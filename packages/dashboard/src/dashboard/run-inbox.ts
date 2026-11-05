@@ -1,6 +1,6 @@
 import { hostname } from 'node:os'
 import { join } from 'node:path'
-import { appendInbox, takeInbox, type InboxLine } from '@openagt/agent-driver'
+import { appendInbox, promptLines, takeInbox, type InboxLine } from '@openagt/agent-driver'
 import { OPENAGENT_DIR } from '../openagent-dir.js'
 import { runResumeHook } from '../project-hooks.js'
 import { findAgent, isPidAlive, resolveAgentCheckout } from '../store/index.js'
@@ -14,7 +14,7 @@ import { findAgent, isPidAlive, resolveAgentCheckout } from '../store/index.js'
 
 /**
  * The inbox of a run, in its checkout's `.openagent/`: the file agent-driver's session reads
- * when a turn ends, one JSON line per message or answer. The run's tool hands the session the
+ * while a turn runs and when it ends, one JSON line per message, answer, or act on a message. The run's tool hands the session the
  * same path.
  */
 export const RUN_INBOX_FILE = 'inbox.jsonl'
@@ -29,8 +29,9 @@ async function isRunWorking(cwd: string, agentId: string): Promise<boolean> {
 }
 
 /**
- * Hand one line to a run of the project at `cwd`. A run that is working takes it from its inbox
- * when its turn ends. A run that has ended (done, stopped, failed, or waiting on its question) is
+ * Hand one line to a run of the project at `cwd`. A run that is working takes it from its inbox:
+ * a message reaches the agent at its next step, or when its turn ends when it was sent for later.
+ * Taking back a message and Send now act on the turn that runs; with none, they are done. A run that has ended (done, stopped, failed, or waiting on its question) is
  * continued through the project's `resume` hook. A run that ends while the line is on its way
  * would leave it in an inbox nobody reads, so the run is looked at again after the write, and
  * what is still in the inbox then is taken back and resumes the run instead.
@@ -49,7 +50,7 @@ export async function sayToRun(
     if (await isWorking(cwd, agentId)) return { ok: true }
     lines.splice(0, 1, ...(await takeInbox(inbox)))
   }
-  for (const stranded of lines) {
+  for (const stranded of promptLines(lines)) {
     const resumed = await runResumeHook(cwd, {
       runId: agentId,
       ...(stranded.kind === 'message' ? { text: stranded.text, ...(stranded.publish !== undefined ? { publish: stranded.publish } : {}) } : { answer: stranded.answer }),

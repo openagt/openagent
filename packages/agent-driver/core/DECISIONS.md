@@ -15,6 +15,11 @@ already made, and lists it in its pull request; for anything else it proposes an
   over a steering library imported from OpenAgent (a tool depending on the product). The
   caller is handed each line it takes, and says what the line changes for the prompts from
   it on (the sentence after them, when a message gives the run a new level).
+- The inbox is read while a turn runs, and a message goes to the agent at once, which reads
+  it between two of its steps, in the same turn; one sent for later waits for the turn's end.
+  Picked over every message waiting for the turn's end, and over stopping the turn to start
+  it again with the message: Claude Code's own chat hands it over at the next step, and
+  both agents take it so (Claude Code's queued user line, Codex's `turn/steer`).
 - Drain, then end. When a turn ends, every line already waiting in the inbox is sent as a
   further prompt of the same session, and the prompt returns when the inbox is empty; a
   line that comes later is for a new session resumed by its id. Picked over a session that

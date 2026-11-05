@@ -2,7 +2,7 @@ import { onProjectFiles, onGitStatus, onAgentWorktree, onAgentMainBranch, onAgen
 import { readModule, runModuleCommand } from './modules.js'
 import { commandReads, findProjectModule } from '../project-modules.js'
 import { resolveProjectPath } from './context.js'
-import { sendStop, sendChoice, sendMessage, sendOpenPullRequest, sendPush, sendMerge, sendMergeBranch, sendStart } from './control.js'
+import { sendStop, sendChoice, sendMessage, withdrawMessage, sendNow, sendOpenPullRequest, sendPush, sendMerge, sendMergeBranch, sendStart } from './control.js'
 import { asArrived } from './relay-agent.js'
 import { onCloneCheck, onCommands, onOwnProjects, onRecordsReach, onStartBranches, onStartCheck } from './projects.js'
 import { onProjectSkills } from './skills.js'
@@ -36,7 +36,7 @@ type RelayFn = (...args: unknown[]) => Promise<unknown>
 // guarded start a run sent here gets: on this computer, never sent on. What destroys a run's
 // history or checkout, or changes how the project keeps its records, is still no other computer's to do.
 const RELAY_READS = { onProjectFiles, readModule, onGitStatus, onAgentWorktree, onAgentMainBranch, onAgentHandoff, onAgent, onStartedName, onOwnRuns, onStartCheck, onCommands, onStartBranches, onDocs, onAgentsDoing, onRetainedWorktrees, onGitHostHome, onRepositoryOffer, onProjectSkills, onRecordsReach }
-const RELAY_ACTS = { sendStop, sendChoice, sendMessage, sendOpenPullRequest, sendPush, sendMerge, sendMergeBranch, sendStart: startHere, runModuleCommand }
+const RELAY_ACTS = { sendStop, sendChoice, sendMessage, withdrawMessage, sendNow, sendOpenPullRequest, sendPush, sendMerge, sendMergeBranch, sendStart: startHere, runModuleCommand }
 // Null-prototype, like RPC_HANDLERS (R1): the key is a request-controlled string, so a plain object
 // would answer `constructor`/`toString`/`valueOf` off Object.prototype and invoke them as handlers.
 const RELAY_FNS = Object.assign(Object.create(null) as Record<string, RelayFn>, RELAY_READS, RELAY_ACTS) as unknown as Record<string, RelayFn>

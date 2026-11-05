@@ -3,7 +3,7 @@ import { copyFile, lstat, mkdir, readlink, readdir, realpath, rename, rm, stat, 
 import { homedir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { accountFolder, accountHome, codexWindows } from './codex-accounts.js'
-import { type AccountRotation, type Question, toolQuestion, type DriverRateWindow, type ReadyPrompt, readyPrompt, runCliSession, continuingTurn, finishTurn, agentEnv, attachLog, combineFraming, combineSignals, makeEmit, promptSent, readWorkspaceFile, oneLine, cutOutput, callArgument, lineCount, patchSize, hunkLines, checkCliReady, type AgentCliParser, type CliIo, type CliSpec, type DriverReadiness, type DriverReadyOptions, type PersonalSetup, type SpawnLike, type SessionLog, type Driver, type DriverEvent, type FileChange, type DriverModel, type DriverPromptOptions, type DriverSession, type DriverStartOptions, type DriverTurn, type DriverUsage } from '@openagt/agent-driver'
+import { type AccountRotation, type Question, toolQuestion, type DriverRateWindow, type ReadyPrompt, readyPrompt, runCliSession, continuingTurn, finishTurn, agentEnv, attachLog, combineFraming, combineSignals, makeEmit, promptSent, readWorkspaceFile, oneLine, cutOutput, callArgument, lineCount, patchSize, hunkLines, checkCliReady, type AgentCliParser, type CliIo, type CliSpec, type DriverReadiness, type DriverReadyOptions, type PersonalSetup, type SpawnLike, type SessionLog, type Driver, type DriverEvent, type FileChange, type DriverModel, type DriverPromptOptions, type DriverSession, type DriverStartOptions, type DriverTurn, type DriverUsage, steeredWords } from '@openagt/agent-driver'
 
 /**
  * Codex's sandbox policy for the shell commands the model writes.
@@ -302,7 +302,7 @@ export class CodexSession implements DriverSession {
           text,
           opts,
           emit,
-          stopped: () => this.startOpts.signal?.aborted === true || opts.signal?.aborted === true,
+          stopped: () => this.startOpts.signal?.aborted === true || this.startOpts.stop?.aborted === true || opts.signal?.aborted === true,
           continueFrom: id => {
             this.lastSessionId = id
           },
@@ -382,6 +382,8 @@ export class CodexSession implements DriverSession {
         signals: combineSignals(this.startOpts.signal, opts.signal),
         parser,
         driver: 'codex',
+        ...(this.startOpts.stop ? { stop: this.startOpts.stop } : {}),
+        ...(opts.inbox !== undefined ? { inbox: opts.inbox, steered: line => steeredWords(line, opts) } : {}),
       })
     // A conversation Codex no longer has (its rollout deleted, or never written on this machine) is
     // refused before the turn starts: the caller's to go on without.
@@ -669,8 +671,36 @@ export class CodexAppServerParser implements AgentCliParser {
   stoppedByLimit = false
   /** The question the agent asked with request_user_input, which the turn was stopped on. */
   private asked: Question | undefined
+  /** The person asked for the turn to end ({@link stop}): an interrupted end is that stop. */
+  private stopping = false
+  /** The turn ended interrupted, on the person's Stop. */
+  private interrupted = false
 
   constructor(private readonly turn: CodexTurnRequest) {}
+
+  /**
+   * Hand the agent a message while its turn runs (`turn/steer`): Codex adds it to the turn under
+   * way, and the agent reads it at its next step. Taken, it has landed; refused (the turn ended
+   * meanwhile), it waits for the turn's end with the rest.
+   */
+  steer(message: { id: string; text: string; words: string }): boolean {
+    if (this.ended || this.stopping || this.sessionId === undefined || this.turnId === undefined) return false
+    this.request(
+      'turn/steer',
+      { threadId: this.sessionId, expectedTurnId: this.turnId, input: [{ type: 'text', text: message.words, text_elements: [] }] },
+      () => [{ type: 'steered', text: message.text, id: message.id }],
+      () => [],
+    )
+    return true
+  }
+
+  /** The person's Stop (`turn/interrupt`): the turn ends where it is, and is over. */
+  stop(): boolean {
+    if (this.ended || this.sessionId === undefined || this.turnId === undefined) return false
+    this.stopping = true
+    this.request('turn/interrupt', { threadId: this.sessionId, turnId: this.turnId }, () => [])
+    return true
+  }
 
   /** The conversation the turn continues, when it continues one. */
   get resumeId(): string | undefined {
@@ -752,6 +782,7 @@ export class CodexAppServerParser implements AgentCliParser {
       ...(this.sessionId ? { sessionId: this.sessionId } : {}),
       ...(this.usage ? { usage: { ...this.usage, ...(this.context !== undefined ? { contextTokens: this.context } : {}) } } : {}),
       ...(this.asked ? { question: this.asked } : {}),
+      ...(this.interrupted && this.asked === undefined ? { stopped: true as const } : {}),
     }
   }
 
@@ -812,6 +843,11 @@ export class CodexAppServerParser implements AgentCliParser {
         const status = field(params['turn'], 'status')
         // Stopped on the agent's question: asked, and over.
         if (status === 'completed' || (status === 'interrupted' && this.asked !== undefined)) return this.end()
+        // Stopped by the person: over too.
+        if (status === 'interrupted' && this.stopping) {
+          this.interrupted = true
+          return this.end()
+        }
         const error = field(params['turn'], 'error')
         // Codex's own word for it, and its sentence ("You've hit your usage limit…") when an older one says no word.
         const info = field(error, 'codexErrorInfo')
@@ -881,7 +917,10 @@ export class CodexAppServerParser implements AgentCliParser {
     const then = this.pending.get(id)
     if (!then) return []
     this.pending.delete(id)
+    const refused = this.refused.get(id)
+    this.refused.delete(id)
     const error = msg['error']
+    if (typeof error === 'object' && error !== null && refused) return refused()
     if (typeof error === 'object' && error !== null) {
       const message = field(error, 'message')
       return this.end(typeof message === 'string' && message.trim() !== '' ? codexErrorMessage(message.trim()) : 'Codex refused the request')
@@ -890,9 +929,13 @@ export class CodexAppServerParser implements AgentCliParser {
     return then(typeof result === 'object' && result !== null ? (result as Record<string, unknown>) : {})
   }
 
-  private request(method: string, params: Record<string, unknown>, then: (result: Record<string, unknown>) => DriverEvent[]): void {
+  /** A request whose refusal is not the turn's failure: what happens then instead. */
+  private readonly refused = new Map<number, () => DriverEvent[]>()
+
+  private request(method: string, params: Record<string, unknown>, then: (result: Record<string, unknown>) => DriverEvent[], refused?: () => DriverEvent[]): void {
     const id = ++this.nextId
     this.pending.set(id, then)
+    if (refused) this.refused.set(id, refused)
     this.send({ id, method, params })
   }
 

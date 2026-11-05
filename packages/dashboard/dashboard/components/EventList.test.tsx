@@ -113,8 +113,8 @@ describe('EventList conversation rows', () => {
   test('a message with no time keeps the line under its box, so nothing moves when its time comes', () => {
     render(<EventList events={[]} sending="hello" stick={false} />)
     const copy = within(screen.getByLabelText('Your message').parentElement!).getByRole('button', { name: 'Copy this message' })
-    expect(copy.parentElement!.className).toContain('h-6')
-    expect(copy.parentElement!.querySelector('time')).toBeNull()
+    expect(copy.closest('.h-6')).toBeTruthy()
+    expect(copy.closest('.h-6')!.querySelector('time')).toBeNull()
   })
 
   test('the first of a run of rows holds the time its line was written, shown while the pointer is on the row; a line with no time holds none', () => {
@@ -628,9 +628,10 @@ describe('EventList row colour', () => {
     expect(screen.getByText('Failed — exited 1').className).toContain('text-danger')
   })
 
-  test('a stopped run is not an error, so it is not red (#1199)', () => {
+  test('a stopped run is no error and no row: it ends where the person stopped it, as Claude Code\'s chat shows it (#1199)', () => {
     render(<EventList events={[{ kind: 'end', ok: false, stopped: true }]} stick={false} />)
-    expect(screen.getByText('Stopped').className).not.toContain('text-danger')
+    expect(screen.queryByText('Stopped')).toBeNull()
+    expect(document.querySelector('.text-danger')).toBeNull()
   })
 
   test('a run waiting on its question is not a failure, and a finished one is not either: neither has an end line (#1774, #1199)', () => {
@@ -1114,16 +1115,16 @@ describe('EventList turn ends', () => {
     expect(screen.queryByText(/waiting for an answer/)).toBeNull()
   })
 
-  test('a stopped end and a failed end are rows where they happened, also once the run went on', () => {
+  test('a failed end is a row where it happened, also once the run went on; a stopped one is none', () => {
     const failed = end({ ok: false, detail: 'boom' })
     const stopped = end({ ok: false, stopped: true })
     const clean = end()
     const waiting = end({ ok: false, waiting: true })
     const events = [prompt('go'), failed, prompt('again'), stopped, prompt('once more'), waiting, prompt('yes'), clean]
-    expect([...quietEnds(events)]).toEqual([waiting, clean])
+    expect([...quietEnds(events)]).toEqual([stopped, waiting, clean])
     render(<EventList events={events} sending="try again" stick={false} />)
     expect(screen.getByText('Failed — boom')).toBeTruthy()
-    expect(screen.getByText('Stopped')).toBeTruthy()
+    expect(screen.queryByText('Stopped')).toBeNull()
     expect(screen.queryByText(/finished|waiting for an answer/)).toBeNull()
   })
 })
@@ -1265,24 +1266,51 @@ describe('EventList queued messages and the wait for subagents', () => {
   const prompt: OpenAgentEvent = { kind: 'driver', event: { type: 'start', prompt: 'go' } }
   const said: OpenAgentEvent = { kind: 'driver', event: { type: 'text', text: 'Hello.' } }
 
-  test('a message the working agent has not read yet is the last row: my box, dimmed, with "Queued" under it', () => {
-    render(<EventList events={[prompt, said]} working queued={['and then this']} stick={false} />)
-    expect(ids()).toEqual(['0', '1', 'queued-0'])
-    const box = screen.getByLabelText('Your message, queued')
+  test('a message the working agent has not read yet is the last row: my box, with Send now under it, and on hover Cancel and edit', () => {
+    const onSendNow = vi.fn()
+    const onEdit = vi.fn()
+    render(<EventList events={[prompt, said]} working queued={[{ id: 'm1', text: 'and then this', later: false, onSendNow, onEdit }]} stick={false} />)
+    expect(ids()).toEqual(['0', '1', 'queued-m1'])
+    const box = screen.getByLabelText('Your message, waiting')
     expect(box.textContent).toBe('and then this')
-    expect(box.className).toContain('opacity-60')
-    expect(box.parentElement!.textContent).toBe('and then thisQueued')
-    // A message that was read is not dimmed and says no such word.
+    fireEvent.click(screen.getByRole('button', { name: 'Send now' }))
+    expect(onSendNow).toHaveBeenCalledTimes(1)
+    fireEvent.click(screen.getByRole('button', { name: 'Cancel and edit message' }))
+    expect(onEdit).toHaveBeenCalledTimes(1)
+    // A message that was read says neither.
     const read = screen.getByLabelText('Your message')
-    expect(read.className).not.toContain('opacity-60')
-    expect(read.parentElement!.textContent).toBe('go')
+    expect(within(read.parentElement!).queryByText(/Send now|Queued/)).toBeNull()
   })
 
-  test('several queued messages are each a row, in the order sent; none queued, none drawn', () => {
-    const { rerender } = render(<EventList events={[prompt]} working queued={['one', 'two']} stick={false} />)
-    expect(screen.getAllByLabelText('Your message, queued').map(n => n.textContent)).toEqual(['one', 'two'])
+  test('one sent for after the turn says "Queued", with no Send now', () => {
+    render(<EventList events={[prompt]} working queued={[{ id: 'm1', text: 'later on', later: true, onEdit: () => {} }]} stick={false} />)
+    expect(screen.getByText('Queued')).toBeTruthy()
+    expect(screen.queryByRole('button', { name: 'Send now' })).toBeNull()
+  })
+
+  test('several waiting messages are each a row, in the order sent; none waiting, none drawn', () => {
+    const { rerender } = render(<EventList events={[prompt]} working queued={[{ id: 'a', text: 'one', later: false }, { id: 'b', text: 'two', later: true }]} stick={false} />)
+    expect(screen.getAllByLabelText('Your message, waiting').map(n => n.textContent)).toEqual(['one', 'two'])
     rerender(<EventList events={[prompt]} working stick={false} />)
-    expect(screen.queryByLabelText('Your message, queued')).toBeNull()
+    expect(screen.queryByLabelText('Your message, waiting')).toBeNull()
+  })
+
+  test('a message the agent read as it worked is my message where it landed, between its steps', () => {
+    const events: OpenAgentEvent[] = [
+      prompt,
+      { kind: 'driver', event: { type: 'action', label: 'Bash', detail: 'sleep 3', id: 'c1' } },
+      { kind: 'driver', event: { type: 'steered', text: 'Also the README.', id: 'm1' } },
+      { kind: 'driver', event: { type: 'action', label: 'Bash', detail: 'echo hi', id: 'c2' } },
+      said,
+    ]
+    render(<EventList events={events} stick={false} />)
+    const mine = screen.getAllByLabelText('Your message').map(n => n.textContent)
+    expect(mine).toEqual(['go', 'Also the README.'])
+    // The steps on either side of it are two lines, not one.
+    const order = Array.from(document.querySelectorAll('[data-message-id]')).map(n => n.textContent ?? '')
+    const at = order.findIndex(text => text.includes('Also the README.'))
+    expect(at).toBeGreaterThan(1)
+    expect(order.slice(at + 1).some(text => /Ran|echo/.test(text))).toBe(true)
   })
 
   test('an agent that ended its turn while subagents work says how many it waits for, as the moving last line', () => {

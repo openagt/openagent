@@ -79,6 +79,7 @@ function eventOf(line: AnyDiaryLine): OpenAgentEvent | undefined {
     // The lines agent-driver's own log writes (its `session-log.ts`): a driver event per kind, the
     // agent's session id, and the question a turn ended on as the gate the dashboard shows.
     case 'start':
+    case 'steered':
     case 'action':
     case 'output':
     case 'thought':

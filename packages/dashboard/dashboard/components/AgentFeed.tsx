@@ -1,7 +1,7 @@
 import type { ReactNode } from 'react'
 import type { AgentDoing, AgentMeta, OpenAgentEvent } from '../../src/index.js'
 import { ChatNote } from './ChatPane.js'
-import { EventList } from './EventList.js'
+import { EventList, type WaitingMessage } from './EventList.js'
 import type { SessionSetup } from './SessionLine.js'
 
 // One agent's feed: the live/replayed event log, or a waiting placeholder before anything has
@@ -43,7 +43,7 @@ export function AgentFeed({
   /** The agent is working: a spinner row closes the feed while it writes nothing. */
   working?: boolean
   /** Messages the working agent has not read yet, and how many subagents an ended turn waits on: the feed's last rows. */
-  queued?: readonly string[] | undefined
+  queued?: readonly WaitingMessage[] | undefined
   waitingOn?: number | undefined
   /** A finished log is static (#1026): it does not follow new output, and opens at its end. */
   stick?: boolean

@@ -133,11 +133,14 @@ already made, and lists it in its pull request; for anything else it proposes an
 - The run records itself and reclaims its own checkout when the agent stops, pushing
   nothing: a clean checkout goes, its branch stays on this machine; the sweep on the tick
   catches what a dead process left, on this machine only.
-- A run stops on SIGINT or SIGTERM to its process: the agent's process tree is ended, the
-  run is recorded `stopped`, the checkout reclaimed. The pid is in the live log, so a
-  dashboard's Stop is that signal. Picked over the run reading the dashboard's control file
-  (the tool would read a file of OpenAgent's shape), and over dying at once (the agent's
-  processes would outlive the run, and the sweep would record it `failed`).
+- A run stops on SIGINT or SIGTERM to its process: the agent is asked to end its turn where
+  it is, as Esc does in Claude Code, the run is recorded `stopped`, the checkout reclaimed,
+  and a message continues it. A second signal ends the agent's process tree at once. The
+  pid is in the live log, so a dashboard's Stop is that signal. Picked over ending the
+  agent's process tree at once (its conversation could be cut halfway through a write), over
+  the run reading the dashboard's control file (the tool would read a file of OpenAgent's
+  shape), and over dying at once (the agent's processes would outlive the run, and the
+  sweep would record it `failed`).
 
 ## When a run needs a person
 - When a run ends waiting on a question, or ends done with a pull request it did not have,

@@ -22,8 +22,12 @@ vi.mock('../rpc/models.js', () => ({
 }))
 vi.mock('../rpc/reads.js', () => ({ onAgent, onRetainedWorktrees, onAgentHandoff, onAgentsDoing, onBridgeQuestion, onBridgeEvents, onBridgeAnswer, onAgentWorktree, onAgentMainBranch, onGitHostHome }))
 const sendMessage = vi.fn(async () => ({ ok: true }) as unknown)
+const withdrawMessage = vi.fn(async () => ({ ok: true }) as unknown)
+const sendNow = vi.fn(async () => ({ ok: true }) as unknown)
 vi.mock('../rpc/control.js', () => ({
   sendMessage,
+  withdrawMessage,
+  sendNow,
   sendOpenPullRequest: vi.fn(async () => null),
   sendSetHandoff: vi.fn(async () => null),
   sendBridgeAnswer: vi.fn(async () => null),
@@ -76,19 +80,23 @@ vi.mock('./SessionRow.js', () => ({
   ),
 }))
 // The composer shows only what the view tells it about the run going: the one fact of it under test here.
+let queuedIds = 0
+const edited: string[] = []
 vi.mock('./AgentComposer.js', () => ({
-  AgentComposer: ({ live, outcome, model, context, controls, onQueued, row, publish, prBase }: { publish?: string; prBase?: string; live: boolean; outcome?: unknown; model?: string; context?: ReactNode; controls?: ReactNode; onQueued?: (text: string) => void; row?: ReactNode }) => (
-    <>
-      {row}
-      <span data-testid="composer-controls">{controls}</span>
-      <button type="button" onClick={() => onQueued?.('and then this')}>queue-one</button>
-      <span data-testid="composer-model">{model ?? ''}</span>
-      <span data-testid="composer-auto" data-publish={publish ?? ''} data-pr-base={prBase ?? ''} />
-      <span data-testid="composer-context">{context}</span>
-      <span data-testid="composer-live">{String(live)}</span>
-      <span data-testid="composer-outcome">{JSON.stringify(outcome ?? null)}</span>
-    </>
-  ),
+  AgentComposer: ({ live, model, context, controls, onQueued, editInBox, row, publish, prBase }: { publish?: string; prBase?: string; live: boolean; model?: string; context?: ReactNode; controls?: ReactNode; onQueued?: (message: { id: string; text: string; later: boolean }) => void; editInBox?: { current: ((text: string) => void) | null }; row?: ReactNode }) => {
+    if (editInBox) editInBox.current = text => void edited.push(text)
+    return (
+      <>
+        {row}
+        <span data-testid="composer-controls">{controls}</span>
+        <button type="button" onClick={() => onQueued?.({ id: `m${++queuedIds}`, text: 'and then this', later: false })}>queue-one</button>
+        <span data-testid="composer-model">{model ?? ''}</span>
+        <span data-testid="composer-auto" data-publish={publish ?? ''} data-pr-base={prBase ?? ''} />
+        <span data-testid="composer-context">{context}</span>
+        <span data-testid="composer-live">{String(live)}</span>
+      </>
+    )
+  },
 }))
 
 const { AgentView } = await import('./AgentView.js')
@@ -411,24 +419,6 @@ describe('a subagent’s own page', () => {
 // The Resume offer (#1391) moved into the composer's submit slot (#1455): its when-offered rules
 // are AgentComposer's now, tested there — AgentView only hands `outcome` down.
 
-describe('how the agent ended, for the message box', () => {
-  test("the card says it until the agent's events are read, then the events do", async () => {
-    let log: (v: unknown) => void = () => {}
-    onAgent.mockReturnValue(new Promise(resolve => (log = resolve)))
-    render(view({ card: { status: 'waiting' } }))
-    // From the first frame, with no event read yet.
-    expect(screen.getByTestId('composer-outcome').textContent).toBe('{"ok":false,"stopped":false,"waiting":true}')
-    log([...ARCHIVED, { kind: 'end', ok: false, stopped: true }])
-    await waitFor(() => expect(screen.getByTestId('composer-outcome').textContent).toBe('{"ok":false,"stopped":true}'))
-  })
-
-  test('with no card and no event it says nothing', () => {
-    onAgent.mockReturnValue(new Promise(() => {}))
-    render(view())
-    expect(screen.getByTestId('composer-outcome').textContent).toBe('null')
-  })
-})
-
 describe('the bar shows its facts together (run switch)', () => {
   test("an ended run's bar is ready once its log and its branch are read, not before", async () => {
     let log: (v: unknown) => void = () => {}
@@ -639,9 +629,9 @@ describe('a question the agent stopped on', () => {
 describe('a message sent while the agent works', () => {
   const start = (prompt: string) => ({ kind: 'driver', event: { type: 'start', prompt } }) as OpenAgentEvent
   const text = { kind: 'driver', event: { type: 'text', text: 'Hi.' } } as OpenAgentEvent
-  const queuedBoxes = () => screen.queryAllByLabelText('Your message, queued')
+  const queuedBoxes = () => screen.queryAllByLabelText('Your message, waiting')
 
-  test('it shows in the chat as queued, each one sent, until the agent\'s next prompt arrives: then it is a read message', () => {
+  test('it shows in the chat as waiting, each one sent, until the agent\'s next prompt arrives: then it is a read message', () => {
     const { rerender } = render(view({ live: true, events: [start('go'), text] }))
     expect(queuedBoxes()).toHaveLength(0)
     fireEvent.click(screen.getByText('queue-one'))
@@ -650,6 +640,29 @@ describe('a message sent while the agent works', () => {
     rerender(view({ live: true, events: [start('go'), text, start('and then this')] }))
     expect(queuedBoxes()).toHaveLength(0)
     expect(screen.getAllByLabelText('Your message')).toHaveLength(2)
+  })
+
+  test('read at the agent\'s next step, it is no longer waiting: its own line shows it where it landed', () => {
+    const { rerender } = render(view({ live: true, events: [start('go'), text] }))
+    fireEvent.click(screen.getByText('queue-one'))
+    const id = `m${queuedIds}`
+    expect(queuedBoxes()).toHaveLength(1)
+    rerender(view({ live: true, events: [start('go'), text, { kind: 'driver', event: { type: 'steered', text: 'and then this', id } } as OpenAgentEvent] }))
+    expect(queuedBoxes()).toHaveLength(0)
+    expect(screen.getAllByLabelText('Your message').map(n => n.textContent)).toEqual(['go', 'and then this'])
+  })
+
+  test('Cancel and edit takes it back from the run and puts it in the box; Send now asks the run to read it now', () => {
+    render(view({ live: true, events: [start('go'), text] }))
+    fireEvent.click(screen.getByText('queue-one'))
+    const id = `m${queuedIds}`
+    fireEvent.click(screen.getByRole('button', { name: 'Send now' }))
+    expect(sendNow).toHaveBeenCalledWith('p1', 'run-1')
+    edited.length = 0
+    fireEvent.click(screen.getByRole('button', { name: 'Cancel and edit message' }))
+    expect(withdrawMessage).toHaveBeenCalledWith('p1', 'run-1', id)
+    expect(edited).toEqual(['and then this'])
+    expect(queuedBoxes()).toHaveLength(0)
   })
 
   test('queued before the agent\'s first event, it is the chat\'s only row, not hidden behind the waiting words', () => {

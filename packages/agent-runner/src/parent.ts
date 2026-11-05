@@ -1,4 +1,4 @@
-import { appendInbox, takeInbox, type InboxLine } from '@openagt/agent-driver'
+import { appendInbox, promptLines, takeInbox, type PromptLine } from '@openagt/agent-driver'
 import { worktreePath } from '@openagt/skill-branches'
 import { inboxPath, readLiveCard } from './live-card.js'
 import { runnerMark } from './records.js'
@@ -64,12 +64,12 @@ async function isRunWorking(repo: string, id: string, deps: Pick<ParentDeps, 'ho
 export async function tellParent(repo: string, parent: string, text: string, deps: ParentDeps): Promise<void> {
   try {
     const isWorking = deps.isWorking ?? ((r: string, id: string) => isRunWorking(r, id, deps))
-    let lines: InboxLine[] = [{ kind: 'message', text }]
+    let lines: PromptLine[] = [{ kind: 'message', text }]
     if (await isWorking(repo, parent)) {
       const inbox = inboxPath(worktreePath(repo, parent))
       await appendInbox(inbox, lines[0]!)
       if (await isWorking(repo, parent)) return
-      lines = await takeInbox(inbox)
+      lines = promptLines(await takeInbox(inbox))
     }
     if (!deps.resume) return
     for (const stranded of lines) await deps.resume(parent, stranded.kind === 'message' ? { text: stranded.text } : { answer: stranded.answer })

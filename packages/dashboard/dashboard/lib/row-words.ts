@@ -30,8 +30,8 @@ export interface RowWords {
 export function rowWords(e: OpenAgentEvent): RowWords | undefined {
   switch (e.kind) {
     case 'end':
-      // A clean end and an end waiting on an answer are no rows at all: the agent's own last
-      // message is how such a turn ends, and the chat drops them before this is asked.
+      // A clean end, an end waiting on an answer and a stopped one are no rows at all: the chat
+      // drops them before this is asked. Asked anyway, a stopped one says so.
       if (e.stopped) return { said: 'Stopped' }
       // Why it failed is a reason, not a name: it belongs in the sentence, not beside it.
       if (!e.ok && !e.waiting) return { said: `Failed — ${e.detail ?? 'unknown error'}` }

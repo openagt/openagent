@@ -2,7 +2,7 @@ import type { AgentDoing, AgentMeta, ChoiceRequest, OpenAgentEvent } from '../..
 import { foldScreenRows, formatOpenAgentEvent } from '../../src/client.js'
 import { parseQuestion, QUESTION_TAG } from '@openagt/agent-driver/question'
 import { Fragment, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode, type RefObject } from 'react'
-import { Check, ChevronRight, Copy } from 'lucide-react'
+import { Check, ChevronRight, Copy, PencilLine } from 'lucide-react'
 import { pendingChoices } from '../lib/live-state.js'
 import { callRow, callSubagents, runRow, endMessage, subagentEnd, subagentEvents, subagentReport, subagentSteps, subagentWait, type SubagentEnd } from '../lib/subagents.js'
 import { answeredQuestion } from '../lib/answered-question.js'
@@ -77,8 +77,13 @@ function isLong(text: string): boolean {
 
 /** Grouping key for a run of same-kind rows: the user's prompt stands apart from the agent's work. */
 function rowGroup(e: OpenAgentEvent): string {
-  if (e.kind === 'driver') return e.event.type === 'start' ? 'you' : 'agent'
+  if (e.kind === 'driver') return e.event.type === 'start' || e.event.type === 'steered' ? 'you' : 'agent'
   return e.kind
+}
+
+/** A message the person sent while the agent worked, as it landed between two of its steps: theirs, in the turn. */
+function steeredText(e: OpenAgentEvent): string | undefined {
+  return e.kind === 'driver' && e.event.type === 'steered' ? e.event.text : undefined
 }
 
 // A driver `start` opens a fresh prompt turn.
@@ -240,13 +245,14 @@ export function withEarlyQuestion(events: OpenAgentEvent[]): OpenAgentEvent[] {
 }
 
 /**
- * The ends that are no row: a clean one, and one waiting on an answer. The agent's last message
- * is how a clean turn ends, and the question's card is how a waiting one does; a
- * line under them said it twice. A failed or stopped end is a row where it happened: it says why
+ * The ends that are no row: a clean one, one waiting on an answer, and one the person stopped. The
+ * agent's last message is how a clean turn ends, and the question's card is how a waiting one does;
+ * a line under them said it twice. A stopped one just ends where the person stopped it, as Claude
+ * Code's chat shows it, with nothing after. A failed end is a row where it happened: it says why
  * the agent is not going on, and why the next prompt was needed.
  */
 export function quietEnds(events: readonly OpenAgentEvent[]): Set<OpenAgentEvent> {
-  return new Set(events.filter(e => e.kind === 'end' && (e.ok || e.waiting)))
+  return new Set(events.filter(e => e.kind === 'end' && (e.ok || e.waiting || e.stopped)))
 }
 
 /**
@@ -384,16 +390,17 @@ function TurnFiles({ files, onOpen, footer }: { files: readonly ChangedFile[]; o
 // whose it is; the place and the box do. A long one is cut short with "Show more" under it. The
 // time it was sent sits under the box and shows while the pointer is on the message; its line is
 // always there, so nothing moves when it shows.
-// `queued`: a message the working agent has not read yet. Dimmed, with the word under it where a
-// read message's time shows on hover.
+// `waiting`: a message the working agent has not read yet, as Claude Code on the web shows one:
+// under it, Send now, or "Queued" for one sent for after the turn, and on hover the copy and
+// Cancel and edit, which takes it back into the box.
 // `attached`: what the run handed the agent with this message, folded under the box.
 // `fresh`: a message just sent, which slides in where it lands, as Claude Code on the web's does.
-function Prompt({ text, at, queued = false, attached, fresh = false }: { text: string; at?: string | undefined; queued?: boolean; attached?: string | undefined; fresh?: boolean }) {
+function Prompt({ text, at, waiting, attached, fresh = false }: { text: string; at?: string | undefined; waiting?: Waiting | undefined; attached?: string | undefined; fresh?: boolean }) {
   const [open, setOpen] = useState(false)
   const tall = isTall(text)
   return (
     <div className={`group/prompt flex min-w-0 flex-1 flex-col items-end font-sans text-foreground ${fresh ? 'bubble-in' : ''}`}>
-      <div role="group" aria-label={queued ? 'Your message, queued' : 'Your message'} className={`max-w-[85%] min-w-0 rounded-xl bg-muted px-3.5 py-2 ${queued ? 'opacity-60' : ''}`}>
+      <div role="group" aria-label={waiting ? 'Your message, waiting' : 'Your message'} className="max-w-[85%] min-w-0 rounded-xl bg-muted px-3.5 py-2">
         <div className={tall && !open ? 'max-h-40 overflow-hidden' : ''}>
           <Markdown text={text} />
         </div>
@@ -404,22 +411,49 @@ function Prompt({ text, at, queued = false, attached, fresh = false }: { text: s
         )}
       </div>
       {attached !== undefined && <Attached text={attached} />}
-      {queued ? (
-        <span className="mt-1.5 h-6 pr-1 text-[11px] leading-6 text-muted-foreground">Queued</span>
-      ) : (
-        // When it was sent and a copy of it, as Claude Code on the web shows under a message, 6px
-        // below the box so a button's hover does not touch it.
-        <div className="mt-1.5 flex h-6 items-center gap-1 text-muted-foreground opacity-0 transition-opacity focus-within:opacity-100 group-hover/prompt:opacity-100">
-          {at !== undefined && (
+      {/* When it was sent and a copy of it, as Claude Code on the web shows under a message, 6px
+          below the box so a button's hover does not touch it. A waiting one says so instead of its time. */}
+      <div className="mt-1.5 flex h-6 items-center gap-1 text-muted-foreground">
+        <div className="flex items-center gap-1 opacity-0 transition-opacity focus-within:opacity-100 group-hover/prompt:opacity-100">
+          {!waiting && at !== undefined && (
             <time dateTime={at} title={new Date(at).toLocaleString()} className="px-1 text-[11px]">
               {formatAge(at)}
             </time>
           )}
           <CopyMessage text={text} />
+          {waiting?.onEdit && (
+            <button type="button" aria-label="Cancel and edit message" title="Cancel and edit message" onClick={waiting.onEdit} className="flex h-6 w-6 items-center justify-center rounded-md hover:bg-accent hover:text-accent-foreground">
+              <PencilLine className="h-3.5 w-3.5" aria-hidden />
+            </button>
+          )}
         </div>
-      )}
+        {waiting &&
+          (waiting.later || !waiting.onSendNow ? (
+            <span className="pr-1 text-[11px] leading-6">Queued</span>
+          ) : (
+            <button type="button" onClick={waiting.onSendNow} className="rounded-md px-1.5 text-[11px] leading-6 hover:bg-accent hover:text-accent-foreground">
+              Send now
+            </button>
+          ))}
+      </div>
     </div>
   )
+}
+
+/** A message the working agent has not read yet, and what can be done with it. */
+export interface Waiting {
+  /** Sent for after the turn (⌘Enter): "Queued", no Send now. */
+  later: boolean
+  /** Send now: the agent reads it at once. */
+  onSendNow?: (() => void) | undefined
+  /** Cancel and edit: it goes back into the box. */
+  onEdit?: (() => void) | undefined
+}
+
+/** A waiting message, as the feed is given it. */
+export interface WaitingMessage extends Waiting {
+  id: string
+  text: string
 }
 
 // What the run handed the agent with a message, after it: a scheduled run carries what its
@@ -555,7 +589,7 @@ const SUBAGENT = 'subagent'
 /** How near its end a chat counts as being at it, in pixels: the scroller's own measure. */
 const AT_END = 8
 const NO_SUBAGENTS: readonly AgentMeta[] = []
-const NONE_QUEUED: readonly string[] = []
+const NONE_QUEUED: readonly WaitingMessage[] = []
 const NOTHING_DOING: Record<string, AgentDoing> = {}
 
 /**
@@ -645,9 +679,9 @@ export function EventList({
    *  on now, else "Starting…" when the last row is a prompt and "Working…" after, so a quiet agent
    *  never looks stalled. */
   working?: boolean
-  /** Messages sent while the agent works, which it reads when its turn ends: each the last row of
-   *  the feed, dimmed, with "Queued" under it, until the agent's next turn shows them as read. */
-  queued?: readonly string[]
+  /** Messages sent while the agent works that it has not read yet: each a last row of the feed,
+   *  with Send now or "Queued" under it, until the agent reads it and it shows where it landed. */
+  queued?: readonly WaitingMessage[]
   /** How many subagents an agent that ended its turn still waits on: a moving last line says so. */
   waitingOn?: number
   stick?: boolean
@@ -891,7 +925,8 @@ export function EventList({
               </MessageScrollerItem>
             )}
             {listed.map((e, i, rows) => {
-              const message = textOf(e)
+              const steered = steeredText(e)
+              const message = steered ?? textOf(e)
               const choiceRow = choiceRows?.rows.get(e)
               const prev = i > 0 ? rows[i - 1] : undefined
               const end = ends.get(e)
@@ -899,8 +934,8 @@ export function EventList({
               // this one breaks the run; the row of a subagent's end goes on that run of subagent rows.
               const chunkHead = !prev || (started.has(i) ? !end : groupOf(prev) !== groupOf(e))
               const at = e.at
-              // The user's own message: a prompt that is not a subagent's end.
-              const own = isTurnBoundary(e) && !end
+              // The user's own message: a prompt that is not a subagent's end, or one the agent read as it worked.
+              const own = (isTurnBoundary(e) && !end) || steered !== undefined
               // What the chat says for a row that is none of the above; nothing when the
               // terminal's own line is what it says (row-words.ts).
               const words = rowWords(e)
@@ -1013,9 +1048,9 @@ export function EventList({
                 <LiveLine word={`Waiting for ${waitingOn} ${waitingOn === 1 ? 'subagent' : 'subagents'}`} />
               </MessageScrollerItem>
             )}
-            {queued.map((text, at) => (
-              <MessageScrollerItem key={`queued-${at}`} messageId={`queued-${at}`} className="-mx-1.5 flex items-start gap-2 rounded-sm px-1.5">
-                <Prompt text={text} queued fresh />
+            {queued.map(({ id, text, ...waiting }) => (
+              <MessageScrollerItem key={`queued-${id}`} messageId={`queued-${id}`} className="-mx-1.5 flex items-start gap-2 rounded-sm px-1.5">
+                <Prompt text={text} waiting={waiting} fresh />
               </MessageScrollerItem>
             ))}
             {tail}

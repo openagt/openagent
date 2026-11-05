@@ -10,7 +10,9 @@ import { SessionRow } from './SessionRow.js'
 import { startedFromBranch, startedFromMain, type StartPicks } from '../lib/started-from.js'
 import { RunPrLabels } from './RunPrLabels.js'
 import type { ContextSet } from '../lib/use-context-set.js'
-import { AgentComposer } from './AgentComposer.js'
+import { AgentComposer, type QueuedMessage } from './AgentComposer.js'
+import { sendNow, withdrawMessage } from '../rpc/control.js'
+import type { WaitingMessage } from './EventList.js'
 import { AgentWorkBar } from './AgentWorkBar.js'
 import { AgentFeed } from './AgentFeed.js'
 import { IssueLinks } from './Markdown.js'
@@ -268,20 +270,38 @@ export function AgentView({
     if (sending && prompts > sending.prompts) setSending(null)
   }, [sending, prompts])
   const onSending = useCallback((text: string | null) => setSending(text === null ? null : { text, prompts }), [prompts])
-  // The messages sent while the agent works: it reads them all when its turn ends, as its next
-  // prompt. Until that prompt's line arrives the feed shows them as queued. An agent that stopped
-  // working without reading them (it failed, it was stopped) shows them no longer.
-  const [queued, setQueued] = useState<{ texts: string[]; prompts: number } | null>(null)
-  useEffect(() => setQueued(null), [agentId])
+  // The messages sent while the agent works that it has not read yet, each shown waiting until the
+  // agent reads it: at its next step, where its `steered` line lands, or, sent for later or not
+  // taken in time, as the prompt of its next turn. An agent that stopped working without reading
+  // them (it failed, it was stopped) shows them no longer.
+  const [queued, setQueued] = useState<(QueuedMessage & { prompts: number })[]>([])
+  useEffect(() => setQueued([]), [agentId])
+  const isRead = useMemo(() => {
+    const steered = new Set(shown.flatMap(e => (e.kind === 'driver' && e.event.type === 'steered' && e.event.id !== undefined ? [e.event.id] : [])))
+    const starts = shown.flatMap(e => (e.kind === 'driver' && e.event.type === 'start' ? [e.event.prompt] : []))
+    return (message: QueuedMessage & { prompts: number }) => steered.has(message.id) || starts.slice(message.prompts).includes(message.text)
+  }, [shown])
+  const unread = queued.filter(message => !isRead(message))
   useEffect(() => {
-    if (queued && prompts > queued.prompts) setQueued(null)
-  }, [queued, prompts])
+    if (unread.length !== queued.length) setQueued(unread)
+  }, [unread.length, queued.length]) // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => {
-    if (!queued || feedLive) return
-    const timer = setTimeout(() => setQueued(null), QUEUED_UNREAD_MS)
+    if (queued.length === 0 || feedLive) return
+    const timer = setTimeout(() => setQueued([]), QUEUED_UNREAD_MS)
     return () => clearTimeout(timer)
-  }, [queued, feedLive])
-  const onQueued = useCallback((text: string) => setQueued(was => ({ texts: [...(was?.texts ?? []), text], prompts })), [prompts])
+  }, [queued.length, feedLive])
+  const onQueued = useCallback((message: QueuedMessage) => setQueued(was => [...was, { ...message, prompts }]), [prompts])
+  // Cancel and edit puts the message back in the box; the composer says how.
+  const editInBox = useRef<((text: string) => void) | null>(null)
+  const waiting: WaitingMessage[] = unread.map(({ prompts: _prompts, ...message }) => ({
+    ...message,
+    onSendNow: () => void sendNow(projectId, agentId),
+    onEdit: () => {
+      setQueued(was => was.filter(other => other.id !== message.id))
+      void withdrawMessage(projectId, agentId, message.id)
+      editInBox.current?.(message.text)
+    },
+  }))
   // A run just started writes its prompt line only once its record is saved and its checkout made.
   // Told apart from the prompts in the same draw that brings the prompt's line, not an effect
   // later: for that one frame the message was in the chat twice.
@@ -488,7 +508,7 @@ export function AgentView({
             onAgentStarted={onAgentStarted}
             onSending={onSending}
             onQueued={onQueued}
-            outcome={outcome}
+            editInBox={editInBox}
             model={underBox}
             {...(window !== undefined ? { context: <ContextCircle used={card?.contextTokens ?? 0} size={window} /> } : {})}
             controls={<RunPrLabels prs={prs} />}
@@ -528,7 +548,7 @@ export function AgentView({
           writing={feedLive ? writing : ''}
           {...(shownSending !== undefined ? { sending: shownSending } : {})}
           working={feedLive || shownSending !== undefined}
-          queued={queued && prompts <= queued.prompts ? queued.texts : undefined}
+          queued={waiting.length > 0 ? waiting : undefined}
           waitingOn={!going && live === false && outcome?.ok !== false && !outcome?.waiting ? subagentsRunning : 0}
           {...(feedLive ? {} : { openAt: 'end' as const, emptyLabel: 'This agent has no events.' })}
           // A message just sent to an ended agent: the chat follows its end from the send on, not

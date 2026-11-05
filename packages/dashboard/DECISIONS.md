@@ -547,6 +547,12 @@ already made, and lists it in its pull request; for anything else it proposes an
   over a channel of ours that every tool would have to learn.
 - A run that ends while the line is on its way has its line taken back out of the inbox
   and resumed instead. Picked over leaving it for a run that will never read it.
+- A message sent while the agent works goes as Claude Code's chat sends it: Enter hands it
+  to the agent at its next step, ⌘Enter keeps it for after the turn. Until the agent reads
+  it, it waits under the chat with Send now, which puts what the agent runs in the
+  background so it reads the message at once, and Cancel and edit, which takes it back into
+  the box; read, it shows where it landed. Picked over every message waiting for the turn's
+  end, and over stopping the turn to start it again with the message.
 - A question the agent waits on is a card in the chat, right under what the agent said, and
   is answered there; the turn's copy and time go under the card. Picked over a panel above
   the message box with an "Asking" line in the chat, which put an empty line and a gap
@@ -556,6 +562,9 @@ already made, and lists it in its pull request; for anything else it proposes an
   can be answered, and the agent reads words, not ids.
 - Stop is a signal to the process the run's card names, whoever runs it. Picked over a
   message to the run: a stop that has to be read is not a stop.
+- Stop is Claude Code's: a square in the message box, Esc its key, and the turn ends where
+  the agent was, with no line after it; a message continues the run. Picked over a stop that
+  ended the run for good, a "Stopped" line and a Resume button.
 - A run another computer started, which is no saved machine, is only read here: in place
   of the message box a line says where it runs. Picked over a box that continued it here,
   which moved the run to this computer under its id, with this computer's logins and none

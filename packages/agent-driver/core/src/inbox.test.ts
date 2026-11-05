@@ -154,3 +154,22 @@ test('the log: a card and a diary in the record shape, current as the turn strea
     await rm(dir, { recursive: true, force: true })
   }
 })
+
+test('promptLines keeps messages and answers in order, less what a later line took back', async () => {
+  const { promptLines } = await import('./inbox.js')
+  assert.deepEqual(
+    promptLines([
+      { kind: 'message', text: 'one', id: 'a' },
+      { kind: 'now' },
+      { kind: 'message', text: 'two', id: 'b' },
+      { kind: 'answer', question: 'Which?', answer: 'Blue' },
+      { kind: 'cancel', id: 'b' },
+      { kind: 'message', text: 'three' },
+    ]),
+    [
+      { kind: 'message', text: 'one', id: 'a' },
+      { kind: 'answer', question: 'Which?', answer: 'Blue' },
+      { kind: 'message', text: 'three' },
+    ],
+  )
+})

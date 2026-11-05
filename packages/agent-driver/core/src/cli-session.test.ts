@@ -235,3 +235,121 @@ test('a turn the parser says failed fails, even when the process exits 0', async
   // Failed without a reason: its output stopped before the turn ended. The partial text is no reason.
   await assert.rejects(run(''), /agent failed: the turn did not finish/)
 })
+
+/** A process whose output and end the test drives: `say` writes a line of output, `exit` closes it. */
+function drivenProcess() {
+  const stdout = new PassThrough()
+  let fireClose: (code: number | null) => void = () => {}
+  const killed: string[] = []
+  const spawn: SpawnLike = () => {
+    const proc: SpawnedProcess = {
+      stdout,
+      stderr: Readable.from([]),
+      stdin: new Writable({ write: (_c, _e, cb) => cb() }),
+      on(event, listener) {
+        if (event === 'close') fireClose = listener as (c: number | null) => void
+        return proc
+      },
+      kill: signal => {
+        killed.push(String(signal))
+      },
+    }
+    return proc
+  }
+  return {
+    spawn,
+    killed,
+    say: (line: string) => stdout.write(line + '\n'),
+    exit: (code: number | null) => {
+      stdout.end()
+      setImmediate(() => fireClose(code))
+    },
+  }
+}
+
+const tick = (ms = 20) => new Promise(resolvePromise => setTimeout(resolvePromise, ms))
+
+test('a stop the agent can be asked for ends the turn as stopped, not failed, and kills nothing', async () => {
+  const agent = drivenProcess()
+  let asked = 0
+  const parser: AgentCliParser = {
+    push: () => [],
+    result: () => ({ text: '', ...(asked > 0 ? { stopped: true as const } : {}) }),
+    stop: () => {
+      asked++
+      return true
+    },
+  }
+  const stop = new AbortController()
+  const turn = runCliSession({ bin: 'agent', args: [], cwd: '/ws', env: {}, prompt: 'go', spawn: agent.spawn, emit: () => {}, signals: [], driver: 'agent', parser, stop: stop.signal })
+  stop.abort()
+  assert.equal(asked, 1, 'the agent is asked to stop')
+  // The CLI says its stopped turn failed, and exits so.
+  agent.exit(1)
+  assert.deepEqual(await turn, { text: '', stopped: true })
+  assert.deepEqual(agent.killed, [], 'nothing was killed')
+})
+
+test('a stop the agent cannot be asked for ends its process instead', async () => {
+  const agent = drivenProcess()
+  const stop = new AbortController()
+  const turn = runCliSession({ bin: 'agent', args: [], cwd: '/ws', env: {}, prompt: 'go', spawn: agent.spawn, emit: () => {}, signals: [], driver: 'agent', parser: { push: () => [], result: () => ({ text: '' }), stop: () => false }, stop: stop.signal })
+  stop.abort()
+  await assert.rejects(turn, /aborted/)
+  assert.deepEqual(agent.killed, ['SIGTERM'])
+})
+
+test('the inbox is read while the turn runs: a message goes to the agent at once, one for later and one it never read are held, one taken back is not', async () => {
+  const { mkdtemp } = await import('node:fs/promises')
+  const { tmpdir } = await import('node:os')
+  const { join } = await import('node:path')
+  const { appendInbox } = await import('./inbox.js')
+  const inbox = join(await mkdtemp(join(tmpdir(), 'inbox-read-')), 'inbox.jsonl')
+  const agent = drivenProcess()
+  const steered: { id: string; text: string; words: string }[] = []
+  const withdrawn: string[] = []
+  let hurried = 0
+  const parser: AgentCliParser = {
+    // The agent reads a message when the CLI repeats its id.
+    push: line => (line.startsWith('read ') ? [{ type: 'steered', text: 'Now.', id: line.slice(5) }] : []),
+    result: () => ({ text: 'done' }),
+    steer: message => {
+      steered.push(message)
+      return true
+    },
+    withdraw: id => withdrawn.push(id),
+    hurry: () => hurried++,
+  }
+  const events: DriverEvent[] = []
+  const turn = runCliSession({
+    bin: 'agent',
+    args: [],
+    cwd: '/ws',
+    env: {},
+    prompt: 'go',
+    spawn: agent.spawn,
+    emit: e => events.push(e),
+    signals: [],
+    driver: 'agent',
+    parser,
+    inbox,
+    steered: async line => `${line.text}\n\nCommit your work.`,
+  })
+  await appendInbox(inbox, { kind: 'message', text: 'Now.', id: 'a' })
+  await appendInbox(inbox, { kind: 'message', text: 'After.', id: 'b', later: true })
+  await appendInbox(inbox, { kind: 'message', text: 'Never mind.', id: 'c' })
+  await appendInbox(inbox, { kind: 'message', text: 'Unread.', id: 'd' })
+  await appendInbox(inbox, { kind: 'cancel', id: 'c' })
+  await appendInbox(inbox, { kind: 'now' })
+  await tick(400)
+  assert.deepEqual(steered.map(m => m.id), ['a', 'c', 'd'], 'every message not for later went to the agent')
+  assert.deepEqual(steered[0], { id: 'a', text: 'Now.', words: 'Now.\n\nCommit your work.' })
+  assert.deepEqual(withdrawn, ['c'])
+  assert.equal(hurried, 1)
+  agent.say('read a')
+  await tick()
+  agent.exit(0)
+  const done = await turn
+  assert.deepEqual(done.held?.map(line => (line.kind === 'message' ? line.id : line.kind)), ['b', 'd'], 'what the agent never read is held, in order')
+  assert.ok(events.some(e => e.type === 'steered' && e.id === 'a'), 'the landing is said')
+})
