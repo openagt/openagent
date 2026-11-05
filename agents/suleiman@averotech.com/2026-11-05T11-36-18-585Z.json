@@ -1,16 +1,30 @@
 {
   "id": "2026-11-05T11-36-18-585Z",
   "startedAt": "2026-11-05T11:36:05.320Z",
-  "status": "running",
+  "endedAt": "2026-11-05T11:37:10.858Z",
+  "status": "done",
   "intent": "/update-tickets",
+  "title": "Ticket sync and PR merge review",
   "driver": "claude-code",
-  "model": "opus",
+  "model": "claude-opus-5-5",
+  "branch": "agent-2026-11-05T11-36-18-585Z",
+  "cost": 0.2352198,
+  "contextTokens": 31310,
   "caller": {
     "runner": {
       "host": "Suleimans-MacBook-Pro.local",
-      "publish": "commit"
+      "pid": 72701,
+      "publish": "commit",
+      "gitAccount": "suleimansh",
+      "baseCommit": "2805c78d1b33c7ba2a96c2b7028e6bb62d09d51d"
     },
+    "pid": 72701,
     "host": "Suleimans-MacBook-Pro.local",
-    "publish": "commit"
+    "gitAccount": "suleimansh",
+    "baseCommit": "2805c78d1b33c7ba2a96c2b7028e6bb62d09d51d",
+    "publish": "commit",
+    "kind": "prompt",
+    "workspace": "/Users/suleiman/Projects/openagent/.branches/agent-2026-11-05T11-36-18-585Z",
+    "sessionId": "7f64bc9f-3585-4821-85fd-c8bec70f7209"
   }
 }
