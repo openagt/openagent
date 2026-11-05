@@ -43,11 +43,18 @@ section[id] {
 .nav-btn:hover {
   border-color: #859289 !important;
 }
-/* The toggle under the logo: only on a computer with OpenAgent installed (+Head.tsx, ViewToggle). */
+/* The toggle under the logo and the big Dashboard button: only on a computer with OpenAgent installed (+Head.tsx, ViewToggle). */
 .view-toggle {
   display: none !important;
 }
 html[data-installed] .view-toggle {
+  display: inline-flex !important;
+}
+/* The big Dashboard button too: it leads to a dashboard only where there is one. */
+.dashboard-cta {
+  display: none !important;
+}
+html[data-installed] .dashboard-cta {
   display: inline-flex !important;
 }
 .view-toggle-off:hover {
