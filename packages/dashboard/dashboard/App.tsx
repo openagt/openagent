@@ -443,6 +443,8 @@ export function App() {
   // Whether the daemon answers at all (#948). Without this, a dead daemon froze every surface
   // silently: the channels retry their transport without a verdict and the polls keep their
   // last value, so "the agent went quiet" and "nothing on this page is live" looked identical.
+  // While the daemon is not answering, its banner says all of it: a run's "live stream lost" notice
+  // under it would only repeat one part, so a run's view is told the stream is lost only then.
   const healthy = useDaemonHealth()
 
   // Route the main pane: the Overview dashboard when no project is selected (#471); else the
@@ -543,7 +545,7 @@ export function App() {
       // list we have not read yet, where whether the agent runs is not known. Only a session that
       // is genuinely absent from a list we did read is gone.
       if (agentId === agentStart.id || !agentsLoaded)
-        return <AgentView projectId={projectId} agentId={agentId} events={events} live={agentId === agentStart.id ? true : null} picks={agentId === agentStart.id ? agentStart.picks : undefined} label={preferences.nameRuns !== false ? startedTitle : agentStart.intent || undefined} naming={agentId === agentStart.id && preferences.nameRuns !== false && startedTitle === undefined} projectName={projectName} remoteLabel={agentId === agentStart.id ? agentStart.runsOn : undefined} files={files} lost={lost} writing={writing} startedWith={agentId === agentStart.id ? agentStart.intent : undefined} onAgentStarted={onAgentStarted} contextSet={contextSet} onProjectRemoved={removableHere} />
+        return <AgentView projectId={projectId} agentId={agentId} events={events} live={agentId === agentStart.id ? true : null} picks={agentId === agentStart.id ? agentStart.picks : undefined} label={preferences.nameRuns !== false ? startedTitle : agentStart.intent || undefined} naming={agentId === agentStart.id && preferences.nameRuns !== false && startedTitle === undefined} projectName={projectName} remoteLabel={agentId === agentStart.id ? agentStart.runsOn : undefined} files={files} lost={lost && healthy} writing={writing} startedWith={agentId === agentStart.id ? agentStart.intent : undefined} onAgentStarted={onAgentStarted} contextSet={contextSet} onProjectRemoved={removableHere} />
       return (
         <NotFound
           title="This agent is gone"
@@ -567,7 +569,7 @@ export function App() {
         naming={selectedAgent.parent === undefined && awaitingName(selectedAgent, preferences.nameRuns !== false) && startedTitle === undefined}
         projectName={projectName}
         files={files}
-        lost={lost}
+        lost={lost && healthy}
         writing={writing}
         startedWith={agentId === agentStart.id ? agentStart.intent : undefined}
         picks={agentId === agentStart.id ? agentStart.picks : undefined}
@@ -665,13 +667,18 @@ export function App() {
     <ProjectLabelsContext.Provider value={labels}>
     {/* As tall as what the screen shows, never taller: a phone's 100vh reaches under its browser's
         bars, and the page then scrolled around the column that scrolls. */}
-    <SidebarProvider open={!sidebarHidden} onOpenChange={open => setSidebarHidden(!open)} className={pageScrolls ? 'min-h-dvh flex-col' : 'fixed inset-x-0 top-(--shown-top,0px) h-(--shown-height,100dvh) min-h-0 flex-col overflow-hidden'} style={{ '--sidebar-width': `${sidebarWidth}px` } as CSSProperties}>
+    {/* `--top-banner`: the height of the daemon's banner while it shows, which a page that scrolls
+        as a page starts its pinned sidebar under, as every other page has it above its sidebar. */}
+    <SidebarProvider open={!sidebarHidden} onOpenChange={open => setSidebarHidden(!open)} className={pageScrolls ? 'min-h-dvh flex-col' : 'fixed inset-x-0 top-(--shown-top,0px) h-(--shown-height,100dvh) min-h-0 flex-col overflow-hidden'} style={{ '--sidebar-width': `${sidebarWidth}px`, ...(healthy ? {} : { '--top-banner': '2.25rem' }) } as CSSProperties}>
       {/* The top navbar is gone (#772 follow-up): its brand, global nav and utility controls moved
           into the sidebar (AgentHistory), so the workspace and the panes get the full height. */}
       {!healthy && (
-        <div role="alert" className="flex items-center gap-2 border-b border-border bg-warning/10 px-4 py-2 text-xs text-warning">
-          <TriangleAlert className="h-3.5 w-3.5 shrink-0" aria-hidden />
-          The daemon is not answering — retrying. Everything on this page is frozen until it returns.
+        // Kept at the top of a page that scrolls, over an opaque ground, as the pinned sidebar is under it.
+        <div role="alert" className={cn('h-(--top-banner) shrink-0 bg-background', pageScrolls && 'sticky top-0 z-30')}>
+          <div className="flex h-full items-center gap-2 border-b border-border bg-warning/10 px-4 text-xs text-warning">
+            <TriangleAlert className="h-3.5 w-3.5 shrink-0" aria-hidden />
+            The daemon is not answering — retrying. Everything on this page is frozen until it returns.
+          </div>
         </div>
       )}
       {/* The workspace row is fixed-height: each column scrolls internally, so the row itself
