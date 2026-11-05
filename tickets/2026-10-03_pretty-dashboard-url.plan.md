@@ -1,5 +1,6 @@
 Effort: 3
 Uncertainty: 7
+Outdated: yes
 
 # [Plan] Pretty Dashboard URL
 
