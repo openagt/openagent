@@ -23,7 +23,7 @@ export function BrandLink({ working, href = '/', onNavigate }: { working: boolea
           and it is still the link home (#909). Said with a screen-size class alone, never a bare
           `hidden` undone at a width: a tool page's stylesheet is loaded after the page's and has
           its own `.hidden`, which then won and hid the word at every width. */}
-      <span className="shrink-0 font-['Source_Serif_4',ui-serif,serif] text-[19px] leading-6 font-normal tracking-[-0.01em] max-sm:hidden">OpenAgent</span>
+      <span className="shrink-0 font-['IBM_Plex_Sans',ui-sans-serif,sans-serif] text-[17px] leading-6 font-medium max-sm:hidden">OpenAgent</span>
     </a>
   )
 }

@@ -27,9 +27,6 @@ function dashboardHere(): Promise<boolean> {
   return asked
 }
 
-/** The dashboard's font for the toggle, so the two toggles are one. */
-const pillFont = "Figtree, ui-sans-serif, system-ui, sans-serif"
-
 const pillStyle: CSSProperties = {
   position: 'relative',
   height: 24,
@@ -37,7 +34,6 @@ const pillStyle: CSSProperties = {
   alignItems: 'center',
   justifyContent: 'center',
   borderRadius: 6,
-  fontFamily: pillFont,
   fontSize: 12,
   lineHeight: '16px',
   fontWeight: 500,
@@ -71,12 +67,15 @@ export function ViewToggle({ style }: { style?: CSSProperties }) {
         aria-hidden
         style={{ position: 'absolute', top: 2, left: 2, width: 96, height: 24, borderRadius: 6, background: '#a7c080', viewTransitionName: 'oa-toggle-thumb' }}
       />
-      <span aria-current="page" style={{ ...pillStyle, width: 96, color: '#232a2e' }}>
-        Landing page
+      {/* The labels after the thumb, and named apart from it: the switch draws them above the thumb as it slides. */}
+      <span style={{ position: 'relative', display: 'inline-flex', gap: 2, viewTransitionName: 'oa-toggle-labels' }}>
+        <span aria-current="page" style={{ ...pillStyle, width: 96, color: '#232a2e' }}>
+          Landing page
+        </span>
+        <a href={dashboardHref} className="view-toggle-off" style={{ ...pillStyle, width: 84, color: '#d3c6aa' }}>
+          Dashboard
+        </a>
       </span>
-      <a href={dashboardHref} className="view-toggle-off" style={{ ...pillStyle, width: 84, color: '#d3c6aa' }}>
-        Dashboard
-      </a>
     </div>
   )
 }

@@ -22,12 +22,10 @@ function goHome(e: MouseEvent) {
   window.scrollTo({ top: 0, behavior: 'smooth' })
 }
 
-/**
- * The dashboard's font for its wordmark. The logo, the wordmark and the toggle are drawn here at the
- * very place and size the dashboard draws them, the top of its sidebar, so switching between the
- * two pages moves neither (#1919).
+/*
+ * The logo, the wordmark and the toggle are drawn here at the very place and size the dashboard
+ * draws them, the top of its sidebar, so switching between the two pages moves neither (#1919).
  */
-const wordmarkFont = "'Source Serif 4', ui-serif, serif"
 
 export function TopNav() {
   return (
@@ -54,7 +52,7 @@ export function TopNav() {
         }}
       >
         <img src="/assets/logo.svg" alt="OpenAgent logo" style={{ width: 21, height: 24, display: 'block' }} />
-        <span style={{ fontFamily: wordmarkFont, fontSize: 19, lineHeight: '24px', fontWeight: 400, letterSpacing: '-0.01em' }}>
+        <span style={{ fontSize: 17, lineHeight: '24px', fontWeight: 500 }}>
           OpenAgent
         </span>
       </a>

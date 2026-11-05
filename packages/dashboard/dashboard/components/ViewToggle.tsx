@@ -18,16 +18,20 @@ function onWebsiteName(): boolean {
  */
 export function ViewToggle() {
   if (!onWebsiteName()) return null
-  const pill = 'relative flex h-6 items-center justify-center rounded-md text-xs font-medium whitespace-nowrap'
+  // In the website's font whatever the page's is (Settings › Appearance), so the two toggles are one.
+  const pill = "relative flex h-6 items-center justify-center rounded-md font-['IBM_Plex_Sans',ui-sans-serif,sans-serif] text-xs font-medium whitespace-nowrap"
   return (
     <div className="relative inline-flex gap-0.5 self-start rounded-lg border border-sidebar-border p-0.5 [view-transition-name:oa-toggle]">
       <span aria-hidden className="absolute top-0.5 left-[calc(0.125rem+96px+0.125rem)] h-6 w-[84px] rounded-md bg-primary [view-transition-name:oa-toggle-thumb]" />
-      {/* A plain link: the landing page is the website's, not a page of this app. */}
-      <a href="/_view/landing" className={cn(pill, 'w-[96px] text-muted-foreground transition-colors hover:text-foreground')}>
-        Landing page
-      </a>
-      <span aria-current="page" className={cn(pill, 'w-[84px] text-primary-foreground')}>
-        Dashboard
+      {/* The labels after the thumb, and named apart from it: the switch draws them above the thumb as it slides. */}
+      <span className="relative inline-flex gap-0.5 [view-transition-name:oa-toggle-labels]">
+        {/* A plain link: the landing page is the website's, not a page of this app. */}
+        <a href="/_view/landing" className={cn(pill, 'w-[96px] text-muted-foreground transition-colors hover:text-foreground')}>
+          Landing page
+        </a>
+        <span aria-current="page" className={cn(pill, 'w-[84px] text-primary-foreground')}>
+          Dashboard
+        </span>
       </span>
     </div>
   )

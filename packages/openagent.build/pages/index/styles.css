@@ -23,6 +23,7 @@ body {
   color: #d3c6aa;
   font-family: 'IBM Plex Sans', sans-serif;
   -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
 }
 a {
   color: #7fbbb3;

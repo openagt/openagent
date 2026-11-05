@@ -16,7 +16,7 @@ const FALLBACKS = {
 }
 
 /** The families index.html already loads. */
-const LOADED = new Set(['Figtree', 'JetBrains Mono', 'Source Serif 4'])
+const LOADED = new Set(['IBM Plex Sans', 'JetBrains Mono', 'Source Serif 4'])
 
 const LINK_ID = 'picked-fonts'
 
