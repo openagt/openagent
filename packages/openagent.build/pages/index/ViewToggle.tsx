@@ -17,14 +17,29 @@ export function useDashboardHref(): string {
   return href
 }
 
-/** Asked once per page, however many of its parts lead to the dashboard. */
+/**
+ * Asked once per page, however many of its parts lead to the dashboard. The answer also settles
+ * whether the toggle shows (`html[data-installed]`, set before first paint from the view cookie):
+ * the public website, reached with a cookie an uninstalled dashboard left, hides it and forgets
+ * the cookie.
+ */
 let asked: Promise<boolean> | undefined
 function dashboardHere(): Promise<boolean> {
   asked ??= fetch('/_view', { method: 'HEAD', cache: 'no-store' }).then(
-    (res) => res.status === 204,
+    (res) => {
+      const here = res.status === 204
+      if (here) document.documentElement.dataset.installed = ''
+      else forgetInstalled()
+      return here
+    },
     () => false,
   )
   return asked
+}
+
+function forgetInstalled(): void {
+  delete document.documentElement.dataset.installed
+  document.cookie = 'openagent-view=; Path=/; Max-Age=0; Secure; SameSite=Lax'
 }
 
 const pillStyle: CSSProperties = {
@@ -50,11 +65,12 @@ export function ViewToggle({ style }: { style?: CSSProperties }) {
   const dashboardHref = useDashboardHref()
   return (
     <div
+      // Shown only where OpenAgent is installed (styles.css), with no dashboard to switch to elsewhere.
+      className="view-toggle"
       style={{
         // The thumb is placed in it: in place, or where the caller puts it.
         position: 'relative',
         ...style,
-        display: 'inline-flex',
         gap: 2,
         padding: 2,
         border: '1px solid #4f585e',

@@ -43,6 +43,13 @@ section[id] {
 .nav-btn:hover {
   border-color: #859289 !important;
 }
+/* The toggle under the logo: only on a computer with OpenAgent installed (+Head.tsx, ViewToggle). */
+.view-toggle {
+  display: none !important;
+}
+html[data-installed] .view-toggle {
+  display: inline-flex !important;
+}
 .view-toggle-off:hover {
   color: #fdf6e3 !important;
 }
