@@ -23,8 +23,9 @@ Today every write goes through `withFileBranch(repo, 'agent-data')` in `@openagt
 2. **Skill texts stop naming the branch.** They say "use the command"; the command knows the folder.
 3. **Folders in Settings.** The list, add a folder, give a folder a remote, "this project writes to…". Each run, ticket and skill shows which folder it comes from.
 4. **Skills from every folder** are linked into the run.
+5. **A ticked skill goes to the personal folder** (linked into runs like the default ones), not committed into the project's repo. Putting it in the project for everyone is a separate choice.
 
-Later: machine settings kept in the personal repo (logins stay per machine; maybe Claude's `setup-token`, encrypted); messages to an agent on another machine through the data repo, shaped like the reply skill (a scheduler `when` command checks for new messages and wakes the run).
+Later: machine settings kept in the personal repo, so a new machine is a clone (logins stay per machine: a copied Claude login logs the other machine out, and Codex refresh tokens work once; maybe Claude's `setup-token`, encrypted); messages to an agent on another machine through the data repo, shaped like the reply skill (a scheduler `when` command checks for new messages and wakes the run).
 
 ## Open
 
