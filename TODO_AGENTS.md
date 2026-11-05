@@ -15,6 +15,7 @@
 - Create tickets/2026-10-26_dashboard-on-tailnet-address.plan.md
 - Create tickets/2026-10-29_personal-installation.plan.md
 - Create tickets/2026-10-29_account-rotation-skill.plan.md
+- Create tickets/2026-11-05_agent-data-in-list-of-folders.plan.md
 
 
 ## Priority 4
