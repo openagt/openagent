@@ -3,13 +3,12 @@
  * the agent queue (the `queue` skill's file, which this package never reads or writes) and to the
  * issue it tracks. No node imports, so browser-side code can name them too.
  *
- * The branch itself is not named here: the tickets live on the shared data branch, `agent-data`,
- * whose name `@openagt/agent-data` exports as `DATA_BRANCH`. A convention, not a setting:
- * `SKILL.md` names the same branch to every agent.
+ * Where the tickets are is not named here: `@openagt/agent-data` knows the project's data directory (in
+ * the person's own folder, or the project's `agent-data` branch when shared).
  */
 
 /**
- * The directory on the branch that holds the tickets — `tickets/<DATE>_<SLUG>.md`, their `.plan.md`
+ * The directory of the project's data that holds the tickets — `tickets/<DATE>_<SLUG>.md`, their `.plan.md`
  * and `.lock.md` siblings, and `meta.json` — and the name of the repository-root link into it.
  * It holds only open tickets: closing one deletes it.
  */

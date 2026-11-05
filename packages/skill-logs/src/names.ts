@@ -1,10 +1,9 @@
 /**
  * The one name the package hangs off. No node imports, so browser-side code can name it too.
  *
- * The branch itself is not named here: the runs live on the shared data branch, `agent-data`,
- * whose name `@openagt/agent-data` exports as `DATA_BRANCH`. A convention, not a setting:
- * `SKILL.md` names the same branch to every agent.
+ * Where the runs are is not named here: `@openagt/agent-data` knows the project's data directory (in
+ * the person's own folder, or the project's `agent-data` branch when shared).
  */
 
-/** Where the runs live: `agents/<who>/<id>.json` and `<id>.jsonl` under the branch root. */
+/** Where the runs live: `agents/<who>/<id>.json` and `<id>.jsonl` in the project's data directory. */
 export const RUNS_DIR = 'agents'
