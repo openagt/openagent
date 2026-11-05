@@ -8,7 +8,7 @@ const sendSyncPersonalFolder = vi.fn(async (_address: string) => ({ ok: true }) 
 const sendStopSyncingPersonalFolder = vi.fn(async () => ({ ok: true as const }))
 vi.mock('../rpc/personal-folder.js', () => ({ onPersonalFolder, sendSyncPersonalFolder, sendStopSyncingPersonalFolder }))
 
-const { RecordsSettings } = await import('./RecordsSettings.js')
+const { AgentDataSettings } = await import('./AgentDataSettings.js')
 
 beforeEach(() => {
   view = { personal: { path: '~/.openagent', unsent: 0, projects: ['test-project', 'oa-newuser'] }, shared: ['openagent'] }
@@ -18,15 +18,15 @@ beforeEach(() => {
 })
 afterEach(cleanup)
 
-describe('Settings › Records', () => {
+describe('Settings › Agent data', () => {
   test('says where the records are: the folder on this computer only, the projects in it, and the shared ones on their own branch', async () => {
-    render(<RecordsSettings />)
+    render(<AgentDataSettings />)
     expect(await screen.findByText('~/.openagent · test-project, oa-newuser. Only on this computer.')).toBeTruthy()
     expect(screen.getByText("openagent · on the branch agent-data. Change it in the project's menu.")).toBeTruthy()
   })
 
   test('syncing asks for the repository, sends what was typed, and then says what it syncs with', async () => {
-    render(<RecordsSettings />)
+    render(<AgentDataSettings />)
     fireEvent.click(await screen.findByRole('button', { name: 'Sync with a repository' }))
     expect(screen.getByText(/Make an empty private repository, then paste its address/)).toBeTruthy()
     const sync = screen.getByRole('button', { name: 'Sync' })
@@ -44,7 +44,7 @@ describe('Settings › Records', () => {
 
   test("a repository that refuses: its reason is said and the address stays to fix", async () => {
     sendSyncPersonalFolder.mockResolvedValueOnce({ ok: false, error: 'the repository could not be reached: not found' })
-    render(<RecordsSettings />)
+    render(<AgentDataSettings />)
     fireEvent.click(await screen.findByRole('button', { name: 'Sync with a repository' }))
     fireEvent.change(screen.getByLabelText('Repository address'), { target: { value: 'github.com/me/typo' } })
     fireEvent.click(screen.getByRole('button', { name: 'Sync' }))
@@ -54,7 +54,7 @@ describe('Settings › Records', () => {
 
   test('a synced folder can stop syncing', async () => {
     view = { ...view, personal: { ...view.personal, remote: 'github.com/me/agent' } }
-    render(<RecordsSettings />)
+    render(<AgentDataSettings />)
     view = { ...view, personal: { path: view.personal.path, unsent: 0, projects: view.personal.projects } }
     fireEvent.click(await screen.findByRole('button', { name: 'Stop syncing' }))
     await waitFor(() => expect(sendStopSyncingPersonalFolder).toHaveBeenCalled())

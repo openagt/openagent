@@ -4,7 +4,7 @@ import { contextProjects } from './context.js'
 import { providedDataChanged } from '../store/provided.js'
 import { repositoryUrlOf } from '../repository-url.js'
 
-// Settings › Records: where the agents' records are kept. The person's own folder, `~/.openagent`,
+// Settings › Agent data: where everything the agents keep is. The person's own folder, `~/.openagent`,
 // which may sync with a repository of theirs so every machine of theirs has the same records, and
 // the projects shared on their own repository's branch instead.
 

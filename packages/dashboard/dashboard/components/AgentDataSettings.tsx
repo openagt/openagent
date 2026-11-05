@@ -7,17 +7,17 @@ import { Input } from './ui/input.js'
 import { SettingsRow, SettingsSection } from './SettingsRows.js'
 
 /** The Settings entry's id. */
-export const RECORDS_ENTRY = 'records'
+export const AGENT_DATA_ENTRY = 'agent-data'
 
 /** Read again this often while the page is open: a sync of another computer's lands in the folder on its own. */
 const EVERY_MS = 10_000
 
 /**
- * Settings › Records: where the agents' records are kept. The person's own folder, which may sync
+ * Settings › Agent data: where everything the agents keep is. The person's own folder, which may sync
  * with a repository of theirs so each of their computers has the same records, and the projects
  * shared on their own repository's branch instead.
  */
-export function RecordsSettings() {
+export function AgentDataSettings() {
   const { value: view, reload } = usePolled<PersonalFolderView | null>(onPersonalFolder, null, EVERY_MS, [])
   const [asking, setAsking] = useState(false)
   const [address, setAddress] = useState('')
@@ -55,7 +55,7 @@ export function RecordsSettings() {
   )
 
   return (
-    <SettingsSection description="Where your agents' records are kept: what each agent was asked and answered, the tickets and the queue.">
+    <SettingsSection description="Everything your agents keep: what each was asked and answered, the tickets, the queue and plans.">
       <div className="py-3 first:pt-0 last:pb-0">
         <SettingsRow
           label="Your folder"
