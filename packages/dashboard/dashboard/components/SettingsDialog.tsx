@@ -14,7 +14,7 @@ import { usePreferences, updatePreferences, themePreference, type ThemePreferenc
 import { useNotificationPermission } from '../lib/notification-permission.js'
 import { BridgeSettings } from './BridgeSettings.js'
 import { AccountsSettings } from './Accounts.js'
-import { FOLDERS_ENTRY, FoldersSettings } from './FoldersSettings.js'
+import { RECORDS_ENTRY, RecordsSettings } from './RecordsSettings.js'
 import { ACCOUNTS_ENTRY } from './Logins.js'
 import { PROJECT_ACCOUNTS_ENTRY, ProjectAccountsSettings, readProjectAccountsAhead, useProjectAccounts } from './ProjectAccounts.js'
 import { SKILLS_ENTRY, SkillsPickProject, SkillsSettings } from './ProjectSkills.js'
@@ -437,10 +437,10 @@ function useOwnEntries(): Entry[] {
       body: <AccountsSettings />,
     },
     {
-      id: FOLDERS_ENTRY,
-      title: 'Folders',
+      id: RECORDS_ENTRY,
+      title: 'Records',
       icon: FolderGit2,
-      body: <FoldersSettings />,
+      body: <RecordsSettings />,
     },
     {
       id: 'claude-web',

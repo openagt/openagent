@@ -34,7 +34,7 @@ export function SettingsRow({
   dimmed = false,
 }: {
   label: string
-  description: string
+  description: ReactNode
   control: ReactNode
   /** A row the rules turned off: greyed, but still shown with its reason. */
   dimmed?: boolean

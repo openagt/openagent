@@ -36,7 +36,7 @@ already made, and lists it in its pull request; for anything else it proposes an
   records shared with other machines and cloud sessions keep reaching them.
 - One place at a time: the share switch moves the project's data to the other place, never a
   copy in each.
-- The personal folder may sync with one repository of the person's (Settings › Folders), so
+- The personal folder may sync with one repository of the person's (Settings › Records), so
   each of their machines has the same records. Picked first over sending one project's data to a
   team's repository, which comes after.
 

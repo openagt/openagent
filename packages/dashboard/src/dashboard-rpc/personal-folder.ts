@@ -4,16 +4,18 @@ import { contextProjects } from './context.js'
 import { providedDataChanged } from '../store/provided.js'
 import { repositoryUrlOf } from '../repository-url.js'
 
-// Settings › Folders: where the agents' records are kept. The person's own folder, `~/.openagent`,
+// Settings › Records: where the agents' records are kept. The person's own folder, `~/.openagent`,
 // which may sync with a repository of theirs so every machine of theirs has the same records, and
 // the projects shared on their own repository's branch instead.
 
-export interface FoldersView {
+export interface PersonalFolderView {
   personal: {
     /** The folder, with the home directory as `~`. */
     path: string
     /** The repository it syncs with, as `host/path`, or its address as given when it is not one. */
     remote?: string
+    /** The repository's page, for a remote that is on a host. */
+    remoteUrl?: string
     /** Commits made here that have not reached the repository yet. */
     unsent: number
     /** The projects of this machine that keep their records in it, by name. */
@@ -23,15 +25,22 @@ export interface FoldersView {
   shared: string[]
 }
 
-export async function onFolders(): Promise<FoldersView> {
+export async function onPersonalFolder(): Promise<PersonalFolderView> {
   const [state, projects] = await Promise.all([readPersonalFolder(), contextProjects().list()])
   const personal: string[] = []
   const shared: string[] = []
   for (const project of projects) ((await readSharing(project.path).catch(() => false)) ? shared : personal).push(project.name)
   const home = homedir()
+  const spelling = state.remote ? spellingOfRemote(state.remote) : undefined
   const path = state.path === home || state.path.startsWith(home + '/') ? '~' + state.path.slice(home.length) : state.path
   return {
-    personal: { path, ...(state.remote ? { remote: spellingOfRemote(state.remote) ?? state.remote } : {}), unsent: state.unsent, projects: personal },
+    personal: {
+      path,
+      ...(state.remote ? { remote: spelling ?? state.remote } : {}),
+      ...(spelling ? { remoteUrl: `https://${spelling}` } : {}),
+      unsent: state.unsent,
+      projects: personal,
+    },
     shared,
   }
 }
