@@ -27,4 +27,4 @@ Keeping `openagent.build` in the address bar while it shows the local dashboard 
 
 Suggested instead: keep the toggle and the "Dashboard" button, but the button sends the browser to the dashboard's own address (`localhost:4200`, or the VPS on a phone). It works in every browser, asks nothing, and the website never touches the machine; the address bar changes after the click. For a nicer address, a DNS record could point `my.openagent.build` at "this computer" so the button goes to `my.openagent.build:4200`, at the price of plain HTTP ("Not secure", a few browser features off) and some home routers blocking such names.
 
-The issue's author has not answered yet: which way to go is open. Full conversation: https://gist.github.com/suleimansh/189c9fc3899534e6f072245d5de9e270
+The issue's author answered (2026-11-05) that these costs are "not good", and asked whether serving the dashboard at `dash.openagent.build` lifts some of the limitations. Which way to go is still open: the subdomain question is to be answered first. Full conversation: https://gist.github.com/suleimansh/189c9fc3899534e6f072245d5de9e270
