@@ -3,7 +3,7 @@ import { copyFile, lstat, mkdir, readlink, readdir, realpath, rename, rm, stat, 
 import { homedir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { accountFolder, accountHome, codexWindows } from './codex-accounts.js'
-import { type AccountRotation, type DriverRateWindow, type ReadyPrompt, readyPrompt, runCliSession, continuingTurn, finishTurn, agentEnv, attachLog, combineFraming, combineSignals, makeEmit, promptSent, readWorkspaceFile, oneLine, cutOutput, callArgument, lineCount, patchSize, hunkLines, checkCliReady, type AgentCliParser, type CliIo, type CliSpec, type DriverReadiness, type DriverReadyOptions, type PersonalSetup, type SpawnLike, type SessionLog, type Driver, type DriverEvent, type FileChange, type DriverModel, type DriverPromptOptions, type DriverSession, type DriverStartOptions, type DriverTurn, type DriverUsage } from '@openagt/agent-driver'
+import { type AccountRotation, type Question, toolQuestion, type DriverRateWindow, type ReadyPrompt, readyPrompt, runCliSession, continuingTurn, finishTurn, agentEnv, attachLog, combineFraming, combineSignals, makeEmit, promptSent, readWorkspaceFile, oneLine, cutOutput, callArgument, lineCount, patchSize, hunkLines, checkCliReady, type AgentCliParser, type CliIo, type CliSpec, type DriverReadiness, type DriverReadyOptions, type PersonalSetup, type SpawnLike, type SessionLog, type Driver, type DriverEvent, type FileChange, type DriverModel, type DriverPromptOptions, type DriverSession, type DriverStartOptions, type DriverTurn, type DriverUsage } from '@openagt/agent-driver'
 
 /**
  * Codex's sandbox policy for the shell commands the model writes.
@@ -139,6 +139,9 @@ export async function prepareCodexHome(home: string, personal: string): Promise<
  */
 export class CodexDriver implements Driver {
   readonly id = 'codex'
+  // No `ownQuestionTool`, though the agent has request_user_input: without the `ask` skill most
+  // models ask in plain words instead (6 of 20 used the tool, measured on codex-cli 0.166.0 across
+  // its 8 models), and with it they use the tool (15 of 20) or the skill's block (3).
   constructor(private readonly opts: CodexDriverOptions = {}) {}
 
   async start(opts: DriverStartOptions): Promise<DriverSession> {
@@ -430,10 +433,16 @@ export class CodexSession implements DriverSession {
     // DriverStartOptions.noTools}). Codex has no one switch for it, as Claude Code's `--tools ""`
     // is: its tools and the rest ride on its feature flags, so they go off one by one.
     if (this.startOpts.noTools) for (const feature of SPARE_FEATURES) args.push('-c', `features.${feature}=false`)
+    // Codex's own tool for asking the person, request_user_input: off by default, under development
+    // on codex-cli 0.166.0. On, the agent asks with it, and the turn stops on its question.
+    else args.push('-c', `features.${ASK_FEATURE}=true`)
     if (this.config.extraArgs) args.push(...this.config.extraArgs)
     return args
   }
 }
+
+/** The feature that gives a Codex agent its request_user_input tool, by `codex features list`'s name. */
+const ASK_FEATURE = 'default_mode_request_user_input'
 
 /**
  * What a session that has nothing to do can be started without, by the names `codex features list`
@@ -658,6 +667,8 @@ export class CodexAppServerParser implements AgentCliParser {
   windows: DriverRateWindow[] | undefined
   /** Whether the account's usage limit is what ended the turn. */
   stoppedByLimit = false
+  /** The question the agent asked with request_user_input, which the turn was stopped on. */
+  private asked: Question | undefined
 
   constructor(private readonly turn: CodexTurnRequest) {}
 
@@ -709,9 +720,18 @@ export class CodexAppServerParser implements AgentCliParser {
     const method = msg['method']
     const id = msg['id']
     if (typeof method !== 'string') return typeof id === 'number' ? this.onResponse(id, msg) : []
-    // A request of the server's own: an approval or a question nobody is there to answer.
+    // A request of the server's own. The agent's question is shown to the person, who answers it
+    // in the chat, and the turn is stopped on it, as Claude Code's is; an approval, or a question
+    // no card can ask, is refused: nobody is there to answer it.
     if (id !== undefined) {
-      this.send({ id, error: { code: -32601, message: 'agent-driver answers no requests' } })
+      const question = method === ASK_REQUEST && this.asked === undefined ? codexQuestion(msg['params']) : undefined
+      if (question === undefined) {
+        this.send({ id, error: { code: -32601, message: 'agent-driver answers no requests' } })
+        return []
+      }
+      this.asked = question
+      const turnId = field(msg['params'], 'turnId')
+      this.request('turn/interrupt', { threadId: this.sessionId, turnId: typeof turnId === 'string' ? turnId : this.turnId }, () => [])
       return []
     }
     const params = msg['params']
@@ -731,6 +751,7 @@ export class CodexAppServerParser implements AgentCliParser {
       text: this.text,
       ...(this.sessionId ? { sessionId: this.sessionId } : {}),
       ...(this.usage ? { usage: { ...this.usage, ...(this.context !== undefined ? { contextTokens: this.context } : {}) } } : {}),
+      ...(this.asked ? { question: this.asked } : {}),
     }
   }
 
@@ -789,7 +810,8 @@ export class CodexAppServerParser implements AgentCliParser {
       }
       case 'turn/completed': {
         const status = field(params['turn'], 'status')
-        if (status === 'completed') return this.end()
+        // Stopped on the agent's question: asked, and over.
+        if (status === 'completed' || (status === 'interrupted' && this.asked !== undefined)) return this.end()
         const error = field(params['turn'], 'error')
         // Codex's own word for it, and its sentence ("You've hit your usage limit…") when an older one says no word.
         const info = field(error, 'codexErrorInfo')
@@ -885,6 +907,20 @@ export class CodexAppServerParser implements AgentCliParser {
     this.io?.end()
     return []
   }
+}
+
+/** The server request request_user_input arrives as. */
+const ASK_REQUEST = 'item/tool/requestUserInput'
+
+/**
+ * The question a request_user_input request asks, from its params: `{questions: [{id, header,
+ * question, isOther, isSecret, options: [{label, description}]}]}`. The first one, as with Claude
+ * Code's; one that asks for a secret is no card's to ask, and is refused.
+ */
+export function codexQuestion(params: unknown): Question | undefined {
+  const questions = field(params, 'questions')
+  const first: unknown = Array.isArray(questions) ? questions[0] : undefined
+  return field(first, 'isSecret') === true ? undefined : toolQuestion(first)
 }
 
 /** Two token readings added up. */
