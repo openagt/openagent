@@ -1,6 +1,6 @@
 {
   "name": "@openagt/uninstall",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Take OpenAgent off this computer again: everything `npx @openagt/install` put on it.",
   "license": "MIT",
   "repository": {

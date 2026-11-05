@@ -13,6 +13,14 @@ already made, and lists it in its pull request; for anything else it proposes an
   @openagt/uninstall` takes off everything the install put on the computer. Picked over
   one command that does both.
 
+## On Linux
+- A command the install needs and the computer lacks (`certutil`, `nft`, `openssl`) is
+  installed by it, with the computer's package manager, in the password step; picked over
+  naming the package and stopping. The uninstall leaves those packages, as other programs
+  may use them, and says how to take them off; picked over removing them.
+- The certificate is also trusted by the system, for `curl` and other tools, where the
+  system takes it (Debian, Ubuntu); picked over the browsers alone.
+
 ## The address
 - The installed dashboard is opened at a name of OpenAgent's own, with the lock and no
   port: this computer answers the name itself (its hosts file), with a certificate made on

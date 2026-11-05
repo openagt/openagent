@@ -1,38 +1,14 @@
 import { strict as assert } from 'node:assert'
 import { test } from 'node:test'
 import { execFileSync } from 'node:child_process'
-import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
+import { mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { ADDRESS, LOOPBACK_ADDRESS, addHostsLine, adminInstallScript, adminUninstallScript, dashboardPlist, portPlist, portRule, quoted, removeHostsLine } from './mac.js'
+import { LOOPBACK_ADDRESS } from './address.js'
+import { adminInstallScript, adminUninstallScript, dashboardPlist, portPlist, portRule } from './mac.js'
 
-/** The scripts are a Mac's: its `sed`, `plutil` and `launchctl`. */
+/** The property lists are read by a Mac's `plutil`. */
 const onMac = { skip: process.platform !== 'darwin' }
-
-const sh = (script: string) => execFileSync('/bin/sh', ['-c', script], { encoding: 'utf8' })
-
-test('quoted keeps any value one word, quotes included', () => {
-  for (const value of ["it's", 'a b', '$HOME', '"x"', "''"]) assert.equal(sh(`printf '%s' ${quoted(value)}`), value)
-})
-
-test('the hosts line is added once, however often, and taken off with the rest left as it was', onMac, async () => {
-  const dir = await mkdtemp(join(tmpdir(), 'install-hosts-'))
-  const hosts = join(dir, 'hosts')
-  try {
-    // A last line with no end: the install's must not be joined to it.
-    await writeFile(hosts, '127.0.0.1 localhost\n255.255.255.255 broadcasthost')
-    sh(addHostsLine(hosts, ADDRESS))
-    sh(addHostsLine(hosts, ADDRESS))
-    assert.equal(await readFile(hosts, 'utf8'), `127.0.0.1 localhost\n255.255.255.255 broadcasthost\n${LOOPBACK_ADDRESS} ${ADDRESS} # OpenAgent\n`)
-    sh(removeHostsLine(hosts))
-    assert.equal(await readFile(hosts, 'utf8'), '127.0.0.1 localhost\n255.255.255.255 broadcasthost\n')
-    // Nothing to take off: the file is left alone.
-    sh(removeHostsLine(hosts))
-    assert.equal(await readFile(hosts, 'utf8'), '127.0.0.1 localhost\n255.255.255.255 broadcasthost\n')
-  } finally {
-    await rm(dir, { recursive: true, force: true })
-  }
-})
 
 test('the launch agent and the launch daemon are property lists macOS reads', onMac, async () => {
   const dir = await mkdtemp(join(tmpdir(), 'install-plist-'))

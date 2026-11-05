@@ -132,7 +132,7 @@ export default function Page() {
         </div>
         <Step kicker="Install">
           <p style={pStyle}>
-            Install it, and from then on openagent.build opens your dashboard on this computer. It starts when you log in. macOS for now:
+            Install it, and from then on openagent.build opens your dashboard on this computer. It starts when you log in. macOS and Linux for now:
           </p>
           <PmSnippet get={(pm) => PMS[pm].install} />
         </Step>

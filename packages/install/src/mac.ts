@@ -1,21 +1,16 @@
+import { X509Certificate } from 'node:crypto'
+import { mkdir, readFile, rm, writeFile } from 'node:fs/promises'
+import { homedir } from 'node:os'
+import { dirname, join } from 'node:path'
 import { SECURE_PORT } from '@openagt/dashboard/secure-address'
+import { ADDRESS, LOOPBACK_ADDRESS, addHostsLine, quoted, removeHostsLine } from './address.js'
+import type { Platform } from './platform.js'
+import { run, succeeds } from './run.js'
 
 /**
- * What the install puts on a Mac, as text: the files it writes and the one script it runs as the
- * administrator. Pure, so a test reads each one; {@link install} and {@link uninstall} write and run them.
+ * What the install puts on a Mac. Its files and its script as the administrator are text, made by
+ * pure functions a test reads; {@link mac} writes and runs them.
  */
-
-/**
- * The dashboard's secure address: the website's own name, which this computer then answers
- * itself, the dashboard with the website's copy beside it (#1919).
- */
-export const ADDRESS = 'openagent.build'
-/**
- * The address the name points at: one of this computer's own, the address's alone. The port rule
- * then touches nothing else this computer sends itself on port 443 (a container a developer
- * publishes there, say), as a rule for `127.0.0.1` would.
- */
-export const LOOPBACK_ADDRESS = '127.0.0.42'
 
 /** What starts the dashboard at login: a launch agent of the person's own. */
 export const DASHBOARD_LABEL = 'build.openagent.dashboard'
@@ -28,9 +23,6 @@ export const PORT_PLIST = `/Library/LaunchDaemons/${PORT_LABEL}.plist`
  */
 export const PORT_ANCHOR = 'com.apple/openagent'
 export const PORT_RULE_FILE = '/etc/pf.anchors/build.openagent'
-
-/** The end of the hosts line the install adds, which is how the uninstall finds it again. */
-export const HOSTS_MARK = '# OpenAgent'
 
 /** One value in a launchd property list. */
 type PlistValue = string | boolean | PlistValue[] | { [key: string]: PlistValue }
@@ -94,26 +86,6 @@ export function portPlist(): string {
   })
 }
 
-/** `value` as one word of a shell script, whatever it holds. */
-export function quoted(value: string): string {
-  return `'${value.replaceAll("'", `'\\''`)}'`
-}
-
-/** Shell lines that take the install's line out of the hosts file `file`, and leave the rest as it was. */
-export function removeHostsLine(file: string): string {
-  return `if grep -q ${quoted(` ${HOSTS_MARK}$`)} ${quoted(file)}; then sed -i '' ${quoted(`/ ${HOSTS_MARK}$/d`)} ${quoted(file)}; fi`
-}
-
-/** Shell lines that point `name` at this computer in the hosts file `file`, once, however often they run. */
-export function addHostsLine(file: string, name: string): string {
-  return [
-    removeHostsLine(file),
-    // A file that does not end its last line would have this one joined to it.
-    `if [ -s ${quoted(file)} ] && [ -n "$(tail -c 1 ${quoted(file)})" ]; then echo >> ${quoted(file)}; fi`,
-    `printf '%s\\n' ${quoted(`${LOOPBACK_ADDRESS} ${name} ${HOSTS_MARK}`)} >> ${quoted(file)}`,
-  ].join('\n')
-}
-
 /** Forget what the Mac remembers of names, so the hosts line counts at once. */
 const FORGET_NAMES = 'dscacheutil -flushcache; killall -HUP mDNSResponder 2>/dev/null || true'
 
@@ -142,20 +114,61 @@ ${FORGET_NAMES}
 `
 }
 
-/** The certificate's openssl settings: for `name` alone, for a server, and no authority over any other. */
-export function certificateConfig(name: string): string {
-  return `[req]
-distinguished_name = dn
-prompt = no
-[dn]
-CN = ${name}
-[ext]
-subjectAltName = DNS:${name}
-basicConstraints = critical, CA:FALSE
-keyUsage = critical, digitalSignature, keyEncipherment
-extendedKeyUsage = serverAuth
-`
+/** Where the install keeps what it puts on this Mac, outside the secure address's own folder. */
+function places(env: NodeJS.ProcessEnv) {
+  const home = env.HOME || homedir()
+  return {
+    home,
+    agent: join(home, 'Library', 'LaunchAgents', `${DASHBOARD_LABEL}.plist`),
+    logs: join(home, 'Library', 'Logs', 'OpenAgent'),
+    app: join(home, 'Library', 'Application Support', 'OpenAgent'),
+    keychain: join(home, 'Library', 'Keychains', 'login.keychain-db'),
+  }
 }
 
-/** The longest a certificate may last for Safari and macOS: 825 days. */
-export const CERTIFICATE_DAYS = 825
+const uid = () => process.getuid?.() ?? 0
+
+export const mac: Platform = {
+  unable: async () => undefined,
+  stopDashboard: () => succeeds('launchctl', ['bootout', `gui/${uid()}/${DASHBOARD_LABEL}`]),
+  appDir: env => places(env).app,
+  prepare: async () => {},
+  adminInstall: () => ({
+    says: `your password as the administrator, once: ${ADDRESS} is pointed at this Mac (/etc/hosts), and its port 443 at the dashboard (a packet filter rule).`,
+    script: adminInstallScript(ADDRESS),
+  }),
+  async trust(certFile, io, env) {
+    // Trusted already, by an install before: macOS asks nothing.
+    if (await succeeds('security', ['verify-cert', '-c', certFile, '-p', 'ssl', '-s', ADDRESS, '-q'])) return
+    io.out(`◆ a certificate for ${ADDRESS} was made on this Mac. macOS asks for your password to trust it.`)
+    await run('security', ['add-trusted-cert', '-r', 'trustRoot', '-p', 'ssl', '-k', places(env).keychain, certFile])
+  },
+  async startDashboard({ node, dashboard, vars }, env) {
+    const place = places(env)
+    await mkdir(place.logs, { recursive: true })
+    await mkdir(dirname(place.agent), { recursive: true })
+    const log = join(place.logs, 'dashboard.log')
+    await writeFile(place.agent, dashboardPlist({ node, dashboard, home: place.home, env: vars, log }))
+    await run('launchctl', ['bootstrap', `gui/${uid()}`, place.agent])
+    return log
+  },
+  openCommand: 'open',
+  async removeDashboard(env) {
+    await run('launchctl', ['bootout', `gui/${uid()}/${DASHBOARD_LABEL}`]).catch(() => {})
+    await rm(places(env).agent, { force: true })
+  },
+  async untrust(certFile, io, env) {
+    const pem = await readFile(certFile, 'utf8').catch(() => undefined)
+    if (pem === undefined) return
+    io.out('◆ macOS asks for your password to stop trusting the certificate.')
+    await run('security', ['remove-trusted-cert', certFile]).catch(() => {})
+    const sha1 = new X509Certificate(pem).fingerprint.replaceAll(':', '')
+    await run('security', ['delete-certificate', '-Z', sha1, places(env).keychain]).catch(() => {})
+  },
+  adminUninstall: () => ({
+    says: `your password as the administrator, once: the hosts line for ${ADDRESS} and its port rule are taken off.`,
+    script: adminUninstallScript(),
+  }),
+  folders: env => [places(env).app, places(env).logs],
+  leftBehind: async () => undefined,
+}
