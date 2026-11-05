@@ -1,19 +1,14 @@
 import { join, relative } from 'node:path'
-import { DATA_BRANCH, excludeFromGit, fileBranchPath, nodeBranchFileFs, nodeGitRunner, pullFileBranch, withFileBranch, type BranchFileFs, type CommitMessage, type FileBranchSync, type FileBranchWrite, type GitRunner } from '@openagt/agent-data'
+import { excludeFromGit, nodeBranchFileFs, nodeGitRunner, projectDataDir, projectDataDirs, pullProjectData, withProjectData, type BranchFileFs, type CommitMessage, type FileBranchSync, type FileBranchWrite, type GitRunner } from '@openagt/agent-data'
 import { TICKETS_DIR } from './names.js'
 
-// Where the tickets live, bound to the branch: the `agent-data` branch of the project's repository,
-// checked out under `.branches/agent-data` for a long-lived process, with a `tickets` link at the
-// repository root so the roadmap is one listing away for a person.
+// Where the tickets live: `tickets/` in the project's data directory (its directory in the
+// personal folder, or the checkout of its `agent-data` branch when shared), with a `tickets` link
+// at the repository root so the roadmap is one listing away for a person.
 
-/** The branch's persistent checkout, from anywhere in the project's clone: `<clone>/.branches/agent-data`. */
-export function ticketsCheckoutPath(root: string, git: GitRunner = nodeGitRunner()): Promise<string> {
-  return fileBranchPath(root, DATA_BRANCH, git)
-}
-
-/** The `tickets/` directory inside the persistent checkout: `<clone>/.branches/agent-data/tickets`. */
+/** The `tickets/` directory in the project's data, from anywhere in the project's clone. */
 export async function ticketsDir(root: string, git: GitRunner = nodeGitRunner()): Promise<string> {
-  return join(await ticketsCheckoutPath(root, git), TICKETS_DIR)
+  return join(await projectDataDir(root, { git }), TICKETS_DIR)
 }
 
 /** The plain-file seams an operation on the branch's files needs. */
@@ -31,8 +26,8 @@ export interface TicketDeps extends Partial<TicketFiles> {
   log?: (message: string) => void
 }
 
-/** The default funnel: the persistent checkout's write cycle, on the `agent-data` branch. */
-export const ticketsFunnel: TicketsFunnel = (root, message, op) => withFileBranch(root, DATA_BRANCH, message, op)
+/** The default funnel: the project's data write. */
+export const ticketsFunnel: TicketsFunnel = (root, message, op) => withProjectData(root, message, op)
 
 /** Fill in whatever a caller left out, so an operation reads the same way in tests and out. */
 export function resolveTicketDeps(deps: TicketDeps): TicketFiles & { funnel: TicketsFunnel; log: (message: string) => void } {
@@ -51,25 +46,31 @@ export function resolveTicketDeps(deps: TicketDeps): TicketFiles & { funnel: Tic
 export interface LinkFs {
   /** Whether anything (file, dir, or dangling link) sits at `path`. */
   lexists: (path: string) => Promise<boolean>
+  /** Where the link at `path` points; `undefined` when nothing there is a link. */
+  readlink: (path: string) => Promise<string | undefined>
   symlink: (target: string, path: string) => Promise<void>
+  unlink: (path: string) => Promise<void>
 }
 
 function nodeLinkFs(): LinkFs {
   const fs = () => import('node:fs/promises')
   return {
     lexists: path => fs().then(f => f.lstat(path)).then(() => true, () => false),
+    readlink: path => fs().then(f => f.readlink(path)).catch(() => undefined),
     symlink: (target, path) => fs().then(f => f.symlink(target, path)),
+    unlink: path => fs().then(f => f.unlink(path)),
   }
 }
 
 /**
- * Bring a long-lived process's view of the branch up to date: the repository root links
- * `tickets` into the checkout, and the branch and its persistent checkout exist and converge with
- * origin — reading what other machines and cloud sessions pushed, and pushing anything an earlier
- * cycle left stranded. Reports why it could not converge; never throws.
+ * Bring a long-lived process's view of the tickets up to date: the repository root links
+ * `tickets` into the project's data, and a shared project's branch and its persistent checkout
+ * exist and converge with origin — reading what other machines and cloud sessions pushed, and
+ * pushing anything an earlier cycle left stranded. Reports why it could not converge; never throws.
  *
  * The root link is created only over nothing — a real `tickets/` directory or a file of the
- * user's own is theirs — and hidden from git the moment it is made, as an uncommitted entry at
+ * user's own is theirs — or over the link made here to the other place the data was in before the
+ * person switched sharing. It is hidden from git the moment it is made, as an uncommitted entry at
  * the root would ride any sweeping `git add -A` onto a code branch. Hiding it takes a pair of
  * rules, because the repository's exclude speaks for every worktree at once, the persistent
  * checkout included, whose root holds the real `tickets/` the branch exists to carry: `/tickets`
@@ -84,10 +85,15 @@ export async function syncTickets(
   const git = deps.git ?? nodeGitRunner()
   const linkFs = deps.linkFs ?? nodeLinkFs()
   const rootLink = join(root, TICKETS_DIR)
+  const wanted = relative(root, await ticketsDir(root, git))
+  const places = await projectDataDirs(root, { git })
+  const made = [places.personal, places.branch].map(dir => relative(root, join(dir, TICKETS_DIR)))
+  const at = await linkFs.readlink(rootLink)
+  if (at !== undefined && at !== wanted && made.includes(at)) await linkFs.unlink(rootLink).catch(() => {})
   if (!(await linkFs.lexists(rootLink))) {
-    await linkFs.symlink(relative(root, await ticketsDir(root, git)), rootLink).catch(() => {})
+    await linkFs.symlink(wanted, rootLink).catch(() => {})
     await excludeFromGit(root, '/' + TICKETS_DIR, undefined, git).catch(() => {})
     await excludeFromGit(root, '!/' + TICKETS_DIR + '/', undefined, git).catch(() => {})
   }
-  return pullFileBranch(root, DATA_BRANCH, { git, log: r.log })
+  return pullProjectData(root, { git, log: r.log })
 }

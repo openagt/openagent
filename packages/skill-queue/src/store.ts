@@ -1,8 +1,7 @@
-import { DATA_BRANCH, nodeBranchFileFs, withFileBranch, type BranchFileFs, type CommitMessage, type FileBranchWrite } from '@openagt/agent-data'
+import { nodeBranchFileFs, withProjectData, type BranchFileFs, type CommitMessage, type FileBranchWrite } from '@openagt/agent-data'
 
-// Where the queue lives, bound to the branch: `TODO_AGENTS.md` at the root of the `agent-data`
-// branch of the project's repository, checked out under `.branches/agent-data` for a long-lived
-// process.
+// Where the queue lives: `TODO_AGENTS.md` at the root of the project's data directory (its
+// directory in the personal folder, or the checkout of its `agent-data` branch when shared).
 
 /** The plain-file seams an operation on the branch's files needs. */
 export type QueueFiles = BranchFileFs
@@ -18,8 +17,8 @@ export interface QueueDeps extends Partial<QueueFiles> {
   funnel?: QueueFunnel
 }
 
-/** The default funnel: the persistent checkout's write cycle, on the `agent-data` branch. */
-const queueFunnel: QueueFunnel = (root, message, op) => withFileBranch(root, DATA_BRANCH, message, op)
+/** The default funnel: the project's data write. */
+const queueFunnel: QueueFunnel = (root, message, op) => withProjectData(root, message, op)
 
 /** Fill in whatever a caller left out, so an operation reads the same way in tests and out. */
 export function resolveQueueDeps(deps: QueueDeps): QueueFiles & { funnel: QueueFunnel } {

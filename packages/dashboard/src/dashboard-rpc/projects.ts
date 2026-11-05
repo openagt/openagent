@@ -1,11 +1,10 @@
 import { contextAddProject, contextPrepareStart, contextProjectErrors, contextProjects, contextRemote, contextRemoveProject, contextStartedIn, resolveProjectPath } from './context.js'
 import { readProjectCommands, type ProjectCommand } from '../project-commands.js'
-import { DATA_BRANCH, branchReach, originDefaultBranch, pullFileBranch, readSharing, writeSharing, type BranchReach } from '@openagt/agent-data'
+import { DATA_BRANCH, branchReach, originDefaultBranch, readSharing, repositoryAddress, repositorySpelling, shareProjectData, type BranchReach } from '@openagt/agent-data'
 import { readProjectHooks, runCheckHook, startLineTakesBase, startLineTakesPrBase, type StartReadiness } from '../project-hooks.js'
 import { isPublishPick, publishPickIn, type PublishPick } from '../publish-levels.js'
 import { hasRemote } from '../has-remote.js'
 import { openagentVersion } from '../version.js'
-import { repositoryAddress, repositorySpelling } from '../repository-address.js'
 import { currentBranch } from '../dashboard/git-status.js'
 import { branchesOnOrigin, waitingSkills } from '../dashboard/start-branch.js'
 import { startFromPick, type StartFromPick } from '../registry.js'
@@ -140,20 +139,16 @@ export async function onRecordsReach(projectId: string): Promise<BranchReach | n
 
 /**
  * The person's switch: share the project's records with its remote, or keep them on this machine.
- * Turning it on sends what is there now, so a remote that refuses is said at once, and the switch
- * goes back to off: the records stay where they were. A project with no remote has nothing to
+ * The records move with the switch: on, from the personal folder to the project's branch, sent at
+ * once, so a remote that refuses is said at once and the switch goes back to off with the records
+ * where they were; off, back to the personal folder. A project with no remote has nothing to
  * share with, and is refused.
  */
 export async function sendShareRecords(projectId: string, on: boolean): Promise<{ ok: true } | { ok: false; error: string }> {
   const cwd = await resolveProjectPath(projectId)
   if (!cwd) return { ok: false, error: 'this project has no local path on this server' }
   if (on && !(await hasRemote(cwd))) return { ok: false, error: 'this project has no remote to share with' }
-  await writeSharing(cwd, on)
-  if (!on) return { ok: true }
-  const sent = await pullFileBranch(cwd, DATA_BRANCH, { log: () => {} })
-  if (sent.ok) return { ok: true }
-  await writeSharing(cwd, false)
-  return { ok: false, error: sent.error }
+  return shareProjectData(cwd, on)
 }
 
 /**

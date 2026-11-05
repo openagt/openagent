@@ -8,7 +8,7 @@ import { readClaudeQuota } from '@openagt/agent-driver-claude'
 import { accountFolder, personalCodexHome, readCodexUsage } from '@openagt/agent-driver-codex'
 import { isPidAlive, lockHolder, markerCard, readProjectAccounts, readyToRun, resumeDetached, runIdFrom, spawnResume, spawnRun, sweep, withdrawMarker, writeMarker } from '@openagt/agent-runner'
 import { findRun } from '@openagt/skill-logs'
-import { DATA_BRANCH, nodeGitRunner, pullFileBranch, type GitRunner } from '@openagt/agent-data'
+import { nodeGitRunner, pullProjectData, type GitRunner } from '@openagt/agent-data'
 import { CHECK_TIMEOUT_MS, GLANCE_MS, NOW_CHECK_TIMEOUT_MS, QUOTA_KEPT_MS, SCHEDULER_LOG, TICK_MS } from './names.js'
 import { inFlight, lastRuns, lastStart, type LastRun } from './records.js'
 import { readSchedule, type Schedule, type ScheduledCommand } from './schedule.js'
@@ -60,7 +60,7 @@ function projectDeps(repo: string, state: State, schedule: Schedule, opts: { git
     schedule,
     host,
     now,
-    pull: () => pullFileBranch(repo, DATA_BRANCH, { git, log }),
+    pull: () => pullProjectData(repo, { git, log }),
     sweep: () => sweep(repo, { host, isAlive: isPidAlive, now, git, log, resume: resumeDetached(repo) }),
     atStart: atStartOf(repo, git),
     check: (shell, lastRun, switchedOn) => runCheck(repo, shell, opts.checkMs, lastRun, switchedOn),

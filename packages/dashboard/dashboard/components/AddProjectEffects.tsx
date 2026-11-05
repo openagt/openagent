@@ -9,10 +9,12 @@ export function AddProjectEffects() {
         <li>makes no commit on your branch and pushes nothing</li>
         <li>
           lets OpenAgent keep its own files there, in hidden folders (<code className={code}>.openagent</code>,{' '}
-          <code className={code}>.branches</code>, <code className={code}>.agent-runner</code>), and the agents&rsquo; records on a local
-          branch <code className={code}>agent-data</code>
+          <code className={code}>.branches</code>, <code className={code}>.agent-runner</code>)
         </li>
-        <li>keeps the records on this machine, unless you choose to share them</li>
+        <li>
+          keeps the agents&rsquo; records in your own folder <code className={code}>~/.openagent</code>, outside the project, unless you
+          choose to share them
+        </li>
         <li>
           gives each agent four basic skills in its own copy, hidden from git: <code className={code}>branches</code>,{' '}
           <code className={code}>logs</code>, <code className={code}>question</code>, and <code className={code}>github</code> when the

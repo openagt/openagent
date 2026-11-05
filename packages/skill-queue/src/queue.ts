@@ -1,5 +1,5 @@
 import { join } from 'node:path'
-import { fileBranchRepo, readBranchFile, DATA_BRANCH } from '@openagt/agent-data'
+import { fileBranchRepo, readProjectFile } from '@openagt/agent-data'
 import { QUEUE_FILE } from './names.js'
 import { resolveQueueDeps, type QueueDeps } from './store.js'
 
@@ -130,12 +130,12 @@ export function removeQueueEntry(md: string, entry: string): string {
 }
 
 /**
- * The queue as it stands: its markdown, or `undefined` when the branch has no queue. From
+ * The queue as it stands: its markdown, or `undefined` when the project has no queue. From
  * anywhere in the repository. `fresh` fetches first, for a long-lived process about to act on
  * the queue, whose local view may trail what other writers pushed.
  */
 export async function readQueue(cwd: string, opts: { fresh?: boolean } = {}): Promise<string | undefined> {
-  return readBranchFile(cwd, DATA_BRANCH, QUEUE_FILE, opts)
+  return readProjectFile(cwd, QUEUE_FILE, opts)
 }
 
 /** What a queue edit did: landed (and whether it changed anything), or did not land. */

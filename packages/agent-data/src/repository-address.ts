@@ -1,5 +1,5 @@
 import { basename } from 'node:path'
-import { nodeGitRunner, type GitRunner } from '@openagt/agent-data'
+import { nodeGitRunner, type GitRunner } from './git.js'
 
 /**
  * The one name a project has on every machine: where its repository was cloned from, as

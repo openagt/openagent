@@ -1,9 +1,9 @@
 import { strict as assert } from 'node:assert'
 import { test } from 'node:test'
-import { mkdir, mkdtemp, realpath, rm, writeFile } from 'node:fs/promises'
+import { mkdir, mkdtemp, readFile, realpath, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { nodeGitRunner, withFileBranch, writeSharing, DATA_BRANCH } from '@openagt/agent-data'
+import { nodeGitRunner, projectDataDir, withFileBranch, writeSharing, DATA_BRANCH } from '@openagt/agent-data'
 import { runCli, USAGE } from './cli.js'
 import { QUEUE_FILE } from './names.js'
 import { addTextArgs, doneArgs } from './module.js'
@@ -169,7 +169,7 @@ test('usage: an unknown command, a wrong argument count, an empty entry and a pr
   }
 })
 
-test('a repository with no remote reads and writes its local branch; outside a repository is a refusal', async () => {
+test('a repository with no remote keeps its queue in the personal folder; outside a repository is a refusal', async () => {
   const solo = await realpath(await mkdtemp(join(tmpdir(), 'queue-cli-solo-')))
   try {
     await git(['init', '-b', 'main'], solo)
@@ -178,13 +178,12 @@ test('a repository with no remote reads and writes its local branch; outside a r
     await writeFile(join(solo, 'README.md'), '# t\n')
     await git(['add', '-A'], solo)
     await git(['commit', '-m', 'init'], solo)
-    const commit = (await git(['commit-tree', '4b825dc642cb6eb9a060e54bf8d69288fbee4904', '-m', 'create the agent-data branch'], solo)).trim()
-    await git(['branch', DATA_BRANCH, commit], solo)
     assert.deepEqual((await run(solo, [])).json, [])
-    // Nothing to carry the change anywhere: it lands as a local commit, and the next read has it.
+    // Nothing to carry the change anywhere: it lands as a commit of the personal folder, and the next read has it.
     assert.equal((await run(solo, ['add', 'x'])).code, 0)
     assert.equal(((await run(solo, [])).json as unknown[]).length, 1)
-    assert.match(await git(['show', `${DATA_BRANCH}:${QUEUE_FILE}`], solo), /x/)
+    assert.match(await readFile(join(await projectDataDir(solo), QUEUE_FILE), 'utf8'), /x/)
+    assert.equal((await git(['branch', '--list', DATA_BRANCH], solo)).trim(), '')
     const outside = await run(tmpdir(), [])
     assert.equal(outside.code, 1)
     assert.deepEqual(outside.json, { ok: false, reason: 'not-a-repo' })

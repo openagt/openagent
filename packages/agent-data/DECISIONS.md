@@ -26,9 +26,20 @@ already made, and lists it in its pull request; for anything else it proposes an
   it fails as a timeout, its own error kind, never as a plain failure: a killed `push` may
   have half landed.
 
+## Where a project's data is
+- By default in the person's own folder on the machine, `~/.openagent`: a git repository with
+  no remote, each project under `projects/<project>/`, named by its repository's address so it
+  is the same on every machine. Picked over a branch of every project's repository: adding a
+  project puts nothing in its repository.
+- A project the person shares writes to its own repository's `agent-data` branch, as before.
+  Picked over moving every project to the personal folder until a folder can have a remote:
+  records shared with other machines and cloud sessions keep reaching them.
+- One place at a time: the share switch moves the project's data to the other place, never a
+  copy in each.
+
 ## The branch
-- A branch of the project's repository holds the agents' data (tickets, the queue) the way
-  `gh-pages` holds a site; code branches hold only code. Every write that changes
+- A shared project's branch holds the agents' data (tickets, the queue) the way `gh-pages`
+  holds a site; code branches hold only code. Every write that changes
   something pushes when the person shares the branch with the remote, and a pull is a
   cycle of its own, so a machine that writes nothing still gets what the others pushed.
 - The branch leaves the machine only on the person's word: one git setting in the

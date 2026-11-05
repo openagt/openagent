@@ -5,7 +5,7 @@ import { isActivated } from '../project.js'
 import { readAllAgents, type AgentMeta } from '../store/index.js'
 import type { ProjectError, StaysLocal } from '../project-errors.js'
 import { projectGitHost, type GitHostFor } from '../store/git-host.js'
-import { projectNameOf } from '../repository-address.js'
+import { projectNameOf } from '@openagt/agent-data'
 
 /**
  * The multi-project read side (#392): projects the daemon serves come from the registry (#390),

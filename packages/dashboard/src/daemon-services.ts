@@ -1,7 +1,7 @@
 import { basename } from 'node:path'
 import { listProjects } from './registry.js'
 import { startDaemonTick, DAEMON_TICK_MS } from './daemon-tick.js'
-import { DATA_BRANCH, branchReach, pullFileBranch } from '@openagt/agent-data'
+import { branchReach, pullProjectData } from '@openagt/agent-data'
 import type { ProjectErrors } from './project-errors.js'
 import { startCloudScratchSweep } from './cloud-scratch-refs.js'
 import { adoptCloudWork, startCloudWorkAdoption } from './cloud-work.js'
@@ -50,17 +50,17 @@ export interface BackgroundServiceDeps {
 }
 
 /**
- * One project's data-sync turn (#1599): converge the `agent-data` branch — the skills' branch,
- * which carries the tickets, the queue and the `logs` skill's runs — with
- * origin through the shared branch library, one pull, and set or clear the project's `data-sync`
- * error by the outcome. The clear is unconditional on success, so the error lives exactly as long
+ * One project's data-sync turn (#1599): converge the project's data — the tickets, the queue and
+ * the `logs` skill's runs — with origin when the project is shared (its `agent-data` branch), one
+ * pull, and set or clear the project's `data-sync` error by the outcome; a project kept on this
+ * machine has its directory in the personal folder, made on the first turn. The clear is unconditional on success, so the error lives exactly as long
  * as the condition — the next tick after the user fixes the remote, it is gone. A branch that stays
  * on this machine (no remote, or the person does not share it) is no error: the project carries why,
  * for as long as that holds. The daemon knows
  * nothing of what is on the branch (#1774): a skill's own setup makes its files.
  */
 export async function syncProjectData(path: string, errors: ProjectErrors, log: (message: string) => void): Promise<void> {
-  const result = await pullFileBranch(path, DATA_BRANCH, { log })
+  const result = await pullProjectData(path, { log })
   if (result.ok) {
     errors.setReach(path, result.reach)
     errors.clear(path, 'data-sync')

@@ -1,6 +1,6 @@
 import { parseArgs } from 'node:util'
 import { join } from 'node:path'
-import { checkoutRoot, gitReason, listBranchDir, nodeBranchFileFs, nodeGitRunner, openBranchReader, readBranchFile, writeFileBranchDetached, type BranchReader, type GitRunner, DATA_BRANCH } from '@openagt/agent-data'
+import { checkoutRoot, gitReason, listProjectDir, nodeBranchFileFs, nodeGitRunner, openProjectReader, readProjectFile, writeProjectDataDetached, type ProjectReader, type GitRunner } from '@openagt/agent-data'
 import { isTicketFile, isTicketPath, META_FILE, TICKETS_DIR, ticketLockName, ticketPlanName, ticketStem } from './names.js'
 import { readTicket, readTickets, readTicketsMeta, type TicketsFs } from './tickets.js'
 import { applyClaims, applyRelease, claimHistory, claimMessage, lockHolder, releaseMessage } from './locks.js'
@@ -16,14 +16,15 @@ import { holderOf } from './holder.js'
  * is reported on stdout as `{ ok: false, reason }` so a caller parsing the output learns why, and
  * on stderr so a person does.
  *
- * Reads go to origin's copy of the branch, fetched first, so a command sees what every writer
- * pushed — its own earlier writes included. Writes are a remote writer's: one commit each, on a
- * throwaway checkout of origin's tip, pushed straight to the branch; a rejected push is re-applied
- * on the new tip and pushed again. The persistent checkout a daemon keeps is never touched.
+ * A project kept on this machine reads and writes its directory in the personal folder, one
+ * commit per write. A shared project reads origin's copy of its branch, fetched first, so a
+ * command sees what every writer pushed — its own earlier writes included — and writes as a
+ * remote writer: one commit each, on a throwaway checkout of origin's tip, pushed straight to the
+ * branch; a rejected push is re-applied on the new tip and pushed again. The persistent checkout
+ * a daemon keeps is never touched.
  *
- * Two flags are the dashboard's, never an agent's: `--local` on the reads (this machine's copy of
- * the branch, no fetch — the dashboard polls, and the writer on that machine keeps the checkout
- * synced), and `--force` on `release` (lift whoever's claim: a person's answer to a dead agent).
+ * Two flags are the dashboard's, never an agent's: `--local` on the reads (this machine's copy, no
+ * fetch — the dashboard polls, and the writer on that machine keeps it synced), and `--force` on `release` (lift whoever's claim: a person's answer to a dead agent).
  * OpenAgent finds this command through the package's `openagent.tickets` declaration.
  */
 
@@ -213,16 +214,15 @@ const COMMANDS: Record<string, Command> = {
 /** The one flag every read takes. */
 const LOCAL = { local: { type: 'boolean' } } as const
 
-/** The branch opened for reading, from wherever the command runs; outside a repo, a refusal. */
-async function open(cwd: string, git: GitRunner): Promise<BranchReader> {
+/** The project's data opened for reading, from wherever the command runs; outside a repo, a refusal. */
+async function open(cwd: string, git: GitRunner): Promise<ProjectReader> {
   await inRepo(() => checkoutRoot(cwd, git))
-  return openBranchReader(cwd, DATA_BRANCH, { git })
+  return openProjectReader(cwd, { git })
 }
 
 /**
- * The ticket reader a read goes through, paths branch-relative (`tickets/<file>`): origin's copy,
- * fetched once, or with `--local` this machine's copy — the persistent checkout at
- * `.branches/agent-data`, else the local branch — with no fetch, for the dashboard's polling.
+ * The ticket reader a read goes through, paths relative to the project's data (`tickets/<file>`):
+ * see {@link open}, or with `--local` this machine's copy with no fetch, for the dashboard's polling.
  */
 async function ticketsFs(cwd: string, local: boolean | undefined, git: GitRunner): Promise<TicketsFs> {
   if (!local) {
@@ -230,13 +230,13 @@ async function ticketsFs(cwd: string, local: boolean | undefined, git: GitRunner
     return { list: dir => reader.list(dir), read: path => reader.read(path) }
   }
   await inRepo(() => checkoutRoot(cwd, git))
-  return { list: dir => listBranchDir(cwd, DATA_BRANCH, dir, {}, { git }), read: path => readBranchFile(cwd, DATA_BRANCH, path, {}, { git }) }
+  return { list: dir => listProjectDir(cwd, dir, {}, { git }), read: path => readProjectFile(cwd, path, {}, { git }) }
 }
 
-/** One write as a one-shot writer: to origin when the branch reaches it, else as a local commit. */
+/** One write as a one-shot writer: to origin when the project is shared, else as a local commit. */
 async function write(cwd: string, message: string, op: (dir: string) => Promise<void>, git: GitRunner): Promise<void> {
   await inRepo(() => checkoutRoot(cwd, git))
-  await writeFileBranchDetached(cwd, DATA_BRANCH, message, op, { git })
+  await writeProjectDataDetached(cwd, message, op, { git })
 }
 
 /** Who this command claims as; a checkout on no branch has no identity to claim with. */

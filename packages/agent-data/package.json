@@ -1,7 +1,7 @@
 {
   "name": "@openagt/agent-data",
   "version": "0.0.12",
-  "description": "What OpenAgent's packages share about a project: making a folder a project, and a branch of the project's repository used as a file store for coding-agent skills. Checked out under .branches/; every write is one sync-commit-push cycle that re-applies when it loses a race, from a long-lived process or one-shot from any clone.",
+  "description": "What OpenAgent's packages share about a project: making a folder a project, and where its coding-agent data lives: the person's own folder ~/.openagent by default, or a branch of the project's repository when shared, checked out under .branches/; every branch write is one sync-commit-push cycle that re-applies when it loses a race, from a long-lived process or one-shot from any clone.",
   "license": "MIT",
   "repository": {
     "type": "git",
@@ -31,7 +31,7 @@
   "scripts": {
     "build": "tsc -p tsconfig.build.json",
     "typecheck": "tsc --noEmit",
-    "test": "tsc -p tsconfig.test.json && node --test --test-timeout=60000 'dist-test/**/*.test.js'",
+    "test": "tsc -p tsconfig.test.json && XDG_CONFIG_HOME=$(mktemp -d) node --test --test-timeout=60000 'dist-test/**/*.test.js'",
     "clean": "rm -rf dist dist-test"
   },
   "devDependencies": {

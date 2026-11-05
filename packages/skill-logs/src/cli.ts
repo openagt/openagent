@@ -1,5 +1,5 @@
 import { parseArgs } from 'node:util'
-import { checkoutRoot, gitReason, nodeGitRunner, openBranchReader, type BranchReader, type GitRunner, DATA_BRANCH } from '@openagt/agent-data'
+import { checkoutRoot, gitReason, nodeGitRunner, openProjectReader, type ProjectReader, type GitRunner } from '@openagt/agent-data'
 import { RUNS_DIR } from './names.js'
 import { agentLines, isRunId, newestFirst, parseDiary, parseRunCard, publicCard, runCardFile, runDiaryFile, runIdOfFile, type ListedRun, type RunCard, type RunPatch } from './run.js'
 import { deleteRun, findRun, listRuns, patchRun, readDiary, resolveLogsDeps, runFiles, runsPath } from './store.js'
@@ -12,19 +12,20 @@ import { skillUseOf } from './skill-use.js'
  * process that ran it, not by the agent.
  *
  * A dashboard that shows the runs reads and changes them through the same command, so it needs
- * no code of this package: `--local` reads the persistent checkout the writer keeps at
- * `.branches/agent-data` instead of origin (no fetch, fast enough to poll), `--full` prints the
- * whole record (the writer's `caller` key, every diary line), and `delete` / `patch` are its
- * Delete and Open-PR buttons, written through that checkout like the writer's own records.
+ * no code of this package: `--local` reads this machine's copy, the directory the writer writes
+ * to, with no fetch (fast enough to poll), `--full` prints the whole record (the writer's `caller`
+ * key, every diary line), and `delete` / `patch` are its Delete and Open-PR buttons, written
+ * through that directory like the writer's own records.
  *
  * The contract: JSON on stdout, one line for a person on stderr, and the exit code says how it
  * went — 0 for a result, 1 for a refusal or a git failure, 2 for a command that could not be
  * read. A refusal is a rule saying no (there is no such run); it is reported on stdout as
  * `{ ok: false, reason }` so a caller parsing the output learns why, and on stderr so a person does.
  *
- * Reads go to origin's copy of the branch, fetched once, so a command sees every run every
- * machine pushed. The persistent checkout is read only with `--local` and written only by
- * `delete` and `patch`.
+ * Reads of a shared project go to origin's copy of its branch, fetched once, so a command sees
+ * every run every machine pushed; a project kept on this machine reads its directory in the
+ * personal folder. This machine's copy is read only with `--local` and written only by `delete`
+ * and `patch`.
  */
 
 /** How many runs the bare command prints unless told otherwise: enough to see what happened lately, not the whole history. */
@@ -40,8 +41,7 @@ export const USAGE = `usage: logs [command]
                                      how it ended, what it cost
 
   For a dashboard that shows the runs, not for an agent:
-  --local                            with either read: read the checkout kept at .branches/agent-data,
-                                     no fetch from origin
+  --local                            with either read: read this machine's copy, no fetch from origin
   --full                             with either read: the whole card (with the writer's caller key)
                                      and, for show, every diary line
   people [--days N]                  who works here: each person who started runs (by the folder their
@@ -228,8 +228,8 @@ function noRun(id: string): Refused {
   return new Refused({ ok: false, reason: 'no-run', id }, `no run is named ${id}`)
 }
 
-/** Every run on the branch by person and id, newest first, from the directory listings alone. */
-async function runEntries(reader: BranchReader): Promise<Array<{ person: string; id: string }>> {
+/** Every run of the project by person and id, newest first, from the directory listings alone. */
+async function runEntries(reader: ProjectReader): Promise<Array<{ person: string; id: string }>> {
   const entries: Array<{ person: string; id: string }> = []
   for (const person of await reader.list(RUNS_DIR)) {
     for (const name of await reader.list(`${RUNS_DIR}/${person}`)) {
@@ -240,10 +240,10 @@ async function runEntries(reader: BranchReader): Promise<Array<{ person: string;
   return newestFirst(entries)
 }
 
-/** The branch opened for reading, from wherever the command runs; outside a repo, a refusal. */
-async function open(cwd: string, git: GitRunner): Promise<BranchReader> {
+/** The project's data opened for reading, from wherever the command runs; outside a repo, a refusal. */
+async function open(cwd: string, git: GitRunner): Promise<ProjectReader> {
   await inRepo(() => checkoutRoot(cwd, git))
-  return openBranchReader(cwd, DATA_BRANCH, { git })
+  return openProjectReader(cwd, { git })
 }
 
 function limitArg(value: string): number {

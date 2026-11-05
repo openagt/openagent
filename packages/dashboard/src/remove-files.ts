@@ -1,6 +1,6 @@
 import { lstat, readdir, rm, rmdir } from 'node:fs/promises'
 import { join } from 'node:path'
-import { DATA_BRANCH, clearSharing, nodeGitRunner, removeFileBranch, SHARE_SETTING, type GitRunner } from '@openagt/agent-data'
+import { DATA_BRANCH, clearSharing, nodeGitRunner, removeFileBranch, removePersonalData, SHARE_SETTING, type GitRunner } from '@openagt/agent-data'
 import { OPENAGENT_DIR } from './openagent-dir.js'
 import { runCleanups } from './built-in.js'
 import { errorMessage } from './error-message.js'
@@ -13,9 +13,10 @@ import type { CleanupReport } from './dashboard/types.js'
  * - every tool that declares a `cleanup` command: asked to run it, and its answer passed on. One
  *   that refuses or fails ends the pass there: the records and the dashboard's directory stay.
  *   The runner refuses while a run is alive, the scheduler while one set to keep running is.
- * - the agents' records: the `agent-data` checkout and local branch, and the person's answer to
- *   "share the records". Left alone when another project on the list is a checkout of the same
- *   repository, since the branch is the repository's and that project still reads it.
+ * - the agents' records: the project's directory in the personal folder, the `agent-data`
+ *   checkout and local branch, and the person's answer to "share the records". Left alone when
+ *   another project on the list is a checkout of the same repository, since both places are the
+ *   repository's and that project still reads them.
  * - the dashboard's own directory, `.openagent/`: every file git does not track.
  *
  * Never the remote, a commit, a branch with work on it or a file git tracks. Nothing here throws:
@@ -46,6 +47,9 @@ export async function removeProjectFiles(root: string, opts: RemoveFilesOptions 
   if (opts.recordsUsedBy !== undefined) {
     report.kept.push({ path: `branch ${DATA_BRANCH}`, reason: `another project on the list uses it: ${opts.recordsUsedBy}` })
   } else {
+    const personal = await removePersonalData(root, { git })
+    if (!personal.ok) report.failed.push(`the agents' records in the personal folder: ${personal.error}`)
+    else if (personal.removed) report.removed.push(personal.removed)
     const records = await removeFileBranch(root, DATA_BRANCH, { git })
     if (!records.ok) report.failed.push(`the agents' records: ${records.error}`)
     else {

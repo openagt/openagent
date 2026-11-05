@@ -39,7 +39,6 @@ export {
 } from './locks.js'
 export { holderOf, AGENT_ID_ENV, type Holder } from './holder.js'
 export {
-  ticketsCheckoutPath,
   ticketsDir,
   syncTickets,
   ticketsFunnel,
