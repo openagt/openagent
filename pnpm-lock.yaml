@@ -503,6 +503,19 @@ importers:
         specifier: ^4.1.10
         version: 4.1.10(@types/node@20.19.43)(jsdom@29.1.1)(vite@8.1.4(@types/node@20.19.43)(esbuild@0.28.1)(jiti@2.7.0)(tsx@4.22.4)(yaml@2.9.0))
 
+  packages/install:
+    dependencies:
+      '@openagt/dashboard':
+        specifier: workspace:*
+        version: link:../dashboard
+    devDependencies:
+      '@types/node':
+        specifier: ^20.0.0
+        version: 20.19.43
+      typescript:
+        specifier: ^7.0.2
+        version: 7.0.2
+
   packages/openagent.build:
     dependencies:
       react:
@@ -988,6 +1001,19 @@ importers:
   packages/skill-ux: {}
 
   packages/skill-work-queue: {}
+
+  packages/uninstall:
+    dependencies:
+      '@openagt/install':
+        specifier: workspace:*
+        version: link:../install
+    devDependencies:
+      '@types/node':
+        specifier: ^20.0.0
+        version: 20.19.43
+      typescript:
+        specifier: ^7.0.2
+        version: 7.0.2
 
 packages:
 

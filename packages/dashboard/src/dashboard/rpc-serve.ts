@@ -1,5 +1,7 @@
 import type { IncomingMessage, ServerResponse } from 'node:http'
+import type { TLSSocket } from 'node:tls'
 import { hostnameFromHostHeader, isLoopbackHost } from '../loopback-host.js'
+import { certificateNames } from '../secure-address.js'
 import { setDashboardContext } from '../dashboard-rpc/context.js'
 import { RPC_HANDLERS, RPC_EVENT_STREAM } from '../dashboard-rpc/index.js'
 import { followRunsChanged } from '../dashboard-rpc/runs-changed.js'
@@ -177,10 +179,29 @@ export function isJsonRequest(req: IncomingMessage): boolean {
  * computer's own address only, so the only `Host` a real user's browser can send is a loopback
  * one — anything else is a rebound name and is rejected. An absent `Host` is rejected too:
  * HTTP/1.1 requires it, and every browser sends it.
+ *
+ * The one other name let in is the secure address's (#1919), and only over its HTTPS: a rebound
+ * name never gets that far, since the browser finds the certificate is for another name and
+ * stops before it sends anything.
  */
 export function isExpectedHost(req: IncomingMessage): boolean {
   const header = req.headers.host
-  return header !== undefined && header !== '' && isLoopbackHost(hostnameFromHostHeader(header))
+  if (header === undefined || header === '') return false
+  const name = hostnameFromHostHeader(header)
+  return isLoopbackHost(name) || ownCertificateNames(req).includes(name)
+}
+
+/** Whether this request came to the secure address (#1919): over its HTTPS, by its name. */
+export function isSecureAddressRequest(req: IncomingMessage): boolean {
+  const header = req.headers.host
+  return header !== undefined && ownCertificateNames(req).includes(hostnameFromHostHeader(header))
+}
+
+/** The names the certificate this request came in on is for: none for plain HTTP. */
+function ownCertificateNames(req: IncomingMessage): string[] {
+  const socket = req.socket as TLSSocket
+  if (!socket.encrypted) return []
+  return certificateNames((socket.getCertificate() as { subjectaltname?: string } | null)?.subjectaltname)
 }
 
 /** Where the dashboard's RPCs live. One prefix, so the static handler can decline it by path. */

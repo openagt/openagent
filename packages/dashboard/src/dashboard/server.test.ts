@@ -510,7 +510,8 @@ test('isSameOriginRequest: absent Origin passes; same host + loopback pass; evil
 })
 
 test('isExpectedHost: only a loopback Host passes (DNS rebinding)', () => {
-  const req = (headers: Record<string, string>): IncomingMessage => ({ headers } as IncomingMessage)
+  // A plain HTTP request's: its connection holds no certificate.
+  const req = (headers: Record<string, string>): IncomingMessage => ({ headers, socket: {} } as IncomingMessage)
   assert.equal(isExpectedHost(req({ host: '127.0.0.1:4200' })), true)
   assert.equal(isExpectedHost(req({ host: 'localhost:4200' })), true)
   assert.equal(isExpectedHost(req({ host: '[::1]:4200' })), true) // the port split must not eat the IPv6 colons

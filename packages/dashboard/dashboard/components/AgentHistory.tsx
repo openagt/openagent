@@ -40,6 +40,7 @@ import { ScrollArea } from './ui/scroll-area.js'
 // Global chrome relocated off the removed top navbar (#772 follow-up): the sidebar is the app's
 // chrome now, so the workspace keeps the full width.
 import { BrandLink } from './BrandLink.js'
+import { ViewToggle } from './ViewToggle.js'
 import { PersonMenu } from './PersonMenu.js'
 import { SidebarResizer } from './SidebarResizer.js'
 import { HideSidebarButton } from './SidebarToggle.js'
@@ -314,6 +315,7 @@ export function AgentHistory({
             <BrandLink working={working} href={homeHref} onNavigate={leave(onDashboard)} />
             <HideSidebarButton />
           </div>
+          <ViewToggle />
           <ProjectSelect projects={projects} scope={scope} pending={scopePending} onScope={onScope} onProjectAdded={onProjectAdded} />
         </SidebarHeader>
         {/* New/Overview/the modules' pages stack tight as one nav group (gap-0.5), close under the
