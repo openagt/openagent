@@ -1,10 +1,9 @@
 /**
  * The one name the package hangs off. No node imports, so browser-side code can name it too.
  *
- * The branch itself is not named here: the queue lives on the shared data branch, `agent-data`,
- * whose name `@openagt/agent-data` exports as `DATA_BRANCH`. A convention, not a setting:
- * `SKILL.md` names the same branch to every agent.
+ * The queue's place is not named here: `@openagt/agent-data` knows the project's data directory (in
+ * the person's own folder, or the project's `agent-data` branch when shared).
  */
 
-/** The agent queue: `TODO_AGENTS.md` at the branch root. */
+/** The agent queue: `TODO_AGENTS.md` at the root of the project's data. */
 export const QUEUE_FILE = 'TODO_AGENTS.md'
