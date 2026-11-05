@@ -2,7 +2,7 @@ import { execFile } from 'node:child_process'
 import { lstat, mkdir, mkdtemp, rename, rm } from 'node:fs/promises'
 import { homedir } from 'node:os'
 import { basename, dirname, join } from 'node:path'
-import { addressOfRemote, repositoryAddress } from './repository-address.js'
+import { addressOfRemote, repositoryAddress } from '@openagt/agent-data'
 
 /**
  * A project added by its repository's address, for a computer that does not have its folder: a

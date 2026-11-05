@@ -3,8 +3,8 @@ import { test } from 'node:test'
 import { mkdir, mkdtemp, readFile, readlink, realpath, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { nodeGitRunner, writeSharing, BRANCHES_DIR, DATA_BRANCH } from '@openagt/agent-data'
-import { syncTickets, ticketsCheckoutPath, ticketsDir } from './store.js'
+import { nodeGitRunner, personalFolder, writeSharing, BRANCHES_DIR, DATA_BRANCH } from '@openagt/agent-data'
+import { syncTickets, ticketsDir } from './store.js'
 
 const git = nodeGitRunner()
 const RETRIED_RM = { recursive: true, force: true, maxRetries: 10 } as const
@@ -20,18 +20,35 @@ async function repo(): Promise<string> {
   return path
 }
 
-test('sync births the branch, links tickets/ at the root hidden from git, and says a repo with no remote keeps it here', async () => {
+test('a project kept on this machine: tickets/ at the root links into its directory in the personal folder, hidden from git, and its repository gets no branch', async () => {
   const root = await repo()
   try {
     assert.deepEqual(await syncTickets(root), { ok: true, reach: 'no-remote' })
-    const wt = await ticketsCheckoutPath(root)
-    assert.equal(wt, join(root, BRANCHES_DIR, DATA_BRANCH))
+    const dir = await ticketsDir(root)
+    assert.equal(dir, join(personalFolder(), 'projects', 'local', ...root.split('/').filter(Boolean), 'tickets'))
+    // The root link reaches into the folder, relatively.
+    assert.equal(join(root, await readlink(join(root, 'tickets'))), dir)
+    const status = await git(['status', '--porcelain'], root)
+    assert.ok(!status.split('\n').some(line => line.trim() === '?? tickets'), status)
+    assert.equal((await git(['branch', '--list', DATA_BRANCH], root)).trim(), '')
+  } finally {
+    await rm(root, RETRIED_RM)
+  }
+})
+
+test('sync births the branch of a shared project, links tickets/ into its checkout hidden from git, and moves a link made for the personal folder', async () => {
+  const root = await repo()
+  try {
+    await syncTickets(root)
+    await writeSharing(root, true)
+    assert.deepEqual(await syncTickets(root), { ok: true, reach: 'no-remote' })
+    const wt = join(root, BRANCHES_DIR, DATA_BRANCH)
     assert.equal(await ticketsDir(root), join(wt, 'tickets'))
     assert.equal((await git(['rev-parse', '--abbrev-ref', 'HEAD'], wt)).trim(), DATA_BRANCH)
     // Born an orphan and left clean between cycles: nothing of the package's is written on it.
     assert.match(await git(['log', '--format=%s', `refs/heads/${DATA_BRANCH}`], root), /^create the agent-data branch\n?$/)
     assert.equal((await git(['status', '--porcelain'], wt)).trim(), '')
-    // The root link reaches into the checkout, relatively, so a moved repo keeps working.
+    // The root link now reaches into the checkout, relatively, so a moved repo keeps working.
     assert.equal(await readlink(join(root, 'tickets')), join(BRANCHES_DIR, DATA_BRANCH, 'tickets'))
     // Hidden from git, so no sweeping `git add -A` ever commits it onto a code branch…
     const status = await git(['status', '--porcelain'], root)

@@ -1,6 +1,6 @@
 import { parseArgs } from 'node:util'
 import { join } from 'node:path'
-import { checkoutRoot, gitReason, nodeBranchFileFs, nodeGitRunner, openBranchReader, writeFileBranchDetached, type BranchReader, type GitRunner, DATA_BRANCH } from '@openagt/agent-data'
+import { checkoutRoot, gitReason, nodeBranchFileFs, nodeGitRunner, openProjectReader, writeProjectDataDetached, type ProjectReader, type GitRunner } from '@openagt/agent-data'
 import { QUEUE_FILE } from './names.js'
 import { appendQueueEntry, insertQueueEntry, parseQueueEntries, parseQueueSections, readQueue, removeQueueEntry } from './queue.js'
 
@@ -13,14 +13,16 @@ import { appendQueueEntry, insertQueueEntry, parseQueueEntries, parseQueueSectio
  * read. A refusal is a rule saying no (there is no such entry); it is reported on stdout as
  * `{ ok: false, reason }` so a caller parsing the output learns why, and on stderr so a person does.
  *
- * Reads go to origin's copy of the branch, fetched first, so a command sees what every writer
- * pushed — its own earlier writes included. Writes are a remote writer's: one commit each, on a
- * throwaway checkout of origin's tip, pushed straight to the branch; a rejected push is re-applied
- * on the new tip and pushed again. The persistent checkout a daemon keeps is never touched.
+ * A project kept on this machine reads and writes its directory in the personal folder, one
+ * commit per write. A shared project reads origin's copy of its branch, fetched first, so a
+ * command sees what every writer pushed — its own earlier writes included — and writes as a
+ * remote writer: one commit each, on a throwaway checkout of origin's tip, pushed straight to the
+ * branch; a rejected push is re-applied on the new tip and pushed again. The persistent checkout
+ * a daemon keeps is never touched.
  *
  * A dashboard that shows the queue reads it through the same command, so it needs no code of this
- * package: `--local` reads this machine's copy of the branch (the persistent checkout a writer keeps
- * at `.branches/agent-data`, else the local branch) with no fetch, fast enough to poll, and `--full`
+ * package: `--local` reads this machine's copy (the directory a writer writes to) with no fetch,
+ * fast enough to poll, and `--full`
  * prints each entry with the priority section it sits in, so the dashboard can show the sections.
  * The package declares the command as OpenAgent's queue provider (`"openagent": { "queue":
  * "queue" }`), which reads `queue --local`; the package's own module reads `queue --local --full`.
@@ -33,8 +35,8 @@ export const USAGE = `usage: queue [command]
   done <text>                        take an entry off the queue
 
   For a dashboard that shows the queue, not for an agent:
-  --local                            with the bare command: read this machine's copy of the branch,
-                                     no fetch from origin
+  --local                            with the bare command: read this machine's copy, no fetch from
+                                     origin
   --full                             with the bare command: each entry as {"entry", "priority"}, the
                                      priority of the section it sits in (absent outside any)
 
@@ -147,16 +149,16 @@ async function writeQueue(dir: string, md: string): Promise<void> {
   await nodeBranchFileFs().write(join(dir, QUEUE_FILE), md)
 }
 
-/** The branch opened for reading, from wherever the command runs; outside a repo, a refusal. */
-async function open(cwd: string, git: GitRunner): Promise<BranchReader> {
+/** The project's data opened for reading, from wherever the command runs; outside a repo, a refusal. */
+async function open(cwd: string, git: GitRunner): Promise<ProjectReader> {
   await inRepo(() => checkoutRoot(cwd, git))
-  return openBranchReader(cwd, DATA_BRANCH, { git })
+  return openProjectReader(cwd, { git })
 }
 
-/** One write as a one-shot writer: to origin when the branch reaches it, else as a local commit. */
+/** One write as a one-shot writer: to origin when the project is shared, else as a local commit. */
 async function write(cwd: string, message: string, op: (dir: string) => Promise<void>, git: GitRunner): Promise<void> {
   await inRepo(() => checkoutRoot(cwd, git))
-  await writeFileBranchDetached(cwd, DATA_BRANCH, message, op, { git })
+  await writeProjectDataDetached(cwd, message, op, { git })
 }
 
 function priorityArg(value: string): number {

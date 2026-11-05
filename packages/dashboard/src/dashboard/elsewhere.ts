@@ -22,7 +22,7 @@ export interface OwnProject {
   name: string
   /** Its folder there. */
   path: string
-  /** Its repository's address ({@link import('../repository-address.js').repositoryAddress}), when it has one. */
+  /** Its repository's address ({@link import('@openagt/agent-data').repositoryAddress}), when it has one. */
   address?: string
   /** The same address in the letters its `origin` is written with: what another computer clones it from. */
   spelling?: string

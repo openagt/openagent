@@ -1,5 +1,5 @@
 import { dirname, join } from 'node:path'
-import { DATA_BRANCH, fileBranchPath, nodeBranchFileFs, nodeGitRunner, withFileBranch, type BranchFileFs, type CommitMessage, type FileBranchWrite, type GitRunner } from '@openagt/agent-data'
+import { nodeBranchFileFs, nodeGitRunner, projectDataDir, withProjectData, type BranchFileFs, type CommitMessage, type FileBranchWrite, type GitRunner } from '@openagt/agent-data'
 import { RUNS_DIR } from './names.js'
 import {
   type ListedRun,
@@ -18,11 +18,10 @@ import {
   type RunPatch,
 } from './run.js'
 
-// Where the runs live, bound to the branch: `agents/<who>/<id>.json` and `<id>.jsonl` at the
-// root of the `agent-data` branch of the project's repository, checked out under
-// `.branches/agent-data` for a long-lived process. This module is that process's side: it reads
-// the checkout and writes through the caller's funnel. The command an agent runs reads the
-// branch off origin instead (`cli`), holding no checkout.
+// Where the runs live: `agents/<who>/<id>.json` and `<id>.jsonl` in the project's data directory
+// (its directory in the personal folder, or the checkout of its `agent-data` branch when the
+// project is shared). This module is a long-lived process's side: it reads that directory and
+// writes through the caller's funnel. The command an agent runs reads through `cli` instead.
 
 /** The plain-file seams an operation on the branch's files needs. */
 export type LogsFiles = BranchFileFs
@@ -40,8 +39,8 @@ export interface LogsDeps extends Partial<LogsFiles> {
   log?: (message: string) => void
 }
 
-/** The default funnel: the persistent checkout's write cycle, on the `agent-data` branch. */
-export const logsFunnel: LogsFunnel = (root, message, op) => withFileBranch(root, DATA_BRANCH, message, op)
+/** The default funnel: the project's data write. */
+export const logsFunnel: LogsFunnel = (root, message, op) => withProjectData(root, message, op)
 
 /** Fill in whatever a caller left out, so an operation reads the same way in tests and out. */
 export function resolveLogsDeps(deps: LogsDeps): LogsFiles & { funnel: LogsFunnel; git: GitRunner; log: (message: string) => void } {
@@ -62,9 +61,9 @@ function runsDir(checkout: string): string {
   return join(checkout, RUNS_DIR)
 }
 
-/** The persistent checkout's runs directory, from anywhere in the project's clone. */
+/** The project's runs directory, from anywhere in the project's clone. */
 export async function runsPath(root: string, git: GitRunner = nodeGitRunner()): Promise<string> {
-  return runsDir(await fileBranchPath(root, DATA_BRANCH, git))
+  return runsDir(await projectDataDir(root, { git }))
 }
 
 /** The card and diary paths of one run inside a checkout, searched across every person's directory; `undefined` when it is nowhere. */
@@ -103,7 +102,7 @@ export async function listRuns(root: string, opts: { since?: number } = {}, deps
 /** Where one run's two files sit on the persistent checkout, or `undefined` when the run is not there. */
 export async function runFiles(root: string, id: string, deps: LogsDeps = {}): Promise<{ card: string; diary: string } | undefined> {
   const r = resolveLogsDeps(deps)
-  return locate(await fileBranchPath(root, DATA_BRANCH, r.git), id, r)
+  return locate(await projectDataDir(root, { git: r.git }), id, r)
 }
 
 /** One run's card, or `undefined` when there is no such run or its card does not parse. */

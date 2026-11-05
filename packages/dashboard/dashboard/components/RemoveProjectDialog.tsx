@@ -91,8 +91,8 @@ export function RemoveProjectDialog({
                   <>
                     Nothing in the folder is deleted: your files and your commits stay, and so do OpenAgent&rsquo;s own files there (
                     <span className={name}>.openagent</span>, <span className={name}>.branches</span>,{' '}
-                    <span className={name}>.agent-runner</span> and the branch <span className={name}>agent-data</span> with the agents&rsquo;
-                    records).
+                    <span className={name}>.agent-runner</span>), and the agents&rsquo; records (in <span className={name}>~/.openagent</span>,
+                    or on the branch <span className={name}>agent-data</span> if you shared them).
                   </>
                 )}{' '}
                 Add the folder again to bring the project back.
@@ -106,11 +106,12 @@ export function RemoveProjectDialog({
                   <p>
                     This deletes, on this machine: the agents&rsquo; checkouts in <span className={name}>.branches</span>, the folders{' '}
                     <span className={name}>.openagent</span> (with <span className={name}>hooks.yml</span>, the project&rsquo;s start lines) and{' '}
-                    <span className={name}>.agent-runner</span>, and the local branch <span className={name}>agent-data</span>. A tool that
+                    <span className={name}>.agent-runner</span>, the agents&rsquo; records in <span className={name}>~/.openagent</span>, and the
+                    local branch <span className={name}>agent-data</span>. A tool that
                     worked in the project removes its own files too: the scheduler&rsquo;s state, the subagent settings.
                   </p>
                   <p className="mt-2">
-                    <span className={name}>The agents&rsquo; conversations go with that branch.</span> If you never shared the records, this is
+                    <span className={name}>The agents&rsquo; conversations go with them.</span> If you never shared the records, this is
                     their only copy. If you did, what has not reached the remote yet is lost. An agent that waits for your answer cannot be
                     continued after this.
                   </p>

@@ -10,7 +10,7 @@ import { computerSaid } from '../dashboard/machine-call.js'
 import { CALLER_ENV, callerAtPage } from '../dashboard/person.js'
 import { THROUGH_PATH, remoteComputerCommand } from '../dashboard/remote-run.js'
 import { listMachines } from '../registry.js'
-import { DATA_BRANCH, pullFileBranch } from '@openagt/agent-data'
+import { pullProjectData } from '@openagt/agent-data'
 
 export type { ModuleCommandResult } from '../project-modules.js'
 export type { ModuleReadResult } from '../dashboard/module-host.js'
@@ -87,7 +87,7 @@ export async function runModuleCommand(projectId: string, pkg: string, args: str
   if (!module) return { ok: false, error: `${pkg} brings no module to this project` }
   const result = await runCommand(root, module, args, command)
   if (acts) {
-    await pullFileBranch(root, DATA_BRANCH, { log: () => {} }).catch(() => {})
+    await pullProjectData(root, { log: () => {} }).catch(() => {})
     providedDataChanged(root, pkg)
   }
   return result

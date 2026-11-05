@@ -41,6 +41,27 @@ export {
   type BranchFileFs,
   type BranchReader,
 } from './file-branch.js'
+export { addressOfRemote, spellingOfRemote, repositoryAddress, repositorySpelling, projectNameOf } from './repository-address.js'
+export {
+  PROJECTS_DIR,
+  personalFolder,
+  projectKey,
+  projectDataPlace,
+  projectDataDir,
+  projectDataDirs,
+  withPersonalFolder,
+  withProjectData,
+  writeProjectDataDetached,
+  readProjectFile,
+  listProjectDir,
+  openProjectReader,
+  pullProjectData,
+  shareProjectData,
+  removePersonalData,
+  type DataPlace,
+  type ProjectDataDeps,
+  type ProjectReader,
+} from './project-data.js'
 export {
   SKILLS_DIRS,
   projectPackages,

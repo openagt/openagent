@@ -23,9 +23,8 @@ import { dispatchRelayRpc } from './dashboard-rpc/relay-dispatch.js'
 import { asRecorded, onMachine } from './dashboard-rpc/reads.js'
 import { tailAgentEvents } from './dashboard-rpc/events-tail.js'
 import { addProject, isHostName, listMachines, listProjects, machineNamed, nameMachine, noteProjects, noteSeen, noteServer, projectId, readPreferences, removeProject, type MachineRecord, type Preferences } from './registry.js'
-import { projectNameOf, repositoryAddress } from './repository-address.js'
 import { writeHookLines } from './built-in.js'
-import { fileBranchRepo, installProject, writeSharing } from '@openagt/agent-data'
+import { fileBranchRepo, installProject, projectKey, projectNameOf, repositoryAddress, writeSharing } from '@openagt/agent-data'
 import { publishedBranch } from '@openagt/agent-data/names'
 import { branchesOnOrigin } from './dashboard/start-branch.js'
 import { removeProjectFiles } from './remove-files.js'
@@ -705,11 +704,15 @@ export function createProjectRuntime({ cwd, env, clone = cloneProject, logins = 
     if (!files || !here) return { ok: true }
     // Off the list first, so no background job of this daemon starts on the folder again; then
     // what OpenAgent left in it. The records are the repository's: while another project on the
-    // list is a checkout of the same repository, they stay.
+    // list is a checkout of the same repository, or a clone of it whose records the personal
+    // folder keeps in the same directory, they stay.
     const repository = await fileBranchRepo(record.path)
+    const key = await projectKey(repository ?? record.path)
     let recordsUsedBy: string | undefined
     for (const other of listed) {
-      if (other.id !== id && repository !== undefined && (await fileBranchRepo(other.path)) === repository) recordsUsedBy = other.path
+      if (other.id === id) continue
+      const otherRepository = await fileBranchRepo(other.path)
+      if ((repository !== undefined && otherRepository === repository) || (await projectKey(otherRepository ?? other.path)) === key) recordsUsedBy = other.path
     }
     const cleanup = await removeProjectFiles(record.path, { recordsUsedBy })
     providedDataChanged(record.path)

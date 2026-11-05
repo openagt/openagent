@@ -39,8 +39,12 @@ function isPidAlive(pid: number): boolean {
  * Run `task` holding the checkout's lock, and let go of it afterwards, whatever the task did.
  * Rejects without running the task when another live process holds the lock longer than the wait.
  */
-export async function withCheckoutLock<T>(repo: string, branch: string, task: () => Promise<T>, deps: CheckoutLockDeps = {}): Promise<T> {
-  const path = checkoutLockPath(repo, branch)
+export function withCheckoutLock<T>(repo: string, branch: string, task: () => Promise<T>, deps: CheckoutLockDeps = {}): Promise<T> {
+  return withLockFile(checkoutLockPath(repo, branch), task, deps)
+}
+
+/** The same lock at any path: what every writer of the personal folder takes. */
+export async function withLockFile<T>(path: string, task: () => Promise<T>, deps: CheckoutLockDeps = {}): Promise<T> {
   const token = `${process.pid} ${randomUUID()}`
   await acquire(path, token, deps.waitMs ?? CHECKOUT_LOCK_WAIT_MS, deps.isAlive ?? isPidAlive)
   try {

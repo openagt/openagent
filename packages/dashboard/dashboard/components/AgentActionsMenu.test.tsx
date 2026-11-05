@@ -406,7 +406,7 @@ describe('Remove project, in the project’s menu', () => {
     await waitFor(() => expect(screen.getByText('Remove this project?')).toBeTruthy())
     const dialog = screen.getByRole('alertdialog')
     expect(dialog.textContent).toMatch(/Nothing in the folder is deleted/)
-    for (const kept of ['.openagent', '.branches', '.agent-runner', 'agent-data']) expect(dialog.textContent).toContain(kept)
+    for (const kept of ['.openagent', '.branches', '.agent-runner', '~/.openagent', 'agent-data']) expect(dialog.textContent).toContain(kept)
     expect(dialog.textContent).toMatch(/Add the folder again to bring\s+the project back/)
     // The box is there, not ticked, and what it would delete is not said until it is.
     expect(screen.getByRole('checkbox').getAttribute('aria-checked')).toBe('false')
@@ -442,7 +442,7 @@ describe('Remove project, in the project’s menu', () => {
     expect(dialog.textContent).toMatch(/An agent that waits for your answer cannot be\s+continued after this/)
     expect(dialog.textContent).toMatch(/A tool that\s+worked in the project removes its own files too/)
     expect(dialog.textContent).toMatch(/A scheduler\s+you set to keep running is not stopped/)
-    expect(dialog.textContent).toMatch(/The agents’ conversations go with that branch/)
+    expect(dialog.textContent).toMatch(/The agents’ conversations go with them/)
     expect(dialog.textContent).toMatch(/this is\s+their only copy/)
     expect(dialog.textContent).toMatch(/It never touches the remote, your files, your commits, a branch with work on it, or a file git tracks/)
     expect(screen.queryByRole('button', { name: 'Remove' })).toBeNull()

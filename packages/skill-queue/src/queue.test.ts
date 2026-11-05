@@ -1,9 +1,9 @@
 import { strict as assert } from 'node:assert'
 import { test } from 'node:test'
-import { mkdtemp, realpath, rm, writeFile } from 'node:fs/promises'
+import { mkdtemp, readFile, realpath, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { nodeGitRunner, withFileBranch, DATA_BRANCH } from '@openagt/agent-data'
+import { nodeGitRunner, personalFolder, projectDataDir, withProjectData } from '@openagt/agent-data'
 import { appendQueueEntry, insertQueueEntry, parseQueueEntries, parseQueueSections, queueAdd, readQueue, removeQueueEntry } from './queue.js'
 import { QUEUE_FILE } from './names.js'
 
@@ -99,7 +99,7 @@ async function repo(): Promise<string> {
   return path
 }
 
-test('queueAdd edits the queue on the branch, from the project and from an agent worktree', async () => {
+test('queueAdd edits the queue in the project\'s data, from the project and from an agent worktree', async () => {
   const root = await repo()
   const entries = async (cwd: string) => parseQueueEntries((await readQueue(cwd)) ?? '')
   try {
@@ -107,15 +107,15 @@ test('queueAdd edits the queue on the branch, from the project and from an agent
     assert.deepEqual(await queueAdd(root, 'ranked', 5), { ok: true, changed: true })
     assert.equal((await queueAdd(root, 'unranked')).ok, true)
     assert.deepEqual(await entries(root), ['ranked', 'unranked'])
-    // From an agent's worktree: the project root is resolved, the edit lands on the same branch.
+    // From an agent's worktree: the project root is resolved, the edit lands in the same place.
     const wt = join(root, '.branches', 'agent-x')
     await git(['worktree', 'add', wt, '-b', 'agent-x'], root)
     assert.equal((await queueAdd(wt, 'from the worktree', 9)).ok, true)
     assert.deepEqual(await entries(wt), ['from the worktree', 'ranked', 'unranked'])
-    assert.deepEqual(parseQueueEntries((await git(['show', `${DATA_BRANCH}:${QUEUE_FILE}`], root))), ['from the worktree', 'ranked', 'unranked'])
-    assert.match(await git(['log', '--format=%s', DATA_BRANCH], root), /queue add: from the worktree\n.*queue add: unranked/)
-    // The pure parser and the git read agree on the seam every writer uses.
-    await withFileBranch(root, DATA_BRANCH, 'by hand', async dir => {
+    assert.deepEqual(parseQueueEntries(await readFile(join(await projectDataDir(root), QUEUE_FILE), 'utf8')), ['from the worktree', 'ranked', 'unranked'])
+    assert.match(await git(['log', '--format=%s'], personalFolder()), /queue add: from the worktree\n.*queue add: unranked/)
+    // The pure parser and the read agree on the seam every writer uses.
+    await withProjectData(root, 'by hand', async dir => {
       await writeFile(join(dir, QUEUE_FILE), '## Priority 3\n\n- [ ] by hand\n')
     })
     assert.deepEqual(await entries(root), ['by hand'])

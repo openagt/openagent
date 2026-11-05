@@ -1,14 +1,14 @@
 import { createHash } from 'node:crypto'
 import { appendFile, stat } from 'node:fs/promises'
 import { join } from 'node:path'
-import { DATA_BRANCH, fileBranchPath, nodeBranchFileFs, withFileBranch, type GitRunner } from '@openagt/agent-data'
+import { nodeBranchFileFs, projectDataDir, withProjectData, type GitRunner } from '@openagt/agent-data'
 import { worktreePath } from '@openagt/skill-branches'
 import { personDir, runCardFile, RUNS_DIR } from '@openagt/skill-logs'
 import { continuationPrompt, logDiaryFile } from '@openagt/agent-driver'
 import { liveDir, readLiveDiary } from '@openagt/agent-runner'
 
 /**
- * A main agent's plan: one markdown file beside its run record on the data branch, and the
+ * A main agent's plan: one markdown file beside its run record in the project's data, and the
  * person's approval of it. The plan is what the person reads before any subagent starts; the
  * approval is their answer to one question, which names the plan by a mark made from its text,
  * so a plan changed after it was approved is a plan not approved.
@@ -35,10 +35,10 @@ export function planQuestion(text: string): string {
   return `Start the subagents on plan ${planMark(text)}?`
 }
 
-/** Where a run's plan sits in a checkout of the data branch: beside its card, else where a plan already is, else under the person the repository commits as. */
-async function planPath(checkout: string, id: string, person: string): Promise<string> {
+/** Where a run's plan sits in the project's data directory: beside its card, else where a plan already is, else under the person the repository commits as. */
+async function planPath(data: string, id: string, person: string): Promise<string> {
   const fs = nodeBranchFileFs()
-  const runs = join(checkout, RUNS_DIR)
+  const runs = join(data, RUNS_DIR)
   for (const dir of await fs.list(runs)) {
     const names = await fs.list(join(runs, dir))
     if (names.includes(runCardFile(id)) || names.includes(planFile(id))) return join(runs, dir, planFile(id))
@@ -46,17 +46,17 @@ async function planPath(checkout: string, id: string, person: string): Promise<s
   return join(runs, person, planFile(id))
 }
 
-/** Save a run's plan over the one it had, as one commit on the data branch. */
+/** Save a run's plan over the one it had, as one commit of the project's data. */
 export async function writePlan(repo: string, id: string, text: string, git: GitRunner): Promise<void> {
   const person = personDir(await git(['config', 'user.email'], repo).catch(() => ''))
-  const written = await withFileBranch(repo, DATA_BRANCH, `orchestration: plan of run ${id}`, async checkout => nodeBranchFileFs().write(await planPath(checkout, id, person), text))
+  const written = await withProjectData(repo, `orchestration: plan of run ${id}`, async data => nodeBranchFileFs().write(await planPath(data, id, person), text), { git })
   if (!written.ok && !written.committed) throw new Error(`the plan could not be saved: ${written.error}`)
 }
 
 /** A run's plan as it was last saved, or `undefined` when it has none. */
 export async function readPlan(repo: string, id: string, git: GitRunner): Promise<string | undefined> {
   const fs = nodeBranchFileFs()
-  const runs = join(await fileBranchPath(repo, DATA_BRANCH, git), RUNS_DIR)
+  const runs = join(await projectDataDir(repo, { git }), RUNS_DIR)
   for (const dir of await fs.list(runs)) {
     const text = await fs.read(join(runs, dir, planFile(id))).catch(() => undefined)
     if (text !== undefined) return text
