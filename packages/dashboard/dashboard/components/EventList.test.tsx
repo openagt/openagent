@@ -443,15 +443,20 @@ describe('EventList question and answer', () => {
     window.matchMedia = media
   })
 
-  test('the turn a question ended has no copy and time, under the card or under what was said before it', () => {
+  test('the turn a question ended has its copy and time under the card, not under what was said before it; the copy takes what was said, and a reply that was only the question\'s block adds nothing', async () => {
     const at = '2026-09-25T10:04:05.000Z'
     const said: OpenAgentEvent = { kind: 'driver', event: { type: 'text', text: 'Here is the plan.' }, at }
-    render(<EventList events={[asked[0]!, said, { ...asked[2]!, at }, asked[3]!]} projectId="p1" agentId="r1" stick={false} />)
+    const block: OpenAgentEvent = { kind: 'driver', event: { type: 'text', text: '```await-choices\n{ "title": "Which color do you prefer?", "options": [{ "label": "Red" }] }\n```' }, at }
+    render(<EventList events={[asked[0]!, said, block, { ...asked[2]!, at }, asked[3]!]} projectId="p1" agentId="r1" stick={false} />)
     const row = screen.getByRole('region', { name: 'Which color do you prefer?' }).closest('[data-message-id]') as HTMLElement
-    expect(within(row).queryByRole('button', { name: 'Copy this message' })).toBeNull()
-    expect(row.querySelector('time')).toBeNull()
+    const copy = within(row).getByRole('button', { name: 'Copy this message' })
+    expect(row.querySelector('time')).toBeTruthy()
     const before = screen.getByText('Here is the plan.').closest('[data-message-id]') as HTMLElement
     expect(within(before).queryByRole('button', { name: 'Copy this message' })).toBeNull()
+    const writeText = vi.fn(async () => {})
+    Object.defineProperty(navigator, 'clipboard', { value: { writeText }, configurable: true })
+    fireEvent.click(copy)
+    await waitFor(() => expect(writeText).toHaveBeenCalledWith('Here is the plan.'))
   })
 
   test('answered, the prompt that resumed the agent is a box with the question and the answer, not my message, and the question is said once', () => {

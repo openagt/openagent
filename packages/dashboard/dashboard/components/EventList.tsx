@@ -842,8 +842,8 @@ export function EventList({
   // The last row of each turn the agent finished, with what its footer copies: everything the
   // agent said since the person's last message, its messages one paragraph apart, as Claude Code on
   // the web's copy takes them; a turn that said nothing but a question, the question. Claude Code
-  // puts the pair under the question the turn ended on too. An answer to the agent's question goes
-  // on the same turn, as it does there. The turn going on has none until it ends: the agent has not
+  // puts the pair under the question the turn ended on too, open or answered, shown while the
+  // pointer is on the turn. An answer to the agent's question goes on the same turn, as it does there. The turn going on has none until it ends: the agent has not
   // finished saying it. A turn that changed files ends on their card: the pair goes under it, as
   // Claude Code puts it under its card of the turn's files. Keyed by the prompt the turn ended at;
   // the last turn's by `null`.
@@ -952,8 +952,8 @@ export function EventList({
                   ) : choiceRow && choiceRow.pick === undefined && projectId !== undefined && agentId !== undefined ? (
                     // The question the agent waits on, answered here, under what it said.
                     typing ? null : <div className="mt-1 flex min-w-0 flex-1 flex-col gap-1.5">
-                      {/* No copy and time under it, as Claude Code on the web has none under a question. */}
                       <QuestionPanel key={`${agentId}:${choiceRow.choice.id}`} projectId={projectId} agentId={agentId} choice={choiceRow.choice} active={e === asking} onSaid={onSaid} />
+                      {footers.has(e) && <ReplyFooter text={footers.get(e)!} at={at} />}
                     </div>
                   ) : choiceRow?.pick !== undefined ? (
                     // What was asked and what was picked. font-sans: a card, not log text.
