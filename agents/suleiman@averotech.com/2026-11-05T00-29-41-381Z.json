@@ -7,7 +7,6 @@
   "title": "Ticket import and issue #2293 sync",
   "driver": "claude-code",
   "model": "claude-opus-5-5",
-  "branch": "agent-2026-11-05T00-29-41-381Z",
   "cost": 0.21684580000000003,
   "contextTokens": 29736,
   "caller": {
