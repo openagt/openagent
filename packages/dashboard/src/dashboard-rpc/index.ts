@@ -25,6 +25,7 @@ export { onProjectSkills, sendChangeSkills, sendProjectSkills, type ProjectSkill
 export { onPerson, type Person } from './person.js'
 export { onGitHostPeople, type HostPerson } from './people.js'
 export { onGitHosts, sendUseGitHostAccount, sendForgetGitHostAccount, sendGitHostLogin, sendGitHostInstall, onAgentState, sendAgentFix, onProjectAccounts, sendProjectAccounts, type GitHostsView, type GitHostRow, type GitHostAccount, type GitHostProvider, type AgentState, type ProjectAccountsView, type ProjectAgentAccounts } from './logins.js'
+export { onPersonalFolder, sendSyncPersonalFolder, sendStopSyncingPersonalFolder, type PersonalFolderView } from './personal-folder.js'
 export { onServerLogins, sendUseLoginsOn, sendAllowLogins, sendSettleLogin, type ServerLoginsView, type ServerLogins, type LoginThere } from './server-logins.js'
 export { onCopiedLogins, sendCopiedLogin, sendForgetCopiedLogin, sendKeepCopiedLogin, sendCopiedUsage, type CopiedView } from './copied-logins.js'
 export { onAgentAccounts, sendRemoveAgentAccount, sendUseAgentAccountFirst, type AccountsAgent, type AccountRow, type AccountWindow, type AccountsView, type AccountResult } from './accounts.js'
@@ -44,6 +45,7 @@ import * as accounts from './accounts.js'
 import * as logins from './logins.js'
 import * as copiedLogins from './copied-logins.js'
 import * as serverLogins from './server-logins.js'
+import * as personalFolder from './personal-folder.js'
 import { streamAgentEvents } from './events.js'
 
 /** One RPC: called with whatever the browser sent, answering with whatever JSON.stringify keeps. */
@@ -64,7 +66,7 @@ export type RpcHandler = (...args: never[]) => unknown
 export const RPC_HANDLERS: Record<string, RpcHandler> = Object.assign(
   Object.create(null) as Record<string, RpcHandler>,
   Object.fromEntries(
-    [reads, control, projects, preferences, quota, models, machines, modules, skills, person, people, accounts, logins, copiedLogins, serverLogins]
+    [reads, control, projects, preferences, quota, models, machines, modules, skills, person, people, accounts, logins, copiedLogins, serverLogins, personalFolder]
       .flatMap(module => Object.entries(module))
       .filter((entry): entry is [string, RpcHandler] => typeof entry[1] === 'function'),
   ),

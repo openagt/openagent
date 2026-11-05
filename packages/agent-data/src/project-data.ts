@@ -26,7 +26,8 @@ import {
 } from './file-branch.js'
 
 // Where a project's agent data lives. By default in the person's own folder on this machine,
-// `~/.openagent`: a git repository of its own with no remote, each project's data under
+// `~/.openagent`: a git repository of its own, synced with a repository of the person's when they
+// give it one (so every machine of theirs has the same records), each project's data under
 // `projects/<project>/`, so adding a project puts nothing in its repository. A project the person
 // shares writes to its own repository's `agent-data` branch instead (`file-branch.ts`), which
 // goes to its remote. One place per project at a time: switching moves the data over.
@@ -133,26 +134,138 @@ function serialize<T>(folder: string, deps: ProjectDataDeps, task: () => Promise
   return next
 }
 
+/** The branch the personal folder is on, here and on its remote. */
+const FOLDER_BRANCH = 'main'
+
+/** The personal folder's remote, `origin`, by the address it was given; `undefined` when it has none. */
+async function folderRemote(folder: string, git: GitRunner): Promise<string | undefined> {
+  return git(['remote', 'get-url', 'origin'], folder).then(
+    out => out.trim() || undefined,
+    () => undefined,
+  )
+}
+
 /**
- * Apply one change to the personal folder: run `op`, commit whatever it changed. Nothing is
- * pushed: the folder has no remote. A failed op leaves no half-written file behind. Never throws.
+ * Take in what the remote has: fetch, then merge origin's tip, origin's side winning a line both
+ * changed. A merge, not a rebase, so a commit of this machine's that never reached the remote is
+ * never dropped; unrelated histories merge too, so the first sync of a folder with a remote another
+ * machine already filled keeps both. A merge git cannot finish even so (a file changed here and
+ * deleted there) is given up, and the folder is put at origin's tip: the remote wins.
+ */
+async function takeRemote(folder: string, git: GitRunner): Promise<void> {
+  await git(['fetch', '-q', 'origin', FOLDER_BRANCH], folder).catch(() => {})
+  const theirs = `refs/remotes/origin/${FOLDER_BRANCH}`
+  if (!(await git(['rev-parse', '--verify', '--quiet', theirs], folder).then(() => true, () => false))) return
+  try {
+    await git(['merge', '-q', '--no-edit', '--allow-unrelated-histories', '-X', 'theirs', theirs], folder)
+  } catch {
+    await git(['merge', '--abort'], folder).catch(() => {})
+    await git(['reset', '-q', '--hard', theirs], folder)
+  }
+}
+
+/**
+ * Apply one change to the personal folder: run `op`, commit whatever it changed. A folder with a
+ * remote first takes in what the remote has, and sends its commits after, the change's and any an
+ * earlier write could not send; a push that loses a race takes the remote in again and runs `op`
+ * again, once. A push that still fails keeps the commit here, and the next write or pull sends it.
+ * A failed op leaves no half-written file behind. Never throws.
  */
 export async function withPersonalFolder(folder: string, message: CommitMessage, op: () => Promise<void>, deps: ProjectDataDeps = {}): Promise<FileBranchWrite> {
   const git = deps.git ?? nodeGitRunner()
   return serialize(folder, deps, async (): Promise<FileBranchWrite> => {
     try {
       await ensurePersonalFolder(folder, git)
-      await op()
-      await git(['add', '-A'], folder)
-      const staged = (await git(['status', '--porcelain'], folder)).trim()
-      if (staged) await git(['commit', '-q', '-m', resolveMessage(message)], folder)
-      return { ok: true, changed: Boolean(staged), pushed: false }
+      const remote = (await folderRemote(folder, git)) !== undefined
+      for (let attempt = 0; ; attempt++) {
+        if (remote) await takeRemote(folder, git)
+        const before = (await git(['rev-parse', 'HEAD'], folder)).trim()
+        await op()
+        await git(['add', '-A'], folder)
+        const staged = (await git(['status', '--porcelain'], folder)).trim()
+        if (staged) await git(['commit', '-q', '-m', resolveMessage(message)], folder)
+        if (!remote) return { ok: true, changed: Boolean(staged), pushed: false }
+        const ahead = await git(['rev-list', '--count', `refs/remotes/origin/${FOLDER_BRANCH}..HEAD`], folder).then(
+          out => out.trim() !== '0',
+          () => true,
+        )
+        if (!ahead) return { ok: true, changed: false, pushed: false }
+        try {
+          await git(['push', '-q', 'origin', `HEAD:refs/heads/${FOLDER_BRANCH}`], folder)
+          return { ok: true, changed: Boolean(staged), pushed: true }
+        } catch (err) {
+          if (attempt >= 1) return { ok: false, committed: true, error: `the personal folder could not be sent to its remote: ${errorMessage(err)}` }
+          if (staged) await git(['reset', '-q', '--hard', before], folder)
+        }
+      }
     } catch (err) {
+      await git(['merge', '--abort'], folder).catch(() => {})
       await git(['reset', '-q', '--hard'], folder).catch(() => {})
       await git(['clean', '-q', '-fd'], folder).catch(() => {})
       return { ok: false, committed: false, error: errorMessage(err) }
     }
   }).catch(err => ({ ok: false, committed: false, error: errorMessage(err) }))
+}
+
+/** How the personal folder stands: where it is, the remote it syncs with, and its commits the remote does not have yet. */
+export interface PersonalFolderState {
+  path: string
+  remote?: string
+  /** Commits made here that have not reached the remote. */
+  unsent: number
+}
+
+/** Read how the personal folder stands, without changing it. A folder not made yet holds nothing. Never throws. */
+export async function readPersonalFolder(deps: ProjectDataDeps = {}): Promise<PersonalFolderState> {
+  const git = deps.git ?? nodeGitRunner()
+  const folder = deps.folder ?? personalFolder()
+  const made = await stat(join(folder, '.git')).then(() => true, () => false)
+  if (!made) return { path: folder, unsent: 0 }
+  const remote = await folderRemote(folder, git)
+  const unsent = remote
+    ? await git(['rev-list', '--count', `refs/remotes/origin/${FOLDER_BRANCH}..HEAD`], folder).then(
+        out => Number(out.trim()) || 0,
+        // Nothing on the remote yet: every commit but the first, which carries nothing, is unsent.
+        async () => Math.max(0, Number((await git(['rev-list', '--count', 'HEAD'], folder).catch(() => '1')).trim()) - 1),
+      )
+    : 0
+  return { path: folder, ...(remote ? { remote } : {}), unsent }
+}
+
+/**
+ * Sync the personal folder with a repository: the remote is set, what it already has (another
+ * machine's records) is merged in, and every commit here is sent. A remote that cannot be reached
+ * or refuses is said, and the folder is left with no remote, as it was.
+ */
+export async function syncPersonalFolder(address: string, deps: ProjectDataDeps = {}): Promise<{ ok: true } | { ok: false; error: string }> {
+  const git = deps.git ?? nodeGitRunner()
+  const folder = deps.folder ?? personalFolder()
+  if (!address.trim() || address.trim().startsWith('-')) return { ok: false, error: 'no repository address given' }
+  const made = await withPersonalFolder(folder, 'sync', async () => {}, deps)
+  if (!made.ok) return { ok: false, error: made.error }
+  await git(['remote', 'remove', 'origin'], folder).catch(() => {})
+  await git(['remote', 'add', 'origin', address.trim()], folder)
+  const reached = await git(['ls-remote', '--heads', 'origin'], folder).then(() => undefined, errorMessage)
+  if (reached !== undefined) {
+    await git(['remote', 'remove', 'origin'], folder).catch(() => {})
+    return { ok: false, error: `the repository could not be reached: ${(reached.trim().split('\n').at(-1) ?? reached).replace(/^fatal: /, '')}` }
+  }
+  const sent = await withPersonalFolder(folder, 'sync', async () => {}, deps)
+  if (sent.ok) return { ok: true }
+  await git(['remote', 'remove', 'origin'], folder).catch(() => {})
+  return { ok: false, error: sent.error }
+}
+
+/** Stop syncing the personal folder: the remote is forgotten, every record stays here. */
+export async function stopSyncingPersonalFolder(deps: ProjectDataDeps = {}): Promise<{ ok: true } | { ok: false; error: string }> {
+  const git = deps.git ?? nodeGitRunner()
+  const folder = deps.folder ?? personalFolder()
+  return serialize(folder, deps, () =>
+    git(['remote', 'remove', 'origin'], folder).then(
+      () => ({ ok: true as const }),
+      () => ({ ok: true as const }),
+    ),
+  ).catch(err => ({ ok: false as const, error: errorMessage(err) }))
 }
 
 /**
