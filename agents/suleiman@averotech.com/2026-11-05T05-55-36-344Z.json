@@ -1,16 +1,30 @@
 {
   "id": "2026-11-05T05-55-36-344Z",
   "startedAt": "2026-11-05T05:55:22.725Z",
-  "status": "running",
+  "endedAt": "2026-11-05T05:57:12.758Z",
+  "status": "done",
   "intent": "/update-tickets",
+  "title": "Close GitHub issue 1132 ticket",
   "driver": "claude-code",
-  "model": "opus",
+  "model": "claude-opus-5-5",
+  "branch": "agent-2026-11-05T05-55-36-344Z",
+  "cost": 0.18331199999999997,
+  "contextTokens": 26891,
   "caller": {
     "runner": {
       "host": "Suleimans-MacBook-Pro.local",
-      "publish": "commit"
+      "pid": 43698,
+      "publish": "commit",
+      "gitAccount": "suleimansh",
+      "baseCommit": "e4b729350c72ab8d808cab8b7092e06c84491b58"
     },
+    "pid": 43698,
     "host": "Suleimans-MacBook-Pro.local",
-    "publish": "commit"
+    "gitAccount": "suleimansh",
+    "baseCommit": "e4b729350c72ab8d808cab8b7092e06c84491b58",
+    "publish": "commit",
+    "kind": "prompt",
+    "workspace": "/Users/suleiman/Projects/openagent/.branches/agent-2026-11-05T05-55-36-344Z",
+    "sessionId": "302ca580-feb2-41fc-8af3-ee078add5fc9"
   }
 }
