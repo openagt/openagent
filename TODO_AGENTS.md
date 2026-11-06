@@ -13,6 +13,7 @@
 - Create tickets/2026-10-18_people-on-shared-computer.plan.md
 - Create tickets/2026-10-26_dashboard-on-tailnet-address.plan.md
 - Create tickets/2026-11-05_agent-data-in-list-of-folders.plan.md
+- Create tickets/2026-11-06_shared-server-tailscale-person-setup.plan.md
 
 
 ## Priority 4
