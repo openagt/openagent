@@ -77,6 +77,11 @@ export interface AgentMeta {
   /** The branch the run's pull request goes into, written on the card by the tool that runs it; absent, the repository's default branch. */
   prBase?: string
   /**
+   * The repos a session with no project has as context, written on the card by the tool that runs
+   * it: each one's name, which its copy's folder in the session's folder has, and the folder it was copied from.
+   */
+  repos?: { name: string; from: string }[]
+  /**
    * How far the run takes its work when its agent finishes: `commit`, `branch`, `pr` or `merge`,
    * the level it was started at or last given. Written on the card by the tool that runs it;
    * absent on a run with none, whose prompts go as written. The session's "Auto" pick shows it.

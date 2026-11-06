@@ -1,4 +1,4 @@
-import { join, resolve, sep } from 'node:path'
+import { isAbsolute, join, resolve, sep } from 'node:path'
 import { hostname, tmpdir } from 'node:os'
 import { randomUUID } from 'node:crypto'
 import { rename, rm, stat, writeFile } from 'node:fs/promises'
@@ -452,10 +452,15 @@ export function createProjectRuntime({ cwd, env, clone = cloneProject, logins = 
   const onStart = async (prompt: string, options: StartAgentOptions = {}, targetProjectId?: string): Promise<StartAgentResult> => {
     if (isElsewhereId(targetProjectId)) return startElsewhere(prompt, options, targetProjectId)
     // A session with no project: in a folder of its own in the sessions home, on this computer,
-    // with no branch, and nothing committed or published.
+    // with no branch, and nothing committed or published; the repos it has are copied into it.
     const noProject = targetProjectId === SESSIONS_ID
     if (noProject && (options.machine !== undefined || options.base !== undefined || options.prBase !== undefined || options.publish !== undefined)) {
       return { ok: false, error: 'A session with no project runs on this computer, with no branch and nothing to publish.' }
+    }
+    if (!noProject && options.repos !== undefined) return { ok: false, error: 'Repos are added to a session with no project: a project works in its own checkout.' }
+    // The folders reach the line one per line: only whole paths go there.
+    if (options.repos !== undefined && !(Array.isArray(options.repos) && options.repos.every(folder => typeof folder === 'string' && isAbsolute(folder) && !folder.includes('\n')))) {
+      return { ok: false, error: 'A repo is named by the path of its folder on this computer.' }
     }
     const projectCwd = noProject ? await readySessionsHome(sessionsHome(env)) : await resolveProject(targetProjectId)
     if (!projectCwd) return { ok: false, error: `unknown project: ${targetProjectId}` }
@@ -505,6 +510,7 @@ export function createProjectRuntime({ cwd, env, clone = cloneProject, logins = 
       ...(publish !== undefined ? { publish } : {}),
       ...(options.base !== undefined ? { base: options.base } : {}),
       ...(options.prBase !== undefined ? { prBase: options.prBase } : {}),
+      ...(options.repos !== undefined ? { repos: options.repos } : {}),
     })
     // The line made a checkout (or is about to): the project's checkouts are read again on the
     // next look rather than a few seconds from now, so the new run's page finds its own.

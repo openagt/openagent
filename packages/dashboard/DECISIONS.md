@@ -465,6 +465,14 @@ already made, and lists it in its pull request; for anything else it proposes an
   picked on the "New agent session" page, by search: no project, a project, or a repo. A repo
   picked becomes a project once the person says they trust it. Picked over a session in a
   repo that is no project: a second kind of session, with no hooks, records or address.
+- A session with no project may have repos as context, added beside "No project" from the
+  same search. Each is a copy in the session's folder, cloned from the repo's folder on a
+  new branch, its origin the repo's own; none is made a project. The agent starts in the
+  session's folder and finds the repos as folders there; the prompt says nothing of them.
+  The session's record names them, and a resumed session goes on with the same copies.
+  Picked over a worktree of each repo, which leaves branches and checkouts in a folder that
+  is no project, and over a clone from the repo's address, which needs a login and the
+  network for what is already on the computer.
 - A hook line finds its tools in the packages OpenAgent brings first, then in the
   project's installed packages. Nothing is downloaded to run a line. Picked over `npx`
   in the lines, which downloads whatever package holds the name on npm when the project

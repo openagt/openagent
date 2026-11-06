@@ -100,6 +100,11 @@ export interface StartAgentOptions {
    * start is forwarded, so the machine starts an ordinary local run and does not relay onward.
    */
   machine?: string
+  /**
+   * The repos a session with no project has as context, by their folders on this computer: each is
+   * copied into the session's folder. Refused for a project, which works in its own checkout.
+   */
+  repos?: string[]
 }
 
 /**

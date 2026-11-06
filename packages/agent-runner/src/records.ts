@@ -55,16 +55,33 @@ export interface RunnerMark {
   for?: string
   /** Who resumed the run last, and when (`run --resume --by`): a scheduler's row, which counts the run as its own from then on. Not kept past the next resume. */
   resumed?: { by: string; at: string }
+  /** The repos a session with no project has as context (`run --repos`), each a copy in its folder. */
+  repos?: SessionRepo[]
+}
+
+/**
+ * A repo a session with no project has as context: the folder it was copied from, and the name
+ * of its copy in the session's folder.
+ */
+export interface SessionRepo {
+  name: string
+  from: string
+}
+
+/** The repos a mark names, as far as they are repos: anything else there is left out. */
+function reposOf(value: unknown): SessionRepo[] | undefined {
+  if (!Array.isArray(value)) return undefined
+  return value.flatMap(repo => (repo && typeof repo === 'object' && typeof repo.name === 'string' && typeof repo.from === 'string' ? [{ name: repo.name as string, from: repo.from as string }] : []))
 }
 
 /** The mark a card carries, or `undefined` for a run this tool did not start. */
 export function runnerMark(card: RunCard): RunnerMark | undefined {
   const mark = card.caller?.['runner']
   if (!mark || typeof mark !== 'object') return undefined
-  const { host, pid, publish, parent, base, prBase, gitAccount, baseCommit, for: started, resumed } = mark as Record<string, unknown>
+  const { host, pid, publish, parent, base, prBase, gitAccount, baseCommit, for: started, resumed, repos } = mark as Record<string, unknown>
   if (typeof host !== 'string') return undefined
   const by = resumed && typeof resumed === 'object' ? (resumed as Record<string, unknown>) : {}
-  return { host, ...(typeof pid === 'number' ? { pid } : {}), ...lasting({ publish, parent, base, prBase, gitAccount, baseCommit, for: started }), ...(typeof by['by'] === 'string' && typeof by['at'] === 'string' ? { resumed: { by: by['by'], at: by['at'] } } : {}) }
+  return { host, ...(typeof pid === 'number' ? { pid } : {}), ...lasting({ publish, parent, base, prBase, gitAccount, baseCommit, for: started, repos }), ...(typeof by['by'] === 'string' && typeof by['at'] === 'string' ? { resumed: { by: by['by'], at: by['at'] } } : {}) }
 }
 
 /**
@@ -78,8 +95,9 @@ export function earlierPrs(card: RunCard): { number: number; url: string }[] {
   return prs.flatMap(pr => (pr && typeof pr === 'object' && typeof pr.number === 'number' && typeof pr.url === 'string' ? [{ number: pr.number as number, url: pr.url as string }] : []))
 }
 
-/** What a mark keeps for the run's whole life, a resume included: its publish level, its parent, where it started, where its pull request goes, what it was started for. */
-export function lasting(mark: { publish?: unknown; parent?: unknown; base?: unknown; prBase?: unknown; gitAccount?: unknown; baseCommit?: unknown; for?: unknown }): Pick<RunnerMark, 'publish' | 'parent' | 'base' | 'prBase' | 'gitAccount' | 'baseCommit' | 'for'> {
+/** What a mark keeps for the run's whole life, a resume included: its publish level, its parent, where it started, where its pull request goes, what it was started for, the repos it has. */
+export function lasting(mark: { publish?: unknown; parent?: unknown; base?: unknown; prBase?: unknown; gitAccount?: unknown; baseCommit?: unknown; for?: unknown; repos?: unknown }): Pick<RunnerMark, 'publish' | 'parent' | 'base' | 'prBase' | 'gitAccount' | 'baseCommit' | 'for' | 'repos'> {
+  const repos = reposOf(mark.repos)
   return {
     ...(isPublish(mark.publish) ? { publish: mark.publish } : {}),
     ...(typeof mark.parent === 'string' ? { parent: mark.parent } : {}),
@@ -88,6 +106,7 @@ export function lasting(mark: { publish?: unknown; parent?: unknown; base?: unkn
     ...(typeof mark.gitAccount === 'string' ? { gitAccount: mark.gitAccount } : {}),
     ...(typeof mark.baseCommit === 'string' ? { baseCommit: mark.baseCommit } : {}),
     ...(typeof mark.for === 'string' ? { for: mark.for } : {}),
+    ...(repos !== undefined && repos.length > 0 ? { repos } : {}),
   }
 }
 
@@ -109,9 +128,10 @@ export function markerCard(run: { id: string; startedAt: string; prompt: string;
  * What a reader of the card finds beside `host`, outside this tool's mark: the run's parent, the
  * name of the branch it was started from when it was told one, the branch its pull request goes into, the account it worked as at the git host, the commit its own work begins at, which its
  * changes are measured from, and how far it takes its work, which a dashboard shows and offers to
- * change, and what it was started for, which a git host's check reads to find the run a thread has.
+ * change, and what it was started for, which a git host's check reads to find the run a thread has,
+ * and the repos a session with no project has, which its page shows.
  */
-export function forReaders(mark: Pick<RunnerMark, 'parent' | 'base' | 'prBase' | 'gitAccount' | 'baseCommit' | 'publish' | 'for'>): { parent?: string; base?: string; prBase?: string; gitAccount?: string; baseCommit?: string; publish?: Publish; for?: string } {
+export function forReaders(mark: Pick<RunnerMark, 'parent' | 'base' | 'prBase' | 'gitAccount' | 'baseCommit' | 'publish' | 'for' | 'repos'>): { parent?: string; base?: string; prBase?: string; gitAccount?: string; baseCommit?: string; publish?: Publish; for?: string; repos?: SessionRepo[] } {
   return {
     ...(mark.parent !== undefined ? { parent: mark.parent } : {}),
     ...(mark.base !== undefined ? { base: publishedBranch(mark.base) ?? mark.base } : {}),
@@ -120,6 +140,7 @@ export function forReaders(mark: Pick<RunnerMark, 'parent' | 'base' | 'prBase' |
     ...(mark.baseCommit !== undefined ? { baseCommit: mark.baseCommit } : {}),
     ...(mark.publish !== undefined ? { publish: mark.publish } : {}),
     ...(mark.for !== undefined ? { for: mark.for } : {}),
+    ...(mark.repos !== undefined ? { repos: mark.repos } : {}),
   }
 }
 

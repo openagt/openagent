@@ -8,6 +8,7 @@ import { cleanup } from './cleanup.js'
 import { everyBasicSkill } from './basic-skills.js'
 import { isPublish, NO_PUBLISH, PUBLISH_LEVELS } from './records.js'
 import { gitHostCommand } from './git-host.js'
+import { sessionRepos } from './session-folder.js'
 
 /**
  * The command line: JSON on stdout, one line for a person on stderr, and the exit code says how
@@ -18,7 +19,7 @@ import { gitHostCommand } from './git-host.js'
 export const USAGE = `usage: agent-runner <command>
 
   run <prompt> [--model <id>] [--effort <level>] [--driver <claude-code|codex>] [--publish <commit|branch|pr|merge>] [--attach <text>] [--parent <id>] [--base <ref>]
-      [--pr-base <branch>] [--branch <name>] [--for <thread>]
+      [--pr-base <branch>] [--branch <name>] [--for <thread>] [--repos <folders>]
                                 one run of <prompt> in its own checkout, now, recorded; on Claude Code unless --driver says Codex,
                                 on the coding agent's own default model unless --model names one;
                                 with --publish, the agent is told, in one sentence after the prompt, how far to take its work when it finishes: commit it, and from there push its branch,
@@ -28,7 +29,8 @@ export const USAGE = `usage: agent-runner <command>
                                 with --base, the run's branch starts from <ref> instead of origin's default branch; refs/remotes/origin/<branch> is that branch as origin has it, fetched first;
                                 with --pr-base, the --publish sentence names <branch> as the branch its pull request goes into, instead of origin's default branch;
                                 with --branch, the run works on <name>, a branch that exists, such as a person's pull request's, instead of a fresh one;
-                                with --for, the run's record names what it was started for, a thread's address on the git host, so the next call there finds it
+                                with --for, the run's record names what it was started for, a thread's address on the git host, so the next call there finds it;
+                                with --repos, in the sessions home, each git repository among <folders>, one per line, is copied into the session's folder (below)
   run --detach <prompt>         the same run in its own process, answered at once with its id: what a dashboard's start hook runs
   run --resume <id> [<text>] [--answer <label>] [--publish <commit|branch|pr|merge|nothing>]
                                 continue an ended run: the same record, its session resumed; the text as the next prompt, or the answer to the question it ended on;
@@ -46,7 +48,9 @@ export const USAGE = `usage: agent-runner <command>
 
 In the sessions home (~/.openagent-sessions, or $XDG_CONFIG_HOME/openagent-sessions) a run has no project: it works in a
 folder of its own there, <home>/<id>, with no git, kept when it ends; its record is kept with the other sessions' in the
-personal folder, and --publish, --base, --pr-base and --branch are refused.
+personal folder, and --publish, --base, --pr-base and --branch are refused. Each repo given with --repos is a clone in
+it, <home>/<id>/<repo's folder name>, on a new branch agent-<id>, its origin the repo's own (none when the repo has none);
+the run's record names them, and a resumed run goes on with the same ones. --repos is refused in a project.
 
 When a run ends waiting on a question, or ends done with a pull request it did not have, the \`ended:\` line in the
 project's .agent-runner/config.yml runs, if there is one, in the project's root, with MESSAGE (one line for a person),
@@ -113,7 +117,7 @@ type Command = (args: string[], io: CliIo, git: GitRunner) => Promise<unknown>
 
 const COMMANDS: Record<string, Command> = {
   async run(args, io, git) {
-    const { positionals, values } = parse(args, { id: { type: 'string' }, model: { type: 'string' }, effort: { type: 'string' }, resume: { type: 'string' }, answer: { type: 'string' }, detach: { type: 'boolean' }, mark: { type: 'boolean' }, driver: { type: 'string' }, publish: { type: 'string' }, attach: { type: 'string' }, started: { type: 'string' }, parent: { type: 'string' }, base: { type: 'string' }, 'pr-base': { type: 'string' }, branch: { type: 'string' }, for: { type: 'string' }, by: { type: 'string' } }, 0, 1)
+    const { positionals, values } = parse(args, { id: { type: 'string' }, model: { type: 'string' }, effort: { type: 'string' }, resume: { type: 'string' }, answer: { type: 'string' }, detach: { type: 'boolean' }, mark: { type: 'boolean' }, driver: { type: 'string' }, publish: { type: 'string' }, attach: { type: 'string' }, started: { type: 'string' }, parent: { type: 'string' }, base: { type: 'string' }, 'pr-base': { type: 'string' }, branch: { type: 'string' }, for: { type: 'string' }, by: { type: 'string' }, repos: { type: 'string' } }, 0, 1)
     const repo = await project(io.cwd, git)
     const driver = values.driver
     if (driver !== undefined && !isDriverName(driver)) throw new Usage(`unknown driver "${driver}"; the drivers are ${DRIVER_NAMES.join(' and ')}`)
@@ -131,6 +135,7 @@ const COMMANDS: Record<string, Command> = {
       if (values['pr-base'] !== undefined) throw new Usage('--resume takes no --pr-base: a run continues into the branch its record names')
       if (values.branch !== undefined) throw new Usage('--resume takes no --branch: a run continues on its own branch')
       if (values.for !== undefined) throw new Usage('--resume takes no --for: a run continues for what its record names')
+      if (values.repos !== undefined) throw new Usage('--resume takes no --repos: a session continues with the repos its record names')
       if (positionals[0] === undefined && values.answer === undefined) throw new Usage('a text or --answer is needed to resume a run')
     }
     if (values.by !== undefined && (values.resume === undefined || !values.by.trim())) throw new Usage('--by names who resumes a run, with --resume')
@@ -140,10 +145,19 @@ const COMMANDS: Record<string, Command> = {
     if (values.for !== undefined && !values.for.trim()) throw new Usage('--for needs what the run is for')
     if (values.attach !== undefined && !values.attach.trim()) throw new Usage('--attach needs a text')
     // A session with no project works in a folder with no git: no branch to start from or work on, nothing to commit or publish.
-    if ((await sessionsHomeOf(repo)) !== undefined) {
+    const noProject = (await sessionsHomeOf(repo)) !== undefined
+    if (noProject) {
       const gitFlag = (['publish', 'base', 'pr-base', 'branch'] as const).find(flag => values[flag] !== undefined && !(flag === 'publish' && noLevel))
       if (gitFlag !== undefined) throw new Usage(`--${gitFlag} is for a run in a project: a session with no project has no git`)
+    } else if (values.repos !== undefined) {
+      throw new Usage('--repos is for a session with no project: a run in a project works in its own checkout')
     }
+    // The repos a session has as context, one folder per line, each copied into the session's folder.
+    const folders = (values.repos ?? '').split('\n').map(line => line.trim()).filter(Boolean)
+    const repos = folders.length > 0 ? await sessionRepos(folders, git).catch((err: unknown) => {
+      const line = err instanceof Error ? err.message : String(err)
+      throw new Refused({ ok: false, reason: 'not-a-repo', detail: line }, line)
+    }) : undefined
     if (values.started !== undefined && (values.id === undefined || Number.isNaN(Date.parse(values.started)))) throw new Usage('--started is the time a run spawned with --id was asked for, like 2026-10-09T10:00:00.000Z')
     // A parent this project has no record of is refused while someone is still listening; a run
     // spawned with its id was asked about already.
@@ -156,7 +170,7 @@ const COMMANDS: Record<string, Command> = {
       const ready = await readyToRun(repo, driver ?? 'claude-code')
       if (ready.problems.length > 0) throw new Refused({ ok: false, reason: 'not-ready', ...ready }, ready.problems.join(' '))
     }
-    const named = { ...(publish !== undefined ? { publish } : {}), ...(values.attach !== undefined ? { attached: values.attach } : {}), ...(values.parent !== undefined ? { parent: values.parent } : {}), ...(values.base !== undefined ? { base: values.base } : {}), ...(values['pr-base'] !== undefined ? { prBase: values['pr-base'].trim() } : {}), ...(values.branch !== undefined ? { branch: values.branch.trim() } : {}), ...(values.for !== undefined ? { for: values.for.trim() } : {}) }
+    const named = { ...(publish !== undefined ? { publish } : {}), ...(values.attach !== undefined ? { attached: values.attach } : {}), ...(values.parent !== undefined ? { parent: values.parent } : {}), ...(values.base !== undefined ? { base: values.base } : {}), ...(values['pr-base'] !== undefined ? { prBase: values['pr-base'].trim() } : {}), ...(values.branch !== undefined ? { branch: values.branch.trim() } : {}), ...(values.for !== undefined ? { for: values.for.trim() } : {}), ...(repos !== undefined ? { repos } : {}) }
     if (values.detach && values.resume !== undefined) {
       const resumed = await detachResume(repo, {
         id: values.resume,
