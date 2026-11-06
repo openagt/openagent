@@ -300,7 +300,7 @@ already made, and lists it in its pull request; for anything else it proposes an
   `/gemstack` starts an agent there, `/gemstack/overview` and `/gemstack/logs` are the
   Overview and a module's page with that project picked, `/gemstack/<agent>` one agent. With
   every project picked the address has no project: `/`, `/logs`; only an agent's page and
-  the "New agent" page, which belong to a project, add `?all`. A name that cannot be an
+  the "New agent session" page, which belong to a project, add `?all`. A name that cannot be an
   address, because a project added before has it or a page has that word, is the project's
   id with its hash. The id still opens the project, and stays what everything else knows
   it by. Picked over `?project=` and over the id with its hash, which named the project in
@@ -370,7 +370,7 @@ already made, and lists it in its pull request; for anything else it proposes an
   line offers the rest. Picked over the launcher listing only the questions, and over words
   that said what had not happened ("Not committed"), and over pages of rows.
 - The sidebar lists the runs by when they were started, unless the person picks the last
-  update or the name from the button beside "Recent agents". Picked over the runs that hold a
+  update or the name from the button beside "Log". Picked over the runs that hold a
   checkout first, which moved a run answered days later to the top and back once its checkout
   went, and over the last update as the default, Claude Code's, which moves a row while a
   person talks to it.

@@ -724,7 +724,7 @@ export function App() {
           interventionCount={interventions.length}
         />
         {/* On a phone the sidebar is a sheet, and this button, over the page's top left corner,
-            opens it. An agent's page and the "New agent" page keep that corner of their top row
+            opens it. An agent's page and the "New agent session" page keep that corner of their top row
             free; a page with no top row of its own gets a bar that names it. */}
         {isMobile && !pageScrolls && <MenuButton />}
         {/* A project's page and an agent's have panes beside them (Panes). A module's page takes

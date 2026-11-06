@@ -42,7 +42,7 @@ function subscribe(listener: () => void): () => void {
 }
 
 /**
- * The project whose own page is open (an agent's or its "New agent" page), by id, set by the shell
+ * The project whose own page is open (an agent's or its "New agent session" page), by id, set by the shell
  * from the route; null on every other page. Its committed presets are the ones offered.
  */
 export const OpenProjectContext = createContext<string | null>(null)

@@ -6,7 +6,7 @@ beforeEach(() => forgetPanes())
 
 const kept = () => JSON.parse(localStorage.getItem('oa.panes')!) as { pages: Record<string, { open: string[]; sizes: Record<string, Record<string, number>> }>; last: Record<string, Record<string, number>> }
 
-test('an agent\'s page has its own panes, and the "New agent" page one set for every project', () => {
+test('an agent\'s page has its own panes, and the "New agent session" page one set for every project', () => {
   expect(panesPage('p1', 'r1')).toBe('p1/r1')
   expect(panesPage('p1', null)).toBe('new')
   expect(panesPage('p2', undefined)).toBe('new')
@@ -91,7 +91,7 @@ describe('how a page\'s room is shared', () => {
     expect(paneSizes('p1/r1', 'workspace')).toBeUndefined()
     setPaneSizes('p1/r1', 'workspace', { chat: 40, panes: 60 })
     expect(paneSizes('p1/r1', 'workspace')).toEqual({ chat: 40, panes: 60 })
-    // Another page, and the "New agent" page: the last shares set anywhere.
+    // Another page, and the "New agent session" page: the last shares set anywhere.
     expect(paneSizes('p1/r2', 'workspace')).toEqual({ chat: 40, panes: 60 })
     expect(paneSizes('new', 'workspace')).toEqual({ chat: 40, panes: 60 })
     setPaneSizes('p1/r2', 'workspace', { chat: 70, panes: 30 })

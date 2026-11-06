@@ -105,7 +105,7 @@ export function AgentHistory({
   scope?: string | null
   /** The address names a project that is not read yet: the select names none, and nothing says all show. */
   scopePending?: boolean
-  /** Whether the list of agents shown is read: until it is, an empty list is not "No agents yet." */
+  /** Whether the list of agents shown is read: until it is, an empty list is not "No sessions yet." */
   listLoaded?: boolean
   /** Pick the one project every page shows, or null for all of them. */
   onScope?: (projectId: string | null) => void
@@ -215,7 +215,7 @@ export function AgentHistory({
   // just-started run (#705) counts too, before its id is known.
   const starting = selectedAgentId !== null && !listed.some(agent => agent.id === selectedAgentId)
 
-  // In the order the person picked from the button beside "Recent agents" (`recents-sort.ts`).
+  // In the order the person picked from the button beside "Log" (`recents-sort.ts`).
   const order = preferences.recentsSort ?? 'created'
   const rows: Row[] = sortRuns(crossProject
     ? recentAgents!.map(rr => ({
@@ -357,7 +357,7 @@ export function AgentHistory({
                   the state of this list rather than a lonely line in the sidebar. */}
               <div className="sticky top-0 z-10">
                 <SidebarGroupLabel className="rounded-none bg-sidebar font-normal tracking-wide text-muted-foreground">
-                  Recent agents
+                  Log
                   <RecentsSortMenu order={order} />
                 </SidebarGroupLabel>
                 {/* Absolute (hanging just below the label) so it does not push the first row down; it
@@ -414,9 +414,9 @@ export function AgentHistory({
                     )
                   })}
                 </SidebarMenu>
-                {/* Nothing while the list is read: it takes a moment, and "No agents yet." would not be true yet. */}
+                {/* Nothing while the list is read: it takes a moment, and "No sessions yet." would not be true yet. */}
                 {!hasRecents && listLoaded && (
-                  <p className="whitespace-nowrap px-2 py-1 text-sm text-muted-foreground">No agents yet.</p>
+                  <p className="whitespace-nowrap px-2 py-1 text-sm text-muted-foreground">No sessions yet.</p>
                 )}
               </SidebarGroupContent>
             </SidebarGroup>
@@ -529,7 +529,7 @@ function NewButton({
     return (
       <Button variant="ghost" className={cls} onClick={() => start(target)}>
         <Plus className="h-4 w-4 shrink-0" />
-        <span className="whitespace-nowrap">New agent</span>
+        <span className="whitespace-nowrap">New agent session</span>
       </Button>
     )
   }
@@ -541,9 +541,9 @@ function NewButton({
         <Tooltip>
           <TooltipTrigger render={<Button variant="ghost" className={cls} onClick={() => setAdding(true)} />}>
             <Plus className="h-4 w-4 shrink-0" />
-            <span className="whitespace-nowrap">New agent</span>
+            <span className="whitespace-nowrap">New agent session</span>
           </TooltipTrigger>
-          <TooltipContent>Add a project to start an agent</TooltipContent>
+          <TooltipContent>Add a project to start an agent session</TooltipContent>
         </Tooltip>
         {adding && <AddProjectPanel onAdded={() => onProjectAdded?.()} onClose={() => setAdding(false)} />}
       </>
@@ -553,9 +553,9 @@ function NewButton({
   // Several projects: pick which one the new session agents in.
   return (
     <DropdownMenu>
-      <DropdownMenuTrigger aria-label="New agent" className={cn(buttonVariants({ variant: 'ghost' }), cls)}>
+      <DropdownMenuTrigger aria-label="New agent session" className={cn(buttonVariants({ variant: 'ghost' }), cls)}>
         <Plus className="h-4 w-4 shrink-0" />
-        <span className="whitespace-nowrap">New agent</span>
+        <span className="whitespace-nowrap">New agent session</span>
         <ChevronDown className="ml-auto h-3.5 w-3.5 shrink-0 opacity-70" />
       </DropdownMenuTrigger>
       <DropdownMenuContent align="start" className="w-[13.5rem]">
@@ -575,7 +575,7 @@ function NewButton({
 }
 
 /**
- * The button beside "Recent agents" (his pick, after Claude Code's own beside its "Recents"): the
+ * The button beside "Log" (his pick, after Claude Code's own beside its "Recents"): the
  * order of the list, kept in the person's preferences. By creation unless picked otherwise, so a
  * run does not move while a person talks to it.
  */
@@ -737,7 +737,7 @@ function AgentHistoryRow({
       observer?.disconnect()
     }
   }, [intent, naming])
-  const titleText = naming ? '' : intent || 'New agent'
+  const titleText = naming ? '' : intent || 'New agent session'
   // A name that comes to a row that waited for it comes in as a new session's does.
   const waitedForName = useRef(false)
   if (naming) waitedForName.current = true

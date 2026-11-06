@@ -8,7 +8,7 @@ import { HumanQueueList } from './HumanQueueList.js'
 import { ScrollArea } from './ui/scroll-area.js'
 import type { StartPicks } from '../lib/started-from.js'
 
-// The project home / launcher: the "New agent" page. It is never consumed by an agent: starting
+// The project home / launcher: the "New agent session" page. It is never consumed by an agent: starting
 // one appends an agent to the rail and adds that agent's own view (AgentView) alongside, and this
 // page stays put, so you can launch again.
 //

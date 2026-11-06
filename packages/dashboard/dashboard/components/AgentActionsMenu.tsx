@@ -43,7 +43,7 @@ import {
 //
 // Given none, a ⋮ holds all of the project's: its git host page, its skills, the offer of a
 // repository, where the agents' records go, its folder, its editor. It stands in the same place on
-// the "New agent" page and on an agent's page (ProjectMenu).
+// the "New agent session" page and on an agent's page (ProjectMenu).
 //
 // The handoff's Push / Open PR are not here: they move the work forward, and sit in the bar above
 // the message box. The editor keeps its preferred-editor submenu; Delete opens its confirm dialog

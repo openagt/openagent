@@ -61,7 +61,7 @@ interface Pane {
 interface PanesValue {
   /** The name the page's panes are kept under (`panesPage`). */
   page: string
-  /** The page has panes at all: an agent's page and the "New agent" page do. */
+  /** The page has panes at all: an agent's page and the "New agent session" page do. */
   enabled: boolean
   /** The panes this page offers, in the order of their icons. */
   panes: Pane[]

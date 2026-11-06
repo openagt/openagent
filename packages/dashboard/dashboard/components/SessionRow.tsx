@@ -13,12 +13,12 @@ function runsOnIcon(target: AgentMeta['target'], kind: AgentMeta['remoteKind']):
   return kind ? MACHINE_ICONS[kind] : Laptop
 }
 
-// A session's row above the message box: the "New agent" page's row, in its place and in its look,
+// A session's row above the message box: the "New agent session" page's row, in its place and in its look,
 // with every item off, since a session keeps where it started. Where it runs, the project, the branch
-// it started from, and at the other end the git host. The branch means what it means on "New agent"
+// it started from, and at the other end the git host. The branch means what it means on "New agent session"
 // and does not flip as the agent renames its own, which its hover names and the bar above says. The
 // row's height is fixed, and each item lands in place: the branch last on its side, so nothing beside
-// it is pushed, and only with the project's name, as on "New agent". A branch that cannot be said
+// it is pushed, and only with the project's name, as on "New agent session". A branch that cannot be said
 // (`lib/started-from.ts`) is left out.
 export function SessionRow({
   runsOn,

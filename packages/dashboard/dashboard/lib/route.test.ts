@@ -19,7 +19,7 @@ describe('parseRoute', () => {
     expect(parse('/logs/a%20b/c')).toEqual({ projectId: null, agentId: null, page: 'logs', pagePath: ['a b', 'c'] })
   })
 
-  it("reads a project's New agent page, with the project picked", () => {
+  it("reads a project's New agent session page, with the project picked", () => {
     expect(parse('/app')).toEqual({ projectId: 'app-a1', agentId: null, scope: 'app-a1' })
     expect(parse('/shop-2def')).toEqual({ projectId: 'shop-2def', agentId: null, scope: 'shop-2def' })
     expect(parse('/logs-9zz')).toEqual({ projectId: 'logs-9zz', agentId: null, scope: 'logs-9zz' })
