@@ -23,8 +23,8 @@ already made, and lists it in its pull request; for anything else it proposes an
   skills every run gets are handed to it by the package that started OpenAgent
   (`@openagt/dashboard`), and a git host's among them only where the project is on that host.
   Their texts are linked into each agent's checkout, hidden from git like the branches
-  skill, each with its command when it has one, so an agent in any project can read
-  earlier runs, ask the person a question and open a pull request with nothing committed.
+  skill, each with its command when it has one, so an agent in any project can ask the
+  person a question and open a pull request with nothing committed.
   A project's own copy of one is left alone. Picked over every skill coming from the
   project's own committed files, where a person who cannot change the default branch got
   agents that could not ask a question; and over the runner naming them itself, where the

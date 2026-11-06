@@ -3,11 +3,12 @@ import { test } from 'node:test'
 import { carriedSkills, GROUPS, SKILL_NAMES } from './catalogue.js'
 import { olderThan, stamped, unstamped } from './skill-file.js'
 
-test('the list holds 20 skills in six groups, and none every run gets by default', async () => {
-  assert.equal(SKILL_NAMES.length, 20)
-  assert.equal(new Set(SKILL_NAMES).size, 20, 'no skill twice')
-  assert.deepEqual(GROUPS.map(group => group.title), ['Tickets and queue', 'Pull requests', 'Automations', 'Code reviews', 'Research', 'Needs its own setup'])
-  for (const basic of ['branches', 'logs', 'ask', 'github', 'orchestration', 'tickets', 'queue']) assert.ok(!SKILL_NAMES.includes(basic), `${basic} comes with every run`)
+test('the list holds 25 skills in seven groups, and none every run gets by default', async () => {
+  assert.equal(SKILL_NAMES.length, 25)
+  assert.equal(new Set(SKILL_NAMES).size, 25, 'no skill twice')
+  assert.deepEqual(GROUPS.map(group => group.title), ['Tickets and queue', 'Agents', 'Pull requests', 'Automations', 'Code reviews', 'Research', 'Needs its own setup'])
+  for (const basic of ['branches', 'ask', 'github']) assert.ok(!SKILL_NAMES.includes(basic), `${basic} comes with every run`)
+  for (const picked of ['tickets', 'queue', 'orchestration', 'logs', 'account-rotation']) assert.ok(SKILL_NAMES.includes(picked), `${picked} is picked`)
 })
 
 test('every skill is carried with its own package\'s text: its name, a description, a version, and its command by full name only', async () => {

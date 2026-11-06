@@ -17,11 +17,11 @@ already made, and lists it in its pull request; for anything else it proposes an
   `.claude/skills/<name>` or `.agents/skills/<name>`, committed on the branch an agent
   starts from. Picked over a skill saying which default it does in a line of its own, a
   format nothing needs yet.
-- The defaults are what an agent needs in any project to work at all (logs, question,
-  and github on a GitHub project) and the skills the dashboard has pages for that need no
-  setup of their own (orchestration, tickets, queue), so a page never shows work an agent
-  cannot do. The rest are picked from init's list. Picked over the first three alone, which
-  left the tickets and the queue a list of ticks away from a new project, and over every
+- The defaults are what an agent needs in any project to work at all: ask, and github on a
+  GitHub project. Every other skill is picked on the project's Skills page: the tickets, the
+  queue, orchestration, the logs and account rotation too. A new project shows only the
+  pages of the skills it picked. Picked over the skills with pages coming with every run,
+  which gave a new project Tickets, Queue and Logs pages it never asked for; and over every
   skill of the list, each one more description in every agent's context.
 - Typed inside a Git repository, the command adds that repository to the projects, by
   its top folder, as "Add project" does, with the agents' records kept on this computer.
@@ -234,6 +234,10 @@ already made, and lists it in its pull request; for anything else it proposes an
   skill that is no default takes them away. Picked over
   a project's pages coming from its own `package.json`, which needed an install in every
   project, and which a project without Node could not have.
+- The logs package is every project's: it keeps the runs' records, which the Log lists. Its
+  Logs page and its Members card are a project's only once the project holds the logs
+  skill's text, like any picked skill's page. Picked over the Logs page on every project,
+  which a new project showed without asking.
 - Three lists name the packages OpenAgent brings, the ones every project has, the ones
   a project picks and the ones that are the computer's, and nothing else in OpenAgent
   names a package. One of those names among a project's own dependencies is not read:

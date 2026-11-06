@@ -4,9 +4,9 @@ import { dirname, join } from 'node:path'
 
 /**
  * The skills a project can pick on the dashboard's Skills page (#2023), in its groups. None is
- * ticked the first time: the person picks what the project needs. The skills every run gets by default are not here (the branches skill,
- * and the ones its command names): they come with every run, with nothing written in the
- * project.
+ * ticked the first time: the person picks what the project needs. The skills every run gets by
+ * default are not here (the branches skill, and the ones its command names): they come with every
+ * run, with nothing written in the project.
  *
  * Each skill's text is its own package's `SKILL.md`, read from this package's install, so the
  * dashboard carries the texts of the versions it was published with.
@@ -18,7 +18,8 @@ export interface SkillGroup {
 }
 
 export const GROUPS: readonly SkillGroup[] = [
-  { title: 'Tickets and queue', skills: ['plan', 'plan-tickets', 'triage', 'update-tickets', 'work-queue', 'suggest-new-tickets', 'suggest-tickets-to-work-on'] },
+  { title: 'Tickets and queue', skills: ['tickets', 'queue', 'plan', 'plan-tickets', 'triage', 'update-tickets', 'work-queue', 'suggest-new-tickets', 'suggest-tickets-to-work-on'] },
+  { title: 'Agents', skills: ['orchestration', 'logs', 'account-rotation'] },
   { title: 'Pull requests', skills: ['reply', 'post-merge-cleanup'] },
   { title: 'Automations', skills: ['scheduler'] },
   { title: 'Code reviews', skills: ['maintainability', 'maintenance', 'readability', 'security-audit', 'ux'] },

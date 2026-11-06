@@ -1,6 +1,6 @@
 import { homedir } from 'node:os'
 import { contextProjects, contextRemote, resolveProjectPath } from './context.js'
-import { findBroughtModule, findComputerModule, findProjectModule, readComputerModules, readProjectModules, runModuleCommand as runCommand, type ModuleCommandResult } from '../project-modules.js'
+import { findBroughtModule, findComputerModule, findProjectModule, readComputerModules, readProjectPages, runModuleCommand as runCommand, type ModuleCommandResult } from '../project-modules.js'
 import { broughtModuleUrl, computerModuleUrl, moduleUrl, versionedModuleUrl } from '../dashboard/module-serve.js'
 import { providedDataChanged } from '../store/provided.js'
 import { callModuleRead, serverHost, type ModuleReadResult } from '../dashboard/module-host.js'
@@ -29,9 +29,10 @@ export interface DashboardModule {
 
 /**
  * Every module the dashboard loads (#1774), one per package. First the computer's, which are
- * there with no project added. Then every module any registered project brings, with the projects
- * that have it: with no project picked the sidebar and the pages are every project's, and the
- * dashboard narrows them itself to a picked project's. A package several projects install is loaded once, from
+ * there with no project added. Then every module whose pages a registered project shows, with
+ * the projects that show them: with no project picked the sidebar and the pages are every
+ * project's, and the dashboard narrows them itself to a picked project's. A package several
+ * projects install is loaded once, from
  * the first of them in the registry's order; its page then reads each project through that
  * project's own command. A project that cannot be read contributes nothing.
  */
@@ -41,7 +42,7 @@ export async function onModules(): Promise<DashboardModule[]> {
     byPackage.set(module.package, { package: module.package, url: await versionedModuleUrl(computerModuleUrl(module), module), projects: [], computer: true })
   }
   for (const project of await contextProjects().list()) {
-    const modules = await readProjectModules(project.path).catch(() => [])
+    const modules = await readProjectPages(project.path).catch(() => [])
     for (const module of modules) {
       const known = byPackage.get(module.package)
       if (known) known.projects.push(project.id)

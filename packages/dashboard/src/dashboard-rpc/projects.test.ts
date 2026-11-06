@@ -296,8 +296,8 @@ test("this computer's projects, as another computer of the person's asks for the
   try {
     provideTestContext()
     const [app] = await onOwnProjects()
-    // The modules OpenAgent brings to every project, here those of a folder that holds nothing else.
-    assert.deepEqual(app!.modules, ['@openagt/dashboard-changes', '@openagt/dashboard-files', '@openagt/skill-logs'])
+    // The pages OpenAgent brings to every project, here those of a folder that holds nothing else: no Logs page, a skill it did not pick.
+    assert.deepEqual(app!.modules, ['@openagt/dashboard-changes', '@openagt/dashboard-files'])
   } finally {
     await restore()
   }

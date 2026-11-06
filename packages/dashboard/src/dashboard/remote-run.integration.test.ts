@@ -370,7 +370,7 @@ test("a project only the other machine has is listed here, marked with that mach
     const listed = await m.a.remoteAgents.elsewhere()
     const otherB = otherOf(m.shopB)
     const id = elsewhereId(projectId(otherB), m.machineB)
-    assert.deepEqual(listed, [{ id, path: otherB, name: 'other', activated: false, gitHost: true, machine: m.machineB, modules: ['@openagt/dashboard-changes', '@openagt/dashboard-files', '@openagt/skill-logs'] }])
+    assert.deepEqual(listed, [{ id, path: otherB, name: 'other', activated: false, gitHost: true, machine: m.machineB, modules: ['@openagt/dashboard-changes', '@openagt/dashboard-files'] }])
 
     // On B, the run starts in B's own project, and the branch picked is B's to read: it goes with it.
     const result = await m.a.onStart('fix the other', { machine: m.machineB, base: 'a-branch-of-b', model: 'opus' }, id)

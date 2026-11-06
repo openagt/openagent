@@ -16,7 +16,10 @@ already made, and lists it in its pull request; for anything else it proposes an
   package depends on the drivers for their logins, never the other way. Picked over the
   drivers calling this package, a circle of packages, and over the switching staying in
   the drivers, with only the list moved out.
-- Every run gets the skill: accounts are the computer's, so no project ticks it.
+- The skill is picked on a project's Skills page, like any other. Runs switch accounts
+  without it: the runner uses this package itself. The skill only lets an agent add or
+  remove an account when the person asks. Picked over every run getting it, one more
+  description in every agent's context for something a person seldom asks.
 - An Accounts card built only on the command, the first skill whose card shows what its command
   says. Picked over moving the whole Settings page first; that it overlaps the Usage card is
   accepted, and Customize hides either.
