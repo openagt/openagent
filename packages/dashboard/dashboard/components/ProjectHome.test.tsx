@@ -38,6 +38,9 @@ describe('ProjectHome', () => {
         removeContext={() => {}}
         toggleContext={() => {}}
         onOpenAgent={() => {}}
+        projects={[]}
+        onPickProject={() => {}}
+        onProjectAdded={() => {}}
       />,
     )
     await act(async () => {
@@ -60,7 +63,7 @@ describe('ProjectHome', () => {
   })
 
   test('nothing waits: no section, no heading', () => {
-    render(<ProjectHome projectId="p1" waiting={[]} events={[]} files={[]} context={new Set()} addContext={() => {}} removeContext={() => {}} toggleContext={() => {}} onOpenAgent={() => {}} />)
+    render(<ProjectHome projectId="p1" waiting={[]} events={[]} files={[]} context={new Set()} addContext={() => {}} removeContext={() => {}} toggleContext={() => {}} onOpenAgent={() => {}} projects={[]} onPickProject={() => {}} onProjectAdded={() => {}} />)
     expect(screen.queryByRole('region', { name: 'Waiting on you' })).toBeNull()
     expect(screen.queryByText(/Waiting on you/)).toBeNull()
   })

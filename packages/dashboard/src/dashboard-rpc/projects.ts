@@ -7,7 +7,8 @@ import { hasRemote } from '../has-remote.js'
 import { openagentVersion } from '../version.js'
 import { currentBranch } from '../dashboard/git-status.js'
 import { branchesOnOrigin, waitingSkills } from '../dashboard/start-branch.js'
-import { startFromPick, type StartFromPick } from '../registry.js'
+import { addRepoFolder, listProjects, startFromPick, type StartFromPick } from '../registry.js'
+import { thisComputersRepos, type FoundRepo } from '../dashboard/repos.js'
 import { homedir } from 'node:os'
 import { canRead, cloneProject, cloneTargetOf } from '../clone-project.js'
 import { isDriverName } from '../driver-names.js'
@@ -151,6 +152,37 @@ export async function sendShareRecords(projectId: string, on: boolean): Promise<
  */
 export async function sendPickProjectDirectory(): Promise<PickDirectoryResult> {
   return pickDirectory()
+}
+
+/** The repos on this computer that are not projects yet, and whether a folder can be added to look in. */
+export interface ReposRead {
+  repos: FoundRepo[]
+  /** This computer can show a folder dialog, so the picker offers "Search another folder…". */
+  canAddFolder: boolean
+}
+
+/**
+ * The repos a new session can start in besides the projects (Rom's "a project is a sticky repo"):
+ * every repository the daemon's crawl found on this computer, less those that are projects
+ * already. The kept list, so the picker opens at once; an old one is crawled again behind it.
+ */
+export async function onRepos(): Promise<ReposRead> {
+  const [repos, projects] = await Promise.all([thisComputersRepos().read(), listProjects().catch(() => [])])
+  const pinned = new Set(projects.map(project => project.path))
+  return { repos: repos.filter(repo => !pinned.has(repo.path)), canAddFolder: canPickDirectory() }
+}
+
+/**
+ * "Search another folder…": the OS folder dialog, and the folder picked joins those the crawl
+ * looks in, which then runs again before the answer. A dismissed dialog adds nothing.
+ */
+export async function sendAddRepoFolder(): Promise<{ ok: true; added: boolean } | { ok: false; error: string }> {
+  const picked = await pickDirectory()
+  if (!picked.ok) return picked
+  if (!picked.path) return { ok: true, added: false }
+  await addRepoFolder(picked.path)
+  await thisComputersRepos().refresh()
+  return { ok: true, added: true }
 }
 
 /**

@@ -1,4 +1,4 @@
-import type { Intervention, OpenAgentEvent, ProjectError } from '../../src/index.js'
+import type { Intervention, OpenAgentEvent, ProjectError, ProjectSummary } from '../../src/index.js'
 import { StartAgentForm } from './StartAgentForm.js'
 import { ProjectActions } from './ProjectActions.js'
 import { ProjectErrorBanner } from './ProjectErrorBanner.js'
@@ -35,8 +35,17 @@ export function ProjectHome({
   onProjectRemoved,
   onSkillsChanged,
   home,
+  projects,
+  onPickProject,
+  onProjectAdded,
 }: {
   projectId: string
+  /** Every project, for the picker of where the session works. */
+  projects: readonly ProjectSummary[]
+  /** Open the "New agent session" page of another project, or of no project. */
+  onPickProject: (projectId: string) => void
+  /** A repo was added as a project from the picker. */
+  onProjectAdded: () => void
   /** The project's name, for the launcher's chip; absent until the projects are read. */
   projectName?: string | null | undefined
   /** The Human Queue, already only the project picked in the sidebar's (#1513) when one is picked. */
@@ -98,6 +107,9 @@ export function ProjectHome({
         removeContext={removeContext}
         toggleContext={toggleContext}
         home={home}
+        projects={projects}
+        onPickProject={onPickProject}
+        onProjectAdded={onProjectAdded}
       />
     </>
   )

@@ -704,10 +704,9 @@ describe('the shell on a phone', () => {
 
       // The launcher has a top row of its own, which keeps its corner free for the button.
       fireEvent.click(screen.getByRole('button', { name: 'Open the menu' }))
-      // New is a menu of the project and "No project".
-      await openMenu(await screen.findByRole('button', { name: 'New agent session' }))
-      fireEvent.click(await screen.findByRole('menuitem', { name: 'app' }))
-      expect(await screen.findByText('the launcher of app')).toBeTruthy()
+      // New is one click, to the page of a session with no project.
+      fireEvent.click(await screen.findByRole('button', { name: 'New agent session' }))
+      expect(await screen.findByText(/^the launcher of/)).toBeTruthy()
       await waitFor(() => expect(screen.queryByRole('button', { name: 'New agent session' })).toBeNull())
       expect(screen.getByRole('button', { name: 'Open the menu' })).toBeTruthy()
       expect(screen.queryByText('Overview')).toBeNull()

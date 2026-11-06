@@ -539,6 +539,9 @@ export function App() {
           onProjectRemoved={leaveRemovedProject}
           // A skill written or deleted gives or takes a page: read the projects and their modules again now.
           onSkillsChanged={() => setProjectsKey(k => k + 1)}
+          projects={projects}
+          onPickProject={newAgentInProject}
+          onProjectAdded={() => setProjectsKey(k => k + 1)}
         />
       )
     }

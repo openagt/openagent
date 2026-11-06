@@ -5,7 +5,7 @@
 export { onAgents, onStartedName, onModuleAgents, onAgent, onAgentsDoing, onDocs, onQueue, onOverview, onRecentAgents, onInterventions, onActivity, onDashboard, onGitHostHome, onRepositoryOffer, onGitStatus, onProjectFiles, onRetainedWorktrees, onAgentWorktree, onAgentMainBranch, onAgentHandoff, onBridgeQuestion, onBridgeStatus, onBridgeToken, onBridgeEvents, onBridgeAnswer, onBridgeBrowser } from './reads.js'
 export { sendStop, sendChoice, sendBridgeAnswer, sendBridgeAnswerCancel, sendBridgeBrowser, sendMessage, sendStart, sendOpenInApp, sendRemoveWorktree, sendDeleteAgent, sendOpenPullRequest, sendPush, sendMergeBranch, sendMerge, sendCreateRepository } from './control.js'
 export { streamAgentEvents, type LiveFeedEvent, type PartialMessage, type StreamSync } from './events.js'
-export { onProjects, sendAddProject, sendStartedAgain, onCloneTarget, sendAddProjectFromAddress, sendRemoveProject, sendShareRecords, sendPickProjectDirectory, onOnboarding, onCommands, onStartBranches, onStartCheck, onCloneCheck, type ProjectLauncher } from './projects.js'
+export { onProjects, sendAddProject, sendStartedAgain, onCloneTarget, sendAddProjectFromAddress, sendRemoveProject, sendShareRecords, sendPickProjectDirectory, onRepos, sendAddRepoFolder, onOnboarding, onCommands, onStartBranches, onStartCheck, onCloneCheck, type ProjectLauncher } from './projects.js'
 export {
   onPreferences,
   savePreferences,
