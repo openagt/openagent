@@ -247,7 +247,7 @@ test('ready to run on Codex: skills in ~/.agents/skills are no warning while run
   }
 })
 
-test('ready to run, and the run: a project that names its own account at the git host works as it; one the git host cannot give stops the run before it starts', async () => {
+test('ready to run, and the run: the computer\u2019s account at the git host, or the project\u2019s own when it names one; no account, or one the git host cannot give, stops the run before it starts', async () => {
   const repo = await testRepo()
   try {
     const probe = async (_bin: string, args: readonly string[]) => ({ ok: true, output: args[0] === '--version' ? '2.1.0' : JSON.stringify({ loggedIn: true }) })
@@ -257,11 +257,15 @@ test('ready to run, and the run: a project that names its own account at the git
       return user === 'stranger' ? { ok: false as const, error: 'gh knows no account stranger' } : { ok: true as const, env: { GH_TOKEN: `tok-${user ?? 'computer'}` }, login: user ?? 'computer-login' }
     }
     assert.deepEqual(await readyToRun(repo, 'claude-code', { probe, isRoot: () => false, gitHostEnv }), { problems: [], warnings: [] })
-    assert.deepEqual(asked, [], 'no account named: the git host is not asked')
+    assert.deepEqual(asked, [undefined], 'no account named: the computer\u2019s is asked for')
     // No account named: the computer's.
     const env: NodeJS.ProcessEnv = {}
     assert.deepEqual(await workAs(repo, () => {}, { gitHostEnv, env }), { git: 'computer-login' })
     assert.equal(env['GH_TOKEN'], 'tok-computer')
+    // OpenAgent has no account there: refused, in the git host's words, never the person's own login.
+    const none = async () => ({ ok: false as const, error: "OpenAgent has no GitHub account: add one in OpenAgent's Permissions" })
+    assert.deepEqual((await readyToRun(repo, 'claude-code', { probe, isRoot: () => false, gitHostEnv: none })).problems, ["OpenAgent has no GitHub account: add one in OpenAgent's Permissions"])
+    await assert.rejects(workAs(repo, () => {}, { gitHostEnv: none, env: {} }), /no GitHub account/)
 
     await writeProjectAccounts(repo, { gitHost: 'octo-agent', claude: ['Rom', 'Dani'], codex: ['Dani'] })
     assert.deepEqual(await workAs(repo, () => {}, { gitHostEnv, env }), { git: 'octo-agent', claude: ['Rom', 'Dani'], codex: ['Dani'] })

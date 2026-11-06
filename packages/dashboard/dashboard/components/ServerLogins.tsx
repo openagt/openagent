@@ -9,7 +9,7 @@ import { cn } from '../lib/utils.js'
 import { usePolled } from '../lib/use-async.js'
 import { CopyButton } from './ui/copy-button.js'
 
-// The servers of the person's that use this computer's logins, in Settings › Accounts: a card with
+// The servers of the person's that use this computer's logins, on the Permissions page: a card with
 // each server, offering this computer's logins or saying how they stand there with the press that
 // makes the server a login of its own in this computer's browser; a row for each login saying whether
 // the server has it, with its press; and the person's answer when a server has an account of theirs
@@ -159,8 +159,8 @@ function useStanding(server: ServerLogins, computer: string, onChanged: () => Pr
 
 /**
  * Where a run sent to a machine of the person's would find no login: how this computer's logins
- * stand there, and the press, as Settings › Accounts says them. A machine that does not take this
- * computer's logins (another person's) is sent to Settings › Accounts.
+ * stand there, and the press, as the Permissions page says them. A machine that does not take this
+ * computer's logins (another person's) is sent to the Permissions page.
  */
 export function MachineLogins({ machineId, onAccounts }: { machineId: string; onAccounts: () => void }) {
   return (

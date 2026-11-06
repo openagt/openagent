@@ -942,6 +942,26 @@ describe('AgentHistory reads a log ahead', () => {
   })
 })
 
+// The accounts the agents work with: a page of the dashboard's own, under the modules' pages.
+test('Permissions is a row of the rail, after the modules\u2019 pages, and opens its page; it is the active one there', () => {
+  const onPage = vi.fn()
+  const { rerender } = render(
+    <SidebarProvider>
+      <AgentHistory projectId={null} agents={[]} selectedAgentId={null} onSelect={vi.fn()} pages={[{ segment: 'logs', label: 'Logs' }]} onPage={onPage} />
+    </SidebarProvider>,
+  )
+  const labels = screen.getAllByRole('button').map(button => button.textContent)
+  expect(labels.indexOf('Permissions')).toBe(labels.indexOf('Logs') + 1)
+  fireEvent.click(screen.getByRole('button', { name: 'Permissions' }))
+  expect(onPage).toHaveBeenCalledWith('permissions')
+  rerender(
+    <SidebarProvider>
+      <AgentHistory projectId={null} agents={[]} selectedAgentId={null} onSelect={vi.fn()} pages={[{ segment: 'logs', label: 'Logs' }]} onPage={onPage} activePage="permissions" />
+    </SidebarProvider>,
+  )
+  expect(screen.getByRole('button', { name: 'Permissions' }).getAttribute('aria-current')).toBe('page')
+})
+
 // A phone has no width for the rail beside the page (#1824): it is a sheet over the page.
 describe('AgentHistory on a phone', () => {
   test('the rail is closed until the menu\'s button is pressed, and going somewhere from it closes it', async () => {

@@ -15,7 +15,7 @@ import { accountsPath, addAccount } from '@openagt/skill-account-rotation'
 /** The real readiness question, before a test swaps it. */
 const realReady = loginsWiring.ready
 
-// Settings › Accounts, the agent's own fix, and a project's own accounts: drawn from what the
+// The Permissions page, the agent's own fix, and a project's own accounts: drawn from what the
 // git host's package and the agent's package answer, never naming either.
 
 const GITHUB: ProvidedCommand = { name: 'github', bin: '/pkg/github', package: '@openagt/skill-github' } as ProvidedCommand

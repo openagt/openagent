@@ -1,4 +1,5 @@
 import { callPackageCommand, runPackageCommand, type ProvidedCommand } from '@openagt/agent-data'
+import { gitHostEnv } from '@openagt/agent-runner'
 import { providedCommand } from '../built-in.js'
 import { isRunId } from './runs.js'
 
@@ -288,7 +289,10 @@ function commandBranches(root: string, command: ProvidedCommand, now: () => numb
     show: (branches, from) => branchRead('show', parseBranchStates, branches, from),
     ahead: (branches, from) => branchRead('ahead', parseBranchesAhead, branches, from),
     async push(branch) {
-      const result = await runPackageCommand(root, command, ['push', '--branch', branch])
+      // As the account runs work as at the git host, as the run itself would push: never the person's own login.
+      const account = await gitHostEnv(root)
+      if (!account.ok) return { ok: false, error: account.error }
+      const result = await runPackageCommand(root, command, ['push', '--branch', branch], account.env)
       drop()
       if (!result.ok) return { ok: false, error: result.error }
       const pushed = result.output && typeof result.output === 'object' ? (result.output as Record<string, unknown>)['pushed'] : undefined

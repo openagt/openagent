@@ -4,7 +4,7 @@ import { allowLogins, serverLogins, settleLeft, syncLogins, type ServerLogins } 
 import type { CopiedKind } from '../dashboard/copied-logins.js'
 import type { AccountResult } from './accounts.js'
 
-// The servers of the person's that use this computer's logins, as Settings › Accounts shows them
+// The servers of the person's that use this computer's logins, as the Permissions page shows them
 // (`logins-sync.ts` keeps them up to them): how each of this computer's accounts stands there, the
 // press that makes a server the logins that cannot go as they are, and the answer for a login the
 // server has that this computer no longer has.

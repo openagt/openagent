@@ -1,3 +1,4 @@
+import { openPermissions } from '../lib/use-route.js'
 import { useState } from 'react'
 import { CircleAlert, Settings } from 'lucide-react'
 import { onPerson, type Person } from '../rpc/person.js'
@@ -68,7 +69,7 @@ export function PersonMenu({ onSettings }: { onSettings: (entry?: string) => voi
         {missing.length > 0 && (
           <>
             {missing.map(item => (
-              <DropdownMenuItem key={item.key} onClick={() => onSettings(item.entry)} className="text-warning">
+              <DropdownMenuItem key={item.key} onClick={openPermissions} className="text-warning">
                 <CircleAlert className="h-3.5 w-3.5 shrink-0" aria-hidden />
                 <span className="flex-1 truncate">{item.words}</span>
               </DropdownMenuItem>

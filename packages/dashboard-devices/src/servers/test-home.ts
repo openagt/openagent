@@ -1,11 +1,16 @@
-import { mkdtemp, rm } from 'node:fs/promises'
+import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import type { Exec, Said } from './ssh.js'
 
 /** A home folder of a test's own: the env the servers file is found through, and how to remove it. */
-export async function testHome(): Promise<{ env: NodeJS.ProcessEnv; remove: () => Promise<void> }> {
+export async function testHome(opts: { github?: boolean } = {}): Promise<{ env: NodeJS.ProcessEnv; remove: () => Promise<void> }> {
   const dir = await mkdtemp(join(tmpdir(), 'servers-'))
+  // OpenAgent's own GitHub account, as `@openagt/skill-github` keeps one: what a copy is made from.
+  if (opts.github !== false) {
+    await mkdir(join(dir, 'openagent-github', 'octocat'), { recursive: true })
+    await writeFile(join(dir, 'openagent-github', 'octocat', 'hosts.yml'), 'github.com: {}\n')
+  }
   return { env: { XDG_CONFIG_HOME: dir }, remove: () => rm(dir, { recursive: true, force: true }) }
 }
 
@@ -38,11 +43,17 @@ export function pretendServer(
 ): { exec: Exec; calls: Call[]; asked: string[] } {
   const calls: Call[] = []
   const asked: string[] = []
-  const exec: Exec = async (bin, args, script) => {
+  const exec: Exec = async (bin, args, script, opts) => {
     if (bin === 'git') {
       // As `git config --get` answers: the value, or nothing and a 1 for a key that is not set.
       const value = args.at(-1) === 'user.name' ? git.name : args.at(-1) === 'user.email' ? git.email : undefined
       return value === undefined ? { code: 1, out: '', err: '' } : { code: 0, out: `${value}\n`, err: '' }
+    }
+    // `gh` as OpenAgent's account: its folder alone, and no token from this process's environment.
+    if (bin === 'env') {
+      const at = args.indexOf('gh')
+      if (at < 0 || !args.includes('GH_TOKEN') || !args.some(arg => arg.startsWith('GH_CONFIG_DIR=') && arg.endsWith('/openagent-github/octocat'))) throw new Error(`not gh as OpenAgent's account: ${args.join(' ')}`)
+      return exec('gh', args.slice(at + 1), script, opts)
     }
     if (bin === 'gh') {
       asked.push(args.join(' '))

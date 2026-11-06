@@ -111,42 +111,10 @@ export function ownClaudeLogoutScript(): LoginScript {
   return { as: SERVER_USER, script: script({ FILE: OWN_CLAUDE_FILE }, `\n  rm -f "$HOME/$FILE" "$HOME/$FILE.new"\n`) }
 }
 
-/**
- * Give the user's git the name and email of the GitHub account it is logged in to, when it has
- * none: a commit made by a person's run reads as theirs. Only what git lacks is given. The email is
- * GitHub's own address for the account, which hides the person's own.
- */
-export function ownIdentityScript(): LoginScript {
-  return {
-    as: SERVER_USER,
-    script: script(
-      {},
-      `
-  unset GH_TOKEN GITHUB_TOKEN GH_CONFIG_DIR XDG_CONFIG_HOME
-  has() { [ -n "$(cd / && git config --get "$1" || true)" ]; }
-  facts=$(gh api --hostname github.com user --jq '[.login, (.id | tostring), (.name // "")] | @tsv')
-  login=$(printf '%s' "$facts" | cut -f1)
-  id=$(printf '%s' "$facts" | cut -f2)
-  name=$(printf '%s' "$facts" | cut -f3)
-  [ -n "$login" ] && [ -n "$id" ] || fail "GitHub did not say whose the login is."
-  has user.name || git config --global -- user.name "\${name:-$login}"
-  has user.email || git config --global -- user.email "$id+$login@users.noreply.github.com"
-`,
-    ),
-  }
-}
-
 /** Run a script on this computer; what comes back never holds the login. */
 async function send(session: Session, { as, script: text }: LoginScript, login = ''): Promise<{ ok: true } | Failed> {
   const said = await session.run(as, text, LOGIN_TIMEOUT_MS)
   return said.code === 0 ? { ok: true } : { ok: false, error: lastLines({ out: scrubbed(said.out, login), err: scrubbed(said.err, login) }) || 'The login could not be written.' }
-}
-
-/** Once a GitHub login is there, git is given the account's name and email. */
-async function named(session: Session, given: GithubGiven): Promise<GithubGiven> {
-  if (!given.ok) return given
-  const named = await send(session, ownIdentityScript())
-  return named.ok ? given : { ok: false, error: `The login is there; git could not be given its name: ${named.error}`, reached: true }
 }
 
 /** Write down how a GitHub login went, for this OpenAgent's own user; `copied` says what was handed over, and from where when it is a copy. */
@@ -199,7 +167,7 @@ export async function giveOwnGithub(opts: OwnOptions, login: string, from?: stri
   const word = login.trim()
   let given: GithubGiven = { ok: false, error: 'The work stopped before it ended.', reached: false }
   try {
-    given = await named(session, await giveGithubLogin(session, word))
+    given = await giveGithubLogin(session, word)
   } finally {
     await update(opts.env, store => noteOwnGithub(store, given, { login: word, ...(from !== undefined ? { from } : {}) }))
   }

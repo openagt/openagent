@@ -17,10 +17,13 @@ interface Ran {
   err: string
 }
 
+/** A run's environment: the account it was given, one of OpenAgent's, so gh works as it. */
+const IN_A_RUN = { XDG_CONFIG_HOME: '/cfg', GH_CONFIG_DIR: '/cfg/openagent-github/octo' }
+
 async function run(cwd: string, argv: string[], deps: CliDeps = {}): Promise<Ran> {
   const outLines: string[] = []
   const errLines: string[] = []
-  const code = await runCli(argv, { cwd, stdout: line => outLines.push(line), stderr: line => errLines.push(line) }, deps)
+  const code = await runCli(argv, { cwd, stdout: line => outLines.push(line), stderr: line => errLines.push(line) }, { ...deps, env: { ...IN_A_RUN, ...deps.env } })
   return { code, out: outLines.length ? JSON.parse(outLines.join('\n')) : undefined, err: errLines.join('\n') }
 }
 

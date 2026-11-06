@@ -9,11 +9,9 @@ import { CopyButton } from './ui/copy-button.js'
 // What runs log in with, and what is missing for them to (#2194's accounts, a step further): the
 // coding agent's CLI, installed and logged in, and the tool of each git host the projects are on.
 // Each is drawn from its own package's answers; a press runs the command that package declared.
-// Four places show it: the cards of Settings › Accounts, the Overview's "Get ready" step, the
+// Four places show it: the cards of the Permissions page, the Overview's "Get ready" step, the
 // start form's red line, and the dot on the person's picture.
 
-/** The Settings entry of every login runs use: what "Add account…" in the person's menu opens. */
-export const ACCOUNTS_ENTRY = 'accounts'
 
 /** How often a page asks again: often while something is under way (an install, the browser's yes), less while something is missing, seldom once all is there. */
 const BUSY_MS = 2_000
@@ -119,7 +117,7 @@ export function agentWords(state: AgentState): string {
 /** What is missing at a host, in words. */
 export function hostWords(row: GitHostRow): string {
   const p = row.provider!
-  return !p.installed ? `${p.tool}, the tool for ${p.name}, is not installed.` : p.accounts.length === 0 ? `No ${p.name} account is logged in.` : `${p.name} no longer takes a login: add it again.`
+  return !p.installed ? `${p.tool}, the tool for ${p.name}, is not installed.` : p.accounts.length === 0 ? `OpenAgent has no ${p.name} account yet.` : `${p.name} no longer takes a login: add it again.`
 }
 
 /** A press that fixes one thing: its button, what it is doing while it does, the command it runs, why it failed. */
@@ -227,17 +225,16 @@ export function HostFix({ row, onChanged, size }: { row: GitHostRow; onChanged: 
   }
   if (p.loggingIn) return <DeviceCode code={p.loggingIn.code} url={p.loggingIn.url} />
   if (p.accounts.length > 0) return null
-  return <FixAction size={size} label={`Log in to ${p.name}`} busy={login.busy} busyWords="Asking for a code…" {...(login.error !== undefined ? { failed: login.error } : {})} onPress={() => void login.start(row.host)} />
+  return <FixAction size={size} label={`Add a ${p.name} account`} busy={login.busy} busyWords="Asking for a code…" {...(login.error !== undefined ? { failed: login.error } : {})} onPress={() => void login.start(row.host)} />
 }
 
-/** One thing missing before runs can start, and the Settings entry that shows it whole. */
+/** One thing missing before runs can start; the Permissions page shows it whole. */
 export interface Missing {
   key: string
   /** What it is: "Claude Code", "GitHub". */
   name: string
   /** What is missing, in words. */
   words: string
-  entry: string
   /** The press that fixes it. */
   fix: ReactNode
 }
@@ -256,7 +253,6 @@ export function useMissing(): { missing: Missing[]; reload: () => Promise<void>;
       key: 'agent',
       name,
       words: agentWords(state),
-      entry: ACCOUNTS_ENTRY,
       fix: <AgentFix state={state} onChanged={() => void reloadAgent()} />,
     })
   }
@@ -267,7 +263,6 @@ export function useMissing(): { missing: Missing[]; reload: () => Promise<void>;
       key: `host:${row.host}`,
       name: p.name,
       words: hostWords(row),
-      entry: ACCOUNTS_ENTRY,
       fix: <HostFix row={row} onChanged={reloadHosts} />,
     })
   }

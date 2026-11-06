@@ -11,7 +11,7 @@ import type { Devices } from './use-devices.js'
 // A server's own page in Settings › Devices, for a server this computer installed OpenAgent on:
 // on the internet, or a computer at home reached through one. Its state and its steps, and who is
 // in on it and who may start runs on it. Whatever is changed on it is changed over SSH, by the
-// `devices server` command's own process. Its logins are on its page in Settings › Accounts.
+// `devices server` command's own process. Its logins are on its page on the Permissions page.
 
 /** What removing a person does, said before it is done: it cannot be taken back. */
 export const REMOVE_PERSON = (name: string): string =>
@@ -231,7 +231,7 @@ const AGENTS: { agent: ModuleAccountsAgent; title: string }[] = [
 /**
  * The coding agents' accounts on the server, as it says them, each in the order its runs take
  * them. One is removed here as on the server's own page: one this computer handed it, this computer
- * offers again under Settings › Accounts. The server's own login stays: Claude Code or Codex keeps it.
+ * offers again on the Permissions page. The server's own login stays: Claude Code or Codex keeps it.
  */
 function Accounts({ host, machine, name, busy }: { host: ModuleHost; machine: ModuleMachine; name: string; busy: boolean }) {
   const { value: read, reload } = usePolled<(ModuleMachineAccount[] | null)[] | undefined>(() => Promise.all(AGENTS.map(({ agent }) => host.machineAccounts(machine.id, agent))), undefined, 30_000, [machine.id])
@@ -260,7 +260,7 @@ function Accounts({ host, machine, name, busy }: { host: ModuleHost; machine: Mo
                   <span className="ml-2 text-xs text-muted-foreground">{[account.from !== undefined ? `from ${account.from}` : account.own ? `${name}'s own login` : undefined, account.first ? 'runs take it first' : undefined].filter(Boolean).join(' · ')}</span>
                 </span>
                 {!account.own && (
-                  <Button size="xs" variant="ghost" disabled={busy || removing !== undefined} aria-label={`Remove ${account.name}'s ${title} account on ${name}`} title={account.from !== undefined ? `Runs on ${name} no longer use it. ${account.from} offers it again under Settings › Accounts.` : `Runs on ${name} no longer use it.`} onClick={() => void remove(agent, account)}>
+                  <Button size="xs" variant="ghost" disabled={busy || removing !== undefined} aria-label={`Remove ${account.name}'s ${title} account on ${name}`} title={account.from !== undefined ? `Runs on ${name} no longer use it. ${account.from} offers it again on the Permissions page.` : `Runs on ${name} no longer use it.`} onClick={() => void remove(agent, account)}>
                     {removing === `${agent} ${account.id}` && <Loader2 className="h-3 w-3 animate-spin" aria-hidden />}
                     Remove
                   </Button>

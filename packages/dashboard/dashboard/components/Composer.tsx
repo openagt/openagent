@@ -20,7 +20,7 @@ import { PresetCreatePanel } from './PresetCreatePanel.js'
 import { CommandsMenu } from './CommandsMenu.js'
 import { DriverModelMenu, type DriverOption } from './DriverModelMenu.js'
 import { RunOnMenu } from './RunOnMenu.js'
-import { openSettings } from '../lib/use-route.js'
+import { openPermissions, openSettings } from '../lib/use-route.js'
 import { useMachines, useMachinesRead, tellMachine, type Machine } from '../lib/machines.js'
 import { restoreRunOn, runTarget, useRunOnFallback, useSelectedMachineId, selectMachine } from '../lib/remote-target.js'
 import { thisMachineName } from '../lib/this-machine.js'
@@ -30,7 +30,6 @@ import { driverOptions, modelEfforts, readMachineModelsAhead, useModelsOn } from
 import { readyCommands, useProjectLauncher } from '../lib/use-project-launcher.js'
 import { AgentAccountItems, firstAccount, readMachineAccountsAhead, useAccountsOn } from './AgentAccounts.js'
 import { readMachineGitHostsAhead } from './GitHosts.js'
-import { ACCOUNTS_ENTRY } from './Logins.js'
 import { Tooltip, TooltipTrigger, TooltipContent } from './ui/tooltip.js'
 import { RowAboveBox, rowClass, rowLeftClass } from './ui/row-item.js'
 
@@ -183,7 +182,7 @@ export const Composer = forwardRef<ComposerHandle, {
     const on = selectedMachine ? machineName(selectedMachine) : undefined
     return {
       account: firstAccount(view),
-      accounts: <AgentAccountItems view={view} on={on} onPick={account => void pick(account)} onAdd={() => (selectedMachine ? openSettings('devices', selectedMachine.id) : openSettings(ACCOUNTS_ENTRY))} />,
+      accounts: <AgentAccountItems view={view} on={on} onPick={account => void pick(account)} onAdd={() => (selectedMachine ? openSettings('devices', selectedMachine.id) : openPermissions())} />,
     }
   }
   // #1073: block Start when the target machine is known-offline; an absent/unknown status must not block.

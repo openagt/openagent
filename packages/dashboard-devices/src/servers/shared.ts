@@ -75,7 +75,7 @@ export async function otherLogins(env: NodeJS.ProcessEnv, machine: string): Prom
 
 /** Copy this computer's GitHub login to the person's own OpenAgent on another person's computer; answers what it says of the logins there. */
 export async function copyGithubToOther(env: NodeJS.ProcessEnv, machine: string, run?: Exec): Promise<Answered> {
-  const own = await ownGithubLogin(run)
+  const own = await ownGithubLogin(run, env)
   if (!own.ok) return own
   return toOther(env, machine, { github: own.login })
 }

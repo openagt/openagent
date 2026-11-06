@@ -105,11 +105,16 @@ already made, and lists it in its pull request; for anything else it proposes an
   over moving a project that already has a remote.
 
 ## Accounts
-- OpenAgent's runs work as an account of their own at GitHub, picked in OpenAgent, and given
-  to each run as that account's token, for `gh` and for git's pushes. Switching it never
-  changes the terminal's `gh`, and a switch in the terminal never moves the runs: the runs'
-  account is the one `gh` had active when OpenAgent first looked, kept until it is picked
-  again in OpenAgent. Picked over runs following the terminal's account until one is picked.
+- OpenAgent's GitHub accounts are its own, added in OpenAgent: each one a folder of its own,
+  the folder `gh` keeps that account's login in, its token there and not in the keychain. The
+  person's own `gh`, git settings and keychain are never read or changed. Picked over using the
+  accounts the person's `gh` knows, which let an agent act as the person.
+- Everything OpenAgent asks GitHub, it asks as one of its accounts: a run as the account it was
+  given, its folder, its token for `gh` and for git's pushes, and its name and GitHub's own
+  address for it on the commits; everything else as the account runs use. With no account,
+  the command is refused and says where one is added. Picked over falling back on the
+  person's own login, the one thing this is for.
+- The account runs use is the first one added, until another is picked in OpenAgent.
 - No switch at a limit for GitHub: the account is the agent's identity (who opens the pull
   request, which forks it may push to), and its hourly calls are plenty. Picked over a list
   that hands over like the Claude accounts do.

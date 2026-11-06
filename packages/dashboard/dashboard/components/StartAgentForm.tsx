@@ -13,7 +13,7 @@ import { startPicks, useStartAgent } from '../lib/use-start-agent.js'
 import { useProjectLauncher } from '../lib/use-project-launcher.js'
 import { useLoaded, usePolled } from '../lib/use-async.js'
 import { Button } from './ui/button.js'
-import { openSettings } from '../lib/use-route.js'
+import { openPermissions, openSettings } from '../lib/use-route.js'
 import { promptWithContext } from '../lib/use-context-set.js'
 import { AutoMenu } from './AutoMenu.js'
 import { ProjectContextMenu } from './ContextMenu.js'
@@ -21,7 +21,7 @@ import { Composer, type ComposerHandle } from './Composer.js'
 import { StartFromMenu, prTargetBranch, startFromBase } from './StartFromMenu.js'
 import { RowItem, rowButtonClass } from './ui/row-item.js'
 import { Dots } from './ToolCalls.js'
-import { ACCOUNTS_ENTRY, AgentFix, agentWords, useAgentState } from './Logins.js'
+import { AgentFix, agentWords, useAgentState } from './Logins.js'
 import { MachineLogins } from './ServerLogins.js'
 import { SKILLS_ENTRY } from './ProjectSkills.js'
 import { GitAccountMenu, useRunsAccount } from './GitHosts.js'
@@ -240,7 +240,7 @@ export function StartAgentForm({
         }
         // Who it pushes as, at the row's other end: the project's git host account on the computer
         // the run goes to. Its own end of the row, so the branch landing moves nothing.
-        startsAtEnd={remote && <GitAccountMenu address={address} machineId={machine?.id} on={name} busy={busy} onAdd={() => (machine ? openSettings('devices', machine.id) : openSettings(ACCOUNTS_ENTRY))} />}
+        startsAtEnd={remote && <GitAccountMenu address={address} machineId={machine?.id} on={name} busy={busy} onAdd={() => (machine ? openSettings('devices', machine.id) : openPermissions())} />}
         // How it runs, under the box: the Context picker, the "Auto" menu, then the project's skills (his pick).
         controls={
           <>
@@ -290,7 +290,7 @@ export function StartAgentForm({
           problem === readiness.fix?.problem ? (
             machine ? (
               readiness.fix.kind === 'log-in' ? (
-                <Refusal key={problem} title={`${agentName} is not logged in on ${name}.`} actions={<MachineLogins machineId={machine.id} onAccounts={() => openSettings(ACCOUNTS_ENTRY)} />} />
+                <Refusal key={problem} title={`${agentName} is not logged in on ${name}.`} actions={<MachineLogins machineId={machine.id} onAccounts={openPermissions} />} />
               ) : (
                 // The install brings every coding agent, and an update brings one added since.
                 <Refusal

@@ -6,7 +6,7 @@ import { fileURLToPath } from 'node:url'
 import type { DriverQuota } from '@openagt/agent-driver'
 import { readClaudeQuota } from '@openagt/agent-driver-claude'
 import { accountFolder, personalCodexHome, readCodexUsage } from '@openagt/agent-driver-codex'
-import { isPidAlive, lockHolder, markerCard, readProjectAccounts, readyToRun, resumeDetached, runIdFrom, spawnResume, spawnRun, sweep, withdrawMarker, writeMarker } from '@openagt/agent-runner'
+import { gitHostEnv, isPidAlive, lockHolder, markerCard, readProjectAccounts, readyToRun, resumeDetached, runIdFrom, spawnResume, spawnRun, sweep, withdrawMarker, writeMarker } from '@openagt/agent-runner'
 import { findRun } from '@openagt/skill-logs'
 import { nodeGitRunner, pullProjectData, type GitRunner } from '@openagt/agent-data'
 import { CHECK_TIMEOUT_MS, GLANCE_MS, NOW_CHECK_TIMEOUT_MS, QUOTA_KEPT_MS, SCHEDULER_LOG, TICK_MS } from './names.js'
@@ -63,7 +63,12 @@ function projectDeps(repo: string, state: State, schedule: Schedule, opts: { git
     pull: () => pullProjectData(repo, { git, log }),
     sweep: () => sweep(repo, { host, isAlive: isPidAlive, now, git, log, resume: resumeDetached(repo) }),
     atStart: atStartOf(repo, git),
-    check: (shell, lastRun, switchedOn) => runCheck(repo, shell, opts.checkMs, lastRun, switchedOn),
+    // As the account runs work as at the git host: never the person's own `gh`. With none, nothing is asked.
+    check: async (shell, lastRun, switchedOn) => {
+      const account = await gitHostEnv(repo)
+      if (!account.ok) return { ok: false, stdout: '', stderr: account.error }
+      return runCheck(repo, shell, opts.checkMs, lastRun, switchedOn, account.env)
+    },
     stillOn: async command => isSwitchedOn(await readState(repo), command),
     lastStart: command => lastStart(repo, command, schedule, host),
     inFlight: command => inFlight(repo, command, schedule, host),

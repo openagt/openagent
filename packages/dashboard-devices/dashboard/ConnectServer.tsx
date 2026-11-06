@@ -119,7 +119,7 @@ export function ConnectServer({ d, onClose, onInvite }: { d: Devices; onClose: (
             </label>
             <div className="space-y-1 pl-6 text-xs">
               <p>The server gets logins of its own. Nothing here is logged out, now or later.</p>
-              <p className="text-muted-foreground">Unchecked: the server has no logins. You can turn it on later in Settings › Accounts.</p>
+              <p className="text-muted-foreground">Unchecked: the server has no logins. You can turn it on later on the Permissions page.</p>
             </div>
             {d.error !== undefined && <Problem>{d.error}</Problem>}
             <Footer>

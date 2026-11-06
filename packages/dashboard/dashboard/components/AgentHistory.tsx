@@ -1,6 +1,7 @@
+import { PERMISSIONS_PAGE } from '../lib/use-route.js'
 import { RevealedTitle } from './RevealedTitle.js'
 import { useEffect, useRef, useState, type ReactNode } from 'react'
-import { Plus, ChevronDown, Bot, ArrowDownUp, Check, Cloud, Laptop, LayoutDashboard, Blocks, FilePen, GitBranch } from 'lucide-react'
+import { Plus, ChevronDown, Bot, ArrowDownUp, Check, Cloud, Laptop, LayoutDashboard, Blocks, FilePen, GitBranch, KeyRound } from 'lucide-react'
 import { MACHINE_ICONS } from './MachineMark.js'
 import { PersonMark } from './PersonMark.js'
 import type { ComponentType } from 'react'
@@ -344,6 +345,8 @@ export function AgentHistory({
           {pages.map(page => (
             <NavRow key={page.segment} icon={page.icon ?? Blocks} label={page.label} active={activePage === page.segment} onClick={leave(() => onPage(page.segment))} />
           ))}
+          {/* The accounts the agents work with (Rom): every account OpenAgent knows, on a page of the dashboard's own. */}
+          <NavRow icon={KeyRound} label="Permissions" active={activePage === PERMISSIONS_PAGE} onClick={leave(() => onPage(PERMISSIONS_PAGE))} />
         </SidebarHeader>
         {/* The themed ScrollArea (#913) instead of the sidebar's native overflow bar, matching the
             Overview: suppress SidebarContent's own `overflow-auto` and let the ScrollArea own it. */}

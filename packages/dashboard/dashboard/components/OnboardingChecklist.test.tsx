@@ -77,8 +77,8 @@ describe('OnboardingChecklist: Get ready', () => {
     expect(screen.getAllByRole('listitem')[0]!.textContent).toMatch(/^Get ready/)
     expect(screen.getByText('Claude Code is not installed.')).toBeTruthy()
     expect(screen.getByRole('button', { name: 'Install Claude Code' })).toBeTruthy()
-    expect(screen.getByText('No GitHub account is logged in.')).toBeTruthy()
-    expect(screen.getByRole('button', { name: 'Log in to GitHub' })).toBeTruthy()
+    expect(screen.getByText('OpenAgent has no GitHub account yet.')).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'Add a GitHub account' })).toBeTruthy()
     cleanup()
 
     logins.onAgentState.mockResolvedValue({ driver: 'claude-code', ready: true } as never)

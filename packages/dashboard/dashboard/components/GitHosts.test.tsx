@@ -16,8 +16,8 @@ const provider = (over: Record<string, unknown> = {}) => ({
   installed: true,
   install: 'brew install gh',
   accounts: [
-    { login: 'octo', terminal: true, runs: true, ok: true },
-    { login: 'octo-agent', terminal: false, runs: false, ok: true },
+    { login: 'octo', runs: true, ok: true },
+    { login: 'octo-agent', runs: false, ok: true },
   ],
   ...over,
 })
@@ -83,14 +83,16 @@ describe('the git host in a session\'s row', () => {
 })
 
 describe('Git hosts', () => {
-  test('a card per host, drawn from its package: the accounts its tool knows, the one runs use, the terminal’s; another is used for runs with a press; a host with no package is one line', async () => {
+  test('a card per host, drawn from its package: OpenAgent\u2019s own accounts, the one runs use; another is used for runs with a press; the -agent advice; a host with no package is one line', async () => {
     logins.onGitHosts.mockResolvedValue({ hosts: [{ host: 'github.com', projects: ['site', 'gemskills'], provider: provider() }, { host: 'gitlab.example.com', projects: ['tool'] }] })
     render(<GitHostsCard />)
     const card = await screen.findByRole('region', { name: 'GitHub' })
     expect(within(card).queryByText('Connected')).toBeNull()
     expect(within(card).getByText('github.com · used by site, gemskills')).toBeTruthy()
     const octo = within(card).getByRole('listitem', { name: '@octo' })
-    expect(octo.textContent).toContain("the terminal's account")
+    expect(octo.textContent).toContain('added to OpenAgent')
+    // octo is no account of an agent's own: the advice says to make one.
+    expect(card.textContent).toContain('We recommend creating dedicated GitHub accounts with limited access for your agents')
     expect(octo.textContent).toContain('in use for runs')
     fireEvent.click(within(card).getByRole('button', { name: 'Details of @octo-agent' }))
     fireEvent.click(within(within(card).getByRole('listitem', { name: '@octo-agent' })).getByRole('button', { name: 'Use for runs' }))
@@ -155,7 +157,7 @@ describe('Git hosts', () => {
     render(<GitHostsCard />)
     const out = await screen.findByRole('region', { name: 'GitHub' })
     expect(within(out).getByText('Log in')).toBeTruthy()
-    fireEvent.click(within(out).getByRole('button', { name: 'Log in to GitHub' }))
+    fireEvent.click(within(out).getByRole('button', { name: 'Add a GitHub account' }))
     await waitFor(() => expect(logins.sendGitHostLogin).toHaveBeenCalledWith('github.com'))
   })
 

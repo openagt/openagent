@@ -234,7 +234,7 @@ describe('Settings › Devices: a server this computer installed', () => {
     const { host, ran } = dashboard(args => (args[0] === 'link' ? link : ok({ servers: [server(ALL_DONE, { adding: false })] })), BOX_SAVED(), { ok: true }, NO_GH, OWNED)
     show(host)
     await open('203.0.113.5')
-    // Its logins are on its page in Settings › Accounts.
+    // Its logins are on its page on the Permissions page.
     expect(screen.queryByRole('tab', { name: 'Logins' })).toBeNull()
     await tab('People')
     const card = () => screen.queryByRole('group', { name: 'The code' })
@@ -867,7 +867,7 @@ describe('Settings › Devices: a server this computer installed', () => {
     await open('198.51.100.7')
     expect(await screen.findByText('You are in as rom.')).toBeTruthy()
     expect(screen.getByText('Your runs there are yours: they use your own GitHub and Claude logins.')).toBeTruthy()
-    // What only the owner does is not there; its logins are in Settings › Accounts, and nothing is asked of the person's own OpenAgent there.
+    // What only the owner does is not there; its logins are on the Permissions page, and nothing is asked of the person's own OpenAgent there.
     expect(screen.queryByRole('button', { name: /^Invite/ })).toBeNull()
     expect(screen.queryByText(/Installed, as/)).toBeNull()
     expect(screen.queryByRole('tab', { name: 'Logins' })).toBeNull()
@@ -1082,7 +1082,7 @@ describe('Settings › Devices: Set up a server, in steps', () => {
     expect((await screen.findByRole('checkbox', { name: 'Use my logins from this computer' })).getAttribute('aria-checked')).toBe('true')
     expect(screen.getByText("Runs on the server use the accounts you're logged into here. Logging in or out here updates the server.")).toBeTruthy()
     expect(screen.getByText('The server gets logins of its own. Nothing here is logged out, now or later.')).toBeTruthy()
-    expect(screen.getByText('Unchecked: the server has no logins. You can turn it on later in Settings › Accounts.')).toBeTruthy()
+    expect(screen.getByText('Unchecked: the server has no logins. You can turn it on later on the Permissions page.')).toBeTruthy()
     expect(screen.queryByRole('radiogroup')).toBeNull()
     expect(now()).toBe('Your logins: now')
     fireEvent.click(button('Install'))

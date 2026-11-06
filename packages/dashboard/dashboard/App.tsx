@@ -1,3 +1,4 @@
+import { PermissionsPage } from './components/Accounts.js'
 import { useEffect, useMemo, useState, type CSSProperties } from 'react'
 import type { Intervention, Activity, ProjectionRead, ProjectSummary, RecentAgent } from '../src/index.js'
 import { onProjectFiles, onInterventions, onActivity, onRecentAgents, onStartedName } from './rpc/reads.js'
@@ -36,7 +37,7 @@ import { useLiveEvents } from './lib/use-live-events.js'
 import { STARTING_AT_MOST_MS, useAgents } from './lib/use-agents.js'
 import { readModuleAgents } from './lib/module-agents.js'
 import { runsAgain, useRunsPace } from './lib/runs-changed.js'
-import { useRoute } from './lib/use-route.js'
+import { PERMISSIONS_PAGE, useRoute } from './lib/use-route.js'
 import { formatRoute, type Route } from './lib/route.js'
 import { projectAddresses } from '../src/project-address.js'
 import { dataLinkRoute } from './lib/data-link.js'
@@ -468,6 +469,7 @@ export function App() {
   // Another computer's project is removed there, not here.
   const removableHere = project?.machine === undefined ? leaveRemovedProject : undefined
   const renderMain = () => {
+    if (pageSegment === PERMISSIONS_PAGE) return <PermissionsPage />
     if (pageSegment) {
       if (modulePage)
         return <ModulePageView page={modulePage} projects={scopedProjects} projectId={scope} path={route.pagePath ?? []} />

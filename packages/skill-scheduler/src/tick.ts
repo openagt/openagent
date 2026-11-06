@@ -402,11 +402,15 @@ function describe(card: RunCard): string {
   return host ? `${card.id} on ${host}` : card.id
 }
 
-/** Run a check at the repository root through the shell, within its budget; the check reads `lastRun` as `$LAST_RUN`, and `switchedOn` as `$SWITCHED_ON` when given. */
-export async function runCheck(repo: string, shell: string, timeoutMs: number, lastRun: string, switchedOn?: string): Promise<CheckResult> {
+/**
+ * Run a check at the repository root through the shell, within its budget; the check reads
+ * `lastRun` as `$LAST_RUN`, and `switchedOn` as `$SWITCHED_ON` when given. `account` is the
+ * environment of the account runs work as at the git host, so a check that asks `gh` asks as it.
+ */
+export async function runCheck(repo: string, shell: string, timeoutMs: number, lastRun: string, switchedOn?: string, account: Record<string, string> = {}): Promise<CheckResult> {
   const { execFile } = await import('node:child_process')
   return new Promise<CheckResult>(resolve => {
-    const child = execFile('sh', ['-c', shell], { cwd: repo, timeout: timeoutMs, maxBuffer: 4 * 1024 * 1024, env: { ...process.env, [LAST_RUN_ENV]: lastRun, ...(switchedOn !== undefined ? { [SWITCHED_ON_ENV]: switchedOn } : {}) } }, (err, stdout, stderr) => {
+    const child = execFile('sh', ['-c', shell], { cwd: repo, timeout: timeoutMs, maxBuffer: 4 * 1024 * 1024, env: { ...process.env, ...account, [LAST_RUN_ENV]: lastRun, ...(switchedOn !== undefined ? { [SWITCHED_ON_ENV]: switchedOn } : {}) } }, (err, stdout, stderr) => {
       // A check ended for running out of its time says so: what it had printed to then says nothing of why it failed.
       const why = err?.killed ? `it took longer than ${timeoutMs / 1000} seconds` : err && !String(stderr).trim() ? err.message : String(stderr)
       resolve({ ok: !err, stdout: String(stdout), stderr: why })

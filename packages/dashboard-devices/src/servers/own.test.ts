@@ -7,7 +7,7 @@ import type { AddressInfo } from 'node:net'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { runCli, type CliIO, type OtherStatus, type OwnStatus, type SharedStatus } from './cli.js'
-import { OWN_CLAUDE_FILE, markOf, ownClaudeLoginScript, ownClaudeLogoutScript, ownIdentityScript } from './own.js'
+import { OWN_CLAUDE_FILE, markOf, ownClaudeLoginScript, ownClaudeLogoutScript } from './own.js'
 import type { OwnDoor } from './own-door.js'
 import type { Exec } from './ssh.js'
 import { storePath } from './store.js'
@@ -43,7 +43,7 @@ function pretendShell(answer: (script: string) => { code?: number; out?: string;
   return { exec, scripts }
 }
 
-const GH_GIVEN = /gh auth login --hostname github\.com --git-protocol https --with-token/
+const GH_GIVEN = /gh auth login --hostname github\.com --with-token --insecure-storage/
 
 test('a person\'s own logins are only on a person\'s OpenAgent: anywhere else own is refused, and nothing is written', async () => {
   const home = await testHome()
@@ -60,7 +60,7 @@ test('a person\'s own logins are only on a person\'s OpenAgent: anywhere else ow
   }
 })
 
-test('a GitHub login handed over on standard input is given to this user\'s gh, whichever account it is, and git gets its name', async () => {
+test('a GitHub login handed over on standard input becomes this user\'s OpenAgent\u2019s account, whichever account it is; its git settings are left as they are', async () => {
   const home = await testHome()
   try {
     const env = { ...home.env, OPENAGENT_PERSON: 'rom' }
@@ -70,9 +70,10 @@ test('a GitHub login handed over on standard input is given to this user\'s gh, 
     const github = (given.out as OwnStatus).logins.github
     assert.equal(github.there, true)
     assert.equal(github.account, 'Rom')
-    // The login is a word of the script, never in the file; then git is named after the account.
+    // The login is a word of the script, never in the file; nothing is written into git's own settings.
     assert.match(shell.scripts[0]!, new RegExp(`^LOGIN='${GH_LOGIN}'$`, 'm'))
-    assert.match(shell.scripts[1]!, /git config --global -- user\.email "\$id\+\$login@users\.noreply\.github\.com"/)
+    assert.equal(shell.scripts.length, 1)
+    assert.doesNotMatch(shell.scripts[0]!, /git config/)
     assert.equal((await readFile(storePath(env), 'utf8')).includes(GH_LOGIN), false)
 
     // The person is a name, not an account: any account's login is theirs to use.
@@ -163,7 +164,6 @@ test('the Claude login is written to a file of the user\'s own that only it read
     assert.equal(await readFile(file, 'utf8'), `CLAUDE_CODE_OAUTH_TOKEN=${CLAUDE_LOGIN}\nCLAUDE_CODE_ACCOUNT_UUID=0f8e7d6c-5b4a-4392-8a1b-2c3d4e5f6a7b\n`)
     assert.deepEqual(await sh(ownClaudeLogoutScript().script), { code: 0, stderr: '' })
     await assert.rejects(stat(file))
-    await new Promise<void>((resolve, reject) => execFile('bash', ['-n', '-c', ownIdentityScript().script], error => (error ? reject(error) : resolve())))
   } finally {
     await rm(home, { recursive: true, force: true })
   }
@@ -274,7 +274,8 @@ test('for another person\'s computer, the logins there are read through OpenAgen
     const env = { ...home.env, OPENAGENT_URL: agent.url }
     const read = await run(env, ['other', BOX_URL])
     assert.deepEqual(read.out, { other: [{ url: BOX_URL, logins: { github: { source: 'copied', from: 'vps-1', account: 'rom' } }, claude: { there: false, working: false } }] } satisfies { other: OtherStatus[] })
-    const gh: Exec = async bin => (bin === 'gh' ? { code: 0, out: `${GH_LOGIN}\n`, err: '' } : { code: 1, out: '', err: '' })
+    // OpenAgent's own account's login, asked of gh in that account's folder: never the person's own gh.
+    const gh: Exec = async (bin, args) => (bin === 'env' && args.some(arg => arg.endsWith('/openagent-github/octocat')) ? { code: 0, out: `${GH_LOGIN}\n`, err: '' } : { code: 1, out: '', err: '' })
     const given = await run(env, ['other-login', BOX_URL, 'github'], { exec: gh })
     assert.equal(given.code, 0)
     assert.deepEqual(agent.asked.find(call => call.fn === 'sendMachineLogins')?.args, [BOX_URL, { github: GH_LOGIN }])

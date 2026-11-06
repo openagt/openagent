@@ -852,13 +852,20 @@ export interface LoginScript {
 /** How long a login's script may take: a server that stopped answering is not waited for longer. */
 export const LOGIN_TIMEOUT_MS = 2 * MINUTE
 
-/** `gh` reads and writes its own file in the server user's home, whatever that user's shell says of another place or another login. */
+/**
+ * OpenAgent's GitHub accounts in the server user's home, the layout `@openagt/skill-github` reads:
+ * one folder each, named by its login, the folder `gh` keeps that login in, with what its commits
+ * are signed with beside it; and the runs' pick. Whatever that user's shell says of another place
+ * or another login is not used.
+ */
 const GH_OWN = 'unset GH_TOKEN GITHUB_TOKEN GH_CONFIG_DIR XDG_CONFIG_HOME'
-const GH_FILE = '"$HOME/.config/gh/hosts.yml"'
+const ACCOUNTS = '"$HOME/.openagent-github"'
+const PICK = '"$HOME/.openagent-github.json"'
 
 /**
- * Give the server a GitHub login: `gh` keeps it in its own file, and git asks `gh` for it. The
- * server then holds this one login, and answers whose it is; when any of that fails, it holds none.
+ * Give the server a GitHub login, as OpenAgent's one account there: `gh` keeps it in that
+ * account's own folder, and runs push with it. The server then holds this one login, and answers
+ * whose it is; when any of that fails, it holds none.
  *
  * The login is a word of the script, which the server's shell reads where a program would read:
  * it is on no command line, and no program the script starts finds it among what it was given.
@@ -871,20 +878,25 @@ export function githubLoginScript(login: string): LoginScript {
       { LOGIN: login },
       `
   ${GH_OWN}
-  rm -f ${GH_FILE}
+  rm -rf ${ACCOUNTS} ${PICK}
   given() {
-    printf '%s\\n' "$LOGIN" | gh auth login --hostname github.com --git-protocol https --with-token &&
-      gh auth setup-git --hostname github.com &&
-      gh api --hostname github.com user --jq .login
+    mkdir -p ${ACCOUNTS}/.taking && chmod 700 ${ACCOUNTS} ${ACCOUNTS}/.taking &&
+      printf '%s\\n' "$LOGIN" | GH_CONFIG_DIR=${ACCOUNTS}/.taking gh auth login --hostname github.com --with-token --insecure-storage &&
+      account=$(GH_CONFIG_DIR=${ACCOUNTS}/.taking gh api --hostname github.com user --jq '{login: .login, id: .id, name: (.name // "")}') &&
+      who=$(GH_CONFIG_DIR=${ACCOUNTS}/.taking gh api --hostname github.com user --jq .login) &&
+      [ -n "$who" ] &&
+      printf '%s\\n' "$account" > ${ACCOUNTS}/.taking/account.json &&
+      mv ${ACCOUNTS}/.taking "$HOME/.openagent-github/$who" &&
+      printf '%s\\n' "$who"
   }
   # All of it or none: a login that is on the server and not known of on this computer could not be taken off from there.
-  given || { rm -f ${GH_FILE}; exit 1; }
+  given || { rm -rf ${ACCOUNTS}; exit 1; }
 `,
     ),
   }
 }
 
-/** Take the GitHub login off the server. */
+/** Take the GitHub login off the server: OpenAgent's accounts there go. */
 export function githubLogoutScript(): LoginScript {
   return {
     as: SERVER_USER,
@@ -892,8 +904,7 @@ export function githubLogoutScript(): LoginScript {
       SERVER_USER,
       {},
       `
-  ${GH_OWN}
-  rm -f ${GH_FILE}
+  rm -rf ${ACCOUNTS} ${PICK}
 `,
     ),
   }

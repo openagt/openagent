@@ -10,7 +10,7 @@ const servers = vi.hoisted(() => ({ onServerLogins: vi.fn(), sendUseLoginsOn: vi
 vi.mock('../rpc/server-logins.js', () => servers)
 
 const { AddedAccountsUsage, freeIn } = await import('./AgentAccounts.js')
-const { AccountsSettings } = await import('./Accounts.js')
+const { AccountsList } = await import('./Accounts.js')
 const { ModulesContext } = await import('../lib/use-modules.js')
 
 const HOUR = 60 * 60_000
@@ -56,7 +56,7 @@ describe('Agent accounts', () => {
     views({ now: NOW, accounts: [{ id: 'This computer', name: 'This computer', own: true, windows: [] }] })
     states({ driver: 'claude-code', ready: false, problem: '`claude` not found', fix: { kind: 'install', command: 'curl -fsSL https://claude.ai/install.sh | bash' } })
     logins.sendAgentFix.mockResolvedValue({ ok: true })
-    render(<AccountsSettings />)
+    render(<AccountsList />)
     const card = await screen.findByRole('region', { name: 'Claude Code' })
     expect(await within(card).findByText('Not installed')).toBeTruthy()
     expect(within(card).getByText('curl -fsSL https://claude.ai/install.sh | bash')).toBeTruthy()
@@ -65,7 +65,7 @@ describe('Agent accounts', () => {
     cleanup()
 
     states({ driver: 'claude-code', ready: false, problem: '`claude` is not logged in.', fix: { kind: 'log-in', command: 'claude auth login' }, fixing: 'log-in' })
-    render(<AccountsSettings />)
+    render(<AccountsList />)
     const out = await screen.findByRole('region', { name: 'Claude Code' })
     expect(await within(out).findByText('Log in')).toBeTruthy()
     expect(within(out).getByRole('status').textContent).toMatch(/Say yes in the page this computer's browser opened/)
@@ -94,7 +94,7 @@ describe('Agent accounts', () => {
   test('a Codex that is not here is its state and the press that installs it', async () => {
     views(TWO)
     states({ driver: 'claude-code', ready: true }, { driver: 'codex', ready: false, problem: '`codex` not found', fix: { kind: 'install', command: 'curl -fsSL https://chatgpt.com/codex/install.sh | sh' } })
-    render(<AccountsSettings />)
+    render(<AccountsList />)
     const card = await screen.findByRole('region', { name: 'Codex' })
     expect(await within(card).findByText('Not installed')).toBeTruthy()
     expect(within(card).getByRole('button', { name: 'Install Codex' })).toBeTruthy()
@@ -118,14 +118,14 @@ describe('Agent accounts', () => {
     const card = { id: 'accounts', label: 'Accounts', package: '@openagt/skill-account-rotation', projects: [], computer: true, Card: () => <p>The skill's card</p> }
     const { unmount } = render(
       <ModulesContext.Provider value={{ ...nothing, cards: [card] }}>
-        <AccountsSettings />
+        <AccountsList />
       </ModulesContext.Provider>,
     )
     expect(await screen.findByText("The skill's card")).toBeTruthy()
     unmount()
     render(
       <ModulesContext.Provider value={nothing}>
-        <AccountsSettings />
+        <AccountsList />
       </ModulesContext.Provider>,
     )
     expect(await screen.findByText('The accounts card did not load.')).toBeTruthy()

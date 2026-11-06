@@ -274,6 +274,11 @@ already made, and lists it in its pull request; for anything else it proposes an
   matters. The agents' records stay on this machine; the project's Agent data page shares
   them. Picked over a list of what the add does and a choice of where the records go in the
   same dialog: too much to read, and a decision to make, before one press.
+- Every account OpenAgent's agents work with is on one page of the dashboard's own,
+  Permissions, a row of the sidebar: the coding agents' accounts and the git hosts'. An agent
+  can reach what its accounts can; a repository is no permission. Where an account at a git
+  host is not named like an agent's own (`-agent`), the page says to make one with limited
+  access. Picked over the accounts being one entry among the Settings.
 - The Skills page ticks nothing in a project that has no skills yet: the person picks what
   the project needs. Picked over ticking every group but the ones that need a setup of
   their own, a long list picked for them.
@@ -397,7 +402,7 @@ already made, and lists it in its pull request; for anything else it proposes an
 - The accounts a run takes are picked beside the message box, for the computer the run goes
   to: a coding agent's in the agent picker, under its models; the git host's at the end of the
   row above the box. A pick there is the one that computer's runs take from then on, as on
-  Settings › Accounts. The person's menu has none of them. Picked over a row per account in the
+  the Permissions page. The person's menu has none of them. Picked over a row per account in the
   person's menu, which said this computer's alone, and over having them in both places.
 - A project's own accounts are a Settings page of that project, shown only for a kind the
   computer has two or more of, "same as this computer" until one is picked.
@@ -527,7 +532,7 @@ already made, and lists it in its pull request; for anything else it proposes an
   machine's OpenAgent was started in, which may be another project.
 - With a machine picked, what would stop a run is asked of that machine as soon as it is
   picked, from its own copy of the project, and said naming the machine. A coding agent
-  logged out there comes with this computer's logins for the machine, as Settings › Accounts
+  logged out there comes with this computer's logins for the machine, as the Permissions page
   offers them. Picked over learning it only after the Start, from the machine's refusal, in
   words written for that machine's own terminal.
 - A machine is picked in "Run on" and removed on its page under Devices. Picked over a remove

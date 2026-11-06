@@ -1,36 +1,39 @@
 import { strict as assert } from 'node:assert'
 import { test } from 'node:test'
 import { execFileSync } from 'node:child_process'
-import { chmodSync, existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { join } from 'node:path'
+import { basename, join } from 'node:path'
 import type { GhRunner } from './gh.js'
-import { ghState, installCommand, jobState, loginUnderWay, runEnv, runsAccount, startJob, startLogin, useForRuns, type GhAccount } from './accounts.js'
+import { accountLogins, ghState, installCommand, isAccountDir, jobState, loginUnderWay, runEnv, runsAccount, settleAdded, startJob, startLogin, useForRuns } from './accounts.js'
 import { runCli, type CliDeps } from './cli.js'
 
-// The accounts gh knows and the one runs use: picked once from the terminal's, kept from then on,
-// changed only here; a run gets the picked one's token, for gh and for git.
+// OpenAgent's own GitHub accounts, one gh folder each, and the one runs use: the person's own gh,
+// git and keychain are never read or changed. A run gets its account's folder, token and name.
 
-const STATUS = {
-  hosts: {
-    'github.com': [
-      { state: 'success', active: true, host: 'github.com', login: 'octo', tokenSource: 'keyring' },
-      { state: 'success', active: false, host: 'github.com', login: 'octo-agent', tokenSource: 'keyring' },
-    ],
-  },
-}
-
-/** gh as scripted: the token of each account is `tok-<login>`, and GitHub says it is that account's unless `whose` says another. */
+/**
+ * gh as scripted: it works as the account whose folder it is given (GH_CONFIG_DIR), or as the
+ * token it is given; each account's token is `tok-<login>`, and GitHub says a token is that
+ * account's unless `whose` says another. `revoked` accounts GitHub no longer takes.
+ */
 const ghWith =
-  (status: unknown, asked: string[][] = [], whose: Record<string, string> = {}): GhRunner =>
-  async (args, _cwd, env) => {
-    asked.push(args)
+  (asked: { args: string[]; env?: Record<string, string>; input?: string }[] = [], opts: { whose?: Record<string, string>; revoked?: string[] } = {}): GhRunner =>
+  async (args, _cwd, env, input) => {
+    asked.push({ args, ...(env ? { env } : {}), ...(input !== undefined ? { input } : {}) })
+    const folder = env?.['GH_CONFIG_DIR'] ? basename(env['GH_CONFIG_DIR']) : ''
     if (args[0] === '--version') return 'gh version 2.93.0\n'
-    if (args[0] === 'auth' && args[1] === 'status') return JSON.stringify(status)
-    if (args[0] === 'auth' && args[1] === 'token') return `tok-${args[args.indexOf('--user') + 1]}\n`
-    if (args[0] === 'api' && args[1] === 'user') {
-      const login = env?.['GH_TOKEN']?.slice('tok-'.length) ?? ''
-      return `${whose[login] ?? login}\n`
+    if (args[0] === 'auth' && args[1] === 'status') return opts.revoked?.includes(folder) ? Promise.reject(new Error('token is invalid')) : ''
+    if (args[0] === 'auth' && args[1] === 'token') return `tok-${folder}\n`
+    if (args[0] === 'auth' && args[1] === 'login') {
+      writeFileSync(join(env!['GH_CONFIG_DIR']!, 'hosts.yml'), 'github.com: {}\n')
+      return ''
+    }
+    if (args[0] === 'api' && args.includes('user')) {
+      const token = env?.['GH_TOKEN'] || ''
+      const login = token ? token.slice('tok-'.length) : folder
+      const who = opts.whose?.[login] ?? login
+      if (args.some(arg => arg.includes('avatar'))) return JSON.stringify({ login: who, name: 'Octo Cat', avatar: null })
+      return args.includes('.login') ? `${who}\n` : `${who}\t42\tOcto Cat\n`
     }
     throw new Error(`unexpected gh ${args.join(' ')}`)
   }
@@ -44,49 +47,79 @@ const withDir = (go: (dir: string) => Promise<void> | void) => async () => {
   }
 }
 
+/** An account OpenAgent has: its folder, with gh's file in it. */
+function account(root: string, login: string, facts?: { id: number; name?: string }): string {
+  const dir = join(root, login)
+  mkdirSync(dir, { recursive: true })
+  writeFileSync(join(dir, 'hosts.yml'), 'github.com: {}\n')
+  if (facts) writeFileSync(join(dir, 'account.json'), JSON.stringify({ login, ...facts }))
+  return dir
+}
+
 async function run(argv: string[], deps: CliDeps): Promise<{ code: number; out: Record<string, unknown>; err: string }> {
   const out: string[] = []
   const err: string[] = []
   const code = await runCli(argv, { cwd: '/r', stdout: line => out.push(line), stderr: line => err.push(line) }, deps)
-  return { code, out: JSON.parse(out.join('\n')) as Record<string, unknown>, err: err.join('\n') }
+  return { code, out: (out.length ? JSON.parse(out.join('\n')) : {}) as Record<string, unknown>, err: err.join('\n') }
 }
 
-test('ghState: no gh is not installed; its accounts with which is the terminal’s; a gh that cannot say is no account', async () => {
-  assert.deepEqual(await ghState('/r', async () => Promise.reject(new Error('spawn gh ENOENT'))), { installed: false })
-  assert.deepEqual(await ghState('/r', ghWith(STATUS)), {
-    installed: true,
-    accounts: [
-      { login: 'octo', terminal: true, ok: true },
-      { login: 'octo-agent', terminal: false, ok: true },
-    ],
-  })
-  assert.deepEqual(await ghState('/r', ghWith({ hosts: {} })), { installed: true, accounts: [] })
-})
+test(
+  'ghState: no gh is not installed; OpenAgent\u2019s accounts are its own folders, each asked of GitHub as itself',
+  withDir(async root => {
+    assert.deepEqual(await ghState(root, '/r', async () => Promise.reject(new Error('spawn gh ENOENT'))), { installed: false })
+    assert.deepEqual(await ghState(root, '/r', ghWith()), { installed: true, accounts: [] })
+    account(root, 'octo-agent')
+    account(root, 'octo')
+    mkdirSync(join(root, '.adding'))
+    mkdirSync(join(root, 'empty'))
+    const asked: { args: string[]; env?: Record<string, string> }[] = []
+    assert.deepEqual(await ghState(root, '/r', ghWith(asked, { revoked: ['octo-agent'] })), {
+      installed: true,
+      accounts: [
+        { login: 'octo', ok: true },
+        { login: 'octo-agent', ok: false },
+      ],
+    })
+    // Each is asked with its own folder, and no token from the environment.
+    const status = asked.filter(a => a.args[1] === 'status')
+    assert.deepEqual(
+      status.map(a => [a.env?.['GH_CONFIG_DIR'], a.env?.['GH_TOKEN']]),
+      [
+        [join(root, 'octo'), ''],
+        [join(root, 'octo-agent'), ''],
+      ],
+    )
+    assert.deepEqual(accountLogins(root), ['octo', 'octo-agent'])
+    assert.ok(isAccountDir(root, join(root, 'octo')))
+    assert.ok(!isAccountDir(root, root) && !isAccountDir(root, join(root, '..', 'gh')) && !isAccountDir(root, '/home/me/.config/gh'))
+  }),
+)
 
 test(
-  'runsAccount: the terminal’s is picked the first time and kept; a switch in the terminal does not move it; a pick gh forgot falls back',
+  'runsAccount: the first is picked and kept; a pick is changed only here; one OpenAgent forgot falls back',
   withDir(dir => {
     const path = join(dir, 'picks.json')
-    const accounts: GhAccount[] = [
-      { login: 'octo', terminal: true, ok: true },
-      { login: 'octo-agent', terminal: false, ok: true },
+    const accounts = [
+      { login: 'octo', ok: true },
+      { login: 'octo-agent', ok: true },
     ]
     assert.equal(runsAccount(accounts, path), 'octo')
     assert.deepEqual(JSON.parse(readFileSync(path, 'utf8')), { runs: { 'github.com': 'octo' } })
-    // The terminal switched: runs stay.
-    assert.equal(runsAccount([{ ...accounts[0]!, terminal: false }, { ...accounts[1]!, terminal: true }], path), 'octo')
     useForRuns('octo-agent', accounts, path)
     assert.equal(runsAccount(accounts, path), 'octo-agent')
-    assert.throws(() => useForRuns('stranger', accounts, path), /knows no account stranger/)
-    // gh logged octo-agent out: the terminal's is the runs' again.
+    assert.throws(() => useForRuns('stranger', accounts, path), /has no GitHub account stranger/)
     assert.equal(runsAccount([accounts[0]!], path), 'octo')
     assert.equal(runsAccount([], join(dir, 'none.json')), undefined)
   }),
 )
 
-test('runEnv: git asks the token of the helper set here alone, ssh addresses go over https, settings already given are kept', () => {
-  const env = runEnv('tok', { GIT_CONFIG_COUNT: '1', GIT_CONFIG_KEY_0: 'core.x', GIT_CONFIG_VALUE_0: 'y' })
+test('runEnv: the account\u2019s folder for gh, its name on commits; git asks the token of the helper set here alone, ssh addresses go over https, settings already given are kept', () => {
+  const env = runEnv('tok', '/cfg/openagent-github/octo', { login: 'octo', id: 42, name: 'Octo Cat' }, { GIT_CONFIG_COUNT: '1', GIT_CONFIG_KEY_0: 'core.x', GIT_CONFIG_VALUE_0: 'y' })
   assert.equal(env['GH_TOKEN'], 'tok')
+  assert.equal(env['GH_CONFIG_DIR'], '/cfg/openagent-github/octo')
+  assert.deepEqual([env['GIT_AUTHOR_NAME'], env['GIT_AUTHOR_EMAIL'], env['GIT_COMMITTER_NAME'], env['GIT_COMMITTER_EMAIL']], ['Octo Cat', '42+octo@users.noreply.github.com', 'Octo Cat', '42+octo@users.noreply.github.com'])
+  assert.equal(runEnv('tok', '/d', { login: 'octo', id: 42 })['GIT_AUTHOR_NAME'], 'octo', 'no name: the login')
+  assert.equal(runEnv('tok', '/d', undefined)['GIT_AUTHOR_NAME'], undefined, 'no facts kept: git signs as it would')
   assert.equal(env['GIT_CONFIG_COUNT'], '5')
   assert.equal(env['GIT_CONFIG_KEY_0'], undefined, 'the one given stays as it was')
   assert.equal(env['GIT_CONFIG_KEY_1'], 'credential.https://github.com.helper')
@@ -94,11 +127,11 @@ test('runEnv: git asks the token of the helper set here alone, ssh addresses go 
   // The real git: whatever helper the person's own config has, this one answers.
   const said = execFileSync('git', ['credential', 'fill'], {
     input: 'protocol=https\nhost=github.com\n\n',
-    env: { ...process.env, ...runEnv('tok-123'), GIT_TERMINAL_PROMPT: '0', GIT_CONFIG_GLOBAL: '/dev/null', GIT_CONFIG_SYSTEM: '/dev/null' },
+    env: { ...process.env, ...runEnv('tok-123', '/d', undefined), GIT_TERMINAL_PROMPT: '0', GIT_CONFIG_GLOBAL: '/dev/null', GIT_CONFIG_SYSTEM: '/dev/null' },
     encoding: 'utf8',
   })
   assert.match(said, /^password=tok-123$/m)
-  const url = execFileSync('git', ['ls-remote', '--get-url', 'git@github.com:o/r.git'], { env: { ...process.env, ...runEnv('t') }, encoding: 'utf8' })
+  const url = execFileSync('git', ['ls-remote', '--get-url', 'git@github.com:o/r.git'], { env: { ...process.env, ...runEnv('t', '/d', undefined) }, encoding: 'utf8' })
   assert.equal(url.trim(), 'https://github.com/o/r.git')
 })
 
@@ -123,10 +156,12 @@ test('the install, run for real in a home of its own, puts a working gh in its ~
 })
 
 test(
-  'accounts: the card’s facts, the runs’ account marked; another host refused; no gh is not installed with the command that installs it',
+  'accounts: the card\u2019s facts, the runs\u2019 account marked; another host refused; no gh is not installed with the command that installs it',
   withDir(async dir => {
     const env = { XDG_CONFIG_HOME: dir }
-    const said = await run(['accounts'], { gh: ghWith(STATUS), env, hasBrew: async () => true, installing: () => undefined, underWay: () => undefined })
+    account(join(dir, 'openagent-github'), 'octo')
+    account(join(dir, 'openagent-github'), 'octo-agent')
+    const said = await run(['accounts'], { gh: ghWith(), env, hasBrew: async () => true, installing: () => undefined, underWay: () => undefined })
     assert.equal(said.code, 0)
     assert.equal(said.out['name'], 'GitHub')
     assert.equal(said.out['requestWord'], 'pull request')
@@ -134,10 +169,10 @@ test(
     assert.equal(said.out['install'], undefined, 'nothing to install while gh is here')
     assert.match(String(said.out['logo']), /^<svg/)
     assert.deepEqual(said.out['accounts'], [
-      { login: 'octo', terminal: true, ok: true, runs: true },
-      { login: 'octo-agent', terminal: false, ok: true, runs: false },
+      { login: 'octo', ok: true, runs: true },
+      { login: 'octo-agent', ok: true, runs: false },
     ])
-    const other = await run(['accounts', '--host', 'gitlab.com'], { gh: ghWith(STATUS), env })
+    const other = await run(['accounts', '--host', 'gitlab.com'], { gh: ghWith(), env })
     assert.equal(other.code, 1)
     assert.equal(other.out['reason'], 'not-mine')
     const none = await run(['accounts'], { gh: async () => Promise.reject(new Error('spawn gh ENOENT')), env, hasBrew: async () => false, installing: () => ({ running: false, failed: 'no network', said: '' }), underWay: () => undefined })
@@ -147,85 +182,111 @@ test(
     const going = await run(['accounts'], { gh: async () => Promise.reject(new Error('spawn gh ENOENT')), env, hasBrew: async () => false, installing: () => ({ running: true, said: '' }), underWay: () => undefined })
     assert.equal(going.out['installing'], true)
     assert.deepEqual(none.out['accounts'], [])
-    const busy = await run(['accounts'], { gh: ghWith(STATUS), env, hasBrew: async () => true, installing: () => undefined, underWay: () => ({ code: 'ABCD-1234', url: 'https://github.com/login/device' }) })
+    const busy = await run(['accounts'], { gh: ghWith(), env, hasBrew: async () => true, installing: () => undefined, underWay: () => ({ code: 'ABCD-1234', url: 'https://github.com/login/device' }) })
     assert.deepEqual(busy.out['loggingIn'], { code: 'ABCD-1234', url: 'https://github.com/login/device' })
   }),
 )
 
 test(
-  'use, then env: a run gets the picked account’s token; --user names another; an account gh does not know is refused',
+  'use, then env: a run gets the picked account\u2019s folder, token and name; --user names another; no account, or one OpenAgent does not have, is refused, never the person\u2019s gh',
   withDir(async dir => {
     const env = { XDG_CONFIG_HOME: dir }
-    const asked: string[][] = []
-    const gh = ghWith(STATUS, asked)
+    const root = join(dir, 'openagent-github')
+    // No account yet: refused, with where one is added.
+    const none = await run(['env'], { gh: ghWith(), env })
+    assert.equal(none.code, 1)
+    assert.equal(none.out['reason'], 'no-account')
+    assert.match(none.err, /Permissions/)
+    account(root, 'octo', { id: 1 })
+    account(root, 'octo-agent', { id: 42, name: 'Octo Agent' })
+    const gh = ghWith()
     assert.equal((await run(['env'], { gh, env })).out['login'], 'octo')
     assert.equal((await run(['use', 'octo-agent'], { gh, env })).code, 0)
     const picked = await run(['env'], { gh, env })
     assert.equal(picked.out['login'], 'octo-agent')
-    assert.equal((picked.out['env'] as Record<string, string>)['GH_TOKEN'], 'tok-octo-agent')
-    assert.deepEqual(asked.at(-2), ['auth', 'token', '--hostname', 'github.com', '--user', 'octo-agent'])
+    const given = picked.out['env'] as Record<string, string>
+    assert.deepEqual([given['GH_TOKEN'], given['GH_CONFIG_DIR'], given['GIT_AUTHOR_EMAIL']], ['tok-octo-agent', join(root, 'octo-agent'), '42+octo-agent@users.noreply.github.com'])
     assert.equal(((await run(['env', '--user', 'octo'], { gh, env })).out['env'] as Record<string, string>)['GH_TOKEN'], 'tok-octo')
     const stranger = await run(['env', '--user', 'stranger'], { gh, env })
     assert.equal(stranger.code, 1)
     assert.equal(stranger.out['reason'], 'no-account')
-    assert.match(stranger.err, /Settings › Accounts/)
     assert.equal((await run(['use', 'stranger'], { gh, env })).out['reason'], 'no-account')
-    // A login gh keeps under one name that GitHub says is another account's: never handed to a run.
-    const mixed = await run(['env', '--user', 'octo-agent'], { gh: ghWith(STATUS, [], { 'octo-agent': 'octo' }), env })
+    // A login kept under one name that GitHub says is another account's: never handed to a run.
+    const mixed = await run(['env', '--user', 'octo-agent'], { gh: ghWith([], { whose: { 'octo-agent': 'octo' } }), env })
     assert.equal(mixed.code, 1)
     assert.equal(mixed.out['reason'], 'not-that-account')
-    assert.match(mixed.err, /the login gh keeps for octo-agent is octo's on GitHub/)
-    // Nobody logged in: nothing changes for the run.
-    assert.deepEqual((await run(['env'], { gh: ghWith({ hosts: {} }), env: { XDG_CONFIG_HOME: join(dir, 'x') } })).out, { ok: true, env: {} })
+    assert.match(mixed.err, /the login OpenAgent keeps for octo-agent is octo's on GitHub/)
   }),
 )
 
 test(
-  'token, take and forget: an account’s own token is handed out, checked to be its own; a token handed over is logged in beside the others; forgetting one ends nothing',
+  'a command that talks to GitHub works as OpenAgent\u2019s account: a run\u2019s own; else the runs\u2019 one, its token for git too; with none it is refused before gh is asked',
   withDir(async dir => {
-    const env = { XDG_CONFIG_HOME: dir }
-    assert.deepEqual((await run(['token', '--user', 'octo-agent'], { gh: ghWith(STATUS), env })).out, { ok: true, login: 'octo-agent', token: 'tok-octo-agent' })
-    assert.equal((await run(['token', '--user', 'stranger'], { gh: ghWith(STATUS), env })).out['reason'], 'no-account')
-    assert.equal((await run(['token', '--user', 'octo-agent'], { gh: ghWith(STATUS, [], { 'octo-agent': 'octo' }), env })).out['reason'], 'not-that-account')
-
-    const token = `gho_${'a1B2'.repeat(9)}`
-    const asked: { args: string[]; input?: string }[] = []
-    const gh: GhRunner = async (args, _cwd, ghEnv, input) => {
-      asked.push({ args, ...(input !== undefined ? { input } : {}) })
-      if (args[0] === 'api' && args[1] === 'user') return ghEnv?.['GH_TOKEN'] === token ? 'octo\n' : Promise.reject(new Error('Bad credentials'))
-      if (args[0] === '--version') return 'gh version 2.93.0\n'
-      if (args[0] === 'auth' && args[1] === 'status') return JSON.stringify(STATUS)
-      return ''
-    }
-    assert.deepEqual((await run(['take'], { gh, env, stdin: async () => `${token}\n` })).out, { ok: true, login: 'octo' })
-    // The token reaches gh on its input, never among its arguments.
-    const login = asked.find(a => a.args[1] === 'login')!
-    assert.deepEqual(login, { args: ['auth', 'login', '--hostname', 'github.com', '--git-protocol', 'https', '--with-token'], input: token })
-    assert.ok(asked.every(a => !a.args.join(' ').includes(token)))
-    assert.equal((await run(['take'], { gh, env, stdin: async () => 'not a token' })).out['reason'], 'no-token')
-    assert.equal((await run(['take'], { gh, env, stdin: async () => `gho_${'z'.repeat(36)}` })).out['reason'], 'no-token')
-
+    const root = join(dir, 'openagent-github')
+    const asked: { args: string[]; env?: Record<string, string> }[] = []
+    const gh = ghWith(asked)
+    const none = await run(['me'], { gh, env: { XDG_CONFIG_HOME: dir } })
+    assert.equal(none.out['reason'], 'no-account')
+    assert.ok(!asked.some(a => a.args[0] === 'api'), 'the person\u2019s gh is never asked')
+    account(root, 'octo', { id: 1 })
     asked.length = 0
-    assert.deepEqual((await run(['forget', 'octo-agent'], { gh, env })).out, { ok: true, login: 'octo-agent' })
-    assert.deepEqual(asked.at(-1)?.args, ['auth', 'logout', '--hostname', 'github.com', '--user', 'octo-agent'])
-    // One gh does not know is forgotten already.
+    assert.equal((await run(['me'], { gh, env: { XDG_CONFIG_HOME: dir } })).out['login'], 'octo')
+    const api = asked.find(a => a.args[0] === 'api' && a.args.includes('{login: .login, name: .name, avatar: .avatar_url}'))!
+    assert.deepEqual([api.env?.['GH_CONFIG_DIR'], api.env?.['GH_TOKEN'], api.env?.['GIT_CONFIG_COUNT']], [join(root, 'octo'), 'tok-octo', '4'])
+    // Inside a run: the account it was given, as it is. A gh folder of the person's own is not one.
+    account(root, 'octo-agent', { id: 42 })
     asked.length = 0
-    assert.deepEqual((await run(['forget', 'stranger'], { gh, env })).out, { ok: true, login: 'stranger' })
-    assert.ok(!asked.some(a => a.args[1] === 'logout'))
+    await run(['me'], { gh, env: { XDG_CONFIG_HOME: dir, GH_CONFIG_DIR: join(root, 'octo-agent') } })
+    assert.equal(asked.find(a => a.args.some(arg => arg.includes('avatar')))?.env?.['GH_CONFIG_DIR'], join(root, 'octo-agent'))
+    asked.length = 0
+    await run(['me'], { gh, env: { XDG_CONFIG_HOME: dir, GH_CONFIG_DIR: '/home/me/.config/gh' } })
+    assert.equal(asked.find(a => a.args.some(arg => arg.includes('avatar')))?.env?.['GH_CONFIG_DIR'], join(root, 'octo'))
   }),
 )
 
-test('login: the terminal’s account is handed over to be given back; install runs the declared command and says it on a failure', async () => {
-  let back: string | undefined = 'unset'
+test(
+  'token, take and forget: an account\u2019s own token is handed out, checked to be its own; a token handed over becomes an account of its own; forgetting one takes only OpenAgent\u2019s copy',
+  withDir(async dir => {
+    const env = { XDG_CONFIG_HOME: dir }
+    const root = join(dir, 'openagent-github')
+    account(root, 'octo-agent')
+    assert.deepEqual((await run(['token', '--user', 'octo-agent'], { gh: ghWith(), env })).out, { ok: true, login: 'octo-agent', token: 'tok-octo-agent' })
+    assert.equal((await run(['token', '--user', 'stranger'], { gh: ghWith(), env })).out['reason'], 'no-account')
+    assert.equal((await run(['token', '--user', 'octo-agent'], { gh: ghWith([], { whose: { 'octo-agent': 'octo' } }), env })).out['reason'], 'not-that-account')
+
+    const token = `gho_${'a1B2'.repeat(5)}`
+    const asked: { args: string[]; env?: Record<string, string>; input?: string }[] = []
+    assert.deepEqual((await run(['take'], { gh: ghWith(asked), env, stdin: async () => `${token}\n` })).out, { ok: true, login: 'a1B2a1B2a1B2a1B2a1B2' })
+    // The token reaches gh on its input, never among its arguments, into the account's own folder.
+    const login = asked.find(a => a.args[1] === 'login')!
+    assert.deepEqual(login.args, ['auth', 'login', '--hostname', 'github.com', '--with-token', '--insecure-storage'])
+    assert.equal(login.input, token)
+    assert.ok(asked.every(a => !a.args.join(' ').includes(token)))
+    assert.deepEqual(accountLogins(root), ['a1B2a1B2a1B2a1B2a1B2', 'octo-agent'])
+    assert.deepEqual(JSON.parse(readFileSync(join(root, 'a1B2a1B2a1B2a1B2a1B2', 'account.json'), 'utf8')), { login: 'a1B2a1B2a1B2a1B2a1B2', id: 42, name: 'Octo Cat' })
+    assert.equal((await run(['take'], { gh: ghWith(), env, stdin: async () => 'not a token' })).out['reason'], 'no-token')
+
+    assert.equal((await run(['use', 'octo-agent'], { gh: ghWith(), env })).code, 0)
+    assert.deepEqual((await run(['forget', 'octo-agent'], { gh: ghWith(), env })).out, { ok: true, login: 'octo-agent' })
+    assert.ok(!existsSync(join(root, 'octo-agent')))
+    assert.deepEqual(JSON.parse(readFileSync(join(dir, 'openagent-github.json'), 'utf8')), { runs: {} })
+    assert.deepEqual((await run(['forget', 'stranger'], { gh: ghWith(), env })).out, { ok: true, login: 'stranger' })
+    assert.equal((await run(['forget', '../x'], { gh: ghWith(), env })).code, 2)
+  }),
+)
+
+test('login: started into OpenAgent\u2019s accounts\u2019 folder; install runs the declared command and says it on a failure', async () => {
+  let into = ''
   const said = await run(['login'], {
-    gh: ghWith(STATUS),
-    login: async terminal => {
-      back = terminal
+    gh: ghWith(),
+    env: { XDG_CONFIG_HOME: '/cfg' },
+    login: async root => {
+      into = root
       return { code: 'ABCD-1234', url: 'https://github.com/login/device' }
     },
   })
   assert.deepEqual(said.out, { ok: true, code: 'ABCD-1234', url: 'https://github.com/login/device' })
-  assert.equal(back, 'octo')
+  assert.equal(into, '/cfg/openagent-github')
   assert.equal((await run(['login'], { gh: async () => Promise.reject(new Error('spawn gh ENOENT')) })).out['reason'], 'not-installed')
 
   const ran: string[] = []
@@ -268,69 +329,65 @@ test('a job goes on after the command answered, says how it ended, and a failed 
 })
 
 /**
- * A browser login run for real, with a stand-in `gh` that writes down what it is asked and a git
- * of its own: `gh` answers its login as `login` says (`ok`, or `no` for a login the browser did not
- * say yes to), and its account as `api` says (`ok`, or `no` for a GitHub that does not answer).
+ * A browser login run for real, with a stand-in `gh` that writes down what it is asked and
+ * where: it logs in when `login` says `ok`, writing its file into the folder it is given, as gh does.
  */
-async function loggedIn(opts: { login: 'ok' | 'no'; api: 'ok' | 'no'; terminal?: string; git?: Record<string, string> }): Promise<{ asked: string[]; git: string; state: ReturnType<typeof jobState> }> {
+async function loggedIn(login: 'ok' | 'no'): Promise<{ asked: string[]; root: string; dir: string; state: ReturnType<typeof jobState> }> {
   const dir = mkdtempSync(join(tmpdir(), 'gh-login-'))
-  const kept = { PATH: process.env['PATH'], GIT_CONFIG_GLOBAL: process.env['GIT_CONFIG_GLOBAL'], GIT_CONFIG_NOSYSTEM: process.env['GIT_CONFIG_NOSYSTEM'] }
+  const kept = process.env['PATH']
+  const log = join(dir, 'asked')
+  writeFileSync(
+    join(dir, 'gh'),
+    [
+      '#!/bin/sh',
+      `echo "GH_CONFIG_DIR=$GH_CONFIG_DIR GH_TOKEN=\${GH_TOKEN-unset} $*" >> '${log}'`,
+      'case "$1 $2" in',
+      `  "auth login") echo "! First copy your one-time code: ABCD-1234"; sleep 0.3; [ ${login} = ok ] && echo "github.com: {}" > "$GH_CONFIG_DIR/hosts.yml" ;;`,
+      `  "api --hostname") printf 'octo\t42\tOcto Cat\n' ;;`,
+      'esac',
+      '',
+    ].join('\n'),
+  )
+  chmodSync(join(dir, 'gh'), 0o755)
+  process.env['PATH'] = `${dir}:${kept}`
   try {
-    const log = join(dir, 'asked')
-    writeFileSync(
-      join(dir, 'gh'),
-      [
-        '#!/bin/sh',
-        `echo "$*" >> '${log}'`,
-        'case "$1 $2" in',
-        `  "auth login") echo "! First copy your one-time code: ABCD-1234"; sleep 0.3; [ ${opts.login} = ok ] ;;`,
-        `  "api --hostname") [ ${opts.api} = ok ] && printf 'octo\t42\tOcto Cat\n' ;;`,
-        'esac',
-        '',
-      ].join('\n'),
-    )
-    chmodSync(join(dir, 'gh'), 0o755)
-    const config = join(dir, 'gitconfig')
-    process.env['PATH'] = `${dir}:${process.env['PATH']}`
-    process.env['GIT_CONFIG_GLOBAL'] = config
-    process.env['GIT_CONFIG_NOSYSTEM'] = '1'
-    for (const [key, value] of Object.entries(opts.git ?? {})) execFileSync('git', ['config', '--global', key, value])
+    const root = join(dir, 'accounts')
+    mkdirSync(root)
     const files = { log: join(dir, 'l.log'), pid: join(dir, 'l.pid'), exit: join(dir, 'l.exit') }
-    assert.deepEqual(await startLogin(opts.terminal, files), { code: 'ABCD-1234', url: 'https://github.com/login/device' })
+    process.env['GH_TOKEN'] = 'the-persons-token'
+    assert.deepEqual(await startLogin(root, files), { code: 'ABCD-1234', url: 'https://github.com/login/device' })
+    delete process.env['GH_TOKEN']
     for (let waited = 0; jobState(files)?.running && waited < 10_000; waited += 100) await new Promise(resolve => setTimeout(resolve, 100))
-    return { asked: readFileSync(log, 'utf8').trim().split('\n'), git: existsSync(config) ? execFileSync('git', ['config', '--global', '--list'], { encoding: 'utf8' }) : '', state: jobState(files) }
+    const { execFile } = await import('node:child_process')
+    const realGh: GhRunner = (args, cwd, env) =>
+      new Promise((resolve, reject) => execFile('gh', args, { cwd, env: { ...process.env, ...env } }, (err, out) => (err ? reject(err) : resolve(String(out)))))
+    await settleAdded(root, realGh, dir, files)
+    return { asked: readFileSync(log, 'utf8').trim().split('\n'), root, dir, state: jobState(files) }
   } finally {
-    for (const [key, value] of Object.entries(kept)) {
-      if (value === undefined) delete process.env[key]
-      else process.env[key] = value
-    }
-    rmSync(dir, { recursive: true, force: true })
+    process.env['PATH'] = kept
+    delete process.env['GH_TOKEN']
   }
 }
 
-test('a browser login gives a git with no name the account’s name and GitHub’s address for it, once the terminal has its account back', async () => {
-  const given = await loggedIn({ login: 'ok', api: 'ok', terminal: 'octo-old' })
-  assert.equal(given.state?.running, false)
-  assert.equal(given.state && 'failed' in given.state ? given.state.failed : undefined, undefined)
-  assert.deepEqual(given.asked, ['auth login --hostname github.com --git-protocol https --web', 'auth switch --hostname github.com --user octo-old', "api --hostname github.com user --jq [.login, (.id | tostring), (.name // \"\")] | @tsv"])
-  assert.equal(given.git, 'user.name=Octo Cat\nuser.email=42+octo@users.noreply.github.com\n')
+test('a browser login goes into a folder of its own, with no token from the environment, and is named by its account once GitHub said yes', async () => {
+  const { asked, root, dir, state } = await loggedIn('ok')
+  try {
+    assert.equal(state?.running, false)
+    assert.equal(asked[0], `GH_CONFIG_DIR=${join(root, '.adding')} GH_TOKEN=unset auth login --hostname github.com --web --insecure-storage --skip-ssh-key`)
+    assert.deepEqual(accountLogins(root), ['octo'])
+    assert.deepEqual(JSON.parse(readFileSync(join(root, 'octo', 'account.json'), 'utf8')), { login: 'octo', id: 42, name: 'Octo Cat' })
+    assert.ok(!existsSync(join(root, '.adding')))
+  } finally {
+    rmSync(dir, { recursive: true, force: true })
+  }
 })
 
-test('a browser login gives git only what it lacks, asks GitHub nothing when git has both, and stands when GitHub does not answer', async () => {
-  const named = await loggedIn({ login: 'ok', api: 'ok', git: { 'user.name': 'Ada' } })
-  assert.equal(named.git, 'user.name=Ada\nuser.email=42+octo@users.noreply.github.com\n')
-
-  const both = await loggedIn({ login: 'ok', api: 'ok', git: { 'user.name': 'Ada', 'user.email': 'ada@example.com' } })
-  assert.equal(both.git, 'user.name=Ada\nuser.email=ada@example.com\n')
-  assert.ok(!both.asked.some(line => line.startsWith('api ')))
-
-  const unanswered = await loggedIn({ login: 'ok', api: 'no' })
-  assert.deepEqual([unanswered.state?.running, unanswered.state && 'failed' in unanswered.state ? unanswered.state.failed : undefined], [false, undefined])
-  assert.equal(unanswered.git, '')
-
-  // A login the browser did not say yes to gives git nothing, and fails.
-  const refused = await loggedIn({ login: 'no', api: 'ok' })
-  assert.ok(refused.state && 'failed' in refused.state && refused.state.failed !== undefined)
-  assert.ok(!refused.asked.some(line => line.startsWith('api ')))
-  assert.equal(refused.git, '')
+test('a browser login GitHub did not say yes to leaves no account', async () => {
+  const { root, dir, state } = await loggedIn('no')
+  try {
+    assert.ok(state && 'failed' in state && state.failed !== undefined)
+    assert.deepEqual(accountLogins(root), [])
+  } finally {
+    rmSync(dir, { recursive: true, force: true })
+  }
 })
