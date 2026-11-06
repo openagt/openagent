@@ -1,16 +1,30 @@
 {
   "id": "2026-11-06T12-40-15-072Z",
   "startedAt": "2026-11-06T12:40:12.630Z",
-  "status": "running",
+  "endedAt": "2026-11-06T12:40:51.212Z",
+  "status": "done",
   "intent": "/plan-tickets",
+  "title": "Queue shared-server Tailscale person plan",
   "driver": "claude-code",
-  "model": "opus",
+  "model": "claude-opus-5-5",
+  "branch": "agent-2026-11-06T12-40-15-072Z",
+  "cost": 0.1412582,
+  "contextTokens": 27617,
   "caller": {
     "runner": {
       "host": "Suleimans-MacBook-Pro.local",
-      "publish": "commit"
+      "pid": 84855,
+      "publish": "commit",
+      "gitAccount": "suleimansh",
+      "baseCommit": "35727980884737d328e1d3ad6c904a4b66781d10"
     },
+    "pid": 84855,
     "host": "Suleimans-MacBook-Pro.local",
-    "publish": "commit"
+    "gitAccount": "suleimansh",
+    "baseCommit": "35727980884737d328e1d3ad6c904a4b66781d10",
+    "publish": "commit",
+    "kind": "prompt",
+    "workspace": "/Users/suleiman/Projects/openagent/.branches/agent-2026-11-06T12-40-15-072Z",
+    "sessionId": "a64147ff-0d4f-407c-b105-d31934401ca5"
   }
 }
