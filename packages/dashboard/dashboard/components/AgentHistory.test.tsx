@@ -616,22 +616,22 @@ describe('AgentHistory New button (#new-button)', () => {
     expect(started).toBe('session')
   })
 
-  test('with one project and none selected, New picks it or no project', async () => {
+  test('with projects and none picked, New is one click to a session with no project: where it works is picked on its page', () => {
     let started: string | null = null
     renderRail(
       <AgentHistory
         projectId={null}
         agents={[]}
         recentAgents={[]}
-        projects={[proj('p1', 'alpha')]}
+        projects={[proj('p1', 'alpha'), proj('p2', 'beta')]}
         onNewAgentInProject={id => (started = id)}
         selectedAgentId={null}
         onSelect={() => {}}
       />,
     )
-    await openMenu(screen.getByRole('button', { name: 'New agent session' }))
-    expect(screen.getAllByRole('menuitem').map(item => item.textContent)).toEqual(['alpha', 'No project'])
-    fireEvent.click(screen.getByRole('menuitem', { name: 'No project' }))
+    const button = screen.getByRole('button', { name: 'New agent session' })
+    expect(button.getAttribute('aria-haspopup')).toBeNull()
+    fireEvent.click(button)
     expect(started).toBe('session')
   })
 
@@ -651,21 +651,6 @@ describe('AgentHistory New button (#new-button)', () => {
     expect(started).toBe('p9')
   })
 
-  test('with several projects and none selected, New is a picker menu', () => {
-    renderRail(
-      <AgentHistory
-        projectId={null}
-        agents={[]}
-        recentAgents={[]}
-        projects={[proj('p1', 'alpha'), proj('p2', 'beta')]}
-        onNewAgentInProject={() => {}}
-        selectedAgentId={null}
-        onSelect={() => {}}
-      />,
-    )
-    // The trigger opens a menu rather than starting immediately (aria-haspopup marks it).
-    expect(screen.getByLabelText('New agent session').getAttribute('aria-haspopup')).toBeTruthy()
-  })
 })
 
 describe('cloud sessions on the rail (#1263/#1264)', () => {
@@ -806,7 +791,7 @@ describe('the project select (#1513)', () => {
     expect(screen.getByRole('button', { name: 'Project: All projects' })).toBeTruthy()
   })
 
-  test('two projects with the same name say which folder each is in, on the button, in the menus and on the rows', async () => {
+  test('two projects with the same name say which folder each is in, on the button, in the menu and on the rows', async () => {
     const work: ProjectSummary = { id: 'shop-1', path: '/home/me/work/shop', name: 'shop', activated: true, gitHost: false }
     const clients: ProjectSummary = { id: 'shop-2', path: '/home/me/clients/shop', name: 'shop', activated: true, gitHost: false }
     const projects = [work, clients, idle]
@@ -825,8 +810,6 @@ describe('the project select (#1513)', () => {
     renderRail(rail(null))
     // The Overview's rows name their project the same way.
     expect(screen.getByText('clients/shop')).toBeTruthy()
-    await openMenu(screen.getByRole('button', { name: 'New agent session' }))
-    expect(screen.getByRole('menuitem', { name: 'work/shop' })).toBeTruthy()
   })
 
   test('while the project the address names is not read, neither "All projects" nor "No sessions yet." shows', () => {
@@ -887,9 +870,11 @@ describe('the project select (#1513)', () => {
     expect(screen.getByText('first').closest('button')?.className).not.toContain('bg-accent ')
   })
 
-  test('with all projects showing, New asks which project even on a project\'s own page', () => {
-    renderRail(<AgentHistory projectId="p2" agents={[]} recentAgents={[]} selectedAgentId={null} onSelect={() => {}} projects={[stranded, idle]} />)
-    expect(screen.getByLabelText('New agent session').getAttribute('aria-haspopup')).toBeTruthy()
+  test('with all projects showing, New opens a session with no project even on a project\'s own page', () => {
+    let started: string | null = null
+    renderRail(<AgentHistory projectId="p2" agents={[]} recentAgents={[]} selectedAgentId={null} onSelect={() => {}} projects={[stranded, idle]} onNewAgentInProject={id => (started = id)} />)
+    fireEvent.click(screen.getByRole('button', { name: 'New agent session' }))
+    expect(started).toBe('session')
   })
 })
 

@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest'
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { forgetRemembered } from '../lib/use-async.js'
 import { openMenu } from '../test-utils.js'
+import { takePendingDraft } from '../lib/draft-handoff.js'
 
 // Everything the form reads goes through a lib module, so the mocks stop at the `rpc/` stubs: an
 // unmocked one reaches for `/_rpc/<name>`, and there is no daemon behind jsdom to answer.
@@ -10,7 +11,7 @@ const onStartCheck = vi.hoisted(() => vi.fn())
 const onCloneCheck = vi.hoisted(() => vi.fn())
 const onProjects = vi.hoisted(() => vi.fn(async () => [] as unknown[]))
 const onStartBranches = vi.hoisted(() => vi.fn(async () => ({ branches: ['feature-x'] }) as { branches?: string[] }))
-vi.mock('../rpc/projects.js', () => ({ onCommands, onStartBranches, onStartCheck, onCloneCheck, onProjects }))
+vi.mock('../rpc/projects.js', () => ({ onCommands, onStartBranches, onStartCheck, onCloneCheck, onProjects, onRepos: () => Promise.resolve({ repos: [], canAddFolder: false }), sendAddRepoFolder: vi.fn() }))
 
 // Mutable so a test can pick the coding agent and the model; reset after each.
 const prefs = vi.hoisted(() => ({ current: {} as Record<string, unknown> }))
@@ -119,7 +120,7 @@ const LOCAL = { kind: 'local' } as const
 const startFromChip = () => screen.queryByRole('combobox', { name: 'The agent starts from' })
 /** A project whose start line passes the branch on, whose folder is on `my/work`. */
 const WITH_BRANCHES = { commands: [], startHook: true, gitHost: true, remote: true, address: 'github.com/acme/shop', startFrom: { main: 'main', local: 'my/work' } }
-const props = { projectId: 'p1', files: [], context: new Set<string>(), addContext: noop, removeContext: noop, toggleContext: noop }
+const props = { projectId: 'p1', files: [], context: new Set<string>(), addContext: noop, removeContext: noop, toggleContext: noop, projects: [], onPickProject: noop, onProjectAdded: noop }
 
 describe('StartAgentForm (#1774)', () => {
   test('the project\'s commands are no buttons: they are in the box\'s `/` list, and nothing starts', async () => {
@@ -522,14 +523,13 @@ describe('StartAgentForm (#1774)', () => {
     await waitFor(() => expect(screen.queryByRole('alert')).toBeNull(), { timeout: 3000 })
   })
 
-  test('the row above the box starts with the project\'s name, said in words, not a button', () => {
+  test('the row above the box starts with where the session works: the project\'s name, on the button of the picker', () => {
     onCommands.mockResolvedValue({ commands: [], startHook: true, gitHost: true })
     render(<StartAgentForm {...props} projectName="gemstack" />)
-    const project = screen.getByTestId('starts-at').firstElementChild!
     expect(startsAt()).toBe('gemstack')
-    expect(project.textContent).toBe('gemstack')
-    expect(project.querySelector('svg')).not.toBeNull()
-    expect(project.tagName).not.toBe('BUTTON')
+    const picker = screen.getByRole('combobox', { name: 'The session works in' })
+    expect(picker.textContent).toBe('gemstack')
+    expect(picker.querySelector('svg')).not.toBeNull()
     // Cut short with an ellipsis where the row is too narrow for it.
     expect(screen.getByText('gemstack').className).toContain('truncate')
     // No heading over the box: the page is laid out as an agent's chat, whose box has none.
@@ -540,9 +540,21 @@ describe('StartAgentForm (#1774)', () => {
     onCommands.mockResolvedValue({ commands: [], startHook: true, gitHost: true })
     const { rerender } = render(<StartAgentForm {...props} />)
     expect(startsAt()).toBe('')
-    expect(composerProps.current.startsAt).toBeNull()
+    expect(screen.queryByRole('combobox', { name: 'The session works in' })).toBeNull()
     rerender(<StartAgentForm {...props} projectName="gemstack" />)
     expect(startsAt()).toBe('gemstack')
+  })
+
+  test('another project picked takes the typed prompt along to its page', async () => {
+    onCommands.mockResolvedValue({ commands: [], startHook: true, gitHost: true })
+    const onPickProject = vi.fn()
+    const alpha = { id: 'alpha-1', path: '/home/me/alpha', name: 'alpha', activated: true, gitHost: true }
+    render(<StartAgentForm {...props} projectId="session" projects={[alpha]} onPickProject={onPickProject} />)
+    ;(composerProps.current.onPromptChange as (value: string) => void)('fix the login page')
+    await openMenu(screen.getByRole('combobox', { name: 'The session works in' }))
+    fireEvent.click(await screen.findByRole('option', { name: 'alpha' }))
+    expect(onPickProject).toHaveBeenCalledWith('alpha-1')
+    expect(takePendingDraft()).toBe('fix the login page')
   })
 
   test('the "start from" chip is after the project\'s chip and reads the main branch until the person picks; then the Start names no branch', async () => {

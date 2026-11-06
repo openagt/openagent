@@ -13,6 +13,8 @@ import {
   renameThisComputer,
   thisComputerName,
   addProject,
+  addRepoFolder,
+  listRepoFolders,
   ensureBridgeToken,
   ensureComputerId,
   listMachines,
@@ -875,4 +877,17 @@ test('a saved machine keeps the name it says it has now, asked with the key it i
     (await listMachines(fs, ENV)).map(({ added: _added, ...machine }) => machine),
     [{ id: STUDIO, label: 'Studio Mac', url: STUDIO, key: 'aaa', door: DOOR }],
   )
+})
+
+test('the folders to look for repos in: added once each, absolute, and kept beside the projects', async () => {
+  const fs = memFs()
+  await addProject('/repos/app-a', APP_A.addedAt, fs, ENV)
+  await addRepoFolder('/work/clients', fs, ENV)
+  await addRepoFolder('/work/clients', fs, ENV)
+  await addRepoFolder('/work/oss', fs, ENV)
+  assert.deepEqual(await listRepoFolders(fs, ENV), ['/work/clients', '/work/oss'])
+  assert.deepEqual(await listProjects(fs, ENV), [APP_A])
+  // A hand-edited file keeps only absolute paths, each once.
+  const raw = JSON.stringify({ projects: [], preferences: {}, repoFolders: ['/a', 'relative', 7, '/a', '/b'] })
+  assert.deepEqual(await listRepoFolders(memFs({ [FILE]: raw }), ENV), ['/a', '/b'])
 })

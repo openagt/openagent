@@ -456,6 +456,11 @@ already made, and lists it in its pull request; for anything else it proposes an
   branch and nothing to publish. Its address is `/session/<id>`, and `/session` is the "New
   agent session" page with no project; the Log lists it with the projects' runs. Picked over
   every session belonging to a project, where a person with no project could start nothing.
+- A repo is any Git repository a quick look through the home folder, and the folders the
+  person added, finds; a project is a repo the person pinned. Where a new session works is
+  picked on the "New agent session" page, by search: no project, a project, or a repo. A repo
+  picked becomes a project once the person says they trust it. Picked over a session in a
+  repo that is no project: a second kind of session, with no hooks, records or address.
 - A hook line finds its tools in the packages OpenAgent brings first, then in the
   project's installed packages. Nothing is downloaded to run a line. Picked over `npx`
   in the lines, which downloads whatever package holds the name on npm when the project

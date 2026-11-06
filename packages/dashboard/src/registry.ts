@@ -1,6 +1,6 @@
 import { accentOf, isCodeFont, isDocumentFont, isFont, isPalette, type Accent, type CodeFont, type DocumentFont, type Font, type Palette } from './appearance.js'
 import { sanitizeOverviewLayouts, type OverviewLayouts } from './overview-layout.js'
-import { basename, dirname, join, resolve } from 'node:path'
+import { basename, dirname, isAbsolute, join, resolve } from 'node:path'
 import { randomBytes } from 'node:crypto'
 import { isBranchName } from './branch-name.js'
 import { isDriverName } from './driver-names.js'
@@ -272,7 +272,12 @@ export interface Registry {
   name?: string
   /** The computers the person removed, the newest last (computers-sync.ts). */
   forgotten?: ForgottenMachine[]
+  /** The folders the person added to look for repos in, besides the home folder (dashboard/repos.ts), absolute. */
+  repoFolders?: string[]
 }
+
+/** The cap on added repo folders, so a hand-edited file cannot make a crawl of everything. */
+const MAX_REPO_FOLDERS = 50
 
 /** How many removed computers are remembered: the oldest is let go first. */
 const MAX_FORGOTTEN = 64
@@ -555,6 +560,7 @@ export async function readRegistry(
   const projects = Array.isArray(obj.projects) ? dedupeProjects(obj.projects) : []
   const machines = sanitizeMachines(obj.machines)
   const forgotten = sanitizeForgotten(obj.forgotten)
+  const repoFolders = Array.isArray(obj.repoFolders) ? [...new Set(obj.repoFolders.filter((folder): folder is string => typeof folder === 'string' && isAbsolute(folder)))].slice(0, MAX_REPO_FOLDERS) : []
   return {
     projects,
     preferences: sanitizePreferences(obj.preferences),
@@ -564,6 +570,7 @@ export async function readRegistry(
     ...(isComputerId(obj.computer) ? { computer: obj.computer } : {}),
     ...(computerNameOf(obj.name) !== undefined ? { name: computerNameOf(obj.name)! } : {}),
     ...(forgotten.length ? { forgotten } : {}),
+    ...(repoFolders.length ? { repoFolders } : {}),
   }
 }
 
@@ -584,7 +591,7 @@ export async function readRegistry(
  */
 async function writeRegistry(registry: Registry, fs: RegistryFs, env: NodeJS.ProcessEnv): Promise<void> {
   const file = registryPath(env)
-  const { projects, preferences, bridgeToken, machines, computer, name, forgotten } = registry
+  const { projects, preferences, bridgeToken, machines, computer, name, forgotten, repoFolders } = registry
   const contents = {
     projects,
     preferences,
@@ -593,6 +600,7 @@ async function writeRegistry(registry: Registry, fs: RegistryFs, env: NodeJS.Pro
     ...(computer ? { computer } : {}),
     ...(name ? { name } : {}),
     ...(forgotten?.length ? { forgotten } : {}),
+    ...(repoFolders?.length ? { repoFolders } : {}),
   }
   const json = JSON.stringify(contents, null, 2)
   await fs.mkdir(dirname(file))
@@ -681,6 +689,23 @@ export async function removeProject(
     registry.projects = registry.projects.filter(project => project.id !== id)
     await writeRegistry(registry, fs, env)
     return removed
+  })
+}
+
+/** The folders the person added to look for repos in (dashboard/repos.ts). Forgiving, like {@link listProjects}. */
+export async function listRepoFolders(fs: RegistryFs = nodeRegistryFs(), env: NodeJS.ProcessEnv = process.env): Promise<string[]> {
+  return (await readRegistry(fs, env)).repoFolders ?? []
+}
+
+/** Add a folder to look for repos in, by its absolute path; one already there is not added again. */
+export async function addRepoFolder(folder: string, fs: RegistryFs = nodeRegistryFs(), env: NodeJS.ProcessEnv = process.env): Promise<void> {
+  return serialize(async () => {
+    const absolute = resolve(folder)
+    const registry = await readRegistry(fs, env)
+    const folders = registry.repoFolders ?? []
+    if (folders.includes(absolute) || folders.length >= MAX_REPO_FOLDERS) return
+    registry.repoFolders = [...folders, absolute]
+    await writeRegistry(registry, fs, env)
   })
 }
 

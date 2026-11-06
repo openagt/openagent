@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react'
-import { CircleAlert, Folder, Puzzle } from 'lucide-react'
-import type { StartFromPick } from '../../src/index.js'
+import { CircleAlert, Puzzle } from 'lucide-react'
+import type { ProjectSummary, StartFromPick } from '../../src/index.js'
 import { onCloneCheck, onStartBranches, onStartCheck } from '../rpc/projects.js'
 import { thisMachineName } from '../lib/this-machine.js'
 import { onMachineLogins, onMachineStartCheck } from '../rpc/machines.js'
@@ -15,11 +15,13 @@ import { useLoaded, usePolled } from '../lib/use-async.js'
 import { Button } from './ui/button.js'
 import { openPermissions, openSettings } from '../lib/use-route.js'
 import { promptWithContext } from '../lib/use-context-set.js'
+import { stashPendingDraft } from '../lib/draft-handoff.js'
 import { AutoMenu } from './AutoMenu.js'
 import { ProjectContextMenu } from './ContextMenu.js'
 import { Composer, type ComposerHandle } from './Composer.js'
 import { StartFromMenu, prTargetBranch, startFromBase } from './StartFromMenu.js'
-import { RowItem, rowButtonClass } from './ui/row-item.js'
+import { rowButtonClass } from './ui/row-item.js'
+import { ProjectPicker } from './ProjectPicker.js'
 import { Dots } from './ToolCalls.js'
 import { AgentFix, agentWords, useAgentState } from './Logins.js'
 import { MachineLogins } from './ServerLogins.js'
@@ -78,8 +80,17 @@ export function StartAgentForm({
   removeContext,
   toggleContext,
   home,
+  projects,
+  onPickProject,
+  onProjectAdded,
 }: {
   projectId: string
+  /** Every project, for the picker of where the session works (ProjectPicker). */
+  projects: readonly ProjectSummary[]
+  /** Open the "New agent session" page of another project, or of no project. */
+  onPickProject: (projectId: string) => void
+  /** A repo was added as a project from the picker: the projects are to be read again. */
+  onProjectAdded: () => void
   /** The saved machine the project is on, when only another computer of the person's has it (elsewhere.ts). */
   home?: string | undefined
   /** The project's name, for the row above the box; absent until the projects are read. */
@@ -105,6 +116,13 @@ export function StartAgentForm({
   const preferences = usePreferences()
   const launcher = useProjectLauncher(projectId)
   const noProject = projectId === SESSIONS_ID
+  // What the box holds, so another project picked takes the prompt along to its page.
+  const typed = useRef('')
+  const pickProject = (id: string) => {
+    if (id === projectId) return
+    if (typed.current.trim()) stashPendingDraft(typed.current)
+    onPickProject(id)
+  }
 
   // The machine this run targets (#1067), if one is picked in "Run on": the start names it by its
   // id, and the daemon, which holds its key, sends the run there (runTarget). A machine runs the
@@ -225,6 +243,8 @@ export function StartAgentForm({
     // same place on both pages.
     <form onSubmit={e => e.preventDefault()} className="relative mx-auto w-full max-w-3xl p-2">
       <Composer
+        // A box of its own per project, so the prompt carried over from the picker lands in it (below).
+        key={projectId}
         ref={composerRef}
         home={home}
         files={files}
@@ -237,14 +257,10 @@ export function StartAgentForm({
         // which would otherwise land before it and push it, and for the saved pick, which would
         // otherwise flip its words.
         startsAt={
-          noProject ? (
-            <RowItem icon={<Folder className="h-3.5 w-3.5 shrink-0" aria-hidden />}>No project</RowItem>
-          ) : projectName ? (
-            <>
-              <RowItem icon={<Folder className="h-3.5 w-3.5 shrink-0" aria-hidden />}>{projectName}</RowItem>
-              {startFrom && preferencesLoaded && <StartFromMenu projectId={projectId} main={startFrom.main} local={startFrom.local} pick={startFromPick} onPick={pickStartFrom} busy={busy} />}
-            </>
-          ) : null
+          <>
+            <ProjectPicker projectId={projectId} projectName={projectName} projects={projects} busy={busy} onPick={pickProject} onProjectAdded={onProjectAdded} />
+            {!noProject && projectName && startFrom && preferencesLoaded && <StartFromMenu projectId={projectId} main={startFrom.main} local={startFrom.local} pick={startFromPick} onPick={pickStartFrom} busy={busy} />}
+          </>
         }
         // Who it pushes as, at the row's other end: the project's git host account on the computer
         // the run goes to. Its own end of the row, so the branch landing moves nothing.
@@ -270,6 +286,7 @@ export function StartAgentForm({
         }
         onSubmit={submit}
         onPromptChange={value => {
+          typed.current = value
           if (!value.trim() && note) setNote(null)
           // Editing after a failed start: the red error described the old attempt, drop it (#948).
           if (error) reset()
