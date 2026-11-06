@@ -8,6 +8,7 @@ import { FakeDriver, type AccountRotation, type Driver, type DriverTurn } from '
 import { ClaudeCodeDriver } from '@openagt/agent-driver-claude'
 import { CodexDriver } from '@openagt/agent-driver-codex'
 import { accountsPath, addAccount } from '@openagt/skill-account-rotation'
+import { writeAgent } from '@openagt/agent-data'
 import { markerCard, writeMarker } from './records.js'
 import { runCommand } from './run.js'
 import { ACCOUNT_ENV, detachResume, detachRun, driverFor, readyToRun, resumeArgs, resumeProject, runArgs, workAs } from './runner.js'
@@ -148,15 +149,29 @@ test('a resumed run continues on the tool its record names, and a Codex run with
         return new FakeDriver({ turns: [{ text: turn }], sessionId: 's-codex' }).start(opts)
       },
     })
-    const first = await runCommand(repo, { prompt: 'Read the docs', driver: codex('Read.'), host: 'this-box', pid: 4242, now: () => NOW, gitHost: { requestOfBranch: async () => undefined }, gitAccount: 'octo-one' })
-    assert.equal(first.status, 'done')
-    const asked: string[] = []
-    const workedAs: (string | undefined)[] = []
-    const second = await resumeProject(repo, { id: first.id, text: 'And the tests?' }, { driverFor: (name, _id, setup) => { asked.push(`${name} ${JSON.stringify(setup)}`); return codex('Read too.') }, workAs: async (_repo, login) => (workedAs.push(login), login) })
-    assert.equal(second.status, 'done')
-    assert.deepEqual(asked, ['codex {"memory":true,"connectors":true,"skills":true}'], 'no config on this machine: the run loads the person\'s setup')
-    assert.deepEqual(workedAs, ['octo-one'], 'the resume goes on as the account the record names, not whatever the computer\'s pick is by then')
-    assert.equal((await findRun(repo, first.id))?.caller?.['gitAccount'], 'octo-one')
+    // The run is on an agent: the record keeps it, and the resume goes on with its accounts as this computer has them.
+    const home = await mkdtemp(join(tmpdir(), 'runner-agent-'))
+    const homeBefore = process.env.XDG_CONFIG_HOME
+    process.env.XDG_CONFIG_HOME = home
+    try {
+      await writeAgent({ id: 'reviewer', name: 'Reviewer', skills: ['ask'], accounts: { github: 'octo-one', claude: ['Dani', 'Nobody'] } })
+      addAccount('Dani', 'x', accountsPath('claude'))
+      const first = await runCommand(repo, { prompt: 'Read the docs', driver: codex('Read.'), host: 'this-box', pid: 4242, now: () => NOW, gitHost: { requestOfBranch: async () => undefined }, gitAccount: 'octo-one', agent: 'reviewer' })
+      assert.equal(first.status, 'done')
+      assert.equal((await findRun(repo, first.id))?.caller?.['agent'], 'reviewer')
+      const asked: string[] = []
+      const workedAs: (string | undefined)[] = []
+      const second = await resumeProject(repo, { id: first.id, text: 'And the tests?' }, { driverFor: (name, _id, setup, as) => { asked.push(`${name} ${JSON.stringify(setup)} ${JSON.stringify(as)}`); return codex('Read too.') }, workAs: async (_repo, login) => (workedAs.push(login), login) })
+      assert.equal(second.status, 'done')
+      assert.deepEqual(asked, ['codex {"memory":true,"connectors":true,"skills":true} {"claude":["Dani"]}'], 'no config on this machine: the run loads the person\'s setup, on the agent\'s accounts this computer has')
+      assert.deepEqual(workedAs, ['octo-one'], 'the resume goes on as the account the record names, not whatever the computer\'s pick is by then')
+      assert.equal((await findRun(repo, first.id))?.caller?.['gitAccount'], 'octo-one')
+      assert.equal((await findRun(repo, first.id))?.caller?.['agent'], 'reviewer', 'the agent stays on the record')
+    } finally {
+      if (homeBefore === undefined) delete process.env.XDG_CONFIG_HOME
+      else process.env.XDG_CONFIG_HOME = homeBefore
+      await rm(home, { recursive: true, force: true })
+    }
     assert.deepEqual(startedWith, [{}, {}], 'no model named at the start nor at the resume: Codex runs on its own default')
   } finally {
     await removeRepo(repo)

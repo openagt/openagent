@@ -4,6 +4,7 @@ import { cloneElement, type ReactElement, type ReactNode } from 'react'
 
 vi.mock('../rpc/logins.js', () => ({ onGitHosts: async () => ({ hosts: [{ host: 'github.com', projects: [], provider: { name: 'GitHub', logo: '<svg></svg>', tool: 'gh', installed: true, accounts: [{ login: 'today', runs: true, ok: true }] } }] }), onAgentState: async () => undefined }))
 vi.mock('../rpc/server-logins.js', () => ({ onServerLogins: async () => ({ computer: 'Studio', servers: [] }) }))
+vi.mock('../rpc/agents.js', () => ({ onAgentsList: async () => ({ agents: [{ id: 'default', name: 'Default', skills: ['ask', 'github'], accounts: {} }, { id: 'reviewer', name: 'Reviewer', skills: ['ask'], accounts: {} }], skills: [], claude: [], codex: [] }) }))
 
 // What each item's hover says is on the page as a line, and its trigger is what holds the button.
 vi.mock('./ui/tooltip.js', () => ({
@@ -28,6 +29,17 @@ describe('a session\'s row above the box', () => {
     expect(screen.getByRole('button', { name: 'GitHub' }).closest('.shrink-0')).toBeTruthy()
     // The account the next run would use is not the one this run used.
     expect(container.textContent).not.toContain('today')
+  })
+
+  test('the agent the session is on, by its name once the agents are read, by its id for one this computer lacks; nothing for the default', async () => {
+    const { container, rerender } = render(<SessionRow {...facts} gitHost={null} agent="reviewer" />)
+    await screen.findByRole('button', { name: 'Reviewer' })
+    expect(words(container)).toEqual(['This machine', 'site', 'main', 'Reviewer'])
+    expect(screen.getAllByRole('tooltip').map(tip => tip.textContent)).toContain('On the agent Reviewer: its skills and accounts')
+    rerender(<SessionRow {...facts} gitHost={null} agent="elsewhere-made" />)
+    expect(words(container)).toContain('elsewhere-made')
+    rerender(<SessionRow {...facts} gitHost={null} />)
+    expect(words(container)).toEqual(['This machine', 'site', 'main'])
   })
 
   test('a session with no project shows the repos it has, each said with where it was copied from', () => {

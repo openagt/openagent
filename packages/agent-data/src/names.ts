@@ -50,3 +50,17 @@ export const OPENAGENT_DIR = '.openagent'
  * gets none of them.
  */
 export const SKILLS_ENV = 'OPENAGENT_SKILLS'
+
+/**
+ * The environment variable that names every skill OpenAgent carries, beside the ones every run
+ * gets: the directories of their packages, joined by the path delimiter. Set with {@link SKILLS_ENV}
+ * by the same command, so a run on an agent that names a skill finds its text and its package here.
+ */
+export const SKILL_CATALOGUE_ENV = 'OPENAGENT_SKILL_CATALOGUE'
+
+/**
+ * The environment variable that names the agent a run is on, by its id (`agents/<id>.json` in the
+ * personal folder): set by whoever starts the run, for that run; unset, the run is on the default
+ * agent. A scheduler's runs name none.
+ */
+export const AGENT_ENV = 'OPENAGENT_AGENT'

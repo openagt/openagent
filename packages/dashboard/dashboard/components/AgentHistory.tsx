@@ -1,4 +1,4 @@
-import { PERMISSIONS_PAGE } from '../lib/use-route.js'
+import { AGENTS_PAGE, PERMISSIONS_PAGE } from '../lib/use-route.js'
 import { RevealedTitle } from './RevealedTitle.js'
 import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { Plus, ChevronDown, Bot, ArrowDownUp, Check, Cloud, Laptop, LayoutDashboard, Blocks, FilePen, GitBranch, KeyRound } from 'lucide-react'
@@ -344,7 +344,8 @@ export function AgentHistory({
           {pages.map(page => (
             <NavRow key={page.segment} icon={page.icon ?? Blocks} label={page.label} active={activePage === page.segment} onClick={leave(() => onPage(page.segment))} />
           ))}
-          {/* The accounts the agents work with (Rom): every account OpenAgent knows, on a page of the dashboard's own. */}
+          {/* The agents (Rom): each a name, skills and accounts, on a page of the dashboard's own; then the accounts they work with. */}
+          <NavRow icon={Bot} label="Agents" active={activePage === AGENTS_PAGE} onClick={leave(() => onPage(AGENTS_PAGE))} />
           <NavRow icon={KeyRound} label="Permissions" active={activePage === PERMISSIONS_PAGE} onClick={leave(() => onPage(PERMISSIONS_PAGE))} />
         </SidebarHeader>
         {/* The themed ScrollArea (#913) instead of the sidebar's native overflow bar, matching the

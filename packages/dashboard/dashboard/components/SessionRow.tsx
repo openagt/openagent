@@ -1,4 +1,4 @@
-import { Cloud, Folder, Laptop, Workflow, type LucideIcon } from 'lucide-react'
+import { Bot, Cloud, Folder, Laptop, Workflow, type LucideIcon } from 'lucide-react'
 import type { AgentMeta, GitHostHome } from '../../src/index.js'
 import { BranchButton } from './StartFromMenu.js'
 import { GitHostOff } from './GitHosts.js'
@@ -6,6 +6,7 @@ import { MACHINE_ICONS } from './MachineMark.js'
 import { RunOnWords } from './RunOnMenu.js'
 import { RowAboveBox, RowOff, rowButtonClass } from './ui/row-item.js'
 import { RepoChip } from './SessionRepos.js'
+import { useAgentName } from './AgentsPage.js'
 
 /** The icon of where a session runs, as "Run on" has a machine's; the two that are no machine have their own. */
 function runsOnIcon(target: AgentMeta['target'], kind: AgentMeta['remoteKind']): LucideIcon {
@@ -33,6 +34,7 @@ export function SessionRow({
   gitHost,
   gitAccount,
   repos,
+  agent,
 }: {
   /** Where the session runs, in a few words: this machine, another machine by its name, the cloud. */
   runsOn: string
@@ -51,7 +53,10 @@ export function SessionRow({
   gitAccount?: string | undefined
   /** The repos a session with no project has, as its record says. */
   repos?: readonly { name: string; from: string }[] | undefined
+  /** The agent the session is on, by its id, as its record says; the default agent when absent. */
+  agent?: string | undefined
 }) {
+  const agentName = useAgentName(agent)
   const started = startedFrom && (worksOn && worksOn !== startedFrom ? `Started from ${startedFrom}, works on ${worksOn}` : `Started from ${startedFrom}`)
   return (
     <RowAboveBox end={<GitHostOff home={gitHost} account={gitAccount} />}>
@@ -76,6 +81,14 @@ export function SessionRow({
         </>
       )}
       {repos?.map(repo => <RepoChip key={repo.name} repo={repo} tip={`A copy of ${repo.from}, in this session's folder`} />)}
+      {agentName !== undefined && (
+        <RowOff tip={`On the agent ${agentName}: its skills and accounts`}>
+          <button type="button" disabled className={rowButtonClass}>
+            <Bot className="h-3.5 w-3.5 shrink-0" aria-hidden />
+            <span className="truncate">{agentName}</span>
+          </button>
+        </RowOff>
+      )}
     </RowAboveBox>
   )
 }

@@ -1,7 +1,8 @@
 import { realpath } from 'node:fs/promises'
 import { createRequire } from 'node:module'
 import { delimiter, dirname } from 'node:path'
-import { SKILLS_ENV } from '@openagt/agent-data'
+import { SKILL_CATALOGUE_ENV, SKILLS_ENV } from '@openagt/agent-data'
+import { SKILL_NAMES } from '../project-skills/catalogue.js'
 
 /**
  * The skills every run gets by default: what an agent needs in any project to work at all, ask
@@ -13,21 +14,26 @@ import { SKILLS_ENV } from '@openagt/agent-data'
 export const DEFAULT_SKILLS: readonly string[] = ['@openagt/skill-ask', '@openagt/skill-github']
 
 /**
- * Put the default skills in `env` under {@link SKILLS_ENV}: their packages' directories, resolved
+ * Put the default skills in `env` under {@link SKILLS_ENV}, and every skill of the catalogue, which
+ * an agent picks from, under {@link SKILL_CATALOGUE_ENV}: their packages' directories, resolved
  * from this package's own install, joined by the path delimiter. One that is not installed is
  * left out.
  */
 export async function handDownSkills(env: NodeJS.ProcessEnv): Promise<void> {
   const require = createRequire(import.meta.url)
-  const dirs: string[] = []
-  for (const name of DEFAULT_SKILLS) {
-    let manifest: string
-    try {
-      manifest = require.resolve(`${name}/package.json`)
-    } catch {
-      continue
+  const dirsOf = async (names: readonly string[]): Promise<string> => {
+    const dirs: string[] = []
+    for (const name of names) {
+      let manifest: string
+      try {
+        manifest = require.resolve(`${name}/package.json`)
+      } catch {
+        continue
+      }
+      dirs.push(await realpath(dirname(manifest)))
     }
-    dirs.push(await realpath(dirname(manifest)))
+    return dirs.join(delimiter)
   }
-  env[SKILLS_ENV] = dirs.join(delimiter)
+  env[SKILLS_ENV] = await dirsOf(DEFAULT_SKILLS)
+  env[SKILL_CATALOGUE_ENV] = await dirsOf(SKILL_NAMES.map(name => `@openagt/skill-${name}`))
 }

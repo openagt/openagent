@@ -122,22 +122,25 @@ test('a Start hands the line the branch to start from, and refuses a word that i
   }
 })
 
-test('a Start hands the run the session\'s account at the git host through the environment, never on the line, and refuses what is no login before the line runs', async () => {
-  const ACCOUNT = `start: 'printf "%s" "\${OPENAGENT_GIT_ACCOUNT-unset}" > started.txt; echo "{\\"id\\":\\"run-9\\"}"'\n`
+test('a Start hands the run the session\'s account at the git host and its agent through the environment, never on the line, and refuses what is no login or no agent id before the line runs', async () => {
+  const ACCOUNT = `start: 'printf "%s %s" "\${OPENAGENT_GIT_ACCOUNT-unset}" "\${OPENAGENT_AGENT-unset}" > started.txt; echo "{\\"id\\":\\"run-9\\"}"'\n`
   const home = await project(ACCOUNT)
   const env = { XDG_CONFIG_HOME: join(home, 'cfg') }
   await mkdir(env.XDG_CONFIG_HOME, { recursive: true })
   const runtime = createProjectRuntime({ cwd: home, env })
   try {
-    assert.deepEqual(await runtime.onStart('Fix it', { account: 'octo-agent' }), { ok: true, agentId: 'run-9' })
-    assert.equal(await readFile(join(home, 'started.txt'), 'utf8'), 'octo-agent')
+    assert.deepEqual(await runtime.onStart('Fix it', { account: 'octo-agent', agent: 'reviewer' }), { ok: true, agentId: 'run-9' })
+    assert.equal(await readFile(join(home, 'started.txt'), 'utf8'), 'octo-agent reviewer')
     assert.deepEqual(await runtime.onStart('Fix it'), { ok: true, agentId: 'run-9' })
-    assert.equal(await readFile(join(home, 'started.txt'), 'utf8'), 'unset', 'no pick: the run goes as the computer\'s account')
+    assert.equal(await readFile(join(home, 'started.txt'), 'utf8'), 'unset unset', 'no pick: the run goes as the computer\'s account, on the default agent')
     await rm(join(home, 'started.txt'))
     const notALogin = { ok: false, error: 'An account is named by its login.' }
     assert.deepEqual(await runtime.onStart('Fix it', { account: 'octo agent' }), notALogin)
     assert.deepEqual(await runtime.onStart('Fix it', { account: '' }), notALogin)
     assert.deepEqual(await runtime.onStart('Fix it', { account: 42 as unknown as string }), notALogin)
+    const notAnAgent = { ok: false, error: 'An agent is named by its id.' }
+    assert.deepEqual(await runtime.onStart('Fix it', { agent: 'Not An Id' }), notAnAgent)
+    assert.deepEqual(await runtime.onStart('Fix it', { agent: '../x' }), notAnAgent)
     await assert.rejects(readFile(join(home, 'started.txt'), 'utf8'), 'the line did not run')
   } finally {
     await runtime.dispose()

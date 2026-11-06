@@ -175,6 +175,8 @@ export interface RunOptions {
   for?: string
   /** The repos a session with no project has as context (`run --repos`), each copied into its folder; kept on its mark. */
   repos?: SessionRepo[]
+  /** The agent the run is on, by its id (`OPENAGENT_AGENT`), kept on its mark; the default agent when absent. */
+  agent?: string
   /** How an ended parent is continued, in its own process; absent, only a working parent is told. */
   resume?: ParentDeps['resume']
   host?: string

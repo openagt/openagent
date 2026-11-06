@@ -178,9 +178,20 @@ already made, and lists it in its pull request; for anything else it proposes an
   runs when a project is removed with its files. Picked over a dashboard deleting
   `.agent-runner` itself.
 
-## Accounts
+## Agents and accounts
+- A run is on an agent: a name, a set of skills and a set of accounts, one file in the person's
+  folder (`agent-data`), named in the run's environment by whoever started it, the default
+  agent when nobody did. Its skills are linked into the checkout as the default ones are, picked
+  by name among every skill the package that started OpenAgent carries (handed down beside the
+  defaults); its accounts are the run's. The record keeps the agent, and a resumed run goes on
+  with it as it stands then. Picked over the runner reading an agent's file by a path of its
+  own, or the dashboard resolving the skills per run: a scheduler's runs name no agent and are
+  on the default one, so its edits reach them with nothing restarted.
 - The account a run works as at the git host is the session's: the one whoever started the run
-  picked for it, in the run's environment, else the computer's. The record keeps its login, and
-  a resumed run goes on as it, never as whatever the computer's pick is by then. Picked over
-  accounts named per project, which were kept on one computer for a repository that is the same
-  everywhere: whose account a session uses is a pick made for that session.
+  picked for it, in the run's environment, else its agent's, else the computer's. The record
+  keeps its login, and a resumed run goes on as it, never as whatever the computer's pick is by
+  then. An account this computer cannot use stops the run before it starts, naming it. On
+  Claude and Codex an agent's accounts apply where this computer has them, and none of them here
+  is every account of the computer's: an agent made on another computer runs here without them.
+  Picked over accounts named per project, which were kept on one computer for a repository
+  that is the same everywhere: whose account a session uses is a pick made for that session.

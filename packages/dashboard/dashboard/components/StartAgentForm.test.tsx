@@ -34,6 +34,14 @@ vi.mock('../rpc/logins.js', () => logins)
 const onMachineStartCheck = vi.hoisted(() => vi.fn())
 const onMachineLogins = vi.hoisted(() => vi.fn())
 vi.mock('../rpc/machines.js', () => ({ onMachineStartCheck, onMachineLogins }))
+// The agents as read, and the menu as a press that picks the second one.
+const agentsList = vi.hoisted(() => ({ agents: [{ id: 'default', name: 'Default', skills: ['ask', 'github'], accounts: {} }, { id: 'reviewer', name: 'Reviewer', skills: ['ask'], accounts: { github: 'octo-agent' } }] }))
+vi.mock('./AgentsPage.js', () => ({ useAgents: () => ({ view: agentsList, reload: async () => {} }) }))
+vi.mock('./AgentMenu.js', () => ({
+  AgentMenu: ({ picked, onPick }: { picked: string | undefined; onPick: (id: string) => void }) => (
+    <button type="button" onClick={() => onPick('reviewer')}>{`agent:${picked ?? ''}`}</button>
+  ),
+}))
 // The computer's account, and a press that picks another for this session.
 const runsAccount = vi.hoisted(() => ({ login: undefined as string | undefined }))
 vi.mock('./GitHosts.js', () => ({
@@ -350,6 +358,31 @@ describe('StartAgentForm (#1774)', () => {
     await waitFor(() => expect(onAgentStarted).toHaveBeenCalled())
     expect(onAgentStarted.mock.lastCall![4]).toEqual({ branch: 'feature-x', gitAccount: 'octo', publish: 'pr', prBase: 'feature-x', driver: 'codex', model: 'gpt-5', effort: 'high' })
     expect((start.mock.lastCall![2] as { account?: string }).account).toBe('octo')
+    runsAccount.login = undefined
+  })
+
+  test('the agent picked goes with the Start and to the run\'s page, and its GitHub account is the session\'s until another is picked; the default agent sends none', async () => {
+    onCommands.mockResolvedValue({ ...WITH_BRANCHES, prBase: true })
+    runsAccount.login = 'octo'
+    start.mockResolvedValue({ agentId: 'r1' })
+    const onAgentStarted = vi.fn()
+    render(<StartAgentForm {...props} projectName="gemstack" onAgentStarted={onAgentStarted} />)
+    expect((await screen.findByText('agent:default')).textContent).toBe('agent:default')
+    fireEvent.click(screen.getByText('submit-typed'))
+    await waitFor(() => expect(onAgentStarted).toHaveBeenCalled())
+    expect((start.mock.lastCall![2] as { agent?: string; account?: string }).agent).toBeUndefined()
+    expect((start.mock.lastCall![2] as { account?: string }).account).toBe('octo')
+    // The reviewer picked: the pick is saved, and with it the session goes as its account.
+    fireEvent.click(screen.getByText('agent:default'))
+    expect(updatePreferences).toHaveBeenCalledWith({ agent: 'reviewer' })
+    prefs.current = { ...prefs.current, agent: 'reviewer' }
+    cleanup()
+    render(<StartAgentForm {...props} projectName="gemstack" onAgentStarted={onAgentStarted} />)
+    await screen.findByText('agent:reviewer')
+    fireEvent.click(screen.getByText('submit-typed'))
+    await waitFor(() => expect(start).toHaveBeenCalledTimes(2))
+    expect((start.mock.lastCall![2] as { agent?: string; account?: string })).toMatchObject({ agent: 'reviewer', account: 'octo-agent' })
+    expect((onAgentStarted.mock.lastCall![4] as { agent?: string; gitAccount?: string })).toMatchObject({ agent: 'reviewer', gitAccount: 'octo-agent' })
     runsAccount.login = undefined
   })
 

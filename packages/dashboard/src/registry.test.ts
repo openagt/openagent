@@ -265,10 +265,13 @@ test('sanitizePreferences reads only the current spellings', async () => {
   const stored = (preferences: Record<string, unknown>) =>
     readPreferences(memFs({ [FILE]: JSON.stringify({ projects: [], preferences }) }), ENV)
   assert.deepEqual(await stored({ handoff: 'local', vanilla: true, transparent: true, browser: true, target: 'actions', autoPm: true }), {})
-  assert.deepEqual(await stored({ agent: 'codex' }), {})
   assert.deepEqual(await stored({ driver: 'claude' }), {})
-  // The key that replaced it still reads, beside the ignored one.
-  assert.deepEqual(await stored({ driver: 'claude-code', agent: 'gpt-9000' }), { driver: 'claude-code' })
+  assert.deepEqual(await stored({ driver: 'claude-code' }), { driver: 'claude-code' })
+  // The agent a run is on, by its id; the default agent is the absent entry, and a word that is no id is dropped.
+  assert.deepEqual(await stored({ agent: 'reviewer' }), { agent: 'reviewer' })
+  assert.deepEqual(await stored({ agent: ' social-media ' }), { agent: 'social-media' })
+  assert.deepEqual(await stored({ agent: 'default' }), {})
+  for (const off of ['', 'Not An Id', '../etc', 42, null]) assert.deepEqual(await stored({ agent: off }), {}, String(off))
   assert.deepEqual(await stored({ publish: 'merge' }), { publish: 'merge' })
   assert.deepEqual(await stored({ publish: 'nothing' }), { publish: 'nothing' })
   assert.deepEqual(await stored({ publish: 'push' }), {}, 'a word the launcher\'s menu does not list is dropped')

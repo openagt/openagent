@@ -1,4 +1,4 @@
-export { BRANCHES_DIR, DATA_BRANCH, OPENAGENT_DIR, SKILLS_ENV } from './names.js'
+export { AGENT_ENV, BRANCHES_DIR, DATA_BRANCH, OPENAGENT_DIR, SKILLS_ENV, SKILL_CATALOGUE_ENV } from './names.js'
 export { installProject, nodeInstallFs, FIRST_COMMIT_MESSAGE, type InstallResult, type InstallDeps, type InstallFs } from './install.js'
 export { gitignorePath, openagentGitignore } from './openagent-gitignore.js'
 export {
@@ -42,6 +42,7 @@ export {
   type BranchReader,
 } from './file-branch.js'
 export { SESSIONS_DIR, sessionsHome, sessionFolder, sessionsHomeOf, runsRootOf, listSessionFolders } from './sessions.js'
+export { AGENTS_DIR, DEFAULT_AGENT, DEFAULT_AGENT_SKILLS, agentIdOf, agentsDir, builtInDefault, isAgentId, isAgentName, listAgents, readAgent, removeAgent, writeAgent, type AgentAccounts, type AgentRecord } from './agents.js'
 export { addressOfRemote, spellingOfRemote, repositoryAddress, repositorySpelling, projectNameOf } from './repository-address.js'
 export {
   PROJECTS_DIR,
