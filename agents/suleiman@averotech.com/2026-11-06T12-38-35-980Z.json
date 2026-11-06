@@ -7,7 +7,6 @@
   "title": "Ticket sync and GitHub import",
   "driver": "claude-code",
   "model": "claude-opus-5-5",
-  "branch": "agent-2026-11-06T12-38-35-980Z",
   "cost": 0.2813216,
   "contextTokens": 35384,
   "caller": {
