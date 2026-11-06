@@ -7,7 +7,6 @@
   "title": "Queue shared-server Tailscale person plan",
   "driver": "claude-code",
   "model": "claude-opus-5-5",
-  "branch": "agent-2026-11-06T12-40-15-072Z",
   "cost": 0.1412582,
   "contextTokens": 27617,
   "caller": {
