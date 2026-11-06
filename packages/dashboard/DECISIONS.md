@@ -261,7 +261,7 @@ already made, and lists it in its pull request; for anything else it proposes an
   it, the shape `npx skills add` writes too. Nothing else: no `package.json`, no install,
   so a Node project, a PHP project and an empty folder get exactly the same. Picked over
   installing the skills' packages into the project.
-- The scheduler is one more skill in the list, ticked by default. Ticking it also writes its
+- The scheduler is one more skill in the list. Ticking it also writes its
   two lines into the project's hooks file, which is this machine's and outside git, so it
   starts with the dashboard; unticking it takes them out and stops it. A project that got the
   text another way, `npx skills add` say, gets no lines: while the scheduler is off, the
@@ -270,6 +270,13 @@ already made, and lists it in its pull request; for anything else it proposes an
 - A project is also added by its repository's address, for a computer that does not have
   its folder, as a server: OpenAgent clones it into `~/projects/<its name>` and says where
   it went. Picked over asking for the folder at every add, one more thing to read.
+- Adding a project asks one thing: whether the person trusts the repository, with why it
+  matters. The agents' records stay on this machine; the project's Agent data page shares
+  them. Picked over a list of what the add does and a choice of where the records go in the
+  same dialog: too much to read, and a decision to make, before one press.
+- The Skills page ticks nothing in a project that has no skills yet: the person picks what
+  the project needs. Picked over ticking every group but the ones that need a setup of
+  their own, a long list picked for them.
 - When a skill in a project has a newer version, the project's page names it ("The
   orchestration skill has a newer version") with an "Update" button; the texts are written only on that press,
   and sent on as a save is. Picked over a count of skills that "have a newer text", which

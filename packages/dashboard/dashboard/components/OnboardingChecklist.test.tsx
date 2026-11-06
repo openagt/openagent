@@ -3,7 +3,6 @@ import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/re
 import { forgetRemembered } from '../lib/use-async.js'
 import type { DashboardData } from '../../src/index.js'
 import { configureFirst } from '../test-utils.js'
-import { checked } from '../test-controls.js'
 
 // The checklist reads its state over several RPC stubs and hooks; stub them all so nothing reaches
 // for a daemon and each row's "done" comes from a fixture instead.
@@ -192,11 +191,10 @@ describe('the tickets import lands on the session it starts (#1169)', () => {
     // The dialog, on the folder the dashboard runs in: no system dialog, and nothing added yet.
     expect(screen.getByRole('dialog', { name: 'Add project' })).toBeTruthy()
     expect(screen.getByText('/Users/dev/here')).toBeTruthy()
-    expect(checked(screen.getByRole('radio', { name: /Keep them on this machine/ }))).toBe(true)
     expect(sendPickProjectDirectory).not.toHaveBeenCalled()
     expect(sendAddProject).not.toHaveBeenCalled()
     fireEvent.click(screen.getByRole('button', { name: 'I trust it, add it' }))
-    await waitFor(() => expect(sendAddProject).toHaveBeenCalledWith('/Users/dev/here', false))
+    await waitFor(() => expect(sendAddProject).toHaveBeenCalledWith('/Users/dev/here'))
   })
 
   test('before anything is pressed, the first step says what adding a project does to the folder; once a project is added it says only what a project is', async () => {

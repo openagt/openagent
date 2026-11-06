@@ -151,11 +151,9 @@ export async function updateSkills(projectId: string, skills: ProjectSkills, run
   return run(() => sendProjectSkills(projectId, newer), 'Could not send the skills.')
 }
 
-/** What is ticked when the page opens: what the project has; in a project with nothing yet, the default picks. */
+/** What is ticked when the page opens: what the project has, so nothing in a project with none yet. */
 function firstTicks(skills: ProjectSkills): Set<string> {
-  const has = all(skills).filter(held)
-  if (has.length > 0) return new Set(has.map(skill => skill.name))
-  return new Set(skills.groups.filter(group => group.ticked).flatMap(group => group.skills.map(skill => skill.name)))
+  return new Set(all(skills).filter(held).map(skill => skill.name))
 }
 
 interface Saved {

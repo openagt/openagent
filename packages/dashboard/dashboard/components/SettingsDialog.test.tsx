@@ -35,7 +35,7 @@ const projectAccounts = vi.hoisted(() => ({ onProjectAccounts: vi.fn(async () =>
 vi.mock('../rpc/logins.js', () => projectAccounts)
 // A project's skills, as a page of the Project group; each project answers with its own one skill.
 const projectSkills = vi.hoisted(() => ({
-  onProjectSkills: vi.fn(async (id: string) => ({ groups: [{ title: 'Tickets and queue', ticked: true, skills: [{ name: `skill-of-${id}`, description: 'What it does.', standing: 'current', waiting: false }] }], uncommitted: [], git: true, local: false })),
+  onProjectSkills: vi.fn(async (id: string) => ({ groups: [{ title: 'Tickets and queue', skills: [{ name: `skill-of-${id}`, description: 'What it does.', standing: 'current', waiting: false }] }], uncommitted: [], git: true, local: false })),
   sendChangeSkills: vi.fn(),
   sendProjectSkills: vi.fn(),
 }))

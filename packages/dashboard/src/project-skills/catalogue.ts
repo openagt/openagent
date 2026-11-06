@@ -3,9 +3,8 @@ import { createRequire } from 'node:module'
 import { dirname, join } from 'node:path'
 
 /**
- * The skills a project can pick on the dashboard's Skills page (#2023), in its groups, with what
- * is ticked the first time. Every group is ticked except the skills that are useless until something of
- * their own is set up. The skills every run gets by default are not here (the branches skill,
+ * The skills a project can pick on the dashboard's Skills page (#2023), in its groups. None is
+ * ticked the first time: the person picks what the project needs. The skills every run gets by default are not here (the branches skill,
  * and the ones its command names): they come with every run, with nothing written in the
  * project.
  *
@@ -16,17 +15,15 @@ import { dirname, join } from 'node:path'
 export interface SkillGroup {
   title: string
   skills: readonly string[]
-  /** Whether the group's skills are ticked in a project that has none of them yet. */
-  ticked: boolean
 }
 
 export const GROUPS: readonly SkillGroup[] = [
-  { title: 'Tickets and queue', ticked: true, skills: ['plan', 'plan-tickets', 'triage', 'update-tickets', 'work-queue', 'suggest-new-tickets', 'suggest-tickets-to-work-on'] },
-  { title: 'Reviews and research', ticked: true, skills: ['maintainability', 'maintenance', 'readability', 'security-audit', 'ux', 'research', 'market-research', 'suggest-new-features'] },
-  { title: 'Pull requests', ticked: true, skills: ['reply'] },
-  { title: 'After a merge', ticked: true, skills: ['post-merge-cleanup'] },
-  { title: 'Automations', ticked: true, skills: ['scheduler'] },
-  { title: 'Needs its own setup', ticked: false, skills: ['browser', 'discord'] },
+  { title: 'Tickets and queue', skills: ['plan', 'plan-tickets', 'triage', 'update-tickets', 'work-queue', 'suggest-new-tickets', 'suggest-tickets-to-work-on'] },
+  { title: 'Pull requests', skills: ['reply', 'post-merge-cleanup'] },
+  { title: 'Automations', skills: ['scheduler'] },
+  { title: 'Code reviews', skills: ['maintainability', 'maintenance', 'readability', 'security-audit', 'ux'] },
+  { title: 'Research', skills: ['research', 'market-research', 'suggest-new-features'] },
+  { title: 'Needs its own setup', skills: ['browser', 'discord'] },
 ]
 
 /** Every skill of the list, in its order. */
@@ -35,8 +32,8 @@ export const SKILL_NAMES: readonly string[] = GROUPS.flatMap(group => group.skil
 /**
  * The scheduler's skill: written, it also gets the two lines that start the scheduler while the
  * dashboard is open, in the project's hooks file, which is this machine's and outside git; deleted,
- * it takes them out. Ticked by default: every automation starts switched off, so the scheduler
- * starts no agent until a person says so.
+ * it takes them out. Every automation starts switched off, so the scheduler starts no agent until
+ * a person says so.
  */
 export const SCHEDULER = 'scheduler'
 

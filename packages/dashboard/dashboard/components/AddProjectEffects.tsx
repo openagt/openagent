@@ -1,5 +1,5 @@
-// What adding a project does to the folder, said before the person adds it: on the first page,
-// beside the button, and again in the dialog that asks. One text for both, so they cannot differ.
+// What adding a project does to the folder, said before the person adds it: on the onboarding
+// checklist, beside its button. The dialog that asks says only the trust question.
 export function AddProjectEffects() {
   const code = 'rounded bg-muted px-1'
   return (
