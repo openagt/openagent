@@ -7,7 +7,7 @@ import { createRequire } from 'node:module'
 import { basename, delimiter, dirname, join } from 'node:path'
 import { SKILLS_ENV } from '@openagt/agent-data'
 import { BUILT_IN_PACKAGES, COMPUTER_PACKAGES, OWN_PACKAGE_NAMES, PICKED_PACKAGES, builtInBinDirs, builtInPackages, builtInPackagesOf, computerPackages, lookupProvided, providedCommand, runCleanups } from './built-in.js'
-import { readComputerModules, readProjectModules } from './project-modules.js'
+import { readComputerModules, readProjectModules, readProjectPages } from './project-modules.js'
 import { providedGitHost } from './store/git-host.js'
 
 test('every package OpenAgent brings is installed with it, and their commands have a directory each', async () => {
@@ -26,6 +26,20 @@ test('a project with nothing installed gets its runs, its branches and a reposit
     assert.equal((await providedCommand(root, 'repository'))?.package, '@openagt/skill-github', 'the built-in package that can create its repository')
     assert.deepEqual((await builtInPackagesOf(root)).map(pkg => pkg.name), [...BUILT_IN_PACKAGES], 'none of the packages a project picks, none of the computer\'s')
     assert.deepEqual((await readProjectModules(root)).map(module => module.package), ['@openagt/dashboard-changes', '@openagt/dashboard-files', '@openagt/skill-logs'])
+  } finally {
+    await rm(root, { recursive: true, force: true })
+  }
+})
+
+test('every project keeps its runs\' records through the logs package, and shows its Logs page only once it picked the logs skill', async () => {
+  const root = await realpath(await mkdtemp(join(tmpdir(), 'openagent-built-in-logs-')))
+  const pages = async (): Promise<string[]> => (await readProjectPages(root)).map(module => module.package)
+  try {
+    assert.deepEqual(await pages(), ['@openagt/dashboard-changes', '@openagt/dashboard-files'])
+    assert.ok((await readProjectModules(root)).some(module => module.package === '@openagt/skill-logs'), 'its commands still run there')
+    await skillText(root, '.agents/skills', 'logs')
+    assert.deepEqual(await pages(), ['@openagt/dashboard-changes', '@openagt/dashboard-files', '@openagt/skill-logs'])
+    assert.equal((await providedCommand(root, 'runs'))?.package, '@openagt/skill-logs')
   } finally {
     await rm(root, { recursive: true, force: true })
   }

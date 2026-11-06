@@ -64,13 +64,12 @@ test('the dashboard\'s modules are every registered project\'s, one per package,
     await addProject(a, '2026-09-19T00:00:00.000Z')
     await addProject(b, '2026-09-19T00:00:01.000Z')
 
-    // The computer's module (the Devices and Machines sections) comes first, and is no project's. Then the built-in modules (Changes, Files, the logs package's), which are every project's, from the first; then the projects' own.
+    // The computer's module (the Devices and Machines sections) comes first, and is no project's. Then the built-in modules (Changes, Files), which are every project's, from the first; the logs package's page is no project's that did not pick its skill; then the projects' own.
     assert.deepEqual(await listed(), [
       { package: '@openagt/dashboard-devices', url: '/_computer-modules/%40openagt%2Fdashboard-devices/dashboard.js', projects: [], computer: true },
       { package: '@openagt/skill-account-rotation', url: '/_computer-modules/%40openagt%2Fskill-account-rotation/dashboard.js', projects: [], computer: true },
       { package: '@openagt/dashboard-changes', url: `/_modules/${projectId(a)}/%40openagt%2Fdashboard-changes/dashboard.js`, projects: [projectId(a), projectId(b)] },
       { package: '@openagt/dashboard-files', url: `/_modules/${projectId(a)}/%40openagt%2Fdashboard-files/dashboard.js`, projects: [projectId(a), projectId(b)] },
-      { package: '@openagt/skill-logs', url: `/_modules/${projectId(a)}/%40openagt%2Fskill-logs/dashboard.js`, projects: [projectId(a), projectId(b)] },
       { package: 'logs', url: `/_modules/${projectId(a)}/logs/w.js`, projects: [projectId(a), projectId(b)] },
       { package: 'queue', url: `/_modules/${projectId(b)}/queue/w.js`, projects: [projectId(b)] },
     ])

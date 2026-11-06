@@ -1,7 +1,7 @@
 import { realpath, stat } from 'node:fs/promises'
 import { dirname, join, normalize, sep } from 'node:path'
 import { packageBins, runPackageCommand, type PackageCommandResult, type ProjectPackage } from '@openagt/agent-data'
-import { broughtToProjects, builtInPackagesOf, computerPackages, ownPackages } from './built-in.js'
+import { broughtToProjects, builtInPackagesOf, computerPackages, ownPackages, showsPages } from './built-in.js'
 
 /**
  * A package that adds UI (#1774): its browser part, named by its `exports["./dashboard"]`, and
@@ -164,6 +164,17 @@ export async function readProjectModules(root: string): Promise<ProjectModule[]>
     if (module) modules.push(module)
   }
   return modules.sort((a, b) => a.package.localeCompare(b.package))
+}
+
+/**
+ * The modules whose pages and cards the project shows: {@link readProjectModules}, less the logs
+ * package's where the project did not pick its skill (`built-in.ts`). The others' commands still
+ * run there.
+ */
+export async function readProjectPages(root: string): Promise<ProjectModule[]> {
+  const modules: ProjectModule[] = []
+  for (const module of await readProjectModules(root)) if (await showsPages(root, module.package)) modules.push(module)
+  return modules
 }
 
 /** The one module of this project that `name` names, or undefined. */

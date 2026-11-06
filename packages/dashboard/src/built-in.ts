@@ -18,6 +18,14 @@ import { declaring, SKILLS_DIRS, SKILLS_ENV, lookupProvidedCommand, packageBins,
 export const BUILT_IN_PACKAGES: readonly string[] = ['@openagt/dashboard-changes', '@openagt/dashboard-files', '@openagt/skill-branches', '@openagt/skill-github', '@openagt/skill-logs', '@openagt/agent-runner']
 
 /**
+ * Of the packages every project has, the ones whose pages and cards a project shows only once it
+ * picked their skill, by the rule of {@link PICKED_PACKAGES}. The logs package keeps every run's
+ * records, which the Log lists, so every project has it and its commands; its Logs page is a pick
+ * like any other skill's.
+ */
+export const PICKED_PAGES: readonly string[] = ['@openagt/skill-logs']
+
+/**
  * The packages that are this computer's and no project's: the door to it, the servers it
  * installed OpenAgent on, and the accounts its runs use. Their pages show and their commands run with no project added, and
  * what one keeps is in the person's home folder.
@@ -82,10 +90,22 @@ export async function builtInPackagesOf(root: string): Promise<ProjectPackage[]>
   const packages: ProjectPackage[] = []
   for (const pkg of await (resolved ??= resolveOwn())) {
     if (pkg.of === 'the computer') continue
-    if (pkg.of === 'a pick' && !(await defaultSkills()).has(pkg.name) && !(pkg.skill !== undefined && (await holdsSkill(root, pkg.skill)))) continue
+    if (pkg.of === 'a pick' && !(await picked(root, pkg))) continue
     packages.push(pkg)
   }
   return packages
+}
+
+/** Whether the project at `root` shows the pages and cards of `name`, one of the packages it has: always, but for one of {@link PICKED_PAGES} it did not pick. */
+export async function showsPages(root: string, name: string): Promise<boolean> {
+  if (!PICKED_PAGES.includes(name)) return true
+  const pkg = (await (resolved ??= resolveOwn())).find(own => own.name === name)
+  return pkg !== undefined && (await picked(root, pkg))
+}
+
+/** Whether the project at `root` has the skill of `pkg`: every run gets it by default, or the project holds its text. */
+async function picked(root: string, pkg: OwnPackage): Promise<boolean> {
+  return (await defaultSkills()).has(pkg.name) || (pkg.skill !== undefined && (await holdsSkill(root, pkg.skill)))
 }
 
 /** The default skills as read last, by the value they were read off. */

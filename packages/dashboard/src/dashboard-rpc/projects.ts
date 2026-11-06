@@ -15,7 +15,7 @@ import { isDriverName } from '../driver-names.js'
 import { loginsWiring } from './logins.js'
 import { canPickDirectory, pickDirectory, type PickDirectoryResult } from '../pick-directory.js'
 import { projectGitHost } from '../store/git-host.js'
-import { readProjectModules } from '../project-modules.js'
+import { readProjectPages } from '../project-modules.js'
 import type { ProjectSummary } from '../dashboard/projects.js'
 import type { OwnProject } from '../dashboard/elsewhere.js'
 import type { AddProjectResult, OnboardingSuggestion, RemoveProjectResult, StartedInResult } from '../dashboard/types.js'
@@ -52,7 +52,7 @@ export async function onOwnProjects(): Promise<OwnProject[]> {
         repositoryAddress(project.path),
         repositorySpelling(project.path),
         readSharing(project.path).catch(() => false),
-        readProjectModules(project.path).catch(() => []),
+        readProjectPages(project.path).catch(() => []),
       ])
       return {
         id: project.id,

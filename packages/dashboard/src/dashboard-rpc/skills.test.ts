@@ -63,7 +63,7 @@ test('a project\'s skills: none yet; written, they are in the folder and wait to
   try {
     const empty = (await onProjectSkills(id))!
     assert.deepEqual({ startBranch: empty.startBranch, uncommitted: empty.uncommitted, git: empty.git, remote: empty.remote, local: empty.local }, { startBranch: 'main', uncommitted: [], git: true, remote: undefined, local: false })
-    assert.deepEqual(empty.groups.map(group => [group.title, group.skills.length]), [['Tickets and queue', 7], ['Pull requests', 2], ['Automations', 1], ['Code reviews', 5], ['Research', 3], ['Needs its own setup', 2]])
+    assert.deepEqual(empty.groups.map(group => [group.title, group.skills.length]), [['Tickets and queue', 9], ['Agents', 3], ['Pull requests', 2], ['Automations', 1], ['Code reviews', 5], ['Research', 3], ['Needs its own setup', 2]])
     assert.ok(flat(empty).every(skill => skill.standing === 'absent' && !skill.waiting && skill.description.length > 10))
 
     const written = await sendChangeSkills(id, { write: ['browser', 'plan'] })
@@ -165,7 +165,7 @@ test('the scheduler\'s skill written switches the scheduler on for the project a
     for (let waited = 0; alive(running.pid!) && waited < 5000; waited += 50) await new Promise(resolve => setTimeout(resolve, 50))
     assert.equal(alive(running.pid!), false, 'its process ended')
 
-    for (const change of [{ write: ['../../etc'] }, { remove: ['logs'] }, { write: ['tickets'] }, { write: 'tickets' }, null, 7, ['tickets']] as never[]) {
+    for (const change of [{ write: ['../../etc'] }, { remove: ['branches'] }, { write: ['ask'] }, { write: 'tickets' }, null, 7, ['tickets']] as never[]) {
       assert.deepEqual(await sendChangeSkills(id, change), { ok: false, error: 'not a list of skills' }, JSON.stringify(change))
     }
     assert.equal(held((await onProjectSkills(id))!), 0, 'nothing of a refused change was written')
