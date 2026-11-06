@@ -190,7 +190,9 @@ already made, and lists it in its pull request; for anything else it proposes an
 - The account a run works as at the git host is the session's: the one whoever started the run
   picked for it, in the run's environment, else its agent's, else the computer's. The record
   keeps its login, and a resumed run goes on as it, never as whatever the computer's pick is by
-  then. An account this computer cannot use stops the run before it starts, naming it. On
+  then. An account this computer cannot use stops the run before it starts, naming it. An
+  agent's account applies only where the project has a git host: in a session with no project,
+  or a project on another host, the run goes as no account rather than refused. On
   Claude and Codex an agent's accounts apply where this computer has them, and none of them here
   is every account of the computer's: an agent made on another computer runs here without them.
   Picked over accounts named per project, which were kept on one computer for a repository

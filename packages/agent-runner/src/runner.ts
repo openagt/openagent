@@ -9,7 +9,7 @@ import { findRun } from '@openagt/skill-logs'
 import { readPersonal } from './config.js'
 import { runAgent } from './agent.js'
 import { basicSkills } from './basic-skills.js'
-import { gitHostEnv } from './git-host.js'
+import { gitHostCommand, gitHostEnv } from './git-host.js'
 import { namedAtStart, resumeRun, runCommand, runIdFrom, type RunOutcome } from './run.js'
 import { runnerMark } from './records.js'
 import { askName } from './title.js'
@@ -249,7 +249,7 @@ export async function runProject(repo: string, opts: { prompt: string; id?: stri
   // (`gitHostEnv` runs the git host's command) and is nothing the small model naming the run needs.
   const marked = opts.id !== undefined && opts.mark !== true
   const naming = namedAtStart({ prompt: opts.prompt, marked, ...(opts.parent !== undefined ? { parent: opts.parent } : {}) }) ? askName(driverFor(driver, undefined, setup, accounts), opts.prompt) : undefined
-  const as = await (deps.workAs ?? workAs)(repo, opts.gitAccount ?? on.accounts.github)
+  const as = await (deps.workAs ?? workAs)(repo, opts.gitAccount ?? (await agentLoginFor(repo, on)))
   return runCommand(repo, {
     prompt: opts.prompt,
     ...(naming !== undefined ? { naming } : {}),
@@ -327,6 +327,17 @@ export const ACCOUNT_ENV = 'OPENAGENT_ACCOUNT'
  * dashboard's other settings for a run are, so no project's `start` line has to carry it.
  */
 export const GIT_ACCOUNT_ENV = 'OPENAGENT_GIT_ACCOUNT'
+
+/**
+ * The login a run on `agent` works as at the git host, where the project has one: an agent's
+ * account at GitHub means nothing in a session with no project, or in a project on another host,
+ * and such a run goes as no account rather than refused. (A pick made for the session is another
+ * matter: it was made among the host's accounts, and is asked for as it is.)
+ */
+export async function agentLoginFor(repo: string, agent: Pick<AgentRecord, 'accounts'>): Promise<string | undefined> {
+  if (agent.accounts.github === undefined) return undefined
+  return (await gitHostCommand(repo)) ? agent.accounts.github : undefined
+}
 
 /** The accounts of each coding agent a run may use, by name, when its agent names its own few. */
 export interface AgentAccounts {
