@@ -9,9 +9,9 @@ vi.mock('../rpc/logins.js', () => logins)
 const servers = vi.hoisted(() => ({ onServerLogins: vi.fn(), sendUseLoginsOn: vi.fn(), sendAllowLogins: vi.fn(), sendSettleLogin: vi.fn() }))
 vi.mock('../rpc/server-logins.js', () => servers)
 
-const { AccountsSettings } = await import('./Accounts.js')
+const { AccountsList } = await import('./Accounts.js')
 
-// Settings › Accounts with a server of the person's that uses this computer's logins: how they stand
+// The Permissions page with a server of the person's that uses this computer's logins: how they stand
 // there, a row for each login, and the person's answer for what the server has that they left. On the
 // server itself: whose computer's logins it uses. The accounts themselves are the skill's card, tested there.
 
@@ -49,7 +49,7 @@ describe('a server that uses this computer\'s logins', () => {
   test('one not told yet is offered them, with one press', async () => {
     views([own])
     server({ on: false })
-    render(<AccountsSettings />)
+    render(<AccountsList />)
     const bar = await there()
     expect(bar.textContent).toContain(`Use your logins on ${LABEL}?`)
     expect(bar.textContent).toContain('its page follows your settings')
@@ -65,7 +65,7 @@ describe('a server that uses this computer\'s logins', () => {
         { kind: 'claude', source: 'Dani', name: 'Dani', state: 'there' },
       ],
     })
-    render(<AccountsSettings />)
+    render(<AccountsList />)
     const block = await there()
     expect(block.textContent).toContain(`${LABEL} uses your logins: 1 of 2 there`)
     expect(block.textContent).toContain('Suleiman needs your yes once')
@@ -84,7 +84,7 @@ describe('a server that uses this computer\'s logins', () => {
         { kind: 'git', host: 'github.com', source: 'octo-agent', name: 'octo-agent', state: 'failed', error: reason },
       ],
     })
-    render(<AccountsSettings />)
+    render(<AccountsList />)
     const block = await there()
     expect(block.textContent).toContain(`${LABEL} uses your logins: 1 of 2 there`)
     expect(block.textContent).toContain('octo-agent did not get there: its row says why. Tried again every minute.')
@@ -99,7 +99,7 @@ describe('a server that uses this computer\'s logins', () => {
       computer: 'Studio',
       servers: ['Box', 'Studio PC'].map(label => ({ machineId: `https://${label}`, label, on: true, reachable: true, left: [], logins: [{ kind: 'claude', source: 'own', name: 'Suleiman', state: 'there' }, { kind: 'claude', source: 'Dani', name: 'Dani', state: 'there' }] })),
     })
-    render(<AccountsSettings />)
+    render(<AccountsList />)
     for (const label of ['Box', 'Studio PC']) {
       const block = await screen.findByRole('region', { name: `Your logins on ${label}` })
       expect(within(block).getByRole('listitem', { name: `Suleiman on ${label}` }).textContent).toBe('SuleimanConnected')
@@ -110,7 +110,7 @@ describe('a server that uses this computer\'s logins', () => {
   test('a server with all of them there says so quietly, and its rows say each one', async () => {
     views([own])
     server({ logins: [{ kind: 'claude', source: 'own', name: 'Suleiman', state: 'there' }] })
-    render(<AccountsSettings />)
+    render(<AccountsList />)
     const block = await there()
     expect(within(block).getByText('Uses your logins: all 1 there')).toBeTruthy()
     expect(within(block).getByRole('listitem', { name: `Suleiman on ${LABEL}` }).textContent).toBe('SuleimanConnected')
@@ -118,7 +118,7 @@ describe('a server that uses this computer\'s logins', () => {
 
   test('with no server of the person\'s there is no card of them', async () => {
     views([own])
-    render(<AccountsSettings />)
+    render(<AccountsList />)
     await waitFor(() => expect(servers.onServerLogins).toHaveBeenCalled())
     expect(screen.queryByText('On your servers')).toBeNull()
   })
@@ -127,7 +127,7 @@ describe('a server that uses this computer\'s logins', () => {
     views([own, dani])
     const rows = (suleiman: string) => [{ kind: 'claude', source: 'own', name: 'Suleiman', state: suleiman, anew: true }, { kind: 'claude', source: 'Dani', name: 'Dani', state: 'there' }]
     server({ logins: rows('allow') })
-    render(<AccountsSettings />)
+    render(<AccountsList />)
     const block = await there()
     // The press: the server says it is under way, then answers nothing more for a while.
     servers.onServerLogins.mockResolvedValueOnce({ computer: 'Studio', servers: [{ machineId: ID, label: LABEL, on: true, reachable: true, logins: rows('allow'), left: [], allowing: { name: 'Suleiman' } }] })
@@ -142,7 +142,7 @@ describe('a server that uses this computer\'s logins', () => {
   test('a login made for the server with a press is taken off there from its row, which spins until the server answers, and waits for the press again; one that goes as it is has no Take off', async () => {
     views([own, dani])
     server({ logins: [{ kind: 'claude', source: 'own', name: 'Suleiman', state: 'there', anew: true }, { kind: 'claude', source: 'Dani', name: 'Dani', state: 'there' }] })
-    render(<AccountsSettings />)
+    render(<AccountsList />)
     const block = await there()
     const takeOff = within(within(block).getByRole('listitem', { name: `Suleiman on ${LABEL}` })).getByRole('button', { name: 'Take off' }) as HTMLButtonElement
     expect(within(within(block).getByRole('listitem', { name: `Dani on ${LABEL}` })).queryByRole('button')).toBeNull()
@@ -163,7 +163,7 @@ describe('a server that uses this computer\'s logins', () => {
     views([own])
     const has = (anew: boolean) => [{ kind: 'claude', source: 'own', name: 'Suleiman', state: 'there', ...(anew ? { anew } : {}) }]
     servers.onServerLogins.mockResolvedValue({ computer: 'Studio', servers: [{ machineId: 'https://Box', label: 'Box', on: true, reachable: true, left: [], logins: has(true) }, { machineId: 'https://Studio PC', label: 'Studio PC', on: true, reachable: true, left: [], logins: has(false) }] })
-    render(<AccountsSettings />)
+    render(<AccountsList />)
     expect(within(await screen.findByRole('listitem', { name: 'Suleiman on Box' })).getByRole('button', { name: 'Take off' })).toBeTruthy()
     expect(within(screen.getByRole('listitem', { name: 'Suleiman on Studio PC' })).queryByRole('button')).toBeNull()
   })
@@ -171,7 +171,7 @@ describe('a server that uses this computer\'s logins', () => {
   test('Allow on a login\'s row makes the login there, and spins while the browser\'s yes is awaited', async () => {
     views([own])
     server({ logins: [{ kind: 'claude', source: 'own', name: 'Suleiman', state: 'allow' }] })
-    render(<AccountsSettings />)
+    render(<AccountsList />)
     const row = await screen.findByRole('listitem', { name: `Suleiman on ${LABEL}` })
     server({ logins: [{ kind: 'claude', source: 'own', name: 'Suleiman', state: 'allow' }], allowing: { name: 'Suleiman' } })
     fireEvent.click(within(row).getByRole('button', { name: 'Allow' }))
@@ -186,7 +186,7 @@ describe('a server that uses this computer\'s logins', () => {
   test('the login being made says where to say yes, with its link to copy for a private window', async () => {
     views([own])
     server({ logins: [{ kind: 'claude', source: 'own', name: 'Suleiman', state: 'allow' }], allowing: { name: 'Suleiman', url: 'https://claude.com/cai/oauth/authorize?x' } })
-    render(<AccountsSettings />)
+    render(<AccountsList />)
     const block = await there()
     expect(block.textContent).toContain(`Making Suleiman's login for ${LABEL}`)
     expect(within(block).getByRole('button', { name: 'Copy link' })).toBeTruthy()
@@ -195,7 +195,7 @@ describe('a server that uses this computer\'s logins', () => {
   test('another account logged in here: the server keeps the one left meanwhile, and the person picks', async () => {
     views([{ ...own, name: 'Work' }])
     server({ logins: [{ kind: 'claude', source: 'own', name: 'Work', state: 'switched', was: 'Suleiman' }] })
-    render(<AccountsSettings />)
+    render(<AccountsList />)
     const row = await screen.findByRole('listitem', { name: `Work on ${LABEL}` })
     expect(row.textContent).toContain('Still runs on Suleiman, the account you left on Studio.')
     fireEvent.click(within(row).getByRole('button', { name: 'Keep Suleiman' }))
@@ -208,7 +208,7 @@ describe('a server that uses this computer\'s logins', () => {
   test('one this computer no longer has is kept there, or taken off, on the person\'s word', async () => {
     views([own])
     server({ logins: [{ kind: 'claude', source: 'own', name: 'Suleiman', state: 'there' }], left: [{ kind: 'claude', source: 'Dani', name: 'Dani' }] })
-    render(<AccountsSettings />)
+    render(<AccountsList />)
     const row = await screen.findByRole('listitem', { name: `Dani on ${LABEL}` })
     expect(row.textContent).toContain('No longer on Studio')
     fireEvent.click(within(row).getByRole('button', { name: 'Take it off' }))
@@ -222,7 +222,7 @@ describe('a server that uses this computer\'s logins', () => {
 describe('on the server itself', () => {
   test('it says whose computer\'s logins it uses', async () => {
     views([{ id: 'Suleiman', name: 'Suleiman', own: false, from: 'Suleimans-MacBook-Pro', comesBack: true, windows: [] }], [], { from: 'Suleimans-MacBook-Pro' })
-    render(<AccountsSettings />)
+    render(<AccountsList />)
     expect(await screen.findByText('Your logins and settings from Suleimans-MacBook-Pro')).toBeTruthy()
   })
 })

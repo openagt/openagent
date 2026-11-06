@@ -8,7 +8,7 @@ import { useSidebar } from './ui/sidebar.js'
 
 /**
  * The button that opens the sidebar over the page. The shell lays it over the top left corner of
- * the page: a page with its own top row (an agent's, the "New agent" page) leaves that corner free,
+ * the page: a page with its own top row (an agent's, the "New agent session" page) leaves that corner free,
  * and every other page gets a {@link PhoneBar} to hold it.
  */
 export function MenuButton({ inBar = false }: { inBar?: boolean }) {

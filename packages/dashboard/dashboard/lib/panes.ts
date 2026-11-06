@@ -1,7 +1,7 @@
 import { useSyncExternalStore } from 'react'
 
 // The panes beside the chat (Changes, Files, the Browser, …), for each page that has them: an
-// agent's page, or the "New agent" page. Which panes are open there, in the order they were
+// agent's page, or the "New agent session" page. Which panes are open there, in the order they were
 // opened, and how the room is shared: between the chat and the panes, and between the open panes.
 // A page is found as it was left on coming back, and a page that was never sized starts with the
 // sizes last set on any page. Remembered in this browser: it is how one person left this screen,
@@ -32,7 +32,7 @@ interface Kept {
 const listeners = new Set<() => void>()
 const NONE: readonly string[] = []
 
-/** The name the panes of a page are kept under: the agent's, or the "New agent" page's own. */
+/** The name the panes of a page are kept under: the agent's, or the "New agent session" page's own. */
 export function panesPage(projectId: string, agentId: string | null | undefined): string {
   return agentId ? `${projectId}/${agentId}` : 'new'
 }

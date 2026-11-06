@@ -18,16 +18,24 @@ export const OVERVIEW_SEGMENT = 'overview'
 export const SETTINGS_SEGMENT = 'settings'
 
 /**
+ * The id the sessions with no project go by where a project's id would be, and their address:
+ * `/session` is the "New agent session" page with no project, `/session/<agentId>` one of those
+ * sessions. A project's id always ends in `-<hash>`, so no project has it, and no project's
+ * address or module's page takes the word.
+ */
+export const SESSIONS_ID = 'session'
+
+/**
  * Whether a segment can name a page a module adds (#1774): a lowercase letter, then lowercase
  * letters and digits, and not a word the dashboard keeps. Whichever module claims the segment gets
  * it, and the shell says "no such page" when none does, or when the picked project has no package
  * that adds it.
  */
 export function isPageSegment(segment: string): boolean {
-  return /^[a-z][a-z0-9]*$/.test(segment) && segment !== OVERVIEW_SEGMENT && segment !== SETTINGS_SEGMENT
+  return /^[a-z][a-z0-9]*$/.test(segment) && segment !== OVERVIEW_SEGMENT && segment !== SETTINGS_SEGMENT && segment !== SESSIONS_ID
 }
 
-/** Each registered project's address, and the project an address or an id names. */
+/** Each registered project's address, and the project an address or an id names; the sessions with no project's too ({@link SESSIONS_ID}). */
 export interface ProjectAddresses {
   /** The project's address: its name, or its id where the name cannot be one. An unknown id is its own address. */
   addressOf(projectId: string): string
@@ -43,9 +51,9 @@ export interface ProjectAddresses {
  * no address in use.
  */
 export function projectAddresses(projectIds: readonly string[], pageWords: readonly string[]): ProjectAddresses {
-  const taken = new Set<string>([OVERVIEW_SEGMENT, SETTINGS_SEGMENT, ...pageWords, ...projectIds])
-  const byId = new Map<string, string>()
-  const byAddress = new Map<string, string>()
+  const taken = new Set<string>([OVERVIEW_SEGMENT, SETTINGS_SEGMENT, SESSIONS_ID, ...pageWords, ...projectIds])
+  const byId = new Map<string, string>([[SESSIONS_ID, SESSIONS_ID]])
+  const byAddress = new Map<string, string>([[SESSIONS_ID, SESSIONS_ID]])
   for (const id of projectIds) {
     const name = nameOf(id)
     const address = name && !taken.has(name) ? name : id

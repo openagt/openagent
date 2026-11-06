@@ -55,6 +55,15 @@ export function useRoute(projects: ProjectAddresses): {
   return { route, go }
 }
 
+/** The dashboard's own page of every account OpenAgent works with, at `/permissions`. */
+export const PERMISSIONS_PAGE = 'permissions'
+
+/** Go to the Permissions page, from a part of the page that has no route to hand. */
+export function openPermissions(): void {
+  window.history.pushState(null, '', `/${PERMISSIONS_PAGE}`)
+  notify()
+}
+
 /** Open Settings at `entry` over the page you are on, from a part of the page that has no route to hand; with `item`, at that page inside it. */
 export function openSettings(entry: string, item?: string): void {
   const url = new URL(window.location.href)

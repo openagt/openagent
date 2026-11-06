@@ -3,7 +3,7 @@ import { test } from 'node:test'
 import { mkdir, mkdtemp, realpath, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { nodeGitRunner, writeSharing, DATA_BRANCH } from '@openagt/agent-data'
+import { nodeGitRunner, personalFolder, sessionsHome, writeSharing, DATA_BRANCH, SESSIONS_DIR } from '@openagt/agent-data'
 import { runCli, USAGE, DEFAULT_LIMIT } from './cli.js'
 import { RUNS_DIR } from './names.js'
 
@@ -267,5 +267,27 @@ test('delete removes a run as one commit; patch sets the branch and the pull req
     assert.equal((await run(a!, ['delete', '../x'])).code, 2)
   } finally {
     await cleanup()
+  }
+})
+
+test('in the sessions home and in a session folder, the commands read the sessions with no project', async () => {
+  const home = sessionsHome()
+  const records = join(personalFolder(), SESSIONS_DIR, RUNS_DIR, 'a@a')
+  await mkdir(join(home, R1), { recursive: true })
+  await mkdir(records, { recursive: true })
+  await writeFile(join(records, `${R1}.json`), JSON.stringify(card(R1, { intent: 'read the news' })))
+  await writeFile(join(records, `${R1}.jsonl`), '{"kind":"said","text":"Reading."}\n')
+  try {
+    for (const cwd of [home, join(home, R1)]) {
+      const out: string[] = []
+      assert.equal(await runCli([], { cwd, stdout: line => out.push(line), stderr: () => {} }, git), 0)
+      assert.deepEqual(JSON.parse(out[0]!).map((run: { id: string; intent: string }) => [run.id, run.intent]), [[R1, 'read the news']])
+      const shown: string[] = []
+      assert.equal(await runCli(['show', R1], { cwd, stdout: line => shown.push(line), stderr: () => {} }, git), 0)
+      assert.equal(JSON.parse(shown[0]!).intent, 'read the news')
+    }
+  } finally {
+    await rm(home, RETRIED_RM)
+    await rm(join(personalFolder(), SESSIONS_DIR), RETRIED_RM)
   }
 })

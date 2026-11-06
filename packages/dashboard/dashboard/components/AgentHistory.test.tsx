@@ -115,7 +115,7 @@ describe('AgentHistory (#785)', () => {
       </SidebarProvider>,
     )
     const rows = [...container.querySelectorAll('button')]
-    const home = rows.find(row => row.textContent?.trim() === 'New agent')
+    const home = rows.find(row => row.textContent?.trim() === 'New agent session')
     const starting = rows.find(row => row.hasAttribute('data-stand-in'))
     expect(starting?.className).toContain('bg-accent')
     expect(home?.className).not.toContain('bg-accent')
@@ -372,8 +372,8 @@ describe('AgentHistory rows', () => {
   // the New launcher rather than vanishing.
   test('with no project and no recents it still renders New and an empty hint', () => {
     renderRail(<AgentHistory projectId={null} agents={[]} recentAgents={[]} selectedAgentId={null} onSelect={() => {}} />)
-    expect(screen.getByText('New agent')).toBeTruthy()
-    expect(screen.getByText('No agents yet.')).toBeTruthy()
+    expect(screen.getByText('New agent session')).toBeTruthy()
+    expect(screen.getByText('No sessions yet.')).toBeTruthy()
   })
 
   // On the Overview the rail pools every project's sessions; a row names its project and jumps in.
@@ -599,7 +599,24 @@ describe('subagents on the rail', () => {
 const proj = (id: string, name: string): ProjectSummary => ({ id, path: `/${id}`, name, activated: true, gitHost: false })
 
 describe('AgentHistory New button (#new-button)', () => {
-  test('with one project, New starts a session in it', () => {
+  test('with no project, New starts a session with no project', () => {
+    let started: string | null = null
+    renderRail(
+      <AgentHistory
+        projectId={null}
+        agents={[]}
+        recentAgents={[]}
+        projects={[]}
+        onNewAgentInProject={id => (started = id)}
+        selectedAgentId={null}
+        onSelect={() => {}}
+      />,
+    )
+    fireEvent.click(screen.getByText('New agent session'))
+    expect(started).toBe('session')
+  })
+
+  test('with one project and none selected, New picks it or no project', async () => {
     let started: string | null = null
     renderRail(
       <AgentHistory
@@ -612,8 +629,10 @@ describe('AgentHistory New button (#new-button)', () => {
         onSelect={() => {}}
       />,
     )
-    fireEvent.click(screen.getByText('New agent'))
-    expect(started).toBe('p1')
+    await openMenu(screen.getByRole('button', { name: 'New agent session' }))
+    expect(screen.getAllByRole('menuitem').map(item => item.textContent)).toEqual(['alpha', 'No project'])
+    fireEvent.click(screen.getByRole('menuitem', { name: 'No project' }))
+    expect(started).toBe('session')
   })
 
   test('inside a project, New starts another session in that project', () => {
@@ -628,7 +647,7 @@ describe('AgentHistory New button (#new-button)', () => {
         onSelect={() => {}}
       />,
     )
-    fireEvent.click(screen.getByText('New agent'))
+    fireEvent.click(screen.getByText('New agent session'))
     expect(started).toBe('p9')
   })
 
@@ -645,7 +664,7 @@ describe('AgentHistory New button (#new-button)', () => {
       />,
     )
     // The trigger opens a menu rather than starting immediately (aria-haspopup marks it).
-    expect(screen.getByLabelText('New agent').getAttribute('aria-haspopup')).toBeTruthy()
+    expect(screen.getByLabelText('New agent session').getAttribute('aria-haspopup')).toBeTruthy()
   })
 })
 
@@ -806,17 +825,17 @@ describe('the project select (#1513)', () => {
     renderRail(rail(null))
     // The Overview's rows name their project the same way.
     expect(screen.getByText('clients/shop')).toBeTruthy()
-    await openMenu(screen.getByRole('button', { name: 'New agent' }))
+    await openMenu(screen.getByRole('button', { name: 'New agent session' }))
     expect(screen.getByRole('menuitem', { name: 'work/shop' })).toBeTruthy()
   })
 
-  test('while the project the address names is not read, neither "All projects" nor "No agents yet." shows', () => {
+  test('while the project the address names is not read, neither "All projects" nor "No sessions yet." shows', () => {
     renderRail(<AgentHistory projectId={null} scopePending listLoaded={false} agents={[]} recentAgents={[]} selectedAgentId={null} onSelect={() => {}} />)
     expect(screen.getByRole('button', { name: 'Project: loading' })).toBeTruthy()
     expect(screen.queryByText('All projects')).toBeNull()
-    expect(screen.queryByText('No agents yet.')).toBeNull()
+    expect(screen.queryByText('No sessions yet.')).toBeNull()
     // The heading stays, so the column does not jump once the list lands.
-    expect(screen.getByText('Recent agents')).toBeTruthy()
+    expect(screen.getByText('Log')).toBeTruthy()
   })
 
   test('picking a project, or all of them, reports the pick and marks the current one', async () => {
@@ -870,7 +889,7 @@ describe('the project select (#1513)', () => {
 
   test('with all projects showing, New asks which project even on a project\'s own page', () => {
     renderRail(<AgentHistory projectId="p2" agents={[]} recentAgents={[]} selectedAgentId={null} onSelect={() => {}} projects={[stranded, idle]} />)
-    expect(screen.getByLabelText('New agent').getAttribute('aria-haspopup')).toBeTruthy()
+    expect(screen.getByLabelText('New agent session').getAttribute('aria-haspopup')).toBeTruthy()
   })
 })
 
@@ -942,6 +961,26 @@ describe('AgentHistory reads a log ahead', () => {
   })
 })
 
+// The accounts the agents work with: a page of the dashboard's own, under the modules' pages.
+test('Permissions is a row of the rail, after the modules\u2019 pages, and opens its page; it is the active one there', () => {
+  const onPage = vi.fn()
+  const { rerender } = render(
+    <SidebarProvider>
+      <AgentHistory projectId={null} agents={[]} selectedAgentId={null} onSelect={vi.fn()} pages={[{ segment: 'logs', label: 'Logs' }]} onPage={onPage} />
+    </SidebarProvider>,
+  )
+  const labels = screen.getAllByRole('button').map(button => button.textContent)
+  expect(labels.indexOf('Permissions')).toBe(labels.indexOf('Logs') + 1)
+  fireEvent.click(screen.getByRole('button', { name: 'Permissions' }))
+  expect(onPage).toHaveBeenCalledWith('permissions')
+  rerender(
+    <SidebarProvider>
+      <AgentHistory projectId={null} agents={[]} selectedAgentId={null} onSelect={vi.fn()} pages={[{ segment: 'logs', label: 'Logs' }]} onPage={onPage} activePage="permissions" />
+    </SidebarProvider>,
+  )
+  expect(screen.getByRole('button', { name: 'Permissions' }).getAttribute('aria-current')).toBe('page')
+})
+
 // A phone has no width for the rail beside the page (#1824): it is a sheet over the page.
 describe('AgentHistory on a phone', () => {
   test('the rail is closed until the menu\'s button is pressed, and going somewhere from it closes it', async () => {
@@ -978,7 +1017,7 @@ describe('AgentHistory on a phone', () => {
     expect(screen.getByRole('button', { name: 'Logs' })).toBeTruthy()
   })
 
-  test('the list is in the order picked beside "Recent agents": by creation unless picked otherwise, whatever order it was given in', async () => {
+  test('the list is in the order picked beside "Log": by creation unless picked otherwise, whatever order it was given in', async () => {
     const agents = [
       // The server lists a run that holds a checkout first: an old one just answered.
       agent({ id: 'old', status: 'waiting', startedAt: '2026-10-18T10:00:00Z', updatedAt: '2026-10-20T09:00:00Z', title: 'Old question' }),

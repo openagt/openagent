@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, test, vi } from 'vitest'
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { createElement } from 'react'
-import { phoneScreen } from './test-utils.js'
+import { openMenu, phoneScreen } from './test-utils.js'
 import { useModuleHost, type ModuleCardProps, type ModuleDefinition, type ModulePageProps } from './module/index.js'
 import { forgetRemembered } from './lib/use-async.js'
 import { skillsSaved } from './lib/skills-saved.js'
@@ -201,7 +201,7 @@ describe('module cards on the Overview (#1818)', () => {
 
   test('a page with no chat scrolls as a page, on any screen, the sidebar fixed beside it; a project\'s own page is pinned, its columns scrolling by themselves', async () => {
     answerOverview([])
-    // A project's own page: its "New agent" page, whose message box stays at the bottom.
+    // A project's own page: its "New agent session" page, whose message box stays at the bottom.
     window.history.replaceState(null, '', `/${PROJECT.name}`)
     // What shows of the page: a phone's keyboard took the rest.
     const shown = Object.assign(new EventTarget(), { height: 500, offsetTop: 0 })
@@ -370,7 +370,6 @@ describe('the project select (#1513)', () => {
   }
 
   async function pick(from: string, to: RegExp): Promise<void> {
-    const { openMenu } = await import('./test-utils.js')
     await openMenu(await screen.findByRole('button', { name: `Project: ${from}` }))
     fireEvent.click(screen.getByRole('menuitem', { name: to }))
   }
@@ -436,13 +435,13 @@ describe('the project select (#1513)', () => {
     await waitFor(() => expect(document.querySelector('button[aria-label="Session actions"][title="site ran"]')).toBeTruthy())
   })
 
-  test('New agent starts in the picked project; picking another on the launcher moves to its launcher, and all keeps the page', async () => {
+  test('New agent session starts in the picked project; picking another on the launcher moves to its launcher, and all keeps the page', async () => {
     answerTwo()
     window.history.replaceState(null, '', '/site/overview')
     render(<App />)
     // The name is a project's once the projects are read.
     await screen.findByRole('button', { name: 'Project: site' })
-    fireEvent.click(await screen.findByText('New agent'))
+    fireEvent.click(await screen.findByText('New agent session'))
     expect(url()).toBe('/site')
     expect(await screen.findByText('the launcher of site')).toBeTruthy()
     await pick('site', /app/)
@@ -565,7 +564,6 @@ describe('the project select (#1513)', () => {
     await screen.findByRole('button', { name: 'Logs' })
     const reads = () => calls.filter(call => call.name === 'onModules').length
     const before = reads()
-    const { openMenu } = await import('./test-utils.js')
     await openMenu(screen.getByRole('button', { name: 'Project: All projects' }))
     fireEvent.click(screen.getByRole('menuitem', { name: /Add project/ }))
     fireEvent.click(await screen.findByRole('button', { name: 'I trust it, add it' }))
@@ -618,7 +616,7 @@ describe('the project select (#1513)', () => {
     }
   })
 
-  test('a link to a project says neither "All projects" nor "No agents yet." while the projects are read, and reads no agents under its address', async () => {
+  test('a link to a project says neither "All projects" nor "No sessions yet." while the projects are read, and reads no agents under its address', async () => {
     for (const link of ['/app', '/app/overview']) {
       // Each link is a page opened afresh: nothing read by the last one.
       forgetRemembered()
@@ -633,7 +631,7 @@ describe('the project select (#1513)', () => {
       await new Promise(resolve => setTimeout(resolve, 100))
       expect(screen.getByRole('button', { name: 'Project: loading' })).toBeTruthy()
       expect(screen.queryByText('All projects')).toBeNull()
-      expect(screen.queryByText('No agents yet.')).toBeNull()
+      expect(screen.queryByText('No sessions yet.')).toBeNull()
       // The address's word is no project's id, and every project's agents are not what the page shows.
       expect(calls.filter(call => call.name === 'onAgents' || call.name === 'onRecentAgents')).toEqual([])
       for (const answer of held) answer([PROJECT, OTHER])
@@ -706,9 +704,11 @@ describe('the shell on a phone', () => {
 
       // The launcher has a top row of its own, which keeps its corner free for the button.
       fireEvent.click(screen.getByRole('button', { name: 'Open the menu' }))
-      fireEvent.click(await screen.findByRole('button', { name: 'New agent' }))
+      // New is a menu of the project and "No project".
+      await openMenu(await screen.findByRole('button', { name: 'New agent session' }))
+      fireEvent.click(await screen.findByRole('menuitem', { name: 'app' }))
       expect(await screen.findByText('the launcher of app')).toBeTruthy()
-      await waitFor(() => expect(screen.queryByRole('button', { name: 'New agent' })).toBeNull())
+      await waitFor(() => expect(screen.queryByRole('button', { name: 'New agent session' })).toBeNull())
       expect(screen.getByRole('button', { name: 'Open the menu' })).toBeTruthy()
       expect(screen.queryByText('Overview')).toBeNull()
       expect(screen.queryByText('Settings')).toBeNull()

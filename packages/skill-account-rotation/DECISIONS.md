@@ -23,7 +23,7 @@ already made, and lists it in its pull request; for anything else it proposes an
 - The person's own login can be logged out from the card and Settings, their terminal with it.
   Picked over never offering it: an account on the list cannot be added a second time, so there
   has to be a way to take any row off.
-- The card says the same numbers as Settings › Accounts, and the skill reads them itself, with the
+- The card says the same numbers as the Permissions page, and the skill reads them itself, with the
   `usage` command. Picked over the card showing only what the last run saved, which on one account
   is nothing, and over OpenAgent handing the card its own reading, which a skill's own page does
   not have. The servers' rows stay in Settings for now.

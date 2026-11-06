@@ -447,7 +447,7 @@ export interface ModuleHost {
   machinePerson(machineId: string): Promise<ModuleMachinePerson>
   /**
    * A saved server of the person's uses this computer's logins from now on: each account this
-   * computer is logged in to gets a login of the server's own there, as Settings › Accounts says.
+   * computer is logged in to gets a login of the server's own there, as the Permissions page says.
    */
   useLoginsOn(machineId: string): Promise<MachineAdded>
   /**
@@ -457,7 +457,7 @@ export interface ModuleHost {
   machineAccounts(machineId: string, agent: ModuleAccountsAgent): Promise<ModuleMachineAccount[] | null>
   /**
    * Take one of them off the machine, by its id there, as its own page does: its runs no longer use
-   * it. One this computer handed the machine, this computer offers it again (Settings › Accounts).
+   * it. One this computer handed the machine, this computer offers it again (the Permissions page).
    */
   removeMachineAccount(machineId: string, agent: ModuleAccountsAgent, id: string): Promise<MachineAdded>
   /** Take one of that person's devices out at the machine, by its id there; answers as {@link machinePerson} does, after. */

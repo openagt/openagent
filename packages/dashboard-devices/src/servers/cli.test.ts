@@ -244,12 +244,21 @@ test('github says whose login a copy would be, or why there is none', async () =
     assert.equal((await run(home.env, ['github', 'more'])).code, 2)
     const good = pretendServer()
     assert.deepEqual((await run(home.env, ['github'], { exec: good.exec })).out, { account: 'octocat' })
-    // Asked of github.com, whatever other host this computer's gh is set to.
+    // Asked of github.com as OpenAgent's account, whatever other host this computer's gh is set to.
     assert.deepEqual(good.asked, ['api --hostname github.com user --jq .login'])
     // Nobody's is an answer too: a page asks to know what it can offer.
-    const nobody = await run(home.env, ['github'], { exec: pretendServer(undefined, () => ({ code: 1, out: '', err: 'To get started with GitHub CLI, please run:  gh auth login' })).exec })
-    assert.equal(nobody.code, 0)
-    assert.deepEqual(nobody.out, { problem: 'There is no GitHub login to copy from this computer. `gh` is not logged in to github.com here, or GitHub does not answer: see `gh auth status`.' })
+    const refused = await run(home.env, ['github'], { exec: pretendServer(undefined, () => ({ code: 1, out: '', err: 'HTTP 401: Bad credentials' })).exec })
+    assert.equal(refused.code, 0)
+    assert.deepEqual(refused.out, { problem: "There is no GitHub login to copy from this computer. GitHub does not take octocat's login, or does not answer: add it again in OpenAgent's Permissions." })
+  } finally {
+    await home.remove()
+  }
+  // OpenAgent with no GitHub account: the person's own gh is not asked.
+  const bare = await testHome({ github: false })
+  try {
+    const none = pretendServer()
+    assert.deepEqual((await run(bare.env, ['github'], { exec: none.exec })).out, { problem: "There is no GitHub login to copy from this computer: add a GitHub account in OpenAgent's Permissions." })
+    assert.deepEqual(none.asked, [])
   } finally {
     await home.remove()
   }

@@ -10,7 +10,7 @@ import type { Devices } from './use-devices.js'
 // The page of a server this person is in at, set up from somewhere else: their own from another
 // computer of theirs, or someone else's who invited them. On a server several people use, this
 // person has an OpenAgent of their own there, as a user of their own, and their runs there use
-// their own logins, which Settings › Accounts gives it. This page lists the person's devices,
+// their own logins, which the Permissions page gives it. This page lists the person's devices,
 // through the server's door with this computer's key there. What only the server's owner does
 // from the computer that set it up (the install, an update, an invite) is not here.
 //
@@ -61,7 +61,7 @@ export function JoinedPage({ d, item, onBack }: { d: Devices; item: JoinedItem; 
             <p className="text-sm">{owner ? 'Yours, set up from another computer.' : person.person !== undefined ? `You are in as ${person.person}.` : 'You are in.'}</p>
             <p className="text-xs text-muted-foreground">
               {owner
-                ? 'Its install, its updates and its invites are done from the computer that set it up, its logins in Settings › Accounts. From here, your phone and this computer reach it, and runs go there.'
+                ? 'Its install, its updates and its invites are done from the computer that set it up, its logins on the Permissions page. From here, your phone and this computer reach it, and runs go there.'
                 : 'Your runs there are yours: they use your own GitHub and Claude logins.'}
             </p>
             {here?.lineRefused && <p className="text-xs text-warning">{`${item.name} no longer lets this computer in for its line: turn on "From anywhere, through ${item.name}" under This computer to set it up again.`}</p>}

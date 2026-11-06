@@ -4,6 +4,7 @@ import { mkdir, mkdtemp, readFile, realpath, rm, writeFile } from 'node:fs/promi
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { parseBranchesAhead, parseBranchStates, parseCheckouts, providedBranches } from './branches.js'
+import { sessionsHome } from '@openagt/agent-data'
 
 // The branches contract (#1774): a project's package declares `"openagent": { "branches": "<command>" }`
 // and OpenAgent reads its checkouts, a branch's state, and moves them, by running that command.
@@ -171,5 +172,22 @@ test("a provider whose package exports its command's function is read in this pr
     assert.deepEqual(await calls(root, 'inbranches'), [`in list @${root}`, `in show agent-run-1 @${root}`, `in ahead --from abc123 agent-run-1 @${root}`], 'every answer came from the function, in the project; the command never ran')
   } finally {
     await rm(root, { recursive: true, force: true })
+  }
+})
+
+test("in the sessions home the checkouts are the sessions' folders, with no branch; a folder goes only with its work dropped", async () => {
+  const home = sessionsHome()
+  const id = '2026-11-06T10-00-00-000Z'
+  await mkdir(join(home, id), { recursive: true })
+  await mkdir(join(home, '.openagent'), { recursive: true })
+  try {
+    const source = await providedBranches()(home)
+    assert.deepEqual(await source?.list(), [{ id, path: join(home, id) }])
+    assert.deepEqual(await source?.push('main'), { ok: false, error: 'a session with no project has no branch' })
+    assert.deepEqual(await source?.remove(id), { ok: false, error: "a session's folder holds its work: delete the session to remove it" })
+    assert.deepEqual(await source?.remove(id, { discard: true }), { ok: true })
+    assert.deepEqual(await source?.list(), [])
+  } finally {
+    await rm(home, { recursive: true, force: true })
   }
 })

@@ -24,7 +24,7 @@ import { asRecorded, onMachine } from './dashboard-rpc/reads.js'
 import { tailAgentEvents } from './dashboard-rpc/events-tail.js'
 import { addProject, isHostName, listMachines, listProjects, machineNamed, nameMachine, noteProjects, noteSeen, noteServer, projectId, readPreferences, removeProject, type MachineRecord, type Preferences } from './registry.js'
 import { writeHookLines } from './built-in.js'
-import { fileBranchRepo, installProject, projectKey, projectNameOf, repositoryAddress, writeSharing } from '@openagt/agent-data'
+import { fileBranchRepo, installProject, projectKey, projectNameOf, repositoryAddress, sessionsHome, writeSharing } from '@openagt/agent-data'
 import { publishedBranch } from '@openagt/agent-data/names'
 import { branchesOnOrigin } from './dashboard/start-branch.js'
 import { removeProjectFiles } from './remove-files.js'
@@ -34,7 +34,8 @@ import { isBranchName } from './branch-name.js'
 import { hasRemote } from './has-remote.js'
 import { projectGitHost } from './store/git-host.js'
 import { providedDataChanged } from './store/provided.js'
-import { projectAddresses } from './project-address.js'
+import { projectAddresses, SESSIONS_ID } from './project-address.js'
+import { readySessionsHome } from './sessions-home.js'
 import { callerAtPage } from './dashboard/person.js'
 import { machineKind, machineName } from './reached-by-line.js'
 
@@ -417,6 +418,7 @@ export function createProjectRuntime({ cwd, env, clone = cloneProject, logins = 
   // resolves to the daemon's own `cwd` without a lookup.
   const resolveProject = async (id: string | undefined): Promise<string | undefined> => {
     if (!id || id === homeId) return cwd
+    if (id === SESSIONS_ID) return sessionsHome(env)
     const records = await listProjects(undefined, env).catch(() => [])
     return records.find(record => record.id === id)?.path
   }
@@ -449,7 +451,13 @@ export function createProjectRuntime({ cwd, env, clone = cloneProject, logins = 
   // the brake), no process to stop at shutdown. A project without the line cannot start a run here.
   const onStart = async (prompt: string, options: StartAgentOptions = {}, targetProjectId?: string): Promise<StartAgentResult> => {
     if (isElsewhereId(targetProjectId)) return startElsewhere(prompt, options, targetProjectId)
-    const projectCwd = await resolveProject(targetProjectId)
+    // A session with no project: in a folder of its own in the sessions home, on this computer,
+    // with no branch, and nothing committed or published.
+    const noProject = targetProjectId === SESSIONS_ID
+    if (noProject && (options.machine !== undefined || options.base !== undefined || options.prBase !== undefined || options.publish !== undefined)) {
+      return { ok: false, error: 'A session with no project runs on this computer, with no branch and nothing to publish.' }
+    }
+    const projectCwd = noProject ? await readySessionsHome(sessionsHome(env)) : await resolveProject(targetProjectId)
     if (!projectCwd) return { ok: false, error: `unknown project: ${targetProjectId}` }
     // Run on a saved machine (#1067): forward the start to its daemon, which runs the hook of its
     // own copy of this project, and relay the run's events back. The project is named by its
@@ -475,7 +483,7 @@ export function createProjectRuntime({ cwd, env, clone = cloneProject, logins = 
     // with none saved the run commits and pushes nothing, and with one the project is not offered
     // it goes as far as the project does with no pull request: its branch pushed, or its work
     // committed where there is no remote.
-    const publish = publishLevelOf(publishPickIn(options.publish, (await projectGitHost(projectCwd).catch(() => undefined)) !== undefined, await hasRemote(projectCwd)))
+    const publish = noProject ? undefined : publishLevelOf(publishPickIn(options.publish, (await projectGitHost(projectCwd).catch(() => undefined)) !== undefined, await hasRemote(projectCwd)))
     // Named unless the person turned naming off: read here rather than sent from the page, so a
     // run a schedule starts is named exactly as one a person starts is.
     const nameRun = (await readPreferences(undefined, env).catch((): Preferences => ({}))).nameRuns !== false

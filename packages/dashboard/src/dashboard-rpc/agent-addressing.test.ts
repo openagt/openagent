@@ -383,6 +383,8 @@ const args = process.argv.slice(2)
 appendFileSync(join(__dirname, 'calls.log'), args.join(' ') + '\\n')
 if (args[0] === 'requests') process.stdout.write('[]')
 else if (args[0] === 'open') process.stdout.write(JSON.stringify({ ok: true, request: { number: 9, url: 'https://x/pull/9' }, existing: false }))
+// The account the push goes as: one with no environment of its own here.
+else if (args[0] === 'env') process.stdout.write(JSON.stringify({ ok: true, login: 'octo-agent', env: {} }))
 `
 
 // "Create draft PR" on the agent's page: the page sends `{ draft: true }`, and the call has to hand

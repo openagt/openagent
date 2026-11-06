@@ -1,5 +1,5 @@
 import { parseArgs } from 'node:util'
-import { checkoutRoot, gitReason, nodeGitRunner, openProjectReader, type ProjectReader, type GitRunner } from '@openagt/agent-data'
+import { runsRootOf, gitReason, nodeGitRunner, openProjectReader, type ProjectReader, type GitRunner } from '@openagt/agent-data'
 import { RUNS_DIR } from './names.js'
 import { agentLines, isRunId, newestFirst, parseDiary, parseRunCard, publicCard, runCardFile, runDiaryFile, runIdOfFile, type ListedRun, type RunCard, type RunPatch } from './run.js'
 import { deleteRun, findRun, listRuns, patchRun, readDiary, resolveLogsDeps, runFiles, runsPath } from './store.js'
@@ -119,7 +119,7 @@ const list: Command = async (args, io, git) => {
   // Each card with the person it is kept under, whichever way it is printed.
   const shown = ({ person, ...card }: ListedRun) => ({ ...(values.full ? card : publicCard(card)), person })
   if (values.local) {
-    const root = await inRepo(() => checkoutRoot(io.cwd, git))
+    const root = await inRepo(() => runsRootOf(io.cwd, git))
     return (await listRuns(root, {}, { git })).filter(keep).slice(0, limit).map(shown)
   }
   const reader = await open(io.cwd, git)
@@ -143,7 +143,7 @@ const COMMANDS: Record<string, Command> = {
     if (values.days !== undefined && (!/^\d+$/.test(values.days) || Number(values.days) < 1)) throw new Usage(`--days takes a whole number above 0, got ${values.days}`)
     const since = Date.now() - Number(values.days ?? 30) * 86_400_000
     if (values.local) {
-      const root = await inRepo(() => checkoutRoot(io.cwd, git))
+      const root = await inRepo(() => runsRootOf(io.cwd, git))
       const files = resolveLogsDeps({ git })
       return skillUseOf({ list: dir => files.list(dir), read: path => files.read(path).catch(() => undefined) }, await runsPath(root, git), since)
     }
@@ -159,7 +159,7 @@ const COMMANDS: Record<string, Command> = {
     const main = (await git(['symbolic-ref', '--short', 'refs/remotes/origin/HEAD'], io.cwd).catch(() => '')).trim() || 'HEAD'
     const commits = readCommitLines(await git(['log', main, '-n', '5000', '--format=%ae%x09%an%x09%at'], io.cwd).catch(() => ''))
     if (values.local) {
-      const root = await inRepo(() => checkoutRoot(io.cwd, git))
+      const root = await inRepo(() => runsRootOf(io.cwd, git))
       const files = resolveLogsDeps({ git })
       return peopleOf({ list: dir => files.list(dir), read: path => files.read(path).catch(() => undefined) }, await runsPath(root, git), since, me, commits)
     }
@@ -172,7 +172,7 @@ const COMMANDS: Record<string, Command> = {
     let card: RunCard | undefined
     let diary: ReturnType<typeof parseDiary> = []
     if (values.local) {
-      const root = await inRepo(() => checkoutRoot(io.cwd, git))
+      const root = await inRepo(() => runsRootOf(io.cwd, git))
       card = await findRun(root, id, { git })
       diary = card ? ((await readDiary(root, id, { git })) ?? []) : []
     } else {
@@ -188,7 +188,7 @@ const COMMANDS: Record<string, Command> = {
   async delete(args, io, git) {
     const { positionals } = parse(args, {}, 1)
     const id = runIdArg(positionals[0]!)
-    const root = await inRepo(() => checkoutRoot(io.cwd, git))
+    const root = await inRepo(() => runsRootOf(io.cwd, git))
     // The run is looked for inside the write cycle, after it synced the checkout: a run another
     // machine recorded is deletable here, and one that is nowhere commits nothing.
     const written = await deleteRun(root, id, { git })
@@ -211,7 +211,7 @@ const COMMANDS: Record<string, Command> = {
       ...(values.landed !== undefined ? { landed: { commit: values.landed, from: values.from! } } : {}),
     }
     if (Object.keys(patch).length === 0) throw new Usage('patch needs --branch, --pr or --landed')
-    const root = await inRepo(() => checkoutRoot(io.cwd, git))
+    const root = await inRepo(() => runsRootOf(io.cwd, git))
     if (await patchRun(root, id, patch, { git })) return { ok: true, id }
     // Not patched: the cycle synced the checkout first, so a run it does not hold is no run at all.
     if (!(await runFiles(root, id, { git }))) throw noRun(id)
@@ -240,9 +240,9 @@ async function runEntries(reader: ProjectReader): Promise<Array<{ person: string
   return newestFirst(entries)
 }
 
-/** The project's data opened for reading, from wherever the command runs; outside a repo, a refusal. */
+/** The project's data opened for reading, from wherever the command runs, or the sessions with no project's, from the sessions home; outside both, a refusal. */
 async function open(cwd: string, git: GitRunner): Promise<ProjectReader> {
-  await inRepo(() => checkoutRoot(cwd, git))
+  await inRepo(() => runsRootOf(cwd, git))
   return openProjectReader(cwd, { git })
 }
 

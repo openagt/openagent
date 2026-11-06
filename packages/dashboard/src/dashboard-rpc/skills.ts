@@ -31,7 +31,7 @@ export interface ProjectSkill {
 
 export interface ProjectSkills {
   /** The list's groups; `ticked` says whether a group's skills are ticked in a project that has none yet. */
-  groups: { title: string; ticked: boolean; skills: ProjectSkill[] }[]
+  groups: { title: string; skills: ProjectSkill[] }[]
   /** The branch agents start from, by its name: the remote's default branch, else the branch the folder is on. Absent where there is none. */
   startBranch?: string
   /** The skills whose files stand written, changed or deleted in the folder with no commit yet. */
@@ -65,7 +65,6 @@ export async function onProjectSkills(projectId: string): Promise<ProjectSkills 
   return {
     groups: GROUPS.map(group => ({
       title: group.title,
-      ticked: group.ticked,
       skills: group.skills.map(name => ({ name, description: carried.get(name)!.description, standing: standing.get(name) ?? 'absent', waiting: waiting.has(name) })),
     })),
     ...(start ? { startBranch: start.name } : {}),

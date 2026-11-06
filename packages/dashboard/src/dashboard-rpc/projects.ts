@@ -74,16 +74,14 @@ export async function onOwnProjects(): Promise<OwnProject[]> {
  * Projects list. Like `sendStart` this needs the daemon (it spawns git + writes the shared
  * registry), so it calls the daemon's own `addProject` closure off the wired dashboard context.
  * Returns the daemon's {@link AddProjectResult}.
- *
- * `share` is the person's answer, asked before the add: whether the agents' records may go to the
- * repository's remote. Nothing is pushed for a project added with `false`.
+ * The agents' records stay on this machine; the project's Agent data page shares them later.
  */
-export async function sendAddProject(path: string, share: boolean): Promise<AddProjectResult> {
+export async function sendAddProject(path: string): Promise<AddProjectResult> {
   // Throws on an unwired context (D3), like `sendStart`: a missing capability is a wiring bug.
   const addProject = contextAddProject()
   const trimmed = path.trim()
   if (!trimmed) return { ok: false, error: 'a project path is required' }
-  return addProject(trimmed, share === true)
+  return addProject(trimmed, false)
 }
 
 /**
@@ -110,11 +108,11 @@ export async function onCloneTarget(address: string): Promise<{ ok: true; addres
  * folder is then added as {@link sendAddProject} adds one. A folder already there with this
  * repository in it is added as it is. The answer says where the project is.
  */
-export async function sendAddProjectFromAddress(address: string, share: boolean): Promise<AddProjectResult> {
+export async function sendAddProjectFromAddress(address: string): Promise<AddProjectResult> {
   const addProject = contextAddProject()
   const cloned = await cloneProject(typeof address === 'string' ? address : '')
   if (!cloned.ok) return cloned
-  const added = await addProject(cloned.path, share === true)
+  const added = await addProject(cloned.path, false)
   return added.ok ? { ...added, path: cloned.path } : added
 }
 

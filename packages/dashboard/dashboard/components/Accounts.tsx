@@ -7,22 +7,33 @@ import { useAgentAccounts } from './AgentAccounts.js'
 import { GitHostsCard } from './GitHosts.js'
 import { AgentFix, StatePill, agentLoginState, agentWords, useAgentState } from './Logins.js'
 import { ModuleSlot } from './ModulePageView.js'
+import { Page } from './Page.js'
 import { ServersCard, ServersProvider } from './ServerLogins.js'
 
-// Settings › Accounts: every login runs use, in one place. The coding agents' accounts are the
-// skill's own card, the same as on the Overview. What is not account rotation is the dashboard's:
-// an agent that needs installing or logging in, how this computer's logins stand on the person's
-// servers (`ServerLogins.tsx`), the git hosts (`GitHosts.tsx`). On a server, the page says whose
-// computer's logins it uses.
+// The Permissions page: every account OpenAgent's agents work with, in one place. An agent can
+// reach what its accounts can, and nothing else is a permission. The coding agents' accounts are
+// the skill's own card, the same as on the Overview. What is not account rotation is the
+// dashboard's: an agent that needs installing or logging in, how this computer's logins stand on
+// the person's servers (`ServerLogins.tsx`), the git hosts (`GitHosts.tsx`). On a server, the page
+// says whose computer's logins it uses.
 
 const ACCOUNT_ROTATION = '@openagt/skill-account-rotation'
 
-/** Settings › Accounts. */
-export function AccountsSettings() {
+/** The Permissions page. */
+export function PermissionsPage() {
+  return (
+    <Page title="Permissions" description="The accounts your agents work with: what an agent can reach is what these accounts can.">
+      <AccountsList />
+    </Page>
+  )
+}
+
+/** Every account, as the page lists them. */
+export function AccountsList() {
   return (
     <ServersProvider>
       <div className="space-y-4">
-        <p className="text-sm text-muted-foreground">Runs use these accounts. When one hits its limit, the next free one takes the run over where it stopped.</p>
+        <p className="text-sm text-muted-foreground">When a coding agent&rsquo;s account hits its limit, the next free one takes the run over where it stopped.</p>
         <FromLine />
         <AgentSetup driver="claude-code" title="Claude Code" Logo={ClaudeLogo} />
         <AgentSetup driver="codex" title="Codex" Logo={CodexLogo} />

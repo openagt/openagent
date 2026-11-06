@@ -19,10 +19,21 @@ describe('parseRoute', () => {
     expect(parse('/logs/a%20b/c')).toEqual({ projectId: null, agentId: null, page: 'logs', pagePath: ['a b', 'c'] })
   })
 
-  it("reads a project's New agent page, with the project picked", () => {
+  it("reads a project's New agent session page, with the project picked", () => {
     expect(parse('/app')).toEqual({ projectId: 'app-a1', agentId: null, scope: 'app-a1' })
     expect(parse('/shop-2def')).toEqual({ projectId: 'shop-2def', agentId: null, scope: 'shop-2def' })
     expect(parse('/logs-9zz')).toEqual({ projectId: 'logs-9zz', agentId: null, scope: 'logs-9zz' })
+  })
+
+  it('reads a session with no project, and its New agent session page, by the word session, with every project showing', () => {
+    expect(parse('/session')).toEqual({ projectId: 'session', agentId: null })
+    expect(parse('/session/2026-07-19T12-00-00-000Z')).toEqual({ projectId: 'session', agentId: '2026-07-19T12-00-00-000Z' })
+    expect(format({ projectId: 'session', agentId: '2026-07-19T12-00-00-000Z' })).toBe('/session/2026-07-19T12-00-00-000Z')
+    expect(format({ projectId: 'session', agentId: null })).toBe('/session')
+    // No project named session takes the word: its id is its address.
+    const named = projectAddresses(['session-1abc'], [])
+    expect(named.addressOf('session-1abc')).toBe('session-1abc')
+    expect(parseRoute('/session', named)).toEqual({ projectId: 'session', agentId: null })
   })
 
   it("reads a project's agent: a second segment that starts with a digit", () => {

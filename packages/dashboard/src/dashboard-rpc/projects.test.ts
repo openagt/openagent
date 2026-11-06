@@ -239,7 +239,7 @@ test('the records switch: in your folder until turned on, and a remote that refu
   }
 })
 
-test('sendAddProject hands the person\u2019s answer on the records to the daemon, as a yes only when it is one', async () => {
+test('sendAddProject adds the path, trimmed, with the agents\u2019 records kept on this machine', async () => {
   const seen: [string, boolean][] = []
   provideTestContext({
     addProject: (path, share) => {
@@ -247,11 +247,9 @@ test('sendAddProject hands the person\u2019s answer on the records to the daemon
       return { ok: true, alreadyActivated: false }
     },
   })
-  await sendAddProject(' /repos/a ', true)
-  await sendAddProject('/repos/b', false)
-  await sendAddProject('/repos/c', 'yes' as unknown as boolean)
-  assert.deepEqual(seen, [['/repos/a', true], ['/repos/b', false], ['/repos/c', false]])
-  assert.deepEqual(await sendAddProject('  ', true), { ok: false, error: 'a project path is required' })
+  await sendAddProject(' /repos/a ')
+  assert.deepEqual(seen, [['/repos/a', false]])
+  assert.deepEqual(await sendAddProject('  '), { ok: false, error: 'a project path is required' })
 })
 
 test('sendRemoveProject hands the project’s id to the daemon, with whether its files go too, and answers what it answers; no id is refused before the daemon is asked', async () => {

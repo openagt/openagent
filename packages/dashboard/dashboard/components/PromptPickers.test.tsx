@@ -28,7 +28,7 @@ const logins = vi.hoisted(() => ({ onGitHosts: vi.fn(), sendUseGitHostAccount: v
 vi.mock('../rpc/logins.js', () => logins)
 const models = vi.hoisted(() => ({ onModels: vi.fn() }))
 vi.mock('../rpc/models.js', () => models)
-const route = vi.hoisted(() => ({ openSettings: vi.fn() }))
+const route = vi.hoisted(() => ({ openSettings: vi.fn(), openPermissions: vi.fn() }))
 vi.mock('../lib/use-route.js', () => route)
 // The editor needs a real DOM; the pickers do not look at it.
 vi.mock('./PromptEditor.js', async () => {
@@ -55,7 +55,7 @@ const CLAUDE = {
 const GITHUB = {
   host: 'github.com',
   projects: ['shop'],
-  provider: { name: 'GitHub', requestWord: 'pull request', tool: 'gh', installed: true, install: 'brew install gh', accounts: [{ login: 'octo', terminal: true, runs: true, ok: true }, { login: 'octo-agent', terminal: false, runs: false, ok: true }] },
+  provider: { name: 'GitHub', requestWord: 'pull request', tool: 'gh', installed: true, install: 'brew install gh', accounts: [{ login: 'octo', runs: true, ok: true }, { login: 'octo-agent', runs: false, ok: true }] },
 }
 
 const renderComposer = () => render(<Composer files={[]} onSubmit={vi.fn()} busy={false} submitLabel="Send" submitBusyLabel="Sending…" />)
@@ -157,7 +157,7 @@ describe('the agent picker holds each agent\'s accounts, on the computer the run
     fireEvent.click(screen.getByRole('menuitem', { name: /Dani/ }))
     expect(accounts.sendUseAgentAccountFirst).toHaveBeenCalledWith('claude', 'Dani')
     fireEvent.click(screen.getByRole('menuitem', { name: 'Add account…' }))
-    expect(route.openSettings).toHaveBeenCalledWith('accounts')
+    expect(route.openPermissions).toHaveBeenCalled()
   })
 
   test('an agent with no account read has no accounts part, and Codex none while it is not installed and has one account', async () => {
@@ -196,7 +196,7 @@ describe('each saved computer that answers is asked ahead what the pickers show 
     prefs = { model: 'opus' }
     machinesRpc.onMachineModels.mockResolvedValue({ ...MODELS, 'claude-code': { models: [{ id: 'opus', name: 'Opus' }] } })
     machinesRpc.onMachineAgentAccounts.mockImplementation(async (_id: string, agent: string) => (agent === 'claude' ? { ...CLAUDE, computer: 'studio' } : null))
-    machinesRpc.onMachineGitHosts.mockResolvedValue({ hosts: [{ ...GITHUB, provider: { ...GITHUB.provider, accounts: [{ login: 'octo-vps', terminal: false, runs: true, ok: true }] } }] })
+    machinesRpc.onMachineGitHosts.mockResolvedValue({ hosts: [{ ...GITHUB, provider: { ...GITHUB.provider, accounts: [{ login: 'octo-vps', runs: true, ok: true }] } }] })
     renderComposer()
     await waitFor(() => expect(machinesRpc.onMachineGitHosts).toHaveBeenCalledWith(STUDIO))
     await waitFor(() => expect(machinesRpc.onMachineAgentAccounts).toHaveBeenCalledWith(STUDIO, 'codex'))
@@ -231,7 +231,7 @@ describe('the git host account a run pushes as', () => {
   })
 
   test("with a machine picked, the accounts are that machine's, asked of it and used there", async () => {
-    machinesRpc.onMachineGitHosts.mockResolvedValue({ hosts: [{ ...GITHUB, provider: { ...GITHUB.provider, accounts: [{ login: 'octo-vps', terminal: false, runs: true, ok: true }, { login: 'octo', terminal: false, runs: false, ok: true }] } }] })
+    machinesRpc.onMachineGitHosts.mockResolvedValue({ hosts: [{ ...GITHUB, provider: { ...GITHUB.provider, accounts: [{ login: 'octo-vps', runs: true, ok: true }, { login: 'octo', runs: false, ok: true }] } }] })
     render(<GitAccountMenu address="github.com/acme/shop" machineId={STUDIO} on="Studio" busy={false} onAdd={vi.fn()} />)
     fireEvent.click(await screen.findByRole('button', { name: 'GitHub account: @octo-vps' }))
     expect(screen.getByText('GitHub account on Studio')).toBeTruthy()
@@ -244,7 +244,7 @@ describe('the git host account a run pushes as', () => {
     logins.onGitHosts.mockResolvedValue({ hosts: [{ ...GITHUB, provider: { ...GITHUB.provider, accounts: [] } }] })
     const onAdd = vi.fn()
     const { unmount } = render(<GitAccountMenu address="github.com/acme/shop" machineId={undefined} on={undefined} busy={false} onAdd={onAdd} />)
-    fireEvent.click(await screen.findByRole('button', { name: 'Log in to GitHub' }))
+    fireEvent.click(await screen.findByRole('button', { name: 'Add a GitHub account' }))
     expect(onAdd).toHaveBeenCalled()
     unmount()
     const other = render(<GitAccountMenu address="gitlab.com/acme/shop" machineId={undefined} on={undefined} busy={false} onAdd={vi.fn()} />)

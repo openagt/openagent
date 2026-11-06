@@ -1,3 +1,4 @@
+import { runsAccountDir } from '@openagt/skill-github'
 import { execFile } from 'node:child_process'
 import { hostname } from 'node:os'
 import { CLAUDE_ACCOUNT_ENV, CLAUDE_TOKEN_ENV } from '@openagt/agent-driver-claude'
@@ -10,7 +11,7 @@ import { accountsPath, readAccounts } from '@openagt/skill-account-rotation'
 /**
  * Both ends of copying a person's logins to another person's computer (machine-logins.ts).
  *
- * On a server, a person's own OpenAgent holds their GitHub login (its user's `gh`) and their
+ * On a server, a person's own OpenAgent holds their GitHub login (its own GitHub account) and their
  * Claude login (an account its runs use: one of their own computer's, `logins-sync.ts`). Before it sends a run to a computer of another
  * person's, it copies what that computer lacks of them, or has an older copy of. A laptop never
  * copies its own logins: they are made for it, and go to no other computer.
@@ -54,11 +55,12 @@ export function personLogins(run: RunComputerCommand): NonNullable<RelayHandlers
   }
 }
 
-/** This OpenAgent's own GitHub login, as its user's `gh` keeps it; nothing when it has none. */
+/** This OpenAgent's own GitHub login: the account its runs use, as OpenAgent keeps it; nothing when it has none. Never its user's own `gh`. */
 function ownGithub(said: NodeJS.ProcessEnv): Promise<string | undefined> {
-  // Its own file, whatever this process was started with of another place or another login.
-  const env = { ...said }
-  for (const name of ['GH_TOKEN', 'GITHUB_TOKEN', 'GH_CONFIG_DIR', 'XDG_CONFIG_HOME']) delete env[name]
+  const runs = runsAccountDir(said)
+  if (!runs) return Promise.resolve(undefined)
+  const env: NodeJS.ProcessEnv = { ...said, GH_CONFIG_DIR: runs.dir }
+  for (const name of ['GH_TOKEN', 'GITHUB_TOKEN']) delete env[name]
   return new Promise(resolve => {
     execFile('gh', ['auth', 'token', '--hostname', 'github.com'], { env, timeout: 10_000 }, (err, out) => {
       const login = err ? '' : String(out).trim()
@@ -75,7 +77,7 @@ export interface OwnLogins {
 }
 
 /**
- * The logins this OpenAgent works with: its user's `gh`, and the Claude login its runs take first:
+ * The logins this OpenAgent works with: the GitHub account its runs use, and the Claude login its runs take first:
  * one of its added accounts, as a login of the person's own computer is here, else the one its
  * service started it with.
  */

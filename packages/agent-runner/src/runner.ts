@@ -39,9 +39,9 @@ export function isDriverName(name: string): name is DriverName {
  * coding agent's CLI is installed and logged in (a problem when not: the session would die
  * before its first turn). Warnings: running as root, and on Codex, skills in `~/.agents/skills`
  * it cannot keep out and `memory` on that does nothing while `skills` is off. What a dashboard's check hook runs, and what a
- * person's run and a scheduler's tick refuse on. The git host is asked only when the project names
- * its own account there (`accounts:` in the config), whether that account can be used: a project
- * with no git host package runs fine, and one whose git host cannot answer says so in the run's own log.
+ * person's run and a scheduler's tick refuse on. The git host is asked whether the account runs
+ * work as there can be used, the project's own when it names one (`accounts:` in the config): a
+ * project with no git host package runs fine, and one with no account there is refused.
  */
 export async function readyToRun(repo: string, driver: DriverName, deps: { probe?: CliProbe; isRoot?: () => boolean; agentsSkills?: string; gitHostEnv?: typeof gitHostEnv } = {}): Promise<DriverReadiness> {
   const opts = { probe: deps.probe ?? probeCli, ...(deps.isRoot ? { isRoot: deps.isRoot } : {}) }
@@ -49,10 +49,8 @@ export async function readyToRun(repo: string, driver: DriverName, deps: { probe
   const ready = await (driver === 'claude-code' ? claudeCodeReady({ ...opts, addedAccount: hasAddedAccount('claude') }) : codexReady({ ...opts, addedAccount: hasAddedAccount('codex'), personal: await readPersonal(repo, () => {}), ...(deps.agentsSkills !== undefined ? { agentsSkills: deps.agentsSkills } : {}) }))
   // The project's own account at the git host, when it names one: a run never works as someone else.
   const user = (await readProjectAccounts(repo, () => {})).gitHost
-  if (user !== undefined) {
-    const given = await (deps.gitHostEnv ?? gitHostEnv)(repo, user)
-    if (!given.ok) ready.problems.push(`This project's runs work as ${user} at the git host, and it cannot be used here: ${given.error}`)
-  }
+  const given = await (deps.gitHostEnv ?? gitHostEnv)(repo, user)
+  if (!given.ok) ready.problems.push(user !== undefined ? `This project's runs work as ${user} at the git host, and it cannot be used here: ${given.error}` : given.error)
   return ready
 }
 
@@ -65,7 +63,7 @@ export async function readyToRun(repo: string, driver: DriverName, deps: { probe
 export async function workAs(repo: string, log: (line: string) => void, deps: { gitHostEnv?: typeof gitHostEnv; env?: NodeJS.ProcessEnv; accounts?: ProjectAccounts } = {}): Promise<AgentAccounts> {
   const accounts = deps.accounts ?? (await readProjectAccounts(repo, log))
   const given = await (deps.gitHostEnv ?? gitHostEnv)(repo, accounts.gitHost)
-  if (!given.ok) throw new Error(`This project's runs work as ${accounts.gitHost} at the git host, and it cannot be used here: ${given.error}`)
+  if (!given.ok) throw new Error(accounts.gitHost !== undefined ? `This project's runs work as ${accounts.gitHost} at the git host, and it cannot be used here: ${given.error}` : given.error)
   Object.assign(deps.env ?? process.env, given.env)
   return { ...(given.login !== undefined ? { git: given.login } : {}), ...(accounts.claude ? { claude: accounts.claude } : {}), ...(accounts.codex ? { codex: accounts.codex } : {}) }
 }

@@ -1,6 +1,7 @@
+import { PERMISSIONS_PAGE } from '../lib/use-route.js'
 import { RevealedTitle } from './RevealedTitle.js'
 import { useEffect, useRef, useState, type ReactNode } from 'react'
-import { Plus, ChevronDown, Bot, ArrowDownUp, Check, Cloud, Laptop, LayoutDashboard, Blocks, FilePen, GitBranch } from 'lucide-react'
+import { Plus, ChevronDown, Bot, ArrowDownUp, Check, Cloud, Laptop, LayoutDashboard, Blocks, FilePen, GitBranch, KeyRound } from 'lucide-react'
 import { MACHINE_ICONS } from './MachineMark.js'
 import { PersonMark } from './PersonMark.js'
 import type { ComponentType } from 'react'
@@ -19,8 +20,8 @@ import { modelName, useModels } from '../lib/models.js'
 import { PR_MARKS, type PrState } from '../lib/pr-marks.js'
 import { agentLabel, awaitingName } from '../lib/agent-label.js'
 import { holdsMainAgent, isOpenSubagent, nestRows, taskLabel } from '../lib/subagents.js'
-import { AddProjectPanel } from './AddProjectPanel.js'
-import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem, DropdownMenuGroup, DropdownMenuLabel } from './ui/dropdown-menu.js'
+import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem, DropdownMenuGroup, DropdownMenuLabel, DropdownMenuSeparator } from './ui/dropdown-menu.js'
+import { SESSIONS_ID } from '../../src/project-address.js'
 import { Tooltip, TooltipTrigger, TooltipContent } from './ui/tooltip.js'
 import { ProjectSelect } from './ProjectSelect.js'
 import {
@@ -105,7 +106,7 @@ export function AgentHistory({
   scope?: string | null
   /** The address names a project that is not read yet: the select names none, and nothing says all show. */
   scopePending?: boolean
-  /** Whether the list of agents shown is read: until it is, an empty list is not "No agents yet." */
+  /** Whether the list of agents shown is read: until it is, an empty list is not "No sessions yet." */
   listLoaded?: boolean
   /** Pick the one project every page shows, or null for all of them. */
   onScope?: (projectId: string | null) => void
@@ -215,13 +216,14 @@ export function AgentHistory({
   // just-started run (#705) counts too, before its id is known.
   const starting = selectedAgentId !== null && !listed.some(agent => agent.id === selectedAgentId)
 
-  // In the order the person picked from the button beside "Recent agents" (`recents-sort.ts`).
+  // In the order the person picked from the button beside "Log" (`recents-sort.ts`).
   const order = preferences.recentsSort ?? 'created'
   const rows: Row[] = sortRuns(crossProject
     ? recentAgents!.map(rr => ({
         key: `${rr.projectId}:${rr.agent.id}`,
         agent: rr.agent,
-        project: label(rr.projectId, rr.projectName),
+        // A session with no project names none.
+        ...(rr.projectId !== SESSIONS_ID ? { project: label(rr.projectId, rr.projectName) } : {}),
         projectId: rr.projectId,
         active: rr.projectId === projectId && rr.agent.id === selectedAgentId,
         onClick: () => onSelectRecent?.(rr.projectId, rr.agent.id),
@@ -333,7 +335,6 @@ export function AgentHistory({
             active={atProjectLauncher}
             onNewAgentInProject={onNewAgentInProject && leave(onNewAgentInProject)}
             onSelect={leave(onSelect)}
-            onProjectAdded={onProjectAdded}
           />
           {/* Overview: the way home, its own nav item directly under New and above the session list,
               more prominent than a menu row. Only this — the current view — carries the active fill. */}
@@ -344,6 +345,8 @@ export function AgentHistory({
           {pages.map(page => (
             <NavRow key={page.segment} icon={page.icon ?? Blocks} label={page.label} active={activePage === page.segment} onClick={leave(() => onPage(page.segment))} />
           ))}
+          {/* The accounts the agents work with (Rom): every account OpenAgent knows, on a page of the dashboard's own. */}
+          <NavRow icon={KeyRound} label="Permissions" active={activePage === PERMISSIONS_PAGE} onClick={leave(() => onPage(PERMISSIONS_PAGE))} />
         </SidebarHeader>
         {/* The themed ScrollArea (#913) instead of the sidebar's native overflow bar, matching the
             Overview: suppress SidebarContent's own `overflow-auto` and let the ScrollArea own it. */}
@@ -357,7 +360,7 @@ export function AgentHistory({
                   the state of this list rather than a lonely line in the sidebar. */}
               <div className="sticky top-0 z-10">
                 <SidebarGroupLabel className="rounded-none bg-sidebar font-normal tracking-wide text-muted-foreground">
-                  Recent agents
+                  Log
                   <RecentsSortMenu order={order} />
                 </SidebarGroupLabel>
                 {/* Absolute (hanging just below the label) so it does not push the first row down; it
@@ -414,9 +417,9 @@ export function AgentHistory({
                     )
                   })}
                 </SidebarMenu>
-                {/* Nothing while the list is read: it takes a moment, and "No agents yet." would not be true yet. */}
+                {/* Nothing while the list is read: it takes a moment, and "No sessions yet." would not be true yet. */}
                 {!hasRecents && listLoaded && (
-                  <p className="whitespace-nowrap px-2 py-1 text-sm text-muted-foreground">No agents yet.</p>
+                  <p className="whitespace-nowrap px-2 py-1 text-sm text-muted-foreground">No sessions yet.</p>
                 )}
               </SidebarGroupContent>
             </SidebarGroup>
@@ -492,16 +495,15 @@ function OverviewButton({ active, count, onClick }: { active: boolean; count: nu
 }
 
 // The "New" launcher, project-count aware (#new-button). With one project picked at the top of the
-// rail, it starts a session there. With all projects showing it adapts to how many exist: none -> open the add-project dialog
-// (you cannot start a session with nowhere to run it); one -> start there; several -> a small picker
-// so you choose where. The label + Plus stay the same in every case, so it reads as one button.
+// rail, it starts a session there. With all projects showing it adapts to how many exist: none ->
+// a session with no project; one or more -> a small picker of the projects and "No project", so
+// you choose where. The label + Plus stay the same in every case, so it reads as one button.
 function NewButton({
   scope,
   projects,
   active = false,
   onNewAgentInProject,
   onSelect,
-  onProjectAdded,
 }: {
   scope: string | null
   projects: ProjectSummary[]
@@ -510,9 +512,7 @@ function NewButton({
   active?: boolean
   onNewAgentInProject?: ((projectId: string) => void) | undefined
   onSelect: (agentId: string | null) => void
-  onProjectAdded?: (() => void) | undefined
 }) {
-  const [adding, setAdding] = useState(false)
   const label = useProjectLabel()
   // Same box as the Overview row (px-2 py-1.5 gap-2) so their icons and labels align; h-auto/px-2/
   // py-1.5 override the button size's default h-9/px-4/py-2. The active fill (same tokens as
@@ -523,39 +523,23 @@ function NewButton({
   )
   const start = (id: string) => (onNewAgentInProject ? onNewAgentInProject(id) : onSelect(null))
 
-  // One project picked, or exactly one registered: start a session straight away.
-  if (scope !== null || projects.length === 1) {
-    const target = scope ?? projects[0]!.id
+  // One project picked, or none registered: start a session straight away, there or with no project.
+  if (scope !== null || projects.length === 0) {
+    const target = scope ?? SESSIONS_ID
     return (
       <Button variant="ghost" className={cls} onClick={() => start(target)}>
         <Plus className="h-4 w-4 shrink-0" />
-        <span className="whitespace-nowrap">New agent</span>
+        <span className="whitespace-nowrap">New agent session</span>
       </Button>
     )
   }
 
-  // No projects: there is nowhere to run a session, so prompt to add one first.
-  if (projects.length === 0) {
-    return (
-      <>
-        <Tooltip>
-          <TooltipTrigger render={<Button variant="ghost" className={cls} onClick={() => setAdding(true)} />}>
-            <Plus className="h-4 w-4 shrink-0" />
-            <span className="whitespace-nowrap">New agent</span>
-          </TooltipTrigger>
-          <TooltipContent>Add a project to start an agent</TooltipContent>
-        </Tooltip>
-        {adding && <AddProjectPanel onAdded={() => onProjectAdded?.()} onClose={() => setAdding(false)} />}
-      </>
-    )
-  }
-
-  // Several projects: pick which one the new session agents in.
+  // Projects: pick which one the new session works in, or none.
   return (
     <DropdownMenu>
-      <DropdownMenuTrigger aria-label="New agent" className={cn(buttonVariants({ variant: 'ghost' }), cls)}>
+      <DropdownMenuTrigger aria-label="New agent session" className={cn(buttonVariants({ variant: 'ghost' }), cls)}>
         <Plus className="h-4 w-4 shrink-0" />
-        <span className="whitespace-nowrap">New agent</span>
+        <span className="whitespace-nowrap">New agent session</span>
         <ChevronDown className="ml-auto h-3.5 w-3.5 shrink-0 opacity-70" />
       </DropdownMenuTrigger>
       <DropdownMenuContent align="start" className="w-[13.5rem]">
@@ -569,13 +553,17 @@ function NewButton({
             <span className="flex-1 truncate">{label(p.id, p.name)}</span>
           </DropdownMenuItem>
         ))}
+        <DropdownMenuSeparator />
+        <DropdownMenuItem onClick={() => start(SESSIONS_ID)}>
+          <span className="flex-1 truncate">No project</span>
+        </DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>
   )
 }
 
 /**
- * The button beside "Recent agents" (his pick, after Claude Code's own beside its "Recents"): the
+ * The button beside "Log" (his pick, after Claude Code's own beside its "Recents"): the
  * order of the list, kept in the person's preferences. By creation unless picked otherwise, so a
  * run does not move while a person talks to it.
  */
@@ -737,7 +725,7 @@ function AgentHistoryRow({
       observer?.disconnect()
     }
   }, [intent, naming])
-  const titleText = naming ? '' : intent || 'New agent'
+  const titleText = naming ? '' : intent || 'New agent session'
   // A name that comes to a row that waited for it comes in as a new session's does.
   const waitedForName = useRef(false)
   if (naming) waitedForName.current = true

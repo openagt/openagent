@@ -1,6 +1,5 @@
 import { afterEach, describe, expect, test, vi } from 'vitest'
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
-import { checked } from '../test-controls.js'
 
 const sendAddProject = vi.hoisted(() => vi.fn())
 const sendPickProjectDirectory = vi.hoisted(() => vi.fn())
@@ -28,41 +27,15 @@ describe('AddProjectPanel (#1150)', () => {
     // The picked path is shown back for the trust gate (#439); nothing is registered yet.
     await screen.findByText('/Users/dev/my-repo')
     expect(sendAddProject).not.toHaveBeenCalled()
-    // What the add will do to the folder is said here, before the button that does it.
+    // The question is short: the warning and the button, no list and no other choice (Rom).
     const dialog = screen.getByRole('dialog', { name: 'Add project' })
-    expect(dialog.textContent).toContain('makes no commit on your branch and pushes nothing')
-    expect(dialog.textContent).toContain('Your files and your branch stay as they are.')
+    expect(dialog.textContent).toContain('add only the ones you trust')
+    expect(dialog.textContent).not.toContain('makes no commit on your branch')
+    expect(screen.queryByRole('radio')).toBeNull()
     fireEvent.click(screen.getByRole('button', { name: 'I trust it, add it' }))
     await screen.findByText('Project added')
-    // The records stay on this machine unless the person picks the other answer.
-    expect(sendAddProject).toHaveBeenCalledWith('/Users/dev/my-repo', false)
-  })
-
-  test('the person says where the agents\u2019 records go before the add: kept here until they pick sharing', async () => {
-    sendPickProjectDirectory.mockResolvedValue({ ok: true, path: '/Users/dev/my-repo' })
-    sendAddProject.mockResolvedValue({ ok: true, alreadyActivated: false })
-    render(<AddProjectPanel onAdded={() => {}} onClose={() => {}} />)
-    const keep = await screen.findByRole('radio', { name: /Keep them on this machine/ })
-    const share = screen.getByRole('radio', { name: /Share them to the repository\u2019s remote/ })
-    expect([checked(keep), checked(share)]).toEqual([true, false])
-    // What sharing does is said beside the choice, before anything happens.
-    expect(screen.getByText('Nothing is pushed.')).toBeTruthy()
-    expect(screen.getByText(/keeps pushing as agents work/)).toBeTruthy()
-    fireEvent.click(share)
-    expect([checked(keep), checked(share)]).toEqual([false, true])
-    fireEvent.click(screen.getByRole('button', { name: 'I trust it, add it' }))
-    await screen.findByText('Project added')
-    expect(sendAddProject).toHaveBeenCalledWith('/Users/dev/my-repo', true)
-    expect(screen.queryByText(/has no remote/)).toBeNull()
-  })
-
-  test('sharing picked for a repository with no remote: the dialog says the records stay on this machine', async () => {
-    sendAddProject.mockResolvedValue({ ok: true, alreadyActivated: false, noRemote: true })
-    render(<AddProjectPanel folder="/Users/dev/here" onAdded={() => {}} onClose={() => {}} />)
-    fireEvent.click(screen.getByRole('radio', { name: /Share them to the repository\u2019s remote/ }))
-    fireEvent.click(screen.getByRole('button', { name: 'I trust it, add it' }))
-    await screen.findByText('Project added')
-    expect(screen.getByText(/has no remote, so the agents\u2019 records stay on this machine/)).toBeTruthy()
+    // The records stay on this machine: the project's Agent data page shares them later.
+    expect(sendAddProject).toHaveBeenCalledWith('/Users/dev/my-repo')
   })
 
   test('a folder handed in is asked about at once: no system dialog, and Cancel closes', async () => {
@@ -77,7 +50,7 @@ describe('AddProjectPanel (#1150)', () => {
     expect(sendAddProject).not.toHaveBeenCalled()
     fireEvent.click(screen.getByRole('button', { name: 'I trust it, add it' }))
     await screen.findByText('Project added')
-    expect(sendAddProject).toHaveBeenCalledWith('/Users/dev/here', false)
+    expect(sendAddProject).toHaveBeenCalledWith('/Users/dev/here')
   })
 
   test('a repo that was already a project reads "Already added"', async () => {
@@ -140,10 +113,9 @@ describe('AddProjectPanel (#1150)', () => {
     expect(dialog.textContent).toContain('github.com/ada/shop')
     expect(dialog.textContent).toContain('It will be cloned to /home/openagent/projects/shop.')
     expect(sendAddProjectFromAddress).not.toHaveBeenCalled()
-    fireEvent.click(screen.getByRole('radio', { name: /Share them to the repository\u2019s remote/ }))
     fireEvent.click(screen.getByRole('button', { name: 'I trust it, clone and add it' }))
     await screen.findByText('Project added')
-    expect(sendAddProjectFromAddress).toHaveBeenCalledWith('https://github.com/Ada/shop', true)
+    expect(sendAddProjectFromAddress).toHaveBeenCalledWith('https://github.com/Ada/shop')
     expect(sendAddProject).not.toHaveBeenCalled()
     expect(dialog.textContent).toContain('It is in /home/openagent/projects/shop.')
     expect(onAdded).toHaveBeenCalledTimes(1)

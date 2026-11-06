@@ -1,33 +1,126 @@
 import { spawn } from 'node:child_process'
-import { chmodSync, mkdirSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs'
+import { chmodSync, existsSync, mkdirSync, readdirSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs'
 import { homedir, tmpdir } from 'node:os'
-import { dirname, join } from 'node:path'
+import { dirname, join, relative, isAbsolute } from 'node:path'
 import { errorMessage, type GhRunner } from './gh.js'
 
 /**
- * The GitHub accounts this computer's `gh` knows, and the one OpenAgent's runs use. The terminal's
- * `gh` keeps its own active account; runs use the account picked here, given to each run as its
- * own token, so switching one never moves the other. The pick is the account `gh` had active when
- * OpenAgent first looked, kept from then on, until it is picked again here.
+ * The GitHub accounts OpenAgent has, and the one its runs use. They are OpenAgent's own, never the
+ * person's: each account is a folder of its own, the folder `gh` keeps that account's login in
+ * (`GH_CONFIG_DIR`), so nothing OpenAgent does reads or changes the person's own `gh`, git or
+ * keychain. An account is added by logging it in here, in the browser, or by handing its token
+ * over (a server of the person's gets theirs that way).
  *
- * The pick is kept in a file of its own, logins only: `gh` keeps the logins' tokens, and a run's
- * is asked of it when the run starts (`gh auth token --user`).
+ * The runs' pick is kept in a file of its own, logins only.
  */
 
 /** The host this package answers for. */
 export const HOST = 'github.com'
 
-/** An account `gh` knows on the host. */
+/** An account OpenAgent has on the host. */
 export interface GhAccount {
   login: string
-  /** The terminal's: the one `gh` uses when it is not told which. */
-  terminal: boolean
-  /** Whether `gh` could use it when asked: false for a login GitHub no longer takes. */
+  /** Whether GitHub still takes its login: false for one that was revoked or expired. */
   ok: boolean
 }
 
-/** What `gh` knows of the host: whether it is installed at all, and its accounts there. */
+/** Whether `gh` is on this computer at all, and OpenAgent's accounts. */
 export type GhState = { installed: false } | { installed: true; accounts: GhAccount[] }
+
+/** What OpenAgent keeps of an account beside its login: what its commits are signed with. */
+export interface AccountFacts {
+  login: string
+  id: number
+  name?: string
+}
+
+/** A GitHub login, as GitHub allows one: also what keeps a folder's name inside the accounts' folder. */
+const LOGIN = /^[A-Za-z0-9](?:[A-Za-z0-9-]{0,38})$/
+
+/** Where OpenAgent's accounts are: one folder each, beside OpenAgent's other files in the person's config folder. */
+export function accountsRoot(env: NodeJS.ProcessEnv = process.env): string {
+  if (env['XDG_CONFIG_HOME']) return join(env['XDG_CONFIG_HOME'], 'openagent-github')
+  return join(env['HOME'] ?? homedir(), '.openagent-github')
+}
+
+/** The folder of one account: what `gh` is given as `GH_CONFIG_DIR` to work as it. */
+export function accountDir(root: string, login: string): string {
+  if (!LOGIN.test(login)) throw new Error(`${login} is no GitHub login`)
+  return join(root, login)
+}
+
+/** Where a browser login waits until GitHub said yes; then it becomes the account's folder. */
+const ADDING = '.adding'
+
+/** Whether `dir` is one of OpenAgent's account folders: a run is given one, and works as it. */
+export function isAccountDir(root: string, dir: string): boolean {
+  const rel = relative(root, dir)
+  return rel !== '' && !rel.startsWith('..') && !isAbsolute(rel) && LOGIN.test(rel)
+}
+
+/** `gh` working as the account in `dir`: its folder, never the person's, and no token from the environment unless given. */
+export function asAccount(gh: GhRunner, dir: string): GhRunner {
+  return (args, cwd, env, input) => gh(args, cwd, { GH_TOKEN: '', GITHUB_TOKEN: '', ...env, GH_CONFIG_DIR: dir }, input)
+}
+
+/** The logins OpenAgent has, by name. */
+export function accountLogins(root: string): string[] {
+  let names: string[]
+  try {
+    names = readdirSync(root)
+  } catch {
+    return []
+  }
+  return names.filter(name => LOGIN.test(name) && existsSync(join(root, name, 'hosts.yml'))).sort((a, b) => a.localeCompare(b))
+}
+
+export function readFacts(dir: string): AccountFacts | undefined {
+  try {
+    const facts = JSON.parse(readFileSync(join(dir, 'account.json'), 'utf8')) as Partial<AccountFacts>
+    if (typeof facts.login === 'string' && typeof facts.id === 'number') return { login: facts.login, id: facts.id, ...(typeof facts.name === 'string' && facts.name ? { name: facts.name } : {}) }
+  } catch {
+    // None kept: the account was added before its facts were.
+  }
+  return undefined
+}
+
+function writeFile600(path: string, text: string): void {
+  mkdirSync(dirname(path), { recursive: true, mode: 0o700 })
+  const next = `${path}.${process.pid}.tmp`
+  writeFileSync(next, text, { mode: 0o600 })
+  chmodSync(next, 0o600)
+  renameSync(next, path)
+}
+
+/** Who GitHub says the account `gh` works as is: its login, id and name. */
+export async function whoAmI(gh: GhRunner, cwd: string): Promise<AccountFacts> {
+  const said = (await gh(['api', '--hostname', HOST, 'user', '--jq', '[.login, (.id | tostring), (.name // "")] | @tsv'], cwd)).trim()
+  const [login = '', id = '', name = ''] = said.split('\t')
+  if (!LOGIN.test(login) || !/^\d+$/.test(id)) throw new Error(`GitHub said no account: ${said || 'nothing'}`)
+  return { login, id: Number(id), ...(name ? { name } : {}) }
+}
+
+/**
+ * A browser login that GitHub said yes to becomes an account: its folder is named by its login,
+ * an account of that name before it replaced. Nothing while the login is still waiting, or when
+ * none was started. Answers the login added.
+ */
+export async function settleAdded(root: string, gh: GhRunner, cwd: string, files: JobFiles = jobFiles('login')): Promise<string | undefined> {
+  const adding = join(root, ADDING)
+  if (!existsSync(join(adding, 'hosts.yml'))) return undefined
+  const state = jobState(files)
+  if (state?.running) return undefined
+  if (state && 'failed' in state && state.failed !== undefined) {
+    rmSync(adding, { recursive: true, force: true })
+    return undefined
+  }
+  const facts = await whoAmI(asAccount(gh, adding), cwd)
+  const dir = accountDir(root, facts.login)
+  rmSync(dir, { recursive: true, force: true })
+  renameSync(adding, dir)
+  writeFile600(join(dir, 'account.json'), `${JSON.stringify(facts, null, 2)}\n`)
+  return facts.login
+}
 
 /** Where the runs' pick is kept: beside OpenAgent's other files in the person's config folder. */
 export function picksPath(env: NodeJS.ProcessEnv = process.env): string {
@@ -53,52 +146,53 @@ function readPicks(path: string): PicksFile {
 }
 
 function writePicks(path: string, file: PicksFile): void {
-  mkdirSync(dirname(path), { recursive: true })
-  const next = `${path}.${process.pid}.tmp`
-  writeFileSync(next, `${JSON.stringify(file, null, 2)}\n`, { mode: 0o600 })
-  chmodSync(next, 0o600)
-  renameSync(next, path)
+  writeFile600(path, `${JSON.stringify(file, null, 2)}\n`)
 }
 
-/** What `gh` knows of the host. A `gh` that is not on this computer is "not installed"; one that cannot say is no account. */
-export async function ghState(cwd: string, gh: GhRunner): Promise<GhState> {
+/**
+ * Whether `gh` is on this computer, and OpenAgent's accounts with whether GitHub still takes each.
+ * A `gh` that is not on this computer is "not installed".
+ */
+export async function ghState(root: string, cwd: string, gh: GhRunner): Promise<GhState> {
   try {
     await gh(['--version'], cwd)
   } catch (err) {
     if (/ENOENT|not found/i.test(errorMessage(err))) return { installed: false }
   }
-  let said: unknown
-  try {
-    said = JSON.parse(await gh(['auth', 'status', '--json', 'hosts', '--hostname', HOST], cwd))
-  } catch {
-    return { installed: true, accounts: [] }
-  }
-  const rows = (said as { hosts?: Record<string, unknown> } | null)?.hosts?.[HOST]
   const accounts: GhAccount[] = []
-  for (const row of Array.isArray(rows) ? rows : []) {
-    const r = row as Record<string, unknown>
-    if (typeof r['login'] !== 'string' || !r['login']) continue
-    accounts.push({ login: r['login'], terminal: r['active'] === true, ok: r['state'] === 'success' })
+  for (const login of accountLogins(root)) {
+    const ok = await asAccount(gh, join(root, login))(['auth', 'status', '--hostname', HOST], cwd).then(
+      () => true,
+      () => false,
+    )
+    accounts.push({ login, ok })
   }
   return { installed: true, accounts }
 }
 
-/**
- * The account runs use: the one picked, while `gh` still knows it; else the terminal's, kept as
- * the pick from now on, so a later switch in the terminal leaves the runs where they were.
- */
+/** The account runs use: the one picked, while OpenAgent still has it; else the first, kept as the pick from now on. */
 export function runsAccount(accounts: readonly GhAccount[], path: string = picksPath()): string | undefined {
   const picks = readPicks(path)
   const picked = picks.runs[HOST]
   if (picked !== undefined && accounts.some(a => a.login === picked)) return picked
-  const terminal = accounts.find(a => a.terminal)?.login
-  if (terminal !== undefined) writePicks(path, { runs: { ...picks.runs, [HOST]: terminal } })
-  return terminal
+  const first = accounts[0]?.login
+  if (first !== undefined) writePicks(path, { runs: { ...picks.runs, [HOST]: first } })
+  return first
 }
 
-/** Runs use `login` from now on: an account `gh` knows. */
+/**
+ * The account runs use and its folder, read off the files alone, asking GitHub nothing: for
+ * OpenAgent's own copy of its login to a server. None when OpenAgent has no account.
+ */
+export function runsAccountDir(env: NodeJS.ProcessEnv = process.env): { login: string; dir: string } | undefined {
+  const root = accountsRoot(env)
+  const login = runsAccount(accountLogins(root).map(name => ({ login: name, ok: true })), picksPath(env))
+  return login === undefined ? undefined : { login, dir: accountDir(root, login) }
+}
+
+/** Runs use `login` from now on: an account OpenAgent has. */
 export function useForRuns(login: string, accounts: readonly GhAccount[], path: string = picksPath()): void {
-  if (!accounts.some(a => a.login === login)) throw new Error(`gh knows no account ${login} on ${HOST}: add it first`)
+  if (!accounts.some(a => a.login === login)) throw new Error(`OpenAgent has no GitHub account ${login}: add it in Permissions first`)
   const picks = readPicks(path)
   writePicks(path, { runs: { ...picks.runs, [HOST]: login } })
 }
@@ -224,37 +318,20 @@ export function loginUnderWay(files = jobFiles('login')): LoggingIn | undefined 
 }
 
 /**
- * Once logged in, give git the name and email of the terminal's account, when it has none: git
- * makes no commit without them, and a user a shared computer made for a person starts with none.
- * Only what git lacks is given. The email is GitHub's own address for the account, which hides the
- * person's own. The login stands whether or not git could be given them.
+ * Log an account in, in the browser: GitHub's device login, whose code the person types at
+ * github.com/login/device, wherever they are. The login goes into a folder of its own, its token
+ * kept there and not in the keychain the person's `gh` uses, so the person's own logins stay as
+ * they are. Answers once `gh` showed the code; `gh` waits on, in a process of its own, for the
+ * yes; {@link settleAdded} then names the folder by the account.
  */
-const NAMED = `{
-  has() { [ -n "$(cd / && git config --get "$1")" ]; }
-  if ! has user.name || ! has user.email; then
-    facts=$(gh api --hostname ${HOST} user --jq '[.login, (.id | tostring), (.name // "")] | @tsv') &&
-      login=$(printf '%s' "$facts" | cut -f1) && id=$(printf '%s' "$facts" | cut -f2) && name=$(printf '%s' "$facts" | cut -f3) &&
-      [ -n "$login" ] && [ -n "$id" ] && {
-        has user.name || git config --global -- user.name "\${name:-$login}"
-        has user.email || git config --global -- user.email "$id+$login@users.noreply.github.com"
-      }
-  fi
-  true
-}`
-
-/**
- * Log an account in to `gh` in the browser: GitHub's device login, whose code the person types at
- * github.com/login/device, wherever they are. `gh` makes the new account the terminal's, so once
- * the browser said yes, the terminal's account before it is made the terminal's again: logging an
- * account in for runs leaves the terminal as it was. Git is given a name then when it has none
- * ({@link NAMED}). Answers once `gh` showed the code; `gh` waits on, in a process of its own, for
- * the yes.
- */
-export async function startLogin(terminal: string | undefined, files = jobFiles('login'), waitMs = 20_000): Promise<LoggingIn> {
+export async function startLogin(root: string, files = jobFiles('login'), waitMs = 20_000): Promise<LoggingIn> {
   const under = loginUnderWay(files)
   if (under) return under
-  const back = terminal !== undefined ? ` && gh auth switch --hostname ${HOST} --user "$1"` : ''
-  await startJob(files, `gh auth login --hostname ${HOST} --git-protocol https --web${back} && ${NAMED}`, terminal !== undefined ? [terminal] : [])
+  const adding = join(root, ADDING)
+  rmSync(adding, { recursive: true, force: true })
+  mkdirSync(adding, { recursive: true, mode: 0o700 })
+  chmodSync(root, 0o700)
+  await startJob(files, `env -u GH_TOKEN -u GITHUB_TOKEN GH_CONFIG_DIR="$1" gh auth login --hostname ${HOST} --web --insecure-storage --skip-ssh-key`, [adding])
   const until = Date.now() + waitMs
   for (;;) {
     const state = jobState(files)
@@ -268,6 +345,32 @@ export async function startLogin(terminal: string | undefined, files = jobFiles(
   }
 }
 
+/** Keep a login handed over as a token as one of OpenAgent's accounts: its folder, its facts. */
+export async function takeToken(root: string, token: string, facts: AccountFacts, gh: GhRunner, cwd: string): Promise<void> {
+  const dir = accountDir(root, facts.login)
+  const next = join(root, `.taking-${process.pid}`)
+  rmSync(next, { recursive: true, force: true })
+  mkdirSync(next, { recursive: true, mode: 0o700 })
+  try {
+    await asAccount(gh, next)(['auth', 'login', '--hostname', HOST, '--with-token', '--insecure-storage'], cwd, undefined, token)
+    writeFile600(join(next, 'account.json'), `${JSON.stringify(facts, null, 2)}\n`)
+    rmSync(dir, { recursive: true, force: true })
+    renameSync(next, dir)
+  } finally {
+    rmSync(next, { recursive: true, force: true })
+  }
+}
+
+/** OpenAgent forgets an account: its folder goes, and a runs' pick that named it. The token is not ended. */
+export function forgetAccount(root: string, login: string, path: string = picksPath()): void {
+  rmSync(accountDir(root, login), { recursive: true, force: true })
+  const picks = readPicks(path)
+  if (picks.runs[HOST] === login) {
+    const { [HOST]: _gone, ...rest } = picks.runs
+    writePicks(path, { runs: rest })
+  }
+}
+
 function stopJob(files: JobFiles): void {
   try {
     process.kill(-Number(readFileSync(files.pid, 'utf8').trim()), 'SIGTERM')
@@ -277,12 +380,12 @@ function stopJob(files: JobFiles): void {
 }
 
 /**
- * The environment a run gets to work as `login`: its token for `gh`, and the same token for git's
+ * The environment to work as an account: its folder for `gh`, its token for `gh` and for git's
  * pushes and fetches to GitHub, whatever the person's own git keeps for it (the keychain, a
- * different helper, an ssh key). Set through git's environment, so nothing of the person's own
- * settings changes. The settings already in the environment are kept.
+ * different helper, an ssh key), and its name on the commits. Set through git's environment, so
+ * nothing of the person's own settings changes. The settings already in the environment are kept.
  */
-export function runEnv(token: string, env: NodeJS.ProcessEnv = process.env): Record<string, string> {
+export function runEnv(token: string, dir: string, facts: AccountFacts | undefined, env: NodeJS.ProcessEnv = process.env): Record<string, string> {
   const given = Number(env['GIT_CONFIG_COUNT'] ?? 0) || 0
   const lines: [string, string][] = [
     // An empty helper drops every helper set before it; then one that answers with the token.
@@ -292,10 +395,16 @@ export function runEnv(token: string, env: NodeJS.ProcessEnv = process.env): Rec
     [`url.https://${HOST}/.insteadOf`, `git@${HOST}:`],
     [`url.https://${HOST}/.insteadOf`, `ssh://git@${HOST}/`],
   ]
-  const out: Record<string, string> = { GH_TOKEN: token, GIT_CONFIG_COUNT: String(given + lines.length) }
+  const out: Record<string, string> = { GH_CONFIG_DIR: dir, GH_TOKEN: token, GIT_CONFIG_COUNT: String(given + lines.length) }
   lines.forEach(([key, value], i) => {
     out[`GIT_CONFIG_KEY_${given + i}`] = key
     out[`GIT_CONFIG_VALUE_${given + i}`] = value
   })
+  if (facts) {
+    // The commits are the account's: its name, and GitHub's own address for it, which hides the person's own.
+    const name = facts.name ?? facts.login
+    const email = `${facts.id}+${facts.login}@users.noreply.github.com`
+    Object.assign(out, { GIT_AUTHOR_NAME: name, GIT_AUTHOR_EMAIL: email, GIT_COMMITTER_NAME: name, GIT_COMMITTER_EMAIL: email })
+  }
   return out
 }

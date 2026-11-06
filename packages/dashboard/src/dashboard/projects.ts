@@ -5,7 +5,8 @@ import { isActivated } from '../project.js'
 import { readAllAgents, type AgentMeta } from '../store/index.js'
 import type { ProjectError, StaysLocal } from '../project-errors.js'
 import { projectGitHost, type GitHostFor } from '../store/git-host.js'
-import { projectNameOf } from '@openagt/agent-data'
+import { projectNameOf, sessionsHome } from '@openagt/agent-data'
+import { SESSIONS_ID } from '../project-address.js'
 
 /**
  * The multi-project read side (#392): projects the daemon serves come from the registry (#390),
@@ -149,6 +150,8 @@ export function defaultProjectsProvider(deps: ProviderDeps = {}): ProjectsProvid
       return Promise.all((await present()).map(summarize))
     },
     async resolvePath(id) {
+      // The sessions with no project work in the sessions home, as a project's runs work in its folder.
+      if (id === SESSIONS_ID) return sessionsHome()
       return (await present()).find(record => record.id === id)?.path
     },
   }

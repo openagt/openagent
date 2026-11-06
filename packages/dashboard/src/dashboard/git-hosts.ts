@@ -1,11 +1,9 @@
 // A git host as its package answers for it (`<command> accounts`), read off what the package
-// printed, and the host a project's remote is on: what the git hosts of Settings › Accounts are drawn from.
+// printed, and the host a project's remote is on: what the git hosts of the Permissions page are drawn from.
 
-/** An account the git host's tool knows, as its package said it. */
+/** One of OpenAgent's own accounts on the git host, as its package said it. */
 export interface GitHostAccount {
   login: string
-  /** The terminal's: the one the tool uses when not told which. */
-  terminal: boolean
   /** The one OpenAgent's runs use. */
   runs: boolean
   /** Whether the tool could use it when asked. */
@@ -63,7 +61,7 @@ export function readProvider(output: unknown): GitHostProvider | undefined {
   for (const row of Array.isArray(said['accounts']) ? said['accounts'] : []) {
     const a = row as Record<string, unknown>
     const login = text(a['login'])
-    if (login !== undefined) accounts.push({ login, terminal: a['terminal'] === true, runs: a['runs'] === true, ok: a['ok'] !== false })
+    if (login !== undefined) accounts.push({ login, runs: a['runs'] === true, ok: a['ok'] !== false })
   }
   const logo = text(said['logo'])
   const loggingIn = said['loggingIn'] as { code?: unknown; url?: unknown } | undefined

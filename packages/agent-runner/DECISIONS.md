@@ -50,6 +50,11 @@ already made, and lists it in its pull request; for anything else it proposes an
   prompt once, and the agent's own loop to the end. No system prompt, no gates, no
   steering: the command's skill file is the whole instruction. Picked over carrying
   OpenAgent's run child over: its flow is the dashboard's, not a scheduled run's.
+- A run in the sessions home has no project: it works in a folder of its own there, with the
+  same skills linked in and no git, and the folder stays when the run ends, holding what the
+  agent made. The home is beside the personal folder, not in it: the personal folder is
+  committed whole and synced to the person's repository. Picked over the folder in the
+  personal folder, where a session's files would be pushed with the records.
 - The agent publishes its own work, when asked to, through the skills in its checkout; the
   run publishes nothing, and reads the pull request back off the branch for the record,
   through the command the project's git host package declares, never through a git host's

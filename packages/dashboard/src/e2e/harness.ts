@@ -19,7 +19,7 @@ import { worktreePath } from '@openagt/skill-branches'
 import { TICKETS_DIR } from '@openagt/skill-tickets'
 import { QUEUE_FILE } from '@openagt/skill-queue'
 import { tailAgentEvents } from '../dashboard-rpc/events-tail.js'
-import { sendAddProject } from '../dashboard-rpc/projects.js'
+import { sendAddProject, sendShareRecords } from '../dashboard-rpc/projects.js'
 import { sendStart, sendStop } from '../dashboard-rpc/control.js'
 import { onAgents } from '../dashboard-rpc/reads.js'
 import type { OpenAgentEvent } from '../events.js'
@@ -243,8 +243,11 @@ export async function makeWorld(): Promise<StoryWorld> {
       const origin = join(cwd, 'origin.git')
       await git(cwd, 'init', '-q', '--bare', origin)
       await git(cwd, 'remote', 'add', 'origin', origin)
-      const added = await rpc(sendAddProject)(cwd, true)
+      const added = await rpc(sendAddProject)(cwd)
       if (!added.ok) throw new Error(`could not register the fixture repo: ${added.error}`)
+      // Its records go to its remote, as a team's do.
+      const shared = await rpc(sendShareRecords)(projectId(resolve(cwd)), true)
+      if (!shared.ok) throw new Error(`could not share the fixture repo's records: ${shared.error}`)
       // The project's own start and resume lines: this machine's file, under the ignored directory.
       await writeFile(join(cwd, PROJECT_HOOKS_FILE), `start: node ${JSON.stringify(fakeRun)} start\nresume: node ${JSON.stringify(fakeRun)} resume\n`)
       return { id: projectId(resolve(cwd)), cwd }

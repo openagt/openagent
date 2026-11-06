@@ -1,11 +1,12 @@
 import { readFile, stat } from 'node:fs/promises'
-import { nodeGitRunner, type GitRunner } from '@openagt/agent-data'
+import { listSessionFolders, nodeGitRunner, sessionFolder, sessionsHomeOf, type GitRunner } from '@openagt/agent-data'
 import { agentBranchName, reclaimWorktree, worktreeDirEntries, worktreePath } from '@openagt/skill-branches'
 import { listRuns, type LogsDeps, type RunCard } from '@openagt/skill-logs'
 import { endLiveCard, readLiveCard, readLiveDiary } from './live-card.js'
 import { lockHolder, runStderrPath } from './run-lock.js'
 import { recordBranchGone, recordRun, runnerMark, startOf } from './records.js'
 import { childEndedLine, tellParent, type ParentDeps } from './parent.js'
+import { SESSION_FOLDER_STAYS } from './run.js'
 
 /**
  * The belt (#1774): what a run's own process could not do because it died. A scheduler runs it on
@@ -25,6 +26,10 @@ import { childEndedLine, tellParent, type ParentDeps } from './parent.js'
  * A run this sweep ends, one that died mid-work or never started, tells its parent when its record
  * names one (`parent.ts`): its own process is not there to. A run that had ended by itself told
  * its parent then, or died just before it could; the sweep does not tell again.
+ *
+ * In the sessions home, the runs with no project, a session's folder is where its run worked: it
+ * stays, whatever the run's end, and only a folder whose run's record does not say how it ended yet
+ * is looked at, so the sweep does not write every session again that ever ran here.
  */
 
 export interface SweepDeps {
@@ -57,18 +62,28 @@ export async function sweep(repo: string, deps: SweepDeps): Promise<SweepResult>
     if (parent !== undefined) await tellParent(repo, parent, childEndedLine({ id: card.id, status: card.status, detail, ...(branch !== undefined ? { branch } : {}), ...(card.pr ? { pr: card.pr } : {}) }), telling)
   }
 
+  const sessions = await sessionsHomeOf(repo)
+  const recorded = await listRuns(repo, {}, logs)
+  const entries = sessions !== undefined ? (await listSessionFolders(sessions)).map(({ id, path }) => ({ agentId: id, path })) : await worktreeDirEntries(repo).catch(() => [])
+
   // Checkouts first: the live card is the truth about a run this machine started.
-  for (const entry of await worktreeDirEntries(repo).catch(() => [])) {
+  for (const entry of entries) {
     let card = await readLiveCard(entry.path, entry.agentId)
     const mark = card && runnerMark(card)
     if (!card || !mark || mark.host !== deps.host) continue
     seen.add(card.id)
+    if (sessions !== undefined && card.status !== 'running' && recorded.some(run => run.id === card!.id && run.status !== 'running')) continue
     if (await lockHolder(repo, card.id, deps.isAlive)) continue
     const died = card.status === 'running'
     if (died) card = await endLiveCard(entry.path, card, 'failed', DIED_DETAIL, now().toISOString())
     const diary = await readLiveDiary(entry.path, card.id)
     const written = await recordRun(repo, card, diary, logs)
     if (written.ok || written.committed) result.recorded.push({ id: card.id, status: card.status })
+    if (sessions !== undefined) {
+      result.kept.push({ id: card.id, reason: card.status === 'waiting' ? 'waiting' : SESSION_FOLDER_STAYS })
+      if (died) await tell(card, DIED_DETAIL, undefined)
+      continue
+    }
     if (card.status === 'waiting') {
       result.kept.push({ id: card.id, reason: 'waiting' })
       continue
@@ -82,12 +97,12 @@ export async function sweep(repo: string, deps: SweepDeps): Promise<SweepResult>
   }
 
   // Then the branch: a running card of this machine's with nothing on disk never started.
-  for (const card of await listRuns(repo, {}, logs)) {
+  for (const card of recorded) {
     if (card.status !== 'running' || seen.has(card.id)) continue
     const mark = runnerMark(card)
     if (!mark || mark.host !== deps.host) continue
     if (await lockHolder(repo, card.id, deps.isAlive)) continue
-    if (await checkoutExists(repo, card.id)) continue // a checkout with no live card yet: the run is opening it
+    if (await checkoutExists(sessions !== undefined ? sessionFolder(sessions, card.id) : worktreePath(repo, card.id))) continue // a checkout with no live card yet: the run is opening it
     const stderr = (await readFile(runStderrPath(repo, card.id), 'utf8').catch(() => '')).trim()
     const ended = stderr ? failedStart(card, stderr, now()) : gone(card, now())
     const written = await recordRun(repo, ended.card, ended.diary, logs)
@@ -100,8 +115,8 @@ export async function sweep(repo: string, deps: SweepDeps): Promise<SweepResult>
 /** The detail of a run whose process died mid-work. */
 const DIED_DETAIL = 'its process died before the run ended'
 
-async function checkoutExists(repo: string, id: string): Promise<boolean> {
-  return stat(worktreePath(repo, id)).then(s => s.isDirectory(), () => false)
+async function checkoutExists(path: string): Promise<boolean> {
+  return stat(path).then(s => s.isDirectory(), () => false)
 }
 
 function failedStart(card: RunCard, stderr: string, now: Date) {

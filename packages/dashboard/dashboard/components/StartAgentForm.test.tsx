@@ -37,7 +37,8 @@ vi.mock('./GitHosts.js', () => ({ GitAccountMenu: () => null, useRunsAccount: ()
 const serverLogins = vi.hoisted(() => ({ onServerLogins: vi.fn(), sendUseLoginsOn: vi.fn(), sendAllowLogins: vi.fn(), sendSettleLogin: vi.fn() }))
 vi.mock('../rpc/server-logins.js', () => serverLogins)
 const openSettings = vi.hoisted(() => vi.fn())
-vi.mock('../lib/use-route.js', async () => ({ ...(await vi.importActual<typeof import('../lib/use-route.js')>('../lib/use-route.js')), openSettings }))
+const openPermissions = vi.hoisted(() => vi.fn())
+vi.mock('../lib/use-route.js', async () => ({ ...(await vi.importActual<typeof import('../lib/use-route.js')>('../lib/use-route.js')), openSettings, openPermissions }))
 
 const start = vi.hoisted(() => vi.fn())
 // What the start says of itself beside its answer: that the machine is cloning the project, or why there is no run.
@@ -466,7 +467,7 @@ describe('StartAgentForm (#1774)', () => {
     expect(openSettings).toHaveBeenCalledWith('skills', 'p1')
   })
 
-  test('a machine that takes no logins of this computer\'s sends the person to Settings, Accounts', async () => {
+  test('a machine that takes no logins of this computer\'s sends the person to the Permissions page', async () => {
     onCommands.mockResolvedValue({ commands: [], startHook: true, gitHost: true, remote: true, address: 'github.com/acme/shop' })
     machine.current = { id: 'd2', url: 'https://box/_devices/via/2', label: 'Dani\'s PC' }
     const line = '`codex` is not logged in. Run `codex login`, then start again.'
@@ -476,7 +477,7 @@ describe('StartAgentForm (#1774)', () => {
     fireEvent.click(await screen.findByRole('button', { name: 'Open Accounts' }))
     expect(screen.getByRole('alert').textContent).toContain('Codex is not logged in on Dani\'s PC.')
     expect(onMachineStartCheck).toHaveBeenCalledWith('p1', 'd2', 'codex')
-    expect(openSettings).toHaveBeenCalledWith('accounts')
+    expect(openPermissions).toHaveBeenCalled()
   })
 
   test('a machine without the picked agent says so in words naming it, and the press opens its page, where an update brings it', async () => {

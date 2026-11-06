@@ -60,7 +60,7 @@ export function readMachineAccountsAhead(machineId: string): void {
 /**
  * An agent's accounts on the computer a run goes to: this computer's, read as Settings reads them,
  * or a saved machine's, asked there; `unanswered` when that machine does not say. A pick makes one
- * the first its runs take, there, as Settings › Accounts does: the next run goes with it.
+ * the first its runs take, there, as the Permissions page does: the next run goes with it.
  */
 export function useAccountsOn(
   agent: AccountsAgent,

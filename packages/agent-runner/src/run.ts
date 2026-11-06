@@ -2,7 +2,7 @@ import { hostname } from 'node:os'
 import { mkdir, stat, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { AgentExitError, ConversationGoneError, continuationPrompt, logDiaryFile, parseQuestion, promptLines, promptOf, takeInbox, type Driver, type DriverPromptOptions, type DriverSession, type DriverTurn, type PromptLine, type LogEndStatus, type Question } from '@openagt/agent-driver'
-import { nodeGitRunner, type GitRunner } from '@openagt/agent-data'
+import { nodeGitRunner, sessionsHomeOf, type GitRunner } from '@openagt/agent-data'
 import { agentBranchName, attachCheckout, createCheckout, reclaimWorktree, relinkCheckout, worktreeBranch, worktreePath, type SkillLink } from '@openagt/skill-branches'
 import { findRun, readDiary, type AnyDiaryLine, type LogsDeps, type RunCard, type RunStatus } from '@openagt/skill-logs'
 import { hideLiveDir, inboxPath, liveDir, readLiveCard, readLiveDiary } from './live-card.js'
@@ -13,6 +13,7 @@ import { acquireRunLock, isPidAlive, releaseRunLock } from './run-lock.js'
 import { runEndedLine } from './ended.js'
 import { askName, isBareCommand, nameRun, type AskedName } from './title.js'
 import { childEndedLine, tellParent, type ParentDeps } from './parent.js'
+import { openSessionFolder } from './session-folder.js'
 
 /**
  * One run (#1774): a checkout from the branches package, a session from agent-driver, the prompt
@@ -52,6 +53,10 @@ import { childEndedLine, tellParent, type ParentDeps } from './parent.js'
  * (`run --pr-base <branch>`); all are on its record for its whole life. When it
  * ends, however it ends, its parent is told (`parent.ts`).
  *
+ * A run started in the sessions home has no project: it works in a folder of its own there
+ * (`session-folder.ts`), with no branch, no pull request and nothing to reclaim, and its record is
+ * kept with the other sessions' (`@openagt/agent-data`'s sessions).
+ *
  * A run that makes its own branch writes down the commit the branch was made at, on its record
  * for its whole life: the run's own work is what came after it, which is how it is still told
  * apart once it is merged. A run given a branch that exists (a person's pull request's) writes none: that
@@ -60,6 +65,9 @@ import { childEndedLine, tellParent, type ParentDeps } from './parent.js'
 
 /** How long naming a run from its report may hold its end up: the small model answers in a few seconds. */
 const REPORT_NAMING_TIMEOUT_MS = 15_000
+
+/** Why a run with no project keeps where it worked: see {@link openSessionFolder}. */
+export const SESSION_FOLDER_STAYS = 'a session folder stays'
 
 /** The detail a stopped run's record carries. */
 export const STOPPED_DETAIL = 'stopped by a signal to its process'
@@ -239,10 +247,16 @@ export async function runCommand(repo: string, opts: RunOptions): Promise<RunOut
 
     // The checkout: the branches package's one sequence, on a fresh branch or the one given.
     // Without one there is no run, and the record says so instead of a marker left running.
-    let checkout: { path: string; branch: string }
+    let checkout: Workspace
+    const sessions = await sessionsHomeOf(repo)
     try {
       const skills = await (opts.skills ?? basicSkills)(repo, opts.driver).catch((): SkillLink[] => [])
-      checkout = opts.branch !== undefined ? await attachCheckout(repo, { agentId: id, branch: opts.branch, skills }, git) : await createCheckout(repo, { agentId: id, skills, ...(opts.base !== undefined ? { base: opts.base } : {}) }, git)
+      checkout =
+        sessions !== undefined
+          ? await openSessionFolder(sessions, id, skills)
+          : opts.branch !== undefined
+            ? await attachCheckout(repo, { agentId: id, branch: opts.branch, skills }, git)
+            : await createCheckout(repo, { agentId: id, skills, ...(opts.base !== undefined ? { base: opts.base } : {}) }, git)
     } catch (err) {
       naming?.stop.abort()
       const detail = `could not create a checkout: ${errorMessage(err)}`
@@ -253,7 +267,7 @@ export async function runCommand(repo: string, opts: RunOptions): Promise<RunOut
       return { id, status: 'failed', checkout: { reclaimed: false, reason: 'no checkout' }, detail }
     }
     // Only a branch this run made: one it was given holds another run's work, begun elsewhere.
-    if (opts.branch === undefined) mark = { ...mark, ...(await startCommit(checkout.path, git)) }
+    if (checkout.branch !== undefined && opts.branch === undefined) mark = { ...mark, ...(await startCommit(checkout.path, git)) }
     // A run another tool marked carries what only that tool knows: orchestration writes the task's
     // name as the run's `title` and the task's id under `caller`. This process builds its card from
     // its own arguments, which never held either, and that card seeds the live card the record is
@@ -273,7 +287,7 @@ export async function runCommand(repo: string, opts: RunOptions): Promise<RunOut
         driver: opts.driver.id,
         ...modelOf(opts.model),
         ...effortOf(opts.effort),
-        branch: checkout.branch,
+        ...(checkout.branch !== undefined ? { branch: checkout.branch } : {}),
         caller: { runner: mark, pid, host, ...forReaders(mark), kind: 'prompt', workspace: checkout.path },
       }),
       prompt: opts.prompt,
@@ -379,13 +393,10 @@ export async function resumeRun(repo: string, opts: ResumeOptions): Promise<RunO
       throw new Error('a text or an answer is needed to resume a run')
     }
 
-    const branch = card.branch ?? agentBranchName(opts.id)
-    const path = worktreePath(repo, opts.id)
-    const kept = await stat(path).then(s => s.isDirectory(), () => false)
     const skills = await (opts.skills ?? basicSkills)(repo, opts.driver).catch((): SkillLink[] => [])
-    const checkout: { path: string; branch: string; again?: true } = kept ? { path, branch } : await attachCheckout(repo, { agentId: opts.id, branch, skills, ...(previous.base !== undefined ? { base: previous.base } : {}) }, git)
-    // A checkout that stayed was made by whatever version ran then: its links are brought to what a new one gets.
-    if (kept) await relinkCheckout(repo, path, { skills }, git)
+    const sessions = await sessionsHomeOf(repo)
+    // A session's folder is opened again as it is, and made again when someone removed it.
+    const checkout: Workspace & { again?: true } = sessions !== undefined ? await openSessionFolder(sessions, opts.id, skills) : await projectCheckout(repo, opts.id, card.branch, previous.base, skills, git)
     // A branch that was gone everywhere was just made again, from where it starts as that is now:
     // that is where the run's own work begins. One still on origin came back with its work.
     const restarted = checkout.again ? await startCommit(checkout.path, git) : {}
@@ -431,9 +442,28 @@ export async function resumeRun(repo: string, opts: ResumeOptions): Promise<RunO
   }
 }
 
+/** Where a run works: a checkout of the project on its branch, or a session's own folder, which has no branch. */
+interface Workspace {
+  path: string
+  branch?: string
+}
+
+/**
+ * A continued run's checkout: the one it kept, or a new one attached to its branch; a branch that
+ * went with the checkout, for holding nothing, starts again from `base`, or origin's default branch.
+ */
+async function projectCheckout(repo: string, id: string, branch: string | undefined, base: string | undefined, skills: readonly SkillLink[], git: GitRunner): Promise<{ path: string; branch: string; again?: true }> {
+  const on = branch ?? agentBranchName(id)
+  const path = worktreePath(repo, id)
+  if (!(await stat(path).then(s => s.isDirectory(), () => false))) return attachCheckout(repo, { agentId: id, branch: on, skills, ...(base !== undefined ? { base } : {}) }, git)
+  // A checkout that stayed was made by whatever version ran then: its links are brought to what a new one gets.
+  await relinkCheckout(repo, path, { skills }, git)
+  return { path, branch: on }
+}
+
 interface SessionRun {
   id: string
-  checkout: { path: string; branch: string }
+  checkout: Workspace
   card: RunCard
   /** The diary the record already holds, for a continued run: written into the checkout before the session opens. */
   priorDiary?: AnyDiaryLine[]
@@ -638,8 +668,11 @@ async function sessionToEnd(repo: string, run: SessionRun, dir: string, inbox: s
 
       // Where the work ended up: the agent renames its branch itself, and the pull request it
       // opened, if any, is read back off the branch through the project's git host.
-      branch = (await worktreeBranch(run.checkout.path, run.git).catch(() => undefined)) ?? run.checkout.branch
-      pr = await run.gitHost.requestOfBranch(repo, branch).catch(() => undefined)
+      // A session's folder has no branch, and so no pull request.
+      if (run.checkout.branch !== undefined) {
+        branch = (await worktreeBranch(run.checkout.path, run.git).catch(() => undefined)) ?? run.checkout.branch
+        pr = await run.gitHost.requestOfBranch(repo, branch).catch(() => undefined)
+      }
       if (pr && named && pr.url !== named.url) earlier = [...earlier, { number: named.number, url: named.url }]
       if (pr) named = pr
       // Each once, and never the one the card names: work moved back to a branch takes its request back.
@@ -648,7 +681,7 @@ async function sessionToEnd(repo: string, run: SessionRun, dir: string, inbox: s
       if (!live) break
       // Written whenever the run has had one, so a list emptied by the work moving back is said too.
       saidEarlier ||= earlier.length > 0
-      await live.patch({ branch, ...(pr ? { pr } : {}), ...(saidEarlier ? { caller: { earlierPrs: earlier } } : {}) })
+      await live.patch({ ...(branch !== undefined ? { branch } : {}), ...(pr ? { pr } : {}), ...(saidEarlier ? { caller: { earlierPrs: earlier } } : {}) })
       // The ended line leaves out a reason the diary already holds: the agent's error line, written
       // just before its process exited, says it, so the ended line says only that the agent exited.
       await live.end(status, status === 'failed' && failure instanceof AgentExitError ? failure.exit : detail)
@@ -671,7 +704,7 @@ async function sessionToEnd(repo: string, run: SessionRun, dir: string, inbox: s
   await naming
   // The record: the two files the session kept, copied onto the branch unchanged.
   const live = driverSession?.log
-  const card = (await readLiveCard(run.checkout.path, run.id)) ?? { ...run.card, status, endedAt: run.clock(), branch, ...(pr ? { pr } : {}), ...(saidEarlier ? { caller: { ...run.card.caller, earlierPrs: earlier } } : {}) }
+  const card = (await readLiveCard(run.checkout.path, run.id)) ?? { ...run.card, status, endedAt: run.clock(), ...(branch !== undefined ? { branch } : {}), ...(pr ? { pr } : {}), ...(saidEarlier ? { caller: { ...run.card.caller, earlierPrs: earlier } } : {}) }
   const diary = live ? await readLiveDiary(run.checkout.path, run.id) : [...(run.priorDiary ?? []), { kind: 'ended', status, ...(detail !== undefined ? { detail } : {}), at: card.endedAt ?? run.clock() }]
   await run.marking
   const recorded = await recordRun(repo, card, diary, run.logs)
@@ -685,7 +718,7 @@ async function sessionToEnd(repo: string, run: SessionRun, dir: string, inbox: s
   const parent = runnerMark(run.card)?.parent
   const tell = async (branchStayed: boolean): Promise<void> => {
     if (parent === undefined) return
-    const line = childEndedLine({ id: run.id, status, ...(detail !== undefined ? { detail } : {}), ...(question !== undefined ? { question } : {}), ...(branchStayed ? { branch } : {}), ...(pr ? { pr } : {}), lastWords })
+    const line = childEndedLine({ id: run.id, status, ...(detail !== undefined ? { detail } : {}), ...(question !== undefined ? { question } : {}), ...(branchStayed && branch !== undefined ? { branch } : {}), ...(pr ? { pr } : {}), lastWords })
     await tellParent(repo, parent, line, run.telling)
   }
 
@@ -696,6 +729,11 @@ async function sessionToEnd(repo: string, run: SessionRun, dir: string, inbox: s
   if (status === 'waiting') {
     await tell(true)
     return outcomeOf(run.id, status, branch, pr, card.cost, { reclaimed: false, reason: 'waiting' }, detail)
+  }
+  // A session's folder is its work, kept for the person and for the run going on later.
+  if (branch === undefined) {
+    await tell(false)
+    return outcomeOf(run.id, status, branch, pr, card.cost, { reclaimed: false, reason: SESSION_FOLDER_STAYS }, detail)
   }
   const reclaimed = await reclaimWorktree(repo, run.checkout.path, { birthBranch: agentBranchName(run.id), ...startOf(run.card), git: run.git })
   if (reclaimed.ok) {
@@ -731,11 +769,11 @@ async function startCommit(checkout: string, git: GitRunner): Promise<{ baseComm
   return commit ? { baseCommit: commit } : {}
 }
 
-function outcomeOf(id: string, status: Exclude<RunStatus, 'running'>, branch: string, pr: RunOutcome['pr'], cost: number | undefined, checkout: RunOutcome['checkout'], detail: string | undefined): RunOutcome {
+function outcomeOf(id: string, status: Exclude<RunStatus, 'running'>, branch: string | undefined, pr: RunOutcome['pr'], cost: number | undefined, checkout: RunOutcome['checkout'], detail: string | undefined): RunOutcome {
   return {
     id,
     status,
-    branch,
+    ...(branch !== undefined ? { branch } : {}),
     ...(pr ? { pr } : {}),
     ...(cost !== undefined ? { cost } : {}),
     checkout,

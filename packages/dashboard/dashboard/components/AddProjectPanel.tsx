@@ -1,10 +1,8 @@
-import { useEffect, useId, useRef, useState, type FormEvent, type KeyboardEvent } from 'react'
+import { useEffect, useRef, useState, type FormEvent, type KeyboardEvent } from 'react'
 import { onCloneTarget, sendAddProject, sendAddProjectFromAddress, sendPickProjectDirectory } from '../rpc/projects.js'
 import { useAction } from '../lib/use-action.js'
-import { AddProjectEffects } from './AddProjectEffects.js'
 import { Button } from './ui/button.js'
 import { Input } from './ui/input.js'
-import { RadioGroup, RadioGroupOption } from './ui/radio-group.js'
 
 // Add a project (#396/#1150): the OS's own folder picker instead of a typed path — the daemon
 // opens the dialog (a browser page cannot learn an absolute path from a picker of its own) and
@@ -12,9 +10,8 @@ import { RadioGroup, RadioGroupOption } from './ui/radio-group.js'
 // registers it. Opened as a small modal from the projects picker and the onboarding checklist.
 // The checklist may hand it the folder the dashboard runs in: then there is nothing to pick.
 //
-// Before the add, the person also says where the agents' records go: kept on this machine, which
-// is what is picked until they pick the other, or shared to the repository's remote. Nothing is
-// pushed for a project added with the first.
+// The question is short: who adds a project wants it added. The agents' records stay on this
+// machine; the project's Agent data page shares them later.
 //
 // The second way in is the repository's address, for a computer that does not have the folder: a
 // server has no screen for a folder dialog and no folder to pick. The person types the address,
@@ -43,9 +40,7 @@ export function AddProjectPanel({
   const [byAddress, setByAddress] = useState(fromAddress)
   const [typed, setTyped] = useState('')
   const [target, setTarget] = useState<{ typed: string; address: string; path: string } | null>(null)
-  const [share, setShare] = useState(false)
-  const recordsLabel = useId()
-  const [added, setAdded] = useState<{ alreadyActivated: boolean; noRemote: boolean; path?: string } | null>(null)
+  const [added, setAdded] = useState<{ alreadyActivated: boolean; path?: string } | null>(null)
   const [pickError, setPickError] = useState<string | null>(null)
   const { busy, error, reset, run } = useAction()
   const panelRef = useRef<HTMLDivElement>(null)
@@ -82,7 +77,7 @@ export function AddProjectPanel({
   useEffect(() => {
     if (!added) return
     // Longer when there is something to read: where a cloned project went.
-    const timer = setTimeout(onClose, added.noRemote || added.path ? 6000 : 2500)
+    const timer = setTimeout(onClose, added.path ? 6000 : 2500)
     return () => clearTimeout(timer)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [added])
@@ -99,9 +94,9 @@ export function AddProjectPanel({
   // Trust confirmed (#439) -> install + register; by address, clone first.
   const confirmAdd = async () => {
     if (busy || (!path && !target)) return
-    const outcome = await run(() => (target ? sendAddProjectFromAddress(target.typed, share) : sendAddProject(path!, share)), 'Failed to add the project.')
+    const outcome = await run(() => (target ? sendAddProjectFromAddress(target.typed) : sendAddProject(path!)), 'Failed to add the project.')
     if (outcome.ok) {
-      setAdded({ alreadyActivated: outcome.value.alreadyActivated, noRemote: outcome.value.noRemote === true, ...(outcome.value.path ? { path: outcome.value.path } : {}) })
+      setAdded({ alreadyActivated: outcome.value.alreadyActivated, ...(outcome.value.path ? { path: outcome.value.path } : {}) })
       onAdded()
     }
   }
@@ -145,8 +140,6 @@ export function AddProjectPanel({
             <p role="status" className="mb-3 text-sm font-medium">
               {added.alreadyActivated ? 'Already added' : 'Project added'}
             </p>
-            {/* Sharing was picked and there is nothing to share with: said, not dropped. */}
-            {added.noRemote && <p className="mb-3 text-xs text-muted-foreground">This repository has no remote, so the agents&rsquo; records stay on this machine.</p>}
             {added.path && (
               <p className="mb-3 break-all text-xs text-muted-foreground">
                 It is in <code className="rounded bg-muted px-1">{added.path}</code>.
@@ -218,35 +211,9 @@ export function AddProjectPanel({
               </p>
             )}
             <p className="mb-3 text-xs text-muted-foreground">
-              Adding it lets the agent read its files. Hidden instructions in an untrusted repo can hijack the agent
-              (prompt injection), so only add repos you trust.
+              Agents will read its files. Hidden instructions in a repository can take over an agent, so add only the
+              ones you trust.
             </p>
-            <div className="mb-3">
-              <AddProjectEffects />
-            </div>
-            {/* One group with one name: the radio group is named by the line above it. */}
-            <div className="mb-3 text-xs">
-              <p id={recordsLabel} className="mb-1 font-medium text-foreground">
-                The agents&rsquo; records (what you ask, what each agent answers)
-              </p>
-              <RadioGroup aria-labelledby={recordsLabel} value={share ? 'share' : 'keep'} disabled={busy} onValueChange={next => setShare(next === 'share')} className="gap-1.5">
-                <RadioGroupOption value="keep" className="flex-nowrap items-start text-xs [&>[data-slot=radio-group-item]]:mt-0.5">
-                  <span>
-                    Keep them on this machine
-                    <span className="block text-muted-foreground">Nothing is pushed.</span>
-                  </span>
-                </RadioGroupOption>
-                <RadioGroupOption value="share" className="flex-nowrap items-start text-xs [&>[data-slot=radio-group-item]]:mt-0.5">
-                  <span>
-                    Share them to the repository&rsquo;s remote
-                    <span className="block text-muted-foreground">
-                      Pushes a branch <code className="rounded bg-muted px-1">agent-data</code> to origin, and keeps pushing as agents work.
-                    </span>
-                  </span>
-                </RadioGroupOption>
-              </RadioGroup>
-              <p className="mt-1 text-muted-foreground">You can change this later in the project&rsquo;s menu.</p>
-            </div>
             {error && <p className="mb-2 text-xs text-danger">{error}</p>}
             <div className="flex justify-end gap-2">
               <Button

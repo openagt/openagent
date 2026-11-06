@@ -179,7 +179,7 @@ async function act(host: string, args: string[]): Promise<{ ok: true; output: un
   return done
 }
 
-/** Runs use `login` at `host` from now on; the terminal's own account stays as it is. */
+/** Runs use `login`, one of OpenAgent's own accounts at `host`, from now on. */
 export async function sendUseGitHostAccount(host: string, login: string): Promise<AccountResult> {
   const done = await act(host, ['use', login])
   return done.ok ? { ok: true } : done

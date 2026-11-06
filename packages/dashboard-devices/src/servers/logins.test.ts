@@ -40,21 +40,21 @@ test('every login script is one a shell reads, runs as the user, and holds the l
   assert.match(STEPS.find(step => step.id === 'tools')!.script({ address: '203.0.113.5', version: '1.2.3' }), /signed-by=\/etc\/apt\/keyrings\/githubcli-archive-keyring\.gpg\] https:\/\/cli\.github\.com\/packages stable main/)
 })
 
-test('on the server the GitHub login reaches gh where a program reads, and is on no command line and in nothing a program is given; a step that fails leaves no login behind', async () => {
+test('on the server the GitHub login becomes OpenAgent\u2019s one account there: it reaches gh where a program reads, and is on no command line and in nothing a program is given; a step that fails leaves no login behind', async () => {
   const home = await mkdtemp(join(tmpdir(), 'servers-gh-'))
   try {
-    // A gh that writes down what it was started with, what it was given, and what it read; it keeps a login as gh does.
+    // A gh that writes down what it was started with, what it was given, and in which folder; it keeps a login there as gh does.
     await mkdir(join(home, '.local', 'bin'), { recursive: true })
-    await mkdir(join(home, '.config', 'gh'), { recursive: true })
-    const kept = join(home, '.config', 'gh', 'hosts.yml')
-    await writeFile(kept, 'a login copied before\n')
+    const accounts = join(home, '.openagent-github')
+    await mkdir(join(accounts, 'olduser'), { recursive: true })
+    await writeFile(join(accounts, 'olduser', 'hosts.yml'), 'a login copied before\n')
     await program(
       join(home, '.local', 'bin', 'gh'),
       `#!/bin/bash
-{ echo "args: $*"; echo "env: $(env | tr '\\n' ' ')"; [ -e "$HOME/.config/gh/hosts.yml" ] && echo "old login still there"; } >> "$HOME/gh.log"
-if [ "$1 $2" = "auth login" ]; then login=$(cat); echo "read: $login" >> "$HOME/gh.log"; echo "kept by gh" > "$HOME/.config/gh/hosts.yml"; fi
-[ "$1 $2" = "auth setup-git" ] && [ -e "$HOME/fail-setup" ] && { echo "could not write the git settings" >&2; exit 1; }
-[ "$1" = api ] && echo octocat
+{ echo "args: $*"; echo "env: $(env | tr '\\n' ' ')"; [ -e "$HOME/.openagent-github/olduser" ] && echo "old login still there"; } >> "$HOME/gh.log"
+if [ "$1 $2" = "auth login" ]; then login=$(cat); echo "read: $login in $GH_CONFIG_DIR" >> "$HOME/gh.log"; echo "kept by gh" > "$GH_CONFIG_DIR/hosts.yml"; fi
+[ "$1" = api ] && [ -e "$HOME/fail-api" ] && { echo "GitHub did not answer" >&2; exit 1; }
+[ "$1" = api ] && case "$*" in *'.login'*'.id'*) echo '{"id":42,"login":"octocat","name":"Mona"}' ;; *) echo octocat ;; esac
 exit 0
 `,
     )
@@ -64,25 +64,33 @@ exit 0
     assert.equal(ran.code, 0, ran.stderr)
     assert.equal(ran.stdout.trim().split('\n').at(-1), 'octocat')
     const log = await readFile(join(home, 'gh.log'), 'utf8')
-    assert.deepEqual(log.split('\n').filter(line => line.startsWith('args: ')), ['args: auth login --hostname github.com --git-protocol https --with-token', 'args: auth setup-git --hostname github.com', 'args: api --hostname github.com user --jq .login'])
-    assert.deepEqual(log.split('\n').filter(line => line.startsWith('read: ')), [`read: ${GH_LOGIN}`])
+    assert.deepEqual(log.split('\n').filter(line => line.startsWith('args: ')), [
+      'args: auth login --hostname github.com --with-token --insecure-storage',
+      'args: api --hostname github.com user --jq {login: .login, id: .id, name: (.name // "")}',
+      'args: api --hostname github.com user --jq .login',
+    ])
+    assert.deepEqual(log.split('\n').filter(line => line.startsWith('read: ')), [`read: ${GH_LOGIN} in ${join(accounts, '.taking')}`])
     // Read once, where gh reads; nowhere else in what any of the three was started with.
     assert.equal(log.split(GH_LOGIN).length, 2)
     assert.doesNotMatch(log, /ghp_someoneElses|elsewhere/)
     // The login copied before was gone before the first of them ran.
-    assert.equal(log.split('\n').filter(line => line === 'old login still there').length, 2)
-    assert.equal(await readFile(kept, 'utf8'), 'kept by gh\n')
+    assert.ok(!log.includes('old login still there'))
+    // The account's folder, named by its login, with what its commits are signed with: the layout OpenAgent reads.
+    assert.equal(await readFile(join(accounts, 'octocat', 'hosts.yml'), 'utf8'), 'kept by gh\n')
+    assert.deepEqual(JSON.parse(await readFile(join(accounts, 'octocat', 'account.json'), 'utf8')), { id: 42, login: 'octocat', name: 'Mona' })
 
     // gh took the login, and what comes after failed: the server is left with none, not with one nobody knows of.
-    await writeFile(join(home, 'fail-setup'), '')
+    await writeFile(join(home, 'fail-api'), '')
     const half = await sh(githubLoginScript(GH_LOGIN).script, env)
     assert.equal(half.code, 1)
-    assert.match(half.stderr, /could not write the git settings/)
-    await assert.rejects(readFile(kept), { code: 'ENOENT' })
+    assert.match(half.stderr, /GitHub did not answer/)
+    await assert.rejects(readFile(join(accounts, 'octocat', 'hosts.yml')), { code: 'ENOENT' })
+    await assert.rejects(readFile(join(accounts, '.taking', 'hosts.yml')), { code: 'ENOENT' })
 
-    await writeFile(kept, 'kept by gh\n')
+    await mkdir(join(accounts, 'octocat'), { recursive: true })
+    await writeFile(join(accounts, 'octocat', 'hosts.yml'), 'kept by gh\n')
     assert.equal((await sh(githubLogoutScript().script, { HOME: home, PATH: process.env.PATH })).code, 0)
-    await assert.rejects(readFile(kept), { code: 'ENOENT' })
+    await assert.rejects(readFile(join(accounts, 'octocat', 'hosts.yml')), { code: 'ENOENT' })
   } finally {
     await rm(home, { recursive: true, force: true })
   }

@@ -7,17 +7,17 @@ import { readAhead, usePolled } from '../lib/use-async.js'
 import { cn } from '../lib/utils.js'
 import { Button } from './ui/button.js'
 import { Card, CardContent, CardHeader, CardTitle } from './ui/card.js'
-import { DeviceCode, HostFix, PackageLogo, StatePill, hostLoginState, hostWords, useGitHosts, useHostLogin } from './Logins.js'
+import { DeviceCode, HostFix, PackageLogo, Pill, StatePill, hostLoginState, hostWords, useGitHosts, useHostLogin } from './Logins.js'
 import { useServers } from './ServerLogins.js'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuGroup, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from './ui/dropdown-menu.js'
 import { Tooltip, TooltipContent, TooltipTrigger } from './ui/tooltip.js'
 import { RowOff, rowButtonClass } from './ui/row-item.js'
 
-// The git hosts of Settings › Accounts: one card with each host the projects' remotes are on, and the
-// host of the git host package OpenAgent brings, drawn from what the host's package answers (its
-// name, its tool, the accounts the tool knows, the one runs use). Runs use the account picked here,
-// whatever the terminal's tool has active, and a switch here leaves the terminal as it is. A host
-// no package answers for is one line; a project with no remote, none.
+// The git hosts of the Permissions page: one card with each host the projects' remotes are on, and
+// the host of the git host package OpenAgent brings, drawn from what the host's package answers
+// (its name, its tool, OpenAgent's own accounts there, the one runs use). The accounts are
+// OpenAgent's, added here: the person's own tool and its logins are never used. A host no package
+// answers for is one line; a project with no remote, none.
 
 /** The git hosts' card. */
 export function GitHostsCard() {
@@ -37,7 +37,7 @@ export function GitHostsCard() {
           <p className="text-sm text-muted-foreground">None of your projects has a remote yet. A project pushed to a git host gets its accounts here.</p>
         ) : (
           <>
-            <p className="text-sm text-muted-foreground">The accounts runs open pull requests and push with. A switch here changes what runs use; the terminal keeps its own.</p>
+            <p className="text-sm text-muted-foreground">OpenAgent&rsquo;s own accounts: runs push and open pull requests with the one in use. Your own logins on this computer are never used.</p>
             {(view?.hosts ?? []).map(row => (row.provider ? <HostAccounts key={row.host} row={row} onChanged={reload} /> : <NoPackage key={row.host} row={row} />))}
           </>
         )}
@@ -58,6 +58,9 @@ function NoPackage({ row }: { row: GitHostRow }) {
     </p>
   )
 }
+
+/** The git host's pill when it has no account runs can use, in the colours of a step to take. */
+const ADD_PILL = { tone: 'bg-warning/10 text-warning', dot: 'bg-warning' }
 
 function HostAccounts({ row, onChanged }: { row: GitHostRow; onChanged: () => Promise<void> }) {
   const p = row.provider!
@@ -88,7 +91,8 @@ function HostAccounts({ row, onChanged }: { row: GitHostRow; onChanged: () => Pr
         <PackageLogo svg={p.logo} />
         <h3 className="text-sm font-medium">{p.name}</h3>
         <span className="min-w-0 flex-1 truncate text-xs text-muted-foreground">{`${row.host} · ${usedBy(row)}`}</span>
-        <StatePill state={state} />
+        {/* In the words of what fixes it, the add button below: OpenAgent's own accounts are added, not logged in to. */}
+        {state === 'step' ? <Pill {...ADD_PILL} words={p.accounts.length === 0 ? 'No account' : 'Add it again'} /> : <StatePill state={state} />}
       </header>
       {p.accounts.length > 0 && (
         <ul className="space-y-1">
@@ -109,7 +113,7 @@ function HostAccounts({ row, onChanged }: { row: GitHostRow; onChanged: () => Pr
                       {account.runs && <span className="shrink-0 text-xs text-success">in use for runs</span>}
                     </span>
                     <span className={cn('block truncate text-xs', account.ok ? 'text-muted-foreground' : 'text-warning')}>
-                      {!account.ok ? `${p.name} no longer takes this login: add it again` : account.from !== undefined ? `from ${account.from}` : account.terminal ? "the terminal's account" : `logged in to ${p.tool}`}
+                      {!account.ok ? `${p.name} no longer takes this login: add it again` : account.from !== undefined ? `from ${account.from}` : 'added to OpenAgent'}
                     </span>
                   </span>
                   {!account.runs && <MoreHorizontal className={cn('size-4 shrink-0 text-muted-foreground transition-opacity', isOpen ? 'opacity-100' : 'opacity-0 group-hover:opacity-100 group-focus-visible:opacity-100')} aria-hidden />}
@@ -125,7 +129,7 @@ function HostAccounts({ row, onChanged }: { row: GitHostRow; onChanged: () => Pr
                           {pressing(account.login, 'use') && <Loader2 className="size-3 animate-spin" aria-hidden />}
                           {pressing(account.login, 'use') ? 'Switching…' : 'Use for runs'}
                         </Button>
-                        <Button size="xs" variant="ghost" className="hover:text-danger" disabled={pending !== undefined} aria-label={`Remove @${account.login}`} title={`${p.tool} on this computer forgets it. The login is not ended: it goes on working wherever else it is.`} onClick={() => void act(account.login, 'remove', () => sendForgetGitHostAccount(row.host, account.login))}>
+                        <Button size="xs" variant="ghost" className="hover:text-danger" disabled={pending !== undefined} aria-label={`Remove @${account.login}`} title="OpenAgent forgets it. The login is not ended: it goes on working wherever else it is." onClick={() => void act(account.login, 'remove', () => sendForgetGitHostAccount(row.host, account.login))}>
                           {pressing(account.login, 'remove') && <Loader2 className="size-3 animate-spin" aria-hidden />}
                           {pressing(account.login, 'remove') ? 'Removing…' : 'Remove'}
                         </Button>
@@ -138,6 +142,10 @@ function HostAccounts({ row, onChanged }: { row: GitHostRow; onChanged: () => Pr
           })}
         </ul>
       )}
+      {p.accounts.some(account => !account.login.toLowerCase().endsWith('-agent')) && (
+        // Rom's advice, where an account is added: an agent's own account limits what a run can reach.
+        <p className="text-xs text-warning">We recommend creating dedicated {p.name} accounts with limited access for your agents, named like <span className="font-mono">you-agent</span>.</p>
+      )}
       {!p.installed || p.accounts.length === 0 ? (
         <div className="space-y-2 pt-1">
           <p className="text-xs text-muted-foreground">{hostWords(row)}</p>
@@ -146,7 +154,7 @@ function HostAccounts({ row, onChanged }: { row: GitHostRow; onChanged: () => Pr
       ) : p.loggingIn ? (
         <DeviceCode code={p.loggingIn.code} url={p.loggingIn.url} />
       ) : (
-        <Button size="xs" variant="ghost" className="-ml-2 font-normal" disabled={login.busy} title={`Logs another account in to ${p.tool} with a code you type at ${p.name}. The terminal's account stays as it is.`} onClick={() => void login.start(row.host)}>
+        <Button size="xs" variant="ghost" className="-ml-2 font-normal" disabled={login.busy} title={`Adds an account to OpenAgent with a code you type at ${p.name}. Your own logins stay as they are.`} onClick={() => void login.start(row.host)}>
           {login.busy ? <Loader2 className="size-3.5 animate-spin" aria-hidden /> : <Plus className="size-3.5" aria-hidden />}
           Add account
         </Button>
@@ -186,7 +194,7 @@ export function useRunsAccount(address: string | undefined, machineId: string | 
 /**
  * The git host account a run pushes and opens its pull request with, at the end of the row above
  * the message box: the project's host, on the computer the run goes to. Its menu picks another of
- * the accounts there, the one its runs use from then on, as Settings › Accounts does; or adds one.
+ * the accounts there, the one its runs use from then on, as the Permissions page does; or adds one.
  * A host with no account logged in says so, and its press goes where one is. Nothing for a project
  * with no remote, or a host no package answers for.
  */
@@ -201,7 +209,7 @@ export function GitAccountMenu({ address, machineId, on, busy, onAdd }: { addres
     return (
       <button type="button" disabled={busy} onClick={onAdd} className={cn(rowButtonClass, 'text-warning')}>
         <PackageLogo svg={p.logo} className="size-3.5" />
-        <span className="truncate">{p.installed ? `Log in to ${p.name}` : `${p.tool} not installed`}</span>
+        <span className="truncate">{p.installed ? `Add a ${p.name} account` : `${p.tool} not installed`}</span>
       </button>
     )
   const said = `Runs push and open pull requests as @${runs.login}${on !== undefined ? ` on ${on}` : ''}`
@@ -222,7 +230,6 @@ export function GitAccountMenu({ address, machineId, on, busy, onAdd }: { addres
             <DropdownMenuItem key={account.login} closeOnClick={false} disabled={!account.ok} onClick={() => void pick(row.host, account.login)}>
               <Check className={cn('h-3.5 w-3.5 shrink-0', account.runs ? 'opacity-100' : 'opacity-0')} aria-hidden />
               <span className="flex-1 truncate">@{account.login}</span>
-              {account.terminal && <span className="text-xs text-muted-foreground">terminal</span>}
             </DropdownMenuItem>
           ))}
         </DropdownMenuGroup>

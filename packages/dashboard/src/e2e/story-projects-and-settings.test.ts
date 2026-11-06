@@ -35,12 +35,12 @@ test('add a project: it is installed, registered, and readable like the sidebar 
     assert.deepEqual(await rpc(onAgents)(project.id), [])
 
     // Adding the same repo again is a no-op the dialog can explain, not a duplicate.
-    const again = await rpc(sendAddProject)(project.cwd, false)
+    const again = await rpc(sendAddProject)(project.cwd)
     assert.deepEqual(again, { ok: true, alreadyActivated: true })
     assert.equal((await rpc(onProjects)()).filter(p => p.id === project.id).length, 1)
 
     // A bogus path is refused with a reason, not a crash.
-    const bogus = await rpc(sendAddProject)(join(world.home, 'nope'), false)
+    const bogus = await rpc(sendAddProject)(join(world.home, 'nope'))
     assert.equal(bogus.ok, false)
   } finally {
     await world.close()

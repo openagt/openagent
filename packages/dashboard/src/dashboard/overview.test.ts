@@ -83,6 +83,20 @@ test('buildRecentAgents pools every project newest-first and tags each with its 
   )
 })
 
+test('buildRecentAgents pools the sessions with no project among the projects\' runs, tagged with the sessions\' id and no name', async () => {
+  const recent = await buildRecentAgents([project('alpha', '/a')], {
+    agents: async () => [agent('a1', '2026-07-13T09:00:00Z')],
+    sessions: async () => [agent('s1', '2026-07-13T10:00:00Z')],
+  })
+  assert.deepEqual(
+    recent.map(r => ({ projectId: r.projectId, project: r.projectName, id: r.agent.id })),
+    [
+      { projectId: 'session', project: '', id: 's1' },
+      { projectId: project('alpha', '/a').id, project: 'alpha', id: 'a1' },
+    ],
+  )
+})
+
 test('buildRecentAgents tolerates a project whose runs cannot be read', async () => {
   const recent = await buildRecentAgents([project('ok', '/ok'), project('bad', '/bad')], {
     agents: async ({ path }) => {

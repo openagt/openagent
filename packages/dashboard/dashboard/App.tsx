@@ -1,3 +1,4 @@
+import { PermissionsPage } from './components/Accounts.js'
 import { useEffect, useMemo, useState, type CSSProperties } from 'react'
 import type { Intervention, Activity, ProjectionRead, ProjectSummary, RecentAgent } from '../src/index.js'
 import { onProjectFiles, onInterventions, onActivity, onRecentAgents, onStartedName } from './rpc/reads.js'
@@ -36,9 +37,9 @@ import { useLiveEvents } from './lib/use-live-events.js'
 import { STARTING_AT_MOST_MS, useAgents } from './lib/use-agents.js'
 import { readModuleAgents } from './lib/module-agents.js'
 import { runsAgain, useRunsPace } from './lib/runs-changed.js'
-import { useRoute } from './lib/use-route.js'
+import { PERMISSIONS_PAGE, useRoute } from './lib/use-route.js'
 import { formatRoute, type Route } from './lib/route.js'
-import { projectAddresses } from '../src/project-address.js'
+import { projectAddresses, SESSIONS_ID } from '../src/project-address.js'
 import { dataLinkRoute } from './lib/data-link.js'
 import { useActivityNotifications, useInterventionNotifications } from './lib/use-notifications.js'
 import { usePreferences, notificationsEnabled, newActivityEnabled, humanInterventionEnabled, OpenProjectContext } from './lib/preferences.js'
@@ -121,6 +122,8 @@ export function App() {
   const labels = useMemo(() => projectLabels(projects), [projects])
   const { route, go: navigate } = useRoute(addresses)
   const { projectId, agentId } = route
+  // A session with no project, or the "New agent session" page with none: in place of a project, the sessions' own id.
+  const noProject = projectId === SESSIONS_ID
   // A module's page (#1774): the route names it by its segment, with no project's own page open.
   const pageSegment = route.page ?? null
   // The address written as the route reads, once it can be read: a project named by its id, as
@@ -202,7 +205,7 @@ export function App() {
   // worktree (#815), the same checkout the action bar's branch, Serve and open-folder act on;
   // polled so a file the agent creates shows up rather than waiting for a reload.
   const { value: files } = usePolled<string[]>(
-    projectId ? () => onProjectFiles(projectId, agentId ?? undefined) : null,
+    projectId && !noProject ? () => onProjectFiles(projectId, agentId ?? undefined) : null,
     EMPTY_FILES,
     10_000,
     [projectId, agentId],
@@ -227,7 +230,7 @@ export function App() {
   useDocumentTitle(interventions.length, projectName ?? (scope ? (labels.get(scope) ?? null) : null))
   // A URL naming a project that is not registered (renamed, removed, mistyped). A non-empty list
   // is the answer, so this never fires while the first read is still out.
-  const unknownProject = projectId !== null && projects.length > 0 && !projects.some(p => p.id === projectId)
+  const unknownProject = projectId !== null && !noProject && projects.length > 0 && !projects.some(p => p.id === projectId)
 
   // Fire a browser notification when a new item lands on the "needs you" queue (#627). Rides the
   // one interventions poll above (the poll stays unconditional — it also feeds the sidebar badge
@@ -468,6 +471,7 @@ export function App() {
   // Another computer's project is removed there, not here.
   const removableHere = project?.machine === undefined ? leaveRemovedProject : undefined
   const renderMain = () => {
+    if (pageSegment === PERMISSIONS_PAGE) return <PermissionsPage />
     if (pageSegment) {
       if (modulePage)
         return <ModulePageView page={modulePage} projects={scopedProjects} projectId={scope} path={route.pagePath ?? []} />
@@ -724,7 +728,7 @@ export function App() {
           interventionCount={interventions.length}
         />
         {/* On a phone the sidebar is a sheet, and this button, over the page's top left corner,
-            opens it. An agent's page and the "New agent" page keep that corner of their top row
+            opens it. An agent's page and the "New agent session" page keep that corner of their top row
             free; a page with no top row of its own gets a bar that names it. */}
         {isMobile && !pageScrolls && <MenuButton />}
         {/* A project's page and an agent's have panes beside them (Panes). A module's page takes
@@ -732,7 +736,8 @@ export function App() {
         <PanesProvider
           projectId={projectId}
           agentId={agentId}
-          enabled={!pageSegment}
+          // A session with no project has no files or changes of a project's to show beside it.
+          enabled={!pageSegment && !noProject}
           files={files}
           context={context}
           toggleContext={toggleContext}

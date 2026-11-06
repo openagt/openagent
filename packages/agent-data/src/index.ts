@@ -41,6 +41,7 @@ export {
   type BranchFileFs,
   type BranchReader,
 } from './file-branch.js'
+export { SESSIONS_DIR, sessionsHome, sessionFolder, sessionsHomeOf, runsRootOf, listSessionFolders } from './sessions.js'
 export { addressOfRemote, spellingOfRemote, repositoryAddress, repositorySpelling, projectNameOf } from './repository-address.js'
 export {
   PROJECTS_DIR,

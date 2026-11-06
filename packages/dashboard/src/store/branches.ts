@@ -1,4 +1,6 @@
-import { callPackageCommand, runPackageCommand, type ProvidedCommand } from '@openagt/agent-data'
+import { rm } from 'node:fs/promises'
+import { callPackageCommand, listSessionFolders, runPackageCommand, sessionFolder, sessionsHomeOf, type ProvidedCommand } from '@openagt/agent-data'
+import { gitHostEnv } from '@openagt/agent-runner'
 import { providedCommand } from '../built-in.js'
 import { isRunId } from './runs.js'
 
@@ -288,7 +290,10 @@ function commandBranches(root: string, command: ProvidedCommand, now: () => numb
     show: (branches, from) => branchRead('show', parseBranchStates, branches, from),
     ahead: (branches, from) => branchRead('ahead', parseBranchesAhead, branches, from),
     async push(branch) {
-      const result = await runPackageCommand(root, command, ['push', '--branch', branch])
+      // As the account runs work as at the git host, as the run itself would push: never the person's own login.
+      const account = await gitHostEnv(root)
+      if (!account.ok) return { ok: false, error: account.error }
+      const result = await runPackageCommand(root, command, ['push', '--branch', branch], account.env)
       drop()
       if (!result.ok) return { ok: false, error: result.error }
       const pushed = result.output && typeof result.output === 'object' ? (result.output as Record<string, unknown>)['pushed'] : undefined
@@ -315,6 +320,32 @@ function commandBranches(root: string, command: ProvidedCommand, now: () => numb
   }
 }
 
+/** What a session folder answers to an act on a branch: it has none. */
+const NO_BRANCH = 'a session with no project has no branch'
+
+/**
+ * The folders of the sessions with no project, as checkouts with no branch: where each run works,
+ * the agent's files and its live card, for the reads that find a run by its checkout. Nothing
+ * provides them: the folders are the sessions home's own (`@openagt/agent-data`), read off the
+ * disk. Every act on a branch is refused, and a folder is removed only with its work dropped.
+ */
+export function sessionFolders(home: string): BranchesSource {
+  return {
+    list: async () => (await listSessionFolders(home)).filter(folder => isRunId(folder.id)),
+    show: async () => [],
+    ahead: async () => [],
+    push: async () => ({ ok: false, error: NO_BRANCH }),
+    merge: async () => ({ ok: false, error: NO_BRANCH }),
+    // A session's folder holds its work, nothing of it committed anywhere: it goes only when that work is dropped with it, as when the session is deleted.
+    async remove(id, opts = {}) {
+      if (!isRunId(id)) return { ok: false, error: `not a run id: ${id}` }
+      if (!opts.discard) return { ok: false, error: "a session's folder holds its work: delete the session to remove it" }
+      await rm(sessionFolder(home, id), { recursive: true, force: true })
+      return { ok: true }
+    },
+  }
+}
+
 /**
  * The production {@link BranchesReader}: the project's provider, looked up among the packages the project has (`built-in.ts`),
  * one source per project kept while the same command provides — so the cache holds across the
@@ -326,6 +357,8 @@ function commandBranches(root: string, command: ProvidedCommand, now: () => numb
 export function providedBranches(now: () => number = Date.now): BranchesReader {
   const sources = new Map<string, { at: number; command?: ProvidedCommand; source?: ReturnType<typeof commandBranches> }>()
   const reader: BranchesFor = async root => {
+    const sessions = await sessionsHomeOf(root)
+    if (sessions !== undefined) return sessionFolders(sessions)
     let known = sources.get(root)
     if (!known || now() - known.at >= CACHE_MS) {
       const command = await providedCommand(root, 'branches').catch(() => undefined)

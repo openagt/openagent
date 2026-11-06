@@ -424,7 +424,7 @@ export function AgentView({
   // Every pull request the run opened, for the row under the message box: the ones before, then the one it is on.
   const earlierPrs = card?.earlierPrs
   const prs = useMemo(() => [...(earlierPrs ?? []), ...(pr && !earlierPrs?.some(earlier => earlier.url === pr.url) ? [pr] : [])], [earlierPrs, pr])
-  // Where the session started, right above the message box, as the "New agent" page has it. It is
+  // Where the session started, right above the message box, as the "New agent session" page has it. It is
   // there whatever stands in the box's place.
   const row = <SessionRow runsOn={runsOn} target={target} remoteKind={card?.remoteKind} elsewhere={elsewhere || card?.otherHost === true} projectName={projectName} startedFrom={startedFrom} worksOn={barCheckout?.branch ?? branch} gitHost={gitHostHome} gitAccount={card?.gitAccount ?? picks?.gitAccount} />
   const workState = [agentId, barCheckout?.branch ?? '', onBranch?.commits.length ?? 0, onBranch?.pendingFiles?.length ?? 0, onBranch?.insertions ?? 0, onBranch?.deletions ?? 0, onBranch?.pushed ?? false, pr?.number ?? '', pr?.state ?? ''].join('|')

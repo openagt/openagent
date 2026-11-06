@@ -25,9 +25,9 @@ const skill = (name: string, standing: Standing = 'absent', waiting = false) => 
 function skills(over: Partial<ProjectSkills> = {}): ProjectSkills {
   return {
     groups: [
-      { title: 'Tickets and queue', ticked: true, skills: [skill('tickets'), skill('queue')] },
-      { title: 'Needs its own setup', ticked: false, skills: [skill('browser')] },
-      { title: 'Automations', ticked: true, skills: [skill('scheduler')] },
+      { title: 'Tickets and queue', skills: [skill('tickets'), skill('queue')] },
+      { title: 'Needs its own setup', skills: [skill('browser')] },
+      { title: 'Automations', skills: [skill('scheduler')] },
     ],
     startBranch: 'main',
     uncommitted: [],
@@ -46,10 +46,14 @@ function noRemote(over: Partial<ProjectSkills> = {}): ProjectSkills {
 
 const box = (name: string): HTMLElement => screen.getByRole('checkbox', { name })
 const isTicked = (name: string): boolean => box(name).getAttribute('aria-checked') === 'true'
+/** Nothing is ticked in a project with no skills: a test ticks what it saves. */
+const tick = (...names: string[]): void => {
+  for (const name of names) fireEvent.click(box(name))
+}
 
 describe('ProjectSkillsLine', () => {
   test('a project with its skills in order has no line: nothing to say', async () => {
-    onProjectSkills.mockResolvedValue(skills({ groups: [{ title: 'Tickets and queue', ticked: true, skills: [skill('tickets', 'current'), skill('queue')] }] }))
+    onProjectSkills.mockResolvedValue(skills({ groups: [{ title: 'Tickets and queue', skills: [skill('tickets', 'current'), skill('queue')] }] }))
     const { container } = render(<ProjectSkillsLine projectId="p1" />)
     await waitFor(() => expect(onProjectSkills).toHaveBeenCalledWith('p1'))
     await waitFor(() => expect(onProjectSkills.mock.results[0]?.type).toBe('return'))
@@ -74,7 +78,7 @@ describe('ProjectSkillsLine', () => {
   })
 
   test('a save on the Skills page, over the line, is read at once: the card says it before the next read', async () => {
-    const tickets = { title: 'Tickets and queue', ticked: true, skills: [skill('tickets', 'current', true)] }
+    const tickets = { title: 'Tickets and queue', skills: [skill('tickets', 'current', true)] }
     onProjectSkills.mockResolvedValueOnce(skills()).mockResolvedValue(skills({ groups: [tickets], uncommitted: ['tickets'] }))
     const { container } = render(<ProjectSkillsLine projectId="p1" />)
     await waitFor(() => expect(onProjectSkills.mock.results[0]?.type).toBe('return'))
@@ -92,7 +96,7 @@ describe('ProjectSkillsLine', () => {
 
   test('a newer version is told by name, and Update writes those skills again and sends them, nothing else', async () => {
     onProjectSkills.mockResolvedValue(
-      skills({ groups: [{ title: 'Tickets and queue', ticked: true, skills: [skill('tickets', 'newer'), skill('queue', 'newer'), skill('plan', 'changed')] }] }),
+      skills({ groups: [{ title: 'Tickets and queue', skills: [skill('tickets', 'newer'), skill('queue', 'newer'), skill('plan', 'changed')] }] }),
     )
     sendChangeSkills.mockResolvedValue({ ok: true, written: ['tickets', 'queue'], removed: [], left: [] })
     sendProjectSkills.mockResolvedValue({ ok: true, sent: 'pushed', branch: 'main' })
@@ -107,14 +111,14 @@ describe('ProjectSkillsLine', () => {
   })
 
   test('one skill with a newer version is named alone', async () => {
-    onProjectSkills.mockResolvedValue(skills({ groups: [{ title: 'Subagents', ticked: true, skills: [skill('orchestration', 'newer')] }] }))
+    onProjectSkills.mockResolvedValue(skills({ groups: [{ title: 'Subagents', skills: [skill('orchestration', 'newer')] }] }))
     const { container } = render(<ProjectSkillsLine projectId="p1" />)
     await screen.findByRole('button', { name: 'Update' })
     expect(container.textContent).toContain('The orchestration skill has a newer version.')
   })
 
   test('skills on this computer only are told with the one press that sends them; once agents have them the card is gone', async () => {
-    const tickets = { title: 'Tickets and queue', ticked: true, skills: [skill('tickets', 'current', true), skill('queue', 'current', true), skill('plan', 'current')] }
+    const tickets = { title: 'Tickets and queue', skills: [skill('tickets', 'current', true), skill('queue', 'current', true), skill('plan', 'current')] }
     onProjectSkills.mockResolvedValueOnce(skills({ groups: [tickets], uncommitted: ['tickets'] })).mockResolvedValue(skills({ groups: [{ ...tickets, skills: tickets.skills.map(one => ({ ...one, waiting: false })) }] }))
     sendProjectSkills.mockResolvedValue({ ok: true, sent: 'pushed', branch: 'main' })
     const { container } = render(<ProjectSkillsLine projectId="p1" />)
@@ -127,7 +131,7 @@ describe('ProjectSkillsLine', () => {
   })
 
   test('skills committed on the folder\'s branch only point to starting from it', async () => {
-    onProjectSkills.mockResolvedValue(skills({ groups: [{ title: 'Tickets and queue', ticked: true, skills: [skill('tickets', 'current', true)] }], local: true }))
+    onProjectSkills.mockResolvedValue(skills({ groups: [{ title: 'Tickets and queue', skills: [skill('tickets', 'current', true)] }], local: true }))
     const { container } = render(<ProjectSkillsLine projectId="p1" />)
     await screen.findByRole('button', { name: 'Send to GitHub' })
     expect(container.textContent).toContain('The tickets skill is on this computer only, so your agents do not have it yet. Or pick My local branch when you start an agent.')
@@ -150,7 +154,7 @@ describe('ProjectSkillsLine', () => {
   })
 
   test('skills on the branch a send left, where no pull request could be opened, are told to merge it, and offered no send', async () => {
-    onProjectSkills.mockResolvedValue(skills({ groups: [{ title: 'Tickets and queue', ticked: true, skills: [skill('tickets', 'current', true)] }], remote: 'GitLab', branch: 'openagent/skills' }))
+    onProjectSkills.mockResolvedValue(skills({ groups: [{ title: 'Tickets and queue', skills: [skill('tickets', 'current', true)] }], remote: 'GitLab', branch: 'openagent/skills' }))
     const { container } = render(<ProjectSkillsLine projectId="p1" />)
     await waitFor(() => expect(container.textContent).toContain('The tickets skill is on the branch openagent/skills on GitLab. Merge it into main, and your agents get it.'))
     expect(screen.queryByRole('button', { name: 'Send to GitLab' })).toBeNull()
@@ -158,7 +162,7 @@ describe('ProjectSkillsLine', () => {
 
   test('skills in a pull request are told with it; many are counted, not named', async () => {
     onProjectSkills.mockResolvedValue(
-      skills({ groups: [{ title: 'Tickets and queue', ticked: true, skills: ['tickets', 'queue', 'plan', 'triage', 'ux'].map(name => skill(name, 'current', true)) }], request: { number: 12, url: 'https://example.com/pull/12' } }),
+      skills({ groups: [{ title: 'Tickets and queue', skills: ['tickets', 'queue', 'plan', 'triage', 'ux'].map(name => skill(name, 'current', true)) }], request: { number: 12, url: 'https://example.com/pull/12' } }),
     )
     const { container } = render(<ProjectSkillsLine projectId="p1" />)
     const open = await screen.findByRole('link', { name: 'Open #12' })
@@ -171,7 +175,7 @@ describe('ProjectSkillsLine', () => {
 describe('the Skills page', () => {
   const card = (name: string): HTMLElement => box(name).closest('label')!
 
-  test('in a project with no skills yet the default picks are ticked: every group but the one that needs a setup of its own, and the scheduler', async () => {
+  test('in a project with no skills yet nothing is ticked: the person picks what it needs', async () => {
     onProjectSkills.mockResolvedValue(skills())
     sendChangeSkills.mockResolvedValue({ ok: true, written: ['tickets', 'queue', 'scheduler'], removed: [], left: [], scheduler: 'on' })
     sendProjectSkills.mockResolvedValue({ ok: true, sent: 'pushed', branch: 'main' })
@@ -180,7 +184,8 @@ describe('the Skills page', () => {
     render(<SkillsSettings projectId="p1" />)
     expect(await screen.findByText('Tickets and queue')).toBeTruthy()
     expect(screen.getByText('What tickets does.')).toBeTruthy()
-    expect([isTicked('tickets'), isTicked('queue'), isTicked('browser'), isTicked('scheduler')]).toEqual([true, true, false, true])
+    expect([isTicked('tickets'), isTicked('queue'), isTicked('browser'), isTicked('scheduler')]).toEqual([false, false, false, false])
+    tick('tickets', 'queue', 'scheduler')
     expect(screen.getByText('3 skills to write.')).toBeTruthy()
 
     fireEvent.click(screen.getByRole('button', { name: 'Save and send to GitHub' }))
@@ -198,7 +203,7 @@ describe('the Skills page', () => {
 
   test('each skill is a card of its own: a press anywhere on it ticks it, and it says how its text stands', async () => {
     onProjectSkills.mockResolvedValue(
-      skills({ groups: [{ title: 'Tickets and queue', ticked: true, skills: [skill('tickets', 'newer'), skill('queue', 'changed', true), skill('plan', 'own'), skill('triage')] }] }),
+      skills({ groups: [{ title: 'Tickets and queue', skills: [skill('tickets', 'newer'), skill('queue', 'changed', true), skill('plan', 'own'), skill('triage')] }] }),
     )
     render(<SkillsSettings projectId="p1" />)
     await screen.findByText('Tickets and queue')
@@ -213,7 +218,7 @@ describe('the Skills page', () => {
 
   test('opened again the ticks show what the project has; a tick removed deletes, a tick added writes', async () => {
     onProjectSkills.mockResolvedValue(
-      skills({ groups: [{ title: 'Tickets and queue', ticked: true, skills: [skill('tickets', 'current'), skill('queue', 'changed'), skill('plan')] }, { title: 'Needs its own setup', ticked: false, skills: [skill('browser')] }] }),
+      skills({ groups: [{ title: 'Tickets and queue', skills: [skill('tickets', 'current'), skill('queue', 'changed'), skill('plan')] }, { title: 'Needs its own setup', skills: [skill('browser')] }] }),
     )
     sendChangeSkills.mockResolvedValue({ ok: true, written: ['browser'], removed: ['tickets'], left: [{ path: '.agents/skills/tickets', reason: 'it holds other files' }] })
     sendProjectSkills.mockResolvedValue({ ok: true, sent: 'pushed', branch: 'main' })
@@ -234,11 +239,12 @@ describe('the Skills page', () => {
   })
 
   test('a default branch that takes no push: the page points to the pull request the change went to; Done is the cards, read again', async () => {
-    onProjectSkills.mockResolvedValueOnce(skills()).mockResolvedValue(skills({ groups: [{ title: 'Tickets and queue', ticked: true, skills: [skill('tickets', 'current', true), skill('queue', 'current', true)] }] }))
+    onProjectSkills.mockResolvedValueOnce(skills()).mockResolvedValue(skills({ groups: [{ title: 'Tickets and queue', skills: [skill('tickets', 'current', true), skill('queue', 'current', true)] }] }))
     sendChangeSkills.mockResolvedValue({ ok: true, written: ['tickets', 'queue'], removed: [], left: [] })
     sendProjectSkills.mockResolvedValue({ ok: true, sent: 'request', request: { number: 12, url: 'https://example.com/pull/12' } })
     render(<SkillsSettings projectId="p1" />)
     await screen.findByText('Tickets and queue')
+    tick('tickets', 'queue')
     fireEvent.click(screen.getByRole('button', { name: 'Save and send to GitHub' }))
     const link = await screen.findByRole('link', { name: 'pull request #12' })
     expect(link.getAttribute('href')).toBe('https://example.com/pull/12')
@@ -256,6 +262,7 @@ describe('the Skills page', () => {
     sendProjectSkills.mockResolvedValueOnce({ ok: false, error: 'could not reach the remote: network down' }).mockResolvedValue({ ok: true, sent: 'pushed', branch: 'main' })
     render(<SkillsSettings projectId="p1" />)
     await screen.findByText('Tickets and queue')
+    tick('tickets', 'queue')
     fireEvent.click(screen.getByRole('button', { name: 'Save and send to GitHub' }))
     expect(await screen.findByText("Saved in the project's folder, not sent: could not reach the remote: network down")).toBeTruthy()
     fireEvent.click(screen.getByRole('button', { name: 'Send again' }))
@@ -266,7 +273,7 @@ describe('the Skills page', () => {
 
   test('a save that is refused says why and keeps the ticks; Cancel puts them back and writes nothing; a folder that is no repository is offered no commit', async () => {
     // A folder that is no repository: nothing to commit, and no branch agents start from.
-    const { startBranch: _none, ...noRepository } = skills({ git: false, groups: [{ title: 'Tickets and queue', ticked: true, skills: [skill('tickets', 'current'), skill('queue')] }] })
+    const { startBranch: _none, ...noRepository } = skills({ git: false, groups: [{ title: 'Tickets and queue', skills: [skill('tickets', 'current'), skill('queue')] }] })
     onProjectSkills.mockResolvedValue(noRepository)
     sendChangeSkills.mockResolvedValueOnce({ ok: false, error: 'EACCES: permission denied' }).mockResolvedValue({ ok: true, written: ['queue'], removed: [], left: [], schedulerError: 'hooks.yml: unreadable' })
     render(<SkillsSettings projectId="p1" />)
@@ -307,6 +314,7 @@ describe('the Skills page', () => {
     sendChangeSkills.mockResolvedValue({ ok: false, error: 'this project has no local path on this server' })
     render(<SkillsSettings projectId="shop~m1" />)
     await screen.findByText('Tickets and queue')
+    tick('tickets', 'queue')
     expect(onProjectSkills).toHaveBeenCalledWith('shop~m1')
     fireEvent.click(screen.getByRole('button', { name: 'Save and send to GitHub' }))
     expect((await screen.findByRole('alert')).textContent).toBe('this project has no local path on this server')
@@ -319,9 +327,11 @@ describe('the Skills page, over time', () => {
   test('the page a person has open keeps the project as it stood when it opened: no later read changes it', async () => {
     vi.useFakeTimers({ shouldAdvanceTime: true })
     try {
-      onProjectSkills.mockResolvedValueOnce(skills()).mockResolvedValue(skills({ groups: [{ title: 'Tickets and queue', ticked: true, skills: [skill('tickets', 'current'), skill('queue')] }] }))
+      onProjectSkills.mockResolvedValueOnce(skills()).mockResolvedValue(skills({ groups: [{ title: 'Tickets and queue', skills: [skill('tickets', 'current'), skill('queue')] }] }))
       render(<SkillsSettings projectId="p1" />)
-      expect(await screen.findByText('3 skills to write.')).toBeTruthy()
+      await screen.findByText('Tickets and queue')
+      tick('tickets', 'queue', 'scheduler')
+      expect(screen.getByText('3 skills to write.')).toBeTruthy()
       // The project now holds tickets (written in a terminal, say), and a minute passes.
       await vi.advanceTimersByTimeAsync(60_000)
       expect(onProjectSkills).toHaveBeenCalledTimes(1)
@@ -338,6 +348,7 @@ describe('the Skills page, over time', () => {
     sendProjectSkills.mockResolvedValue({ ok: true, sent: 'committed' })
     render(<SkillsSettings projectId="p1" />)
     expect((await screen.findByText(/Save commits the change\./)).textContent).toContain('Save commits the change.')
+    tick('tickets', 'queue')
     fireEvent.click(screen.getByRole('button', { name: 'Save and commit' }))
     expect(await screen.findByText('Committed. Your agents get this change from their next start.')).toBeTruthy()
   })

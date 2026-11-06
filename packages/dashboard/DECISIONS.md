@@ -261,7 +261,7 @@ already made, and lists it in its pull request; for anything else it proposes an
   it, the shape `npx skills add` writes too. Nothing else: no `package.json`, no install,
   so a Node project, a PHP project and an empty folder get exactly the same. Picked over
   installing the skills' packages into the project.
-- The scheduler is one more skill in the list, ticked by default. Ticking it also writes its
+- The scheduler is one more skill in the list. Ticking it also writes its
   two lines into the project's hooks file, which is this machine's and outside git, so it
   starts with the dashboard; unticking it takes them out and stops it. A project that got the
   text another way, `npx skills add` say, gets no lines: while the scheduler is off, the
@@ -270,6 +270,18 @@ already made, and lists it in its pull request; for anything else it proposes an
 - A project is also added by its repository's address, for a computer that does not have
   its folder, as a server: OpenAgent clones it into `~/projects/<its name>` and says where
   it went. Picked over asking for the folder at every add, one more thing to read.
+- Adding a project asks one thing: whether the person trusts the repository, with why it
+  matters. The agents' records stay on this machine; the project's Agent data page shares
+  them. Picked over a list of what the add does and a choice of where the records go in the
+  same dialog: too much to read, and a decision to make, before one press.
+- Every account OpenAgent's agents work with is on one page of the dashboard's own,
+  Permissions, a row of the sidebar: the coding agents' accounts and the git hosts'. An agent
+  can reach what its accounts can; a repository is no permission. Where an account at a git
+  host is not named like an agent's own (`-agent`), the page says to make one with limited
+  access. Picked over the accounts being one entry among the Settings.
+- The Skills page ticks nothing in a project that has no skills yet: the person picks what
+  the project needs. Picked over ticking every group but the ones that need a setup of
+  their own, a long list picked for them.
 - When a skill in a project has a newer version, the project's page names it ("The
   orchestration skill has a newer version") with an "Update" button; the texts are written only on that press,
   and sent on as a save is. Picked over a count of skills that "have a newer text", which
@@ -300,7 +312,7 @@ already made, and lists it in its pull request; for anything else it proposes an
   `/gemstack` starts an agent there, `/gemstack/overview` and `/gemstack/logs` are the
   Overview and a module's page with that project picked, `/gemstack/<agent>` one agent. With
   every project picked the address has no project: `/`, `/logs`; only an agent's page and
-  the "New agent" page, which belong to a project, add `?all`. A name that cannot be an
+  the "New agent session" page, which belong to a project, add `?all`. A name that cannot be an
   address, because a project added before has it or a page has that word, is the project's
   id with its hash. The id still opens the project, and stays what everything else knows
   it by. Picked over `?project=` and over the id with its hash, which named the project in
@@ -370,7 +382,7 @@ already made, and lists it in its pull request; for anything else it proposes an
   line offers the rest. Picked over the launcher listing only the questions, and over words
   that said what had not happened ("Not committed"), and over pages of rows.
 - The sidebar lists the runs by when they were started, unless the person picks the last
-  update or the name from the button beside "Recent agents". Picked over the runs that hold a
+  update or the name from the button beside "Log". Picked over the runs that hold a
   checkout first, which moved a run answered days later to the top and back once its checkout
   went, and over the last update as the default, Claude Code's, which moves a row while a
   person talks to it.
@@ -390,7 +402,7 @@ already made, and lists it in its pull request; for anything else it proposes an
 - The accounts a run takes are picked beside the message box, for the computer the run goes
   to: a coding agent's in the agent picker, under its models; the git host's at the end of the
   row above the box. A pick there is the one that computer's runs take from then on, as on
-  Settings › Accounts. The person's menu has none of them. Picked over a row per account in the
+  the Permissions page. The person's menu has none of them. Picked over a row per account in the
   person's menu, which said this computer's alone, and over having them in both places.
 - A project's own accounts are a Settings page of that project, shown only for a kind the
   computer has two or more of, "same as this computer" until one is picked.
@@ -438,6 +450,12 @@ already made, and lists it in its pull request; for anything else it proposes an
   lines are a default: a line already there is kept, and the person can change or delete any
   of them. Picked over the launcher telling the person which command to run, which left an
   empty folder unable to start.
+- A session need not be in a project: with none, it runs in a folder of its own,
+  `~/.openagent-sessions/<id>/`, started, resumed and checked by the hook lines of that home,
+  which the daemon writes there as it writes a project's. It runs on this computer, with no
+  branch and nothing to publish. Its address is `/session/<id>`, and `/session` is the "New
+  agent session" page with no project; the Log lists it with the projects' runs. Picked over
+  every session belonging to a project, where a person with no project could start nothing.
 - A hook line finds its tools in the packages OpenAgent brings first, then in the
   project's installed packages. Nothing is downloaded to run a line. Picked over `npx`
   in the lines, which downloads whatever package holds the name on npm when the project
@@ -520,7 +538,7 @@ already made, and lists it in its pull request; for anything else it proposes an
   machine's OpenAgent was started in, which may be another project.
 - With a machine picked, what would stop a run is asked of that machine as soon as it is
   picked, from its own copy of the project, and said naming the machine. A coding agent
-  logged out there comes with this computer's logins for the machine, as Settings › Accounts
+  logged out there comes with this computer's logins for the machine, as the Permissions page
   offers them. Picked over learning it only after the Start, from the machine's refusal, in
   words written for that machine's own terminal.
 - A machine is picked in "Run on" and removed on its page under Devices. Picked over a remove

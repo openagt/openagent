@@ -42,7 +42,7 @@ describe('AgentActionBar', () => {
     expect(screen.getAllByRole('button')).toHaveLength(2)
   })
 
-  test('the project\'s ⋮ stands where the "New agent" page has it: past the spacer, just before the panes\' icons, acting on the project', () => {
+  test('the project\'s ⋮ stands where the "New agent session" page has it: past the spacer, just before the panes\' icons, acting on the project', () => {
     const removed = () => {}
     const error = { kind: 'error', message: 'The push was rejected' }
     const { container } = render(<AgentActionBar projectId="p1" agentId="run-1" events={[...AGENTS.running!, error] as OpenAgentEvent[]} label="Dark mode" checkout={DIRTY} onProjectRemoved={removed} />)
@@ -86,7 +86,7 @@ describe('AgentActionBar', () => {
     const row = container.firstElementChild!.className.split(' ')
     for (const cls of ['pr-2', 'md:pl-4', 'max-md:pl-11']) expect(row).toContain(cls)
     expect(row).not.toContain('pr-12')
-    // As tall as the "New agent" page's row and an open pane's header, so the three stand level;
+    // As tall as the "New agent session" page's row and an open pane's header, so the three stand level;
     // unlike a pane's header, no line under it.
     expect(row).toContain('h-11')
     expect(row.join(' ')).not.toMatch(/border/)

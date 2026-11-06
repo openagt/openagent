@@ -615,7 +615,7 @@ export async function runCli(args: string[], io: CliIO): Promise<number> {
       case 'github': {
         if (rest.length) break
         // Nobody's is an answer too, with why: a page asks this to know what it can offer.
-        const own = await ownGithubAccount(io.exec)
+        const own = await ownGithubAccount(io.exec, io.env)
         return print(own.ok ? { account: own.account } : { problem: own.error })
       }
       case 'reach': {

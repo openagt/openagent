@@ -1,6 +1,6 @@
 import { useEffect, useId, useRef, useState, type ComponentType, type ReactNode } from 'react'
 import { Dialog as BaseDialog } from '@base-ui/react/dialog'
-import { ArrowLeft, Bell, Bot, ChevronRight, Database, FolderGit2, Globe, KeyRound, Palette, Puzzle, Users, X } from 'lucide-react'
+import { ArrowLeft, Bell, Bot, ChevronRight, Database, FolderGit2, Globe, KeyRound, Palette, Puzzle, X } from 'lucide-react'
 import { ACCENTS, DEFAULT_ACCENT_LABELS, accentOf, CODE_FONTS, DOCUMENT_FONTS, DRIVERS, FONTS, PALETTES, PALETTE_LABELS, type Accent, type CodeFont, type DocumentFont, type Font, type Palette as ColourPalette } from '../../src/client.js'
 import { driverOptions, useModels } from '../lib/models.js'
 import { NO_MODEL_PINNED } from '../lib/agent-settings.js'
@@ -13,9 +13,7 @@ import { useDetectedEditors } from '../lib/editors.js'
 import { usePreferences, updatePreferences, themePreference, type ThemePreference } from '../lib/preferences.js'
 import { useNotificationPermission } from '../lib/notification-permission.js'
 import { BridgeSettings } from './BridgeSettings.js'
-import { AccountsSettings } from './Accounts.js'
 import { AGENT_DATA_ENTRY, AgentDataSettings } from './AgentDataSettings.js'
-import { ACCOUNTS_ENTRY } from './Logins.js'
 import { PROJECT_ACCOUNTS_ENTRY, ProjectAccountsSettings, readProjectAccountsAhead, useProjectAccounts } from './ProjectAccounts.js'
 import { SKILLS_ENTRY, SkillsSettings } from './ProjectSkills.js'
 import { PickProject } from './PickProject.js'
@@ -454,12 +452,6 @@ function useOwnEntries(): Entry[] {
           />
         </Section>
       ),
-    },
-    {
-      id: ACCOUNTS_ENTRY,
-      title: 'Accounts',
-      icon: Users,
-      body: <AccountsSettings />,
     },
     {
       id: AGENT_DATA_ENTRY,

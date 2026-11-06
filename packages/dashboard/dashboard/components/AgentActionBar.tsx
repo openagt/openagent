@@ -5,10 +5,11 @@ import { AgentErrorCount } from './AgentErrorCount.js'
 import { PaneMenu, PaneToggles } from './Panes.js'
 import { ShowSidebarButton } from './SidebarToggle.js'
 import { ProjectMenu } from './ProjectActions.js'
+import { SESSIONS_ID } from '../../src/project-address.js'
 
 // One agent's top bar: its name with a small ⌄, which is the session's menu (AgentActionsMenu); and
 // at the end the count of what it could not get past, the project's ⋮, and the icons of the page's
-// panes (Panes), the ⋮ and the icons where the "New agent" page has them. It says nothing of the
+// panes (Panes), the ⋮ and the icons where the "New agent session" page has them. It says nothing of the
 // agent's state or of its tree: the feed and the message box say whether the agent works and how it
 // ended, where it runs and its project are in the row above the message box (SessionRow), and its
 // branch, what the branch holds and the next step in the bar above that (AgentWorkBar). One bar for
@@ -65,7 +66,7 @@ export function AgentActionBar({
     // On a phone the row's start is kept free: the shell lays the menu's button over it
     // (MenuButton). Each left padding is under its own screen size, never a plain one with a
     // phone's over it: a module's stylesheet carries its own copy of the plain class, which comes
-    // later and would win. The row is as tall as the "New agent" page's (ProjectActions) and as an
+    // later and would win. The row is as tall as the "New agent session" page's (ProjectActions) and as an
     // open pane's header, so the three stand level; unlike a pane's, it has no line under it.
     <div className="flex h-11 shrink-0 items-center gap-2 overflow-hidden pr-2 md:pl-4 max-md:pl-11">
       <ShowSidebarButton />
@@ -90,7 +91,8 @@ export function AgentActionBar({
           at the end rather than beside the name, which gives up width as the row fills: a
           count is only useful if it is whole. */}
       {ready && <AgentErrorCount events={events} />}
-      <ProjectMenu projectId={projectId} onProjectRemoved={onProjectRemoved} />
+      {/* A session with no project has no project's menu. */}
+      {projectId !== SESSIONS_ID && <ProjectMenu projectId={projectId} onProjectRemoved={onProjectRemoved} />}
       <PaneToggles />
     </div>
   )

@@ -1,3 +1,4 @@
+import { SESSIONS_ID } from '../../src/project-address.js'
 import { useEffect, useRef, useState } from 'react'
 import type { GitHostHome, OpenAgentEvent, RepositoryOffer } from '../../src/index.js'
 import { sessionInfo } from '../../src/client.js'
@@ -43,7 +44,7 @@ import {
 //
 // Given none, a ⋮ holds all of the project's: its git host page, its skills, the offer of a
 // repository, where the agents' records go, its folder, its editor. It stands in the same place on
-// the "New agent" page and on an agent's page (ProjectMenu).
+// the "New agent session" page and on an agent's page (ProjectMenu).
 //
 // The handoff's Push / Open PR are not here: they move the work forward, and sit in the bar above
 // the message box. The editor keeps its preferred-editor submenu; Delete opens its confirm dialog
@@ -151,7 +152,8 @@ export function AgentActionsMenu({
   const name = label?.trim() || agentId
   // What the button is called: the menu acts on one session, or, with none, on the project.
   const title = session ? 'Session actions' : 'Project actions'
-  const removable = retainedWorktree && !active && !!agentId
+  // A session with no project keeps its folder, its work: it goes only with the session, by Delete.
+  const removable = retainedWorktree && !active && !!agentId && projectId !== SESSIONS_ID
   const deletable = !!onDeleted && !active && !!agentId
   // The project's page on its git host: the first item of the project's menu, and in a session's
   // menu after what opens the session's own.

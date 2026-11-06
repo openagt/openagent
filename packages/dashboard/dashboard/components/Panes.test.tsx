@@ -144,7 +144,7 @@ describe('opening and closing a pane', () => {
     expect(icon('Files').getAttribute('aria-pressed')).toBe('false')
   })
 
-  test('each page has its own: what is open on one agent\'s page is not on the next one\'s, nor on the "New agent" page', () => {
+  test('each page has its own: what is open on one agent\'s page is not on the next one\'s, nor on the "New agent session" page', () => {
     const { rerender } = render(<Page />)
     fireEvent.click(icon('Files'))
     rerender(<Page agentId="r2" />)
@@ -177,7 +177,7 @@ describe('what a module\'s pane is given', () => {
     expect([...props.context.files]).toEqual(['a.ts'])
   })
 
-  test('on the "New agent" page it is given no run', () => {
+  test('on the "New agent session" page it is given no run', () => {
     render(<Page agentId={null} activity={7} />)
     fireEvent.click(icon('Files'))
     const props = shown.mock.lastCall![0] as ModulePanelProps
@@ -282,7 +282,7 @@ describe('how the room is shared', () => {
     expect(share('panes')).toBe('60%')
     laidOut(groups(container)[0]!, { chat: 70, panes: 30 })
     expect(share('panes')).toBe('30%')
-    // The first agent kept its own, and the "New agent" page starts with the last.
+    // The first agent kept its own, and the "New agent session" page starts with the last.
     rerender(<Page />)
     expect(share('panes')).toBe('60%')
     rerender(<Page agentId={null} />)
