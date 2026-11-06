@@ -5,6 +5,7 @@ import { DATA_BRANCH } from './names.js'
 import { nodeGitRunner, type GitRunner } from './git.js'
 import { withLockFile } from './checkout-lock.js'
 import { repositoryAddress } from './repository-address.js'
+import { SESSIONS_DIR, sessionsHomeOf } from './sessions.js'
 import {
   branchReach,
   fileBranchPath,
@@ -70,9 +71,15 @@ export async function projectKey(repo: string, git: GitRunner = nodeGitRunner())
   return parts.join('/')
 }
 
-/** Where the project `cwd` is in writes and reads its data right now. Never throws. */
+/** Where the project `cwd` is in writes and reads its data right now; for the sessions home, where the sessions with no project keep theirs. Never throws. */
 export async function projectDataPlace(cwd: string, deps: ProjectDataDeps = {}): Promise<DataPlace> {
   const git = deps.git ?? nodeGitRunner()
+  // The sessions with no project keep their records together, in the personal folder.
+  const sessions = await sessionsHomeOf(cwd)
+  if (sessions !== undefined) {
+    const folder = deps.folder ?? personalFolder()
+    return { kind: 'personal', repo: sessions, folder, dir: join(folder, SESSIONS_DIR) }
+  }
   const repo = (await fileBranchRepo(cwd, git)) ?? cwd
   if (await readSharing(repo, git)) return { kind: 'branch', repo, dir: await fileBranchPath(repo, DATA_BRANCH, git) }
   const folder = deps.folder ?? personalFolder()

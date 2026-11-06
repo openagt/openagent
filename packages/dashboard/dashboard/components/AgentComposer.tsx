@@ -1,3 +1,4 @@
+import { SESSIONS_ID } from '../../src/project-address.js'
 import { useEffect, useRef, useState, type MutableRefObject, type ReactNode } from 'react'
 import { Loader2, Square } from 'lucide-react'
 import { Composer, type ComposerHandle } from './Composer.js'
@@ -212,17 +213,22 @@ export function AgentComposer({
         sessionContext={context}
         {...(contextSet ? { addContext: contextSet.add, removeContext: contextSet.remove } : {})}
         controls={
-          <>
-            {contextSet && <ProjectContextMenu projectId={projectId} context={contextSet.context} busy={busy} onToggle={contextSet.toggle} />}
-            <AutoMenu
-              publish={picked ?? recorded}
-              picks={offeredPublishPicks(launcher?.gitHost ?? true, launcher?.remote ?? true)}
-              onPublish={pick => setPicked(pick === recorded ? null : pick)}
-              target={prBase !== undefined ? { into: prBase } : undefined}
-              busy={busy}
-            />
-            {controls}
-          </>
+          // A session with no project has no project to take Context from, and no git to take its work further with.
+          projectId === SESSIONS_ID ? (
+            controls
+          ) : (
+            <>
+              {contextSet && <ProjectContextMenu projectId={projectId} context={contextSet.context} busy={busy} onToggle={contextSet.toggle} />}
+              <AutoMenu
+                publish={picked ?? recorded}
+                picks={offeredPublishPicks(launcher?.gitHost ?? true, launcher?.remote ?? true)}
+                onPublish={pick => setPicked(pick === recorded ? null : pick)}
+                target={prBase !== undefined ? { into: prBase } : undefined}
+                busy={busy}
+              />
+              {controls}
+            </>
+          )
         }
         idleControl={idleControl}
         // What the box can do, not what it is for: the keys for a working agent, as Claude Code's box

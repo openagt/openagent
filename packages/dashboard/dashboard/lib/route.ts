@@ -6,6 +6,9 @@
 // pages show every project instead with `?all`. The URL is the selection — what used to be three
 // pieces of React state guessing at each other, which is where the #761/#766/#768/#774 bugs came from.
 //
+// A session with no project has the address `/session/<agentId>`, and `/session` is the "New agent
+// session" page with no project: `session` stands where a project's address would (`SESSIONS_ID`).
+//
 // A project's address is its folder's name, or its id where the name cannot be one: the rule is
 // `src/project-address.ts`, shared with the server, which prints it for the project `openagent` opens.
 //
@@ -17,7 +20,7 @@
 // The ids are URL-safe by construction (the registry derives a project id from its path, an agent
 // id from its start time), so the segments are still encoded/decoded — a URL typed by hand is input.
 
-import { OVERVIEW_SEGMENT, SETTINGS_SEGMENT, isPageSegment, type ProjectAddresses } from '../../src/project-address.js'
+import { OVERVIEW_SEGMENT, SESSIONS_ID, SETTINGS_SEGMENT, isPageSegment, type ProjectAddresses } from '../../src/project-address.js'
 
 /** What the dashboard is looking at, as carried by the URL. */
 export interface Route {
@@ -75,12 +78,13 @@ export function parseRoute(url: string, projects: ProjectAddresses): Route {
   const [second, ...after] = rest
   if (second === OVERVIEW_SEGMENT) return { projectId: null, agentId: null, scope: projectId, ...settings }
   if (second !== undefined && isPageSegment(second)) return { projectId: null, agentId: null, page: second, pagePath: after, scope: projectId, ...settings }
-  return { projectId, agentId: second ?? null, ...(params.has(ALL_PARAM) ? {} : { scope: projectId }), ...settings }
+  // The sessions with no project are no project to show alone: every project shows beside them.
+  return { projectId, agentId: second ?? null, ...(params.has(ALL_PARAM) || projectId === SESSIONS_ID ? {} : { scope: projectId }), ...settings }
 }
 
 /** The URL for a route, its path and its query — the inverse of {@link parseRoute}. */
 export function formatRoute(route: Route, projects: ProjectAddresses): string {
-  const all = !route.page && route.projectId && !route.scope ? [ALL_PARAM] : []
+  const all = !route.page && route.projectId && route.projectId !== SESSIONS_ID && !route.scope ? [ALL_PARAM] : []
   const settings = route.settings !== undefined ? [`${SETTINGS_PARAM}=${encodeURIComponent(route.settings)}`, ...(route.settingsItem ? [`${SETTINGS_ITEM_PARAM}=${encodeURIComponent(route.settingsItem)}`] : [])] : []
   const query = [...all, ...settings].join('&')
   return formatPath(route, projects) + (query ? `?${query}` : '')

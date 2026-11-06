@@ -21,6 +21,10 @@ already made, and lists it in its pull request; for anything else it proposes an
   dropped: a run's page on another machine, a continued run on another machine and a
   wiped laptop all read the diary from the branch, and a few megabytes a year is the
   price.
+- The sessions with no project keep their runs together, in the personal folder's
+  `sessions/` directory, in the shape a project's data has: one place for all of them, read
+  from the sessions home and from any session's folder in it. Picked over a record kept in
+  each session's own folder, which is not synced.
 - `<who>` is the git email the writer's repository commits as, lowercased, unsafe
   characters replaced, `anonymous` when unusable. The folder groups the runs by person and
   protects nothing: ids never collide, and the same email authors the commits. A flat

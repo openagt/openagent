@@ -1,3 +1,4 @@
+import { SESSIONS_ID } from '../project-address.js'
 import { stat } from 'node:fs/promises'
 import { originDefaultBranch } from '@openagt/agent-data'
 import { moduleAgents, type ModuleAgent, type ModuleAgentsWanted } from '../dashboard/module-agents.js'
@@ -459,13 +460,18 @@ export async function onOverview(): Promise<Overview> {
   )
 }
 
-/** Recent sessions pooled across every project (#shared-shell), newest first, for the home rail. */
+/** Recent sessions pooled across every project and the sessions with no project (#shared-shell), newest first, for the home rail. */
 export async function onRecentAgents(): Promise<RecentAgent[]> {
   // Each project's runs as its own list shows them, the projects only the person's other computers have too.
   const elsewhere = await contextRemote()
     .elsewhere()
     .catch((): ProjectSummary[] => [])
-  return withProjects(projects => buildRecentAgents([...projects, ...elsewhere], { agents: project => runRows(project.id, project.machine === undefined ? project.path : undefined) }))
+  return withProjects(projects =>
+    buildRecentAgents([...projects, ...elsewhere], {
+      agents: project => runRows(project.id, project.machine === undefined ? project.path : undefined),
+      sessions: async () => runRows(SESSIONS_ID, await resolveProjectPath(SESSIONS_ID)),
+    }),
+  )
 }
 
 

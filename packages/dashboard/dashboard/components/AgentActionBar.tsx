@@ -5,6 +5,7 @@ import { AgentErrorCount } from './AgentErrorCount.js'
 import { PaneMenu, PaneToggles } from './Panes.js'
 import { ShowSidebarButton } from './SidebarToggle.js'
 import { ProjectMenu } from './ProjectActions.js'
+import { SESSIONS_ID } from '../../src/project-address.js'
 
 // One agent's top bar: its name with a small ⌄, which is the session's menu (AgentActionsMenu); and
 // at the end the count of what it could not get past, the project's ⋮, and the icons of the page's
@@ -90,7 +91,8 @@ export function AgentActionBar({
           at the end rather than beside the name, which gives up width as the row fills: a
           count is only useful if it is whole. */}
       {ready && <AgentErrorCount events={events} />}
-      <ProjectMenu projectId={projectId} onProjectRemoved={onProjectRemoved} />
+      {/* A session with no project has no project's menu. */}
+      {projectId !== SESSIONS_ID && <ProjectMenu projectId={projectId} onProjectRemoved={onProjectRemoved} />}
       <PaneToggles />
     </div>
   )

@@ -5,6 +5,7 @@ import { cloudRunState } from '../cloud-run-state.js'
 import { bridgeQuestions } from './bridge-store.js'
 import { hostname } from 'node:os'
 import type { MachineKind } from '../reached-by-line.js'
+import { SESSIONS_ID } from '../project-address.js'
 
 // The first-sidebar Overview (#437, part of #314): a cross-project glance at what the agent
 // is working on right now, the size of the backlog, and the recently active projects. It
@@ -56,7 +57,7 @@ export interface Overview {
   recent: RecentProject[]
 }
 
-/** One recent session, tagged with the project it belongs to, for the cross-project rail. */
+/** One recent session, tagged with the project it belongs to, for the cross-project rail; a session with no project is tagged {@link SESSIONS_ID}, with no name. */
 export interface RecentAgent {
   projectId: string
   projectName: string
@@ -73,10 +74,12 @@ const RECENT_RUNS_LIMIT = 30
 export interface RecentAgentsDeps {
   /** A project's runs: off its folder for one of this computer's, as its computer says them for another's. */
   agents?: (project: ProjectSummary) => Promise<AgentMeta[]>
+  /** The sessions with no project; none when absent. */
+  sessions?: () => Promise<AgentMeta[]>
 }
 
 /**
- * Every project's sessions pooled and sorted newest-first (capped), so the shared sidebar (#shared-
+ * Every project's sessions, and the sessions with no project, pooled and sorted newest-first (capped), so the shared sidebar (#shared-
  * shell) can show recents on the home/Overview where no single project is selected. Each row carries
  * the project it belongs to, so selecting it jumps into that project's session. Forgiving — a project
  * whose agents cannot be read simply contributes nothing.
@@ -86,8 +89,11 @@ export async function buildRecentAgents(projects: ProjectSummary[], deps: Recent
   // Every project at once: each one's read is a git read of its branches too (the rows' marks), and
   // one after the other the list waited for all of them in turn. Kept in the projects' order, so
   // the first project to list a run still keeps it below.
-  const read = await Promise.all(projects.map(project => readAgents(project).catch((): AgentMeta[] => [])))
-  const all: RecentAgent[] = projects.flatMap((project, at) => (read[at] ?? []).map(agent => ({ projectId: project.id, projectName: project.name, agent })))
+  const [read, sessions] = await Promise.all([Promise.all(projects.map(project => readAgents(project).catch((): AgentMeta[] => []))), (deps.sessions ?? (async () => []))().catch((): AgentMeta[] => [])])
+  const all: RecentAgent[] = [
+    ...projects.flatMap((project, at) => (read[at] ?? []).map(agent => ({ projectId: project.id, projectName: project.name, agent }))),
+    ...sessions.map(agent => ({ projectId: SESSIONS_ID, projectName: '', agent })),
+  ]
   all.sort((a, b) => (b.agent.startedAt ?? '').localeCompare(a.agent.startedAt ?? ''))
   // One row per run (#1648): two checkouts of one repository share their archive, so every run
   // was listed once per checkout; the first project to list it keeps it.

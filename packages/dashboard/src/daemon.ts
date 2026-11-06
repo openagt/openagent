@@ -15,6 +15,8 @@ import { bridgeSessionsFrom } from './dashboard/bridge-sessions.js'
 import { bridgeQuestions } from './dashboard/bridge-store.js'
 import { bridgeBrowserDir, bridgeBrowserOwner, startBridgeBrowser, type BridgeBrowser, type BridgeBrowserOptions } from './bridge-browser.js'
 import { runProjectHooks } from './project-hooks.js'
+import { prepareSessionsHome, startSessionsSweep } from './sessions-home.js'
+import { sessionsHome } from '@openagt/agent-data'
 import { readSecureAddress, SECURE_PORT, type SecureAddress } from './secure-address.js'
 import { builtInServices } from './built-in.js'
 import { COMPUTER_ENV, sayOwnUrl, startPackageServices, type PackageServices, type PackageServicesOptions } from './package-services.js'
@@ -220,6 +222,10 @@ export async function runDaemon(cwd: string, opts: RunDaemonOptions = {}): Promi
   for (const record of listed) {
     await runProjectHooks(record.path, 'open', { log: console.log })
   }
+  // The sessions with no project: their home's hook lines written, as a project's are when it is
+  // added, and a session whose process died swept, as a project's scheduler sweeps its runs.
+  const sessions = await prepareSessionsHome(sessionsHome(env))
+  const stopSessionsSweep = startSessionsSweep(sessions)
 
   // The services of OpenAgent's own packages: each runs for as long as the daemon does, and is
   // told the daemon's address.
@@ -239,6 +245,7 @@ export async function runDaemon(cwd: string, opts: RunDaemonOptions = {}): Promi
   const stopComputersSync = startComputersSync(env)
 
   await waitForShutdown(opts.signal)
+  stopSessionsSweep()
   stopLoginsSync()
   stopComputersSync()
 

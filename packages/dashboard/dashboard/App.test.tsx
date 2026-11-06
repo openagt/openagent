@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, test, vi } from 'vitest'
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { createElement } from 'react'
-import { phoneScreen } from './test-utils.js'
+import { openMenu, phoneScreen } from './test-utils.js'
 import { useModuleHost, type ModuleCardProps, type ModuleDefinition, type ModulePageProps } from './module/index.js'
 import { forgetRemembered } from './lib/use-async.js'
 import { skillsSaved } from './lib/skills-saved.js'
@@ -370,7 +370,6 @@ describe('the project select (#1513)', () => {
   }
 
   async function pick(from: string, to: RegExp): Promise<void> {
-    const { openMenu } = await import('./test-utils.js')
     await openMenu(await screen.findByRole('button', { name: `Project: ${from}` }))
     fireEvent.click(screen.getByRole('menuitem', { name: to }))
   }
@@ -565,7 +564,6 @@ describe('the project select (#1513)', () => {
     await screen.findByRole('button', { name: 'Logs' })
     const reads = () => calls.filter(call => call.name === 'onModules').length
     const before = reads()
-    const { openMenu } = await import('./test-utils.js')
     await openMenu(screen.getByRole('button', { name: 'Project: All projects' }))
     fireEvent.click(screen.getByRole('menuitem', { name: /Add project/ }))
     fireEvent.click(await screen.findByRole('button', { name: 'I trust it, add it' }))
@@ -706,7 +704,9 @@ describe('the shell on a phone', () => {
 
       // The launcher has a top row of its own, which keeps its corner free for the button.
       fireEvent.click(screen.getByRole('button', { name: 'Open the menu' }))
-      fireEvent.click(await screen.findByRole('button', { name: 'New agent session' }))
+      // New is a menu of the project and "No project".
+      await openMenu(await screen.findByRole('button', { name: 'New agent session' }))
+      fireEvent.click(await screen.findByRole('menuitem', { name: 'app' }))
       expect(await screen.findByText('the launcher of app')).toBeTruthy()
       await waitFor(() => expect(screen.queryByRole('button', { name: 'New agent session' })).toBeNull())
       expect(screen.getByRole('button', { name: 'Open the menu' })).toBeTruthy()

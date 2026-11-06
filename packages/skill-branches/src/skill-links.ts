@@ -78,6 +78,27 @@ export async function linkSkill(
   }
 }
 
+/**
+ * Link `skills` into a folder that is no checkout: a session's own folder, which has no project and
+ * no git. The same links a checkout gets for each harness and each skill's package, without this
+ * package's own skill, which is about branches, and with nothing to hide from a git that is not there.
+ */
+export async function linkSkillsInFolder(folder: string, skills: readonly SkillLink[], fs: LinkFs = nodeLinkFs(), git: GitRunner = nodeGitRunner()): Promise<void> {
+  for (const skill of skills) {
+    for (const dir of HARNESS_SKILL_DIRS) {
+      const path = join(folder, dir, skill.name)
+      try {
+        if (await entryExists(path)) continue
+        await fs.mkdir(join(folder, dir))
+        await fs.symlinkDir(skill.dir, path)
+      } catch {
+        // A filesystem that refuses the link: the agent still starts, without the skill.
+      }
+    }
+    if (skill.package) await linkPackage(folder, folder, skill.package, git)
+  }
+}
+
 /** The paths of a skill's links, relative to a checkout: its text for every harness, and its package's links when it has one. */
 export function skillLinkPaths(skill: SkillLink): string[] {
   return [...HARNESS_SKILL_DIRS.map(dir => `${dir}/${skill.name}`), ...(skill.package ? packageLinkPaths(skill.package) : [])]

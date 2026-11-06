@@ -20,8 +20,8 @@ import { modelName, useModels } from '../lib/models.js'
 import { PR_MARKS, type PrState } from '../lib/pr-marks.js'
 import { agentLabel, awaitingName } from '../lib/agent-label.js'
 import { holdsMainAgent, isOpenSubagent, nestRows, taskLabel } from '../lib/subagents.js'
-import { AddProjectPanel } from './AddProjectPanel.js'
-import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem, DropdownMenuGroup, DropdownMenuLabel } from './ui/dropdown-menu.js'
+import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem, DropdownMenuGroup, DropdownMenuLabel, DropdownMenuSeparator } from './ui/dropdown-menu.js'
+import { SESSIONS_ID } from '../../src/project-address.js'
 import { Tooltip, TooltipTrigger, TooltipContent } from './ui/tooltip.js'
 import { ProjectSelect } from './ProjectSelect.js'
 import {
@@ -222,7 +222,8 @@ export function AgentHistory({
     ? recentAgents!.map(rr => ({
         key: `${rr.projectId}:${rr.agent.id}`,
         agent: rr.agent,
-        project: label(rr.projectId, rr.projectName),
+        // A session with no project names none.
+        ...(rr.projectId !== SESSIONS_ID ? { project: label(rr.projectId, rr.projectName) } : {}),
         projectId: rr.projectId,
         active: rr.projectId === projectId && rr.agent.id === selectedAgentId,
         onClick: () => onSelectRecent?.(rr.projectId, rr.agent.id),
@@ -334,7 +335,6 @@ export function AgentHistory({
             active={atProjectLauncher}
             onNewAgentInProject={onNewAgentInProject && leave(onNewAgentInProject)}
             onSelect={leave(onSelect)}
-            onProjectAdded={onProjectAdded}
           />
           {/* Overview: the way home, its own nav item directly under New and above the session list,
               more prominent than a menu row. Only this — the current view — carries the active fill. */}
@@ -495,16 +495,15 @@ function OverviewButton({ active, count, onClick }: { active: boolean; count: nu
 }
 
 // The "New" launcher, project-count aware (#new-button). With one project picked at the top of the
-// rail, it starts a session there. With all projects showing it adapts to how many exist: none -> open the add-project dialog
-// (you cannot start a session with nowhere to run it); one -> start there; several -> a small picker
-// so you choose where. The label + Plus stay the same in every case, so it reads as one button.
+// rail, it starts a session there. With all projects showing it adapts to how many exist: none ->
+// a session with no project; one or more -> a small picker of the projects and "No project", so
+// you choose where. The label + Plus stay the same in every case, so it reads as one button.
 function NewButton({
   scope,
   projects,
   active = false,
   onNewAgentInProject,
   onSelect,
-  onProjectAdded,
 }: {
   scope: string | null
   projects: ProjectSummary[]
@@ -513,9 +512,7 @@ function NewButton({
   active?: boolean
   onNewAgentInProject?: ((projectId: string) => void) | undefined
   onSelect: (agentId: string | null) => void
-  onProjectAdded?: (() => void) | undefined
 }) {
-  const [adding, setAdding] = useState(false)
   const label = useProjectLabel()
   // Same box as the Overview row (px-2 py-1.5 gap-2) so their icons and labels align; h-auto/px-2/
   // py-1.5 override the button size's default h-9/px-4/py-2. The active fill (same tokens as
@@ -526,9 +523,9 @@ function NewButton({
   )
   const start = (id: string) => (onNewAgentInProject ? onNewAgentInProject(id) : onSelect(null))
 
-  // One project picked, or exactly one registered: start a session straight away.
-  if (scope !== null || projects.length === 1) {
-    const target = scope ?? projects[0]!.id
+  // One project picked, or none registered: start a session straight away, there or with no project.
+  if (scope !== null || projects.length === 0) {
+    const target = scope ?? SESSIONS_ID
     return (
       <Button variant="ghost" className={cls} onClick={() => start(target)}>
         <Plus className="h-4 w-4 shrink-0" />
@@ -537,23 +534,7 @@ function NewButton({
     )
   }
 
-  // No projects: there is nowhere to run a session, so prompt to add one first.
-  if (projects.length === 0) {
-    return (
-      <>
-        <Tooltip>
-          <TooltipTrigger render={<Button variant="ghost" className={cls} onClick={() => setAdding(true)} />}>
-            <Plus className="h-4 w-4 shrink-0" />
-            <span className="whitespace-nowrap">New agent session</span>
-          </TooltipTrigger>
-          <TooltipContent>Add a project to start an agent session</TooltipContent>
-        </Tooltip>
-        {adding && <AddProjectPanel onAdded={() => onProjectAdded?.()} onClose={() => setAdding(false)} />}
-      </>
-    )
-  }
-
-  // Several projects: pick which one the new session agents in.
+  // Projects: pick which one the new session works in, or none.
   return (
     <DropdownMenu>
       <DropdownMenuTrigger aria-label="New agent session" className={cn(buttonVariants({ variant: 'ghost' }), cls)}>
@@ -572,6 +553,10 @@ function NewButton({
             <span className="flex-1 truncate">{label(p.id, p.name)}</span>
           </DropdownMenuItem>
         ))}
+        <DropdownMenuSeparator />
+        <DropdownMenuItem onClick={() => start(SESSIONS_ID)}>
+          <span className="flex-1 truncate">No project</span>
+        </DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>
   )

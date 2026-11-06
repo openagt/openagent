@@ -599,7 +599,24 @@ describe('subagents on the rail', () => {
 const proj = (id: string, name: string): ProjectSummary => ({ id, path: `/${id}`, name, activated: true, gitHost: false })
 
 describe('AgentHistory New button (#new-button)', () => {
-  test('with one project, New starts a session in it', () => {
+  test('with no project, New starts a session with no project', () => {
+    let started: string | null = null
+    renderRail(
+      <AgentHistory
+        projectId={null}
+        agents={[]}
+        recentAgents={[]}
+        projects={[]}
+        onNewAgentInProject={id => (started = id)}
+        selectedAgentId={null}
+        onSelect={() => {}}
+      />,
+    )
+    fireEvent.click(screen.getByText('New agent session'))
+    expect(started).toBe('session')
+  })
+
+  test('with one project and none selected, New picks it or no project', async () => {
     let started: string | null = null
     renderRail(
       <AgentHistory
@@ -612,8 +629,10 @@ describe('AgentHistory New button (#new-button)', () => {
         onSelect={() => {}}
       />,
     )
-    fireEvent.click(screen.getByText('New agent session'))
-    expect(started).toBe('p1')
+    await openMenu(screen.getByRole('button', { name: 'New agent session' }))
+    expect(screen.getAllByRole('menuitem').map(item => item.textContent)).toEqual(['alpha', 'No project'])
+    fireEvent.click(screen.getByRole('menuitem', { name: 'No project' }))
+    expect(started).toBe('session')
   })
 
   test('inside a project, New starts another session in that project', () => {

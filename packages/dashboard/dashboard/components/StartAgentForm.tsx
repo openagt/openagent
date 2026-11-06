@@ -25,6 +25,7 @@ import { AgentFix, agentWords, useAgentState } from './Logins.js'
 import { MachineLogins } from './ServerLogins.js'
 import { SKILLS_ENTRY } from './ProjectSkills.js'
 import { GitAccountMenu, useRunsAccount } from './GitHosts.js'
+import { SESSIONS_ID } from '../../src/project-address.js'
 
 /** The note while the start is asked for: what the chat's first line says next. */
 const STARTING = 'Starting session'
@@ -64,6 +65,9 @@ const THEIR_LOGINS_MS = 8_000
 // picks, the button shows the pick the daemon will start the run at: Commit, which pushes
 // nothing. Saved, so the pick holds for every next run. A project with no git host package
 // is offered Off, Commit and Publish branch only, and one with no remote Off and Commit.
+// With no project (`SESSIONS_ID`), the run starts in a folder of its own on this computer: the row
+// says "No project", and nothing about a repository is offered, no branch, no account, no Auto
+// level, no project Context or skills.
 export function StartAgentForm({
   projectId,
   projectName,
@@ -100,6 +104,7 @@ export function StartAgentForm({
   const composerRef = useRef<ComposerHandle>(null)
   const preferences = usePreferences()
   const launcher = useProjectLauncher(projectId)
+  const noProject = projectId === SESSIONS_ID
 
   // The machine this run targets (#1067), if one is picked in "Run on": the start names it by its
   // id, and the daemon, which holds its key, sends the run there (runTarget). A machine runs the
@@ -183,8 +188,9 @@ export function StartAgentForm({
     if (busy) return
     setNote(STARTING)
     setSentTo(machine ? machineName(machine) : clonedHere ? hereName() : null)
+    const { publish: _publish, ...unpublished } = startPicks(preferences)
     const result = await start(projectId, promptWithContext(text, context), {
-      ...startPicks(preferences),
+      ...(noProject ? unpublished : startPicks(preferences)),
       ...(startFrom ? startFromBase(startFromPick, startFrom.main, startFrom.local) : {}),
       ...(prInto !== undefined ? { prBase: prInto } : {}),
       ...(machine ? { machine: machine.id } : {}),
@@ -199,7 +205,7 @@ export function StartAgentForm({
       onAgentStarted?.(text, result.agentId, machine?.label, result.projectId, {
         ...(started !== undefined ? { branch: started } : {}),
         ...(runsAccount !== undefined ? { gitAccount: runsAccount } : {}),
-        publish: publishPick,
+        ...(noProject ? {} : { publish: publishPick }),
         ...(prInto !== undefined ? { prBase: prInto } : {}),
         ...(preferences.driver ? { driver: preferences.driver } : {}),
         ...(preferences.model ? { model: preferences.model } : {}),
@@ -231,7 +237,9 @@ export function StartAgentForm({
         // which would otherwise land before it and push it, and for the saved pick, which would
         // otherwise flip its words.
         startsAt={
-          projectName ? (
+          noProject ? (
+            <RowItem icon={<Folder className="h-3.5 w-3.5 shrink-0" aria-hidden />}>No project</RowItem>
+          ) : projectName ? (
             <>
               <RowItem icon={<Folder className="h-3.5 w-3.5 shrink-0" aria-hidden />}>{projectName}</RowItem>
               {startFrom && preferencesLoaded && <StartFromMenu projectId={projectId} main={startFrom.main} local={startFrom.local} pick={startFromPick} onPick={pickStartFrom} busy={busy} />}
@@ -240,9 +248,10 @@ export function StartAgentForm({
         }
         // Who it pushes as, at the row's other end: the project's git host account on the computer
         // the run goes to. Its own end of the row, so the branch landing moves nothing.
-        startsAtEnd={remote && <GitAccountMenu address={address} machineId={machine?.id} on={name} busy={busy} onAdd={() => (machine ? openSettings('devices', machine.id) : openPermissions())} />}
+        startsAtEnd={remote && !noProject && <GitAccountMenu address={address} machineId={machine?.id} on={name} busy={busy} onAdd={() => (machine ? openSettings('devices', machine.id) : openPermissions())} />}
         // How it runs, under the box: the Context picker, the "Auto" menu, then the project's skills (his pick).
         controls={
+          noProject ? undefined : (
           <>
             <ProjectContextMenu projectId={projectId} context={context} busy={busy} onToggle={toggleContext} />
             <AutoMenu
@@ -257,6 +266,7 @@ export function StartAgentForm({
               <span className="truncate">Skills</span>
             </button>
           </>
+          )
         }
         onSubmit={submit}
         onPromptChange={value => {

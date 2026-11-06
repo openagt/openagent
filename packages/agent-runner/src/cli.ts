@@ -1,5 +1,5 @@
 import { parseArgs } from 'node:util'
-import { nodeGitRunner, runPackageCommand, type GitRunner } from '@openagt/agent-data'
+import { nodeGitRunner, runPackageCommand, sessionsHomeOf, type GitRunner } from '@openagt/agent-data'
 import { liftSkillRules, projectRoot } from '@openagt/skill-branches'
 import { findRun } from '@openagt/skill-logs'
 import { DRIVER_NAMES, detachResume, detachRun, isDriverName, readyToRun, resumeProject, runProject } from './runner.js'
@@ -43,6 +43,10 @@ export const USAGE = `usage: agent-runner <command>
   init                          this tool's lines in the dashboard's .openagent/hooks.yml, so its Start works; a line already there is kept
   cleanup                       remove what this tool left in the project: the runs' locks and stderr files, then .agent-runner/ and the rule hiding it from git once it is empty;
                                 config.yml is yours and stays; refused while a run's process is alive; the command a dashboard asks for when a project is removed with its files
+
+In the sessions home (~/.openagent-sessions, or $XDG_CONFIG_HOME/openagent-sessions) a run has no project: it works in a
+folder of its own there, <home>/<id>, with no git, kept when it ends; its record is kept with the other sessions' in the
+personal folder, and --publish, --base, --pr-base and --branch are refused.
 
 When a run ends waiting on a question, or ends done with a pull request it did not have, the \`ended:\` line in the
 project's .agent-runner/config.yml runs, if there is one, in the project's root, with MESSAGE (one line for a person),
@@ -135,6 +139,11 @@ const COMMANDS: Record<string, Command> = {
     if (values['pr-base'] !== undefined && !values['pr-base'].trim()) throw new Usage('--pr-base needs a branch name')
     if (values.for !== undefined && !values.for.trim()) throw new Usage('--for needs what the run is for')
     if (values.attach !== undefined && !values.attach.trim()) throw new Usage('--attach needs a text')
+    // A session with no project works in a folder with no git: no branch to start from or work on, nothing to commit or publish.
+    if ((await sessionsHomeOf(repo)) !== undefined) {
+      const gitFlag = (['publish', 'base', 'pr-base', 'branch'] as const).find(flag => values[flag] !== undefined && !(flag === 'publish' && noLevel))
+      if (gitFlag !== undefined) throw new Usage(`--${gitFlag} is for a run in a project: a session with no project has no git`)
+    }
     if (values.started !== undefined && (values.id === undefined || Number.isNaN(Date.parse(values.started)))) throw new Usage('--started is the time a run spawned with --id was asked for, like 2026-10-09T10:00:00.000Z')
     // A parent this project has no record of is refused while someone is still listening; a run
     // spawned with its id was asked about already.
@@ -235,8 +244,13 @@ const COMMANDS: Record<string, Command> = {
   },
 }
 
-/** The project the working directory belongs to, even from inside a checkout under `.branches/`. */
+/**
+ * The project the working directory belongs to, even from inside a checkout under `.branches/`;
+ * or the sessions home, from it or from a session's folder in it: the runs with no project.
+ */
 async function project(cwd: string, git: GitRunner): Promise<string> {
+  const sessions = await sessionsHomeOf(cwd)
+  if (sessions !== undefined) return sessions
   try {
     return await projectRoot(cwd, git)
   } catch (err) {

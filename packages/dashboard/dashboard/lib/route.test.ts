@@ -25,6 +25,17 @@ describe('parseRoute', () => {
     expect(parse('/logs-9zz')).toEqual({ projectId: 'logs-9zz', agentId: null, scope: 'logs-9zz' })
   })
 
+  it('reads a session with no project, and its New agent session page, by the word session, with every project showing', () => {
+    expect(parse('/session')).toEqual({ projectId: 'session', agentId: null })
+    expect(parse('/session/2026-07-19T12-00-00-000Z')).toEqual({ projectId: 'session', agentId: '2026-07-19T12-00-00-000Z' })
+    expect(format({ projectId: 'session', agentId: '2026-07-19T12-00-00-000Z' })).toBe('/session/2026-07-19T12-00-00-000Z')
+    expect(format({ projectId: 'session', agentId: null })).toBe('/session')
+    // No project named session takes the word: its id is its address.
+    const named = projectAddresses(['session-1abc'], [])
+    expect(named.addressOf('session-1abc')).toBe('session-1abc')
+    expect(parseRoute('/session', named)).toEqual({ projectId: 'session', agentId: null })
+  })
+
   it("reads a project's agent: a second segment that starts with a digit", () => {
     expect(parse('/app/2026-07-19T12-00-00-000Z')).toEqual({ projectId: 'app-a1', agentId: '2026-07-19T12-00-00-000Z', scope: 'app-a1' })
   })

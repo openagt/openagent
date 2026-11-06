@@ -7,6 +7,7 @@ import { AgentOverview } from './AgentOverview.js'
 import { HumanQueueList } from './HumanQueueList.js'
 import { ScrollArea } from './ui/scroll-area.js'
 import type { StartPicks } from '../lib/started-from.js'
+import { SESSIONS_ID } from '../../src/project-address.js'
 
 // The project home / launcher: the "New agent session" page. It is never consumed by an agent: starting
 // one appends an agent to the rail and adds that agent's own view (AgentView) alongside, and this
@@ -16,6 +17,8 @@ import type { StartPicks } from '../lib/started-from.js'
 // column (#1455 item 4), the Human Queue's own rows, and the box to start an agent is at the bottom, where an agent's
 // message box is. The project's Docs are not here: they are the Docs pane (Panes), on this page
 // as on an agent's.
+//
+// With no project (`SESSIONS_ID`), the page is the same without what a project has: its skills.
 export function ProjectHome({
   projectId,
   projectName,
@@ -58,6 +61,7 @@ export function ProjectHome({
   /** The saved machine the project is on, when only another computer of the person's has it (elsewhere.ts): it is removed there, not here. */
   home?: string | undefined
 }) {
+  const noProject = projectId === SESSIONS_ID
   return (
     <>
       <ProjectActions projectId={projectId} onProjectRemoved={home === undefined ? onProjectRemoved : undefined} />
@@ -81,7 +85,7 @@ export function ProjectHome({
           {/* What the project's skills need from the person, when they need something (#2023): a card
               under the agents that wait, in the same column; with nothing to say there is no card,
               and "Skills" under the box opens the project's Skills page in Settings. */}
-          <ProjectSkillsLine key={projectId} projectId={projectId} onChanged={onSkillsChanged} />
+          {!noProject && <ProjectSkillsLine key={projectId} projectId={projectId} onChanged={onSkillsChanged} />}
         </div>
       </ScrollArea>
       <StartAgentForm

@@ -7,7 +7,7 @@ import { readAhead, usePolled } from '../lib/use-async.js'
 import { cn } from '../lib/utils.js'
 import { Button } from './ui/button.js'
 import { Card, CardContent, CardHeader, CardTitle } from './ui/card.js'
-import { DeviceCode, HostFix, PackageLogo, StatePill, hostLoginState, hostWords, useGitHosts, useHostLogin } from './Logins.js'
+import { DeviceCode, HostFix, PackageLogo, Pill, StatePill, hostLoginState, hostWords, useGitHosts, useHostLogin } from './Logins.js'
 import { useServers } from './ServerLogins.js'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuGroup, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from './ui/dropdown-menu.js'
 import { Tooltip, TooltipContent, TooltipTrigger } from './ui/tooltip.js'
@@ -59,6 +59,9 @@ function NoPackage({ row }: { row: GitHostRow }) {
   )
 }
 
+/** The git host's pill when it has no account runs can use, in the colours of a step to take. */
+const ADD_PILL = { tone: 'bg-warning/10 text-warning', dot: 'bg-warning' }
+
 function HostAccounts({ row, onChanged }: { row: GitHostRow; onChanged: () => Promise<void> }) {
   const p = row.provider!
   const state = hostLoginState(row)!
@@ -88,7 +91,8 @@ function HostAccounts({ row, onChanged }: { row: GitHostRow; onChanged: () => Pr
         <PackageLogo svg={p.logo} />
         <h3 className="text-sm font-medium">{p.name}</h3>
         <span className="min-w-0 flex-1 truncate text-xs text-muted-foreground">{`${row.host} · ${usedBy(row)}`}</span>
-        <StatePill state={state} />
+        {/* In the words of what fixes it, the add button below: OpenAgent's own accounts are added, not logged in to. */}
+        {state === 'step' ? <Pill {...ADD_PILL} words={p.accounts.length === 0 ? 'No account' : 'Add it again'} /> : <StatePill state={state} />}
       </header>
       {p.accounts.length > 0 && (
         <ul className="space-y-1">

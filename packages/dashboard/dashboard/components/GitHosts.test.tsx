@@ -142,7 +142,7 @@ describe('Git hosts', () => {
     expect(screen.getByRole('link', { name: 'github.com/login/device' }).getAttribute('href')).toBe('https://github.com/login/device')
   })
 
-  test('no tool is grey, with the press that installs it and the command it runs, and why the last install failed; no account is amber, with the press that logs one in', async () => {
+  test('no tool is grey, with the press that installs it and the command it runs, and why the last install failed; no account is amber, "No account", with the press that adds one', async () => {
     logins.onGitHosts.mockResolvedValue({ hosts: [{ host: 'github.com', projects: ['site'], provider: provider({ installed: false, accounts: [], installFailed: 'curl: could not resolve host' }) }] })
     render(<GitHostsCard />)
     const card = await screen.findByRole('region', { name: 'GitHub' })
@@ -156,7 +156,7 @@ describe('Git hosts', () => {
     logins.onGitHosts.mockResolvedValue({ hosts: [{ host: 'github.com', projects: ['site'], provider: provider({ accounts: [] }) }] })
     render(<GitHostsCard />)
     const out = await screen.findByRole('region', { name: 'GitHub' })
-    expect(within(out).getByText('Log in')).toBeTruthy()
+    expect(within(out).getByText('No account')).toBeTruthy()
     fireEvent.click(within(out).getByRole('button', { name: 'Add a GitHub account' }))
     await waitFor(() => expect(logins.sendGitHostLogin).toHaveBeenCalledWith('github.com'))
   })

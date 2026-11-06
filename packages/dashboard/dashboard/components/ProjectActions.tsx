@@ -2,6 +2,7 @@ import type { OpenAgentEvent } from '../../src/index.js'
 import { AgentActionsMenu } from './AgentActionsMenu.js'
 import { PaneMenu, PaneToggles } from './Panes.js'
 import { ShowSidebarButton } from './SidebarToggle.js'
+import { SESSIONS_ID } from '../../src/project-address.js'
 
 /** The menu is given no session, so no events: it acts on the project. Stable, so it does not churn on every render. */
 const NO_EVENTS: OpenAgentEvent[] = []
@@ -28,7 +29,8 @@ export function ProjectActions({
       <ShowSidebarButton />
       <PaneMenu />
       <div className="grow shrink-0" />
-      <ProjectMenu projectId={projectId} onProjectRemoved={onProjectRemoved} />
+      {/* No project, no menu of a project's. */}
+      {projectId !== SESSIONS_ID && <ProjectMenu projectId={projectId} onProjectRemoved={onProjectRemoved} />}
       <PaneToggles />
     </div>
   )

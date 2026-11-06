@@ -450,6 +450,12 @@ already made, and lists it in its pull request; for anything else it proposes an
   lines are a default: a line already there is kept, and the person can change or delete any
   of them. Picked over the launcher telling the person which command to run, which left an
   empty folder unable to start.
+- A session need not be in a project: with none, it runs in a folder of its own,
+  `~/.openagent-sessions/<id>/`, started, resumed and checked by the hook lines of that home,
+  which the daemon writes there as it writes a project's. It runs on this computer, with no
+  branch and nothing to publish. Its address is `/session/<id>`, and `/session` is the "New
+  agent session" page with no project; the Log lists it with the projects' runs. Picked over
+  every session belonging to a project, where a person with no project could start nothing.
 - A hook line finds its tools in the packages OpenAgent brings first, then in the
   project's installed packages. Nothing is downloaded to run a line. Picked over `npx`
   in the lines, which downloads whatever package holds the name on npm when the project
