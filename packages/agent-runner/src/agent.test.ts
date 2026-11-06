@@ -6,7 +6,8 @@ import { join } from 'node:path'
 import { AGENT_ENV, writeAgent } from '@openagt/agent-data'
 import { accountsPath, addAccount } from '@openagt/skill-account-rotation'
 import { agentNamed, runAgent } from './agent.js'
-import { accountsOn } from './runner.js'
+import { accountsOn, agentLoginFor } from './runner.js'
+import { git, handDownBasicSkills, removeRepo, testRepo } from './test-repo.js'
 
 test('the agent a run is on is read off the environment by its id; the default is none; a word that is no id is refused', () => {
   assert.equal(agentNamed({}), undefined)
@@ -48,5 +49,23 @@ test('an agent\'s Claude and Codex accounts apply where this computer has them: 
     assert.deepEqual(accountsOn({ accounts: { codex: ['Rom'] } }, env), { codex: ['Rom'] })
   } finally {
     await rm(dir, { recursive: true, force: true })
+  }
+})
+
+handDownBasicSkills()
+
+test('an agent\'s GitHub account applies where the project has a git host; in a session with no project, or a project on another host, the run goes as no account', async () => {
+  const repo = await testRepo()
+  const home = await mkdtemp(join(tmpdir(), 'oa-sessions-'))
+  try {
+    await git(['remote', 'set-url', 'origin', 'git@github.com:someone/project.git'], repo)
+    assert.equal(await agentLoginFor(repo, { accounts: { github: 'octo-agent' } }), 'octo-agent')
+    assert.equal(await agentLoginFor(repo, { accounts: {} }), undefined)
+    await git(['remote', 'set-url', 'origin', 'https://gitlab.com/someone/project.git'], repo)
+    assert.equal(await agentLoginFor(repo, { accounts: { github: 'octo-agent' } }), undefined, 'not on GitHub')
+    assert.equal(await agentLoginFor(home, { accounts: { github: 'octo-agent' } }), undefined, 'no project at all')
+  } finally {
+    await removeRepo(repo)
+    await rm(home, { recursive: true, force: true })
   }
 })

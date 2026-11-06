@@ -2,7 +2,7 @@ import { parseArgs } from 'node:util'
 import { nodeGitRunner, runPackageCommand, sessionsHomeOf, type GitRunner } from '@openagt/agent-data'
 import { liftSkillRules, projectRoot } from '@openagt/skill-branches'
 import { findRun } from '@openagt/skill-logs'
-import { DRIVER_NAMES, GIT_ACCOUNT_ENV, detachResume, detachRun, isDriverName, readyToRun, resumeProject, runProject } from './runner.js'
+import { DRIVER_NAMES, GIT_ACCOUNT_ENV, agentLoginFor, detachResume, detachRun, isDriverName, readyToRun, resumeProject, runProject } from './runner.js'
 import { agentNamed, runAgent } from './agent.js'
 import { AGENT_ENV } from '@openagt/agent-data'
 import { initHooks } from './init.js'
@@ -187,7 +187,7 @@ const COMMANDS: Record<string, Command> = {
     if (process.env[AGENT_ENV]?.trim() && values.resume !== undefined) throw new Usage(`${AGENT_ENV} is for a new run: a run continues on the agent its record names`)
     if (values.resume === undefined && values.id === undefined) {
       // The session's account, or its agent's: an account this computer cannot use stops the run here, naming it.
-      const login = gitAccount ?? (await runAgent(agent, io.stderr)).accounts.github
+      const login = gitAccount ?? (await agentLoginFor(repo, await runAgent(agent, io.stderr)))
       const ready = await readyToRun(repo, driver ?? 'claude-code', login !== undefined ? { login } : {})
       if (ready.problems.length > 0) throw new Refused({ ok: false, reason: 'not-ready', ...ready }, ready.problems.join(' '))
     }
