@@ -30,6 +30,14 @@ describe('a session\'s row above the box', () => {
     expect(container.textContent).not.toContain('today')
   })
 
+  test('a session with no project shows the repos it has, each said with where it was copied from', () => {
+    const { container } = render(<SessionRow runsOn="This machine" elsewhere={false} gitHost={null} repos={[{ name: 'vike', from: '/home/me/oss/vike' }, { name: 'notes', from: '/home/me/notes' }]} />)
+    expect(container.textContent).toContain('vike')
+    expect(container.textContent).toContain('notes')
+    expect(screen.getByText("A copy of /home/me/oss/vike, in this session's folder")).toBeTruthy()
+    expect(screen.queryByRole('button', { name: /Remove/ })).toBeNull()
+  })
+
   test('its height is the row\'s own, whatever has landed: nothing moves when a name lands', () => {
     const { container } = render(<SessionRow runsOn="This machine" elsewhere={false} gitHost={null} />)
     expect(container.firstElementChild!.className.split(' ')).toContain('h-8')

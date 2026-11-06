@@ -22,6 +22,7 @@ import { Composer, type ComposerHandle } from './Composer.js'
 import { StartFromMenu, prTargetBranch, startFromBase } from './StartFromMenu.js'
 import { rowButtonClass } from './ui/row-item.js'
 import { ProjectPicker } from './ProjectPicker.js'
+import { SessionRepoPicks, type PickedRepo } from './SessionRepos.js'
 import { Dots } from './ToolCalls.js'
 import { AgentFix, agentWords, useAgentState } from './Logins.js'
 import { MachineLogins } from './ServerLogins.js'
@@ -69,7 +70,8 @@ const THEIR_LOGINS_MS = 8_000
 // is offered Off, Commit and Publish branch only, and one with no remote Off and Commit.
 // With no project (`SESSIONS_ID`), the run starts in a folder of its own on this computer: the row
 // says "No project", and nothing about a repository is offered, no branch, no account, no Auto
-// level, no project Context or skills.
+// level, no project Context or skills. Beside "No project", the repos the session has as context
+// (SessionRepos.tsx): each is copied into the session's folder, and none is made a project.
 export function StartAgentForm({
   projectId,
   projectName,
@@ -116,6 +118,9 @@ export function StartAgentForm({
   const preferences = usePreferences()
   const launcher = useProjectLauncher(projectId)
   const noProject = projectId === SESSIONS_ID
+  // The repos a session with no project has as context, until it starts or another project is picked.
+  const [repos, setRepos] = useState<PickedRepo[]>([])
+  useEffect(() => setRepos([]), [projectId])
   // What the box holds, so another project picked takes the prompt along to its page.
   const typed = useRef('')
   const pickProject = (id: string) => {
@@ -212,6 +217,7 @@ export function StartAgentForm({
       ...(startFrom ? startFromBase(startFromPick, startFrom.main, startFrom.local) : {}),
       ...(prInto !== undefined ? { prBase: prInto } : {}),
       ...(machine ? { machine: machine.id } : {}),
+      ...(noProject && repos.length > 0 ? { repos: repos.map(repo => repo.path) } : {}),
     })
     setNote(null)
     if (result) {
@@ -228,8 +234,10 @@ export function StartAgentForm({
         ...(preferences.driver ? { driver: preferences.driver } : {}),
         ...(preferences.model ? { model: preferences.model } : {}),
         ...(preferences.effort ? { effort: preferences.effort } : {}),
+        ...(noProject && repos.length > 0 ? { repos: repos.map(repo => ({ name: repo.name, from: repo.path })) } : {}),
       }) // select the run we just started (#761)
       composerRef.current?.clear()
+      setRepos([])
     }
   }
 
@@ -259,6 +267,7 @@ export function StartAgentForm({
         startsAt={
           <>
             <ProjectPicker projectId={projectId} projectName={projectName} projects={projects} busy={busy} onPick={pickProject} onProjectAdded={onProjectAdded} />
+            {noProject && <SessionRepoPicks picked={repos} projects={projects} busy={busy} onChange={setRepos} />}
             {!noProject && projectName && startFrom && preferencesLoaded && <StartFromMenu projectId={projectId} main={startFrom.main} local={startFrom.local} pick={startFromPick} onPick={pickStartFrom} busy={busy} />}
           </>
         }

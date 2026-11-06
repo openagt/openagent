@@ -11,7 +11,8 @@ const onStartCheck = vi.hoisted(() => vi.fn())
 const onCloneCheck = vi.hoisted(() => vi.fn())
 const onProjects = vi.hoisted(() => vi.fn(async () => [] as unknown[]))
 const onStartBranches = vi.hoisted(() => vi.fn(async () => ({ branches: ['feature-x'] }) as { branches?: string[] }))
-vi.mock('../rpc/projects.js', () => ({ onCommands, onStartBranches, onStartCheck, onCloneCheck, onProjects, onRepos: () => Promise.resolve({ repos: [], canAddFolder: false }), sendAddRepoFolder: vi.fn() }))
+const onRepos = vi.hoisted(() => vi.fn(async () => ({ repos: [] as { path: string; name: string; url?: string }[], canAddFolder: false })))
+vi.mock('../rpc/projects.js', () => ({ onCommands, onStartBranches, onStartCheck, onCloneCheck, onProjects, onRepos, sendAddRepoFolder: vi.fn() }))
 
 // Mutable so a test can pick the coding agent and the model; reset after each.
 const prefs = vi.hoisted(() => ({ current: {} as Record<string, unknown> }))
@@ -555,6 +556,45 @@ describe('StartAgentForm (#1774)', () => {
     fireEvent.click(await screen.findByRole('option', { name: 'alpha' }))
     expect(onPickProject).toHaveBeenCalledWith('alpha-1')
     expect(takePendingDraft()).toBe('fix the login page')
+  })
+
+  test('with no project, "Add repo" adds repos as chips, a project\'s or one that is none, and the Start sends their folders; nothing is made a project', async () => {
+    onCommands.mockResolvedValue({ commands: [], startHook: true, gitHost: true })
+    onRepos.mockResolvedValue({ repos: [{ path: '/home/me/oss/vike', name: 'vike', url: 'https://github.com/vikejs/vike.git' }], canAddFolder: false })
+    start.mockResolvedValue({ agentId: 'r1' })
+    const onAgentStarted = vi.fn()
+    const onPickProject = vi.fn()
+    const alpha = { id: 'alpha-1', path: '/home/me/alpha', name: 'alpha', activated: true, gitHost: true }
+    render(<StartAgentForm {...props} projectId="session" projects={[alpha]} onPickProject={onPickProject} onAgentStarted={onAgentStarted} />)
+    const addRepo = () => screen.getByRole('combobox', { name: 'Add repo' })
+    await openMenu(addRepo())
+    fireEvent.click(await screen.findByRole('option', { name: /vike/ }))
+    await openMenu(addRepo())
+    fireEvent.click(await screen.findByRole('option', { name: /alpha/ }))
+    expect(startsAt()).toBe('No projectvikealphaAdd repo')
+    // A repo picked once is not offered again.
+    await openMenu(addRepo())
+    await waitFor(() => expect(screen.queryAllByRole('option')).toEqual([]))
+    fireEvent.keyDown(document.activeElement ?? document.body, { key: 'Escape' })
+    expect(onPickProject).not.toHaveBeenCalled()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Remove alpha' }))
+    expect(startsAt()).toBe('No projectvikeAdd repo')
+    fireEvent.click(screen.getByText('submit-typed'))
+    await waitFor(() => expect(start).toHaveBeenCalledWith('session', 'do the thing', { repos: ['/home/me/oss/vike'] }))
+    await waitFor(() => expect(onAgentStarted).toHaveBeenCalledWith('do the thing', 'r1', undefined, undefined, { repos: [{ name: 'vike', from: '/home/me/oss/vike' }] }))
+    // Started: the next session starts with none.
+    expect(startsAt()).toBe('No projectAdd repo')
+  })
+
+  test('a project has no "Add repo", and its Start sends no repos', async () => {
+    onCommands.mockResolvedValue({ commands: [], startHook: true, gitHost: true })
+    start.mockResolvedValue({ agentId: 'r1' })
+    render(<StartAgentForm {...props} projectName="gemstack" />)
+    expect(screen.queryByRole('combobox', { name: 'Add repo' })).toBeNull()
+    fireEvent.click(screen.getByText('submit-typed'))
+    await waitFor(() => expect(start).toHaveBeenCalled())
+    expect(start.mock.calls[0]![2]).not.toHaveProperty('repos')
   })
 
   test('the "start from" chip is after the project\'s chip and reads the main branch until the person picks; then the Start names no branch', async () => {

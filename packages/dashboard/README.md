@@ -39,7 +39,7 @@ OpenAgent runs no coding agent and makes no model call. Starting an agent is run
 `.openagent/hooks.yml`:
 
 ```yaml
-start: agent-runner run --detach "$PROMPT" ${DRIVER:+--driver "$DRIVER"} ${MODEL:+--model "$MODEL"} ${EFFORT:+--effort "$EFFORT"} ${PUBLISH:+--publish "$PUBLISH"} ${BASE:+--base "$BASE"} ${PR_BASE:+--pr-base "$PR_BASE"}
+start: agent-runner run --detach "$PROMPT" ${DRIVER:+--driver "$DRIVER"} ${MODEL:+--model "$MODEL"} ${EFFORT:+--effort "$EFFORT"} ${PUBLISH:+--publish "$PUBLISH"} ${BASE:+--base "$BASE"} ${PR_BASE:+--pr-base "$PR_BASE"} ${REPOS:+--repos "$REPOS"}
 resume: agent-runner run --detach --resume "$RUN_ID" ${TEXT:+"$TEXT"} ${ANSWER:+--answer "$ANSWER"} ${PUBLISH:+--publish "$PUBLISH"}
 check: agent-runner check ${DRIVER:+--driver "$DRIVER"}
 ```
@@ -70,6 +70,10 @@ A run started from another branch origin has opens its pull request into that br
 launcher puts its name in `PR_BASE`, unless the Auto menu says main. The Auto menu's section "The
 pull request goes into" is shown only when the `start` line mentions `$PR_BASE`: an older line
 gets it by adding `${PR_BASE:+--pr-base "$PR_BASE"}`. Without it the pull request goes to main.
+
+A session with no project may have repos as context, picked with **Add repo** beside "No project":
+their folders reach the line in `REPOS`, one per line, and `agent-runner` copies each into the
+session's folder. The sessions home's lines are OpenAgent's own, written fresh each time it starts.
 
 The `check` line is what the launcher runs before a Start, with the picked coding agent in
 `DRIVER`: it answers one JSON document with `problems` (a coding agent not installed or logged

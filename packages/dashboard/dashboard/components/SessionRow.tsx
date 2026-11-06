@@ -5,6 +5,7 @@ import { GitHostOff } from './GitHosts.js'
 import { MACHINE_ICONS } from './MachineMark.js'
 import { RunOnWords } from './RunOnMenu.js'
 import { RowAboveBox, RowOff, rowButtonClass } from './ui/row-item.js'
+import { RepoChip } from './SessionRepos.js'
 
 /** The icon of where a session runs, as "Run on" has a machine's; the two that are no machine have their own. */
 function runsOnIcon(target: AgentMeta['target'], kind: AgentMeta['remoteKind']): LucideIcon {
@@ -19,7 +20,8 @@ function runsOnIcon(target: AgentMeta['target'], kind: AgentMeta['remoteKind']):
 // and does not flip as the agent renames its own, which its hover names and the bar above says. The
 // row's height is fixed, and each item lands in place: the branch last on its side, so nothing beside
 // it is pushed, and only with the project's name, as on "New agent session". A branch that cannot be said
-// (`lib/started-from.ts`) is left out.
+// (`lib/started-from.ts`) is left out. A session with no project shows the repos it has instead,
+// each copied into its folder.
 export function SessionRow({
   runsOn,
   target,
@@ -30,6 +32,7 @@ export function SessionRow({
   worksOn,
   gitHost,
   gitAccount,
+  repos,
 }: {
   /** Where the session runs, in a few words: this machine, another machine by its name, the cloud. */
   runsOn: string
@@ -46,6 +49,8 @@ export function SessionRow({
   gitHost: GitHostHome | null
   /** The account the run worked as there, as its record says. */
   gitAccount?: string | undefined
+  /** The repos a session with no project has, as its record says. */
+  repos?: readonly { name: string; from: string }[] | undefined
 }) {
   const started = startedFrom && (worksOn && worksOn !== startedFrom ? `Started from ${startedFrom}, works on ${worksOn}` : `Started from ${startedFrom}`)
   return (
@@ -70,6 +75,7 @@ export function SessionRow({
           )}
         </>
       )}
+      {repos?.map(repo => <RepoChip key={repo.name} repo={repo} tip={`A copy of ${repo.from}, in this session's folder`} />)}
     </RowAboveBox>
   )
 }

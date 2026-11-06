@@ -1,4 +1,4 @@
-import { mkdir, stat } from 'node:fs/promises'
+import { mkdir, rm, stat } from 'node:fs/promises'
 import { hostname } from 'node:os'
 import { join } from 'node:path'
 import { OPENAGENT_DIR } from '@openagt/agent-data'
@@ -15,10 +15,12 @@ const SWEEP_EVERY_MS = 60_000
 
 /**
  * The sessions home made ready for runs: its `.openagent/` folder, and the hook lines every
- * package that writes them writes there, as into a project that is added. Answers the home.
+ * package that writes them writes there, as into a project that is added. The lines are
+ * OpenAgent's own, not a person's: written fresh, so they are always this version's. Answers the home.
  */
 export async function prepareSessionsHome(home: string, log: (line: string) => void = console.log): Promise<string> {
   await mkdir(join(home, OPENAGENT_DIR), { recursive: true })
+  await rm(join(home, DASHBOARD_HOOKS), { force: true })
   for (const failed of await writeHookLines(home)) log(`[openagent] hook lines (${home}): ${failed}`)
   return home
 }

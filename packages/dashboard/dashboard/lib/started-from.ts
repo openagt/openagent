@@ -21,6 +21,7 @@ export interface StartPicks {
   driver?: string
   model?: string
   effort?: string
+  repos?: { name: string; from: string }[]
 }
 
 /** Whether what the run started from is origin's default branch, whose name has to be read. */

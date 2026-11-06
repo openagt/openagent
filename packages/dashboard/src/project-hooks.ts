@@ -132,7 +132,7 @@ export async function runProjectHooks(cwd: string, kind: HookKind, opts: RunHook
   }
 }
 
-/** What a `start` line is given: the prompt, and the coding agent, model, publish level branch to start from and pull request's branch when the person picked them. */
+/** What a `start` line is given: the prompt, and the coding agent, model, publish level, branch to start from, pull request's branch and repos when the person picked them. */
 export interface StartHookInput {
   prompt: string
   driver?: string
@@ -145,6 +145,8 @@ export interface StartHookInput {
   base?: string
   /** The branch the run's pull request goes into; the repository's default branch when absent. */
   prBase?: string
+  /** The folders of the repos a session with no project has as context: one per line in `REPOS`. */
+  repos?: readonly string[]
   /**
    * Whether the run is given a short name by a small model (the person's setting). `false` reaches
    * the run's own tool through the environment rather than the line, so no project's `hooks.yml`
@@ -180,7 +182,7 @@ export type RunHookResult = { ok: true; id: string; driver?: string } | { ok: fa
 
 /**
  * Run the project's `start` line: the prompt in `PROMPT`, the picks in `DRIVER`, `MODEL`, `EFFORT`,
- * `PUBLISH`, `BASE` and `PR_BASE` when made. The line answers one JSON document on stdout whose `id` names the
+ * `PUBLISH`, `BASE`, `PR_BASE` and `REPOS` (one folder per line) when made. The line answers one JSON document on stdout whose `id` names the
  * run it started, and whose `driver` may name the coding agent that runs it.
  */
 export function runStartHook(cwd: string, input: StartHookInput, opts: Omit<RunHooksOptions, 'log'> = {}): Promise<RunHookResult> {
@@ -197,6 +199,7 @@ export function runStartHook(cwd: string, input: StartHookInput, opts: Omit<RunH
     ...(input.publish !== undefined ? { PUBLISH: input.publish } : {}),
     ...(input.base !== undefined ? { BASE: input.base } : {}),
     ...(input.prBase !== undefined ? { PR_BASE: input.prBase } : {}),
+    ...(input.repos !== undefined && input.repos.length > 0 ? { REPOS: input.repos.join('\n') } : {}),
   }, opts)
 }
 
