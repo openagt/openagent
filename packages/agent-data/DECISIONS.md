@@ -26,6 +26,14 @@ already made, and lists it in its pull request; for anything else it proposes an
   it fails as a timeout, its own error kind, never as a plain failure: a killed `push` may
   have half landed.
 
+## The agents
+- An agent is a name, a set of skills and a set of accounts, one file each in the person's
+  folder (`agents/<id>.json`), so every computer that syncs the folder has the same agents. The
+  file names the accounts and never holds a token: an account the computer a run goes to does
+  not have is simply not there. `default` is the agent a run is on when none is picked, built
+  in until it is edited, never removed or renamed. Picked over agents kept beside the registry on
+  one computer, which Rom's design rules out: an agent is made once and used anywhere.
+
 ## Where a project's data is
 - By default in the person's own folder on the machine, `~/.openagent`: a git repository with
   no remote, each project under `projects/<project>/`, named by its repository's address so it

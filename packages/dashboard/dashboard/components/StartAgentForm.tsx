@@ -5,7 +5,7 @@ import { onCloneCheck, onStartBranches, onStartCheck } from '../rpc/projects.js'
 import { thisMachineName } from '../lib/this-machine.js'
 import { onMachineLogins, onMachineStartCheck } from '../rpc/machines.js'
 import { usePreferences, usePreferencesLoaded, updatePreferences } from '../lib/preferences.js'
-import { DRIVER_LABELS, isDriverName, machineName, offeredPublishPicks, publishPickIn, reachedThrough } from '../../src/client.js'
+import { DEFAULT_AGENT, DRIVER_LABELS, isDriverName, machineName, offeredPublishPicks, publishPickIn, reachedThrough } from '../../src/client.js'
 import { useMachines } from '../lib/machines.js'
 import { followProjectHome, runTarget, useSelectedMachineId } from '../lib/remote-target.js'
 import type { StartPicks } from '../lib/started-from.js'
@@ -28,6 +28,8 @@ import { AgentFix, agentWords, useAgentState } from './Logins.js'
 import { MachineLogins } from './ServerLogins.js'
 import { SKILLS_ENTRY } from './ProjectSkills.js'
 import { GitAccountMenu, useSessionAccount } from './GitHosts.js'
+import { AgentMenu } from './AgentMenu.js'
+import { useAgents } from './AgentsPage.js'
 import { SESSIONS_ID } from '../../src/project-address.js'
 
 /** The note while the start is asked for: what the chat's first line says next. */
@@ -71,6 +73,9 @@ const THEIR_LOGINS_MS = 8_000
 // the computer the run goes to. A pick there is for this session alone: it goes with the Start,
 // and the computer's own pick, the Permissions page's, stays. Not saved: the next session starts
 // on the computer's again.
+// First under the box, the "Agent" menu: which agent the session is on, its skills and accounts
+// (AgentMenu.tsx); saved, like the model. Its GitHub account is what the account control shows
+// until the person picks another for the session.
 // With no project (`SESSIONS_ID`), the run starts in a folder of its own on this computer: the row
 // says "No project", and nothing about a repository is offered, no branch, no account, no Auto
 // level, no project Context or skills. Beside "No project", the repos the session has as context
@@ -208,10 +213,14 @@ export function StartAgentForm({
     wasReady.current = ready
   }, [fixable, agent?.ready])
 
-  // The git host account picked for this session, when the person picked one; the computer's otherwise.
+  // The agent the session is on: the saved pick, while there is such an agent; the default otherwise.
+  const { view: agentsView } = useAgents()
+  const onAgent = agentsView?.agents.find(one => one.id === (preferences.agent ?? DEFAULT_AGENT)) ?? agentsView?.agents[0]
+  const agentId = onAgent !== undefined && onAgent.id !== DEFAULT_AGENT ? onAgent.id : undefined
+  // The git host account picked for this session, when the person picked one; the agent's, else the computer's, otherwise.
   const [pickedAccount, setPickedAccount] = useState<string | undefined>()
   useEffect(() => setPickedAccount(undefined), [projectId, machine?.id])
-  const account = useSessionAccount(address, machine?.id, pickedAccount)
+  const account = useSessionAccount(address, machine?.id, pickedAccount ?? onAgent?.accounts.github)
 
   const submit = async (text: string) => {
     if (busy) return
@@ -225,6 +234,7 @@ export function StartAgentForm({
       ...(machine ? { machine: machine.id } : {}),
       ...(noProject && repos.length > 0 ? { repos: repos.map(repo => repo.path) } : {}),
       ...(!noProject && remote && account !== undefined ? { account } : {}),
+      ...(agentId !== undefined ? { agent: agentId } : {}),
     })
     setNote(null)
     if (result) {
@@ -236,6 +246,7 @@ export function StartAgentForm({
       onAgentStarted?.(text, result.agentId, machine?.label, result.projectId, {
         ...(started !== undefined ? { branch: started } : {}),
         ...(!noProject && remote && account !== undefined ? { gitAccount: account } : {}),
+        ...(agentId !== undefined ? { agent: agentId } : {}),
         ...(noProject ? {} : { publish: publishPick }),
         ...(prInto !== undefined ? { prBase: prInto } : {}),
         ...(preferences.driver ? { driver: preferences.driver } : {}),
@@ -280,7 +291,9 @@ export function StartAgentForm({
         }
         // How it runs, under the box: the Context picker, the "Auto" menu, then the project's skills (his pick).
         controls={
-          noProject ? undefined : (
+          <>
+            <AgentMenu agents={agentsView?.agents} picked={onAgent?.id} busy={busy} onPick={id => updatePreferences({ agent: id === DEFAULT_AGENT ? '' : id })} />
+            {!noProject && (
           <>
             <ProjectContextMenu projectId={projectId} context={context} busy={busy} onToggle={toggleContext} />
             <AutoMenu
@@ -295,7 +308,8 @@ export function StartAgentForm({
               <span className="truncate">Skills</span>
             </button>
           </>
-          )
+            )}
+          </>
         }
         // Who it pushes as, at that row's right, before the model: the project's git host account on
         // the computer the run goes to, picked for this session.

@@ -115,14 +115,14 @@ test('a start line that names the coding agent of its run is taken at its word; 
   }
 })
 
-test('naming a run off, and the session\'s account at the git host, reach the run\'s own tool through the environment, with no line of any hooks.yml changed', async () => {
+test('naming a run off, the session\'s account at the git host and its agent reach the run\'s own tool through the environment, with no line of any hooks.yml changed', async () => {
   // The line below never mentions them: the run's tool is the line's own child and reads them there.
-  const cwd = await project(`start: 'printf "%s %s\\n" "\${OPENAGENT_NAME_RUN-unset}" "\${OPENAGENT_GIT_ACCOUNT-unset}" >> named.txt; echo "{\\"ok\\":true,\\"id\\":\\"run-1\\"}"'\n`)
+  const cwd = await project(`start: 'printf "%s %s %s\\n" "\${OPENAGENT_NAME_RUN-unset}" "\${OPENAGENT_GIT_ACCOUNT-unset}" "\${OPENAGENT_AGENT-unset}" >> named.txt; echo "{\\"ok\\":true,\\"id\\":\\"run-1\\"}"'\n`)
   try {
     assert.deepEqual(await runStartHook(cwd, { prompt: 'x' }), { ok: true, id: 'run-1' })
     assert.deepEqual(await runStartHook(cwd, { prompt: 'x', nameRun: false }), { ok: true, id: 'run-1' })
-    assert.deepEqual(await runStartHook(cwd, { prompt: 'x', nameRun: true, account: 'octo-agent' }), { ok: true, id: 'run-1' })
-    assert.equal(await readFile(join(cwd, 'named.txt'), 'utf8'), 'unset unset\n0 unset\nunset octo-agent\n')
+    assert.deepEqual(await runStartHook(cwd, { prompt: 'x', nameRun: true, account: 'octo-agent', agent: 'reviewer' }), { ok: true, id: 'run-1' })
+    assert.equal(await readFile(join(cwd, 'named.txt'), 'utf8'), 'unset unset unset\n0 unset unset\nunset octo-agent reviewer\n')
   } finally {
     await rm(cwd, { recursive: true, force: true })
   }

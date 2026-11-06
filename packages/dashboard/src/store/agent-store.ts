@@ -81,6 +81,8 @@ export interface AgentMeta {
    * it: each one's name, which its copy's folder in the session's folder has, and the folder it was copied from.
    */
   repos?: { name: string; from: string }[]
+  /** The agent the run is on, by its id, written on the card by the tool that runs it; absent, the default agent. */
+  agent?: string
   /**
    * How far the run takes its work when its agent finishes: `commit`, `branch`, `pr` or `merge`,
    * the level it was started at or last given. Written on the card by the tool that runs it;

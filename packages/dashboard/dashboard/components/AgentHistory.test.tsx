@@ -947,7 +947,7 @@ describe('AgentHistory reads a log ahead', () => {
 })
 
 // The accounts the agents work with: a page of the dashboard's own, under the modules' pages.
-test('Permissions is a row of the rail, after the modules\u2019 pages, and opens its page; it is the active one there', () => {
+test('Agents and Permissions are rows of the rail, after the modules\u2019 pages, and open their pages; the one open is the active one', () => {
   const onPage = vi.fn()
   const { rerender } = render(
     <SidebarProvider>
@@ -955,7 +955,10 @@ test('Permissions is a row of the rail, after the modules\u2019 pages, and opens
     </SidebarProvider>,
   )
   const labels = screen.getAllByRole('button').map(button => button.textContent)
-  expect(labels.indexOf('Permissions')).toBe(labels.indexOf('Logs') + 1)
+  expect(labels.indexOf('Agents')).toBe(labels.indexOf('Logs') + 1)
+  expect(labels.indexOf('Permissions')).toBe(labels.indexOf('Agents') + 1)
+  fireEvent.click(screen.getByRole('button', { name: 'Agents' }))
+  expect(onPage).toHaveBeenCalledWith('agents')
   fireEvent.click(screen.getByRole('button', { name: 'Permissions' }))
   expect(onPage).toHaveBeenCalledWith('permissions')
   rerender(

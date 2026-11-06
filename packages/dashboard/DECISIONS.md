@@ -391,6 +391,16 @@ already made, and lists it in its pull request; for anything else it proposes an
   went, and over the last update as the default, Claude Code's, which moves a row while a
   person talks to it.
 
+## The agents
+- An agent (Rom's design) is a name, a set of skills and a set of accounts, made once on the
+  Agents page and used in any project or none: the page lists them, the default first, and edits
+  each in place, its skills ticked from the list the Skills page has, plus the two every agent
+  starts with, its accounts among the ones the Permissions page knows. The session's agent is
+  the "Agent" menu first under the box, saved like the model; its GitHub account is what the
+  account control shows until the person picks another for the session. The run's record keeps
+  the agent, and the session's row says it. Picked over an agent as a skill or a module, which
+  Rom ruled out, and over agents per project: a project is context, an agent is who works.
+
 ## What runs log in with
 - Settings has one page for it, Accounts: the coding agents' cards, then the git hosts', each
   a card per tool drawn from its package's answers. Picked over two pages, Agent accounts and

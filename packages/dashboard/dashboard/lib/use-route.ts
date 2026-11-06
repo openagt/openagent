@@ -58,6 +58,15 @@ export function useRoute(projects: ProjectAddresses): {
 /** The dashboard's own page of every account OpenAgent works with, at `/permissions`. */
 export const PERMISSIONS_PAGE = 'permissions'
 
+/** The dashboard's own page of the agents, each a name, skills and accounts, at `/agents`. */
+export const AGENTS_PAGE = 'agents'
+
+/** Go to the Agents page, from a part of the page that has no route to hand. */
+export function openAgents(): void {
+  window.history.pushState(null, '', `/${AGENTS_PAGE}`)
+  notify()
+}
+
 /** Go to the Permissions page, from a part of the page that has no route to hand. */
 export function openPermissions(): void {
   window.history.pushState(null, '', `/${PERMISSIONS_PAGE}`)

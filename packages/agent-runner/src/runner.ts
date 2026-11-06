@@ -7,13 +7,16 @@ import { ClaudeCodeDriver, claudeCodeReady } from '@openagt/agent-driver-claude'
 import { CodexDriver, codexReady } from '@openagt/agent-driver-codex'
 import { findRun } from '@openagt/skill-logs'
 import { readPersonal } from './config.js'
+import { runAgent } from './agent.js'
+import { basicSkills } from './basic-skills.js'
 import { gitHostEnv } from './git-host.js'
 import { namedAtStart, resumeRun, runCommand, runIdFrom, type RunOutcome } from './run.js'
 import { runnerMark } from './records.js'
 import { askName } from './title.js'
 import { publishChange, type NO_PUBLISH, type Publish, type SessionRepo } from './records.js'
 import { acquireRunLock, handOverRunLock, isPidAlive, releaseRunLock, runStderrPath } from './run-lock.js'
-import { accountRotation, hasAddedAccount } from '@openagt/skill-account-rotation'
+import { accountRotation, accountsPath, hasAddedAccount, readAccounts } from '@openagt/skill-account-rotation'
+import type { AgentRecord } from '@openagt/agent-data'
 
 /**
  * The tool's process side: a run in this process, the same run detached in its own process and
@@ -234,15 +237,19 @@ export async function detachResume(
  * one given; none given, the coding agent starts on its own default. A parent it names that has
  * ended by the time this run ends is continued in a process of its own.
  */
-export async function runProject(repo: string, opts: { prompt: string; id?: string; startedAt?: string; mark?: boolean; model?: string; effort?: string; driver?: DriverName; publish?: Publish; attached?: string; parent?: string; base?: string; prBase?: string; branch?: string; for?: string; repos?: SessionRepo[]; gitAccount?: string; log?: (line: string) => void }): Promise<RunOutcome> {
+export async function runProject(repo: string, opts: { prompt: string; id?: string; startedAt?: string; mark?: boolean; model?: string; effort?: string; driver?: DriverName; publish?: Publish; attached?: string; parent?: string; base?: string; prBase?: string; branch?: string; for?: string; repos?: SessionRepo[]; gitAccount?: string; agent?: string; log?: (line: string) => void }, deps: { workAs?: typeof workAs } = {}): Promise<RunOutcome> {
   const id = opts.id ?? runIdFrom(new Date().toISOString())
   const driver = opts.driver ?? 'claude-code'
-  const setup = await readPersonal(repo, opts.log ?? (() => {}))
+  const log = opts.log ?? (() => {})
+  const setup = await readPersonal(repo, log)
+  // The agent the run is on: its skills go into the checkout, its accounts are the run's unless the session picked one.
+  const on = await runAgent(opts.agent, log)
+  const accounts = accountsOn(on)
   // The name is asked for before the git host's account is read, which takes a second or more
   // (`gitHostEnv` runs the git host's command) and is nothing the small model naming the run needs.
   const marked = opts.id !== undefined && opts.mark !== true
-  const naming = namedAtStart({ prompt: opts.prompt, marked, ...(opts.parent !== undefined ? { parent: opts.parent } : {}) }) ? askName(driverFor(driver, undefined, setup), opts.prompt) : undefined
-  const as = await workAs(repo, opts.gitAccount)
+  const naming = namedAtStart({ prompt: opts.prompt, marked, ...(opts.parent !== undefined ? { parent: opts.parent } : {}) }) ? askName(driverFor(driver, undefined, setup, accounts), opts.prompt) : undefined
+  const as = await (deps.workAs ?? workAs)(repo, opts.gitAccount ?? on.accounts.github)
   return runCommand(repo, {
     prompt: opts.prompt,
     ...(naming !== undefined ? { naming } : {}),
@@ -252,8 +259,10 @@ export async function runProject(repo: string, opts: { prompt: string; id?: stri
     marked,
     ...(opts.model !== undefined ? { model: opts.model } : {}),
     ...(opts.effort !== undefined ? { effort: opts.effort } : {}),
-    driver: driverFor(driver, id, setup),
+    driver: driverFor(driver, id, setup, accounts),
+    skills: (where, agent) => basicSkills(where, agent, on),
     ...(as !== undefined ? { gitAccount: as } : {}),
+    ...(opts.agent !== undefined ? { agent: opts.agent } : {}),
     ...(opts.publish !== undefined ? { publish: opts.publish } : {}),
     ...(opts.attached !== undefined ? { attached: opts.attached } : {}),
     ...(opts.parent !== undefined ? { parent: opts.parent } : {}),
@@ -286,8 +295,13 @@ export async function resumeProject(
   const card = await findRun(repo, opts.id)
   const recorded = card?.driver ?? 'claude-code'
   if (!isDriverName(recorded)) throw new Error(`run ${opts.id} is on ${recorded}, which agent-runner cannot start`)
-  const setup = await readPersonal(repo, opts.log ?? (() => {}))
-  const as = await (deps.workAs ?? workAs)(repo, card ? runnerMark(card)?.gitAccount : undefined)
+  const log = opts.log ?? (() => {})
+  const setup = await readPersonal(repo, log)
+  const previous = card ? runnerMark(card) : undefined
+  // The agent the record names, as it stands now: its skills again, its accounts on this computer.
+  const on = await runAgent(previous?.agent, log)
+  const accounts = accountsOn(on)
+  const as = await (deps.workAs ?? workAs)(repo, previous?.gitAccount)
   return resumeRun(repo, {
     id: opts.id,
     ...(opts.text !== undefined ? { text: opts.text } : {}),
@@ -296,7 +310,8 @@ export async function resumeProject(
     ...(opts.effort !== undefined ? { effort: opts.effort } : {}),
     ...(opts.by !== undefined ? { by: opts.by } : {}),
     ...(opts.publish !== undefined ? { publish: publishChange(opts.publish) ?? null } : {}),
-    driver: (deps.driverFor ?? driverFor)(recorded, opts.id, setup),
+    driver: (deps.driverFor ?? driverFor)(recorded, opts.id, setup, accounts),
+    skills: (where, agent) => basicSkills(where, agent, on),
     ...(as !== undefined ? { gitAccount: as } : {}),
     resume: resumeDetached(repo),
     ...(opts.log ? { log: opts.log } : {}),
@@ -313,6 +328,29 @@ export const ACCOUNT_ENV = 'OPENAGENT_ACCOUNT'
  */
 export const GIT_ACCOUNT_ENV = 'OPENAGENT_GIT_ACCOUNT'
 
+/** The accounts of each coding agent a run may use, by name, when its agent names its own few. */
+export interface AgentAccounts {
+  claude?: string[]
+  codex?: string[]
+}
+
+/**
+ * The Claude and Codex accounts the run's agent names, those this computer has: an account named
+ * on another computer applies only where it is. None of them here, or none named: every account
+ * of the computer's.
+ */
+export function accountsOn(agent: Pick<AgentRecord, 'accounts'>, env: NodeJS.ProcessEnv = process.env): AgentAccounts {
+  const here = (kind: 'claude' | 'codex', named: string[] | undefined): string[] | undefined => {
+    if (!named) return undefined
+    const have = new Set(readAccounts(accountsPath(kind, env)).map(account => account.name))
+    const kept = named.filter(name => have.has(name))
+    return kept.length > 0 ? kept : undefined
+  }
+  const claude = here('claude', agent.accounts.claude)
+  const codex = here('codex', agent.accounts.codex)
+  return { ...(claude ? { claude } : {}), ...(codex ? { codex } : {}) }
+}
+
 /**
  * The coding agent a run is on, unrestricted either way: Claude Code with permissions bypassed, Codex
  * with full access. The run's agent, when asked to publish, pushes its branch and opens its pull request itself, which
@@ -323,16 +361,16 @@ export const GIT_ACCOUNT_ENV = 'OPENAGENT_GIT_ACCOUNT'
  * this machine's config turns off (`personal:` in `config.ts`). How a part is turned off is the
  * adapter's own business.
  */
-export function driverFor(name: DriverName, id: string | undefined, personal: PersonalSetup): Driver {
+export function driverFor(name: DriverName, id: string | undefined, personal: PersonalSetup, as: AgentAccounts = {}): Driver {
   // Without an id, a driver for no run's agent: a session that only names one.
   const env: NodeJS.ProcessEnv = { ...process.env, ...(id !== undefined ? { [AGENT_ID_ENV]: id } : {}) }
-  // On the person's accounts of the agent, the next free one taking over at a limit; the one to start on, when whoever started the run said.
+  // On the person's accounts of the agent, or the few its own agent names, the next free one taking over at a limit; the one to start on, when whoever started the run said.
   const prefer = env[ACCOUNT_ENV]?.trim()
-  const accounts = prefer ? { prefer } : {}
+  const accounts = (only: string[] | undefined) => ({ ...(prefer ? { prefer } : {}), ...(only ? { only } : {}) })
   switch (name) {
     case 'claude-code':
-      return new ClaudeCodeDriver({ permissionMode: 'bypassPermissions', env, personal, accounts: accountRotation('claude', accounts) })
+      return new ClaudeCodeDriver({ permissionMode: 'bypassPermissions', env, personal, accounts: accountRotation('claude', accounts(as.claude)) })
     case 'codex':
-      return new CodexDriver({ sandbox: 'danger-full-access', env, personal, accounts: accountRotation('codex', accounts) })
+      return new CodexDriver({ sandbox: 'danger-full-access', env, personal, accounts: accountRotation('codex', accounts(as.codex)) })
   }
 }

@@ -75,6 +75,12 @@ A session with no project may have repos as context, picked with **Add repo** be
 their folders reach the line in `REPOS`, one per line, and `agent-runner` copies each into the
 session's folder. The sessions home's lines are OpenAgent's own, written fresh each time it starts.
 
+The session's agent (the **Agent** menu under the box) and its GitHub account (the control at
+the right) reach the run through its environment, `OPENAGENT_AGENT` and `OPENAGENT_GIT_ACCOUNT`,
+never on the line: `agent-runner` reads them as the line's own child. An agent is a name, skills
+and accounts, a file in `~/.openagent/agents/`, edited on the Agents page; the skills it can be
+given are handed down with the default ones (`OPENAGENT_SKILL_CATALOGUE`).
+
 The `check` line is what the launcher runs before a Start, with the picked coding agent in
 `DRIVER`: it answers one JSON document with `problems` (a coding agent not installed or logged
 out: said in red) and `warnings` (said in amber), each line naming its own fix. A project

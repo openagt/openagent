@@ -2,6 +2,7 @@ import { accentOf, isCodeFont, isDocumentFont, isFont, isPalette, type Accent, t
 import { sanitizeOverviewLayouts, type OverviewLayouts } from './overview-layout.js'
 import { basename, dirname, isAbsolute, join, resolve } from 'node:path'
 import { randomBytes } from 'node:crypto'
+import { DEFAULT_AGENT, isAgentId } from '@openagt/agent-data'
 import { isBranchName } from './branch-name.js'
 import { isDriverName } from './driver-names.js'
 import { isPublishPick, type PublishPick } from './publish-levels.js'
@@ -180,6 +181,11 @@ export interface Preferences {
    * listed starts from its main branch**, so the default stores nothing.
    */
   startFrom?: Record<string, StartFromPick>
+  /**
+   * The agent a run started from the launcher is on, by its id (`~/.openagent/agents/<id>.json`).
+   * The launcher's "Agent" pick writes it. **Absent = the default agent.**
+   */
+  agent?: string
   /**
    * Where a run started from the launcher goes: a saved machine, by its id. The "Run on" pick
    * writes it, and the page picks it again at its next opening. **Absent = this machine.** A
@@ -431,6 +437,9 @@ function sanitizePreferences(value: unknown): Preferences {
   // `publish` is constrained to the picks the launcher's menu lists.
   if (isPublishPick(input['publish'])) preferences.publish = input['publish']
   // `runOn` names a saved machine by its id, which is its address; a blank one is this machine, the absent entry.
+  // `agent` names an agent by its id; the default agent is the absent entry.
+  const agent = typeof input['agent'] === 'string' ? input['agent'].trim() : ''
+  if (isAgentId(agent) && agent !== DEFAULT_AGENT) preferences.agent = agent
   const runOn = typeof input['runOn'] === 'string' ? input['runOn'].trim() : ''
   if (/^https?:\/\/\S+$/.test(runOn) && runOn.length <= 2048) preferences.runOn = runOn
   const startFrom = sanitizeStartFrom(input['startFrom'])

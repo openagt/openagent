@@ -1,0 +1,118 @@
+import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest'
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
+import { forgetRemembered } from '../lib/use-async.js'
+
+const rpc = vi.hoisted(() => ({ onAgentsList: vi.fn(), sendSaveAgent: vi.fn(), sendRemoveAgent: vi.fn() }))
+vi.mock('../rpc/agents.js', () => rpc)
+const route = vi.hoisted(() => ({ openAgents: vi.fn() }))
+vi.mock('../lib/use-route.js', () => route)
+// The tooltip's words are on the page.
+vi.mock('./ui/tooltip.js', async () => {
+  const { cloneElement } = await import('react')
+  return {
+    Tooltip: ({ children }: { children: React.ReactNode }) => <>{children}</>,
+    TooltipTrigger: ({ render: trigger, children }: { render: React.ReactElement; children: React.ReactNode }) => cloneElement(trigger, {} as never, children),
+    TooltipContent: ({ children }: { children: React.ReactNode }) => <span role="tooltip">{children}</span>,
+  }
+})
+
+const { AgentsPage } = await import('./AgentsPage.js')
+const { AgentMenu } = await import('./AgentMenu.js')
+
+const DEFAULT = { id: 'default', name: 'Default', skills: ['ask', 'github'], accounts: {} }
+const REVIEWER = { id: 'reviewer', name: 'Reviewer', skills: ['ask', 'readability'], accounts: { github: 'octo-agent', claude: ['Dani'] } }
+const VIEW = {
+  agents: [DEFAULT, REVIEWER],
+  skills: [
+    { title: 'Every agent starts with', skills: [{ name: 'ask', description: 'Ask the person.' }, { name: 'github', description: 'Pull requests on GitHub.' }] },
+    { title: 'Code reviews', skills: [{ name: 'readability', description: 'Read the code.' }, { name: 'ux', description: 'Judge the UX.' }] },
+  ],
+  github: { accounts: ['octo', 'octo-agent'], computer: 'octo' },
+  claude: [{ id: 'This computer', name: 'Claude login on Studio' }, { id: 'Dani', name: 'Dani' }],
+  codex: [],
+}
+
+beforeEach(() => {
+  rpc.onAgentsList.mockResolvedValue(VIEW)
+  rpc.sendSaveAgent.mockResolvedValue({ ok: true, id: 'social' })
+  rpc.sendRemoveAgent.mockResolvedValue({ ok: true })
+})
+
+afterEach(() => {
+  cleanup()
+  forgetRemembered()
+  for (const fn of Object.values(rpc)) fn.mockReset()
+  route.openAgents.mockReset()
+})
+
+describe('the Agents page', () => {
+  test('one card per agent, the default first and marked; each with its skills and the accounts it works as, the computer’s where it names none', async () => {
+    render(<AgentsPage />)
+    const cards = await screen.findAllByRole('region')
+    expect(cards.map(card => card.getAttribute('aria-label'))).toEqual(['Default', 'Reviewer'])
+    expect(within(cards[0]!).getByText(/the agent a session is on unless you pick another/)).toBeTruthy()
+    expect(within(cards[0]!).getByText("GitHub: this computer's (@octo)")).toBeTruthy()
+    expect(within(cards[1]!).getByText('@octo-agent on GitHub · Claude: Dani')).toBeTruthy()
+    expect(within(cards[1]!).getByText('readability')).toBeTruthy()
+    // The default is never removed.
+    expect(within(cards[0]!).queryByRole('button', { name: 'Remove Default' })).toBeNull()
+    expect(within(cards[1]!).getByRole('button', { name: 'Remove Reviewer' })).toBeTruthy()
+  })
+
+  test('a new agent: its name, the skills ticked from the list, the two every agent starts with ticked already; saved as the dashboard’s call, and the list read again', async () => {
+    render(<AgentsPage />)
+    fireEvent.click(await screen.findByRole('button', { name: 'New agent' }))
+    const editor = screen.getByRole('region', { name: 'New agent' })
+    expect((within(editor).getByLabelText('ask') as HTMLInputElement).getAttribute('aria-checked') ?? (within(editor).getByLabelText('ask') as HTMLInputElement).checked.toString()).toMatch(/true/)
+    fireEvent.change(within(editor).getByLabelText('Name'), { target: { value: 'Social Media' } })
+    fireEvent.click(within(editor).getByLabelText('ux'))
+    fireEvent.click(within(editor).getByLabelText('Claude account Dani'))
+    fireEvent.click(within(editor).getByRole('button', { name: 'Save' }))
+    await waitFor(() => expect(rpc.sendSaveAgent).toHaveBeenCalledWith({ name: 'Social Media', skills: ['ask', 'github', 'ux'], accounts: { claude: ['Dani'] } }))
+    await waitFor(() => expect(rpc.onAgentsList).toHaveBeenCalledTimes(2))
+    expect(screen.queryByRole('region', { name: 'New agent' })).toBeNull()
+  })
+
+  test('an agent edited in place keeps its id; a refusal is said under the editor and nothing closes', async () => {
+    rpc.sendSaveAgent.mockResolvedValue({ ok: false, error: 'OpenAgent has no GitHub account stranger on this computer.' })
+    render(<AgentsPage />)
+    fireEvent.click(await screen.findByRole('button', { name: 'Edit Reviewer' }))
+    const editor = screen.getByRole('region', { name: 'Editing Reviewer' })
+    fireEvent.click(within(editor).getByLabelText('readability'))
+    fireEvent.click(within(editor).getByRole('button', { name: 'Save' }))
+    await waitFor(() => expect(rpc.sendSaveAgent).toHaveBeenCalledWith({ id: 'reviewer', name: 'Reviewer', skills: ['ask'], accounts: { github: 'octo-agent', claude: ['Dani'] } }))
+    expect((await within(editor).findByRole('alert')).textContent).toContain('no GitHub account stranger')
+    // The default's name is not for editing.
+    fireEvent.click(within(editor).getByRole('button', { name: 'Cancel' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Edit Default' }))
+    expect((screen.getByLabelText('Name') as HTMLInputElement).disabled).toBe(true)
+  })
+
+  test('removing an agent asks first, then removes it and reads the list again', async () => {
+    render(<AgentsPage />)
+    fireEvent.click(await screen.findByRole('button', { name: 'Remove Reviewer' }))
+    const dialog = await screen.findByRole('alertdialog')
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Remove' }))
+    await waitFor(() => expect(rpc.sendRemoveAgent).toHaveBeenCalledWith('reviewer'))
+    await waitFor(() => expect(rpc.onAgentsList).toHaveBeenCalledTimes(2))
+  })
+})
+
+describe('the Agent menu under the box', () => {
+  test('the agent picked, by name; another picked is said back; "Manage agents…" opens the page; nothing until the agents are read', () => {
+    const onPick = vi.fn()
+    const { container, rerender } = render(<AgentMenu agents={undefined} picked={undefined} busy={false} onPick={onPick} />)
+    expect(container.textContent).toBe('')
+    rerender(<AgentMenu agents={VIEW.agents} picked={undefined} busy={false} onPick={onPick} />)
+    expect(screen.getByRole('button', { name: 'Agent: Default' }).textContent).toBe('Default')
+    rerender(<AgentMenu agents={VIEW.agents} picked="reviewer" busy={false} onPick={onPick} />)
+    const trigger = screen.getByRole('button', { name: 'Agent: Reviewer' })
+    expect(screen.getByRole('tooltip').textContent).toBe('This session is on the agent Reviewer: 2 skills, as @octo-agent on GitHub')
+    fireEvent.click(trigger)
+    fireEvent.click(screen.getByRole('menuitem', { name: /^Default/ }))
+    expect(onPick).toHaveBeenCalledWith('default')
+    fireEvent.click(trigger)
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Manage agents…' }))
+    expect(route.openAgents).toHaveBeenCalled()
+  })
+})

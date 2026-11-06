@@ -24,7 +24,7 @@ import { asRecorded, onMachine } from './dashboard-rpc/reads.js'
 import { tailAgentEvents } from './dashboard-rpc/events-tail.js'
 import { addProject, isHostName, listMachines, listProjects, machineNamed, nameMachine, noteProjects, noteSeen, noteServer, projectId, readPreferences, removeProject, type MachineRecord, type Preferences } from './registry.js'
 import { writeHookLines } from './built-in.js'
-import { fileBranchRepo, installProject, projectKey, projectNameOf, repositoryAddress, sessionsHome, writeSharing } from '@openagt/agent-data'
+import { fileBranchRepo, installProject, isAgentId, projectKey, projectNameOf, repositoryAddress, sessionsHome, writeSharing } from '@openagt/agent-data'
 import { publishedBranch } from '@openagt/agent-data/names'
 import { branchesOnOrigin } from './dashboard/start-branch.js'
 import { removeProjectFiles } from './remove-files.js'
@@ -459,6 +459,7 @@ export function createProjectRuntime({ cwd, env, clone = cloneProject, logins = 
     }
     // The login reaches the run's environment: one word, as a login is.
     if (options.account !== undefined && !(typeof options.account === 'string' && /^\S+$/.test(options.account))) return { ok: false, error: 'An account is named by its login.' }
+    if (options.agent !== undefined && !isAgentId(options.agent)) return { ok: false, error: 'An agent is named by its id.' }
     if (!noProject && options.repos !== undefined) return { ok: false, error: 'Repos are added to a session with no project: a project works in its own checkout.' }
     // The folders reach the line one per line: only whole paths go there.
     if (options.repos !== undefined && !(Array.isArray(options.repos) && options.repos.every(folder => typeof folder === 'string' && isAbsolute(folder) && !folder.includes('\n')))) {
@@ -514,6 +515,7 @@ export function createProjectRuntime({ cwd, env, clone = cloneProject, logins = 
       ...(options.prBase !== undefined ? { prBase: options.prBase } : {}),
       ...(options.repos !== undefined ? { repos: options.repos } : {}),
       ...(options.account !== undefined ? { account: options.account } : {}),
+      ...(options.agent !== undefined ? { agent: options.agent } : {}),
     })
     // The line made a checkout (or is about to): the project's checkouts are read again on the
     // next look rather than a few seconds from now, so the new run's page finds its own.

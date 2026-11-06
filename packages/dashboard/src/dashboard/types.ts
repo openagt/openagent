@@ -111,6 +111,11 @@ export interface StartAgentOptions {
    * keeps it, and a resume goes on as it.
    */
   account?: string
+  /**
+   * The agent the session is on, by its id (`~/.openagent/agents/<id>.json`): its skills and
+   * accounts. Absent, the default agent. The run's record keeps it, and a resume goes on with it.
+   */
+  agent?: string
 }
 
 /**

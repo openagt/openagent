@@ -3,6 +3,8 @@ import { nodeGitRunner, runPackageCommand, sessionsHomeOf, type GitRunner } from
 import { liftSkillRules, projectRoot } from '@openagt/skill-branches'
 import { findRun } from '@openagt/skill-logs'
 import { DRIVER_NAMES, GIT_ACCOUNT_ENV, detachResume, detachRun, isDriverName, readyToRun, resumeProject, runProject } from './runner.js'
+import { agentNamed, runAgent } from './agent.js'
+import { AGENT_ENV } from '@openagt/agent-data'
 import { initHooks } from './init.js'
 import { cleanup } from './cleanup.js'
 import { everyBasicSkill } from './basic-skills.js'
@@ -52,9 +54,11 @@ personal folder, and --publish, --base, --pr-base and --branch are refused. Each
 it, <home>/<id>/<repo's folder name>, on a new branch agent-<id>, its origin the repo's own (none when the repo has none);
 the run's record names them, and a resumed run goes on with the same ones. --repos is refused in a project.
 
-A run works at the git host as the account the computer's runs use, or as the one named in OPENAGENT_GIT_ACCOUNT by
-whoever started it, the pick for that session; its record keeps the login, and a resumed run goes on as it. An account
-this computer cannot use stops the run before it starts, naming it.
+A run is on an agent (~/.openagent/agents/<id>.json: a name, skills, accounts), the one OPENAGENT_AGENT names, else the
+default agent; its skills are linked into the checkout like the default ones, and its accounts are the run's: at the git
+host its login, unless OPENAGENT_GIT_ACCOUNT names the pick for that session, and on Claude and Codex the accounts it
+names that this computer has. The record keeps the agent and the login, and a resumed run goes on with them. An account
+this computer cannot use at the git host stops the run before it starts, naming it.
 
 When a run ends waiting on a question, or ends done with a pull request it did not have, the \`ended:\` line in the
 project's .agent-runner/config.yml runs, if there is one, in the project's root, with MESSAGE (one line for a person),
@@ -173,8 +177,18 @@ const COMMANDS: Record<string, Command> = {
     // The account at the git host picked for this session, by whoever started the run: in the environment ({@link GIT_ACCOUNT_ENV}).
     const gitAccount = process.env[GIT_ACCOUNT_ENV]?.trim() || undefined
     if (gitAccount !== undefined && values.resume !== undefined) throw new Usage(`${GIT_ACCOUNT_ENV} is for a new run: a run continues as the account its record names`)
+    // The agent the run is on, by its id, in the environment too ({@link AGENT_ENV}); a resumed run goes on with the one its record names.
+    let agent: string | undefined
+    try {
+      agent = agentNamed()
+    } catch (err) {
+      throw new Usage(err instanceof Error ? err.message : String(err))
+    }
+    if (process.env[AGENT_ENV]?.trim() && values.resume !== undefined) throw new Usage(`${AGENT_ENV} is for a new run: a run continues on the agent its record names`)
     if (values.resume === undefined && values.id === undefined) {
-      const ready = await readyToRun(repo, driver ?? 'claude-code', gitAccount !== undefined ? { login: gitAccount } : {})
+      // The session's account, or its agent's: an account this computer cannot use stops the run here, naming it.
+      const login = gitAccount ?? (await runAgent(agent, io.stderr)).accounts.github
+      const ready = await readyToRun(repo, driver ?? 'claude-code', login !== undefined ? { login } : {})
       if (ready.problems.length > 0) throw new Refused({ ok: false, reason: 'not-ready', ...ready }, ready.problems.join(' '))
     }
     const named = { ...(publish !== undefined ? { publish } : {}), ...(values.attach !== undefined ? { attached: values.attach } : {}), ...(values.parent !== undefined ? { parent: values.parent } : {}), ...(values.base !== undefined ? { base: values.base } : {}), ...(values['pr-base'] !== undefined ? { prBase: values['pr-base'].trim() } : {}), ...(values.branch !== undefined ? { branch: values.branch.trim() } : {}), ...(values.for !== undefined ? { for: values.for.trim() } : {}), ...(repos !== undefined ? { repos } : {}) }
@@ -220,6 +234,7 @@ const COMMANDS: Record<string, Command> = {
       ...(driver !== undefined ? { driver } : {}),
       ...named,
       ...(gitAccount !== undefined ? { gitAccount } : {}),
+      ...(agent !== undefined ? { agent } : {}),
       log: io.stderr,
     })
     return { ok: outcome.status === 'done' || outcome.status === 'waiting', ...outcome }

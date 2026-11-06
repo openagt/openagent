@@ -57,6 +57,8 @@ export interface RunnerMark {
   resumed?: { by: string; at: string }
   /** The repos a session with no project has as context (`run --repos`), each a copy in its folder. */
   repos?: SessionRepo[]
+  /** The agent the run is on, by its id (`OPENAGENT_AGENT`): its skills and accounts; the default agent when absent. */
+  agent?: string
 }
 
 /**
@@ -78,10 +80,10 @@ function reposOf(value: unknown): SessionRepo[] | undefined {
 export function runnerMark(card: RunCard): RunnerMark | undefined {
   const mark = card.caller?.['runner']
   if (!mark || typeof mark !== 'object') return undefined
-  const { host, pid, publish, parent, base, prBase, gitAccount, baseCommit, for: started, resumed, repos } = mark as Record<string, unknown>
+  const { host, pid, publish, parent, base, prBase, gitAccount, baseCommit, for: started, resumed, repos, agent } = mark as Record<string, unknown>
   if (typeof host !== 'string') return undefined
   const by = resumed && typeof resumed === 'object' ? (resumed as Record<string, unknown>) : {}
-  return { host, ...(typeof pid === 'number' ? { pid } : {}), ...lasting({ publish, parent, base, prBase, gitAccount, baseCommit, for: started, repos }), ...(typeof by['by'] === 'string' && typeof by['at'] === 'string' ? { resumed: { by: by['by'], at: by['at'] } } : {}) }
+  return { host, ...(typeof pid === 'number' ? { pid } : {}), ...lasting({ publish, parent, base, prBase, gitAccount, baseCommit, for: started, repos, agent }), ...(typeof by['by'] === 'string' && typeof by['at'] === 'string' ? { resumed: { by: by['by'], at: by['at'] } } : {}) }
 }
 
 /**
@@ -96,7 +98,7 @@ export function earlierPrs(card: RunCard): { number: number; url: string }[] {
 }
 
 /** What a mark keeps for the run's whole life, a resume included: its publish level, its parent, where it started, where its pull request goes, what it was started for, the repos it has. */
-export function lasting(mark: { publish?: unknown; parent?: unknown; base?: unknown; prBase?: unknown; gitAccount?: unknown; baseCommit?: unknown; for?: unknown; repos?: unknown }): Pick<RunnerMark, 'publish' | 'parent' | 'base' | 'prBase' | 'gitAccount' | 'baseCommit' | 'for' | 'repos'> {
+export function lasting(mark: { publish?: unknown; parent?: unknown; base?: unknown; prBase?: unknown; gitAccount?: unknown; baseCommit?: unknown; for?: unknown; repos?: unknown; agent?: unknown }): Pick<RunnerMark, 'publish' | 'parent' | 'base' | 'prBase' | 'gitAccount' | 'baseCommit' | 'for' | 'repos' | 'agent'> {
   const repos = reposOf(mark.repos)
   return {
     ...(isPublish(mark.publish) ? { publish: mark.publish } : {}),
@@ -107,6 +109,7 @@ export function lasting(mark: { publish?: unknown; parent?: unknown; base?: unkn
     ...(typeof mark.baseCommit === 'string' ? { baseCommit: mark.baseCommit } : {}),
     ...(typeof mark.for === 'string' ? { for: mark.for } : {}),
     ...(repos !== undefined && repos.length > 0 ? { repos } : {}),
+    ...(typeof mark.agent === 'string' && mark.agent ? { agent: mark.agent } : {}),
   }
 }
 
@@ -131,7 +134,7 @@ export function markerCard(run: { id: string; startedAt: string; prompt: string;
  * change, and what it was started for, which a git host's check reads to find the run a thread has,
  * and the repos a session with no project has, which its page shows.
  */
-export function forReaders(mark: Pick<RunnerMark, 'parent' | 'base' | 'prBase' | 'gitAccount' | 'baseCommit' | 'publish' | 'for' | 'repos'>): { parent?: string; base?: string; prBase?: string; gitAccount?: string; baseCommit?: string; publish?: Publish; for?: string; repos?: SessionRepo[] } {
+export function forReaders(mark: Pick<RunnerMark, 'parent' | 'base' | 'prBase' | 'gitAccount' | 'baseCommit' | 'publish' | 'for' | 'repos' | 'agent'>): { parent?: string; base?: string; prBase?: string; gitAccount?: string; baseCommit?: string; publish?: Publish; for?: string; repos?: SessionRepo[]; agent?: string } {
   return {
     ...(mark.parent !== undefined ? { parent: mark.parent } : {}),
     ...(mark.base !== undefined ? { base: publishedBranch(mark.base) ?? mark.base } : {}),
@@ -141,6 +144,7 @@ export function forReaders(mark: Pick<RunnerMark, 'parent' | 'base' | 'prBase' |
     ...(mark.publish !== undefined ? { publish: mark.publish } : {}),
     ...(mark.for !== undefined ? { for: mark.for } : {}),
     ...(mark.repos !== undefined ? { repos: mark.repos } : {}),
+    ...(mark.agent !== undefined ? { agent: mark.agent } : {}),
   }
 }
 

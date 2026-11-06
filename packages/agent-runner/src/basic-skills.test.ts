@@ -2,13 +2,14 @@ import { strict as assert } from 'node:assert'
 import { test } from 'node:test'
 import { execFile } from 'node:child_process'
 import { promisify } from 'node:util'
-import { lstat, readFile, realpath } from 'node:fs/promises'
-import { join } from 'node:path'
+import { lstat, mkdir, mkdtemp, readFile, realpath, rm, writeFile } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import { delimiter, join } from 'node:path'
 import { createCheckout, HARNESS_SKILL_DIRS, skillLinkPaths } from '@openagt/skill-branches'
-import { basicSkills, everyBasicSkill } from './basic-skills.js'
+import { basicSkills, carriedSkillNames, everyBasicSkill } from './basic-skills.js'
 import { runCli } from './cli.js'
 import { gitHostCommand } from './git-host.js'
-import { SKILLS_ENV } from '@openagt/agent-data'
+import { SKILL_CATALOGUE_ENV, SKILLS_ENV } from '@openagt/agent-data'
 import { git, handDownBasicSkills, removeRepo, testRepo } from './test-repo.js'
 
 // The skills every run gets, on a real repository: which ones a project has by its remote, what a
@@ -173,5 +174,36 @@ test('a run\'s git host is the package the project installed for it, else the ru
     assert.equal((await gitHostCommand(repo))?.package, 'other-host')
   } finally {
     await removeRepo(repo)
+  }
+})
+
+test('an agent\'s skills: picked by name among the defaults and the catalogue handed down, in the agent\'s order, a name nothing carries skipped; the rules for the git host\'s and the asking skill still hold', async () => {
+  const repo = await testRepo()
+  const catalogue = await mkdtemp(join(tmpdir(), 'oa-catalogue-'))
+  const before = process.env[SKILL_CATALOGUE_ENV]
+  try {
+    // A skill package of this test's own, carried in the catalogue: its text names it `review`.
+    const dir = join(catalogue, 'skill-review')
+    await mkdir(dir, { recursive: true })
+    await writeFile(join(dir, 'package.json'), JSON.stringify({ name: '@test/skill-review', version: '1.0.0' }))
+    await writeFile(join(dir, 'SKILL.md'), '---\nname: review\ndescription: Review the code.\n---\nReview it.\n')
+    // A text with no package beside it is no skill of the catalogue.
+    await mkdir(join(catalogue, 'loose'))
+    await writeFile(join(catalogue, 'loose', 'SKILL.md'), '---\nname: loose\n---\n')
+    process.env[SKILL_CATALOGUE_ENV] = [dir, join(catalogue, 'loose')].join(delimiter)
+    await git(['remote', 'set-url', 'origin', 'git@github.com:someone/project.git'], repo)
+    assert.deepEqual(await carriedSkillNames(), ['logs', 'ask', 'github', 'review'], 'the defaults first, then the catalogue')
+    assert.deepEqual((await basicSkills(repo)).map(skill => skill.name), ['logs', 'ask', 'github'], 'no agent: the defaults')
+    assert.deepEqual((await basicSkills(repo, {}, { skills: ['review', 'github', 'nothing-carries-this'] })).map(skill => skill.name), ['review', 'github'])
+    assert.deepEqual((await basicSkills(repo, { ownQuestionTool: true }, { skills: ['ask', 'review'] })).map(skill => skill.name), ['review'], 'an agent with a question tool of its own gets no ask')
+    await git(['remote', 'set-url', 'origin', 'https://gitlab.com/someone/project.git'], repo)
+    assert.deepEqual((await basicSkills(repo, {}, { skills: ['github', 'review'] })).map(skill => skill.name), ['review'], 'the git host\'s skill only where it answers for the project')
+    assert.deepEqual((await basicSkills(repo, {}, { skills: [] })).map(skill => skill.name), [], 'an agent with no skill gets none')
+    assert.ok((await everyBasicSkill()).some(skill => skill.name === 'review'), 'a cleanup knows the catalogue\'s too')
+  } finally {
+    if (before === undefined) delete process.env[SKILL_CATALOGUE_ENV]
+    else process.env[SKILL_CATALOGUE_ENV] = before
+    await removeRepo(repo)
+    await rm(catalogue, { recursive: true, force: true })
   }
 })

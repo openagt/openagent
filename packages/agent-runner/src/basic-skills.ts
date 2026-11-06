@@ -1,20 +1,21 @@
 import { readFile, realpath } from 'node:fs/promises'
 import { delimiter, join } from 'node:path'
-import { declaring, packageBins, readManifest, runPackageCommand, SKILLS_ENV, type ProjectPackage, type ProvidedCommand } from '@openagt/agent-data'
+import { declaring, packageBins, readManifest, runPackageCommand, SKILL_CATALOGUE_ENV, SKILLS_ENV, type AgentRecord, type ProjectPackage, type ProvidedCommand } from '@openagt/agent-data'
 import type { SkillLink } from '@openagt/skill-branches'
 
 /**
- * The basic skills (#2023): the ones every run gets, with nothing committed in the project. Each
- * one's text is linked into the agent's checkout, hidden from git, beside the branches skill the
- * checkout already carries, and with it the skill's package and command, so the text's
- * `npx @openagt/skill-logs@0.1` runs that very copy. A project that tracks its own copy of one
- * keeps it: an entry already in the checkout is left alone.
+ * The basic skills (#2023): the ones a run gets with nothing committed in the project, its
+ * agent's. Each one's text is linked into the agent's checkout, hidden from git, beside the
+ * branches skill the checkout already carries, and with it the skill's package and command, so
+ * the text's `npx @openagt/skill-logs@0.1` runs that very copy. A project that tracks its own
+ * copy of one keeps it: an entry already in the checkout is left alone.
  *
- * This tool names no skill: the package that started OpenAgent owns the list and hands it down in
- * {@link SKILLS_ENV}, the directories of the skills' packages, so a run started by hand, with
- * nothing set, gets none. A git host's skill is linked only where its package answers the
- * project's page there (its `home` command): its text says the project's pull requests are on
- * that host, which is wrong anywhere else.
+ * This tool names no skill: the package that started OpenAgent owns the lists and hands them
+ * down, in {@link SKILLS_ENV} the directories of the packages of the skills a run gets when no
+ * agent says otherwise, in {@link SKILL_CATALOGUE_ENV} those of every skill it carries, which an
+ * agent picks from by name; a run started by hand, with nothing set, gets none. A git host's
+ * skill is linked only where its package answers the project's page there (its `home` command):
+ * its text says the project's pull requests are on that host, which is wrong anywhere else.
  */
 
 interface BasicSkill {
@@ -26,12 +27,25 @@ interface BasicSkill {
   asking: boolean
 }
 
-/** The list as last read, by the value it was read off: the environment is read on each ask. */
-let resolved: { from: string; skills: Promise<BasicSkill[]> } | undefined
+/** The lists as last read, by the values they were read off: the environment is read on each ask. */
+let resolved: { from: string; skills: Promise<{ defaults: BasicSkill[]; carried: BasicSkill[] }> } | undefined
 
-function basic(): Promise<BasicSkill[]> {
-  const from = process.env[SKILLS_ENV] ?? ''
-  if (resolved?.from !== from) resolved = { from, skills: resolveBasic(from) }
+/** The default skills, and every skill carried: the defaults first, then the catalogue's, one entry per skill name. */
+function lists(): Promise<{ defaults: BasicSkill[]; carried: BasicSkill[] }> {
+  const defaults = process.env[SKILLS_ENV] ?? ''
+  const catalogue = process.env[SKILL_CATALOGUE_ENV] ?? ''
+  const from = `${defaults}\n${catalogue}`
+  if (resolved?.from !== from) {
+    resolved = {
+      from,
+      skills: (async () => {
+        const first = await resolveBasic(defaults)
+        const names = new Set(first.map(skill => skill.link.name))
+        const rest = (await resolveBasic(catalogue)).filter(skill => !names.has(skill.link.name) && names.add(skill.link.name))
+        return { defaults: first, carried: [...first, ...rest] }
+      })(),
+    }
+  }
   return resolved.skills
 }
 
@@ -59,18 +73,27 @@ function skillName(text: string): string | undefined {
   return name
 }
 
-/** Every basic skill handed down, whatever the project: what a cleanup takes the rules back for. */
+/** Every skill handed down, default or carried, whatever the project: what a cleanup takes the rules back for. */
 export async function everyBasicSkill(): Promise<SkillLink[]> {
-  return (await basic()).map(skill => skill.link)
+  return (await lists()).carried.map(skill => skill.link)
+}
+
+/** The names of every skill carried, in the lists' order: what an agent can be given. */
+export async function carriedSkillNames(): Promise<string[]> {
+  return (await lists()).carried.map(skill => skill.link.name)
 }
 
 /**
- * The basic skills of the project at `repo`: all of them, a git host's only where it answers for
- * the project, and one that teaches asking only for an agent with no question tool of its own.
+ * The basic skills of the project at `repo`, for a run on `on`: the agent's, by name, among the
+ * skills carried, the defaults when it is on no agent; a git host's only where it answers for the
+ * project, and one that teaches asking only for a coding agent with no question tool of its own.
+ * A name the agent has that nothing carried is no skill here.
  */
-export async function basicSkills(repo: string, agent: { ownQuestionTool?: boolean } = {}): Promise<SkillLink[]> {
+export async function basicSkills(repo: string, agent: { ownQuestionTool?: boolean } = {}, on?: Pick<AgentRecord, 'skills'>): Promise<SkillLink[]> {
+  const { defaults, carried } = await lists()
+  const picked = on ? on.skills.flatMap(name => carried.filter(skill => skill.link.name === name)) : defaults
   const skills: SkillLink[] = []
-  for (const { link, gitHost, asking } of await basic()) {
+  for (const { link, gitHost, asking } of picked) {
     if (asking && agent.ownQuestionTool === true) continue
     if (gitHost && !(await runPackageCommand(repo, gitHost, ['home'])).ok) continue
     skills.push(link)
@@ -84,7 +107,7 @@ export async function basicSkills(repo: string, agent: { ownQuestionTool?: boole
  */
 export async function basicGitHosts(repo: string): Promise<ProjectPackage[]> {
   const hosts: ProjectPackage[] = []
-  for (const { pkg, gitHost } of await basic()) {
+  for (const { pkg, gitHost } of (await lists()).carried) {
     if (gitHost && (await runPackageCommand(repo, gitHost, ['home'])).ok) hosts.push(pkg)
   }
   return hosts
@@ -92,5 +115,5 @@ export async function basicGitHosts(repo: string): Promise<ProjectPackage[]> {
 
 /** The names of the basic skills' packages: a project's own copy of one is never read as its git host. */
 export async function basicPackageNames(): Promise<string[]> {
-  return (await basic()).map(skill => skill.pkg.name)
+  return (await lists()).carried.map(skill => skill.pkg.name)
 }

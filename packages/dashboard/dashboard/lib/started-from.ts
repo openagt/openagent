@@ -22,6 +22,8 @@ export interface StartPicks {
   model?: string
   effort?: string
   repos?: { name: string; from: string }[]
+  /** The agent the run is on, by its id. */
+  agent?: string
 }
 
 /** Whether what the run started from is origin's default branch, whose name has to be read. */

@@ -24,6 +24,7 @@ export { onModules, runModuleCommand, runComputerCommand, runComputerCommandOn, 
 export { onProjectSkills, sendChangeSkills, sendProjectSkills, type ProjectSkills, type ProjectSkill, type ChangeSkillsResult } from './skills.js'
 export { onPerson, type Person } from './person.js'
 export { onGitHostPeople, type HostPerson } from './people.js'
+export { onAgentsList, sendSaveAgent, sendRemoveAgent, type AgentsView, type AgentChange, type AgentSkillChoice } from './agents.js'
 export { onGitHosts, sendUseGitHostAccount, sendForgetGitHostAccount, sendGitHostLogin, sendGitHostInstall, onAgentState, sendAgentFix, type GitHostsView, type GitHostRow, type GitHostAccount, type GitHostProvider, type AgentState } from './logins.js'
 export { onPersonalFolder, sendSyncPersonalFolder, sendStopSyncingPersonalFolder, type PersonalFolderView } from './personal-folder.js'
 export { onProjectAgentData, type ProjectAgentData, type KeptData } from './project-agent-data.js'
@@ -48,6 +49,7 @@ import * as copiedLogins from './copied-logins.js'
 import * as serverLogins from './server-logins.js'
 import * as personalFolder from './personal-folder.js'
 import * as projectAgentData from './project-agent-data.js'
+import * as agents from './agents.js'
 import { streamAgentEvents } from './events.js'
 
 /** One RPC: called with whatever the browser sent, answering with whatever JSON.stringify keeps. */
@@ -68,7 +70,7 @@ export type RpcHandler = (...args: never[]) => unknown
 export const RPC_HANDLERS: Record<string, RpcHandler> = Object.assign(
   Object.create(null) as Record<string, RpcHandler>,
   Object.fromEntries(
-    [reads, control, projects, preferences, quota, models, machines, modules, skills, person, people, accounts, logins, copiedLogins, serverLogins, personalFolder, projectAgentData]
+    [reads, control, projects, preferences, quota, models, machines, modules, skills, person, people, accounts, logins, copiedLogins, serverLogins, personalFolder, projectAgentData, agents]
       .flatMap(module => Object.entries(module))
       .filter((entry): entry is [string, RpcHandler] => typeof entry[1] === 'function'),
   ),
