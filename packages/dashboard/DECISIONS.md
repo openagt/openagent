@@ -404,12 +404,13 @@ already made, and lists it in its pull request; for anything else it proposes an
   form's red line, and a dot on the person's picture whose menu says what. Picked over a
   login step every new install walks through: the onboarding is heavy enough.
 - The accounts a run takes are picked beside the message box, for the computer the run goes
-  to: a coding agent's in the agent picker, under its models; the git host's at the end of the
-  row above the box. A pick there is the one that computer's runs take from then on, as on
-  the Permissions page. The person's menu has none of them. Picked over a row per account in the
-  person's menu, which said this computer's alone, and over having them in both places.
-- A project's own accounts are a Settings page of that project, shown only for a kind the
-  computer has two or more of, "same as this computer" until one is picked.
+  to: a coding agent's in the agent picker, under its models, the pick that computer's runs
+  take from then on, as on the Permissions page; the git host's under the box at the right,
+  before the model, a pick for this session alone, which goes with the Start and is kept on
+  the run's record, the computer's own pick staying as the Permissions page made it. The
+  person's menu has none of them. Picked over a row per account in the person's menu, which
+  said this computer's alone, over having them in both places, and over accounts named per
+  project in its settings: whose account a session works as is a pick made for that session.
 - Every coding agent's accounts are the same card, picker part and pick, with the agent's own
   words: adding one asks whose it is, then the agent's sign-in in this computer's browser.
   Picked over showing the email Codex's sign-in tells, which only Codex could, and would

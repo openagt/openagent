@@ -75,10 +75,10 @@ export const Composer = forwardRef<ComposerHandle, {
   /** Where the agent starts, in the row above the box after the "Run on" pick: the launcher's
    *  project and the branch it starts from. */
   startsAt?: ReactNode
-  /** At that row's other end: who the run pushes as, the launcher's git host account. */
-  startsAtEnd?: ReactNode
   /** The caller's controls in the row under the box: the launcher's Context picker and "Auto" menu. */
   controls?: ReactNode
+  /** The caller's controls at that row's other end, before the model: who the run pushes as, the launcher's git host account. */
+  controlsEnd?: ReactNode
   /** Inside a session: the model it runs on, said at the right of the row under the box, where
    *  the launcher has its select. Words, not a menu: a session keeps the model it started with. */
   sessionModel?: string | undefined
@@ -117,7 +117,7 @@ export const Composer = forwardRef<ComposerHandle, {
   /** The saved machine the project is on, when only another computer of the person's has it (elsewhere.ts). */
   home?: string | undefined
 }>(function Composer(
-  { files, addContext, removeContext, startsAt, startsAtEnd, controls, sessionModel, sessionContext, onSubmit, onPromptChange, onPreset, busy, submitLabel, submitBusyLabel, placeholder, compact = false, showDriverModel = true, inAgent = false, sessionRow, canSubmit = true, idleControl, home },
+  { files, addContext, removeContext, startsAt, controls, controlsEnd, sessionModel, sessionContext, onSubmit, onPromptChange, onPreset, busy, submitLabel, submitBusyLabel, placeholder, compact = false, showDriverModel = true, inAgent = false, sessionRow, canSubmit = true, idleControl, home },
   ref,
 ) {
   const [prompt, setPrompt] = useState('')
@@ -419,7 +419,7 @@ export const Composer = forwardRef<ComposerHandle, {
       {inAgent ? (
         sessionRow
       ) : (
-        <RowAboveBox end={startsAtEnd}>
+        <RowAboveBox>
           {runOnEl}
           {startsAt}
         </RowAboveBox>
@@ -444,7 +444,8 @@ export const Composer = forwardRef<ComposerHandle, {
           page below. */}
       <div className={cn('mt-1', rowClass)}>
         <div className={rowLeftClass}>{controls}</div>
-        <div className="shrink-0">
+        <div className="flex shrink-0 items-center gap-0.5">
+          {controlsEnd}
           {driverModelEl || (
             <span className="flex items-center">
               {sessionModel !== undefined && <span className="px-2 text-[13px] text-muted-foreground">{sessionModel}</span>}

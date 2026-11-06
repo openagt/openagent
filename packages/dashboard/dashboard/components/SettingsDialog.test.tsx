@@ -30,8 +30,6 @@ vi.mock('../rpc/models.js', () => ({ onModels }))
 // Its own suite reads the accounts; here the entry is its name.
 vi.mock('./AgentDataSettings.js', () => ({ AGENT_DATA_ENTRY: 'agent-data', AgentDataSettings: () => <p>Where the agent data is</p> }))
 vi.mock('./ProjectAgentDataSettings.js', () => ({ PROJECT_AGENT_DATA_ENTRY: 'project-agent-data', ProjectAgentDataSettings: () => <p>Where this project's agent data is</p> }))
-const projectAccounts = vi.hoisted(() => ({ onProjectAccounts: vi.fn(async () => ({})), sendProjectAccounts: vi.fn() }))
-vi.mock('../rpc/logins.js', () => projectAccounts)
 // A project's skills, as a page of the Project group; each project answers with its own one skill.
 const projectSkills = vi.hoisted(() => ({
   onProjectSkills: vi.fn(async (id: string) => ({ groups: [{ title: 'Tickets and queue', skills: [{ name: `skill-of-${id}`, description: 'What it does.', standing: 'current', waiting: false }] }], uncommitted: [], git: true, local: false })),
@@ -335,28 +333,6 @@ describe('the Settings list', () => {
     // Opened on nothing in particular: the first entry.
     expect(title()).toBe('SettingsAppearance')
     expect(screen.getByRole('button', { name: 'Appearance' }).getAttribute('aria-current')).toBe('page')
-  })
-
-  test("a project's own accounts are an entry of that project's, first, when the computer has something to pick; never under All projects", async () => {
-    projectAccounts.onProjectAccounts.mockResolvedValue({ gitHost: { host: 'github.com', name: 'GitHub', accounts: ['octo', 'octo-agent'], computer: 'octo' } } as never)
-    show('', 'p1')
-    await waitFor(() => expect(entries('Project')).toEqual(['Accounts', 'Skills', 'Agent data', 'Orchestration']))
-    await pick(select('Project'), 'All projects')
-    expect(entries('Project')).toEqual(['Skills', 'Agent data', 'Orchestration', 'Scheduler'])
-    projectAccounts.onProjectAccounts.mockResolvedValue({} as never)
-  })
-
-  test("a project's Accounts entry read ahead is in the list from the dialog's first frame, not after the server's second", async () => {
-    const { readProjectAccountsAhead } = await import('./ProjectAccounts.js')
-    projectAccounts.onProjectAccounts.mockResolvedValueOnce({ gitHost: { host: 'github.com', name: 'GitHub', requestWord: 'pull request', accounts: ['octo', 'octo-agent'], computer: 'octo' } } as never)
-    readProjectAccountsAhead('p1')
-    await new Promise(resolve => setTimeout(resolve, 0))
-    // Opened later, and the server slow to answer again.
-    projectAccounts.onProjectAccounts.mockImplementation(() => new Promise(() => {}))
-    show('', 'p1')
-    expect(entries('Project')).toEqual(['Accounts', 'Skills', 'Agent data', 'Orchestration'])
-    projectAccounts.onProjectAccounts.mockReset()
-    projectAccounts.onProjectAccounts.mockResolvedValue({} as never)
   })
 
   test("a package's entry of the picked project is given that project alone, and the computer's none", () => {

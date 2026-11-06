@@ -6,7 +6,7 @@ import { fileURLToPath } from 'node:url'
 import type { DriverQuota } from '@openagt/agent-driver'
 import { readClaudeQuota } from '@openagt/agent-driver-claude'
 import { accountFolder, personalCodexHome, readCodexUsage } from '@openagt/agent-driver-codex'
-import { gitHostEnv, isPidAlive, lockHolder, markerCard, readProjectAccounts, readyToRun, resumeDetached, runIdFrom, spawnResume, spawnRun, sweep, withdrawMarker, writeMarker } from '@openagt/agent-runner'
+import { gitHostEnv, isPidAlive, lockHolder, markerCard, readyToRun, resumeDetached, runIdFrom, spawnResume, spawnRun, sweep, withdrawMarker, writeMarker } from '@openagt/agent-runner'
 import { findRun } from '@openagt/skill-logs'
 import { nodeGitRunner, pullProjectData, type GitRunner } from '@openagt/agent-data'
 import { CHECK_TIMEOUT_MS, GLANCE_MS, NOW_CHECK_TIMEOUT_MS, QUOTA_KEPT_MS, SCHEDULER_LOG, TICK_MS } from './names.js'
@@ -15,7 +15,7 @@ import { readSchedule, type Schedule, type ScheduledCommand } from './schedule.j
 import { isSwitchedOn, namesGivenUp, readState, stateDir, updateState, withoutListed, withoutName, withoutPid, type ListedCommand, type State, type TickRecord } from './state.js'
 import { atStartOf } from './start-point.js'
 import { glance, listed, runCheck, startNow, tick, type StartedNow, type TickDeps } from './tick.js'
-import { accountsPath, readAccounts, usableAccounts } from '@openagt/skill-account-rotation'
+import { accountsPath, readAccounts } from '@openagt/skill-account-rotation'
 
 /**
  * The tool's process side (#1774): a tick wired to the real project, and the scheduler's own small
@@ -76,11 +76,8 @@ function projectDeps(repo: string, state: State, schedule: Schedule, opts: { git
     busy: async id => (await lockHolder(repo, id, isPidAlive)) !== undefined,
     ready: agent => readyToRun(repo, agent),
     quota: keptQuota(repo),
-    // The project's own few when it names some (`accounts:` in its runner config), else all of the person's.
-    accounts: async agent => {
-      const own = await readProjectAccounts(repo, log)
-      return agent === 'codex' ? usableAccounts(readAccounts(accountsPath('codex')), own.codex) : usableAccounts(readAccounts(accountsPath('claude')), own.claude)
-    },
+    // All of the person's accounts on the agent.
+    accounts: async agent => readAccounts(accountsPath(agent === 'codex' ? 'codex' : 'claude')),
     // The person's own Codex login from their own home; an added one from its folder, where its login is.
     codexUsage: account => readCodexUsage({ home: account.login === undefined ? personalCodexHome() : accountFolder(account) }),
     mint: () => runIdFrom(now().toISOString()),

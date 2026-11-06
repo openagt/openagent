@@ -6,9 +6,10 @@ import { probeCli, type CliProbe, type Driver, type DriverReadiness, type Person
 import { ClaudeCodeDriver, claudeCodeReady } from '@openagt/agent-driver-claude'
 import { CodexDriver, codexReady } from '@openagt/agent-driver-codex'
 import { findRun } from '@openagt/skill-logs'
-import { readPersonal, readProjectAccounts, type ProjectAccounts } from './config.js'
+import { readPersonal } from './config.js'
 import { gitHostEnv } from './git-host.js'
 import { namedAtStart, resumeRun, runCommand, runIdFrom, type RunOutcome } from './run.js'
+import { runnerMark } from './records.js'
 import { askName } from './title.js'
 import { publishChange, type NO_PUBLISH, type Publish, type SessionRepo } from './records.js'
 import { acquireRunLock, handOverRunLock, isPidAlive, releaseRunLock, runStderrPath } from './run-lock.js'
@@ -40,39 +41,35 @@ export function isDriverName(name: string): name is DriverName {
  * before its first turn). Warnings: running as root, and on Codex, skills in `~/.agents/skills`
  * it cannot keep out and `memory` on that does nothing while `skills` is off. What a dashboard's check hook runs, and what a
  * person's run and a scheduler's tick refuse on. The git host is asked whether the account runs
- * work as there can be used, the project's own when it names one (`accounts:` in the config): a
- * project with no git host package runs fine, and one with no account there is refused.
+ * work as there can be used, `login` when one is named: a project with no git host package runs
+ * fine, and one with no account there is refused.
  */
-export async function readyToRun(repo: string, driver: DriverName, deps: { probe?: CliProbe; isRoot?: () => boolean; agentsSkills?: string; gitHostEnv?: typeof gitHostEnv } = {}): Promise<DriverReadiness> {
+export async function readyToRun(repo: string, driver: DriverName, deps: { probe?: CliProbe; isRoot?: () => boolean; agentsSkills?: string; gitHostEnv?: typeof gitHostEnv; login?: string } = {}): Promise<DriverReadiness> {
   const opts = { probe: deps.probe ?? probeCli, ...(deps.isRoot ? { isRoot: deps.isRoot } : {}) }
   // An added account is a login runs use: a server with only the person's own computers' logins runs on them.
   const ready = await (driver === 'claude-code' ? claudeCodeReady({ ...opts, addedAccount: hasAddedAccount('claude') }) : codexReady({ ...opts, addedAccount: hasAddedAccount('codex'), personal: await readPersonal(repo, () => {}), ...(deps.agentsSkills !== undefined ? { agentsSkills: deps.agentsSkills } : {}) }))
-  // The project's own account at the git host, when it names one: a run never works as someone else.
-  const user = (await readProjectAccounts(repo, () => {})).gitHost
-  const given = await (deps.gitHostEnv ?? gitHostEnv)(repo, user)
-  if (!given.ok) ready.problems.push(user !== undefined ? `This project's runs work as ${user} at the git host, and it cannot be used here: ${given.error}` : given.error)
+  const given = await (deps.gitHostEnv ?? gitHostEnv)(repo, deps.login)
+  if (!given.ok) ready.problems.push(deps.login !== undefined ? cannotWorkAs(deps.login, given.error) : given.error)
   return ready
 }
 
-/**
- * The accounts this run works as: at the git host, the project's own or else the computer's, its
- * environment set on this process, which is the run's own (the CLI's `run`), so the agent and
- * every git push of the run go as that account, and nothing of the person's own settings changes;
- * and the Claude and Codex accounts the project names, if it names some.
- */
-export async function workAs(repo: string, log: (line: string) => void, deps: { gitHostEnv?: typeof gitHostEnv; env?: NodeJS.ProcessEnv; accounts?: ProjectAccounts } = {}): Promise<AgentAccounts> {
-  const accounts = deps.accounts ?? (await readProjectAccounts(repo, log))
-  const given = await (deps.gitHostEnv ?? gitHostEnv)(repo, accounts.gitHost)
-  if (!given.ok) throw new Error(accounts.gitHost !== undefined ? `This project's runs work as ${accounts.gitHost} at the git host, and it cannot be used here: ${given.error}` : given.error)
-  Object.assign(deps.env ?? process.env, given.env)
-  return { ...(given.login !== undefined ? { git: given.login } : {}), ...(accounts.claude ? { claude: accounts.claude } : {}), ...(accounts.codex ? { codex: accounts.codex } : {}) }
+/** Why a run cannot go as `login` at the git host, on this computer. */
+function cannotWorkAs(login: string, error: string): string {
+  return `This session works as @${login} at the git host, and it cannot be used here: ${error}`
 }
 
-/** The account this run works as at the git host, when it can say; and the accounts a project's runs may use on each agent, by name, when it names its own few. */
-export interface AgentAccounts {
-  git?: string
-  claude?: string[]
-  codex?: string[]
+/**
+ * The account this run works as at the git host: `login`, the one picked for this session, or
+ * else the computer's. Its environment is set on this process, which is the run's own (the CLI's
+ * `run`), so the agent and every git push of the run go as that account, and nothing of the
+ * person's own settings changes. The login, when the git host can say; an account this computer
+ * cannot use is a refusal naming it, never a run as someone else.
+ */
+export async function workAs(repo: string, login: string | undefined, deps: { gitHostEnv?: typeof gitHostEnv; env?: NodeJS.ProcessEnv } = {}): Promise<string | undefined> {
+  const given = await (deps.gitHostEnv ?? gitHostEnv)(repo, login)
+  if (!given.ok) throw new Error(login !== undefined ? cannotWorkAs(login, given.error) : given.error)
+  Object.assign(deps.env ?? process.env, given.env)
+  return given.login
 }
 
 /** The command line of a spawned run: the model, the coding agent, the publish level, the attached text, the parent, the base, the pull request's base, the branch and what it is for named only when the run has them, so the run's own defaults apply otherwise. */
@@ -237,16 +234,15 @@ export async function detachResume(
  * one given; none given, the coding agent starts on its own default. A parent it names that has
  * ended by the time this run ends is continued in a process of its own.
  */
-export async function runProject(repo: string, opts: { prompt: string; id?: string; startedAt?: string; mark?: boolean; model?: string; effort?: string; driver?: DriverName; publish?: Publish; attached?: string; parent?: string; base?: string; prBase?: string; branch?: string; for?: string; repos?: SessionRepo[]; log?: (line: string) => void }): Promise<RunOutcome> {
+export async function runProject(repo: string, opts: { prompt: string; id?: string; startedAt?: string; mark?: boolean; model?: string; effort?: string; driver?: DriverName; publish?: Publish; attached?: string; parent?: string; base?: string; prBase?: string; branch?: string; for?: string; repos?: SessionRepo[]; gitAccount?: string; log?: (line: string) => void }): Promise<RunOutcome> {
   const id = opts.id ?? runIdFrom(new Date().toISOString())
   const driver = opts.driver ?? 'claude-code'
   const setup = await readPersonal(repo, opts.log ?? (() => {}))
-  const accounts = await readProjectAccounts(repo, opts.log ?? (() => {}))
   // The name is asked for before the git host's account is read, which takes a second or more
   // (`gitHostEnv` runs the git host's command) and is nothing the small model naming the run needs.
   const marked = opts.id !== undefined && opts.mark !== true
-  const naming = namedAtStart({ prompt: opts.prompt, marked, ...(opts.parent !== undefined ? { parent: opts.parent } : {}) }) ? askName(driverFor(driver, undefined, setup, accounts), opts.prompt) : undefined
-  const as = await workAs(repo, opts.log ?? (() => {}), { accounts })
+  const naming = namedAtStart({ prompt: opts.prompt, marked, ...(opts.parent !== undefined ? { parent: opts.parent } : {}) }) ? askName(driverFor(driver, undefined, setup), opts.prompt) : undefined
+  const as = await workAs(repo, opts.gitAccount)
   return runCommand(repo, {
     prompt: opts.prompt,
     ...(naming !== undefined ? { naming } : {}),
@@ -256,8 +252,8 @@ export async function runProject(repo: string, opts: { prompt: string; id?: stri
     marked,
     ...(opts.model !== undefined ? { model: opts.model } : {}),
     ...(opts.effort !== undefined ? { effort: opts.effort } : {}),
-    driver: driverFor(driver, id, setup, as),
-    ...(as.git !== undefined ? { gitAccount: as.git } : {}),
+    driver: driverFor(driver, id, setup),
+    ...(as !== undefined ? { gitAccount: as } : {}),
     ...(opts.publish !== undefined ? { publish: opts.publish } : {}),
     ...(opts.attached !== undefined ? { attached: opts.attached } : {}),
     ...(opts.parent !== undefined ? { parent: opts.parent } : {}),
@@ -279,18 +275,19 @@ export function resumeDetached(repo: string): (id: string, line: { text: string 
 /**
  * Continue an ended run of the real project, in this process: the user's text, or the answer to
  * the question it ended on. The coding agent is the one the run's record names: the session
- * to resume is its own.
+ * to resume is its own, and so is the account at the git host it worked as, when the record
+ * names one; the computer's for a run recorded before that was kept.
  */
 export async function resumeProject(
   repo: string,
   opts: SpawnedResume & { log?: (line: string) => void },
-  deps: { driverFor?: typeof driverFor } = {},
+  deps: { driverFor?: typeof driverFor; workAs?: typeof workAs } = {},
 ): Promise<RunOutcome> {
   const card = await findRun(repo, opts.id)
   const recorded = card?.driver ?? 'claude-code'
   if (!isDriverName(recorded)) throw new Error(`run ${opts.id} is on ${recorded}, which agent-runner cannot start`)
   const setup = await readPersonal(repo, opts.log ?? (() => {}))
-  const as = await workAs(repo, opts.log ?? (() => {}))
+  const as = await (deps.workAs ?? workAs)(repo, card ? runnerMark(card)?.gitAccount : undefined)
   return resumeRun(repo, {
     id: opts.id,
     ...(opts.text !== undefined ? { text: opts.text } : {}),
@@ -299,8 +296,8 @@ export async function resumeProject(
     ...(opts.effort !== undefined ? { effort: opts.effort } : {}),
     ...(opts.by !== undefined ? { by: opts.by } : {}),
     ...(opts.publish !== undefined ? { publish: publishChange(opts.publish) ?? null } : {}),
-    driver: (deps.driverFor ?? driverFor)(recorded, opts.id, setup, as),
-    ...(as.git !== undefined ? { gitAccount: as.git } : {}),
+    driver: (deps.driverFor ?? driverFor)(recorded, opts.id, setup),
+    ...(as !== undefined ? { gitAccount: as } : {}),
     resume: resumeDetached(repo),
     ...(opts.log ? { log: opts.log } : {}),
   })
@@ -308,6 +305,13 @@ export async function resumeProject(
 
 /** The account a run starts on, of the agent it runs on, by name, when whoever started it picked one: a scheduler's pick. */
 export const ACCOUNT_ENV = 'OPENAGENT_ACCOUNT'
+
+/**
+ * The account at the git host a run works as, by its login, when whoever started it picked one
+ * for this session: a dashboard's pick beside the message box. In the environment, as the
+ * dashboard's other settings for a run are, so no project's `start` line has to carry it.
+ */
+export const GIT_ACCOUNT_ENV = 'OPENAGENT_GIT_ACCOUNT'
 
 /**
  * The coding agent a run is on, unrestricted either way: Claude Code with permissions bypassed, Codex
@@ -319,16 +323,16 @@ export const ACCOUNT_ENV = 'OPENAGENT_ACCOUNT'
  * this machine's config turns off (`personal:` in `config.ts`). How a part is turned off is the
  * adapter's own business.
  */
-export function driverFor(name: DriverName, id: string | undefined, personal: PersonalSetup, as: AgentAccounts = {}): Driver {
+export function driverFor(name: DriverName, id: string | undefined, personal: PersonalSetup): Driver {
   // Without an id, a driver for no run's agent: a session that only names one.
   const env: NodeJS.ProcessEnv = { ...process.env, ...(id !== undefined ? { [AGENT_ID_ENV]: id } : {}) }
-  // On the person's accounts of the agent, or the project's own few, the next free one taking over at a limit; the one to start on, when whoever started the run said.
+  // On the person's accounts of the agent, the next free one taking over at a limit; the one to start on, when whoever started the run said.
   const prefer = env[ACCOUNT_ENV]?.trim()
-  const accounts = (only: string[] | undefined) => ({ ...(prefer ? { prefer } : {}), ...(only ? { only } : {}) })
+  const accounts = prefer ? { prefer } : {}
   switch (name) {
     case 'claude-code':
-      return new ClaudeCodeDriver({ permissionMode: 'bypassPermissions', env, personal, accounts: accountRotation('claude', accounts(as.claude)) })
+      return new ClaudeCodeDriver({ permissionMode: 'bypassPermissions', env, personal, accounts: accountRotation('claude', accounts) })
     case 'codex':
-      return new CodexDriver({ sandbox: 'danger-full-access', env, personal, accounts: accountRotation('codex', accounts(as.codex)) })
+      return new CodexDriver({ sandbox: 'danger-full-access', env, personal, accounts: accountRotation('codex', accounts) })
   }
 }

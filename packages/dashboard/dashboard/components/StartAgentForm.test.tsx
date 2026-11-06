@@ -34,8 +34,12 @@ vi.mock('../rpc/logins.js', () => logins)
 const onMachineStartCheck = vi.hoisted(() => vi.fn())
 const onMachineLogins = vi.hoisted(() => vi.fn())
 vi.mock('../rpc/machines.js', () => ({ onMachineStartCheck, onMachineLogins }))
+// The computer's account, and a press that picks another for this session.
 const runsAccount = vi.hoisted(() => ({ login: undefined as string | undefined }))
-vi.mock('./GitHosts.js', () => ({ GitAccountMenu: () => null, useRunsAccount: () => runsAccount.login }))
+vi.mock('./GitHosts.js', () => ({
+  GitAccountMenu: ({ onPick }: { onPick: (login: string) => void }) => <button type="button" onClick={() => onPick('octo-agent')}>pick-octo-agent</button>,
+  useSessionAccount: (_address: string | undefined, _machineId: string | undefined, picked: string | undefined) => picked ?? runsAccount.login,
+}))
 const serverLogins = vi.hoisted(() => ({ onServerLogins: vi.fn(), sendUseLoginsOn: vi.fn(), sendAllowLogins: vi.fn(), sendSettleLogin: vi.fn() }))
 vi.mock('../rpc/server-logins.js', () => serverLogins)
 const openSettings = vi.hoisted(() => vi.fn())
@@ -66,6 +70,7 @@ vi.mock('./Composer.js', async () => {
       <>
         <div data-testid="starts-at">{props.startsAt}</div>
         <div data-testid="controls">{props.controls}</div>
+        <div data-testid="controls-end">{props.controlsEnd}</div>
         <button type="button" disabled={!props.canSubmit} onClick={() => props.onSubmit('do the thing')}>
           submit-typed
         </button>
@@ -90,6 +95,7 @@ beforeEach(() => {
 })
 
 afterEach(() => {
+  runsAccount.login = undefined
   cleanup()
   forgetRemembered()
   start.mockReset()
@@ -343,6 +349,21 @@ describe('StartAgentForm (#1774)', () => {
     fireEvent.click(screen.getByText('submit-typed'))
     await waitFor(() => expect(onAgentStarted).toHaveBeenCalled())
     expect(onAgentStarted.mock.lastCall![4]).toEqual({ branch: 'feature-x', gitAccount: 'octo', publish: 'pr', prBase: 'feature-x', driver: 'codex', model: 'gpt-5', effort: 'high' })
+    expect((start.mock.lastCall![2] as { account?: string }).account).toBe('octo')
+    runsAccount.login = undefined
+  })
+
+  test('the git host account picked for this session goes with the Start, and to the run\'s page; the computer\'s pick is sent when none is made', async () => {
+    onCommands.mockResolvedValue({ ...WITH_BRANCHES, prBase: true })
+    runsAccount.login = 'octo'
+    start.mockResolvedValue({ agentId: 'r1' })
+    const onAgentStarted = vi.fn()
+    render(<StartAgentForm {...props} projectName="gemstack" onAgentStarted={onAgentStarted} />)
+    fireEvent.click(await screen.findByText('pick-octo-agent'))
+    fireEvent.click(screen.getByText('submit-typed'))
+    await waitFor(() => expect(onAgentStarted).toHaveBeenCalled())
+    expect((start.mock.lastCall![2] as { account?: string }).account).toBe('octo-agent')
+    expect((onAgentStarted.mock.lastCall![4] as { gitAccount?: string }).gitAccount).toBe('octo-agent')
     runsAccount.login = undefined
   })
 

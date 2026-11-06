@@ -24,7 +24,7 @@ export { onModules, runModuleCommand, runComputerCommand, runComputerCommandOn, 
 export { onProjectSkills, sendChangeSkills, sendProjectSkills, type ProjectSkills, type ProjectSkill, type ChangeSkillsResult } from './skills.js'
 export { onPerson, type Person } from './person.js'
 export { onGitHostPeople, type HostPerson } from './people.js'
-export { onGitHosts, sendUseGitHostAccount, sendForgetGitHostAccount, sendGitHostLogin, sendGitHostInstall, onAgentState, sendAgentFix, onProjectAccounts, sendProjectAccounts, type GitHostsView, type GitHostRow, type GitHostAccount, type GitHostProvider, type AgentState, type ProjectAccountsView, type ProjectAgentAccounts } from './logins.js'
+export { onGitHosts, sendUseGitHostAccount, sendForgetGitHostAccount, sendGitHostLogin, sendGitHostInstall, onAgentState, sendAgentFix, type GitHostsView, type GitHostRow, type GitHostAccount, type GitHostProvider, type AgentState } from './logins.js'
 export { onPersonalFolder, sendSyncPersonalFolder, sendStopSyncingPersonalFolder, type PersonalFolderView } from './personal-folder.js'
 export { onProjectAgentData, type ProjectAgentData, type KeptData } from './project-agent-data.js'
 export { onServerLogins, sendUseLoginsOn, sendAllowLogins, sendSettleLogin, type ServerLoginsView, type ServerLogins, type LoginThere } from './server-logins.js'

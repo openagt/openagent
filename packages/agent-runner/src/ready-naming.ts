@@ -2,7 +2,7 @@ import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import type { Driver, DriverSession, ReadyPrompt } from '@openagt/agent-driver'
-import { readPersonal, readProjectAccounts } from './config.js'
+import { readPersonal } from './config.js'
 import { driverFor, type DriverName } from './runner.js'
 import { isBareCommand, TITLE_MODELS, TITLE_SYSTEM, titleOf, titlePrompt } from './title.js'
 
@@ -17,9 +17,8 @@ import { isBareCommand, TITLE_MODELS, TITLE_SYSTEM, titleOf, titlePrompt } from 
 // the dashboard's — keeps one naming session started and waiting, takes it for a run the moment
 // the run is started, and starts the next one for the run after.
 //
-// One waits per setup a run would name with: the coding agent, the person's setup parts that are
-// off on this machine, and the project's own accounts, when it names some. A project like most
-// shares the one. A coding agent nobody starts a run on has none waiting: one is made after its
+// One waits per setup a run would name with: the coding agent and the person's setup parts that
+// are off on this machine. A project like most shares the one. A coding agent nobody starts a run on has none waiting: one is made after its
 // first run, which is named the way it always was, by a session started then.
 //
 // A session waits a while at most and is replaced: its process holds a login that may be refreshed
@@ -46,13 +45,10 @@ export interface NamingSetup {
   driver: Driver
 }
 
-/** The setup a run of `driver` in `repo` names with: the project's setup parts and its accounts on that agent. */
+/** The setup a run of `driver` in `repo` names with: the project's setup parts. */
 export async function namingSetup(repo: string, driver: DriverName): Promise<NamingSetup> {
-  const quiet = () => {}
-  const personal = await readPersonal(repo, quiet)
-  const accounts = await readProjectAccounts(repo, quiet)
-  const own = driver === 'claude-code' ? accounts.claude : accounts.codex
-  return { key: JSON.stringify([driver, personal, own ?? null]), driver: driverFor(driver, undefined, personal, accounts) }
+  const personal = await readPersonal(repo, () => {})
+  return { key: JSON.stringify([driver, personal]), driver: driverFor(driver, undefined, personal) }
 }
 
 interface Waiting {

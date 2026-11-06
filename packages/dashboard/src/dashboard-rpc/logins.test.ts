@@ -8,7 +8,7 @@ import type { ProvidedCommand } from '@openagt/agent-data'
 import { addProject, listProjects } from '../registry.js'
 import { readProvider, remoteHost } from '../dashboard/git-hosts.js'
 import { accountsWiring } from './accounts.js'
-import { loginsWiring, onAgentState, onGitHosts, onProjectAccounts, sendAgentFix, sendForgetGitHostAccount, sendGitHostLogin, sendProjectAccounts, sendUseGitHostAccount } from './logins.js'
+import { loginsWiring, onAgentState, onGitHosts, sendAgentFix, sendForgetGitHostAccount, sendGitHostLogin, sendUseGitHostAccount } from './logins.js'
 import { provideTestContext } from './test-context.js'
 import { accountsPath, addAccount } from '@openagt/skill-account-rotation'
 
@@ -165,43 +165,6 @@ test('the agent: what is in the way and the fix its package declared; a press ru
     Object.assign(loginsWiring, before)
   }
 })
-
-test('a project’s own accounts: offered for a kind the computer has two or more of; saved in its runner config, never in the repository; an account the computer does not know is refused', () =>
-  withProjects(async dirs => {
-    const id = (await listProjects()).find(p => p.path === dirs.github)!.id
-    let view = await onProjectAccounts(id)
-    assert.deepEqual(view?.gitHost, { host: 'github.com', name: 'GitHub', requestWord: 'pull request', accounts: ['octo', 'octo-agent'], computer: 'octo' })
-    assert.equal(view?.claude, undefined, 'one Claude account: nothing to pick')
-    assert.equal(view?.codex, undefined, 'one Codex account: nothing to pick')
-
-    addAccount('Dani', 'sk-ant-oat01-dani', accountsWiring.path('claude'))
-    addAccount('Rom', 'codex-rom', accountsWiring.path('codex'))
-    assert.deepEqual((await onProjectAccounts(id))?.codex, { accounts: [{ id: 'This computer', name: 'Codex login on Studio' }, { id: 'Rom', name: 'Rom' }] })
-    assert.deepEqual((await sendProjectAccounts(id, { codex: ['Rom'] })).ok, true)
-    assert.match(readFileSync(join(dirs.github, '.agent-runner', 'config.yml'), 'utf8'), /codex:\n\s+- Rom/)
-    assert.equal((await sendProjectAccounts(id, { codex: ['Nobody'] })).ok, false)
-    assert.deepEqual((await sendProjectAccounts(id, { gitHost: 'octo-agent', claude: ['Dani'] })).ok, true)
-    assert.match(readFileSync(join(dirs.github, '.agent-runner', 'config.yml'), 'utf8'), /git-host: octo-agent/)
-    assert.equal(execFileSync('git', ['status', '--porcelain'], { cwd: dirs.github, encoding: 'utf8' }), '', 'git sees nothing of it')
-    view = await onProjectAccounts(id)
-    assert.equal(view?.gitHost?.project, 'octo-agent')
-    assert.deepEqual(view?.claude?.project, ['Dani'])
-
-    assert.equal((await sendProjectAccounts(id, { gitHost: 'stranger' })).ok, false)
-    assert.equal((await sendProjectAccounts(id, { claude: ['Nobody'] })).ok, false)
-    assert.equal((await sendProjectAccounts(id, { gitHost: null, claude: null, codex: null })).ok, true)
-    view = await onProjectAccounts(id)
-    assert.equal(view?.gitHost?.project, undefined)
-  }))
-
-test('a project’s own git host account is not offered while the computer has one account there', () =>
-  withProjects(
-    async dirs => {
-      const id = (await listProjects()).find(p => p.path === dirs.github)!.id
-      assert.deepEqual(await onProjectAccounts(id), {})
-    },
-    [{ login: 'octo', terminal: true, runs: true }],
-  ))
 
 test('the real readiness question: with the CLI logged out, an account added on that agent\'s own list is a login runs use', async () => {
   const dir = mkdtempSync(join(tmpdir(), 'oa-ready-'))
