@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { Check, ChevronDown, GitBranch, Loader2, MoreHorizontal, Plus } from 'lucide-react'
 import type { GitHostHome } from '../../src/index.js'
 import { sendForgetGitHostAccount, sendUseGitHostAccount, type GitHostRow, type GitHostsView } from '../rpc/logins.js'
-import { onMachineGitHosts, sendMachineGitHostAccount } from '../rpc/machines.js'
+import { onMachineGitHosts } from '../rpc/machines.js'
 import { readAhead, usePolled } from '../lib/use-async.js'
 import { cn } from '../lib/utils.js'
 import { Button } from './ui/button.js'
@@ -176,60 +176,64 @@ export function readMachineGitHostsAhead(machineId: string): void {
   readAhead(machineGitHostsKey(machineId), () => onMachineGitHosts(machineId))
 }
 
-/** A git host's accounts on the computer a run goes to: this computer's, or a saved machine's, asked there. A pick is the one its runs push with, there. */
-export function useGitHostsOn(machineId: string | undefined): { view: GitHostsView | undefined; pick: (host: string, login: string) => Promise<void> } {
+/** A git host's accounts on the computer a run goes to: this computer's, or a saved machine's, asked there. */
+export function useGitHostsOn(machineId: string | undefined): GitHostsView | undefined {
   const own = useGitHosts()
   const theirs = usePolled<GitHostsView | null | undefined>(machineId !== undefined ? () => onMachineGitHosts(machineId) : null, undefined, 30_000, [machineId], machineId !== undefined ? { remember: machineGitHostsKey(machineId) } : undefined)
-  if (machineId === undefined) return { view: own.view, pick: (host, login) => sendUseGitHostAccount(host, login).then(own.reload) }
-  return { view: theirs.value ?? undefined, pick: (host, login) => sendMachineGitHostAccount(machineId, host, login).then(theirs.reload) }
-}
-
-/** The login a run started now would work as: the account of the project's host, on the computer it goes to. */
-export function useRunsAccount(address: string | undefined, machineId: string | undefined): string | undefined {
-  const { view } = useGitHostsOn(machineId)
-  const host = address?.split('/')[0]
-  return view?.hosts.find(one => one.host === host)?.provider?.accounts.find(account => account.runs)?.login
+  return machineId === undefined ? own.view : (theirs.value ?? undefined)
 }
 
 /**
- * The git host account a run pushes and opens its pull request with, at the end of the row above
- * the message box: the project's host, on the computer the run goes to. Its menu picks another of
- * the accounts there, the one its runs use from then on, as the Permissions page does; or adds one.
- * A host with no account logged in says so, and its press goes where one is. Nothing for a project
- * with no remote, or a host no package answers for.
+ * The account a session works as at the project's host, on the computer the run goes to: the one
+ * picked for this session, while that computer still has it; else the one that computer's runs
+ * use. Undefined with no account there.
  */
-export function GitAccountMenu({ address, machineId, on, busy, onAdd }: { address: string | undefined; machineId: string | undefined; on: string | undefined; busy: boolean; onAdd: () => void }) {
-  const { view, pick } = useGitHostsOn(machineId)
+export function useSessionAccount(address: string | undefined, machineId: string | undefined, picked: string | undefined): string | undefined {
+  const view = useGitHostsOn(machineId)
+  const host = address?.split('/')[0]
+  const accounts = view?.hosts.find(one => one.host === host)?.provider?.accounts
+  return (picked !== undefined && accounts?.some(account => account.login === picked && account.ok) ? picked : undefined) ?? accounts?.find(account => account.runs)?.login
+}
+
+/**
+ * The git host account a session pushes and opens its pull request with, under the message box
+ * at the right: the project's host, on the computer the run goes to. Its menu picks another of
+ * the accounts there, for this session only: the computer's own pick, which the Permissions page
+ * makes, stays what it is; or adds one. A host with no account logged in says so, and its press
+ * goes where one is. Nothing for a project with no remote, or a host no package answers for.
+ */
+export function GitAccountMenu({ address, machineId, on, busy, picked, onPick, onAdd }: { address: string | undefined; machineId: string | undefined; on: string | undefined; busy: boolean; picked: string | undefined; onPick: (login: string) => void; onAdd: () => void }) {
+  const view = useGitHostsOn(machineId)
+  const account = useSessionAccount(address, machineId, picked)
   const host = address?.split('/')[0]
   const row = host === undefined ? undefined : view?.hosts.find(one => one.host === host)
   const p = row?.provider
   if (!row || !p) return null
-  const runs = p.accounts.find(account => account.runs)
-  if (!runs)
+  if (account === undefined)
     return (
       <button type="button" disabled={busy} onClick={onAdd} className={cn(rowButtonClass, 'text-warning')}>
         <PackageLogo svg={p.logo} className="size-3.5" />
         <span className="truncate">{p.installed ? `Add a ${p.name} account` : `${p.tool} not installed`}</span>
       </button>
     )
-  const said = `Runs push and open pull requests as @${runs.login}${on !== undefined ? ` on ${on}` : ''}`
+  const said = `This session pushes and opens pull requests as @${account}${on !== undefined ? ` on ${on}` : ''}`
   return (
     <DropdownMenu>
       <Tooltip>
-        <TooltipTrigger render={<DropdownMenuTrigger type="button" disabled={busy} aria-label={`${p.name} account: @${runs.login}`} className={rowButtonClass} />}>
+        <TooltipTrigger render={<DropdownMenuTrigger type="button" disabled={busy} aria-label={`${p.name} account: @${account}`} className={rowButtonClass} />}>
           <PackageLogo svg={p.logo} className="size-3.5" />
-          <span className="max-w-32 truncate">@{runs.login}</span>
+          <span className="max-w-32 truncate">@{account}</span>
           <ChevronDown className="h-3 w-3 shrink-0 opacity-70" aria-hidden />
         </TooltipTrigger>
         <TooltipContent>{said}</TooltipContent>
       </Tooltip>
       <DropdownMenuContent align="end" className="min-w-[14rem]">
         <DropdownMenuGroup>
-          <DropdownMenuLabel>{`${p.name} account${on !== undefined ? ` on ${on}` : ''}`}</DropdownMenuLabel>
-          {p.accounts.map(account => (
-            <DropdownMenuItem key={account.login} closeOnClick={false} disabled={!account.ok} onClick={() => void pick(row.host, account.login)}>
-              <Check className={cn('h-3.5 w-3.5 shrink-0', account.runs ? 'opacity-100' : 'opacity-0')} aria-hidden />
-              <span className="flex-1 truncate">@{account.login}</span>
+          <DropdownMenuLabel>{`${p.name} account for this session${on !== undefined ? `, on ${on}` : ''}`}</DropdownMenuLabel>
+          {p.accounts.map(login => (
+            <DropdownMenuItem key={login.login} disabled={!login.ok} onClick={() => onPick(login.login)}>
+              <Check className={cn('h-3.5 w-3.5 shrink-0', login.login === account ? 'opacity-100' : 'opacity-0')} aria-hidden />
+              <span className="flex-1 truncate">@{login.login}</span>
             </DropdownMenuItem>
           ))}
         </DropdownMenuGroup>

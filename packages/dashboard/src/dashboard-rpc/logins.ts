@@ -4,12 +4,11 @@ import { nodeGitRunner, runPackageCommand, type ProvidedCommand } from '@openagt
 import type { DriverFix, DriverReadiness } from '@openagt/agent-driver'
 import { claudeCodeReady } from '@openagt/agent-driver-claude'
 import { codexReady } from '@openagt/agent-driver-codex'
-import { readProjectAccounts, writeProjectAccounts } from '@openagt/agent-runner'
 import { providedCommand } from '../built-in.js'
 import { isDriverName, type DriverName } from '../driver-names.js'
 import { readPreferences } from '../registry.js'
-import { accountsWiring, onAgentAccounts, type AccountResult, type AccountsAgent } from './accounts.js'
-import { contextProjects, resolveProjectPath } from './context.js'
+import { accountsWiring, type AccountResult } from './accounts.js'
+import { contextProjects } from './context.js'
 import { readProvider, remoteHost, type GitHostProvider } from '../dashboard/git-hosts.js'
 import { readCopied } from '../dashboard/copied-logins.js'
 import { syncLogins } from '../dashboard/logins-sync.js'
@@ -299,71 +298,4 @@ function runFix(command: string): Promise<void> {
       else reject(new Error(said.trim().split('\n').slice(-3).join('\n') || (code === null ? 'It took too long, and was stopped.' : `It ended with ${code}.`)))
     })
   })
-}
-
-/** A project's own accounts, beside the computer's: shown for a kind the computer has two or more of, or that the project names already. */
-export interface ProjectAccountsView {
-  gitHost?: {
-    host: string
-    name: string
-    /** The host's word for a pull request. */
-    requestWord: string
-    accounts: string[]
-    /** The computer's runs' account. */
-    computer?: string
-    /** The project's own, when it names one. */
-    project?: string
-  }
-  claude?: ProjectAgentAccounts
-  codex?: ProjectAgentAccounts
-}
-
-/** One agent's accounts a project may pick from, and its own few. */
-export interface ProjectAgentAccounts {
-  accounts: { id: string; name: string }[]
-  /** The project's own few, by id, when it names some. */
-  project?: string[]
-}
-
-export async function onProjectAccounts(projectId: string): Promise<ProjectAccountsView | null> {
-  const root = await resolveProjectPath(projectId)
-  if (!root) return null
-  const own = await readProjectAccounts(root, () => {})
-  const view: ProjectAccountsView = {}
-  const remote = await loginsWiring.origin(root)
-  const host = remote !== undefined ? remoteHost(remote) : undefined
-  // The host's accounts as the Git hosts answer has them: asking its tool again takes most of a second.
-  const provider = host !== undefined ? (await onGitHosts()).hosts.find(row => row.host === host)?.provider : undefined
-  if (host !== undefined && provider && (provider.accounts.length >= 2 || own.gitHost !== undefined)) {
-    const computer = provider.accounts.find(a => a.runs)?.login
-    view.gitHost = { host, name: provider.name, requestWord: provider.requestWord, accounts: provider.accounts.map(a => a.login), ...(computer !== undefined ? { computer } : {}), ...(own.gitHost !== undefined ? { project: own.gitHost } : {}) }
-  }
-  for (const agent of ['claude', 'codex'] as const) {
-    const accounts = (await onAgentAccounts(agent)).accounts
-    const project = own[agent]
-    if (accounts.length >= 2 || project !== undefined) view[agent] = { accounts: accounts.map(a => ({ id: a.id, name: a.name })), ...(project !== undefined ? { project } : {}) }
-  }
-  return view
-}
-
-/** Change a project's own accounts: a value sets one, `null` goes back to the computer's. Kept on this computer, never in the repository. */
-export async function sendProjectAccounts(projectId: string, change: { gitHost?: string | null; claude?: string[] | null; codex?: string[] | null }): Promise<AccountResult> {
-  const root = await resolveProjectPath(projectId)
-  if (!root) return { ok: false, error: 'No such project.' }
-  const known = await onProjectAccounts(projectId)
-  if (typeof change.gitHost === 'string' && !known?.gitHost?.accounts.includes(change.gitHost)) return { ok: false, error: `This computer knows no account ${change.gitHost} there.` }
-  for (const agent of ['claude', 'codex'] as const satisfies AccountsAgent[]) {
-    const picked = change[agent]
-    if (Array.isArray(picked) && picked.some(id => !known?.[agent]?.accounts.some(a => a.id === id))) return { ok: false, error: `That ${agent === 'codex' ? 'Codex' : 'Claude'} account is not on this computer.` }
-  }
-  try {
-    await writeProjectAccounts(root, {
-      ...(change.gitHost !== undefined ? { gitHost: change.gitHost } : {}),
-      ...(change.claude !== undefined ? { claude: change.claude } : {}),
-      ...(change.codex !== undefined ? { codex: change.codex } : {}),
-    })
-    return { ok: true }
-  } catch (err) {
-    return { ok: false, error: err instanceof Error ? err.message : String(err) }
-  }
 }

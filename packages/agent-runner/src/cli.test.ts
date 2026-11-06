@@ -51,6 +51,15 @@ test('usage errors exit 2 with the usage on stderr and nothing on stdout; outsid
     const retargeted = await run(repo, 'run', '--detach', '--resume', '2026-09-17T20-00-00-000Z', 'go on', '--pr-base', 'login-page')
     assert.equal(retargeted.code, 2)
     assert.match(retargeted.err, /--resume takes no --pr-base/)
+    // The session's account at the git host is for a new run: a resumed one goes on as its record says.
+    process.env['OPENAGENT_GIT_ACCOUNT'] = 'octo-agent'
+    try {
+      const reaccounted = await run(repo, 'run', '--detach', '--resume', '2026-09-17T20-00-00-000Z', 'go on')
+      assert.equal(reaccounted.code, 2)
+      assert.match(reaccounted.err, /OPENAGENT_GIT_ACCOUNT is for a new run/)
+    } finally {
+      delete process.env['OPENAGENT_GIT_ACCOUNT']
+    }
     const noTarget = await run(repo, 'run', 'Read the docs', '--pr-base', ' ')
     assert.equal(noTarget.code, 2)
     const unknownLevel = await run(repo, 'run', 'Read the docs', '--publish', 'push')

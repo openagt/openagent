@@ -27,7 +27,7 @@ import { Dots } from './ToolCalls.js'
 import { AgentFix, agentWords, useAgentState } from './Logins.js'
 import { MachineLogins } from './ServerLogins.js'
 import { SKILLS_ENTRY } from './ProjectSkills.js'
-import { GitAccountMenu, useRunsAccount } from './GitHosts.js'
+import { GitAccountMenu, useSessionAccount } from './GitHosts.js'
 import { SESSIONS_ID } from '../../src/project-address.js'
 
 /** The note while the start is asked for: what the chat's first line says next. */
@@ -52,8 +52,7 @@ const THEIR_LOGINS_MS = 8_000
 // The Context picker (#439/#314) narrows the run's focus to other projects and to files: the
 // picked paths ride the prompt as one `Context:` line at its end.
 // The row above the box says where the Start goes: the "Run on" pick, which the Composer draws
-// first, then the project's name, then the branch the agent starts from; at its other end, the git
-// host account the run pushes as, on the computer it goes to.
+// first, then the project's name, then the branch the agent starts from.
 // That branch is a menu: the project's main branch (origin's default branch, fetched fresh), "My
 // local branch", the branch the project's folder is on, as committed on this machine, or another
 // of origin's branches, fetched fresh. The pick is saved per project. It reaches the start hook as
@@ -68,6 +67,10 @@ const THEIR_LOGINS_MS = 8_000
 // picks, the button shows the pick the daemon will start the run at: Commit, which pushes
 // nothing. Saved, so the pick holds for every next run. A project with no git host package
 // is offered Off, Commit and Publish branch only, and one with no remote Off and Commit.
+// At the right of that row, before the model: the git host account this session pushes as, on
+// the computer the run goes to. A pick there is for this session alone: it goes with the Start,
+// and the computer's own pick, the Permissions page's, stays. Not saved: the next session starts
+// on the computer's again.
 // With no project (`SESSIONS_ID`), the run starts in a folder of its own on this computer: the row
 // says "No project", and nothing about a repository is offered, no branch, no account, no Auto
 // level, no project Context or skills. Beside "No project", the repos the session has as context
@@ -205,7 +208,10 @@ export function StartAgentForm({
     wasReady.current = ready
   }, [fixable, agent?.ready])
 
-  const runsAccount = useRunsAccount(address, machine?.id)
+  // The git host account picked for this session, when the person picked one; the computer's otherwise.
+  const [pickedAccount, setPickedAccount] = useState<string | undefined>()
+  useEffect(() => setPickedAccount(undefined), [projectId, machine?.id])
+  const account = useSessionAccount(address, machine?.id, pickedAccount)
 
   const submit = async (text: string) => {
     if (busy) return
@@ -218,6 +224,7 @@ export function StartAgentForm({
       ...(prInto !== undefined ? { prBase: prInto } : {}),
       ...(machine ? { machine: machine.id } : {}),
       ...(noProject && repos.length > 0 ? { repos: repos.map(repo => repo.path) } : {}),
+      ...(!noProject && remote && account !== undefined ? { account } : {}),
     })
     setNote(null)
     if (result) {
@@ -228,7 +235,7 @@ export function StartAgentForm({
       const started = startFrom ? (startFromPick?.kind === 'local' ? startFrom.local : startFromPick?.kind === 'published' ? startFromPick.branch : startFrom.main) : undefined
       onAgentStarted?.(text, result.agentId, machine?.label, result.projectId, {
         ...(started !== undefined ? { branch: started } : {}),
-        ...(runsAccount !== undefined ? { gitAccount: runsAccount } : {}),
+        ...(!noProject && remote && account !== undefined ? { gitAccount: account } : {}),
         ...(noProject ? {} : { publish: publishPick }),
         ...(prInto !== undefined ? { prBase: prInto } : {}),
         ...(preferences.driver ? { driver: preferences.driver } : {}),
@@ -271,9 +278,6 @@ export function StartAgentForm({
             {!noProject && projectName && startFrom && preferencesLoaded && <StartFromMenu projectId={projectId} main={startFrom.main} local={startFrom.local} pick={startFromPick} onPick={pickStartFrom} busy={busy} />}
           </>
         }
-        // Who it pushes as, at the row's other end: the project's git host account on the computer
-        // the run goes to. Its own end of the row, so the branch landing moves nothing.
-        startsAtEnd={remote && !noProject && <GitAccountMenu address={address} machineId={machine?.id} on={name} busy={busy} onAdd={() => (machine ? openSettings('devices', machine.id) : openPermissions())} />}
         // How it runs, under the box: the Context picker, the "Auto" menu, then the project's skills (his pick).
         controls={
           noProject ? undefined : (
@@ -293,6 +297,9 @@ export function StartAgentForm({
           </>
           )
         }
+        // Who it pushes as, at that row's right, before the model: the project's git host account on
+        // the computer the run goes to, picked for this session.
+        controlsEnd={remote && !noProject && <GitAccountMenu address={address} machineId={machine?.id} on={name} busy={busy} picked={pickedAccount} onPick={setPickedAccount} onAdd={() => (machine ? openSettings('devices', machine.id) : openPermissions())} />}
         onSubmit={submit}
         onPromptChange={value => {
           typed.current = value

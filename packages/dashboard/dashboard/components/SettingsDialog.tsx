@@ -14,7 +14,6 @@ import { usePreferences, updatePreferences, themePreference, type ThemePreferenc
 import { useNotificationPermission } from '../lib/notification-permission.js'
 import { BridgeSettings } from './BridgeSettings.js'
 import { AGENT_DATA_ENTRY, AgentDataSettings } from './AgentDataSettings.js'
-import { PROJECT_ACCOUNTS_ENTRY, ProjectAccountsSettings, readProjectAccountsAhead, useProjectAccounts } from './ProjectAccounts.js'
 import { SKILLS_ENTRY, SkillsSettings } from './ProjectSkills.js'
 import { PickProject } from './PickProject.js'
 import { PROJECT_AGENT_DATA_ENTRY, ProjectAgentDataSettings } from './ProjectAgentDataSettings.js'
@@ -103,14 +102,7 @@ export function SettingsDialog({
   }
   const yours = [...own, ...mounted.filter(section => section.computer).map(section => moduleEntry(section, []))]
   const forProject = mounted.filter(section => !section.computer && (project ? section.projects.includes(project.id) : section.projects.length > 0))
-  // A project's own accounts: one project's, so only with one picked, and only when there is something to pick.
-  const { view: projectAccounts } = useProjectAccounts(project?.id)
-  // The other projects' too, so the project select shows a project's entries at once.
-  useEffect(() => {
-    for (const p of projects) readProjectAccountsAhead(p.id)
-  }, [projects])
   const ownForProject: Entry[] = [
-    ...(project && projectAccounts ? [{ id: PROJECT_ACCOUNTS_ENTRY, title: 'Accounts', icon: KeyRound, body: <ProjectAccountsSettings projectId={project.id} /> }] : []),
     ...(projects.length > 0
       ? [
           {

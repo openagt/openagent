@@ -105,6 +105,12 @@ export interface StartAgentOptions {
    * copied into the session's folder. Refused for a project, which works in its own checkout.
    */
   repos?: string[]
+  /**
+   * The account at the git host this session works as, by its login: one of the accounts the
+   * computer the run goes to has there. Absent, the one that computer's runs use. The run's record
+   * keeps it, and a resume goes on as it.
+   */
+  account?: string
 }
 
 /**

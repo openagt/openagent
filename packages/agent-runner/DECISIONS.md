@@ -179,8 +179,8 @@ already made, and lists it in its pull request; for anything else it proposes an
   `.agent-runner` itself.
 
 ## Accounts
-- A project may name its own accounts, when not the computer's: its account at the git host,
-  and which of the person's Claude and Codex accounts its runs use (a project worked on as
-  someone else's agent, on their subscription). Kept on this computer for that project, never in the
-  repository: whose accounts a project uses is the person's, not the project's. The
-  computer's are used where it names none.
+- The account a run works as at the git host is the session's: the one whoever started the run
+  picked for it, in the run's environment, else the computer's. The record keeps its login, and
+  a resumed run goes on as it, never as whatever the computer's pick is by then. Picked over
+  accounts named per project, which were kept on one computer for a repository that is the same
+  everywhere: whose account a session uses is a pick made for that session.

@@ -1,4 +1,4 @@
-import { NAME_FILE_ENV } from '@openagt/agent-runner'
+import { GIT_ACCOUNT_ENV, NAME_FILE_ENV } from '@openagt/agent-runner'
 import { spawn } from 'node:child_process'
 import { readFile } from 'node:fs/promises'
 import { basename, delimiter, join } from 'node:path'
@@ -147,6 +147,8 @@ export interface StartHookInput {
   prBase?: string
   /** The folders of the repos a session with no project has as context: one per line in `REPOS`. */
   repos?: readonly string[]
+  /** The account at the git host the session works as, by its login: in the environment, as `nameRun` is, so no line has to carry it. */
+  account?: string
   /**
    * Whether the run is given a short name by a small model (the person's setting). `false` reaches
    * the run's own tool through the environment rather than the line, so no project's `hooks.yml`
@@ -193,6 +195,7 @@ export function runStartHook(cwd: string, input: StartHookInput, opts: Omit<RunH
     // project changed, which a setting nobody can act on would not be a setting at all.
     ...(input.nameRun === false ? { OPENAGENT_NAME_RUN: '0' } : {}),
     ...(input.nameFile !== undefined ? { [NAME_FILE_ENV]: input.nameFile } : {}),
+    ...(input.account !== undefined ? { [GIT_ACCOUNT_ENV]: input.account } : {}),
     ...(input.driver !== undefined ? { DRIVER: input.driver } : {}),
     ...(input.model !== undefined ? { MODEL: input.model } : {}),
     ...(input.effort !== undefined ? { EFFORT: input.effort } : {}),

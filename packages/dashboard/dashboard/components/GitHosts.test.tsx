@@ -6,7 +6,7 @@ const logins = vi.hoisted(() => ({ onGitHosts: vi.fn(), sendUseGitHostAccount: v
 vi.mock('../rpc/logins.js', () => logins)
 vi.mock('../rpc/server-logins.js', () => ({ onServerLogins: vi.fn(async () => ({ computer: 'Studio', servers: [] })), sendUseLoginsOn: vi.fn(), sendAllowLogins: vi.fn(), sendSettleLogin: vi.fn() }))
 
-const { GitHostOff, GitHostsCard, useRunsAccount } = await import('./GitHosts.js')
+const { GitHostOff, GitHostsCard, useSessionAccount } = await import('./GitHosts.js')
 
 const provider = (over: Record<string, unknown> = {}) => ({
   name: 'GitHub',
@@ -36,7 +36,7 @@ afterEach(() => {
 })
 
 describe('the account a run started now would work as', () => {
-  const Says = ({ address }: { address: string | undefined }) => <span data-testid="login">{useRunsAccount(address, undefined) ?? 'none'}</span>
+  const Says = ({ address, picked }: { address: string | undefined; picked?: string }) => <span data-testid="login">{useSessionAccount(address, undefined, picked) ?? 'none'}</span>
 
   test('the one the project\'s host marks as the runs\' own; none for a host no package answers for', async () => {
     logins.onGitHosts.mockResolvedValue({ hosts: [{ host: 'github.com', projects: [], provider: provider({ accounts: [{ login: 'other', runs: false, ok: true }, { login: 'octo', runs: true, ok: true }] }) }] })
@@ -44,6 +44,11 @@ describe('the account a run started now would work as', () => {
     await waitFor(() => expect(screen.getByTestId('login').textContent).toBe('octo'))
     rerender(<Says address="gitlab.com/o/r" />)
     expect(screen.getByTestId('login').textContent).toBe('none')
+    // One picked for this session, while the computer has it.
+    rerender(<Says address="github.com/o/r" picked="other" />)
+    expect(screen.getByTestId('login').textContent).toBe('other')
+    rerender(<Says address="github.com/o/r" picked="gone" />)
+    expect(screen.getByTestId('login').textContent).toBe('octo')
   })
 })
 

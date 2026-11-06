@@ -366,13 +366,17 @@ describe('the box', () => {
 const runOn = () => screen.getByRole('button', { name: 'Run on' })
 
 describe('the rows around the box', () => {
-  test('where the agent starts is a row above the box: "Run on", then the caller\'s words; under it, the caller\'s controls and then the model at the right', () => {
-    renderComposer({ startsAt: <span>a-place</span>, controls: <span>a-control</span> })
+  test('where the agent starts is a row above the box: "Run on", then the caller\'s words; under it, the caller\'s controls, then the caller\'s end controls and the model at the right', () => {
+    renderComposer({ startsAt: <span>a-place</span>, controls: <span>a-control</span>, controlsEnd: <span>an-end-control</span> })
     const above = box().previousElementSibling!
     const under = box().nextElementSibling!
     const place = screen.getByText('a-place')
     const control = screen.getByText('a-control')
+    const endControl = screen.getByText('an-end-control')
     const select = agentTrigger()
+    expect(under.contains(endControl)).toBe(true)
+    expect(control.compareDocumentPosition(endControl) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+    expect(endControl.compareDocumentPosition(select) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
     expect(above.contains(runOn())).toBe(true)
     expect(above.contains(place)).toBe(true)
     expect(runOn().compareDocumentPosition(place) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
