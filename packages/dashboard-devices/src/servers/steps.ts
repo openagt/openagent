@@ -236,6 +236,23 @@ export const DESKTOP_FILE = '/etc/openagent/desktop-user'
 /** The one thing the server's user may run as root. */
 export const SUDOERS = `${SERVER_USER} ALL=(root) NOPASSWD: ${PERSON_HELPER}`
 
+/** The command a person logged in to the server runs for its devices: `openagent-devices add --for <name> --qr`. */
+export const DEVICES_COMMAND = '/usr/local/bin/openagent-devices'
+
+/**
+ * That command: the door's own, as the server's user with the helper, as the service runs it,
+ * which a shell that logs in has nothing of. A code is always for someone named: one for nobody
+ * is the owner's, and whoever opened it would be in as them.
+ */
+export const DEVICES = `#!/bin/sh
+[ "$(id -u)" = 0 ] || exec sudo "$0" "$@"
+if [ "$1" = add ] && [ "$2" != --for ]; then
+  echo "Name whose device it is: openagent-devices add --for <name> --qr. The owner's own name gives the owner a device." >&2
+  exit 2
+fi
+cd /home/${SERVER_USER}
+exec runuser -u ${SERVER_USER} -- env ${PERSON_HELPER_ENV}=${PERSON_HELPER} ${DOOR} "$@"`
+
 /**
  * The helper itself, a script root runs:
  *
@@ -373,6 +390,8 @@ add() {
   is_user "$user" || useradd --create-home --shell /bin/bash "$user"
   home=$(getent passwd "$user" | cut -d: -f6)
   [ "$home" = "/home/$user" ] || fail "The user $user has no home of its own."
+  # Their home is theirs alone: no other person's agents read their work.
+  chmod 700 "$home"
   agents "$user" "$home"
   systemctl enable --quiet "$unit"
   apply_firewall
@@ -458,6 +477,8 @@ export const STEPS: readonly StepDef[] = [
         {},
         `
   id ${SERVER_USER} >/dev/null 2>&1 || useradd --create-home --shell /bin/bash ${SERVER_USER}
+  # Its home is its own: a system whose homes others may read (older Debian's) does not decide that.
+  chmod 700 /home/${SERVER_USER}
 `,
       ),
   },
@@ -599,7 +620,7 @@ export const STEPS: readonly StepDef[] = [
     script: ({ desktop = '' }) =>
       script(
         'root',
-        { HELPER, SUDOERS, PERSON_UNIT, FIREWALL_UNIT, DESKTOP: desktop },
+        { HELPER, SUDOERS, PERSON_UNIT, FIREWALL_UNIT, DEVICES, DESKTOP: desktop },
         `
   install -d -m 755 ${ROOT}/bin /etc/openagent ${PERSONS_DIR}
   # Each file root's, written whole and moved in, and only when it changed.
@@ -612,6 +633,7 @@ export const STEPS: readonly StepDef[] = [
   }
   helper=0 units=0 persons=0 desk=0
   if changed ${PERSON_HELPER} "$HELPER"; then put ${PERSON_HELPER} 755 "$HELPER"; helper=1; fi
+  if changed ${DEVICES_COMMAND} "$DEVICES"; then put ${DEVICES_COMMAND} 755 "$DEVICES"; fi
   if changed ${SUDOERS_FILE} "$SUDOERS"; then
     # Checked before it is in place: a rule sudo cannot read would leave nobody able to use sudo. A name with a dot is not read by sudo meanwhile.
     tmp=$(mktemp /etc/sudoers.d/.openagent.XXXXXX)

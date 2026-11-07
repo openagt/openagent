@@ -291,7 +291,8 @@ export async function openDoor(opts: DoorOptions): Promise<Door> {
   const now = opts.now ?? Date.now
   const knocks = opts.knocks ?? (peer => onOwnNetwork(peer))
   const secure = opts.secured !== undefined || opts.proxied === true
-  const kind: DoorKind = opts.secured ? 'server' : opts.proxied ? 'tailscale' : 'wifi'
+  // A server gives each person a user of their own, and the service names the helper that makes it.
+  const kind: DoorKind = opts.secured ? 'server' : opts.proxied ? (env.OPENAGENT_PERSON_HELPER ? 'tailscale-server' : 'tailscale') : 'wifi'
   const ownTarget = new URL(opts.target)
   // Who a request is from: behind a program that passes it on, the caller that program names (the
   // last address it added), else the socket's other end. Only a program on this computer reaches a

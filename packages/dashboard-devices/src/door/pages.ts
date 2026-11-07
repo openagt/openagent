@@ -31,8 +31,8 @@ ${script ? `<script nonce="${nonce}">${script}</script>` : ''}
 `
 }
 
-/** Which door a page is of: one on the Wi-Fi, a server's, or one behind Tailscale. */
-export type DoorKind = 'wifi' | 'server' | 'tailscale'
+/** Which door a page is of: one on the Wi-Fi, a server's, one behind Tailscale, or a server's behind Tailscale. */
+export type DoorKind = 'wifi' | 'server' | 'tailscale' | 'tailscale-server'
 
 /**
  * How to get in, in the words both pages use. A server has no screen of its own to press on:
@@ -41,6 +41,9 @@ export type DoorKind = 'wifi' | 'server' | 'tailscale'
 export function howToGetIn(kind: DoorKind): string {
   if (kind === 'server')
     return "This computer is a server. On the computer it was connected from, open OpenAgent's Settings › Devices › Add device › Phone or tablet, pick Anywhere, through this server, and scan the code with this device. A device that is already in can also make a code: its Settings › Devices › Add device."
+  // A server's door is its owner's: a code made there for nobody would let the device in as them, so the command asks whose it is.
+  if (kind === 'tailscale-server')
+    return 'This computer is a server on your Tailscale network. Log in to it, run openagent-devices add --for <your name> --qr, and scan the code with this device. A device that is already in can also make a code: its Settings › Devices › Add device.'
   if (kind === 'tailscale')
     return 'This computer is on your Tailscale network. On it, open OpenAgent\'s Settings › Devices › Add device › Phone or tablet, and scan the code with this device; on a computer with no screen, run npx @openagt/dashboard-devices add --qr. A device that is already in can also make a code: its Settings › Devices › Add device.'
   return 'On the computer that runs OpenAgent, open Settings › Devices › Add device › Phone or tablet, and scan the code with this device.'
@@ -59,7 +62,7 @@ export function notInPage(kind: DoorKind): string {
  */
 export function enterPage(path: string, nonce: string, kind: DoorKind): string {
   const unreachable =
-    kind === 'server' ? 'Check that this device is on the internet, then scan the code again.' : kind === 'tailscale' ? 'Check that Tailscale is on on this device, signed in as on the computer, then scan the code again.' : 'Check that this device is on the same Wi-Fi as the computer, then scan the code again.'
+    kind === 'server' ? 'Check that this device is on the internet, then scan the code again.' : kind === 'tailscale' || kind === 'tailscale-server' ? 'Check that Tailscale is on on this device, signed in as on the computer, then scan the code again.' : 'Check that this device is on the same Wi-Fi as the computer, then scan the code again.'
   const script = `
     const say = (title, text) => { document.getElementById('title').textContent = title; document.getElementById('text').textContent = text }
     const code = location.hash.slice(1).split('.')[0]
