@@ -135,6 +135,11 @@ already made, and lists it in its pull request; for anything else it proposes an
 - An agent on the server reaches only its own person's OpenAgent and lines: the server's
   firewall says so. Picked over a check in OpenAgent's code, which every new port would need
   again.
+- Each person's home on the server is theirs alone, the owner's too, whatever the system's
+  own default: another person's agents read none of it.
+- A code made on a server's command line names whose device it is, the owner's own name for
+  the owner's. Picked over the owner as the default, where a code made for someone else let
+  them in as the owner.
 - Each person sees only their own programs running on the server: a run's prompt is on its
   command line.
 - Removing a person removes everything of theirs on the server: their user, their logins, their
