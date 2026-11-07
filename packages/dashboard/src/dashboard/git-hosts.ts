@@ -10,6 +10,8 @@ export interface GitHostAccount {
   ok: boolean
   /** On a server: the computer of the person's whose login it is. */
   from?: string
+  /** Its public picture at the host, as the package said it: an https address. */
+  avatar?: string
 }
 
 /** What a git host's package answers of it. */
@@ -61,7 +63,8 @@ export function readProvider(output: unknown): GitHostProvider | undefined {
   for (const row of Array.isArray(said['accounts']) ? said['accounts'] : []) {
     const a = row as Record<string, unknown>
     const login = text(a['login'])
-    if (login !== undefined) accounts.push({ login, runs: a['runs'] === true, ok: a['ok'] !== false })
+    const avatar = text(a['avatar'])
+    if (login !== undefined) accounts.push({ login, runs: a['runs'] === true, ok: a['ok'] !== false, ...(avatar?.startsWith('https://') ? { avatar } : {}) })
   }
   const logo = text(said['logo'])
   const loggingIn = said['loggingIn'] as { code?: unknown; url?: unknown } | undefined

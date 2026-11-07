@@ -169,8 +169,8 @@ test(
     assert.equal(said.out['install'], undefined, 'nothing to install while gh is here')
     assert.match(String(said.out['logo']), /^<svg/)
     assert.deepEqual(said.out['accounts'], [
-      { login: 'octo', ok: true, runs: true },
-      { login: 'octo-agent', ok: true, runs: false },
+      { login: 'octo', ok: true, runs: true, avatar: 'https://github.com/octo.png?size=64' },
+      { login: 'octo-agent', ok: true, runs: false, avatar: 'https://github.com/octo-agent.png?size=64' },
     ])
     const other = await run(['accounts', '--host', 'gitlab.com'], { gh: ghWith(), env })
     assert.equal(other.code, 1)

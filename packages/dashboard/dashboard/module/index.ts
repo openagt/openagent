@@ -10,7 +10,7 @@
 // This file IS `@openagt/dashboard/module`: the dashboard's build emits it as its own entry (`/assets/host/module-<hash>.js`),
 // sharing every chunk with the dashboard itself. Nothing here names a skill.
 import type { Health } from '../../src/health.js'
-import { createContext, useContext, type ComponentType } from 'react'
+import { createContext, useContext, type ComponentType, type ReactNode } from 'react'
 import type { CardWidth } from '../../src/overview-layout.js'
 import type { AgentStatus } from '../../src/index.js'
 import type { ModuleAgent, ModuleAgentsWanted } from '../../src/dashboard/module-agents.js'
@@ -31,6 +31,22 @@ export interface ModuleProject {
 export interface ModuleCardProps {
   /** The registered projects that have the module's package, in the registry's order; with a project picked in the dashboard, that project alone. */
   projects: ModuleProject[]
+  /**
+   * The host page's line under one account's row, for a card that lists a coding agent's accounts
+   * (account rotation's): where the account works, on the person's devices, which only the
+   * dashboard knows. The card draws it as it is; absent where the page has nothing to add (the
+   * Overview). A card that lists no accounts leaves it.
+   */
+  accountWhere?: (account: ModuleAccount) => ReactNode
+}
+
+/** A coding agent's account, as a card names it to {@link ModuleCardProps.accountWhere}. */
+export interface ModuleAccount {
+  agent: 'claude' | 'codex'
+  /** The person's own login on this computer, not one added to OpenAgent. */
+  own: boolean
+  /** What the card's commands know it by. */
+  name: string
 }
 
 /**

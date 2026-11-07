@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest'
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { forgetRemembered } from '../lib/use-async.js'
+import { openMenu } from '../test-utils.js'
 
 const logins = vi.hoisted(() => ({ onGitHosts: vi.fn(), sendUseGitHostAccount: vi.fn(), sendForgetGitHostAccount: vi.fn(), sendGitHostLogin: vi.fn(), sendGitHostInstall: vi.fn(), onAgentState: vi.fn(), sendAgentFix: vi.fn() }))
 vi.mock('../rpc/logins.js', () => logins)
@@ -88,44 +89,65 @@ describe('the git host in a session\'s row', () => {
 })
 
 describe('Git hosts', () => {
-  test('a card per host, drawn from its package: OpenAgent\u2019s own accounts, the one runs use; another is used for runs with a press; the -agent advice; a host with no package is one line', async () => {
+  test('one card, "Git host accounts", a section per host drawn from its package: OpenAgent\u2019s own accounts, the one runs use; another is used for runs with a press; the -agent advice behind an ⓘ; a host with no package is one line', async () => {
     logins.onGitHosts.mockResolvedValue({ hosts: [{ host: 'github.com', projects: ['site', 'gemskills'], provider: provider() }, { host: 'gitlab.example.com', projects: ['tool'] }] })
     render(<GitHostsCard />)
     const card = await screen.findByRole('region', { name: 'GitHub' })
     expect(within(card).queryByText('Connected')).toBeNull()
-    expect(within(card).getByText('github.com · used by site, gemskills')).toBeTruthy()
+    expect(screen.getByText('Git host accounts')).toBeTruthy()
+    expect(within(card).getByText('Used by site, gemskills')).toBeTruthy()
     const octo = within(card).getByRole('listitem', { name: '@octo' })
     expect(octo.textContent).toContain('added to OpenAgent')
-    // octo is no account of an agent's own: the advice says to make one.
-    expect(card.textContent).toContain('We recommend creating dedicated GitHub accounts with limited access for your agents')
-    expect(octo.textContent).toContain('in use for runs')
-    fireEvent.click(within(card).getByRole('button', { name: 'Details of @octo-agent' }))
-    fireEvent.click(within(within(card).getByRole('listitem', { name: '@octo-agent' })).getByRole('button', { name: 'Use for runs' }))
+    // octo is no account of an agent's own: the advice says to make one, quietly, beside Add account.
+    expect(within(card).getByRole('button', { name: 'Why an account of its own for your agents' })).toBeTruthy()
+    expect(card.textContent).not.toContain('We recommend')
+    expect(octo.textContent).toContain('Runs use this')
+    await openMenu(within(card).getByRole('button', { name: 'More for @octo-agent' }))
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Use for runs' }))
     await waitFor(() => expect(logins.sendUseGitHostAccount).toHaveBeenCalledWith('github.com', 'octo-agent'))
-    expect(screen.getByLabelText('gitlab.example.com').textContent).toBe('gitlab.example.com · used by tool · no package for it yet')
+    expect(screen.getByLabelText('gitlab.example.com').textContent).toBe('gitlab.example.com · Used by tool. No package for it yet.')
   })
 
-  test('an account runs do not use is removed from this computer with a press; the one runs use has no Remove, and a refusal is said', async () => {
+  test("each account has its picture at the host, as the package said it; its first letter with none", async () => {
+    logins.onGitHosts.mockResolvedValue({ hosts: [{ host: 'github.com', projects: ['site'], provider: provider({ accounts: [{ login: 'octo', runs: true, ok: true, avatar: 'https://github.com/octo.png?size=64' }, { login: 'octo-agent', runs: false, ok: true }] }) }] })
+    render(<GitHostsCard />)
+    const card = await screen.findByRole('region', { name: 'GitHub' })
+    expect(within(card).getByRole('listitem', { name: '@octo' }).querySelector('img')?.getAttribute('src')).toBe('https://github.com/octo.png?size=64')
+    expect(within(card).getByRole('listitem', { name: '@octo-agent' }).querySelector('img')).toBeNull()
+    expect(within(card).getByRole('listitem', { name: '@octo-agent' }).textContent).toMatch(/^O@octo-agent/)
+  })
+
+  test('any account is removed from its ⋯, after a yes that says what it means: the one runs use leaves runs with none; the press spins, and a refusal is said', async () => {
     logins.onGitHosts.mockResolvedValue({ hosts: [{ host: 'github.com', projects: ['site'], provider: provider() }] })
     render(<GitHostsCard />)
     const card = await screen.findByRole('region', { name: 'GitHub' })
-    fireEvent.click(within(card).getByRole('button', { name: 'Details of @octo' }))
-    expect(within(within(card).getByRole('listitem', { name: '@octo' })).queryByRole('button', { name: /Remove/ })).toBeNull()
-    fireEvent.click(within(card).getByRole('button', { name: 'Details of @octo-agent' }))
-    fireEvent.click(within(within(card).getByRole('listitem', { name: '@octo-agent' })).getByRole('button', { name: 'Remove @octo-agent' }))
-    await waitFor(() => expect(logins.sendForgetGitHostAccount).toHaveBeenCalledWith('github.com', 'octo-agent'))
-    // While gh works, the pressed button says so, with a spinner, and no other press is taken.
+    // The ⋯ is always there, not only on a hover.
+    await openMenu(within(card).getByRole('button', { name: 'More for @octo' }))
+    expect(screen.queryByRole('menuitem', { name: 'Use for runs' })).toBeNull()
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Remove' }))
+    const asked = within(card).getByRole('group', { name: 'Remove @octo' })
+    expect(asked.textContent).toContain('Runs use @octo. Without it they have no GitHub account until you add one.')
+    fireEvent.click(within(asked).getByRole('button', { name: 'Cancel' }))
+    expect(within(card).queryByRole('group', { name: 'Remove @octo' })).toBeNull()
+    expect(logins.sendForgetGitHostAccount).not.toHaveBeenCalled()
+
     let answer: (value: { ok: true }) => void = () => {}
     logins.sendForgetGitHostAccount.mockImplementation(() => new Promise(resolve => (answer = resolve)))
-    fireEvent.click(within(within(card).getByRole('listitem', { name: '@octo-agent' })).getByRole('button', { name: 'Remove @octo-agent' }))
-    const removing = within(within(card).getByRole('listitem', { name: '@octo-agent' })).getByRole('button', { name: 'Remove @octo-agent' })
-    await waitFor(() => expect(removing.textContent).toBe('Removing…'))
-    expect(removing.querySelector('.animate-spin')).not.toBeNull()
-    expect((within(within(card).getByRole('listitem', { name: '@octo-agent' })).getByRole('button', { name: 'Use for runs' }) as HTMLButtonElement).disabled).toBe(true)
+    await openMenu(within(card).getByRole('button', { name: 'More for @octo-agent' }))
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Remove' }))
+    const other = within(card).getByRole('group', { name: 'Remove @octo-agent' })
+    expect(other.textContent).toContain('OpenAgent forgets @octo-agent. The login goes on working wherever else it is.')
+    fireEvent.click(within(other).getByRole('button', { name: 'Remove' }))
+    await waitFor(() => expect(logins.sendForgetGitHostAccount).toHaveBeenCalledWith('github.com', 'octo-agent'))
+    expect(within(other).getByRole('button', { name: 'Removing…' })).toBeTruthy()
+    expect(within(within(card).getByRole('listitem', { name: '@octo-agent' })).getByRole('button', { name: 'More for @octo-agent' }).querySelector('.animate-spin')).not.toBeNull()
     answer({ ok: true })
-    await waitFor(() => expect(removing.textContent).toBe('Remove'))
+    await waitFor(() => expect(within(card).queryByRole('group', { name: 'Remove @octo-agent' })).toBeNull())
+
     logins.sendForgetGitHostAccount.mockResolvedValue({ ok: false, error: 'gh could not forget it.' })
-    fireEvent.click(within(within(card).getByRole('listitem', { name: '@octo-agent' })).getByRole('button', { name: 'Remove @octo-agent' }))
+    await openMenu(within(card).getByRole('button', { name: 'More for @octo-agent' }))
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Remove' }))
+    fireEvent.click(within(within(card).getByRole('group', { name: 'Remove @octo-agent' })).getByRole('button', { name: 'Remove' }))
     expect((await within(card).findByRole('alert')).textContent).toBe('gh could not forget it.')
   })
 
@@ -147,11 +169,11 @@ describe('Git hosts', () => {
     expect(screen.getByRole('link', { name: 'github.com/login/device' }).getAttribute('href')).toBe('https://github.com/login/device')
   })
 
-  test('no tool is grey, with the press that installs it and the command it runs, and why the last install failed; no account is amber, "No account", with the press that adds one', async () => {
+  test('no tool: said, with the press that installs it and the command it runs, and why the last install failed; no account: said, with the press that adds one', async () => {
     logins.onGitHosts.mockResolvedValue({ hosts: [{ host: 'github.com', projects: ['site'], provider: provider({ installed: false, accounts: [], installFailed: 'curl: could not resolve host' }) }] })
     render(<GitHostsCard />)
     const card = await screen.findByRole('region', { name: 'GitHub' })
-    expect(within(card).getByText('Not installed')).toBeTruthy()
+    expect(within(card).getByText('gh, the tool for GitHub, is not installed.')).toBeTruthy()
     expect(within(card).getByText('brew install gh')).toBeTruthy()
     expect(within(card).getByRole('alert').textContent).toBe('curl: could not resolve host')
     fireEvent.click(within(card).getByRole('button', { name: 'Install gh' }))
@@ -161,7 +183,7 @@ describe('Git hosts', () => {
     logins.onGitHosts.mockResolvedValue({ hosts: [{ host: 'github.com', projects: ['site'], provider: provider({ accounts: [] }) }] })
     render(<GitHostsCard />)
     const out = await screen.findByRole('region', { name: 'GitHub' })
-    expect(within(out).getByText('No account')).toBeTruthy()
+    expect(within(out).getByText('OpenAgent has no GitHub account yet.')).toBeTruthy()
     fireEvent.click(within(out).getByRole('button', { name: 'Add a GitHub account' }))
     await waitFor(() => expect(logins.sendGitHostLogin).toHaveBeenCalledWith('github.com'))
   })

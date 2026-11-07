@@ -8,14 +8,16 @@ import { GitHostsCard } from './GitHosts.js'
 import { AgentFix, StatePill, agentLoginState, agentWords, useAgentState } from './Logins.js'
 import { ModuleSlot } from './ModulePageView.js'
 import { Page } from './Page.js'
-import { ServersCard, ServersProvider } from './ServerLogins.js'
+import { AccountWhere, ServerAsks, ServersProvider } from './ServerLogins.js'
 
 // The Permissions page: every account OpenAgent's agents work with, in one place. An agent can
-// reach what its accounts can, and nothing else is a permission. The coding agents' accounts are
-// the skill's own card, the same as on the Overview. What is not account rotation is the
-// dashboard's: an agent that needs installing or logging in, how this computer's logins stand on
-// the person's servers (`ServerLogins.tsx`), the git hosts (`GitHosts.tsx`). On a server, the page
-// says whose computer's logins it uses.
+// reach what its accounts can, and nothing else is a permission. Each account is said once, with
+// where it works under it (this computer and the person's servers, `ServerLogins.tsx`), and only
+// what a server asks of the person stands above them (his pick over a card that listed every
+// account again under each server). The coding agents' accounts are the skill's own card, the same
+// as on the Overview, the dashboard filling the line under each row through the card's
+// `accountWhere`; the git hosts' are the dashboard's (`GitHosts.tsx`), in the same rows. On a
+// server, the page says whose computer's logins it uses.
 
 const ACCOUNT_ROTATION = '@openagt/skill-account-rotation'
 
@@ -36,8 +38,8 @@ export function AccountsList() {
         <FromLine />
         <AgentSetup driver="claude-code" title="Claude Code" Logo={ClaudeLogo} />
         <AgentSetup driver="codex" title="Codex" Logo={CodexLogo} />
+        <ServerAsks />
         <RotationCard />
-        <ServersCard />
         <GitHostsCard />
       </div>
     </ServersProvider>
@@ -58,7 +60,7 @@ function RotationCard() {
     )
   return (
     <ModuleSlot package={card.package} label="accounts card">
-      <card.Card projects={[]} />
+      <card.Card projects={[]} accountWhere={account => <AccountWhere account={{ kind: account.agent, own: account.own, name: account.name }} />} />
     </ModuleSlot>
   )
 }

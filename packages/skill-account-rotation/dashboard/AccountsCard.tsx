@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
-import { Check, Copy, KeyRound, MoreHorizontal } from 'lucide-react'
-import { Button, Card, CardContent, CardHeader, CardTitle, ClaudeLogo, CodexLogo, GaugeFace, Input, Skeleton, cn, useModuleHost, usePolled, type ModuleCardProps, type ModuleHost } from '@openagt/dashboard/module'
+import { Check, Copy, Info, KeyRound, MoreHorizontal } from 'lucide-react'
+import { Button, Card, CardContent, CardHeader, CardTitle, ClaudeLogo, CodexLogo, GaugeFace, Input, Skeleton, Tooltip, TooltipContent, TooltipTrigger, cn, useModuleHost, usePolled, type ModuleCardProps, type ModuleHost } from '@openagt/dashboard/module'
 
 // The accounts each coding agent's runs try, in order: how full each one is, whether it is at a
 // limit, adding one: the command's own sign-in, which goes on by itself while the card follows it.
@@ -279,7 +279,7 @@ function AddAccount({ agent, now, from, naming, onNaming, onChanged }: { agent: 
   )
 }
 
-function AgentAccounts({ agent, accounts, usage, reading, adding, from, naming, onNaming, onPress, onChanged, busy }: { agent: (typeof AGENTS)[number]; accounts: Account[]; usage: Usage[]; reading: boolean; adding: AddingNow; from: string | undefined; naming: boolean; onNaming: (naming: boolean) => void; onPress: (args: string[]) => void; onChanged: () => void; busy: boolean }) {
+function AgentAccounts({ agent, accounts, usage, reading, adding, from, naming, onNaming, where, onPress, onChanged, busy }: { agent: (typeof AGENTS)[number]; accounts: Account[]; usage: Usage[]; reading: boolean; adding: AddingNow; from: string | undefined; naming: boolean; onNaming: (naming: boolean) => void; where: ModuleCardProps['accountWhere']; onPress: (args: string[]) => void; onChanged: () => void; busy: boolean }) {
   // The row that is open, and the press that waits for a yes in it: taking an account off is a sign-in to undo.
   const [open, setOpen] = useState<{ name: string; asking?: 'remove' | 'logout' }>()
   const now = Date.now()
@@ -337,6 +337,8 @@ function AgentAccounts({ agent, accounts, usage, reading, adding, from, naming, 
                     </span>
                   )}
                 </button>
+                {/* Where it works, as the page it is on says it (the Permissions page: the person's devices). */}
+                {where && <div className="pl-[1.625rem]">{where({ agent: agent.id, own: account.own, name: account.name })}</div>}
                 {isOpen && (
                   <div className="space-y-1.5 pb-1.5 pl-[1.625rem] pt-1">
                     {open.asking ? (
@@ -389,7 +391,7 @@ function AgentAccounts({ agent, accounts, usage, reading, adding, from, naming, 
   )
 }
 
-export function AccountsCard(_props: ModuleCardProps) {
+export function AccountsCard({ accountWhere }: ModuleCardProps) {
   const host = useModuleHost()
   const { value: list, loaded, reload } = usePolled<Read<Account> | undefined>(() => read<Account>(host, 'list'), undefined, LIST_EVERY_MS, [], { remember: 'account-rotation:list', stored: true })
   const { value: usage, reload: reloadUsage } = usePolled<Read<Usage> | undefined>(() => read<Usage>(host, 'usage'), undefined, USAGE_EVERY_MS, [], { remember: 'account-rotation:usage', stored: true })
@@ -438,17 +440,27 @@ export function AccountsCard(_props: ModuleCardProps) {
       .finally(() => setBusy(false))
   }
 
+  // Rotation does something only for an agent with two accounts or more.
+  const rotates = list?.ok === true && AGENTS.some(agent => (list.accounts[agent.id] ?? []).filter(account => !account.signedOut).length > 1)
+
   return (
     <Card>
       <CardHeader>
         <CardTitle className="text-base">
           <span className="inline-flex items-center gap-2">
             <KeyRound className="h-4 w-4 text-muted-foreground" aria-hidden />
-            Accounts
+            Coding agent accounts
+            {/* What this card's package does with them, said only where it does something: an agent with two accounts or more. */}
+            {rotates && (
+              <Tooltip>
+                <TooltipTrigger render={<button type="button" aria-label="What happens at an account's limit" className="font-normal text-muted-foreground hover:text-foreground" />}>
+                  <Info className="h-3.5 w-3.5" aria-hidden />
+                </TooltipTrigger>
+                <TooltipContent className="max-w-xs">When an account hits its limit, the next free one of the same agent takes the run over where it stopped.</TooltipContent>
+              </Tooltip>
+            )}
           </span>
         </CardTitle>
-        {/* What this card's package does with them, said here and nowhere else: a page-wide line read as the dashboard's own, and was wrong for the git hosts' accounts. */}
-        <p className="text-sm text-muted-foreground">When a coding agent&rsquo;s account hits its limit, the next free one takes the run over where it stopped.</p>
       </CardHeader>
       <CardContent className="flex flex-col gap-1">
         {list === undefined && !loaded && <Skeleton className="h-16 w-full" />}
@@ -465,6 +477,7 @@ export function AccountsCard(_props: ModuleCardProps) {
               adding={adding?.[agent.id] ?? {}}
               naming={naming === agent.id}
               onNaming={on => setNaming(on ? agent.id : undefined)}
+              where={accountWhere}
               from={AGENTS.flatMap(each => list.accounts[each.id] ?? []).find(account => account.from !== undefined)?.from}
               busy={busy}
               onPress={press}

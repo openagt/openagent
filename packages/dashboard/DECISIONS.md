@@ -470,6 +470,20 @@ already made, and lists it in its pull request; for anything else it proposes an
   word for a pull request, the accounts its tool knows and the one runs use, so OpenAgent
   names no git host. One card per host the projects' remotes are on, a self-hosted one its
   own; a host no package answers for is a plain line, and a project with no remote is none.
+- Each account is said once, the coding agents' in the account-rotation skill's card ("Coding
+  agent accounts") and the git hosts' in one card ("Git host accounts", a section per host by
+  its package's name and logo, so a host added later is one more section), in the same rows, and where an account works
+  is a line of chips under its row: this computer, then each server, its dot green, amber, red
+  or grey, its press there (Allow, Take off, the pick of a switched account) on the chip. The
+  dashboard fills that line in the skill's card through the card's `accountWhere`, so the skill
+  knows no server. Above the accounts stands only what a server asks of the person. Picked over
+  a card that listed every account again under each server, and over one card holding the
+  skill's accounts and the git hosts', which would have made the skill the dashboard's.
+- A git host's account shows its picture at the host, the address its package gives (the
+  dashboard names no host's), and its ⋯ is always there: Use for runs, and Remove for any
+  account, the one runs use too, after a yes that says runs then have none until one is added.
+  Picked over a ⋯ seen only on a hover and the account in use kept until another was picked,
+  which left a person with one account no way to take it off.
   A card is green when there is nothing to do, amber for a step, grey for a tool not here.
 - What runs need and do not have is a first step of the Overview's onboarding: the coding
   agent's only once it is missing (install the tool, then log in), each git host's always,

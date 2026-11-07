@@ -64,7 +64,7 @@ export const USAGE = `usage: github <command>
   people <email>...            the GitHub accounts behind the project's commit emails: [{ email, login, avatar }], one per email a commit of the
                                repository's is signed with by an account, or that is GitHub's own address for one (at most 20 asked at once); any other email is left out
   accounts [--host <host>]     OpenAgent's own GitHub accounts and the one its runs use: { host, name, requestWord, logo, tool, installed,
-                               install, accounts: [{ login, runs, ok }], loggingIn? }; a host other than github.com is refused (not-mine)
+                               install, accounts: [{ login, runs, ok, avatar }], loggingIn? }; a host other than github.com is refused (not-mine)
   use <login>                  OpenAgent's runs use <login> from now on, one of its accounts
   login                        add an account to OpenAgent, logged in in the browser: { code, url }, the code typed at url; gh waits on for the yes.
   stop-login                   give up the login under way: its gh stops waiting, nothing of it is kept.
@@ -385,7 +385,8 @@ const COMMANDS: Record<string, Command> = {
       tool: 'gh',
       installed: state.installed,
       ...(installWith !== undefined ? { install: installWith } : {}),
-      accounts: accounts.map(a => ({ ...a, runs: a.login === runs })),
+      // Each one's public picture, so a page shows whose it is with no login asked.
+      accounts: accounts.map(a => ({ ...a, runs: a.login === runs, avatar: `https://github.com/${encodeURIComponent(a.login)}.png?size=64` })),
       ...(loggingIn ? { loggingIn } : {}),
       // The install a press started: going on, or why it failed while gh is still not here.
       ...(install?.running ? { installing: true } : !state.installed && install?.failed !== undefined ? { installFailed: install.failed } : {}),
