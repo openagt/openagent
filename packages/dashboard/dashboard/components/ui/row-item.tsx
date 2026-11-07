@@ -27,11 +27,10 @@ export const rowLeftClass = 'flex min-w-0 flex-1 items-center gap-0.5 max-sm:ove
  * and no wrap, so a name that lands late moves nothing; the later items give way first, each cut
  * short, and on a phone the row scrolls sideways, its right edge faded to say so.
  */
-export function RowAboveBox({ children, end }: { children: ReactNode; end?: ReactNode }) {
+export function RowAboveBox({ children }: { children: ReactNode }) {
   return (
     <div className={cn('mb-1', rowClass)}>
       <div className={rowLeftClass}>{children}</div>
-      {end && <div className="shrink-0">{end}</div>}
     </div>
   )
 }

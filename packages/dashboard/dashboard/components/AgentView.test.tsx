@@ -68,14 +68,13 @@ vi.mock('./AgentWorkBar.js', () => ({
 }))
 // The row above the box has its own tests: here it says what the view told it.
 vi.mock('./SessionRow.js', () => ({
-  SessionRow: ({ runsOn, elsewhere, startedFrom, worksOn, projectName, gitAccount }: { runsOn: string; elsewhere: boolean; startedFrom?: string; worksOn?: string; projectName?: string | null; gitAccount?: string }) => (
+  SessionRow: ({ runsOn, elsewhere, startedFrom, worksOn, projectName }: { runsOn: string; elsewhere: boolean; startedFrom?: string; worksOn?: string; projectName?: string | null }) => (
     <div data-testid="row">
       <span data-testid="row-runs-on">{runsOn}</span>
       <span data-testid="row-elsewhere">{String(elsewhere)}</span>
       <span data-testid="row-project">{projectName ?? ''}</span>
       <span data-testid="row-started-from" data-value={startedFrom ?? ''} />
       <span data-testid="row-works-on" data-value={worksOn ?? ''} />
-      <span data-testid="row-account" data-value={gitAccount ?? ''} />
     </div>
   ),
 }))
@@ -83,7 +82,7 @@ vi.mock('./SessionRow.js', () => ({
 let queuedIds = 0
 const edited: string[] = []
 vi.mock('./AgentComposer.js', () => ({
-  AgentComposer: ({ live, model, context, controls, onQueued, editInBox, row, publish, prBase }: { publish?: string; prBase?: string; live: boolean; model?: string; context?: ReactNode; controls?: ReactNode; onQueued?: (message: { id: string; text: string; later: boolean }) => void; editInBox?: { current: ((text: string) => void) | null }; row?: ReactNode }) => {
+  AgentComposer: ({ live, model, context, controls, onQueued, editInBox, row, publish, prBase, agent, gitAccount }: { publish?: string; prBase?: string; live: boolean; model?: string; context?: ReactNode; controls?: ReactNode; onQueued?: (message: { id: string; text: string; later: boolean }) => void; editInBox?: { current: ((text: string) => void) | null }; row?: ReactNode; agent?: string; gitAccount?: string }) => {
     if (editInBox) editInBox.current = text => void edited.push(text)
     return (
       <>
@@ -92,6 +91,8 @@ vi.mock('./AgentComposer.js', () => ({
         <button type="button" onClick={() => onQueued?.({ id: `m${++queuedIds}`, text: 'and then this', later: false })}>queue-one</button>
         <span data-testid="composer-model">{model ?? ''}</span>
         <span data-testid="composer-auto" data-publish={publish ?? ''} data-pr-base={prBase ?? ''} />
+        <span data-testid="composer-agent" data-value={agent ?? ''} />
+        <span data-testid="composer-account" data-value={gitAccount ?? ''} />
         <span data-testid="composer-context">{context}</span>
         <span data-testid="composer-live">{String(live)}</span>
       </>
@@ -801,18 +802,19 @@ describe('the page\'s two bars', () => {
 })
 
 describe('a run the launcher just started, before its record is there', () => {
-  const picks = { branch: 'gh-pages', gitAccount: 'octo', publish: 'pr', prBase: 'gh-pages', effort: 'high' }
+  const picks = { branch: 'gh-pages', gitAccount: 'octo', publish: 'pr', prBase: 'gh-pages', effort: 'high', agent: 'reviewer' }
   const row = (id: string, name: string) => screen.getByTestId(id).dataset[name]
 
   test('its page says what the launcher said at once; the record says it from then on', () => {
     const { rerender } = render(view({ live: true, events: [], picks }))
     expect(row('row-started-from', 'value')).toBe('gh-pages')
-    expect(row('row-account', 'value')).toBe('octo')
+    expect(row('composer-account', 'value')).toBe('octo')
+    expect(row('composer-agent', 'value')).toBe('reviewer')
     expect(row('composer-auto', 'publish')).toBe('pr')
     expect(row('composer-auto', 'prBase')).toBe('gh-pages')
     rerender(view({ live: true, events: [], picks, card: { status: 'running' as const, base: 'other', gitAccount: 'hubot', publish: 'commit' } }))
     expect(row('row-started-from', 'value')).toBe('other')
-    expect(row('row-account', 'value')).toBe('hubot')
+    expect(row('composer-account', 'value')).toBe('hubot')
     expect(row('composer-auto', 'publish')).toBe('commit')
   })
 

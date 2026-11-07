@@ -2,10 +2,6 @@ import { afterEach, describe, expect, test, vi } from 'vitest'
 import { cleanup, render, screen } from '@testing-library/react'
 import { cloneElement, type ReactElement, type ReactNode } from 'react'
 
-vi.mock('../rpc/logins.js', () => ({ onGitHosts: async () => ({ hosts: [{ host: 'github.com', projects: [], provider: { name: 'GitHub', logo: '<svg></svg>', tool: 'gh', installed: true, accounts: [{ login: 'today', runs: true, ok: true }] } }] }), onAgentState: async () => undefined }))
-vi.mock('../rpc/server-logins.js', () => ({ onServerLogins: async () => ({ computer: 'Studio', servers: [] }) }))
-vi.mock('../rpc/agents.js', () => ({ onAgentsList: async () => ({ agents: [{ id: 'default', name: 'Default', skills: ['ask', 'github'], accounts: {} }, { id: 'reviewer', name: 'Reviewer', skills: ['ask'], accounts: {} }], skills: [], claude: [], codex: [] }) }))
-
 // What each item's hover says is on the page as a line, and its trigger is what holds the button.
 vi.mock('./ui/tooltip.js', () => ({
   Tooltip: ({ children }: { children: ReactNode }) => <>{children}</>,
@@ -17,33 +13,18 @@ const { SessionRow } = await import('./SessionRow.js')
 
 afterEach(cleanup)
 
-const facts = { runsOn: 'This machine', elsewhere: false, projectName: 'site', startedFrom: 'main', worksOn: 'agent-fix-login', gitHost: { url: 'https://github.com/o/r', name: 'GitHub' } }
+const facts = { runsOn: 'This machine', elsewhere: false, projectName: 'site', startedFrom: 'main', worksOn: 'agent-fix-login' }
 const words = (container: HTMLElement) => [...container.querySelectorAll('button')].map(button => button.textContent)
 
 describe('a session\'s row above the box', () => {
-  test('where it runs, the project, the branch, at the other end the git host: every one off', async () => {
+  test('where it runs, the project, the branch: every one off, and nothing else, as the launcher\'s row (the agent and the account are under the box)', () => {
     const { container } = render(<SessionRow {...facts} />)
-    await screen.findByRole('button', { name: 'GitHub' })
-    expect(words(container)).toEqual(['This machine', 'site', 'main', 'GitHub'])
-    for (const button of container.querySelectorAll('button')) expect(button.disabled).toBe(true)
-    expect(screen.getByRole('button', { name: 'GitHub' }).closest('.shrink-0')).toBeTruthy()
-    // The account the next run would use is not the one this run used.
-    expect(container.textContent).not.toContain('today')
-  })
-
-  test('the agent the session is on, by its name once the agents are read, by its id for one this computer lacks; nothing for the default', async () => {
-    const { container, rerender } = render(<SessionRow {...facts} gitHost={null} agent="reviewer" />)
-    await screen.findByRole('button', { name: 'Reviewer' })
-    expect(words(container)).toEqual(['This machine', 'site', 'main', 'Reviewer'])
-    expect(screen.getAllByRole('tooltip').map(tip => tip.textContent)).toContain('On the agent Reviewer: its skills and accounts')
-    rerender(<SessionRow {...facts} gitHost={null} agent="elsewhere-made" />)
-    expect(words(container)).toContain('elsewhere-made')
-    rerender(<SessionRow {...facts} gitHost={null} />)
     expect(words(container)).toEqual(['This machine', 'site', 'main'])
+    for (const button of container.querySelectorAll('button')) expect(button.disabled).toBe(true)
   })
 
   test('a session with no project shows the repos it has, each said with where it was copied from', () => {
-    const { container } = render(<SessionRow runsOn="This machine" elsewhere={false} gitHost={null} repos={[{ name: 'vike', from: '/home/me/oss/vike' }, { name: 'notes', from: '/home/me/notes' }]} />)
+    const { container } = render(<SessionRow runsOn="This machine" elsewhere={false} repos={[{ name: 'vike', from: '/home/me/oss/vike' }, { name: 'notes', from: '/home/me/notes' }]} />)
     expect(container.textContent).toContain('vike')
     expect(container.textContent).toContain('notes')
     expect(screen.getByText("A copy of /home/me/oss/vike, in this session's folder")).toBeTruthy()
@@ -51,15 +32,15 @@ describe('a session\'s row above the box', () => {
   })
 
   test('its height is the row\'s own, whatever has landed: nothing moves when a name lands', () => {
-    const { container } = render(<SessionRow runsOn="This machine" elsewhere={false} gitHost={null} />)
+    const { container } = render(<SessionRow runsOn="This machine" elsewhere={false} />)
     expect(container.firstElementChild!.className.split(' ')).toContain('h-8')
     expect(words(container)).toEqual(['This machine'])
   })
 
   test('no project name yet, or no branch to vouch for: no word for it, never a guess', () => {
-    const { container, rerender } = render(<SessionRow {...facts} projectName={null} gitHost={null} />)
+    const { container, rerender } = render(<SessionRow {...facts} projectName={null} />)
     expect(words(container)).toEqual(['This machine'])
-    rerender(<SessionRow {...facts} startedFrom={undefined} gitHost={null} />)
+    rerender(<SessionRow {...facts} startedFrom={undefined} />)
     expect(words(container)).toEqual(['This machine', 'site'])
   })
 
@@ -68,7 +49,7 @@ describe('a session\'s row above the box', () => {
     ['main', undefined, 'Started from main'],
     ['agent-work', 'agent-work', 'Started from agent-work'],
   ])('the branch\'s hover, started from %s, working on %s', (startedFrom, worksOn, says) => {
-    render(<SessionRow {...facts} startedFrom={startedFrom} worksOn={worksOn} gitHost={null} />)
+    render(<SessionRow {...facts} startedFrom={startedFrom} worksOn={worksOn} />)
     expect(screen.getAllByRole('tooltip').map(tip => tip.textContent)).toContain(says)
     // A disabled button takes no pointer: the hover is on what holds it.
     const button = screen.getByRole('button', { name: startedFrom }) as HTMLButtonElement
@@ -77,21 +58,21 @@ describe('a session\'s row above the box', () => {
   })
 
   test('the branch it says is the one it started from, not the one it works on, which only its hover names', () => {
-    const { container } = render(<SessionRow {...facts} gitHost={null} />)
+    const { container } = render(<SessionRow {...facts} />)
     expect(words(container)).toContain('main')
     expect(words(container).join()).not.toContain('agent-fix-login')
   })
 
   test('a machine and the cloud say what they are: their name, and the mark of not being this computer', () => {
     const dot = (container: HTMLElement) => container.querySelector('button .rounded-full')
-    const { container, rerender } = render(<SessionRow {...facts} gitHost={null} />)
+    const { container, rerender } = render(<SessionRow {...facts} />)
     expect(dot(container)).toBeNull()
-    rerender(<SessionRow {...facts} runsOn="Studio" target="remote" remoteKind="server" elsewhere gitHost={null} />)
+    rerender(<SessionRow {...facts} runsOn="Studio" target="remote" remoteKind="server" elsewhere />)
     expect(words(container)[0]).toBe('Studio')
     expect(dot(container)).toBeTruthy()
-    rerender(<SessionRow {...facts} runsOn="Cloud" target="web" elsewhere gitHost={null} />)
+    rerender(<SessionRow {...facts} runsOn="Cloud" target="web" elsewhere />)
     expect(words(container)[0]).toBe('Cloud')
-    rerender(<SessionRow {...facts} runsOn="GitHub Actions" target="actions" elsewhere gitHost={null} />)
+    rerender(<SessionRow {...facts} runsOn="GitHub Actions" target="actions" elsewhere />)
     expect(words(container)[0]).toBe('GitHub Actions')
   })
 })

@@ -39,11 +39,11 @@ function useAgentLogins(): { devices: AgentLoginsOn[] | undefined; reload: () =>
   return { devices: value, reload }
 }
 
-/** An agent's name by its id; the id itself for one this computer does not have; nothing for none. */
+/** An agent's name by its id, once the agents are read; the id itself for one this computer does not have; nothing for none. */
 export function useAgentName(id: string | undefined): string | undefined {
   const { view } = useAgents()
-  if (id === undefined) return undefined
-  return view?.agents.find(agent => agent.id === id)?.name ?? id
+  if (id === undefined || !view) return undefined
+  return view.agents.find(agent => agent.id === id)?.name ?? id
 }
 
 /** What the editor holds: the agent as it stands, or a new one. */
@@ -100,7 +100,7 @@ function AgentCard({ agent, view, devices, onChanged }: { agent: AgentRecord; vi
   const isDefault = agent.id === DEFAULT_AGENT
   if (editing) return <AgentEditor agent={agent} view={view} onDone={async saved => (setEditing(false), saved ? onChanged() : undefined)} />
   const accounts = [
-    agent.accounts.github !== undefined ? `@${agent.accounts.github} on GitHub` : `GitHub: this computer's${view.github?.computer !== undefined ? ` (@${view.github.computer})` : ''}`,
+    agent.accounts.github !== undefined ? `@${agent.accounts.github} on GitHub` : 'GitHub: whatever the computer uses',
     ...(agent.accounts.claude ? [`Claude: ${agent.accounts.claude.map(id => view.claude.find(account => account.id === id)?.name ?? id).join(', ')}`] : []),
     ...(agent.accounts.codex ? [`Codex: ${agent.accounts.codex.map(id => view.codex.find(account => account.id === id)?.name ?? id).join(', ')}`] : []),
   ]
@@ -211,7 +211,7 @@ function OnDevices({ login, devices, onCopied }: { login: string; devices: Agent
   )
 }
 
-/** This computer's account at GitHub: the value of the select for an agent that names none. */
+/** No account of the agent's own, whatever the computer uses: the value of the select for an agent that names none. */
 const COMPUTERS = ''
 
 /** An agent edited in place, or a new one: the name, the skills ticked, the accounts picked; Save writes it, Cancel leaves it. */
@@ -244,7 +244,7 @@ function AgentEditor({ agent, view, onDone }: { agent?: AgentRecord; view: Agent
       setBusy(false)
     }
   }
-  const githubItems = [{ value: COMPUTERS, label: `This computer's${view.github?.computer !== undefined ? ` (@${view.github.computer})` : ''}` }, ...(view.github?.accounts ?? []).map(login => ({ value: login, label: `@${login}` }))]
+  const githubItems = [{ value: COMPUTERS, label: 'None — whatever the computer uses' }, ...(view.github?.accounts ?? []).map(login => ({ value: login, label: `@${login}` }))]
   return (
     <Card role="region" aria-label={agent ? `Editing ${agent.name}` : 'New agent'}>
       <CardHeader>
