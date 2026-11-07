@@ -87,7 +87,9 @@ export function withAdvice(server: { address: string; user: string }, said: stri
       ? `OpenAgent logs in with this computer's own SSH keys. Check that "ssh ${server.user}@${server.address}" works in a terminal without asking for anything.`
       : /sudo: a password is required|sudo: a terminal is required|sudo: command not found|sudo: not found/.test(said)
         ? `The user ${server.user} cannot become root without a password. Use root, or a user whose sudo asks for none.`
-        : undefined
+        : /Could not resolve hostname/.test(said) && /\.ts\.net$/.test(server.address)
+          ? `${server.address} is a Tailscale name: this computer finds it only while Tailscale is on here. Turn Tailscale on, then try again.`
+          : undefined
   return [said, advice].filter(Boolean).join('\n')
 }
 

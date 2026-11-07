@@ -71,6 +71,11 @@ test('a login that fails says what to do about it: the keys, a changed server, a
 
     assert.match(withAdvice(SERVER, '@ WARNING: REMOTE HOST IDENTIFICATION HAS CHANGED! @\nHost key verification failed.'), /\nThis server shows another key than the one this computer remembers for it\. Nothing was sent to it\.$/)
     assert.equal(withAdvice(SERVER, 'E: Unable to locate package git'), 'E: Unable to locate package git')
+    assert.equal(
+      withAdvice({ address: 'pc.tail1.ts.net', user: 'ada' }, 'ssh: Could not resolve hostname pc.tail1.ts.net: nodename nor servname provided, or not known'),
+      'ssh: Could not resolve hostname pc.tail1.ts.net: nodename nor servname provided, or not known\npc.tail1.ts.net is a Tailscale name: this computer finds it only while Tailscale is on here. Turn Tailscale on, then try again.',
+    )
+    assert.equal(withAdvice(SERVER, 'ssh: Could not resolve hostname pc.local: nodename nor servname provided'), 'ssh: Could not resolve hostname pc.local: nodename nor servname provided')
   } finally {
     await home.remove()
   }

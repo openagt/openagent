@@ -44,7 +44,7 @@ export function State({ tone, children }: { tone: 'working' | 'good' | 'warn' | 
       ) : tone === 'bad' ? (
         <CircleX aria-hidden className="h-3 w-3 shrink-0" />
       ) : (
-        <span aria-hidden className={cn('h-1.5 w-1.5 shrink-0 rounded-full', tone === 'good' ? 'bg-[var(--color-primary)]' : 'bg-muted-foreground/40')} />
+        <span aria-hidden className={cn('h-1.5 w-1.5 shrink-0 rounded-full', tone === 'good' ? 'bg-success' : 'bg-muted-foreground/40')} />
       )}
       {children}
     </span>
