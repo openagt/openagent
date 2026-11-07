@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest'
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { forgetRemembered } from '../lib/use-async.js'
 
-const rpc = vi.hoisted(() => ({ onAgentsList: vi.fn(), sendSaveAgent: vi.fn(), sendRemoveAgent: vi.fn() }))
+const rpc = vi.hoisted(() => ({ onAgentsList: vi.fn(), sendSaveAgent: vi.fn(), sendRemoveAgent: vi.fn(), onAgentLogins: vi.fn(), sendCopyAgentLogins: vi.fn() }))
 vi.mock('../rpc/agents.js', () => rpc)
 const route = vi.hoisted(() => ({ openAgents: vi.fn() }))
 vi.mock('../lib/use-route.js', () => route)
@@ -34,6 +34,8 @@ const VIEW = {
 
 beforeEach(() => {
   rpc.onAgentsList.mockResolvedValue(VIEW)
+  rpc.onAgentLogins.mockResolvedValue([])
+  rpc.sendCopyAgentLogins.mockResolvedValue({ ok: true })
   rpc.sendSaveAgent.mockResolvedValue({ ok: true, id: 'social' })
   rpc.sendRemoveAgent.mockResolvedValue({ ok: true })
 })
@@ -86,6 +88,22 @@ describe('the Agents page', () => {
     fireEvent.click(within(editor).getByRole('button', { name: 'Cancel' }))
     fireEvent.click(screen.getByRole('button', { name: 'Edit Default' }))
     expect((screen.getByLabelText('Name') as HTMLInputElement).disabled).toBe(true)
+  })
+
+  test('where an agent\u2019s GitHub account is: one line per device, on it or not, with why; "Copy again" for one that failed copies now and reads again; nothing for an agent that names none', async () => {
+    rpc.onAgentLogins.mockResolvedValue([
+      { machineId: 'm1', label: 'Droplet', reachable: true, github: { 'octo-agent': { state: 'there' } } },
+      { machineId: 'm2', label: 'Laptop', reachable: true, github: { 'octo-agent': { state: 'failed', error: 'GitHub did not take the login' } } },
+      { machineId: 'm3', label: 'Studio', reachable: false, github: {} },
+    ])
+    render(<AgentsPage />)
+    const where = await screen.findByRole('list', { name: 'Where @octo-agent is' })
+    expect([...where.querySelectorAll('li')].map(li => li.textContent).slice(0, 3)).toEqual(['on Droplet', 'Laptop: not copied — GitHub did not take the login', 'Studio: not reached'])
+    fireEvent.click(within(where).getByRole('button', { name: 'Copy again' }))
+    await waitFor(() => expect(rpc.sendCopyAgentLogins).toHaveBeenCalled())
+    await waitFor(() => expect(rpc.onAgentLogins).toHaveBeenCalledTimes(2))
+    expect(screen.queryByRole('list', { name: /Where @/ })).toBe(where)
+    expect(screen.getAllByRole('list', { name: /Where @/ })).toHaveLength(1)
   })
 
   test('removing an agent asks first, then removes it and reads the list again', async () => {

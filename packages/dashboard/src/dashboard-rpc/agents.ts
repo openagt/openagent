@@ -5,8 +5,10 @@ import { agentIdOf, DEFAULT_AGENT, DEFAULT_AGENT_SKILLS, isAgentId, isAgentName,
 import { carriedSkills, GROUPS } from '../project-skills/catalogue.js'
 import { onAgentAccounts, type AccountResult } from './accounts.js'
 import { onGitHosts } from './logins.js'
+import { agentLoginsOn, syncLogins, type AgentLoginsOn } from '../dashboard/logins-sync.js'
 
 export type { AgentAccounts, AgentRecord } from '@openagt/agent-data'
+export type { AgentLoginsOn } from '../dashboard/logins-sync.js'
 
 // The Agents page (Rom's design): an agent is a name, a set of skills and a set of accounts, kept
 // as one file each in the personal folder, so every computer that syncs it has the same agents.
@@ -125,7 +127,22 @@ export async function sendSaveAgent(change: AgentChange): Promise<({ ok: true; i
   }
   const written = await writeAgent({ id, name, skills: [...new Set(skills)], accounts })
   if (!written.ok && !written.committed) return { ok: false, error: written.error }
+  // Its GitHub account goes to every device of the person's now, not a minute from now; the page follows it.
+  if (accounts.github !== undefined && process.env['OPENAGENT_SERVER'] !== '1') void syncLogins().catch(() => [])
   return { ok: true, id }
+}
+
+/** How the agents' GitHub accounts stand on each device of the person's. A server copies to no device: none. */
+export async function onAgentLogins(): Promise<AgentLoginsOn[]> {
+  if (process.env['OPENAGENT_SERVER'] === '1') return []
+  return agentLoginsOn()
+}
+
+/** Copy the agents' GitHub accounts to every device again, now: the press for one that failed. */
+export async function sendCopyAgentLogins(): Promise<AccountResult> {
+  if (process.env['OPENAGENT_SERVER'] === '1') return { ok: false, error: 'A server copies logins to no device.' }
+  await syncLogins()
+  return { ok: true }
 }
 
 /** Remove an agent; the default agent stays. */

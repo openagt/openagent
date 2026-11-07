@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
-import { Bot, Loader2, Pencil, Plus, Trash2 } from 'lucide-react'
-import { onAgentsList, sendRemoveAgent, sendSaveAgent, type AgentRecord, type AgentsView } from '../rpc/agents.js'
+import { Bot, Check, Loader2, Pencil, Plus, RefreshCw, Trash2 } from 'lucide-react'
+import { onAgentLogins, onAgentsList, sendCopyAgentLogins, sendRemoveAgent, sendSaveAgent, type AgentLoginsOn, type AgentRecord, type AgentsView } from '../rpc/agents.js'
 import { DEFAULT_AGENT } from '../../src/client.js'
 import { usePolled } from '../lib/use-async.js'
 import { cn } from '../lib/utils.js'
@@ -30,6 +30,15 @@ export function useAgents(): { view: AgentsView | undefined; reload: () => Promi
   return { view: value, reload }
 }
 
+/** How often the devices are asked how the agents' GitHub accounts stand there. */
+const DEVICES_MS = 15_000
+
+/** How the agents' GitHub accounts stand on each device of the person's. */
+function useAgentLogins(): { devices: AgentLoginsOn[] | undefined; reload: () => Promise<void> } {
+  const { value, reload } = usePolled<AgentLoginsOn[] | undefined>(onAgentLogins, undefined, DEVICES_MS, [], 'previous')
+  return { devices: value, reload }
+}
+
 /** An agent's name by its id; the id itself for one this computer does not have; nothing for none. */
 export function useAgentName(id: string | undefined): string | undefined {
   const { view } = useAgents()
@@ -54,7 +63,12 @@ function draftOf(agent?: AgentRecord): Draft {
 /** The Agents page. */
 export function AgentsPage() {
   const { view, reload } = useAgents()
+  const { devices, reload: reloadDevices } = useAgentLogins()
   const [adding, setAdding] = useState(false)
+  const changed = async () => {
+    await reload()
+    await reloadDevices()
+  }
   return (
     <Page
       title="Agents"
@@ -70,9 +84,9 @@ export function AgentsPage() {
         <Skeleton className="h-32 w-full" />
       ) : (
         <div className="space-y-4">
-          {adding && <AgentEditor view={view} onDone={async saved => (setAdding(false), saved ? reload() : undefined)} />}
+          {adding && <AgentEditor view={view} onDone={async saved => (setAdding(false), saved ? changed() : undefined)} />}
           {view.agents.map(agent => (
-            <AgentCard key={agent.id} agent={agent} view={view} onChanged={reload} />
+            <AgentCard key={agent.id} agent={agent} view={view} devices={devices} onChanged={changed} />
           ))}
         </div>
       )}
@@ -81,7 +95,7 @@ export function AgentsPage() {
 }
 
 /** One agent: its name, skills and accounts, and the presses that edit or remove it. */
-function AgentCard({ agent, view, onChanged }: { agent: AgentRecord; view: AgentsView; onChanged: () => Promise<void> }) {
+function AgentCard({ agent, view, devices, onChanged }: { agent: AgentRecord; view: AgentsView; devices: AgentLoginsOn[] | undefined; onChanged: () => Promise<void> }) {
   const [editing, setEditing] = useState(false)
   const isDefault = agent.id === DEFAULT_AGENT
   if (editing) return <AgentEditor agent={agent} view={view} onDone={async saved => (setEditing(false), saved ? onChanged() : undefined)} />
@@ -133,8 +147,67 @@ function AgentCard({ agent, view, onChanged }: { agent: AgentRecord; view: Agent
           )}
         </p>
         <p className="text-muted-foreground">{accounts.join(' · ')}</p>
+        {agent.accounts.github !== undefined && devices && devices.length > 0 && <OnDevices login={agent.accounts.github} devices={devices} onCopied={onChanged} />}
       </CardContent>
     </Card>
+  )
+}
+
+/**
+ * Where an agent's GitHub account is: one line per device of the person's, as the last copy left
+ * it. The account goes to every device by itself when the agent is saved and every minute after;
+ * "Copy again" is for one that failed, with why.
+ */
+function OnDevices({ login, devices, onCopied }: { login: string; devices: AgentLoginsOn[]; onCopied: () => Promise<void> }) {
+  const [copying, setCopying] = useState(false)
+  const [error, setError] = useState<string | undefined>()
+  const copy = async () => {
+    setCopying(true)
+    setError(undefined)
+    try {
+      const done = await sendCopyAgentLogins()
+      if (!done.ok) setError(done.error)
+      await onCopied()
+    } finally {
+      setCopying(false)
+    }
+  }
+  const failed = devices.some(device => device.reachable && device.github[login]?.state === 'failed')
+  return (
+    <ul aria-label={`Where @${login} is`} className="space-y-0.5 text-xs">
+      {devices.map(device => {
+        const on = device.github[login]
+        return (
+          <li key={device.machineId} className="flex items-center gap-1.5">
+            {!device.reachable ? (
+              <span className="text-muted-foreground">{device.label}: not reached</span>
+            ) : on?.state === 'there' ? (
+              <>
+                <Check className="size-3 text-success" aria-hidden />
+                <span>on {device.label}</span>
+              </>
+            ) : on?.state === 'failed' ? (
+              <span className="text-warning">{`${device.label}: not copied — ${on.error ?? 'it did not take it'}`}</span>
+            ) : (
+              <span className="text-muted-foreground">{device.label}: not copied yet</span>
+            )}
+          </li>
+        )
+      })}
+      {failed && (
+        <li>
+          <Button size="xs" variant="ghost" className="-ml-2 font-normal" disabled={copying} onClick={() => void copy()}>
+            {copying ? <Loader2 className="size-3 animate-spin" aria-hidden /> : <RefreshCw className="size-3" aria-hidden />}
+            {copying ? 'Copying…' : 'Copy again'}
+          </Button>
+          {error !== undefined && (
+            <span role="alert" className="ml-2 text-danger">
+              {error}
+            </span>
+          )}
+        </li>
+      )}
+    </ul>
   )
 }
 
