@@ -354,7 +354,7 @@ agents() {
     as_person "$user" "$home" 'curl -fsSL https://chatgpt.com/codex/install.sh | sh' || fail "Codex could not be installed for $user."
   fi
 }
-# Every person's, by the users this helper made.
+# Every person's, by the users this helper made; and their home locked, for a person made before homes were.
 all_agents() {
   local file user
   lock
@@ -363,6 +363,7 @@ all_agents() {
     user=$(basename "$file" .env)
     user_ok "$user" && is_user "$user" || continue
     [ "$(getent passwd "$user" | cut -d: -f6)" = "/home/$user" ] || continue
+    chmod 700 "/home/$user"
     agents "$user" "/home/$user"
   done
 }
