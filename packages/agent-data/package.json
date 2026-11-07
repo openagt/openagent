@@ -26,6 +26,10 @@
     "./names": {
       "types": "./dist/names.d.ts",
       "default": "./dist/names.js"
+    },
+    "./repository-address": {
+      "types": "./dist/repository-address.d.ts",
+      "default": "./dist/repository-address.js"
     }
   },
   "scripts": {

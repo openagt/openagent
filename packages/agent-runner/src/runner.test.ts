@@ -154,7 +154,7 @@ test('a resumed run continues on the tool its record names, and a Codex run with
     const homeBefore = process.env.XDG_CONFIG_HOME
     process.env.XDG_CONFIG_HOME = home
     try {
-      await writeAgent({ id: 'reviewer', name: 'Reviewer', skills: ['ask'], accounts: { github: 'octo-one', claude: ['Dani', 'Nobody'] } })
+      await writeAgent({ id: 'reviewer', name: 'Reviewer', skills: ['ask'], accounts: { github: 'octo-one', claude: ['Dani', 'Nobody'] }, projectSkills: true })
       addAccount('Dani', 'x', accountsPath('claude'))
       const first = await runCommand(repo, { prompt: 'Read the docs', driver: codex('Read.'), host: 'this-box', pid: 4242, now: () => NOW, gitHost: { requestOfBranch: async () => undefined }, gitAccount: 'octo-one', agent: 'reviewer', skillsOff: ['ask'], projectSkills: 'none' })
       assert.equal(first.status, 'done')

@@ -31,13 +31,13 @@ test('the agent named is read from the personal folder; one this computer does n
   const before = process.env.XDG_CONFIG_HOME
   process.env.XDG_CONFIG_HOME = dir
   try {
-    await writeAgent({ id: 'reviewer', name: 'Reviewer', skills: ['ask', 'readability'], accounts: { github: 'octo-agent', claude: ['Dani'] } })
+    await writeAgent({ id: 'reviewer', name: 'Reviewer', skills: ['ask', 'readability'], accounts: { github: 'octo-agent', claude: ['Dani'] }, projectSkills: true })
     const said: string[] = []
     const log = (line: string): void => void said.push(line)
-    assert.deepEqual(await runAgent('reviewer', log), { id: 'reviewer', name: 'Reviewer', skills: ['ask', 'readability'], accounts: { github: 'octo-agent', claude: ['Dani'] } })
-    assert.deepEqual(await runAgent(undefined, log), { id: 'default', name: 'Default', skills: ['ask', 'github'], accounts: {} })
+    assert.deepEqual(await runAgent('reviewer', log), { id: 'reviewer', name: 'Reviewer', skills: ['ask', 'readability'], accounts: { github: 'octo-agent', claude: ['Dani'] }, projectSkills: true })
+    assert.deepEqual(await runAgent(undefined, log), { id: 'default', name: 'Default', skills: ['ask', 'github'], accounts: {}, projectSkills: true })
     assert.deepEqual(said, [])
-    assert.deepEqual(await runAgent('gone', log), { id: 'default', name: 'Default', skills: ['ask', 'github'], accounts: {} })
+    assert.deepEqual(await runAgent('gone', log), { id: 'default', name: 'Default', skills: ['ask', 'github'], accounts: {}, projectSkills: true })
     assert.match(said[0]!, /no agent gone on this computer: the run is on the default agent/)
   } finally {
     if (before === undefined) delete process.env.XDG_CONFIG_HOME

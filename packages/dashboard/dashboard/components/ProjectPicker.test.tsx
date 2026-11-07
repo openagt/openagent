@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest'
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { openMenu } from '../test-utils.js'
 import { forgetRemembered } from '../lib/use-async.js'
 import type { ProjectSummary } from '../../src/index.js'
@@ -7,7 +7,11 @@ import type { ProjectSummary } from '../../src/index.js'
 const onRepos = vi.hoisted(() => vi.fn())
 const sendAddRepoFolder = vi.hoisted(() => vi.fn())
 const sendAddProject = vi.hoisted(() => vi.fn())
-vi.mock('../rpc/projects.js', () => ({ onRepos, sendAddRepoFolder, sendAddProject, sendPickProjectDirectory: vi.fn(), onCloneTarget: vi.fn(), sendAddProjectFromAddress: vi.fn() }))
+const onCloneTarget = vi.hoisted(() => vi.fn())
+const sendAddProjectFromAddress = vi.hoisted(() => vi.fn())
+vi.mock('../rpc/projects.js', () => ({ onRepos, sendAddRepoFolder, sendAddProject, sendPickProjectDirectory: vi.fn(), onCloneTarget, sendAddProjectFromAddress }))
+const MACBOOK = { id: 'http://127.0.0.1:4210', url: 'http://127.0.0.1:4210', label: 'Suleimans-MacBook-Pro' }
+vi.mock('../lib/machines.js', () => ({ useMachines: () => [MACBOOK] }))
 
 const { ProjectPicker, REPOS_SHOWN, shownAddress } = await import('./ProjectPicker.js')
 
@@ -24,10 +28,12 @@ afterEach(() => {
   vi.clearAllMocks()
 })
 
+const NO_PROJECT = { label: 'No project', tip: 'The session works in a folder of its own' }
+
 function renderPicker(over: Partial<Parameters<typeof ProjectPicker>[0]> = {}) {
   const onPick = vi.fn()
   const onProjectAdded = vi.fn()
-  const props = { projectId: 'session', projects: [ALPHA], busy: false, onPick, onProjectAdded, ...over }
+  const props = { look: 'row' as const, none: NO_PROJECT, picked: null, projects: [ALPHA], busy: false, onPick, onProjectAdded, ...over }
   const view = render(<ProjectPicker {...props} />)
   return { onPick, onProjectAdded, props, ...view }
 }
@@ -48,8 +54,63 @@ describe('ProjectPicker', () => {
     renderPicker()
     expect(trigger().textContent).toBe('No project')
     cleanup()
-    renderPicker({ projectId: 'alpha-1', projectName: 'alpha' })
+    renderPicker({ picked: 'alpha-1', pickedName: 'alpha' })
     expect(trigger().textContent).toBe('alpha')
+  })
+
+  test('in the sidebar: the same menu under a full-width button that names the project every page shows, or all of them; a bar while the one the address names is not read', async () => {
+    const { rerender, props } = renderPicker({ look: 'sidebar', none: { label: 'All projects' } })
+    expect(screen.getByRole('combobox', { name: 'Project: All projects' }).textContent).toBe('All projects')
+    rerender(<ProjectPicker {...props} look="sidebar" none={{ label: 'All projects' }} picked="alpha-1" />)
+    expect(screen.getByRole('combobox', { name: 'Project: alpha' }).textContent).toBe('alpha')
+    await openMenu(screen.getByRole('combobox', { name: 'Project: alpha' }))
+    await screen.findByRole('option', { name: /vike/ })
+    expect(options()).toEqual(['All projects', 'alpha', 'vikegithub.com/vikejs/vike', 'notes/home/me/notes'])
+    fireEvent.click(screen.getByRole('option', { name: 'All projects' }))
+    expect(props.onPick).toHaveBeenLastCalledWith(null)
+    rerender(<ProjectPicker {...props} look="sidebar" none={{ label: 'All projects' }} picked="alpha-1" pending />)
+    expect((screen.getByRole('combobox', { name: 'Project: loading' }) as HTMLButtonElement).disabled).toBe(true)
+  })
+
+  test("a project's row says what is wrong with it, that it is not activated, how its records are kept, or which other computer of the person's has it", async () => {
+    const stranded: ProjectSummary = { ...ALPHA, errors: [{ code: 'data-sync', message: 'the data branch could not be pushed: Permission denied (publickey)', since: '2026-08-20T10:00:00.000Z' }] }
+    const idle: ProjectSummary = { id: 'beta-2', path: '/home/me/beta', name: 'beta', activated: false, gitHost: true }
+    const local: ProjectSummary = { id: 'gamma-3', path: '/home/me/gamma', name: 'gamma', activated: true, gitHost: true, local: 'no-remote' }
+    const kept: ProjectSummary = { id: 'delta-4', path: '/home/me/delta', name: 'delta', activated: true, gitHost: true, local: 'kept' }
+    const there: ProjectSummary = { id: 'test-project-2~abc', path: '/Users/me/test-project', name: 'test-project', activated: true, gitHost: true, machine: MACBOOK.id }
+    renderPicker({ projects: [stranded, idle, local, kept, there] })
+    await openMenu(trigger())
+    const broken = screen.getByRole('option', { name: /alpha/ })
+    expect(broken.querySelector('.bg-danger')).toBeTruthy()
+    expect(within(broken).getByText('Not syncing with the remote').getAttribute('title')).toContain('Permission denied (publickey)')
+    expect(within(screen.getByRole('option', { name: /beta/ })).getByText('Not activated')).toBeTruthy()
+    expect(within(screen.getByRole('option', { name: /gamma/ })).getByText('Local only, no remote').className).toContain('text-muted-foreground')
+    expect(within(screen.getByRole('option', { name: /delta/ })).getByText('Records kept on this machine')).toBeTruthy()
+    expect(within(screen.getByRole('option', { name: /test-project/ })).getByText('on Suleimans-MacBook-Pro')).toBeTruthy()
+    expect(within(screen.getByRole('option', { name: /gamma/ })).queryByText(/^on /)).toBeNull()
+  })
+
+  test("a repository's address typed into the search is offered to add, unless a project or repo has it; picked, the trust question says where it is cloned to, and on a yes it is a project", async () => {
+    onCloneTarget.mockResolvedValue({ ok: true, address: 'github.com/ada/shop', path: '/home/me/projects/shop' })
+    sendAddProjectFromAddress.mockResolvedValue({ ok: true, alreadyActivated: false, path: '/home/me/projects/shop' })
+    const { onPick, onProjectAdded, props, rerender } = renderPicker()
+    await openMenu(trigger())
+    await screen.findByRole('option', { name: /vike/ })
+    fireEvent.change(search(), { target: { value: 'github.com/vikejs/vike' } })
+    expect(options()).toEqual(['vikegithub.com/vikejs/vike'])
+    fireEvent.change(search(), { target: { value: 'ada/shop' } })
+    expect(screen.queryAllByRole('option')).toEqual([])
+    fireEvent.change(search(), { target: { value: 'https://github.com/ada/shop' } })
+    expect(options()).toEqual(['Add github.com/ada/shopCloned to this computer, as a project'])
+    fireEvent.click(screen.getByRole('option', { name: /Add github.com\/ada\/shop/ }))
+    expect(await screen.findByText('Do you trust this repository?')).toBeTruthy()
+    await waitFor(() => expect(onCloneTarget).toHaveBeenCalledWith('https://github.com/ada/shop'))
+    expect(screen.getByText('/home/me/projects/shop')).toBeTruthy()
+    fireEvent.click(screen.getByRole('button', { name: 'I trust it, clone and add it' }))
+    await waitFor(() => expect(sendAddProjectFromAddress).toHaveBeenCalledWith('https://github.com/ada/shop'))
+    await waitFor(() => expect(onProjectAdded).toHaveBeenCalledTimes(1))
+    rerender(<ProjectPicker {...props} projects={[ALPHA, { id: 'shop-5', path: '/home/me/projects/shop', name: 'shop', activated: true, gitHost: true }]} />)
+    await waitFor(() => expect(onPick).toHaveBeenCalledWith('shop-5'))
   })
 
   test('the repos are read as the page opens, before the menu is: the crawl behind them has run by then', async () => {
@@ -96,10 +157,13 @@ describe('ProjectPicker', () => {
   })
 
   test('a project opens its page, and no project the page of a session with none', async () => {
-    const { onPick } = renderPicker({ projectId: 'alpha-1', projectName: 'alpha' })
+    const { onPick } = renderPicker({ picked: 'alpha-1', pickedName: 'alpha' })
     await openMenu(trigger())
+    // The pick is the tick at the row's end; the other rows carry none.
+    expect(screen.getByRole('option', { name: 'alpha' }).lastElementChild!.classList.contains('lucide-check')).toBe(true)
+    expect(screen.getByRole('option', { name: 'No project' }).lastElementChild!.classList.contains('lucide-check')).toBe(false)
     fireEvent.click(await screen.findByRole('option', { name: 'No project' }))
-    expect(onPick).toHaveBeenLastCalledWith('session')
+    expect(onPick).toHaveBeenLastCalledWith(null)
     cleanup()
     const second = renderPicker()
     await openMenu(trigger())

@@ -92,6 +92,8 @@ export interface AgentChange {
   name: string
   skills: string[]
   accounts: AgentAccounts
+  /** Whether its sessions get the project's own skills. */
+  projectSkills: boolean
 }
 
 /**
@@ -111,6 +113,7 @@ export async function sendSaveAgent(change: AgentChange): Promise<({ ok: true; i
   const known = new Set((await skillChoices()).flatMap(group => group.skills.map(skill => skill.name)))
   const skills = Array.isArray(change.skills) ? change.skills : undefined
   if (!skills || skills.some(skill => typeof skill !== 'string' || !known.has(skill))) return { ok: false, error: 'An agent is given skills from the list.' }
+  if (typeof change.projectSkills !== 'boolean') return { ok: false, error: 'Whether an agent gets project skills is yes or no.' }
   const view = await onAgentsList()
   const given = typeof change.accounts === 'object' && change.accounts !== null ? change.accounts : {}
   const accounts: AgentAccounts = {}
@@ -124,7 +127,7 @@ export async function sendSaveAgent(change: AgentChange): Promise<({ ok: true; i
     if (!Array.isArray(picked) || picked.some(one => typeof one !== 'string' || !view[kind].some(account => account.id === one))) return { ok: false, error: `That ${kind === 'claude' ? 'Claude' : 'Codex'} account is not on this computer.` }
     if (picked.length > 0) accounts[kind] = picked
   }
-  const written = await writeAgent({ id, name, skills: [...new Set(skills)], accounts })
+  const written = await writeAgent({ id, name, skills: [...new Set(skills)], accounts, projectSkills: change.projectSkills })
   if (!written.ok && !written.committed) return { ok: false, error: written.error }
   // Its GitHub account goes to every device of the person's now, not a minute from now; the page follows it.
   if (accounts.github !== undefined && process.env['OPENAGENT_SERVER'] !== '1') void syncLogins().catch(() => [])

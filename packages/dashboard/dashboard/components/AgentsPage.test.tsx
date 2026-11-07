@@ -19,8 +19,8 @@ vi.mock('./ui/tooltip.js', async () => {
 const { AgentsPage } = await import('./AgentsPage.js')
 const { AgentMenu } = await import('./AgentMenu.js')
 
-const DEFAULT = { id: 'default', name: 'Default', skills: ['ask', 'github'], accounts: {} }
-const REVIEWER = { id: 'reviewer', name: 'Reviewer', skills: ['ask', 'readability'], accounts: { github: 'octo-agent', claude: ['Dani'] } }
+const DEFAULT = { id: 'default', name: 'Default', skills: ['ask', 'github'], accounts: {}, projectSkills: true }
+const REVIEWER = { id: 'reviewer', name: 'Reviewer', skills: ['ask', 'readability'], accounts: { github: 'octo-agent', claude: ['Dani'] }, projectSkills: false }
 const VIEW = {
   agents: [DEFAULT, REVIEWER],
   skills: [
@@ -56,6 +56,9 @@ describe('the Agents page', () => {
     expect(within(cards[0]!).getByText('GitHub: whatever the computer uses')).toBeTruthy()
     expect(within(cards[1]!).getByText('@octo-agent on GitHub · Claude: Dani')).toBeTruthy()
     expect(within(cards[1]!).getByText('readability')).toBeTruthy()
+    // An agent set to never pick up the project's own skills says so after its list; the default does not.
+    expect(within(cards[1]!).getByText('· no project skills')).toBeTruthy()
+    expect(within(cards[0]!).queryByText('· no project skills')).toBeNull()
     // The default is never removed.
     expect(within(cards[0]!).queryByRole('button', { name: 'Remove Default' })).toBeNull()
     expect(within(cards[1]!).getByRole('button', { name: 'Remove Reviewer' })).toBeTruthy()
@@ -70,7 +73,7 @@ describe('the Agents page', () => {
     fireEvent.click(within(editor).getByLabelText('ux'))
     fireEvent.click(within(editor).getByLabelText('Claude account Dani'))
     fireEvent.click(within(editor).getByRole('button', { name: 'Save' }))
-    await waitFor(() => expect(rpc.sendSaveAgent).toHaveBeenCalledWith({ name: 'Social Media', skills: ['ask', 'github', 'ux'], accounts: { claude: ['Dani'] } }))
+    await waitFor(() => expect(rpc.sendSaveAgent).toHaveBeenCalledWith({ name: 'Social Media', skills: ['ask', 'github', 'ux'], accounts: { claude: ['Dani'] }, projectSkills: true }))
     await waitFor(() => expect(rpc.onAgentsList).toHaveBeenCalledTimes(2))
     expect(screen.queryByRole('region', { name: 'New agent' })).toBeNull()
   })
@@ -81,8 +84,11 @@ describe('the Agents page', () => {
     fireEvent.click(await screen.findByRole('button', { name: 'Edit Reviewer' }))
     const editor = screen.getByRole('region', { name: 'Editing Reviewer' })
     fireEvent.click(within(editor).getByLabelText('readability'))
+    // Its project-skills tick is off as its record says; ticked on, the save says so.
+    expect(within(editor).getByLabelText('Project skills').getAttribute('aria-checked')).toBe('false')
+    fireEvent.click(within(editor).getByLabelText('Project skills'))
     fireEvent.click(within(editor).getByRole('button', { name: 'Save' }))
-    await waitFor(() => expect(rpc.sendSaveAgent).toHaveBeenCalledWith({ id: 'reviewer', name: 'Reviewer', skills: ['ask'], accounts: { github: 'octo-agent', claude: ['Dani'] } }))
+    await waitFor(() => expect(rpc.sendSaveAgent).toHaveBeenCalledWith({ id: 'reviewer', name: 'Reviewer', skills: ['ask'], accounts: { github: 'octo-agent', claude: ['Dani'] }, projectSkills: true }))
     expect((await within(editor).findByRole('alert')).textContent).toContain('no GitHub account stranger')
     // The default's name is not for editing.
     fireEvent.click(within(editor).getByRole('button', { name: 'Cancel' }))

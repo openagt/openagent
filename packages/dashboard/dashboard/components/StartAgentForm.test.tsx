@@ -35,7 +35,7 @@ const onMachineStartCheck = vi.hoisted(() => vi.fn())
 const onMachineLogins = vi.hoisted(() => vi.fn())
 vi.mock('../rpc/machines.js', () => ({ onMachineStartCheck, onMachineLogins }))
 // The agents as read, and the menu as a press that picks the second one.
-const agentsList = vi.hoisted(() => ({ agents: [{ id: 'default', name: 'Default', skills: ['ask', 'github'], accounts: {} }, { id: 'reviewer', name: 'Reviewer', skills: ['ask'], accounts: { github: 'octo-agent' } }] }))
+const agentsList = vi.hoisted(() => ({ agents: [{ id: 'default', name: 'Default', skills: ['ask', 'github'], accounts: {}, projectSkills: true }, { id: 'reviewer', name: 'Reviewer', skills: ['ask'], accounts: { github: 'octo-agent' }, projectSkills: false }] }))
 vi.mock('./AgentsPage.js', () => ({ useAgents: () => ({ view: agentsList, reload: async () => {} }) }))
 vi.mock('./AgentMenu.js', () => ({
   AgentMenu: ({ picked, onPick }: { picked: string | undefined; onPick: (id: string) => void }) => (
@@ -44,7 +44,7 @@ vi.mock('./AgentMenu.js', () => ({
 }))
 // The skills this session gets: a press that picks some, and what it was given.
 vi.mock('./SkillsMenu.js', () => ({
-  NO_PICKS: { on: [], off: [] },
+  agentPicks: (agent: { projectSkills: boolean } | undefined) => (agent?.projectSkills === false ? { on: [], off: [], project: 'none' } : { on: [], off: [] }),
   SkillsMenu: ({ projectId, picks, onChange }: { projectId: string | undefined; picks: { on: string[]; off: string[]; project?: 'none' | string[] }; onChange: (picks: { on: string[]; off: string[]; project?: 'none' | string[] }) => void }) => (
     <button type="button" onClick={() => onChange({ on: ['review'], off: ['github'], project: 'none' })}>{`skills:${projectId ?? 'no project'}:${picks.on.join('+')}/${picks.off.join('+')}/${picks.project === undefined ? 'all' : picks.project === 'none' ? 'none' : picks.project.join('+')}`}</button>
   ),
@@ -539,6 +539,19 @@ describe('StartAgentForm (#1774)', () => {
     await waitFor(() => expect(start).toHaveBeenCalledTimes(2))
     const sent = start.mock.lastCall![2] as Record<string, unknown>
     expect('skillsOn' in sent || 'skillsOff' in sent || 'projectSkills' in sent).toBe(false)
+  })
+
+  test('on an agent set to never pick up project skills, the session starts from none and the Start says so; the next session starts from none again', async () => {
+    onCommands.mockResolvedValue({ commands: [], startHook: true, gitHost: true, remote: true, address: 'github.com/acme/shop' })
+    start.mockResolvedValue({ agentId: 'r1' })
+    prefs.current = { ...prefs.current, agent: 'reviewer' }
+    render(<StartAgentForm {...props} projectName="gemstack" />)
+    await screen.findByText('agent:reviewer')
+    expect(await screen.findByText('skills:p1://none')).toBeTruthy()
+    fireEvent.click(screen.getByText('submit-typed'))
+    await waitFor(() => expect(start).toHaveBeenCalled())
+    expect(start.mock.lastCall![2]).toMatchObject({ agent: 'reviewer', projectSkills: 'none' })
+    expect(screen.getByText('skills:p1://none')).toBeTruthy()
   })
 
   test('a machine that takes no logins of this computer\'s sends the person to the Permissions page', async () => {

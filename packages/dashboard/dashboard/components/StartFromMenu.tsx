@@ -122,8 +122,9 @@ export function StartFromMenu({ projectId, main, local, pick, onPick, busy }: { 
                 <Combobox.List>
                   {(row: Row) => (
                     <Combobox.Item key={row.value} value={row} className={cn(MENU_ITEM_CLASS, 'items-start')}>
-                      <Check className={cn('mt-0.5 h-3.5 w-3.5 shrink-0', row.value === picked.value ? 'opacity-100' : 'opacity-0')} aria-hidden />
-                      {row.description !== undefined ? <OptionLabel label={row.label} description={row.description} /> : <span className="min-w-0 leading-tight [overflow-wrap:anywhere]">{row.label}</span>}
+                      {row.description !== undefined ? <OptionLabel label={row.label} description={row.description} /> : <span className="min-w-0 flex-1 leading-tight [overflow-wrap:anywhere]">{row.label}</span>}
+                      {/* The pick is the tick at the row's end. */}
+                      {row.value === picked.value && <Check className="ml-auto mt-0.5 h-3.5 w-3.5 shrink-0" aria-hidden />}
                     </Combobox.Item>
                   )}
                 </Combobox.List>

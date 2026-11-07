@@ -33,6 +33,11 @@ export interface AgentRecord {
   skills: string[]
   /** The accounts it works as, by name: an account not on the computer a run goes to does not apply there. */
   accounts: AgentAccounts
+  /**
+   * Whether its sessions get the project's own skills, the ones a project keeps in its repo
+   * (Rom's first level): off, a session starts from none, and can still pick them for itself.
+   */
+  projectSkills: boolean
 }
 
 export interface AgentAccounts {
@@ -67,7 +72,7 @@ export function isAgentId(id: unknown): id is string {
 
 /** The default agent as it is before anyone edits it. */
 export function builtInDefault(): AgentRecord {
-  return { id: DEFAULT_AGENT, name: 'Default', skills: [...DEFAULT_AGENT_SKILLS], accounts: {} }
+  return { id: DEFAULT_AGENT, name: 'Default', skills: [...DEFAULT_AGENT_SKILLS], accounts: {}, projectSkills: true }
 }
 
 export function agentsDir(folder: string = personalFolder()): string {
@@ -88,7 +93,7 @@ function readRecord(id: string, text: string): AgentRecord | undefined {
     return undefined
   }
   if (typeof raw !== 'object' || raw === null) return undefined
-  const { name, skills, accounts } = raw as Record<string, unknown>
+  const { name, skills, accounts, projectSkills } = raw as Record<string, unknown>
   if (typeof name !== 'string' || !name.trim()) return undefined
   const names = Array.isArray(skills) ? skills.filter((skill): skill is string => typeof skill === 'string' && ID.test(skill)) : []
   const given = typeof accounts === 'object' && accounts !== null ? (accounts as Record<string, unknown>) : {}
@@ -104,6 +109,7 @@ function readRecord(id: string, text: string): AgentRecord | undefined {
       ...(claude ? { claude } : {}),
       ...(codex ? { codex } : {}),
     },
+    projectSkills: projectSkills !== false,
   }
 }
 
@@ -140,7 +146,7 @@ export async function listAgents(folder: string = personalFolder()): Promise<Age
 export async function writeAgent(record: AgentRecord, deps: ProjectDataDeps = {}): Promise<FileBranchWrite> {
   const folder = deps.folder ?? personalFolder()
   const file = agentFile(folder, record.id)
-  const body = JSON.stringify({ name: record.name, skills: record.skills, accounts: record.accounts }, null, 2) + '\n'
+  const body = JSON.stringify({ name: record.name, skills: record.skills, accounts: record.accounts, projectSkills: record.projectSkills }, null, 2) + '\n'
   return withPersonalFolder(
     folder,
     `agent ${record.name}`,

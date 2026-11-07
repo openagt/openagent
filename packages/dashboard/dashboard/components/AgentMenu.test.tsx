@@ -3,7 +3,7 @@ import { cleanup, render, screen } from '@testing-library/react'
 import { cloneElement, type ReactElement, type ReactNode } from 'react'
 import { forgetRemembered } from '../lib/use-async.js'
 
-vi.mock('../rpc/agents.js', () => ({ onAgentsList: async () => ({ agents: [{ id: 'default', name: 'Default', skills: ['ask', 'github'], accounts: {} }, { id: 'reviewer', name: 'Reviewer', skills: ['ask'], accounts: {} }], skills: [], claude: [], codex: [] }), onAgentLogins: async () => [] }))
+vi.mock('../rpc/agents.js', () => ({ onAgentsList: async () => ({ agents: [{ id: 'default', name: 'Default', skills: ['ask', 'github'], accounts: {}, projectSkills: true }, { id: 'reviewer', name: 'Reviewer', skills: ['ask'], accounts: {}, projectSkills: true }], skills: [], claude: [], codex: [] }), onAgentLogins: async () => [] }))
 // What each item's hover says is on the page as a line, and its trigger is what holds the button.
 vi.mock('./ui/tooltip.js', () => ({
   Tooltip: ({ children }: { children: ReactNode }) => <>{children}</>,

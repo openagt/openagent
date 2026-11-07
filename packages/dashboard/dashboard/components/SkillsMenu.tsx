@@ -38,6 +38,11 @@ export interface SkillPicks {
 
 export const NO_PICKS: SkillPicks = { on: [], off: [] }
 
+/** The picks a session starts from on its agent: none, or no project skill for an agent set to never pick them up (the session still overrides). */
+export function agentPicks(agent: Pick<AgentRecord, 'projectSkills'> | undefined): SkillPicks {
+  return agent?.projectSkills === false ? { on: [], off: [], project: 'none' } : NO_PICKS
+}
+
 /** The names of the skills the session gets of its agent's and the picks: the agent's less the ones off, then the ones on. */
 export function sessionSkills(agent: Pick<AgentRecord, 'skills'> | undefined, picks: SkillPicks): string[] {
   const own = agent?.skills ?? []

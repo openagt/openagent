@@ -54,10 +54,11 @@ interface Draft {
   github?: string | undefined
   claude: Set<string>
   codex: Set<string>
+  projectSkills: boolean
 }
 
 function draftOf(agent?: AgentRecord): Draft {
-  return { ...(agent ? { id: agent.id } : {}), name: agent?.name ?? '', skills: new Set(agent?.skills ?? ['ask', 'github']), ...(agent?.accounts.github !== undefined ? { github: agent.accounts.github } : {}), claude: new Set(agent?.accounts.claude ?? []), codex: new Set(agent?.accounts.codex ?? []) }
+  return { ...(agent ? { id: agent.id } : {}), name: agent?.name ?? '', skills: new Set(agent?.skills ?? ['ask', 'github']), ...(agent?.accounts.github !== undefined ? { github: agent.accounts.github } : {}), claude: new Set(agent?.accounts.claude ?? []), codex: new Set(agent?.accounts.codex ?? []), projectSkills: agent?.projectSkills ?? true }
 }
 
 /** The Agents page. */
@@ -145,6 +146,7 @@ function AgentCard({ agent, view, devices, onChanged }: { agent: AgentRecord; vi
               </span>
             ))
           )}
+          {!agent.projectSkills && <span className="text-muted-foreground">· no project skills</span>}
         </p>
         <p className="text-muted-foreground">{accounts.join(' · ')}</p>
         {agent.accounts.github !== undefined && devices && devices.length > 0 && <OnDevices login={agent.accounts.github} devices={devices} onCopied={onChanged} />}
@@ -237,6 +239,7 @@ function AgentEditor({ agent, view, onDone }: { agent?: AgentRecord; view: Agent
         name: draft.name,
         skills: [...draft.skills],
         accounts: { ...(draft.github !== undefined ? { github: draft.github } : {}), ...(draft.claude.size > 0 ? { claude: [...draft.claude] } : {}), ...(draft.codex.size > 0 ? { codex: [...draft.codex] } : {}) },
+        projectSkills: draft.projectSkills,
       })
       if (!done.ok) setError(done.error)
       else await onDone(true)
@@ -273,6 +276,14 @@ function AgentEditor({ agent, view, onDone }: { agent?: AgentRecord; view: Agent
               </div>
             </section>
           ))}
+          {/* Rom's first level: an agent set to never pick up the project's own skills. A session can still pick them. */}
+          <label className="flex cursor-pointer items-start gap-2.5 text-sm">
+            <Checkbox checked={draft.projectSkills} onCheckedChange={checked => setDraft(d => ({ ...d, projectSkills: checked === true }))} disabled={busy} className="mt-0.5" aria-label="Project skills" />
+            <span className="min-w-0">
+              <span className="block font-medium">Project skills</span>
+              <span className="mt-0.5 block text-xs text-muted-foreground">The skills a project keeps in its repo go to this agent&rsquo;s sessions too. Off, a session starts without them and can still pick them under the box.</span>
+            </span>
+          </label>
         </div>
         <div className="space-y-3">
           <p className="text-sm font-medium">Accounts</p>
