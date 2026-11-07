@@ -9,7 +9,8 @@ import { basename, join } from 'node:path'
 // crawl cut short has the nearest,
 // that stops at a repository (what is inside one is that repository's) and stops altogether at a
 // strict time limit: what was found by then is the list. It is kept, and read again in the
-// background once it is old, so the picker never waits on a crawl but its first.
+// background once it is old, so the picker never waits on a crawl but its first. A first crawl cut
+// short (a busy start, a slow folder) is followed at once by one with time enough, behind the answer.
 
 /** A Git repository found on this computer. */
 export interface FoundRepo {
@@ -24,8 +25,11 @@ export interface FoundRepo {
 /** How far into a folder the crawl goes: `~/Projects/org/repo` is 3 deep. */
 export const CRAWL_DEPTH = 4
 
-/** The crawl's strict limit: past it, what was found is the list. */
+/** The strict limit of a crawl someone waits on: past it, what was found is the list. */
 export const CRAWL_LIMIT_MS = 2000
+
+/** The limit of a crawl nobody waits on: behind a kept list. */
+export const CRAWL_BEHIND_LIMIT_MS = 20_000
 
 /** How old the kept list may be before a read crawls again, in the background. */
 export const REPOS_MAX_AGE_MS = 60_000
@@ -82,6 +86,12 @@ export interface CrawlOptions {
   now?: () => number
 }
 
+/** What a crawl found, and whether it looked everywhere or the time was up first. */
+export interface Crawl {
+  repos: FoundRepo[]
+  whole: boolean
+}
+
 /**
  * The repositories under `roots`, each found once, by name. A root that is itself a
  * repository is one, and is still looked through: a home folder can be a repository of its own
@@ -89,7 +99,7 @@ export interface CrawlOptions {
  * crawl goes no further into it. The crawl reads a level of folders at once, and stops when the
  * time is up, between reads: what it found until then is the answer.
  */
-export async function crawlRepos(roots: readonly string[], options: CrawlOptions = {}): Promise<FoundRepo[]> {
+export async function crawlRepos(roots: readonly string[], options: CrawlOptions = {}): Promise<Crawl> {
   const fs = options.fs ?? nodeCrawlFs()
   const depth = options.depth ?? CRAWL_DEPTH
   const now = options.now ?? Date.now
@@ -97,10 +107,15 @@ export async function crawlRepos(roots: readonly string[], options: CrawlOptions
   const found = new Map<string, FoundRepo>()
   const seen = new Set<string>()
   let level = roots.filter(root => !seen.has(root) && seen.add(root))
-  for (let at = 0; level.length > 0 && at <= depth && now() < deadline; at++) {
+  let whole = true
+  for (let at = 0; level.length > 0 && at <= depth && whole; at++) {
     const next: string[] = []
     // A level at a time, in chunks, so a slow folder holds up only its chunk and the time is checked often.
-    for (let i = 0; i < level.length && now() < deadline; i += 32) {
+    for (let i = 0; i < level.length; i += 32) {
+      if (now() >= deadline) {
+        whole = false
+        break
+      }
       await Promise.all(
         level.slice(i, i + 32).map(async folder => {
           const entries = await fs.entries(folder)
@@ -124,54 +139,65 @@ export async function crawlRepos(roots: readonly string[], options: CrawlOptions
     level = next
   }
   // By name: the reads of a level run at once and land in any order, and the list should not move between crawls.
-  return [...found.values()].sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: 'base' }) || a.path.localeCompare(b.path))
+  const repos = [...found.values()].sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: 'base' }) || a.path.localeCompare(b.path))
+  return { repos, whole }
+}
+
+/** The repos as kept, and whether a crawl with more time is looking for the rest of them. */
+export interface RepoRead {
+  repos: FoundRepo[]
+  looking: boolean
 }
 
 /** The kept repo list and how it is read again. */
 export interface RepoIndex {
-  /** The repos as last found: the first read waits on a crawl, a read of an old list crawls again in the background. */
-  read(): Promise<FoundRepo[]>
+  /** The repos as last found: the first read waits on a crawl, a read of an old or cut-short list crawls again in the background. */
+  read(): Promise<RepoRead>
   /** Crawl now, and answer what this crawl found: after a folder is added. */
-  refresh(): Promise<FoundRepo[]>
+  refresh(): Promise<RepoRead>
 }
 
 /** A {@link RepoIndex} over the folders `roots` names when a crawl starts. */
-export function repoIndex(roots: () => Promise<string[]>, options: { crawl?: (roots: string[]) => Promise<FoundRepo[]>; now?: () => number; maxAgeMs?: number } = {}): RepoIndex {
-  const crawl = options.crawl ?? (found => crawlRepos(found))
+export function repoIndex(roots: () => Promise<string[]>, options: { crawl?: (roots: string[], limitMs: number) => Promise<Crawl>; now?: () => number; maxAgeMs?: number } = {}): RepoIndex {
+  const crawl = options.crawl ?? ((found, limitMs) => crawlRepos(found, { limitMs }))
   const now = options.now ?? Date.now
   const maxAge = options.maxAgeMs ?? REPOS_MAX_AGE_MS
-  let kept: { repos: FoundRepo[]; at: number } | undefined
-  let running: Promise<FoundRepo[]> | undefined
-  const crawlOnce = (): Promise<FoundRepo[]> => {
+  // `again`: the crawl someone waited on was cut short, and one with time enough is to follow it.
+  let kept: { repos: FoundRepo[]; at: number; again: boolean } | undefined
+  let running: Promise<void> | undefined
+  const crawlOnce = (waited: boolean): Promise<void> => {
     running ??= roots()
-      .then(crawl)
+      .then(found => crawl(found, waited ? CRAWL_LIMIT_MS : CRAWL_BEHIND_LIMIT_MS))
       .then(
-        repos => {
-          kept = { repos, at: now() }
-          return repos
+        ({ repos, whole }) => {
+          kept = { repos, at: now(), again: waited && !whole }
         },
-        () => kept?.repos ?? [],
+        () => {},
       )
       .finally(() => {
         running = undefined
       })
     return running
   }
+  const answer = (): RepoRead => ({ repos: kept?.repos ?? [], looking: kept?.again ?? false })
   return {
     async read() {
-      if (!kept) return crawlOnce()
-      if (now() - kept.at > maxAge) void crawlOnce()
-      return kept.repos
+      if (!kept) await crawlOnce(true)
+      if (kept && (kept.again || now() - kept.at > maxAge)) void crawlOnce(false)
+      return answer()
     },
     // A crawl already on its way may have started before what changed: this one starts after it.
-    refresh: () => (running ?? Promise.resolve()).then(crawlOnce),
+    refresh: () =>
+      (running ?? Promise.resolve())
+        .then(() => crawlOnce(true))
+        .then(answer),
   }
 }
 
 let thisComputer: RepoIndex | undefined
 
 /**
- * This computer's repos: one list for the daemon, started at its boot. It looks in the home folder
+ * This computer's repos: one list for the daemon, first crawled when a page asks. It looks in the home folder
  * and in the folders the person added (`repoFolders` in the registry).
  */
 export function thisComputersRepos(): RepoIndex {

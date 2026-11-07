@@ -38,6 +38,7 @@ import {
 } from './ui/sidebar.js'
 import { needsWord } from './HumanQueueList.js'
 import { ScrollArea } from './ui/scroll-area.js'
+import { PopupPlacementContext } from './ui/popup-placement.js'
 // Global chrome relocated off the removed top navbar (#772 follow-up): the sidebar is the app's
 // chrome now, so the workspace keeps the full width.
 import { BrandLink } from './BrandLink.js'
@@ -306,7 +307,9 @@ export function AgentHistory({
     // follow-up), the sidebar carries the app's chrome — brand, global nav, and the utility
     // controls in the footer — so the workspace and the panes get the full height. A phone has no
     // width for a column: there it is a sheet over the page, closed until asked for.
-    <>
+    // Fixed to the window (or a phone's sheet), it stays put while the page scrolls: what opens from
+    // it is placed against the window too, or each scroll carries it off and pulls it back a frame later.
+    <PopupPlacementContext.Provider value={pinned || isMobile ? 'fixed' : 'absolute'}>
       {pinned && <div aria-hidden className="w-(--sidebar-width) shrink-0" />}
       <Sidebar collapsible={isMobile ? 'offcanvas' : 'none'} className={cn('relative w-(--sidebar-width) border-r border-sidebar-border', pinned && 'fixed top-(--top-banner,0px) left-0 z-20 h-[calc(100dvh-var(--top-banner,0px))]')}>
         {/* The brand and the project select (#1513): the project picked here is the one every page
@@ -433,7 +436,7 @@ export function AgentHistory({
         {/* Its right edge, dragged to set its width; a phone's sheet has none. */}
         {!isMobile && <SidebarResizer />}
       </Sidebar>
-    </>
+    </PopupPlacementContext.Provider>
   )
 }
 

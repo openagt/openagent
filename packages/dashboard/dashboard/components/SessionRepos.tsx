@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { Combobox } from '@base-ui/react/combobox'
 import { FolderGit2, Plus, Search, X } from 'lucide-react'
 import type { ProjectSummary } from '../../src/index.js'
@@ -9,7 +9,8 @@ import { rowButtonClass, rowItemClass, RowOff } from './ui/row-item.js'
 import { ScrollArea } from './ui/scroll-area.js'
 import { Tooltip, TooltipTrigger, TooltipContent } from './ui/tooltip.js'
 import { MENU_ITEM_CLASS, MENU_POPUP_CLASS, MENU_TRIGGER_OPEN_CLASS } from './ui/dropdown-menu.js'
-import { REPOS_SHOWN, shownAddress } from './ProjectPicker.js'
+import { usePopupPlacement } from './ui/popup-placement.js'
+import { ASK_AGAIN_MS, REPOS_SHOWN, shownAddress } from './ProjectPicker.js'
 
 /** The most rows a search lists. */
 const SEARCH_SHOWN = 200
@@ -77,7 +78,15 @@ export function SessionRepoPicks({
 }) {
   const [open, setOpen] = useState(false)
   const [typed, setTyped] = useState('')
-  const repos = useLoaded<ReposRead | null>(() => onRepos().catch(() => ({ repos: [], hosted: [], hostedLoading: false, canAddFolder: false })), null, [open])
+  const positionMethod = usePopupPlacement()
+  // Asked again shortly while the look through this computer is still on its way, and the menu is open.
+  const [again, setAgain] = useState(0)
+  const repos = useLoaded<ReposRead | null>(() => onRepos().catch(() => ({ repos: [], hosted: [], reposLoading: false, hostedLoading: false, canAddFolder: false })), null, [open, again])
+  useEffect(() => {
+    if (!open || !repos?.reposLoading) return
+    const later = setTimeout(() => setAgain(k => k + 1), ASK_AGAIN_MS)
+    return () => clearTimeout(later)
+  }, [open, repos])
   const projectRows = useMemo<Row[]>(
     () => projects.filter(p => p.machine === undefined).map(p => ({ value: `project:${p.id}`, label: folderName(p.path), detail: p.path, path: p.path, search: p.path })),
     [projects],
@@ -128,7 +137,7 @@ export function SessionRepoPicks({
           <TooltipContent>A copy of the repo in the session's folder, on a branch of its own</TooltipContent>
         </Tooltip>
         <Combobox.Portal>
-          <Combobox.Positioner sideOffset={6} align="start" className="z-50 outline-none">
+          <Combobox.Positioner positionMethod={positionMethod} sideOffset={6} align="start" className="z-50 outline-none">
             <Combobox.Popup aria-label="Add repo" className={cn(MENU_POPUP_CLASS, 'w-[24rem] max-w-[var(--available-width)]')}>
               <div className="flex items-center gap-2 border-b border-border px-3">
                 <Search className="h-3.5 w-3.5 shrink-0 text-muted-foreground" aria-hidden />
@@ -155,7 +164,7 @@ export function SessionRepoPicks({
                       </Combobox.Group>
                     )}
                   </Combobox.List>
-                  {repos === null ? (
+                  {repos === null || repos.reposLoading ? (
                     <p role="status" className="px-2 py-1.5 text-xs text-muted-foreground">Looking for repos on this computer…</p>
                   ) : !typed.trim() && repos.repos.length > REPOS_SHOWN ? (
                     <p className="px-2 py-1.5 text-xs text-muted-foreground">Search to see more of the {repos.repos.length} repos.</p>
