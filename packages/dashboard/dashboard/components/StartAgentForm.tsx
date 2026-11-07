@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react'
-import { CircleAlert, Puzzle } from 'lucide-react'
+import { CircleAlert } from 'lucide-react'
 import type { ProjectSummary, StartFromPick } from '../../src/index.js'
 import { onCloneCheck, onStartBranches, onStartCheck } from '../rpc/projects.js'
 import { thisMachineName } from '../lib/this-machine.js'
@@ -20,13 +20,12 @@ import { AutoMenu } from './AutoMenu.js'
 import { ProjectContextMenu } from './ContextMenu.js'
 import { Composer, type ComposerHandle } from './Composer.js'
 import { StartFromMenu, prTargetBranch, startFromBase } from './StartFromMenu.js'
-import { rowButtonClass } from './ui/row-item.js'
 import { ProjectPicker } from './ProjectPicker.js'
 import { SessionRepoPicks, type PickedRepo } from './SessionRepos.js'
 import { Dots } from './ToolCalls.js'
 import { AgentFix, agentWords, useAgentState } from './Logins.js'
 import { MachineLogins } from './ServerLogins.js'
-import { SKILLS_ENTRY } from './ProjectSkills.js'
+import { SkillsButton } from './ProjectSkills.js'
 import { GitAccountMenu, useSessionAccount } from './GitHosts.js'
 import { AgentMenu } from './AgentMenu.js'
 import { useAgents } from './AgentsPage.js'
@@ -303,10 +302,7 @@ export function StartAgentForm({
               target={prTarget}
               busy={busy}
             />
-            <button type="button" onClick={() => openSettings(SKILLS_ENTRY, projectId)} className={rowButtonClass}>
-              <Puzzle className="h-3.5 w-3.5 shrink-0" aria-hidden />
-              <span className="truncate">Skills</span>
-            </button>
+            <SkillsButton projectId={projectId} />
           </>
             )}
           </>

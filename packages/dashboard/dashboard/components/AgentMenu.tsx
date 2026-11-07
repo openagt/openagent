@@ -1,8 +1,10 @@
 import { Bot, Check, ChevronDown, Settings2 } from 'lucide-react'
 import type { AgentRecord } from '../rpc/agents.js'
+import { DEFAULT_AGENT } from '../../src/client.js'
 import { openAgents } from '../lib/use-route.js'
 import { cn } from '../lib/utils.js'
-import { rowButtonClass } from './ui/row-item.js'
+import { RowOff, rowButtonClass } from './ui/row-item.js'
+import { useAgentName } from './AgentsPage.js'
 import { Tooltip, TooltipContent, TooltipTrigger } from './ui/tooltip.js'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuGroup, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from './ui/dropdown-menu.js'
 
@@ -45,5 +47,23 @@ export function AgentMenu({ agents, picked, busy, onPick }: { agents: readonly A
         </DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>
+  )
+}
+
+/**
+ * The session page's "Agent", in the launcher's place and look, off: the agent the session is on,
+ * as its record says, the default where it names none. Drawn once the agents are read, as the menu is.
+ */
+export function AgentOff({ agent }: { agent: string | undefined }) {
+  const name = useAgentName(agent ?? DEFAULT_AGENT)
+  if (name === undefined) return null
+  return (
+    <RowOff tip={`This session is on the agent ${name}: its skills and accounts`}>
+      <button type="button" disabled className={rowButtonClass}>
+        <Bot className="h-3.5 w-3.5 shrink-0" aria-hidden />
+        <span className="max-w-32 truncate">{name}</span>
+        <ChevronDown className="h-3 w-3 shrink-0 opacity-70" aria-hidden />
+      </button>
+    </RowOff>
   )
 }

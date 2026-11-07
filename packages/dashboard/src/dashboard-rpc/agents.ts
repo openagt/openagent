@@ -32,8 +32,8 @@ export interface AgentsView {
   agents: AgentRecord[]
   /** The skills to pick from, in groups: the default agent's first, then the catalogue's. */
   skills: { title: string; skills: AgentSkillChoice[] }[]
-  /** OpenAgent's GitHub accounts on this computer, and the one its runs use when an agent names none. */
-  github?: { accounts: string[]; computer?: string }
+  /** OpenAgent's GitHub accounts on this computer. */
+  github?: { accounts: string[] }
   /** The Claude accounts of the Permissions page, by id and name. */
   claude: { id: string; name: string }[]
   /** The Codex accounts, the same way. */
@@ -77,11 +77,10 @@ async function skillChoices(): Promise<AgentsView['skills']> {
 export async function onAgentsList(): Promise<AgentsView> {
   const [agents, skills, hosts, claude, codex] = await Promise.all([listAgents(), skillChoices(), onGitHosts(), onAgentAccounts('claude'), onAgentAccounts('codex')])
   const provider = hosts.hosts.find(row => row.host === GITHUB)?.provider
-  const computer = provider?.accounts.find(account => account.runs)?.login
   return {
     agents,
     skills,
-    ...(provider ? { github: { accounts: provider.accounts.filter(account => account.ok).map(account => account.login), ...(computer !== undefined ? { computer } : {}) } } : {}),
+    ...(provider ? { github: { accounts: provider.accounts.filter(account => account.ok).map(account => account.login) } } : {}),
     claude: claude.accounts.map(account => ({ id: account.id, name: account.name })),
     codex: codex.accounts.map(account => ({ id: account.id, name: account.name })),
   }

@@ -248,8 +248,8 @@ export function GitAccountMenu({ address, machineId, on, busy, picked, onPick, o
 }
 
 /**
- * The project's git host in a session's row above the message box, where the launcher's row has the
- * account: the account this run worked as, which its record keeps. A run recorded before that was
+ * The project's git host under a session's message box at the right, where the launcher has the
+ * account's menu: the account this run worked as, which its record keeps. A run recorded before that was
  * kept says the host's name: the one its project's runs use today need not be the one it pushed as.
  * Nothing for a project with no page on a git host, and until the logo is read, so it lands whole.
  */

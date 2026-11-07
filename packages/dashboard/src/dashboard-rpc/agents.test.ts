@@ -50,7 +50,7 @@ test('the agents, the skills to pick from and the accounts this computer knows; 
     assert.deepEqual(view.skills[0], { title: 'Every agent starts with', skills: [{ name: 'ask', description: view.skills[0]!.skills[0]!.description }, { name: 'github', description: view.skills[0]!.skills[1]!.description }] })
     assert.ok(view.skills[0]!.skills.every(skill => skill.description.length > 0), 'each default skill says what it is')
     assert.ok(view.skills.some(group => group.skills.some(skill => skill.name === 'readability')), 'the catalogue is there')
-    assert.deepEqual(view.github, { accounts: ['octo', 'octo-agent'], computer: 'octo' }, 'a login GitHub no longer takes is not offered')
+    assert.deepEqual(view.github, { accounts: ['octo', 'octo-agent'] }, 'a login GitHub no longer takes is not offered')
     assert.ok(view.claude.some(account => account.id === 'Dani'))
 
     // Saved under the id its name gives; a second one of that name is refused.

@@ -1,14 +1,17 @@
 import { useEffect, useState } from 'react'
+import { Puzzle } from 'lucide-react'
 import { onProjectSkills, sendChangeSkills, sendProjectSkills, type ProjectSkills, type ProjectSkill, type SendSkillsResult } from '../rpc/skills.js'
 import { useAction } from '../lib/use-action.js'
 import { useLoaded, usePolled } from '../lib/use-async.js'
 import { onSkillsSaved, skillsSaved } from '../lib/skills-saved.js'
 import { cn } from '../lib/utils.js'
+import { openSettings } from '../lib/use-route.js'
+import { rowButtonClass } from './ui/row-item.js'
 import { Button, buttonVariants } from './ui/button.js'
 import { Checkbox } from './ui/checkbox.js'
 import { Skeleton } from './ui/skeleton.js'
 
-// A project's skills (#2023). "Skills", after "Auto" under the launcher's box, opens Settings on
+// A project's skills (#2023). "Skills", after "Auto" under the box on both pages, opens Settings on
 // the project's Skills page: a card with a tick for each skill a project picks beyond the ones
 // every run gets by default. The card on the project's own page, under the agents that wait on the
 // person, shows only while it has something to say: a newer version to take, and skills that have
@@ -17,6 +20,16 @@ import { Skeleton } from './ui/skeleton.js'
 
 /** The Settings entry, in the Project group. */
 export const SKILLS_ENTRY = 'skills'
+
+/** "Skills" under the box, the same on both pages: opens Settings on the project's Skills page. */
+export function SkillsButton({ projectId }: { projectId: string }) {
+  return (
+    <button type="button" onClick={() => openSettings(SKILLS_ENTRY, projectId)} className={rowButtonClass}>
+      <Puzzle className="h-3.5 w-3.5 shrink-0" aria-hidden />
+      <span className="truncate">Skills</span>
+    </button>
+  )
+}
 
 const held = (skill: ProjectSkill): boolean => skill.standing !== 'absent'
 const all = (skills: ProjectSkills): ProjectSkill[] => skills.groups.flatMap(group => group.skills)

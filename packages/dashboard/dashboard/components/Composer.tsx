@@ -77,7 +77,7 @@ export const Composer = forwardRef<ComposerHandle, {
   startsAt?: ReactNode
   /** The caller's controls in the row under the box: the launcher's Context picker and "Auto" menu. */
   controls?: ReactNode
-  /** The caller's controls at that row's other end, before the model: who the run pushes as, the launcher's git host account. */
+  /** The caller's controls at that row's other end, before the model: who the run pushes as, the git host account, on both pages. */
   controlsEnd?: ReactNode
   /** Inside a session: the model it runs on, said at the right of the row under the box, where
    *  the launcher has its select. Words, not a menu: a session keeps the model it started with. */

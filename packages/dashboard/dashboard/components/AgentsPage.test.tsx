@@ -27,7 +27,7 @@ const VIEW = {
     { title: 'Every agent starts with', skills: [{ name: 'ask', description: 'Ask the person.' }, { name: 'github', description: 'Pull requests on GitHub.' }] },
     { title: 'Code reviews', skills: [{ name: 'readability', description: 'Read the code.' }, { name: 'ux', description: 'Judge the UX.' }] },
   ],
-  github: { accounts: ['octo', 'octo-agent'], computer: 'octo' },
+  github: { accounts: ['octo', 'octo-agent'] },
   claude: [{ id: 'This computer', name: 'Claude login on Studio' }, { id: 'Dani', name: 'Dani' }],
   codex: [],
 }
@@ -53,7 +53,7 @@ describe('the Agents page', () => {
     const cards = await screen.findAllByRole('region')
     expect(cards.map(card => card.getAttribute('aria-label'))).toEqual(['Default', 'Reviewer'])
     expect(within(cards[0]!).getByText(/the agent a session is on unless you pick another/)).toBeTruthy()
-    expect(within(cards[0]!).getByText("GitHub: this computer's (@octo)")).toBeTruthy()
+    expect(within(cards[0]!).getByText('GitHub: whatever the computer uses')).toBeTruthy()
     expect(within(cards[1]!).getByText('@octo-agent on GitHub · Claude: Dani')).toBeTruthy()
     expect(within(cards[1]!).getByText('readability')).toBeTruthy()
     // The default is never removed.
@@ -88,6 +88,8 @@ describe('the Agents page', () => {
     fireEvent.click(within(editor).getByRole('button', { name: 'Cancel' }))
     fireEvent.click(screen.getByRole('button', { name: 'Edit Default' }))
     expect((screen.getByLabelText('Name') as HTMLInputElement).disabled).toBe(true)
+    // An agent that names no account: one plain item, not the computer's account repeated.
+    expect(screen.getByLabelText('GitHub account').textContent).toBe('None — whatever the computer uses')
   })
 
   test('where an agent\u2019s GitHub account is: one line per device, on it or not, with why; "Copy again" for one that failed copies now and reads again; nothing for an agent that names none', async () => {
