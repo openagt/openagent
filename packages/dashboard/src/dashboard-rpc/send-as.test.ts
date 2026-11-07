@@ -7,7 +7,7 @@ import { nodeGitRunner, readRemoteAccount, type ProvidedCommand } from '@openagt
 import { loginsWiring } from './logins.js'
 import { provideTestContext } from './test-context.js'
 import { sendPersonalFolderAs, sendSyncPersonalFolder } from './personal-folder.js'
-import { pushAccountOf, remoteAccount } from './send-as.js'
+import { originAccountOf, remoteAccount } from './send-as.js'
 
 // The account OpenAgent sends a repository as, through the dashboard's calls: GitHub's accounts and
 // the settings for one as the host's package would answer them.
@@ -58,11 +58,11 @@ test("a repository's branches are pushed as the account kept at its Share switch
     const repo = join(dir, 'repo')
     mkdirSync(repo)
     await git(['init', '-q'], repo)
-    assert.deepEqual(await pushAccountOf(repo), { ok: true }, 'no origin')
+    assert.deepEqual(await originAccountOf(repo), { ok: true }, 'no origin')
     await git(['remote', 'add', 'origin', join(dir, 'origin.git')], repo)
-    assert.deepEqual(await pushAccountOf(repo), { ok: true }, 'a folder on this disk asks no login')
+    assert.deepEqual(await originAccountOf(repo), { ok: true }, 'a folder on this disk asks no login')
     await git(['remote', 'set-url', 'origin', 'git@github.com:me/shop.git'], repo)
-    assert.deepEqual(await pushAccountOf(repo), { ok: true, account: { login: 'octo', host: 'github.com', config: CONFIG } }, 'the one runs use')
+    assert.deepEqual(await originAccountOf(repo), { ok: true, account: { login: 'octo', host: 'github.com', config: CONFIG } }, 'the one runs use')
   }))
 
 test("with no account of OpenAgent's at the host, the personal folder is not synced, and keeps no remote", () =>

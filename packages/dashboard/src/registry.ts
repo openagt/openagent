@@ -718,6 +718,19 @@ export async function addRepoFolder(folder: string, fs: RegistryFs = nodeRegistr
   })
 }
 
+/** Stop looking for repos in a folder the person added; one not there changes nothing. */
+export async function removeRepoFolder(folder: string, fs: RegistryFs = nodeRegistryFs(), env: NodeJS.ProcessEnv = process.env): Promise<void> {
+  return serialize(async () => {
+    const registry = await readRegistry(fs, env)
+    const folders = registry.repoFolders ?? []
+    if (!folders.includes(folder)) return
+    const kept = folders.filter(one => one !== folder)
+    if (kept.length) registry.repoFolders = kept
+    else delete registry.repoFolders
+    await writeRegistry(registry, fs, env)
+  })
+}
+
 /** The user's dashboard preferences (#410), or `{}` when none are stored. */
 export async function readPreferences(
   fs: RegistryFs = nodeRegistryFs(),

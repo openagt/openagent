@@ -9,6 +9,7 @@ import { GIT_HOST_NAME, homeUrlFor } from './home.js'
 import { MAX_PEOPLE, peopleByEmail } from './people.js'
 import { createRepository, offerRepository, type CreateOffer, type CreateOutcome } from './create.js'
 import { isGithubLogin, publicProfile, type ProfileFetch } from './profile.js'
+import { listRepos } from './repos.js'
 import { listReplies } from './replies.js'
 import { DIARY_ENV, byline, writeComment } from './comment.js'
 import { mkdtempSync, readFileSync, rmSync } from 'node:fs'
@@ -56,6 +57,10 @@ export const USAGE = `usage: github <command>
   home                         the project's page on GitHub, from its origin remote
   profile <login>              a GitHub user's public profile, read with no login: { login, name, avatar } (a picture's https address); what a person copies
                                into OpenAgent as their own name and picture
+  repos [--user <login>] [--owner <name>]
+                               the repositories of <name>, a GitHub user or organization (default: the account itself), as the account <login> (default:
+                               the account runs use) sees them, its private ones too: { login, owner, repos: [{ address, url, private, pushedAt, description }] },
+                               the newest pushed first, at most 300
   people <email>...            the GitHub accounts behind the project's commit emails: [{ email, login, avatar }], one per email a commit of the
                                repository's is signed with by an account, or that is GitHub's own address for one (at most 20 asked at once); any other email is left out
   accounts [--host <host>]     OpenAgent's own GitHub accounts and the one its runs use: { host, name, requestWord, logo, tool, installed,
@@ -207,6 +212,19 @@ async function workingGh(ctx: Context): Promise<GhRunner> {
   const gh = ctx.gh
   const env = runEnv(await tokenOf(login, dir, ctx.cwd, gh), dir, readFacts(dir), ctx.env)
   return (args, cwd, more, input) => gh(args, cwd, { ...env, ...more }, input)
+}
+
+/** One of OpenAgent's accounts: `user`, when named, else the one runs use; refused when OpenAgent has no such account. */
+async function accountNamed(user: string | undefined, cwd: string, gh: GhRunner, env: NodeJS.ProcessEnv): Promise<{ login: string; dir: string }> {
+  const root = accountsRoot(env)
+  const state = await ghState(root, cwd, gh)
+  const accounts = state.installed ? state.accounts : []
+  if (user !== undefined && !accounts.some(a => a.login === user)) {
+    throw new Refused({ ok: false, reason: 'no-account', login: user }, `OpenAgent has no GitHub account ${user} on this computer: add it in OpenAgent's Permissions`)
+  }
+  const login = user ?? runsAccount(accounts, picksPath(env))
+  if (login === undefined) throw noAccount()
+  return { login, dir: accountDir(root, login) }
 }
 
 function noAccount(): Refused {
@@ -408,30 +426,23 @@ const COMMANDS: Record<string, Command> = {
 
   async env(args, { cwd, gh, env }) {
     const { values } = parse(args, { user: { type: 'string' } }, 0)
-    const root = accountsRoot(env)
-    const state = await ghState(root, cwd, gh)
-    const accounts = state.installed ? state.accounts : []
-    if (values.user !== undefined && !accounts.some(a => a.login === values.user)) {
-      throw new Refused({ ok: false, reason: 'no-account', login: values.user }, `OpenAgent has no GitHub account ${values.user} on this computer: add it in OpenAgent's Permissions`)
-    }
-    const login = values.user ?? runsAccount(accounts, picksPath(env))
     // No account: a run never falls back on the person's own gh.
-    if (login === undefined) throw noAccount()
-    const dir = accountDir(root, login)
+    const { login, dir } = await accountNamed(values.user, cwd, gh, env)
     return { ok: true, login, env: runEnv(await tokenOf(login, dir, cwd, gh), dir, readFacts(dir), env) }
+  },
+
+  async repos(args, { cwd, gh, env }) {
+    const { values } = parse(args, { user: { type: 'string' }, owner: { type: 'string' } }, 0)
+    if (values.owner !== undefined && !isGithubLogin(values.owner)) throw new Refused({ ok: false, reason: 'no-owner', owner: values.owner }, `${values.owner} is no GitHub user or organization`)
+    const { login, dir } = await accountNamed(values.user, cwd, gh, env)
+    const owner = values.owner ?? login
+    return { ok: true, login, owner, repos: await listRepos(asAccount(gh, dir), cwd, owner) }
   },
 
   async 'git-config'(args, { cwd, gh, env }) {
     const { values } = parse(args, { user: { type: 'string' } }, 0)
-    const root = accountsRoot(env)
-    const state = await ghState(root, cwd, gh)
-    const accounts = state.installed ? state.accounts : []
-    if (values.user !== undefined && !accounts.some(a => a.login === values.user)) {
-      throw new Refused({ ok: false, reason: 'no-account', login: values.user }, `OpenAgent has no GitHub account ${values.user} on this computer: add it in OpenAgent's Permissions`)
-    }
-    const login = values.user ?? runsAccount(accounts, picksPath(env))
-    if (login === undefined) throw noAccount()
-    return { ok: true, login, host: HOST, config: gitConfig(accountDir(root, login)) }
+    const { login, dir } = await accountNamed(values.user, cwd, gh, env)
+    return { ok: true, login, host: HOST, config: gitConfig(dir) }
   },
 
   async token(args, { cwd, gh, env }) {

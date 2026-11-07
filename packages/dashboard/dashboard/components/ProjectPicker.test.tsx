@@ -20,7 +20,7 @@ const VIKE = { path: '/home/me/oss/vike', name: 'vike', url: 'https://github.com
 const NOTES = { path: '/home/me/notes', name: 'notes' }
 
 beforeEach(() => {
-  onRepos.mockResolvedValue({ repos: [VIKE, NOTES], canAddFolder: true })
+  onRepos.mockResolvedValue({ repos: [VIKE, NOTES], hosted: [], hostedLoading: false, canAddFolder: true })
 })
 afterEach(() => {
   cleanup()
@@ -113,6 +113,43 @@ describe('ProjectPicker', () => {
     await waitFor(() => expect(onPick).toHaveBeenCalledWith('shop-5'))
   })
 
+  test("the git hosts' repos follow the ones on this computer, with their address and why they are listed; picked, one is cloned the way a typed address is", async () => {
+    onRepos.mockResolvedValue({
+      repos: [VIKE, NOTES],
+      hosted: [
+        { address: 'github.com/octo-agent/shop', url: 'https://github.com/octo-agent/shop', private: true, from: '@octo-agent' },
+        { address: 'github.com/vikejs/bati', url: 'https://github.com/vikejs/bati', private: false, description: 'Scaffolder', from: 'vikejs' },
+      ],
+      hostedLoading: false,
+      canAddFolder: false,
+    })
+    onCloneTarget.mockResolvedValue({ ok: true, address: 'github.com/vikejs/bati', path: '/home/me/projects/bati' })
+    renderPicker()
+    await openMenu(trigger())
+    await screen.findByRole('option', { name: /bati/ })
+    expect(options()).toEqual(['No project', 'alpha', 'vikegithub.com/vikejs/vike', 'notes/home/me/notes', 'octo-agent/shopPrivate · Not on this computer · @octo-agent', 'vikejs/batiNot on this computer · vikejs'])
+    // Found by its description too; its address is no "Add" row.
+    fireEvent.change(search(), { target: { value: 'scaffold' } })
+    expect(options()).toEqual(['vikejs/batiNot on this computer · vikejs'])
+    fireEvent.change(search(), { target: { value: 'github.com/vikejs/bati' } })
+    expect(options()).toEqual(['vikejs/batiNot on this computer · vikejs'])
+    fireEvent.click(screen.getByRole('option', { name: /vikejs\/bati/ }))
+    expect(await screen.findByText('Do you trust this repository?')).toBeTruthy()
+    await waitFor(() => expect(onCloneTarget).toHaveBeenCalledWith('github.com/vikejs/bati'))
+  })
+
+  test("while the git hosts are being asked, the menu says so and asks again", async () => {
+    onRepos.mockResolvedValue({ repos: [VIKE], hosted: [], hostedLoading: true, canAddFolder: false })
+    renderPicker()
+    await openMenu(trigger())
+    expect(await screen.findByText('Asking GitHub for repos…')).toBeTruthy()
+    const before = onRepos.mock.calls.length
+    onRepos.mockResolvedValue({ repos: [VIKE], hosted: [{ address: 'github.com/octo/app', url: 'https://github.com/octo/app', private: false, from: '@octo' }], hostedLoading: false, canAddFolder: false })
+    await waitFor(() => expect(onRepos.mock.calls.length).toBeGreaterThan(before), { timeout: 4000 })
+    expect(await screen.findByRole('option', { name: /octo\/app/ })).toBeTruthy()
+    expect(screen.queryByText('Asking GitHub for repos…')).toBeNull()
+  })
+
   test('the repos are read as the page opens, before the menu is: the crawl behind them has run by then', async () => {
     renderPicker()
     await waitFor(() => expect(onRepos).toHaveBeenCalledTimes(1))
@@ -144,7 +181,7 @@ describe('ProjectPicker', () => {
 
   test('with nothing typed only the first repos are listed, and the search reaches the rest', async () => {
     const many = Array.from({ length: REPOS_SHOWN + 5 }, (_, i) => ({ path: `/home/me/r${i}`, name: `r${i}` }))
-    onRepos.mockResolvedValue({ repos: many, canAddFolder: false })
+    onRepos.mockResolvedValue({ repos: many, hosted: [], hostedLoading: false, canAddFolder: false })
     renderPicker({ projects: [] })
     await openMenu(trigger())
     await screen.findByRole('option', { name: /^r0/ })
@@ -204,7 +241,7 @@ describe('ProjectPicker', () => {
     await openMenu(trigger())
     await screen.findByRole('option', { name: /vike/ })
     const before = onRepos.mock.calls.length
-    onRepos.mockResolvedValue({ repos: [VIKE, NOTES, { path: '/work/client', name: 'client' }], canAddFolder: true })
+    onRepos.mockResolvedValue({ repos: [VIKE, NOTES, { path: '/work/client', name: 'client' }], hosted: [], hostedLoading: false, canAddFolder: true })
     fireEvent.click(screen.getByText('Search another folder…'))
     await waitFor(() => expect(sendAddRepoFolder).toHaveBeenCalledTimes(1))
     await screen.findByRole('option', { name: /client/ })

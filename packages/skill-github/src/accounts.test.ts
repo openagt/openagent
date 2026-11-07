@@ -240,6 +240,43 @@ test(
 )
 
 test(
+  'repos: an owner\u2019s repositories as an account of OpenAgent\u2019s sees them, newest pushed first; the account\u2019s own by default; no account, or no owner word, is refused',
+  withDir(async dir => {
+    const env = { XDG_CONFIG_HOME: dir }
+    const root = join(dir, 'openagent-github')
+    const asked: { args: string[]; env?: Record<string, string> }[] = []
+    const base = ghWith(asked)
+    const gh: GhRunner = async (args, cwd, given, input) => {
+      if (args[0] !== 'repo') return base(args, cwd, given, input)
+      asked.push({ args, ...(given ? { env: given } : {}) })
+      return JSON.stringify([
+        { nameWithOwner: `${args[2]}/old`, url: `https://github.com/${args[2]}/old`, isPrivate: false, pushedAt: '2026-01-01T00:00:00Z', description: '' },
+        { nameWithOwner: `${args[2]}/new`, url: `https://github.com/${args[2]}/new`, isPrivate: true, pushedAt: '2026-11-01T00:00:00Z', description: 'The new one' },
+        { nameWithOwner: '../evil', url: 'javascript:x' },
+      ])
+    }
+    assert.equal((await run(['repos'], { gh, env })).out['reason'], 'no-account')
+    account(root, 'octo', { id: 1 })
+    account(root, 'octo-agent', { id: 42 })
+    const own = await run(['repos', '--user', 'octo-agent'], { gh, env })
+    assert.equal(own.code, 0)
+    assert.deepEqual(own.out, {
+      ok: true,
+      login: 'octo-agent',
+      owner: 'octo-agent',
+      repos: [
+        { address: 'github.com/octo-agent/new', url: 'https://github.com/octo-agent/new', private: true, pushedAt: '2026-11-01T00:00:00Z', description: 'The new one' },
+        { address: 'github.com/octo-agent/old', url: 'https://github.com/octo-agent/old', private: false, pushedAt: '2026-01-01T00:00:00Z' },
+      ],
+    })
+    assert.equal(asked.find(a => a.args[0] === 'repo')?.env?.['GH_CONFIG_DIR'], join(root, 'octo-agent'), 'as that account, never the person\u2019s gh')
+    const org = await run(['repos', '--owner', 'vikejs'], { gh, env })
+    assert.deepEqual([org.out['login'], org.out['owner']], ['octo', 'vikejs'], 'an organization, as the account runs use')
+    assert.equal((await run(['repos', '--owner', '../x'], { gh, env })).out['reason'], 'no-owner')
+  }),
+)
+
+test(
   'a command that talks to GitHub works as OpenAgent\u2019s account: a run\u2019s own; else the runs\u2019 one, its token for git too; with none it is refused before gh is asked',
   withDir(async dir => {
     const root = join(dir, 'openagent-github')
