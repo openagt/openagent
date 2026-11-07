@@ -172,10 +172,20 @@ already made, and lists it in its pull request; for anything else it proposes an
 - The bar above a session's box goes once its pull request is merged or closed. Picked over the
   bar staying with the request as a label: the labels under the box already say it.
 - The foot of the sidebar is the person: their picture and first name, as one row that opens
-  one menu with their whole name, the theme, the notifications and Settings. The name is git's, the picture the
-  git host's, asked through the project's git host package. The project select stays at the
+  one menu with their whole name, the theme, the notifications and Settings. The project select stays at the
   top, beside the pages it changes. Picked over a row of three icons, and over the project
   select at the foot.
+- The person's name and picture are their own in OpenAgent (Settings › Profile), kept in their
+  own folder so every computer of theirs shows the same, and told to the servers they join.
+  "Sync from GitHub" copies a GitHub profile's name and picture once, read with no login; no git
+  host is asked after. With none set, the name is git's and there is no picture. Picked over
+  the name being git's and the picture the git host's, read live (Rom: decoupled from GitHub).
+- OpenAgent never pushes as the person's own login: the personal folder's sync and a project's
+  Share switch each name one of OpenAgent's accounts at the repository's host, picked where they
+  are turned on (the one runs use first), and so do the Skills page's Send and the clean-up of
+  Claude Code web's branches (the Share switch's account, else the one runs use). With no
+  account there, nothing is sent, and the page says where one is added. Picked over pushing with
+  whatever login the computer has (Rom: "scary").
 - The dashboard grows by modules: a package that adds to the dashboard (pages, Overview
   cards, link actions, panes beside the chat, a run's summary, Settings sections) is a module;
   a skill that brings pages is a module that is also a skill. A module is one OpenAgent

@@ -115,6 +115,12 @@ already made, and lists it in its pull request; for anything else it proposes an
   the command is refused and says where one is added. Picked over falling back on the
   person's own login, the one thing this is for.
 - The account runs use is the first one added, until another is picked in OpenAgent.
+- `git-config` gives git settings that ask `gh`, working in the account's own folder, for the
+  login when git needs it: what a repository OpenAgent sends as an account keeps. No token in
+  them. Picked over handing the token itself, which a repository's config would then hold.
+- `profile` reads a GitHub user's public profile with no login: what a person copies into
+  OpenAgent as their own name and picture. Picked over asking as one of OpenAgent's accounts,
+  which would show the agent's face, not the person's.
 - No switch at a limit for GitHub: the account is the agent's identity (who opens the pull
   request, which forks it may push to), and its hourly calls are plenty. Picked over a list
   that hands over like the Claude accounts do.

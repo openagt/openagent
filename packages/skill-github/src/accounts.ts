@@ -385,6 +385,23 @@ function stopJob(files: JobFiles): void {
  * different helper, an ssh key), and its name on the commits. Set through git's environment, so
  * nothing of the person's own settings changes. The settings already in the environment are kept.
  */
+/**
+ * The git settings that make git use the account in `dir` at GitHub, with no secret in them: an
+ * empty helper drops every helper set before it (the person's keychain among them), then gh,
+ * working in the account's folder only, answers git's ask for the login; a remote written for
+ * ssh goes over https, where that login is the one asked. What a repository OpenAgent sends as
+ * an account keeps in its own config.
+ */
+export function gitConfig(dir: string): [string, string][] {
+  const quoted = `'${dir.replace(/'/g, `'\\''`)}'`
+  return [
+    [`credential.https://${HOST}.helper`, ''],
+    [`credential.https://${HOST}.helper`, `!f() { test "$1" = get || exit 0; GH_TOKEN= GITHUB_TOKEN= GH_CONFIG_DIR=${quoted} gh auth git-credential get; }; f`],
+    [`url.https://${HOST}/.insteadOf`, `git@${HOST}:`],
+    [`url.https://${HOST}/.insteadOf`, `ssh://git@${HOST}/`],
+  ]
+}
+
 export function runEnv(token: string, dir: string, facts: AccountFacts | undefined, env: NodeJS.ProcessEnv = process.env): Record<string, string> {
   const given = Number(env['GIT_CONFIG_COUNT'] ?? 0) || 0
   const lines: [string, string][] = [

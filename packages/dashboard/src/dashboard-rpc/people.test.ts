@@ -12,7 +12,6 @@ function host(asked: string[][]): GitHostSource {
     open: async () => ({ ok: false, error: 'no' }),
     merge: async () => ({ ok: false, error: 'no' }),
     home: async () => undefined,
-    me: async () => undefined,
     people: async emails => {
       asked.push([...emails])
       return emails.includes('rom@y.dev') ? [{ email: 'rom@y.dev', login: 'rom', avatar: 'https://avatars.githubusercontent.com/u/1' }] : []

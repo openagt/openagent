@@ -4,6 +4,7 @@ import { startDaemonTick, DAEMON_TICK_MS } from './daemon-tick.js'
 import { branchReach, pullProjectData } from '@openagt/agent-data'
 import type { ProjectErrors } from './project-errors.js'
 import { startCloudScratchSweep } from './cloud-scratch-refs.js'
+import { pushAccountOf } from './dashboard-rpc/send-as.js'
 import { adoptCloudWork, startCloudWorkAdoption } from './cloud-work.js'
 import type { ProjectSummary } from './dashboard/projects.js'
 import { providerProblems } from './store/provided.js'
@@ -99,7 +100,7 @@ export function startBackgroundServices(deps: BackgroundServiceDeps): Background
   // because session creation only signals "created", not "clone finished" — a driver deleting its
   // own ref races the provisioning and can strand the session. The sweep waits out that race
   // (~a day) and only deletes refs whose work is provably on the default branch.
-  const cloudScratch = startCloudScratchSweep({ projects, log })
+  const cloudScratch = startCloudScratchSweep({ projects, log, pushAccount: pushAccountOf })
 
   // Adopt the branch a cloud session actually worked on (#1601): match each settled web run to
   // the `claude/*` head descending from its hand-off anchor, record the branch and PR on the

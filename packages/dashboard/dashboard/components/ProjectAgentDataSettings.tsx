@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { onProjectAgentData, type KeptData, type ProjectAgentData } from '../rpc/project-agent-data.js'
+import { onProjectAgentData, sendProjectDataAs, type KeptData, type ProjectAgentData } from '../rpc/project-agent-data.js'
 import { sendShareRecords } from '../rpc/projects.js'
 import { usePolled } from '../lib/use-async.js'
 import { useAction } from '../lib/use-action.js'
@@ -7,6 +7,7 @@ import { openSettings } from '../lib/use-route.js'
 import { ConfirmDialog } from './ui/confirm-dialog.js'
 import { SettingsSection, SettingsSelectRow, SettingsRow } from './SettingsRows.js'
 import { AGENT_DATA_ENTRY } from './AgentDataSettings.js'
+import { SendAs, firstSendAs } from './SendAs.js'
 
 /** The Settings entry's id: the project's own page, beside the person's own folder's `agent-data`. */
 export const PROJECT_AGENT_DATA_ENTRY = 'project-agent-data'
@@ -23,11 +24,14 @@ const KIND_WORDS: Record<KeptData['kind'], (n: number) => string> = {
 
 /**
  * Settings › Project › Agent data: where one project's agent data is, the person's own folder or
- * the project's own repository, switched here, and what the skills keep there.
+ * the project's own repository, switched here, and what the skills keep there. Kept in the
+ * repository, it is sent as one of OpenAgent's own accounts at the remote's host, named here,
+ * never as the person's own login.
  */
 export function ProjectAgentDataSettings({ projectId }: { projectId: string }) {
   const { value: data, loaded, reload } = usePolled<ProjectAgentData | null>(() => onProjectAgentData(projectId), null, EVERY_MS, [projectId])
   const [confirmShare, setConfirmShare] = useState(false)
+  const [picked, setPicked] = useState<string | undefined>()
   const { busy, error, run } = useAction()
   if (!loaded) return null
   if (!data) return <p className="text-sm text-muted-foreground">This project&rsquo;s agent data is on the computer the project is on.</p>
@@ -56,11 +60,16 @@ export function ProjectAgentDataSettings({ projectId }: { projectId: string }) {
   )
   const where =
     data.place === 'repository' ? (
-      <>In this project&rsquo;s repository, on the branch agent-data. Everyone who can read the repository can read it.</>
+      <>
+        In this project&rsquo;s repository, on the branch agent-data{data.account ? `, sent as @${data.account}` : ''}. Everyone who can read the repository can read it.
+      </>
     ) : (
       <>In {folder}.</>
     )
   const kept = data.kept.filter(k => k.count > 0)
+  // The account it goes as: the one kept while shared; on the way in, the one picked in the dialog.
+  const sendAs = picked !== undefined && data.accounts?.logins.includes(picked) ? picked : firstSendAs(data.accounts, data.account)
+  const noAccount = data.accounts !== undefined && sendAs === undefined
 
   const pick = (next: string) => {
     if (next === data.place || busy) return
@@ -80,6 +89,11 @@ export function ProjectAgentDataSettings({ projectId }: { projectId: string }) {
         ]}
         onChange={pick}
       />
+      {data.place === 'repository' && data.accounts && (
+        <div className="pb-3">
+          <SendAs host={data.accounts} value={data.account} disabled={busy} onChange={login => void run(() => sendProjectDataAs(projectId, login), 'Could not change the account.').then(() => reload())} />
+        </div>
+      )}
       {error && <p className="py-3 text-xs text-danger">{error}</p>}
       <SettingsRow
         label="What is kept"
@@ -97,11 +111,13 @@ export function ProjectAgentDataSettings({ projectId }: { projectId: string }) {
             git email. Everyone who can read the repository can read it.
           </>
         }
+        extra={data.accounts && <SendAs host={data.accounts} value={sendAs} onChange={setPicked} label="Push as" />}
         confirmLabel="Move and push"
         confirmBusyLabel="Moving…"
         fallbackError="Could not move the agent data."
         destructive={false}
-        onConfirm={() => sendShareRecords(projectId, true)}
+        confirmDisabled={noAccount}
+        onConfirm={() => sendShareRecords(projectId, true, sendAs)}
         onSuccess={() => void reload()}
       />
     </SettingsSection>

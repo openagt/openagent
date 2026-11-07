@@ -4,3 +4,4 @@ import { rpc } from '../lib/rpc.js'
 export type * from '../../src/dashboard-rpc/project-agent-data.js'
 
 export const onProjectAgentData = rpc<typeof impl.onProjectAgentData>('onProjectAgentData')
+export const sendProjectDataAs = rpc<typeof impl.sendProjectDataAs>('sendProjectDataAs')

@@ -5,6 +5,7 @@ import { DATA_BRANCH } from './names.js'
 import { nodeGitRunner, type GitRunner } from './git.js'
 import { withLockFile } from './checkout-lock.js'
 import { repositoryAddress } from './repository-address.js'
+import { NoRemoteAccountError, accountGit, clearRemoteAccount, readRemoteAccount, writeRemoteAccount, type RemoteAccount } from './remote-account.js'
 import { SESSIONS_DIR, sessionsHomeOf } from './sessions.js'
 import {
   branchReach,
@@ -179,7 +180,7 @@ async function takeRemote(folder: string, git: GitRunner): Promise<void> {
  * A failed op leaves no half-written file behind. Never throws.
  */
 export async function withPersonalFolder(folder: string, message: CommitMessage, op: () => Promise<void>, deps: ProjectDataDeps = {}): Promise<FileBranchWrite> {
-  const git = deps.git ?? nodeGitRunner()
+  const git = accountGit(deps.git ?? nodeGitRunner())
   return serialize(folder, deps, async (): Promise<FileBranchWrite> => {
     try {
       await ensurePersonalFolder(folder, git)
@@ -201,7 +202,8 @@ export async function withPersonalFolder(folder: string, message: CommitMessage,
           await git(['push', '-q', 'origin', `HEAD:refs/heads/${FOLDER_BRANCH}`], folder)
           return { ok: true, changed: Boolean(staged), pushed: true }
         } catch (err) {
-          if (attempt >= 1) return { ok: false, committed: true, error: `the personal folder could not be sent to its remote: ${errorMessage(err)}` }
+          // No account to send it as: another try cannot change that.
+          if (attempt >= 1 || err instanceof NoRemoteAccountError) return { ok: false, committed: true, error: `the personal folder could not be sent to its remote: ${errorMessage(err)}` }
           if (staged) await git(['reset', '-q', '--hard', before], folder)
         }
       }
@@ -218,6 +220,8 @@ export async function withPersonalFolder(folder: string, message: CommitMessage,
 export interface PersonalFolderState {
   path: string
   remote?: string
+  /** The login of OpenAgent's account it is sent as (`remote-account.ts`). */
+  account?: string
   /** Commits made here that have not reached the remote. */
   unsent: number
 }
@@ -236,43 +240,61 @@ export async function readPersonalFolder(deps: ProjectDataDeps = {}): Promise<Pe
         async () => Math.max(0, Number((await git(['rev-list', '--count', 'HEAD'], folder).catch(() => '1')).trim()) - 1),
       )
     : 0
-  return { path: folder, ...(remote ? { remote } : {}), unsent }
+  const account = (await readRemoteAccount(folder, git).catch(() => undefined))?.login
+  return { path: folder, ...(remote ? { remote } : {}), ...(account ? { account } : {}), unsent }
 }
 
 /**
- * Sync the personal folder with a repository: the remote is set, what it already has (another
- * machine's records) is merged in, and every commit here is sent. A remote that cannot be reached
- * or refuses is said, and the folder is left with no remote, as it was.
+ * Sync the personal folder with a repository, sent as `account`, one of OpenAgent's own (none for
+ * a repository in a folder on this disk, which asks no login): the remote is set, what it already
+ * has (another machine's records) is merged in, and every commit here is sent. A remote that cannot
+ * be reached or refuses is said, and the folder is left with no remote and no account, as it was.
  */
-export async function syncPersonalFolder(address: string, deps: ProjectDataDeps = {}): Promise<{ ok: true } | { ok: false; error: string }> {
-  const git = deps.git ?? nodeGitRunner()
+export async function syncPersonalFolder(address: string, account: RemoteAccount | undefined, deps: ProjectDataDeps = {}): Promise<{ ok: true } | { ok: false; error: string }> {
+  const plain = deps.git ?? nodeGitRunner()
+  const git = accountGit(plain)
   const folder = deps.folder ?? personalFolder()
   if (!address.trim() || address.trim().startsWith('-')) return { ok: false, error: 'no repository address given' }
   const made = await withPersonalFolder(folder, 'sync', async () => {}, deps)
   if (!made.ok) return { ok: false, error: made.error }
-  await git(['remote', 'remove', 'origin'], folder).catch(() => {})
-  await git(['remote', 'add', 'origin', address.trim()], folder)
+  const undo = async () => {
+    await plain(['remote', 'remove', 'origin'], folder).catch(() => {})
+    await clearRemoteAccount(folder, plain)
+  }
+  await undo()
+  await plain(['remote', 'add', 'origin', address.trim()], folder)
+  if (account) await writeRemoteAccount(folder, account, plain)
   const reached = await git(['ls-remote', '--heads', 'origin'], folder).then(() => undefined, errorMessage)
   if (reached !== undefined) {
-    await git(['remote', 'remove', 'origin'], folder).catch(() => {})
+    await undo()
     return { ok: false, error: `the repository could not be reached: ${(reached.trim().split('\n').at(-1) ?? reached).replace(/^fatal: /, '')}` }
   }
   const sent = await withPersonalFolder(folder, 'sync', async () => {}, deps)
   if (sent.ok) return { ok: true }
-  await git(['remote', 'remove', 'origin'], folder).catch(() => {})
+  await undo()
   return { ok: false, error: sent.error }
+}
+
+/** Send the personal folder as another of OpenAgent's accounts from now on: what was not sent yet goes with the next write. */
+export async function sendPersonalFolderAs(account: RemoteAccount, deps: ProjectDataDeps = {}): Promise<{ ok: true } | { ok: false; error: string }> {
+  const git = deps.git ?? nodeGitRunner()
+  const folder = deps.folder ?? personalFolder()
+  if (!(await folderRemote(folder, git))) return { ok: false, error: 'the personal folder syncs with no repository' }
+  return serialize(folder, deps, () => writeRemoteAccount(folder, account, git)).then(
+    () => ({ ok: true as const }),
+    err => ({ ok: false as const, error: errorMessage(err) }),
+  )
 }
 
 /** Stop syncing the personal folder: the remote is forgotten, every record stays here. */
 export async function stopSyncingPersonalFolder(deps: ProjectDataDeps = {}): Promise<{ ok: true } | { ok: false; error: string }> {
   const git = deps.git ?? nodeGitRunner()
   const folder = deps.folder ?? personalFolder()
-  return serialize(folder, deps, () =>
-    git(['remote', 'remove', 'origin'], folder).then(
-      () => ({ ok: true as const }),
-      () => ({ ok: true as const }),
-    ),
-  ).catch(err => ({ ok: false as const, error: errorMessage(err) }))
+  return serialize(folder, deps, async () => {
+    await git(['remote', 'remove', 'origin'], folder).catch(() => {})
+    await clearRemoteAccount(folder, git)
+    return { ok: true as const }
+  }).catch(err => ({ ok: false as const, error: errorMessage(err) }))
 }
 
 /**
@@ -362,17 +384,21 @@ async function emptyData(dir: string): Promise<void> {
  * at once, so a remote that refuses is said at once and the switch goes back to off with the data
  * where it was; off, from the branch's checkout back to the personal folder, nothing pushed (the
  * copy on the remote stays as it was). The branch is always locked before the personal folder.
+ * On, it is sent as `account`, one of OpenAgent's own (none for a remote in a folder on this disk,
+ * which asks no login); off, the account is forgotten with the switch.
  */
-export async function shareProjectData(cwd: string, on: boolean, deps: ProjectDataDeps = {}): Promise<{ ok: true } | { ok: false; error: string }> {
+export async function shareProjectData(cwd: string, on: boolean, account: RemoteAccount | undefined, deps: ProjectDataDeps = {}): Promise<{ ok: true } | { ok: false; error: string }> {
   const git = deps.git ?? nodeGitRunner()
   const repo = (await fileBranchRepo(cwd, git)) ?? cwd
   const folder = deps.folder ?? personalFolder()
   const { personal } = await projectDataDirs(repo, deps)
   if (on) {
     await writeSharing(repo, true, git)
+    if (account) await writeRemoteAccount(repo, account, git)
     const sent = await withFileBranch(repo, DATA_BRANCH, 'move the records here from the personal folder', dir => copyData(personal, dir), deps)
     if (!sent.ok) {
       await writeSharing(repo, false, git)
+      await clearRemoteAccount(repo, git)
       return { ok: false, error: sent.error }
     }
     const moved = await withPersonalFolder(folder, `move ${relative(personal, folder)} to its repository`, () => rm(personal, { recursive: true, force: true }), deps)
@@ -390,9 +416,23 @@ export async function shareProjectData(cwd: string, on: boolean, deps: ProjectDa
     },
     deps,
   )
-  if (kept.ok) return { ok: true }
+  if (kept.ok) {
+    await clearRemoteAccount(repo, git)
+    return { ok: true }
+  }
   await writeSharing(repo, true, git)
   return { ok: false, error: kept.error }
+}
+
+/** Send the shared project's data as another of OpenAgent's accounts from now on: what was not sent yet goes with the next write. */
+export async function shareProjectDataAs(cwd: string, account: RemoteAccount, deps: ProjectDataDeps = {}): Promise<{ ok: true } | { ok: false; error: string }> {
+  const git = deps.git ?? nodeGitRunner()
+  const repo = (await fileBranchRepo(cwd, git)) ?? cwd
+  if (!(await readSharing(repo, git))) return { ok: false, error: 'the project is not shared' }
+  return writeRemoteAccount(repo, account, git).then(
+    () => ({ ok: true as const }),
+    err => ({ ok: false as const, error: errorMessage(err) }),
+  )
 }
 
 /**

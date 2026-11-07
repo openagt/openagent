@@ -1,5 +1,5 @@
 import { join } from 'node:path'
-import { DATA_BRANCH, nodeGitRunner, type GitRunner } from '@openagt/agent-data'
+import { DATA_BRANCH, accountGit, nodeGitRunner, type GitRunner, type RemoteAccount } from '@openagt/agent-data'
 import { OPENAGENT_DIR } from './openagent-dir.js'
 import { prsForBranch, type LinkedPr } from './dashboard/pull-requests.js'
 import { listAgents, type AgentMeta } from './store/index.js'
@@ -329,6 +329,8 @@ export interface CloudScratchSweepOptions {
   log: (message: string) => void
   /** The agents the daemon is still responsible for, whose run branches this must not touch. */
   busy?: () => ReadonlySet<string>
+  /** The account of OpenAgent's a project's origin is talked with as: never the person's own login. */
+  pushAccount?: (cwd: string) => Promise<{ ok: true; account?: RemoteAccount } | { ok: false; error: string }>
   /** The per-project sweep (default {@link sweepCloudScratchRefs}). */
   sweep?: (cwd: string) => Promise<ScratchSweepResult>
 }
@@ -341,7 +343,14 @@ export interface CloudScratchSweepOptions {
  * noise. A ref vanishing from origin with no line explaining why would read as a bug.
  */
 export function startCloudScratchSweep(opts: CloudScratchSweepOptions): ProjectPass {
-  const sweep = opts.sweep ?? ((cwd: string) => sweepCloudScratchRefs(cwd, { ...(opts.busy ? { busy: opts.busy() } : {}) }))
+  const sweep =
+    opts.sweep ??
+    (async (cwd: string): Promise<ScratchSweepResult> => {
+      // Origin is read and its refs deleted as one of OpenAgent's accounts; a project with none to go as is left alone.
+      const as = opts.pushAccount ? await opts.pushAccount(cwd) : { ok: true as const }
+      if (!as.ok) return { deleted: [], kept: [], failed: [] }
+      return sweepCloudScratchRefs(cwd, { git: accountGit(nodeGitRunner(), as.account), ...(opts.busy ? { busy: opts.busy() } : {}) })
+    })
 
   // No timer of its own (E4): the daemon's one clock calls `tick`.
   return startProjectPass(opts.projects, async cwd => {

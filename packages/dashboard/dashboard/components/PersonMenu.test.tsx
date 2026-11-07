@@ -31,7 +31,7 @@ afterEach(() => {
 
 describe('PersonMenu', () => {
   test('the person\'s row: their picture and first name, opening their whole name, the theme, the notifications, and Settings', async () => {
-    onPerson.mockResolvedValue({ name: 'Ada Lovelace', login: 'ada', avatar: 'https://avatars.githubusercontent.com/u/1' })
+    onPerson.mockResolvedValue({ name: 'Ada Lovelace', github: 'ada', avatar: 'https://avatars.githubusercontent.com/u/1' })
     const onSettings = vi.fn()
     const { container } = render(<PersonMenu onSettings={onSettings} />)
     const row = await screen.findByRole('button', { name: 'Ada Lovelace: settings' })
@@ -46,7 +46,7 @@ describe('PersonMenu', () => {
   })
 
   test('no accounts are in it: they are picked beside the message box, for the computer the run goes to', async () => {
-    onPerson.mockResolvedValue({ name: 'Ada Lovelace', login: 'ada' })
+    onPerson.mockResolvedValue({ name: 'Ada Lovelace', github: 'ada' })
     logins.onGitHosts.mockResolvedValue({ hosts: [GITHUB] })
     accounts.onAgentAccounts.mockResolvedValue({ now: 0, accounts: [{ id: 'This computer', name: 'Ada', own: true, windows: [{ label: 'week', percent: 22 }] }] })
     render(<PersonMenu onSettings={() => {}} />)
@@ -57,7 +57,7 @@ describe('PersonMenu', () => {
   })
 
   test('drawn again, as a phone draws its sidebar at each opening, the row shows the person at once, while they are asked again', async () => {
-    onPerson.mockResolvedValue({ name: 'Ada Lovelace', login: 'ada' })
+    onPerson.mockResolvedValue({ name: 'Ada Lovelace', github: 'ada' })
     const first = render(<PersonMenu onSettings={() => {}} />)
     await screen.findByRole('button', { name: 'Ada Lovelace: settings' })
     first.unmount()
@@ -97,7 +97,7 @@ const GITHUB = {
 
 describe('PersonMenu: what is missing', () => {
   test('something runs need is missing: a dot on the picture, and the menu says what first, opening where it is fixed', async () => {
-    onPerson.mockResolvedValue({ name: 'Ada Lovelace', login: 'ada' })
+    onPerson.mockResolvedValue({ name: 'Ada Lovelace', github: 'ada' })
     logins.onAgentState.mockResolvedValue({ driver: 'claude-code', ready: false, problem: '`claude` is not logged in.', fix: { kind: 'log-in', command: 'claude auth login' } })
     const onSettings = vi.fn()
     const { container } = render(<PersonMenu onSettings={onSettings} />)

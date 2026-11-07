@@ -1,6 +1,7 @@
 import { nameAddress, numberAddress, ownAddresses, urlHost, type AddressDeps } from './address.js'
 import { doorFingerprint } from './certificate.js'
 import { execFile } from 'node:child_process'
+import { personalFolder, readPersonRecord } from '@openagt/agent-data'
 import { hostname } from 'node:os'
 import { ENTER_PATH, readKeyWord } from './door.js'
 import { askMe, enterForLine, leaveLine, readLineLink } from './line-out.js'
@@ -454,7 +455,12 @@ function runHelper(path: string, args: string[]): Promise<HelperAnswer> {
   })
 }
 
-/** The name of the person at this computer, as git knows it: the one their commits carry. */
+/** The name of the person at this computer: the one they gave OpenAgent (`person.json` in their own folder), else git's, the one their commits carry. */
+async function personName(env: NodeJS.ProcessEnv): Promise<string | undefined> {
+  const record = await readPersonRecord(personalFolder(env)).catch(() => undefined)
+  return (record ? nameOf(record.name) : undefined) ?? gitName()
+}
+
 function gitName(): Promise<string | undefined> {
   return new Promise(resolve => {
     execFile('git', ['config', '--global', '--get', 'user.name'], { timeout: 15_000 }, (err, out) => resolve(err ? undefined : nameOf(String(out))))
@@ -608,7 +614,7 @@ export async function runCli(args: string[], io: CliIO): Promise<number> {
       case 'me': {
         if (rest.length) break
         // No name is an answer too: the page then asks the person for theirs.
-        const name = await (io.myName ?? gitName)()
+        const name = await (io.myName ?? (() => personName(io.env)))()
         return print(name !== undefined ? { name } : {})
       }
       case 'owner': {

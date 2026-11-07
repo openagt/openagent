@@ -220,27 +220,49 @@ test(
 )
 
 test(
+  'git-config: the settings that make git go as an account of OpenAgent\u2019s, gh asked in that account\u2019s folder only, no token in them; no account is refused',
+  withDir(async dir => {
+    const env = { XDG_CONFIG_HOME: dir }
+    const root = join(dir, 'openagent-github')
+    assert.equal((await run(['git-config'], { gh: ghWith(), env })).out['reason'], 'no-account')
+    account(root, 'octo-agent', { id: 42 })
+    const said = await run(['git-config'], { gh: ghWith(), env })
+    assert.equal(said.code, 0)
+    assert.equal(said.out['login'], 'octo-agent')
+    assert.equal(said.out['host'], 'github.com')
+    const config = said.out['config'] as [string, string][]
+    assert.deepEqual(config[0], ['credential.https://github.com.helper', ''], 'every helper before it dropped')
+    assert.match(config[1]![1], new RegExp(`GH_TOKEN= GITHUB_TOKEN= GH_CONFIG_DIR='${join(root, 'octo-agent')}' gh auth git-credential get`))
+    assert.deepEqual(config.slice(2).map(([, value]) => value), ['git@github.com:', 'ssh://git@github.com/'])
+    assert.doesNotMatch(JSON.stringify(said.out), /tok-/, 'no token')
+    assert.equal((await run(['git-config', '--user', 'stranger'], { gh: ghWith(), env })).out['reason'], 'no-account')
+  }),
+)
+
+test(
   'a command that talks to GitHub works as OpenAgent\u2019s account: a run\u2019s own; else the runs\u2019 one, its token for git too; with none it is refused before gh is asked',
   withDir(async dir => {
     const root = join(dir, 'openagent-github')
     const asked: { args: string[]; env?: Record<string, string> }[] = []
     const gh = ghWith(asked)
-    const none = await run(['me'], { gh, env: { XDG_CONFIG_HOME: dir } })
+    const people = ['people', 'a@x.dev']
+    const commits = (): { args: string[]; env?: Record<string, string> } | undefined => asked.find(a => a.args[0] === 'api' && a.args[1]!.startsWith('repos/'))
+    const none = await run(people, { gh, env: { XDG_CONFIG_HOME: dir } })
     assert.equal(none.out['reason'], 'no-account')
     assert.ok(!asked.some(a => a.args[0] === 'api'), 'the person\u2019s gh is never asked')
     account(root, 'octo', { id: 1 })
     asked.length = 0
-    assert.equal((await run(['me'], { gh, env: { XDG_CONFIG_HOME: dir } })).out['login'], 'octo')
-    const api = asked.find(a => a.args[0] === 'api' && a.args.includes('{login: .login, name: .name, avatar: .avatar_url}'))!
+    await run(people, { gh, env: { XDG_CONFIG_HOME: dir } })
+    const api = commits()!
     assert.deepEqual([api.env?.['GH_CONFIG_DIR'], api.env?.['GH_TOKEN'], api.env?.['GIT_CONFIG_COUNT']], [join(root, 'octo'), 'tok-octo', '4'])
     // Inside a run: the account it was given, as it is. A gh folder of the person's own is not one.
     account(root, 'octo-agent', { id: 42 })
     asked.length = 0
-    await run(['me'], { gh, env: { XDG_CONFIG_HOME: dir, GH_CONFIG_DIR: join(root, 'octo-agent') } })
-    assert.equal(asked.find(a => a.args.some(arg => arg.includes('avatar')))?.env?.['GH_CONFIG_DIR'], join(root, 'octo-agent'))
+    await run(people, { gh, env: { XDG_CONFIG_HOME: dir, GH_CONFIG_DIR: join(root, 'octo-agent') } })
+    assert.equal(commits()?.env?.['GH_CONFIG_DIR'], join(root, 'octo-agent'))
     asked.length = 0
-    await run(['me'], { gh, env: { XDG_CONFIG_HOME: dir, GH_CONFIG_DIR: '/home/me/.config/gh' } })
-    assert.equal(asked.find(a => a.args.some(arg => arg.includes('avatar')))?.env?.['GH_CONFIG_DIR'], join(root, 'octo'))
+    await run(people, { gh, env: { XDG_CONFIG_HOME: dir, GH_CONFIG_DIR: '/home/me/.config/gh' } })
+    assert.equal(commits()?.env?.['GH_CONFIG_DIR'], join(root, 'octo'))
   }),
 )
 

@@ -1,8 +1,8 @@
 import { openPermissions } from '../lib/use-route.js'
 import { useState } from 'react'
 import { CircleAlert, Settings } from 'lucide-react'
-import { onPerson, type Person } from '../rpc/person.js'
-import { useLoaded } from '../lib/use-async.js'
+import type { Person } from '../rpc/person.js'
+import { usePerson } from '../lib/use-person.js'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuGroup, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from './ui/dropdown-menu.js'
 import { ThemeSubmenu } from './ThemeSubmenu.js'
 import { NotificationsSubmenu } from './NotificationsSubmenu.js'
@@ -12,8 +12,8 @@ import { useMissing } from './Logins.js'
 // that opens their menu (his pick, over a row of three icons): the theme, the notifications, and
 // Settings, under their whole name. The accounts a run takes are picked where the run is started,
 // beside the message box, for the computer it goes to: the agent's in the agent picker, the git
-// host's after the branch; not here a second time. A dot on the picture says something runs need is missing; the menu says what. The gear at the row's end says what the row opens. The name is
-// git's, the picture the git host's (`onPerson`); with no picture, their initials.
+// host's after the branch; not here a second time. A dot on the picture says something runs need is missing; the menu says what. The gear at the row's end says what the row opens. The name and
+// the picture are the person's own, set in Settings › Profile (`onPerson`); with no picture, their initials.
 
 /** The first word of a name: what the row says, the whole name being in the menu. */
 export function firstName(name: string): string {
@@ -26,13 +26,14 @@ export function initials(name: string): string {
   return (words.length > 1 ? `${words[0]![0]}${words.at(-1)![0]}` : (words[0]?.[0] ?? '?')).toUpperCase()
 }
 
-function Avatar({ person, dot }: { person: Person | null; dot: boolean }) {
+/** A person's picture, or their initials; `dot` says something runs need is missing. */
+export function Avatar({ person, dot = false, size = 'h-6 w-6 text-[10px]' }: { person: Person | null; dot?: boolean; size?: string }) {
   // A picture that does not load leaves the initials, never a broken image.
   const [broken, setBroken] = useState(false)
   const picture = person?.avatar && !broken ? person.avatar : undefined
   return (
     <span aria-hidden className="relative shrink-0">
-      <span className="flex h-6 w-6 items-center justify-center overflow-hidden rounded-full bg-muted text-[10px] font-medium text-muted-foreground">
+      <span className={`flex ${size} items-center justify-center overflow-hidden rounded-full bg-muted font-medium text-muted-foreground`}>
         {picture ? <img src={picture} alt="" referrerPolicy="no-referrer" className="h-full w-full object-cover" onError={() => setBroken(true)} /> : person ? initials(person.name) : null}
       </span>
       {dot && <span data-testid="missing-dot" className="absolute -top-0.5 -right-0.5 size-2 rounded-full bg-warning ring-2 ring-sidebar" />}
@@ -41,8 +42,7 @@ function Avatar({ person, dot }: { person: Person | null; dot: boolean }) {
 }
 
 export function PersonMenu({ onSettings }: { onSettings: (entry?: string) => void }) {
-  // Kept for the page's life: on a phone the sidebar is drawn anew at each opening, and shows them at once.
-  const person = useLoaded<Person | null>(() => onPerson().catch(() => null), null, [], { remember: 'person' })
+  const { person } = usePerson()
   const { missing } = useMissing()
   return (
     <DropdownMenu>
@@ -60,7 +60,7 @@ export function PersonMenu({ onSettings }: { onSettings: (entry?: string) => voi
             <DropdownMenuGroup>
               <DropdownMenuLabel className="flex flex-col">
                 <span className="truncate text-foreground">{person.name}</span>
-                {person.login && <span className="truncate font-normal">@{person.login}</span>}
+                {person.github && <span className="truncate font-normal">@{person.github}</span>}
               </DropdownMenuLabel>
             </DropdownMenuGroup>
             <DropdownMenuSeparator />

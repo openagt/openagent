@@ -1,6 +1,7 @@
 import { contextAddProject, contextPrepareStart, contextProjectErrors, contextProjects, contextRemote, contextRemoveProject, contextStartedIn, resolveProjectPath } from './context.js'
 import { readProjectCommands, type ProjectCommand } from '../project-commands.js'
 import { DATA_BRANCH, originDefaultBranch, readSharing, repositoryAddress, repositorySpelling, shareProjectData } from '@openagt/agent-data'
+import { originHost, remoteAccount } from './send-as.js'
 import { readProjectHooks, runCheckHook, startLineTakesBase, startLineTakesPrBase, type StartReadiness } from '../project-hooks.js'
 import { isPublishPick, publishPickIn, type PublishPick } from '../publish-levels.js'
 import { hasRemote } from '../has-remote.js'
@@ -137,11 +138,16 @@ export async function sendRemoveProject(projectId: string, files: boolean): Prom
  * where they were; off, back to the personal folder. A project with no remote has nothing to
  * share with, and is refused.
  */
-export async function sendShareRecords(projectId: string, on: boolean): Promise<{ ok: true } | { ok: false; error: string }> {
+export async function sendShareRecords(projectId: string, on: boolean, login?: string): Promise<{ ok: true } | { ok: false; error: string }> {
   const cwd = await resolveProjectPath(projectId)
   if (!cwd) return { ok: false, error: 'this project has no local path on this server' }
   if (on && !(await hasRemote(cwd))) return { ok: false, error: 'this project has no remote to share with' }
-  return shareProjectData(cwd, on)
+  if (!on) return shareProjectData(cwd, false, undefined)
+  // Sent as one of OpenAgent's accounts at the remote's host, never the person's own login; a remote in a folder on this disk asks none.
+  const host = await originHost(cwd)
+  const account = host !== undefined ? await remoteAccount(host, login) : undefined
+  if (account && !account.ok) return account
+  return shareProjectData(cwd, true, account?.account)
 }
 
 /**
