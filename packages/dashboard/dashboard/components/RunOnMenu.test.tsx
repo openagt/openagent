@@ -92,6 +92,9 @@ describe('the "Run on" pick in the row under the box', () => {
     expect(items[0]!.textContent).toContain('This machine')
     expect(items[1]!.textContent).toContain('Studio')
     expect(items[2]!.textContent).toContain('Add a machine…')
+    // Named, and the pick is the tick at the row's end; the other rows carry none.
+    expect(screen.getByText('Run on')).toBeTruthy()
+    expect(items.map(item => item.lastElementChild!.classList.contains('lucide-check'))).toEqual([false, true, false])
 
     fireEvent.click(items[1]!)
     expect(connection.onSelect).toHaveBeenCalledWith(STUDIO)

@@ -129,8 +129,9 @@ export function DriverModelMenu({
       <DropdownMenuContent align="end">
         {drivers.map(a => (
           <DropdownMenuSub key={a.value}>
+            {/* The tick leads every row of this menu (his pick): the rows' ends carry the account and the way into its models. */}
             <DropdownMenuSubTrigger>
-              <Check className={cn('h-3.5 w-3.5 shrink-0', a.value === driver ? 'opacity-100' : 'opacity-0')} />
+              <Check className={cn('h-3.5 w-3.5 shrink-0', a.value === driver ? 'opacity-100' : 'opacity-0')} aria-hidden />
               {a.icon && <span className="flex h-4 w-4 items-center justify-center">{a.icon}</span>}
               <span className="flex-1">{a.label}</span>
               {/* A long name gives way, never how full the account is. */}
@@ -145,12 +146,7 @@ export function DriverModelMenu({
               {a.models.length === 0 && a.modelsNote && <DropdownMenuItem disabled>{a.modelsNote}</DropdownMenuItem>}
               {a.models.map(m => (
                 <DropdownMenuItem key={m.value} onClick={() => onChange(a.value, m.value)}>
-                  <Check
-                    className={cn(
-                      'h-3.5 w-3.5 shrink-0',
-                      a.value === driver && m.value === model ? 'opacity-100' : 'opacity-0',
-                    )}
-                  />
+                  <Check className={cn('h-3.5 w-3.5 shrink-0', a.value === driver && m.value === model ? 'opacity-100' : 'opacity-0')} aria-hidden />
                   {m.label}
                 </DropdownMenuItem>
               ))}
@@ -164,12 +160,12 @@ export function DriverModelMenu({
             <DropdownMenuGroup>
               <DropdownMenuLabel>Effort</DropdownMenuLabel>
               <DropdownMenuItem onClick={() => effort!.onChange(undefined)}>
-                <Check className={cn('h-3.5 w-3.5 shrink-0', effort?.level === undefined ? 'opacity-100' : 'opacity-0')} />
+                <Check className={cn('h-3.5 w-3.5 shrink-0', effort?.level === undefined ? 'opacity-100' : 'opacity-0')} aria-hidden />
                 The agent’s default
               </DropdownMenuItem>
               {levels.map(one => (
                 <DropdownMenuItem key={one} onClick={() => effort!.onChange(one)}>
-                  <Check className={cn('h-3.5 w-3.5 shrink-0', effort?.level === one ? 'opacity-100' : 'opacity-0')} />
+                  <Check className={cn('h-3.5 w-3.5 shrink-0', effort?.level === one ? 'opacity-100' : 'opacity-0')} aria-hidden />
                   {effortLabel(one)}
                 </DropdownMenuItem>
               ))}

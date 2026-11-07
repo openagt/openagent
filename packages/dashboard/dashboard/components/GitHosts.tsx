@@ -227,7 +227,8 @@ export function GitAccountMenu({ address, machineId, on, busy, picked, onPick, o
         </TooltipTrigger>
         <TooltipContent>{said}</TooltipContent>
       </Tooltip>
-      <DropdownMenuContent align="end" className="min-w-[14rem]">
+      {/* Opens rightward from its button, and the tick leads its rows (his picks). */}
+      <DropdownMenuContent align="start" className="min-w-[14rem]">
         <DropdownMenuGroup>
           <DropdownMenuLabel>{`${p.name} account for this session${on !== undefined ? `, on ${on}` : ''}`}</DropdownMenuLabel>
           {p.accounts.map(login => (

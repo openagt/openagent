@@ -2,7 +2,8 @@ import { execFile } from 'node:child_process'
 import { lstat, mkdir, mkdtemp, rename, rm } from 'node:fs/promises'
 import { homedir } from 'node:os'
 import { basename, dirname, join } from 'node:path'
-import { addressOfRemote, repositoryAddress } from '@openagt/agent-data'
+import { repositoryAddress } from '@openagt/agent-data'
+import { typedRepository } from './typed-repository.js'
 
 /**
  * A project added by its repository's address, for a computer that does not have its folder: a
@@ -25,34 +26,13 @@ export interface CloneTarget {
   path: string
 }
 
-const HOST = /^[a-z0-9](?:[a-z0-9.-]*[a-z0-9])?$/i
-const SEGMENT = /^[a-z0-9_][a-z0-9._~-]*$/i
-const MAX_TYPED = 512
-
 /**
- * Read what a person typed as a repository's address: `github.com/you/shop`, the same with
- * `https://` before it, `ssh://git@github.com/you/shop.git`, or `git@github.com:you/shop.git`.
- * Undefined for anything else: a folder on this disk, another kind of address, a name that could
- * be read as an option or lead out of the folder projects are cloned into.
+ * Where what a person typed would be cloned to: `~/projects/<its name>`, in the home of the user
+ * OpenAgent runs as. Undefined wherever {@link typedRepository} is.
  */
 export function cloneTarget(typed: string, home: string = homedir()): CloneTarget | undefined {
-  const said = typed.trim().replace(/\/+$/, '')
-  if (!said || said.length > MAX_TYPED || /[\s\x00-\x1f\x7f]/.test(said)) return undefined
-  const scp = /^([a-z0-9_][a-z0-9._-]*)@([^:/@]+):([^:].*)$/i.exec(said)
-  const web = scp ? null : /^(?:(https|ssh):\/\/(?:([a-z0-9_][a-z0-9._-]*)@)?)?([^:/@]+)(?::(\d{1,5}))?\/(.+)$/i.exec(said)
-  const [host, rest] = scp ? [scp[2]!, scp[3]!] : web ? [web[3]!, web[5]!] : []
-  if (host === undefined || rest === undefined || !HOST.test(host) || !host.includes('.')) return undefined
-  const segments = rest.split('/')
-  if (!segments.every(segment => SEGMENT.test(segment))) return undefined
-  const name = segments.at(-1)!.replace(/\.git$/i, '')
-  if (!name || !SEGMENT.test(name)) return undefined
-  const scheme = web?.[1]?.toLowerCase()
-  // A user or a port is for SSH; a web address has neither, so no login rides in what was typed.
-  if (web && scheme !== 'ssh' && (web[2] !== undefined || web[4] !== undefined)) return undefined
-  // Written anew from its parts, so git is given the two kinds of address it is allowed, as it spells them.
-  const url = scp ? said : scheme === 'ssh' ? `ssh://${web![2] !== undefined ? `${web![2]}@` : ''}${host}${web![4] !== undefined ? `:${web![4]}` : ''}/${rest}` : `https://${host}/${rest}`
-  const address = addressOfRemote(url)
-  return address ? { url, address, path: join(home, 'projects', name) } : undefined
+  const repository = typedRepository(typed)
+  return repository && { url: repository.url, address: repository.address, path: join(home, 'projects', repository.name) }
 }
 
 /** How a clone went: the folder the project is in, and whether it was cloned now or was already there. */

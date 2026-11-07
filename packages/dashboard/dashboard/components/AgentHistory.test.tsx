@@ -13,7 +13,9 @@ import { projectLabels, ProjectLabelsContext } from '../lib/project-labels.js'
 const onProjects = vi.hoisted(() => vi.fn(() => Promise.resolve([])))
 const sendAddProject = vi.hoisted(() => vi.fn())
 const sendPickProjectDirectory = vi.hoisted(() => vi.fn())
-vi.mock('../rpc/projects.js', () => ({ onProjects, sendAddProject, sendPickProjectDirectory, onCloneTarget: vi.fn(), sendAddProjectFromAddress: vi.fn() }))
+// The project picker at the top reads the repos on this computer: none here.
+const onRepos = vi.hoisted(() => vi.fn(() => Promise.resolve({ repos: [], canAddFolder: false })))
+vi.mock('../rpc/projects.js', () => ({ onProjects, sendAddProject, sendPickProjectDirectory, onRepos, sendAddRepoFolder: vi.fn(), onCloneTarget: vi.fn(), sendAddProjectFromAddress: vi.fn() }))
 // An ended agent's log, read as the pointer reaches its row.
 const onAgent = vi.hoisted(() => vi.fn((_projectId: string, _agentId: string) => Promise.resolve([])))
 vi.mock('../rpc/reads.js', () => ({ onAgent }))
@@ -785,10 +787,10 @@ describe('the project select (#1513)', () => {
 
   test('it names the picked project, or "All projects" when none is picked', () => {
     const { unmount } = renderRail(<AgentHistory projectId={null} scope="p2" agents={[]} selectedAgentId={null} onSelect={() => {}} projects={[stranded, idle]} />)
-    expect(screen.getByRole('button', { name: 'Project: beta' })).toBeTruthy()
+    expect(screen.getByRole('combobox', { name: 'Project: beta' })).toBeTruthy()
     unmount()
     renderRail(<AgentHistory projectId={null} agents={[]} recentAgents={[]} selectedAgentId={null} onSelect={() => {}} projects={[stranded, idle]} />)
-    expect(screen.getByRole('button', { name: 'Project: All projects' })).toBeTruthy()
+    expect(screen.getByRole('combobox', { name: 'Project: All projects' })).toBeTruthy()
   })
 
   test('two projects with the same name say which folder each is in, on the button, in the menu and on the rows', async () => {
@@ -802,10 +804,10 @@ describe('the project select (#1513)', () => {
       </ProjectLabelsContext.Provider>
     )
     const { unmount } = renderRail(rail('shop-1'))
-    await openMenu(screen.getByRole('button', { name: 'Project: work/shop' }))
+    await openMenu(screen.getByRole('combobox', { name: 'Project: work/shop' }))
     // The folder is muted, the name as any other's.
-    expect(within(screen.getByRole('menuitem', { name: /clients\/shop/ })).getByText('clients/').className).toContain('text-muted-foreground')
-    expect(screen.getByRole('menuitem', { name: /beta/ })).toBeTruthy()
+    expect(within(screen.getByRole('option', { name: /clients\/shop/ })).getByText('clients/').className).toContain('text-muted-foreground')
+    expect(screen.getByRole('option', { name: /beta/ })).toBeTruthy()
     unmount()
     renderRail(rail(null))
     // The Overview's rows name their project the same way.
@@ -814,7 +816,7 @@ describe('the project select (#1513)', () => {
 
   test('while the project the address names is not read, neither "All projects" nor "No sessions yet." shows', () => {
     renderRail(<AgentHistory projectId={null} scopePending listLoaded={false} agents={[]} recentAgents={[]} selectedAgentId={null} onSelect={() => {}} />)
-    expect(screen.getByRole('button', { name: 'Project: loading' })).toBeTruthy()
+    expect(screen.getByRole('combobox', { name: 'Project: loading' })).toBeTruthy()
     expect(screen.queryByText('All projects')).toBeNull()
     expect(screen.queryByText('No sessions yet.')).toBeNull()
     // The heading stays, so the column does not jump once the list lands.
@@ -826,23 +828,22 @@ describe('the project select (#1513)', () => {
     renderRail(
       <AgentHistory projectId={null} scope="p1" onScope={id => picks.push(id)} agents={[]} selectedAgentId={null} onSelect={() => {}} projects={[stranded, idle]} />,
     )
-    await openMenu(screen.getByRole('button', { name: 'Project: alpha' }))
-    const current = screen.getByRole('menuitem', { name: /alpha/ })
-    expect(within(current).getByLabelText('selected')).toBeTruthy()
-    expect(within(screen.getByRole('menuitem', { name: /beta/ })).queryByLabelText('selected')).toBeNull()
-    fireEvent.click(screen.getByRole('menuitem', { name: /beta/ }))
-    await openMenu(screen.getByRole('button', { name: 'Project: alpha' }))
-    fireEvent.click(screen.getByRole('menuitem', { name: /All projects/ }))
+    await openMenu(screen.getByRole('combobox', { name: 'Project: alpha' }))
+    expect(screen.getByRole('option', { name: /alpha/ }).getAttribute('aria-selected')).toBe('true')
+    expect(screen.getByRole('option', { name: /beta/ }).getAttribute('aria-selected')).toBe('false')
+    fireEvent.click(screen.getByRole('option', { name: /beta/ }))
+    await openMenu(screen.getByRole('combobox', { name: 'Project: alpha' }))
+    fireEvent.click(screen.getByRole('option', { name: /All projects/ }))
     expect(picks).toEqual(['p2', null])
   })
 
   test('a project the daemon recorded an error for gets a red dot and the error in words; one not activated says so', async () => {
     renderRail(<AgentHistory projectId={null} agents={[]} recentAgents={[]} selectedAgentId={null} onSelect={() => {}} projects={[stranded, idle]} />)
-    await openMenu(screen.getByRole('button', { name: 'Project: All projects' }))
-    const broken = screen.getByRole('menuitem', { name: /alpha/ })
+    await openMenu(screen.getByRole('combobox', { name: 'Project: All projects' }))
+    const broken = screen.getByRole('option', { name: /alpha/ })
     expect(broken.querySelector('.bg-danger')).toBeTruthy()
     expect(within(broken).getByText('Not syncing with the remote').getAttribute('title')).toContain('Permission denied (publickey)')
-    const quiet = screen.getByRole('menuitem', { name: /beta/ })
+    const quiet = screen.getByRole('option', { name: /beta/ })
     expect(quiet.querySelector('.bg-danger')).toBeNull()
     expect(within(quiet).getByText('Not activated')).toBeTruthy()
   })
@@ -851,13 +852,13 @@ describe('the project select (#1513)', () => {
     const local = { ...idle, id: 'p3', name: 'gamma', activated: true, local: 'no-remote' as const }
     const kept = { ...idle, id: 'p4', name: 'delta', activated: true, local: 'kept' as const }
     renderRail(<AgentHistory projectId={null} agents={[]} recentAgents={[]} selectedAgentId={null} onSelect={() => {}} projects={[stranded, local, kept]} />)
-    await openMenu(screen.getByRole('button', { name: 'Project: All projects' }))
+    await openMenu(screen.getByRole('combobox', { name: 'Project: All projects' }))
     // A project with a remote whose records the person keeps says that instead, as quietly.
-    expect(within(screen.getByRole('menuitem', { name: /delta/ })).getByText('Records kept on this machine').className).toContain('text-muted-foreground')
-    const item = screen.getByRole('menuitem', { name: /gamma/ })
+    expect(within(screen.getByRole('option', { name: /delta/ })).getByText('Records kept on this machine').className).toContain('text-muted-foreground')
+    const item = screen.getByRole('option', { name: /gamma/ })
     expect(item.querySelector('.bg-danger')).toBeNull()
     expect(within(item).getByText('Local only, no remote').className).toContain('text-muted-foreground')
-    expect(within(screen.getByRole('menuitem', { name: /alpha/ })).queryByText('Local only, no remote')).toBeNull()
+    expect(within(screen.getByRole('option', { name: /alpha/ })).queryByText('Local only, no remote')).toBeNull()
   })
 
   test('with all projects showing, the row of the agent on screen is the highlighted one', () => {

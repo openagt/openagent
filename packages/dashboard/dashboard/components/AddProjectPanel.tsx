@@ -16,20 +16,25 @@ import { Input } from './ui/input.js'
 // The second way in is the repository's address, for a computer that does not have the folder: a
 // server has no screen for a folder dialog and no folder to pick. The person types the address,
 // sees where the project will be cloned to, confirms the same trust question, and only then is
-// anything cloned. A computer whose folder dialog cannot open offers this way in its place.
+// anything cloned. A computer whose folder dialog cannot open offers this way in its place. The
+// project picker hands the address typed into its search: then it opens at the trust question.
 //
 // It behaves like the dialog it claims to be (#948): Esc closes, Tab stays inside, focus
 // returns to the opener on close.
 export function AddProjectPanel({
   folder,
-  fromAddress = false,
+  address,
+  fromAddress = address !== undefined,
   onAdded,
   onClose,
 }: {
   folder?: string | undefined
+  /** The repository's address, typed already: read at once, so the trust question is the first thing shown. */
+  address?: string | undefined
   /** Opened to add a project by its repository's address: no folder dialog. */
   fromAddress?: boolean
-  onAdded: () => void
+  /** The project was added: its folder, for the picker to pick it once the projects are read again. */
+  onAdded: (path: string) => void
   onClose: () => void
 }) {
   // The picked path, once the system dialog answered; the phases are picking (no path yet),
@@ -38,7 +43,7 @@ export function AddProjectPanel({
   // The other way: by address. `typed` is what the field holds; `target` is that address once
   // OpenAgent has said where it would clone it to, which is what the trust question shows.
   const [byAddress, setByAddress] = useState(fromAddress)
-  const [typed, setTyped] = useState('')
+  const [typed, setTyped] = useState(address ?? '')
   const [target, setTarget] = useState<{ typed: string; address: string; path: string } | null>(null)
   const [added, setAdded] = useState<{ alreadyActivated: boolean; path?: string } | null>(null)
   const [pickError, setPickError] = useState<string | null>(null)
@@ -83,13 +88,17 @@ export function AddProjectPanel({
   }, [added])
 
   // The address as typed -> where it would be cloned to, or why it is no address. Nothing is cloned yet.
-  const readAddress = async (event: FormEvent) => {
-    event.preventDefault()
+  const readAddress = async (event?: FormEvent) => {
+    event?.preventDefault()
     const address = typed.trim()
     if (busy || !address) return
     const outcome = await run(() => onCloneTarget(address), 'Could not reach the daemon.')
     if (outcome.ok) setTarget({ typed: address, address: outcome.value.address, path: outcome.value.path })
   }
+  useEffect(() => {
+    if (address !== undefined) void readAddress()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   // Trust confirmed (#439) -> install + register; by address, clone first.
   const confirmAdd = async () => {
@@ -97,7 +106,7 @@ export function AddProjectPanel({
     const outcome = await run(() => (target ? sendAddProjectFromAddress(target.typed) : sendAddProject(path!)), 'Failed to add the project.')
     if (outcome.ok) {
       setAdded({ alreadyActivated: outcome.value.alreadyActivated, ...(outcome.value.path ? { path: outcome.value.path } : {}) })
-      onAdded()
+      onAdded(outcome.value.path ?? path!)
     }
   }
 

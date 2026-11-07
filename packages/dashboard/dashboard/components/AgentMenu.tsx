@@ -32,6 +32,7 @@ export function AgentMenu({ agents, picked, busy, onPick }: { agents: readonly A
       <DropdownMenuContent align="start" className="min-w-[14rem]">
         <DropdownMenuGroup>
           <DropdownMenuLabel>Agent</DropdownMenuLabel>
+          {/* The tick leads here (his pick): the row's end is for the count of skills. */}
           {agents.map(agent => (
             <DropdownMenuItem key={agent.id} onClick={() => onPick(agent.id)}>
               <Check className={cn('h-3.5 w-3.5 shrink-0', agent.id === on.id ? 'opacity-100' : 'opacity-0')} aria-hidden />

@@ -233,30 +233,32 @@ export function AgentComposer({
         sessionContext={context}
         {...(contextSet ? { addContext: contextSet.add, removeContext: contextSet.remove } : {})}
         // The launcher's row under the box, item for item in its places: the agent, off, since a session
-        // keeps the one it started on; the Context picker and the "Auto" menu; "Skills", off, the picks it
-        // started with in its hover; the run's own pull requests after them; and at the right, before the
-        // model, the account the run worked as, off. A session with no project has no project to take
+        // keeps the one it started on; "Skills", off, the picks it started with in its hover; the Context
+        // picker; the run's own pull requests after them; and at the right, before the model, the account
+        // the run worked as, off, then the "Auto" menu. A session with no project has no project to take
         // Context from and no git to take its work further with.
         controls={
           <>
             <AgentOff agent={agent} />
-            {projectId !== SESSIONS_ID && (
-              <>
-                {contextSet && <ProjectContextMenu projectId={projectId} context={contextSet.context} busy={busy} onToggle={contextSet.toggle} />}
-                <AutoMenu
-                  publish={picked ?? recorded}
-                  picks={offeredPublishPicks(launcher?.gitHost ?? true, launcher?.remote ?? true)}
-                  onPublish={pick => setPicked(pick === recorded ? null : pick)}
-                  target={prBase !== undefined ? { into: prBase } : undefined}
-                  busy={busy}
-                />
-              </>
-            )}
             <SkillsOff skillsOn={skillsOn} skillsOff={skillsOff} projectSkills={projectSkills} noProject={projectId === SESSIONS_ID} />
+            {projectId !== SESSIONS_ID && contextSet && <ProjectContextMenu projectId={projectId} context={contextSet.context} busy={busy} onToggle={contextSet.toggle} />}
             {controls}
           </>
         }
-        controlsEnd={<GitHostOff home={gitHost ?? null} account={gitAccount} />}
+        controlsEnd={
+          <>
+            <GitHostOff home={gitHost ?? null} account={gitAccount} />
+            {projectId !== SESSIONS_ID && (
+              <AutoMenu
+                publish={picked ?? recorded}
+                picks={offeredPublishPicks(launcher?.gitHost ?? true, launcher?.remote ?? true)}
+                onPublish={pick => setPicked(pick === recorded ? null : pick)}
+                target={prBase !== undefined ? { into: prBase } : undefined}
+                busy={busy}
+              />
+            )}
+          </>
+        }
         idleControl={idleControl}
         // What the box can do, not what it is for: the keys for a working agent, as Claude Code's box
         // says them in the same place.

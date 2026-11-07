@@ -9,7 +9,7 @@ vi.mock('../rpc/skills.js', () => ({ onProjectSkills }))
 const openSettings = vi.hoisted(() => vi.fn())
 vi.mock('../lib/use-route.js', () => ({ openSettings }))
 
-const { NO_PICKS, SkillsMenu, SkillsOff, sessionSkills, skillPicksSaid } = await import('./SkillsMenu.js')
+const { NO_PICKS, SkillsMenu, SkillsOff, agentPicks, sessionSkills, skillPicksSaid } = await import('./SkillsMenu.js')
 
 afterEach(() => {
   cleanup()
@@ -17,7 +17,7 @@ afterEach(() => {
   onProjectSkills.mockReset()
 })
 
-const REVIEWER = { id: 'reviewer', name: 'Reviewer', skills: ['ask', 'readability'], accounts: {} }
+const REVIEWER = { id: 'reviewer', name: 'Reviewer', skills: ['ask', 'readability'], accounts: {}, projectSkills: true }
 const GROUPS = [
   { title: 'Every agent starts with', skills: [{ name: 'ask', description: '' }, { name: 'github', description: '' }] },
   { title: 'Code reviews', skills: [{ name: 'readability', description: '' }, { name: 'ux', description: '' }] },
@@ -114,6 +114,12 @@ describe('the Skills menu under the launcher\'s box', () => {
 })
 
 describe('what the picks say', () => {
+  test('a session starts from no pick on its agent, and from no project skill on one set to never pick them up', () => {
+    expect(agentPicks(REVIEWER)).toBe(NO_PICKS)
+    expect(agentPicks(undefined)).toBe(NO_PICKS)
+    expect(agentPicks({ projectSkills: false })).toEqual({ on: [], off: [], project: 'none' })
+  })
+
   test('the skills a session gets of its agent\'s: the agent\'s less the ones off, then the ones on', () => {
     expect(sessionSkills(REVIEWER, NO_PICKS)).toEqual(['ask', 'readability'])
     expect(sessionSkills(REVIEWER, { on: ['ux', 'ask'], off: ['readability'] })).toEqual(['ask', 'ux'])

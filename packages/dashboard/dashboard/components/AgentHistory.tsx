@@ -23,7 +23,7 @@ import { holdsMainAgent, isOpenSubagent, nestRows, taskLabel } from '../lib/suba
 import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem, DropdownMenuGroup, DropdownMenuLabel } from './ui/dropdown-menu.js'
 import { SESSIONS_ID } from '../../src/project-address.js'
 import { Tooltip, TooltipTrigger, TooltipContent } from './ui/tooltip.js'
-import { ProjectSelect } from './ProjectSelect.js'
+import { ProjectPicker } from './ProjectPicker.js'
 import {
   Sidebar,
   SidebarContent,
@@ -318,7 +318,7 @@ export function AgentHistory({
             <HideSidebarButton />
           </div>
           <ViewToggle />
-          <ProjectSelect projects={projects} scope={scope} pending={scopePending} onScope={onScope} onProjectAdded={onProjectAdded} />
+          <ProjectPicker look="sidebar" none={{ label: 'All projects' }} picked={scope ?? null} pending={scopePending} projects={projects} onPick={onScope} onProjectAdded={onProjectAdded ?? (() => {})} />
         </SidebarHeader>
         {/* New/Overview/the modules' pages stack tight as one nav group (gap-0.5), close under the
             project select (no top padding: the select's own section has its room below it), with a

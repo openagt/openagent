@@ -25,7 +25,7 @@ import { SessionRepoPicks, type PickedRepo } from './SessionRepos.js'
 import { Dots } from './ToolCalls.js'
 import { AgentFix, agentWords, useAgentState } from './Logins.js'
 import { MachineLogins } from './ServerLogins.js'
-import { NO_PICKS, SkillsMenu, type SkillPicks } from './SkillsMenu.js'
+import { agentPicks, SkillsMenu, type SkillPicks } from './SkillsMenu.js'
 import { GitAccountMenu, useSessionAccount } from './GitHosts.js'
 import { AgentMenu } from './AgentMenu.js'
 import { useAgents } from './AgentsPage.js'
@@ -219,9 +219,9 @@ export function StartAgentForm({
   // The git host account picked for this session, when the person picked one; the agent's, else the computer's, otherwise.
   const [pickedAccount, setPickedAccount] = useState<string | undefined>()
   useEffect(() => setPickedAccount(undefined), [projectId, machine?.id])
-  // The skills picked for this session, beside its agent's list and the project's: none until the person picks.
-  const [skillPicks, setSkillPicks] = useState<SkillPicks>(NO_PICKS)
-  useEffect(() => setSkillPicks(NO_PICKS), [projectId, onAgent?.id])
+  // The skills picked for this session, beside its agent's list and the project's: what its agent starts from, until the person picks.
+  const [skillPicks, setSkillPicks] = useState<SkillPicks>(() => agentPicks(onAgent))
+  useEffect(() => setSkillPicks(agentPicks(onAgent)), [projectId, onAgent?.id, onAgent?.projectSkills])
   const pickedSkills = {
     ...(skillPicks.on.length > 0 ? { skillsOn: skillPicks.on } : {}),
     ...(skillPicks.off.length > 0 ? { skillsOff: skillPicks.off } : {}),
@@ -265,7 +265,7 @@ export function StartAgentForm({
       }) // select the run we just started (#761)
       composerRef.current?.clear()
       setRepos([])
-      setSkillPicks(NO_PICKS)
+      setSkillPicks(agentPicks(onAgent))
     }
   }
 
@@ -294,33 +294,30 @@ export function StartAgentForm({
         // otherwise flip its words.
         startsAt={
           <>
-            <ProjectPicker projectId={projectId} projectName={projectName} projects={projects} busy={busy} onPick={pickProject} onProjectAdded={onProjectAdded} />
+            <ProjectPicker look="row" none={{ label: 'No project', tip: 'The session works in a folder of its own' }} picked={noProject ? null : projectId} pickedName={projectName} projects={projects} busy={busy} onPick={id => pickProject(id ?? SESSIONS_ID)} onProjectAdded={onProjectAdded} />
             {noProject && <SessionRepoPicks picked={repos} projects={projects} busy={busy} onChange={setRepos} />}
             {!noProject && projectName && startFrom && preferencesLoaded && <StartFromMenu projectId={projectId} main={startFrom.main} local={startFrom.local} pick={startFromPick} onPick={pickStartFrom} busy={busy} />}
           </>
         }
-        // How it runs, under the box: the agent, then the Context picker, the "Auto" menu and the skills this session gets (his pick).
+        // Who runs, under the box at the left (his order): the agent, the skills this session gets, then the Context picker.
         controls={
           <>
             <AgentMenu agents={agentsView?.agents} picked={onAgent?.id} busy={busy} onPick={id => updatePreferences({ agent: id === DEFAULT_AGENT ? '' : id })} />
-            {!noProject && (
-              <>
-                <ProjectContextMenu projectId={projectId} context={context} busy={busy} onToggle={toggleContext} />
-                <AutoMenu
-                  publish={publishPick}
-                  picks={offeredPublishPicks(gitHost, remote)}
-                  onPublish={pick => updatePreferences({ publish: pick })}
-                  target={prTarget}
-                  busy={busy}
-                />
-              </>
-            )}
             <SkillsMenu projectId={noProject ? undefined : projectId} agent={onAgent} groups={agentsView?.skills} picks={skillPicks} onChange={setSkillPicks} busy={busy} />
+            {!noProject && <ProjectContextMenu projectId={projectId} context={context} busy={busy} onToggle={toggleContext} />}
           </>
         }
-        // Who it pushes as, at that row's right, before the model: the project's git host account on
-        // the computer the run goes to, picked for this session.
-        controlsEnd={remote && !noProject && <GitAccountMenu address={address} machineId={machine?.id} on={name} busy={busy} picked={pickedAccount} onPick={setPickedAccount} onAdd={() => (machine ? openSettings('devices', machine.id) : openPermissions())} />}
+        // What becomes of the work, at that row's right, before the model: who it pushes as (the
+        // project's git host account on the computer the run goes to, picked for this session), then
+        // the "Auto" menu.
+        controlsEnd={
+          !noProject && (
+            <>
+              {remote && <GitAccountMenu address={address} machineId={machine?.id} on={name} busy={busy} picked={pickedAccount} onPick={setPickedAccount} onAdd={() => (machine ? openSettings('devices', machine.id) : openPermissions())} />}
+              <AutoMenu publish={publishPick} picks={offeredPublishPicks(gitHost, remote)} onPublish={pick => updatePreferences({ publish: pick })} target={prTarget} busy={busy} />
+            </>
+          )
+        }
         onSubmit={submit}
         onPromptChange={value => {
           typed.current = value

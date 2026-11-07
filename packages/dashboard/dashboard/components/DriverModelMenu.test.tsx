@@ -106,7 +106,8 @@ describe('the effort, in the model menu', () => {
     fireEvent.click(trigger)
     expect(screen.getByText('Effort')).toBeTruthy()
     const items = ['The agent’s default', 'Low', 'Medium', 'High'].map(name => screen.getByRole('menuitem', { name }))
-    expect(items.map(item => item.querySelector('svg')!.getAttribute('class')).map(c => c?.includes('opacity-100'))).toEqual([false, false, false, true])
+    // The tick leads the picked row; the other rows carry it unseen, so the words line up.
+    expect(items.map(item => item.firstElementChild!.classList.contains('opacity-100'))).toEqual([false, false, false, true])
     fireEvent.click(screen.getByRole('menuitem', { name: 'Medium' }))
     expect(picked.onChange).toHaveBeenCalledWith('medium')
   })

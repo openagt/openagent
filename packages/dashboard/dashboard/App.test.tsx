@@ -370,8 +370,8 @@ describe('the project select (#1513)', () => {
   }
 
   async function pick(from: string, to: RegExp): Promise<void> {
-    await openMenu(await screen.findByRole('button', { name: `Project: ${from}` }))
-    fireEvent.click(screen.getByRole('menuitem', { name: to }))
+    await openMenu(await screen.findByRole('combobox', { name: `Project: ${from}` }))
+    fireEvent.click(screen.getByRole('option', { name: to }))
   }
 
   test('all projects show until one is picked; then the Overview, its badge and the agent list show only that project', async () => {
@@ -440,7 +440,7 @@ describe('the project select (#1513)', () => {
     window.history.replaceState(null, '', '/site/overview')
     render(<App />)
     // The name is a project's once the projects are read.
-    await screen.findByRole('button', { name: 'Project: site' })
+    await screen.findByRole('combobox', { name: 'Project: site' })
     fireEvent.click(await screen.findByText('New agent session'))
     expect(url()).toBe('/site')
     expect(await screen.findByText('the launcher of site')).toBeTruthy()
@@ -448,10 +448,10 @@ describe('the project select (#1513)', () => {
     expect(url()).toBe('/app')
     await pick('app', /All projects/)
     expect(url()).toBe('/app?all')
-    expect(await screen.findByRole('button', { name: 'Project: All projects' })).toBeTruthy()
+    expect(await screen.findByRole('combobox', { name: 'Project: All projects' })).toBeTruthy()
     // Back returns to the launcher with its project picked.
     window.history.back()
-    expect(await screen.findByRole('button', { name: 'Project: app' })).toBeTruthy()
+    expect(await screen.findByRole('combobox', { name: 'Project: app' })).toBeTruthy()
     expect(url()).toBe('/app')
   })
 
@@ -487,7 +487,7 @@ describe('the project select (#1513)', () => {
     answerTwo()
     window.history.replaceState(null, '', '/gone-123/overview')
     render(<App />)
-    expect(await screen.findByRole('button', { name: 'Project: All projects' })).toBeTruthy()
+    expect(await screen.findByRole('combobox', { name: 'Project: All projects' })).toBeTruthy()
     expect(await screen.findByText('card for app, site')).toBeTruthy()
   })
 
@@ -558,14 +558,15 @@ describe('the project select (#1513)', () => {
 
   test('adding a project reads the modules again at once', async () => {
     answerTwo()
-    answers.set('sendPickProjectDirectory', () => ({ ok: true, path: '/work/new' }))
+    // A repo on this computer that is no project yet, picked at the top of the sidebar, is made one.
+    answers.set('onRepos', () => ({ repos: [{ path: '/work/new', name: 'new' }], canAddFolder: false }))
     answers.set('sendAddProject', () => ({ ok: true, alreadyActivated: false }))
     render(<App />)
     await screen.findByRole('button', { name: 'Logs' })
     const reads = () => calls.filter(call => call.name === 'onModules').length
     const before = reads()
-    await openMenu(screen.getByRole('button', { name: 'Project: All projects' }))
-    fireEvent.click(screen.getByRole('menuitem', { name: /Add project/ }))
+    await openMenu(screen.getByRole('combobox', { name: 'Project: All projects' }))
+    fireEvent.click(await screen.findByRole('option', { name: /new/ }))
     fireEvent.click(await screen.findByRole('button', { name: 'I trust it, add it' }))
     await waitFor(() => expect(reads()).toBe(before + 1))
   })
@@ -629,13 +630,13 @@ describe('the project select (#1513)', () => {
       render(<App />)
       await waitFor(() => expect(calls.some(call => call.name === 'onModules')).toBe(true))
       await new Promise(resolve => setTimeout(resolve, 100))
-      expect(screen.getByRole('button', { name: 'Project: loading' })).toBeTruthy()
+      expect(screen.getByRole('combobox', { name: 'Project: loading' })).toBeTruthy()
       expect(screen.queryByText('All projects')).toBeNull()
       expect(screen.queryByText('No sessions yet.')).toBeNull()
       // The address's word is no project's id, and every project's agents are not what the page shows.
       expect(calls.filter(call => call.name === 'onAgents' || call.name === 'onRecentAgents')).toEqual([])
       for (const answer of held) answer([PROJECT, OTHER])
-      expect(await screen.findByRole('button', { name: 'Project: app' })).toBeTruthy()
+      expect(await screen.findByRole('combobox', { name: 'Project: app' })).toBeTruthy()
       await waitFor(() => expect(calls.some(call => call.name === 'onAgents' && call.args[0] === PROJECT.id)).toBe(true))
       expect(calls.filter(call => call.name === 'onAgents').map(call => call.args[0])).not.toContain('app')
       cleanup()
@@ -667,7 +668,7 @@ describe('the project select (#1513)', () => {
     cleanup()
     window.history.replaceState(null, '', '/logs-9zz')
     render(<App />)
-    expect(await screen.findByRole('button', { name: 'Project: logs' })).toBeTruthy()
+    expect(await screen.findByRole('combobox', { name: 'Project: logs' })).toBeTruthy()
     expect(url()).toBe('/logs-9zz')
     cleanup()
     window.history.replaceState(null, '', '/gone')
