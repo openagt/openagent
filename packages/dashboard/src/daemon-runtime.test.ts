@@ -122,17 +122,19 @@ test('a Start hands the line the branch to start from, and refuses a word that i
   }
 })
 
-test('a Start hands the run the session\'s account at the git host and its agent through the environment, never on the line, and refuses what is no login or no agent id before the line runs', async () => {
-  const ACCOUNT = `start: 'printf "%s %s" "\${OPENAGENT_GIT_ACCOUNT-unset}" "\${OPENAGENT_AGENT-unset}" > started.txt; echo "{\\"id\\":\\"run-9\\"}"'\n`
+test('a Start hands the run the session\'s account at the git host, its agent and its picks of skills through the environment, never on the line, and refuses what is no login, no agent id or no skill name before the line runs', async () => {
+  const ACCOUNT = `start: 'printf "%s %s %s %s %s" "\${OPENAGENT_GIT_ACCOUNT-unset}" "\${OPENAGENT_AGENT-unset}" "\${OPENAGENT_SKILLS_ON-unset}" "\${OPENAGENT_SKILLS_OFF-unset}" "\${OPENAGENT_PROJECT_SKILLS-unset}" > started.txt; echo "{\\"id\\":\\"run-9\\"}"'\n`
   const home = await project(ACCOUNT)
   const env = { XDG_CONFIG_HOME: join(home, 'cfg') }
   await mkdir(env.XDG_CONFIG_HOME, { recursive: true })
   const runtime = createProjectRuntime({ cwd: home, env })
   try {
-    assert.deepEqual(await runtime.onStart('Fix it', { account: 'octo-agent', agent: 'reviewer' }), { ok: true, agentId: 'run-9' })
-    assert.equal(await readFile(join(home, 'started.txt'), 'utf8'), 'octo-agent reviewer')
+    assert.deepEqual(await runtime.onStart('Fix it', { account: 'octo-agent', agent: 'reviewer', skillsOn: ['review', 'ux'], skillsOff: ['github'], projectSkills: ['deploy', 'lint'] }), { ok: true, agentId: 'run-9' })
+    assert.equal(await readFile(join(home, 'started.txt'), 'utf8'), 'octo-agent reviewer review,ux github deploy,lint')
+    assert.deepEqual(await runtime.onStart('Fix it', { projectSkills: 'none' }), { ok: true, agentId: 'run-9' })
+    assert.equal(await readFile(join(home, 'started.txt'), 'utf8'), 'unset unset unset unset none')
     assert.deepEqual(await runtime.onStart('Fix it'), { ok: true, agentId: 'run-9' })
-    assert.equal(await readFile(join(home, 'started.txt'), 'utf8'), 'unset unset', 'no pick: the run goes as the computer\'s account, on the default agent')
+    assert.equal(await readFile(join(home, 'started.txt'), 'utf8'), 'unset unset unset unset unset', 'no pick: the run goes as the computer\'s account, on the default agent, with its skills and every project skill')
     await rm(join(home, 'started.txt'))
     const notALogin = { ok: false, error: 'An account is named by its login.' }
     assert.deepEqual(await runtime.onStart('Fix it', { account: 'octo agent' }), notALogin)
@@ -141,6 +143,13 @@ test('a Start hands the run the session\'s account at the git host and its agent
     const notAnAgent = { ok: false, error: 'An agent is named by its id.' }
     assert.deepEqual(await runtime.onStart('Fix it', { agent: 'Not An Id' }), notAnAgent)
     assert.deepEqual(await runtime.onStart('Fix it', { agent: '../x' }), notAnAgent)
+    const notSkills = { ok: false, error: 'Skills are named by their names.' }
+    assert.deepEqual(await runtime.onStart('Fix it', { skillsOn: ['Not A Skill'] }), notSkills)
+    assert.deepEqual(await runtime.onStart('Fix it', { skillsOff: [] }), notSkills)
+    assert.deepEqual(await runtime.onStart('Fix it', { skillsOff: 'github' as unknown as string[] }), notSkills)
+    const notProjectSkills = { ok: false, error: 'Project skills are none, or named by their names.' }
+    assert.deepEqual(await runtime.onStart('Fix it', { projectSkills: 'all' as unknown as 'none' }), notProjectSkills)
+    assert.deepEqual(await runtime.onStart('Fix it', { projectSkills: [] }), notProjectSkills)
     await assert.rejects(readFile(join(home, 'started.txt'), 'utf8'), 'the line did not run')
   } finally {
     await runtime.dispose()

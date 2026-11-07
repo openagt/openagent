@@ -11,7 +11,7 @@ import { ProjectContextMenu } from './ContextMenu.js'
 import { AutoMenu } from './AutoMenu.js'
 import { AgentOff } from './AgentMenu.js'
 import { GitHostOff } from './GitHosts.js'
-import { SkillsButton } from './ProjectSkills.js'
+import { SkillsOff } from './SkillsMenu.js'
 import { isPublishPick, offeredPublishPicks, type PublishPick } from '../../src/client.js'
 import { useProjectLauncher } from '../lib/use-project-launcher.js'
 import { promptWithContext, type ContextSet } from '../lib/use-context-set.js'
@@ -57,6 +57,9 @@ export function AgentComposer({
   agent,
   gitHost,
   gitAccount,
+  skillsOn,
+  skillsOff,
+  projectSkills,
 }: {
   projectId: string
   /** Which run this addresses (#749). */
@@ -93,6 +96,10 @@ export function AgentComposer({
   gitHost?: GitHostHome | null | undefined
   /** The account the run worked as there, as its record says. */
   gitAccount?: string | undefined
+  /** The session's picks of skills, as its record says: on top of its agent's, left out of its agent's, which of the project's own stayed. */
+  skillsOn?: string[] | undefined
+  skillsOff?: string[] | undefined
+  projectSkills?: 'none' | string[] | undefined
 }) {
   const composerRef = useRef<ComposerHandle>(null)
   useEffect(() => {
@@ -226,9 +233,10 @@ export function AgentComposer({
         sessionContext={context}
         {...(contextSet ? { addContext: contextSet.add, removeContext: contextSet.remove } : {})}
         // The launcher's row under the box, item for item in its places: the agent, off, since a session
-        // keeps the one it started on; the Context picker, the "Auto" menu and "Skills"; the run's own pull
-        // requests after them; and at the right, before the model, the account the run worked as, off.
-        // A session with no project has no project to take Context from, no git to take its work further with and no project skills.
+        // keeps the one it started on; the Context picker and the "Auto" menu; "Skills", off, the picks it
+        // started with in its hover; the run's own pull requests after them; and at the right, before the
+        // model, the account the run worked as, off. A session with no project has no project to take
+        // Context from and no git to take its work further with.
         controls={
           <>
             <AgentOff agent={agent} />
@@ -242,9 +250,9 @@ export function AgentComposer({
                   target={prBase !== undefined ? { into: prBase } : undefined}
                   busy={busy}
                 />
-                <SkillsButton projectId={projectId} />
               </>
             )}
+            <SkillsOff skillsOn={skillsOn} skillsOff={skillsOff} projectSkills={projectSkills} noProject={projectId === SESSIONS_ID} />
             {controls}
           </>
         }

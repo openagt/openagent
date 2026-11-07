@@ -8,6 +8,8 @@ export {
 } from './branch-names.js'
 export {
   worktreePath,
+  leaveOut,
+  type LeaveOut,
   addWorktree,
   attachWorktree,
   listWorktrees,

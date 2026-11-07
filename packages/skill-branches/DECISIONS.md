@@ -213,3 +213,9 @@ ending.
   `.branches` once it is empty, and is what a dashboard runs when a project is removed with
   its files. A checkout with uncommitted work and a branch with work on it stay. Picked over
   a dashboard deleting `.branches` itself.
+- A checkout can be made without some of the project's paths: git's sparse checkout, in the
+  worktree alone, everything else in, set right after the worktree is added and again when a
+  kept checkout is relinked. The index keeps the paths, so the checkout is clean and a commit
+  from it changes nothing about them, and the project's other checkouts have them. What a
+  caller leaves out is its own business: a run's tool leaves out the project skills a session
+  did not pick. Picked over deleting the files, which the agent's next commit would carry.

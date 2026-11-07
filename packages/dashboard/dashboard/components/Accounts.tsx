@@ -33,7 +33,6 @@ export function AccountsList() {
   return (
     <ServersProvider>
       <div className="space-y-4">
-        <p className="text-sm text-muted-foreground">When a coding agent&rsquo;s account hits its limit, the next free one takes the run over where it stopped.</p>
         <FromLine />
         <AgentSetup driver="claude-code" title="Claude Code" Logo={ClaudeLogo} />
         <AgentSetup driver="codex" title="Codex" Logo={CodexLogo} />

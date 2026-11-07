@@ -156,9 +156,11 @@ test('a resumed run continues on the tool its record names, and a Codex run with
     try {
       await writeAgent({ id: 'reviewer', name: 'Reviewer', skills: ['ask'], accounts: { github: 'octo-one', claude: ['Dani', 'Nobody'] } })
       addAccount('Dani', 'x', accountsPath('claude'))
-      const first = await runCommand(repo, { prompt: 'Read the docs', driver: codex('Read.'), host: 'this-box', pid: 4242, now: () => NOW, gitHost: { requestOfBranch: async () => undefined }, gitAccount: 'octo-one', agent: 'reviewer' })
+      const first = await runCommand(repo, { prompt: 'Read the docs', driver: codex('Read.'), host: 'this-box', pid: 4242, now: () => NOW, gitHost: { requestOfBranch: async () => undefined }, gitAccount: 'octo-one', agent: 'reviewer', skillsOff: ['ask'], projectSkills: 'none' })
       assert.equal(first.status, 'done')
       assert.equal((await findRun(repo, first.id))?.caller?.['agent'], 'reviewer')
+      assert.deepEqual((await findRun(repo, first.id))?.caller?.['skillsOff'], ['ask'], 'the session\'s picks of skills are on the record')
+      assert.equal((await findRun(repo, first.id))?.caller?.['projectSkills'], 'none')
       const asked: string[] = []
       const workedAs: (string | undefined)[] = []
       const second = await resumeProject(repo, { id: first.id, text: 'And the tests?' }, { driverFor: (name, _id, setup, as) => { asked.push(`${name} ${JSON.stringify(setup)} ${JSON.stringify(as)}`); return codex('Read too.') }, workAs: async (_repo, login) => (workedAs.push(login), login) })
@@ -167,6 +169,8 @@ test('a resumed run continues on the tool its record names, and a Codex run with
       assert.deepEqual(workedAs, ['octo-one'], 'the resume goes on as the account the record names, not whatever the computer\'s pick is by then')
       assert.equal((await findRun(repo, first.id))?.caller?.['gitAccount'], 'octo-one')
       assert.equal((await findRun(repo, first.id))?.caller?.['agent'], 'reviewer', 'the agent stays on the record')
+      assert.deepEqual((await findRun(repo, first.id))?.caller?.['skillsOff'], ['ask'], 'and so do the picks')
+      assert.equal((await findRun(repo, first.id))?.caller?.['projectSkills'], 'none')
     } finally {
       if (homeBefore === undefined) delete process.env.XDG_CONFIG_HOME
       else process.env.XDG_CONFIG_HOME = homeBefore

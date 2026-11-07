@@ -42,6 +42,13 @@ vi.mock('./AgentMenu.js', () => ({
     <button type="button" onClick={() => onPick('reviewer')}>{`agent:${picked ?? ''}`}</button>
   ),
 }))
+// The skills this session gets: a press that picks some, and what it was given.
+vi.mock('./SkillsMenu.js', () => ({
+  NO_PICKS: { on: [], off: [] },
+  SkillsMenu: ({ projectId, picks, onChange }: { projectId: string | undefined; picks: { on: string[]; off: string[]; project?: 'none' | string[] }; onChange: (picks: { on: string[]; off: string[]; project?: 'none' | string[] }) => void }) => (
+    <button type="button" onClick={() => onChange({ on: ['review'], off: ['github'], project: 'none' })}>{`skills:${projectId ?? 'no project'}:${picks.on.join('+')}/${picks.off.join('+')}/${picks.project === undefined ? 'all' : picks.project === 'none' ? 'none' : picks.project.join('+')}`}</button>
+  ),
+}))
 // The computer's account, and a press that picks another for this session.
 const runsAccount = vi.hoisted(() => ({ login: undefined as string | undefined }))
 vi.mock('./GitHosts.js', () => ({
@@ -516,11 +523,22 @@ describe('StartAgentForm (#1774)', () => {
     expect(screen.queryByRole('alert')).toBeNull()
   })
 
-  test('"Skills" under the box opens Settings on this project\'s Skills page', async () => {
+  test('the skills picked for this session go with the Start and to the run\'s page; none picked, nothing is sent; the next session starts from none again', async () => {
     onCommands.mockResolvedValue({ commands: [], startHook: true, gitHost: true, remote: true, address: 'github.com/acme/shop' })
-    render(<StartAgentForm {...props} />)
-    fireEvent.click(screen.getByRole('button', { name: 'Skills' }))
-    expect(openSettings).toHaveBeenCalledWith('skills', 'p1')
+    start.mockResolvedValue({ agentId: 'r1' })
+    const onAgentStarted = vi.fn()
+    render(<StartAgentForm {...props} projectName="gemstack" onAgentStarted={onAgentStarted} />)
+    fireEvent.click(await screen.findByText('skills:p1://all'))
+    expect(screen.getByText('skills:p1:review/github/none')).toBeTruthy()
+    fireEvent.click(screen.getByText('submit-typed'))
+    await waitFor(() => expect(onAgentStarted).toHaveBeenCalled())
+    expect(start.mock.lastCall![2]).toMatchObject({ skillsOn: ['review'], skillsOff: ['github'], projectSkills: 'none' })
+    expect(onAgentStarted.mock.lastCall![4]).toMatchObject({ skillsOn: ['review'], skillsOff: ['github'], projectSkills: 'none' })
+    expect(screen.getByText('skills:p1://all')).toBeTruthy()
+    fireEvent.click(screen.getByText('submit-typed'))
+    await waitFor(() => expect(start).toHaveBeenCalledTimes(2))
+    const sent = start.mock.lastCall![2] as Record<string, unknown>
+    expect('skillsOn' in sent || 'skillsOff' in sent || 'projectSkills' in sent).toBe(false)
   })
 
   test('a machine that takes no logins of this computer\'s sends the person to the Permissions page', async () => {

@@ -24,6 +24,10 @@ export interface StartPicks {
   repos?: { name: string; from: string }[]
   /** The agent the run is on, by its id. */
   agent?: string
+  /** The session's picks of skills: names on top of its agent's, names of its agent's left out, which of the project's own stay (`none`, or names; absent, every one). */
+  skillsOn?: string[]
+  skillsOff?: string[]
+  projectSkills?: 'none' | string[]
 }
 
 /** Whether what the run started from is origin's default branch, whose name has to be read. */

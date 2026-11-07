@@ -1,4 +1,5 @@
 import { nodeGitRunner } from '@openagt/agent-data'
+import { projectSkillNames } from '@openagt/agent-runner'
 import { skillsOn, uncommittedSkills } from '../project-skills/branch.js'
 import { carriedSkills, GROUPS } from '../project-skills/catalogue.js'
 import { applyChange, isKnown } from '../project-skills/change.js'
@@ -46,13 +47,15 @@ export interface ProjectSkills {
   branch?: string
   /** Whether the branch the folder is on has every waiting skill: an agent started from it has them now. */
   local: boolean
+  /** Every skill the project holds, by name, as a run's checkout has them: the list's, and the project's own; what the launcher's Skills menu offers per session. */
+  held: string[]
 }
 
 /** The project's skills; `null` when the project is unknown here. */
 export async function onProjectSkills(projectId: string): Promise<ProjectSkills | null> {
   const cwd = await resolveProjectPath(projectId)
   if (!cwd) return null
-  const [state, carried] = await Promise.all([readProject(cwd), carriedSkills()])
+  const [state, carried, held] = await Promise.all([readProject(cwd), carriedSkills(), projectSkillNames(cwd)])
   const standing = new Map(state.skills.map(skill => [skill.name, skill.standing]))
   const { start, waiting } = await waitingSkills(cwd, state.skills.filter(skill => skill.standing !== 'absent').map(skill => skill.name))
   const uncommitted = state.git ? await uncommittedSkills(cwd) : []
@@ -74,6 +77,7 @@ export async function onProjectSkills(projectId: string): Promise<ProjectSkills 
     ...(open ? { request: open } : {}),
     ...(pushed && [...waiting.keys()].every(name => pushed.has(name)) ? { branch: SKILLS_BRANCH } : {}),
     local: waiting.size > 0 && uncommitted.length === 0 && [...waiting.values()].every(skill => skill.here),
+    held,
   }
 }
 

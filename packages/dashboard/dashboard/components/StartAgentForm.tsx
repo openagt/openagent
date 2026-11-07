@@ -25,7 +25,7 @@ import { SessionRepoPicks, type PickedRepo } from './SessionRepos.js'
 import { Dots } from './ToolCalls.js'
 import { AgentFix, agentWords, useAgentState } from './Logins.js'
 import { MachineLogins } from './ServerLogins.js'
-import { SkillsButton } from './ProjectSkills.js'
+import { NO_PICKS, SkillsMenu, type SkillPicks } from './SkillsMenu.js'
 import { GitAccountMenu, useSessionAccount } from './GitHosts.js'
 import { AgentMenu } from './AgentMenu.js'
 import { useAgents } from './AgentsPage.js'
@@ -219,6 +219,14 @@ export function StartAgentForm({
   // The git host account picked for this session, when the person picked one; the agent's, else the computer's, otherwise.
   const [pickedAccount, setPickedAccount] = useState<string | undefined>()
   useEffect(() => setPickedAccount(undefined), [projectId, machine?.id])
+  // The skills picked for this session, beside its agent's list and the project's: none until the person picks.
+  const [skillPicks, setSkillPicks] = useState<SkillPicks>(NO_PICKS)
+  useEffect(() => setSkillPicks(NO_PICKS), [projectId, onAgent?.id])
+  const pickedSkills = {
+    ...(skillPicks.on.length > 0 ? { skillsOn: skillPicks.on } : {}),
+    ...(skillPicks.off.length > 0 ? { skillsOff: skillPicks.off } : {}),
+    ...(!noProject && skillPicks.project !== undefined ? { projectSkills: skillPicks.project } : {}),
+  }
   const account = useSessionAccount(address, machine?.id, pickedAccount ?? onAgent?.accounts.github)
 
   const submit = async (text: string) => {
@@ -234,6 +242,7 @@ export function StartAgentForm({
       ...(noProject && repos.length > 0 ? { repos: repos.map(repo => repo.path) } : {}),
       ...(!noProject && remote && account !== undefined ? { account } : {}),
       ...(agentId !== undefined ? { agent: agentId } : {}),
+      ...pickedSkills,
     })
     setNote(null)
     if (result) {
@@ -246,6 +255,7 @@ export function StartAgentForm({
         ...(started !== undefined ? { branch: started } : {}),
         ...(!noProject && remote && account !== undefined ? { gitAccount: account } : {}),
         ...(agentId !== undefined ? { agent: agentId } : {}),
+        ...pickedSkills,
         ...(noProject ? {} : { publish: publishPick }),
         ...(prInto !== undefined ? { prBase: prInto } : {}),
         ...(preferences.driver ? { driver: preferences.driver } : {}),
@@ -255,6 +265,7 @@ export function StartAgentForm({
       }) // select the run we just started (#761)
       composerRef.current?.clear()
       setRepos([])
+      setSkillPicks(NO_PICKS)
     }
   }
 
@@ -288,23 +299,23 @@ export function StartAgentForm({
             {!noProject && projectName && startFrom && preferencesLoaded && <StartFromMenu projectId={projectId} main={startFrom.main} local={startFrom.local} pick={startFromPick} onPick={pickStartFrom} busy={busy} />}
           </>
         }
-        // How it runs, under the box: the Context picker, the "Auto" menu, then the project's skills (his pick).
+        // How it runs, under the box: the agent, then the Context picker, the "Auto" menu and the skills this session gets (his pick).
         controls={
           <>
             <AgentMenu agents={agentsView?.agents} picked={onAgent?.id} busy={busy} onPick={id => updatePreferences({ agent: id === DEFAULT_AGENT ? '' : id })} />
             {!noProject && (
-          <>
-            <ProjectContextMenu projectId={projectId} context={context} busy={busy} onToggle={toggleContext} />
-            <AutoMenu
-              publish={publishPick}
-              picks={offeredPublishPicks(gitHost, remote)}
-              onPublish={pick => updatePreferences({ publish: pick })}
-              target={prTarget}
-              busy={busy}
-            />
-            <SkillsButton projectId={projectId} />
-          </>
+              <>
+                <ProjectContextMenu projectId={projectId} context={context} busy={busy} onToggle={toggleContext} />
+                <AutoMenu
+                  publish={publishPick}
+                  picks={offeredPublishPicks(gitHost, remote)}
+                  onPublish={pick => updatePreferences({ publish: pick })}
+                  target={prTarget}
+                  busy={busy}
+                />
+              </>
             )}
+            <SkillsMenu projectId={noProject ? undefined : projectId} agent={onAgent} groups={agentsView?.skills} picks={skillPicks} onChange={setSkillPicks} busy={busy} />
           </>
         }
         // Who it pushes as, at that row's right, before the model: the project's git host account on

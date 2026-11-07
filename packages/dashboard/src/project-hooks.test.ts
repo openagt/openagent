@@ -115,14 +115,15 @@ test('a start line that names the coding agent of its run is taken at its word; 
   }
 })
 
-test('naming a run off, the session\'s account at the git host and its agent reach the run\'s own tool through the environment, with no line of any hooks.yml changed', async () => {
+test('naming a run off, the session\'s account at the git host, its agent and its picks of skills reach the run\'s own tool through the environment, with no line of any hooks.yml changed', async () => {
   // The line below never mentions them: the run's tool is the line's own child and reads them there.
-  const cwd = await project(`start: 'printf "%s %s %s\\n" "\${OPENAGENT_NAME_RUN-unset}" "\${OPENAGENT_GIT_ACCOUNT-unset}" "\${OPENAGENT_AGENT-unset}" >> named.txt; echo "{\\"ok\\":true,\\"id\\":\\"run-1\\"}"'\n`)
+  const cwd = await project(`start: 'printf "%s %s %s %s %s %s\\n" "\${OPENAGENT_NAME_RUN-unset}" "\${OPENAGENT_GIT_ACCOUNT-unset}" "\${OPENAGENT_AGENT-unset}" "\${OPENAGENT_SKILLS_ON-unset}" "\${OPENAGENT_SKILLS_OFF-unset}" "\${OPENAGENT_PROJECT_SKILLS-unset}" >> named.txt; echo "{\\"ok\\":true,\\"id\\":\\"run-1\\"}"'\n`)
   try {
     assert.deepEqual(await runStartHook(cwd, { prompt: 'x' }), { ok: true, id: 'run-1' })
     assert.deepEqual(await runStartHook(cwd, { prompt: 'x', nameRun: false }), { ok: true, id: 'run-1' })
-    assert.deepEqual(await runStartHook(cwd, { prompt: 'x', nameRun: true, account: 'octo-agent', agent: 'reviewer' }), { ok: true, id: 'run-1' })
-    assert.equal(await readFile(join(cwd, 'named.txt'), 'utf8'), 'unset unset unset\n0 unset unset\nunset octo-agent reviewer\n')
+    assert.deepEqual(await runStartHook(cwd, { prompt: 'x', nameRun: true, account: 'octo-agent', agent: 'reviewer', skillsOn: ['review', 'ux'], skillsOff: ['github'], projectSkills: 'none' }), { ok: true, id: 'run-1' })
+    assert.deepEqual(await runStartHook(cwd, { prompt: 'x', projectSkills: ['deploy', 'lint'] }), { ok: true, id: 'run-1' })
+    assert.equal(await readFile(join(cwd, 'named.txt'), 'utf8'), 'unset unset unset unset unset unset\n0 unset unset unset unset unset\nunset octo-agent reviewer review,ux github none\nunset unset unset unset unset deploy,lint\n')
   } finally {
     await rm(cwd, { recursive: true, force: true })
   }

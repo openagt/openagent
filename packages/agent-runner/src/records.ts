@@ -1,4 +1,5 @@
-import type { FileBranchWrite } from '@openagt/agent-data'
+import { isSkillName, type FileBranchWrite } from '@openagt/agent-data'
+import type { ProjectSkillsPick } from './agent.js'
 import { publishedBranch } from '@openagt/agent-data/names'
 import { deleteRun, writeRun, type AnyDiaryLine, type LogsDeps, type RunCard } from '@openagt/skill-logs'
 
@@ -59,6 +60,12 @@ export interface RunnerMark {
   repos?: SessionRepo[]
   /** The agent the run is on, by its id (`OPENAGENT_AGENT`): its skills and accounts; the default agent when absent. */
   agent?: string
+  /** Skills the run gets on top of its agent's (`OPENAGENT_SKILLS_ON`): the session's pick. */
+  skillsOn?: string[]
+  /** Skills of its agent's the run does not get (`OPENAGENT_SKILLS_OFF`): the session's pick. */
+  skillsOff?: string[]
+  /** Which of the project's own skills stay in the run's checkout (`OPENAGENT_PROJECT_SKILLS`): none, or the ones named; every one when absent. */
+  projectSkills?: ProjectSkillsPick
 }
 
 /**
@@ -80,10 +87,10 @@ function reposOf(value: unknown): SessionRepo[] | undefined {
 export function runnerMark(card: RunCard): RunnerMark | undefined {
   const mark = card.caller?.['runner']
   if (!mark || typeof mark !== 'object') return undefined
-  const { host, pid, publish, parent, base, prBase, gitAccount, baseCommit, for: started, resumed, repos, agent } = mark as Record<string, unknown>
+  const { host, pid, publish, parent, base, prBase, gitAccount, baseCommit, for: started, resumed, repos, agent, skillsOn, skillsOff, projectSkills } = mark as Record<string, unknown>
   if (typeof host !== 'string') return undefined
   const by = resumed && typeof resumed === 'object' ? (resumed as Record<string, unknown>) : {}
-  return { host, ...(typeof pid === 'number' ? { pid } : {}), ...lasting({ publish, parent, base, prBase, gitAccount, baseCommit, for: started, repos, agent }), ...(typeof by['by'] === 'string' && typeof by['at'] === 'string' ? { resumed: { by: by['by'], at: by['at'] } } : {}) }
+  return { host, ...(typeof pid === 'number' ? { pid } : {}), ...lasting({ publish, parent, base, prBase, gitAccount, baseCommit, for: started, repos, agent, skillsOn, skillsOff, projectSkills }), ...(typeof by['by'] === 'string' && typeof by['at'] === 'string' ? { resumed: { by: by['by'], at: by['at'] } } : {}) }
 }
 
 /**
@@ -97,9 +104,15 @@ export function earlierPrs(card: RunCard): { number: number; url: string }[] {
   return prs.flatMap(pr => (pr && typeof pr === 'object' && typeof pr.number === 'number' && typeof pr.url === 'string' ? [{ number: pr.number as number, url: pr.url as string }] : []))
 }
 
-/** What a mark keeps for the run's whole life, a resume included: its publish level, its parent, where it started, where its pull request goes, what it was started for, the repos it has. */
-export function lasting(mark: { publish?: unknown; parent?: unknown; base?: unknown; prBase?: unknown; gitAccount?: unknown; baseCommit?: unknown; for?: unknown; repos?: unknown; agent?: unknown }): Pick<RunnerMark, 'publish' | 'parent' | 'base' | 'prBase' | 'gitAccount' | 'baseCommit' | 'for' | 'repos' | 'agent'> {
+/** A list of skill names, as a mark keeps one; nothing for anything else, or an empty list. */
+const skillNames = (value: unknown): string[] | undefined => (Array.isArray(value) && value.length > 0 && value.every(isSkillName) ? (value as string[]) : undefined)
+
+/** What a mark keeps for the run's whole life, a resume included: its publish level, its parent, where it started, where its pull request goes, what it was started for, the repos it has, its agent and the session's picks of skills. */
+export function lasting(mark: { publish?: unknown; parent?: unknown; base?: unknown; prBase?: unknown; gitAccount?: unknown; baseCommit?: unknown; for?: unknown; repos?: unknown; agent?: unknown; skillsOn?: unknown; skillsOff?: unknown; projectSkills?: unknown }): Pick<RunnerMark, 'publish' | 'parent' | 'base' | 'prBase' | 'gitAccount' | 'baseCommit' | 'for' | 'repos' | 'agent' | 'skillsOn' | 'skillsOff' | 'projectSkills'> {
   const repos = reposOf(mark.repos)
+  const skillsOn = skillNames(mark.skillsOn)
+  const skillsOff = skillNames(mark.skillsOff)
+  const projectSkills = mark.projectSkills === 'none' ? 'none' : skillNames(mark.projectSkills)
   return {
     ...(isPublish(mark.publish) ? { publish: mark.publish } : {}),
     ...(typeof mark.parent === 'string' ? { parent: mark.parent } : {}),
@@ -110,6 +123,9 @@ export function lasting(mark: { publish?: unknown; parent?: unknown; base?: unkn
     ...(typeof mark.for === 'string' ? { for: mark.for } : {}),
     ...(repos !== undefined && repos.length > 0 ? { repos } : {}),
     ...(typeof mark.agent === 'string' && mark.agent ? { agent: mark.agent } : {}),
+    ...(skillsOn ? { skillsOn } : {}),
+    ...(skillsOff ? { skillsOff } : {}),
+    ...(projectSkills !== undefined ? { projectSkills } : {}),
   }
 }
 
@@ -134,7 +150,7 @@ export function markerCard(run: { id: string; startedAt: string; prompt: string;
  * change, and what it was started for, which a git host's check reads to find the run a thread has,
  * and the repos a session with no project has, which its page shows.
  */
-export function forReaders(mark: Pick<RunnerMark, 'parent' | 'base' | 'prBase' | 'gitAccount' | 'baseCommit' | 'publish' | 'for' | 'repos' | 'agent'>): { parent?: string; base?: string; prBase?: string; gitAccount?: string; baseCommit?: string; publish?: Publish; for?: string; repos?: SessionRepo[]; agent?: string } {
+export function forReaders(mark: Pick<RunnerMark, 'parent' | 'base' | 'prBase' | 'gitAccount' | 'baseCommit' | 'publish' | 'for' | 'repos' | 'agent' | 'skillsOn' | 'skillsOff' | 'projectSkills'>): { parent?: string; base?: string; prBase?: string; gitAccount?: string; baseCommit?: string; publish?: Publish; for?: string; repos?: SessionRepo[]; agent?: string; skillsOn?: string[]; skillsOff?: string[]; projectSkills?: ProjectSkillsPick } {
   return {
     ...(mark.parent !== undefined ? { parent: mark.parent } : {}),
     ...(mark.base !== undefined ? { base: publishedBranch(mark.base) ?? mark.base } : {}),
@@ -145,6 +161,9 @@ export function forReaders(mark: Pick<RunnerMark, 'parent' | 'base' | 'prBase' |
     ...(mark.for !== undefined ? { for: mark.for } : {}),
     ...(mark.repos !== undefined ? { repos: mark.repos } : {}),
     ...(mark.agent !== undefined ? { agent: mark.agent } : {}),
+    ...(mark.skillsOn !== undefined ? { skillsOn: mark.skillsOn } : {}),
+    ...(mark.skillsOff !== undefined ? { skillsOff: mark.skillsOff } : {}),
+    ...(mark.projectSkills !== undefined ? { projectSkills: mark.projectSkills } : {}),
   }
 }
 

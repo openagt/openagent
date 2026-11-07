@@ -116,6 +116,16 @@ export interface StartAgentOptions {
    * accounts. Absent, the default agent. The run's record keeps it, and a resume goes on with it.
    */
   agent?: string
+  /** Skills the session gets on top of its agent's, by name: the "Skills" menu's picks for this session. Absent, none. */
+  skillsOn?: string[]
+  /** Skills of its agent's the session does not get, by name. Absent, none. */
+  skillsOff?: string[]
+  /**
+   * Which of the project's own skills stay in the session's checkout: `none`, or their names.
+   * Absent, every one. Refused for a session with no project. The run's record keeps these three,
+   * and a resume goes on with them.
+   */
+  projectSkills?: 'none' | string[]
 }
 
 /**

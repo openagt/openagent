@@ -24,7 +24,7 @@ import { asRecorded, onMachine } from './dashboard-rpc/reads.js'
 import { tailAgentEvents } from './dashboard-rpc/events-tail.js'
 import { addProject, isHostName, listMachines, listProjects, machineNamed, nameMachine, noteProjects, noteSeen, noteServer, projectId, readPreferences, removeProject, type MachineRecord, type Preferences } from './registry.js'
 import { writeHookLines } from './built-in.js'
-import { fileBranchRepo, installProject, isAgentId, projectKey, projectNameOf, repositoryAddress, sessionsHome, writeSharing } from '@openagt/agent-data'
+import { fileBranchRepo, installProject, isAgentId, projectKey, projectNameOf, repositoryAddress, sessionsHome, writeSharing, isSkillName } from '@openagt/agent-data'
 import { publishedBranch } from '@openagt/agent-data/names'
 import { branchesOnOrigin } from './dashboard/start-branch.js'
 import { removeProjectFiles } from './remove-files.js'
@@ -454,12 +454,16 @@ export function createProjectRuntime({ cwd, env, clone = cloneProject, logins = 
     // A session with no project: in a folder of its own in the sessions home, on this computer,
     // with no branch, and nothing committed or published; the repos it has are copied into it.
     const noProject = targetProjectId === SESSIONS_ID
-    if (noProject && (options.machine !== undefined || options.base !== undefined || options.prBase !== undefined || options.publish !== undefined || options.account !== undefined)) {
-      return { ok: false, error: 'A session with no project runs on this computer, with no branch, nothing to publish and no account at a git host.' }
+    if (noProject && (options.machine !== undefined || options.base !== undefined || options.prBase !== undefined || options.publish !== undefined || options.account !== undefined || options.projectSkills !== undefined)) {
+      return { ok: false, error: 'A session with no project runs on this computer, with no branch, nothing to publish, no account at a git host and no project skills.' }
     }
     // The login reaches the run's environment: one word, as a login is.
     if (options.account !== undefined && !(typeof options.account === 'string' && /^\S+$/.test(options.account))) return { ok: false, error: 'An account is named by its login.' }
     if (options.agent !== undefined && !isAgentId(options.agent)) return { ok: false, error: 'An agent is named by its id.' }
+    // The picks of skills reach the environment as lists of names: only names go there.
+    const skillList = (value: unknown): value is string[] => Array.isArray(value) && value.length > 0 && value.every(isSkillName)
+    if ((options.skillsOn !== undefined && !skillList(options.skillsOn)) || (options.skillsOff !== undefined && !skillList(options.skillsOff))) return { ok: false, error: 'Skills are named by their names.' }
+    if (options.projectSkills !== undefined && options.projectSkills !== 'none' && !skillList(options.projectSkills)) return { ok: false, error: 'Project skills are none, or named by their names.' }
     if (!noProject && options.repos !== undefined) return { ok: false, error: 'Repos are added to a session with no project: a project works in its own checkout.' }
     // The folders reach the line one per line: only whole paths go there.
     if (options.repos !== undefined && !(Array.isArray(options.repos) && options.repos.every(folder => typeof folder === 'string' && isAbsolute(folder) && !folder.includes('\n')))) {
@@ -516,6 +520,9 @@ export function createProjectRuntime({ cwd, env, clone = cloneProject, logins = 
       ...(options.repos !== undefined ? { repos: options.repos } : {}),
       ...(options.account !== undefined ? { account: options.account } : {}),
       ...(options.agent !== undefined ? { agent: options.agent } : {}),
+      ...(options.skillsOn !== undefined ? { skillsOn: options.skillsOn } : {}),
+      ...(options.skillsOff !== undefined ? { skillsOff: options.skillsOff } : {}),
+      ...(options.projectSkills !== undefined ? { projectSkills: options.projectSkills } : {}),
     })
     // The line made a checkout (or is about to): the project's checkouts are read again on the
     // next look rather than a few seconds from now, so the new run's page finds its own.

@@ -64,3 +64,20 @@ export const SKILL_CATALOGUE_ENV = 'OPENAGENT_SKILL_CATALOGUE'
  * agent. A scheduler's runs name none.
  */
 export const AGENT_ENV = 'OPENAGENT_AGENT'
+
+/**
+ * The environment variables that change the skills one run gets, a session's picks beside the
+ * message box: {@link SKILLS_ON_ENV} names skills its agent lacks that it gets too, and
+ * {@link SKILLS_OFF_ENV} skills of its agent's it does not get, each a comma-separated list of
+ * names; {@link PROJECT_SKILLS_ENV} says which of the project's own skills stay in its checkout:
+ * `all` (unset too), `none`, or their names comma-separated. Set by whoever starts the run; a
+ * resumed run goes on with what its record kept.
+ */
+export const SKILLS_ON_ENV = 'OPENAGENT_SKILLS_ON'
+export const SKILLS_OFF_ENV = 'OPENAGENT_SKILLS_OFF'
+export const PROJECT_SKILLS_ENV = 'OPENAGENT_PROJECT_SKILLS'
+
+/** Whether a word is a skill's name, as its text's front matter names it: `tickets`, `plan-tickets`. */
+export function isSkillName(name: unknown): name is string {
+  return typeof name === 'string' && /^[a-z0-9][a-z0-9-]{0,63}$/.test(name)
+}

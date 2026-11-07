@@ -196,6 +196,8 @@ test('an agent\'s skills: picked by name among the defaults and the catalogue ha
     assert.deepEqual((await basicSkills(repo)).map(skill => skill.name), ['logs', 'ask', 'github'], 'no agent: the defaults')
     assert.deepEqual((await basicSkills(repo, {}, { skills: ['review', 'github', 'nothing-carries-this'] })).map(skill => skill.name), ['review', 'github'])
     assert.deepEqual((await basicSkills(repo, { ownQuestionTool: true }, { skills: ['ask', 'review'] })).map(skill => skill.name), ['review'], 'an agent with a question tool of its own gets no ask')
+    assert.deepEqual((await basicSkills(repo, {}, { skills: ['ask', 'github'] }, { off: ['github'], on: ['review', 'ask', 'nothing-carries-this'] })).map(skill => skill.name), ['ask', 'review'], 'the session\'s picks: the agent\'s less the ones off, the ones on after them, once each')
+    assert.deepEqual((await basicSkills(repo, {}, { skills: ['ask'] }, { project: 'none' })).map(skill => skill.name), ['ask'], 'the project\'s own skills are another matter')
     await git(['remote', 'set-url', 'origin', 'https://gitlab.com/someone/project.git'], repo)
     assert.deepEqual((await basicSkills(repo, {}, { skills: ['github', 'review'] })).map(skill => skill.name), ['review'], 'the git host\'s skill only where it answers for the project')
     assert.deepEqual((await basicSkills(repo, {}, { skills: [] })).map(skill => skill.name), [], 'an agent with no skill gets none')

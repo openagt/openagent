@@ -7,7 +7,7 @@ import { ClaudeCodeDriver, claudeCodeReady } from '@openagt/agent-driver-claude'
 import { CodexDriver, codexReady } from '@openagt/agent-driver-codex'
 import { findRun } from '@openagt/skill-logs'
 import { readPersonal } from './config.js'
-import { runAgent } from './agent.js'
+import { runAgent, type SkillPicks } from './agent.js'
 import { basicSkills } from './basic-skills.js'
 import { gitHostCommand, gitHostEnv } from './git-host.js'
 import { namedAtStart, resumeRun, runCommand, runIdFrom, type RunOutcome } from './run.js'
@@ -237,13 +237,14 @@ export async function detachResume(
  * one given; none given, the coding agent starts on its own default. A parent it names that has
  * ended by the time this run ends is continued in a process of its own.
  */
-export async function runProject(repo: string, opts: { prompt: string; id?: string; startedAt?: string; mark?: boolean; model?: string; effort?: string; driver?: DriverName; publish?: Publish; attached?: string; parent?: string; base?: string; prBase?: string; branch?: string; for?: string; repos?: SessionRepo[]; gitAccount?: string; agent?: string; log?: (line: string) => void }, deps: { workAs?: typeof workAs } = {}): Promise<RunOutcome> {
+export async function runProject(repo: string, opts: { prompt: string; id?: string; startedAt?: string; mark?: boolean; model?: string; effort?: string; driver?: DriverName; publish?: Publish; attached?: string; parent?: string; base?: string; prBase?: string; branch?: string; for?: string; repos?: SessionRepo[]; gitAccount?: string; agent?: string; skills?: SkillPicks; log?: (line: string) => void }, deps: { workAs?: typeof workAs } = {}): Promise<RunOutcome> {
   const id = opts.id ?? runIdFrom(new Date().toISOString())
   const driver = opts.driver ?? 'claude-code'
   const log = opts.log ?? (() => {})
   const setup = await readPersonal(repo, log)
-  // The agent the run is on: its skills go into the checkout, its accounts are the run's unless the session picked one.
+  // The agent the run is on: its skills, with the session's picks, go into the checkout; its accounts are the run's unless the session picked one.
   const on = await runAgent(opts.agent, log)
+  const picks = opts.skills ?? {}
   const accounts = accountsOn(on)
   // The name is asked for before the git host's account is read, which takes a second or more
   // (`gitHostEnv` runs the git host's command) and is nothing the small model naming the run needs.
@@ -260,9 +261,12 @@ export async function runProject(repo: string, opts: { prompt: string; id?: stri
     ...(opts.model !== undefined ? { model: opts.model } : {}),
     ...(opts.effort !== undefined ? { effort: opts.effort } : {}),
     driver: driverFor(driver, id, setup, accounts),
-    skills: (where, agent) => basicSkills(where, agent, on),
+    skills: (where, agent) => basicSkills(where, agent, on, picks),
     ...(as !== undefined ? { gitAccount: as } : {}),
     ...(opts.agent !== undefined ? { agent: opts.agent } : {}),
+    ...(picks.on !== undefined ? { skillsOn: picks.on } : {}),
+    ...(picks.off !== undefined ? { skillsOff: picks.off } : {}),
+    ...(picks.project !== undefined ? { projectSkills: picks.project } : {}),
     ...(opts.publish !== undefined ? { publish: opts.publish } : {}),
     ...(opts.attached !== undefined ? { attached: opts.attached } : {}),
     ...(opts.parent !== undefined ? { parent: opts.parent } : {}),
@@ -298,8 +302,9 @@ export async function resumeProject(
   const log = opts.log ?? (() => {})
   const setup = await readPersonal(repo, log)
   const previous = card ? runnerMark(card) : undefined
-  // The agent the record names, as it stands now: its skills again, its accounts on this computer.
+  // The agent the record names, as it stands now: its skills again, with the session's picks, its accounts on this computer.
   const on = await runAgent(previous?.agent, log)
+  const picks: SkillPicks = { ...(previous?.skillsOn !== undefined ? { on: previous.skillsOn } : {}), ...(previous?.skillsOff !== undefined ? { off: previous.skillsOff } : {}), ...(previous?.projectSkills !== undefined ? { project: previous.projectSkills } : {}) }
   const accounts = accountsOn(on)
   const as = await (deps.workAs ?? workAs)(repo, previous?.gitAccount)
   return resumeRun(repo, {
@@ -311,7 +316,7 @@ export async function resumeProject(
     ...(opts.by !== undefined ? { by: opts.by } : {}),
     ...(opts.publish !== undefined ? { publish: publishChange(opts.publish) ?? null } : {}),
     driver: (deps.driverFor ?? driverFor)(recorded, opts.id, setup, accounts),
-    skills: (where, agent) => basicSkills(where, agent, on),
+    skills: (where, agent) => basicSkills(where, agent, on, picks),
     ...(as !== undefined ? { gitAccount: as } : {}),
     resume: resumeDetached(repo),
     ...(opts.log ? { log: opts.log } : {}),

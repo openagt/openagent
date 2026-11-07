@@ -3,9 +3,9 @@ import { test } from 'node:test'
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { AGENT_ENV, writeAgent } from '@openagt/agent-data'
+import { AGENT_ENV, PROJECT_SKILLS_ENV, SKILLS_OFF_ENV, SKILLS_ON_ENV, writeAgent } from '@openagt/agent-data'
 import { accountsPath, addAccount } from '@openagt/skill-account-rotation'
-import { agentNamed, runAgent } from './agent.js'
+import { agentNamed, anySkillPick, runAgent, skillPicksNamed } from './agent.js'
 import { accountsOn, agentLoginFor } from './runner.js'
 import { git, handDownBasicSkills, removeRepo, testRepo } from './test-repo.js'
 
@@ -15,6 +15,15 @@ test('the agent a run is on is read off the environment by its id; the default i
   assert.equal(agentNamed({ [AGENT_ENV]: 'default' }), undefined)
   assert.equal(agentNamed({ [AGENT_ENV]: ' reviewer ' }), 'reviewer')
   assert.throws(() => agentNamed({ [AGENT_ENV]: 'Not An Id' }), /no agent id/)
+})
+
+test('a session\'s picks of skills are read off the environment: names on, names off, which of the project\'s stay; nothing set is no pick; a word that is no skill name is refused', () => {
+  assert.deepEqual(skillPicksNamed({}), {})
+  assert.equal(anySkillPick(skillPicksNamed({ [PROJECT_SKILLS_ENV]: 'all', [SKILLS_ON_ENV]: ' ' })), false, 'every project skill is the same as nothing said')
+  assert.deepEqual(skillPicksNamed({ [SKILLS_ON_ENV]: 'review, tickets,review', [SKILLS_OFF_ENV]: 'github', [PROJECT_SKILLS_ENV]: 'none' }), { on: ['review', 'tickets'], off: ['github'], project: 'none' })
+  assert.deepEqual(skillPicksNamed({ [PROJECT_SKILLS_ENV]: 'deploy,lint' }), { project: ['deploy', 'lint'] })
+  assert.throws(() => skillPicksNamed({ [SKILLS_OFF_ENV]: 'Not A Skill' }), /OPENAGENT_SKILLS_OFF is no list of skill names: Not A Skill/)
+  assert.throws(() => skillPicksNamed({ [PROJECT_SKILLS_ENV]: '../x' }), /OPENAGENT_PROJECT_SKILLS is no list/)
 })
 
 test('the agent named is read from the personal folder; one this computer does not have is the default agent, said; none named is the default', async () => {

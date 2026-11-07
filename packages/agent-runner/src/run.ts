@@ -3,12 +3,14 @@ import { mkdir, stat, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { AgentExitError, ConversationGoneError, continuationPrompt, logDiaryFile, parseQuestion, promptLines, promptOf, takeInbox, type Driver, type DriverPromptOptions, type DriverSession, type DriverTurn, type PromptLine, type LogEndStatus, type Question } from '@openagt/agent-driver'
 import { nodeGitRunner, sessionsHomeOf, type GitRunner } from '@openagt/agent-data'
-import { agentBranchName, attachCheckout, createCheckout, reclaimWorktree, relinkCheckout, worktreeBranch, worktreePath, type SkillLink } from '@openagt/skill-branches'
+import { agentBranchName, attachCheckout, createCheckout, reclaimWorktree, relinkCheckout, worktreeBranch, worktreePath, type SkillLink, type LeaveOut } from '@openagt/skill-branches'
 import { findRun, readDiary, type AnyDiaryLine, type LogsDeps, type RunCard, type RunStatus } from '@openagt/skill-logs'
 import { hideLiveDir, inboxPath, liveDir, readLiveCard, readLiveDiary } from './live-card.js'
 import { earlierPrs, forReaders, lasting, markerCard, publishChange, recordBranchGone, recordRun, runnerMark, startOf, writeMarker, type Publish, type RunnerMark, type SessionRepo } from './records.js'
 import { projectGitHost, type GitHost } from './git-host.js'
 import { basicSkills } from './basic-skills.js'
+import { leavingOut } from './project-skills.js'
+import type { ProjectSkillsPick } from './agent.js'
 import { acquireRunLock, isPidAlive, releaseRunLock } from './run-lock.js'
 import { runEndedLine } from './ended.js'
 import { askName, isBareCommand, nameRun, type AskedName } from './title.js'
@@ -177,6 +179,10 @@ export interface RunOptions {
   repos?: SessionRepo[]
   /** The agent the run is on, by its id (`OPENAGENT_AGENT`), kept on its mark; the default agent when absent. */
   agent?: string
+  /** The session's picks of skills, kept on its mark (`agent.ts` SkillPicks): skills on top of its agent's, skills of its agent's left out, which of the project's own stay in its checkout. */
+  skillsOn?: string[]
+  skillsOff?: string[]
+  projectSkills?: ProjectSkillsPick
   /** How an ended parent is continued, in its own process; absent, only a working parent is told. */
   resume?: ParentDeps['resume']
   host?: string
@@ -255,12 +261,14 @@ export async function runCommand(repo: string, opts: RunOptions): Promise<RunOut
     const sessions = await sessionsHomeOf(repo)
     try {
       const skills = await (opts.skills ?? basicSkills)(repo, opts.driver).catch((): SkillLink[] => [])
+      // The project's own skills the session leaves out stay out of this checkout alone.
+      const without = leavingOut(mark.projectSkills, git)
       checkout =
         sessions !== undefined
           ? await openSessionFolder(sessions, id, skills, mark.repos, git)
           : opts.branch !== undefined
-            ? await attachCheckout(repo, { agentId: id, branch: opts.branch, skills }, git)
-            : await createCheckout(repo, { agentId: id, skills, ...(opts.base !== undefined ? { base: opts.base } : {}) }, git)
+            ? await attachCheckout(repo, { agentId: id, branch: opts.branch, skills, without }, git)
+            : await createCheckout(repo, { agentId: id, skills, without, ...(opts.base !== undefined ? { base: opts.base } : {}) }, git)
     } catch (err) {
       naming?.stop.abort()
       const detail = `could not create a checkout: ${errorMessage(err)}`
@@ -400,7 +408,7 @@ export async function resumeRun(repo: string, opts: ResumeOptions): Promise<RunO
     const skills = await (opts.skills ?? basicSkills)(repo, opts.driver).catch((): SkillLink[] => [])
     const sessions = await sessionsHomeOf(repo)
     // A session's folder is opened again as it is, and made again when someone removed it.
-    const checkout: Workspace & { again?: true } = sessions !== undefined ? await openSessionFolder(sessions, opts.id, skills, previous.repos, git) : await projectCheckout(repo, opts.id, card.branch, previous.base, skills, git)
+    const checkout: Workspace & { again?: true } = sessions !== undefined ? await openSessionFolder(sessions, opts.id, skills, previous.repos, git) : await projectCheckout(repo, opts.id, card.branch, previous.base, skills, leavingOut(previous.projectSkills, git), git)
     // A branch that was gone everywhere was just made again, from where it starts as that is now:
     // that is where the run's own work begins. One still on origin came back with its work.
     const restarted = checkout.again ? await startCommit(checkout.path, git) : {}
@@ -456,12 +464,12 @@ interface Workspace {
  * A continued run's checkout: the one it kept, or a new one attached to its branch; a branch that
  * went with the checkout, for holding nothing, starts again from `base`, or origin's default branch.
  */
-async function projectCheckout(repo: string, id: string, branch: string | undefined, base: string | undefined, skills: readonly SkillLink[], git: GitRunner): Promise<{ path: string; branch: string; again?: true }> {
+async function projectCheckout(repo: string, id: string, branch: string | undefined, base: string | undefined, skills: readonly SkillLink[], without: LeaveOut, git: GitRunner): Promise<{ path: string; branch: string; again?: true }> {
   const on = branch ?? agentBranchName(id)
   const path = worktreePath(repo, id)
-  if (!(await stat(path).then(s => s.isDirectory(), () => false))) return attachCheckout(repo, { agentId: id, branch: on, skills, ...(base !== undefined ? { base } : {}) }, git)
+  if (!(await stat(path).then(s => s.isDirectory(), () => false))) return attachCheckout(repo, { agentId: id, branch: on, skills, without, ...(base !== undefined ? { base } : {}) }, git)
   // A checkout that stayed was made by whatever version ran then: its links are brought to what a new one gets.
-  await relinkCheckout(repo, path, { skills }, git)
+  await relinkCheckout(repo, path, { skills, without }, git)
   return { path, branch: on }
 }
 

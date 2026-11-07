@@ -1,6 +1,6 @@
 import { nodeGitRunner, type GitRunner, BRANCHES_DIR, excludeFromGit } from '@openagt/agent-data'
 import { agentBranchName } from './branch-names.js'
-import { addWorktree, attachWorktree, type AddedWorktree } from './worktree.js'
+import { addWorktree, attachWorktree, leaveOut, type AddedWorktree, type LeaveOut } from './worktree.js'
 import { linkDependencies } from './worktree-deps.js'
 import { reconcileBranchLinks } from './branch-links.js'
 import { linkSkill, type SkillLink } from './skill-links.js'
@@ -13,9 +13,10 @@ import { linkOwnCommand } from './command-link.js'
  * scheduler starting a run, the command line).
  */
 
-/** Other skills to link into the checkout beside this package's own: see `SkillLink`. */
+/** Other skills to link into the checkout beside this package's own (see `SkillLink`), and what of the project's own stays out of it, asked of the checkout (`leaveOut`). */
 export interface CheckoutSkills {
   skills?: readonly SkillLink[]
+  without?: LeaveOut
 }
 
 /** A new agent's checkout, on a fresh `agent-<id>` branch from `base` or origin's default branch. */
@@ -24,7 +25,7 @@ export async function createCheckout(
   opts: { agentId: string; base?: string } & CheckoutSkills,
   git: GitRunner = nodeGitRunner(),
 ): Promise<AddedWorktree> {
-  const worktree = await addWorktree(repo, { agentId: opts.agentId, branch: agentBranchName(opts.agentId), ...(opts.base ? { base: opts.base } : {}) }, git)
+  const worktree = await addWorktree(repo, { agentId: opts.agentId, branch: agentBranchName(opts.agentId), ...(opts.base ? { base: opts.base } : {}), ...(opts.without ? { without: opts.without } : {}) }, git)
   await settle(repo, worktree.path, git, opts.skills)
   return worktree
 }
@@ -35,17 +36,18 @@ export async function attachCheckout(
   opts: { agentId: string; branch: string; base?: string } & CheckoutSkills,
   git: GitRunner = nodeGitRunner(),
 ): Promise<AddedWorktree> {
-  const worktree = await attachWorktree(repo, { agentId: opts.agentId, branch: opts.branch, ...(opts.base ? { base: opts.base } : {}) }, git)
+  const worktree = await attachWorktree(repo, { agentId: opts.agentId, branch: opts.branch, ...(opts.base ? { base: opts.base } : {}), ...(opts.without ? { without: opts.without } : {}) }, git)
   await settle(repo, worktree.path, git, opts.skills)
   return worktree
 }
 
 /**
  * The links of a checkout that is already there, brought to what a new one gets: the package's
- * command and skill, and the caller's skills. For a continued agent whose checkout stayed, made by
+ * command and skill, and the caller's skills, and the paths it leaves out set again. For a continued agent whose checkout stayed, made by
  * whatever version ran then. A link that is there is left alone, so this is safe to ask again.
  */
 export async function relinkCheckout(repo: string, path: string, opts: CheckoutSkills = {}, git: GitRunner = nodeGitRunner()): Promise<void> {
+  await leaveOut(path, opts.without, git)
   await linkOwnCommand(repo, path, git)
   await linkSkill(repo, path, undefined, git, opts.skills)
 }

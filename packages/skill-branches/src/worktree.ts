@@ -74,7 +74,12 @@ export interface AddWorktreeOptions {
   branch: string
   /** Base ref to branch from; defaults to origin's default branch ({@link freshStart}). A `publishedBase` is fetched first ({@link fetchedBase}). */
   base?: string
+  /** Paths from the checkout's root that stay out of it ({@link leaveOut}), asked of the checkout once it is there: what it holds is what the answer is about. */
+  without?: LeaveOut
 }
+
+/** What a checkout leaves out, asked of it once it is there: paths from its root. */
+export type LeaveOut = (checkout: string) => Promise<readonly string[]>
 
 /** The worktree {@link addWorktree} created. */
 export interface AddedWorktree {
@@ -142,7 +147,20 @@ export async function addWorktree(
   const path = worktreePath(repo, opts.agentId)
   const base = opts.base !== undefined ? await fetchedBase(repo, opts.base, git) : await freshStart(repo, git)
   await git(['worktree', 'add', '--no-track', '-b', opts.branch, path, ...(base ? [base] : [])], repo)
+  await leaveOut(path, opts.without, git)
   return { path, branch: opts.branch }
+}
+
+/**
+ * Leave what `without` answers out of the checkout at `path`: git's sparse checkout, with
+ * everything else in, so the files are not on disk there while the index keeps them, and nothing
+ * is committed about it. A checkout's own setting: the project's other checkouts have all their
+ * files. Nothing asked, or none answered, leaves the checkout as it is: a full one stays full.
+ */
+export async function leaveOut(path: string, without: LeaveOut | undefined, git: GitRunner = nodeGitRunner()): Promise<void> {
+  const paths = without ? await without(path) : []
+  if (paths.length === 0) return
+  await git(['sparse-checkout', 'set', '--no-cone', '/*', ...paths.map(entry => `!/${entry.replace(/^\/+/, '')}`)], path)
 }
 
 /**
@@ -159,7 +177,7 @@ export async function addWorktree(
  */
 export async function attachWorktree(
   repo: string,
-  opts: { agentId: string; branch: string; base?: string },
+  opts: { agentId: string; branch: string; base?: string; without?: LeaveOut },
   git: GitRunner = nodeGitRunner(),
 ): Promise<AddedWorktree> {
   if (!isSafeAgentId(opts.agentId)) throw new Error(`unsafe agent id: ${opts.agentId}`)
@@ -167,6 +185,7 @@ export async function attachWorktree(
   const has = (ref: string) => git(['rev-parse', '--verify', '--quiet', `${ref}^{commit}`], repo).then(out => out.trim() !== '', () => false)
   if (await has(`refs/heads/${opts.branch}`)) {
     await git(['worktree', 'add', path, opts.branch], repo)
+    await leaveOut(path, opts.without, git)
     return { path, branch: opts.branch }
   }
   const theirs = `refs/remotes/origin/${opts.branch}`
@@ -176,6 +195,7 @@ export async function attachWorktree(
   const again = start !== theirs
   start ??= await freshStart(repo, git)
   await git(['worktree', 'add', '--no-track', '-b', opts.branch, path, ...(start ? [start] : [])], repo)
+  await leaveOut(path, opts.without, git)
   return { path, branch: opts.branch, ...(again ? { again: true } : {}) }
 }
 

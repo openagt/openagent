@@ -60,6 +60,8 @@ describe('AccountsCard', () => {
       codex: [{ name: 'This computer', windows: [{ window: 'thirty_day', percentUsed: 10 }] }],
     })
     const ring = (row: string, label: string): string | null | undefined => within(screen.getByRole('button', { name: `Details of ${row}` })).queryByRole('meter', { name: label })?.getAttribute('aria-valuenow')
+    // What the card does with the accounts, said by the card itself.
+    expect(await screen.findByText('When a coding agent’s account hits its limit, the next free one takes the run over where it stopped.')).toBeTruthy()
     await screen.findByRole('button', { name: 'Details of Ada' })
     await waitFor(() => expect(ring('Ada', 'week')).toBe('61'))
     expect(ring('Ada', '5 h')).toBe('2')
