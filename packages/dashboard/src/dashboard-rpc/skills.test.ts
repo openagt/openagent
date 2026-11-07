@@ -65,12 +65,14 @@ test('a project\'s skills: none yet; written, they are in the folder and wait to
     assert.deepEqual({ startBranch: empty.startBranch, uncommitted: empty.uncommitted, git: empty.git, remote: empty.remote, local: empty.local }, { startBranch: 'main', uncommitted: [], git: true, remote: undefined, local: false })
     assert.deepEqual(empty.groups.map(group => [group.title, group.skills.length]), [['Tickets and queue', 9], ['Agents', 3], ['Pull requests', 2], ['Automations', 1], ['Code reviews', 5], ['Research', 3], ['Needs its own setup', 2]])
     assert.ok(flat(empty).every(skill => skill.standing === 'absent' && !skill.waiting && skill.description.length > 10))
+    assert.deepEqual(empty.held, [], 'nothing tracked yet: a run\'s checkout has no project skill')
 
     const written = await sendChangeSkills(id, { write: ['browser', 'plan'] })
     assert.deepEqual(written, { ok: true, written: ['browser', 'plan'], removed: [], left: [] })
     assert.match(await readFile(join(dir, '.agents/skills/browser/SKILL.md'), 'utf8'), /^---\nname: browser\n/)
     const waiting = (await onProjectSkills(id))!
     assert.equal(held(waiting), 2)
+    assert.deepEqual(waiting.held, [], 'written, not committed: not in a run\'s checkout yet')
     assert.deepEqual(waiting.uncommitted, ['plan', 'browser'])
     assert.deepEqual(flat(waiting).filter(skill => skill.waiting).map(skill => skill.name), ['plan', 'browser'])
     assert.deepEqual(flat(waiting).filter(skill => skill.standing === 'current').map(skill => skill.name), ['plan', 'browser'])
@@ -88,6 +90,7 @@ test('a project\'s skills: none yet; written, they are in the folder and wait to
     assert.equal(git('log', '--format=%s').trim(), 'Update OpenAgent skills\nUpdate OpenAgent skills\ninit')
     const after = (await onProjectSkills(id))!
     assert.deepEqual(after.uncommitted, [])
+    assert.deepEqual(after.held, ['browser', 'plan'], 'committed: what a run\'s checkout has, and the Skills menu offers')
     assert.deepEqual(flat(after).filter(skill => skill.waiting), [])
     assert.deepEqual((await onCommands(id))!.commands.map(command => [command.name, command.waiting]), [['plan', undefined]])
     assert.deepEqual(await sendProjectSkills(id), { ok: false, error: 'no skill to send' })

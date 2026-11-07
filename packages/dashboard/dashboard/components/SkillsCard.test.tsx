@@ -16,7 +16,7 @@ const { SkillsCard } = await import('./SkillsCard.js')
 
 const skill = (name: string, over: Record<string, unknown> = {}) => ({ name, description: '', standing: 'current', waiting: false, ...over })
 const state = (list: ReturnType<typeof skill>[], over: Partial<ProjectSkills> = {}): ProjectSkills =>
-  ({ groups: [{ title: 'Skills', skills: list }], uncommitted: [], git: true, remote: 'GitHub', local: false, ...over }) as ProjectSkills
+  ({ groups: [{ title: 'Skills', skills: list }], uncommitted: [], held: [], git: true, remote: 'GitHub', local: false, ...over }) as ProjectSkills
 const project = (id: string) => ({ id, name: id, path: `/repos/${id}` }) as never
 
 // No record says which skills were used, unless a test says.

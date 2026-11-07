@@ -197,3 +197,15 @@ already made, and lists it in its pull request; for anything else it proposes an
   is every account of the computer's: an agent made on another computer runs here without them.
   Picked over accounts named per project, which were kept on one computer for a repository
   that is the same everywhere: whose account a session uses is a pick made for that session.
+- A session's picks of skills are the run's, in its environment with its agent: the skills on
+  top of its agent's, the ones of its agent's left out, and which of the project's own skills
+  stay in its checkout. The run links its agent's list less the ones off plus the ones on, by
+  the same rules as the agent's alone; the project skills not picked are left out of the run's
+  checkout by git's sparse checkout, right after the worktree is made and before the skills are
+  linked, so the index keeps them, nothing is committed about them, and the project's other
+  checkouts have them. Which skills the project has is asked of that checkout, not of the
+  project's folder: the checkout starts from origin's branch, and a folder behind or ahead of
+  it would leave the wrong ones out. The record keeps the picks and a resumed run goes on with them, its
+  checkout made again the same way. Picked over deleting the files from the checkout, which
+  the agent's next `git add -A` would commit as a removal, and over the runner editing what
+  the project tracks, which is the project's and not one session's.

@@ -32,7 +32,7 @@ vi.mock('./AgentDataSettings.js', () => ({ AGENT_DATA_ENTRY: 'agent-data', Agent
 vi.mock('./ProjectAgentDataSettings.js', () => ({ PROJECT_AGENT_DATA_ENTRY: 'project-agent-data', ProjectAgentDataSettings: () => <p>Where this project's agent data is</p> }))
 // A project's skills, as a page of the Project group; each project answers with its own one skill.
 const projectSkills = vi.hoisted(() => ({
-  onProjectSkills: vi.fn(async (id: string) => ({ groups: [{ title: 'Tickets and queue', skills: [{ name: `skill-of-${id}`, description: 'What it does.', standing: 'current', waiting: false }] }], uncommitted: [], git: true, local: false })),
+  onProjectSkills: vi.fn(async (id: string) => ({ groups: [{ title: 'Tickets and queue', skills: [{ name: `skill-of-${id}`, description: 'What it does.', standing: 'current', waiting: false }] }], uncommitted: [], held: [], git: true, local: false })),
   sendChangeSkills: vi.fn(),
   sendProjectSkills: vi.fn(),
 }))

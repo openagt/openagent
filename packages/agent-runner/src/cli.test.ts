@@ -73,6 +73,19 @@ test('usage errors exit 2 with the usage on stderr and nothing on stdout; outsid
     } finally {
       delete process.env['OPENAGENT_AGENT']
     }
+    // And the session's picks of skills: a resumed run goes on with the ones its record keeps; a word that is no skill name is refused.
+    process.env['OPENAGENT_SKILLS_ON'] = 'review'
+    try {
+      const repicked = await run(repo, 'run', '--detach', '--resume', '2026-09-17T20-00-00-000Z', 'go on')
+      assert.equal(repicked.code, 2)
+      assert.match(repicked.err, /OPENAGENT_SKILLS_ON, OPENAGENT_SKILLS_OFF and OPENAGENT_PROJECT_SKILLS are for a new run/)
+      process.env['OPENAGENT_SKILLS_ON'] = 'Not A Skill'
+      const misnamed = await run(repo, 'run', 'Read the docs')
+      assert.equal(misnamed.code, 2)
+      assert.match(misnamed.err, /OPENAGENT_SKILLS_ON is no list of skill names: Not A Skill/)
+    } finally {
+      delete process.env['OPENAGENT_SKILLS_ON']
+    }
     const noTarget = await run(repo, 'run', 'Read the docs', '--pr-base', ' ')
     assert.equal(noTarget.code, 2)
     const unknownLevel = await run(repo, 'run', 'Read the docs', '--publish', 'push')

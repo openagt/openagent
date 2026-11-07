@@ -253,12 +253,24 @@ already made, and lists it in its pull request; for anything else it proposes an
   a server is when it was just connected, with no way to let a phone in; and over a
   starter project made on every server, one nobody asked for.
 - "Add project" stays small: it writes no skill. The launcher's row under the box then has
-  "Skills", after Auto, which opens that project's Skills page in Settings: a card with a
+  "Skills", after Auto, whose menu ends in that project's Skills page in Settings: a card with a
   tick for each skill a project picks beyond the defaults. Picked over "Add project"
-  writing the skills itself, which put files into every project a person adds. The button was picked over a line of its own on the
+  writing the skills itself, which put files into every project a person adds. The control was picked over a line of its own on the
   project's page ("This project has 4 of 25 skills", with an "Add skills" button), which
   stood there also when it had nothing to offer, and over an item in the project's ⋮ menu,
   where it was not seen.
+- The "Skills" menu under the box picks the skills one session gets, as the account beside it
+  is picked: its agent's ticked, each tickable off; every other skill OpenAgent carries under
+  "More skills", in the Agents page's groups, tickable on; the project's own skills all, none
+  or each; nothing saved, so the next session starts from its agent's list and every project
+  skill. The picks reach the run in its environment with the agent and the account, its record
+  keeps them, and a resume applies them again; the session page says them in the item's
+  hover, off. A session with no project has the agent part alone. Picked over the skills
+  being the agent's alone, where one session that needs one skill more or one less would
+  need an agent made for it, and over a pick saved like the model's, which Rom's design
+  ruled out: the agent is the lasting set, the session the exception. The skills left out of
+  the agent's list are the ones under "More skills" rather than one long list: twenty-five
+  skills under the box read as the overwhelming list of the first skills picker.
 - OpenAgent has no command of its own to give a project skills: the Skills page in the
   dashboard, or `npx skills add openagt/openagent` in a terminal, which writes the same
   texts for any agent. Picked over `npx @openagt/init`, a second list with ticks to keep in

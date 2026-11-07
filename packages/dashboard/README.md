@@ -81,6 +81,14 @@ never on the line: `agent-runner` reads them as the line's own child. An agent i
 and accounts, a file in `~/.openagent/agents/`, edited on the Agents page; the skills it can be
 given are handed down with the default ones (`OPENAGENT_SKILL_CATALOGUE`).
 
+The **Skills** menu under the box picks, for this session alone, which skills the run gets: its
+agent's ticked, any other carried skill tickable, and which of the project's own skills stay in
+its checkout. The picks go the same way, in `OPENAGENT_SKILLS_ON`, `OPENAGENT_SKILLS_OFF` (names,
+comma-separated) and `OPENAGENT_PROJECT_SKILLS` (`all`, `none` or names): `agent-runner` links the
+agent's skills less the ones off plus the ones on, and leaves the project skills not picked out of
+the run's checkout with git's sparse checkout, nothing committed. The record keeps the picks, and
+a resume goes on with them.
+
 The `check` line is what the launcher runs before a Start, with the picked coding agent in
 `DRIVER`: it answers one JSON document with `problems` (a coding agent not installed or logged
 out: said in red) and `warnings` (said in amber), each line naming its own fix. A project

@@ -447,6 +447,8 @@ export function AccountsCard(_props: ModuleCardProps) {
             Accounts
           </span>
         </CardTitle>
+        {/* What this card's package does with them, said here and nowhere else: a page-wide line read as the dashboard's own, and was wrong for the git hosts' accounts. */}
+        <p className="text-sm text-muted-foreground">When a coding agent&rsquo;s account hits its limit, the next free one takes the run over where it stopped.</p>
       </CardHeader>
       <CardContent className="flex flex-col gap-1">
         {list === undefined && !loaded && <Skeleton className="h-16 w-full" />}

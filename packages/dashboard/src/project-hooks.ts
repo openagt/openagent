@@ -1,5 +1,5 @@
 import { GIT_ACCOUNT_ENV, NAME_FILE_ENV } from '@openagt/agent-runner'
-import { AGENT_ENV } from '@openagt/agent-data'
+import { AGENT_ENV, PROJECT_SKILLS_ENV, SKILLS_OFF_ENV, SKILLS_ON_ENV } from '@openagt/agent-data'
 import { spawn } from 'node:child_process'
 import { readFile } from 'node:fs/promises'
 import { basename, delimiter, join } from 'node:path'
@@ -152,6 +152,10 @@ export interface StartHookInput {
   account?: string
   /** The agent the session is on, by its id: in the environment the same way. */
   agent?: string
+  /** The session's picks of skills, in the environment the same way: names on top of its agent's, names of its agent's left out, and which of the project's own stay (`none`, or names). */
+  skillsOn?: readonly string[]
+  skillsOff?: readonly string[]
+  projectSkills?: 'none' | readonly string[]
   /**
    * Whether the run is given a short name by a small model (the person's setting). `false` reaches
    * the run's own tool through the environment rather than the line, so no project's `hooks.yml`
@@ -200,6 +204,9 @@ export function runStartHook(cwd: string, input: StartHookInput, opts: Omit<RunH
     ...(input.nameFile !== undefined ? { [NAME_FILE_ENV]: input.nameFile } : {}),
     ...(input.account !== undefined ? { [GIT_ACCOUNT_ENV]: input.account } : {}),
     ...(input.agent !== undefined ? { [AGENT_ENV]: input.agent } : {}),
+    ...(input.skillsOn !== undefined ? { [SKILLS_ON_ENV]: input.skillsOn.join(',') } : {}),
+    ...(input.skillsOff !== undefined ? { [SKILLS_OFF_ENV]: input.skillsOff.join(',') } : {}),
+    ...(input.projectSkills !== undefined ? { [PROJECT_SKILLS_ENV]: input.projectSkills === 'none' ? 'none' : input.projectSkills.join(',') } : {}),
     ...(input.driver !== undefined ? { DRIVER: input.driver } : {}),
     ...(input.model !== undefined ? { MODEL: input.model } : {}),
     ...(input.effort !== undefined ? { EFFORT: input.effort } : {}),

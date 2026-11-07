@@ -83,6 +83,10 @@ export interface AgentMeta {
   repos?: { name: string; from: string }[]
   /** The agent the run is on, by its id, written on the card by the tool that runs it; absent, the default agent. */
   agent?: string
+  /** The session's picks of skills, written on the card by the tool that runs it: names on top of its agent's, names of its agent's left out, which of the project's own stayed in its checkout (`none`, or names; absent, every one). */
+  skillsOn?: string[]
+  skillsOff?: string[]
+  projectSkills?: 'none' | string[]
   /**
    * How far the run takes its work when its agent finishes: `commit`, `branch`, `pr` or `merge`,
    * the level it was started at or last given. Written on the card by the tool that runs it;

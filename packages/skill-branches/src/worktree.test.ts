@@ -19,6 +19,7 @@ import {
   worktreePath,
   currentBranch,
   listWorktreeDirs,
+  leaveOut,
   FRESH_START_FETCH_MS,
 } from './worktree.js'
 import { agentBranchName } from './branch-names.js'
@@ -491,5 +492,65 @@ test('a new checkout started from a published base takes origin\'s copy, fetched
     assert.equal(await git(['rev-parse', '--verify', '--quiet', `refs/heads/${agentBranchName('r4')}`], repo).then(() => true, () => false), false)
   } finally {
     await rm(base, { recursive: true, force: true })
+  }
+})
+
+test('paths left out of a checkout: git\'s sparse checkout in the new worktree, everything else in; none given, no such call', async () => {
+  const git = recordingGit()
+  const asked: string[] = []
+  const { path } = await addWorktree(REPO, { agentId: 'run1', branch: 'agent-run1', without: async checkout => (asked.push(checkout), ['.agents/skills/b', '/.claude/skills/b']) }, git)
+  assert.deepEqual(asked, [path], 'asked of the checkout once it is there')
+  assert.deepEqual(git.calls.at(-1), { args: ['sparse-checkout', 'set', '--no-cone', '/*', '!/.agents/skills/b', '!/.claude/skills/b'], cwd: path })
+  const full = recordingGit()
+  await addWorktree(REPO, { agentId: 'run1', branch: 'agent-run1', without: async () => [] }, full)
+  assert.equal(full.calls.some(call => call.args[0] === 'sparse-checkout'), false)
+  await leaveOut(path, undefined, full)
+  assert.equal(full.calls.some(call => call.args[0] === 'sparse-checkout'), false)
+})
+
+test('a checkout made without some of the project\'s skills has every other file, the project\'s other checkouts have them all, and a commit from it changes nothing about them', async () => {
+  const git = nodeGitRunner()
+  const repo = await realpath(await mkdtemp(join(tmpdir(), 'worktree-')))
+  try {
+    await git(['init'], repo)
+    await git(['config', 'user.email', 't@t'], repo)
+    await git(['config', 'user.name', 't'], repo)
+    for (const name of ['a', 'b']) {
+      await mkdir(join(repo, '.agents', 'skills', name), { recursive: true })
+      await writeFile(join(repo, '.agents', 'skills', name, 'SKILL.md'), `---\nname: ${name}\n---\n`)
+      await mkdir(join(repo, '.claude', 'skills'), { recursive: true })
+      await symlink(`../../.agents/skills/${name}`, join(repo, '.claude', 'skills', name))
+    }
+    await mkdir(join(repo, 'src'))
+    await writeFile(join(repo, 'src', 'x.ts'), 'export {}\n')
+    await git(['add', '-A'], repo)
+    await git(['commit', '-m', 'init'], repo)
+    // Asked of the checkout: the skill is left out because that checkout has it.
+    const without = async (checkout: string) => ((await git(['ls-files', '--', '.agents/skills/b'], checkout)).trim() !== '' ? ['.agents/skills/b', '.claude/skills/b'] : [])
+    const there = (path: string, file: string) => stat(join(path, file)).then(() => true, () => false)
+
+    const { path } = await addWorktree(repo, { agentId: 'run1', branch: 'agent-run1', without }, git)
+    assert.equal(await there(path, 'src/x.ts'), true)
+    assert.equal(await there(path, '.agents/skills/a/SKILL.md'), true)
+    assert.equal(await there(path, '.claude/skills/a'), true)
+    assert.equal(await there(path, '.agents/skills/b/SKILL.md'), false, 'the skill left out is not in this checkout')
+    assert.equal(await there(path, '.claude/skills/b'), false, 'nor its link')
+    assert.equal(await git(['status', '--porcelain'], path), '', 'nothing to commit about it')
+    assert.equal(await there(repo, '.agents/skills/b/SKILL.md'), true, 'the main checkout keeps it')
+    // A commit from that checkout: the skill stays in the tree.
+    await writeFile(join(path, 'src', 'y.ts'), 'export {}\n')
+    await git(['add', '-A'], path)
+    await git(['commit', '-m', 'work'], path)
+    assert.ok((await git(['ls-tree', '-r', '--name-only', 'HEAD'], path)).includes('.agents/skills/b/SKILL.md'))
+    // A second checkout, made in full, has them all.
+    const full = await addWorktree(repo, { agentId: 'run2', branch: 'agent-run2' }, git)
+    assert.equal(await there(full.path, '.agents/skills/b/SKILL.md'), true)
+    // The same branch attached again, without the same: left out again.
+    await removeWorktree(repo, path, git)
+    const back = await attachWorktree(repo, { agentId: 'run1', branch: 'agent-run1', without }, git)
+    assert.equal(await there(back.path, 'src/y.ts'), true)
+    assert.equal(await there(back.path, '.agents/skills/b/SKILL.md'), false)
+  } finally {
+    await rm(repo, { recursive: true, force: true })
   }
 })

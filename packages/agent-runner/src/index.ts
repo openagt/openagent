@@ -12,5 +12,6 @@ export { initHooks, writeHookLines, HOOK_LINES, type InitOutcome } from './init.
 export { runCli, USAGE, type CliIo, type CliRefusal } from './cli.js'
 export { ReadyNaming, namingSetup, READY_NAMING_MAX_WAIT_MS, READY_NAMING_MAX_WAITING, type NamingSetup, type ReadyNamingDeps } from './ready-naming.js'
 export { NAME_FILE_ENV } from './title.js'
-export { agentNamed, runAgent } from './agent.js'
+export { agentNamed, anySkillPick, runAgent, skillPicksNamed, type ProjectSkillsPick, type SkillPicks } from './agent.js'
+export { leavingOut, leftOutSkillPaths, projectSkillNames } from './project-skills.js'
 export { carriedSkillNames } from './basic-skills.js'

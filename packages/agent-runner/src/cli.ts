@@ -1,9 +1,9 @@
 import { parseArgs } from 'node:util'
-import { nodeGitRunner, runPackageCommand, sessionsHomeOf, type GitRunner } from '@openagt/agent-data'
+import { nodeGitRunner, runPackageCommand, sessionsHomeOf, type GitRunner, PROJECT_SKILLS_ENV, SKILLS_OFF_ENV, SKILLS_ON_ENV } from '@openagt/agent-data'
 import { liftSkillRules, projectRoot } from '@openagt/skill-branches'
 import { findRun } from '@openagt/skill-logs'
 import { DRIVER_NAMES, GIT_ACCOUNT_ENV, agentLoginFor, detachResume, detachRun, isDriverName, readyToRun, resumeProject, runProject } from './runner.js'
-import { agentNamed, runAgent } from './agent.js'
+import { agentNamed, anySkillPick, runAgent, skillPicksNamed, type SkillPicks } from './agent.js'
 import { AGENT_ENV } from '@openagt/agent-data'
 import { initHooks } from './init.js'
 import { cleanup } from './cleanup.js'
@@ -59,6 +59,12 @@ default agent; its skills are linked into the checkout like the default ones, an
 host its login, unless OPENAGENT_GIT_ACCOUNT names the pick for that session, and on Claude and Codex the accounts it
 names that this computer has. The record keeps the agent and the login, and a resumed run goes on with them. An account
 this computer cannot use at the git host stops the run before it starts, naming it.
+
+A session's picks of skills, for that run alone: OPENAGENT_SKILLS_ON names skills its agent lacks that it gets too, and
+OPENAGENT_SKILLS_OFF skills of its agent's it does not get, each names separated by commas; OPENAGENT_PROJECT_SKILLS says
+which of the project's own skills (.agents/skills/<name>, .claude/skills/<name>) stay in its checkout: all (unset too),
+none, or their names separated by commas, the others left out of that checkout by git's sparse checkout, nothing
+committed. The record keeps the picks, and a resumed run goes on with them.
 
 When a run ends waiting on a question, or ends done with a pull request it did not have, the \`ended:\` line in the
 project's .agent-runner/config.yml runs, if there is one, in the project's root, with MESSAGE (one line for a person),
@@ -185,6 +191,15 @@ const COMMANDS: Record<string, Command> = {
       throw new Usage(err instanceof Error ? err.message : String(err))
     }
     if (process.env[AGENT_ENV]?.trim() && values.resume !== undefined) throw new Usage(`${AGENT_ENV} is for a new run: a run continues on the agent its record names`)
+    // The session's picks of skills, in the environment the same way; a resumed run goes on with the ones its record keeps.
+    let skills: SkillPicks
+    try {
+      skills = skillPicksNamed()
+    } catch (err) {
+      throw new Usage(err instanceof Error ? err.message : String(err))
+    }
+    if (anySkillPick(skills) && values.resume !== undefined) throw new Usage(`${SKILLS_ON_ENV}, ${SKILLS_OFF_ENV} and ${PROJECT_SKILLS_ENV} are for a new run: a run continues with the skills its record names`)
+    if (skills.project !== undefined && noProject) throw new Usage(`${PROJECT_SKILLS_ENV} is for a run in a project: a session with no project has no project skills`)
     if (values.resume === undefined && values.id === undefined) {
       // The session's account, or its agent's: an account this computer cannot use stops the run here, naming it.
       const login = gitAccount ?? (await agentLoginFor(repo, await runAgent(agent, io.stderr)))
@@ -192,6 +207,7 @@ const COMMANDS: Record<string, Command> = {
       if (ready.problems.length > 0) throw new Refused({ ok: false, reason: 'not-ready', ...ready }, ready.problems.join(' '))
     }
     const named = { ...(publish !== undefined ? { publish } : {}), ...(values.attach !== undefined ? { attached: values.attach } : {}), ...(values.parent !== undefined ? { parent: values.parent } : {}), ...(values.base !== undefined ? { base: values.base } : {}), ...(values['pr-base'] !== undefined ? { prBase: values['pr-base'].trim() } : {}), ...(values.branch !== undefined ? { branch: values.branch.trim() } : {}), ...(values.for !== undefined ? { for: values.for.trim() } : {}), ...(repos !== undefined ? { repos } : {}) }
+    const picked = anySkillPick(skills) ? { skills } : {}
     if (values.detach && values.resume !== undefined) {
       const resumed = await detachResume(repo, {
         id: values.resume,
@@ -226,6 +242,7 @@ const COMMANDS: Record<string, Command> = {
     if (positionals[0] === undefined) throw new Usage('expected 1 argument(s), got 0')
     const outcome = await runProject(repo, {
       prompt: positionals[0],
+      ...picked,
       ...(values.id !== undefined ? { id: values.id } : {}),
       ...(values.started !== undefined ? { startedAt: new Date(values.started).toISOString() } : {}),
       ...(values.mark ? { mark: true } : {}),

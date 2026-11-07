@@ -76,3 +76,13 @@ test('the mark keeps the publish level a run was given, and drops a word that is
   assert.equal(runnerMark(card)?.publish, 'merge')
   assert.equal(runnerMark({ ...card, caller: { runner: { ...mark, publish: 'push' } } })?.publish, undefined)
 })
+
+test('a session\'s picks of skills last on the mark, for its readers too; every project skill is nothing kept, and a list that is no skill names is dropped', () => {
+  assert.deepEqual(lasting({ skillsOn: ['review'], skillsOff: ['github'], projectSkills: 'none' }), { skillsOn: ['review'], skillsOff: ['github'], projectSkills: 'none' })
+  assert.deepEqual(lasting({ projectSkills: ['deploy', 'lint'] }), { projectSkills: ['deploy', 'lint'] })
+  assert.deepEqual(lasting({ skillsOn: [], skillsOff: ['Not A Skill'], projectSkills: 'all' }), {})
+  const card = markerCard({ id: '2026-09-16T14-01-00-000Z', startedAt: '2026-09-16T14:01:00.000Z', prompt: 'Review', driver: 'claude-code', mark: { ...mark, skillsOff: ['github'], projectSkills: 'none' } })
+  assert.deepEqual(card.caller?.['skillsOff'], ['github'])
+  assert.equal(card.caller?.['projectSkills'], 'none')
+  assert.deepEqual(runnerMark(card), { ...mark, skillsOff: ['github'], projectSkills: 'none' })
+})

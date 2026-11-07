@@ -82,7 +82,7 @@ vi.mock('./SessionRow.js', () => ({
 let queuedIds = 0
 const edited: string[] = []
 vi.mock('./AgentComposer.js', () => ({
-  AgentComposer: ({ live, model, context, controls, onQueued, editInBox, row, publish, prBase, agent, gitAccount }: { publish?: string; prBase?: string; live: boolean; model?: string; context?: ReactNode; controls?: ReactNode; onQueued?: (message: { id: string; text: string; later: boolean }) => void; editInBox?: { current: ((text: string) => void) | null }; row?: ReactNode; agent?: string; gitAccount?: string }) => {
+  AgentComposer: ({ live, model, context, controls, onQueued, editInBox, row, publish, prBase, agent, gitAccount, projectSkills }: { publish?: string; prBase?: string; live: boolean; model?: string; context?: ReactNode; controls?: ReactNode; onQueued?: (message: { id: string; text: string; later: boolean }) => void; editInBox?: { current: ((text: string) => void) | null }; row?: ReactNode; agent?: string; gitAccount?: string; projectSkills?: 'none' | string[] }) => {
     if (editInBox) editInBox.current = text => void edited.push(text)
     return (
       <>
@@ -93,6 +93,7 @@ vi.mock('./AgentComposer.js', () => ({
         <span data-testid="composer-auto" data-publish={publish ?? ''} data-pr-base={prBase ?? ''} />
         <span data-testid="composer-agent" data-value={agent ?? ''} />
         <span data-testid="composer-account" data-value={gitAccount ?? ''} />
+        <span data-testid="composer-project-skills" data-value={projectSkills === undefined ? 'all' : projectSkills === 'none' ? 'none' : projectSkills.join('+')} />
         <span data-testid="composer-context">{context}</span>
         <span data-testid="composer-live">{String(live)}</span>
       </>
@@ -802,7 +803,7 @@ describe('the page\'s two bars', () => {
 })
 
 describe('a run the launcher just started, before its record is there', () => {
-  const picks = { branch: 'gh-pages', gitAccount: 'octo', publish: 'pr', prBase: 'gh-pages', effort: 'high', agent: 'reviewer' }
+  const picks = { branch: 'gh-pages', gitAccount: 'octo', publish: 'pr', prBase: 'gh-pages', effort: 'high', agent: 'reviewer', projectSkills: 'none' as const }
   const row = (id: string, name: string) => screen.getByTestId(id).dataset[name]
 
   test('its page says what the launcher said at once; the record says it from then on', () => {
@@ -810,12 +811,15 @@ describe('a run the launcher just started, before its record is there', () => {
     expect(row('row-started-from', 'value')).toBe('gh-pages')
     expect(row('composer-account', 'value')).toBe('octo')
     expect(row('composer-agent', 'value')).toBe('reviewer')
+    expect(row('composer-project-skills', 'value')).toBe('none')
     expect(row('composer-auto', 'publish')).toBe('pr')
     expect(row('composer-auto', 'prBase')).toBe('gh-pages')
     rerender(view({ live: true, events: [], picks, card: { status: 'running' as const, base: 'other', gitAccount: 'hubot', publish: 'commit' } }))
     expect(row('row-started-from', 'value')).toBe('other')
     expect(row('composer-account', 'value')).toBe('hubot')
     expect(row('composer-auto', 'publish')).toBe('commit')
+    // The record says no pick: the launcher's does not come back.
+    expect(row('composer-project-skills', 'value')).toBe('all')
   })
 
   test('a record with no level has none: a message took it away, and the launcher\'s does not come back', () => {

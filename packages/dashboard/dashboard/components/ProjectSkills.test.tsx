@@ -30,7 +30,7 @@ function skills(over: Partial<ProjectSkills> = {}): ProjectSkills {
       { title: 'Automations', skills: [skill('scheduler')] },
     ],
     startBranch: 'main',
-    uncommitted: [],
+    uncommitted: [], held: [],
     git: true,
     remote: 'GitHub',
     local: false,

@@ -20,7 +20,7 @@ vi.mock('../lib/use-project-launcher.js', () => ({ useProjectLauncher: () => ({ 
 vi.mock('./ContextMenu.js', () => ({ ProjectContextMenu: ({ context }: { context: Set<string> }) => <span>Context · {[...context].join(', ')}</span> }))
 // The launcher's other items, each tested on its own: stand-ins that say what they were given.
 vi.mock('./AgentMenu.js', () => ({ AgentOff: ({ agent }: { agent?: string }) => <span>Agent · {agent ?? 'default'}</span> }))
-vi.mock('./ProjectSkills.js', () => ({ SkillsButton: ({ projectId }: { projectId: string }) => <span>Skills · {projectId}</span> }))
+vi.mock('./SkillsMenu.js', () => ({ SkillsOff: ({ skillsOff, projectSkills, noProject }: { skillsOff?: string[]; projectSkills?: 'none' | string[]; noProject?: boolean }) => <span>Skills · {noProject ? 'no project' : `${(skillsOff ?? []).join('+') || 'all'}/${projectSkills === undefined ? 'all' : projectSkills === 'none' ? 'none' : projectSkills.join('+')}`}</span> }))
 vi.mock('./GitHosts.js', () => ({ GitHostOff: ({ home, account }: { home: { name: string } | null; account?: string }) => (home ? <span>Account · {account ?? home.name}</span> : null) }))
 
 // The Composer is exercised by its own tests; here it only has to hand back a submit and report
@@ -87,14 +87,14 @@ describe('AgentComposer row', () => {
 describe('AgentComposer row under the box', () => {
   test('the launcher\'s items in the launcher\'s places, the session\'s own off: the agent, Context, Auto, Skills, then the run\'s pull requests; at the right the account the run worked as', () => {
     const contextSet = { context: new Set(['src/app.ts']), add: vi.fn(), remove: vi.fn(), toggle: vi.fn(), reset: vi.fn() }
-    renderComposer({ agent: 'reviewer', gitHost: { url: 'https://github.com/o/r', name: 'GitHub' }, gitAccount: 'octo-agent', publish: 'pr', contextSet, controls: <span>PR #7</span> })
-    expect(screen.getByTestId('composer-controls').textContent).toBe('Agent · reviewerContext · src/app.tsAuto: prpick Open PRpick CommitSkills · p1PR #7')
+    renderComposer({ agent: 'reviewer', gitHost: { url: 'https://github.com/o/r', name: 'GitHub' }, gitAccount: 'octo-agent', publish: 'pr', contextSet, controls: <span>PR #7</span>, skillsOff: ['github'], projectSkills: ['deploy'] })
+    expect(screen.getByTestId('composer-controls').textContent).toBe('Agent · reviewerContext · src/app.tsAuto: prpick Open PRpick CommitSkills · github/deployPR #7')
     expect(screen.getByTestId('composer-controls-end').textContent).toBe('Account · octo-agent')
   })
 
-  test('a session with no project: the agent and its pull requests alone, no Context, Auto, Skills or account, as the launcher with no project', () => {
+  test('a session with no project: the agent, its skills and its pull requests alone, no Context, Auto or account, as the launcher with no project', () => {
     renderComposer({ projectId: 'session', controls: <span>PR #7</span> })
-    expect(screen.getByTestId('composer-controls').textContent).toBe('Agent · defaultPR #7')
+    expect(screen.getByTestId('composer-controls').textContent).toBe('Agent · defaultSkills · no projectPR #7')
     expect(screen.getByTestId('composer-controls-end').textContent).toBe('')
   })
 })

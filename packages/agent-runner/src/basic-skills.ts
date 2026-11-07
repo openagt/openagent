@@ -2,6 +2,7 @@ import { readFile, realpath } from 'node:fs/promises'
 import { delimiter, join } from 'node:path'
 import { declaring, packageBins, readManifest, runPackageCommand, SKILL_CATALOGUE_ENV, SKILLS_ENV, type AgentRecord, type ProjectPackage, type ProvidedCommand } from '@openagt/agent-data'
 import type { SkillLink } from '@openagt/skill-branches'
+import type { SkillPicks } from './agent.js'
 
 /**
  * The basic skills (#2023): the ones a run gets with nothing committed in the project, its
@@ -85,13 +86,17 @@ export async function carriedSkillNames(): Promise<string[]> {
 
 /**
  * The basic skills of the project at `repo`, for a run on `on`: the agent's, by name, among the
- * skills carried, the defaults when it is on no agent; a git host's only where it answers for the
- * project, and one that teaches asking only for a coding agent with no question tool of its own.
- * A name the agent has that nothing carried is no skill here.
+ * skills carried, the defaults when it is on no agent; less the session's `picks.off`, plus its
+ * `picks.on`, after them in their order; a git host's only where it answers for the project, and
+ * one that teaches asking only for a coding agent with no question tool of its own. A name the
+ * agent or a pick has that nothing carried is no skill here.
  */
-export async function basicSkills(repo: string, agent: { ownQuestionTool?: boolean } = {}, on?: Pick<AgentRecord, 'skills'>): Promise<SkillLink[]> {
+export async function basicSkills(repo: string, agent: { ownQuestionTool?: boolean } = {}, on?: Pick<AgentRecord, 'skills'>, picks: SkillPicks = {}): Promise<SkillLink[]> {
   const { defaults, carried } = await lists()
-  const picked = on ? on.skills.flatMap(name => carried.filter(skill => skill.link.name === name)) : defaults
+  const own = on ? on.skills : defaults.map(skill => skill.link.name)
+  const off = new Set(picks.off ?? [])
+  const names = [...own.filter(name => !off.has(name)), ...(picks.on ?? []).filter(name => !own.includes(name))]
+  const picked = names.flatMap(name => carried.filter(skill => skill.link.name === name))
   const skills: SkillLink[] = []
   for (const { link, gitHost, asking } of picked) {
     if (asking && agent.ownQuestionTool === true) continue
