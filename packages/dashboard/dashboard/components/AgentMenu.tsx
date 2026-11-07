@@ -2,6 +2,7 @@ import { Bot, Check, ChevronDown, Settings2 } from 'lucide-react'
 import type { AgentRecord } from '../rpc/agents.js'
 import { DEFAULT_AGENT } from '../../src/client.js'
 import { openAgents } from '../lib/use-route.js'
+import { cn } from '../lib/utils.js'
 import { RowOff, rowButtonClass } from './ui/row-item.js'
 import { useAgentName } from './AgentsPage.js'
 import { Tooltip, TooltipContent, TooltipTrigger } from './ui/tooltip.js'
@@ -31,11 +32,12 @@ export function AgentMenu({ agents, picked, busy, onPick }: { agents: readonly A
       <DropdownMenuContent align="start" className="min-w-[14rem]">
         <DropdownMenuGroup>
           <DropdownMenuLabel>Agent</DropdownMenuLabel>
+          {/* The tick leads here (his pick): the row's end is for the count of skills. */}
           {agents.map(agent => (
             <DropdownMenuItem key={agent.id} onClick={() => onPick(agent.id)}>
+              <Check className={cn('h-3.5 w-3.5 shrink-0', agent.id === on.id ? 'opacity-100' : 'opacity-0')} aria-hidden />
               <span className="flex-1 truncate">{agent.name}</span>
               <span className="shrink-0 text-xs text-muted-foreground">{agent.skills.length === 1 ? '1 skill' : `${agent.skills.length} skills`}</span>
-              {agent.id === on.id && <Check className="h-3.5 w-3.5 shrink-0" aria-hidden />}
             </DropdownMenuItem>
           ))}
         </DropdownMenuGroup>
