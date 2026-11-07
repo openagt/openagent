@@ -1,4 +1,5 @@
 import { execFile } from 'node:child_process'
+import { userInfo } from 'node:os'
 
 /**
  * The door behind Tailscale: a computer the person reaches from their other devices over their own
@@ -87,12 +88,16 @@ export async function servedAt(run: TailscaleRun, name: string): Promise<Said<st
   }
 }
 
-/** Serve the door, at 127.0.0.1:`port`, on this computer's HTTPS port on the network; kept by Tailscale across restarts. */
-export async function serveDoor(run: TailscaleRun, port: number): Promise<Said<undefined>> {
+/**
+ * Serve the door, at 127.0.0.1:`port`, on this computer's HTTPS port on the network; kept by Tailscale across restarts.
+ * On Linux only root and Tailscale's operator may change what it serves: `user` is who the door runs as, named in the fix.
+ */
+export async function serveDoor(run: TailscaleRun, port: number, user = userInfo().username): Promise<Said<undefined>> {
   const { code, out } = await run(['serve', '--bg', `--https=${TAILSCALE_PORT}`, `http://127.0.0.1:${port}`], SERVE_MS)
   // Off for the whole network: Tailscale names the page in the person's account where it is turned on, and waits for it.
   const enable = /https:\/\/login\.tailscale\.com\/\S+/.exec(out)?.[0]
   if (/not enabled/i.test(out)) return { ok: false, problem: 'Serve is off on your Tailscale network. Turn it on once in your Tailscale account; the door opens by itself then.', ...(enable ? { enable } : {}) }
+  if (/Access denied/i.test(out)) return { ok: false, problem: `Tailscale does not let the user ${user} serve the door. Run sudo tailscale set --operator=${user} once on this computer, then turn this on again.` }
   if (code !== 0) return { ok: false, problem: `Tailscale did not serve the door: ${firstLine(out)}` }
   return { ok: true, value: undefined }
 }

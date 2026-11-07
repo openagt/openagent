@@ -5,7 +5,7 @@ import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { promisify } from 'node:util'
-import { SERVICE_UNIT, STEPS, STEP_IDS, linkScript, quoted } from './steps.js'
+import { DEVICES, DEVICES_COMMAND, HELPER, SERVICE_UNIT, STEPS, STEP_IDS, linkScript, quoted } from './steps.js'
 
 const run = promisify(execFile)
 const FACTS = { address: '203.0.113.5', version: '1.2.3' }
@@ -182,4 +182,33 @@ test('a server\'s git gets this computer\'s name and email where it has none; wh
   } finally {
     await rm(base, { recursive: true, force: true })
   }
+})
+
+test("a person logged in to the server gets its devices as the server's user, and a code only for someone named", async () => {
+  await run('sh', ['-n', '-c', DEVICES])
+  const people = STEPS.find(step => step.id === 'people')!.script(FACTS)
+  assert.ok(people.includes(`put ${DEVICES_COMMAND} 755 "$DEVICES"`))
+  // As the service runs the door: its user, and the helper that makes a person's user.
+  assert.match(DEVICES, /^exec runuser -u openagent -- env OPENAGENT_PERSON_HELPER=\/opt\/openagent\/bin\/openagent-person \/opt\/openagent\/node\/bin\/node \S+\/bin\/devices "\$@"$/m)
+  // Root already: no sudo. A code for nobody would be the owner's, and is refused before anything runs as the server's user.
+  const bin = await mkdtemp(join(tmpdir(), 'devices-'))
+  try {
+    await writeFile(join(bin, 'id'), '#!/bin/sh\necho 0\n', { mode: 0o755 })
+    await writeFile(join(bin, 'runuser'), '#!/bin/sh\necho ran "$@"\n', { mode: 0o755 })
+    const command = join(bin, 'openagent-devices')
+    await writeFile(command, DEVICES, { mode: 0o755 })
+    const env = { PATH: `${bin}:/usr/bin:/bin` }
+    for (const args of [['add'], ['add', '--qr']]) {
+      const refused = await run(command, args, { env }).then(() => undefined, (err: { code: number; stderr: string }) => err)
+      assert.equal(refused?.code, 2)
+      assert.match(refused!.stderr, /^Name whose device it is: openagent-devices add --for <name> --qr\./)
+    }
+  } finally {
+    await rm(bin, { recursive: true, force: true })
+  }
+})
+
+test('every home the install makes is its user\'s alone', () => {
+  assert.match(STEPS.find(step => step.id === 'user')!.script(FACTS), /\n  chmod 700 \/home\/openagent\n/)
+  assert.match(HELPER, /\n  chmod 700 "\$home"\n  agents "\$user" "\$home"\n/)
 })

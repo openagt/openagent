@@ -48,6 +48,14 @@ test('Serve is asked to serve the door, said off with the page that turns it on,
   assert.equal(tailscale.served(), undefined)
 })
 
+test("a user that is not Tailscale's operator is told the line that makes it one", async () => {
+  const denied = async () => ({ code: 1, out: 'sending serve config: Access denied: serve config denied\nUse \'sudo tailscale serve --bg --https=443 http://127.0.0.1:4201\'' })
+  assert.deepEqual(await serveDoor(denied, 4201, 'openagent'), {
+    ok: false,
+    problem: 'Tailscale does not let the user openagent serve the door. Run sudo tailscale set --operator=openagent once on this computer, then turn this on again.',
+  })
+})
+
 test('what the person serves on that port themselves is told apart from the door', async () => {
   const tailscale = fakeTailscale()
   tailscale.serveOther('http://127.0.0.1:3000')
