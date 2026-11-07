@@ -2,6 +2,7 @@
 import type { ComponentProps } from 'react'
 import { Tooltip as TooltipPrimitive } from '@base-ui/react/tooltip'
 import { cn } from '../../lib/utils.js'
+import { usePopupPlacement } from './popup-placement.js'
 
 // A trimmed shadcn-style Tooltip on Base UI (already a dep across the ui/ kit — no Radix pulled
 // in). Per item:
@@ -29,6 +30,7 @@ function TooltipContent({
   side?: ComponentProps<typeof TooltipPrimitive.Positioner>['side']
   align?: ComponentProps<typeof TooltipPrimitive.Positioner>['align']
 }) {
+  const positionMethod = usePopupPlacement()
   return (
     <TooltipPrimitive.Portal>
       {/* The stacking layer belongs here, on the positioned element (#1506). It used to sit on the
@@ -37,6 +39,7 @@ function TooltipContent({
           positioner, was painted *behind* it: the preset hints in the launcher's menu rendered
           with the right words and were covered by the very menu that triggered them. */}
       <TooltipPrimitive.Positioner
+        positionMethod={positionMethod}
         className="z-50"
         sideOffset={sideOffset}
         {...(side ? { side } : {})}

@@ -4,6 +4,7 @@ import { Select as SelectPrimitive } from '@base-ui/react/select'
 import { Check, ChevronDown } from 'lucide-react'
 import { cn } from '../../lib/utils.js'
 import { MENU_SURFACE_CLASS } from './dropdown-menu.js'
+import { usePopupPlacement } from './popup-placement.js'
 
 // A shadcn-style Select on Base UI, matching the DropdownMenu already here (no Radix pulled in).
 // Replaces the bare `<select>` the forms and the Settings rows drew by hand: its list was the
@@ -48,10 +49,11 @@ export function SelectContent({
   children,
   ...props
 }: ComponentProps<typeof SelectPrimitive.Popup> & { sideOffset?: number; align?: 'start' | 'center' | 'end' }) {
+  const positionMethod = usePopupPlacement()
   return (
     <SelectPrimitive.Portal>
       {/* Under the trigger like a menu, not laid over it: the picked item stays readable while the list is open. */}
-      <SelectPrimitive.Positioner sideOffset={sideOffset} align={align} alignItemWithTrigger={false} className="z-50 outline-none">
+      <SelectPrimitive.Positioner positionMethod={positionMethod} sideOffset={sideOffset} align={align} alignItemWithTrigger={false} className="z-50 outline-none">
         <SelectPrimitive.Popup
           data-slot="select-content"
           className={cn(

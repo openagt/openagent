@@ -14,13 +14,14 @@ import { rowButtonClass } from './ui/row-item.js'
 import { ScrollArea } from './ui/scroll-area.js'
 import { Tooltip, TooltipTrigger, TooltipContent } from './ui/tooltip.js'
 import { MENU_ITEM_CLASS, MENU_POPUP_CLASS, MENU_TRIGGER_OPEN_CLASS } from './ui/dropdown-menu.js'
+import { usePopupPlacement } from './ui/popup-placement.js'
 import { AddProjectPanel } from './AddProjectPanel.js'
 
 /** How many repos the menu lists before a search: the search reaches the rest. */
 export const REPOS_SHOWN = 20
 
-/** How soon the menu asks again while the git hosts' lists are being read. */
-const HOSTED_AGAIN_MS = 2000
+/** How soon a menu asks again while repos are still being looked for: on this computer, or at the git hosts. */
+export const ASK_AGAIN_MS = 2000
 
 /** The most rows a search lists. */
 const SEARCH_SHOWN = 200
@@ -179,6 +180,7 @@ export function ProjectPicker({
   onProjectAdded: () => void
 }) {
   const label = useProjectLabel()
+  const positionMethod = usePopupPlacement()
   const [open, setOpen] = useState(false)
   const [typed, setTyped] = useState('')
   const [adding, setAdding] = useState<{ folder: string } | { address: string } | null>(null)
@@ -187,11 +189,11 @@ export function ProjectPicker({
   const [folderError, setFolderError] = useState<string | null>(null)
   // Read again after a folder is added: the daemon has crawled it by then.
   const [folders, setFolders] = useState(0)
-  const repos = useLoaded<ReposRead | null>(() => onRepos().catch(() => ({ repos: [], hosted: [], hostedLoading: false, canAddFolder: false })), null, [open, folders])
-  // The git hosts' lists are still being read: asked again shortly, while the menu is open.
+  const repos = useLoaded<ReposRead | null>(() => onRepos().catch(() => ({ repos: [], hosted: [], reposLoading: false, hostedLoading: false, canAddFolder: false })), null, [open, folders])
+  // This computer's or the git hosts' lists are still being read: asked again shortly, while the menu is open.
   useEffect(() => {
-    if (!open || !repos?.hostedLoading) return
-    const again = setTimeout(() => setFolders(k => k + 1), HOSTED_AGAIN_MS)
+    if (!open || !(repos?.reposLoading || repos?.hostedLoading)) return
+    const again = setTimeout(() => setFolders(k => k + 1), ASK_AGAIN_MS)
     return () => clearTimeout(again)
   }, [open, repos])
 
@@ -300,7 +302,7 @@ export function ProjectPicker({
           trigger
         )}
         <Combobox.Portal>
-          <Combobox.Positioner sideOffset={6} align="start" className="z-50 outline-none">
+          <Combobox.Positioner positionMethod={positionMethod} sideOffset={6} align="start" className="z-50 outline-none">
             <Combobox.Popup aria-label={name} className={cn(MENU_POPUP_CLASS, 'w-[22rem] max-w-[var(--available-width)]')}>
               <div className="flex items-center gap-2 border-b border-border px-3">
                 <Search className="h-3.5 w-3.5 shrink-0 text-muted-foreground" aria-hidden />
@@ -341,7 +343,7 @@ export function ProjectPicker({
                       </Combobox.Group>
                     )}
                   </Combobox.List>
-                  {repos === null ? (
+                  {repos === null || repos.reposLoading ? (
                     <p role="status" className="px-2 py-1.5 text-xs text-muted-foreground">Looking for repos on this computer…</p>
                   ) : !typed.trim() && repoRows.length > REPOS_SHOWN ? (
                     <p className="px-2 py-1.5 text-xs text-muted-foreground">Search to see more of the {repoRows.length} repos.</p>

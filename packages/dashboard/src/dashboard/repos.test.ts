@@ -3,7 +3,7 @@ import { test } from 'node:test'
 import { mkdir, mkdtemp, realpath, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { crawlRepos, originUrlOf, repoIndex, type CrawlFs, type FoundRepo } from './repos.js'
+import { CRAWL_BEHIND_LIMIT_MS, CRAWL_LIMIT_MS, crawlRepos, originUrlOf, repoIndex, type Crawl, type CrawlFs, type FoundRepo } from './repos.js'
 
 // The repos on this computer: a crawl of folders, shallowest first, that stops at a repository and
 // at a strict time limit, and a kept list read again once it is old.
@@ -38,11 +38,14 @@ test('the crawl finds the repos under a folder, with their addresses, by name, a
   })
   try {
     // By name, whatever order the reads landed in.
-    assert.deepEqual(await crawlRepos([root]), [
-      { path: join(root, 'Projects/org/shop'), name: 'shop' },
-      { path: join(root, 'Projects/vike'), name: 'vike', url: 'https://github.com/vikejs/vike.git' },
-      { path: join(root, 'z-first/Zeta'), name: 'Zeta' },
-    ])
+    assert.deepEqual(await crawlRepos([root]), {
+      repos: [
+        { path: join(root, 'Projects/org/shop'), name: 'shop' },
+        { path: join(root, 'Projects/vike'), name: 'vike', url: 'https://github.com/vikejs/vike.git' },
+        { path: join(root, 'z-first/Zeta'), name: 'Zeta' },
+      ],
+      whole: true,
+    })
   } finally {
     await rm(root, { recursive: true, force: true })
   }
@@ -57,7 +60,7 @@ test('the crawl skips hidden folders, package installs and the home\'s system fo
     'a/b/c/near/.git': null,
   })
   try {
-    assert.deepEqual((await crawlRepos([root], { depth: 4 })).map(repo => repo.name), ['near'])
+    assert.deepEqual((await crawlRepos([root], { depth: 4 })).repos.map(repo => repo.name), ['near'])
   } finally {
     await rm(root, { recursive: true, force: true })
   }
@@ -66,7 +69,7 @@ test('the crawl skips hidden folders, package installs and the home\'s system fo
 test('a root that is a repository is one, and is still looked through: a home folder can be one', async () => {
   const root = await tree({ '.git': null, 'Projects/app/.git': null })
   try {
-    assert.deepEqual((await crawlRepos([root])).map(repo => repo.path).sort(), [root, join(root, 'Projects/app')].sort())
+    assert.deepEqual((await crawlRepos([root])).repos.map(repo => repo.path).sort(), [root, join(root, 'Projects/app')].sort())
   } finally {
     await rm(root, { recursive: true, force: true })
   }
@@ -89,26 +92,64 @@ test('the crawl stops at its time limit, and answers what it found by then: the 
     read: async () => undefined,
   }
   const found = await crawlRepos(['/h'], { fs, limitMs: 1000, now: () => clock })
-  assert.deepEqual(found.map(repo => repo.path), ['/h/near'])
+  assert.deepEqual(found, { repos: [{ path: '/h/near', name: 'near' }], whole: false })
 })
 
 test('the kept list: the first read waits on a crawl, a fresh one is kept, an old one is answered and crawled again behind it', async () => {
   let clock = 0
   let crawls = 0
   let next: FoundRepo[] = [{ path: '/a', name: 'a' }]
-  const index = repoIndex(async () => ['/h'], { now: () => clock, maxAgeMs: 1000, crawl: async () => (crawls++, next) })
-  assert.deepEqual(await index.read(), [{ path: '/a', name: 'a' }])
+  const index = repoIndex(async () => ['/h'], { now: () => clock, maxAgeMs: 1000, crawl: async () => (crawls++, { repos: next, whole: true }) })
+  assert.deepEqual(await index.read(), { repos: [{ path: '/a', name: 'a' }], looking: false })
   next = [{ path: '/b', name: 'b' }]
   clock = 500
-  assert.deepEqual(await index.read(), [{ path: '/a', name: 'a' }])
+  assert.deepEqual(await index.read(), { repos: [{ path: '/a', name: 'a' }], looking: false })
   assert.equal(crawls, 1)
   clock = 2000
   // Old: the kept list now, and a crawl behind it whose answer the next read has.
-  assert.deepEqual(await index.read(), [{ path: '/a', name: 'a' }])
+  assert.deepEqual(await index.read(), { repos: [{ path: '/a', name: 'a' }], looking: false })
   await new Promise(resolve => setImmediate(resolve))
   assert.equal(crawls, 2)
-  assert.deepEqual(await index.read(), [{ path: '/b', name: 'b' }])
+  assert.deepEqual(await index.read(), { repos: [{ path: '/b', name: 'b' }], looking: false })
   // A refresh crawls now, and answers what it found.
   next = [{ path: '/c', name: 'c' }]
-  assert.deepEqual(await index.refresh(), [{ path: '/c', name: 'c' }])
+  assert.deepEqual(await index.refresh(), { repos: [{ path: '/c', name: 'c' }], looking: false })
+})
+
+test('a first crawl cut short is answered as still looking, and one with time enough follows it at once', async () => {
+  const limits: number[] = []
+  const answers: Crawl[] = [
+    { repos: [{ path: '/h/near', name: 'near' }], whole: false },
+    { repos: [{ path: '/h/Projects/app', name: 'app' }, { path: '/h/near', name: 'near' }], whole: true },
+  ]
+  let landed!: () => void
+  const behind = new Promise<void>(resolve => (landed = resolve))
+  const index = repoIndex(async () => ['/h'], {
+    crawl: async (_roots, limitMs) => {
+      limits.push(limitMs)
+      const answer = answers[limits.length - 1]!
+      if (limits.length === 2) await behind
+      return answer
+    },
+  })
+  assert.deepEqual(await index.read(), { repos: [{ path: '/h/near', name: 'near' }], looking: true })
+  // The second crawl is on its way, with the time nobody waits on: a read meanwhile starts no third.
+  assert.deepEqual(await index.read(), { repos: [{ path: '/h/near', name: 'near' }], looking: true })
+  assert.deepEqual(limits, [CRAWL_LIMIT_MS, CRAWL_BEHIND_LIMIT_MS])
+  landed()
+  await new Promise(resolve => setImmediate(resolve))
+  assert.deepEqual(await index.read(), { repos: answers[1]!.repos, looking: false })
+  assert.equal(limits.length, 2)
+})
+
+test('a crawl with time enough that is still cut short is the list: it is not looked for again until it is old', async () => {
+  let crawls = 0
+  const index = repoIndex(async () => ['/h'], {
+    crawl: async () => (crawls++, { repos: [{ path: '/h/near', name: 'near' }], whole: false }),
+  })
+  await index.read()
+  await new Promise(resolve => setImmediate(resolve))
+  assert.deepEqual(await index.read(), { repos: [{ path: '/h/near', name: 'near' }], looking: false })
+  await new Promise(resolve => setImmediate(resolve))
+  assert.equal(crawls, 2)
 })

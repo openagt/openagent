@@ -168,6 +168,8 @@ export interface ReposRead {
   repos: FoundRepo[]
   /** The repositories OpenAgent's accounts and the owners the person named have at the hosts, none of them on this computer: picked, one is cloned. */
   hosted: HostedRepo[]
+  /** The look through this computer was cut short, and one with more time is on its way: the picker asks again shortly. */
+  reposLoading: boolean
   /** The hosts are being asked: the picker asks again shortly. */
   hostedLoading: boolean
   /** This computer can show a folder dialog, so the picker offers "Search another folder…". */
@@ -180,7 +182,8 @@ export interface ReposRead {
  * already. The kept list, so the picker opens at once; an old one is crawled again behind it.
  */
 export async function onRepos(): Promise<ReposRead> {
-  const [repos, projects, hosted] = await Promise.all([thisComputersRepos().read(), listProjects().catch(() => []), readHosted()])
+  const [found, projects, hosted] = await Promise.all([thisComputersRepos().read(), listProjects().catch(() => []), readHosted()])
+  const repos = found.repos
   const pinned = new Set(projects.map(project => project.path))
   // A repository at a host that is here already, as a repo or a project, is listed once: by its folder.
   const here = new Set<string>()
@@ -192,6 +195,7 @@ export async function onRepos(): Promise<ReposRead> {
   return {
     repos: repos.filter(repo => !pinned.has(repo.path)),
     hosted: hosted.repos.filter(repo => !here.has(repo.address.toLowerCase())),
+    reposLoading: found.looking,
     hostedLoading: hosted.loading,
     canAddFolder: canPickDirectory(),
   }
