@@ -156,6 +156,21 @@ test('only a server takes a coding agent\'s login; a git host\'s account, which 
     assert.deepEqual(await onCopiedLogins(), { ok: true, logins: [] })
   }, false))
 
+test('a git host\'s account handed over, then gone from here another way than OpenAgent\'s, is no longer said to be here: the computer offers it again', () =>
+  onServer(async () => {
+    await sendCopiedLogin({ kind: 'git', host: 'github.com', source: 'octo', name: 'octo', who: 'octo', runs: true, ...laptop }, 'gho_token_of_octo_123456')
+    const listing = (logins: string[]) => async (_host: string, args: string[]) =>
+      args[0] === 'accounts' ? { ok: true as const, output: { ok: true, name: 'GitHub', tool: 'gh', installed: true, accounts: logins.map(login => ({ login, runs: true })) } } : { ok: true as const, output: { ok: true } }
+    copiedWiring.gitHost = listing(['Octo'])
+    assert.deepEqual((await onCopiedLogins() as { logins: { name: string }[] }).logins.map(login => login.name), ['octo'])
+    // Its folder deleted by hand: the package lists no such account.
+    copiedWiring.gitHost = listing([])
+    assert.deepEqual(await onCopiedLogins(), { ok: true, logins: [] })
+    // A package that does not answer says nothing of it: the login is taken to be there still.
+    copiedWiring.gitHost = async () => ({ ok: false, error: 'No package answers for github.com.' })
+    assert.deepEqual((await onCopiedLogins() as { logins: unknown[] }).logins.length, 1)
+  }, false))
+
 test('what is handed over must read as a login of a kind this server knows', () =>
   onServer(async () => {
     assert.deepEqual(await sendCopiedLogin({ kind: 'mail' as 'git', source: 'own', name: 'S', who: 'u', ...laptop }, LOGIN), { ok: false, error: 'That is no login.' })

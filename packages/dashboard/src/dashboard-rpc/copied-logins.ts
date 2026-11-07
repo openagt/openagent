@@ -7,6 +7,7 @@ import { isServerName } from '../dashboard/machine-logins.js'
 import { isKind, isWord, readCopied, readUsage, same, writeCopied, type CopiedKind, type CopiedLogin, type GivenLogin, type UsageWindow } from '../dashboard/copied-logins.js'
 import { accountsWiring, type AccountResult } from './accounts.js'
 import { gitHostPackages } from './logins.js'
+import { readProvider } from '../dashboard/git-hosts.js'
 import { addAccount, changeAccounts, readAccounts, removeAccount } from '@openagt/skill-account-rotation'
 
 // What a server answers the person's own computers about their logins here (the logins, and what
@@ -38,9 +39,26 @@ function refused(): { ok: false; error: string } {
   return { ok: false, error: 'This OpenAgent takes no logins from another computer: it is no server.' }
 }
 
-/** What this device keeps from the person's computers, without how full each is: what a computer compares its own with. A device that is no server keeps git hosts' accounts alone. */
+/**
+ * What this device keeps from the person's computers, without how full each is: what a computer compares its own with. A device that is no server keeps git hosts' accounts alone.
+ * Only what is still here: a login whose account went another way than OpenAgent's (its folder deleted by hand) is not said to be here, so the computer offers it again.
+ */
 export async function onCopiedLogins(): Promise<CopiedView> {
-  return { ok: true, logins: readCopied().map(({ usage: _usage, ...rest }) => rest) }
+  const hosts = new Map<string, Promise<Set<string> | undefined>>()
+  const gitLogins = (host: string): Promise<Set<string> | undefined> => {
+    let asked = hosts.get(host)
+    if (!asked) hosts.set(host, (asked = copiedWiring.gitHost(host, ['accounts', '--host', host]).then(said => (said.ok ? readProvider(said.output) : undefined)).then(provider => provider && new Set(provider.accounts.map(account => account.login.toLowerCase())))))
+    return asked
+  }
+  const copied = readCopied()
+  const here = await Promise.all(
+    copied.map(async login => {
+      // A host that does not answer says nothing of its accounts: the login is taken to be there still.
+      if (login.kind === 'git') return (await gitLogins(login.host!))?.has(login.name.toLowerCase()) ?? true
+      return readAccounts(accountsWiring.path(login.kind)).some(account => account.name === login.name && account.login !== undefined)
+    }),
+  )
+  return { ok: true, logins: copied.filter((_, i) => here[i]).map(({ usage: _usage, ...rest }) => rest) }
 }
 
 /** A name for the row that no other account here has: the computer's name beside it when one has it already. */
