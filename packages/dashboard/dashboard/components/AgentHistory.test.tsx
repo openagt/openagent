@@ -837,6 +837,23 @@ describe('the project select (#1513)', () => {
     expect(picks).toEqual(['p2', null])
   })
 
+  test('pinned to the window beside a page that scrolls, its project menu is placed against the window too, and does not jump as the page scrolls', async () => {
+    // The menu's positioner: the nearest element above the list placed by Base UI.
+    const positionOf = () => {
+      let at: HTMLElement | null = screen.getByRole('listbox')
+      while (at && at.style.position !== 'fixed' && at.style.position !== 'absolute') at = at.parentElement
+      return at?.style.position
+    }
+    renderRail(<AgentHistory projectId={null} pageScrolls agents={[]} selectedAgentId={null} onSelect={() => {}} projects={[stranded, idle]} />)
+    await openMenu(screen.getByRole('combobox', { name: 'Project: All projects' }))
+    expect(positionOf()).toBe('fixed')
+    cleanup()
+    // In the page's flow, it scrolls with the page: so does its menu.
+    renderRail(<AgentHistory projectId={null} agents={[]} selectedAgentId={null} onSelect={() => {}} projects={[stranded, idle]} />)
+    await openMenu(screen.getByRole('combobox', { name: 'Project: All projects' }))
+    expect(positionOf()).toBe('absolute')
+  })
+
   test('a project the daemon recorded an error for gets a red dot and the error in words; one not activated says so', async () => {
     renderRail(<AgentHistory projectId={null} agents={[]} recentAgents={[]} selectedAgentId={null} onSelect={() => {}} projects={[stranded, idle]} />)
     await openMenu(screen.getByRole('combobox', { name: 'Project: All projects' }))

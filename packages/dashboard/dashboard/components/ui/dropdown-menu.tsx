@@ -3,6 +3,7 @@ import { ChevronRight, Check } from 'lucide-react'
 import type { ComponentProps, ReactNode } from 'react'
 import { cn } from '../../lib/utils.js'
 import { ScrollArea } from './scroll-area.js'
+import { usePopupPlacement } from './popup-placement.js'
 
 // The shadcn "base" dropdown menu (built on Base UI, not Radix) — trimmed to what the Start
 // form's Commands + agent/model menus need (#649/#650). On the menu surface, which sets the theme's
@@ -54,9 +55,10 @@ export function DropdownMenuContent({
   children,
   ...props
 }: ComponentProps<typeof Menu.Popup> & { sideOffset?: number; align?: 'start' | 'center' | 'end' }) {
+  const positionMethod = usePopupPlacement()
   return (
     <Menu.Portal>
-      <Menu.Positioner sideOffset={sideOffset} align={align} className="z-50 outline-none">
+      <Menu.Positioner positionMethod={positionMethod} sideOffset={sideOffset} align={align} className="z-50 outline-none">
         <Menu.Popup className={cn(MENU_POPUP_CLASS, className)} {...props}>
           <PopupBody>{children}</PopupBody>
         </Menu.Popup>
@@ -105,9 +107,10 @@ export function DropdownMenuSubTrigger({ className, children, ...props }: Compon
 }
 
 export function DropdownMenuSubContent({ className, children, ...props }: ComponentProps<typeof Menu.Popup>) {
+  const positionMethod = usePopupPlacement()
   return (
     <Menu.Portal>
-      <Menu.Positioner side="right" align="start" sideOffset={2} className="z-50 outline-none">
+      <Menu.Positioner positionMethod={positionMethod} side="right" align="start" sideOffset={2} className="z-50 outline-none">
         <Menu.Popup className={cn(MENU_POPUP_CLASS, className)} {...props}>
           <PopupBody>{children}</PopupBody>
         </Menu.Popup>
