@@ -5,7 +5,7 @@
 export { onAgents, onStartedName, onModuleAgents, onAgent, onAgentsDoing, onDocs, onQueue, onOverview, onRecentAgents, onInterventions, onActivity, onDashboard, onGitHostHome, onRepositoryOffer, onGitStatus, onProjectFiles, onRetainedWorktrees, onAgentWorktree, onAgentMainBranch, onAgentHandoff, onBridgeQuestion, onBridgeStatus, onBridgeToken, onBridgeEvents, onBridgeAnswer, onBridgeBrowser } from './reads.js'
 export { sendStop, sendChoice, sendBridgeAnswer, sendBridgeAnswerCancel, sendBridgeBrowser, sendMessage, sendStart, sendOpenInApp, sendRemoveWorktree, sendDeleteAgent, sendOpenPullRequest, sendPush, sendMergeBranch, sendMerge, sendCreateRepository } from './control.js'
 export { streamAgentEvents, type LiveFeedEvent, type PartialMessage, type StreamSync } from './events.js'
-export { onProjects, sendAddProject, sendStartedAgain, onCloneTarget, sendAddProjectFromAddress, sendRemoveProject, sendShareRecords, sendPickProjectDirectory, onRepos, sendAddRepoFolder, onOnboarding, onCommands, onStartBranches, onStartCheck, onCloneCheck, type ProjectLauncher } from './projects.js'
+export { onProjects, sendAddProject, sendStartedAgain, onCloneTarget, sendAddProjectFromAddress, sendRemoveProject, sendShareRecords, sendPickProjectDirectory, onRepos, sendAddRepoFolder, onCommands, onStartBranches, onStartCheck, onCloneCheck, type ProjectLauncher } from './projects.js'
 export {
   onPreferences,
   savePreferences,
@@ -50,6 +50,7 @@ import * as serverLogins from './server-logins.js'
 import * as personalFolder from './personal-folder.js'
 import * as projectAgentData from './project-agent-data.js'
 import * as agents from './agents.js'
+import * as backup from './backup.js'
 import { streamAgentEvents } from './events.js'
 
 /** One RPC: called with whatever the browser sent, answering with whatever JSON.stringify keeps. */
@@ -70,7 +71,7 @@ export type RpcHandler = (...args: never[]) => unknown
 export const RPC_HANDLERS: Record<string, RpcHandler> = Object.assign(
   Object.create(null) as Record<string, RpcHandler>,
   Object.fromEntries(
-    [reads, control, projects, preferences, quota, models, machines, modules, skills, person, people, accounts, logins, copiedLogins, serverLogins, personalFolder, projectAgentData, agents]
+    [reads, control, projects, preferences, quota, models, machines, modules, skills, person, people, accounts, logins, copiedLogins, serverLogins, personalFolder, projectAgentData, agents, backup]
       .flatMap(module => Object.entries(module))
       .filter((entry): entry is [string, RpcHandler] => typeof entry[1] === 'function'),
   ),

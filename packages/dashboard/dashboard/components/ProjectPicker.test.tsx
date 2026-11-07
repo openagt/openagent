@@ -43,6 +43,13 @@ const search = () => screen.getByRole('combobox', { name: 'Search projects and r
 const options = () => screen.getAllByRole('option').map(option => option.textContent)
 
 describe('ProjectPicker', () => {
+  test('as a button that adds a project (the first steps): its words on it, and no "no project" row, only what can be added', async () => {
+    renderPicker({ look: 'add', none: { label: 'Add a project' }, projects: [] })
+    await openMenu(screen.getByRole('combobox', { name: 'Add a project' }))
+    await screen.findByRole('option', { name: /vike/ })
+    expect(options()).toEqual(['vikegithub.com/vikejs/vike', 'notes/home/me/notes'])
+  })
+
   test('a repo\'s address is said as its host and path, over https or ssh, and never with a login in it', () => {
     expect(shownAddress('https://github.com/vikejs/vike.git')).toBe('github.com/vikejs/vike')
     expect(shownAddress('git@github.com:vikejs/vike.git')).toBe('github.com/vikejs/vike')

@@ -1,6 +1,6 @@
 import { useEffect, useState, type ReactNode } from 'react'
 import { DRIVER_LABELS, type DriverName } from '../../src/client.js'
-import { onAgentState, onGitHosts, sendAgentFix, sendGitHostInstall, sendGitHostLogin, type AgentState, type GitHostRow, type GitHostsView } from '../rpc/logins.js'
+import { onAgentState, onGitHosts, sendAgentFix, sendGitHostInstall, sendGitHostLogin, sendStopGitHostLogin, type AgentState, type GitHostRow, type GitHostsView } from '../rpc/logins.js'
 import { usePolled } from '../lib/use-async.js'
 import { cn } from '../lib/utils.js'
 import { Button } from './ui/button.js'
@@ -173,18 +173,34 @@ export function AgentFix({ state, onChanged, size }: { state: AgentState; onChan
   )
 }
 
-/** A login at the git host under way: the code, with a copy, and the page to type it at. */
-export function DeviceCode({ code, url }: { code: string; url: string }) {
+/** A login at the git host under way, said as one sentence: the page to open, the code to enter (with a copy), and Cancel, which gives it up. */
+export function DeviceCode({ code, url, host, onChanged }: { code: string; url: string; host: string; onChanged: () => Promise<void> }) {
+  const [stopping, setStopping] = useState(false)
+  const cancel = async () => {
+    setStopping(true)
+    try {
+      await sendStopGitHostLogin(host).catch(() => undefined)
+      await onChanged()
+    } finally {
+      setStopping(false)
+    }
+  }
   return (
-    <div role="status" className="space-y-1.5 text-xs">
-      <p className="text-muted-foreground">Type this code at the page below, signed in to the account to add:</p>
-      <div className="flex items-center gap-2">
-        <code className="rounded bg-muted px-2 py-1 font-mono text-sm font-medium tracking-wider">{code}</code>
-        <CopyButton text={code} label="Copy the code" />
-        <a href={url} target="_blank" rel="noreferrer" className="text-[var(--color-primary)] underline-offset-2 hover:underline">
+    <div role="status" className="space-y-1 text-xs">
+      {/* One sentence, as a person says it (his pick over a label above a row of parts). */}
+      <p className="flex flex-wrap items-center gap-x-1.5 gap-y-1 text-sm">
+        <span>Open</span>
+        <a href={url} target="_blank" rel="noreferrer" className="font-medium text-[var(--color-primary)] underline-offset-2 hover:underline">
           {url.replace(/^https:\/\//, '')}
         </a>
-      </div>
+        <span>and enter</span>
+        <code className="rounded bg-muted px-1.5 py-0.5 font-mono text-sm font-medium tracking-wider">{code}</code>
+        <CopyButton text={code} label="Copy the code" />
+        <Button size="xs" variant="ghost" className="text-muted-foreground" disabled={stopping} onClick={() => void cancel()}>
+          {stopping ? 'Cancelling…' : 'Cancel'}
+        </Button>
+      </p>
+      <p className="text-muted-foreground">Sign in there as the account OpenAgent should use.</p>
     </div>
   )
 }
@@ -223,7 +239,7 @@ export function HostFix({ row, onChanged, size }: { row: GitHostRow; onChanged: 
     }
     return <FixAction size={size} label={`Install ${p.tool}`} busy={p.installing === true} busyWords={`Installing ${p.tool}…`} command={p.install} {...((error ?? p.installFailed) !== undefined ? { failed: (error ?? p.installFailed)! } : {})} onPress={() => void install()} />
   }
-  if (p.loggingIn) return <DeviceCode code={p.loggingIn.code} url={p.loggingIn.url} />
+  if (p.loggingIn) return <DeviceCode code={p.loggingIn.code} url={p.loggingIn.url} host={row.host} onChanged={onChanged} />
   if (p.accounts.length > 0) return null
   return <FixAction size={size} label={`Add a ${p.name} account`} busy={login.busy} busyWords="Asking for a code…" {...(login.error !== undefined ? { failed: login.error } : {})} onPress={() => void login.start(row.host)} />
 }

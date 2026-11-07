@@ -152,7 +152,7 @@ function HostAccounts({ row, onChanged }: { row: GitHostRow; onChanged: () => Pr
           <HostFix row={row} onChanged={onChanged} />
         </div>
       ) : p.loggingIn ? (
-        <DeviceCode code={p.loggingIn.code} url={p.loggingIn.url} />
+        <DeviceCode code={p.loggingIn.code} url={p.loggingIn.url} host={row.host} onChanged={onChanged} />
       ) : (
         <Button size="xs" variant="ghost" className="-ml-2 font-normal" disabled={login.busy} title={`Adds an account to OpenAgent with a code you type at ${p.name}. Your own logins stay as they are.`} onClick={() => void login.start(row.host)}>
           {login.busy ? <Loader2 className="size-3.5 animate-spin" aria-hidden /> : <Plus className="size-3.5" aria-hidden />}

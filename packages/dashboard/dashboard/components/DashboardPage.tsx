@@ -16,6 +16,7 @@ import { ALL_PROJECTS, arrangeCards } from '../../src/client.js'
 import type { ProjectSummary } from '../../src/index.js'
 import { Page } from './Page.js'
 import { NEEDS_YOU_ID, StatTile, WORKING_ID, scrollToPart } from './StatTile.js'
+import { YourAgentsTile } from './YourAgentsTile.js'
 
 // The Overview landing page (#1139): a focused at-a-glance board — usage first, then what needs a
 // human (Human Queue) beside the agents working now, then the cards the installed packages
@@ -40,6 +41,7 @@ export function DashboardPage({
   active,
   projects,
   scope,
+  onProjectAdded,
 }: {
   onSelectProject: (id: string) => void
   /** Open one session (project + run): the Agents rows link straight to a session. */
@@ -56,6 +58,8 @@ export function DashboardPage({
   projects: ProjectSummary[]
   /** The one project the page shows (#1513), or null for all: the agents at work and the packages' cards show only its, and a card of a package it does not have is not drawn. */
   scope: string | null
+  /** A project was added from the first steps: the app reads its projects again. */
+  onProjectAdded: () => void
 }) {
   // Its ✕ hides it (#958), and a switch in Settings › Appearance shows it again.
   const onboardingDismissed = usePreferences().onboardingDismissed ?? false
@@ -73,7 +77,7 @@ export function DashboardPage({
       stale: interventionsStale,
       label: 'Needs you',
       order: 1,
-      width: '1/3',
+      width: '1/4',
       minWidth: '1/4',
       node: (
         <StatTile
@@ -90,7 +94,7 @@ export function DashboardPage({
       stale: active.stale,
       label: 'Working now',
       order: 2,
-      width: '1/3',
+      width: '1/4',
       minWidth: '1/4',
       node: (
         <StatTile
@@ -102,6 +106,9 @@ export function DashboardPage({
         />
       ),
     },
+    // The person's agents (Rom's design: an agent is a name, skills and accounts): how many, by name,
+    // a press from their page. A quarter, as the other tiles: four of them fill one row.
+    { id: 'your-agents', label: 'Your agents', order: 4, width: '1/4', minWidth: '1/4', node: <YourAgentsTile /> },
     // Usage (#1139): the one figure that governs everything the agent may do next.
     { id: 'usage', label: 'Usage', order: 5, width: '1', minWidth: '1/2', node: <Quota projects={projects} /> },
     {
@@ -188,7 +195,7 @@ export function DashboardPage({
     >
       <div className="space-y-4">
         {!onboardingDismissed && !editing && (
-          <OnboardingChecklist onAgentStarted={onAgentStarted} onSelectProject={onSelectProject} />
+          <OnboardingChecklist projects={projects} onAgentStarted={onAgentStarted} onSelectProject={onSelectProject} onProjectAdded={onProjectAdded} />
         )}
         {!editing && <AgentUpdates />}
         {!layoutRead ? null : editing ? <EditOverview arranged={arranged} layouts={layouts} layoutKey={layoutKey} /> : arranged.some(({ hidden }) => !hidden) ? (

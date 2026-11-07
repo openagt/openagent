@@ -24,6 +24,8 @@ export function ProfileSettings() {
   const saving = useAction()
   const syncing = useAction()
   const removing = useAction()
+  // What the last Sync did, said once it is done: a press that changed nothing still answers.
+  const [synced, setSynced] = useState<string | undefined>()
   if (!person) return null
   const name = typedName ?? person.name
   const github = typedGithub ?? person.github ?? ''
@@ -36,7 +38,13 @@ export function ProfileSettings() {
     personChanged()
   }
   const save = () => void saving.run(() => sendSavePersonName(name), 'Could not save your name.').then(done)
-  const sync = () => void syncing.run(() => sendSyncPersonFromGitHub(github), 'Could not read that GitHub profile.').then(done)
+  const sync = () => {
+    setSynced(undefined)
+    void syncing.run(() => sendSyncPersonFromGitHub(github), 'Could not read that GitHub profile.').then(async outcome => {
+      await done(outcome)
+      if (outcome.ok) setSynced(outcome.value.changed ? `Name and picture copied from @${outcome.value.login}.` : `Already up to date with @${outcome.value.login}.`)
+    })
+  }
   const remove = () => void removing.run(() => sendRemovePersonPicture(), 'Could not remove the picture.').then(done)
   const changedName = name.trim() !== '' && (name.trim() !== person.name || !person.own)
 
@@ -112,6 +120,7 @@ export function ProfileSettings() {
               onChange={event => {
                 setGithub(event.target.value)
                 syncing.reset()
+                setSynced(undefined)
               }}
               className="h-8 w-48"
             />
@@ -121,6 +130,11 @@ export function ProfileSettings() {
           </div>
         </form>
         {syncing.error && <p className="mt-2 text-xs text-danger">{syncing.error}</p>}
+        {synced && (
+          <p role="status" className="mt-2 text-xs text-muted-foreground">
+            {synced}
+          </p>
+        )}
       </div>
     </SettingsSection>
   )

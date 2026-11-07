@@ -42,7 +42,7 @@ async function withComputer(body: (asked: string[][], folder: string) => Promise
 test('Sync from GitHub copies the profile into the person\'s own record once; after that, the person is read with no git host asked', () =>
   withComputer(async (asked, folder) => {
     assert.equal((await onPerson()).own, undefined, 'none set yet: the computer\'s name')
-    assert.deepEqual(await sendSyncPersonFromGitHub('@ada'), { ok: true })
+    assert.deepEqual(await sendSyncPersonFromGitHub('@ada'), { ok: true, changed: true, login: 'ada' })
     assert.deepEqual(asked.filter(args => args[0] === 'profile'), [['profile', 'ada']])
     assert.deepEqual(JSON.parse(readFileSync(join(folder, 'person.json'), 'utf8')), { name: 'Ada Lovelace', picture: 'https://avatars.githubusercontent.com/u/1', github: 'ada' })
     asked.length = 0

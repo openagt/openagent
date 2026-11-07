@@ -5,7 +5,7 @@ import { join } from 'node:path'
 import { test } from 'node:test'
 import { nodeGitRunner, type GitRunner } from './git.js'
 import { readSharing, writeSharing } from './file-branch.js'
-import { readRemoteAccount, writeRemoteAccount, type RemoteAccount } from './remote-account.js'
+import { clearRemoteAccount, readRemoteAccount, writeRemoteAccount, type RemoteAccount } from './remote-account.js'
 import {
   listProjectDir,
   openProjectReader,
@@ -16,6 +16,7 @@ import {
   readPersonalFolder,
   readProjectFile,
   removePersonalData,
+  sendPersonalFolderAs,
   stopSyncingPersonalFolder,
   syncPersonalFolder,
   shareProjectData,
@@ -356,6 +357,27 @@ test('a personal folder on a repository at a host is sent only as an account of 
     assert.equal((await readPersonalFolder({ folder, git })).account, 'octo')
     assert.deepEqual(await withProjectData(repo, 'a note', writeNote('sent\n'), { folder, git: hosted }), { ok: true, changed: true, pushed: true })
     assert.equal((await real(['show', 'main:projects/example.com/acme/shop/notes/a.md'], remote.bare)).trim(), 'sent')
+
+    // The account forgotten (a new computer, an update): a change is made all the same, and waits here.
+    await clearRemoteAccount(folder, git)
+    assert.deepEqual(await withProjectData(repo, 'a later note', writeNote('waits\n'), { folder, git: hosted }), { ok: true, changed: true, pushed: false })
+    assert.equal((await readPersonalFolder({ folder, git })).unsent, 1)
+    assert.equal((await real(['show', 'main:projects/example.com/acme/shop/notes/a.md'], remote.bare)).trim(), 'sent')
+    // An account named: what waited goes at once.
+    assert.deepEqual(await sendPersonalFolderAs(ACCOUNT, { folder, git: hosted }), { ok: true })
+    assert.equal((await readPersonalFolder({ folder, git })).unsent, 0)
+    assert.equal((await real(['show', 'main:projects/example.com/acme/shop/notes/a.md'], remote.bare)).trim(), 'waits')
+
+    // A repository that refuses: the folder is sent as it was, and git's reason is said plainly.
+    await real(['remote', 'set-url', 'origin', join(folder, 'nowhere.git')], folder)
+    await withProjectData(repo, 'one more', writeNote('more\n'), { folder, git: hosted })
+    const unsent = await sendPersonalFolderAs({ login: 'other', host: 'example.com', config: [] }, { folder, git: hosted })
+    assert.equal(unsent.ok, false)
+    assert.doesNotMatch((unsent as { error: string }).error, /Command failed|push -q/)
+    assert.equal((await readPersonalFolder({ folder, git })).account, 'octo', 'left as it was')
+    await clearRemoteAccount(folder, git)
+    assert.equal((await sendPersonalFolderAs(ACCOUNT, { folder, git: hosted })).ok, false)
+    assert.equal((await readPersonalFolder({ folder, git })).account, undefined, 'none named, as before')
   } finally {
     await cleanup()
     await remote.cleanup()

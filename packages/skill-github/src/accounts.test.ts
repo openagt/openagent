@@ -5,7 +5,7 @@ import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, wr
 import { tmpdir } from 'node:os'
 import { basename, join } from 'node:path'
 import type { GhRunner } from './gh.js'
-import { accountLogins, ghState, installCommand, isAccountDir, jobState, loginUnderWay, runEnv, runsAccount, settleAdded, startJob, startLogin, useForRuns } from './accounts.js'
+import { accountLogins, ghState, installCommand, isAccountDir, jobState, loginUnderWay, runEnv, runsAccount, settleAdded, startJob, startLogin, stopLogin, useForRuns } from './accounts.js'
 import { runCli, type CliDeps } from './cli.js'
 
 // OpenAgent's own GitHub accounts, one gh folder each, and the one runs use: the person's own gh,
@@ -365,6 +365,26 @@ test('the code of a login, as each gh says it', async () => {
       await new Promise(resolve => setTimeout(resolve, 200))
       assert.deepEqual(loginUnderWay(files), { code: /([A-Z0-9]{4}-[A-Z0-9]{4})/.exec(said)![1], url: 'https://github.com/login/device' })
     }
+  } finally {
+    rmSync(dir, { recursive: true, force: true })
+  }
+})
+
+test('a login given up: its gh stops waiting, and nothing of it is kept, not even as a failure', async () => {
+  const dir = mkdtempSync(join(tmpdir(), 'gh-stop-'))
+  try {
+    const files = { log: join(dir, 'l.log'), pid: join(dir, 'l.pid'), exit: join(dir, 'l.exit') }
+    mkdirSync(join(dir, '.adding'))
+    await startJob(files, 'echo "one-time code: ABCD-1234"; sleep 30')
+    await new Promise(resolve => setTimeout(resolve, 200))
+    assert.deepEqual(loginUnderWay(files), { code: 'ABCD-1234', url: 'https://github.com/login/device' })
+    const pid = Number(readFileSync(files.pid, 'utf8'))
+    stopLogin(dir, files)
+    await new Promise(resolve => setTimeout(resolve, 200))
+    assert.throws(() => process.kill(pid, 0), 'its shell is gone')
+    assert.equal(jobState(files), undefined)
+    assert.equal(loginUnderWay(files), undefined)
+    assert.equal(existsSync(join(dir, '.adding')), false)
   } finally {
     rmSync(dir, { recursive: true, force: true })
   }

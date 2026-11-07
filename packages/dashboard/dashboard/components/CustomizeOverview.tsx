@@ -14,30 +14,36 @@ export interface Placed {
   hidden: boolean
 }
 
-// How many of the column's twelve parts a card takes at each width. The widths follow the
-// Overview's own room, not the window's (the sidebar takes some, or none once hidden): in a narrow
-// column every card is full width, in a middling one a card under the whole width is a half, and
-// only in a wide one does each stand at its own share: a quarter beside three, a third beside two.
-// A phone's column is always narrow.
-const SPAN: Record<CardWidth, string> = {
-  '1/4': '@2xl:col-span-6 @5xl:col-span-3',
-  '1/3': '@2xl:col-span-6 @5xl:col-span-4',
-  '1/2': '@2xl:col-span-6',
-  '2/3': '@2xl:col-span-6 @5xl:col-span-8',
-  '3/4': '@2xl:col-span-6 @5xl:col-span-9',
-  '1': '',
+// Where a card starts at each width, and how much of a row's leftover it takes. The widths follow
+// the Overview's own room, not the window's (the sidebar takes some, or none once hidden): in a
+// narrow column every card is full width, in a middling one a card under the whole width is a
+// half, and only in a wide one does each start at its own share: a quarter beside three, a third
+// beside two. A row its cards do not fill (a card that is not there on this install, a half beside
+// a third) is filled by them, each growing by its share (his pick over gaps, and over moving cards
+// up out of the order set). A quarter is a third in a middling column: the number tiles, three of
+// them a row. A phone's column is always narrow. Each size is said for its own widths only
+// (`@max-2xl:`), never as a base class a wider one refines: a module's dashboard.css that defines
+// the base class again would win over the refinement.
+const FULL = '@max-2xl:basis-full'
+const FLEX: Record<CardWidth, string> = {
+  '1/4': `${FULL} grow-[3] @2xl:basis-[calc(33.333%_-_0.667rem)] @4xl:basis-[calc(25%_-_0.75rem)]`,
+  '1/3': `${FULL} grow-[4] @2xl:basis-[calc(50%_-_0.5rem)] @5xl:basis-[calc(33.333%_-_0.667rem)]`,
+  '1/2': `${FULL} grow-[6] @2xl:basis-[calc(50%_-_0.5rem)]`,
+  '2/3': `${FULL} grow-[8] @2xl:basis-[calc(50%_-_0.5rem)] @5xl:basis-[calc(66.667%_-_0.334rem)]`,
+  '3/4': `${FULL} grow-[9] @2xl:basis-[calc(50%_-_0.5rem)] @5xl:basis-[calc(75%_-_0.25rem)]`,
+  '1': 'basis-full grow-[12]',
 }
 
 /**
- * The Overview's cards on a grid of twelve, each at its width, in the order given. The cards of one
- * row are as tall as its tallest, their content at the top: three bottoms at three heights read as
- * unfinished.
+ * The Overview's cards in rows, each at its width, in the order given, a row's cards filling it.
+ * The cards of one row are as tall as its tallest, their content at the top: three bottoms at
+ * three heights read as unfinished.
  */
 export function CardGrid({ cards }: { cards: Placed[] }) {
   return (
     <Grid>
       {cards.map(({ card, width }) => (
-        <CardCell key={card.id} card={card} className={cn('col-span-12 flex min-w-0 flex-col *:flex-1', SPAN[width])} />
+        <CardCell key={card.id} card={card} className={cn('flex min-w-0 flex-col *:flex-1', FLEX[width])} />
       ))}
     </Grid>
   )
@@ -71,7 +77,7 @@ function CardCell({ card, className }: { card: OverviewCard; className: string }
 function Grid({ children, onDragOver, onDrop }: { children: ReactNode; onDragOver?: (event: DragEvent) => void; onDrop?: (event: DragEvent) => void }) {
   return (
     <div className="@container">
-      <div className="grid grid-cols-12 gap-4" onDragOver={onDragOver} onDrop={onDrop}>
+      <div className="flex flex-wrap gap-4" onDragOver={onDragOver} onDrop={onDrop}>
         {children}
       </div>
     </div>
@@ -233,7 +239,7 @@ export function EditOverview({ arranged, layouts, layoutKey }: { arranged: Place
             }}
             onDragLeave={() => setAimed(undefined)}
             onDrop={drop}
-            className={cn('col-span-12 flex min-h-40 items-center justify-center rounded-lg border-2 border-dashed text-sm text-muted-foreground transition-colors', dragging && aimed === 'end' ? 'border-primary bg-primary/5 text-primary' : 'border-border')}
+            className={cn('flex min-h-40 basis-full items-center justify-center rounded-lg border-2 border-dashed text-sm text-muted-foreground transition-colors', dragging && aimed === 'end' ? 'border-primary bg-primary/5 text-primary' : 'border-border')}
           >
             No card on the page. Drag one here, or press its +.
           </div>
@@ -257,7 +263,7 @@ export function EditOverview({ arranged, layouts, layoutKey }: { arranged: Place
             onDrop={drop}
             onDragEnd={endDrag}
             // The card being moved stays where it was, faded, until it is dropped where the bar shows.
-            className={cn('relative col-span-12 flex min-w-0 cursor-grab flex-col rounded-lg outline-1 outline-offset-2 outline-border outline-dashed', SPAN[width], dragging?.id === card.id && 'opacity-40')}
+            className={cn('relative flex min-w-0 cursor-grab flex-col rounded-lg outline-1 outline-offset-2 outline-border outline-dashed', FLEX[width], dragging?.id === card.id && 'opacity-40')}
             style={{ viewTransitionName: transitionName(card.id) }}
           >
             {/* Where the dragged card lands: a bar in the gap at this card's edge, laid over the page. */}

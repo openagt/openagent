@@ -8,6 +8,13 @@ const sendSyncPersonalFolder = vi.fn(async (_address: string, _login?: string) =
 const sendStopSyncingPersonalFolder = vi.fn(async () => ({ ok: true as const }))
 const sendPersonalFolderAs = vi.fn(async (_login: string) => ({ ok: true as const }))
 vi.mock('../rpc/personal-folder.js', () => ({ onPersonalFolder, sendSyncPersonalFolder, sendStopSyncingPersonalFolder, sendPersonalFolderAs }))
+// The notice of what is not backed up has its own tests (BackupNotice.test.tsx).
+vi.mock('./BackupNotice.js', async importOriginal => ({ ...(await importOriginal<object>()), BackupNotice: () => null }))
+const logins = vi.hoisted(() => ({ onGitHosts: vi.fn(), sendUseGitHostAccount: vi.fn(), sendForgetGitHostAccount: vi.fn(), sendGitHostLogin: vi.fn(), sendGitHostInstall: vi.fn(), onAgentState: vi.fn(), sendAgentFix: vi.fn() }))
+vi.mock('../rpc/logins.js', () => logins)
+const github = (accounts: { login: string; runs: boolean; ok: boolean }[]) => ({
+  hosts: [{ host: 'github.com', projects: [], provider: { name: 'GitHub', requestWord: 'pull request', logo: '<svg/>', tool: 'gh', installed: true, install: 'brew install gh', accounts } }],
+})
 
 const { AgentDataSettings } = await import('./AgentDataSettings.js')
 
@@ -16,6 +23,8 @@ beforeEach(() => {
   onPersonalFolder.mockClear()
   sendSyncPersonalFolder.mockClear()
   sendStopSyncingPersonalFolder.mockClear()
+  logins.onGitHosts.mockResolvedValue(github([{ login: 'me-agent', runs: false, ok: true }, { login: 'reviewer-agent', runs: true, ok: true }]))
+  logins.sendGitHostLogin.mockResolvedValue({ ok: true })
 })
 afterEach(cleanup)
 
@@ -32,33 +41,44 @@ describe('Settings › Agent data', () => {
     const sync = screen.getByRole('button', { name: 'Sync' })
     expect((sync as HTMLButtonElement).disabled).toBe(true)
     fireEvent.change(screen.getByLabelText('Repository address'), { target: { value: 'github.com/me/agent' } })
-    view = { ...view, remote: 'github.com/me/agent', remoteUrl: 'https://github.com/me/agent', unsent: 2 }
+    view = { ...view, remote: 'github.com/me/agent', remoteUrl: 'https://github.com/me/agent', account: 'reviewer-agent', unsent: 2 }
     fireEvent.click(sync)
     // Sent as one of OpenAgent's accounts at the host: the one runs use, unless another is picked.
-    expect(screen.getByRole('combobox', { name: 'Send as' }).textContent).toContain('@reviewer-agent')
+    expect(screen.getByRole('combobox', { name: 'Back up as' }).textContent).toContain('@reviewer-agent')
     await waitFor(() => expect(sendSyncPersonalFolder).toHaveBeenCalledWith('github.com/me/agent', 'reviewer-agent'))
     // The address is a link inside the line, so the line is read whole.
     const line = (text: string) => (_: string, element: Element | null) => element?.tagName === 'P' && element.textContent === text
-    expect(await screen.findByText(line('~/.openagent · test-project, oa-newuser. Synced with github.com/me/agent. 2 changes not sent yet.'))).toBeTruthy()
+    expect(await screen.findByText(line('~/.openagent · test-project, oa-newuser. Backed up to github.com/me/agent as @reviewer-agent. 2 changes waiting to back up.'))).toBeTruthy()
     expect(screen.queryByLabelText('Repository address')).toBeNull()
     expect(screen.getByRole('link', { name: 'github.com/me/agent' }).getAttribute('href')).toBe('https://github.com/me/agent')
   })
 
-  test("with no account of OpenAgent's at the host, nothing is sent: the page says where one is added, and Sync stays off", async () => {
+  test("with no account of OpenAgent's at the host, nothing is sent: one is added right here, and Sync stays off until then", async () => {
     view = { ...view, hosts: [] }
+    logins.onGitHosts.mockResolvedValue(github([]))
     render(<AgentDataSettings />)
     fireEvent.click(await screen.findByRole('button', { name: 'Sync with a repository' }))
     fireEvent.change(screen.getByLabelText('Repository address'), { target: { value: 'github.com/me/agent' } })
-    expect(screen.getByText(/OpenAgent has no account at github\.com to send it as, and never uses your own login/)).toBeTruthy()
+    expect(await screen.findByText(/OpenAgent backs up to GitHub with an account of its own, never your own login/)).toBeTruthy()
     expect((screen.getByRole('button', { name: 'Sync' }) as HTMLButtonElement).disabled).toBe(true)
+    fireEvent.click(screen.getByRole('button', { name: 'Add a GitHub account' }))
+    await waitFor(() => expect(logins.sendGitHostLogin).toHaveBeenCalledWith('github.com'))
   })
 
-  test('a synced folder says the account it is sent as', async () => {
+  test('a synced folder says the account it is backed up as', async () => {
     view = { ...view, remote: 'github.com/me/agent', remoteUrl: 'https://github.com/me/agent', account: 'me-agent' }
     render(<AgentDataSettings />)
     const line = (text: string) => (_: string, element: Element | null) => element?.tagName === 'P' && element.textContent === text
-    expect(await screen.findByText(line('~/.openagent · test-project, oa-newuser. Synced with github.com/me/agent, sent as @me-agent.'))).toBeTruthy()
-    expect(screen.getByRole('combobox', { name: 'Send as' }).textContent).toContain('@me-agent')
+    expect(await screen.findByText(line('~/.openagent · test-project, oa-newuser. Backed up to github.com/me/agent as @me-agent.'))).toBeTruthy()
+    expect(screen.getByRole('combobox', { name: 'Back up as' }).textContent).toContain('@me-agent')
+  })
+
+  test('a synced folder at a git host with no account named says it is not backed up, and leaves the fix to the notice above', async () => {
+    view = { ...view, remote: 'github.com/me/agent', remoteUrl: 'https://github.com/me/agent', unsent: 3 }
+    render(<AgentDataSettings />)
+    const line = (text: string) => (_: string, element: Element | null) => element?.tagName === 'P' && element.textContent === text
+    expect(await screen.findByText(line('~/.openagent · test-project, oa-newuser. Synced with github.com/me/agent, not backed up yet.'))).toBeTruthy()
+    expect(screen.queryByRole('combobox', { name: 'Back up as' })).toBeNull()
   })
 
   test("a repository that refuses: its reason is said and the address stays to fix", async () => {

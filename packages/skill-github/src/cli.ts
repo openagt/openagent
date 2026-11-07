@@ -15,7 +15,7 @@ import { DIARY_ENV, byline, writeComment } from './comment.js'
 import { mkdtempSync, readFileSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { HOST, accountDir, accountsRoot, asAccount, forgetAccount, ghState, gitConfig, hasBrew, installCommand, isAccountDir, jobFiles, jobState, loginUnderWay, picksPath, readFacts, runEnv, runsAccount, settleAdded, startJob, startLogin, takeToken, useForRuns, whoAmI, type AccountFacts, type JobState, type LoggingIn } from './accounts.js'
+import { HOST, accountDir, accountsRoot, asAccount, forgetAccount, ghState, gitConfig, hasBrew, installCommand, isAccountDir, jobFiles, jobState, loginUnderWay, picksPath, stopLogin, readFacts, runEnv, runsAccount, settleAdded, startJob, startLogin, takeToken, useForRuns, whoAmI, type AccountFacts, type JobState, type LoggingIn } from './accounts.js'
 
 /**
  * The command line over the package (#1820): the same functions for an agent in a shell, and for
@@ -67,6 +67,7 @@ export const USAGE = `usage: github <command>
                                install, accounts: [{ login, runs, ok }], loggingIn? }; a host other than github.com is refused (not-mine)
   use <login>                  OpenAgent's runs use <login> from now on, one of its accounts
   login                        add an account to OpenAgent, logged in in the browser: { code, url }, the code typed at url; gh waits on for the yes.
+  stop-login                   give up the login under way: its gh stops waiting, nothing of it is kept.
                                The account is OpenAgent's own: the person's gh, git and keychain stay as they are
   install                      put gh on this computer with no admin: Homebrew where it is, else GitHub's build into ~/.local/bin; answers once it
                                started, and accounts says installing until it ended, then installFailed if it did
@@ -108,6 +109,8 @@ export interface CliDeps {
   login?: (root: string) => Promise<LoggingIn>
   /** The browser login under way; the default reads it off its files. */
   underWay?: () => LoggingIn | undefined
+  /** Give up the browser login under way; the default stops its gh. */
+  stopLogin?: (root: string) => void
   /** What the command was handed on standard input; the default reads the process's. */
   stdin?: () => Promise<string>
   /** What reads a public profile from GitHub; the default is `fetch`. */
@@ -147,6 +150,7 @@ export async function runCli(argv: string[], io: CliIo, deps: CliDeps = {}): Pro
     installing: deps.installing ?? (() => jobState(jobFiles('install'))),
     login: deps.login ?? (root => startLogin(root)),
     underWay: deps.underWay ?? (() => loginUnderWay()),
+    stopLogin: deps.stopLogin ?? (root => stopLogin(root)),
     stdin: deps.stdin ?? readStdin,
     fetch: deps.fetch ?? fetch,
   }
@@ -183,6 +187,7 @@ interface Context {
   installing: () => JobState | undefined
   login: (root: string) => Promise<LoggingIn>
   underWay: () => LoggingIn | undefined
+  stopLogin: (root: string) => void
   stdin: () => Promise<string>
   fetch: ProfileFetch
 }
@@ -409,6 +414,12 @@ const COMMANDS: Record<string, Command> = {
       const detail = err instanceof Error ? err.message : String(err)
       throw new Refused({ ok: false, reason: 'login-failed', detail }, `gh could not start a login: ${detail}`)
     }
+  },
+
+  async 'stop-login'(args, { env, stopLogin }) {
+    parse(args, {}, 0)
+    stopLogin(accountsRoot(env))
+    return { ok: true }
   },
 
   async install(args, { hasBrew, shell }) {

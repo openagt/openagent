@@ -20,7 +20,7 @@ import { projectGitHost } from '../store/git-host.js'
 import { readProjectPages } from '../project-modules.js'
 import type { ProjectSummary } from '../dashboard/projects.js'
 import type { OwnProject } from '../dashboard/elsewhere.js'
-import type { AddProjectResult, OnboardingSuggestion, RemoveProjectResult, StartedInResult } from '../dashboard/types.js'
+import type { AddProjectResult, RemoveProjectResult, StartedInResult } from '../dashboard/types.js'
 
 // The Projects sidebar behind the new dashboard (#405): the global registry (#390) the
 // daemon and CLI write — id, path, name, activated, last activity. The per-agent
@@ -256,17 +256,6 @@ export async function sendAddRepoFolder(): Promise<{ ok: true; added: boolean } 
   await addRepoFolder(picked.path)
   await thisComputersRepos().refresh()
   return { ok: true, added: true }
-}
-
-/**
- * The Onboarding checklist's one server-side fact (#958): the directory this server runs in,
- * so the first step can offer "Add {cwd} as project" without the user typing a path.
- */
-export async function onOnboarding(): Promise<OnboardingSuggestion> {
-  // A service runs in its user's home folder, as OpenAgent does on a server: no project to offer.
-  const cwd = process.cwd() === homedir() ? null : process.cwd()
-  const registered = await contextProjects().list()
-  return { cwd, cwdProjectId: (cwd !== null && registered.find(p => p.path === cwd)?.id) || null, canPickFolder: canPickDirectory() }
 }
 
 /** What the launcher offers for a project: its commands, and whether a run can be started here at all. */

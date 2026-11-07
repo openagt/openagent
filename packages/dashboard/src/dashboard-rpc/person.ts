@@ -33,7 +33,7 @@ export async function sendRemovePersonPicture(): Promise<{ ok: true } | { ok: fa
  * Copy the name and picture of GitHub's public profile of `login` into the person's own, once:
  * read with no login, and never again after this press.
  */
-export async function sendSyncPersonFromGitHub(login: string): Promise<{ ok: true } | { ok: false; error: string }> {
+export async function sendSyncPersonFromGitHub(login: string): Promise<{ ok: true; changed: boolean; login: string } | { ok: false; error: string }> {
   if (typeof login !== 'string' || !login.trim()) return { ok: false, error: 'Type a GitHub login.' }
   const said = await gitHostPackages.run(GITHUB, ['profile', login.trim().replace(/^@/, '')])
   if (!said.ok) return said
@@ -45,7 +45,7 @@ export async function sendSyncPersonFromGitHub(login: string): Promise<{ ok: tru
     ...(isPictureAddress(avatar) ? { picture: avatar } : {}),
     github: found,
   })
-  return written.ok ? { ok: true } : { ok: false, error: written.error }
+  return written.ok ? { ok: true, changed: written.changed, login: found } : { ok: false, error: written.error }
 }
 
 /** Forget the person's own name and picture: git's name, or this computer's user, again. */

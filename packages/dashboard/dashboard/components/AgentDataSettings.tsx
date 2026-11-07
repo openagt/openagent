@@ -7,6 +7,8 @@ import { Button } from './ui/button.js'
 import { Input } from './ui/input.js'
 import { SettingsRow, SettingsSection } from './SettingsRows.js'
 import { SendAs, firstSendAs } from './SendAs.js'
+import { BackupNotice, accountsAt } from './BackupNotice.js'
+import { HostFix, useGitHosts } from './Logins.js'
 
 /** The Settings entry's id. */
 export const AGENT_DATA_ENTRY = 'agent-data'
@@ -27,12 +29,15 @@ export function AgentDataSettings() {
   const [address, setAddress] = useState('')
   const [picked, setPicked] = useState<string | undefined>()
   const { busy, error, reset, run } = useAction()
+  // OpenAgent's accounts, read live: one added here is offered at once.
+  const { view: gitHosts, reload: reloadGitHosts } = useGitHosts()
   if (!view) return null
   const personal = view
 
   // The host the typed address is on, and OpenAgent's accounts there; a folder on this disk asks no login.
   const typedHost = typedRepository(address)?.address.split('/')[0]?.toLowerCase()
-  const typedAt: SendAsHost | undefined = typedHost !== undefined ? (personal.hosts.find(row => row.host === typedHost) ?? { host: typedHost, logins: [] }) : undefined
+  const typedRow = typedHost !== undefined ? gitHosts?.hosts.find(row => row.host === typedHost) : undefined
+  const typedAt: SendAsHost | undefined = typedHost !== undefined ? (typedRow ? accountsAt(typedRow, typedHost) : (personal.hosts.find(row => row.host === typedHost) ?? { host: typedHost, logins: [] })) : undefined
   const sendAs = picked !== undefined && typedAt?.logins.includes(picked) ? picked : firstSendAs(typedAt)
   const remoteHost = personal.remoteUrl ? personal.remote?.split('/')[0]?.toLowerCase() : undefined
   const remoteAt = remoteHost !== undefined ? personal.hosts.find(row => row.host === remoteHost) : undefined
@@ -54,7 +59,9 @@ export function AgentDataSettings() {
     })
 
   const holds = personal.projects.length > 0 ? ` · ${personal.projects.join(', ')}` : ''
-  const unsent = personal.unsent > 0 ? ` ${personal.unsent} ${personal.unsent === 1 ? 'change' : 'changes'} not sent yet.` : ''
+  const unsent = personal.unsent > 0 ? ` ${personal.unsent} ${personal.unsent === 1 ? 'change' : 'changes'} waiting to back up.` : ''
+  // At a git host with no account named: the notice above says so, with the fix.
+  const unnamed = remoteHost !== undefined && !personal.account
   const remote = personal.remoteUrl ? (
     <a href={personal.remoteUrl} target="_blank" rel="noreferrer" className="underline underline-offset-2 hover:text-foreground">
       {personal.remote}
@@ -63,16 +70,21 @@ export function AgentDataSettings() {
     personal.remote
   )
   const where = personal.remote ? (
-    <>
-      Synced with {remote}
-      {personal.account ? `, sent as @${personal.account}` : ''}.{unsent}
-    </>
+    unnamed ? (
+      <>Synced with {remote}, not backed up yet.</>
+    ) : (
+      <>
+        Backed up to {remote}
+        {personal.account ? ` as @${personal.account}` : ''}.{unsent}
+      </>
+    )
   ) : (
     'Only on this computer.'
   )
 
   return (
     <SettingsSection description="Everything your agents keep: what each was asked and answered, the tickets, the queue and plans.">
+      <BackupNotice onChanged={() => void reload()} />
       <div className="py-3 first:pt-0 last:pb-0">
         <SettingsRow
           label="Your folder"
@@ -96,9 +108,9 @@ export function AgentDataSettings() {
             )
           }
         />
-        {personal.remote && remoteHost !== undefined && (
+        {personal.remote && remoteHost !== undefined && !unnamed && (
           <div className="mt-2">
-            <SendAs host={remoteAt ?? { host: remoteHost, logins: [] }} value={personal.account} onChange={sendAsOther} disabled={busy} />
+            <SendAs host={remoteAt ?? { host: remoteHost, logins: [] }} value={personal.account} onChange={sendAsOther} disabled={busy} label="Back up as" />
           </div>
         )}
         {asking && !personal.remote && (
@@ -143,7 +155,16 @@ export function AgentDataSettings() {
                 Cancel
               </Button>
             </div>
-            {typedAt && <SendAs host={typedAt} value={sendAs} onChange={setPicked} disabled={busy} />}
+            {typedAt &&
+              (typedAt.logins.length === 0 && typedRow ? (
+                // No account of OpenAgent's there: one is added here, its code shown in place.
+                <div className="space-y-1.5">
+                  <p className="text-xs text-muted-foreground">{`OpenAgent backs up to ${typedRow.provider?.name ?? typedAt.host} with an account of its own, never your own login. It has none there yet.`}</p>
+                  <HostFix row={typedRow} onChanged={reloadGitHosts} size="xs" />
+                </div>
+              ) : (
+                <SendAs host={typedAt} value={sendAs} onChange={setPicked} disabled={busy} label="Back up as" />
+              ))}
           </form>
         )}
         {error && <p className="mt-2 text-xs text-danger">{error}</p>}

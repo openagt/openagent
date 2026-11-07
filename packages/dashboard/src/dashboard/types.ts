@@ -50,22 +50,6 @@ export interface CleanupReport {
 export type RemoveProjectResult = { ok: true; cleanup?: CleanupReport } | { ok: false; error: string }
 
 /**
- * What the Onboarding checklist (#958) needs and no other read carries: the server's own
- * working directory, offered as the one-click first project.
- *
- * Both fields are null where adding projects is not wired (the relay), so a public host
- * never discloses its filesystem layout.
- */
-export interface OnboardingSuggestion {
-  /** The server's working directory, or null when it cannot be offered: the home folder is where a service runs, not a project. */
-  cwd: string | null
-  /** The project id for {@link cwd} when it is already registered, else null. */
-  cwdProjectId: string | null
-  /** Whether this computer can show a window to pick a folder in: one with no screen, as a server, cannot. */
-  canPickFolder: boolean
-}
-
-/**
  * What a Start carries besides its prompt (#1774): the person's picks, handed to the project's
  * `start` hook line as `DRIVER`, `MODEL`, `PUBLISH` and `BASE`. Absent leaves each to the tool the line names.
  */
