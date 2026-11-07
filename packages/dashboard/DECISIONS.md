@@ -400,6 +400,13 @@ already made, and lists it in its pull request; for anything else it proposes an
   account control shows until the person picks another for the session. The run's record keeps
   the agent, and the session's row says it. Picked over an agent as a skill or a module, which
   Rom ruled out, and over agents per project: a project is context, an agent is who works.
+- An agent's GitHub account goes to every device of the person's, server or not, told to use
+  this computer's logins or not: as soon as the agent is saved, and every minute after, through
+  the same sync that keeps a server up to this computer's logins; a device added later gets it
+  on its next minute. A git host's token goes as it is, so no press is needed, and a device that
+  is no server takes a git host's copy alone. The Agents page says where it is, and "Copy again"
+  is for one that failed. Picked over the switch per server, which stays for the coding agents'
+  logins: an agent is the same on every device, and its account is what makes it one.
 
 ## What runs log in with
 - Settings has one page for it, Accounts: the coding agents' cards, then the git hosts', each

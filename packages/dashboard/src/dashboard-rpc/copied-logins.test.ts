@@ -146,10 +146,14 @@ test('a login the computer no longer has is kept when the person says so, and it
     assert.deepEqual(readCopied().map(l => l.name), ['Suleiman', 'Work'])
   }))
 
-test('only a server takes logins, and what is handed over must read as one', () =>
+test('only a server takes a coding agent\'s login; a git host\'s account, which an agent names, is taken on any device of the person\'s, and said', () =>
   onServer(async () => {
-    assert.deepEqual(await onCopiedLogins(), { ok: false, error: 'This OpenAgent takes no logins from another computer: it is no server.' })
     assert.equal((await sendCopiedLogin({ kind: 'claude', source: 'own', name: 'S', who: 'u', ...laptop }, LOGIN)).ok, false)
+    assert.deepEqual(await onCopiedLogins(), { ok: true, logins: [] })
+    assert.deepEqual(await sendCopiedLogin({ kind: 'git', host: 'github.com', source: 'octo', name: 'octo', who: 'octo', ...laptop }, 'gho_token_of_octo_123456'), { ok: true })
+    assert.deepEqual((await onCopiedLogins() as { logins: unknown[] }).logins, [{ kind: 'git', host: 'github.com', source: 'octo', name: 'octo', who: 'octo', from: 'Suleimans-MacBook-Pro' }])
+    assert.deepEqual(await sendForgetCopiedLogin({ kind: 'git', host: 'github.com', source: 'octo' }), { ok: true })
+    assert.deepEqual(await onCopiedLogins(), { ok: true, logins: [] })
   }, false))
 
 test('what is handed over must read as a login of a kind this server knows', () =>

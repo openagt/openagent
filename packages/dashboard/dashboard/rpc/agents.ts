@@ -7,3 +7,5 @@ export type * from '../../src/dashboard-rpc/agents.js'
 export const onAgentsList = rpc<typeof impl.onAgentsList>('onAgentsList')
 export const sendSaveAgent = rpc<typeof impl.sendSaveAgent>('sendSaveAgent')
 export const sendRemoveAgent = rpc<typeof impl.sendRemoveAgent>('sendRemoveAgent')
+export const onAgentLogins = rpc<typeof impl.onAgentLogins>('onAgentLogins')
+export const sendCopyAgentLogins = rpc<typeof impl.sendCopyAgentLogins>('sendCopyAgentLogins')

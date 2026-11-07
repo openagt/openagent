@@ -11,7 +11,9 @@ import { addAccount, changeAccounts, readAccounts, removeAccount } from '@openag
 
 // What a server answers the person's own computers about their logins here (the logins, and what
 // is kept of them: `dashboard/copied-logins.ts`): what it keeps, a login handed over, one taken
-// off or kept, how full each is. Only a server's OpenAgent takes logins.
+// off or kept, how full each is. Only a server's OpenAgent takes a coding agent's login; a git
+// host's account that an agent names (Rom's design: an agent is skills and accounts, the same
+// on every device) is taken on any device of the person's, a laptop too.
 //
 // Taking one off deletes it here and ends nothing: the computer goes on logged in.
 
@@ -36,9 +38,8 @@ function refused(): { ok: false; error: string } {
   return { ok: false, error: 'This OpenAgent takes no logins from another computer: it is no server.' }
 }
 
-/** What the server keeps from the person's computers, without how full each is: what a computer compares its own with. */
+/** What this device keeps from the person's computers, without how full each is: what a computer compares its own with. A device that is no server keeps git hosts' accounts alone. */
 export async function onCopiedLogins(): Promise<CopiedView> {
-  if (!copiedWiring.server()) return refused()
   return { ok: true, logins: readCopied().map(({ usage: _usage, ...rest }) => rest) }
 }
 
@@ -100,8 +101,8 @@ async function codexFolder(auth: string): Promise<{ ok: true; folder: string; ke
  * Claude login, a Codex sign-in as Codex keeps it, a git host's token.
  */
 export async function sendCopiedLogin(given: GivenLogin, secret: string): Promise<AccountResult> {
-  if (!copiedWiring.server()) return refused()
   const { kind, host, source, name, who, from } = (given ?? {}) as Partial<GivenLogin>
+  if (kind !== 'git' && !copiedWiring.server()) return refused()
   if (!isKind(kind) || !isWord(source) || !isWord(name) || !isWord(who) || !isServerName(from) || (kind === 'git' && !isWord(host)) || typeof secret !== 'string' || !secret.trim() || secret.length > 64 * 1024) {
     return { ok: false, error: 'That is no login.' }
   }
@@ -150,7 +151,7 @@ function claudeAccountId(who: string): string | undefined {
 
 /** Take a login a computer handed over off this server: it is deleted here, and goes on working wherever else it is. */
 export async function sendForgetCopiedLogin(which: Pick<CopiedLogin, 'kind' | 'host' | 'source'>): Promise<AccountResult> {
-  if (!copiedWiring.server()) return refused()
+  if (which?.kind !== 'git' && !copiedWiring.server()) return refused()
   const login = readCopied().find(other => isKind(which?.kind) && same(other, which))
   if (!login) return { ok: true }
   const gone = await takeOff(login)

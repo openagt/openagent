@@ -7,7 +7,7 @@ import type { ProvidedCommand } from '@openagt/agent-data'
 import { accountsPath, addAccount } from '@openagt/skill-account-rotation'
 import { accountsWiring } from './accounts.js'
 import { loginsWiring } from './logins.js'
-import { onAgentsList, sendRemoveAgent, sendSaveAgent } from './agents.js'
+import { onAgentLogins, onAgentsList, sendCopyAgentLogins, sendRemoveAgent, sendSaveAgent } from './agents.js'
 import { provideTestContext } from './test-context.js'
 
 // The agents through the dashboard's own calls: the personal folder under a temp $XDG_CONFIG_HOME,
@@ -79,3 +79,15 @@ test('the agents, the skills to pick from and the accounts this computer knows; 
     assert.equal((await sendRemoveAgent('default')).ok, false)
     assert.equal((await sendRemoveAgent('../x')).ok, false)
   }))
+
+test('a server copies the agents\' accounts to no device: it says none, and refuses the press', async () => {
+  const before = process.env['OPENAGENT_SERVER']
+  process.env['OPENAGENT_SERVER'] = '1'
+  try {
+    assert.deepEqual(await onAgentLogins(), [])
+    assert.deepEqual(await sendCopyAgentLogins(), { ok: false, error: 'A server copies logins to no device.' })
+  } finally {
+    if (before === undefined) delete process.env['OPENAGENT_SERVER']
+    else process.env['OPENAGENT_SERVER'] = before
+  }
+})
