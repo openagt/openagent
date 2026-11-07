@@ -195,7 +195,7 @@ export const removePerson = (host: ModuleHost, name: string): Promise<Answer<Doo
 /** Keep a person a server's line made here, though that server no longer has them. */
 export const keepPerson = (host: ModuleHost, name: string): Promise<Answer<DoorStatus>> => run(host, ['keep', name], readStatus)
 
-/** The name of the person at this computer, as git knows it; nothing when git has none, or the question failed. */
+/** The name of the person at this computer, as they gave it to OpenAgent, else as git knows it; nothing when neither has one, or the question failed. */
 export async function myName(host: ModuleHost): Promise<string | undefined> {
   const answer = await run(host, ['me'], output => (output && typeof output === 'object' ? (output as Record<string, unknown>) : undefined))
   return answer.ok ? text(answer.value.name) : undefined

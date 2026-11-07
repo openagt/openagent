@@ -34,6 +34,7 @@
     "clean": "rm -rf dist dist-test"
   },
   "dependencies": {
+    "@openagt/agent-data": "workspace:*",
     "@openagt/agent-driver-claude": "workspace:*",
     "@openagt/skill-github": "workspace:*",
     "uqr": "0.1.3"

@@ -175,17 +175,22 @@ test('create: only for a project with no origin; --check names the repository; t
   assert.equal(taken.err, 'the repository could not be created: Name already exists on this account')
 })
 
-test('me: who is signed in to GitHub, with name and picture when GitHub has them; nobody signed in is a refusal', async () => {
-  const asked: string[][] = []
-  const me = await run('/r', ['me'], { gh: async args => (asked.push(args), '{"login":"octo","name":"Octo Cat","avatar":"https://avatars.githubusercontent.com/u/1?v=4"}\n') })
-  assert.equal(me.code, 0)
-  assert.deepEqual(me.out, { ok: true, login: 'octo', name: 'Octo Cat', avatar: 'https://avatars.githubusercontent.com/u/1?v=4' })
-  assert.deepEqual(asked[0]?.slice(0, 2), ['api', 'user'])
-  const plain = await run('/r', ['me'], { gh: async () => '{"login":"octo","name":null,"avatar":"javascript:alert(1)"}' })
+test("profile: a GitHub user's public profile, read with no login at all; no such user, or no login word, is a refusal", async () => {
+  const asked: { url: string; headers: Record<string, string> }[] = []
+  const answer = (status: number, body: unknown) => async (url: string, init: { headers: Record<string, string> }) => (asked.push({ url, headers: init.headers }), { ok: status < 300, status, json: async () => body })
+  const gh: GhRunner = async () => assert.fail('gh is never asked: no account is used')
+  const found = await run('/r', ['profile', 'octo'], { gh, fetch: answer(200, { login: 'Octo', name: 'Octo Cat', avatar_url: 'https://avatars.githubusercontent.com/u/1?v=4' }) })
+  assert.equal(found.code, 0)
+  assert.deepEqual(found.out, { ok: true, login: 'Octo', name: 'Octo Cat', avatar: 'https://avatars.githubusercontent.com/u/1?v=4' })
+  assert.equal(asked[0]?.url, 'https://api.github.com/users/octo')
+  assert.equal(asked[0]?.headers['authorization'], undefined)
+  const plain = await run('/r', ['profile', 'octo'], { gh, fetch: answer(200, { login: 'octo', name: null, avatar_url: 'javascript:alert(1)' }) })
   assert.deepEqual(plain.out, { ok: true, login: 'octo' }, 'no name, and a picture address that is no https one is dropped')
-  const nobody = await run('/r', ['me'], { gh: async () => { throw new Error('You are not logged into any GitHub hosts') } })
+  const nobody = await run('/r', ['profile', 'nobody-here'], { gh, fetch: answer(404, {}) })
   assert.equal(nobody.code, 1)
-  assert.deepEqual(nobody.out, { ok: false, reason: 'not-logged-in', detail: 'You are not logged into any GitHub hosts' })
+  assert.deepEqual(nobody.out, { ok: false, reason: 'no-user', detail: 'GitHub has no user nobody-here' })
+  assert.equal(((await run('/r', ['profile', '../etc'], { gh, fetch: answer(200, {}) })).out as { reason?: string }).reason, 'no-user')
+  assert.equal(asked.length, 3, 'a word that is no login is never asked')
 })
 
 test("people: the GitHub account behind each commit email, by the newest commit signed with it; an email no account's commit carries is left out", async () => {

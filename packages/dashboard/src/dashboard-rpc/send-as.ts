@@ -1,0 +1,63 @@
+import { nodeGitRunner, noAccountSentence, readRemoteAccount, remoteHostOf, type RemoteAccount } from '@openagt/agent-data'
+import { gitHostPackages, onGitHosts } from './logins.js'
+
+// The account OpenAgent sends a repository as (`remote-account.ts` in agent-data): one of its
+// own accounts at the repository's host, named where the person turns sending on, never the
+// person's own login. What the git host's package answers for an account (`<command> git-config
+// --user <login>`) is what the repository keeps.
+
+/** OpenAgent's accounts at one host: what a "Send as" select offers. */
+export interface SendAsHost {
+  host: string
+  /** The logins GitHub still takes, by name. */
+  logins: string[]
+  /** The one runs use, picked first where none is named yet. */
+  runs?: string
+}
+
+/** OpenAgent's accounts at each host a package answers for. */
+export async function accountsByHost(): Promise<SendAsHost[]> {
+  const { hosts } = await onGitHosts()
+  return hosts.flatMap(row => {
+    const accounts = row.provider?.accounts.filter(account => account.ok) ?? []
+    if (accounts.length === 0) return []
+    const runs = accounts.find(account => account.runs)?.login
+    return [{ host: row.host, logins: accounts.map(account => account.login), ...(runs !== undefined ? { runs } : {}) }]
+  })
+}
+
+/** What a repository at `host` keeps to be sent as `login`: what its git host's package says of that account. */
+export async function remoteAccount(host: string, login?: string): Promise<{ ok: true; account: RemoteAccount } | { ok: false; error: string }> {
+  if (login === undefined) return { ok: false, error: `${noAccountSentence(host)}: add one in Permissions › Git hosts.` }
+  if (typeof login !== 'string' || !/^\S+$/.test(login)) return { ok: false, error: `${String(login)} is no account.` }
+  const said = await gitHostPackages.run(host, ['git-config', '--user', login])
+  if (!said.ok) return said
+  const { login: as, host: at, config } = (said.output ?? {}) as { login?: unknown; host?: unknown; config?: unknown }
+  const lines = Array.isArray(config) ? config.filter((line): line is [string, string] => Array.isArray(line) && line.length === 2 && typeof line[0] === 'string' && typeof line[1] === 'string') : []
+  if (typeof as !== 'string' || typeof at !== 'string' || lines.length === 0) return { ok: false, error: `The package for ${host} gave no way to send as @${login}.` }
+  return { ok: true, account: { login: as, host: at, config: lines } }
+}
+
+/** The host the repository at `root` has its origin on; none for no origin, or one in a folder on this disk. */
+export async function originHost(root: string): Promise<string | undefined> {
+  const url = await nodeGitRunner()(['remote', 'get-url', 'origin'], root).then(
+    out => out.trim(),
+    () => '',
+  )
+  return url ? remoteHostOf(url) : undefined
+}
+
+/**
+ * The account a repository's own branches are sent as by a press of the person's (the Skills
+ * page's Send, the clean-up of Claude Code web's branches): the one kept for it at its Share
+ * switch, else the one runs use at its host. Nothing for a remote that is a folder on this disk,
+ * which asks no login.
+ */
+export async function pushAccountOf(root: string): Promise<{ ok: true; account?: RemoteAccount } | { ok: false; error: string }> {
+  const host = await originHost(root)
+  if (host === undefined) return { ok: true }
+  const kept = await readRemoteAccount(root)
+  if (kept) return { ok: true, account: kept }
+  const runs = (await accountsByHost()).find(row => row.host === host)?.runs
+  return remoteAccount(host, runs)
+}

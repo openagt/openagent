@@ -1,6 +1,6 @@
 import { useEffect, useId, useRef, useState, type ComponentType, type ReactNode } from 'react'
 import { Dialog as BaseDialog } from '@base-ui/react/dialog'
-import { ArrowLeft, Bell, Bot, ChevronRight, Database, FolderGit2, Globe, KeyRound, Palette, Puzzle, X } from 'lucide-react'
+import { ArrowLeft, Bell, Bot, ChevronRight, Database, FolderGit2, Globe, KeyRound, Palette, Puzzle, UserRound, X } from 'lucide-react'
 import { ACCENTS, DEFAULT_ACCENT_LABELS, accentOf, CODE_FONTS, DOCUMENT_FONTS, DRIVERS, FONTS, PALETTES, PALETTE_LABELS, type Accent, type CodeFont, type DocumentFont, type Font, type Palette as ColourPalette } from '../../src/client.js'
 import { driverOptions, useModels } from '../lib/models.js'
 import { NO_MODEL_PINNED } from '../lib/agent-settings.js'
@@ -14,6 +14,7 @@ import { usePreferences, updatePreferences, themePreference, type ThemePreferenc
 import { useNotificationPermission } from '../lib/notification-permission.js'
 import { BridgeSettings } from './BridgeSettings.js'
 import { AGENT_DATA_ENTRY, AgentDataSettings } from './AgentDataSettings.js'
+import { PROFILE_ENTRY, ProfileSettings } from './ProfileSettings.js'
 import { SKILLS_ENTRY, SkillsSettings } from './ProjectSkills.js'
 import { PickProject } from './PickProject.js'
 import { PROJECT_AGENT_DATA_ENTRY, ProjectAgentDataSettings } from './ProjectAgentDataSettings.js'
@@ -285,7 +286,7 @@ function ProjectSelect({ projects, value, onChange }: { projects: ProjectSummary
   )
 }
 
-/** The dashboard's own entries, the first of the list: how it looks, what it tells you, which agent runs, on which accounts, Claude web. */
+/** The dashboard's own entries, the first of the list: who you are, how it looks, what it tells you, which agent runs, on which accounts, Claude web. */
 function useOwnEntries(): Entry[] {
   const preferences = usePreferences()
   const editors = useDetectedEditors()
@@ -303,6 +304,12 @@ function useOwnEntries(): Entry[] {
   const palette = preferences.palette ?? 'openagent'
 
   return [
+    {
+      id: PROFILE_ENTRY,
+      title: 'Profile',
+      icon: UserRound,
+      body: <ProfileSettings />,
+    },
     {
       id: 'appearance',
       title: 'Appearance',

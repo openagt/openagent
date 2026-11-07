@@ -8,13 +8,13 @@ import { watchAndMerge } from './merge-watch.js'
 import { GIT_HOST_NAME, homeUrlFor } from './home.js'
 import { MAX_PEOPLE, peopleByEmail } from './people.js'
 import { createRepository, offerRepository, type CreateOffer, type CreateOutcome } from './create.js'
-import { signedIn } from './me.js'
+import { isGithubLogin, publicProfile, type ProfileFetch } from './profile.js'
 import { listReplies } from './replies.js'
 import { DIARY_ENV, byline, writeComment } from './comment.js'
 import { mkdtempSync, readFileSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { HOST, accountDir, accountsRoot, asAccount, forgetAccount, ghState, hasBrew, installCommand, isAccountDir, jobFiles, jobState, loginUnderWay, picksPath, readFacts, runEnv, runsAccount, settleAdded, startJob, startLogin, takeToken, useForRuns, whoAmI, type AccountFacts, type JobState, type LoggingIn } from './accounts.js'
+import { HOST, accountDir, accountsRoot, asAccount, forgetAccount, ghState, gitConfig, hasBrew, installCommand, isAccountDir, jobFiles, jobState, loginUnderWay, picksPath, readFacts, runEnv, runsAccount, settleAdded, startJob, startLogin, takeToken, useForRuns, whoAmI, type AccountFacts, type JobState, type LoggingIn } from './accounts.js'
 
 /**
  * The command line over the package (#1820): the same functions for an agent in a shell, and for
@@ -54,7 +54,8 @@ export const USAGE = `usage: github <command>
   merge <number>               land pull request <number>: a draft is marked ready, then the merge is armed as --merge arms it
   watch <number>               wait for pull request <number>'s checks and merge it once they pass; what --merge starts where the repository has no auto-merge
   home                         the project's page on GitHub, from its origin remote
-  me                           the account OpenAgent works as on GitHub: login, name, avatar (a picture's https address)
+  profile <login>              a GitHub user's public profile, read with no login: { login, name, avatar } (a picture's https address); what a person copies
+                               into OpenAgent as their own name and picture
   people <email>...            the GitHub accounts behind the project's commit emails: [{ email, login, avatar }], one per email a commit of the
                                repository's is signed with by an account, or that is GitHub's own address for one (at most 20 asked at once); any other email is left out
   accounts [--host <host>]     OpenAgent's own GitHub accounts and the one its runs use: { host, name, requestWord, logo, tool, installed,
@@ -66,6 +67,8 @@ export const USAGE = `usage: github <command>
                                started, and accounts says installing until it ended, then installFailed if it did
   env [--user <login>]         the environment a run gets to work as <login> (default: the account runs use): { env }, its gh folder, its token for gh and
                                for git, its name on commits; refused (no-account) when OpenAgent has no account
+  git-config [--user <login>]  the git settings that make git push and fetch as <login> (default: the account runs use), asking gh for its login when git needs it:
+                               { login, host, config: [[key, value]] }; no secret in them, so they may be kept in a repository's own config
   token --user <login>         <login>'s token as OpenAgent keeps it, checked with GitHub to be that account's: { login, token }; what OpenAgent copies to a
                                server of the person's, which then uses the same login, never a new one
   take                         add the login whose token is on standard input as one of OpenAgent's accounts: { login }
@@ -102,6 +105,8 @@ export interface CliDeps {
   underWay?: () => LoggingIn | undefined
   /** What the command was handed on standard input; the default reads the process's. */
   stdin?: () => Promise<string>
+  /** What reads a public profile from GitHub; the default is `fetch`. */
+  fetch?: ProfileFetch
 }
 
 /** A refusal: a rule said no, and the caller learns which. */
@@ -138,6 +143,7 @@ export async function runCli(argv: string[], io: CliIo, deps: CliDeps = {}): Pro
     login: deps.login ?? (root => startLogin(root)),
     underWay: deps.underWay ?? (() => loginUnderWay()),
     stdin: deps.stdin ?? readStdin,
+    fetch: deps.fetch ?? fetch,
   }
   try {
     if (WORK.has(command!)) context.gh = await workingGh(context)
@@ -173,6 +179,7 @@ interface Context {
   login: (root: string) => Promise<LoggingIn>
   underWay: () => LoggingIn | undefined
   stdin: () => Promise<string>
+  fetch: ProfileFetch
 }
 
 /** All of the process's standard input, as text. */
@@ -183,7 +190,7 @@ async function readStdin(): Promise<string> {
 }
 
 /** The commands that talk to GitHub: they work as one of OpenAgent's accounts. */
-const WORK = new Set(['requests', 'replies', 'comment', 'open', 'merge', 'watch', 'create', 'people', 'me'])
+const WORK = new Set(['requests', 'replies', 'comment', 'open', 'merge', 'watch', 'create', 'people'])
 
 /**
  * `gh` working as one of OpenAgent's accounts: the one a run was given, when this runs inside
@@ -414,6 +421,19 @@ const COMMANDS: Record<string, Command> = {
     return { ok: true, login, env: runEnv(await tokenOf(login, dir, cwd, gh), dir, readFacts(dir), env) }
   },
 
+  async 'git-config'(args, { cwd, gh, env }) {
+    const { values } = parse(args, { user: { type: 'string' } }, 0)
+    const root = accountsRoot(env)
+    const state = await ghState(root, cwd, gh)
+    const accounts = state.installed ? state.accounts : []
+    if (values.user !== undefined && !accounts.some(a => a.login === values.user)) {
+      throw new Refused({ ok: false, reason: 'no-account', login: values.user }, `OpenAgent has no GitHub account ${values.user} on this computer: add it in OpenAgent's Permissions`)
+    }
+    const login = values.user ?? runsAccount(accounts, picksPath(env))
+    if (login === undefined) throw noAccount()
+    return { ok: true, login, host: HOST, config: gitConfig(accountDir(root, login)) }
+  },
+
   async token(args, { cwd, gh, env }) {
     const { values } = parse(args, { user: { type: 'string' } }, 0)
     const login = values.user
@@ -454,10 +474,12 @@ const COMMANDS: Record<string, Command> = {
     return peopleByEmail(cwd, positionals.filter(email => /^[^\s@]+@[^\s@]+$/.test(email)), gh)
   },
 
-  async me(args, { cwd, gh }) {
-    parse(args, {}, 0)
-    const outcome = await signedIn(cwd, gh)
-    if (!outcome.ok) throw new Refused(outcome, `GitHub did not say who the account is: ${outcome.detail}`)
+  async profile(args, { fetch }) {
+    const { positionals } = parse(args, {}, 1)
+    const login = positionals[0]!
+    if (!isGithubLogin(login)) throw new Refused({ ok: false, reason: 'no-user', detail: `${login} is no GitHub login` }, `${login} is no GitHub login`)
+    const outcome = await publicProfile(login, fetch)
+    if (!outcome.ok) throw new Refused(outcome, outcome.detail)
     return outcome
   },
 }

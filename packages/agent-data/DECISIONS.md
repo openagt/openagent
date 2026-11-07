@@ -47,6 +47,13 @@ already made, and lists it in its pull request; for anything else it proposes an
 - The personal folder may sync with one repository of the person's (Settings › Agent data), so
   each of their machines has the same records. Picked first over sending one project's data to a
   team's repository, which comes after.
+- What goes to a remote goes as one of OpenAgent's own accounts, never as the person's own
+  login: the account is kept in the pushing repository's own config (the personal folder's, or
+  the project's beside its share setting), as the git settings its git host's package gave for
+  it, no secret in them; every fetch and push drops the person's credential helpers and uses
+  those. A remote on a host with no account kept is refused; a remote that is a folder on this
+  disk asks no login. Picked over a setting in the person's git config, which their own pushes
+  would read, and over each process handing in its own account, which a writer would forget.
 
 ## The branch
 - A shared project's branch holds the agents' data (tickets, the queue) the way `gh-pages`

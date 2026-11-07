@@ -43,6 +43,8 @@ export {
 } from './file-branch.js'
 export { SESSIONS_DIR, sessionsHome, sessionFolder, sessionsHomeOf, runsRootOf, listSessionFolders } from './sessions.js'
 export { AGENTS_DIR, DEFAULT_AGENT, DEFAULT_AGENT_SKILLS, agentIdOf, agentsDir, builtInDefault, isAgentId, isAgentName, listAgents, readAgent, removeAgent, writeAgent, type AgentAccounts, type AgentRecord } from './agents.js'
+export { PERSON_FILE, isPersonRecordName, isPictureAddress, readPersonRecord, removePersonRecord, writePersonRecord, type PersonRecord } from './person.js'
+export { NoRemoteAccountError, accountGit, clearRemoteAccount, noAccountSentence, readRemoteAccount, remoteHostOf, writeRemoteAccount, type RemoteAccount } from './remote-account.js'
 export { addressOfRemote, spellingOfRemote, repositoryAddress, repositorySpelling, projectNameOf } from './repository-address.js'
 export {
   PROJECTS_DIR,
@@ -59,9 +61,11 @@ export {
   openProjectReader,
   pullProjectData,
   shareProjectData,
+  shareProjectDataAs,
   removePersonalData,
   readPersonalFolder,
   syncPersonalFolder,
+  sendPersonalFolderAs,
   stopSyncingPersonalFolder,
   type PersonalFolderState,
   type DataPlace,

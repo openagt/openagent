@@ -54,7 +54,7 @@ export interface GitHostHome {
   name: string
 }
 
-/** The person signed in at the git host: what the dashboard shows of them. */
+/** A person's account at the git host: what a card shows of them. */
 export interface GitHostPerson {
   login: string
   name?: string
@@ -81,8 +81,6 @@ export interface GitHostSource {
   merge(number: number): Promise<MergeOutcome>
   /** The project's page on the git host; `undefined` when the provider cannot tell (no remote there). */
   home(): Promise<GitHostHome | undefined>
-  /** Who is signed in at the git host; `undefined` when nobody is, or the provider cannot tell. */
-  me(): Promise<GitHostPerson | undefined>
   /** The accounts behind these commit emails, each with its email; an email the host knows no account for is left out. */
   people(emails: readonly string[]): Promise<(GitHostPerson & { email: string })[]>
 }
@@ -157,18 +155,6 @@ function commandGitHost(root: string, command: ProvidedCommand): GitHostSource {
       if (!result.ok || !result.output || typeof result.output !== 'object') return undefined
       const home = result.output as Record<string, unknown>
       return typeof home['url'] === 'string' && typeof home['name'] === 'string' ? { url: home['url'], name: home['name'] } : undefined
-    },
-    async me() {
-      const result = await runPackageCommand(root, command, ['me'])
-      if (!result.ok || !result.output || typeof result.output !== 'object') return undefined
-      const me = result.output as Record<string, unknown>
-      if (typeof me['login'] !== 'string' || !me['login']) return undefined
-      return {
-        login: me['login'],
-        ...(typeof me['name'] === 'string' && me['name'] ? { name: me['name'] } : {}),
-        // Only a picture on the web: the page loads it, and nothing else is fetched.
-        ...(typeof me['avatar'] === 'string' && me['avatar'].startsWith('https://') ? { avatar: me['avatar'] } : {}),
-      }
     },
     async people(emails) {
       if (emails.length === 0) return []

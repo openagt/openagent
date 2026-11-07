@@ -1,6 +1,7 @@
 import { dirname, join } from 'node:path'
 import { BRANCHES_DIR } from './names.js'
 import { nodeGitRunner, type GitRunner } from './git.js'
+import { accountGit } from './remote-account.js'
 import { excludeFromGit, repositoryCheckouts, unexcludeFromGit } from './git-exclude.js'
 import { withCheckoutLock, type CheckoutLockDeps } from './checkout-lock.js'
 
@@ -70,8 +71,9 @@ interface Resolved {
   lock: CheckoutLockDeps
 }
 
+/** Every talk with origin goes as the account kept for the repository, never as the person's own login (`remote-account.ts`). */
 function resolveDeps(deps: FileBranchDeps): Resolved {
-  return { git: deps.git ?? nodeGitRunner(), log: deps.log ?? (() => {}), lock: deps.lock ?? {} }
+  return { git: accountGit(deps.git ?? nodeGitRunner()), log: deps.log ?? (() => {}), lock: deps.lock ?? {} }
 }
 
 /**

@@ -28,6 +28,7 @@ const onModels = vi.hoisted(() =>
 )
 vi.mock('../rpc/models.js', () => ({ onModels }))
 // Its own suite reads the accounts; here the entry is its name.
+vi.mock('./ProfileSettings.js', () => ({ PROFILE_ENTRY: 'profile', ProfileSettings: () => <p>Your name and picture</p> }))
 vi.mock('./AgentDataSettings.js', () => ({ AGENT_DATA_ENTRY: 'agent-data', AgentDataSettings: () => <p>Where the agent data is</p> }))
 vi.mock('./ProjectAgentDataSettings.js', () => ({ PROJECT_AGENT_DATA_ENTRY: 'project-agent-data', ProjectAgentDataSettings: () => <p>Where this project's agent data is</p> }))
 // A project's skills, as a page of the Project group; each project answers with its own one skill.
@@ -110,7 +111,7 @@ describe('Settings dropdowns (#1172)', () => {
   test('picking a theme saves it, and the row shows it', async () => {
     prefsRead.mockResolvedValueOnce({})
     refreshPreferences()
-    open()
+    open('appearance')
     await waitFor(() => expect(showing(select('Theme'))).toBe('System'))
     expect(await choices(select('Theme'))).toEqual(['System', 'Light', 'Dark'])
     await pick(select('Theme'), 'Dark')
@@ -326,13 +327,13 @@ describe('the Settings list', () => {
 
   test("two groups: yours and this computer's, the computer's packages among them; then the picked project's packages", () => {
     show('', 'p1')
-    expect(entries('You and this computer')).toEqual(['Appearance', 'Notifications', 'Agent', 'Agent data', 'Claude web', 'Devices'])
+    expect(entries('You and this computer')).toEqual(['Profile', 'Appearance', 'Notifications', 'Agent', 'Agent data', 'Claude web', 'Devices'])
     // gemstack has orchestration and no scheduler; every project has its skills.
     expect(entries('Project')).toEqual(['Skills', 'Agent data', 'Orchestration'])
     expect(showing(select('Project'))).toBe('gemstack')
     // Opened on nothing in particular: the first entry.
-    expect(title()).toBe('SettingsAppearance')
-    expect(screen.getByRole('button', { name: 'Appearance' }).getAttribute('aria-current')).toBe('page')
+    expect(title()).toBe('SettingsProfile')
+    expect(screen.getByRole('button', { name: 'Profile' }).getAttribute('aria-current')).toBe('page')
   })
 
   test("a package's entry of the picked project is given that project alone, and the computer's none", () => {
@@ -359,7 +360,7 @@ describe('the Settings list', () => {
     await pick(select('Project'), 'plain')
     expect(entries('Project')).toEqual(['Skills', 'Agent data'])
     // The entry it was on is not plain's: the first entry shows.
-    expect(title()).toBe('SettingsAppearance')
+    expect(title()).toBe('SettingsProfile')
   })
 
   test('with no project picked in the sidebar, the project group opens on every project', () => {

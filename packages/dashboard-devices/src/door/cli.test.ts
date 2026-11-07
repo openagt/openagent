@@ -1,5 +1,8 @@
 import { strict as assert } from 'node:assert'
 import { test } from 'node:test'
+import { mkdir } from 'node:fs/promises'
+import { join } from 'node:path'
+import { personalFolder } from '@openagt/agent-data'
 import { createServer } from 'node:http'
 import type { AddressInfo } from 'node:net'
 import type { NetworkInterfaceInfo } from 'node:os'
@@ -433,9 +436,13 @@ test('owner, add --for and remove-person: the owner is named first, a link is ma
     assert.deepEqual([first.code, first.err], [1, ['Name the owner first: devices owner <your name>']])
     assert.equal((await run(home.env, ['add', '--for', '<not a name>'])).code, 1)
 
-    // Whom to name the owner: the name git knows for the person at this computer, or none.
+    // Whom to name the owner: the name the person gave OpenAgent (their own folder's person.json), else the one git knows, or none.
     assert.deepEqual((await run(home.env, ['me'], { myName: async () => 'Ada Lovelace' })).out, { name: 'Ada Lovelace' })
     assert.deepEqual((await run(home.env, ['me'], { myName: async () => undefined })).out, {})
+    const folder = personalFolder(home.env)
+    await mkdir(folder, { recursive: true })
+    await writeFile(join(folder, 'person.json'), JSON.stringify({ name: 'Ada King' }))
+    assert.deepEqual((await run(home.env, ['me'])).out, { name: 'Ada King' })
 
     assert.deepEqual(((await run(home.env, ['owner', ' Ada  Lovelace '])).out as { persons: unknown }).persons, [{ name: 'Ada Lovelace', owner: true }])
     const second = await run(home.env, ['owner', 'Eve'])

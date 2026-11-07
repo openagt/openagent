@@ -43,7 +43,6 @@ function host(asked: string[]): GitHostSource {
     requests: async () => ({ ok: true, requests: [] }),
     merge: async () => ({ ok: false, error: 'not here' }),
     home: async () => undefined,
-    me: async () => undefined,
     people: async () => [],
   }
 }
@@ -127,6 +126,20 @@ test('a remote that cannot be reached is said, after the commit in the folder', 
     const sent = await sendSkills(dir, ['triage'])
     assert.ok(!sent.ok && sent.error.startsWith('could not reach the remote: '), JSON.stringify(sent))
     assert.equal(git('log', '--format=%s', '-1').trim(), 'Update OpenAgent skills')
+  } finally {
+    await done()
+  }
+})
+
+test("the remote is reached only as one of OpenAgent's accounts: with none to go as, the skills are committed here and not sent, and the reason is said", async () => {
+  const { dir, git, remote, done } = await project()
+  try {
+    const before = remote('rev-parse', 'main').trim()
+    await applyChange(dir, { write: ['triage'] })
+    const refused = await sendSkills(dir, ['triage'], { pushAccount: async () => ({ ok: false, error: 'OpenAgent sends nothing to github.com as your own login' }) })
+    assert.deepEqual(refused, { ok: false, error: 'committed here, not sent: OpenAgent sends nothing to github.com as your own login' })
+    assert.equal(remote('rev-parse', 'main').trim(), before)
+    assert.match(git('log', '-1', '--format=%s'), /Update OpenAgent skills/)
   } finally {
     await done()
   }

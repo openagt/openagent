@@ -2,7 +2,7 @@ import { execFile } from 'node:child_process'
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { gitReason, nodeGitRunner, type GitRunner } from '@openagt/agent-data'
+import { accountGit, gitReason, nodeGitRunner, type GitRunner, type RemoteAccount } from '@openagt/agent-data'
 import { commitSkills, skillPaths } from '../project-skills/branch.js'
 import { projectGitHost, type GitHostFor } from '../store/git-host.js'
 import { forgetBranchPrs, forgetPr } from './pull-requests.js'
@@ -19,6 +19,10 @@ import { startBranch } from './start-branch.js'
  * Nothing else the person has is pushed: the folder's branch is pushed as it is only when it is the
  * default branch and holds nothing past the remote's but skill files; else the skills' files are
  * written onto the remote's branch in a commit of their own, made without touching the folder.
+ *
+ * The remote is talked with as one of OpenAgent's accounts (`pushAccount`, the one kept at the
+ * project's Share switch, else the one runs use), never as the person's own login: with none,
+ * nothing is sent and the reason is said.
  */
 
 /** The branch the skills go to when the default branch takes no push: one, so a second send updates the open pull request. */
@@ -37,13 +41,16 @@ export type SendSkillsResult =
   | { ok: true; sent: 'branch'; branch: string }
   | { ok: false; error: string }
 
-export async function sendSkills(cwd: string, names: readonly string[], deps: { git?: GitRunner; gitHost?: GitHostFor } = {}): Promise<SendSkillsResult> {
+export async function sendSkills(cwd: string, names: readonly string[], deps: { git?: GitRunner; gitHost?: GitHostFor; pushAccount?: (cwd: string) => Promise<{ ok: true; account?: RemoteAccount } | { ok: false; error: string }> } = {}): Promise<SendSkillsResult> {
   if (names.length === 0) return { ok: false, error: 'no skill to send' }
-  const git = deps.git ?? nodeGitRunner()
-  const committed = await commitSkills(cwd, names, git)
+  const local = deps.git ?? nodeGitRunner()
+  const committed = await commitSkills(cwd, names, local)
   if (!committed.ok) return committed
   const start = await startBranch(cwd)
   if (!start || start.ref === 'HEAD') return { ok: true, sent: 'committed' }
+  const as = deps.pushAccount ? await deps.pushAccount(cwd) : { ok: true as const }
+  if (!as.ok) return { ok: false, error: `committed here, not sent: ${as.error}` }
+  const git = accountGit(local, as.account)
   try {
     await git(['fetch', '--quiet', 'origin', start.name], cwd)
   } catch (err) {

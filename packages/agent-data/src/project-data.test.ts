@@ -5,6 +5,7 @@ import { join } from 'node:path'
 import { test } from 'node:test'
 import { nodeGitRunner, type GitRunner } from './git.js'
 import { readSharing, writeSharing } from './file-branch.js'
+import { readRemoteAccount, writeRemoteAccount, type RemoteAccount } from './remote-account.js'
 import {
   listProjectDir,
   openProjectReader,
@@ -25,6 +26,8 @@ import {
 const real = nodeGitRunner()
 /** git, with origin's address read as a host would have it, so the project is named the way a real clone is. */
 const git: GitRunner = async (args, cwd) => (args.join(' ') === 'remote get-url origin' && !cwd.includes('/personal') && (await real(['remote'], cwd)).includes('origin') ? 'https://example.com/acme/shop.git\n' : real(args, cwd))
+/** One of OpenAgent's accounts at the made-up host: no settings, as the bare origin asks no login. */
+const ACCOUNT: RemoteAccount = { login: 'octo', host: 'example.com', config: [] }
 const RETRIED_RM = { recursive: true, force: true, maxRetries: 10 } as const
 const there = (path: string): Promise<boolean> => stat(path).then(() => true, () => false)
 
@@ -176,6 +179,7 @@ test('a shared project writes to its own branch, pushed, and leaves the personal
   const { repo, bare, folder, cleanup } = await setup()
   try {
     await writeSharing(repo, true, git)
+    await writeRemoteAccount(repo, ACCOUNT, git)
     const place = await projectDataPlace(repo, { folder, git })
     assert.equal(place.kind, 'branch')
     assert.deepEqual(await withProjectData(repo, 'a note', writeNote('shared\n'), { folder, git }), { ok: true, changed: true, pushed: true })
@@ -191,22 +195,24 @@ test('the share switch moves the records: on, to the branch and its remote; off,
   const personal = join(folder, 'projects', 'example.com', 'acme', 'shop')
   try {
     await withProjectData(repo, 'a note', writeNote('kept\n'), { folder, git })
-    assert.deepEqual(await shareProjectData(repo, true, { folder, git }), { ok: true })
+    assert.deepEqual(await shareProjectData(repo, true, ACCOUNT, { folder, git }), { ok: true })
     assert.equal(await readSharing(repo, git), true)
     assert.equal((await git(['show', 'agent-data:notes/a.md'], bare)).trim(), 'kept')
     assert.equal(await there(personal), false, 'never in two places')
     assert.equal(await readProjectFile(repo, 'notes/a.md', {}, { folder, git }), 'kept\n')
 
     await withProjectData(repo, 'another', async dir => writeFile(join(dir, 'notes', 'b.md'), 'b\n'), { folder, git })
-    assert.deepEqual(await shareProjectData(repo, false, { folder, git }), { ok: true })
+    assert.deepEqual(await readRemoteAccount(repo, git), ACCOUNT, 'sent as the account named at the switch')
+    assert.deepEqual(await shareProjectData(repo, false, undefined, { folder, git }), { ok: true })
     assert.equal(await readSharing(repo, git), false)
+    assert.equal(await readRemoteAccount(repo, git), undefined, 'the account goes with the switch')
     assert.equal(await readFile(join(personal, 'notes', 'a.md'), 'utf8'), 'kept\n')
     assert.equal(await readFile(join(personal, 'notes', 'b.md'), 'utf8'), 'b\n')
     assert.deepEqual(await readdir(join(repo, '.branches', 'agent-data')), ['.git'])
     assert.equal((await git(['show', 'agent-data:notes/b.md'], bare)).trim(), 'b', 'nothing pushed on the way off')
 
     // On again: the records go back, the remote's copy and the move both kept.
-    assert.deepEqual(await shareProjectData(repo, true, { folder, git }), { ok: true })
+    assert.deepEqual(await shareProjectData(repo, true, ACCOUNT, { folder, git }), { ok: true })
     assert.equal((await git(['show', 'agent-data:notes/b.md'], bare)).trim(), 'b')
     assert.equal(await there(personal), false)
   } finally {
@@ -219,7 +225,7 @@ test('a remote that refuses the records: the switch goes back to off and the rec
   try {
     await withProjectData(repo, 'a note', writeNote('kept\n'), { folder, git })
     await rm(bare, RETRIED_RM)
-    const shared = await shareProjectData(repo, true, { folder, git })
+    const shared = await shareProjectData(repo, true, ACCOUNT, { folder, git })
     assert.equal(shared.ok, false)
     assert.equal(await readSharing(repo, git), false)
     assert.equal(await readProjectFile(repo, 'notes/a.md', {}, { folder, git }), 'kept\n')
@@ -255,7 +261,7 @@ test('a personal folder synced with a repository sends every record there, and a
   const { bare, cleanup } = await remoteRepo()
   try {
     await withProjectData(laptop.repo, 'a note', writeNote('from the laptop\n'), { folder: laptop.folder, git })
-    assert.deepEqual(await syncPersonalFolder(bare, { folder: laptop.folder, git }), { ok: true })
+    assert.deepEqual(await syncPersonalFolder(bare, undefined, { folder: laptop.folder, git }), { ok: true })
     assert.equal((await real(['show', 'main:projects/example.com/acme/shop/notes/a.md'], bare)).trim(), 'from the laptop')
 
     // The server had records of its own before it synced: both stay.
@@ -263,7 +269,7 @@ test('a personal folder synced with a repository sends every record there, and a
       await mkdir(join(dir, 'notes'), { recursive: true })
       await writeFile(join(dir, 'notes', 'b.md'), 'from the server\n')
     }, { folder: server.folder, git })
-    assert.deepEqual(await syncPersonalFolder(bare, { folder: server.folder, git }), { ok: true })
+    assert.deepEqual(await syncPersonalFolder(bare, undefined, { folder: server.folder, git }), { ok: true })
     assert.equal(await readProjectFile(server.repo, 'notes/a.md', {}, { folder: server.folder, git }), 'from the laptop\n')
     assert.equal(await readProjectFile(server.repo, 'notes/b.md', {}, { folder: server.folder, git }), 'from the server\n')
 
@@ -288,8 +294,8 @@ test('a line both machines changed: the remote\'s wins, and neither machine\'s o
     await writeFile(join(dir, 'TODO_AGENTS.md'), text)
   }
   try {
-    assert.deepEqual(await syncPersonalFolder(bare, { folder: laptop.folder, git }), { ok: true })
-    assert.deepEqual(await syncPersonalFolder(bare, { folder: server.folder, git }), { ok: true })
+    assert.deepEqual(await syncPersonalFolder(bare, undefined, { folder: laptop.folder, git }), { ok: true })
+    assert.deepEqual(await syncPersonalFolder(bare, undefined, { folder: server.folder, git }), { ok: true })
     await withProjectData(laptop.repo, 'laptop queue', queue('- [ ] laptop\n'), { folder: laptop.folder, git })
     // The server writes offline, then comes back: its commit is merged with the laptop's, not dropped.
     await real(['remote', 'set-url', 'origin', '/nowhere'], server.folder)
@@ -313,16 +319,43 @@ test('a repository that cannot be reached is said, and the folder keeps no remot
   const remote = await remoteRepo()
   try {
     await withProjectData(repo, 'a note', writeNote('kept\n'), { folder, git })
-    const refused = await syncPersonalFolder(join(folder, 'nowhere.git'), { folder, git })
+    const refused = await syncPersonalFolder(join(folder, 'nowhere.git'), undefined, { folder, git })
     assert.equal(refused.ok, false)
     assert.equal((await readPersonalFolder({ folder, git })).remote, undefined)
-    assert.deepEqual(await syncPersonalFolder('--upload-pack=touch /tmp/x', { folder, git }), { ok: false, error: 'no repository address given' })
+    assert.deepEqual(await syncPersonalFolder('--upload-pack=touch /tmp/x', undefined, { folder, git }), { ok: false, error: 'no repository address given' })
 
-    assert.deepEqual(await syncPersonalFolder(remote.bare, { folder, git }), { ok: true })
+    assert.deepEqual(await syncPersonalFolder(remote.bare, undefined, { folder, git }), { ok: true })
+    await writeRemoteAccount(folder, ACCOUNT, git)
+    assert.equal((await readPersonalFolder({ folder, git })).account, 'octo')
     assert.deepEqual(await stopSyncingPersonalFolder({ folder, git }), { ok: true })
     assert.equal((await readPersonalFolder({ folder, git })).remote, undefined)
+    assert.equal((await readPersonalFolder({ folder, git })).account, undefined, 'the account goes with the sync')
     assert.deepEqual(await withProjectData(repo, 'after', async dir => writeFile(join(dir, 'notes', 'b.md'), 'b\n'), { folder, git }), { ok: true, changed: true, pushed: false })
     assert.equal(await readProjectFile(repo, 'notes/a.md', {}, { folder, git }), 'kept\n')
+  } finally {
+    await cleanup()
+    await remote.cleanup()
+  }
+})
+
+test('a personal folder on a repository at a host is sent only as an account of OpenAgent\'s: with none, the commit stays here and the reason is said', async () => {
+  const { repo, folder, cleanup } = await setup()
+  const remote = await remoteRepo()
+  // The folder's origin reads as one on a host, as a repository a person made there does.
+  const hosted: GitRunner = async (args, cwd) => {
+    const said = await git(args, cwd)
+    return args.join(' ') === 'remote get-url origin' && cwd === folder ? 'https://example.com/me/agent.git\n' : said
+  }
+  try {
+    const refused = await syncPersonalFolder(remote.bare, undefined, { folder, git: hosted })
+    assert.equal(refused.ok, false)
+    assert.match((refused as { error: string }).error, /OpenAgent sends nothing to example\.com as your own login/)
+    assert.equal((await readPersonalFolder({ folder, git })).remote, undefined, 'left as it was')
+
+    assert.deepEqual(await syncPersonalFolder(remote.bare, ACCOUNT, { folder, git: hosted }), { ok: true })
+    assert.equal((await readPersonalFolder({ folder, git })).account, 'octo')
+    assert.deepEqual(await withProjectData(repo, 'a note', writeNote('sent\n'), { folder, git: hosted }), { ok: true, changed: true, pushed: true })
+    assert.equal((await real(['show', 'main:projects/example.com/acme/shop/notes/a.md'], remote.bare)).trim(), 'sent')
   } finally {
     await cleanup()
     await remote.cleanup()

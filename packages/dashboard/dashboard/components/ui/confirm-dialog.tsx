@@ -24,6 +24,8 @@ export function ConfirmDialog({
   onSuccess,
   fallbackError = 'Something went wrong.',
   destructive = true,
+  extra,
+  confirmDisabled = false,
 }: {
   /** The control that opens the dialog (an icon button). Omit when driving `open` yourself — e.g.
    *  opening from a menu item, where the menu closes on click and cannot also be the trigger. */
@@ -42,6 +44,10 @@ export function ConfirmDialog({
   onSuccess?: () => void
   fallbackError?: string
   destructive?: boolean
+  /** A pick the confirm goes with, under the body: the account a push goes as. */
+  extra?: ReactNode
+  /** The confirm cannot go yet: what `extra` asks for is missing. */
+  confirmDisabled?: boolean
 }) {
   const [uncontrolledOpen, setUncontrolledOpen] = useState(false)
   const open = controlledOpen ?? uncontrolledOpen
@@ -76,6 +82,7 @@ export function ConfirmDialog({
           <AlertDialog.Description className="mt-2 text-xs leading-relaxed text-muted-foreground">
             {body}
           </AlertDialog.Description>
+          {extra && <div className="mt-3">{extra}</div>}
           {error && <p className="mt-2 text-xs text-danger">{error}</p>}
           <div className="mt-4 flex justify-end gap-2">
             <AlertDialog.Close
@@ -88,7 +95,7 @@ export function ConfirmDialog({
             <Button
               variant={destructive ? 'destructive' : 'default'}
               size="sm"
-              disabled={busy}
+              disabled={busy || confirmDisabled}
               onClick={confirm}
               className={cn(busy && 'cursor-progress')}
             >

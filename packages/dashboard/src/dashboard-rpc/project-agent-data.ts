@@ -1,4 +1,5 @@
-import { readPersonalFolder, readSharing } from '@openagt/agent-data'
+import { readPersonalFolder, readRemoteAccount, readSharing, shareProjectDataAs } from '@openagt/agent-data'
+import { accountsByHost, originHost, remoteAccount, type SendAsHost } from './send-as.js'
 import { resolveProjectPath } from './context.js'
 import { hasRemote } from '../has-remote.js'
 import { providedCommand } from '../built-in.js'
@@ -27,6 +28,10 @@ export interface ProjectAgentData {
   /** Whether the project has a remote to keep its data on. */
   canShare: boolean
   kept: KeptData[]
+  /** The login of OpenAgent's account it is sent as, while shared. */
+  account?: string
+  /** OpenAgent's accounts at the remote's host: what it may be sent as. None for a remote that asks no login. */
+  accounts?: SendAsHost
 }
 
 /** The skill's name of a package: `@openagt/skill-logs` reads `logs`. */
@@ -38,7 +43,8 @@ function skillName(pkg: string): string {
 export async function onProjectAgentData(projectId: string): Promise<ProjectAgentData | null> {
   const root = await resolveProjectPath(projectId)
   if (!root) return null
-  const [shared, canShare, state] = await Promise.all([readSharing(root).catch(() => false), hasRemote(root), readPersonalFolder()])
+  const [shared, canShare, state, host, account] = await Promise.all([readSharing(root).catch(() => false), hasRemote(root), readPersonalFolder(), originHost(root), readRemoteAccount(root).catch(() => undefined)])
+  const accounts = host !== undefined ? ((await accountsByHost().catch((): SendAsHost[] => [])).find(row => row.host === host) ?? { host, logins: [] }) : undefined
   const kinds = [
     { kind: 'runs' as const, count: async () => (await (await projectRuns(root))?.list())?.length },
     { kind: 'tickets' as const, count: async () => (await (await projectTickets(root))?.list())?.length },
@@ -55,5 +61,17 @@ export async function onProjectAgentData(projectId: string): Promise<ProjectAgen
     folder: personalFolderShown(state),
     canShare,
     kept,
+    ...(shared && account ? { account: account.login } : {}),
+    ...(accounts ? { accounts } : {}),
   }
+}
+
+/** Send the shared project's data as another of OpenAgent's accounts from now on. */
+export async function sendProjectDataAs(projectId: string, login: string): Promise<{ ok: true } | { ok: false; error: string }> {
+  const root = await resolveProjectPath(projectId)
+  if (!root) return { ok: false, error: 'this project has no local path on this server' }
+  const host = await originHost(root)
+  if (host === undefined) return { ok: false, error: 'This project is sent to no git host.' }
+  const account = await remoteAccount(host, login)
+  return account.ok ? shareProjectDataAs(root, account.account) : account
 }
