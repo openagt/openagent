@@ -43,8 +43,8 @@ describe('AutoMenu', () => {
       'Merge on greenIt commits, pushes its branch and opens a pull request set to merge once its checks pass.',
     ])
     expect(screen.getAllByRole('menuitem').map(item => item.getAttribute('aria-current'))).toEqual(['false', 'false', 'false', 'true', 'false'])
-    // The drawn check follows the same pick.
-    expect(screen.getAllByRole('menuitem').map(item => item.querySelector('svg')!.classList.contains('opacity-100'))).toEqual([false, false, false, true, false])
+    // The drawn check follows the same pick: the tick at the row's end, on that row alone.
+    expect(screen.getAllByRole('menuitem').map(item => item.lastElementChild!.classList.contains('lucide-check'))).toEqual([false, false, false, true, false])
   })
 
   test('only the offered picks are listed', async () => {

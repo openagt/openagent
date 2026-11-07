@@ -299,28 +299,25 @@ export function StartAgentForm({
             {!noProject && projectName && startFrom && preferencesLoaded && <StartFromMenu projectId={projectId} main={startFrom.main} local={startFrom.local} pick={startFromPick} onPick={pickStartFrom} busy={busy} />}
           </>
         }
-        // How it runs, under the box: the agent, then the Context picker, the "Auto" menu and the skills this session gets (his pick).
+        // Who runs, under the box at the left (his order): the agent, the skills this session gets, then the Context picker.
         controls={
           <>
             <AgentMenu agents={agentsView?.agents} picked={onAgent?.id} busy={busy} onPick={id => updatePreferences({ agent: id === DEFAULT_AGENT ? '' : id })} />
-            {!noProject && (
-              <>
-                <ProjectContextMenu projectId={projectId} context={context} busy={busy} onToggle={toggleContext} />
-                <AutoMenu
-                  publish={publishPick}
-                  picks={offeredPublishPicks(gitHost, remote)}
-                  onPublish={pick => updatePreferences({ publish: pick })}
-                  target={prTarget}
-                  busy={busy}
-                />
-              </>
-            )}
             <SkillsMenu projectId={noProject ? undefined : projectId} agent={onAgent} groups={agentsView?.skills} picks={skillPicks} onChange={setSkillPicks} busy={busy} />
+            {!noProject && <ProjectContextMenu projectId={projectId} context={context} busy={busy} onToggle={toggleContext} />}
           </>
         }
-        // Who it pushes as, at that row's right, before the model: the project's git host account on
-        // the computer the run goes to, picked for this session.
-        controlsEnd={remote && !noProject && <GitAccountMenu address={address} machineId={machine?.id} on={name} busy={busy} picked={pickedAccount} onPick={setPickedAccount} onAdd={() => (machine ? openSettings('devices', machine.id) : openPermissions())} />}
+        // What becomes of the work, at that row's right, before the model: who it pushes as (the
+        // project's git host account on the computer the run goes to, picked for this session), then
+        // the "Auto" menu.
+        controlsEnd={
+          !noProject && (
+            <>
+              {remote && <GitAccountMenu address={address} machineId={machine?.id} on={name} busy={busy} picked={pickedAccount} onPick={setPickedAccount} onAdd={() => (machine ? openSettings('devices', machine.id) : openPermissions())} />}
+              <AutoMenu publish={publishPick} picks={offeredPublishPicks(gitHost, remote)} onPublish={pick => updatePreferences({ publish: pick })} target={prTarget} busy={busy} />
+            </>
+          )
+        }
         onSubmit={submit}
         onPromptChange={value => {
           typed.current = value

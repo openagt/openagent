@@ -130,7 +130,6 @@ export function DriverModelMenu({
         {drivers.map(a => (
           <DropdownMenuSub key={a.value}>
             <DropdownMenuSubTrigger>
-              <Check className={cn('h-3.5 w-3.5 shrink-0', a.value === driver ? 'opacity-100' : 'opacity-0')} />
               {a.icon && <span className="flex h-4 w-4 items-center justify-center">{a.icon}</span>}
               <span className="flex-1">{a.label}</span>
               {/* A long name gives way, never how full the account is. */}
@@ -140,18 +139,14 @@ export function DriverModelMenu({
                   <span className="shrink-0 whitespace-pre">{a.account.percent}</span>
                 </span>
               )}
+              {a.value === driver && <Check className="h-3.5 w-3.5 shrink-0" aria-hidden />}
             </DropdownMenuSubTrigger>
             <DropdownMenuSubContent className="min-w-[15rem]">
               {a.models.length === 0 && a.modelsNote && <DropdownMenuItem disabled>{a.modelsNote}</DropdownMenuItem>}
               {a.models.map(m => (
                 <DropdownMenuItem key={m.value} onClick={() => onChange(a.value, m.value)}>
-                  <Check
-                    className={cn(
-                      'h-3.5 w-3.5 shrink-0',
-                      a.value === driver && m.value === model ? 'opacity-100' : 'opacity-0',
-                    )}
-                  />
-                  {m.label}
+                  <span className="flex-1">{m.label}</span>
+                  {a.value === driver && m.value === model && <Check className="h-3.5 w-3.5 shrink-0" aria-hidden />}
                 </DropdownMenuItem>
               ))}
               {a.accounts}
@@ -164,13 +159,13 @@ export function DriverModelMenu({
             <DropdownMenuGroup>
               <DropdownMenuLabel>Effort</DropdownMenuLabel>
               <DropdownMenuItem onClick={() => effort!.onChange(undefined)}>
-                <Check className={cn('h-3.5 w-3.5 shrink-0', effort?.level === undefined ? 'opacity-100' : 'opacity-0')} />
-                The agent’s default
+                <span className="flex-1">The agent’s default</span>
+                {effort?.level === undefined && <Check className="h-3.5 w-3.5 shrink-0" aria-hidden />}
               </DropdownMenuItem>
               {levels.map(one => (
                 <DropdownMenuItem key={one} onClick={() => effort!.onChange(one)}>
-                  <Check className={cn('h-3.5 w-3.5 shrink-0', effort?.level === one ? 'opacity-100' : 'opacity-0')} />
-                  {effortLabel(one)}
+                  <span className="flex-1">{effortLabel(one)}</span>
+                  {effort?.level === one && <Check className="h-3.5 w-3.5 shrink-0" aria-hidden />}
                 </DropdownMenuItem>
               ))}
             </DropdownMenuGroup>

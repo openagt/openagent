@@ -85,11 +85,11 @@ describe('AgentComposer row', () => {
 })
 
 describe('AgentComposer row under the box', () => {
-  test('the launcher\'s items in the launcher\'s places, the session\'s own off: the agent, Context, Auto, Skills, then the run\'s pull requests; at the right the account the run worked as', () => {
+  test('the launcher\'s items in the launcher\'s places, the session\'s own off: the agent, Skills, Context, then the run\'s pull requests; at the right the account the run worked as, then Auto', () => {
     const contextSet = { context: new Set(['src/app.ts']), add: vi.fn(), remove: vi.fn(), toggle: vi.fn(), reset: vi.fn() }
     renderComposer({ agent: 'reviewer', gitHost: { url: 'https://github.com/o/r', name: 'GitHub' }, gitAccount: 'octo-agent', publish: 'pr', contextSet, controls: <span>PR #7</span>, skillsOff: ['github'], projectSkills: ['deploy'] })
-    expect(screen.getByTestId('composer-controls').textContent).toBe('Agent · reviewerContext · src/app.tsAuto: prpick Open PRpick CommitSkills · github/deployPR #7')
-    expect(screen.getByTestId('composer-controls-end').textContent).toBe('Account · octo-agent')
+    expect(screen.getByTestId('composer-controls').textContent).toBe('Agent · reviewerSkills · github/deployContext · src/app.tsPR #7')
+    expect(screen.getByTestId('composer-controls-end').textContent).toBe('Account · octo-agentAuto: prpick Open PRpick Commit')
   })
 
   test('a session with no project: the agent, its skills and its pull requests alone, no Context, Auto or account, as the launcher with no project', () => {

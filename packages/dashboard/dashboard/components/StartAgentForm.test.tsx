@@ -217,14 +217,14 @@ describe('StartAgentForm (#1774)', () => {
     expect(alert.parentElement!.className).toContain('bottom-full')
   })
 
-  test('under the box: the Context picker, then the "Auto" menu', async () => {
+  test('under the box, at the left: the agent, then Skills, then the Context picker; at the right, before the model: the account, then the "Auto" menu', async () => {
     onCommands.mockResolvedValue({ commands: [], startHook: true, gitHost: true, remote: true })
     render(<StartAgentForm {...props} />)
     const below = screen.getByTestId('controls')
-    await waitFor(() => expect(below.contains(autoMenu())).toBe(true))
-    const context = within(below).getAllByRole('button')[0]!
-    expect(context).not.toBe(autoMenu())
-    expect(context.compareDocumentPosition(autoMenu()) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+    const end = screen.getByTestId('controls-end')
+    await waitFor(() => expect(end.contains(autoMenu())).toBe(true))
+    expect(within(below).getAllByRole('button').map(button => button.textContent)).toEqual(['agent:default', 'skills:p1://all', 'Context'])
+    expect(within(end).getAllByRole('button').map(button => button.textContent)).toEqual(['pick-octo-agent', 'Auto: Commit'])
   })
 
   test('the publish options: the button reads Commit until the person picks, and the Start carries no pick, left to the daemon; a saved pick is shown and carried, Off too; a change writes the saved setting', async () => {

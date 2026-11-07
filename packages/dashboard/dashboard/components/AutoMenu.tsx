@@ -77,8 +77,8 @@ export function AutoMenu({
           {picks.map(pick => (
             // aria-current: the check mark is only drawn, so a screen reader is told the pick too.
             <DropdownMenuItem key={pick} className="items-start" aria-current={pick === publish} onClick={() => onPublish(pick)}>
-              <Check className={cn('mt-0.5 h-3.5 w-3.5 shrink-0', pick === publish ? 'opacity-100' : 'opacity-0')} aria-hidden />
               <OptionLabel label={PUBLISH_LABELS[pick]} description={PUBLISH_DESCRIPTIONS[pick]} />
+              {pick === publish && <Check className="ml-auto mt-0.5 h-3.5 w-3.5 shrink-0" aria-hidden />}
             </DropdownMenuItem>
           ))}
         </DropdownMenuGroup>
@@ -89,8 +89,8 @@ export function AutoMenu({
               <DropdownMenuLabel className="font-normal">The pull request goes into</DropdownMenuLabel>
               {into.picks.map(branch => (
                 <DropdownMenuItem key={branch} aria-current={branch === into.into} onClick={() => into.onPick?.(branch)}>
-                  <Check className={cn('h-3.5 w-3.5 shrink-0', branch === into.into ? 'opacity-100' : 'opacity-0')} aria-hidden />
-                  <span className="truncate">{branch}</span>
+                  <span className="flex-1 truncate">{branch}</span>
+                  {branch === into.into && <Check className="h-3.5 w-3.5 shrink-0" aria-hidden />}
                 </DropdownMenuItem>
               ))}
             </DropdownMenuGroup>

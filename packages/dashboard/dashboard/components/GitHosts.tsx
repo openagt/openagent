@@ -232,8 +232,8 @@ export function GitAccountMenu({ address, machineId, on, busy, picked, onPick, o
           <DropdownMenuLabel>{`${p.name} account for this session${on !== undefined ? `, on ${on}` : ''}`}</DropdownMenuLabel>
           {p.accounts.map(login => (
             <DropdownMenuItem key={login.login} disabled={!login.ok} onClick={() => onPick(login.login)}>
-              <Check className={cn('h-3.5 w-3.5 shrink-0', login.login === account ? 'opacity-100' : 'opacity-0')} aria-hidden />
               <span className="flex-1 truncate">@{login.login}</span>
+              {login.login === account && <Check className="h-3.5 w-3.5 shrink-0" aria-hidden />}
             </DropdownMenuItem>
           ))}
         </DropdownMenuGroup>
