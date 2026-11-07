@@ -7,12 +7,14 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuGroup, DropdownMenuItem,
 import { ThemeSubmenu } from './ThemeSubmenu.js'
 import { NotificationsSubmenu } from './NotificationsSubmenu.js'
 import { useMissing } from './Logins.js'
+import { useBackup } from '../lib/use-backup.js'
+import { AGENT_DATA_ENTRY } from './AgentDataSettings.js'
 
 // The foot of the sidebar: the person at this dashboard, their picture and first name, as one row
 // that opens their menu (his pick, over a row of three icons): the theme, the notifications, and
 // Settings, under their whole name. The accounts a run takes are picked where the run is started,
 // beside the message box, for the computer it goes to: the agent's in the agent picker, the git
-// host's after the branch; not here a second time. A dot on the picture says something runs need is missing; the menu says what. The gear at the row's end says what the row opens. The name and
+// host's after the branch; not here a second time. A dot on the picture says something runs need is missing, or that the agents' data is not backed up; the menu says what. The gear at the row's end says what the row opens. The name and
 // the picture are the person's own, set in Settings › Profile (`onPerson`); with no picture, their initials.
 
 /** The first word of a name: what the row says, the whole name being in the menu. */
@@ -44,13 +46,16 @@ export function Avatar({ person, dot = false, size = 'h-6 w-6 text-[10px]' }: { 
 export function PersonMenu({ onSettings }: { onSettings: (entry?: string) => void }) {
   const { person } = usePerson()
   const { missing } = useMissing()
+  const { view: backup } = useBackup()
+  const notBackedUp = (backup?.gaps.length ?? 0) > 0
+  const needs = missing.length > 0 || notBackedUp
   return (
     <DropdownMenu>
       <DropdownMenuTrigger
-        aria-label={`${person ? `${person.name}: settings` : 'Settings'}${missing.length > 0 ? ', something is missing' : ''}`}
+        aria-label={`${person ? `${person.name}: settings` : 'Settings'}${needs ? ', something is missing' : ''}`}
         className="flex w-full min-w-0 items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm outline-none hover:bg-sidebar-accent focus-visible:ring-2 focus-visible:ring-sidebar-ring data-[popup-open]:bg-sidebar-accent"
       >
-        <Avatar person={person} dot={missing.length > 0} />
+        <Avatar person={person} dot={needs} />
         <span className="min-w-0 flex-1 truncate">{person ? firstName(person.name) : ''}</span>
         <Settings className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden />
       </DropdownMenuTrigger>
@@ -66,7 +71,7 @@ export function PersonMenu({ onSettings }: { onSettings: (entry?: string) => voi
             <DropdownMenuSeparator />
           </>
         )}
-        {missing.length > 0 && (
+        {needs && (
           <>
             {missing.map(item => (
               <DropdownMenuItem key={item.key} onClick={openPermissions} className="text-warning">
@@ -74,6 +79,12 @@ export function PersonMenu({ onSettings }: { onSettings: (entry?: string) => voi
                 <span className="flex-1 truncate">{item.words}</span>
               </DropdownMenuItem>
             ))}
+            {notBackedUp && (
+              <DropdownMenuItem onClick={() => onSettings(AGENT_DATA_ENTRY)} className="text-warning">
+                <CircleAlert className="h-3.5 w-3.5 shrink-0" aria-hidden />
+                <span className="flex-1 truncate">Agent data not backed up</span>
+              </DropdownMenuItem>
+            )}
             <DropdownMenuSeparator />
           </>
         )}

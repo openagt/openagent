@@ -1,106 +1,101 @@
-import { useState, type ReactNode } from 'react'
-import type { DashboardData, OnboardingSuggestion } from '../../src/index.js'
-import { ChevronRight, FolderPlus, Square, SquareCheckBig, X } from 'lucide-react'
+import { useRef, useState, type ReactNode } from 'react'
+import type { DashboardData, ProjectSummary } from '../../src/index.js'
+import { Check, Info, X } from 'lucide-react'
 import { onDashboard } from '../rpc/reads.js'
-import { onOnboarding } from '../rpc/projects.js'
 import { usePolled } from '../lib/use-async.js'
+import { usePerson } from '../lib/use-person.js'
+import { cn } from '../lib/utils.js'
 import { Button } from './ui/button.js'
-import { Card, CardContent, CardHeader, CardTitle } from './ui/card.js'
+import { Card, CardContent, CardHeader } from './ui/card.js'
 import { usePreferences, updatePreferences, notificationsEnabled } from '../lib/preferences.js'
 import { useNotificationPermission } from '../lib/notification-permission.js'
 import { startPicks, useStartAgent } from '../lib/use-start-agent.js'
 import { AddProjectEffects } from './AddProjectEffects.js'
-import { AddProjectPanel } from './AddProjectPanel.js'
+import { ProjectPicker } from './ProjectPicker.js'
 import { UpdateTicketsButton, UPDATE_TICKETS_PROMPT } from './UpdateTicketsButton.js'
-import { useMissing } from './Logins.js'
+import { HostFix, hostLoginState, hostWords, useMissing } from './Logins.js'
+import { firstName } from './PersonMenu.js'
 import { Tooltip, TooltipTrigger, TooltipContent } from './ui/tooltip.js'
 
-// The Onboarding checklist (#958): the integrations a new install needs, each with the state it
-// is actually in rather than a static list to read past.
+// The Overview's first steps (#958): what a new install needs, each with the state it is actually
+// in rather than a static list to read past.
 //
-// Every "done" is derived from a real fact — a registered project, a non-empty queue, a ticket on
-// disk, a granted browser permission — so a step cannot be ticked by clicking it, and a step done
-// outside the dashboard shows up ticked anyway.
+// Every "done" is derived from a real fact — a login, a registered project, a non-empty queue, a
+// ticket on disk, a granted browser permission — so a step cannot be ticked by clicking it, and a
+// step done outside the dashboard shows up ticked anyway. Numbered, not boxes: a box invites a
+// click that can tick nothing.
 //
-// It renders at the top of the Overview. Its ✕ hides it, and the "Onboarding on the Overview"
-// switch in Settings › Appearance brings it back: what the ✕ promises.
+// One step is open at a time (his pick): the next one to do, its words and its button at the row's
+// end; a step done is one line with a ✓ and what was done; the steps after it, only their titles,
+// each a press from open. A step stays once shown, done or not, so the count never moves under a
+// person: "Connect GitHub" turns into a ✓, it does not vanish.
+//
+// It renders at the top of the Overview, greeting the person by the time of day. Its ✕ hides it,
+// and the "Onboarding on the Overview" switch in Settings › Appearance brings it back: what the ✕
+// promises. With every step a session needs done, it says so, and its button starts the first one.
 
 /** What the ✕ says it does. */
 const HIDE = 'Hide; Settings › Appearance brings it back'
 
-/** A folder's own name, the last part of its path. */
-const folderName = (path: string): string => path.replace(/[\\/]+$/, '').split(/[\\/]/).pop() || path
-
-/**
- * What adding a project does to the folder, folded under one line: the step reads in a glance,
- * and the whole of it is a press away. The Add dialog says all of it again before anything is done.
- */
-function WhatAddingDoes() {
-  const [open, setOpen] = useState(false)
-  return (
-    <div className="space-y-1">
-      <p className="text-xs text-muted-foreground">Agents work in the project's folder, each in its own copy and on its own branch. Your files and your branch stay as they are.</p>
-      <button type="button" aria-expanded={open} className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground" onClick={() => setOpen(!open)}>
-        <ChevronRight aria-hidden className={open ? 'h-3 w-3 rotate-90' : 'h-3 w-3'} />
-        What adding a project does
-      </button>
-      {open && (
-        <div className="pl-4">
-          <AddProjectEffects />
-        </div>
-      )}
-    </div>
-  )
+/** The greeting for an hour of the day: morning until noon, afternoon until six, then evening. */
+export function greeting(hour: number): string {
+  return hour >= 5 && hour < 12 ? 'Good morning' : hour >= 12 && hour < 18 ? 'Good afternoon' : 'Good evening'
 }
 
-/** One checklist row: what it is, whether it is done, and what to do about it. */
+/** One step: what it is, whether it is done, and what to do about it. */
 interface Step {
   key: string
   label: string
-  /** What the step is: a sentence, or more when the step changes something of the person's. */
-  description: ReactNode
+  /** What the step is, said while it is open. */
+  description?: ReactNode
+  /** More of what it does, behind an ⓘ beside its title: read on a hover, not in the way. */
+  info?: ReactNode
   done: boolean
+  /** What was done, beside a done step's title: the account, the project. */
+  doneNote?: string
   /**
-   * Nothing breaks if this one is never done (#1139).
-   *
-   * Marked per step rather than by position, so the list can be reordered without the promise
-   * moving with it. Only the two steps the agent cannot work without are left unmarked.
+   * Nothing breaks if this one is never done (#1139). Marked per step rather than by position, so
+   * the list can be reordered without the promise moving with it.
    */
   optional?: boolean
-  /** The action(s) offered while it is not done. */
-  action?: React.ReactNode
+  /** The press that does it, at the row's end while the step is open. */
+  action?: ReactNode
 }
 
 export function OnboardingChecklist({
+  projects,
   onAgentStarted,
   onSelectProject,
+  onProjectAdded,
 }: {
+  /** The projects as the app read them: the picker sees one it added land, and closes on it. */
+  projects: readonly ProjectSummary[]
   /**
    * Told about the session a step started, so the shell can land on it (#1169). The project
    * travels with it: this renders on the Overview, which has none selected. Required, so a new mounting surface cannot quietly drop the navigation.
    */
   onAgentStarted: (projectId: string, intent: string, agentId: string) => void
-  /** Where "Configure first, then run" lands (#1507): the launcher of the project the checklist
-   *  acts on. Required for the same reason `onAgentStarted` is — a new mounting surface must not
-   *  quietly leave the chevron with nowhere to go. */
+  /** Where "Configure first, then run" and "Start your first session" land (#1507): the launcher of the project the steps act on. */
   onSelectProject: (id: string) => void
+  /** A project was added here: the app reads its projects again. */
+  onProjectAdded: () => void
 }) {
-  // Slower than the Overview's own 5s poll: onboarding state changes at human speed, and this
-  // read fans out over every project to answer the tickets question.
+  // Slower than the Overview's own 5s poll: these change at human speed, and this read fans out
+  // over every project to answer the tickets question.
   const { value: data, reload } = usePolled<DashboardData | null>(onDashboard, null, 10_000, [])
-  const { value: suggestion, reload: reloadSuggestion } = usePolled<OnboardingSuggestion | null>(onOnboarding, null, 30_000, [])
   const preferences = usePreferences()
   const permission = useNotificationPermission()
   const { start, busy: starting, error: startError } = useStartAgent()
-  // What runs need on this computer and do not have: the step is there only while something is missing.
-  const { missing } = useMissing()
+  const { person } = usePerson()
+  // What runs need on this computer: the coding agent's login, and an account at each git host.
+  const { missing, hosts, reload: reloadMissing } = useMissing()
+  // The steps shown once stay, done or not: the coding agent's is there only once it was missing.
+  const seen = useRef(new Set<string>())
+  // The step the person opened; by default, the first one not done.
+  const [picked, setPicked] = useState<string | undefined>()
 
-  // The Add dialog: open with the folder the dashboard runs in, open to pick one, open to take a repository's address, or closed.
-  const [addingProject, setAddingProject] = useState<{ folder?: string; fromAddress?: boolean } | null>(null)
-
-  // The project onboarding acts on: the one this server runs in when it is registered, else the
-  // only/most recent one. Onboarding is a first-agent flow, so there is rarely a second candidate.
-  const targetProjectId = suggestion?.cwdProjectId ?? data?.projects[0]?.projectId ?? null
+  // The project the steps act on: the only/most recent one. A first-session flow rarely has a second.
+  const targetProjectId = data?.projects[0]?.projectId ?? null
 
   const projectCount = data?.totals.projects ?? 0
   const hasTickets = data?.projects.some(p => p.hasTickets) ?? false
@@ -120,64 +115,51 @@ export function OnboardingChecklist({
     if (started) onAgentStarted(targetProjectId, UPDATE_TICKETS_PROMPT, started.agentId)
   }
 
-  // The folder the dashboard runs in, while it is not a project yet: the first step offers it.
-  const here = suggestion?.cwd && !suggestion.cwdProjectId ? suggestion.cwd : undefined
+  const agentMissing = missing.find(item => item.key === 'agent')
+  if (agentMissing) seen.current.add('agent')
+  const agentStep: Step[] = seen.current.has('agent')
+    ? [{ key: 'agent', label: `Set up ${agentMissing?.name ?? 'your coding agent'}`, description: agentMissing?.words, done: !agentMissing, doneNote: 'Ready', ...(agentMissing ? { action: agentMissing.fix } : {}) }]
+    : []
+  const hostSteps: Step[] = (hosts?.hosts ?? []).flatMap(row => {
+    const p = row.provider
+    if (!p) return []
+    const done = hostLoginState(row) === 'connected'
+    const runs = p.accounts.find(account => account.runs && account.ok)?.login ?? p.accounts.find(account => account.ok)?.login
+    return [
+      {
+        key: `host:${row.host}`,
+        label: `Connect ${p.name}`,
+        description: p.installed && p.accounts.length === 0 ? `OpenAgent pushes and opens ${p.requestWord}s with an account of its own, never your own login.` : hostWords(row),
+        done,
+        ...(runs ? { doneNote: `@${runs}` } : {}),
+        action: <HostFix row={row} onChanged={reloadMissing} size="sm" />,
+      },
+    ]
+  })
 
   const steps: Step[] = [
-    ...(missing.length > 0
-      ? [
-          {
-            key: 'ready',
-            label: 'Get ready',
-            description: 'What runs need on this computer. Each is one press, with no admin.',
-            done: false,
-            action: (
-              <ul className="space-y-3">
-                {missing.map(item => (
-                  <li key={item.key} className="space-y-1.5">
-                    <p className="text-xs font-medium">{item.words}</p>
-                    {item.fix}
-                  </li>
-                ))}
-              </ul>
-            ),
-          },
-        ]
-      : []),
+    ...agentStep,
+    ...hostSteps,
     {
       key: 'project',
-      label: 'Add a project',
-      // Said before the button is pressed: what adding does to the folder. Once a project is
-      // added the step is done, and one sentence says what a project is. Until the first read
-      // lands nobody knows which, so the tall text does not flash at a person who has projects.
-      description: data && projectCount === 0 ? <WhatAddingDoes /> : 'A project is a git repo OpenAgent may work in.',
+      label: 'Add your first project',
+      description: 'A git repo your agents work in, each in its own copy and on its own branch. Your files and your branch stay as they are.',
+      info: <AddProjectEffects />,
       done: projectCount > 0,
+      ...(projects.length > 0 ? { doneNote: projects.map(project => project.name).join(', ') } : {}),
+      // The picker of the sidebar and the box: the repos on this computer and at GitHub, another folder, an address.
       action: (
-        <div className="space-y-2">
-          {here && (
-            <div className="min-w-0 space-y-1">
-              <Button size="sm" onClick={() => setAddingProject({ folder: here })}>
-                <FolderPlus className="h-3.5 w-3.5" aria-hidden />
-                {`Add “${folderName(here)}”`}
-              </Button>
-              {/* The whole path under the button, never in it: a long one made the button the card's width. */}
-              <p className="truncate font-mono text-[11px] text-muted-foreground" title={here}>
-                {`The folder OpenAgent runs in: ${here}`}
-              </p>
-            </div>
-          )}
-          <div className="flex flex-wrap gap-2">
-            {/* Not on a computer with no screen: the folder dialog has nowhere to open. */}
-            {suggestion?.canPickFolder !== false && (
-              <Button size="sm" variant={here ? 'outline' : 'default'} onClick={() => setAddingProject({})}>
-                {here ? 'Choose another folder…' : 'Choose a folder…'}
-              </Button>
-            )}
-            <Button size="sm" variant="outline" onClick={() => setAddingProject({ fromAddress: true })}>
-              Add from a GitHub address
-            </Button>
-          </div>
-        </div>
+        <ProjectPicker
+          look="add"
+          none={{ label: 'Add a project' }}
+          picked={null}
+          projects={projects}
+          onPick={() => void reload()}
+          onProjectAdded={() => {
+            onProjectAdded()
+            void reload()
+          }}
+        />
       ),
     },
     // Only when some project has a queue at all (#1774): a project gets one from a package it
@@ -199,12 +181,11 @@ export function OnboardingChecklist({
           {
             key: 'tickets',
             label: 'Populate tickets/',
-            description:
-              'tickets/ holds the bigger things to work on, in the repo. The agent researches and plans them, and they are the input the queue is filled from.',
+            description: 'tickets/ holds the bigger things to work on, in the repo. The agent researches and plans them, and they are the input the queue is filled from.',
             done: hasTickets,
             optional: true,
             action: (
-              <div className="flex flex-col items-start gap-1">
+              <div className="flex flex-col items-end gap-1">
                 <UpdateTicketsButton
                   variant="default"
                   busy={starting}
@@ -221,7 +202,7 @@ export function OnboardingChecklist({
       : []),
     {
       key: 'browser-notification',
-      label: 'Add browser notifications',
+      label: 'Turn on notifications',
       description: 'Desktop pings while the dashboard is open, so a session waiting on you does not sit unnoticed.',
       done: browserGranted,
       optional: true,
@@ -232,85 +213,92 @@ export function OnboardingChecklist({
           <span className="text-xs text-muted-foreground">Not supported by this browser</span>
         ) : (
           <Button size="sm" variant="outline" onClick={enableBrowserNotifications}>
-            Enable
+            Turn on
           </Button>
         ),
     },
   ]
 
-  const doneCount = steps.filter(s => s.done).length
+  const open = picked !== undefined && steps.some(step => step.key === picked && !step.done) ? picked : steps.find(step => !step.done)?.key
+  const ready = data !== null && steps.every(step => step.done || step.optional)
+  const name = person ? `, ${firstName(person.name)}` : ''
 
   return (
     <Card>
-      <CardHeader className="flex flex-row items-start justify-between gap-3">
-        <div>
-          <CardTitle className="text-base">Onboarding</CardTitle>
-          <p className="text-xs text-muted-foreground">
-            {doneCount} of {steps.length} set up.
-          </p>
-          <div aria-hidden className="mt-2 h-1 w-40 overflow-hidden rounded-full bg-muted-foreground/15">
-            <div className="h-full rounded-full bg-[var(--color-primary)]" style={{ width: `${(doneCount / Math.max(1, steps.length)) * 100}%` }} />
-          </div>
+      <CardHeader className="flex flex-row items-center justify-between gap-3">
+        <h2 className="min-w-0 text-lg font-semibold tracking-tight">{ready ? `You're all set${name}` : `${greeting(new Date().getHours())}${name}`}</h2>
+        <div className="flex shrink-0 items-center gap-3">
+          {/* Where the steps stand, one dash each: the numbers below say which is which. */}
+          <ol aria-label={`${steps.filter(step => step.done).length} of ${steps.length} done`} className="flex items-center gap-1.5">
+            {steps.map(step => (
+              <li key={step.key} aria-hidden className={cn('h-1.5 w-6 rounded-full', step.done ? 'bg-[var(--color-primary)]' : step.key === open ? 'bg-[var(--color-primary)]/40' : 'bg-muted-foreground/20')} />
+            ))}
+          </ol>
+          {ready && targetProjectId && (
+            <Button
+              size="sm"
+              onClick={() => {
+                updatePreferences({ onboardingDismissed: true })
+                onSelectProject(targetProjectId)
+              }}
+            >
+              Start your first session
+            </Button>
+          )}
+          <Tooltip>
+            <TooltipTrigger render={<Button variant="ghost" size="sm" onClick={() => updatePreferences({ onboardingDismissed: true })} aria-label={HIDE} />}>
+              <X className="h-4 w-4" aria-hidden />
+            </TooltipTrigger>
+            <TooltipContent>{HIDE}</TooltipContent>
+          </Tooltip>
         </div>
-        <Tooltip>
-          <TooltipTrigger
-            render={
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => updatePreferences({ onboardingDismissed: true })}
-                aria-label={HIDE}
-              />
-            }
-          >
-            <X className="h-4 w-4" aria-hidden />
-          </TooltipTrigger>
-          <TooltipContent>{HIDE}</TooltipContent>
-        </Tooltip>
       </CardHeader>
       <CardContent>
-        <ul className="divide-y divide-border">
-          {steps.map(step => (
-            // The action is under the words, where the eye already is: at the row's far end it was
-            // a long way from what it does, and a long folder name squeezed the words to a strip.
-            <li key={step.key} className="flex items-start gap-3 py-4 first:pt-0 last:pb-0">
-              {/* A checkbox, not a circle: an outlined circle reads as a radio button, i.e. as
-                  one of a set you pick between, when these are independent things to tick (#1139). */}
-              {step.done ? (
-                <SquareCheckBig className="mt-0.5 h-4 w-4 shrink-0 text-[var(--color-primary)]" aria-label="Done" />
-              ) : (
-                <Square className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" aria-label="Not done" />
-              )}
-              <div className="min-w-0 flex-1 space-y-2">
-                <div>
-                  <p className={step.done ? 'text-sm text-muted-foreground line-through' : 'text-sm font-medium'}>
-                    {step.label}
-                    {step.optional && (
-                      <span className="ml-2 rounded-full border border-border px-1.5 py-0.5 align-middle text-[10px] font-normal uppercase tracking-wide text-muted-foreground">
-                        Optional
-                      </span>
-                    )}
-                  </p>
-                  {typeof step.description === 'string' ? <p className="text-xs text-muted-foreground">{step.description}</p> : <div className="mt-1">{step.description}</div>}
+        <ol className="divide-y divide-border">
+          {steps.map((step, at) => {
+            const isOpen = step.key === open
+            return (
+              <li key={step.key} aria-label={step.label} aria-current={isOpen ? 'step' : undefined} className="flex items-start gap-3 py-3 first:pt-0 last:pb-0">
+                {step.done ? (
+                  <span aria-label="Done" className="mt-0.5 flex size-6 shrink-0 items-center justify-center rounded-full bg-[var(--color-primary)] text-[var(--color-primary-foreground)]">
+                    <Check className="h-3.5 w-3.5" aria-hidden />
+                  </span>
+                ) : (
+                  <span aria-hidden className={cn('mt-0.5 flex size-6 shrink-0 items-center justify-center rounded-full border text-xs font-medium tabular-nums', isOpen ? 'border-[var(--color-primary)] text-[var(--color-primary)]' : 'border-border text-muted-foreground')}>
+                    {at + 1}
+                  </span>
+                )}
+                <div className="flex min-w-0 flex-1 gap-3 max-sm:flex-col sm:items-start">
+                  <div className="min-w-0 flex-1 space-y-1">
+                    <div className="mt-1 flex flex-wrap items-center gap-x-2">
+                      <button
+                        type="button"
+                        disabled={step.done || isOpen}
+                        onClick={() => setPicked(step.key)}
+                        className={cn('flex flex-wrap items-center gap-x-2 text-left text-sm', step.done ? 'text-muted-foreground' : isOpen ? 'font-medium' : 'text-muted-foreground hover:text-foreground')}
+                      >
+                        <span>{step.label}</span>
+                        {step.done && step.doneNote && <span className="truncate text-xs text-muted-foreground">· {step.doneNote}</span>}
+                        {step.optional && !step.done && <span className="rounded-full border border-border px-1.5 py-0.5 text-[10px] font-normal uppercase tracking-wide text-muted-foreground">Optional</span>}
+                      </button>
+                      {isOpen && step.info && (
+                        <Tooltip>
+                          <TooltipTrigger render={<button type="button" aria-label={`More on ${step.label}`} className="text-muted-foreground hover:text-foreground" />}>
+                            <Info className="h-3.5 w-3.5" aria-hidden />
+                          </TooltipTrigger>
+                          <TooltipContent className="max-w-sm">{step.info}</TooltipContent>
+                        </Tooltip>
+                      )}
+                    </div>
+                    {isOpen && step.description && (typeof step.description === 'string' ? <p className="text-xs text-muted-foreground">{step.description}</p> : step.description)}
+                  </div>
+                  {isOpen && step.action && <div className="flex shrink-0 sm:justify-end">{step.action}</div>}
                 </div>
-                {!step.done && step.action && <div className="max-w-full">{step.action}</div>}
-              </div>
-            </li>
-          ))}
-        </ul>
+              </li>
+            )
+          })}
+        </ol>
       </CardContent>
-
-      {addingProject && (
-        <AddProjectPanel
-          folder={addingProject.folder}
-          fromAddress={addingProject.fromAddress === true}
-          onAdded={() => {
-            void reload()
-            reloadSuggestion()
-          }}
-          onClose={() => setAddingProject(null)}
-        />
-      )}
     </Card>
   )
 }

@@ -46,7 +46,6 @@ vi.mock('../rpc/reads.js', async importOriginal => ({
   onPreferences: vi.fn(async () => ({})),
   onDetectedEditors: vi.fn(async () => []),
   onDashboard: vi.fn(async () => null),
-  onOnboardingSuggestion: vi.fn(async () => null),
 }))
 
 import { SettingsDialog } from './SettingsDialog.js'

@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Combobox } from '@base-ui/react/combobox'
-import { Cloud, Check, ChevronDown, ChevronsUpDown, Folder, FolderGit2, FolderSearch, Layers, Plus, Search } from 'lucide-react'
+import { Cloud, Check, ChevronDown, ChevronsUpDown, Folder, FolderGit2, FolderPlus, FolderSearch, Layers, Plus, Search } from 'lucide-react'
 import type { ProjectSummary } from '../../src/index.js'
 import { machineKind, machineName, typedRepository } from '../../src/client.js'
 import { onRepos, sendAddRepoFolder, type ReposRead } from '../rpc/projects.js'
@@ -11,6 +11,7 @@ import { cn } from '../lib/utils.js'
 import { MACHINE_ICONS } from './MachineMark.js'
 import { projectErrorTitle } from './ProjectErrorBanner.js'
 import { rowButtonClass } from './ui/row-item.js'
+import { buttonVariants } from './ui/button.js'
 import { ScrollArea } from './ui/scroll-area.js'
 import { Tooltip, TooltipTrigger, TooltipContent } from './ui/tooltip.js'
 import { MENU_ITEM_CLASS, MENU_POPUP_CLASS, MENU_TRIGGER_OPEN_CLASS } from './ui/dropdown-menu.js'
@@ -68,14 +69,14 @@ const matches = (row: Row, query: string): boolean => `${row.label}\n${row.searc
  * nothing that matches is not listed. Typed as a repository's address that no row has, one more
  * row offers to add it: cloned here and made a project, as the Add-by-address way did.
  */
-export function pickerGroups(none: Row, projects: readonly Row[], repos: readonly Row[], typed: string): Group[] {
+export function pickerGroups(none: Row | undefined, projects: readonly Row[], repos: readonly Row[], typed: string): Group[] {
   const query = typed.trim().toLowerCase()
   const kept = (rows: readonly Row[], most: number) => (query ? rows.filter(row => matches(row, query)) : rows).slice(0, most)
   const address = typedRepository(typed)?.address
   const known = address !== undefined && [...projects, ...repos].some(row => row.search.toLowerCase().includes(address))
   const add: Row[] = address !== undefined && !known ? [{ value: `address:${address}`, label: `Add ${address}`, detail: 'Cloned to this computer, as a project', pick: { kind: 'address', typed: typed.trim() }, search: '' }] : []
   const groups: Group[] = [
-    { value: 'none', items: kept([none], 1) },
+    { value: 'none', items: none ? kept([none], 1) : [] },
     { value: 'projects', label: 'Projects', items: kept(projects, SEARCH_SHOWN) },
     { value: 'repos', label: 'Repos', items: kept(repos, query ? SEARCH_SHOWN : REPOS_SHOWN) },
     { value: 'address', items: add },
@@ -170,10 +171,10 @@ export function ProjectPicker({
   busy?: boolean
   /** The address names a project the dashboard has not read yet: which one it is, or whether it is one, is not known. */
   pending?: boolean
-  /** The first row: what no project means here. */
+  /** The first row: what no project means here; for the `add` look, the button's words. */
   none: { label: string; tip?: string }
-  /** The button: a row button under the box, or the sidebar's full-width one. */
-  look: 'row' | 'sidebar'
+  /** The button: a row button under the box, the sidebar's full-width one, or a button that adds a project (the Overview's first steps). */
+  look: 'row' | 'sidebar' | 'add'
   /** A project, or none, was picked. */
   onPick: (projectId: string | null) => void
   /** A repo was added as a project: the projects are to be read again. */
@@ -225,7 +226,8 @@ export function ProjectPicker({
     ],
     [repos],
   )
-  const groups = pickerGroups(NONE, projectRows, repoRows, typed)
+  // A button that adds one has no "none" to pick: it is what the button says.
+  const groups = pickerGroups(look === 'add' ? undefined : NONE, projectRows, repoRows, typed)
   const current = picked === null ? NONE : (projectRows.find(row => row.value === `project:${picked}`) ?? { value: `project:${picked}`, label: pickedName ?? '', pick: { kind: 'none' }, search: '' })
   const shown = current.label
   // No project word until the name is known, never a wrong one.
@@ -239,9 +241,14 @@ export function ProjectPicker({
     else if (outcome.added) setFolders(k => k + 1)
   }
 
-  const name = look === 'sidebar' ? `Project: ${pending ? 'loading' : shown}` : 'The session works in'
+  const name = look === 'sidebar' ? `Project: ${pending ? 'loading' : shown}` : look === 'add' ? none.label : 'The session works in'
   const button =
-    look === 'sidebar' ? (
+    look === 'add' ? (
+      <button type="button" className={buttonVariants({ size: 'sm' })}>
+        <FolderPlus className="h-3.5 w-3.5" aria-hidden />
+        {none.label}
+      </button>
+    ) : look === 'sidebar' ? (
       <button type="button" className="flex w-full items-center gap-2 rounded-md border border-sidebar-border bg-background px-2 py-1.5 text-sm font-medium transition-colors hover:bg-sidebar-accent/60">
         {/* Until the projects are read, the project the address names is not known: a bar where its
             name goes, rather than "All projects" for a moment. */}

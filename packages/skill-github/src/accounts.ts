@@ -371,6 +371,13 @@ export function forgetAccount(root: string, login: string, path: string = picksP
   }
 }
 
+/** Give up the login under way: its `gh` stops waiting, and nothing of it is kept. */
+export function stopLogin(root: string, files = jobFiles('login')): void {
+  stopJob(files)
+  rmSync(join(root, ADDING), { recursive: true, force: true })
+  for (const path of [files.log, files.pid, files.exit]) rmSync(path, { force: true })
+}
+
 function stopJob(files: JobFiles): void {
   try {
     process.kill(-Number(readFileSync(files.pid, 'utf8').trim()), 'SIGTERM')

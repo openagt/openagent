@@ -29,7 +29,15 @@ already made, and lists it in its pull request; for anything else it proposes an
 - The card says the same numbers as the Permissions page, and the skill reads them itself, with the
   `usage` command. Picked over the card showing only what the last run saved, which on one account
   is nothing, and over OpenAgent handing the card its own reading, which a skill's own page does
-  not have. The servers' rows stay in Settings for now.
+  not have.
+- The card is "Coding agent accounts", and what it does at an account's limit is said behind an ⓘ
+  beside its title, only while an agent has two accounts or more: with one each, nothing
+  rotates. Rotation is the runner's for every run, ticked as a skill or not: the skill only
+  teaches an agent to change the accounts when asked.
+- Under each account's row the card draws the line the page it is on gives it
+  (`accountWhere`), the account named by its agent, whether it is the own login, and its name:
+  the Permissions page says there where the account works, on the person's servers. Picked over
+  the skill reading the dashboard's servers, which it would then depend on.
 - One way to add an account, the same for an agent, a card and Settings, here and on a server: the
   sign-in runs in a process of its own, and commands start it, read it and hand it the code. Picked
   over the sign-in staying in OpenAgent's process, where only Settings could reach it, and over

@@ -8,6 +8,8 @@ const accounts = vi.hoisted(() => ({ onAgentAccounts: vi.fn(), sendUseAgentAccou
 vi.mock('../rpc/accounts.js', () => accounts)
 const logins = vi.hoisted(() => ({ onGitHosts: vi.fn(), sendUseGitHostAccount: vi.fn(), sendGitHostLogin: vi.fn(), sendGitHostInstall: vi.fn(), onAgentState: vi.fn(), sendAgentFix: vi.fn() }))
 vi.mock('../rpc/logins.js', () => logins)
+const backup = vi.hoisted(() => ({ onBackup: vi.fn(), sendBackUpAs: vi.fn() }))
+vi.mock('../rpc/backup.js', () => backup)
 // The menu's theme and notifications rows have their own suites; here they are the rows' names.
 vi.mock('./ThemeSubmenu.js', () => ({ ThemeSubmenu: () => <div role="menuitem">Theme</div> }))
 vi.mock('./NotificationsSubmenu.js', () => ({ NotificationsSubmenu: () => <div role="menuitem">Notifications</div> }))
@@ -18,6 +20,7 @@ beforeEach(() => {
   accounts.onAgentAccounts.mockResolvedValue({ now: 0, accounts: [] })
   logins.onGitHosts.mockResolvedValue({ hosts: [] })
   logins.onAgentState.mockResolvedValue({ driver: 'claude-code', ready: true })
+  backup.onBackup.mockResolvedValue({ gaps: [] })
 })
 
 afterEach(() => {
@@ -27,6 +30,7 @@ afterEach(() => {
   accounts.onAgentAccounts.mockReset()
   accounts.sendUseAgentAccountFirst.mockReset()
   for (const fn of Object.values(logins)) fn.mockReset()
+  backup.onBackup.mockReset()
 })
 
 describe('PersonMenu', () => {
@@ -106,5 +110,16 @@ describe('PersonMenu: what is missing', () => {
     fireEvent.click(screen.getByRole('menuitem', { name: 'Claude Code is not logged in.' }))
     expect(window.location.pathname).toBe('/permissions')
     expect(onSettings).not.toHaveBeenCalled()
+  })
+
+  test('agent data not backed up: a dot on the picture, and an item that opens Settings › Agent data', async () => {
+    onPerson.mockResolvedValue({ name: 'Ada Lovelace' })
+    backup.onBackup.mockResolvedValue({ gaps: [{ kind: 'personal', address: 'github.com/ada/agent', host: 'github.com', waiting: 2 }] })
+    const onSettings = vi.fn()
+    const { container } = render(<PersonMenu onSettings={onSettings} />)
+    fireEvent.click(await screen.findByRole('button', { name: 'Ada Lovelace: settings, something is missing' }))
+    expect(container.ownerDocument.querySelector('[data-testid="missing-dot"]')).toBeTruthy()
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Agent data not backed up' }))
+    expect(onSettings).toHaveBeenCalledWith('agent-data')
   })
 })

@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Check, ChevronDown, GitBranch, Loader2, MoreHorizontal, Plus } from 'lucide-react'
+import { Check, ChevronDown, GitBranch, Info, Loader2, MoreHorizontal, Plus } from 'lucide-react'
 import type { GitHostHome } from '../../src/index.js'
 import { sendForgetGitHostAccount, sendUseGitHostAccount, type GitHostRow, type GitHostsView } from '../rpc/logins.js'
 import { onMachineGitHosts } from '../rpc/machines.js'
@@ -7,39 +7,39 @@ import { readAhead, usePolled } from '../lib/use-async.js'
 import { cn } from '../lib/utils.js'
 import { Button } from './ui/button.js'
 import { Card, CardContent, CardHeader, CardTitle } from './ui/card.js'
-import { DeviceCode, HostFix, PackageLogo, Pill, StatePill, hostLoginState, hostWords, useGitHosts, useHostLogin } from './Logins.js'
-import { useServers } from './ServerLogins.js'
+import { DeviceCode, HostFix, PackageLogo, hostWords, useGitHosts, useHostLogin } from './Logins.js'
+import { AccountWhere, useServers } from './ServerLogins.js'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuGroup, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from './ui/dropdown-menu.js'
 import { Tooltip, TooltipContent, TooltipTrigger } from './ui/tooltip.js'
 import { RowOff, rowButtonClass } from './ui/row-item.js'
 
-// The git hosts of the Permissions page: one card with each host the projects' remotes are on, and
-// the host of the git host package OpenAgent brings, drawn from what the host's package answers
-// (its name, its tool, OpenAgent's own accounts there, the one runs use). The accounts are
+// The git hosts of the Permissions page: one card, "Git host accounts", with a section for each
+// host the projects' remotes are on and the host of the git host package OpenAgent brings, drawn
+// from what the host's package answers (its name and logo, its tool, OpenAgent's own accounts
+// there, the one runs use), so a host added later is one more section. Its rows are as the coding
+// agents' accounts are, each with where it works under it. The accounts are
 // OpenAgent's, added here: the person's own tool and its logins are never used. A host no package
 // answers for is one line; a project with no remote, none.
 
-/** The git hosts' card. */
+/** The git hosts' card: a section for each host, by its package's name and logo, with its accounts. */
 export function GitHostsCard() {
   const { view, reload } = useGitHosts()
   return (
     <Card>
-      <CardHeader>
+      <CardHeader className="gap-1">
         <CardTitle className="text-base">
           <span className="inline-flex items-center gap-2">
             <GitBranch className="h-4 w-4 text-muted-foreground" aria-hidden />
-            Git hosts
+            Git host accounts
           </span>
         </CardTitle>
+        <p className="text-sm text-muted-foreground">Runs push with the one in use at each host, never your own login.</p>
       </CardHeader>
       <CardContent className="flex flex-col gap-4">
         {view && view.hosts.length === 0 ? (
           <p className="text-sm text-muted-foreground">None of your projects has a remote yet. A project pushed to a git host gets its accounts here.</p>
         ) : (
-          <>
-            <p className="text-sm text-muted-foreground">OpenAgent&rsquo;s own accounts: runs push and open pull requests with the one in use. Your own logins on this computer are never used.</p>
-            {(view?.hosts ?? []).map(row => (row.provider ? <HostAccounts key={row.host} row={row} onChanged={reload} /> : <NoPackage key={row.host} row={row} />))}
-          </>
+          (view?.hosts ?? []).map(row => (row.provider ? <HostAccounts key={row.host} row={row} onChanged={reload} /> : <NoPackage key={row.host} row={row} />))
         )}
       </CardContent>
     </Card>
@@ -47,29 +47,25 @@ export function GitHostsCard() {
 }
 
 function usedBy(row: GitHostRow): string {
-  return row.projects.length > 0 ? `used by ${row.projects.join(', ')}` : 'no project on it yet'
+  return row.projects.length > 0 ? `Used by ${row.projects.join(', ')}` : 'No project on it yet'
 }
 
 function NoPackage({ row }: { row: GitHostRow }) {
   return (
     <p aria-label={row.host} className="rounded-lg border border-dashed border-border px-3 py-2.5 text-sm text-muted-foreground">
       <span className="font-medium text-foreground">{row.host}</span>
-      {` · ${usedBy(row)} · no package for it yet`}
+      {` · ${usedBy(row)}. No package for it yet.`}
     </p>
   )
 }
 
-/** The git host's pill when it has no account runs can use, in the colours of a step to take. */
-const ADD_PILL = { tone: 'bg-warning/10 text-warning', dot: 'bg-warning' }
-
 function HostAccounts({ row, onChanged }: { row: GitHostRow; onChanged: () => Promise<void> }) {
   const p = row.provider!
-  const state = hostLoginState(row)!
   const [error, setError] = useState<string | undefined>()
   const login = useHostLogin(onChanged)
   const servers = useServers()
-  // The row that is open, and the press under way, on which account: its button says so until the answer.
-  const [open, setOpen] = useState<string | undefined>()
+  // The account whose removal waits for the person's yes, and the press under way: its words say so until the answer.
+  const [removing, setRemoving] = useState<string | undefined>()
   const [pending, setPending] = useState<{ login: string; press: 'use' | 'remove' } | undefined>()
   const act = async (login: string, press: 'use' | 'remove', go: () => Promise<{ ok: true } | { ok: false; error: string }>) => {
     setPending({ login, press })
@@ -77,87 +73,110 @@ function HostAccounts({ row, onChanged }: { row: GitHostRow; onChanged: () => Pr
     try {
       const done = await go()
       if (!done.ok) setError(done.error)
+      setRemoving(undefined)
       // What the servers said of an account goes with it.
       await Promise.all([onChanged(), servers.reload()])
     } finally {
       setPending(undefined)
     }
   }
-  const pressing = (login: string, press: 'use' | 'remove'): boolean => pending?.login === login && pending.press === press
   const shownError = error ?? login.error
+  const empty = !p.installed || p.accounts.length === 0
   return (
-    <section aria-label={p.name} className="space-y-1">
-      <header className="flex flex-wrap items-center gap-x-2 gap-y-1">
+    <section aria-label={p.name} className="space-y-2">
+      <header className="flex min-w-0 items-center gap-2">
         <PackageLogo svg={p.logo} />
         <h3 className="text-sm font-medium">{p.name}</h3>
-        <span className="min-w-0 flex-1 truncate text-xs text-muted-foreground">{`${row.host} · ${usedBy(row)}`}</span>
-        {/* In the words of what fixes it, the add button below: OpenAgent's own accounts are added, not logged in to. */}
-        {state === 'step' ? <Pill {...ADD_PILL} words={p.accounts.length === 0 ? 'No account' : 'Add it again'} /> : <StatePill state={state} />}
+        <span className="min-w-0 flex-1 truncate text-xs text-muted-foreground">{usedBy(row)}</span>
+        {/* Another account, at the host's line: the empty host has its own press below. */}
+        {!empty && !p.loggingIn && (
+          <div className="flex shrink-0 items-center gap-1">
+            <Button size="xs" variant="ghost" className="font-normal" disabled={login.busy} title={`Adds an account to OpenAgent with a code you type at ${p.name}. Your own logins stay as they are.`} onClick={() => void login.start(row.host)}>
+              {login.busy ? <Loader2 className="size-3.5 animate-spin" aria-hidden /> : <Plus className="size-3.5" aria-hidden />}
+              Add account
+            </Button>
+            {/* Rom's advice, where an account is added: an agent's own account limits what a run can reach. Said once it matters, quietly. */}
+            {p.accounts.some(account => !account.login.toLowerCase().endsWith('-agent')) && (
+              <Tooltip>
+                <TooltipTrigger render={<button type="button" aria-label="Why an account of its own for your agents" className="text-muted-foreground hover:text-foreground" />}>
+                  <Info className="size-3.5" aria-hidden />
+                </TooltipTrigger>
+                <TooltipContent className="max-w-xs">An account of its own for your agents, with access to only what they need, is safer: name it like you-agent.</TooltipContent>
+              </Tooltip>
+            )}
+          </div>
+        )}
       </header>
       {p.accounts.length > 0 && (
-        <ul className="space-y-1">
+        <ul className="space-y-2">
           {p.accounts.map(account => {
-            const isOpen = open === account.login
+            const busy = pending?.login === account.login
             return (
-              <li key={account.login} aria-label={`@${account.login}`}>
-                <button
-                  type="button"
-                  aria-label={`Details of @${account.login}`}
-                  aria-expanded={isOpen}
-                  onClick={() => setOpen(isOpen ? undefined : account.login)}
-                  className="group -mx-2 flex w-[calc(100%+1rem)] min-w-0 items-center gap-2.5 rounded-md px-2 py-1 text-left transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-primary)]"
-                >
-                  <span className="min-w-0 flex-1">
-                    <span className="flex min-w-0 items-center gap-1.5 text-sm">
-                      <span className="min-w-0 truncate font-medium">@{account.login}</span>
-                      {account.runs && <span className="shrink-0 text-xs text-success">in use for runs</span>}
-                    </span>
-                    <span className={cn('block truncate text-xs', account.ok ? 'text-muted-foreground' : 'text-warning')}>
-                      {!account.ok ? `${p.name} no longer takes this login: add it again` : account.from !== undefined ? `from ${account.from}` : 'added to OpenAgent'}
-                    </span>
-                  </span>
-                  {!account.runs && <MoreHorizontal className={cn('size-4 shrink-0 text-muted-foreground transition-opacity', isOpen ? 'opacity-100' : 'opacity-0 group-hover:opacity-100 group-focus-visible:opacity-100')} aria-hidden />}
-                </button>
-                {isOpen && (
-                  <div className="-ml-2 flex items-center gap-1 pb-1.5 pt-1">
-                    {account.runs ? (
-                      // The account runs use is never taken off: another is picked first.
-                      <p className="pl-2 text-xs text-muted-foreground">Runs use this account. To take it off, pick another first.</p>
-                    ) : (
-                      <>
-                        <Button size="xs" variant="ghost" disabled={pending !== undefined || !account.ok} onClick={() => void act(account.login, 'use', () => sendUseGitHostAccount(row.host, account.login))}>
-                          {pressing(account.login, 'use') && <Loader2 className="size-3 animate-spin" aria-hidden />}
-                          {pressing(account.login, 'use') ? 'Switching…' : 'Use for runs'}
-                        </Button>
-                        <Button size="xs" variant="ghost" className="hover:text-danger" disabled={pending !== undefined} aria-label={`Remove @${account.login}`} title="OpenAgent forgets it. The login is not ended: it goes on working wherever else it is." onClick={() => void act(account.login, 'remove', () => sendForgetGitHostAccount(row.host, account.login))}>
-                          {pressing(account.login, 'remove') && <Loader2 className="size-3 animate-spin" aria-hidden />}
-                          {pressing(account.login, 'remove') ? 'Removing…' : 'Remove'}
-                        </Button>
-                      </>
+              <li key={account.login} aria-label={`@${account.login}`} className="flex min-w-0 items-start gap-2.5">
+                <Avatar src={account.avatar} login={account.login} />
+                <div className="min-w-0 flex-1 space-y-1">
+                  <div className="flex min-w-0 items-center gap-2">
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate text-sm font-medium">@{account.login}</p>
+                      <p className={cn('truncate text-xs', account.ok ? 'text-muted-foreground' : 'text-warning')}>
+                        {!account.ok ? `${p.name} no longer takes this login: add it again` : account.from !== undefined ? `from ${account.from}` : 'added to OpenAgent'}
+                      </p>
+                    </div>
+                    {account.runs && (
+                      <span className="inline-flex shrink-0 items-center gap-1 text-xs text-success">
+                        <Check className="size-3.5" aria-hidden />
+                        Runs use this
+                      </span>
                     )}
+                    <DropdownMenu>
+                      <DropdownMenuTrigger aria-label={`More for @${account.login}`} disabled={pending !== undefined} className="shrink-0 rounded-md p-1 text-muted-foreground hover:bg-muted hover:text-foreground">
+                        {busy ? <Loader2 className="size-4 animate-spin" aria-hidden /> : <MoreHorizontal className="size-4" aria-hidden />}
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="end" className="min-w-[11rem]">
+                        {!account.runs && (
+                          <DropdownMenuItem disabled={!account.ok} onClick={() => void act(account.login, 'use', () => sendUseGitHostAccount(row.host, account.login))}>
+                            Use for runs
+                          </DropdownMenuItem>
+                        )}
+                        <DropdownMenuItem className="text-danger" onClick={() => setRemoving(account.login)}>
+                          Remove
+                        </DropdownMenuItem>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
                   </div>
-                )}
+                  {removing === account.login && (
+                    <div role="group" aria-label={`Remove @${account.login}`} className="flex flex-wrap items-center gap-2 rounded-md bg-muted px-2.5 py-2 text-xs">
+                      <p className="min-w-0 flex-1 basis-60">
+                        {account.runs
+                          ? `Runs use @${account.login}. Without it they have no ${p.name} account until you add one.`
+                          : `OpenAgent forgets @${account.login}. The login goes on working wherever else it is.`}
+                      </p>
+                      <Button size="xs" variant="destructive" disabled={busy} onClick={() => void act(account.login, 'remove', () => sendForgetGitHostAccount(row.host, account.login))}>
+                        {busy ? 'Removing…' : 'Remove'}
+                      </Button>
+                      <Button size="xs" variant="ghost" disabled={busy} onClick={() => setRemoving(undefined)}>
+                        Cancel
+                      </Button>
+                    </div>
+                  )}
+                  {/* Where it works: this computer, and the person's servers that use its logins. */}
+                  <AccountWhere account={{ kind: 'git', host: row.host, login: account.login }} />
+                </div>
               </li>
             )
           })}
         </ul>
       )}
-      {p.accounts.some(account => !account.login.toLowerCase().endsWith('-agent')) && (
-        // Rom's advice, where an account is added: an agent's own account limits what a run can reach.
-        <p className="text-xs text-warning">We recommend creating dedicated {p.name} accounts with limited access for your agents, named like <span className="font-mono">you-agent</span>.</p>
-      )}
-      {!p.installed || p.accounts.length === 0 ? (
-        <div className="space-y-2 pt-1">
-          <p className="text-xs text-muted-foreground">{hostWords(row)}</p>
-          <HostFix row={row} onChanged={onChanged} />
+      {empty ? (
+        // What is missing on the left, its press at the row's end, as the Overview's first steps have them (a phone stacks them).
+        <div className="flex items-center gap-3 pt-1 max-sm:flex-col max-sm:items-start">
+          <p className="min-w-0 flex-1 text-xs text-muted-foreground">{hostWords(row)}</p>
+          <div className="shrink-0">
+            <HostFix row={row} onChanged={onChanged} />
+          </div>
         </div>
-      ) : p.loggingIn ? (
-        <DeviceCode code={p.loggingIn.code} url={p.loggingIn.url} />
       ) : (
-        <Button size="xs" variant="ghost" className="-ml-2 font-normal" disabled={login.busy} title={`Adds an account to OpenAgent with a code you type at ${p.name}. Your own logins stay as they are.`} onClick={() => void login.start(row.host)}>
-          {login.busy ? <Loader2 className="size-3.5 animate-spin" aria-hidden /> : <Plus className="size-3.5" aria-hidden />}
-          Add account
-        </Button>
+        p.loggingIn && <DeviceCode code={p.loggingIn.code} url={p.loggingIn.url} host={row.host} onChanged={onChanged} />
       )}
       {shownError !== undefined && (
         <p role="alert" className="text-xs text-danger">
@@ -165,6 +184,16 @@ function HostAccounts({ row, onChanged }: { row: GitHostRow; onChanged: () => Pr
         </p>
       )}
     </section>
+  )
+}
+
+/** An account's picture at its host, as its package said it; its first letter while there is none, or it does not load. */
+function Avatar({ src, login }: { src: string | undefined; login: string }) {
+  const [broken, setBroken] = useState(false)
+  return (
+    <span aria-hidden className="mt-0.5 flex size-7 shrink-0 items-center justify-center overflow-hidden rounded-full bg-muted text-xs font-medium text-muted-foreground">
+      {src && !broken ? <img src={src} alt="" referrerPolicy="no-referrer" className="size-full object-cover" onError={() => setBroken(true)} /> : login[0]?.toUpperCase()}
+    </span>
   )
 }
 

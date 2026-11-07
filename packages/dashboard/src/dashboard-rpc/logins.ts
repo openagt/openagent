@@ -207,6 +207,12 @@ export async function sendGitHostLogin(host: string): Promise<{ ok: true; code: 
   return typeof said?.code === 'string' && typeof said.url === 'string' && said.url.startsWith('https://') ? { ok: true, code: said.code, url: said.url } : { ok: false, error: 'The package gave no code to log in with.' }
 }
 
+/** Give up the login under way at `host`: its tool stops waiting, and the press to add an account is back. */
+export async function sendStopGitHostLogin(host: string): Promise<AccountResult> {
+  const done = await act(host, ['stop-login'])
+  return done.ok ? { ok: true } : done
+}
+
 /** Install the tool `host`'s package works through, with the command it declared; the card follows it. */
 export async function sendGitHostInstall(host: string): Promise<AccountResult> {
   const done = await act(host, ['install'])

@@ -15,7 +15,7 @@ import './dashboard.css'
 export default defineModule({
   pages: [{ segment: 'queue', label: 'Queue', icon: ListTodo, Page: QueuePage }],
   cards: [
-    { id: 'queued', label: 'In the queue', order: 3, width: '1/3', minWidth: '1/4', Card: QueueTile },
+    { id: 'queued', label: 'In the queue', order: 3, width: '1/4', minWidth: '1/4', Card: QueueTile },
     { id: 'queue', label: 'AI Queue', order: 10, Card: QueueCard },
   ],
   linkActions: [ADD_TO_QUEUE],

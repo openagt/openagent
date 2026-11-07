@@ -54,6 +54,11 @@ already made, and lists it in its pull request; for anything else it proposes an
   those. A remote on a host with no account kept is refused; a remote that is a folder on this
   disk asks no login. Picked over a setting in the person's git config, which their own pushes
   would read, and over each process handing in its own account, which a writer would forget.
+- A change to the personal folder with no account to send it as is made all the same and waits
+  on this machine, a success that was not sent; naming an account sends what waited at once.
+  Picked over each write failing with the reason (every save, the profile's and an agent's
+  ticket, read as broken after an update that dropped the person's own login), the folder's
+  state being said once where it is synced.
 
 ## The branch
 - A shared project's branch holds the agents' data (tickets, the queue) the way `gh-pages`

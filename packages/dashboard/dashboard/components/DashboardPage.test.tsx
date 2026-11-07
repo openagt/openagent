@@ -8,6 +8,7 @@ import type { ActiveAgent, Intervention } from '../../src/index.js'
 vi.mock('./Quota.js', () => ({ Quota: () => <div>usage</div> }))
 vi.mock('./OnboardingChecklist.js', () => ({ OnboardingChecklist: () => <div>onboarding</div> }))
 vi.mock('./SkillsCard.js', () => ({ SkillsCard: () => <div>skills</div> }))
+vi.mock('./YourAgentsTile.js', () => ({ YourAgentsTile: () => <div>your agents</div> }))
 vi.mock('./ModuleCards.js', () => ({
   useModuleCards: () => [{ id: '@x/tickets/hot', label: 'Hot tickets', width: '1/2', minWidth: '1/3', present: true, node: <div>a package's card</div> }],
 }))
@@ -21,7 +22,7 @@ const projects = [{ id: 'p1', name: 'alpha' }, { id: 'p2', name: 'beta' }] as ne
 /** The agents at work, as the shell read them. */
 let working: ActiveAgent[] = []
 const show = (scope: string | null = null, stale = { interventions: false, active: false }) =>
-  render(<DashboardPage onSelectProject={() => {}} onSelectAgent={() => {}} onAgentStarted={() => {}} interventions={[]} interventionsStale={stale.interventions} active={{ active: working, stale: stale.active }} projects={projects} scope={scope} />)
+  render(<DashboardPage onProjectAdded={() => {}} onSelectProject={() => {}} onSelectAgent={() => {}} onAgentStarted={() => {}} interventions={[]} interventionsStale={stale.interventions} active={{ active: working, stale: stale.active }} projects={projects} scope={scope} />)
 /** The cards drawn, in order, each with its grid classes. */
 const drawn = () => [...document.querySelectorAll<HTMLElement>('[data-card]')].map(el => ({ id: el.dataset['card'], spans: el.className }))
 
@@ -38,17 +39,20 @@ describe('the Overview', () => {
     working = []
     show()
     await screen.findByText('Human Queue')
-    expect(drawn().map(card => card.id)).toEqual(['needs-you', 'working-now', 'usage', 'human-queue', 'working', 'skills', '@x/tickets/hot'])
+    expect(drawn().map(card => card.id)).toEqual(['needs-you', 'working-now', 'your-agents', 'usage', 'human-queue', 'working', 'skills', '@x/tickets/hot'])
     expect(screen.getByText('No agent is at work.')).toBeTruthy()
-    // Full width is the whole row at every size; half is half once the column has the room; a third, a third once it is wide.
-    expect(drawn()[0]!.spans).toContain('@5xl:col-span-4')
-    expect(drawn()[3]!.spans).not.toContain('@2xl:col-span-6')
-    expect(drawn()[6]!.spans).toContain('@2xl:col-span-6')
+    // Full width is the whole row at every size; a third is a half once the column has the room, a
+    // third once it is wide; a quarter (the number tiles) a third, then a quarter; a row's cards fill it.
+    expect(drawn()[0]!.spans).toContain('@4xl:basis-[calc(25%_-_0.75rem)]')
+    expect(drawn()[4]!.spans).toContain('basis-full')
+    expect(drawn()[4]!.spans).not.toMatch(/@\w+:basis-/)
+    expect(drawn()[7]!.spans).toContain('@2xl:basis-[calc(50%_-_0.5rem)]')
+    expect(drawn()[7]!.spans).toContain('grow-[6]')
     cleanup()
     working = [active('r1', 'p1')]
     show()
     expect(await screen.findByText('working on r1')).toBeTruthy()
-    expect(drawn().map(card => card.id)).toEqual(['needs-you', 'working-now', 'usage', 'human-queue', 'working', 'skills', '@x/tickets/hot'])
+    expect(drawn().map(card => card.id)).toEqual(['needs-you', 'working-now', 'your-agents', 'usage', 'human-queue', 'working', 'skills', '@x/tickets/hot'])
     cleanup()
     // With a project picked, only that project's agents count.
     show('p2')
@@ -64,12 +68,12 @@ describe('the Overview', () => {
     }
     show()
     await screen.findByText('Human Queue')
-    expect(drawn().map(card => card.id)).toEqual(['@x/tickets/hot', 'human-queue', 'needs-you', 'working-now', 'working', 'skills'])
+    expect(drawn().map(card => card.id)).toEqual(['@x/tickets/hot', 'human-queue', 'needs-you', 'working-now', 'your-agents', 'working', 'skills'])
     expect(screen.queryByText('usage')).toBeNull()
-    expect(drawn()[0]!.spans).toContain('@5xl:col-span-4')
+    expect(drawn()[0]!.spans).toContain('@5xl:basis-[calc(33.333%_-_0.667rem)]')
     // The Human Queue fits half at the narrowest: a quarter is passed over for its own width, the whole row.
-    expect(drawn()[1]!.spans).not.toMatch(/@\w+:col-span-/)
-    expect(drawn()[2]!.spans).toContain('@5xl:col-span-3')
+    expect(drawn()[1]!.spans).not.toMatch(/@\w+:basis-/)
+    expect(drawn()[2]!.spans).toContain('@4xl:basis-[calc(25%_-_0.75rem)]')
   })
 
   test("a project's layout is its own; a project never arranged is laid out as all projects are", async () => {
@@ -91,7 +95,7 @@ describe('the Overview', () => {
     fireEvent.click(await screen.findByRole('button', { name: 'Customize' }))
     expect(screen.getByRole('status').textContent).toMatch(/Arranging the layout for alpha/)
     // Every shown card has its bar; the agents at work, though none works, are there to be placed.
-    expect(screen.getAllByRole('toolbar').map(bar => bar.getAttribute('aria-label'))).toEqual(['Usage', 'Working now', 'Human Queue', 'Agents at work', 'Skills', 'Hot tickets'])
+    expect(screen.getAllByRole('toolbar').map(bar => bar.getAttribute('aria-label'))).toEqual(['Usage', 'Working now', 'Your agents', 'Human Queue', 'Agents at work', 'Skills', 'Hot tickets'])
     // The card hidden waits in the tray.
     const tray = within(screen.getByRole('region', { name: 'Cards not on the page' }))
     expect(tray.getAllByRole('listitem').map(item => item.getAttribute('aria-label'))).toEqual(['Needs you'])
@@ -111,7 +115,7 @@ describe('the Overview', () => {
     // The arrow keys on a card's handle move it among the cards on the page: Usage passes Working now.
     // (Each press here is read against the layout the page started with: the stand-in preferences do not change.)
     fireEvent.keyDown(screen.getByRole('button', { name: 'Move Usage: arrow keys' }), { key: 'ArrowRight' })
-    expect(saved()['p1']!.map(place => place.id)).toEqual(['needs-you', 'working-now', 'usage', 'human-queue', 'working', 'skills', '@x/tickets/hot'])
+    expect(saved()['p1']!.map(place => place.id)).toEqual(['needs-you', 'working-now', 'usage', 'your-agents', 'human-queue', 'working', 'skills', '@x/tickets/hot'])
     // Back to the all-projects layout: the project's own is forgotten, and the other layouts stay.
     fireEvent.click(screen.getByRole('button', { name: 'Use the all-projects layout' }))
     expect(saved()).toEqual({ '*': [{ id: 'usage' }] })
@@ -161,12 +165,12 @@ describe('the Overview', () => {
     expect(prefs.updatePreferences).not.toHaveBeenCalled()
     fireEvent.drop(document.querySelector('[data-card="human-queue"]')!, transfer)
     const order = (prefs.updatePreferences.mock.lastCall![0] as { overviewLayouts: Record<string, { id: string }[]> }).overviewLayouts['*']!.map(place => place.id)
-    expect(order.slice(0, 4)).toEqual(['working-now', 'usage', 'needs-you', 'human-queue'])
+    expect(order.slice(0, 5)).toEqual(['working-now', 'your-agents', 'usage', 'needs-you', 'human-queue'])
   })
 
   test('with every card off the page, the page says so, and Customize gives a room to drop the first one into', async () => {
     working = []
-    prefs.value = { onboardingDismissed: true, overviewLayouts: { '*': ['needs-you', 'working-now', 'usage', 'human-queue', 'working', 'skills', '@x/tickets/hot'].map(id => ({ id, hidden: true })) } }
+    prefs.value = { onboardingDismissed: true, overviewLayouts: { '*': ['needs-you', 'working-now', 'your-agents', 'usage', 'human-queue', 'working', 'skills', '@x/tickets/hot'].map(id => ({ id, hidden: true })) } }
     show()
     expect(await screen.findByText(/Every card is off the Overview/)).toBeTruthy()
     fireEvent.click(screen.getByRole('button', { name: 'Customize' }))
@@ -208,7 +212,7 @@ describe('the Overview', () => {
     const item = (kind: Intervention['kind'], n: number): Intervention => ({ projectId: 'p1', projectName: 'alpha', kind, title: `t${n}`, agentId: `r${n}` })
     const scrolled = vi.fn()
     Element.prototype.scrollIntoView = scrolled
-    render(<DashboardPage onSelectProject={() => {}} onSelectAgent={() => {}} onAgentStarted={() => {}} interventions={[item('awaiting', 1), item('awaiting', 2), item('pr', 3)]} interventionsStale={false} active={{ active: [], stale: false }} projects={projects} scope={null} />)
+    render(<DashboardPage onProjectAdded={() => {}} onSelectProject={() => {}} onSelectAgent={() => {}} onAgentStarted={() => {}} interventions={[item('awaiting', 1), item('awaiting', 2), item('pr', 3)]} interventionsStale={false} active={{ active: [], stale: false }} projects={projects} scope={null} />)
     const tile = (await screen.findByText('Needs you')).closest('button')!
     expect(tile.textContent).toBe('Needs you32 questions to answer')
     fireEvent.click(tile)
@@ -225,7 +229,7 @@ describe('the Overview', () => {
       item({ number: 6, title: 'Add DESCRIPTION.md', url: 'https://x/pull/6', agentId: 'r6' }),
       item({ number: 8, title: 'Condense README', url: 'https://x/pull/8' }),
     ]
-    render(<DashboardPage onSelectProject={() => {}} onSelectAgent={onSelectAgent} onAgentStarted={() => {}} interventions={interventions} interventionsStale={false} active={{ active: [], stale: false }} projects={[]} scope={null} />)
+    render(<DashboardPage onProjectAdded={() => {}} onSelectProject={() => {}} onSelectAgent={onSelectAgent} onAgentStarted={() => {}} interventions={interventions} interventionsStale={false} active={{ active: [], stale: false }} projects={[]} scope={null} />)
     // Grouped by kind, each under its heading, in the order that holds a run up most; a row says its kind on its icon's hover.
     expect(screen.getAllByRole('region').map(group => group.getAttribute('aria-label'))).toEqual(['Pull requests', 'To commit'])
     expect(screen.getByTitle('Needs commit')).toBeTruthy()

@@ -186,6 +186,13 @@ already made, and lists it in its pull request; for anything else it proposes an
   Claude Code web's branches (the Share switch's account, else the one runs use). With no
   account there, nothing is sent, and the page says where one is added. Picked over pushing with
   whatever login the computer has (Rom: "scary").
+- What is not backed up (the personal folder, or a shared project's data, at a git host with no
+  account named) is said once: an item in the person's menu, and a notice at the top of
+  Settings › Agent data with the fix in it, adding an account there (its code shown in place),
+  then "Back up as" and one press that sends what waited. The person picks the account even
+  when there is only one. Picked over each save failing with the reason, a trip to the
+  Permissions page, and the only account being used without asking (an agent's own account
+  would carry the person's data).
 - The dashboard grows by modules: a package that adds to the dashboard (pages, Overview
   cards, link actions, panes beside the chat, a run's summary, Settings sections) is a module;
   a skill that brings pages is a module that is also a skill. A module is one OpenAgent
@@ -372,6 +379,19 @@ already made, and lists it in its pull request; for anything else it proposes an
   package's settings a change to OpenAgent.
 - The onboarding checklist is the Overview's alone. Picked over keeping a copy in Settings,
   where it is no setting.
+- The onboarding is numbered steps, one open at a time: the next to do, its words and its
+  press at the row's end; a step done is one line with a ✓ and what was done; the later ones
+  their titles only, each a press from open. A step stays once shown, so the count never moves.
+  It greets the person by name and the time of day, and once every step a session needs is
+  done its press starts the first session. Adding a project is the project picker of the
+  sidebar and the box. Picked over every step open at once with its press under its words,
+  boxes to tick that no click ticks, and buttons for the folder the dashboard happened to
+  start in.
+- The Overview's cards fill each row: a card starts at its width and takes a share of the
+  row's leftover by it, so a card missing on this install, or a half beside a third, leaves no
+  gap. The number tiles are quarters (a third in a middling column), the person's agents one
+  of them. Picked over a grid of fixed spans with gaps, and over moving cards up out of the
+  order the person set.
 - The scheduler is a package's: its Automations page, its Settings entry and its Overview
   card are the scheduler package's own module, read and written through its command.
   OpenAgent reads no scheduler file and has no hook line for a scheduler setting. Picked
@@ -450,11 +470,26 @@ already made, and lists it in its pull request; for anything else it proposes an
   word for a pull request, the accounts its tool knows and the one runs use, so OpenAgent
   names no git host. One card per host the projects' remotes are on, a self-hosted one its
   own; a host no package answers for is a plain line, and a project with no remote is none.
+- Each account is said once, the coding agents' in the account-rotation skill's card ("Coding
+  agent accounts") and the git hosts' in one card ("Git host accounts", a section per host by
+  its package's name and logo, so a host added later is one more section), in the same rows, and where an account works
+  is a line of chips under its row: this computer, then each server, its dot green, amber, red
+  or grey, its press there (Allow, Take off, the pick of a switched account) on the chip. The
+  dashboard fills that line in the skill's card through the card's `accountWhere`, so the skill
+  knows no server. Above the accounts stands only what a server asks of the person. Picked over
+  a card that listed every account again under each server, and over one card holding the
+  skill's accounts and the git hosts', which would have made the skill the dashboard's.
+- A git host's account shows its picture at the host, the address its package gives (the
+  dashboard names no host's), and its ⋯ is always there: Use for runs, and Remove for any
+  account, the one runs use too, after a yes that says runs then have none until one is added.
+  Picked over a ⋯ seen only on a hover and the account in use kept until another was picked,
+  which left a person with one account no way to take it off.
   A card is green when there is nothing to do, amber for a step, grey for a tool not here.
-- What runs need and do not have is a first step of the Overview's onboarding, shown only
-  while something is missing (install the tool, then log in), the same press on the start
-  form's red line, and a dot on the person's picture whose menu says what. Picked over a
-  login step every new install walks through: the onboarding is heavy enough.
+- What runs need and do not have is a first step of the Overview's onboarding: the coding
+  agent's only once it is missing (install the tool, then log in), each git host's always,
+  as OpenAgent needs an account of its own there on every new install; the same press on the
+  start form's red line, and a dot on the person's picture whose menu says what. Picked over
+  a login step for the coding agent every new install walks through: most have it already.
 - The accounts a run takes are picked beside the message box, for the computer the run goes
   to: a coding agent's in the agent picker, under its models, the pick that computer's runs
   take from then on, as on the Permissions page; the git host's under the box at the right,

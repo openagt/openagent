@@ -43,6 +43,25 @@ const openRow = async (name: string): Promise<void> => void fireEvent.click(awai
 const listed = (claude: unknown[], codex: unknown[] = []) => (): ModuleCommandResult => ({ ok: true, output: { claude, codex } })
 
 describe('AccountsCard', () => {
+  test('with one account an agent, nothing rotates: no word of what happens at a limit', async () => {
+    renderCard(listed([{ name: 'This computer', who: 'Ada', own: true }], [{ name: 'This computer', who: 'Ada C', own: true }]))
+    await screen.findByRole('button', { name: 'Details of Ada' })
+    expect(screen.queryByRole('button', { name: "What happens at an account's limit" })).toBeNull()
+  })
+
+  test('the page it is on may say where each account works: its line under the row, asked with the account', async () => {
+    const runComputerCommand = vi.fn(async (args: string[]): Promise<ModuleCommandResult> => (args[0] === 'usage' ? { ok: true, output: { claude: [], codex: [] } } : listed([{ name: 'This computer', who: 'Ada', own: true }, { name: 'Work', own: false }], [{ name: 'This computer', who: 'Ada C', own: true }])()))
+    const host: Pick<ModuleHost, 'package' | 'runCommand' | 'runComputerCommand'> = { package: '@openagt/skill-account-rotation', runCommand: async () => ({ ok: false, error: 'not in a project' }), runComputerCommand }
+    render(
+      <ModuleHostContext.Provider value={host as ModuleHost}>
+        <AccountsCard projects={[]} accountWhere={account => <span>{`where ${account.agent} ${account.own ? 'own' : account.name}`}</span>} />
+      </ModuleHostContext.Provider>,
+    )
+    expect(await screen.findByText('where claude own')).toBeTruthy()
+    expect(screen.getByText('where claude Work')).toBeTruthy()
+    expect(screen.getByText('where codex own')).toBeTruthy()
+  })
+
   afterEach(() => {
     cleanup()
     forgetRemembered()
@@ -60,8 +79,9 @@ describe('AccountsCard', () => {
       codex: [{ name: 'This computer', windows: [{ window: 'thirty_day', percentUsed: 10 }] }],
     })
     const ring = (row: string, label: string): string | null | undefined => within(screen.getByRole('button', { name: `Details of ${row}` })).queryByRole('meter', { name: label })?.getAttribute('aria-valuenow')
-    // What the card does with the accounts, said by the card itself.
-    expect(await screen.findByText('When a coding agent’s account hits its limit, the next free one takes the run over where it stopped.')).toBeTruthy()
+    // What the card does with the accounts, said by the card itself: behind an ⓘ, as an agent here has more than one.
+    expect(await screen.findByText('Coding agent accounts')).toBeTruthy()
+    expect(await screen.findByRole('button', { name: "What happens at an account's limit" })).toBeTruthy()
     await screen.findByRole('button', { name: 'Details of Ada' })
     await waitFor(() => expect(ring('Ada', 'week')).toBe('61'))
     expect(ring('Ada', '5 h')).toBe('2')

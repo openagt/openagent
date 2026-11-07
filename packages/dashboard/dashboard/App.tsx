@@ -505,6 +505,7 @@ export function App() {
           active={activeAgents}
           projects={projects}
           scope={scope}
+          onProjectAdded={() => setProjectsKey(k => k + 1)}
         />
       )
     }

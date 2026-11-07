@@ -8,6 +8,21 @@
     <!-- The brand mark as the tab icon (#757). It carries its own dark-mode ramp inside the file:
          a favicon sits on browser chrome, which follows the OS theme, not our in-app theme choice. -->
     <link rel="icon" href="/logo.svg" />
+    <!-- The look the page had last time, put back before its first paint (lib/kept-look.ts keeps
+         it): the person's theme from the first frame, not the default's until their preferences
+         arrive. A first visit takes the OS's light or dark. Inline, so it runs before anything is drawn. -->
+    <script>
+      try {
+        var root = document.documentElement
+        var look = JSON.parse(localStorage.getItem('openagent:look') || 'null')
+        var systemDark = window.matchMedia('(prefers-color-scheme: dark)').matches
+        var theme = (look && look.theme) || 'system'
+        if (theme === 'dark' || (theme === 'system' && systemDark)) root.classList.add('dark')
+        if (look && look.palette) root.dataset.palette = look.palette
+        if (look && look.accent) root.dataset.accent = look.accent
+        if (look && look.style) root.setAttribute('style', look.style)
+      } catch (e) {}
+    </script>
     <!-- The fonts with no pick in Settings › Appearance (tailwind.css): IBM Plex Sans for the page,
          JetBrains Mono for code, Source Serif 4 for a Markdown file read as a page. Another pick
          is loaded the same way by AppFrame (lib/fonts.ts). -->

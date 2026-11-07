@@ -172,12 +172,20 @@ async function takeRemote(folder: string, git: GitRunner): Promise<void> {
   }
 }
 
+/** What git said went wrong, as a person reads it: its last line, not the command it ran. */
+function gitReason(err: unknown): string {
+  const said = errorMessage(err).trim()
+  return (said.split('\n').at(-1) ?? said).replace(/^(fatal|error): /, '')
+}
+
 /**
  * Apply one change to the personal folder: run `op`, commit whatever it changed. A folder with a
  * remote first takes in what the remote has, and sends its commits after, the change's and any an
  * earlier write could not send; a push that loses a race takes the remote in again and runs `op`
  * again, once. A push that still fails keeps the commit here, and the next write or pull sends it.
- * A failed op leaves no half-written file behind. Never throws.
+ * With no account of OpenAgent's named to send it as, the change is made all the same and waits
+ * here (`pushed: false`): that is the folder's state, said where it is synced, not this write's
+ * failure. A failed op leaves no half-written file behind. Never throws.
  */
 export async function withPersonalFolder(folder: string, message: CommitMessage, op: () => Promise<void>, deps: ProjectDataDeps = {}): Promise<FileBranchWrite> {
   const git = accountGit(deps.git ?? nodeGitRunner())
@@ -202,8 +210,9 @@ export async function withPersonalFolder(folder: string, message: CommitMessage,
           await git(['push', '-q', 'origin', `HEAD:refs/heads/${FOLDER_BRANCH}`], folder)
           return { ok: true, changed: Boolean(staged), pushed: true }
         } catch (err) {
-          // No account to send it as: another try cannot change that.
-          if (attempt >= 1 || err instanceof NoRemoteAccountError) return { ok: false, committed: true, error: `the personal folder could not be sent to its remote: ${errorMessage(err)}` }
+          // No account to send it as: made all the same, it waits here until one is named.
+          if (err instanceof NoRemoteAccountError) return { ok: true, changed: Boolean(staged), pushed: false }
+          if (attempt >= 1) return { ok: false, committed: true, error: `the personal folder could not be sent to its remote: ${gitReason(err)}` }
           if (staged) await git(['reset', '-q', '--hard', before], folder)
         }
       }
@@ -267,7 +276,7 @@ export async function syncPersonalFolder(address: string, account: RemoteAccount
   const reached = await git(['ls-remote', '--heads', 'origin'], folder).then(() => undefined, errorMessage)
   if (reached !== undefined) {
     await undo()
-    return { ok: false, error: `the repository could not be reached: ${(reached.trim().split('\n').at(-1) ?? reached).replace(/^fatal: /, '')}` }
+    return { ok: false, error: `the repository could not be reached: ${gitReason(reached)}` }
   }
   const sent = await withPersonalFolder(folder, 'sync', async () => {}, deps)
   if (sent.ok) return { ok: true }
@@ -275,15 +284,24 @@ export async function syncPersonalFolder(address: string, account: RemoteAccount
   return { ok: false, error: sent.error }
 }
 
-/** Send the personal folder as another of OpenAgent's accounts from now on: what was not sent yet goes with the next write. */
+/**
+ * Send the personal folder as another of OpenAgent's accounts from now on, and send what waits now.
+ * A send the repository refuses leaves the folder sent as it was, the reason said.
+ */
 export async function sendPersonalFolderAs(account: RemoteAccount, deps: ProjectDataDeps = {}): Promise<{ ok: true } | { ok: false; error: string }> {
   const git = deps.git ?? nodeGitRunner()
   const folder = deps.folder ?? personalFolder()
   if (!(await folderRemote(folder, git))) return { ok: false, error: 'the personal folder syncs with no repository' }
-  return serialize(folder, deps, () => writeRemoteAccount(folder, account, git)).then(
-    () => ({ ok: true as const }),
-    err => ({ ok: false as const, error: errorMessage(err) }),
+  const before = await readRemoteAccount(folder, git).catch(() => undefined)
+  const named = await serialize(folder, deps, () => writeRemoteAccount(folder, account, git)).then(
+    () => undefined,
+    err => errorMessage(err),
   )
+  if (named !== undefined) return { ok: false, error: named }
+  const sent = await withPersonalFolder(folder, 'sync', async () => {}, deps)
+  if (sent.ok) return { ok: true }
+  await serialize(folder, deps, () => (before ? writeRemoteAccount(folder, before, git) : clearRemoteAccount(folder, git))).catch(() => {})
+  return { ok: false, error: sent.error }
 }
 
 /** Stop syncing the personal folder: the remote is forgotten, every record stays here. */

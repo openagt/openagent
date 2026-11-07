@@ -6,7 +6,7 @@ let person: Person
 const onPerson = vi.fn(async () => person)
 const sendSavePersonName = vi.fn(async (_name: string) => ({ ok: true }) as { ok: true } | { ok: false; error: string })
 const sendRemovePersonPicture = vi.fn(async () => ({ ok: true as const }))
-const sendSyncPersonFromGitHub = vi.fn(async (_login: string) => ({ ok: true }) as { ok: true } | { ok: false; error: string })
+const sendSyncPersonFromGitHub = vi.fn(async (login: string) => ({ ok: true, changed: true, login }) as { ok: true; changed: boolean; login: string } | { ok: false; error: string })
 vi.mock('../rpc/person.js', () => ({ onPerson, sendSavePersonName, sendRemovePersonPicture, sendSyncPersonFromGitHub }))
 
 const { ProfileSettings } = await import('./ProfileSettings.js')
@@ -37,6 +37,11 @@ describe('Settings › Profile', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Sync' }))
     await waitFor(() => expect(sendSyncPersonFromGitHub).toHaveBeenCalledWith('suleimansh'))
     expect(await screen.findByText('From @suleimansh on GitHub.')).toBeTruthy()
+    expect(screen.getByRole('status').textContent).toBe('Name and picture copied from @suleimansh.')
+    // Again, with nothing new at GitHub: it still answers.
+    sendSyncPersonFromGitHub.mockResolvedValueOnce({ ok: true, changed: false, login: 'suleimansh' })
+    fireEvent.click(screen.getByRole('button', { name: 'Sync' }))
+    expect(await screen.findByText('Already up to date with @suleimansh.')).toBeTruthy()
     person = { name: 'Suleiman Shahbari', github: 'suleimansh', own: true }
     fireEvent.click(screen.getByRole('button', { name: 'Remove' }))
     await waitFor(() => expect(sendRemovePersonPicture).toHaveBeenCalled())
