@@ -1,4 +1,5 @@
-import { nodeGitRunner, originDefaultBranch } from '@openagt/agent-data'
+import { originDefaultBranch } from '@openagt/agent-data'
+import { originGit } from '../dashboard-rpc/send-as.js'
 import { publishedBase } from '@openagt/agent-data/names'
 import type { StartFromPick } from '../registry.js'
 import { skillsOn } from '../project-skills/branch.js'
@@ -30,7 +31,8 @@ export async function branchesOnOrigin(cwd: string): Promise<string[] | undefine
     timer = setTimeout(() => resolve(undefined), ORIGIN_WAIT_MS)
     timer.unref()
   })
-  const listed = nodeGitRunner()(['ls-remote', '--heads', 'origin'], cwd).catch(() => undefined)
+  // Asked as one of OpenAgent's accounts, never the person's own login.
+  const listed = originGit(cwd).then(git => git(['ls-remote', '--heads', 'origin'], cwd)).catch(() => undefined)
   const out = await Promise.race([listed, late])
   clearTimeout(timer)
   if (out === undefined) return undefined
@@ -72,7 +74,7 @@ export async function waitingSkills(cwd: string, names: readonly string[], pick?
   let missing = names.filter(name => !on.has(name))
   if (missing.length > 0 && start.ref !== 'HEAD' && Date.now() - (fetched.get(`${cwd}\0${start.name}`) ?? 0) > FRESH_MS) {
     fetched.set(`${cwd}\0${start.name}`, Date.now())
-    const fetch = nodeGitRunner()(['fetch', '--quiet', 'origin', `+refs/heads/${start.name}:${publishedBase(start.name)}`], cwd).catch(() => undefined)
+    const fetch = originGit(cwd).then(git => git(['fetch', '--quiet', 'origin', `+refs/heads/${start.name}:${publishedBase(start.name)}`], cwd)).catch(() => undefined)
     await Promise.race([fetch, new Promise(resolve => setTimeout(resolve, FETCH_WAIT_MS))])
     on = await skillsOn(cwd, start.ref)
     missing = names.filter(name => !on.has(name))

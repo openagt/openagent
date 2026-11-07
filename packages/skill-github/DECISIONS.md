@@ -118,6 +118,9 @@ already made, and lists it in its pull request; for anything else it proposes an
 - `git-config` gives git settings that ask `gh`, working in the account's own folder, for the
   login when git needs it: what a repository OpenAgent sends as an account keeps. No token in
   them. Picked over handing the token itself, which a repository's config would then hold.
+- `repos` lists a user's or an organization's repositories as an account of OpenAgent's, its
+  private ones too: what the project picker lists beside the repos on the computer. Picked
+  over GitHub's public listing, which leaves out every private repository the account reads.
 - `profile` reads a GitHub user's public profile with no login: what a person copies into
   OpenAgent as their own name and picture. Picked over asking as one of OpenAgent's accounts,
   which would show the agent's face, not the person's.

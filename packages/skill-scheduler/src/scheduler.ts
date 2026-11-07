@@ -8,7 +8,7 @@ import { readClaudeQuota } from '@openagt/agent-driver-claude'
 import { accountFolder, personalCodexHome, readCodexUsage } from '@openagt/agent-driver-codex'
 import { gitHostEnv, isPidAlive, lockHolder, markerCard, readyToRun, resumeDetached, runIdFrom, spawnResume, spawnRun, sweep, withdrawMarker, writeMarker } from '@openagt/agent-runner'
 import { findRun } from '@openagt/skill-logs'
-import { nodeGitRunner, pullProjectData, type GitRunner } from '@openagt/agent-data'
+import { nodeGitRunner, pullProjectData, remoteHostOf, type GitRunner } from '@openagt/agent-data'
 import { CHECK_TIMEOUT_MS, GLANCE_MS, NOW_CHECK_TIMEOUT_MS, QUOTA_KEPT_MS, SCHEDULER_LOG, TICK_MS } from './names.js'
 import { inFlight, lastRuns, lastStart, type LastRun } from './records.js'
 import { readSchedule, type Schedule, type ScheduledCommand } from './schedule.js'
@@ -16,6 +16,24 @@ import { isSwitchedOn, namesGivenUp, readState, stateDir, updateState, withoutLi
 import { atStartOf } from './start-point.js'
 import { glance, listed, runCheck, startNow, tick, type StartedNow, type TickDeps } from './tick.js'
 import { accountsPath, readAccounts } from '@openagt/skill-account-rotation'
+
+/**
+ * `git`, its fetches going as the account runs use at the git host (`gitHostEnv`), never the
+ * person's own login: with no account to go as, a fetch is refused, and the start point is this
+ * clone's own copy, as offline. A remote that is a folder on this disk is fetched as it is.
+ */
+export function fetchingAsRunsAccount(repo: string, git: GitRunner, asAccount: (env: Record<string, string>) => GitRunner = nodeGitRunner): GitRunner {
+  return async (args, cwd) => {
+    if (args[0] !== 'fetch') return git(args, cwd)
+    // A remote that is a folder on this disk asks no login.
+    const url = (await git(['remote', 'get-url', 'origin'], cwd).catch(() => '')).trim()
+    if (!url || remoteHostOf(url) === undefined) return git(args, cwd)
+    const account = await gitHostEnv(repo)
+    if (!account.ok) throw new Error(account.error)
+    if (!account.env['GIT_CONFIG_COUNT']) throw new Error('no account of OpenAgent\'s to fetch as')
+    return asAccount(account.env)(args, cwd)
+  }
+}
 
 /**
  * The tool's process side (#1774): a tick wired to the real project, and the scheduler's own small
@@ -62,7 +80,7 @@ function projectDeps(repo: string, state: State, schedule: Schedule, opts: { git
     now,
     pull: () => pullProjectData(repo, { git, log }),
     sweep: () => sweep(repo, { host, isAlive: isPidAlive, now, git, log, resume: resumeDetached(repo) }),
-    atStart: atStartOf(repo, git),
+    atStart: atStartOf(repo, fetchingAsRunsAccount(repo, git)),
     // As the account runs work as at the git host: never the person's own `gh`. With none, nothing is asked.
     check: async (shell, lastRun, switchedOn) => {
       const account = await gitHostEnv(repo)

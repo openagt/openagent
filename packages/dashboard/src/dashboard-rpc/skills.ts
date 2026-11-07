@@ -10,7 +10,7 @@ import { waitingSkills } from '../dashboard/start-branch.js'
 import { readProjectHooks, runProjectHooks } from '../project-hooks.js'
 import { providedDataChanged } from '../store/provided.js'
 import { resolveProjectPath } from './context.js'
-import { pushAccountOf } from './send-as.js'
+import { originAccountOf } from './send-as.js'
 
 export type { SendSkillsResult } from '../dashboard/send-skills.js'
 
@@ -153,8 +153,8 @@ export async function sendProjectSkills(projectId: string, only?: string[]): Pro
   if (!cwd) return { ok: false, error: 'this project has no local path on this server' }
   const named = names(only)
   if (!named) return { ok: false, error: 'not a list of skills' }
-  if (named.length > 0) return sendSkills(cwd, named, { pushAccount: pushAccountOf })
+  if (named.length > 0) return sendSkills(cwd, named, { pushAccount: originAccountOf })
   const skills = await onProjectSkills(projectId)
   const due = skills ? [...new Set([...skills.uncommitted, ...skills.groups.flatMap(group => group.skills).filter(skill => skill.waiting).map(skill => skill.name)])] : []
-  return sendSkills(cwd, due, { pushAccount: pushAccountOf })
+  return sendSkills(cwd, due, { pushAccount: originAccountOf })
 }

@@ -123,13 +123,16 @@ export function isGitTimeout(err: unknown): err is GitTimeoutError {
  *
  * The buffer is raised well past the default because a repo crawl (`git ls-files`) prints a
  * line per file, and a large checkout overruns it.
+ *
+ * `env` is added to the process's own environment for each call: an account's, for a talk with a
+ * remote as that account.
  */
-export function nodeGitRunner(): GitRunner {
+export function nodeGitRunner(env?: Record<string, string>): GitRunner {
   return async (args, cwd) => {
     const { execFile } = await import('node:child_process')
     const timeoutMs = gitTimeoutMs(args)
     return new Promise<string>((resolvePromise, rejectPromise) => {
-      execFile('git', args, { cwd, timeout: timeoutMs, maxBuffer: 16 * 1024 * 1024 }, (err, stdout) => {
+      execFile('git', args, { cwd, timeout: timeoutMs, maxBuffer: 16 * 1024 * 1024, ...(env ? { env: { ...process.env, ...env } } : {}) }, (err, stdout) => {
         if (!err) return resolvePromise(String(stdout))
         // execFile kills on both timeout and a maxBuffer overrun; only the latter carries ENOBUFS.
         const killed = (err as { killed?: boolean }).killed === true

@@ -4,7 +4,7 @@ import { startDaemonTick, DAEMON_TICK_MS } from './daemon-tick.js'
 import { branchReach, pullProjectData } from '@openagt/agent-data'
 import type { ProjectErrors } from './project-errors.js'
 import { startCloudScratchSweep } from './cloud-scratch-refs.js'
-import { pushAccountOf } from './dashboard-rpc/send-as.js'
+import { originAccountOf, originGit } from './dashboard-rpc/send-as.js'
 import { adoptCloudWork, startCloudWorkAdoption } from './cloud-work.js'
 import type { ProjectSummary } from './dashboard/projects.js'
 import { providerProblems } from './store/provided.js'
@@ -100,13 +100,14 @@ export function startBackgroundServices(deps: BackgroundServiceDeps): Background
   // because session creation only signals "created", not "clone finished" — a driver deleting its
   // own ref races the provisioning and can strand the session. The sweep waits out that race
   // (~a day) and only deletes refs whose work is provably on the default branch.
-  const cloudScratch = startCloudScratchSweep({ projects, log, pushAccount: pushAccountOf })
+  const cloudScratch = startCloudScratchSweep({ projects, log, pushAccount: originAccountOf })
 
   // Adopt the branch a cloud session actually worked on (#1601): match each settled web run to
   // the `claude/*` head descending from its hand-off anchor, record the branch and PR on the
   // run's archive, and open the armed draft PR the session never did. Daemon-side by necessity:
   // the branch does not exist yet when the wrapper ends — the cloud VM is still provisioning.
-  const cloudWork = startCloudWorkAdoption({ projects, log, adopt: cwd => adoptCloudWork(cwd) })
+  // Origin is read as one of OpenAgent's accounts, never the person's own login.
+  const cloudWork = startCloudWorkAdoption({ projects, log, adopt: async cwd => adoptCloudWork(cwd, { git: await originGit(cwd) }) })
 
   // One clock for every background job (E4). Each says how many ticks it wants between turns
   // instead of owning an interval, so there is one place to look when the answer to "why is

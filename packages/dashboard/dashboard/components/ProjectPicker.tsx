@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Combobox } from '@base-ui/react/combobox'
-import { Check, ChevronDown, ChevronsUpDown, Folder, FolderGit2, FolderSearch, Layers, Plus, Search } from 'lucide-react'
+import { Cloud, Check, ChevronDown, ChevronsUpDown, Folder, FolderGit2, FolderSearch, Layers, Plus, Search } from 'lucide-react'
 import type { ProjectSummary } from '../../src/index.js'
 import { machineKind, machineName, typedRepository } from '../../src/client.js'
 import { onRepos, sendAddRepoFolder, type ReposRead } from '../rpc/projects.js'
@@ -19,16 +19,19 @@ import { AddProjectPanel } from './AddProjectPanel.js'
 /** How many repos the menu lists before a search: the search reaches the rest. */
 export const REPOS_SHOWN = 20
 
+/** How soon the menu asks again while the git hosts' lists are being read. */
+const HOSTED_AGAIN_MS = 2000
+
 /** The most rows a search lists. */
 const SEARCH_SHOWN = 200
 
-/** A row of the menu: none, a project, a repo that is not one yet, or the address typed, to add. */
+/** A row of the menu: none, a project, a repo that is not one yet (on this computer, or at a git host), or the address typed, to add. */
 interface Row {
   value: string
   label: string
   /** Under the label, muted: a repo's address, or its folder when it has none. */
   detail?: string
-  pick: { kind: 'none' } | { kind: 'project'; project: ProjectSummary } | { kind: 'repo'; path: string } | { kind: 'address'; typed: string }
+  pick: { kind: 'none' } | { kind: 'project'; project: ProjectSummary } | { kind: 'repo'; path: string } | { kind: 'hosted'; address: string } | { kind: 'address'; typed: string }
   /** What the search matches besides the label. */
   search: string
 }
@@ -184,7 +187,13 @@ export function ProjectPicker({
   const [folderError, setFolderError] = useState<string | null>(null)
   // Read again after a folder is added: the daemon has crawled it by then.
   const [folders, setFolders] = useState(0)
-  const repos = useLoaded<ReposRead | null>(() => onRepos().catch(() => ({ repos: [], canAddFolder: false })), null, [open, folders])
+  const repos = useLoaded<ReposRead | null>(() => onRepos().catch(() => ({ repos: [], hosted: [], hostedLoading: false, canAddFolder: false })), null, [open, folders])
+  // The git hosts' lists are still being read: asked again shortly, while the menu is open.
+  useEffect(() => {
+    if (!open || !repos?.hostedLoading) return
+    const again = setTimeout(() => setFolders(k => k + 1), HOSTED_AGAIN_MS)
+    return () => clearTimeout(again)
+  }, [open, repos])
 
   useEffect(() => {
     if (added === null) return
@@ -201,7 +210,17 @@ export function ProjectPicker({
     [projects, label],
   )
   const repoRows = useMemo<Row[]>(
-    () => (repos?.repos ?? []).map(repo => ({ value: `repo:${repo.path}`, label: repo.name, detail: repo.url ? shownAddress(repo.url) : repo.path, pick: { kind: 'repo', path: repo.path }, search: `${repo.path}\n${repo.url ?? ''}` })),
+    () => [
+      ...(repos?.repos ?? []).map((repo): Row => ({ value: `repo:${repo.path}`, label: repo.name, detail: repo.url ? shownAddress(repo.url) : repo.path, pick: { kind: 'repo', path: repo.path }, search: `${repo.path}\n${repo.url ?? ''}` })),
+      // Not on this computer: picked, it is cloned, as an address typed is.
+      ...(repos?.hosted ?? []).map((repo): Row => ({
+        value: `hosted:${repo.address}`,
+        label: repo.address.split('/').slice(1).join('/'),
+        detail: `${repo.private ? 'Private · ' : ''}Not on this computer · ${repo.from}`,
+        pick: { kind: 'hosted', address: repo.address },
+        search: `${repo.address}\n${repo.description ?? ''}`,
+      })),
+    ],
     [repos],
   )
   const groups = pickerGroups(NONE, projectRows, repoRows, typed)
@@ -268,6 +287,7 @@ export function ProjectPicker({
           if (row.pick.kind === 'none') onPick(null)
           else if (row.pick.kind === 'project') onPick(row.pick.project.id)
           else if (row.pick.kind === 'repo') setAdding({ folder: row.pick.path })
+          else if (row.pick.kind === 'hosted') setAdding({ address: row.pick.address })
           else setAdding({ address: row.pick.typed })
         }}
       >
@@ -303,6 +323,8 @@ export function ProjectPicker({
                                 <Layers className="mt-0.5 h-3.5 w-3.5 shrink-0 text-muted-foreground" aria-hidden />
                               ) : row.pick.kind === 'repo' ? (
                                 <FolderGit2 className="mt-0.5 h-3.5 w-3.5 shrink-0 text-muted-foreground" aria-hidden />
+                              ) : row.pick.kind === 'hosted' ? (
+                                <Cloud className="mt-0.5 h-3.5 w-3.5 shrink-0 text-muted-foreground" aria-hidden />
                               ) : null}
                               {row.pick.kind === 'project' ? (
                                 <ProjectLine project={row.pick.project} label={row.label} />
@@ -321,9 +343,14 @@ export function ProjectPicker({
                   </Combobox.List>
                   {repos === null ? (
                     <p role="status" className="px-2 py-1.5 text-xs text-muted-foreground">Looking for repos on this computer…</p>
-                  ) : !typed.trim() && repos.repos.length > REPOS_SHOWN ? (
-                    <p className="px-2 py-1.5 text-xs text-muted-foreground">Search to see more of the {repos.repos.length} repos.</p>
+                  ) : !typed.trim() && repoRows.length > REPOS_SHOWN ? (
+                    <p className="px-2 py-1.5 text-xs text-muted-foreground">Search to see more of the {repoRows.length} repos.</p>
                   ) : null}
+                  {repos?.hostedLoading && (
+                    <p role="status" className="px-2 py-1.5 text-xs text-muted-foreground">
+                      Asking GitHub for repos…
+                    </p>
+                  )}
                 </div>
               </ScrollArea>
               {repos?.canAddFolder && (

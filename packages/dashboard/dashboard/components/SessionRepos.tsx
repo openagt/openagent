@@ -77,7 +77,7 @@ export function SessionRepoPicks({
 }) {
   const [open, setOpen] = useState(false)
   const [typed, setTyped] = useState('')
-  const repos = useLoaded<ReposRead | null>(() => onRepos().catch(() => ({ repos: [], canAddFolder: false })), null, [open])
+  const repos = useLoaded<ReposRead | null>(() => onRepos().catch(() => ({ repos: [], hosted: [], hostedLoading: false, canAddFolder: false })), null, [open])
   const projectRows = useMemo<Row[]>(
     () => projects.filter(p => p.machine === undefined).map(p => ({ value: `project:${p.id}`, label: folderName(p.path), detail: p.path, path: p.path, search: p.path })),
     [projects],

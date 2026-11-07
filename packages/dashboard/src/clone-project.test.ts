@@ -68,18 +68,17 @@ function pretendGit(): { run: CloneRunner; calls: { args: readonly string[]; env
   return { run, calls }
 }
 
-test('a repository is cloned into the projects folder, by the two ways in an address names and with no question to a person; one already there is taken as it is', async () => {
+test("a repository is cloned into the projects folder, over the web, with the person's credential helpers dropped and no question to a person; one already there is taken as it is", async () => {
   const home = await realpath(await mkdtemp(join(tmpdir(), 'openagent-clone-')))
   try {
     const git = pretendGit()
     const path = join(home, 'projects', 'shop')
-    const none = async () => undefined
-    assert.deepEqual(await cloneProject('github.com/ada/shop', { home, run: git.run, env: { PATH: '/bin' }, sshCommand: none }), { ok: true, path, cloned: true })
+    assert.deepEqual(await cloneProject('github.com/ada/shop', { home, run: git.run, env: { PATH: '/bin' } }), { ok: true, path, cloned: true })
     // Made beside the folder, under a name no repository has, and moved there once it is whole.
     const made = git.calls[0]!.args.at(-1)!
     assert.match(made, new RegExp(`^${join(home, 'projects')}/\\.shop\\.cloning-[A-Za-z0-9]{6}$`))
-    assert.deepEqual(git.calls[0]!.args.slice(0, -1), ['-c', 'protocol.allow=never', '-c', 'protocol.https.allow=always', '-c', 'protocol.ssh.allow=always', 'clone', '--', 'https://github.com/ada/shop'])
-    assert.deepEqual(git.calls[0]!.env, { PATH: '/bin', GIT_TERMINAL_PROMPT: '0', GIT_ASKPASS: '', GIT_SSH_COMMAND: 'ssh -oBatchMode=yes' })
+    assert.deepEqual(git.calls[0]!.args.slice(0, -1), ['-c', 'credential.helper=', '-c', 'protocol.allow=never', '-c', 'protocol.https.allow=always', 'clone', '--', 'https://github.com/ada/shop'])
+    assert.deepEqual(git.calls[0]!.env, { PATH: '/bin', GIT_TERMINAL_PROMPT: '0', GIT_ASKPASS: '' })
     assert.deepEqual(await readdir(join(home, 'projects')), ['shop'])
 
     // The same repository, typed another way: nothing is cloned again.
@@ -97,11 +96,14 @@ test('a repository is cloned into the projects folder, by the two ways in an add
     assert.deepEqual(await readdir(join(home, 'projects', 'notes')), ['keep.txt'])
     assert.equal(git.calls.length, 1)
 
-    // A person's own way to reach SSH is kept, from git's settings or from the environment, and is told the same: no question.
-    await cloneProject('github.com/ada/tools', { home, run: git.run, env: {}, sshCommand: async () => 'ssh -i ~/.ssh/work' })
-    assert.equal(git.calls[1]!.env.GIT_SSH_COMMAND, 'ssh -i ~/.ssh/work -oBatchMode=yes')
-    await cloneProject('github.com/ada/more', { home, run: git.run, env: { GIT_SSH_COMMAND: 'ssh -F /dev/null' }, sshCommand: async () => 'ssh -i ~/.ssh/work' })
-    assert.equal(git.calls[2]!.env.GIT_SSH_COMMAND, 'ssh -F /dev/null -oBatchMode=yes')
+    // As one of OpenAgent's accounts: its settings after the person's helpers are dropped.
+    const account = { login: 'octo-agent', host: 'github.com', config: [['credential.https://github.com.helper', '!gh-as-octo'], ['url.https://github.com/.insteadOf', 'git@github.com:']] as [string, string][] }
+    await cloneProject('github.com/ada/tools', { home, run: git.run, env: {}, account })
+    assert.deepEqual(git.calls[1]!.args.slice(0, 6), ['-c', 'credential.helper=', '-c', 'credential.https://github.com.helper=!gh-as-octo', '-c', 'url.https://github.com/.insteadOf=git@github.com:'])
+    // An SSH address would use the person's own key: refused, unless the account takes it over the web.
+    assert.deepEqual(await cloneProject('git@github.com:ada/keys.git', { home, run: git.run }), { ok: false, error: 'OpenAgent reads github.com/ada/keys over SSH only through one of its own accounts, never with your own key. Paste its https:// address, or add an account at github.com in Permissions.' })
+    assert.equal(git.calls.length, 2)
+    assert.deepEqual(await cloneProject('git@github.com:ada/keys.git', { home, run: git.run, account }), { ok: true, path: join(home, 'projects', 'keys'), cloned: true })
   } finally {
     await rm(home, { recursive: true, force: true })
   }
@@ -161,26 +163,12 @@ test('a clone that fails leaves no folder, and says why in git\'s own last words
 
     assert.deepEqual(await cloneProject('github.com/ada/private', { home, run: failing("Cloning into '/x'...\nfatal: could not read Username for 'https://github.com': terminal prompts disabled\n") }), {
       ok: false,
-      error: "This computer has no login that can read github.com/ada/private, or there is no such repository: a private one needs a login. git said: could not read Username for 'https://github.com': terminal prompts disabled",
+      error: "This computer has no account of OpenAgent's that can read github.com/ada/private, or there is no such repository: a private one needs one, added in Permissions. git said: could not read Username for 'https://github.com': terminal prompts disabled",
     })
     await gone('private')
     assert.deepEqual(await cloneProject('example.com/ada/shop', { home, run: failing("fatal: unable to access 'https://example.com/ada/shop/': Could not resolve host: example.com\n") }), {
       ok: false,
       error: "unable to access 'https://example.com/ada/shop/': Could not resolve host: example.com",
-    })
-    // Over SSH git ends every failure with the same two lines: the reason is what comes before them.
-    assert.deepEqual(await cloneProject('git@github.com:ada/private.git', { home, run: failing("Cloning into '/x'...\ngit@github.com: Permission denied (publickey).\nfatal: Could not read from remote repository.\n\nPlease make sure you have the correct access rights\nand the repository exists.\n") }), {
-      ok: false,
-      error: 'This computer has no login that can read github.com/ada/private, or there is no such repository: a private one needs a login. git said: git@github.com: Permission denied (publickey). Could not read from remote repository.',
-    })
-    // A host this computer never met over SSH is not a missing login.
-    assert.deepEqual(await cloneProject('git@git.example.com:ada/shop.git', { home, run: failing('Host key verification failed.\nfatal: Could not read from remote repository.\n\nPlease make sure you have the correct access rights\nand the repository exists.\n') }), {
-      ok: false,
-      error: 'This computer has never met git.example.com over SSH, so it does not know it is the real one. Use the address that starts with https://, or connect to it once in a terminal. git said: Host key verification failed. Could not read from remote repository.',
-    })
-    assert.deepEqual(await cloneProject('git@git.example.com:ada/shop.git', { home, run: failing('ssh: connect to host git.example.com port 22: Operation timed out\nfatal: Could not read from remote repository.\n\nPlease make sure you have the correct access rights\nand the repository exists.\n') }), {
-      ok: false,
-      error: 'ssh: connect to host git.example.com port 22: Operation timed out Could not read from remote repository.',
     })
     assert.deepEqual(await cloneProject('github.com/ada/huge', { home, run: failing('', true) }), { ok: false, error: 'Cloning github.com/ada/huge took too long, and was stopped.' })
     await gone('huge')
@@ -197,22 +185,21 @@ test('whether the logins read a repository is asked of its host the way a clone 
     calls.push({ args, env })
     return said === undefined ? { ok: true } : { ok: false, said, timedOut }
   }
-  const none = async () => undefined
-  assert.deepEqual(await canRead('github.com/ada/shop', { run: answering(), env: { PATH: '/bin' }, sshCommand: none }), { ok: true })
+  assert.deepEqual(await canRead('github.com/ada/shop', { run: answering(), env: { PATH: '/bin' } }), { ok: true })
   // Nothing is cloned: the host is asked for its branches, by the same ways in and with no question to a person.
-  assert.deepEqual(calls[0]!.args, ['-c', 'protocol.allow=never', '-c', 'protocol.https.allow=always', '-c', 'protocol.ssh.allow=always', 'ls-remote', '--heads', '--', 'https://github.com/ada/shop'])
-  assert.deepEqual(calls[0]!.env, { PATH: '/bin', GIT_TERMINAL_PROMPT: '0', GIT_ASKPASS: '', GIT_SSH_COMMAND: 'ssh -oBatchMode=yes' })
+  assert.deepEqual(calls[0]!.args, ['-c', 'credential.helper=', '-c', 'protocol.allow=never', '-c', 'protocol.https.allow=always', 'ls-remote', '--heads', '--', 'https://github.com/ada/shop'])
+  assert.deepEqual(calls[0]!.env, { PATH: '/bin', GIT_TERMINAL_PROMPT: '0', GIT_ASKPASS: '' })
 
   const noLogin = "fatal: could not read Username for 'https://github.com': terminal prompts disabled\n"
-  assert.deepEqual(await canRead('github.com/ada/private', { run: answering(noLogin), sshCommand: none }), {
+  assert.deepEqual(await canRead('github.com/ada/private', { run: answering(noLogin) }), {
     ok: false,
-    error: "This computer has no login that can read github.com/ada/private, or there is no such repository: a private one needs a login. git said: could not read Username for 'https://github.com': terminal prompts disabled",
+    error: "This computer has no account of OpenAgent's that can read github.com/ada/private, or there is no such repository: a private one needs one, added in Permissions. git said: could not read Username for 'https://github.com': terminal prompts disabled",
   })
-  assert.deepEqual(await canRead('github.com/ada/private', { run: answering(noLogin), sshCommand: none }, 'experiment'), {
+  assert.deepEqual(await canRead('github.com/ada/private', { run: answering(noLogin) }, 'experiment'), {
     ok: false,
-    error: "experiment has no login that can read github.com/ada/private, or there is no such repository: a private one needs a login. git said: could not read Username for 'https://github.com': terminal prompts disabled",
+    error: "experiment has no account of OpenAgent's that can read github.com/ada/private, or there is no such repository: a private one needs one, added in Permissions. git said: could not read Username for 'https://github.com': terminal prompts disabled",
   })
-  assert.deepEqual(await canRead('github.com/ada/slow', { run: answering('', true), sshCommand: none }), { ok: false, error: 'github.com/ada/slow did not answer in time.' })
+  assert.deepEqual(await canRead('github.com/ada/slow', { run: answering('', true) }), { ok: false, error: 'github.com/ada/slow did not answer in time.' })
   assert.deepEqual(await canRead('not an address', { run: answering() }), { ok: false, error: '"not an address" is not a repository\'s address. One looks like github.com/you/project.' })
 })
 
@@ -221,7 +208,7 @@ test('the real git refuses a way in an address does not name, even when asked fo
   const home = await realpath(await mkdtemp(join(tmpdir(), 'openagent-clone-')))
   try {
     const marker = join(home, 'ran')
-    assert.throws(() => execFileSync('git', ['-c', 'protocol.allow=never', '-c', 'protocol.https.allow=always', '-c', 'protocol.ssh.allow=always', 'clone', '--', `ext::sh -c "touch ${marker}"`, join(home, 'x')], { stdio: 'pipe' }))
+    assert.throws(() => execFileSync('git', ['-c', 'protocol.allow=never', '-c', 'protocol.https.allow=always', 'clone', '--', `ext::sh -c "touch ${marker}"`, join(home, 'x')], { stdio: 'pipe' }))
     assert.equal(await stat(marker).then(() => true, () => false), false)
   } finally {
     await rm(home, { recursive: true, force: true })

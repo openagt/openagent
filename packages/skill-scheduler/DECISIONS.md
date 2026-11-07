@@ -178,6 +178,9 @@ already made, and lists it in its pull request; for anything else it proposes an
   fetched first as the run's own checkout does. Picked over starting it anyway, where the
   agent was told a command it does not know each time the command was due; and over asking
   for every command on every tick, which fetched every minute.
+- That fetch goes as the account runs use at the git host, never the person's own login: with
+  none, it is refused and the start point is the clone's own copy, as offline. A remote that
+  is a folder on the disk is fetched as it is.
 - The quota gate is OpenAgent's spend boundary, copied: a window in force may be used
   only as far as the week has elapsed, plus the user's cushion, half a day when unset.
   Picked over a plainer line (a window at 100% stands down): nothing would pace the week.

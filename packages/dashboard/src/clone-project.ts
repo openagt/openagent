@@ -2,7 +2,7 @@ import { execFile } from 'node:child_process'
 import { lstat, mkdir, mkdtemp, rename, rm } from 'node:fs/promises'
 import { homedir } from 'node:os'
 import { basename, dirname, join } from 'node:path'
-import { repositoryAddress } from '@openagt/agent-data'
+import { repositoryAddress, type RemoteAccount } from '@openagt/agent-data'
 import { typedRepository } from './typed-repository.js'
 
 /**
@@ -12,8 +12,11 @@ import { typedRepository } from './typed-repository.js'
  * and that folder is then added like any other. Nothing is asked about where: the page says
  * where it went.
  *
- * git clones with the logins this computer has (its credential helper, its SSH keys) and is
- * never let ask a person for one: a repository it cannot read is refused in words.
+ * git clones as one of OpenAgent's accounts at the repository's host (`account`), never with the
+ * person's own logins: their credential helpers are dropped, and an SSH address, which would use
+ * their own key, is refused unless the account's settings take it over the web. With no account
+ * there, only a public repository can be cloned. git is never let ask a person for a login: a
+ * repository it cannot read is refused in words.
  */
 
 /** Where a repository is cloned from and to. */
@@ -51,19 +54,13 @@ const nodeCloneRunner: CloneRunner = (args, env, timeoutMs) =>
     })
   })
 
-/** The way to SSH a person set for git on this computer, when they set one: which key, which program. */
-const ownSshCommand = (env: NodeJS.ProcessEnv): Promise<string | undefined> =>
-  new Promise(done => execFile('git', ['config', '--get', 'core.sshCommand'], { env, cwd: homedir(), timeout: 10_000 }, (error, stdout) => done(error ? undefined : String(stdout).trim() || undefined)))
-
 /** How long a clone may take: a large repository over a slow line, not a hang. */
 const CLONE_TIMEOUT_MS = 15 * 60_000
 /** How long asking a repository's host whether it is readable may take. */
 const READ_TIMEOUT_MS = 30_000
 
-/** What git says when it has no login that can read a repository, over the web and over SSH. */
-const NO_LOGIN = /could not read Username|Authentication failed|terminal prompts disabled|Permission denied \(publickey|Repository not found/i
-/** What SSH says of a host this computer has never met: it would ask a person, and nobody is there to answer. */
-const NOT_MET = /Host key verification failed/i
+/** What git says when it has no login that can read a repository. */
+const NO_LOGIN = /could not read Username|Authentication failed|terminal prompts disabled|Repository not found/i
 /** What git says after every failure, whatever the reason. */
 const SAID_EVERY_TIME = /^(Cloning into |Please make sure you have the correct access rights|and the repository exists)/
 
@@ -80,8 +77,8 @@ export interface CloneOptions {
   run?: CloneRunner
   env?: NodeJS.ProcessEnv
   timeoutMs?: number
-  /** The person's own way to SSH for git, when they set one; read off git's settings when unsaid. */
-  sshCommand?: (env: NodeJS.ProcessEnv) => Promise<string | undefined>
+  /** The account of OpenAgent's the repository is read as: its git settings. None: no login at all. */
+  account?: RemoteAccount
 }
 
 /** The clones on their way, by the folder each ends in: a second ask for the same folder waits for the first. */
@@ -113,6 +110,8 @@ async function cloneTo({ url, address, path }: CloneTarget, opts: CloneOptions):
   }
   const already = await there()
   if (already) return already
+  const ssh = overSsh(url, address, opts)
+  if (ssh) return ssh
   const projects = dirname(path)
   await mkdir(projects, { recursive: true })
   // A name no repository has: one starts with a letter, a digit or an underscore.
@@ -138,21 +137,35 @@ async function cloneTo({ url, address, path }: CloneTarget, opts: CloneOptions):
 export async function canRead(typed: string, opts: CloneOptions = {}, subject = 'This computer'): Promise<{ ok: true } | { ok: false; error: string }> {
   const target = cloneTarget(typed, opts.home)
   if (!target) return { ok: false, error: `"${typed.trim().slice(0, 80)}" ${NOT_AN_ADDRESS}` }
+  const ssh = overSsh(target.url, target.address, opts)
+  if (ssh) return ssh
   const said = await askGit(['ls-remote', '--heads', '--', target.url], opts, READ_TIMEOUT_MS)
   if (said.ok) return { ok: true }
   if (said.timedOut) return { ok: false, error: `${target.address} did not answer in time.` }
   return { ok: false, error: gitRefusal(said.said, target.address, 'git could not read it.', subject) }
 }
 
-/** Run git about a repository the way a clone does: only the ways in an address, never a question to a person. */
-async function askGit(args: readonly string[], opts: CloneOptions, timeoutMs: number): ReturnType<CloneRunner> {
-  const env = opts.env ?? process.env
-  const ssh = env.GIT_SSH_COMMAND ?? (await (opts.sshCommand ?? ownSshCommand)(env)) ?? 'ssh'
+/**
+ * An SSH address would be read with the person's own key: refused, unless the account's settings
+ * take that host's SSH addresses over the web, where the account's login is the one asked.
+ */
+function overSsh(url: string, address: string, opts: CloneOptions): { ok: false; error: string } | undefined {
+  if (/^https:\/\//i.test(url)) return undefined
+  const host = address.split('/')[0]!
+  const rewritten = opts.account?.config.some(([key, value]) => key === `url.https://${host}/.insteadOf` && url.startsWith(value))
+  if (rewritten) return undefined
+  return { ok: false, error: `OpenAgent reads ${address} over SSH only through one of its own accounts, never with your own key. Paste its https:// address${opts.account ? '' : `, or add an account at ${host} in Permissions`}.` }
+}
+
+/** Run git about a repository the way a clone does: over the web only, as the account given or no login, never a question to a person. */
+function askGit(args: readonly string[], opts: CloneOptions, timeoutMs: number): ReturnType<CloneRunner> {
+  // The person's credential helpers dropped, the keychain's too; the account's in their place.
+  const login = ['-c', 'credential.helper=', ...(opts.account?.config ?? []).flatMap(([key, value]) => ['-c', `${key}=${value}`])]
   return (opts.run ?? nodeCloneRunner)(
-    // Only the two ways in a repository's address names: git never runs a program an address could name.
-    ['-c', 'protocol.allow=never', '-c', 'protocol.https.allow=always', '-c', 'protocol.ssh.allow=always', ...args],
-    // Never a question to a person, in a terminal or in a window: nobody is there to answer one. The person's own way to SSH is kept, and told the same.
-    { ...env, GIT_TERMINAL_PROMPT: '0', GIT_ASKPASS: '', GIT_SSH_COMMAND: `${ssh} -oBatchMode=yes` },
+    // Over the web only: SSH would use the person's own key, and git never runs a program an address could name.
+    [...login, '-c', 'protocol.allow=never', '-c', 'protocol.https.allow=always', ...args],
+    // Never a question to a person, in a terminal or in a window: nobody is there to answer one.
+    { ...(opts.env ?? process.env), GIT_TERMINAL_PROMPT: '0', GIT_ASKPASS: '' },
     opts.timeoutMs ?? timeoutMs,
   )
 }
@@ -161,6 +174,5 @@ async function askGit(args: readonly string[], opts: CloneOptions, timeoutMs: nu
 function gitRefusal(said: string, address: string, otherwise: string, subject = 'This computer'): string {
   const lines = said.split('\n').map(line => line.trim().replace(/^(fatal|error): /i, '')).filter(line => line && !SAID_EVERY_TIME.test(line))
   const words = lines.slice(-2).join(' ') || otherwise
-  if (NOT_MET.test(said)) return `${subject} has never met ${address.split('/')[0]} over SSH, so it does not know it is the real one. Use the address that starts with https://, or connect to it once in a terminal. git said: ${words}`
-  return NO_LOGIN.test(said) ? `${subject} has no login that can read ${address}, or there is no such repository: a private one needs a login. git said: ${words}` : words
+  return NO_LOGIN.test(said) ? `${subject} has no account of OpenAgent's that can read ${address}, or there is no such repository: a private one needs one, added in Permissions. git said: ${words}` : words
 }

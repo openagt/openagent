@@ -1,14 +1,15 @@
 import { contextAddProject, contextPrepareStart, contextProjectErrors, contextProjects, contextRemote, contextRemoveProject, contextStartedIn, resolveProjectPath } from './context.js'
 import { readProjectCommands, type ProjectCommand } from '../project-commands.js'
-import { DATA_BRANCH, originDefaultBranch, readSharing, repositoryAddress, repositorySpelling, shareProjectData } from '@openagt/agent-data'
-import { originHost, remoteAccount } from './send-as.js'
+import { DATA_BRANCH, addressOfRemote, isRepoOwner, originDefaultBranch, readRepoOwners, readSharing, repositoryAddress, repositorySpelling, shareProjectData, writeRepoOwners } from '@openagt/agent-data'
+import { readHosted, refreshHosted, type HostedRepo } from './hosted-repos.js'
+import { cloneAccountFor, originHost, remoteAccount } from './send-as.js'
 import { readProjectHooks, runCheckHook, startLineTakesBase, startLineTakesPrBase, type StartReadiness } from '../project-hooks.js'
 import { isPublishPick, publishPickIn, type PublishPick } from '../publish-levels.js'
 import { hasRemote } from '../has-remote.js'
 import { openagentVersion } from '../version.js'
 import { currentBranch } from '../dashboard/git-status.js'
 import { branchesOnOrigin, waitingSkills } from '../dashboard/start-branch.js'
-import { addRepoFolder, listProjects, startFromPick, type StartFromPick } from '../registry.js'
+import { addRepoFolder, listProjects, listRepoFolders, removeRepoFolder, startFromPick, type StartFromPick } from '../registry.js'
 import { thisComputersRepos, type FoundRepo } from '../dashboard/repos.js'
 import { homedir } from 'node:os'
 import { canRead, cloneProject, cloneTargetOf } from '../clone-project.js'
@@ -112,7 +113,9 @@ export async function onCloneTarget(address: string): Promise<{ ok: true; addres
  */
 export async function sendAddProjectFromAddress(address: string): Promise<AddProjectResult> {
   const addProject = contextAddProject()
-  const cloned = await cloneProject(typeof address === 'string' ? address : '')
+  const typed = typeof address === 'string' ? address : ''
+  const account = await cloneAccountFor(typed)
+  const cloned = await cloneProject(typed, account ? { account } : {})
   if (!cloned.ok) return cloned
   const added = await addProject(cloned.path, false)
   return added.ok ? { ...added, path: cloned.path } : added
@@ -160,9 +163,13 @@ export async function sendPickProjectDirectory(): Promise<PickDirectoryResult> {
   return pickDirectory()
 }
 
-/** The repos on this computer that are not projects yet, and whether a folder can be added to look in. */
+/** The repos on this computer that are not projects yet, the ones at the git hosts not here, and whether a folder can be added to look in. */
 export interface ReposRead {
   repos: FoundRepo[]
+  /** The repositories OpenAgent's accounts and the owners the person named have at the hosts, none of them on this computer: picked, one is cloned. */
+  hosted: HostedRepo[]
+  /** The hosts are being asked: the picker asks again shortly. */
+  hostedLoading: boolean
   /** This computer can show a folder dialog, so the picker offers "Search another folder…". */
   canAddFolder: boolean
 }
@@ -173,9 +180,65 @@ export interface ReposRead {
  * already. The kept list, so the picker opens at once; an old one is crawled again behind it.
  */
 export async function onRepos(): Promise<ReposRead> {
-  const [repos, projects] = await Promise.all([thisComputersRepos().read(), listProjects().catch(() => [])])
+  const [repos, projects, hosted] = await Promise.all([thisComputersRepos().read(), listProjects().catch(() => []), readHosted()])
   const pinned = new Set(projects.map(project => project.path))
-  return { repos: repos.filter(repo => !pinned.has(repo.path)), canAddFolder: canPickDirectory() }
+  // A repository at a host that is here already, as a repo or a project, is listed once: by its folder.
+  const here = new Set<string>()
+  for (const repo of repos) if (repo.url && addressOfRemote(repo.url)) here.add(addressOfRemote(repo.url)!)
+  for (const project of projects) {
+    const address = await repositoryAddress(project.path).catch(() => undefined)
+    if (address) here.add(address)
+  }
+  return {
+    repos: repos.filter(repo => !pinned.has(repo.path)),
+    hosted: hosted.repos.filter(repo => !here.has(repo.address.toLowerCase())),
+    hostedLoading: hosted.loading,
+    canAddFolder: canPickDirectory(),
+  }
+}
+
+/** Settings › Repos: where repos are looked for, on this computer and at the git hosts. */
+export interface RepoSources {
+  /** The folders the person added, looked in beside the home folder. */
+  folders: string[]
+  /** The users and organizations at a git host whose repositories are listed, as `<host>/<name>`. */
+  owners: string[]
+}
+
+export async function onRepoSources(): Promise<RepoSources> {
+  const [folders, owners] = await Promise.all([listRepoFolders().catch(() => []), readRepoOwners()])
+  return { folders, owners }
+}
+
+/** List one more user's or organization's repositories: `vikejs`, `github.com/vikejs` or its page's address. GitHub when no host is named. */
+export async function sendAddRepoOwner(typed: string): Promise<{ ok: true } | { ok: false; error: string }> {
+  const said = typeof typed === 'string' ? typed.trim().replace(/^https?:\/\//, '').replace(/\/+$/, '') : ''
+  const owner = said.includes('/') ? said.replace(/^([^/]+)/, host => host.toLowerCase()) : `github.com/${said.replace(/^@/, '')}`
+  if (!isRepoOwner(owner)) return { ok: false, error: `"${said.slice(0, 80)}" is not a user or organization. One looks like vikejs, or github.com/vikejs.` }
+  const owners = await readRepoOwners()
+  if (owners.some(one => one.toLowerCase() === owner.toLowerCase())) return { ok: true }
+  const written = await writeRepoOwners([...owners, owner])
+  if (!written.ok) return { ok: false, error: written.error }
+  void refreshHosted()
+  return { ok: true }
+}
+
+/** Stop listing an owner's repositories. */
+export async function sendRemoveRepoOwner(owner: string): Promise<{ ok: true } | { ok: false; error: string }> {
+  const owners = await readRepoOwners()
+  if (!owners.includes(owner)) return { ok: true }
+  const written = await writeRepoOwners(owners.filter(one => one !== owner))
+  if (!written.ok) return { ok: false, error: written.error }
+  void refreshHosted()
+  return { ok: true }
+}
+
+/** Stop looking for repos in a folder the person added. */
+export async function sendRemoveRepoFolder(folder: string): Promise<{ ok: true } | { ok: false; error: string }> {
+  if (typeof folder !== 'string') return { ok: false, error: 'no folder named' }
+  await removeRepoFolder(folder)
+  await thisComputersRepos().refresh()
+  return { ok: true }
 }
 
 /**
@@ -290,7 +353,9 @@ export async function onStartCheck(projectId: string, driver?: string): Promise<
  */
 export async function onCloneCheck(address: string, driver?: string, as?: string): Promise<StartReadiness> {
   const ready = await loginsWiring.ready(typeof driver === 'string' && isDriverName(driver) ? driver : 'claude-code')
-  const read = await canRead(typeof address === 'string' ? address : '', {}, typeof as === 'string' && as.trim() ? as.trim() : undefined)
+  const typed = typeof address === 'string' ? address : ''
+  const account = await cloneAccountFor(typed)
+  const read = await canRead(typed, account ? { account } : {}, typeof as === 'string' && as.trim() ? as.trim() : undefined)
   return { problems: [...ready.problems, ...(read.ok ? [] : [read.error])], warnings: ready.warnings, ...(ready.fix ? { fix: ready.fix } : {}) }
 }
 

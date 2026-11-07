@@ -299,6 +299,13 @@ already made, and lists it in its pull request; for anything else it proposes an
 - A project is also added by its repository's address, for a computer that does not have
   its folder, as a server: OpenAgent clones it into `~/projects/<its name>` and says where
   it went. Picked over asking for the folder at every add, one more thing to read.
+- A clone, and the check that a repository can be read, go over the web only, as the account
+  runs use at the repository's host, the person's credential helpers dropped; with none
+  there, only a public repository is read. An SSH address is refused unless the account's
+  settings take it over the web: SSH would use the person's own key. The dashboard's other
+  talks with a project's origin (the branches the launcher offers, Claude Code web's
+  branches) go as the Share switch's account, else the one runs use. Picked over the logins
+  the computer has, which are the person's own.
 - Adding a project asks one thing: whether the person trusts the repository, with why it
   matters. The agents' records stay on this machine; the project's Agent data page shares
   them. Picked over a list of what the add does and a choice of where the records go in the
@@ -511,6 +518,13 @@ already made, and lists it in its pull request; for anything else it proposes an
   picked on the "New agent session" page, by search: no project, a project, or a repo. A repo
   picked becomes a project once the person says they trust it. Picked over a session in a
   repo that is no project: a second kind of session, with no hooks, records or address.
+- The repos also list, after the ones on the computer, each of OpenAgent's accounts' own
+  repositories at its git host, as itself, and the repositories of the users and
+  organizations the person named in Settings › Repos, as the account runs use; one on the
+  computer already is listed once, by its folder. Picked, one is cloned as an address typed
+  is. The lists are read behind the menu and kept ten minutes. The names are kept in the
+  person's own folder, the same on every computer; the folders added stay the computer's.
+  Picked over asking the hosts each time the menu opens, which waits a second or more.
 - A session with no project may have repos as context, added beside "No project" from the
   same search. Each is a copy in the session's folder, cloned from the repo's folder on a
   new branch, its origin the repo's own; none is made a project. The agent starts in the
