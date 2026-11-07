@@ -284,7 +284,7 @@ export function ProjectPicker({
             <Combobox.Popup aria-label={name} className={cn(MENU_POPUP_CLASS, 'w-[24rem] max-w-[var(--available-width)]')}>
               <div className="flex items-center gap-2 border-b border-border px-3">
                 <Search className="h-3.5 w-3.5 shrink-0 text-muted-foreground" aria-hidden />
-                <Combobox.Input aria-label="Search projects and repos" placeholder="Search projects and repos, or type a GitHub address" className="h-9 w-full min-w-0 bg-transparent text-sm outline-none placeholder:text-muted-foreground" />
+                <Combobox.Input aria-label="Search projects and repos" placeholder="Search, or paste a GitHub address" className="h-9 w-full min-w-0 bg-transparent text-sm outline-none placeholder:text-muted-foreground" />
               </div>
               <ScrollArea viewportClassName="h-[min(20rem,calc(var(--available-height)-5rem))]">
                 <div className="p-1">
