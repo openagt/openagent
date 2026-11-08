@@ -344,9 +344,11 @@ as_person() {
   local user=$1 home=$2
   runuser -u "$user" -- env -i HOME="$home" USER="$user" LOGNAME="$user" CODEX_NON_INTERACTIVE=1 PATH=/usr/local/bin:/usr/bin:/bin bash -o pipefail -c "cd && $3" </dev/null >/dev/null 2>&1
 }
-# Claude Code's and Codex's own installers, into the person's home, as for the server's own user: each keeps itself up to date there.
+# What each person's user gets, made now or at an update: their home theirs alone, so no other person's agents read their work;
+# and Claude Code's and Codex's own installers, into it, as for the server's own user: each keeps itself up to date there.
 agents() {
   local user=$1 home=$2
+  chmod 700 "$home"
   if [ ! -e "$home/.local/bin/claude" ]; then
     as_person "$user" "$home" 'curl -fsSL https://claude.ai/install.sh | bash' || fail "Claude Code could not be installed for $user."
   fi
@@ -390,8 +392,6 @@ add() {
   is_user "$user" || useradd --create-home --shell /bin/bash "$user"
   home=$(getent passwd "$user" | cut -d: -f6)
   [ "$home" = "/home/$user" ] || fail "The user $user has no home of its own."
-  # Their home is theirs alone: no other person's agents read their work.
-  chmod 700 "$home"
   agents "$user" "$home"
   systemctl enable --quiet "$unit"
   apply_firewall

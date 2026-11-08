@@ -210,5 +210,6 @@ test("a person logged in to the server gets its devices as the server's user, an
 
 test('every home the install makes is its user\'s alone', () => {
   assert.match(STEPS.find(step => step.id === 'user')!.script(FACTS), /\n  chmod 700 \/home\/openagent\n/)
-  assert.match(HELPER, /\n  chmod 700 "\$home"\n  agents "\$user" "\$home"\n/)
+  // Each person's, made now or at an update: what their user gets, the home first.
+  assert.match(HELPER, /\nagents\(\) \{\n  local user=\$1 home=\$2\n  chmod 700 "\$home"\n/)
 })
