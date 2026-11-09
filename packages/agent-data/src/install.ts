@@ -1,6 +1,6 @@
 import { access, mkdir, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
-import { nodeGitRunner, type GitRunner } from './git.js'
+import { errorMessage, nodeGitRunner, type GitRunner } from './git.js'
 import { OPENAGENT_DIR } from './names.js'
 import { openagentGitignore, gitignorePath } from './openagent-gitignore.js'
 
@@ -82,6 +82,6 @@ export async function installProject(cwd: string, deps: InstallDeps = {}): Promi
     await fs.write(gitignorePath(cwd), openagentGitignore())
     return insideRepo ? { ok: true } : { ok: true, initialized: true }
   } catch (err) {
-    return { ok: false, error: err instanceof Error ? err.message : String(err) }
+    return { ok: false, error: errorMessage(err) }
   }
 }

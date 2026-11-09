@@ -2,7 +2,7 @@ import { cp, mkdir, readdir, readFile, rm, stat, writeFile } from 'node:fs/promi
 import { homedir } from 'node:os'
 import { join, sep } from 'node:path'
 import { DATA_BRANCH } from './names.js'
-import { nodeGitRunner, type GitRunner } from './git.js'
+import { errorMessage, nodeGitRunner, type GitRunner } from './git.js'
 import { withLockFile } from './checkout-lock.js'
 import { originUrl, repositoryAddress } from './origin.js'
 import { NoRemoteAccountError, accountGit, clearRemoteAccount, readRemoteAccount, writeRemoteAccount, type RemoteAccount } from './remote-account.js'
@@ -16,6 +16,7 @@ import {
   pullFileBranch,
   readBranchFile,
   readSharing,
+  resolveMessage,
   withFileBranch,
   writeFileBranchDetached,
   writeSharing,
@@ -97,15 +98,6 @@ export async function projectDataDirs(cwd: string, deps: ProjectDataDeps = {}): 
 /** The directory a long-lived process reads the project's data off. */
 export async function projectDataDir(cwd: string, deps: ProjectDataDeps = {}): Promise<string> {
   return (await projectDataPlace(cwd, deps)).dir
-}
-
-/** git's message of a failed call, or the value as text. */
-function errorMessage(err: unknown): string {
-  return err instanceof Error ? err.message : String(err)
-}
-
-function resolveMessage(message: CommitMessage): string {
-  return typeof message === 'function' ? message() : message
 }
 
 /**

@@ -2,7 +2,7 @@ import { lstat, mkdir, mkdtemp, readdir, readFile, realpath, rm, rmdir, writeFil
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { BRANCHES_DIR } from './names.js'
-import { nodeGitRunner, type GitRunner } from './git.js'
+import { errorMessage, nodeGitRunner, type GitRunner } from './git.js'
 import { accountGit } from './remote-account.js'
 import { excludeFromGit, repositoryCheckouts, unexcludeFromGit } from './git-exclude.js'
 import { withCheckoutLock, type CheckoutLockDeps } from './checkout-lock.js'
@@ -143,11 +143,6 @@ async function refExists(cwd: string, ref: string, git: GitRunner): Promise<bool
     () => true,
     () => false,
   )
-}
-
-/** The message a failed git invocation carries, or the value itself as text. */
-function errorMessage(err: unknown): string {
-  return err instanceof Error ? err.message : String(err)
 }
 
 /**
@@ -349,7 +344,8 @@ export type FileBranchWrite =
 /** A writer's message: fixed, or resolved after the op ran (a batch only knows what it did then). */
 export type CommitMessage = string | (() => string)
 
-function resolveMessage(message: CommitMessage): string {
+/** The message a write commits with, once its op ran. */
+export function resolveMessage(message: CommitMessage): string {
   return typeof message === 'function' ? message() : message
 }
 

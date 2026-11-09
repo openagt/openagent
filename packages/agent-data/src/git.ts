@@ -179,13 +179,17 @@ export async function checkoutRoot(cwd: string, git: GitRunner = nodeGitRunner()
   return (await git(['rev-parse', '--show-toplevel'], cwd)).trim()
 }
 
+/** The message a failed git invocation carries, or the value itself as text. */
+export function errorMessage(err: unknown): string {
+  return err instanceof Error ? err.message : String(err)
+}
+
 /**
  * The line of a failed git invocation worth showing: git's own `fatal:` / `error:` / `remote:`
  * line when there is one, else the first line, else a placeholder.
  */
 export function gitReason(err: unknown): string {
-  const message = err instanceof Error ? err.message : String(err)
-  const lines = message.split('\n').map(line => line.trim()).filter(Boolean)
+  const lines = errorMessage(err).split('\n').map(line => line.trim()).filter(Boolean)
   return lines.find(line => /^(fatal|error|remote):/i.test(line)) ?? lines[0] ?? 'git failed'
 }
 
