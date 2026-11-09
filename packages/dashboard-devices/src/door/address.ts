@@ -87,3 +87,8 @@ export function onOwnNetwork(peer: string | undefined, deps: AddressDeps = {}): 
 export function urlHost(host: string): string {
   return isIP(host) === 6 ? `[${host}]` : host
 }
+
+/** A server's door as a person types it, and as its links go: its number or name, with its port when that is not HTTPS's own. */
+export function serverWhere(address: string, port: number): string {
+  return `${urlHost(address)}${port === 443 ? '' : `:${port}`}`
+}

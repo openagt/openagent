@@ -1,13 +1,13 @@
-import { nameAddress, numberAddress, ownAddresses, urlHost, type AddressDeps } from './address.js'
+import { nameAddress, numberAddress, ownAddresses, serverWhere, urlHost, type AddressDeps } from './address.js'
 import { doorFingerprint } from './certificate.js'
 import { execFile } from 'node:child_process'
 import { personalFolder, readPersonRecord } from '@openagt/agent-data'
 import { hostname } from 'node:os'
-import { ENTER_PATH, readKeyWord } from './door.js'
+import { ENTER_PATH, codeLink, readKeyWord } from './door.js'
 import { askMe, enterForLine, leaveLine, readLineLink } from './line-out.js'
 import { askAt, cancelAt, doorOrigin, hearAt, mayAnswerAsks, waitingAsks } from './pair.js'
 import { startPersonWork } from './persons.js'
-import { HTTPS_PORT, serve } from './serve.js'
+import { serve } from './serve.js'
 import { announce, find } from './wifi.js'
 import { tailscaleName, tailscaleRun, type TailscaleRun } from './tailscale.js'
 import { renderUnicodeCompact } from 'uqr'
@@ -324,9 +324,9 @@ async function addDevice(io: CliIO, said?: string): Promise<Given> {
     // The same code at the Wi-Fi's door beside it, for a device on this Wi-Fi that is not on Tailscale.
     const wifi = wifiListening(store)
     const host = wifi ? ((await nameAddress(io.address)) ?? numberAddress(io.address)) : undefined
-    const wifiUrl = wifi && host ? `http://${urlHost(host)}:${wifi.port}${ENTER_PATH}#${code}` : undefined
+    const wifiUrl = wifi && host ? codeLink(`http://${urlHost(host)}:${wifi.port}`, code) : undefined
     // Tailscale's certificate is one every device trusts: a device that opens the link needs no key of the door's to know it by.
-    return { url: `https://${store.tailscale.address}${ENTER_PATH}#${code}`, ...(wifiUrl ? { wifiUrl } : {}), where: store.tailscale.address, code: shownCode(code), expires, ...(person !== undefined ? { person } : {}) }
+    return { url: codeLink(`https://${store.tailscale.address}`, code), ...(wifiUrl ? { wifiUrl } : {}), where: store.tailscale.address, code: shownCode(code), expires, ...(person !== undefined ? { person } : {}) }
   }
   if (store.https) {
     if (!status.listening) throw new Refused(status.problem ?? 'the door is not open')
@@ -334,10 +334,9 @@ async function addDevice(io: CliIO, said?: string): Promise<Given> {
     if (!fingerprint) throw new Refused('the door has no key yet')
     const person = await whose()
     const { code, expires } = await addCode(io.env, Date.now(), person)
-    const port = store.listening!.port
-    const where = `${urlHost(store.https.address)}${port === HTTPS_PORT ? '' : `:${port}`}`
+    const where = serverWhere(store.https.address, store.listening!.port)
     // After the code, what the door's key is known by: a device that opens the link knows the door again by it.
-    return { url: `https://${where}${ENTER_PATH}#${code}.${fingerprint}`, where, code: shownCode(code), expires, ...(person !== undefined ? { person } : {}) }
+    return { url: codeLink(`https://${where}`, code, fingerprint), where, code: shownCode(code), expires, ...(person !== undefined ? { person } : {}) }
   }
   if (!status.on) throw new Refused('On this Wi-Fi is off: turn it on first')
   if (!status.listening) throw new Refused(status.problem ?? 'the door is not open')
@@ -348,9 +347,9 @@ async function addDevice(io: CliIO, said?: string): Promise<Given> {
   if (!first) throw new Refused('this computer is on no network a device could reach it on')
   const person = await whose()
   const { code, expires } = await addCode(io.env, Date.now(), person)
-  const link = (host: string): string => `http://${urlHost(host)}:${port}${ENTER_PATH}#${code}`
+  const at = (host: string): string => `${urlHost(host)}:${port}`
   // The number beside the name, for the phone that cannot open a name on the network.
-  return { url: link(first), ...(name && number ? { numberUrl: link(number) } : {}), where: `${urlHost(first)}:${port}`, code: shownCode(code), expires, ...(person !== undefined ? { person } : {}) }
+  return { url: codeLink(`http://${at(first)}`, code), ...(name && number ? { numberUrl: codeLink(`http://${at(number)}`, code) } : {}), where: at(first), code: shownCode(code), expires, ...(person !== undefined ? { person } : {}) }
 }
 
 /**

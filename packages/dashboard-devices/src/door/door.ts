@@ -4,7 +4,7 @@ import { createServer, request as httpRequest, type IncomingMessage, type Outgoi
 import { createServer as createSecureServer, type Server as SecureServer } from 'node:https'
 import type { AddressInfo, Socket } from 'node:net'
 import type { Duplex } from 'node:stream'
-import { nameAddress, onOwnNetwork, plainAddress, urlHost, type AddressDeps } from './address.js'
+import { nameAddress, onOwnNetwork, plainAddress, serverWhere, urlHost, type AddressDeps } from './address.js'
 import { doorFingerprint, type Secured } from './certificate.js'
 import { deviceName } from './device-name.js'
 import { listen, readFields, refuse, sendJson, shut } from './http.js'
@@ -77,6 +77,15 @@ export const ME_CODE_PATH = `${ME_PATH}/code`
 export const ASK_PATH = `${DOOR_PREFIX}/ask`
 /** The cookie a device that is in carries: its id, a dot, its key. */
 export const DEVICE_COOKIE = 'oa_device'
+
+/**
+ * The link a code is handed out as, at the door at `origin`: what a camera opens and a computer
+ * pastes. The code rides after the `#`, which a browser keeps to itself; after it and a dot, on a
+ * server, what the door's key is known by (`pin`), since no certificate a device trusts says so.
+ */
+export function codeLink(origin: string, code: string, pin?: string): string {
+  return `${origin}${ENTER_PATH}#${code}${pin !== undefined ? `.${pin}` : ''}`
+}
 
 /** As long as a browser keeps a cookie at most; sent again before it runs out, so a device stays in until it is removed. */
 const COOKIE_MAX_AGE_S = 400 * 24 * 60 * 60
@@ -416,7 +425,7 @@ export async function openDoor(opts: DoorOptions): Promise<Door> {
         // By this computer's name on the network when it has one, as every code here is; by the number it was asked at too.
         const name = await nameAddress(opts.address)
         const asked = req.headers.host ?? `${urlHost(plainAddress(req.socket.localAddress ?? ''))}:${port}`
-        const link = (host: string): string => `http://${host}${ENTER_PATH}#${code}`
+        const link = (host: string): string => codeLink(`http://${host}`, code)
         return sendJson(res, 200, { state: 'allowed', link: link(name ? `${urlHost(name)}:${port}` : asked), ...(name ? { numberLink: link(asked) } : {}) })
       }
       if (left || Date.now() >= until) return sendJson(res, 200, { state: 'waiting', expires: ask.expires })
@@ -615,14 +624,14 @@ export async function openDoor(opts: DoorOptions): Promise<Door> {
     if (opts.proxied && store.tailscale) {
       const { code, expires } = await addCode(env, now(), who.person === owner ? undefined : who.person)
       // Tailscale's certificate is one every device trusts: nothing of the door's key follows the code.
-      return sendJson(res, 200, { url: `https://${store.tailscale.address}${ENTER_PATH}#${code}`, where: store.tailscale.address, code: shownCode(code), expires })
+      return sendJson(res, 200, { url: codeLink(`https://${store.tailscale.address}`, code), where: store.tailscale.address, code: shownCode(code), expires })
     }
     const fingerprint = await doorFingerprint(env)
     if (!store.https || !fingerprint) return refuse(res, 503, 'the door has no address or no key yet')
     const { code, expires } = await addCode(env, now(), who.person === owner ? undefined : who.person, forLine)
     const port = (server.address() as AddressInfo).port
-    const where = `${urlHost(store.https.address)}${port === 443 ? '' : `:${port}`}`
-    return sendJson(res, 200, { url: `https://${where}${ENTER_PATH}#${code}.${fingerprint}`, where, code: shownCode(code), expires })
+    const where = serverWhere(store.https.address, port)
+    return sendJson(res, 200, { url: codeLink(`https://${where}`, code, fingerprint), where, code: shownCode(code), expires })
   }
 
   /**

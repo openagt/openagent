@@ -2,7 +2,7 @@ import { stat } from 'node:fs/promises'
 import { createServer, type Server } from 'node:http'
 import { hostname } from 'node:os'
 import { CHALLENGE_PREFIX, LETS_ENCRYPT } from './acme.js'
-import { numberAddress, onOwnNetwork, plainAddress, urlHost, type AddressDeps } from './address.js'
+import { numberAddress, onOwnNetwork, plainAddress, serverWhere, type AddressDeps } from './address.js'
 import { keepCertificate, type KeepOptions, type Keeper, type Secured } from './certificate.js'
 import { openDoor, type Door } from './door.js'
 import { listen, shut } from './http.js'
@@ -85,8 +85,8 @@ export function routeFor(line: Line, store: Store, target: string, env: NodeJS.P
 }
 
 /** The door's port on a server, and the port the certificate office reads the proof on. */
-export const HTTPS_PORT = 443
-export const PROOF_PORT = 80
+const HTTPS_PORT = 443
+const PROOF_PORT = 80
 
 export interface ServeOptions {
   env: NodeJS.ProcessEnv
@@ -434,10 +434,7 @@ export async function serve(opts: ServeOptions): Promise<void> {
       door = undefined
       let proof: Server | undefined
       try {
-        proof = await openProof(proofPort, opts.host, proofs, () => {
-          const at = door?.port ?? httpsPort
-          return `https://${urlHost(address)}${at === HTTPS_PORT ? '' : `:${at}`}`
-        })
+        proof = await openProof(proofPort, opts.host, proofs, () => `https://${serverWhere(address, door?.port ?? httpsPort)}`)
         const keeper = await keepCertificate({
           env,
           host: address,
