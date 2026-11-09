@@ -47,6 +47,11 @@ function sessionIdFromUrl() {
   return match ? match[1] : undefined
 }
 
+/** This extension's version, which tells a stale script from a current one; `?` with no extension runtime, as in check.mjs. */
+function extensionVersion() {
+  return typeof chrome !== 'undefined' && chrome.runtime?.getManifest ? chrome.runtime.getManifest().version : '?'
+}
+
 /** What the daemon last said about our report, so the panel can say why nothing arrived. */
 let bridgeStatus = 'not sent yet'
 
@@ -176,9 +181,8 @@ function cleanText(text) {
  */
 function sayHello(sessionId, note) {
   if (typeof chrome === 'undefined' || !chrome.runtime?.sendMessage) return
-  const version = chrome.runtime.getManifest?.().version ?? '?'
   try {
-    chrome.runtime.sendMessage({ type: 'oa-hello', sessionId, version, note }, reply => {
+    chrome.runtime.sendMessage({ type: 'oa-hello', sessionId, version: extensionVersion(), note }, reply => {
       // The worker's reply says whether this tab is the Driver (#1332): the overlay goes up
       // the moment the page loads, not when the first cycle reaches it.
       if (!chrome.runtime.lastError && reply?.driver) setDriver(true)
@@ -1152,9 +1156,8 @@ function renderOverlay() {
   if (signInPage()) return removeOverlay()
   const overlay = document.getElementById(OVERLAY_ID)
   if (!overlay) return
-  const version = typeof chrome !== 'undefined' && chrome.runtime?.getManifest ? chrome.runtime.getManifest().version : '?'
   ownWrites(() => {
-    overlay.querySelector('.oa-driver-status').textContent = `bridge v${version} · ${location.pathname} · ${turnRows().length} turn rows · question ${bridgeStatus} · transcript ${transcriptStatus}`
+    overlay.querySelector('.oa-driver-status').textContent = `bridge v${extensionVersion()} · ${location.pathname} · ${turnRows().length} turn rows · question ${bridgeStatus} · transcript ${transcriptStatus}`
     overlay.querySelector('.oa-driver-log').textContent = driverLines.join('\n')
   })
 }
@@ -1332,8 +1335,7 @@ if (!IS_TOP) {
     const head = document.createElement('div')
     head.style.cssText = `display:flex;align-items:center;gap:8px${collapsed ? '' : ';margin-bottom:6px'}`
     const title = document.createElement('span')
-    const version = typeof chrome !== 'undefined' && chrome.runtime?.getManifest ? chrome.runtime.getManifest().version : '?'
-    const fullTitle = `OpenAgent bridge v${version}`
+    const fullTitle = `OpenAgent bridge v${extensionVersion()}`
     // Folded, the label shrinks to "OA": the fold exists to give the corner back, so the full
     // name and version retreat to the tooltip.
     title.textContent = collapsed ? 'OA' : fullTitle
