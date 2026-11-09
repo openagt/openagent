@@ -108,11 +108,16 @@ already made, and lists it in its pull request; for anything else it proposes an
   server, so a laptop on any internet starts a run on a computer at home. Picked over opening
   the computer at home to the internet first, which needs a port on its router and fails where
   the internet provider shares one address between many homes.
-- Whoever connects a computer to a server several people use picks who there may start runs on
-  it: nobody, only them, or them and people they pick on the server by name. A run of another
-  person's there runs as that person's own user on the computer, with their own logins, never
-  its owner's. Picked over an "Everyone" switch, which let in whoever is added to the server
-  later without the owner's word.
+- A computer at home behind a server has one switch for the server: whether it may start the
+  owner's runs on it, or only show them, as a computer's page has for a server. Who else may is
+  its People, added by name from the server's people, or with a code at its own door when it has
+  one; a computer with both ways asks which. A run of another person's there runs as that
+  person's own user on the computer, with their own logins, never its owner's. Picked over a
+  three-way choice that said the People tab again, and over an "Everyone" switch, which let in
+  whoever is added to the server later without the owner's word.
+- The switch and the people are two settings: turning the server off or on never changes who is
+  named, and an Update sends both as they are. Picked over a mode that cleared the names, which
+  lost the people at the first Update.
 - A person picked gets no link and no code: they reach the computer through the server they are
   already in at. Its owner's page lists the server's people to pick from, which the server's door
   tells every device that is in. Picked over inviting them to the computer itself a second time.

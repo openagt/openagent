@@ -37,9 +37,8 @@ export const USAGE = `usage: devices server <command>
                                        and, for one fixed on the computer itself, a line to paste there once
   add-through <address>                save a computer reached through a server among OpenAgent's machines, through that
                                        server, once its install is done
-  who <address> nobody|me              say who on its server may start runs on a computer reached through it: nobody (the
-                                       server only shows its runs), or only its own person; the user each person named
-                                       before has on it is deleted, with everything in it
+  who <address> nobody|me              whether its server may start runs on a computer reached through it (me), or only
+                                       show them (nobody); the people named on it stay as they are
   people <address> <name>...           the people on its server who may start runs on a computer reached through it too,
                                        by their names there: each gets a user of their own on it at their first run
   link <address> [--for <name>]        a code the server's door gives for a new device, once, for ten minutes, with its
@@ -456,25 +455,16 @@ async function reachedThrough(io: CliIO, said: string): Promise<Server & { throu
 const WHO_TIMEOUT_MS = 20_000
 
 /**
- * Say who on its server may start runs on a computer reached through it: nobody, or only its own
- * person. Each person named before, whose user its line made there, is taken away with all of it:
- * their logins, their copies of projects, and work they did not push. Answers its persons as they
- * are after.
+ * Say whether its server may start runs on a computer reached through it, or only show them. The
+ * people named on it stay named: taking one off is Remove person. Answers its persons.
  */
 async function setWho(io: CliIO, said: string, who: Who): Promise<DevicesStatus> {
   const server = await reachedThrough(io, said)
-  const over = io.exec ? { exec: io.exec } : {}
-  const listed = await readDevices(server, over)
-  if (!listed.ok) throw new Refused(listed.error)
-  const others = listed.persons.filter(person => !person.owner && person.from === server.through).map(person => person.name)
-  const answered = await tellWho(server, whoScript(server.through, who, others), others.length ? PERSON_TIMEOUT_MS : WHO_TIMEOUT_MS, over)
+  const answered = await tellWho(server, whoScript(server.through, who), WHO_TIMEOUT_MS, io.exec ? { exec: io.exec } : {})
   if (answered.ok)
     await update(io.env, store => {
       const saved = store.servers.find(candidate => candidate.address === server.address)
-      if (saved) {
-        saved.who = who
-        delete saved.people
-      }
+      if (saved) saved.who = who
     })
   return devicesOf(answered, undefined)
 }
@@ -485,12 +475,11 @@ async function setWho(io: CliIO, said: string, who: Who): Promise<DevicesStatus>
  */
 async function setPeople(io: CliIO, said: string, people: readonly string[]): Promise<DevicesStatus> {
   const server = await reachedThrough(io, said)
-  const answered = await tellWho(server, peopleScript(server.through, people), WHO_TIMEOUT_MS, io.exec ? { exec: io.exec } : {})
+  const answered = await tellWho(server, peopleScript(server.through, people, server.who ?? 'me'), WHO_TIMEOUT_MS, io.exec ? { exec: io.exec } : {})
   if (answered.ok)
     await update(io.env, store => {
       const saved = store.servers.find(candidate => candidate.address === server.address)
       if (saved) {
-        saved.who = 'me'
         if (people.length) saved.people = [...people]
         else delete saved.people
       }

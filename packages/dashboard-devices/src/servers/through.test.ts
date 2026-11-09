@@ -52,18 +52,19 @@ test('a computer reached through a server has its line where a server has its do
 test('the line step names the owner, lets the line in with the link on standard input, and says who may start runs', async () => {
   const helper = '/opt/openagent/bin/openagent-person'
   const asked = await withDoor(LINE_STEP.script({ ...FACTS, through: { ...FACTS.through!, link: LINK, people: ['dani', "Lee O'Neil"] } }))
-  assert.deepEqual(asked, ['|owner rom|', `|line add -|${LINK}`, `${helper}|line for ${VPS} dani Lee O'Neil|`])
-  // A computer that keeps its line there already gets no link, and keeps what it is told.
-  assert.deepEqual(await withDoor(LINE_STEP.script(FACTS)), ['|owner rom|', `${helper}|line full ${VPS}|`])
-  // Nobody: the server only watches, whoever was named.
-  assert.deepEqual(await withDoor(LINE_STEP.script({ ...FACTS, through: { ...FACTS.through!, who: 'nobody', people: ['dani'] } })), ['|owner rom|', `${helper}|line watch ${VPS}|`])
+  assert.deepEqual(asked, ['|owner rom|', `|line add -|${LINK}`, `${helper}|line for ${VPS} dani Lee O'Neil|`, `${helper}|line full ${VPS}|`])
+  // A computer that keeps its line there already gets no link; both settings are told as this computer holds them, nobody named included.
+  assert.deepEqual(await withDoor(LINE_STEP.script(FACTS)), ['|owner rom|', `${helper}|line for ${VPS}|`, `${helper}|line full ${VPS}|`])
+  // Nobody: the server only watches; who is named is told all the same, for when it starts runs again.
+  assert.deepEqual(await withDoor(LINE_STEP.script({ ...FACTS, through: { ...FACTS.through!, who: 'nobody', people: ['dani'] } })), ['|owner rom|', `${helper}|line for ${VPS} dani|`, `${helper}|line watch ${VPS}|`])
   // The link is a word of the script, never on a command line.
   assert.doesNotMatch(LINE_STEP.script({ ...FACTS, through: { ...FACTS.through!, link: LINK } }), new RegExp(`line add ${LINK.replace(/[.#/]/g, '\\$&')}`))
+  // The mode alone: whoever is named stays named.
   assert.deepEqual(await withDoor(whoScript(VPS, 'nobody')), [`${helper}|line watch ${VPS}|`, '|status|'])
-  assert.deepEqual(await withDoor(whoScript(VPS, 'me', ['dani'])), [`${helper}|line full ${VPS}|`, `${helper}|remove-person dani|`, '|status|'])
-  assert.deepEqual(await withDoor(peopleScript(VPS, ['dani', 'lee'])), [`${helper}|line for ${VPS} dani lee|`, '|status|'])
-  assert.deepEqual(await withDoor(peopleScript(VPS, [])), [`${helper}|line full ${VPS}|`, '|status|'], 'nobody named: only its own person')
-  assert.deepEqual(await withDoor(whoScript(VPS, 'me', ['dani', 'sam'])), [`${helper}|line full ${VPS}|`, `${helper}|remove-person dani|`, `${helper}|remove-person sam|`, '|status|'])
+  assert.deepEqual(await withDoor(whoScript(VPS, 'me')), [`${helper}|line full ${VPS}|`, '|status|'])
+  // The people, then the mode as it stands: naming people never turns the server on.
+  assert.deepEqual(await withDoor(peopleScript(VPS, ['dani', 'lee'], 'me')), [`${helper}|line for ${VPS} dani lee|`, `${helper}|line full ${VPS}|`, '|status|'])
+  assert.deepEqual(await withDoor(peopleScript(VPS, [], 'nobody')), [`${helper}|line for ${VPS}|`, `${helper}|line watch ${VPS}|`, '|status|'], 'nobody named: only its own person')
 })
 
 test('the person at a computer reached through a server may open its OpenAgent: their user is let call the owner\'s ports, and no other', async () => {
@@ -133,6 +134,7 @@ test('the install of a computer reached through a server gives it its line as th
     assert.deepEqual(again.asked, [`onMachinePerson ["${VPS}"]`])
     assert.match(kept.calls.at(-1)!.script, /^LINK=''$/m)
     assert.match(kept.calls.at(-1)!.script, new RegExp(`line for "\\$URL" 'dani'`))
+    assert.match(kept.calls.at(-1)!.script, /line full "\$URL"/)
   } finally {
     await home.remove()
   }
@@ -214,7 +216,7 @@ test('add-through saves the computer among the machines through its server, by i
   }
 })
 
-test('people names who on the server may start runs too; who takes them away, with the users the line made for them, and nobody else\'s', async () => {
+test('people names who on the server may start runs too; who only turns the server on or off here, and the people stay named', async () => {
   const home = await testHome()
   try {
     await update(home.env, store => void store.servers.push({ ...BOX, through: VPS, who: 'me', steps: freshSteps('through').map(step => ({ ...step, state: 'done' })), adding: false }))
@@ -232,21 +234,20 @@ test('people names who on the server may start runs too; who takes them away, wi
     assert.equal(gone.code, 0, gone.err.join('\n'))
     assert.deepEqual((await readStore(home.env)).servers[0]!.people, ['dani'])
 
-    const said = await cli(home.env, ['who', BOX.address, 'me'], { exec })
+    const said = await cli(home.env, ['who', BOX.address, 'nobody'], { exec })
     assert.equal(said.code, 0, said.err.join('\n'))
     const script = calls.at(-1)!.script
-    assert.match(script, /line full "\$URL"/)
-    assert.match(script, /remove-person 'dani'/)
-    assert.match(script, /remove-person 'lee'/)
-    assert.doesNotMatch(script, /remove-person 'sam'|remove-person 'rom'/)
+    assert.match(script, /line watch "\$URL"/)
+    assert.doesNotMatch(script, /remove-person|line for/)
     assert.deepEqual((said.out as { persons: unknown[] }).persons.slice(1, 2), [{ name: 'dani', from: VPS }])
-    assert.deepEqual([(await readStore(home.env)).servers[0]!.who, (await readStore(home.env)).servers[0]!.people], ['me', undefined])
+    assert.deepEqual([(await readStore(home.env)).servers[0]!.who, (await readStore(home.env)).servers[0]!.people], ['nobody', ['dani']])
 
     persons = [{ name: 'rom', owner: true }, { name: 'sam', from: 'https://other.example' }]
-    const kept = await cli(home.env, ['who', BOX.address, 'nobody'], { exec })
+    const kept = await cli(home.env, ['who', BOX.address, 'me'], { exec })
     assert.equal(kept.code, 0)
+    assert.match(calls.at(-1)!.script, /line full "\$URL"/)
     assert.doesNotMatch(calls.at(-1)!.script, /remove-person/)
-    assert.equal((await readStore(home.env)).servers[0]!.who, 'nobody')
+    assert.deepEqual([(await readStore(home.env)).servers[0]!.who, (await readStore(home.env)).servers[0]!.people], ['me', ['dani']])
     assert.equal((await cli(home.env, ['who', BOX.address, 'everyone'])).code, 2)
   } finally {
     await home.remove()

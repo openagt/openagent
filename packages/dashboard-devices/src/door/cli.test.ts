@@ -306,7 +306,8 @@ test('line for, full and watch say who at the server may start runs here; only a
     assert.equal((await run(server, ['line', 'for', '203.0.113.7', 'ada', '<not a name>'])).code, 1, 'a name is a name')
 
     assert.deepEqual(linesOf((await run(server, ['line', 'for', '203.0.113.7', 'ada', 'kim', 'ada'])).out), [{ mode: 'full', for: ['ada', 'kim'], person: 'rom' }], 'each named once')
-    assert.deepEqual(linesOf((await run(server, ['line', 'watch', '203.0.113.7'])).out), [{ mode: 'watch', for: undefined, person: 'rom' }], 'nobody: only what reads, and for nobody else')
+    assert.deepEqual(linesOf((await run(server, ['line', 'watch', '203.0.113.7'])).out), [{ mode: 'watch', for: ['ada', 'kim'], person: 'rom' }], 'only what reads; who is named stays named')
+    assert.deepEqual(linesOf((await run(server, ['line', 'full', '203.0.113.7'])).out), [{ mode: 'full', for: ['ada', 'kim'], person: 'rom' }], 'starts runs again, for the same people')
     assert.deepEqual(linesOf((await run(server, ['line', 'for', '203.0.113.7', 'ada', 'kim'])).out), [{ mode: 'full', for: ['ada', 'kim'], person: 'rom' }])
 
     // The server has not said yet who is there: nobody is taken for gone.
@@ -320,9 +321,8 @@ test('line for, full and watch say who at the server may start runs here; only a
     assert.deepEqual((await persons()).filter(person => person.removed).map(person => person.name), ['kim'])
 
     // Only me: the others are switched off here, not gone there; what the server last said of who is there still holds.
-    await run(server, ['line', 'full', '203.0.113.7'])
-    assert.deepEqual((await persons()).filter(person => person.removed).map(person => person.name), ['kim'])
     assert.deepEqual(linesOf((await run(server, ['line', 'for', '203.0.113.7'])).out), [{ mode: 'full', for: undefined, person: 'rom' }], 'for nobody: only me again')
+    assert.deepEqual((await persons()).filter(person => person.removed).map(person => person.name), ['kim'])
     await run(server, ['line', 'for', '203.0.113.7', 'ada', 'kim'])
 
     const kept = await run(home.env, ['keep', 'kim'])

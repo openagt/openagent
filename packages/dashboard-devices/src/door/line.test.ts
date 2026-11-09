@@ -953,8 +953,8 @@ test('a computer whose line names people at its server has an address for each o
     // The computer hears from its server who is there.
     await until('the computer heard who is at the server', async () => (JSON.stringify((await readStore(r.computer)).lines[0]!.persons) === JSON.stringify(['ada', 'rom']) ? true : undefined))
 
-    // Only rom again: the address for ada goes, and her OpenAgent there drops the computer.
-    await command(r.computer, 'line', 'full', '127.0.0.1')
+    // Only rom again, named so: the address for ada goes, and her OpenAgent there drops the computer. (The mode alone would keep her named.)
+    await command(r.computer, 'line', 'for', '127.0.0.1')
     await until('the server took the address for ada away', async () => {
       const kept = (await readStore(r.server)).devices.find(device => device.line)!.line!
       return kept.others === undefined && kept.for === undefined ? true : undefined

@@ -5,7 +5,7 @@ import { testConnection, type Answer, type ServerRow, type Tested } from './serv
 import { CopyButton } from './codes.js'
 import { hasDoor, labelOf } from './model.js'
 import { Problem, StepLine, StepMark } from './parts.js'
-import { WhoCanStart } from './ServerPage.js'
+import { RunsThrough } from './ServerPage.js'
 import type { Devices } from './use-devices.js'
 
 // "Set up a server", in steps: where the server is, a test that this computer gets in there,
@@ -407,16 +407,14 @@ function Ready({ d, server, onInvite, onClose }: { d: Devices; server: ServerRow
         <CircleCheck aria-hidden className="h-5 w-5 text-success" />
         <p className="text-sm font-medium">{`${name} is ready.`}</p>
         <p className="text-xs text-muted-foreground">
-          {server.through !== undefined ? 'Your runs can go there from here. Who else uses it?' : 'Your runs can go there from here. Anyone else? Add them: each works there with their own logins.'}
+          Your runs can go there from here. Anyone else? Add them: each works there with their own logins.
         </p>
       </div>
-      {server.through !== undefined && <WhoCanStart host={d.host} server={{ ...server, through: server.through }} label={name} busy={d.busy} onChange={d.act} />}
+      {server.through !== undefined && <RunsThrough host={d.host} server={{ ...server, through: server.through }} label={name} busy={d.busy} onChange={d.act} />}
       <Footer>
-        {server.through === undefined && (
-          <Button size="sm" variant="outline" onClick={onInvite}>
-            Add people
-          </Button>
-        )}
+        <Button size="sm" variant="outline" onClick={onInvite}>
+          Add people
+        </Button>
         <Button size="sm" onClick={onClose}>
           Done
         </Button>
