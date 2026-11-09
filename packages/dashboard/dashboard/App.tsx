@@ -1,8 +1,8 @@
 import { PermissionsPage } from './components/Accounts.js'
 import { AgentsPage } from './components/AgentsPage.js'
 import { useEffect, useMemo, useState, type CSSProperties } from 'react'
-import type { Intervention, Activity, ProjectionRead, ProjectSummary, RecentAgent } from '../src/index.js'
-import { onProjectFiles, onInterventions, onActivity, onRecentAgents, onStartedName } from './rpc/reads.js'
+import type { Intervention, Activity, ProjectionRead, ProjectSummary } from '../src/index.js'
+import { onProjectFiles, onInterventions, onActivity, onStartedName } from './rpc/reads.js'
 import { sendStart } from './rpc/control.js'
 import { onProjects } from './rpc/projects.js'
 import { AgentHistory } from './components/AgentHistory.js'
@@ -30,8 +30,8 @@ import { DAEMON_SERVICES } from './lib/daemon-services.js'
 import { startPicks } from './lib/use-start-agent.js'
 import { stashPendingDraft } from './lib/draft-handoff.js'
 import { useLiveEvents } from './lib/use-live-events.js'
-import { STARTING_AT_MOST_MS, useAgents } from './lib/use-agents.js'
-import { runsAgain, useRunsPace } from './lib/runs-changed.js'
+import { useAgents, useRecentAgents } from './lib/use-agents.js'
+import { runsAgain } from './lib/runs-changed.js'
 import { AGENTS_PAGE, PERMISSIONS_PAGE, useRoute } from './lib/use-route.js'
 import { formatRoute, type Route } from './lib/route.js'
 import { projectAddresses, SESSIONS_ID } from '../src/project-address.js'
@@ -57,9 +57,6 @@ const EMPTY_INTERVENTIONS: ProjectionRead<Intervention> = { items: [], whole: []
 
 /** Stable initial for the activity poll (#627), so it does not churn on every render. */
 const EMPTY_ACTIVITY: ProjectionRead<Activity> = { items: [], whole: [] }
-
-/** Stable initial for the cross-project recents poll, so it does not churn on every render. */
-const EMPTY_RECENT: RecentAgent[] = []
 
 // The dashboard shell (#405 phase 2): Sessions | main | the panes, with the project
 // selection in the top nav as a dropdown since #772 (it used to be a rail of its own). The main pane
@@ -230,26 +227,9 @@ export function App() {
   useActivityNotifications(activity, browserActivity)
 
   // The shared sidebar's recents when all projects show (#shared-shell): the rail pools every
-  // project's sessions here. Polled only then — a picked project's own agents (above) carry its rail.
+  // project's sessions here.
   const allShow = scope === null && !scopePending
-  const recentPace = useRunsPace(10_000)
-  const { value: recentAgents, reload: reloadRecent, loaded: recentLoaded } = usePolled<RecentAgent[]>(allShow ? onRecentAgents : null, EMPTY_RECENT, recentPace, [allShow], undefined, runsAgain(undefined))
-  // Every project's runs are read every ten seconds, but a run just started is read every second
-  // until its row and its name are in, as a project's own list reads it (`use-agents.ts`): the name
-  // is the first thing a person waits on. Only for a run just started: one that never shows in that
-  // list (it runs on another machine) is not read for again each time the list is shown.
-  const startedRecent = agentStart.id === null ? undefined : recentAgents.find(row => row.agent.id === agentStart.id && row.projectId === agentStart.projectId)
-  const recentAwaitsStart =
-    allShow && agentStart.id !== null && Date.now() - agentStart.at < STARTING_AT_MOST_MS && (startedRecent === undefined || awaitingName(startedRecent.agent, preferences.nameRuns !== false))
-  useEffect(() => {
-    if (!recentAwaitsStart) return
-    const timer = setInterval(() => void reloadRecent(), 1000)
-    const stop = setTimeout(() => clearInterval(timer), STARTING_AT_MOST_MS)
-    return () => {
-      clearInterval(timer)
-      clearTimeout(stop)
-    }
-  }, [recentAwaitsStart, reloadRecent])
+  const { recentAgents, reload: reloadRecent, loaded: recentLoaded } = useRecentAgents(allShow, agentStart)
 
   // An agent just started in `inProject`, which is not always the selected one: the onboarding
   // checklist starts one from the Overview, where nothing is selected (#1169).
