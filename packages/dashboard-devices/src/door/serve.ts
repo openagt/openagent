@@ -5,6 +5,7 @@ import { CHALLENGE_PREFIX, LETS_ENCRYPT } from './acme.js'
 import { numberAddress, onOwnNetwork, plainAddress, urlHost, type AddressDeps } from './address.js'
 import { keepCertificate, type KeepOptions, type Keeper, type Secured } from './certificate.js'
 import { openDoor, type Door } from './door.js'
+import { listen, shut } from './http.js'
 import { linePorts, openLines, tellOpenAgent, whomToTell } from './line-in.js'
 import { askMe, keepLine, type MeThere, type Route } from './line-out.js'
 import { startPersonWork } from './persons.js'
@@ -180,16 +181,7 @@ async function openProof(port: number, host: string | undefined, proofs: Readonl
   // Open to every network: a caller that sends nothing, or too many at once, is not waited for.
   server.headersTimeout = 10_000
   server.maxConnections = 256
-  const listen = (on: string): Promise<void> =>
-    new Promise((resolve, reject) => {
-      server.once('error', reject)
-      server.listen(port, on, () => {
-        server.removeListener('error', reject)
-        resolve()
-      })
-    })
-  if (host !== undefined) await listen(host)
-  else await listen('::').catch(err => ((err as NodeJS.ErrnoException).code === 'EAFNOSUPPORT' ? listen('0.0.0.0') : Promise.reject(err)))
+  await listen(server, port, host)
   return server
 }
 
@@ -423,8 +415,7 @@ export async function serve(opts: ServeOptions): Promise<void> {
     if (!served) return
     await lines.close()
     served.keeper.stop()
-    served.proof.closeAllConnections()
-    await new Promise<void>(resolve => served!.proof.close(() => resolve()))
+    await shut(served.proof)
     served = undefined
     secured = undefined
     asking = undefined
@@ -468,10 +459,7 @@ export async function serve(opts: ServeOptions): Promise<void> {
       } catch (err) {
         failedAt = Date.now()
         // What was opened for a certificate that cannot be kept (a key file that cannot be read) is closed again.
-        if (proof) {
-          proof.closeAllConnections()
-          await new Promise<void>(resolve => proof!.close(() => resolve()))
-        }
+        if (proof) await shut(proof)
         // The door's process of an OpenAgent that just ended still holds the port: it goes by itself.
         problem = startingOver(err, store) ? store.problem : whyNot(err, proofPort)
       }

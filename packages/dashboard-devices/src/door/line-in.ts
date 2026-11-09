@@ -1,6 +1,7 @@
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from 'node:http'
 import { PassThrough, Readable, type Duplex } from 'node:stream'
 import { DATA, END, HEAD, Link, RESET, carriedHeaders, carriedPath, carriedValue, readHead, sendBody, type Frame } from './frames.js'
+import { listen, refuse, sendJson, shut } from './http.js'
 import { PERSON_HEADER, nameWord, personLinePorts, personOf, type Store } from './store.js'
 
 /**
@@ -202,9 +203,6 @@ export function openLines(opts: LinesOptions = {}): Lines {
   const sessions = new Map<string, Session>()
   const addresses = new Map<string, { computer: LineComputer; server: Server }>()
 
-  const refuse = (res: ServerResponse, status: number, text: string): void => void res.writeHead(status, { 'content-type': 'text/plain; charset=utf-8', 'cache-control': 'no-store' }).end(text)
-  const json = (res: ServerResponse, value: unknown): void => void res.writeHead(200, { 'content-type': 'application/json', 'cache-control': 'no-store' }).end(JSON.stringify(value))
-
   const answer = (computer: LineComputer, req: IncomingMessage, res: ServerResponse): void => {
     // Asked by OpenAgent on this server, and by no page a browser on it opened: a page says where it
     // comes from, or reached this address under a name of its own, and is turned away either way.
@@ -219,8 +217,8 @@ export function openLines(opts: LinesOptions = {}): Lines {
     // key it is answered opens nothing: only this server reaches the address.
     if (path.split('?')[0] === ENTER_PATH) {
       req.resume()
-      if (req.method === 'POST') return json(res, { ok: true, key: 'line' })
-      if (req.method === 'DELETE') return json(res, { ok: true })
+      if (req.method === 'POST') return sendJson(res, 200, { ok: true, key: 'line' })
+      if (req.method === 'DELETE') return sendJson(res, 200, { ok: true })
       return refuse(res, 405, 'method not allowed')
     }
     if (!carriedPath(path)) return refuse(res, 404, 'not found')
@@ -271,20 +269,11 @@ export function openLines(opts: LinesOptions = {}): Lines {
     )
   }
 
-  const open = (computer: LineComputer): Promise<Server> =>
-    new Promise((resolve, reject) => {
-      const server = createServer((req, res) => answer(computer, req, res))
-      server.once('error', reject)
-      // This computer only: what is asked here is asked by OpenAgent on this server, and by nothing on a network.
-      server.listen(computer.port, '127.0.0.1', () => {
-        server.removeListener('error', reject)
-        resolve(server)
-      })
-    })
-
-  const shut = async (server: Server): Promise<void> => {
-    server.closeAllConnections()
-    await new Promise<void>(resolve => server.close(() => resolve()))
+  const open = async (computer: LineComputer): Promise<Server> => {
+    const server = createServer((req, res) => answer(computer, req, res))
+    // This computer only: what is asked here is asked by OpenAgent on this server, and by nothing on a network.
+    await listen(server, computer.port, '127.0.0.1')
+    return server
   }
 
   return {
