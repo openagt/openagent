@@ -355,7 +355,11 @@ export function sameDigest(a: string, b: string): boolean {
  */
 export const isAddress = (value: unknown): value is string => typeof value === 'string' && addressOf(value) === value
 
-/** `said` as the file keeps an address, or `undefined` for what is no server's number or name. */
+/**
+ * `said` as the file keeps an address, or `undefined` for what is no server's number or name. The
+ * servers this computer sets up over SSH are kept by it too, so the two always read the same; and
+ * nothing that a command could read as an option of its own passes.
+ */
 export function addressOf(said: string): string | undefined {
   if (said.length > 253) return undefined
   if (isIP(said) === 4) return said

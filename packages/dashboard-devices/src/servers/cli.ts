@@ -6,11 +6,11 @@ import type { Mint } from '@openagt/agent-driver-claude'
 import { ownGithubAccount } from './logins.js'
 import { ownDoor, type OwnDoor } from './own-door.js'
 import { OwnAtWork, giveOwnClaude, giveOwnGithub, isClaudeAccountId, personHere, removeOwn, startOverSoon } from './own.js'
-import { askOpenAgent, copyGithubToOther, isOtherUrl, isSharedUrl, lineTo, mintFor, otherLogins, setSharedReach, startMint } from './shared.js'
+import { askOpenAgent, copyGithubToOther, isOtherUrl, lineTo, mintFor, otherLogins, setSharedReach, startMint } from './shared.js'
 import { lastLines, openSession, withAdvice, type Exec } from './ssh.js'
 import { PERSON_TIMEOUT_MS, SERVER_MARK, SERVER_USER, devicesScript, peopleScript, reachedOf, stepLabel, stepsFor, whoScript, type Who } from './steps.js'
-import { LOGIN_KINDS, addressOf, isServerName, atWork, doorUrl, freshSteps, isMachineUrl, isUser, isVersion, keepDevices, keptDevices, readStore, throughUrl, update, working, type Login, type LoginKind, type Reach, type Server, type StepState, type Store } from './store.js'
-import { nameOf } from '../door/store.js'
+import { LOGIN_KINDS, isServerName, atWork, doorUrl, freshSteps, isUser, isVersion, keepDevices, keptDevices, readStore, throughUrl, update, working, type Login, type LoginKind, type Reach, type Server, type StepState, type Store } from './store.js'
+import { addressOf, isLineUrl, nameOf } from '../door/store.js'
 import { Unreadable } from '../home-file.js'
 
 /**
@@ -257,16 +257,14 @@ function startWork(words: string[], env: NodeJS.ProcessEnv): number {
   return child.pid
 }
 
-/** Whether `said` is a server's door among OpenAgent's machines: the only kind a computer keeps its line to. */
-const isDoor = (said: string | undefined): said is string => said !== undefined && isMachineUrl(said) && said.startsWith('https://')
-
 async function connect(io: CliIO, said: { address: string; user: string; version: string; through?: string; tailscale?: true }): Promise<Status> {
   const address = addressOf(said.address)
   if (address === undefined) throw new Refused(`${said.address} is not a server's number or name`)
   if (said.tailscale && !/\.ts\.net$/.test(address)) throw new Refused(`${said.address} is not a name on Tailscale: connect it by its name there, like name.tail1234.ts.net`)
   if (!isUser(said.user)) throw new Refused(`${said.user} is not a user name`)
   if (!isVersion(said.version)) throw new Refused(`${said.version} is not a version of OpenAgent`)
-  if (said.through !== undefined && !isDoor(said.through)) throw new Refused(`${said.through} is not a server's address among OpenAgent's machines`)
+  // Only a server's door on the internet is one a computer keeps its line to.
+  if (said.through !== undefined && !isLineUrl(said.through)) throw new Refused(`${said.through} is not a server's address among OpenAgent's machines`)
   // Written before the install's process starts, which reads it; held under this command's own
   // name until that process has one, so two presses of the button are one install.
   await update(io.env, store => {
@@ -705,12 +703,12 @@ export async function runCli(args: string[], io: CliIO): Promise<number> {
         return print(ownStatusOf(await readStore(io.env), name))
       }
       case 'shared': {
-        if (rest.length === 0 || !rest.every(isSharedUrl)) break
+        if (rest.length === 0 || !rest.every(isLineUrl)) break
         return print(await sharedStatusOf(io, rest))
       }
       case 'shared-reach': {
         const [url, mode] = rest
-        if (rest.length !== 2 || !isSharedUrl(url) || (mode !== 'full' && mode !== 'watch' && mode !== 'off')) break
+        if (rest.length !== 2 || !isLineUrl(url) || (mode !== 'full' && mode !== 'watch' && mode !== 'off')) break
         await setSharedReach(io.env, url, mode, io.door ?? ownDoor).catch((err: unknown) => {
           throw new Refused(err instanceof Error ? err.message : String(err))
         })
@@ -718,7 +716,7 @@ export async function runCli(args: string[], io: CliIO): Promise<number> {
       }
       case 'shared-forget': {
         const [url] = rest
-        if (rest.length !== 1 || !isSharedUrl(url)) break
+        if (rest.length !== 1 || !isLineUrl(url)) break
         await setSharedReach(io.env, url, 'off', io.door ?? ownDoor).catch((err: unknown) => {
           throw new Refused(err instanceof Error ? err.message : String(err))
         })

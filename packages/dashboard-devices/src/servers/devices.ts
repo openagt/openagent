@@ -1,7 +1,7 @@
 import { lastLines, openSession, withAdvice, type Exec } from './ssh.js'
 import { PERSON_TIMEOUT_MS, SERVER_USER, devicesScript, ownerScript, removeDeviceScript, removePersonScript } from './steps.js'
-import { addressOf, isMachineUrl, type Server } from './store.js'
-import { nameOf } from '../door/store.js'
+import type { Server } from './store.js'
+import { addressOf, isLineUrl, nameOf } from '../door/store.js'
 
 /**
  * The devices that are in on a server, as its door lists them: asked over SSH, so a person sees
@@ -107,7 +107,7 @@ export function devicesIn(out: string): { devices: ServerDevice[]; persons: Serv
     const said = typeof problem === 'string' ? problem.replace(/[\p{Cc}\p{Cf}\p{Zl}\p{Zp}]/gu, ' ').trim().slice(0, 400) : ''
     if (!persons.length) persons.push({ name: known, owner: true })
     else if (owner !== true) {
-      const via = typeof from === 'string' && isMachineUrl(from) && from.startsWith('https://') ? from : undefined
+      const via = isLineUrl(from) ? from : undefined
       persons.push({ name: known, ...(working === true ? { working: true as const } : {}), ...(said ? { problem: said } : {}), ...(via !== undefined ? { from: via, ...(removed === true && kept !== true ? { removed: true as const } : {}), ...(kept === true ? { kept: true as const } : {}) } : {}) })
     }
   }

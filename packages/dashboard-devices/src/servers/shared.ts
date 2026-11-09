@@ -184,6 +184,3 @@ export async function setSharedReach(env: NodeJS.ProcessEnv, machine: string, mo
 
 /** Whether `said` names another person's computer the way OpenAgent's machines do: through a server, at its line's address on one, or at its own door. */
 export const isOtherUrl = (said: string | undefined): said is string => said !== undefined && (isThroughUrl(said) || (isMachineUrl(said) && (said.startsWith('http://127.0.0.1:') || said.startsWith('https://'))))
-
-/** Whether `said` names a shared server the way OpenAgent's machines do. */
-export const isSharedUrl = (said: string | undefined): said is string => said !== undefined && isMachineUrl(said) && said.startsWith('https://')

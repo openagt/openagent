@@ -1,6 +1,6 @@
 import { readFile } from 'node:fs/promises'
-import { isIP } from 'node:net'
-import { nameOf } from '../door/store.js'
+import { urlHost } from '../door/address.js'
+import { isAddress, isLineUrl, nameOf } from '../door/store.js'
 import { Unreadable, homeFile, jsonFile, withLock, writeWhole } from '../home-file.js'
 import { pidAlive } from '../process.js'
 import { reachedOf, stepIdsFor, type Reached, type StepId, type Who } from './steps.js'
@@ -149,21 +149,6 @@ export async function keepDevices(env: NodeJS.ProcessEnv, address: string, said:
   })
 }
 
-/**
- * `said` as a server's address is kept, or `undefined` for what is none: a number, or a name, in
- * the one form the server's door keeps it in too, so the two always read the same. Nothing that
- * could be read as an option of a command passes.
- */
-export function addressOf(said: string): string | undefined {
-  if (said.length > 253) return undefined
-  if (isIP(said) === 4) return said
-  if (isIP(said) === 6) {
-    if (said.includes('%') || said.includes('.')) return undefined
-    return new URL(`http://[${said}]`).hostname.slice(1, -1)
-  }
-  return /^(?=.*[a-z])[a-z0-9]([a-z0-9-]*[a-z0-9])?(\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)+$/i.test(said) ? said.toLowerCase() : undefined
-}
-
 /** Whether `said` is a user name a Linux server has. */
 export const isUser = (said: unknown): said is string => typeof said === 'string' && /^[a-z_][a-z0-9_-]{0,31}$/.test(said)
 
@@ -214,7 +199,7 @@ export const isAccount = (said: unknown): said is string => typeof said === 'str
 
 /** Where the door of the server at `address` answers: what OpenAgent's machines know it by. */
 export function doorUrl(address: string): string {
-  return `https://${address.includes(':') ? `[${address}]` : address}`
+  return `https://${urlHost(address)}`
 }
 
 /** Every step, not started: a computer reached through a server has its line where a server has its door. */
@@ -268,7 +253,7 @@ export function sanitize(value: unknown): Store {
     if (servers.length >= MAX_SERVERS) break
     if (!entry || typeof entry !== 'object') continue
     const { address, user, fingerprint, steps, worker, adding, reach, through, who, people, line, tailscale } = entry as Record<string, unknown>
-    if (typeof address !== 'string' || addressOf(address) !== address || !isUser(user)) continue
+    if (!isAddress(address) || !isUser(user)) continue
     if (servers.some(server => server.address === address)) continue
     // Every step, in the install's own order: a step the file does not know has not started.
     const known = new Map<string, Step>()
@@ -279,7 +264,7 @@ export function sanitize(value: unknown): Store {
       known.set(id, { id: id as StepId, state: state as StepState, ...(typeof said === 'string' && said ? { said: said.slice(-MAX_SAID) } : {}) })
     }
     // Only a server's door on the internet is one a computer keeps its line to.
-    const via = typeof through === 'string' && isMachineUrl(through) && through.startsWith('https://') ? through : undefined
+    const via = isLineUrl(through) ? through : undefined
     // Only one connected by its name on Tailscale is one there.
     const onTailscale = via === undefined && tailscale === true && /\.ts\.net$/.test(address)
     servers.push({
