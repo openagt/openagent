@@ -228,6 +228,26 @@ function statusOf(store: Store, env: NodeJS.ProcessEnv): Status {
   }
 }
 
+/**
+ * The status once the door's process followed a change of the file, as `settled` tells it, or as
+ * it stands after a moment: the answer says how the change went.
+ */
+async function followed(io: CliIO, settled: (store: Store) => boolean): Promise<Status> {
+  const deadline = Date.now() + (io.followMs ?? 3_000)
+  for (;;) {
+    const store = await readStore(io.env)
+    if (settled(store) || Date.now() > deadline) return statusOf(store, io.env)
+    await new Promise(resolve => setTimeout(resolve, 100))
+  }
+}
+
+/**
+ * Whether the door's process followed the door's moving to another place: once it is to be open
+ * there (`open`), it listens there or says why not; once it is not, it listens no more, unless On
+ * this Wi-Fi keeps it open.
+ */
+const moved = (open: boolean) => (store: Store): boolean => (open ? isListening(store) || store.problem !== undefined : !isListening(store) || store.on)
+
 async function setSwitch(io: CliIO, on: boolean): Promise<Status> {
   await update(io.env, store => {
     store.on = on
@@ -235,15 +255,11 @@ async function setSwitch(io: CliIO, on: boolean): Promise<Status> {
     if (!on && store.tailscale) delete store.wifiProblem
     else if (!on) delete store.problem
   })
-  const deadline = Date.now() + (io.followMs ?? 3_000)
-  for (;;) {
-    const store = await readStore(io.env)
+  return followed(io, store => {
     // Behind Tailscale the Wi-Fi's door is the one beside it, and the file says it apart.
     const said = store.tailscale ? store.wifiListening : store.listening
-    const settled = on ? wifiListening(store) !== undefined || (store.tailscale ? store.wifiProblem : store.problem) !== undefined : said === undefined || !pidAlive(said.pid)
-    if (settled || Date.now() > deadline) return statusOf(store, io.env)
-    await new Promise(resolve => setTimeout(resolve, 100))
-  }
+    return on ? wifiListening(store) !== undefined || (store.tailscale ? store.wifiProblem : store.problem) !== undefined : said === undefined || !pidAlive(said.pid)
+  })
 }
 
 /** On a server or off it: the file says which, and the answer waits a moment for the door's process to follow. */
@@ -255,14 +271,8 @@ async function setHttps(io: CliIO, address: string | undefined): Promise<Status>
     // Where the door listened until now is not where it will: its process says so anew.
     delete store.listening
   })
-  const deadline = Date.now() + (io.followMs ?? 3_000)
-  for (;;) {
-    const store = await readStore(io.env)
-    // A certificate takes longer than this waits for: the answer then says it is being asked for.
-    const settled = address === undefined ? !isListening(store) || store.on : isListening(store) || store.problem !== undefined
-    if (settled || Date.now() > deadline) return statusOf(store, io.env)
-    await new Promise(resolve => setTimeout(resolve, 100))
-  }
+  // A certificate takes longer than this waits for: the answer then says it is being asked for.
+  return followed(io, moved(address !== undefined))
 }
 
 /**
@@ -287,13 +297,7 @@ async function setTailscale(io: CliIO, on: boolean): Promise<Status> {
     // Where the door listened until now is not where it will: its process says so anew.
     delete store.listening
   })
-  const deadline = Date.now() + (io.followMs ?? 3_000)
-  for (;;) {
-    const store = await readStore(io.env)
-    const settled = address === undefined ? !isListening(store) || store.on : isListening(store) || store.problem !== undefined
-    if (settled || Date.now() > deadline) return statusOf(store, io.env)
-    await new Promise(resolve => setTimeout(resolve, 100))
-  }
+  return followed(io, moved(address !== undefined))
 }
 
 /** A code as a command answers it: the link a camera opens, and what is typed instead, where and the code. */
