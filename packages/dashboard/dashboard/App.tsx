@@ -485,7 +485,7 @@ export function App() {
       // list we have not read yet, where whether the agent runs is not known. Only a session that
       // is genuinely absent from a list we did read is gone.
       if (justStarted || !agentsLoaded)
-        return <AgentView {...agentPage} live={justStarted ? true : null} label={namesRuns ? startedTitle : agentStart.intent || undefined} naming={justStarted && namesRuns && startedTitle === undefined} remoteLabel={justStarted ? agentStart.runsOn : undefined} />
+        return <AgentView {...agentPage} live={justStarted ? true : null} label={namesRuns ? startedTitle : (justStarted && agentStart.intent) || undefined} naming={justStarted && namesRuns && startedTitle === undefined} remoteLabel={justStarted ? agentStart.runsOn : undefined} />
       return (
         <NotFound
           title="This agent is gone"
