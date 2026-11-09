@@ -1,7 +1,7 @@
 import { mkdir, stat, writeFile } from 'node:fs/promises'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
-import { errorMessage, nodeGitRunner, type GitRunner } from './git.js'
+import { errorMessage, gitReason, nodeGitRunner, type GitRunner } from './git.js'
 import { withLockFile, type CheckoutLockDeps } from './checkout-lock.js'
 import { originUrl } from './origin.js'
 import { NoRemoteAccountError, accountGit, clearRemoteAccount, readRemoteAccount, writeRemoteAccount, type RemoteAccount } from './remote-account.js'
@@ -76,10 +76,12 @@ async function takeRemote(folder: string, git: GitRunner): Promise<void> {
   }
 }
 
-/** What git said went wrong, as a person reads it: its last line, not the command it ran. */
-function gitReason(err: unknown): string {
-  const said = errorMessage(err).trim()
-  return (said.split('\n').at(-1) ?? said).replace(/^(fatal|error): /, '')
+/**
+ * What git said went wrong, as a person reads it: its own line about it ({@link gitReason}), not
+ * the command it ran nor the advice it adds after, without its `fatal:` or `error:`.
+ */
+function plainReason(err: unknown): string {
+  return gitReason(err).replace(/^(fatal|error): /, '')
 }
 
 /**
@@ -116,7 +118,7 @@ export async function withPersonalFolder(folder: string, message: CommitMessage,
         } catch (err) {
           // No account to send it as: made all the same, it waits here until one is named.
           if (err instanceof NoRemoteAccountError) return { ok: true, changed: Boolean(staged), pushed: false }
-          if (attempt >= 1) return { ok: false, committed: true, error: `the personal folder could not be sent to its remote: ${gitReason(err)}` }
+          if (attempt >= 1) return { ok: false, committed: true, error: `the personal folder could not be sent to its remote: ${plainReason(err)}` }
           if (staged) await git(['reset', '-q', '--hard', before], folder)
         }
       }
@@ -180,7 +182,7 @@ export async function syncPersonalFolder(address: string, account: RemoteAccount
   const reached = await git(['ls-remote', '--heads', 'origin'], folder).then(() => undefined, errorMessage)
   if (reached !== undefined) {
     await undo()
-    return { ok: false, error: `the repository could not be reached: ${gitReason(reached)}` }
+    return { ok: false, error: `the repository could not be reached: ${plainReason(reached)}` }
   }
   const sent = await withPersonalFolder(folder, 'sync', async () => {}, deps)
   if (sent.ok) return { ok: true }
