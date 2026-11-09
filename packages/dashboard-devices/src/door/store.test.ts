@@ -435,7 +435,7 @@ test('a person takes out only devices of their own, and a computer\'s other entr
   }
 })
 
-test('a line for everyone, who it is for and the persons a server last said are kept only when they read as such', () => {
+test('a line that names people, whom it is for and the persons a server last said are kept only when they read as such; one that was for everyone is for those it made here', () => {
   const added = new Date().toISOString()
   const key = sha256('k')
   const store = sanitize({
@@ -445,13 +445,15 @@ test('a line for everyone, who it is for and the persons a server last said are 
       { name: 'kim', added, port: 4400, from: 'http://203.0.113.7', kept: 'yes' },
     ],
     devices: [
-      { id: 'aaaaaa', name: 'studio', key, added, line: { port: 4310, others: { ada: 4210, kim: 4410, eve: 4211, rom: 4311, bad: 'x', 'NOT AN ACCOUNT': 4212 } }, person: 'rom' },
-      { id: 'bbbbbb', name: 'laptop', key, added, line: { port: 4410, others: { rom: 4310 } }, person: 'kim' },
-      { id: 'cccccc', name: 'desk', key, added, line: { port: 4211, others: [4212] } },
+      { id: 'aaaaaa', name: 'studio', key, added, line: { port: 4310, for: ['ada', 'kim', 'eve', 'ada', '<not one>', 3], others: { ada: 4210, kim: 4410, eve: 4211, rom: 4311, bad: 'x', 'NOT AN ACCOUNT': 4212 } }, person: 'rom' },
+      { id: 'bbbbbb', name: 'laptop', key, added, line: { port: 4410, for: ['rom'], others: { rom: 4310 } }, person: 'kim' },
+      { id: 'cccccc', name: 'desk', key, added, line: { port: 4211, others: { rom: 4212 } } },
+      { id: 'dddddd', name: 'box', key, added, line: { port: 4213, for: 'everyone', others: [4212] } },
     ],
     lines: [
-      { url: 'https://203.0.113.7', pin: 'p', key: 'id.k', mode: 'full', for: 'everyone', person: 'rom', persons: ['ada', 'rom', 'rom', '<not one>', 7] },
+      { url: 'https://203.0.113.7', pin: 'p', key: 'id.k', mode: 'full', for: ['ada', 'ada', 'kim', '<not one>', 7], person: 'rom', persons: ['ada', 'rom', 'rom', '<not one>', 7] },
       { url: 'https://203.0.113.8', pin: 'p', key: 'id.k', mode: 'full', for: 'some', person: '-x', persons: ['ada'] },
+      { url: 'https://203.0.113.9', pin: 'p', key: 'id.k', mode: 'full', for: 'everyone', person: 'rom' },
     ],
   })
   assert.deepEqual(
@@ -463,18 +465,23 @@ test('a line for everyone, who it is for and the persons a server last said are 
     ],
   )
   // Each port is one address: the second computer's own port was the first one's for kim already, so it has no line.
+  // An address is only for a person named, who is here; a computer that names nobody has none.
   assert.deepEqual(
     store.devices.map(device => device.line),
-    [{ port: 4310, others: { ada: 4210, kim: 4410 } }, undefined, { port: 4211 }],
+    [{ port: 4310, for: ['ada', 'kim', 'eve'], others: { ada: 4210, kim: 4410 } }, undefined, { port: 4211 }, { port: 4213 }],
   )
   assert.deepEqual(portsOf(store.devices[0]!), [4310, 4210, 4410])
   assert.deepEqual(store.lines, [
-    { url: 'https://203.0.113.7', pin: 'p', key: 'id.k', mode: 'full', for: 'everyone', person: 'rom', persons: ['ada', 'rom'] },
-    { url: 'https://203.0.113.8', pin: 'p', key: 'id.k', mode: 'full' },
+    { url: 'https://203.0.113.7', pin: 'p', key: 'id.k', mode: 'full', for: ['ada', 'kim'], person: 'rom', persons: ['ada', 'rom'] },
+    { url: 'https://203.0.113.8', pin: 'p', key: 'id.k', mode: 'full', persons: ['ada'] },
+    { url: 'https://203.0.113.9', pin: 'p', key: 'id.k', mode: 'full', person: 'rom' },
   ])
+  // A line that was for everyone at its server, from before people were named: for the persons it made here.
+  const was = sanitize({ persons: [{ name: 'ada', owner: true, added }, { name: 'rom', added, port: 4300, from: 'https://203.0.113.7' }, { name: 'kim', added, port: 4400 }], lines: [{ url: 'https://203.0.113.7', pin: 'p', key: 'id.k', mode: 'full', for: 'everyone' }] })
+  assert.deepEqual(was.lines[0]!.for, ['rom'])
 })
 
-test('a computer whose line is for everyone gets an address in the block of each other person with an OpenAgent of their own, and the owner\'s; given ports are kept, a person gone loses theirs', () => {
+test('a computer whose line names people gets an address in the block of each of them who has an OpenAgent of their own, and the owner\'s; given ports are kept, a person gone or no longer named loses theirs', () => {
   const added = new Date().toISOString()
   const key = sha256('k')
   const owner = { from: 4210, count: 50 }
@@ -486,7 +493,7 @@ test('a computer whose line is for everyone gets an address in the block of each
       { name: 'eve', added },
     ],
     devices: [
-      { id: 'aaaaaa', name: 'studio', key, added, line: { port: 4310 }, person: 'rom' },
+      { id: 'aaaaaa', name: 'studio', key, added, line: { port: 4310, for: ['ada', 'kim', 'eve', 'rom'] }, person: 'rom' },
       { id: 'bbbbbb', name: 'laptop', key, added, line: { port: 4210 } },
       { id: 'cccccc', name: 'kim', key, added, line: { port: 4410 }, person: 'kim' },
     ],
@@ -499,9 +506,14 @@ test('a computer whose line is for everyone gets an address in the block of each
   store.persons = store.persons.filter(person => person.name !== 'kim')
   assert.equal(shareLine(store, studio, owner), true)
   assert.deepEqual(studio.line!.others, { ada: 4211 })
-  // A line for everyone on a computer with nobody else yet is one all the same.
-  const alone = sanitize({ persons: [], devices: [{ id: 'dddddd', name: 'box', key, added, line: { port: 4210 } }] })
-  assert.equal(shareLine(alone, alone.devices[0]!, owner), true)
-  assert.deepEqual(alone.devices[0]!.line, { port: 4210, others: {} })
-  assert.deepEqual(sanitize(JSON.parse(JSON.stringify(alone))).devices[0]!.line, { port: 4210, others: {} })
+  // No longer named: the address goes; nobody named: no address at all, and nothing to write.
+  studio.line!.for = ['kim']
+  assert.equal(shareLine(store, studio, owner), true)
+  assert.equal(studio.line!.others, undefined)
+  assert.equal(shareLine(store, studio, owner), false)
+  // A computer that names someone who is not here yet has nothing to write either.
+  const alone = sanitize({ persons: [], devices: [{ id: 'dddddd', name: 'box', key, added, line: { port: 4210, for: ['ada'] } }] })
+  assert.equal(shareLine(alone, alone.devices[0]!, owner), false)
+  assert.deepEqual(alone.devices[0]!.line, { port: 4210, for: ['ada'] })
+  assert.deepEqual(sanitize(JSON.parse(JSON.stringify(alone))).devices[0]!.line, { port: 4210, for: ['ada'] })
 })

@@ -42,15 +42,17 @@ export interface ServerRow {
   through?: string
   /** For a computer reached through a server: who there may start runs on it. */
   who?: Who
+  /** For a computer reached through a server: the people there who may start runs on it besides its owner, by name. */
+  people?: string[]
   /** A computer on the person's Tailscale network, at its door there: no line is kept to it. */
   tailscale?: true
   steps: StepRow[]
 }
 
-/** Who on its server may start runs on a computer reached through it: nobody, its own person, or every person there. */
-export type Who = 'nobody' | 'me' | 'everyone'
+/** Who on its server may start runs on a computer reached through it: nobody, or its own person, with the people they pick there besides. */
+export type Who = 'nobody' | 'me'
 
-const WHO: readonly string[] = ['nobody', 'me', 'everyone']
+const WHO: readonly string[] = ['nobody', 'me']
 
 /** What a server may do on this computer through the line this computer keeps to it: everything a machine is asked, or only read. */
 export type Reach = 'full' | 'watch'
@@ -128,7 +130,7 @@ export function readServers(output: unknown): ServerRow[] | undefined {
   const rows: ServerRow[] = []
   for (const entry of servers) {
     if (!entry || typeof entry !== 'object') continue
-    const { address, url, user, fingerprint, working, adding, reach, through, who, tailscale, steps } = entry as Record<string, unknown>
+    const { address, url, user, fingerprint, working, adding, reach, through, who, people, tailscale, steps } = entry as Record<string, unknown>
     const [at, door, by, known] = [text(address), text(url), text(user), text(fingerprint)]
     if (!at || !door || !by || !Array.isArray(steps)) continue
     const list: StepRow[] = []
@@ -139,7 +141,8 @@ export function readServers(output: unknown): ServerRow[] | undefined {
       if (stepId && name && STATES.includes(state as string)) list.push({ id: stepId, label: name, state: state as StepState, ...(words ? { said: words } : {}) })
     }
     const via = text(through)
-    rows.push({ address: at, url: door, user: by, ...(known ? { fingerprint: known } : {}), working: working === true, adding: adding === true, ...(reach === 'full' || reach === 'watch' ? { reach } : {}), ...(via ? { through: via, who: WHO.includes(who as string) ? (who as Who) : 'me' } : {}), ...(!via && tailscale === true ? { tailscale: true as const } : {}), steps: list })
+    const named = Array.isArray(people) ? people.flatMap(name => (text(name) ? [text(name)!] : [])) : []
+    rows.push({ address: at, url: door, user: by, ...(known ? { fingerprint: known } : {}), working: working === true, adding: adding === true, ...(reach === 'full' || reach === 'watch' ? { reach } : {}), ...(via ? { through: via, who: WHO.includes(who as string) ? (who as Who) : 'me', ...(named.length ? { people: named } : {}) } : {}), ...(!via && tailscale === true ? { tailscale: true as const } : {}), steps: list })
   }
   return rows
 }
@@ -222,8 +225,10 @@ function readTested(output: unknown): Tested | undefined {
 export const testConnection = (host: ModuleHost, address: string, user: string): Promise<Answer<Tested>> => run(host, ['test', address, user], readTested)
 /** Save a computer reached through a server among the machines, through that server, once its install is done. */
 export const addThrough = (host: ModuleHost, address: string): Promise<Answer<ServerRow[]>> => run(host, ['add-through', address], readServers)
-/** Say who on its server may start runs on a computer reached through it; with `remove`, the users of the others there go. */
-export const setWho = (host: ModuleHost, address: string, who: Who, remove = false): Promise<Answer<DevicesRead>> => run(host, ['who', address, who, ...(remove ? ['remove'] : [])], readDevices)
+/** Say who on its server may start runs on a computer reached through it: nobody, or only its own person; the users of the people named before go. */
+export const setWho = (host: ModuleHost, address: string, who: Who): Promise<Answer<DevicesRead>> => run(host, ['who', address, who], readDevices)
+/** Name the people on its server who may start runs on a computer reached through it, besides its own person. */
+export const setPeople = (host: ModuleHost, address: string, people: readonly string[]): Promise<Answer<DevicesRead>> => run(host, ['people', address, ...people], readDevices)
 /** Whose GitHub login a copy would be: the account this computer's `gh` is logged in to, or why there is none to copy. */
 export type OwnGithub = { account: string } | { problem: string }
 

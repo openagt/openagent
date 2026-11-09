@@ -50,9 +50,9 @@ export const USAGE = `usage: devices <command>
                  the link is the one the server gives for a new device, or - to read it from standard input;
                  with watch the server only reads
   line full <at> only this computer's own person at the server at this number or name may start runs here through its line
-  line everyone <at>
-                 everyone at that server may, each as a user of their own here; only where OPENAGENT_PERSON_HELPER
-                 names the helper, on a computer set up as a server
+  line for <at> [<name>...]
+                 these people at that server may too, each as a user of their own here; only where OPENAGENT_PERSON_HELPER
+                 names the helper, on a computer set up as a server; with no name, only this computer's own person again
   line watch <at>
                  it may only read: this computer's runs are seen from the server's page, and none is started or told anything
   line remove <at>
@@ -154,11 +154,11 @@ export interface Status {
   }[]
   /**
    * The servers this computer keeps a line open to, what each may do through it, who there may
-   * start runs here (`for`: everyone; only this computer's own person when absent), this
+   * start runs here (`for`, by name; only this computer's own person when absent), this
    * computer's person there, the id this computer has among that server's devices, and whether
    * the server said no to its key.
    */
-  lines: { url: string; mode: Line['mode']; for?: 'everyone'; person?: string; id?: string; name?: string; refused?: true }[]
+  lines: { url: string; mode: Line['mode']; for?: string[]; person?: string; id?: string; name?: string; refused?: true }[]
 }
 
 /** Whether the door should be open: the switch is on, or the computer is a server, or it is reached over Tailscale. */
@@ -186,12 +186,12 @@ function ownPerson(env: NodeJS.ProcessEnv): string | undefined {
 /**
  * Whether a person a server's line made here is no longer that server's: this computer keeps no
  * line to it, the server no longer lets the line in, or its door no longer lists them among its
- * persons. A line that is for only this computer's person again says nothing of them: they are
- * switched off here, not gone there.
+ * persons. A line that no longer names them says nothing of them: they are switched off here,
+ * not gone there.
  */
 function goneFrom(store: Store, person: string, from: string): boolean {
   const line = store.lines.find(candidate => candidate.url === from)
-  return !line || line.refused === true || (line.for === 'everyone' && line.persons !== undefined && !line.persons.includes(person))
+  return !line || line.refused === true || (line.persons !== undefined && !line.persons.includes(person))
 }
 
 function statusOf(store: Store, env: NodeJS.ProcessEnv): Status {
@@ -513,18 +513,19 @@ async function addLine(io: CliIO, pasted: string, mode: Line['mode']): Promise<S
 
 /**
  * What the server may do through its line, and for whom: `full` for this computer's own person
- * there, `everyone` for each person there as a user of their own here, `watch` only to read.
+ * there, `watch` only to read, or `full` for its own person and the people named, each as a user
+ * of their own here.
  */
-async function setLineMode(io: CliIO, at: string, mode: Line['mode'] | 'everyone'): Promise<Status> {
-  // Everyone gets a user of their own here: only a computer set up as a server makes them.
-  if (mode === 'everyone' && !io.env.OPENAGENT_PERSON_HELPER) throw new Refused('This computer is not set up as a server: only a server lets everyone at another start runs on it, each as a user of their own.')
+async function setLineMode(io: CliIO, at: string, mode: Line['mode'], people: readonly string[] = []): Promise<Status> {
+  // Each person named gets a user of their own here: only a computer set up as a server makes them.
+  if (people.length && !io.env.OPENAGENT_PERSON_HELPER) throw new Refused('This computer is not set up as a server: only a server lets people at another start runs on it, each as a user of their own.')
   const found = await update(io.env, store => {
     const line = lineAt(store, at)
     // A line the server said no to is not one any more: it is asked for anew, with a new link.
     // Letting the server do less is written all the same: what it may do, should the old line ever carry again, is the least the person said.
     if (line && (!line.refused || mode === 'watch')) {
-      line.mode = mode === 'watch' ? 'watch' : 'full'
-      if (mode === 'everyone') line.for = 'everyone'
+      line.mode = mode
+      if (people.length) line.for = [...people]
       else delete line.for
     }
     return line
@@ -682,7 +683,16 @@ export async function runCli(args: string[], io: CliIO): Promise<number> {
         const [what, at, how] = rest
         // A link holds a code that works once: a program hands it over on standard input, where no other program sees it.
         if (what === 'add' && at && (rest.length === 2 || (rest.length === 3 && how === 'watch'))) return print(await addLine(io, at === '-' ? await (io.stdin ?? ownStdin)() : at, how === 'watch' ? 'watch' : 'full'))
-        if ((what === 'full' || what === 'watch' || what === 'everyone') && at && rest.length === 2) return print(await setLineMode(io, at, what))
+        if ((what === 'full' || what === 'watch') && at && rest.length === 2) return print(await setLineMode(io, at, what))
+        if (what === 'for' && at) {
+          const people: string[] = []
+          for (const said of rest.slice(2)) {
+            const name = nameOf(said)
+            if (name === undefined) throw new Refused(`${said} is not a name: letters, digits, spaces, dots, apostrophes and dashes, at most 40`)
+            if (!people.includes(name)) people.push(name)
+          }
+          return print(await setLineMode(io, at, 'full', people))
+        }
         if (what === 'remove' && at && rest.length === 2) return print(await removeLine(io, at))
         break
       }

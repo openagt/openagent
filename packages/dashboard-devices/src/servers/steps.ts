@@ -26,11 +26,11 @@ export const reachedOf = (server: { through?: string | undefined; tailscale?: tr
 /** The steps of a server, by how it is reached. */
 export const stepIdsFor = (reached: Reached): readonly StepId[] => (reached === 'through' ? THROUGH_STEP_IDS : reached === 'tailscale' ? TAILSCALE_STEP_IDS : STEP_IDS)
 
-/** Who may start runs on a computer reached through a server, from that server: nobody, its own person, or every person there. */
-export type Who = 'nobody' | 'me' | 'everyone'
+/** Who may start runs on a computer reached through a server, from that server: nobody, or its own person, with the people they pick there besides. */
+export type Who = 'nobody' | 'me'
 
-/** What the computer's door is told for each: the server only watches, its person starts runs, or every person there does. */
-export const LINE_MODE: Record<Who, 'watch' | 'full' | 'everyone'> = { nobody: 'watch', me: 'full', everyone: 'everyone' }
+/** What the computer's door is told for each: the server only watches, or its person starts runs. */
+export const LINE_MODE: Record<Who, 'watch' | 'full'> = { nobody: 'watch', me: 'full' }
 
 /** A computer reached through a server, as its install knows it. */
 export interface Through {
@@ -39,6 +39,8 @@ export interface Through {
   /** The person who connects it, by their name there: the computer's owner. */
   owner: string
   who: Who
+  /** The people on the server who may start runs on it too, by their names there, each as a user of their own on it. */
+  people?: readonly string[]
   /** A link that lets the computer's line in at the server, once; none when the computer keeps its line there already. */
   link?: string
 }
@@ -750,14 +752,14 @@ export const LINE_STEP: StepDef = {
     if (!through) throw new Error('only a computer reached through a server has a line step')
     return script(
       'openagent',
-      { URL: through.url, OWNER: through.owner, LINK: through.link ?? '', MODE: LINE_MODE[through.who] },
+      { URL: through.url, OWNER: through.owner, LINK: through.link ?? '' },
       `
   # Named once, as a server's owner is at its first Invite; the same person again changes nothing.
   ${DOOR} owner "$OWNER" >/dev/null
   # A line it already keeps there is kept: a link comes only for a computer that has none, or lost it.
   # On standard input, never on a command line: it lets a computer in.
   [ -z "$LINK" ] || printf '%s\n' "$LINK" | ${DOOR} line add - >/dev/null
-  ${WITH_HELPER} ${DOOR} line "$MODE" "$URL" >/dev/null
+  ${lineFor(through.who, through.people)}
 `,
     )
   },
@@ -826,16 +828,31 @@ export function stepLabel(step: StepDef, through: string | undefined): string {
   return step.id === 'line' && through !== undefined ? `Its line to ${new URL(through).host}` : step.label
 }
 
+/** The door's command that says who at the server may start runs on the computer: the server only watches, its person, or its person and the people named. */
+const lineFor = (who: Who, people: readonly string[] = []): string => (who === 'me' && people.length ? `${WITH_HELPER} ${DOOR} line for "$URL" ${people.map(quoted).join(' ')} >/dev/null` : `${WITH_HELPER} ${DOOR} line ${LINE_MODE[who]} "$URL" >/dev/null`)
+
 /**
  * The script that tells the door of a computer reached through a server who there may start runs
- * on it, and with `remove`, takes away the user of each person its line made, with everything in it.
- * Run as the server's own user.
+ * on it: nobody, or only its own person; the user of each person named before (`remove`) is taken
+ * away, with everything in it. Run as the server's own user.
  */
 export function whoScript(url: string, who: Who, remove: readonly string[] = []): string {
-  return script(SERVER_USER, { URL: url, MODE: LINE_MODE[who] }, `
-  ${WITH_HELPER} ${DOOR} line "$MODE" "$URL" >/dev/null
+  return script(SERVER_USER, { URL: url }, `
+  ${lineFor(who)}
 ${remove.map(person => `  ${WITH_HELPER} ${DOOR} remove-person ${quoted(person)} >/dev/null
 `).join('')}  ${DOOR} status
+`)
+}
+
+/**
+ * The script that names the people on the server who may start runs on a computer reached
+ * through it, besides its own person: each gets a user of their own on it at their first run.
+ * Run as the server's own user.
+ */
+export function peopleScript(url: string, people: readonly string[]): string {
+  return script(SERVER_USER, { URL: url }, `
+  ${lineFor('me', people)}
+  ${DOOR} status
 `)
 }
 

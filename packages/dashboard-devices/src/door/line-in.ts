@@ -22,8 +22,8 @@ import { PERSON_HEADER, nameWord, personLinePorts, personOf, type Store } from '
  * Which user may call which port is the server's firewall's to say: the owner's ports answer the
  * owner's user, a person's ports that person's.
  *
- * A computer whose line is for everyone here has an address in each person's block too, and each
- * person's OpenAgent is told of its own. So the firewall says as before who calls which, and each
+ * A computer whose line names people here has an address in each of their blocks too, and each
+ * of their OpenAgents is told of its own. So the firewall says as before who calls which, and each
  * call down the line says whom it is for (`PERSON_HEADER`): the person whose address it came to,
  * as this server says, never as the caller does. The computer sends it on to that person's own
  * OpenAgent there.

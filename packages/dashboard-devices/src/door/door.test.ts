@@ -605,7 +605,7 @@ test('a device asks who it is here, and takes out a device of its own person and
     // A computer with no persons: the one person's, all of its devices.
     const phone = await r.letIn('a phone')
     const alone = await fetch(`${r.at}${ME_PATH}`, { headers: { cookie: phone.cookie } })
-    assert.deepEqual(await alone.json(), { owner: true, devices: [{ id: phone.entry.id, name: 'a phone', added: (await readStore(r.env)).devices[0]!.added }] })
+    assert.deepEqual(await alone.json(), { owner: true, devices: [{ id: phone.entry.id, name: 'a phone', added: (await readStore(r.env)).devices[0]!.added }], persons: [] })
 
     await nameOwner(r.env, 'ada')
     await addPerson(r.env, 'rom')
@@ -614,8 +614,9 @@ test('a device asks who it is here, and takes out a device of its own person and
     const romCookie = `${DEVICE_COOKIE}=${romsPhone.id}.${romsPhone.key}`
     const romBearer = { authorization: `Bearer ${romsLaptop.id}.${romsLaptop.key}` }
 
-    const mine = (await (await fetch(`${r.at}${ME_PATH}`, { headers: romBearer })).json()) as { person: string; owner: boolean; ownerName?: string; devices: { id: string; person: string }[] }
-    assert.deepEqual([mine.person, mine.owner, mine.ownerName, mine.devices.map(device => [device.id, device.person])], ['rom', false, 'ada', [[romsPhone.id, 'rom'], [romsLaptop.id, 'rom']]])
+    const mine = (await (await fetch(`${r.at}${ME_PATH}`, { headers: romBearer })).json()) as { person: string; owner: boolean; ownerName?: string; devices: { id: string; person: string }[]; persons: string[] }
+    // Who is here is said to every device that is in: whom a computer of theirs may be shared with.
+    assert.deepEqual([mine.person, mine.owner, mine.ownerName, mine.devices.map(device => [device.id, device.person]), mine.persons], ['rom', false, 'ada', [[romsPhone.id, 'rom'], [romsLaptop.id, 'rom']], ['ada', 'rom']])
     const owners = (await (await fetch(`${r.at}${ME_PATH}`, { headers: { cookie: phone.cookie } })).json()) as { person: string; owner: boolean; devices: { id: string }[] }
     assert.deepEqual([owners.person, owners.owner, owners.devices.map(device => device.id)], ['ada', true, [phone.entry.id]])
 

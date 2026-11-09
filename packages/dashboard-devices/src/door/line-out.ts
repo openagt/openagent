@@ -4,7 +4,7 @@ import type { Duplex } from 'node:stream'
 import { connect } from 'node:tls'
 import { keyFingerprint } from './der.js'
 import { DATA, END, HEAD, Link, RESET, carriedHeaders, carriedPath, carriedValue, readHead, sendBody, type Frame } from './frames.js'
-import { COMPUTER_HEADER, OWNERS_NAME_HEADER, PERSON_HEADER, nameFromWord, nameOf } from './store.js'
+import { COMPUTER_HEADER, MAX_PERSONS, OWNERS_NAME_HEADER, PERSON_HEADER, nameFromWord, nameOf, nameWord } from './store.js'
 
 /**
  * This computer's end of a line: it calls its server, says who it is with the key it has there,
@@ -18,7 +18,7 @@ import { COMPUTER_HEADER, OWNERS_NAME_HEADER, PERSON_HEADER, nameFromWord, nameO
  *
  * The server says with each call whom of its persons it is for (`PERSON_HEADER`), and this
  * computer decides where the call goes by it ({@link Route}): to its own OpenAgent for its own
- * person, and, on a line for everyone there, to the OpenAgent of that person's own user here.
+ * person, and, for a person the line names, to the OpenAgent of that person's own user here.
  * The word is the server's, which this computer trusts with its line; it is not passed on.
  */
 
@@ -27,8 +27,22 @@ export const LINE_PATH = '/_devices/line'
 export const LINE_PROTOCOL = 'openagent-line'
 /** Said to OpenAgent with a call that may only read. */
 export const WATCH_HEADER = 'x-openagent-watch'
-/** Said by a computer as it asks for its line, when everyone at the server may start runs on it: the server then gives it an address for each of its persons. */
+/** Said by a computer as it asks for its line: who at the server may start runs on it, by their names as {@link namesHeader} writes them; the server then gives it an address for each of them. */
 export const LINE_FOR_HEADER = 'x-openagent-line-for'
+
+/** Names as the line's header carries them: each as `nameWord` writes it, with commas between. */
+export const namesHeader = (names: readonly string[]): string => names.map(nameWord).join(',')
+
+/** The names a line's header carries, each once, as they were; a word that is no name is dropped. */
+export function namesIn(header: string | string[] | undefined): string[] {
+  const said = Array.isArray(header) ? header.join(',') : (header ?? '')
+  const names: string[] = []
+  for (const word of said.split(',')) {
+    const name = nameFromWord(word.trim())
+    if (name !== undefined && !names.includes(name) && names.length < MAX_PERSONS) names.push(name)
+  }
+  return names
+}
 /** Where the door tells a device who it is there: the door's own `ME_PATH`. */
 const ME_PATH = '/_devices/me'
 const CARRIED_HEADERS: readonly string[] = ['content-type', 'accept']
@@ -77,11 +91,11 @@ export function dial(url: string, pin: string, signal?: AbortSignal): Promise<Du
 }
 
 /**
- * Ask the door for a line with this computer's key there, saying whether everyone there may start
- * runs through it. Answers what arrived after the door's yes, which is already the line's. Throws
+ * Ask the door for a line with this computer's key there, saying who there may start runs through
+ * it, by name. Answers what arrived after the door's yes, which is already the line's. Throws
  * {@link NotLetIn} on the door's no.
  */
-export function knock(socket: Duplex, url: string, key: string, computer?: string, everyone = false): Promise<Buffer> {
+export function knock(socket: Duplex, url: string, key: string, computer?: string, people: readonly string[] = []): Promise<Buffer> {
   return new Promise((resolve, reject) => {
     let heard = Buffer.alloc(0)
     const timer = setTimeout(() => done(new Error('the server did not answer')), DIAL_MS)
@@ -111,7 +125,7 @@ export function knock(socket: Duplex, url: string, key: string, computer?: strin
     socket.on('data', onData)
     socket.once('close', onClose)
     socket.once('error', onClose)
-    socket.write(`GET ${LINE_PATH} HTTP/1.1\r\nHost: ${new URL(url).host}\r\nConnection: Upgrade\r\nUpgrade: ${LINE_PROTOCOL}\r\nAuthorization: Bearer ${key}\r\n${computer !== undefined ? `${COMPUTER_HEADER}: ${computer}\r\n` : ''}${everyone ? `${LINE_FOR_HEADER}: everyone\r\n` : ''}\r\n`)
+    socket.write(`GET ${LINE_PATH} HTTP/1.1\r\nHost: ${new URL(url).host}\r\nConnection: Upgrade\r\nUpgrade: ${LINE_PROTOCOL}\r\nAuthorization: Bearer ${key}\r\n${computer !== undefined ? `${COMPUTER_HEADER}: ${computer}\r\n` : ''}${people.length ? `${LINE_FOR_HEADER}: ${namesHeader(people)}\r\n` : ''}\r\n`)
   })
 }
 
@@ -238,8 +252,8 @@ export interface KeepLineOptions {
   computer?: string
   /** Told each time the server answered the key: let in, or no longer. */
   onAnswer?: (letIn: boolean) => void
-  /** Everyone at the server may start runs here through the line: said as the line is asked for. */
-  everyone?: boolean
+  /** Who at the server may start runs here through the line, by name: said as the line is asked for. */
+  people?: readonly string[]
   route: CarryOptions['route']
   watch: () => boolean
   /** Ends the line for good. */
@@ -266,7 +280,7 @@ export async function keepLine(opts: KeepLineOptions): Promise<void> {
     const began = Date.now()
     try {
       const socket = await dial(opts.url, opts.pin, opts.signal)
-      const rest = await knock(socket, opts.url, opts.key, opts.computer, opts.everyone === true)
+      const rest = await knock(socket, opts.url, opts.key, opts.computer, opts.people)
       if (opts.signal.aborted) return void socket.destroy()
       opts.onAnswer?.(true)
       log(`devices: a line is open to ${host}`)
@@ -378,7 +392,7 @@ export async function enterForLine(link: LineLink, name: string, computer?: stri
   }
 }
 
-/** What a server's door says of this computer's person there: their name, and, to a line for everyone, the server's persons. */
+/** What a server's door says of this computer's person there: their name, and the server's persons. */
 export interface MeThere {
   person?: string
   persons?: string[]

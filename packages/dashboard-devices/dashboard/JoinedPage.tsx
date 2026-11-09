@@ -14,7 +14,7 @@ import type { Devices } from './use-devices.js'
 // through the server's door with this computer's key there. What only the server's owner does
 // from the computer that set it up (the install, an update, an invite) is not here.
 //
-// And the page of another person's computer: shared with everyone on a server, or shared with
+// And the page of another person's computer: shared with this person on a server, or shared with
 // this person at its own door, added here with a code the owner gave. The logins this person's
 // runs use there, and their own devices there.
 
@@ -153,9 +153,8 @@ function otherWords(label: 'GitHub' | 'Claude', login: OtherLogin | undefined, n
 }
 
 /**
- * Another person's computer: set up as a server and shared with everyone on a server this
- * computer's person is in at, or shared with this person at its own door, with a code its owner
- * gave. This person has an OpenAgent of their own there, as a user of their own, and their runs
+ * Another person's computer: set up as a server and shared with this person on a server both
+ * are in at, or shared with this person at its own door, with a code its owner gave. This person has an OpenAgent of their own there, as a user of their own, and their runs
  * there use their own logins: copies from their OpenAgent on the server, made the first time they
  * start a run there, or made here. This page says which logins it has, and makes one here in
  * place of a copy: GitHub's copied from this computer, Claude's made in this computer's browser.
@@ -175,7 +174,7 @@ export function OtherPage({ d, item, onBack }: { d: Devices; item: OtherItem; on
   const making = row?.making ?? { working: false }
   useEffect(() => setWorking(making.working), [making.working])
   const name = item.name
-  // Shared with everyone on a server both are in at, where copies come from; or shared with this person at its own door.
+  // Shared on a server both are in at, where copies come from; or shared with this person at its own door.
   const via = machine.url.includes('/_devices/via/')
   const server = via ? hostOf(machine.url) : undefined
   const copies = via ? ` A copy from ${server} no longer takes its place.` : ''
@@ -192,12 +191,12 @@ export function OtherPage({ d, item, onBack }: { d: Devices; item: OtherItem; on
   }
   return (
     <div>
-      <Head icon={Server} name={name} badge={`${owner}'s`} facts={[machine.version !== undefined ? <State tone="good">Online</State> : <State tone="quiet">Offline</State>, via ? `for everyone on ${server}` : 'shared with you', person?.person !== undefined ? `you are ${person.person}` : undefined]} />
+      <Head icon={Server} name={name} badge={`${owner}'s`} facts={[machine.version !== undefined ? <State tone="good">Online</State> : <State tone="quiet">Offline</State>, via ? `shared with you on ${server}` : 'shared with you', person?.person !== undefined ? `you are ${person.person}` : undefined]} />
       {tabs.length > 1 && <Tabs label={name} tabs={tabs} value={tab} onChange={setTab} />}
       {tab === 'overview' && (
         <>
           <Part>
-            <p className="text-xs text-muted-foreground">{via ? `${owner}'s server, for everyone on ${server}. Your runs there use your own logins.` : `${owner}'s computer, shared with you. A run there runs as you, in your own OpenAgent on it, with your own logins.`}</p>
+            <p className="text-xs text-muted-foreground">{via ? `${owner}'s server, shared with you on ${server}. Your runs there use your own logins.` : `${owner}'s computer, shared with you. A run there runs as you, in your own OpenAgent on it, with your own logins.`}</p>
           </Part>
           <Part title="Logins">
             {/* What a run from this computer needs first: from here, nothing is copied by itself. */}

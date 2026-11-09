@@ -50,14 +50,14 @@ async function keepsLine(session: Session, url: string): Promise<boolean> {
  * that server, and a link for the line when the computer has none there. Words for the person
  * when that server does not say.
  */
-async function lineFacts(session: Session, server: Required<Pick<Server, 'through'>> & Pick<Server, 'who'>, ask: (fn: string, args: unknown[]) => Promise<unknown>): Promise<{ ok: true; through: NonNullable<Facts['through']> } | { ok: false; said: string }> {
+async function lineFacts(session: Session, server: Required<Pick<Server, 'through'>> & Pick<Server, 'who' | 'people'>, ask: (fn: string, args: unknown[]) => Promise<unknown>): Promise<{ ok: true; through: NonNullable<Facts['through']> } | { ok: false; said: string }> {
   const host = new URL(server.through).host
   try {
     // OpenAgent's machines are named by their address.
     const person = (await ask('onMachinePerson', [server.through])) as { ok?: boolean; said?: { person?: unknown }; error?: unknown } | undefined
     const name = person?.ok && typeof person.said?.person === 'string' ? nameOf(person.said.person) : undefined
     if (name === undefined) return { ok: false, said: person?.ok || person?.error === undefined ? `${host} does not say who you are there. Press Invite on its row once: it names you its owner.` : `${host} did not say who you are there: ${String(person.error)}` }
-    const through = { url: server.through, owner: name, who: server.who ?? 'me' }
+    const through = { url: server.through, owner: name, who: server.who ?? 'me', ...(server.people ? { people: server.people } : {}) }
     if (await keepsLine(session, server.through)) return { ok: true, through }
     const link = (await ask('sendMachineLineLink', [server.through])) as { ok?: boolean; url?: unknown; error?: unknown } | undefined
     if (!link?.ok || typeof link.url !== 'string') return { ok: false, said: `${host} gave no link for the line: ${typeof link?.error === 'string' ? link.error : 'it did not say why'}` }
@@ -108,7 +108,7 @@ export async function install(opts: InstallOptions): Promise<void> {
   const server = await change(kept => {
     if (working(kept) && !mine(kept) && kept.worker!.pid !== process.ppid) throw new AlreadyWorking(address)
     kept.worker = { pid: process.pid, seen: new Date().toISOString() }
-    return { address: kept.address, user: kept.user, ...(kept.through !== undefined ? { through: kept.through } : {}), ...(kept.who !== undefined ? { who: kept.who } : {}), ...(kept.tailscale ? { tailscale: true as const } : {}) }
+    return { address: kept.address, user: kept.user, ...(kept.through !== undefined ? { through: kept.through } : {}), ...(kept.who !== undefined ? { who: kept.who } : {}), ...(kept.people ? { people: kept.people } : {}), ...(kept.tailscale ? { tailscale: true as const } : {}) }
   })
   if (!server) throw new Error(`no server at ${address}`)
   const ask = opts.ask ?? ((fn: string, args: unknown[]) => askOpenAgent(env, fn, args))
@@ -123,7 +123,7 @@ export async function install(opts: InstallOptions): Promise<void> {
       await set(step.id, 'running')
       if (step.id === 'line' && server.through !== undefined) {
         // Asked only now: a link lets the line in for ten minutes, and the steps before take longer.
-        const asked = await lineFacts(session, { through: server.through, ...(server.who !== undefined ? { who: server.who } : {}) }, ask)
+        const asked = await lineFacts(session, { through: server.through, ...(server.who !== undefined ? { who: server.who } : {}), ...(server.people ? { people: server.people } : {}) }, ask)
         if (!asked.ok) return void (await set(step.id, 'failed', asked.said))
         facts.through = asked.through
       }

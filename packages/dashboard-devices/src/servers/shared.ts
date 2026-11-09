@@ -12,8 +12,8 @@ import { BEAT_MS, atWork, heartbeat, isMachineUrl, isThroughUrl, update, type Lo
  * So this computer's OpenAgent is asked to make each call: it holds the key, and this package
  * never sees it. A login made or read here is handed over in the call's body, and is not kept.
  *
- * And another person's computer, set up as a server and shared with everyone on a server this
- * person is in at: this person has an OpenAgent of their own there, which keeps their logins for
+ * And another person's computer, set up as a server and shared with this person on a server both
+ * are in at: this person has an OpenAgent of their own there, which keeps their logins for
  * their runs there. Those are copies from their OpenAgent on the server, made the first time they
  * start a run there; a login made here for it instead is no copy, and no copy takes its place. It
  * is reached through the server, at the address OpenAgent saved it at.
