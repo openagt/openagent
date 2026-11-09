@@ -1,6 +1,6 @@
 import { PermissionsPage } from './components/Accounts.js'
 import { AgentsPage } from './components/AgentsPage.js'
-import { useEffect, useMemo, useState, type CSSProperties } from 'react'
+import { useEffect, useMemo, useReducer, useState, type CSSProperties } from 'react'
 import type { Intervention, Activity, ProjectionRead, ProjectSummary } from '../src/index.js'
 import { onProjectFiles, onInterventions, onActivity, onStartedName } from './rpc/reads.js'
 import { sendStart } from './rpc/control.js'
@@ -84,10 +84,10 @@ export function App() {
   // each project carries what the daemon currently finds wrong with it, a state that appears and
   // clears on the daemon's own minute cadence, so the sidebar dot and the project's banner have to
   // follow it. Slow, and reloadable so adding a project from the sidebar's "New" reflects at once
-  // (bump the key).
-  const [projectsKey, setProjectsKey] = useState(0)
+  // (`reloadProjects` bumps the key).
+  const [projectsKey, reloadProjects] = useReducer((key: number) => key + 1, 0)
   // A skill saved in Settings gives or takes a page too.
-  useEffect(() => onSkillsSaved(() => setProjectsKey(k => k + 1)), [])
+  useEffect(() => onSkillsSaved(reloadProjects), [reloadProjects])
   // Kept for the next visit too: the Overview's cards are drawn for the projects before they are read again.
   const { value: projects, loaded: projectsLoaded } = usePolled<ProjectSummary[]>(onProjects, EMPTY_PROJECTS, 30_000, [projectsKey], { remember: 'projects', stored: true })
   // Read again when a project is added from the sidebar or removed from its project home: which
@@ -261,7 +261,7 @@ export function App() {
   /** The same, for the surfaces that start an agent inside the selected project. */
   // A run of another computer's project started on this one starts in the copy cloned here: a project the list has yet to read.
   const onAgentStarted = (intent: string, startedId: string, runsOn?: string, startedIn?: string, picks?: StartPicks) => {
-    if (startedIn !== undefined && startedIn !== projectId) setProjectsKey(k => k + 1)
+    if (startedIn !== undefined && startedIn !== projectId) reloadProjects()
     agentStarted(startedIn ?? projectId, intent, startedId, runsOn, picks)
   }
 
@@ -381,7 +381,7 @@ export function App() {
   // The project is off the list: read the list again and leave its page for the Overview of every
   // project, since the one it was picked as is gone.
   const leaveRemovedProject = () => {
-    setProjectsKey(k => k + 1)
+    reloadProjects()
     navigate({ projectId: null, agentId: null })
   }
   // Another computer's project is removed there, not here.
@@ -425,7 +425,7 @@ export function App() {
           active={activeAgents}
           projects={projects}
           scope={scope}
-          onProjectAdded={() => setProjectsKey(k => k + 1)}
+          onProjectAdded={reloadProjects}
         />
       )
     }
@@ -456,10 +456,10 @@ export function App() {
           errors={project?.errors}
           onProjectRemoved={leaveRemovedProject}
           // A skill written or deleted gives or takes a page: read the projects and their modules again now.
-          onSkillsChanged={() => setProjectsKey(k => k + 1)}
+          onSkillsChanged={reloadProjects}
           projects={projects}
           onPickProject={newAgentInProject}
-          onProjectAdded={() => setProjectsKey(k => k + 1)}
+          onProjectAdded={reloadProjects}
         />
       )
     }
@@ -580,7 +580,7 @@ export function App() {
           projects={projects}
           onNewAgentInProject={newAgentInProject}
           onProjectAdded={() => {
-            setProjectsKey(k => k + 1)
+            reloadProjects()
             reload()
           }}
           startTick={agentStart.tick}
