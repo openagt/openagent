@@ -11,6 +11,7 @@ import { sayName } from '../dashboard/machine-call.js'
 import { callerAtPage } from '../dashboard/person.js'
 import { syncComputersSoon } from '../dashboard/computers-sync.js'
 import { parseMachineLink } from '../machine-link.js'
+import { SESSIONS_ID } from '../project-address.js'
 import { openagentVersion } from '../version.js'
 import { readinessOf, type StartReadiness } from '../project-hooks.js'
 import type { ModelsView } from '../dashboard/models.js'
@@ -445,7 +446,8 @@ async function onMachine(projectId: string, machineId: string): Promise<{ ok: tr
   if (!machine) return { ok: false, error: 'That machine is no longer saved. Pick another place to run.' }
   const project = await projectToSend(projectId)
   if (!project) return { ok: false, error: `unknown project: ${String(projectId)}` }
-  const name = project.home?.machine === machine.id ? project.home.line : project.address
+  // A session with no project is named by the sessions' own id, on every machine.
+  const name = projectId === SESSIONS_ID ? SESSIONS_ID : project.home?.machine === machine.id ? project.home.line : project.address
   if (!name) return { ok: false, error: 'This project has no repository address, so it cannot be sent to another machine.' }
   return { ok: true, machine, project, target: { url: machine.url, key: machine.key, ...(machine.pin ? { pin: machine.pin } : {}), project: name } }
 }

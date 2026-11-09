@@ -437,6 +437,8 @@ export function createProjectRuntime({ cwd, env, clone = cloneProject, logins = 
     return address
   }
   const projectAt = async (address: string): Promise<string | undefined> => {
+    // The sessions with no project: every OpenAgent has a home of its own for them, under the one id.
+    if (address === SESSIONS_ID) return SESSIONS_ID
     // A project with no address is named by its id here, by the person's other computer that lists it.
     const id = idInLineName(address)
     if (id !== undefined) return (await listProjects(undefined, env).catch(() => [])).some(record => record.id === id) ? id : undefined
@@ -454,9 +456,11 @@ export function createProjectRuntime({ cwd, env, clone = cloneProject, logins = 
     // A session with no project: in a folder of its own in the sessions home, on this computer,
     // with no branch, and nothing committed or published; the repos it has are copied into it.
     const noProject = targetProjectId === SESSIONS_ID
-    if (noProject && (options.machine !== undefined || options.base !== undefined || options.prBase !== undefined || options.publish !== undefined || options.account !== undefined || options.projectSkills !== undefined)) {
-      return { ok: false, error: 'A session with no project runs on this computer, with no branch, nothing to publish, no account at a git host and no project skills.' }
+    if (noProject && (options.base !== undefined || options.prBase !== undefined || options.publish !== undefined || options.account !== undefined || options.projectSkills !== undefined)) {
+      return { ok: false, error: 'A session with no project runs with no branch, nothing to publish, no account at a git host and no project skills.' }
     }
+    // Its repos are folders on this computer, copied into its folder here: on a machine there is nothing to copy.
+    if (noProject && options.machine !== undefined && options.repos !== undefined) return { ok: false, error: 'The repos are folders on this computer: a session with them runs here. Pick this computer, or start without them.' }
     // The login reaches the run's environment: one word, as a login is.
     if (options.account !== undefined && !(typeof options.account === 'string' && /^\S+$/.test(options.account))) return { ok: false, error: 'An account is named by its login.' }
     if (options.agent !== undefined && !isAgentId(options.agent)) return { ok: false, error: 'An agent is named by its id.' }
@@ -475,6 +479,8 @@ export function createProjectRuntime({ cwd, env, clone = cloneProject, logins = 
     // own copy of this project, and relay the run's events back. The project is named by its
     // repository's address, the one name both machines have for it.
     if (options.machine !== undefined) {
+      // A session with no project is named by the sessions' own id: the machine works in its own sessions home.
+      if (noProject) return sendToMachine(prompt, options, options.machine, { id: SESSIONS_ID, name: 'A session with no project', address: SESSIONS_ID })
       const project = await repositoryAddress(projectCwd)
       if (!project) return { ok: false, error: 'This project has no repository address, so it cannot be sent to another machine.' }
       return sendToMachine(prompt, options, options.machine, { id: targetProjectId ?? homeId, name: await projectNameOf(projectCwd), address: project, cwd: projectCwd })
@@ -543,7 +549,7 @@ export function createProjectRuntime({ cwd, env, clone = cloneProject, logins = 
   // followed from here. `machine` is stripped so the other side does not relay onward, and `base`
   // because a branch of this machine names nothing there (it drops both too).
   const sendToMachine = async (prompt: string, options: StartAgentOptions, id: string, project: { id: string; name: string; address: string; cwd?: string }): Promise<StartAgentResult> => {
-    const { machine: _id, base: _thisMachines, prBase: _thisMachinesToo, ...forwarded } = options
+    const { machine: _id, base: _thisMachines, prBase: _thisMachinesToo, repos: _folders, ...forwarded } = options
     const machine = (await listMachines(undefined, env)).find(saved => saved.id === id)
     if (!machine) return { ok: false, error: 'That machine is no longer saved. Pick another place to run.' }
     const target = { url: machine.url, key: machine.key, ...(machine.pin ? { pin: machine.pin } : {}), project: project.address }
@@ -558,6 +564,8 @@ export function createProjectRuntime({ cwd, env, clone = cloneProject, logins = 
     }
     const result = await startRemoteAgent(target, { prompt, options: forwarded })
     if (!result.ok) {
+      // A machine from before sessions with no project could go there knows no project by that name: nothing to clone.
+      if ('noProject' in result && project.address === SESSIONS_ID) return { ok: false, error: `${machine.label} runs an older OpenAgent, which takes no session with no project. Update it, or pick a project.` }
       // The one refusal the page can do something about: it has the machine clone the project, and starts again.
       return 'noProject' in result ? { ok: false, error: `${project.name} is not on ${machine.label} yet.`, notThere: true } : result
     }

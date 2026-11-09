@@ -2,6 +2,7 @@ import { forwardRef, useEffect, useImperativeHandle, useMemo, useRef, useState, 
 import { ArrowUp, Loader2 } from 'lucide-react'
 import type { ProjectSummary } from '../../src/index.js'
 import { machineName, type DriverName } from '../../src/client.js'
+import { SESSIONS_ID } from '../../src/project-address.js'
 import {
   usePreferences,
   usePreferencesLoaded,
@@ -139,10 +140,12 @@ export const Composer = forwardRef<ComposerHandle, {
   const activeProjectId = useActiveProjectId() // the project whose commands the `/` list offers
   const launcher = useProjectLauncher(activeProjectId)
   const commands = launcher?.commands ?? []
+  // A session with no project runs on any machine, in that machine's own folder for them.
+  const noProject = activeProjectId === SESSIONS_ID
   // A project with no repository address has no name another machine knows it by, so it runs here
   // only and a machine picked on another project's launcher is not its target. Another computer's
   // such project runs on that computer only: this one cannot clone it.
-  const onlyHere = home === undefined && launcher !== null && launcher.address === undefined
+  const onlyHere = !noProject && home === undefined && launcher !== null && launcher.address === undefined
   const onlyThere = home !== undefined && launcher !== null && launcher.address === undefined
   const selectedMachineId = useSelectedMachineId() // #1067: the machine this run targets, if any
   // The pick saved at the last opening is picked again, once the preferences and the machines are
@@ -165,7 +168,7 @@ export const Composer = forwardRef<ComposerHandle, {
   }, [inAgent, machines, machineStatus])
   const fallback = useRunOnFallback()
   const fellBackFrom = fallback?.why === 'offline' ? machines.find(machine => machine.id === fallback.id) : undefined
-  const selectedMachine = runTarget(machines, selectedMachineId, launcher, home)
+  const selectedMachine = runTarget(machines, selectedMachineId, noProject ? { address: SESSIONS_ID } : launcher, home)
   // The agents and models of the machine the run goes to: a run there is given one of its own.
   const { models, theirs } = useModelsOn(inAgent ? undefined : selectedMachine?.id)
   // Each agent's accounts on that computer, in its part of the agent picker: the one picked is the
@@ -309,6 +312,7 @@ export const Composer = forwardRef<ComposerHandle, {
         machines,
         selectedMachineId,
         onlyHere,
+        noProject,
         home,
         onlyThere,
         // #1067: selecting a machine makes it the run target in place, no navigation.

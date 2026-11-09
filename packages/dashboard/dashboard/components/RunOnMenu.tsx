@@ -33,6 +33,8 @@ export type ConnectionControl = {
   selectedMachineId: string | null
   /** The project has no repository address, the one name another machine would know it by: it runs here only. */
   onlyHere: boolean
+  /** A session with no project: it runs in a folder of its own, here or on the machine picked. */
+  noProject?: boolean | undefined
   /** The saved machine the project is on, when only another computer of the person's has it (elsewhere.ts): this computer clones it first. */
   home?: string | undefined
   /** Such a project with no repository address: it runs on its own computer only. */
@@ -118,7 +120,7 @@ export function RunOnMenu({ connection, busy, inRow = false }: { connection: Con
             <Laptop className="mt-0.5 h-3.5 w-3.5 shrink-0 text-muted-foreground" aria-hidden />
             <OptionLabel
               label={here}
-              description={connection.home === undefined ? "Runs here, through this project's start hook." : connection.onlyThere ? 'It has no repository address to clone it here from.' : 'Cloned here first, then runs here.'}
+              description={connection.noProject ? 'Runs here, in a folder of its own.' : connection.home === undefined ? "Runs here, through this project's start hook." : connection.onlyThere ? 'It has no repository address to clone it here from.' : 'Cloned here first, then runs here.'}
             />
             {onThisMachine && <Check className="ml-auto mt-0.5 h-3.5 w-3.5 shrink-0" aria-hidden />}
           </DropdownMenuItem>
@@ -128,7 +130,7 @@ export function RunOnMenu({ connection, busy, inRow = false }: { connection: Con
             const offline = status === 'offline'
             const words = wordsOf(machine)
             // On another computer's project, what each computer does with it: it has it, or clones it first.
-            const withProject = connection.home === undefined ? words : machine.id === connection.home ? `${words}. Has this project.` : `${words}. Cloned there first, then runs there.`
+            const withProject = connection.noProject ? `${words}. Runs there, in a folder of its own.` : connection.home === undefined ? words : machine.id === connection.home ? `${words}. Has this project.` : `${words}. Cloned there first, then runs there.`
             const description = offline ? (reachedByLine(machine.url) ? 'Not connected. It must be on, with OpenAgent running.' : `Offline · ${withProject}`) : withProject
             // Another computer's project with no address goes nowhere but its own computer.
             const closed = connection.onlyHere || (connection.onlyThere === true && machine.id !== connection.home)
