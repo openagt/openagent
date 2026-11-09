@@ -1,5 +1,7 @@
-import { thisComputerName } from '../registry.js'
-import { useLoginsOn } from '../registry.js'
+import { listMachines, thisComputerName, useLoginsOn } from '../registry.js'
+import { readPersonalFolder } from '@openagt/agent-data'
+import { machineCall } from '../dashboard/remote-run.js'
+import { personalFolderShown } from '../personal-folder-shown.js'
 import { allowLogins, serverLogins, settleLeft, syncLogins, type ServerLogins } from '../dashboard/logins-sync.js'
 import type { CopiedKind } from '../dashboard/copied-logins.js'
 import type { AccountResult } from './accounts.js'
@@ -39,4 +41,21 @@ export async function sendAllowLogins(machineId: string): Promise<AccountResult>
 /** A login the server has of this computer's that this computer no longer has: kept there, or taken off. */
 export async function sendSettleLogin(machineId: string, which: { kind: CopiedKind; host?: string; source: string }, keep: boolean): Promise<AccountResult> {
   return settleLeft(machineId, which, keep === true)
+}
+
+/**
+ * A saved server of the person's syncs its agent data with the repository this computer's does,
+ * sent as the GitHub login this computer copied there: the same logs, tickets and agents on both.
+ * Asked once, as the server is set up; the server keeps syncing by itself from then on.
+ */
+export async function sendSyncPersonalFolderOn(machineId: string): Promise<AccountResult> {
+  const machine = (await listMachines()).find(saved => saved.id === machineId)
+  if (!machine) return { ok: false, error: 'That server is no longer saved.' }
+  const own = await readPersonalFolder()
+  const remote = personalFolderShown(own).remote
+  if (remote === undefined) return { ok: false, error: "This computer's agent data syncs with no repository: set it in Settings › Agent data first." }
+  const said = await machineCall({ url: machine.url, key: machine.key, ...(machine.pin ? { pin: machine.pin } : {}) }, 'sendSyncPersonalFolder', [remote, ...(own.account !== undefined ? [own.account] : [])])
+  if (!said.ok) return { ok: false, error: `${machine.label} could not be asked: ${said.error}` }
+  const { ok, error } = (said.ret && typeof said.ret === 'object' ? said.ret : {}) as { ok?: unknown; error?: unknown }
+  return ok === true ? { ok: true } : { ok: false, error: `${machine.label} says: ${typeof error === 'string' ? error : 'nothing'}` }
 }

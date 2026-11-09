@@ -14,6 +14,7 @@ import { onOwnComputers, sendAddComputer, sendForgetComputers } from './computer
 import { sendRenameComputer } from './machines.js'
 import { onAgentAccounts, sendRemoveAgentAccount, sendUseAgentAccountFirst } from './accounts.js'
 import { onGitHosts, sendUseGitHostAccount } from './logins.js'
+import { onPersonalFolder, sendSyncPersonalFolder } from './personal-folder.js'
 
 // The machine side of the remote-agent relay (#1067 slice 2). A daemon that relayed an agent here asks this
 // to read/steer/hand off THAT run against THIS machine's own checkout. Every entry is a run-scoped RPC
@@ -94,8 +95,8 @@ export async function dispatchRelayRpc(projectId: string, fn: string, args: unkn
 // Which of a computer's accounts its runs take, a coding agent's and a git host's, is asked and picked
 // from the page of the computer that sends it a run: the run goes with the one picked there. One is
 // removed from there too, as its own page removes it.
-const MACHINE_READS = { onCopiedLogins, onOwnProjects, onOwnInterventions, onOwnComputers, onCloneCheck, onModels, onAgentAccounts, onGitHosts }
-const MACHINE_ACTS = { sendCopiedLogin, sendForgetCopiedLogin, sendKeepCopiedLogin, sendCopiedUsage, patchPreferences, sendAddComputer, sendForgetComputers, sendRenameComputer, sendUseAgentAccountFirst, sendRemoveAgentAccount, sendUseGitHostAccount }
+const MACHINE_READS = { onCopiedLogins, onOwnProjects, onOwnInterventions, onOwnComputers, onCloneCheck, onModels, onAgentAccounts, onGitHosts, onPersonalFolder }
+const MACHINE_ACTS = { sendCopiedLogin, sendForgetCopiedLogin, sendKeepCopiedLogin, sendCopiedUsage, patchPreferences, sendAddComputer, sendForgetComputers, sendRenameComputer, sendUseAgentAccountFirst, sendRemoveAgentAccount, sendUseGitHostAccount, sendSyncPersonalFolder }
 const MACHINE_FNS = Object.assign(Object.create(null) as Record<string, RelayFn>, MACHINE_READS, MACHINE_ACTS) as unknown as Record<string, RelayFn>
 
 /** The machine-wide names a relay caller may invoke. */

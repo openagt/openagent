@@ -62,6 +62,9 @@ function dashboard(
   const computersThrough = vi.fn(async (_id: string): Promise<ModuleComputersThrough> => ({ ok: true, computers: [] }))
   const addComputerThrough = vi.fn(async (_id: string, _computer: string): Promise<MachineAdded> => ({ ok: true }))
   const useLoginsOn = vi.fn(async (_id: string): Promise<MachineAdded> => ({ ok: true }))
+  const syncDataOn = vi.fn(async (_id: string): Promise<MachineAdded> => ({ ok: true }))
+  // This computer's agent data syncs with no repository, unless a test says otherwise.
+  const agentDataRemote = vi.fn(async (): Promise<string | undefined> => undefined)
   // No machine says who this computer's person is there, unless a test says otherwise.
   const machinePerson = vi.fn(async (_id: string): Promise<ModuleMachinePerson> => ({ ok: false, error: 'not said', unknown: true }))
   const removeMachineDevice = vi.fn(async (_id: string, _device: string): Promise<ModuleMachinePerson> => ({ ok: false, error: 'not said' }))
@@ -97,6 +100,8 @@ function dashboard(
     machinePerson,
     removeMachineDevice,
     useLoginsOn,
+    syncDataOn,
+    agentDataRemote,
     machineAccounts,
     removeMachineAccount,
     watchScreen: vi.fn(async () => undefined),
@@ -104,7 +109,7 @@ function dashboard(
   }
   // What was asked of the `devices server` command, without the reads a page makes again and again by itself.
   const ran = (): string[] => runComputerCommand.mock.calls.map(([args]) => args.join(' ')).filter(line => !line.startsWith('devices '))
-  return { host, runComputerCommand, runComputerCommandOn, doorCommand, machines, addMachine, removeMachine, computersThrough, addComputerThrough, machinePerson, removeMachineDevice, useLoginsOn, machineAccounts, removeMachineAccount, ran }
+  return { host, runComputerCommand, runComputerCommandOn, doorCommand, machines, addMachine, removeMachine, computersThrough, addComputerThrough, machinePerson, removeMachineDevice, useLoginsOn, syncDataOn, agentDataRemote, machineAccounts, removeMachineAccount, ran }
 }
 
 function show(host: ModuleHost) {
@@ -1137,6 +1142,47 @@ describe('Settings › Devices: Set up a server, in steps', () => {
     expect(button('Test connection').disabled).toBe(true)
     expect(button('Continue').disabled).toBe(true)
     expect(ran().some(line => line.startsWith('test '))).toBe(false)
+  })
+
+  test('when this computer\'s agent data syncs with a repository, the server is offered the same sync, after its logins: ticked, it is asked once the logins are there; its step is on the list', async () => {
+    let row: ServerRow | undefined
+    const { host, syncDataOn, useLoginsOn, agentDataRemote } = dashboard(
+      args => {
+        if (args[0] === 'connect') row = server(['done', 'running'], { working: true })
+        if (args[0] === 'link') return ok(LINK)
+        if (args[0] === 'added' && row) row = { ...row, adding: false }
+        return ok({ servers: row ? [row] : [] })
+      },
+      BOX_SAVED(),
+    )
+    agentDataRemote.mockImplementation(async () => 'github.com/ada/agent')
+    let used: (answer: MachineAdded) => void = () => {}
+    useLoginsOn.mockImplementation(() => new Promise<MachineAdded>(resolve => (used = resolve)))
+    show(host)
+    await toConnect()
+    testAs('203.0.113.5')
+    await waitFor(() => expect(button('Continue').disabled).toBe(false))
+    fireEvent.click(button('Continue'))
+    const box = (await screen.findByRole('checkbox', { name: 'Sync my agent data there too' })) as HTMLButtonElement
+    expect(screen.getByText("Its agent data syncs with github.com/ada/agent, as this computer's does: the same logs, tickets and agents on both. Sent as the GitHub login copied there.")).toBeTruthy()
+    expect(box.getAttribute('aria-checked')).toBe('true')
+    // Without this computer's logins there is no login to send it as: the box follows the one above.
+    fireEvent.click(screen.getByRole('checkbox', { name: 'Use my logins from this computer' }))
+    const off = screen.getByRole('checkbox', { name: 'Sync my agent data there too' })
+    expect(off.hasAttribute('disabled') || off.getAttribute('aria-disabled') === 'true' || off.hasAttribute('data-disabled')).toBe(true)
+    fireEvent.click(screen.getByRole('checkbox', { name: 'Use my logins from this computer' }))
+    fireEvent.click(button('Install'))
+    const steps = await screen.findByRole('list', { name: 'The install on 203.0.113.5' })
+    expect(within(steps).getByRole('listitem', { name: 'Syncs your agent data: not started' })).toBeTruthy()
+    row = server(ALL_DONE)
+    await waitFor(() => expect(useLoginsOn).toHaveBeenCalledWith('https://203.0.113.5'))
+    // Not before the logins are there: the login copied is what sends it.
+    expect(syncDataOn).not.toHaveBeenCalled()
+    used({ ok: true })
+    await waitFor(() => expect(syncDataOn).toHaveBeenCalledWith('https://203.0.113.5'))
+    expect(await within(steps).findByRole('listitem', { name: 'Syncs your agent data: done' })).toBeTruthy()
+    expect(await screen.findByText('203.0.113.5 is ready.')).toBeTruthy()
+    expect(syncDataOn).toHaveBeenCalledTimes(1)
   })
 
   test('a cloud server: Where, a test that goes through, its logins, then Install starts this computer\'s own OpenAgent there, in no project', async () => {

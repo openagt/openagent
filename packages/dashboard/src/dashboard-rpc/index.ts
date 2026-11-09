@@ -28,7 +28,7 @@ export { onAgentsList, sendSaveAgent, sendRemoveAgent, onAgentLogins, sendCopyAg
 export { onGitHosts, sendUseGitHostAccount, sendForgetGitHostAccount, sendGitHostLogin, sendGitHostInstall, onAgentState, sendAgentFix, type GitHostsView, type GitHostRow, type GitHostAccount, type GitHostProvider, type AgentState } from './logins.js'
 export { onPersonalFolder, sendSyncPersonalFolder, sendStopSyncingPersonalFolder, type PersonalFolderView } from './personal-folder.js'
 export { onProjectAgentData, type ProjectAgentData, type KeptData } from './project-agent-data.js'
-export { onServerLogins, sendUseLoginsOn, sendAllowLogins, sendSettleLogin, type ServerLoginsView, type ServerLogins, type LoginThere } from './server-logins.js'
+export { onServerLogins, sendUseLoginsOn, sendSyncPersonalFolderOn, sendAllowLogins, sendSettleLogin, type ServerLoginsView, type ServerLogins, type LoginThere } from './server-logins.js'
 export { onCopiedLogins, sendCopiedLogin, sendForgetCopiedLogin, sendKeepCopiedLogin, sendCopiedUsage, type CopiedView } from './copied-logins.js'
 export { onAgentAccounts, sendRemoveAgentAccount, sendUseAgentAccountFirst, type AccountsAgent, type AccountRow, type AccountWindow, type AccountsView, type AccountResult } from './accounts.js'
 

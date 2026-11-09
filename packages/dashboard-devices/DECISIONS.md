@@ -168,6 +168,12 @@ already made, and lists it in its pull request; for anything else it proposes an
   keeps its one switch. Linux first; a Mac later. Picked over three choices on every computer,
   with "Everyone" greyed where it cannot work.
 
+## The server's agent data
+- A server set up from this computer is offered the person's agent data too, when this computer's
+  syncs with a repository: the server syncs with the same one, sent as the GitHub login copied
+  there, so the same logs, tickets and agents are on both. Picked over a server that starts with
+  agent data of its own, set to sync on its own page by hand.
+
 ## The server's logins
 - A person's logins reach another person's computer copied from their own server, before their
   first run there; they can make a login of its own there instead, and a copy never replaces it.

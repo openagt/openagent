@@ -466,6 +466,10 @@ export interface ModuleHost {
    * computer is logged in to gets a login of the server's own there, as the Permissions page says.
    */
   useLoginsOn(machineId: string): Promise<MachineAdded>
+  /** A saved server of the person's syncs its agent data with the repository this computer's does, sent as the login copied there. */
+  syncDataOn(machineId: string): Promise<MachineAdded>
+  /** The repository this computer's agent data syncs with, as a person reads it (`github.com/you/agent`); nothing when it syncs with none. */
+  agentDataRemote(): Promise<string | undefined>
   /**
    * A coding agent's accounts on a saved machine, in the order its runs take them, as it says.
    * `null` for a machine that does not answer, or runs an OpenAgent that is not asked this.

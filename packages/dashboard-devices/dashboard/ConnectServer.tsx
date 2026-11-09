@@ -1,6 +1,6 @@
 import { useEffect, useState, type ComponentType, type FormEvent, type ReactNode } from 'react'
 import { Check, CircleCheck, CircleX, Cloud, House, Loader2, PlugZap, Waypoints } from 'lucide-react'
-import { Button, Checkbox, Dialog, Input, Select, SelectContent, SelectItem, SelectTrigger, SelectValue, cn } from '@openagt/dashboard/module'
+import { Button, Checkbox, Dialog, Input, Select, SelectContent, SelectItem, SelectTrigger, SelectValue, cn, usePolled } from '@openagt/dashboard/module'
 import { testConnection, type Answer, type ServerRow, type Tested } from './servers.js'
 import { CopyButton } from './codes.js'
 import { hasDoor, labelOf } from './model.js'
@@ -38,6 +38,10 @@ export function ConnectServer({ d, onClose, onInvite }: { d: Devices; onClose: (
   const [testing, setTesting] = useState(false)
   // Whether the server uses this computer's logins, from when it is saved among the machines.
   const [useMine, setUseMine] = useState(true)
+  // And syncs its agent data with the repository this computer's does, when it syncs with one: sent as the login copied there.
+  const { value: remote } = usePolled<string | undefined>(() => d.host.agentDataRemote().catch(() => undefined), undefined, 60_000, [])
+  const [syncData, setSyncData] = useState(true)
+  const syncs = useMine && syncData && remote !== undefined
   const [installed, setInstalled] = useState<string | undefined>()
   const through = kind === 'home' ? (via ?? doors[0]?.url) : undefined
   // A PC the person sits at, reached through a server or on Tailscale: installed by their own user there.
@@ -66,7 +70,7 @@ export function ConnectServer({ d, onClose, onInvite }: { d: Devices; onClose: (
   }
 
   const install = async (): Promise<void> => {
-    if (await d.install(at, as, kind === 'tailscale' ? 'tailscale' : through, useMine)) {
+    if (await d.install(at, as, kind === 'tailscale' ? 'tailscale' : through, useMine, syncs)) {
       setInstalled(at)
       setStage('install')
     }
@@ -125,6 +129,15 @@ export function ConnectServer({ d, onClose, onInvite }: { d: Devices; onClose: (
               <p>The server gets logins of its own. Nothing here is logged out, now or later.</p>
               <p className="text-muted-foreground">Unchecked: the server has no logins. You can turn it on later on the Permissions page.</p>
             </div>
+            {remote !== undefined && (
+              <label className="flex items-start gap-2 text-sm">
+                <Checkbox className="mt-0.5" checked={useMine && syncData} disabled={!useMine} onCheckedChange={checked => setSyncData(checked === true)} aria-label="Sync my agent data there too" />
+                <span>
+                  Sync my agent data there too
+                  <span className="block text-xs text-muted-foreground">{`Its agent data syncs with ${remote}, as this computer's does: the same logs, tickets and agents on both. Sent as the GitHub login copied there${useMine ? '' : ', so it needs your logins'}.`}</span>
+                </span>
+              </label>
+            )}
             {d.error !== undefined && <Problem>{d.error}</Problem>}
             <Footer>
               <Button size="sm" variant="ghost" onClick={() => setStage('connect')}>
@@ -138,7 +151,7 @@ export function ConnectServer({ d, onClose, onInvite }: { d: Devices; onClose: (
             </Footer>
           </div>
         )}
-        {stage === 'install' && <Installing d={d} server={server} useMine={useMine} onReady={() => setStage('ready')} onClose={onClose} />}
+        {stage === 'install' && <Installing d={d} server={server} useMine={useMine} syncData={syncs} onReady={() => setStage('ready')} onClose={onClose} />}
         {stage === 'ready' && server !== undefined && <Ready d={d} server={server} onInvite={() => onInvite(server.address)} onClose={onClose} />}
       </div>
     </Dialog>
@@ -325,7 +338,7 @@ function TestResult({ answer, address, user, home }: { answer: Answer<Tested>; a
   )
 }
 
-function Installing({ d, server, useMine, onReady, onClose }: { d: Devices; server: ServerRow | undefined; /** The server is to use this computer's logins. */ useMine: boolean; onReady: () => void; onClose: () => void }) {
+function Installing({ d, server, useMine, syncData, onReady, onClose }: { d: Devices; server: ServerRow | undefined; /** The server is to use this computer's logins. */ useMine: boolean; /** And to sync this computer's agent data. */ syncData: boolean; onReady: () => void; onClose: () => void }) {
   const done = server !== undefined && !server.working && server.steps.every(step => step.state === 'done')
   const failed = server !== undefined && !server.working && server.steps.some(step => step.state === 'failed')
   const item = d.items.find(candidate => candidate.kind === 'server' && candidate.server.address === server?.address)
@@ -334,9 +347,11 @@ function Installing({ d, server, useMine, onReady, onClose }: { d: Devices; serv
   // Taken once the server is saved; one that failed leaves the server installed all the same.
   const logins = (server !== undefined ? d.logins[server.address] : undefined) ?? { state: 'waiting' as const }
   const loginsFailed = useMine && logins.state === 'failed'
+  const data = (server !== undefined ? d.data[server.address] : undefined) ?? { state: 'waiting' as const }
+  const dataFailed = syncData && data.state === 'failed'
 
   useEffect(() => {
-    if (done && saved && (!useMine || logins.state === 'done')) onReady()
+    if (done && saved && (!useMine || logins.state === 'done') && (!syncData || data.state === 'done')) onReady()
   })
 
   if (server === undefined) return <Loader2 aria-label="Starting" className="h-4 w-4 animate-spin text-primary" />
@@ -355,6 +370,7 @@ function Installing({ d, server, useMine, onReady, onClose }: { d: Devices; serv
           {reason !== undefined && <p className="mt-1 ml-5.5 text-xs text-danger">{reason}</p>}
         </li>
         {useMine && <StepLine label="Uses your logins" state={logins.state} said={logins.said} />}
+        {syncData && <StepLine label="Syncs your agent data" state={data.state} said={data.said} />}
       </ol>
       {!failed && !done && <p className="text-xs text-muted-foreground">A few minutes. You can close this: it goes on, and its row shows how far it is.</p>}
       {d.error !== undefined && <Problem>{d.error}</Problem>}
@@ -369,7 +385,7 @@ function Installing({ d, server, useMine, onReady, onClose }: { d: Devices; serv
             Try again
           </Button>
         )}
-        {done && saved && loginsFailed && (
+        {done && saved && (loginsFailed || dataFailed) && (
           <Button size="sm" onClick={onReady}>
             Continue
           </Button>
