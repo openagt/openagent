@@ -113,6 +113,7 @@ test('the machine-wide calls are the logins and settings a computer brings its s
     onModels: 'read',
     onAgentAccounts: 'read',
     onGitHosts: 'read',
+    onPersonalFolder: 'read',
     sendCopiedLogin: 'act',
     sendForgetCopiedLogin: 'act',
     sendKeepCopiedLogin: 'act',
@@ -124,6 +125,7 @@ test('the machine-wide calls are the logins and settings a computer brings its s
     sendUseAgentAccountFirst: 'act',
     sendRemoveAgentAccount: 'act',
     sendUseGitHostAccount: 'act',
+    sendSyncPersonalFolder: 'act',
   }
   assert.deepEqual([...MACHINE_RPC_NAMES].sort(), Object.keys(classes).sort())
   for (const [name, said] of Object.entries(classes)) assert.equal(isMachineRead(name) ? 'read' : 'act', said, name)

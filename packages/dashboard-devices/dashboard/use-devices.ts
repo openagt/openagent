@@ -58,6 +58,8 @@ export interface Devices {
   notAdded: Record<string, string>
   /** How a server just saved among the machines took this computer's logins, by address: once the person said it uses them. */
   logins: Record<string, { state: StepState; said?: string }>
+  /** How a server just saved took this computer's agent data to sync, by address: once the person said so. */
+  data: Record<string, { state: StepState; said?: string }>
   /** The server whose Update or Try again was pressed, until its command answered. */
   pressed: string | undefined
   reloadDoor: () => Promise<unknown>
@@ -82,7 +84,7 @@ export interface Devices {
    * the person last said for it.
    */
   /** `through`: the server a computer at home is reached through, or `tailscale` for one on the person's Tailscale network. */
-  install: (address: string, user: string, through?: string | 'tailscale', logins?: boolean) => Promise<boolean>
+  install: (address: string, user: string, through?: string | 'tailscale', logins?: boolean, data?: boolean) => Promise<boolean>
   /** Save a server whose install ended among the machines. */
   addToMachines: (server: ServerRow) => Promise<void>
   removeServer: (server: ServerRow) => Promise<void>
@@ -189,6 +191,9 @@ export function useDevices({ everyMs, devicesEveryMs, devicesAnswerMs = DEVICES_
   // The servers that are to use this computer's logins once they are saved, by address.
   const wantsLogins = useRef(new Set<string>())
   const [logins, setLogins] = useState<Devices['logins']>({})
+  // The servers that are to sync this computer's agent data once they are saved, by address.
+  const wantsData = useRef(new Set<string>())
+  const [data, setData] = useState<Devices['data']>({})
 
   const act = async (change: () => Promise<Answer<unknown>>): Promise<boolean> => {
     setBusy(true)
@@ -200,12 +205,13 @@ export function useDevices({ everyMs, devicesEveryMs, devicesAnswerMs = DEVICES_
     return answer.ok
   }
 
-  const install = async (at: string, as: string, through?: string | 'tailscale', useLogins?: boolean): Promise<boolean> => {
+  const install = async (at: string, as: string, through?: string | 'tailscale', useLogins?: boolean, syncData?: boolean): Promise<boolean> => {
     if (!machines || machines.version === 'unknown') {
       setError('This computer could not say which OpenAgent it runs.')
       return false
     }
     if (useLogins !== undefined) wantsLogins.current[useLogins ? 'add' : 'delete'](at)
+    if (syncData !== undefined) wantsData.current[syncData ? 'add' : 'delete'](at)
     setNotAdded(reasons => without(reasons, at))
     setPressed(at)
     const started = await act(() => connect(host, at, as, machines.version, through))
@@ -213,12 +219,17 @@ export function useDevices({ everyMs, devicesEveryMs, devicesAnswerMs = DEVICES_
     return started
   }
 
-  /** A server just saved as the machine `id` uses this computer's logins, when the person said so; one that failed is told, and the server stays saved. */
+  /** A server just saved as the machine `id` uses this computer's logins, when the person said so; one that failed is told, and the server stays saved. Then its agent data, when they said so too: the login copied there sends it. */
   const useLoginsOn = async (address: string, id: string): Promise<void> => {
-    if (!wantsLogins.current.delete(address)) return
-    setLogins(states => ({ ...states, [address]: { state: 'running' } }))
-    const used = await host.useLoginsOn(id).catch((err: unknown) => ({ ok: false as const, error: err instanceof Error ? err.message : String(err) }))
-    setLogins(states => ({ ...states, [address]: used.ok ? { state: 'done' } : { state: 'failed', said: used.error } }))
+    if (wantsLogins.current.delete(address)) {
+      setLogins(states => ({ ...states, [address]: { state: 'running' } }))
+      const used = await host.useLoginsOn(id).catch((err: unknown) => ({ ok: false as const, error: err instanceof Error ? err.message : String(err) }))
+      setLogins(states => ({ ...states, [address]: used.ok ? { state: 'done' } : { state: 'failed', said: used.error } }))
+    }
+    if (!wantsData.current.delete(address)) return
+    setData(states => ({ ...states, [address]: { state: 'running' } }))
+    const synced = await host.syncDataOn(id).catch((err: unknown) => ({ ok: false as const, error: err instanceof Error ? err.message : String(err) }))
+    setData(states => ({ ...states, [address]: synced.ok ? { state: 'done' } : { state: 'failed', said: synced.error } }))
   }
 
   /**
@@ -319,6 +330,7 @@ export function useDevices({ everyMs, devicesEveryMs, devicesAnswerMs = DEVICES_
     setError,
     notAdded,
     logins,
+    data,
     pressed,
     reloadDoor,
     changeDoor,

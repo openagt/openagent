@@ -7,7 +7,8 @@ import { sendStart } from './rpc/control.js'
 import { onProjects } from './rpc/projects.js'
 import { onComputersThrough, onMachineAgentAccounts, onMachinePerson, onMachineVersions, sendLetMachineIn, sendMachineCode, sendMachineRemoveAgentAccount, sendRemoveMachineDevice } from './rpc/machines.js'
 import { onGitHostPeople } from './rpc/people.js'
-import { sendUseLoginsOn } from './rpc/server-logins.js'
+import { sendSyncPersonalFolderOn, sendUseLoginsOn } from './rpc/server-logins.js'
+import { onPersonalFolder } from './rpc/personal-folder.js'
 import { addComputerThrough, addMachine, removeMachine, renameComputer, renameMachine } from './lib/machines.js'
 import { AgentHistory } from './components/AgentHistory.js'
 import { SidebarProvider } from './components/ui/sidebar.js'
@@ -413,6 +414,8 @@ export function App() {
       },
       removeMachineAccount: sendMachineRemoveAgentAccount,
       useLoginsOn: sendUseLoginsOn,
+      syncDataOn: sendSyncPersonalFolderOn,
+      agentDataRemote: async () => (await onPersonalFolder()).remote,
       addComputerThrough: async (machineId, computerId) => {
         const added = await addComputerThrough(machineId, computerId)
         return added.ok ? { ok: true } : added

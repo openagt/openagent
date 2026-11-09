@@ -69,6 +69,12 @@ export const INERT_HOST_SERVICES: HostServices = {
   async useLoginsOn() {
     return { ok: false, error: 'no dashboard to give a server logins from' }
   },
+  async syncDataOn() {
+    return { ok: false, error: 'no dashboard to sync a server from' }
+  },
+  async agentDataRemote() {
+    return undefined
+  },
   async watchScreen() {
     return undefined
   },
