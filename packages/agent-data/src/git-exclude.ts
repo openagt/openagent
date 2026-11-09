@@ -1,4 +1,4 @@
-import { appendFile, mkdir, readFile, rename, writeFile } from 'node:fs/promises'
+import { appendFile, lstat, mkdir, readFile, rename, writeFile } from 'node:fs/promises'
 import { join, isAbsolute } from 'node:path'
 import { nodeGitRunner, type GitRunner } from './git.js'
 
@@ -82,4 +82,16 @@ export async function unexcludeFromGit(
 export async function repositoryCheckouts(repo: string, git: GitRunner = nodeGitRunner()): Promise<string[]> {
   const list = await git(['worktree', 'list', '--porcelain'], repo)
   return list.split('\n').filter(line => line.startsWith('worktree ')).map(line => line.slice('worktree '.length))
+}
+
+/**
+ * Take the rule hiding a tool's directory, `/<dir>`, back out once the tool removed the directory:
+ * only when no checkout of the repository still has one, since they all read the rule. Best-effort:
+ * a repository whose checkouts cannot be listed, or whose exclude file cannot be written, keeps it.
+ */
+export async function unexcludeOnceGone(repo: string, dir: string, git: GitRunner = nodeGitRunner()): Promise<void> {
+  const checkouts = await repositoryCheckouts(repo, git).catch(() => undefined)
+  if (checkouts === undefined) return
+  for (const checkout of checkouts) if (await lstat(join(checkout, dir)).then(() => true, () => false)) return
+  await unexcludeFromGit(repo, `/${dir}`, undefined, git).catch(() => {})
 }

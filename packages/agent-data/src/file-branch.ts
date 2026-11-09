@@ -4,7 +4,7 @@ import { dirname, join } from 'node:path'
 import { BRANCHES_DIR } from './names.js'
 import { EMPTY_TREE, errorMessage, nodeGitRunner, type GitRunner } from './git.js'
 import { accountGit } from './remote-account.js'
-import { excludeFromGit, repositoryCheckouts, unexcludeFromGit } from './git-exclude.js'
+import { excludeFromGit, unexcludeOnceGone } from './git-exclude.js'
 import { withCheckoutLock, type CheckoutLockDeps } from './checkout-lock.js'
 
 // A branch used as a file store: a branch of the project's repository that holds files nobody
@@ -324,12 +324,7 @@ export async function removeFileBranch(cwd: string, branch: string, deps: FileBr
  */
 async function removeCheckoutsDir(repo: string, git: GitRunner): Promise<boolean> {
   if (!(await rmdir(join(repo, BRANCHES_DIR)).then(() => true, () => false))) return false
-  const checkouts = await repositoryCheckouts(repo, git).catch(() => undefined)
-  if (checkouts) {
-    let held = false
-    for (const checkout of checkouts) held ||= await lstat(join(checkout, BRANCHES_DIR)).then(() => true, () => false)
-    if (!held) await unexcludeFromGit(repo, '/' + BRANCHES_DIR, undefined, git).catch(() => {})
-  }
+  await unexcludeOnceGone(repo, BRANCHES_DIR, git)
   return true
 }
 
