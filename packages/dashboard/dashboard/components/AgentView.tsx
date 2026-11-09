@@ -27,8 +27,7 @@ import { Committing, HandoffActions, HandoffSummary, isCommitAsk } from './Agent
 import { AgentDetails, type AgentDetailsCard } from './AgentDetails.js'
 import { holdsMainAgent } from '../lib/subagents.js'
 import { agentLogKey } from '../lib/agent-log.js'
-import { revealChange, revealFile, revealScreen, revealSubagent } from '../lib/reveal-change.js'
-import { panesPage } from '../lib/panes.js'
+import { usePaneOpeners } from '../lib/reveal-change.js'
 import { modelContextWindow, modelName, useModels } from '../lib/models.js'
 import { ContextCircle } from './ContextCircle.js'
 import { effortLabel } from '../lib/effort.js'
@@ -201,21 +200,10 @@ export function AgentView({
   const startedFrom = startedFromBranch(card, mainBranch) ?? picks?.branch
   const [open, setOpen] = useState(false)
   // What the installed modules add to this run's page: a summary in the bar above the message box.
-  const { runSlots: mountedSlots, panels: mountedPanels } = useMountedModules()
-  // A changed file's row in the chat opens the pane that lists changes, when a module of this
-  // project has one.
-  const listsChanges = mountedPanels.some(panel => panel.changes && panel.projects.includes(projectId))
-  const onOpenChange = useMemo(() => (listsChanges ? (path?: string) => revealChange(panesPage(projectId, agentId), path) : undefined), [listsChanges, projectId, agentId])
-  // A file a step names ("Read index.html") opens the pane that shows the run's files, on it, when
-  // a module of this project has one.
-  const showsFiles = mountedPanels.some(panel => panel.files && panel.projects.includes(projectId))
-  const onOpenFile = useMemo(() => (showsFiles ? (path: string) => revealFile(panesPage(projectId, agentId), path) : undefined), [showsFiles, projectId, agentId])
-  // A live screen's row in the chat opens the pane that shows it, the same way.
-  const showsScreen = mountedPanels.some(panel => panel.screen && panel.projects.includes(projectId))
-  const onOpenScreen = useMemo(() => (showsScreen ? () => revealScreen(panesPage(projectId, agentId)) : undefined), [showsScreen, projectId, agentId])
-  // A subagent's row opens it in the pane beside the chat.
-  const onOpenSubagent = useMemo(() => (key: string) => revealSubagent(panesPage(projectId, agentId), key), [projectId, agentId])
-  const runSlots = mountedSlots.filter(slots => slots.projects.includes(projectId))
+  const runSlots = useMountedModules().runSlots.filter(slots => slots.projects.includes(projectId))
+  // What a row of the chat opens in a pane beside it: a changed file, a file a step names
+  // ("Read index.html"), a live screen, a subagent.
+  const { onOpenChange, onOpenFile, onOpenScreen, onOpenSubagent } = usePaneOpeners(projectId, agentId)
   const toggle = useCallback(() => setOpen(o => !o), [])
 
   // The events already on screen keep their place while the archived copy is read, so an agent
