@@ -10,7 +10,7 @@ import { DATA, END, FrameReader, HEAD, Link, MAX_PAYLOAD, PING, PONG, RESET, car
 import { carry, dial, enterForLine, knock, readLineLink, unchunked, WATCH_HEADER, type Route } from './line-out.js'
 import { tellOpenAgent } from './line-in.js'
 import { NOT_A_SERVER, NO_OWNER, ONLY_ITS_OWN, making, routeFor, serve, type ServeOptions } from './serve.js'
-import { addCode, computerWordFor, enter, readStore, sha256, update, type Store } from './store.js'
+import { addCode, computerWordFor, enter, readStore, sha256, update, type Line, type Store } from './store.js'
 import { quietAnnounce, testHome } from './test-home.js'
 import { testOffice } from './test-office.js'
 
@@ -84,43 +84,44 @@ test('a body in pieces is put together, and a length that is none ends the readi
   for (const none of ['-6\r\nabc', 'zz\r\nabc', '', '5']) assert.equal(unchunked(Buffer.from(none)).length, 0, none)
 })
 
-test('a call down a line goes to this computer\'s own OpenAgent for its own person, and to another person\'s own only on a line for everyone, on a computer set up as a server', () => {
+test('a call down a line goes to this computer\'s own OpenAgent for its own person, and to another person\'s own only when the line names them, on a computer set up as a server', () => {
   const added = new Date().toISOString()
   const target = 'http://127.0.0.1:4200'
   const helper = { OPENAGENT_PERSON_HELPER: '/opt/openagent/bin/openagent-person' }
   const line = { url: 'https://203.0.113.7', pin: 'p', key: 'id.k', mode: 'full' as const, person: 'rom' }
-  const everyone = { ...line, for: 'everyone' as const }
+  const named = { ...line, for: ['ada', 'lee', 'kim'] }
   const store: Store = { on: false, persons: [{ name: 'rom', owner: true, added }, { name: 'ada', added, port: 4300, ready: true }, { name: 'kim', added, port: 4400, problem: 'useradd failed' }], devices: [], codes: [], asks: [], lines: [] }
   const asked: string[] = []
   const start = { method: 'POST', path: '/_relay/start' }
-  const route = (on: typeof line, person: string | undefined, env: NodeJS.ProcessEnv = helper, kept: Store = store, call = start): Route => routeFor(on, kept, target, env, person, call, account => asked.push(account))
+  const route = (on: Line, person: string | undefined, env: NodeJS.ProcessEnv = helper, kept: Store = store, call = start): Route => routeFor(on, kept, target, env, person, call, account => asked.push(account))
   // Its own person, the computer's owner, a call for nobody: this computer's own OpenAgent.
   for (const person of ['rom', undefined]) assert.deepEqual(route(line, person), { target })
   assert.deepEqual(route({ ...line, person: 'someone' }, 'rom'), { target }, 'the owner here')
-  // A line for only its person: nobody else, whatever the server says.
+  // A line for only its person: nobody else, whatever the server says. Nor anyone the line does not name.
   assert.deepEqual(route(line, 'ada'), { status: 403, text: ONLY_ITS_OWN })
-  // A line that never heard who its person is takes every call as theirs, as before persons; one for everyone does not.
+  assert.deepEqual(route({ ...line, for: ['lee'] }, 'ada'), { status: 403, text: ONLY_ITS_OWN })
+  // A line that never heard who its person is takes every call as theirs, as before persons; one that names people does not.
   const { person: _person, ...unheard } = line
-  assert.deepEqual(route(unheard as typeof line, 'ada', {}), { target })
-  assert.deepEqual(route(everyone, 'ada', {}), { status: 403, text: NOT_A_SERVER })
-  assert.deepEqual(route(everyone, 'ada', helper, { ...store, persons: [] }), { status: 503, text: NO_OWNER })
-  assert.deepEqual(route(everyone, 'ada'), { target: 'http://127.0.0.1:4300' })
+  assert.deepEqual(route(unheard, 'ada', {}), { target })
+  assert.deepEqual(route(named, 'ada', {}), { status: 403, text: NOT_A_SERVER })
+  assert.deepEqual(route(named, 'ada', helper, { ...store, persons: [] }), { status: 503, text: NO_OWNER })
+  assert.deepEqual(route(named, 'ada'), { target: 'http://127.0.0.1:4300' })
   // Their own OpenAgent goes by the computer's name as its owner named it; the owner's own is told nothing.
-  assert.deepEqual(routeFor(everyone, store, target, helper, 'ada', start, () => {}, 'OpenAgentVPS'), { target: 'http://127.0.0.1:4300', ownersName: 'OpenAgentVPS' })
+  assert.deepEqual(routeFor(named, store, target, helper, 'ada', start, () => {}, 'OpenAgentVPS'), { target: 'http://127.0.0.1:4300', ownersName: 'OpenAgentVPS' })
   assert.deepEqual(routeFor(line, store, target, helper, 'rom', start, () => {}, 'OpenAgentVPS'), { target })
   // Someone with no user here yet has one made; one whose making failed says why, and is tried again.
-  assert.deepEqual(route(everyone, 'lee'), { status: 503, text: making('lee') })
-  assert.match((route(everyone, 'kim') as { text: string }).text, /^@kim's place on this computer could not be made: useradd failed\. It is tried again at the next run\.$/)
+  assert.deepEqual(route(named, 'lee'), { status: 503, text: making('lee') })
+  assert.match((route(named, 'kim') as { text: string }).text, /^@kim's place on this computer could not be made: useradd failed\. It is tried again at the next run\.$/)
   assert.deepEqual(asked, ['lee', 'kim'])
   // A page that only looks makes nobody a user: the computer is there, and has no logins of theirs yet.
   asked.length = 0
-  assert.deepEqual(route(everyone, 'lee', helper, store, { method: 'GET', path: '/_relay/ping' }), { target })
-  assert.deepEqual(route(everyone, 'lee', helper, store, { method: 'GET', path: '/_relay/logins' }), { status: 200, text: '{}', type: 'application/json' })
-  assert.deepEqual(route(everyone, 'lee', helper, store, { method: 'GET', path: '/_relay/events?run=x' }), { status: 503, text: making('lee') })
-  assert.deepEqual(route(everyone, 'kim', helper, store, { method: 'GET', path: '/_relay/ping' }), { target })
+  assert.deepEqual(route(named, 'lee', helper, store, { method: 'GET', path: '/_relay/ping' }), { target })
+  assert.deepEqual(route(named, 'lee', helper, store, { method: 'GET', path: '/_relay/logins' }), { status: 200, text: '{}', type: 'application/json' })
+  assert.deepEqual(route(named, 'lee', helper, store, { method: 'GET', path: '/_relay/events?run=x' }), { status: 503, text: making('lee') })
+  assert.deepEqual(route(named, 'kim', helper, store, { method: 'GET', path: '/_relay/ping' }), { target })
   assert.deepEqual(asked, [], 'no user is made for a look')
   // Logins handed over make one, as a run does.
-  assert.deepEqual(route(everyone, 'lee', helper, store, { method: 'POST', path: '/_relay/logins' }), { status: 503, text: making('lee') })
+  assert.deepEqual(route(named, 'lee', helper, store, { method: 'POST', path: '/_relay/logins' }), { status: 503, text: making('lee') })
   assert.deepEqual(asked, ['lee'])
 })
 
@@ -870,7 +871,7 @@ test('on a server with a user per person, a person\'s computer has its line in t
   }
 })
 
-test('a computer whose line is for everyone at its server has an address for each person there, and each call goes to the OpenAgent of that person\'s own user on the computer, made the first time', async () => {
+test('a computer whose line names people at its server has an address for each of them there, and each call goes to the OpenAgent of that person\'s own user on the computer, made the first time', async () => {
   // Ada's own OpenAgent on Rom's computer, once her user there is made: the helper's work, which the test does itself.
   const adasThere: IncomingMessage['headers'][] = []
   const adasAgent = createServer((req, res) => {
@@ -907,11 +908,11 @@ test('a computer whose line is for everyone at its server has an address for eac
     const own = await until('rom’s own OpenAgent saved his computer', () => romsMachines[0])
     assert.equal(own.owner, undefined)
 
-    // Everyone at the server: ada's OpenAgent there is told of an address of the computer for her, with whose it is.
-    await command(r.computer, 'line', 'everyone', '127.0.0.1')
+    // Ada named: her OpenAgent at the server is told of an address of the computer for her, with whose it is.
+    await command(r.computer, 'line', 'for', '127.0.0.1', 'ada')
     const forAda = await until('ada’s OpenAgent saved rom’s computer', () => r.machines.find(machine => machine.owner === 'rom'))
     const studio = (await readStore(r.server)).devices.find(device => device.line)!
-    assert.deepEqual(studio.line!.others, { ada: Number(new URL(forAda.url).port) })
+    assert.deepEqual([studio.line!.for, studio.line!.others], [['ada'], { ada: Number(new URL(forAda.url).port) }])
 
     // Her page only looking makes her no user there: the computer's own OpenAgent says it is there.
     await until('the line carries for ada', async () => (await fetch(`${forAda.url}/_relay/ping`)).status === 200)
@@ -954,7 +955,10 @@ test('a computer whose line is for everyone at its server has an address for eac
 
     // Only rom again: the address for ada goes, and her OpenAgent there drops the computer.
     await command(r.computer, 'line', 'full', '127.0.0.1')
-    await until('the server took the address for ada away', async () => ((await readStore(r.server)).devices.find(device => device.line)!.line!.others === undefined ? true : undefined))
+    await until('the server took the address for ada away', async () => {
+      const kept = (await readStore(r.server)).devices.find(device => device.line)!.line!
+      return kept.others === undefined && kept.for === undefined ? true : undefined
+    })
     await until('ada’s OpenAgent dropped rom’s computer', () => (r.machines.some(machine => machine.owner === 'rom') ? undefined : true))
     assert.deepEqual(JSON.parse((await doorCall(`${link.origin}/_devices/computers`, { headers: adasLaptop })).text), { computers: [] })
     assert.equal((await fetch(`${own.url}/_relay/ping`)).status, 200, 'rom’s own address carries on')

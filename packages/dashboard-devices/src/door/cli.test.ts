@@ -282,7 +282,7 @@ test('a line the server said no to is told as refused, and is not told what the 
   }
 })
 
-test('line everyone, full and watch say who at the server may start runs here; only a computer set up as a server lets everyone; a person a line made here is said to be removed once that server no longer has them, until the owner keeps them', async () => {
+test('line for, full and watch say who at the server may start runs here; only a computer set up as a server names people; a person a line made here is said to be removed once that server no longer has them, until the owner keeps them; remove-person takes their name off the line', async () => {
   const home = await testHome()
   const server = { ...home.env, OPENAGENT_PERSON_HELPER: '/opt/openagent/bin/openagent-person' }
   try {
@@ -296,17 +296,18 @@ test('line everyone, full and watch say who at the server may start runs here; o
       ]
       store.lines = [{ url, pin: 'p'.repeat(43), key: '0f9e8d7c6b5a.the-secret', mode: 'full', person: 'rom' }]
     })
-    type Said = { lines: { mode: string; for?: string; person?: string }[]; persons: { name: string; from?: string; removed?: true; kept?: true }[] }
+    type Said = { lines: { mode: string; for?: string[]; person?: string }[]; persons: { name: string; from?: string; removed?: true; kept?: true }[] }
     const linesOf = (said: unknown): unknown => (said as Said).lines.map(({ mode, for: who, person }) => ({ mode, for: who, person }))
 
-    const notServer = await run(home.env, ['line', 'everyone', '203.0.113.7'])
+    const notServer = await run(home.env, ['line', 'for', '203.0.113.7', 'ada', 'kim'])
     assert.equal(notServer.code, 1)
     assert.match(notServer.err.join(''), /not set up as a server/)
     assert.equal((await readStore(home.env)).lines[0]!.for, undefined)
+    assert.equal((await run(server, ['line', 'for', '203.0.113.7', 'ada', '<not a name>'])).code, 1, 'a name is a name')
 
-    assert.deepEqual(linesOf((await run(server, ['line', 'everyone', '203.0.113.7'])).out), [{ mode: 'full', for: 'everyone', person: 'rom' }])
+    assert.deepEqual(linesOf((await run(server, ['line', 'for', '203.0.113.7', 'ada', 'kim', 'ada'])).out), [{ mode: 'full', for: ['ada', 'kim'], person: 'rom' }], 'each named once')
     assert.deepEqual(linesOf((await run(server, ['line', 'watch', '203.0.113.7'])).out), [{ mode: 'watch', for: undefined, person: 'rom' }], 'nobody: only what reads, and for nobody else')
-    assert.deepEqual(linesOf((await run(server, ['line', 'everyone', '203.0.113.7'])).out), [{ mode: 'full', for: 'everyone', person: 'rom' }])
+    assert.deepEqual(linesOf((await run(server, ['line', 'for', '203.0.113.7', 'ada', 'kim'])).out), [{ mode: 'full', for: ['ada', 'kim'], person: 'rom' }])
 
     // The server has not said yet who is there: nobody is taken for gone.
     const persons = async (): Promise<Said['persons']> => ((await run(home.env, ['status'])).out as Said).persons
@@ -318,12 +319,11 @@ test('line everyone, full and watch say who at the server may start runs here; o
     await update(home.env, store => void (store.lines[0]!.persons = ['ada', 'rom']))
     assert.deepEqual((await persons()).filter(person => person.removed).map(person => person.name), ['kim'])
 
-    // Only me: the others are switched off here, not gone there, and who is there is heard anew once it is for everyone again.
+    // Only me: the others are switched off here, not gone there; what the server last said of who is there still holds.
     await run(server, ['line', 'full', '203.0.113.7'])
-    assert.deepEqual((await persons()).filter(person => person.removed), [])
-    await run(server, ['line', 'everyone', '203.0.113.7'])
-    assert.deepEqual((await persons()).filter(person => person.removed), [])
-    await update(home.env, store => void (store.lines[0]!.persons = ['ada', 'rom']))
+    assert.deepEqual((await persons()).filter(person => person.removed).map(person => person.name), ['kim'])
+    assert.deepEqual(linesOf((await run(server, ['line', 'for', '203.0.113.7'])).out), [{ mode: 'full', for: undefined, person: 'rom' }], 'for nobody: only me again')
+    await run(server, ['line', 'for', '203.0.113.7', 'ada', 'kim'])
 
     const kept = await run(home.env, ['keep', 'kim'])
     assert.equal(kept.code, 0)
@@ -331,9 +331,13 @@ test('line everyone, full and watch say who at the server may start runs here; o
     assert.equal((await run(home.env, ['keep', 'rom'])).code, 1, 'the owner is no person to keep')
     assert.equal((await run(home.env, ['keep', 'nobody'])).code, 1)
 
+    // A person removed here is no longer named on the line that made them.
+    await update(home.env, store => void delete store.persons.find(person => person.name === 'kim')!.port)
+    assert.deepEqual(linesOf((await run(server, ['remove-person', 'kim'])).out), [{ mode: 'full', for: ['ada'], person: 'rom' }])
+
     // No line to that server any more: everyone it made here is removed from it.
     await update(home.env, store => void (store.lines = []))
-    assert.deepEqual((await persons()).filter(person => person.removed).map(person => person.name), ['ada', 'kim'])
+    assert.deepEqual((await persons()).filter(person => person.removed).map(person => person.name), ['ada'])
   } finally {
     await home.remove()
   }

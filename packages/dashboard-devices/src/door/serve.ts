@@ -37,8 +37,8 @@ import { addPerson, computerWordFor, isComputerId, pidAlive, readStore, readStor
  * address, and OpenAgent is told of it.
  *
  * A call down a line goes where its person's runs here are ({@link routeFor}): this computer's
- * own OpenAgent for its own person, and, on a line for everyone at that server, the OpenAgent of
- * the user of their own that each other person has here, made the first time they need it.
+ * own OpenAgent for its own person, and, for a person the line names, the OpenAgent of the user
+ * of their own that they have here, made the first time they need it.
  */
 
 /** Said down a line for a call this computer does not take. */
@@ -47,13 +47,13 @@ export const NOT_A_SERVER = 'This computer is not set up as a server: it gives n
 export const NO_OWNER = "This computer's owner is not named yet."
 export const making = (name: string): string => `${name}'s place on this computer is being made. Try again in a minute.`
 
-/** How often a line for everyone asks its server who is there. */
+/** How often a line that names people asks its server who is there. */
 const MIRROR_MS = 60_000
 
 /**
  * Where a call down `line` goes, by whom of the server's persons it is for. Its own person, or a
- * call that names nobody, reaches this computer's own OpenAgent. Anyone else only on a line for
- * everyone, on a computer that gives each person a user of their own: their own OpenAgent, once
+ * call that names nobody, reaches this computer's own OpenAgent. Anyone else only when the line
+ * names them, on a computer that gives each person a user of their own: their own OpenAgent, once
  * their user is made; until then the call is answered that it is being made.
  *
  * A user is made (`make`) only for a call that needs one: a run started, or logins handed over. A
@@ -62,9 +62,9 @@ const MIRROR_MS = 60_000
  */
 export function routeFor(line: Line, store: Store, target: string, env: NodeJS.ProcessEnv, person: string | undefined, call: { method: string; path: string }, make: (name: string) => void, ownersName?: string): Route {
   const owner = store.persons.find(candidate => candidate.owner)?.name
-  // A line that never heard who its person is takes every call as theirs, as before persons; a line for everyone does not.
-  if (person === undefined || person === line.person || person === owner || (line.person === undefined && line.for !== 'everyone')) return { target }
-  if (line.for !== 'everyone') return { status: 403, text: ONLY_ITS_OWN }
+  // A line that never heard who its person is takes every call as theirs, as before persons; one that names people does not.
+  if (person === undefined || person === line.person || person === owner || (line.person === undefined && line.for === undefined)) return { target }
+  if (!line.for?.includes(person)) return { status: 403, text: ONLY_ITS_OWN }
   if (!env.OPENAGENT_PERSON_HELPER) return { status: 403, text: NOT_A_SERVER }
   if (owner === undefined) return { status: 503, text: NO_OWNER }
   const theirs = store.persons.find(candidate => candidate.name === person && !candidate.owner)
@@ -108,7 +108,7 @@ export interface ServeOptions {
   retryMs?: number
   /** How a line is kept, for a test that cannot wait: its retries, its questions, its patience. */
   line?: { retryMs?: readonly number[]; pingMs?: number; quietMs?: number }
-  /** How often a line for everyone asks its server who is there, and how it asks; for a test. */
+  /** How often a line asks its server who is there, and how it asks; for a test. */
   mirrorMs?: number
   askMe?: typeof askMe
   /** How the making of a person's user is started on its own; this package's own command, detached, when unsaid. */
@@ -317,7 +317,7 @@ export async function serve(opts: ServeOptions): Promise<void> {
   const followLines = (store: Store): void => {
     latest = store
     // A line asked for again when who may use it changed: the server is told as the line is asked for.
-    const wanted = new Map(store.lines.map(line => [`${line.url}\n${line.pin}\n${line.key}\n${line.for ?? ''}`, line]))
+    const wanted = new Map(store.lines.map(line => [`${line.url}\n${line.pin}\n${line.key}\n${(line.for ?? []).join('\n')}`, line]))
     modes.clear()
     for (const line of store.lines) modes.set(line.url, line.mode)
     for (const [id, controller] of kept) {
@@ -339,7 +339,7 @@ export async function serve(opts: ServeOptions): Promise<void> {
         ...(computer !== undefined ? { computer } : {}),
         // Written down, so the person is told: a line the server said no to stays so until it is asked for anew.
         onAnswer: letIn => void noteAnswer(line, letIn),
-        everyone: line.for === 'everyone',
+        ...(line.for !== undefined ? { people: line.for } : {}),
         // The line as the file says it now: who its person is may have been heard since it was asked for.
         route: (person, call) => {
           const now = latest ?? store
@@ -381,24 +381,24 @@ export async function serve(opts: ServeOptions): Promise<void> {
   }
 
   /**
-   * On a server: each computer whose line is for everyone has an address for each person here,
-   * also for one invited after its line was asked for, and none for one who left. Written only
-   * when something is missing or left over.
+   * On a server: each computer whose line names people has an address for each of them here,
+   * also for one who got a user of their own after its line was asked for, and none for one who
+   * left. Written only when something is missing or left over.
    */
   const shareLines = async (store: Store): Promise<void> => {
     const looked = structuredClone(store)
-    if (!looked.devices.some(device => device.line?.others !== undefined && shareLine(looked, device, ports))) return
+    if (!looked.devices.some(device => device.line?.for !== undefined && shareLine(looked, device, ports))) return
     await update(env, kept => {
-      for (const device of kept.devices) if (device.line?.others !== undefined) shareLine(kept, device, ports)
+      for (const device of kept.devices) if (device.line?.for !== undefined) shareLine(kept, device, ports)
     })
   }
 
-  // A line for everyone asks its server now and then who is there: who of those given a user here left it.
+  // A line that names people asks its server now and then who is there: who of those given a user here left it.
   // Any other line asks too until it has heard whose it is: a call for anyone else is refused only by that.
   const heardAt = new Map<string, number>()
   const mirror = (): void => {
     for (const line of latest?.lines ?? []) {
-      if ((line.for !== 'everyone' && line.person !== undefined) || line.refused || Date.now() - (heardAt.get(line.key) ?? -Infinity) < (opts.mirrorMs ?? MIRROR_MS)) continue
+      if ((line.for === undefined && line.person !== undefined) || line.refused || Date.now() - (heardAt.get(line.key) ?? -Infinity) < (opts.mirrorMs ?? MIRROR_MS)) continue
       // Asked once in a while, whatever came of the last time: a server that is away is not asked in a hurry.
       heardAt.set(line.key, Date.now())
       void (opts.askMe ?? askMe)(line)
@@ -410,7 +410,7 @@ export async function serve(opts: ServeOptions): Promise<void> {
             const kept = store.lines.find(candidate => candidate.url === line.url && candidate.key === line.key)
             if (!kept || same(kept)) return
             if (said.person !== undefined) kept.person = said.person
-            if (said.persons !== undefined && kept.for === 'everyone') kept.persons = said.persons
+            if (said.persons !== undefined) kept.persons = said.persons
             if (said.name !== undefined) kept.name = said.name
           })
         })

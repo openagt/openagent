@@ -927,11 +927,11 @@ describe('Settings › Devices: a server this computer installed', () => {
     expect((await screen.findByRole('listitem', { name: 'rom-desktop (through 203.0.113.5)' })).textContent).toContain("rom's, shared with you")
     await open('203.0.113.5')
     const list = await screen.findByRole('list', { name: 'The computers on 203.0.113.5' })
-    expect(list.textContent).toContain("rom-desktop· rom's · for everyone")
+    expect(list.textContent).toContain("rom-desktop· rom's · shared with you")
     fireEvent.click(screen.getByRole('button', { name: 'Back to Devices' }))
 
     await open('rom-desktop (through 203.0.113.5)')
-    expect(await screen.findByText("rom's server, for everyone on 203.0.113.5. Your runs there use your own logins.")).toBeTruthy()
+    expect(await screen.findByText("rom's server, shared with you on 203.0.113.5. Your runs there use your own logins.")).toBeTruthy()
     const logins_ = await screen.findByRole('list', { name: 'Your logins on rom-desktop (through 203.0.113.5)' })
     await waitFor(() => expect(logins_.textContent).toContain('GitHub: copied from vps-1.'))
     expect(logins_.textContent).toContain('Claude: not on rom-desktop (through 203.0.113.5) yet.')
@@ -1012,8 +1012,8 @@ describe('Settings › Devices: a computer at home set up as a server, through a
   }
   const SAVED: ModuleMachines = { version: '1.2.3', machines: [{ id: VPS, label: '165.245.244.10', url: VPS, version: '1.2.3' }, { id: VIA, label: 'rom-box', url: VIA, version: '1.2.3' }] }
 
-  test('its page is a server at home, reached through another: who may start runs on it in place of an Invite, and no line from this computer', async () => {
-    const { host, ran, machinePerson } = dashboard(() => ok({ servers: [box()] }), SAVED)
+  test('its page is a server at home, reached through another: who may start runs on it, picked by name among the people on that server, with no code; and no line from this computer', async () => {
+    const { host, ran, machinePerson } = dashboard(args => (args[0] === 'people' ? ok({ devices: [], persons: [{ name: 'rom', owner: true }] }) : ok({ servers: [box()] })), SAVED)
     machinePerson.mockImplementation(async id => (id === VPS ? { ok: true, said: { person: 'rom', owner: false, devices: [], persons: ['suleimansh', 'rom', 'dani'] } } : { ok: false, error: 'not said', unknown: true }))
     show(host)
     const row = await screen.findByRole('listitem', { name: 'rom-box' })
@@ -1024,15 +1024,47 @@ describe('Settings › Devices: a computer at home set up as a server, through a
     const group = await screen.findByRole('radiogroup', { name: 'Who can start runs on 192.168.1.20' })
     expect(within(group).getByRole('radio', { name: /Only me/ }).getAttribute('aria-checked')).toBe('true')
     expect(within(group).getByRole('radio', { name: /Nobody: its runs only show on 165\.245\.244\.10/ })).toBeTruthy()
-    await waitFor(() => expect(within(group).getByRole('radio', { name: /Everyone on 165\.245\.244\.10 \(3 people\)/ })).toBeTruthy())
+    expect(within(group).getByRole('radio', { name: /Me and people I pick on 165\.245\.244\.10/ })).toBeTruthy()
     expect(group.textContent).toContain("Each person's runs use their own logins, never yours.")
     expect(group.textContent).toContain('Their agents run on your home network.')
     expect(screen.queryByRole('button', { name: 'Add person to 192.168.1.20' })).toBeNull()
-    expect(screen.queryByRole('tab', { name: 'People' })).toBeNull()
     expect(screen.queryByRole('tab', { name: 'Logins' })).toBeNull()
 
-    fireEvent.click(within(await screen.findByRole('radiogroup', { name: 'Who can start runs on 192.168.1.20' })).getByRole('radio', { name: /Everyone/ }))
-    await waitFor(() => expect(ran()).toContain('who 192.168.1.20 everyone'))
+    // Picking people opens the list of the server's people: not this person, each with a box; no code.
+    fireEvent.click(within(group).getByRole('radio', { name: /Me and people I pick/ }))
+    const list = await screen.findByRole('list', { name: 'The people on 165.245.244.10' })
+    expect(within(list).getAllByRole('checkbox').map(box => box.getAttribute('aria-label'))).toEqual(['suleimansh', 'dani'])
+    expect(screen.getByRole('dialog', { name: 'Add person to rom-box' })).toBeTruthy()
+    expect(screen.getByText('Someone on 165.245.244.10. They get a user of their own on rom-box, with their own logins, and reach it through 165.245.244.10: no code to send. Their agents run on your home network.')).toBeTruthy()
+    expect(screen.queryByRole('textbox', { name: 'Their name' })).toBeNull()
+    const add = screen.getByRole('button', { name: 'Add person' })
+    expect(add.hasAttribute('disabled')).toBe(true)
+    fireEvent.click(within(list).getByRole('checkbox', { name: 'dani' }))
+    fireEvent.click(within(list).getByRole('checkbox', { name: 'suleimansh' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Add 2 people' }))
+    await waitFor(() => expect(ran()).toContain('people 192.168.1.20 dani suleimansh'))
+    await waitFor(() => expect(screen.queryByRole('list', { name: 'The people on 165.245.244.10' })).toBeNull())
+
+    // Its People: the same pick, from Add person; nobody named yet says so.
+    await tab('People')
+    expect(await screen.findByText('Nobody yet. Add person picks someone on 165.245.244.10; they get a user of their own here.')).toBeTruthy()
+    fireEvent.click(screen.getByRole('button', { name: 'Add person to 192.168.1.20' }))
+    expect(await screen.findByRole('list', { name: 'The people on 165.245.244.10' })).toBeTruthy()
+    fireEvent.click(screen.getByRole('button', { name: 'Cancel' }))
+    expect(ran().filter(line => line.startsWith('who '))).toEqual([])
+  })
+
+  test('with people named, the choice says who; the people named already and this person are not offered again', async () => {
+    const { host, machinePerson } = dashboard(() => ok({ servers: [box({ people: ['dani'] })] }), SAVED)
+    machinePerson.mockImplementation(async id => (id === VPS ? { ok: true, said: { person: 'rom', owner: false, devices: [], persons: ['suleimansh', 'rom', 'dani'] } } : { ok: false, error: 'not said', unknown: true }))
+    show(host)
+    await open('rom-box')
+    const group = await screen.findByRole('radiogroup', { name: 'Who can start runs on 192.168.1.20' })
+    expect(within(group).getByRole('radio', { name: /Me and dani/ }).getAttribute('aria-checked')).toBe('true')
+    await tab('People')
+    fireEvent.click(await screen.findByRole('button', { name: 'Add person to 192.168.1.20' }))
+    const list = await screen.findByRole('list', { name: 'The people on 165.245.244.10' })
+    expect(within(list).getAllByRole('checkbox').map(box => box.getAttribute('aria-label'))).toEqual(['suleimansh'])
   })
 
   test('a server at home whose door opened on Tailscale since says so on its row and its page, and names the server it goes through', async () => {
@@ -1052,7 +1084,7 @@ describe('Settings › Devices: a computer at home set up as a server, through a
   test('a server at home with a door on Tailscale has People: Add person asks its door over SSH and says to share it in Tailscale, the owner uses it through the server, and a phone of this person\'s gets a code at that door', async () => {
     const saved: ModuleMachines = { ...SAVED, machines: [{ ...SAVED.machines[0]!, label: 'OpenAgentVPS' }, SAVED.machines[1]!] }
     const link = { url: 'https://rom-box.tail1234.ts.net/_devices/enter#K7P4QX9M', where: 'rom-box.tail1234.ts.net', code: 'K7P4-QX9M', expires: new Date(Date.now() + 10 * 60_000).toISOString() }
-    const { host, ran } = dashboard(args => (args[0] === 'link' ? ok(link) : ok({ servers: [box({ who: 'everyone' })] })), saved, undefined, undefined, () => ok({ devices: [], persons: [{ name: 'rom', owner: true }, { name: 'ada', from: VPS }], door: { tailscale: 'rom-box.tail1234.ts.net' } }))
+    const { host, ran } = dashboard(args => (args[0] === 'link' ? ok(link) : ok({ servers: [box({ people: ['ada'] })] })), saved, undefined, undefined, () => ok({ devices: [], persons: [{ name: 'rom', owner: true }, { name: 'ada', from: VPS }], door: { tailscale: 'rom-box.tail1234.ts.net' } }))
     show(host)
     await open('rom-box')
     await tab('People')
@@ -1073,29 +1105,30 @@ describe('Settings › Devices: a computer at home set up as a server, through a
     await waitFor(() => expect(ran()).toContain('link 192.168.1.20'))
   })
 
-  test('from everyone to fewer, it asks first what becomes of the others\' users there: they go, or stay switched off', async () => {
+  test('from people to fewer, it asks first: the users the others have there go, with everything in them', async () => {
     const persons = [{ name: 'rom', owner: true }, { name: 'suleimansh', from: VPS }, { name: 'dani', from: VPS }]
-    const { host, ran } = dashboard(() => ok({ servers: [box({ who: 'everyone' })] }), SAVED, undefined, undefined, () => ok({ devices: [], persons }))
+    const { host, ran } = dashboard(() => ok({ servers: [box({ people: ['suleimansh', 'dani'] })] }), SAVED, undefined, undefined, () => ok({ devices: [], persons }))
     show(host)
     await open('rom-box')
     const group = () => screen.getByRole('radiogroup', { name: 'Who can start runs on 192.168.1.20' })
     await screen.findByRole('radiogroup', { name: 'Who can start runs on 192.168.1.20' })
+    expect(within(group()).getByRole('radio', { name: /Me and suleimansh and dani/ }).getAttribute('aria-checked')).toBe('true')
     fireEvent.click(within(group()).getByRole('radio', { name: /Only me/ }))
     expect(await screen.findByText('suleimansh and dani have their own users on 192.168.1.20.')).toBeTruthy()
     expect(screen.getByText('Work they did not push goes with them.')).toBeTruthy()
-    fireEvent.click(screen.getByRole('button', { name: 'Keep them, switched off' }))
+    expect(screen.queryByRole('button', { name: 'Keep them, switched off' })).toBeNull()
+    fireEvent.click(screen.getByRole('button', { name: 'Remove them, with their logins and projects' }))
     await waitFor(() => expect(ran()).toContain('who 192.168.1.20 me'))
-    expect(ran()).not.toContain('who 192.168.1.20 me remove')
 
     fireEvent.click(within(group()).getByRole('radio', { name: /Nobody/ }))
     fireEvent.click(await screen.findByRole('button', { name: 'Remove them, with their logins and projects' }))
-    await waitFor(() => expect(ran()).toContain('who 192.168.1.20 nobody remove'))
+    await waitFor(() => expect(ran()).toContain('who 192.168.1.20 nobody'))
 
     // Cancel changes nothing.
     fireEvent.click(within(group()).getByRole('radio', { name: /Only me/ }))
     fireEvent.click(await screen.findByRole('button', { name: 'Cancel' }))
     await waitFor(() => expect(screen.queryByText(/have their own users/)).toBeNull())
-    expect(ran().filter(line => line.startsWith('who '))).toEqual(['who 192.168.1.20 me', 'who 192.168.1.20 nobody remove'])
+    expect(ran().filter(line => line.startsWith('who '))).toEqual(['who 192.168.1.20 me', 'who 192.168.1.20 nobody'])
   })
 
   test('once installed it is saved through its server, by its line, and no link is asked of it', async () => {

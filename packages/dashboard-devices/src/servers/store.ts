@@ -2,6 +2,7 @@ import { randomBytes } from 'node:crypto'
 import { mkdir, readFile, rename, rm, stat, writeFile } from 'node:fs/promises'
 import { isIP } from 'node:net'
 import { dirname, join } from 'node:path'
+import { nameOf } from '../door/store.js'
 import { reachedOf, stepIdsFor, type Reached, type StepId, type Who } from './steps.js'
 
 /**
@@ -83,6 +84,8 @@ export interface Server {
   through?: string
   /** For a computer reached through a server: who there may start runs on it, as this computer last said. */
   who?: Who
+  /** For a computer reached through a server: the people there who may start runs on it besides its owner, by name, as this computer last said. */
+  people?: string[]
   /** For a computer reached through a server: the id its line has among that server's devices, once it is among OpenAgent's machines through it. */
   line?: string
   /** Set for a computer on the person's Tailscale network, connected by its name there: its door is there, behind Tailscale. */
@@ -92,7 +95,7 @@ export interface Server {
 export type Reach = 'full' | 'watch'
 
 /**
- * Another person's computer, shared with everyone on a server this computer's person is in at:
+ * Another person's computer, shared with this computer's person on a server both are in at:
  * saved among OpenAgent's machines, by the address it answers at. What is kept here is only
  * what this computer does for it itself: the Claude login it makes in its browser for that
  * person's OpenAgent there, while it does.
@@ -237,9 +240,12 @@ export function throughUrl(server: Pick<Server, 'through' | 'line'>): string | u
   return server.through !== undefined && server.line !== undefined ? `${server.through}/_devices/via/${server.line}` : undefined
 }
 
-const WHO: readonly Who[] = ['nobody', 'me', 'everyone']
+const WHO: readonly Who[] = ['nobody', 'me']
 
 const STATES: readonly StepState[] = ['waiting', 'running', 'done', 'failed']
+
+/** Names as a file says them: each once, and only what is a name. */
+const named = (said: unknown): string[] => (Array.isArray(said) ? [...new Set(said.flatMap(name => (typeof name === 'string' && nameOf(name) === name ? [name] : [])))] : [])
 
 function readWorker(value: unknown): { worker: Worker } | undefined {
   if (!value || typeof value !== 'object') return undefined
@@ -276,7 +282,7 @@ export function sanitize(value: unknown): Store {
   for (const entry of Array.isArray(obj.servers) ? obj.servers : []) {
     if (servers.length >= MAX_SERVERS) break
     if (!entry || typeof entry !== 'object') continue
-    const { address, user, fingerprint, steps, worker, adding, reach, through, who, line, tailscale } = entry as Record<string, unknown>
+    const { address, user, fingerprint, steps, worker, adding, reach, through, who, people, line, tailscale } = entry as Record<string, unknown>
     if (typeof address !== 'string' || addressOf(address) !== address || !isUser(user)) continue
     if (servers.some(server => server.address === address)) continue
     // Every step, in the install's own order: a step the file does not know has not started.
@@ -299,7 +305,7 @@ export function sanitize(value: unknown): Store {
       ...(readWorker(worker) ?? {}),
       adding: adding === true,
       ...(reach === 'full' || reach === 'watch' ? { reach } : {}),
-      ...(via !== undefined ? { through: via, ...(WHO.includes(who as Who) ? { who: who as Who } : {}), ...(typeof line === 'string' && /^[a-z0-9]{6,32}$/.test(line) ? { line } : {}) } : {}),
+      ...(via !== undefined ? { through: via, ...(WHO.includes(who as Who) ? { who: who as Who } : {}), ...(named(people).length ? { people: named(people) } : {}), ...(typeof line === 'string' && /^[a-z0-9]{6,32}$/.test(line) ? { line } : {}) } : {}),
       ...(onTailscale ? { tailscale: true as const } : {}),
     })
   }

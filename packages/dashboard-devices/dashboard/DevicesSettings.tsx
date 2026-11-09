@@ -414,7 +414,7 @@ function DoorPeople({ d, persons, devices, lines }: { d: Devices; persons: Perso
                     {line.mode === 'watch' ? `${nameAt(line.url)} only sees this computer's runs.` : `Uses this computer through ${nameAt(line.url)}.`}
                   </p>
                 ))}
-            {/* A person of a server whose line lets everyone there start runs here: where they come from, and whether that server still has them. */}
+            {/* A person a server's line named here: where they come from, and whether that server still has them. */}
             {person.from !== undefined && !(person.removed && !person.kept) && <p className="pt-1 text-xs text-muted-foreground">{person.removed ? `Removed from ${nameAt(person.from)}. Kept here, switched off.` : `Uses this computer through ${nameAt(person.from)}.`}</p>}
             {person.from !== undefined && person.removed && !person.kept && (
               <div role="group" aria-label={`${person.name} was removed from ${nameAt(person.from)}`} className="flex flex-wrap items-center justify-between gap-2 pt-1">

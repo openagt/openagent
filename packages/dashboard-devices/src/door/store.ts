@@ -29,12 +29,12 @@ export interface Device {
    * OpenAgent is asked through that line. Its own from the day it got in, so the address
    * OpenAgent saved it under stays good.
    *
-   * A computer whose line is for everyone here has an address for each other person too
-   * (`others`, by their name, the owner's among them): each in the block of ports of
-   * that person's own OpenAgent, which asks it there. An empty `others` is a line for everyone on
-   * a computer that has nobody else yet.
+   * A computer that lets people here start runs on it names them (`for`, by their name, the
+   * owner's among them), and has an address for each of them who is here (`others`): each in the
+   * block of ports of that person's own OpenAgent, which asks it there. A person named who is not
+   * here yet, or has no OpenAgent of their own, has no address until they do.
    */
-  line?: { port: number; others?: Record<string, number> }
+  line?: { port: number; for?: string[]; others?: Record<string, number> }
   /**
    * Which computer the entry is: the SHA-256 of the word that computer says, hex. Its OpenAgent
    * and its line say the same word, so a computer is listed once, and one that gets in again
@@ -101,11 +101,11 @@ export function portsOf(device: Device): number[] {
 }
 
 /**
- * Give a computer whose line is for everyone an address for each person here who is not its own:
- * one among the lines' ports of that person's own OpenAgent, the owner's in `ownerPorts`. A person
- * with no OpenAgent of their own is asked through the owner's, and has no address of their own. A
- * port given is kept for as long as the person is here; a person gone loses theirs. Answers
- * whether anything changed.
+ * Give a computer an address for each person its line names (`line.for`) who is here and is not
+ * its own: one among the lines' ports of that person's own OpenAgent, the owner's in `ownerPorts`.
+ * A person with no OpenAgent of their own has no address until they do. A port given is kept for
+ * as long as the person is here and named; one no longer here, or no longer named, loses theirs.
+ * Answers whether anything changed.
  */
 export function shareLine(store: Store, device: Device, ownerPorts: { from: number; count: number }): boolean {
   if (!device.line) return false
@@ -114,8 +114,9 @@ export function shareLine(store: Store, device: Device, ownerPorts: { from: numb
   const taken = new Set(store.devices.filter(other => other !== device).flatMap(portsOf))
   taken.add(device.line.port)
   const others: Record<string, number> = {}
+  const named = device.line.for ?? []
   for (const person of store.persons) {
-    if (person.name === own || (!person.owner && person.port === undefined)) continue
+    if (person.name === own || !named.includes(person.name) || (!person.owner && person.port === undefined)) continue
     const block = person.owner ? ownerPorts : personLinePorts(person.port!)
     const kept = had[person.name]
     const port = kept !== undefined && kept >= block.from && kept < block.from + block.count && !taken.has(kept) ? kept : Array.from({ length: block.count }, (_, at) => block.from + at).find(candidate => !taken.has(candidate))
@@ -123,8 +124,9 @@ export function shareLine(store: Store, device: Device, ownerPorts: { from: numb
     taken.add(port)
     others[person.name] = port
   }
-  const same = device.line.others !== undefined && JSON.stringify(Object.entries(others).sort()) === JSON.stringify(Object.entries(had).sort())
-  device.line.others = others
+  const same = JSON.stringify(Object.entries(others).sort()) === JSON.stringify(Object.entries(had).sort())
+  if (Object.keys(others).length) device.line.others = others
+  else delete device.line.others
   return !same
 }
 
@@ -215,13 +217,13 @@ export interface Line {
   /** What the server may do through the line: everything a machine is asked, or only what reads. */
   mode: 'full' | 'watch'
   /**
-   * Who on the server may start runs here through the line: everyone there, each as a user of
-   * their own on this computer. Absent: only this computer's own person.
+   * Who on the server may start runs here through the line, by their names there, each as a
+   * user of their own on this computer. Absent: only this computer's own person.
    */
-  for?: 'everyone'
+  for?: string[]
   /** This computer's person at the server, by their name, as its door said. */
   person?: string
-  /** For a line for everyone: the server's persons, as its door last said them. */
+  /** The server's persons, as its door last said them: who of those named is no longer there. */
   persons?: string[]
   /** The server's name, as its owner named it and its door said: what a page here lists the line under. */
   name?: string
@@ -423,22 +425,22 @@ export function sanitize(value: unknown): Store {
     const { id, name, key, added, seen, line, computer, person } = entry as Record<string, unknown>
     if (typeof id !== 'string' || !/^[a-z0-9]{6,32}$/.test(id) || !isDigest(key) || !isIso(added)) continue
     if (devices.some(device => device.id === id)) continue
-    const { port, others } = (line && typeof line === 'object' ? line : {}) as Record<string, unknown>
+    const { port, others, for: named } = (line && typeof line === 'object' ? line : {}) as Record<string, unknown>
     // One port for one computer: a second entry that names a port already given is in without a line.
     const own = isPort(port) && !taken.has(port)
     if (own) taken.add(port)
     const whose = someoneElse(person)
-    // Its addresses for others: each for a person here who is not its own, at a port nobody else has.
-    let shared: Record<string, number> | undefined
-    if (own && others && typeof others === 'object' && !Array.isArray(others)) {
-      shared = {}
+    // Whom it lets start runs on it, by name, and its addresses for them: each for a person here who is not its own, at a port nobody else has.
+    const lets = own && Array.isArray(named) ? [...new Set(named.filter(isName))].slice(0, MAX_PERSONS) : []
+    const shared: Record<string, number> = {}
+    if (lets.length && others && typeof others === 'object' && !Array.isArray(others)) {
       for (const [other, at] of Object.entries(others as Record<string, unknown>)) {
-        if (!isName(other) || !isPort(at) || taken.has(at) || other === (whose ?? persons[0]?.name) || !persons.some(candidate => candidate.name === other)) continue
+        if (!isName(other) || !isPort(at) || taken.has(at) || other === (whose ?? persons[0]?.name) || !lets.includes(other) || !persons.some(candidate => candidate.name === other)) continue
         taken.add(at)
         shared[other] = at
       }
     }
-    devices.push({ id, name: typeof name === 'string' && name.trim() ? name.trim().slice(0, MAX_NAME) : 'A device', key, added, ...(isIso(seen) ? { seen } : {}), ...(own ? { line: { port, ...(shared ? { others: shared } : {}) } } : {}), ...(isDigest(computer) ? { computer } : {}), ...(whose ? { person: whose } : {}) })
+    devices.push({ id, name: typeof name === 'string' && name.trim() ? name.trim().slice(0, MAX_NAME) : 'A device', key, added, ...(isIso(seen) ? { seen } : {}), ...(own ? { line: { port, ...(lets.length ? { for: lets } : {}), ...(Object.keys(shared).length ? { others: shared } : {}) } } : {}), ...(isDigest(computer) ? { computer } : {}), ...(whose ? { person: whose } : {}) })
   }
   const lines: Line[] = []
   for (const entry of Array.isArray(obj.lines) ? obj.lines : []) {
@@ -447,10 +449,11 @@ export function sanitize(value: unknown): Store {
     const { url, pin, key, mode, refused, for: who, person, persons: theirs, name } = entry as Record<string, unknown>
     if (!isLineUrl(url) || typeof pin !== 'string' || !pin || typeof key !== 'string' || !key) continue
     if (lines.some(line => line.url === url)) continue
-    const everyone = who === 'everyone'
-    const heard = everyone && Array.isArray(theirs) ? [...new Set(theirs.filter(isName))].slice(0, MAX_PERSONS) : undefined
+    // A line that was for everyone there, from before people were named: for those it made here.
+    const named = who === 'everyone' ? persons.filter(candidate => candidate.from === url).map(candidate => candidate.name) : Array.isArray(who) ? [...new Set(who.filter(isName))].slice(0, MAX_PERSONS) : []
+    const heard = Array.isArray(theirs) ? [...new Set(theirs.filter(isName))].slice(0, MAX_PERSONS) : undefined
     const called = typeof name === 'string' ? name.trim().slice(0, 60) : ''
-    lines.push({ url, pin, key, mode: mode === 'watch' ? 'watch' : 'full', ...(everyone ? { for: 'everyone' as const } : {}), ...(isName(person) ? { person } : {}), ...(heard ? { persons: heard } : {}), ...(called ? { name: called } : {}), ...(refused === true ? { refused: true } : {}) })
+    lines.push({ url, pin, key, mode: mode === 'watch' ? 'watch' : 'full', ...(named.length ? { for: named } : {}), ...(isName(person) ? { person } : {}), ...(heard ? { persons: heard } : {}), ...(called ? { name: called } : {}), ...(refused === true ? { refused: true } : {}) })
   }
   const codes: Code[] = []
   for (const entry of Array.isArray(obj.codes) ? obj.codes : []) {
@@ -841,7 +844,10 @@ function freeBlock(store: Store): number | undefined {
   return undefined
 }
 
-/** Take a person out, with every device of theirs and every code made for them. False for the owner and for no such person. */
+/**
+ * Take a person out, with every device of theirs and every code made for them; one a server's
+ * line made here is no longer named on that line. False for the owner and for no such person.
+ */
 export async function removePerson(env: NodeJS.ProcessEnv, name: string): Promise<boolean> {
   return update(env, store => {
     const person = store.persons.find(candidate => candidate.name === name)
@@ -849,6 +855,11 @@ export async function removePerson(env: NodeJS.ProcessEnv, name: string): Promis
     store.persons = store.persons.filter(candidate => candidate !== person)
     store.devices = store.devices.filter(device => device.person !== name)
     store.codes = store.codes.filter(code => code.person !== name)
+    for (const line of store.lines) {
+      if (!line.for?.includes(name)) continue
+      line.for = line.for.filter(named => named !== name)
+      if (!line.for.length) delete line.for
+    }
     return true
   })
 }

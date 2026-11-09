@@ -109,11 +109,17 @@ already made, and lists it in its pull request; for anything else it proposes an
   the computer at home to the internet first, which needs a port on its router and fails where
   the internet provider shares one address between many homes.
 - Whoever connects a computer to a server several people use picks who there may start runs on
-  it: nobody, only them, or everyone. A run of another person's there runs as that person's own
-  user on the computer, with their own logins, never its owner's.
-- When people can no longer reach a computer shared with everyone, its owner is asked whether
-  their users go, or stay switched off. Picked over always removing them, and over always
-  keeping them.
+  it: nobody, only them, or them and people they pick on the server by name. A run of another
+  person's there runs as that person's own user on the computer, with their own logins, never
+  its owner's. Picked over an "Everyone" switch, which let in whoever is added to the server
+  later without the owner's word.
+- A person picked gets no link and no code: they reach the computer through the server they are
+  already in at. Its owner's page lists the server's people to pick from, which the server's door
+  tells every device that is in. Picked over inviting them to the computer itself a second time.
+- Taking a person off a computer takes their user there away, with their logins and projects,
+  and asks first. Picked over keeping the user switched off, a second state nobody needs.
+- When people can no longer reach a computer shared with them, its owner is asked whether their
+  users go, or stay switched off. Picked over always removing them, and over always keeping them.
 
 ## Logging in to a server
 - OpenAgent logs in with this computer's own SSH keys. Picked over a password field, which
@@ -164,9 +170,9 @@ already made, and lists it in its pull request; for anything else it proposes an
 - A computer with no SSH yet gets one line to paste on it once, which turns SSH on, adds the
   laptop's key and lets its user install without a password. Picked over the same three steps
   told in words, and over a line that installs OpenAgent on the computer itself.
-- A computer is personal or a server: only a server offers "Everyone", and a personal computer
+- A computer is personal or a server: only a server offers people, and a personal computer
   keeps its one switch. Linux first; a Mac later. Picked over three choices on every computer,
-  with "Everyone" greyed where it cannot work.
+  with people greyed where it cannot work.
 
 ## The server's agent data
 - A server set up from this computer is offered the person's agent data too, when this computer's

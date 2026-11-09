@@ -410,7 +410,7 @@ function Ready({ d, server, onInvite, onClose }: { d: Devices; server: ServerRow
           {server.through !== undefined ? 'Your runs can go there from here. Who else uses it?' : 'Your runs can go there from here. Anyone else? Add them: each works there with their own logins.'}
         </p>
       </div>
-      {server.through !== undefined && <WhoCanStart host={d.host} server={{ ...server, through: server.through }} busy={d.busy} onChange={d.act} />}
+      {server.through !== undefined && <WhoCanStart host={d.host} server={{ ...server, through: server.through }} label={name} busy={d.busy} onChange={d.act} />}
       <Footer>
         {server.through === undefined && (
           <Button size="sm" variant="outline" onClick={onInvite}>

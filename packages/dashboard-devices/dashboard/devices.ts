@@ -44,8 +44,8 @@ export interface LineRow {
   /** The server's door, as an origin. */
   url: string
   mode: 'full' | 'watch'
-  /** Everyone at the server may start runs here, each as a user of their own. */
-  for?: 'everyone'
+  /** The people at the server who may start runs here too, by name, each as a user of their own. */
+  for?: string[]
   /** The server's name, as its door said it. */
   name?: string
   refused?: true
@@ -102,7 +102,8 @@ export function readStatus(output: unknown): DoorStatus | undefined {
   for (const entry of Array.isArray(lines) ? lines : []) {
     const { url, mode, for: who, name, refused } = (entry && typeof entry === 'object' ? entry : {}) as Record<string, unknown>
     const [at, called] = [text(url), text(name)]
-    if (at && !kept.some(line => line.url === at)) kept.push({ url: at, mode: mode === 'watch' ? 'watch' : 'full', ...(who === 'everyone' ? { for: 'everyone' as const } : {}), ...(called ? { name: called } : {}), ...(refused === true ? { refused: true as const } : {}) })
+    const named = Array.isArray(who) ? who.flatMap(name => (text(name) ? [text(name)!] : [])) : []
+    if (at && !kept.some(line => line.url === at)) kept.push({ url: at, mode: mode === 'watch' ? 'watch' : 'full', ...(named.length ? { for: named } : {}), ...(called ? { name: called } : {}), ...(refused === true ? { refused: true as const } : {}) })
   }
   const people: PersonRow[] = []
   for (const entry of Array.isArray(persons) ? persons : []) {

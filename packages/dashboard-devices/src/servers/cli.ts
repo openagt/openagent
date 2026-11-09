@@ -8,7 +8,7 @@ import { ownDoor, type OwnDoor } from './own-door.js'
 import { OwnAtWork, giveOwnClaude, giveOwnGithub, isClaudeAccountId, personHere, removeOwn, startOverSoon } from './own.js'
 import { askOpenAgent, copyGithubToOther, isOtherUrl, isSharedUrl, lineTo, mintFor, otherLogins, setSharedReach, startMint } from './shared.js'
 import { lastLines, openSession, withAdvice, type Exec } from './ssh.js'
-import { PERSON_TIMEOUT_MS, SERVER_MARK, SERVER_USER, devicesScript, reachedOf, stepLabel, stepsFor, whoScript, type Who } from './steps.js'
+import { PERSON_TIMEOUT_MS, SERVER_MARK, SERVER_USER, devicesScript, peopleScript, reachedOf, stepLabel, stepsFor, whoScript, type Who } from './steps.js'
 import { LOGIN_KINDS, Unreadable, addressOf, isServerName, atWork, doorUrl, freshSteps, isMachineUrl, isUser, isVersion, keepDevices, keptDevices, readStore, throughUrl, update, working, type Login, type LoginKind, type Reach, type Server, type StepState, type Store } from './store.js'
 import { nameOf } from '../door/store.js'
 
@@ -37,10 +37,11 @@ export const USAGE = `usage: devices server <command>
                                        and, for one fixed on the computer itself, a line to paste there once
   add-through <address>                save a computer reached through a server among OpenAgent's machines, through that
                                        server, once its install is done
-  who <address> nobody|me|everyone [remove]
-                                       say who on its server may start runs on a computer reached through it: nobody (the
-                                       server only shows its runs), only its own person, or every person there; with
-                                       "remove", the user each other person has on it is deleted, with everything in it
+  who <address> nobody|me              say who on its server may start runs on a computer reached through it: nobody (the
+                                       server only shows its runs), or only its own person; the user each person named
+                                       before has on it is deleted, with everything in it
+  people <address> <name>...           the people on its server who may start runs on a computer reached through it too,
+                                       by their names there: each gets a user of their own on it at their first run
   link <address> [--for <name>]        a code the server's door gives for a new device, once, for ten minutes, with its
                                        link; with --for, for a person's device, by their name (the owner is named first)
   owner <address> <name>               name the server's owner at its door, once
@@ -72,7 +73,7 @@ On this computer, for a server someone invited this computer's person to (by its
   shared-reach <url> full|watch|off    keep a line open to the server as this person's, and say what it may do; or none
   shared-forget <url>                  forget the server here, and the line to it
 
-On this computer, for another person's computer shared with everyone on a server this computer's person is in at:
+On this computer, for another person's computer shared with this computer's person on a server both are in at:
   other <url>...                       the person's logins there, as it says, and the Claude login this computer makes for it
   other-login <url> github             copy this computer's GitHub login there, in place of the server's copy
   other-login <url> claude             make a Claude login for it in this computer's browser, and hand it over
@@ -232,7 +233,7 @@ function statusOf(store: Store, env: NodeJS.ProcessEnv): Status {
         working: busy,
         adding: server.adding,
         ...(server.reach ? { reach: server.reach } : {}),
-        ...(server.through !== undefined ? { through: server.through, who: server.who ?? 'me' } : {}),
+        ...(server.through !== undefined ? { through: server.through, who: server.who ?? 'me', ...(server.people ? { people: server.people } : {}) } : {}),
         ...(server.tailscale ? { tailscale: true as const } : {}),
         steps: stepsFor(reachedOf(server)).map(def => {
           const [id, label] = [def.id, stepLabel(def, server.through)]
@@ -455,34 +456,58 @@ async function reachedThrough(io: CliIO, said: string): Promise<Server & { throu
 const WHO_TIMEOUT_MS = 20_000
 
 /**
- * Say who on its server may start runs on a computer reached through it. With `remove`, each
- * person whose user its line made there is taken away with all of it: their logins, their copies
- * of projects, and work they did not push. Answers its persons as they are after.
+ * Say who on its server may start runs on a computer reached through it: nobody, or only its own
+ * person. Each person named before, whose user its line made there, is taken away with all of it:
+ * their logins, their copies of projects, and work they did not push. Answers its persons as they
+ * are after.
  */
-async function setWho(io: CliIO, said: string, who: Who, remove: boolean): Promise<DevicesStatus> {
+async function setWho(io: CliIO, said: string, who: Who): Promise<DevicesStatus> {
   const server = await reachedThrough(io, said)
   const over = io.exec ? { exec: io.exec } : {}
-  let others: string[] = []
-  if (remove) {
-    const listed = await readDevices(server, over)
-    if (!listed.ok) throw new Refused(listed.error)
-    others = listed.persons.filter(person => !person.owner && person.from === server.through).map(person => person.name)
-  }
-  const session = await openSession(server, over)
-  let answered: Devices
-  try {
-    const ran = await session.run(SERVER_USER, whoScript(server.through, who, others), others.length ? PERSON_TIMEOUT_MS : WHO_TIMEOUT_MS)
-    const listed = ran.code === 0 ? devicesIn(ran.out) : undefined
-    answered = ran.code !== 0 ? { ok: false, error: withAdvice(server, lastLines(ran) || 'The computer did not answer.') } : listed ? { ok: true, ...listed } : { ok: false, error: 'The computer answered something else than its devices.' }
-  } finally {
-    await session.close()
-  }
+  const listed = await readDevices(server, over)
+  if (!listed.ok) throw new Refused(listed.error)
+  const others = listed.persons.filter(person => !person.owner && person.from === server.through).map(person => person.name)
+  const answered = await tellWho(server, whoScript(server.through, who, others), others.length ? PERSON_TIMEOUT_MS : WHO_TIMEOUT_MS, over)
   if (answered.ok)
     await update(io.env, store => {
       const saved = store.servers.find(candidate => candidate.address === server.address)
-      if (saved) saved.who = who
+      if (saved) {
+        saved.who = who
+        delete saved.people
+      }
     })
   return devicesOf(answered, undefined)
+}
+
+/**
+ * Name the people on its server who may start runs on a computer reached through it, besides its
+ * own person: each gets a user of their own on it at their first run there. Answers its persons.
+ */
+async function setPeople(io: CliIO, said: string, people: readonly string[]): Promise<DevicesStatus> {
+  const server = await reachedThrough(io, said)
+  const answered = await tellWho(server, peopleScript(server.through, people), WHO_TIMEOUT_MS, io.exec ? { exec: io.exec } : {})
+  if (answered.ok)
+    await update(io.env, store => {
+      const saved = store.servers.find(candidate => candidate.address === server.address)
+      if (saved) {
+        saved.who = 'me'
+        if (people.length) saved.people = [...people]
+        else delete saved.people
+      }
+    })
+  return devicesOf(answered, undefined)
+}
+
+/** Run a script on the computer that tells its door who may start runs on it, and read its devices from the answer. */
+async function tellWho(server: Server & { through: string }, script: string, timeoutMs: number, over: { exec?: Exec }): Promise<Devices> {
+  const session = await openSession(server, over)
+  try {
+    const ran = await session.run(SERVER_USER, script, timeoutMs)
+    const listed = ran.code === 0 ? devicesIn(ran.out) : undefined
+    return ran.code !== 0 ? { ok: false, error: withAdvice(server, lastLines(ran) || 'The computer did not answer.') } : listed ? { ok: true, ...listed } : { ok: false, error: 'The computer answered something else than its devices.' }
+  } finally {
+    await session.close()
+  }
 }
 
 /**
@@ -568,9 +593,20 @@ export async function runCli(args: string[], io: CliIO): Promise<number> {
         return print(await addThrough(io, address))
       }
       case 'who': {
-        const [address, who, remove] = rest
-        if (!address || (who !== 'nobody' && who !== 'me' && who !== 'everyone') || !(rest.length === 2 || (rest.length === 3 && remove === 'remove'))) break
-        return print(await setWho(io, address, who, remove === 'remove'))
+        const [address, who] = rest
+        if (!address || (who !== 'nobody' && who !== 'me') || rest.length !== 2) break
+        return print(await setWho(io, address, who))
+      }
+      case 'people': {
+        const [address, ...said] = rest
+        if (!address) break
+        const people: string[] = []
+        for (const word of said) {
+          const name = nameOf(word)
+          if (name === undefined) throw new Refused(`${word} is not a name: letters, digits, spaces, dots, apostrophes and dashes, at most 40`)
+          if (!people.includes(name)) people.push(name)
+        }
+        return print(await setPeople(io, address, people))
       }
       case 'link': {
         const [address, flag, person] = rest
@@ -588,7 +624,15 @@ export async function runCli(args: string[], io: CliIO): Promise<number> {
         if (rest.length !== 2 || !address || !name) break
         const server = await still(io, address)
         const over = io.exec ? { exec: io.exec } : {}
-        return print(await kept(io, server.address, devicesOf(await (command === 'owner' ? nameOwner : removePerson)(server, name, over), await ownLine(io, server))))
+        const status = devicesOf(await (command === 'owner' ? nameOwner : removePerson)(server, name, over), await ownLine(io, server))
+        // A person removed from a computer reached through a server is no longer named on its line there.
+        if (command === 'remove-person' && server.people?.includes(name))
+          await update(io.env, store => {
+            const saved = store.servers.find(candidate => candidate.address === server.address)
+            if (saved?.people) saved.people = saved.people.filter(named => named !== name)
+            if (saved && !saved.people?.length) delete saved.people
+          })
+        return print(await kept(io, server.address, status))
       }
       case 'devices': {
         const [address, last] = rest

@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { ChevronRight, CircleCheck, House, Laptop, Loader2, Server, UserPlus, UserRound } from 'lucide-react'
-import { Button, ConfirmDialog, Dialog, RadioGroup, RadioGroupOption, formatDateTime, formatRelative, usePolled, type ModuleAccountsAgent, type ModuleComputersThrough, type ModuleHost, type ModuleMachine, type ModuleMachineAccount } from '@openagt/dashboard/module'
-import { idsOf, loadDevices, nameOwner, removeDevice, removePerson, setWho, askLink, type Answer, type DeviceRow, type ServerRow, type Who } from './servers.js'
+import { Button, Checkbox, ConfirmDialog, Dialog, RadioGroup, RadioGroupOption, formatDateTime, formatRelative, usePolled, type ModuleAccountsAgent, type ModuleComputersThrough, type ModuleHost, type ModuleMachine, type ModuleMachineAccount } from '@openagt/dashboard/module'
+import { idsOf, loadDevices, nameOwner, removeDevice, removePerson, setPeople, setWho, askLink, type Answer, type DeviceRow, type ServerRow, type Who } from './servers.js'
 import { labelOf, type ServerItem } from './model.js'
 import { Invite } from './codes.js'
 import { myName } from './devices.js'
@@ -64,9 +64,9 @@ export function ServerPage({ d, item, onBack, invite = false }: { d: Devices; it
     <State tone="quiet">{`Logs in as ${server.user}`}</State>
   )
 
-  // A server at home has people once it has a door of its own to let them in at: one on Tailscale, opened since it was connected.
-  const ownDoor = item.door?.https ?? item.door?.tailscale
-  const tabs: { id: Tab; title: string }[] = !done || (home && ownDoor === undefined) ? [{ id: 'overview', title: 'Overview' }] : [
+  // A server at home with no door of its own gets its people from the server it is reached through: picked by name, no code. One with a door of its own, on Tailscale, invites with a code as a server does.
+  const picks = home && item.door?.https === undefined && item.door?.tailscale === undefined
+  const tabs: { id: Tab; title: string }[] = !done ? [{ id: 'overview', title: 'Overview' }] : [
     { id: 'overview', title: 'Overview' },
     { id: 'people', title: 'People' },
   ]
@@ -99,16 +99,17 @@ export function ServerPage({ d, item, onBack, invite = false }: { d: Devices; it
         <Part>
           <div className="flex items-center justify-between gap-3">
             <p className="text-sm">{read ? `Who is in (${read.devices.length})` : 'Who is in'}</p>
-            <Button size="sm" disabled={busy} aria-label={`Add person to ${server.address}`} title="Someone else, by their name: they add this server to their own OpenAgent with the code, and get a user of their own here." onClick={() => (setJoined(undefined), setInviting(true))}>
+            <Button size="sm" disabled={busy} aria-label={`Add person to ${server.address}`} title={picks ? `Someone on ${hostOf(server.through!)}, by their name: they get a user of their own here, and reach it through ${hostOf(server.through!)}.` : 'Someone else, by their name: they add this server to their own OpenAgent with the code, and get a user of their own here.'} onClick={() => (setJoined(undefined), setInviting(true))}>
               <UserPlus className="h-3.5 w-3.5" aria-hidden />
               Add person
             </Button>
           </div>
-          <People d={d} address={server.address} ownDevice={machine?.device} {...(server.through !== undefined ? { through: labelOf(d.machines?.machines ?? [], server.through) } : {})} />
+          <People d={d} address={server.address} ownDevice={machine?.device} {...(server.through !== undefined ? { through: labelOf(d.machines?.machines ?? [], server.through), picks } : {})} />
         </Part>
       )}
       {d.error !== undefined && <Problem>{d.error}</Problem>}
-      {inviting && (
+      {inviting && picks && <PickPeople host={host} server={{ ...server, through: server.through! }} label={item.name} onChange={d.act} onClose={() => setInviting(false)} />}
+      {inviting && !picks && (
         <Invite
           label={item.name}
           tailscale={server.tailscale === true || (item.door?.tailscale !== undefined && item.door.https === undefined)}
@@ -199,7 +200,7 @@ function Overview({ d, item }: { d: Devices; item: ServerItem }) {
       </Part>
       {done && server.through !== undefined && (
         <Part title="Who can use it">
-          <WhoCanStart host={host} server={{ ...server, through: server.through }} busy={busy} onChange={d.act} />
+          <WhoCanStart host={host} server={{ ...server, through: server.through }} label={item.name} busy={busy} onChange={d.act} />
         </Part>
       )}
       {done && machine?.version !== undefined && <Accounts host={host} machine={machine} name={item.name} busy={busy} />}
@@ -279,46 +280,38 @@ function Accounts({ host, machine, name, busy }: { host: ModuleHost; machine: Mo
 
 /**
  * Who on its server may start runs on a computer reached through it: nobody, its own person, or
- * every person there. Going from everyone to fewer asks first what becomes of the users the others
- * have on the computer: they go with all of it, or stay, switched off.
+ * its own person and people picked there by name, each as a user of their own on the computer.
+ * Going to fewer asks first what becomes of the users the others have on the computer: they go,
+ * with all of it.
  */
-export function WhoCanStart({ host, server, busy, onChange }: { host: ModuleHost; server: ServerRow & { through: string }; busy: boolean; onChange: (change: () => Promise<Answer<unknown>>) => Promise<boolean> }) {
+export function WhoCanStart({ host, server, label = server.address, busy, onChange }: { host: ModuleHost; server: ServerRow & { through: string }; /** The computer's name, as its page shows it. */ label?: string; busy: boolean; onChange: (change: () => Promise<Answer<unknown>>) => Promise<boolean> }) {
   const at = hostOf(server.through)
-  // How many people that server has, when its door says: a person's computer only hears of them through a line for everyone.
-  const { value: people } = usePolled<number | undefined>(
-    async () => {
-      const asked = await host.machinePerson(server.through)
-      const persons = asked.ok && asked.said && typeof asked.said === 'object' ? (asked.said as Record<string, unknown>).persons : undefined
-      return Array.isArray(persons) ? persons.length : undefined
-    },
-    undefined,
-    60_000,
-    [server.through],
-    'previous',
-  )
+  const people = server.people ?? []
   // The others whose users the computer holds, and what the person picked, while the question is open.
   const [asking, setAsking] = useState<{ who: Who; others: string[] } | undefined>()
-  const who = server.who ?? 'me'
-  const pick = async (next: Who): Promise<void> => {
+  const [picking, setPicking] = useState(false)
+  const who: Who | 'people' = server.who === 'nobody' ? 'nobody' : people.length ? 'people' : 'me'
+  const pick = async (next: Who | 'people'): Promise<void> => {
     if (next === who) return
-    if (who === 'everyone') {
+    if (next === 'people') return setPicking(true)
+    if (people.length) {
       const listed = await loadDevices(host, server.address)
       const others = listed.ok ? listed.value.persons.filter(person => !person.owner && person.from === server.through).map(person => person.name) : []
       if (others.length) return setAsking({ who: next, others })
     }
     await onChange(() => setWho(host, server.address, next))
   }
-  const answer = (remove: boolean): void => {
+  const answer = (): void => {
     const asked = asking!
     setAsking(undefined)
-    void onChange(() => setWho(host, server.address, asked.who, remove))
+    void onChange(() => setWho(host, server.address, asked.who))
   }
   return (
     <div className="space-y-2">
-      <RadioGroup aria-label={`Who can start runs on ${server.address}`} value={who} disabled={busy} onValueChange={next => void pick(next as Who)}>
+      <RadioGroup aria-label={`Who can start runs on ${server.address}`} value={who} disabled={busy} onValueChange={next => void pick(next as Who | 'people')}>
         <RadioGroupOption value="me">Only me</RadioGroupOption>
-        <RadioGroupOption value="everyone">
-          {`Everyone on ${at}${people !== undefined ? ` (${people} ${people === 1 ? 'person' : 'people'})` : ''}`}
+        <RadioGroupOption value="people">
+          {people.length ? `Me and ${named(people)}` : `Me and people I pick on ${at}`}
           <span className="block w-full pl-6 text-xs text-muted-foreground">
             Each person's runs use their own logins, never yours.
             <br />
@@ -327,12 +320,13 @@ export function WhoCanStart({ host, server, busy, onChange }: { host: ModuleHost
         </RadioGroupOption>
         <RadioGroupOption value="nobody">{`Nobody: its runs only show on ${at}`}</RadioGroupOption>
       </RadioGroup>
+      {picking && <PickPeople host={host} server={server} label={label} onChange={onChange} onClose={() => setPicking(false)} />}
       {asking !== undefined && (
         <Dialog open onOpenChange={open => !open && setAsking(undefined)} title={`Who can start runs on ${server.address}`}>
           <div className="space-y-4 text-sm">
             <p>{`${named(asking.others)} ${asking.others.length === 1 ? 'has a user of their own' : 'have their own users'} on ${server.address}.`}</p>
             <div className="space-y-1">
-              <Button size="sm" variant="destructive" onClick={() => answer(true)}>
+              <Button size="sm" variant="destructive" onClick={answer}>
                 Remove them, with their logins and projects
               </Button>
               <p className="text-xs text-muted-foreground">Work they did not push goes with them.</p>
@@ -341,14 +335,78 @@ export function WhoCanStart({ host, server, busy, onChange }: { host: ModuleHost
               <Button size="sm" variant="ghost" onClick={() => setAsking(undefined)}>
                 Cancel
               </Button>
-              <Button size="sm" variant="outline" onClick={() => answer(false)}>
-                Keep them, switched off
-              </Button>
             </div>
           </div>
         </Dialog>
       )}
     </div>
+  )
+}
+
+/**
+ * Pick, among the people on the server a computer is reached through, who may start runs on it
+ * too: the server's door says who is there, and the computer's own person and the people named
+ * already are not offered. No link and no code: each person reaches the computer through the
+ * server they are already in at, and gets a user of their own on it at their first run.
+ */
+export function PickPeople({ host, server, label, onChange, onClose }: { host: ModuleHost; server: ServerRow & { through: string }; /** The computer's name, as its page shows it. */ label: string; onChange: (change: () => Promise<Answer<unknown>>) => Promise<boolean>; onClose: () => void }) {
+  const at = hostOf(server.through)
+  const have = server.people ?? []
+  const { value: there } = usePolled<{ me: string | undefined; persons: string[] } | undefined>(
+    async () => {
+      const asked = await host.machinePerson(server.through)
+      const said = asked.ok && asked.said && typeof asked.said === 'object' ? (asked.said as Record<string, unknown>) : undefined
+      if (!said) return undefined
+      return { me: typeof said.person === 'string' ? said.person : undefined, persons: Array.isArray(said.persons) ? said.persons.filter((name): name is string => typeof name === 'string') : [] }
+    },
+    undefined,
+    60_000,
+    [server.through],
+  )
+  const choices = there?.persons.filter(name => name !== there.me && !have.includes(name)) ?? []
+  const [picked, setPicked] = useState<string[]>([])
+  const [adding, setAdding] = useState(false)
+  const add = async (): Promise<void> => {
+    setAdding(true)
+    const done = await onChange(() => setPeople(host, server.address, [...have, ...picked]))
+    setAdding(false)
+    if (done) onClose()
+  }
+  return (
+    <Dialog open onOpenChange={open => !open && onClose()} title={`Add person to ${label}`}>
+      <div className="space-y-4 text-sm">
+        {there === undefined ? (
+          <p className="text-xs text-muted-foreground">{`Asking ${at} who is there…`}</p>
+        ) : choices.length === 0 ? (
+          <p className="text-xs text-muted-foreground">{have.length ? `Everyone on ${at} is here already. Someone new is added on ${at} first: its People.` : `Nobody else is on ${at} yet. Add them there first: its People.`}</p>
+        ) : (
+          <>
+            <p className="text-xs text-muted-foreground">{`Someone on ${at}. They get a user of their own on ${label}, with their own logins, and reach it through ${at}: no code to send. Their agents run on your home network.`}</p>
+            <ul aria-label={`The people on ${at}`} className="space-y-2">
+              {choices.map(name => (
+                <li key={name}>
+                  <label className="flex items-center gap-2">
+                    <Checkbox checked={picked.includes(name)} onCheckedChange={checked => setPicked(checked === true ? [...picked, name] : picked.filter(other => other !== name))} aria-label={name} />
+                    <span>{name}</span>
+                  </label>
+                </li>
+              ))}
+            </ul>
+          </>
+        )}
+        <div className="flex justify-end gap-2">
+          <Button size="sm" variant="ghost" onClick={onClose}>
+            Cancel
+          </Button>
+          {choices.length > 0 && (
+            <Button size="sm" disabled={picked.length === 0 || adding} onClick={() => void add()}>
+              {adding && <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden />}
+              {picked.length > 1 ? `Add ${picked.length} people` : 'Add person'}
+            </Button>
+          )}
+        </div>
+      </div>
+    </Dialog>
   )
 }
 
@@ -379,8 +437,8 @@ export function ComputersThrough({ host, machine, busy, everyMs }: { host: Modul
               <div className="flex min-w-0 items-center gap-2">
                 {computer.owner !== undefined ? <Server aria-hidden className="h-3.5 w-3.5 shrink-0 text-muted-foreground" /> : <Laptop aria-hidden className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />}
                 <span className="truncate text-sm">{computer.name}</span>
-                {/* Another person's, set up as a server and shared with everyone on this one. */}
-                {computer.owner !== undefined && <span className="shrink-0 text-muted-foreground">{`· ${computer.owner}'s · for everyone`}</span>}
+                {/* Another person's, set up as a server and shared with this person on this one. */}
+                {computer.owner !== undefined && <span className="shrink-0 text-muted-foreground">{`· ${computer.owner}'s · shared with you`}</span>}
                 <State tone={computer.online ? 'good' : 'quiet'}>{computer.online ? 'Online' : 'Away'}</State>
               </div>
               {computer.added ? (
@@ -431,7 +489,7 @@ function DeviceLine({ device, address, busy, ownKey, onRemove }: { device: Devic
 }
 
 /** Who is in on a server, as its door lists them, by person. Read by the page with the rest, over SSH. */
-function People({ d, address, ownDevice, through }: { d: Devices; address: string; ownDevice: string | undefined; /** A server at home: the server it is reached through, by its name, which its owner uses it through too. */ through?: string }) {
+function People({ d, address, ownDevice, through, picks = false }: { d: Devices; address: string; ownDevice: string | undefined; /** A server at home: the server it is reached through, by its name, which its owner uses it through too. */ through?: string; /** Add person picks among that server's people, by name: no code. */ picks?: boolean }) {
   const { host, busy } = d
   const read = d.devices[address]
   const error = d.devicesError[address]
@@ -455,7 +513,7 @@ function People({ d, address, ownDevice, through }: { d: Devices; address: strin
   return (
     <div className="space-y-2 text-xs">
       {(devices === undefined || (devices.length === 0 && persons.length < 2)) && (
-        <p className="text-muted-foreground">{devices === undefined ? (error === undefined ? 'Asking the server who is in…' : 'The devices that are in on the server could not be read.') : 'Nobody yet. Invite gives someone a code; your own phone is added with Add device.'}</p>
+        <p className="text-muted-foreground">{devices === undefined ? (error === undefined ? 'Asking the server who is in…' : 'The devices that are in on the server could not be read.') : picks ? `Nobody yet. Add person picks someone on ${through}; they get a user of their own here.` : 'Nobody yet. Invite gives someone a code; your own phone is added with Add device.'}</p>
       )}
       {devices !== undefined &&
         (devices.length > 0 || persons.length > 1) &&
