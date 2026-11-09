@@ -261,6 +261,8 @@ export interface Me {
   person?: string
   /** Whether that person is the computer's owner: always so while it has no persons. */
   owner: boolean
+  /** The owner's name, once the computer has persons: whose computer a device of someone else's is on. */
+  ownerName?: string
   /** That person's devices, as `status` lists them: a computer once. */
   devices: ListedDevice[]
   /** To a computer whose line is for everyone here: every person here, the owner first, by their name. */
@@ -279,6 +281,7 @@ export function me(store: Store, person: string | undefined, forEveryone = false
   return {
     ...(person !== undefined ? { person } : {}),
     owner: person === undefined || person === owner,
+    ...(owner !== undefined ? { ownerName: owner } : {}),
     devices: listedDevices(store).filter(device => device.person === person),
     ...(forEveryone ? { persons: store.persons.map(candidate => candidate.name) } : {}),
     ...(name !== undefined ? { name } : {}),

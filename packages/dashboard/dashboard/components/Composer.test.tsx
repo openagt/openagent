@@ -293,7 +293,7 @@ describe('Composer (#721)', () => {
     await saveMachines(box)
     selectMachine(box.id)
     const { onSubmit } = renderComposer()
-    const words = "Your GitHub and Claude logins are copied to @rom's server. @rom can see what is on it. Runs there start once you say OK."
+    const words = "Your own logins are used on rom's computer: copied there by a server of yours, or logged in on its page. rom can see what is on it. Runs there start once you say OK."
     const note = (): HTMLElement | null => screen.queryByRole('note')
     await waitFor(() => expect(note()?.querySelector("p")?.textContent).toBe(words))
     fireEvent.change(screen.getByLabelText('prompt'), { target: { value: 'ship it' } })

@@ -296,8 +296,9 @@ test('for another person\'s computer, the logins there are read through OpenAgen
     await rm(claudeHome, { recursive: true, force: true })
     assert.equal((await readFile(storePath(env), 'utf8')).includes(CLAUDE_LOGIN), false)
 
-    // What names no computer of another person's is not one.
-    assert.equal((await run(env, ['other', SERVER_URL])).code, 2)
+    // What names no computer of another person's is not one: a computer at its own door may be one, a path under it or a plain word is not.
+    assert.equal((await run(env, ['other', `${SERVER_URL}/x`])).code, 2)
+    assert.equal((await run(env, ['other', 'not-a-url'])).code, 2)
     assert.equal((await run(env, ['other', `${SERVER_URL}/_devices/via/../x`])).code, 2)
   } finally {
     await agent.close()

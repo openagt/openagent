@@ -6,7 +6,7 @@ import { isElsewhereId, lineNameOf } from '../dashboard/elsewhere.js'
 import { isClaudeAccountId, isLoginWord, type MachineLogins } from '../dashboard/machine-logins.js'
 import { errorMessage } from '../error-message.js'
 import { contextRemote, resolveProjectPath } from './context.js'
-import { addMachine, forgetMachine, isPersonName, listMachines, noteListed, noteName, removeMachine, renameThisComputer, tellMachine, thisComputerName, unforgetMachine, useLoginsOn, type MachineRecord } from '../registry.js'
+import { addMachine, forgetMachine, isPersonName, listMachines, noteListed, noteName, noteOwner, removeMachine, renameThisComputer, tellMachine, thisComputerName, unforgetMachine, useLoginsOn, type MachineRecord } from '../registry.js'
 import { sayName } from '../dashboard/machine-call.js'
 import { callerAtPage } from '../dashboard/person.js'
 import { syncComputersSoon } from '../dashboard/computers-sync.js'
@@ -84,9 +84,17 @@ export async function saveMachine(pasted: string, label?: string, owner?: string
   const entered = await enterRemote(link.door, link.code, await ownName(), link.pin)
   if (!entered.ok) return entered
   const access = { url: link.url, key: entered.key, door: link.door, ...(link.pin ? { pin: link.pin } : {}) }
+  // Whose computer it is: its door says whether this computer's person is its owner. Another
+  // person's is saved as theirs, so nothing of this computer's (its keys, its logins) is handed to it.
+  let whose = isPersonName(owner) ? owner : undefined
+  if (whose === undefined) {
+    const me = await remoteDoor(access, { what: 'me' })
+    const said = me.ok && me.said && typeof me.said === 'object' ? (me.said as { owner?: unknown; ownerName?: unknown }) : undefined
+    if (said?.owner === false && isPersonName(said.ownerName)) whose = said.ownerName
+  }
   let added: Awaited<ReturnType<typeof addMachine>>
   try {
-    added = await addMachine({ ...access, ...(typeof label === 'string' ? { label } : {}), ...(isPersonName(owner) ? { owner } : {}) })
+    added = await addMachine({ ...access, ...(typeof label === 'string' ? { label } : {}), ...(whose !== undefined ? { owner: whose } : {}) })
   } catch (err) {
     // A key nobody holds is not left on the machine.
     void leaveRemote(access)
@@ -230,7 +238,11 @@ export async function onMachinePerson(machineId: string): Promise<MachinePerson>
   const machine = (await listMachines()).find(saved => saved.id === machineId)
   if (!machine) return { ok: false, error: 'That machine is no longer saved.' }
   if (machine.url.includes(THROUGH_PATH)) return { ok: false, error: 'A computer reached through a server says nothing of persons.', unknown: true }
-  return remoteDoor(machine, { what: 'me' })
+  const asked = await remoteDoor(machine, { what: 'me' })
+  // A machine saved before its door said whose it is: kept as that person's from here on, so the syncs leave it alone.
+  const said = asked.ok && asked.said && typeof asked.said === 'object' ? (asked.said as { owner?: unknown; ownerName?: unknown }) : undefined
+  if (said?.owner === false && isPersonName(said.ownerName) && machine.owner === undefined) await noteOwner(machine, said.ownerName).catch(() => {})
+  return asked
 }
 
 /** Take one of this person's devices out at a saved machine, by its id there; answers what {@link onMachinePerson} does, as it is after. */

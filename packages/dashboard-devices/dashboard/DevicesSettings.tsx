@@ -1,9 +1,10 @@
 import { useEffect, useState } from 'react'
-import { ChevronLeft, Ellipsis, House, Monitor, Plus, Server, Smartphone, Tablet, UserRound } from 'lucide-react'
+import { ChevronLeft, Ellipsis, House, Monitor, Plus, Server, Smartphone, Tablet, UserPlus, UserRound } from 'lucide-react'
 import { Button, ConfirmDialog, Dialog, DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, Input, formatDateTime, formatRelative, usePolled, useSettingsCrumb } from '@openagt/dashboard/module'
-import { keepPerson, loadMine, removeDevice, removeMine, removePerson, renameDevice, setTailscale, type Answer, type DeviceRow, type DoorStatus, type LineRow, type Mine, type PersonRow } from './devices.js'
+import { addDevice, keepPerson, loadMine, myName, nameOwner, removeDevice, removeMine, removePerson, renameDevice, setTailscale, type Answer, type DeviceRow, type DoorStatus, type LineRow, type Mine, type PersonRow } from './devices.js'
 import { removeDevice as removeServerDevice } from './servers.js'
-import { AddDevice, type Adding } from './AddDevice.js'
+import { AddDevice, useJoined, type Adding } from './AddDevice.js'
+import { Invite } from './codes.js'
 import { ComputerPage } from './ComputerPage.js'
 import { JoinedPage, OtherPage } from './JoinedPage.js'
 import { ServerPage } from './ServerPage.js'
@@ -72,6 +73,10 @@ export function DevicesSettings({ everyMs = 3_000, devicesEveryMs = 30_000, devi
         setAdding(undefined)
         setInviting(true)
         setOpened({ key: `server:${address}` })
+      }}
+      onJoined={machineId => {
+        setAdding(undefined)
+        setOpened({ key: '', machine: machineId })
       }}
     />
   )
@@ -164,20 +169,56 @@ function Tile({ icon: Icon, title, words, button, primary = false, onClick }: { 
 
 /** Every device, once, each a row: a phone with its menu, anything else opening its page. */
 function List({ d, onOpen, onAdd }: { d: Devices; onOpen: (item: Item) => void; onAdd: () => void }) {
+  const { host } = d
   const status = d.door?.ok ? d.door.value : undefined
   const persons = status?.persons ?? []
   // A computer several people use lists its door's devices by person, as it did: the people part below.
   const items = persons.length ? d.items.filter(item => !(item.kind === 'phone' && item.door)) : d.items
   const server = hasServer({ servers: d.servers, machines: d.machines?.machines ?? [] })
+  // Someone else gets a user of their own only on a computer set up as a server: there, and only there, Add person.
+  const addsPersons = d.isServer || status?.https !== undefined || persons.length > 0
+  const [addingPerson, setAddingPerson] = useState(false)
+  const [codeOn, setCodeOn] = useState(false)
+  const joined = useJoined(d, codeOn)
   return (
     <div className="space-y-1">
       <div className="flex items-center justify-between gap-4">
         <p className="text-sm font-medium">{items.length ? `Your devices (${items.length})` : 'Your devices'}</p>
-        <Button size="sm" variant="outline" onClick={onAdd}>
-          <Plus className="h-3.5 w-3.5" aria-hidden />
-          Add device
-        </Button>
+        <div className="flex gap-2">
+          {addsPersons && (
+            <Button size="sm" variant="outline" title="Someone else, by their name: they add this computer to their own OpenAgent with the code, and get a user of their own here." onClick={() => setAddingPerson(true)}>
+              <UserPlus className="h-3.5 w-3.5" aria-hidden />
+              Add person
+            </Button>
+          )}
+          <Button size="sm" variant="outline" onClick={onAdd}>
+            <Plus className="h-3.5 w-3.5" aria-hidden />
+            Add device
+          </Button>
+        </div>
       </div>
+      {addingPerson && (
+        <Invite
+          label={d.machines?.name ?? 'this computer'}
+          tailscale={status?.tailscale !== undefined && status.https === undefined}
+          ask={person => addDevice(host, person)}
+          persons={{
+            owner: persons.find(person => person.owner)?.name,
+            myName: () => myName(host),
+            nameOwner: async name => {
+              const named = await nameOwner(host, name)
+              await d.reloadDoor().catch(() => {})
+              return named.ok ? { ok: true } : named
+            },
+          }}
+          joined={joined}
+          onCode={code => setCodeOn(code !== undefined)}
+          onClose={() => {
+            setAddingPerson(false)
+            setCodeOn(false)
+          }}
+        />
+      )}
       {items.length === 0 && !persons.length && <p className="text-xs text-muted-foreground">{server ? 'None yet. Add device: a phone from anywhere, or a computer.' : status?.tailscale ? 'None yet. Add device: a phone or a computer on your Tailscale network.' : 'None yet. Add device: a phone or a computer on the same Wi-Fi.'}</p>}
       <ul aria-label="Your devices" className="divide-y divide-border">
         {items.map(item => (
@@ -219,7 +260,7 @@ function ItemRow({ d, item, onOpen }: { d: Devices; item: Item; onOpen: () => vo
     const { machine, person } = item
     return <Row icon={Server} name={item.name} facts={[machine.version !== undefined ? <State tone="good">Online</State> : <State tone="quiet">Offline</State>, 'Server', person.owner ? 'yours' : person.person !== undefined ? `you are ${person.person}` : undefined]} onOpen={onOpen} />
   }
-  return <Row icon={Server} name={item.name} facts={[item.machine.version !== undefined ? <State tone="good">Online</State> : <State tone="quiet">Offline</State>, `${item.owner}'s server`]} onOpen={onOpen} />
+  return <Row icon={Server} name={item.name} facts={[item.machine.version !== undefined ? <State tone="good">Online</State> : <State tone="quiet">Offline</State>, `${item.owner}'s, shared with you`, item.person?.person !== undefined ? `you are ${item.person.person}` : undefined]} onOpen={onOpen} />
 }
 
 /** A phone or a browser: no page of its own, a menu to rename it here, or take it out. */

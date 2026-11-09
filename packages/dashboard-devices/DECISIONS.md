@@ -48,6 +48,15 @@ already made, and lists it in its pull request; for anything else it proposes an
 - A person on a computer is a name, typed at the invite, whatever git host they use; the owner
   names themselves the same way the first time. Picked over their GitHub account, which left out
   a person on another git host.
+- Add device is for the person's own phones, browsers and computers; Add person, only on a
+  computer that gives each person a user of their own, is for someone else, by name. Picked over
+  one button that asks who the device is for, which on a personal computer let someone else in as
+  its owner.
+- A computer shared with a person is added to their own OpenAgent, with the code its owner gives:
+  it is among their machines as the owner's, shared with them, a run there runs as them in their
+  own OpenAgent on it, and their own OpenAgent hands it nothing of theirs by itself. Picked over
+  opening the owner's computer in a browser as a new person, an OpenAgent with none of their logins,
+  logs or projects.
 - Only the computer's owner invites. Picked over anyone who is in inviting; letting the owner
   allow others to invite can come later.
 - A computer only one person uses is unchanged: OpenAgent asks who the owner is only the first

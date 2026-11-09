@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, type ComponentType } from 'react'
 import { Globe, Loader2, Monitor, Server, Smartphone, Ticket, Waypoints, Wifi } from 'lucide-react'
 import { Button, Dialog, buttonVariants, cn, type ModuleMachine } from '@openagt/dashboard/module'
-import { addDevice, findComputers, myName, nameOwner, setSwitch, type FoundComputer } from './devices.js'
+import { addDevice, findComputers, setSwitch, type FoundComputer } from './devices.js'
 import { readPersonThere } from './servers.js'
 import { CodeCard, Joined, NoCodeYet, PhoneCode, RanOut, Waiting, clock, useCode, type Given, type GivenAnswer } from './codes.js'
 import { ConnectServer } from './ConnectServer.js'
@@ -25,11 +25,11 @@ const KINDS: readonly { id: Exclude<Adding, 'choose'>; icon: ComponentType<{ cla
   { id: 'phone', icon: Smartphone, title: 'Phone or tablet', words: 'Scan a code with its camera.' },
   { id: 'computer', icon: Monitor, title: 'Computer', words: 'Another Mac or PC that runs OpenAgent.' },
   { id: 'server', icon: Server, title: 'Server', words: 'Install OpenAgent on a VPS, or on a PC that stays on.' },
-  { id: 'code', icon: Ticket, title: 'I have a code', words: 'Join a server, or a computer someone set up for you.' },
+  { id: 'code', icon: Ticket, title: 'I have a code', words: 'Join a server of yours, or a computer someone shared with you.' },
 ]
 
 /** The names of the devices on the list, and whose new one got in: what a code's dialog says once one did. */
-function useJoined(d: Devices, waiting: boolean): string | undefined {
+export function useJoined(d: Devices, waiting: boolean): string | undefined {
   const before = useRef<Set<string> | undefined>(undefined)
   const [joined, setJoined] = useState<string | undefined>()
   const keys = d.items.map(item => item.key).join(' ')
@@ -50,13 +50,13 @@ function useJoined(d: Devices, waiting: boolean): string | undefined {
   return joined
 }
 
-export function AddDevice({ d, start, isServer, onClose, onInvite }: { d: Devices; start: Adding; /** This computer is a server: it sets up no server. */ isServer: boolean; onClose: () => void; /** Invite people to a server just set up. */ onInvite: (address: string) => void }) {
+export function AddDevice({ d, start, isServer, onClose, onInvite, onJoined }: { d: Devices; start: Adding; /** This computer is a server: it sets up no server. */ isServer: boolean; onClose: () => void; /** Add people to a server just set up. */ onInvite: (address: string) => void; /** A computer someone shared was joined: its page, by its machine's id. */ onJoined: (machineId: string) => void }) {
   const [adding, setAdding] = useState<Adding>(start)
   if (adding === 'choose') return <Choose kinds={isServer ? KINDS.filter(kind => kind.id !== 'server') : KINDS} onPicked={setAdding} onClose={onClose} />
   if (adding === 'phone') return <AddPhone d={d} onClose={onClose} />
   if (adding === 'computer') return <AddComputer d={d} onClose={onClose} />
   if (adding === 'server') return <ConnectServer d={d} onClose={onClose} onInvite={onInvite} />
-  return <JoinDialog d={d} onClose={onClose} />
+  return <JoinDialog d={d} onClose={onClose} onJoined={onJoined} />
 }
 
 function Choose({ kinds, onPicked, onClose }: { kinds: typeof KINDS; onPicked: (adding: Adding) => void; onClose: () => void }) {
@@ -212,21 +212,8 @@ function AddPhone({ d, onClose }: { d: Devices; onClose: () => void }) {
   return (
     <PhoneCode
       title="Add phone"
-      ask={server ? () => codeAt(d, server) : person => addDevice(host, person)}
-      // A computer several people use asks who a device is for: on a personal one, a device is its owner's.
-      {...(!server && (status?.https || status?.persons.length)
-        ? {
-            persons: {
-              owner: status.persons.find(person => person.owner)?.name,
-              myName: () => myName(host),
-              nameOwner: async name => {
-                const named = await nameOwner(host, name)
-                await d.reloadDoor().catch(() => {})
-                return named.ok ? { ok: true } : named
-              },
-            },
-          }
-        : {})}
+      // The person's own phone: at a server through its door, else at this computer's. Someone else's device is added with Add person.
+      ask={server ? () => codeAt(d, server) : () => addDevice(host)}
       {...(server ? { openHere: true } : {})}
       joined={joined}
       onCode={setCode}

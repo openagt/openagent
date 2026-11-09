@@ -382,8 +382,8 @@ export const Composer = forwardRef<ComposerHandle, {
   const loginsNote = untold && (
     <div role="note" className="mb-1.5 flex items-center gap-3 rounded-md border border-border bg-background px-3 py-2 text-xs">
       <p className="min-w-0 flex-1">
-        <span className="text-foreground">{`Your GitHub and Claude logins are copied to @${owner}'s server.`}</span>{' '}
-        <span className="text-muted-foreground">{`@${owner} can see what is on it. Runs there start once you say OK.`}</span>
+        <span className="text-foreground">{`Your own logins are used on ${owner}'s computer: copied there by a server of yours, or logged in on its page.`}</span>{' '}
+        <span className="text-muted-foreground">{`${owner} can see what is on it. Runs there start once you say OK.`}</span>
       </p>
       <Button
         type="button"

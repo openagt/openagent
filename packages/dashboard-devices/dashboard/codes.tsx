@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { Check, CircleCheck, Copy, ExternalLink, Loader2, RotateCw } from 'lucide-react'
-import { Button, Dialog, Input, QrCode, RadioGroup, RadioGroupOption } from '@openagt/dashboard/module'
+import { Button, Dialog, Input, QrCode } from '@openagt/dashboard/module'
 import { Problem } from './parts.js'
 
 // A code a new device gets in with, the ways it is shown: as a QR code a phone's camera opens, and
@@ -189,13 +189,12 @@ const NOT_A_NAME = 'A name is letters and digits, with spaces, dots, apostrophes
 
 /**
  * A phone gets in: the code as a QR code its camera opens, and the link to send it when it has no
- * camera, with how long the code still works, until the phone is in. On a computer that tells
- * persons apart (`persons`), who the phone is for is asked first.
+ * camera, with how long the code still works, until the phone is in. The phone is the person's
+ * own: someone else's device is added with Add person.
  */
 export function PhoneCode({
   title,
   ask,
-  persons,
   steps = ["Open the phone's camera and point it at the code.", 'Tap the link it shows. OpenAgent opens, and stays in.'],
   camera = true,
   openHere = false,
@@ -204,8 +203,7 @@ export function PhoneCode({
   onClose,
 }: {
   title: string
-  ask: (person?: string) => Promise<GivenAnswer>
-  persons?: Persons
+  ask: () => Promise<GivenAnswer>
   /** What the person does with the code, step by step. */
   steps?: readonly string[]
   /** The code is for a phone's camera: the link is for one with no camera. */
@@ -217,20 +215,14 @@ export function PhoneCode({
   onCode?: (code: Given | undefined) => void
   onClose: () => void
 }) {
-  // Who the code is for: asked first when the computer tells persons apart; `null` until it is said, "" for the person at the page.
-  const [person, setPerson] = useState<string | null>(persons ? null : '')
   const [byNumber, setByNumber] = useState(false)
   const [byWifi, setByWifi] = useState(false)
-  const { code, asking, error, left, expired, again } = useCode(ask, !persons, next => (setByNumber(false), setByWifi(false), onCode?.(next)), joined !== undefined)
+  const { code, asking, error, left, expired, again } = useCode(() => ask(), true, next => (setByNumber(false), setByWifi(false), onCode?.(next)), joined !== undefined)
   const link = code && byWifi && code.wifiUrl ? code.wifiUrl : code && byNumber && code.numberUrl ? code.numberUrl : code?.url
-  const forWhom = person || undefined
-
-  if (persons && person === null) return <ForWhom title={title} persons={persons} onClose={onClose} onPicked={picked => (setPerson(picked), void again(picked || undefined))} />
 
   return (
     <Dialog open onOpenChange={open => !open && onClose()} title={title}>
       <div className="space-y-4">
-        {forWhom !== undefined && <p className="text-sm font-medium">{`For ${forWhom}. Send them the link.`}</p>}
         {joined !== undefined ? (
           <Joined>{`${joined} is in.`}</Joined>
         ) : asking || error !== undefined || !code ? (
@@ -281,7 +273,7 @@ export function PhoneCode({
         )}
         <div className="flex justify-end gap-2">
           {!asking && (joined !== undefined || expired || error !== undefined || !code) && (
-            <Button size="sm" variant="outline" onClick={() => void again(forWhom)}>
+            <Button size="sm" variant="outline" onClick={() => void again()}>
               <RotateCw className="h-3.5 w-3.5" aria-hidden />
               {joined !== undefined ? 'Add another' : 'New code'}
             </Button>
@@ -378,81 +370,11 @@ export function WhoAreYou({ title, naming, onType, onConfirm, onClose }: { title
   )
 }
 
-/** Who a phone's code is for, on a computer that tells persons apart: the person at the page, or someone else by their name. */
-function ForWhom({ title, persons, onPicked, onClose }: { title: string; persons: Persons; onPicked: (person: string) => void; onClose: () => void }) {
-  const [whom, setWhom] = useState<'me' | 'other'>('me')
-  const [typed, setTyped] = useState('')
-  const { naming, ask, type, confirm } = useNaming(persons)
-  const name = nameOf(typed)
-
-  const go = (): void => {
-    if (whom === 'me') return onPicked('')
-    if (name === undefined) return
-    if (persons.owner !== undefined) return onPicked(samePerson(name, persons.owner) ? '' : name)
-    void ask()
-  }
-
-  if (naming !== undefined)
-    return (
-      <WhoAreYou
-        title={title}
-        naming={naming}
-        onType={type}
-        // The owner's own name is the owner's device, as "Me" is.
-        onConfirm={owner => void confirm(owner).then(named => named && onPicked(name === undefined || samePerson(name, owner) ? '' : name))}
-        onClose={onClose}
-      />
-    )
-
-  return (
-    <Dialog open onOpenChange={open => !open && onClose()} title={title}>
-      <form
-        className="space-y-4"
-        onSubmit={event => {
-          event.preventDefault()
-          go()
-        }}
-      >
-        <p id="code-for-whom" className="text-sm">
-          Who is it for?
-        </p>
-        <RadioGroup aria-labelledby="code-for-whom" value={whom} onValueChange={next => setWhom(next === 'other' ? 'other' : 'me')} className="gap-3">
-          <RadioGroupOption value="me" className="flex-nowrap items-start [&>[data-slot=radio-group-item]]:mt-0.5">
-            <span>
-              Me
-              <span className="block text-xs text-muted-foreground">My phone or my browser.</span>
-            </span>
-          </RadioGroupOption>
-          <RadioGroupOption value="other" className="flex-nowrap items-start [&>[data-slot=radio-group-item]]:mt-0.5">
-            <span>
-              Someone else
-              <span className="block text-xs text-muted-foreground">By their name. On a server they get a user of their own, and their runs use their own logins. On any other computer they use this computer's.</span>
-            </span>
-          </RadioGroupOption>
-        </RadioGroup>
-        {whom === 'other' && (
-          <div className="space-y-1">
-            <Input autoFocus aria-label="Their name" placeholder="Their name" value={typed} onChange={event => setTyped(event.target.value)} className="h-8 bg-background px-2 text-sm" />
-            {typed.trim() !== '' && name === undefined && <p className="text-xs text-danger">{NOT_A_NAME}</p>}
-          </div>
-        )}
-        <div className="flex justify-end gap-2">
-          <Button size="sm" variant="outline" type="button" onClick={onClose}>
-            Cancel
-          </Button>
-          <Button size="sm" type="submit" disabled={whom === 'other' && name === undefined}>
-            Continue
-          </Button>
-        </div>
-      </form>
-    </Dialog>
-  )
-}
-
 /**
- * Someone else is let in at a server, by their name: they type where and the code on
- * their computer, or scan it as a QR code with their phone. The first time, the person at the
- * page says they are the owner.
+ * Add person: someone else is let in at a server, or at a computer that gives each person a user
+ * of their own, by their name. They add it to their own OpenAgent with where and the code, on
+ * their computer; a phone with no computer behind it scans it as a QR code and opens OpenAgent
+ * there. The first time, the person at the page says they are the owner.
  */
 export function Invite({
   label,
@@ -474,7 +396,7 @@ export function Invite({
   onCode?: (code: Given | undefined) => void
   onClose: () => void
 }) {
-  const title = `Invite to ${label}`
+  const title = `Add person to ${label}`
   const [typed, setTyped] = useState('')
   const [person, setPerson] = useState<string | undefined>()
   const [qr, setQr] = useState(false)
@@ -537,7 +459,7 @@ export function Invite({
             <p className="text-xs text-muted-foreground">
               {qr ? (
                 <>
-                  {'On their phone: open the camera and point it at the code. On their computer: '}
+                  {`On their phone: open the camera and point it at the code; OpenAgent on ${label} opens, as them. On their computer: `}
                   <button type="button" className="underline" onClick={() => setQr(false)}>
                     show where and the code
                   </button>
@@ -545,7 +467,7 @@ export function Invite({
                 </>
               ) : (
                 <>
-                  On their computer: <span className="font-medium">Settings › Devices › Add device › I have a code</span>. On their phone:{' '}
+                  On their computer: <span className="font-medium">Settings › Devices › Add device › I have a code</span>. {label} is then in their own OpenAgent, as yours, shared with them. On a phone with no computer:{' '}
                   <button type="button" className="underline" onClick={() => setQr(true)}>
                     show a QR code
                   </button>{' '}

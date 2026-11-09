@@ -83,6 +83,9 @@ export interface AddLink {
   numberUrl?: string
   /** Behind Tailscale, the same code at the Wi-Fi's door beside it, for a device not on Tailscale. */
   wifiUrl?: string
+  /** What is typed on another computer instead: where, and the code. */
+  where?: string
+  code?: string
   expires: string
 }
 
@@ -194,9 +197,9 @@ export const removeMine = (id: string, fetchFn?: typeof fetch): Promise<Answer<M
 
 function readLink(output: unknown): AddLink | undefined {
   if (!output || typeof output !== 'object') return undefined
-  const { url, numberUrl, wifiUrl, expires } = output as Record<string, unknown>
-  const [link, byNumber, byWifi, until] = [text(url), text(numberUrl), text(wifiUrl), text(expires)]
-  return link && until ? { url: link, ...(byNumber ? { numberUrl: byNumber } : {}), ...(byWifi ? { wifiUrl: byWifi } : {}), expires: until } : undefined
+  const { url, numberUrl, wifiUrl, where, code, expires } = output as Record<string, unknown>
+  const [link, byNumber, byWifi, at, typed, until] = [text(url), text(numberUrl), text(wifiUrl), text(where), text(code), text(expires)]
+  return link && until ? { url: link, ...(byNumber ? { numberUrl: byNumber } : {}), ...(byWifi ? { wifiUrl: byWifi } : {}), ...(at ? { where: at } : {}), ...(typed ? { code: typed } : {}), expires: until } : undefined
 }
 
 async function run<T>(host: ModuleHost, args: string[], read: (output: unknown) => T | undefined): Promise<Answer<T>> {

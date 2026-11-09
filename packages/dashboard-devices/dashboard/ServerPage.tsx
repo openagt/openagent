@@ -97,9 +97,9 @@ export function ServerPage({ d, item, onBack, invite = false }: { d: Devices; it
         <Part>
           <div className="flex items-center justify-between gap-3">
             <p className="text-sm">{read ? `Who is in (${read.devices.length})` : 'Who is in'}</p>
-            <Button size="sm" disabled={busy} aria-label={`Invite to ${server.address}`} title="A code for a person, a phone or a browser: scanned or opened once, it lets them into OpenAgent on the server, from anywhere." onClick={() => (setJoined(undefined), setInviting(true))}>
+            <Button size="sm" disabled={busy} aria-label={`Add person to ${server.address}`} title="Someone else, by their name: they add this server to their own OpenAgent with the code, and get a user of their own here." onClick={() => (setJoined(undefined), setInviting(true))}>
               <UserPlus className="h-3.5 w-3.5" aria-hidden />
-              Invite
+              Add person
             </Button>
           </div>
           <People d={d} address={server.address} ownDevice={machine?.device} />
@@ -482,7 +482,7 @@ function People({ d, address, ownDevice }: { d: Devices; address: string; ownDev
               </div>
             )}
             {person?.working && <p className="text-muted-foreground">{`Making ${person.name}'s own user on the server, with their own OpenAgent. This takes a minute or two.`}</p>}
-            {person?.problem !== undefined && !person.working && <p role="alert" className="text-danger">{`${person.name}'s own user on the server could not be made: ${person.problem.replace(/\.?$/, '.')} Invite them again to try again.`}</p>}
+            {person?.problem !== undefined && !person.working && <p role="alert" className="text-danger">{`${person.name}'s own user on the server could not be made: ${person.problem.replace(/\.?$/, '.')} Add them again to try again.`}</p>}
             {person !== undefined && theirs.length === 0 && <p className="text-muted-foreground">No device yet.</p>}
             {theirs.length > 0 && (
               <ul aria-label={person !== undefined ? `Devices of ${person.name} on ${address}` : `The devices that are in on ${address}`} className="space-y-2">

@@ -391,14 +391,14 @@ function Ready({ d, server, onInvite, onClose }: { d: Devices; server: ServerRow
         <CircleCheck aria-hidden className="h-5 w-5 text-success" />
         <p className="text-sm font-medium">{`${name} is ready.`}</p>
         <p className="text-xs text-muted-foreground">
-          {server.through !== undefined ? 'Your runs can go there from here. Who else uses it?' : 'Your runs can go there from here. Anyone else? Invite them: each works there with their own logins.'}
+          {server.through !== undefined ? 'Your runs can go there from here. Who else uses it?' : 'Your runs can go there from here. Anyone else? Add them: each works there with their own logins.'}
         </p>
       </div>
       {server.through !== undefined && <WhoCanStart host={d.host} server={{ ...server, through: server.through }} busy={d.busy} onChange={d.act} />}
       <Footer>
         {server.through === undefined && (
           <Button size="sm" variant="outline" onClick={onInvite}>
-            Invite people
+            Add people
           </Button>
         )}
         <Button size="sm" onClick={onClose}>
