@@ -17,7 +17,7 @@ import { SESSIONS_ID } from '../../src/project-address.js'
 // reaches Done.
 export function AgentActionBar({
   projectId,
-  agentId: agentId,
+  agentId,
   events,
   retainedWorktree = false,
   onWorktreeRemoved,

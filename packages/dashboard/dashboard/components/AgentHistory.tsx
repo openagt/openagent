@@ -233,7 +233,7 @@ export function AgentHistory({
       }))
     : agents.map(agent => ({
         key: agent.id,
-        agent: agent,
+        agent,
         projectId,
         // Following live highlights the newest running agent, not every one of them (#738):
         // `agents` is newest-first, so that is the first with a running status.

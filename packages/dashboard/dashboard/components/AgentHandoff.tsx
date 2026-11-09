@@ -101,7 +101,7 @@ export function Committing() {
 
 export function HandoffActions({
   projectId,
-  agentId: agentId,
+  agentId,
   state,
   subagent = false,
   onAsked,

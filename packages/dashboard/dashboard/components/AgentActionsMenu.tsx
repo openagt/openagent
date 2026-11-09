@@ -51,7 +51,7 @@ import {
 // (a menu item cannot also be the dialog's trigger, so the dialog is controlled).
 export function AgentActionsMenu({
   projectId,
-  agentId: agentId,
+  agentId,
   events,
   label,
   naming = false,

@@ -59,7 +59,7 @@ const NOTHING_DOING: Record<string, AgentDoing> = {}
 
 export function AgentView({
   projectId,
-  agentId: agentId,
+  agentId,
   events,
   live,
   card,

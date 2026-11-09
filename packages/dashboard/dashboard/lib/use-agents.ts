@@ -50,5 +50,5 @@ export function useAgents(projectId: string | null, starting: string | null = nu
   }, [settingUp, starting, reload])
   // `loaded` is what lets the shell tell a session that is gone from one it has not read yet
   // (#784): a bookmarked link must not flash "gone" while the first read is still out.
-  return { agents: agents, reload, loaded }
+  return { agents, reload, loaded }
 }
