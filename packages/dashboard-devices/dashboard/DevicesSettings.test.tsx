@@ -421,6 +421,18 @@ describe('Settings › Devices: another computer, once', () => {
     expect(within(screen.getByRole('list', { name: 'Your devices' })).getAllByRole('listitem')).toHaveLength(2)
   })
 
+  test("on a server, another person's computer in at the door is theirs alone: under them, never among the owner's devices with a way to send runs to it", async () => {
+    const ADAS = { id: 'ada000000001', name: 'OpenAgent on ada-laptop', added: PHONE.added, line: true, person: 'Ada' }
+    const OWN = { id: 'own000000001', name: 'OpenAgent on Studio', added: PHONE.added }
+    const { host } = door(() => ok({ ...OPEN, persons: [{ name: 'Rom', owner: true }, { name: 'Ada', ready: true }], devices: [OWN, ADAS] }))
+    show(host)
+    const mine = await screen.findByRole('list', { name: 'Your devices' })
+    expect(within(mine).getAllByRole('listitem').map(item => item.getAttribute('aria-label'))).toEqual(['Studio'])
+    expect(screen.queryByRole('listitem', { name: 'ada-laptop' })).toBeNull()
+    // Listed under Ada, as a computer of hers that keeps a line here.
+    expect(screen.getByRole('list', { name: 'Devices of Ada' }).textContent).toContain('ada-laptop')
+  })
+
   test('a computer only saved here: on its page, "can start runs here" turns on in one press: this door gives a link, and the computer saves it', async () => {
     let devices: object[] = []
     const { host, runComputerCommand } = door(args => {

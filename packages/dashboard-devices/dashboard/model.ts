@@ -161,8 +161,9 @@ export function itemsOf(sources: Sources): Item[] {
     const through = throughOf(machine)
     items.push({ kind: 'computer', key: `machine:${machine.id}`, name: machine.label, machine, ...(device ? { door: device } : {}), ...(through !== undefined ? { through: { url: through, label: labelOf(machines, through) } } : {}), ...(reachedByLine(machine.url) ? { line: true as const } : {}) })
   }
-  // And each computer in at this door that is no saved machine: it starts runs here, and runs do not go there.
-  for (const device of doorDevices) if (isComputer(device) && !matched.has(device.id)) items.push({ kind: 'computer', key: `door:${device.id}`, name: device.name.replace(AGENT_NAME, ''), door: device })
+  // And each computer of this person's in at this door that is no saved machine: it starts runs here, and runs do not go there.
+  // Another person's computer, in at a server's door as theirs, is theirs alone: it is listed under them, never offered here.
+  for (const device of doorDevices) if (isComputer(device) && device.person === undefined && !matched.has(device.id)) items.push({ kind: 'computer', key: `door:${device.id}`, name: device.name.replace(AGENT_NAME, ''), door: device })
 
   // Servers: installed here; set up elsewhere or shared by someone; another person's computer.
   for (const server of servers) {
