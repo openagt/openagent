@@ -3,7 +3,8 @@ import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-li
 import { ModuleHostContext, type MachineAdded, type MachineRemoved, type ModuleCommandResult, type ModuleComputersThrough, type ModuleAccountsAgent, type ModuleHost, type ModuleMachineAccount, type ModuleMachinePerson, type ModuleMachines } from '@openagt/dashboard/module'
 import { DevicesSettings } from './DevicesSettings.js'
 import { olderThan } from './parts.js'
-import type { DeviceRow, ServerRow, StepState } from './servers.js'
+import type { DeviceRow } from './devices.js'
+import type { ServerRow, StepState } from './servers.js'
 
 // The servers in Settings › Devices: a server this computer installed OpenAgent on, a computer at
 // home set up as one, a server set up elsewhere or shared by someone, another person's computer.

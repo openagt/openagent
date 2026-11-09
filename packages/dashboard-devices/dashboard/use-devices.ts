@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { useModuleHost, usePolled, type ModuleHost, type ModuleMachines } from '@openagt/dashboard/module'
-import { loadStatus, type DoorStatus } from './devices.js'
-import { addThrough, askLink, connect, forget, loadDevices, loadServers, loadShared, markAdded, ownGithub, reach, readPersonThere, type Answer, type DevicesRead, type OwnGithub, type PersonThere, type ServerRow, type ServersRead, type SharedRow, type StepState } from './servers.js'
+import { failed, loadStatus, readPersonThere, type Answer, type DoorStatus, type PersonThere } from './devices.js'
+import { addThrough, askLink, connect, forget, loadDevices, loadServers, loadShared, markAdded, ownGithub, reach, type DevicesRead, type OwnGithub, type ServerRow, type ServersRead, type SharedRow, type StepState } from './servers.js'
 import { hasDoor, itemsOf, onTailscale, type Item, type Sources } from './model.js'
 
 // What Settings › Devices reads, read once for the list and every page of it: this computer's
@@ -224,12 +224,12 @@ export function useDevices({ everyMs, devicesEveryMs, devicesAnswerMs = DEVICES_
   const useLoginsOn = async (address: string, id: string): Promise<void> => {
     if (wantsLogins.current.delete(address)) {
       setLogins(states => ({ ...states, [address]: { state: 'running' } }))
-      const used = await host.useLoginsOn(id).catch((err: unknown) => ({ ok: false as const, error: err instanceof Error ? err.message : String(err) }))
+      const used = await host.useLoginsOn(id).catch(failed)
       setLogins(states => ({ ...states, [address]: used.ok ? { state: 'done' } : { state: 'failed', said: used.error } }))
     }
     if (!wantsData.current.delete(address)) return
     setData(states => ({ ...states, [address]: { state: 'running' } }))
-    const synced = await host.syncDataOn(id).catch((err: unknown) => ({ ok: false as const, error: err instanceof Error ? err.message : String(err) }))
+    const synced = await host.syncDataOn(id).catch(failed)
     setData(states => ({ ...states, [address]: synced.ok ? { state: 'done' } : { state: 'failed', said: synced.error } }))
   }
 
@@ -287,7 +287,7 @@ export function useDevices({ everyMs, devicesEveryMs, devicesAnswerMs = DEVICES_
   })
 
   const removeMachine = async (id: string): Promise<boolean> => {
-    const removed = await host.removeMachine(id).catch((err: unknown) => ({ ok: false as const, error: err instanceof Error ? err.message : String(err) }))
+    const removed = await host.removeMachine(id).catch(failed)
     if (!removed.ok) setError(removed.error)
     await reloadMachines().catch(() => {})
     return removed.ok

@@ -1,10 +1,10 @@
 import { useEffect, useState } from 'react'
 import { ChevronRight, CircleCheck, House, Laptop, Loader2, Server, UserPlus, UserRound } from 'lucide-react'
 import { Button, Checkbox, ConfirmDialog, Dialog, Switch, formatDateTime, formatRelative, usePolled, type ModuleAccountsAgent, type ModuleComputersThrough, type ModuleHost, type ModuleMachine, type ModuleMachineAccount } from '@openagt/dashboard/module'
-import { idsOf, nameOwner, removeDevice, removePerson, setPeople, setWho, askLink, type Answer, type DeviceRow, type ServerRow } from './servers.js'
+import { idsOf, myName, type Answer, type DeviceRow } from './devices.js'
+import { nameOwner, removeDevice, removePerson, setPeople, setWho, askLink, type ServerRow } from './servers.js'
 import { labelOf, type ServerItem } from './model.js'
 import { Invite } from './codes.js'
-import { myName } from './devices.js'
 import { Head, Part, Problem, Said, State, StepLine, SwitchLine, Tabs, hostOf, olderThan } from './parts.js'
 import type { Devices } from './use-devices.js'
 
