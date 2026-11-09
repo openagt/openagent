@@ -19,8 +19,6 @@ export interface LiveEvents {
   events: OpenAgentEvent[]
   /** True while the stream is lost and being retried — the feed may be behind reality. */
   lost: boolean
-  /** The server closed the channel on purpose (relay stream ended, unknown run) — final. */
-  done: boolean
   /** The message the agent is writing, as far as it has got; empty when it is writing none. Never in `events`. */
   writing: string
 }
@@ -40,26 +38,16 @@ function retryDelay(attempt: number): number {
  */
 const SYNC_GRACE_MS = 1500
 
-export function useLiveEvents(projectId: string | null, agentId?: string | null, resetKey?: unknown): LiveEvents {
+export function useLiveEvents(projectId: string | null, agentId?: string | null): LiveEvents {
   const [events, setEvents] = useState<OpenAgentEvent[]>([])
   const [lost, setLost] = useState(false)
-  const [done, setDone] = useState(false)
   const [writing, setWriting] = useState('')
 
-  // Drop the accumulated feed at a run boundary the caller knows about (a fresh Start bumps
-  // `resetKey`), WITHOUT tearing down the subscription. The new run's diary appears a beat later,
-  // so until its first line streams the buffer would otherwise still hold the finished run —
-  // which the jump-to-live view (#705) would show. Clearing here means the pane waits empty for
-  // the new run instead, and the live tail streams it in as soon as its diary exists.
-  useEffect(() => {
-    setEvents([])
-    setWriting('')
-  }, [resetKey])
-
+  // Another run, or one just started, is a feed of its own: it starts empty, and the live tail
+  // streams the run in as soon as its diary exists.
   useEffect(() => {
     setEvents([])
     setLost(false)
-    setDone(false)
     setWriting('')
     if (!projectId) return
     let channel: EventChannel | undefined
@@ -161,7 +149,6 @@ export function useLiveEvents(projectId: string | null, agentId?: string | null,
           buffer = undefined
           if (graceTimer) clearTimeout(graceTimer)
           if (err) retry()
-          else if (!cancelled) setDone(true)
         })
       }, retry)
     }
@@ -183,5 +170,5 @@ export function useLiveEvents(projectId: string | null, agentId?: string | null,
   // resumed session (#762) appends to the SAME journal, where slicing is exactly wrong: it hid
   // everything before the resume for as long as the agent was live. See {@link currentAgentEvents}.
   const scoped = useMemo(() => (agentId ? events : currentAgentEvents(events)), [events, agentId])
-  return { events: scoped, lost, done, writing }
+  return { events: scoped, lost, writing }
 }
