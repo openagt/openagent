@@ -1,7 +1,6 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useState } from 'react'
 import type { OpenAgentEvent } from '../../src/index.js'
 import { onEvents, type EventChannel } from '../rpc/events.js'
-import { currentAgentEvents } from './live-state.js'
 
 // The live agent feed (#405), shared. The dashboard is a projection of the selected run's diary,
 // the file the run's own tool writes as the agent works, streamed over Server-Sent Events that
@@ -11,8 +10,8 @@ import { currentAgentEvents } from './live-state.js'
 //
 // The feed is per RUN, not per project (#749): each run has a diary of its own, so the selected
 // run's id picks the file to follow. Changing it resubscribes, which is what makes selecting run A
-// vs run B show different output. Without an id there is nothing to follow and the server closes
-// the channel at once.
+// vs run B show different output. Without an id there is nothing to follow (the daemon streams no
+// run for none), so nothing is subscribed.
 
 /** The live feed plus whether its channel is currently down (#948). */
 export interface LiveEvents {
@@ -49,7 +48,7 @@ export function useLiveEvents(projectId: string | null, agentId?: string | null)
     setEvents([])
     setLost(false)
     setWriting('')
-    if (!projectId) return
+    if (!projectId || !agentId) return
     let channel: EventChannel | undefined
     let cancelled = false
     let attempt = 0
@@ -78,7 +77,7 @@ export function useLiveEvents(projectId: string | null, agentId?: string | null)
       // shows less than it already showed (#1402's rule, applied to the live channel).
       const reconnect = !first
       first = false
-      void onEvents(projectId, agentId ?? undefined).then(ch => {
+      void onEvents(projectId, agentId).then(ch => {
         if (cancelled) {
           void ch.close()
           return
@@ -163,12 +162,8 @@ export function useLiveEvents(projectId: string | null, agentId?: string | null)
     // agentId is a dependency: selecting another agent must resubscribe to that agent's log (#749).
   }, [projectId, agentId])
 
-  // Scope the accumulated feed to the agent in progress — but only for the project-root fallback:
-  // that subscription lives across run boundaries (it only resets on a project switch), so
-  // without the slice a second agent would show the previous agent's log until it finished. An agent's
-  // own tail (#749) holds nothing but that agent — including the second `session` boundary a
-  // resumed session (#762) appends to the SAME journal, where slicing is exactly wrong: it hid
-  // everything before the resume for as long as the agent was live. See {@link currentAgentEvents}.
-  const scoped = useMemo(() => (agentId ? events : currentAgentEvents(events)), [events, agentId])
-  return { events: scoped, lost, writing }
+  // An agent's own tail (#749) holds nothing but that agent, so the feed is its whole log: also the
+  // second `session` boundary a resumed session (#762) appends to the SAME journal, where slicing
+  // at the last one hid everything before the resume for as long as the agent was live.
+  return { events, lost, writing }
 }

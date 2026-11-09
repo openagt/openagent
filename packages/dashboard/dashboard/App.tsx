@@ -343,8 +343,8 @@ export function App() {
 
   // The live agent feed is owned here: the main view and the panes' count of its events read one
   // shared event stream.
-  // The agent whose feed and controls are in play is simply the one in the URL; in the no-id
-  // fallback there is none yet, and a null id resolves to the project root, as before.
+  // The agent whose feed and controls are in play is simply the one in the URL; with none there is
+  // no feed.
   const { events, lost, writing } = useLiveEvents(projectId, agentId)
   // The run's feed says it ended before the runs poll does: read the runs now, so its page stops
   // reading as running (and its handoff is read) without waiting up to a poll for it.
