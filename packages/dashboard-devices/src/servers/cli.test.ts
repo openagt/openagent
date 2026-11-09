@@ -346,3 +346,28 @@ test('a server is reached the way it was first connected: Set up again another w
     await home.remove()
   }
 })
+
+test('a server at home that opened a door on Tailscale since it was connected gives links to that door: link takes them, once its devices were read here; a link to any other door is refused', async () => {
+  const home = await testHome()
+  const door = async () => ({ ok: true as const, out: JSON.stringify({ lines: [] }) })
+  try {
+    assert.equal((await run(home.env, ['connect', '192.168.1.20', 'rom', '1.2.3', '--through', 'https://box.example.com'], { startWork: () => 0 })).code, 0)
+    const tailscale = { url: 'https://home.tail1234.ts.net/_devices/enter#K7P4QX9M', where: 'home.tail1234.ts.net', code: 'K7P4-QX9M', expires: '2026-10-11T12:00:00.000Z' }
+    // Not read yet: the door's name on Tailscale is not known here, and the link is no link of the server's.
+    const early = await run(home.env, ['link', '192.168.1.20'], { exec: pretendServer(() => ({ out: JSON.stringify(tailscale) })).exec, door })
+    assert.deepEqual([early.code, early.err], [1, ['The server answered something else than a link to its own door at https://192.168.1.20.']])
+    // Its devices read: the door said where it is open.
+    const status = JSON.stringify({ on: false, listening: true, tailscale: { address: 'Home.tail1234.ts.net' }, devices: [], persons: [{ name: 'rom', owner: true }], lines: [] })
+    const read = await run(home.env, ['devices', '192.168.1.20'], { exec: pretendServer(() => ({ out: status })).exec, door })
+    assert.deepEqual((read.out as { door?: unknown }).door, { tailscale: 'home.tail1234.ts.net' })
+    assert.deepEqual((await run(home.env, ['link', '192.168.1.20'], { exec: pretendServer(() => ({ out: JSON.stringify(tailscale) })).exec, door })).out, tailscale)
+    assert.deepEqual((await run(home.env, ['link', '192.168.1.20', '--for', 'Dani'], { exec: pretendServer(() => ({ out: JSON.stringify(tailscale) })).exec, door })).out, tailscale)
+    const elsewhere = await run(home.env, ['link', '192.168.1.20'], { exec: pretendServer(() => ({ out: JSON.stringify({ ...tailscale, url: 'https://other.tail1234.ts.net/_devices/enter#K7P4QX9M', where: 'other.tail1234.ts.net' }) })).exec, door })
+    assert.equal(elsewhere.code, 1)
+    // A link whose typed address is for another door than its own is no link either.
+    const torn = await run(home.env, ['link', '192.168.1.20'], { exec: pretendServer(() => ({ out: JSON.stringify({ ...tailscale, where: '192.168.1.20' }) })).exec, door })
+    assert.deepEqual([torn.code, torn.err], [1, ['The server gives no code to type yet: update it first.']])
+  } finally {
+    await home.remove()
+  }
+})

@@ -1044,6 +1044,30 @@ describe('Settings › Devices: a computer at home set up as a server, through a
     expect(screen.getAllByText('through OpenAgentVPS').length).toBeGreaterThan(0)
   })
 
+  test('a server at home with a door on Tailscale has People: Add person asks its door over SSH and says to share it in Tailscale, the owner uses it through the server, and a phone of this person\'s gets a code at that door', async () => {
+    const saved: ModuleMachines = { ...SAVED, machines: [{ ...SAVED.machines[0]!, label: 'OpenAgentVPS' }, SAVED.machines[1]!] }
+    const link = { url: 'https://rom-box.tail1234.ts.net/_devices/enter#K7P4QX9M', where: 'rom-box.tail1234.ts.net', code: 'K7P4-QX9M', expires: new Date(Date.now() + 10 * 60_000).toISOString() }
+    const { host, ran } = dashboard(args => (args[0] === 'link' ? ok(link) : ok({ servers: [box({ who: 'everyone' })] })), saved, undefined, undefined, () => ok({ devices: [], persons: [{ name: 'rom', owner: true }, { name: 'ada', from: VPS }], door: { tailscale: 'rom-box.tail1234.ts.net' } }))
+    show(host)
+    await open('rom-box')
+    await tab('People')
+    expect(await screen.findByText('Uses this computer through OpenAgentVPS.')).toBeTruthy()
+    await invite('Dani', '192.168.1.20')
+    await waitFor(() => expect(ran()).toContain('link 192.168.1.20 --for Dani'))
+    expect(await screen.findByText('rom-box is on your Tailscale network: Dani reaches it only once you share it with them in Tailscale (its machine in the Tailscale admin › Share), with Tailscale on their device.')).toBeTruthy()
+    expect(screen.getByRole('group', { name: 'The code' }).textContent).toContain('rom-box.tail1234.ts.net')
+    fireEvent.click(screen.getByRole('button', { name: 'Done' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Back to Devices' }))
+
+    // This person's own phone: a code at that door too, asked over SSH as this computer holds no key there.
+    fireEvent.click(await screen.findByRole('button', { name: 'Add device' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Continue' }))
+    fireEvent.click(await screen.findByRole('radio', { name: /On your Tailscale network, through rom-box/ }))
+    fireEvent.click(screen.getByRole('button', { name: 'Show the code' }))
+    expect(await screen.findByRole('img', { name: 'The code a new device scans' })).toBeTruthy()
+    await waitFor(() => expect(ran()).toContain('link 192.168.1.20'))
+  })
+
   test('from everyone to fewer, it asks first what becomes of the others\' users there: they go, or stay switched off', async () => {
     const persons = [{ name: 'rom', owner: true }, { name: 'suleimansh', from: VPS }, { name: 'dani', from: VPS }]
     const { host, ran } = dashboard(() => ok({ servers: [box({ who: 'everyone' })] }), SAVED, undefined, undefined, () => ok({ devices: [], persons }))

@@ -436,6 +436,14 @@ async function sharedStatusOf(io: CliIO, urls: string[]): Promise<{ shared: Shar
   }
 }
 
+/** The addresses the server's door said it is open at when its devices were last read here: a server at home may have opened a door on Tailscale since it was connected. */
+async function doorsOf(env: NodeJS.ProcessEnv, address: string): Promise<string[]> {
+  const kept = await keptDevices(env, address)
+  const door = kept && typeof kept === 'object' ? (kept as { door?: unknown }).door : undefined
+  const { https, tailscale } = (door && typeof door === 'object' ? door : {}) as Record<string, unknown>
+  return [https, tailscale].flatMap(said => (typeof said === 'string' && addressOf(said) !== undefined ? [addressOf(said)!] : []))
+}
+
 /** The saved computer reached through a server at what a person typed, when nothing is being installed on it; a refusal for any other. */
 async function reachedThrough(io: CliIO, said: string): Promise<Server & { through: string }> {
   const server = await still(io, said)
@@ -569,7 +577,8 @@ export async function runCli(args: string[], io: CliIO): Promise<number> {
         if (!address || !(rest.length === 1 || (rest.length === 3 && flag === '--for' && person))) break
         const name = person === undefined ? undefined : nameOf(person)
         if (person !== undefined && name === undefined) throw new Refused(`${person} is not a name: letters, digits, spaces, dots, apostrophes and dashes, at most 40`)
-        const link = await askLink(await still(io, address), io.exec ? { exec: io.exec } : {}, name)
+        const server = await still(io, address)
+        const link = await askLink(server, io.exec ? { exec: io.exec } : {}, name, await doorsOf(io.env, server.address))
         if (!link.ok) throw new Refused(link.error)
         return print({ url: link.url, where: link.where, code: link.code, expires: link.expires })
       }

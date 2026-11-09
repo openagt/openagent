@@ -2,7 +2,7 @@ import { useEffect, useRef, useState, type ComponentType } from 'react'
 import { Globe, Loader2, Monitor, Server, Smartphone, Ticket, Waypoints, Wifi } from 'lucide-react'
 import { Button, Dialog, buttonVariants, cn, type ModuleMachine } from '@openagt/dashboard/module'
 import { addDevice, findComputers, setSwitch, type FoundComputer } from './devices.js'
-import { readPersonThere } from './servers.js'
+import { askLink, readPersonThere } from './servers.js'
 import { CodeCard, Joined, NoCodeYet, PhoneCode, RanOut, Waiting, clock, useCode, type Given, type GivenAnswer } from './codes.js'
 import { ConnectServer } from './ConnectServer.js'
 import { JoinDialog } from './Join.js'
@@ -110,20 +110,42 @@ const codeAt = async (d: Devices, server: ModuleMachine): Promise<GivenAnswer> =
   return asked.ok ? { ok: true, value: asked.value } : asked
 }
 
+/** A place a phone's code comes from, besides this computer's own door: a server of the person's, or a server at home with a door of its own on Tailscale. */
+interface Place {
+  id: string
+  label: string
+  /** The address the page waits at for the device that gets in. */
+  address: string
+  /** A door on Tailscale: the phone must be on it. */
+  tailscale?: string
+  ask: () => Promise<GivenAnswer>
+}
+
+/** Where a phone of this person's gets a code from here: each server this computer is in at, and each server at home it installed whose door opened on Tailscale since, asked over SSH. */
+function placesOf(d: Devices): Place[] {
+  const servers = serversOf(d).map((server): Place => ({ id: server.id, label: server.label, address: hostOf(server.url), ask: () => codeAt(d, server) }))
+  const homes = d.items.flatMap((item): Place[] => {
+    if (item.kind !== 'server' || item.server.through === undefined || item.server.working || !item.server.steps.every(step => step.state === 'done') || item.door?.tailscale === undefined) return []
+    const { address } = item.server
+    return [{ id: `home:${address}`, label: item.name, address, tailscale: item.door.tailscale, ask: () => askLink(d.host, address) }]
+  })
+  return [...servers, ...homes]
+}
+
 function AddPhone({ d, onClose }: { d: Devices; onClose: () => void }) {
   const { host } = d
   const status = d.door?.ok ? d.door.value : undefined
-  const servers = serversOf(d)
+  const places = placesOf(d)
   // Where the phone works: through a server, by its id, or on this Wi-Fi (''); asked only when there is a server to go through.
-  const [where, setWhere] = useState<string | undefined>(servers.length && !status?.https ? undefined : '')
-  const [picked, setPicked] = useState(servers[0]?.id ?? '')
+  const [where, setWhere] = useState<string | undefined>(places.length && !status?.https ? undefined : '')
+  const [picked, setPicked] = useState(places[0]?.id ?? '')
   const [turning, setTurning] = useState(false)
   const [error, setError] = useState<string | undefined>()
   const [code, setCode] = useState<Given | undefined>()
   const joined = useJoined(d, code !== undefined)
-  const server = servers.find(candidate => candidate.id === where)
+  const server = places.find(candidate => candidate.id === where)
   useEffect(() => {
-    d.await(server ? hostOf(server.url) : undefined)
+    d.await(server ? server.address : undefined)
     return () => d.await(undefined)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [where])
@@ -134,9 +156,13 @@ function AddPhone({ d, onClose }: { d: Devices; onClose: () => void }) {
         <div className="space-y-4">
           <p className="text-sm">Where should it work?</p>
           <div role="radiogroup" aria-label="Where should it work?" className="space-y-2">
-            {servers.map(server => (
-              <Choice key={server.id} on={picked === server.id} icon={Globe} title={`Anywhere, through ${server.label}`} recommended={server.id === servers[0]!.id} words={`It opens ${server.label}, with a lock. From there it starts runs on this computer and on all your devices that are on.`} onPick={() => setPicked(server.id)} />
-            ))}
+            {places.map(place =>
+              place.tailscale !== undefined ? (
+                <Choice key={place.id} on={picked === place.id} icon={Waypoints} title={`On your Tailscale network, through ${place.label}`} words={`It opens ${place.label} at https://${place.tailscale}, with a lock, wherever it is. Tailscale must run on it, signed in as on ${place.label}.`} onPick={() => setPicked(place.id)} />
+              ) : (
+                <Choice key={place.id} on={picked === place.id} icon={Globe} title={`Anywhere, through ${place.label}`} recommended={place.id === places[0]!.id} words={`It opens ${place.label}, with a lock. From there it starts runs on this computer and on all your devices that are on.`} onPick={() => setPicked(place.id)} />
+              ),
+            )}
             {status?.tailscale ? (
               <Choice on={picked === ''} icon={Waypoints} title="On your Tailscale network" words={`It opens this computer at https://${status.tailscale.address}, with a lock, wherever it is. Tailscale must run on it, signed in as on this computer.`} onPick={() => setPicked('')} />
             ) : (
@@ -213,7 +239,7 @@ function AddPhone({ d, onClose }: { d: Devices; onClose: () => void }) {
     <PhoneCode
       title="Add phone"
       // The person's own phone: at a server through its door, else at this computer's. Someone else's device is added with Add person.
-      ask={server ? () => codeAt(d, server) : () => addDevice(host)}
+      ask={server ? server.ask : () => addDevice(host)}
       {...(server ? { openHere: true } : {})}
       joined={joined}
       onCode={setCode}
