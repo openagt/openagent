@@ -265,8 +265,7 @@ export function App() {
     agentStarted(startedIn ?? projectId, intent, startedId, runsOn, picks)
   }
 
-  // Selecting a session (or the Live/Home row) is always an explicit choice, so it ends the
-  // just-started follow.
+  // One of the project's sessions, or with none its launcher.
   const selectAgent = (id: string | null) => {
     go({ projectId, agentId: id })
   }
@@ -279,8 +278,8 @@ export function App() {
   // the Agents view (#1139), and the modules' cards — know which run they are about, and going through
   // selectProject drops that on the way, landing on the launcher instead of the session the row was
   // describing.
-  const selectAgentInProject = (id: string, agentId: string) => {
-    go({ projectId: id, agentId: agentId })
+  const selectAgentInProject = (inProject: string, id: string) => {
+    go({ projectId: inProject, agentId: id })
   }
 
   // "New" in the sidebar: start a fresh session in a named project (the sidebar decides which —
@@ -462,14 +461,31 @@ export function App() {
         />
       )
     }
+    const justStarted = agentId === agentStart.id
     // The name the daemon had for the run just started, before the run's record has one.
-    const startedTitle = agentId === agentStart.id ? agentStart.title : undefined
+    const startedTitle = justStarted ? agentStart.title : undefined
+    const namesRuns = preferences.nameRuns !== false
+    // What an agent's page is given whether its run is listed yet or not.
+    const agentPage = {
+      projectId,
+      agentId,
+      events,
+      projectName,
+      files,
+      lost: lost && healthy,
+      writing,
+      startedWith: justStarted ? agentStart.intent : undefined,
+      picks: justStarted ? agentStart.picks : undefined,
+      onAgentStarted,
+      contextSet,
+      onProjectRemoved: removableHere,
+    }
     if (!selectedAgent) {
       // Not in the list: either the run we just started (its card lands a beat later) or a
       // list we have not read yet, where whether the agent runs is not known. Only a session that
       // is genuinely absent from a list we did read is gone.
-      if (agentId === agentStart.id || !agentsLoaded)
-        return <AgentView projectId={projectId} agentId={agentId} events={events} live={agentId === agentStart.id ? true : null} picks={agentId === agentStart.id ? agentStart.picks : undefined} label={preferences.nameRuns !== false ? startedTitle : agentStart.intent || undefined} naming={agentId === agentStart.id && preferences.nameRuns !== false && startedTitle === undefined} projectName={projectName} remoteLabel={agentId === agentStart.id ? agentStart.runsOn : undefined} files={files} lost={lost && healthy} writing={writing} startedWith={agentId === agentStart.id ? agentStart.intent : undefined} onAgentStarted={onAgentStarted} contextSet={contextSet} onProjectRemoved={removableHere} />
+      if (justStarted || !agentsLoaded)
+        return <AgentView {...agentPage} live={justStarted ? true : null} label={namesRuns ? startedTitle : agentStart.intent || undefined} naming={justStarted && namesRuns && startedTitle === undefined} remoteLabel={justStarted ? agentStart.runsOn : undefined} />
       return (
         <NotFound
           title="This agent is gone"
@@ -483,32 +499,21 @@ export function App() {
     // what the bar, feed and composer say without remounting any of them.
     return (
       <AgentView
-        projectId={projectId}
-        agentId={agentId}
-        events={events}
+        {...agentPage}
         live={selectedAgent.status === 'running'}
         card={selectedAgent}
         // A subagent's page is named as its rows are: by its task, not by its whole prompt.
-        label={selectedAgent.parent !== undefined ? taskLabel(selectedAgent) : awaitingName(selectedAgent, preferences.nameRuns !== false) ? startedTitle : agentLabel(selectedAgent)}
-        naming={selectedAgent.parent === undefined && awaitingName(selectedAgent, preferences.nameRuns !== false) && startedTitle === undefined}
-        projectName={projectName}
-        files={files}
-        lost={lost && healthy}
-        writing={writing}
-        startedWith={agentId === agentStart.id ? agentStart.intent : undefined}
-        picks={agentId === agentStart.id ? agentStart.picks : undefined}
+        label={selectedAgent.parent !== undefined ? taskLabel(selectedAgent) : awaitingName(selectedAgent, namesRuns) ? startedTitle : agentLabel(selectedAgent)}
+        naming={selectedAgent.parent === undefined && awaitingName(selectedAgent, namesRuns) && startedTitle === undefined}
         target={selectedAgent.target}
         remoteLabel={selectedAgent.remoteLabel}
         subagents={subagents}
-        onAgentStarted={onAgentStarted}
-        contextSet={contextSet}
         onDeleted={() => {
           // Its view is about to point at a session that no longer exists; go home and refresh
           // the rail so the row is gone (#1032).
           selectAgent(null)
           reload()
         }}
-        onProjectRemoved={removableHere}
       />
     )
   }
