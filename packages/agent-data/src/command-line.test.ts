@@ -60,6 +60,7 @@ test('the arguments are read strictly: an unknown flag, or too few or too many p
   assert.throws(() => parseCommandArgs(['--nope'], {}, 0), UsageError)
   assert.throws(() => parseCommandArgs([], {}, 1), { name: 'Error', message: 'expected 1 argument(s), got 0' })
   assert.throws(() => parseCommandArgs(['a', 'b', 'c'], {}, 0, 2), { message: 'expected 0 to 2 argument(s), got 3' })
+  assert.throws(() => parseCommandArgs([], {}, 1, Infinity), { message: 'expected at least 1 argument(s), got 0' })
 })
 
 test('outside a repository is a refusal; any other failure stays what it is', async () => {

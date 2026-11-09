@@ -95,11 +95,14 @@ type Options = Record<string, { type: 'string' | 'boolean' }>
 
 type ParsedArgs<O extends Options> = ReturnType<typeof parseArgs<{ args: string[]; options: O; allowPositionals: true; strict: true }>>
 
-/** `parseArgs` with the count of positional arguments checked: anything it cannot read, or too few or too many, is a usage error. */
+/**
+ * `parseArgs` with the count of positional arguments checked: anything it cannot read, or too few
+ * or too many, is a usage error. `max` is `Infinity` for a command that takes any number.
+ */
 export function parseCommandArgs<O extends Options>(args: string[], options: O, min: number, max: number = min): ParsedArgs<O> {
   try {
     const parsed = parseArgs({ args, options, allowPositionals: true, strict: true })
-    if (parsed.positionals.length < min || parsed.positionals.length > max) throw new UsageError(`expected ${max === min ? min : `${min} to ${max}`} argument(s), got ${parsed.positionals.length}`)
+    if (parsed.positionals.length < min || parsed.positionals.length > max) throw new UsageError(`expected ${max === min ? min : max === Infinity ? `at least ${min}` : `${min} to ${max}`} argument(s), got ${parsed.positionals.length}`)
     return parsed
   } catch (err) {
     throw err instanceof UsageError ? err : new UsageError(errorMessage(err))

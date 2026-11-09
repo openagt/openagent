@@ -1,7 +1,6 @@
-import { parseArgs } from 'node:util'
 import { basename, resolve } from 'node:path'
 import { realpath, stat } from 'node:fs/promises'
-import { nodeGitRunner, checkoutRoot, gitReason, type GitRunner } from '@openagt/agent-data'
+import { GIT_FAILED, Refused, UsageError, checkoutRoot, inRepo, nodeGitRunner, parseCommandArgs, runCommandLine, type Command, type GitRunner } from '@openagt/agent-data'
 import { agentBranchName, agentIdFromWorktreeDir, isSafeAgentId, sessionNameOf } from './branch-names.js'
 import {
   branchPushed,
@@ -27,13 +26,9 @@ import { cleanup } from './cleanup.js'
 
 /**
  * The command line over the package (#1725): the same functions a caller's code calls, for an agent
- * (and a person) in a shell. One implementation, every surface a caller.
- *
- * The contract: JSON on stdout, one line for a person on stderr, and the exit code says how it
- * went — 0 for a result, 1 for a refusal or a git failure, 2 for a command that could not be
- * read. A refusal is a rule saying no (a dirty tree, a name that is not a session name); it is
- * reported on stdout as `{ ok: false, reason }` so a caller parsing the output learns why, and
- * on stderr so a person does.
+ * (and a person) in a shell. One implementation, every surface a caller. It answers as every
+ * OpenAgent command does (`runCommandLine`); a refusal here is a rule saying no: a dirty tree, a
+ * name that is not a session name.
  *
  * Where the project is comes from the working directory: for every command that acts on the
  * project (`create`, `attach`, `show`, `ahead`, `list`, `remove`, `prune`, and `push --branch`) it is
@@ -76,66 +71,28 @@ export interface CliIo {
   stderr: (line: string) => void
 }
 
-/** A refusal: a rule said no, and the caller learns which. */
-export type CliRefusal = { ok: false; reason: string; [key: string]: unknown }
-
-/** Thrown inside a command to end it with a refusal. */
-class Refused extends Error {
-  constructor(readonly outcome: CliRefusal, readonly line: string) {
-    super(line)
-  }
-}
-
-/** Thrown inside a command for an argument that cannot be read: usage on stderr, exit 2. */
-class Usage extends Error {}
-
 /** Run the CLI: `argv` is everything after the program name. Resolves to the exit code. */
-export async function runCli(argv: string[], io: CliIo, git: GitRunner = nodeGitRunner()): Promise<number> {
-  const [command, ...rest] = argv
-  const run = command && Object.hasOwn(COMMANDS, command) ? COMMANDS[command] : undefined
-  if (!run) {
-    io.stderr(USAGE)
-    return 2
-  }
-  try {
-    io.stdout(JSON.stringify(await run(rest, io.cwd, git)))
-    return 0
-  } catch (err) {
-    if (err instanceof Usage) {
-      io.stderr(`${err.message}\n\n${USAGE}`)
-      return 2
-    }
-    if (err instanceof Refused) {
-      io.stdout(JSON.stringify(err.outcome))
-      io.stderr(err.line)
-      return 1
-    }
-    const detail = gitReason(err)
-    io.stdout(JSON.stringify({ ok: false, reason: 'git-failed', detail }))
-    io.stderr(detail)
-    return 1
-  }
+export function runCli(argv: string[], io: CliIo, git: GitRunner = nodeGitRunner()): Promise<number> {
+  return runCommandLine(argv, io, { usage: USAGE, commands: COMMANDS, failure: GIT_FAILED }, io.cwd, git)
 }
 
-type Command = (args: string[], cwd: string, git: GitRunner) => Promise<unknown>
-
-const COMMANDS: Record<string, Command> = {
+const COMMANDS: Record<string, Command<[string, GitRunner]>> = {
   async create(args, cwd, git) {
-    const { positionals, values } = parse(args, { base: { type: 'string' } }, 1)
+    const { positionals, values } = parseCommandArgs(args, { base: { type: 'string' } }, 1)
     const agentId = agentIdArg(positionals[0]!)
     const repo = await project(cwd, git)
     return { ok: true, ...(await createCheckout(repo, { agentId, ...(values.base ? { base: values.base } : {}) }, git)) }
   },
 
   async attach(args, cwd, git) {
-    const { positionals, values } = parse(args, { base: { type: 'string' } }, 2)
+    const { positionals, values } = parseCommandArgs(args, { base: { type: 'string' } }, 2)
     const [agentId, branch] = [agentIdArg(positionals[0]!), positionals[1]!]
     const repo = await project(cwd, git)
     return { ok: true, ...(await attachCheckout(repo, { agentId, branch, ...(values.base ? { base: values.base } : {}) }, git)) }
   },
 
   async name(args, cwd, git) {
-    const { positionals } = parse(args, {}, 1)
+    const { positionals } = parseCommandArgs(args, {}, 1)
     const name = positionals[0]!
     const checkout = await inRepo(() => checkoutRoot(cwd, git))
     const outcome = await nameBranch(checkout, name, git)
@@ -146,7 +103,7 @@ const COMMANDS: Record<string, Command> = {
   },
 
   async status(args, cwd, git) {
-    const { positionals } = parse(args, {}, 0, 1)
+    const { positionals } = parseCommandArgs(args, {}, 0, 1)
     const path = positionals[0] ? resolve(cwd, positionals[0]) : await inRepo(() => checkoutRoot(cwd, git))
     if (!(await isWorktreeRoot(path, git))) throw new Refused({ ok: false, reason: 'not-a-worktree', path }, `${path} is not a git worktree`)
     const branch = await currentBranch(path, git)
@@ -156,23 +113,23 @@ const COMMANDS: Record<string, Command> = {
   },
 
   async show(args, cwd, git) {
-    const { values, positionals } = parse(args, { from: { type: 'string' } }, 1, Infinity)
-    if (values.from !== undefined && !values.from.trim()) throw new Usage('--from names a commit')
+    const { values, positionals } = parseCommandArgs(args, { from: { type: 'string' } }, 1, Infinity)
+    if (values.from !== undefined && !values.from.trim()) throw new UsageError('--from names a commit')
     const repo = await project(cwd, git)
     return readBranchStates(repo, positionals, git, values.from)
   },
 
   async ahead(args, cwd, git) {
-    const { values, positionals } = parse(args, { from: { type: 'string' } }, 1, Infinity)
-    if (values.from !== undefined && !values.from.trim()) throw new Usage('--from names a commit')
+    const { values, positionals } = parseCommandArgs(args, { from: { type: 'string' } }, 1, Infinity)
+    if (values.from !== undefined && !values.from.trim()) throw new UsageError('--from names a commit')
     const repo = await project(cwd, git)
     return readBranchesAhead(repo, positionals, git, values.from)
   },
 
   async push(args, cwd, git) {
-    const { values } = parse(args, { branch: { type: 'string' } }, 0)
+    const { values } = parseCommandArgs(args, { branch: { type: 'string' } }, 0)
     if (values.branch !== undefined) {
-      if (!values.branch.trim()) throw new Usage('--branch names a branch')
+      if (!values.branch.trim()) throw new UsageError('--branch names a branch')
       const outcome = await pushBranchByName(await project(cwd, git), values.branch, git)
       if (!outcome.ok) throw new Refused(outcome, pushRefusalLine(values.branch, outcome))
       return outcome
@@ -184,7 +141,7 @@ const COMMANDS: Record<string, Command> = {
   },
 
   async merge(args, cwd, git) {
-    const { positionals } = parse(args, {}, 1)
+    const { positionals } = parseCommandArgs(args, {}, 1)
     const repo = await project(cwd, git)
     const outcome = await mergeBranch(repo, positionals[0]!, git)
     if (!outcome.ok) throw new Refused(outcome, mergeRefusalLine(outcome))
@@ -194,7 +151,7 @@ const COMMANDS: Record<string, Command> = {
   },
 
   async list(args, cwd, git) {
-    const { values } = parse(args, { sizes: { type: 'boolean' } }, 0)
+    const { values } = parseCommandArgs(args, { sizes: { type: 'boolean' } }, 0)
     const repo = await project(cwd, git)
     const rows = []
     for (const entry of await worktreeDirEntries(repo)) {
@@ -207,8 +164,8 @@ const COMMANDS: Record<string, Command> = {
   },
 
   async remove(args, cwd, git) {
-    const { positionals, values } = parse(args, { discard: { type: 'boolean' }, from: { type: 'string' } }, 1)
-    if (values.from !== undefined && !values.from.trim()) throw new Usage('--from names a commit')
+    const { positionals, values } = parseCommandArgs(args, { discard: { type: 'boolean' }, from: { type: 'string' } }, 1)
+    if (values.from !== undefined && !values.from.trim()) throw new UsageError('--from names a commit')
     const agentId = agentIdArg(positionals[0]!)
     const repo = await project(cwd, git)
     const outcome = values.discard ? await discard(repo, agentId, git) : await reclaim(repo, agentId, git, values.from)
@@ -219,7 +176,7 @@ const COMMANDS: Record<string, Command> = {
   },
 
   async prune(args, cwd, git) {
-    parse(args, {}, 0)
+    parseCommandArgs(args, {}, 0)
     const repo = await project(cwd, git)
     const removed: string[] = []
     const skipped: { agentId: string; reason: string; detail: string }[] = []
@@ -234,7 +191,7 @@ const COMMANDS: Record<string, Command> = {
   },
 
   async cleanup(args, cwd, git) {
-    parse(args, {}, 0)
+    parseCommandArgs(args, {}, 0)
     const repo = await project(cwd, git)
     return cleanup(repo, agentId => reclaim(repo, agentId, git).then(outcome => (outcome.ok ? undefined : refusalLine(agentId, outcome))), git)
   },
@@ -327,31 +284,4 @@ function agentIdArg(agentId: string): string {
 /** The project the working directory belongs to. */
 async function project(cwd: string, git: GitRunner): Promise<string> {
   return inRepo(() => projectRoot(cwd, git))
-}
-
-/**
- * Outside a repo, the commands have nothing to act on: said as a refusal, not a git failure.
- * Only git's own "not a git repository" reads as that; a timeout, a missing git, or a corrupt
- * repo stays the failure it is.
- */
-async function inRepo<T>(read: () => Promise<T>): Promise<T> {
-  try {
-    return await read()
-  } catch (err) {
-    if (!/not a git repository/i.test(err instanceof Error ? err.message : String(err))) throw err
-    throw new Refused({ ok: false, reason: 'not-a-repo' }, 'not inside a git repository')
-  }
-}
-
-type Options = Record<string, { type: 'string' | 'boolean' }>
-
-/** `parseArgs` with the positional count checked: too few or too many is a usage error. */
-function parse<O extends Options>(args: string[], options: O, min: number, max: number = min) {
-  try {
-    const parsed = parseArgs({ args, options, allowPositionals: true, strict: true })
-    if (parsed.positionals.length < min || parsed.positionals.length > max) throw new Usage(`expected ${max === min ? min : max === Infinity ? `at least ${min}` : `${min} to ${max}`} argument(s), got ${parsed.positionals.length}`)
-    return parsed
-  } catch (err) {
-    throw err instanceof Usage ? err : new Usage(err instanceof Error ? err.message : String(err))
-  }
 }
