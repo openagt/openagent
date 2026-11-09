@@ -26,6 +26,7 @@ import { cn } from './lib/utils.js'
 import { onSkillsSaved } from './lib/skills-saved.js'
 import { usePolled } from './lib/use-async.js'
 import { useIsMobile } from './lib/use-mobile.js'
+import { usePinnedPage } from './lib/use-pinned-page.js'
 import { NotFound } from './components/NotFound.js'
 import { ModulePageView, ModuleSlot } from './components/ModulePageView.js'
 import { useModules, ModulesContext } from './lib/use-modules.js'
@@ -87,15 +88,6 @@ const EMPTY_RECENT: RecentAgent[] = []
 // shows, or none for all of them. It filters what the pages show; it is not a page of its own, so it
 // rides along on every navigation as the address's first segment (`/{project}/overview`,
 // `/{project}/logs`). A project's own pages pick their project unless `?all` is there.
-/** How long what a phone shows is read at every frame once it changed: as its keyboard slides and settles. */
-const SETTLE_MS = 700
-
-/** Whether a box someone types in has the focus: what brings up a phone's keyboard. */
-function typing(): boolean {
-  const focused = document.activeElement
-  return focused instanceof HTMLElement && (focused.isContentEditable || focused instanceof HTMLTextAreaElement || (focused instanceof HTMLInputElement && !['button', 'checkbox', 'radio', 'submit', 'reset', 'range', 'color', 'file'].includes(focused.type)))
-}
-
 export function App() {
   // The registered projects, for the browser-tab title (#695/U3) — the selected project's name
   // plus the needs-you count drive `document.title` so a backgrounded tab tells you which project
@@ -609,60 +601,8 @@ export function App() {
   // stays at the top; on a wider screen the sidebar stays beside it. A chat keeps its box at the
   // bottom, and only its own columns scroll.
   const pageScrolls = phoneTitle !== null
-  // Every other page is pinned: only its own columns scroll. A phone made the page itself a little
-  // taller than it shows, and a finger on the top bar or the message box scrolled it, or reloaded it.
-  useEffect(() => {
-    if (pageScrolls) return
-    document.documentElement.dataset['pinned'] = 'true'
-    // The page lies exactly where the screen shows it: with a phone's keyboard open, the room
-    // above the keyboard, so the message box sits on the keyboard. Safari leaves the page as tall,
-    // lays its keyboard over it and scrolls what shows: the page follows where that is, rather
-    // than scrolling it back, which made it jump while the keyboard came and went.
-    const view = window.visualViewport
-    const root = document.documentElement
-    // Only while a box has the keyboard: once none has, the page is the whole screen at its top
-    // again, whatever Safari still says of what shows, which kept it short and low after its
-    // keyboard was gone.
-    const fit = (): void => {
-      if (!view) return
-      if (!typing()) {
-        root.style.removeProperty('--shown-height')
-        root.style.removeProperty('--shown-top')
-        if (window.scrollY !== 0 || view.offsetTop !== 0) window.scrollTo(0, 0)
-        return
-      }
-      root.style.setProperty('--shown-height', `${view.height}px`)
-      root.style.setProperty('--shown-top', `${view.offsetTop}px`)
-    }
-    // Safari moves what shows as its keyboard slides, says so only after, and says nothing once
-    // it stopped: while a box takes or lets go of the keyboard, what shows is read at every frame.
-    let frame = 0
-    let until = 0
-    const step = (): void => {
-      fit()
-      frame = performance.now() < until ? requestAnimationFrame(step) : 0
-    }
-    const settle = (): void => {
-      until = performance.now() + SETTLE_MS
-      fit()
-      if (frame === 0) frame = requestAnimationFrame(step)
-    }
-    fit()
-    view?.addEventListener('resize', settle)
-    view?.addEventListener('scroll', settle)
-    document.addEventListener('focusin', settle)
-    document.addEventListener('focusout', settle)
-    return () => {
-      delete root.dataset['pinned']
-      root.style.removeProperty('--shown-height')
-      root.style.removeProperty('--shown-top')
-      cancelAnimationFrame(frame)
-      view?.removeEventListener('resize', settle)
-      view?.removeEventListener('scroll', settle)
-      document.removeEventListener('focusin', settle)
-      document.removeEventListener('focusout', settle)
-    }
-  }, [pageScrolls])
+  // Every other page is pinned: only its own columns scroll.
+  usePinnedPage(!pageScrolls)
 
   return (
     // The whole shell lives inside the SidebarProvider so the sidebar's context (state + Cmd/Ctrl+B,
