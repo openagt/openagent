@@ -102,11 +102,19 @@ type ParsedArgs<O extends Options> = ReturnType<typeof parseArgs<{ args: string[
 export function parseCommandArgs<O extends Options>(args: string[], options: O, min: number, max: number = min): ParsedArgs<O> {
   try {
     const parsed = parseArgs({ args, options, allowPositionals: true, strict: true })
-    if (parsed.positionals.length < min || parsed.positionals.length > max) throw new UsageError(`expected ${max === min ? min : max === Infinity ? `at least ${min}` : `${min} to ${max}`} argument(s), got ${parsed.positionals.length}`)
+    if (parsed.positionals.length < min || parsed.positionals.length > max) throw new UsageError(`expected ${countWords(min, max)} argument(s), got ${parsed.positionals.length}`)
     return parsed
   } catch (err) {
     throw err instanceof UsageError ? err : new UsageError(errorMessage(err))
   }
+}
+
+/** How many arguments a command takes, in words: `1`, `at least 1`, `at most 2`, `1 to 3`. */
+function countWords(min: number, max: number): string {
+  if (min === max) return `${min}`
+  if (max === Infinity) return `at least ${min}`
+  if (min === 0) return `at most ${max}`
+  return `${min} to ${max}`
 }
 
 /**
