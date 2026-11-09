@@ -9,7 +9,7 @@ import { OwnAtWork, giveOwnClaude, giveOwnGithub, isClaudeAccountId, personHere,
 import { askOpenAgent, copyGithubToOther, isOtherUrl, lineTo, mintFor, otherLogins, setSharedReach, startMint } from './shared.js'
 import { lastLines, openSession, withAdvice, type Exec } from './ssh.js'
 import { PERSON_TIMEOUT_MS, SERVER_MARK, SERVER_USER, devicesScript, peopleScript, reachedOf, stepLabel, stepsFor, whoScript, type Who } from './steps.js'
-import { LOGIN_KINDS, isServerName, atWork, doorUrl, freshSteps, isUser, isVersion, keepDevices, keptDevices, readStore, throughUrl, update, working, type Login, type LoginKind, type Reach, type Server, type StepState, type Store } from './store.js'
+import { LOGIN_KINDS, isServerName, atWork, changeServer, doorUrl, freshSteps, isUser, isVersion, keepDevices, keptDevices, readStore, throughUrl, update, working, type Login, type LoginKind, type Reach, type Server, type StepState, type Store } from './store.js'
 import { addressOf, isLineUrl, nameOf } from '../door/store.js'
 import { Unreadable } from '../home-file.js'
 
@@ -102,6 +102,9 @@ export interface CliIO {
   /** This computer's public key that ssh offers a server; read off its key files and its SSH agent when unsaid. */
   ownKey?: () => Promise<string | undefined>
 }
+
+/** How this command logs in to a server: with the real `ssh`, unless the caller says another. */
+const sshOf = (io: CliIO): { exec?: Exec } => (io.exec ? { exec: io.exec } : {})
 
 /** All of the process's standard input, as text. */
 async function ownStdin(): Promise<string> {
@@ -294,10 +297,9 @@ async function connect(io: CliIO, said: { address: string; user: string; version
   try {
     worker = (io.startWork ?? (words => startWork(words, io.env)))(['work', address, said.version])
   } finally {
-    await update(io.env, store => {
-      const server = store.servers.find(candidate => candidate.address === address)
+    await changeServer(io.env, address, server => {
       // The install's process puts its own name there as it starts: it may have, and may have ended already.
-      if (!server || server.worker?.pid !== process.pid) return
+      if (server.worker?.pid !== process.pid) return
       if (worker !== undefined) server.worker = { pid: worker, seen: new Date().toISOString() }
       else delete server.worker
     })
@@ -332,15 +334,12 @@ async function setReach(io: CliIO, said: string, mode: Reach): Promise<Status> {
   // A line this computer already keeps is told what the server may do. One it lost since is asked for anew.
   const kept = server.reach !== undefined && (await door(['line', mode, server.address], io.env)).ok
   if (!kept) {
-    const link = await askLink(server, io.exec ? { exec: io.exec } : {})
+    const link = await askLink(server, sshOf(io))
     if (!link.ok) throw new Refused(link.error)
     const asked = await door(['line', 'add', '-', ...(mode === 'watch' ? ['watch'] : [])], io.env, link.url)
     if (!asked.ok) throw new Refused(asked.error)
   }
-  await update(io.env, store => {
-    const saved = store.servers.find(candidate => candidate.address === server.address)
-    if (saved) saved.reach = mode
-  })
+  await changeServer(io.env, server.address, saved => void (saved.reach = mode))
   return statusOf(await readStore(io.env), io.env)
 }
 
@@ -459,12 +458,8 @@ const WHO_TIMEOUT_MS = 20_000
  */
 async function setWho(io: CliIO, said: string, who: Who): Promise<DevicesStatus> {
   const server = await reachedThrough(io, said)
-  const answered = await tellWho(server, whoScript(server.through, who), WHO_TIMEOUT_MS, io.exec ? { exec: io.exec } : {})
-  if (answered.ok)
-    await update(io.env, store => {
-      const saved = store.servers.find(candidate => candidate.address === server.address)
-      if (saved) saved.who = who
-    })
+  const answered = await tellWho(server, whoScript(server.through, who), WHO_TIMEOUT_MS, sshOf(io))
+  if (answered.ok) await changeServer(io.env, server.address, saved => void (saved.who = who))
   return devicesOf(answered, undefined)
 }
 
@@ -474,14 +469,11 @@ async function setWho(io: CliIO, said: string, who: Who): Promise<DevicesStatus>
  */
 async function setPeople(io: CliIO, said: string, people: readonly string[]): Promise<DevicesStatus> {
   const server = await reachedThrough(io, said)
-  const answered = await tellWho(server, peopleScript(server.through, people, server.who ?? 'me'), WHO_TIMEOUT_MS, io.exec ? { exec: io.exec } : {})
+  const answered = await tellWho(server, peopleScript(server.through, people, server.who ?? 'me'), WHO_TIMEOUT_MS, sshOf(io))
   if (answered.ok)
-    await update(io.env, store => {
-      const saved = store.servers.find(candidate => candidate.address === server.address)
-      if (saved) {
-        if (people.length) saved.people = [...people]
-        else delete saved.people
-      }
+    await changeServer(io.env, server.address, saved => {
+      if (people.length) saved.people = [...people]
+      else delete saved.people
     })
   return devicesOf(answered, undefined)
 }
@@ -505,7 +497,7 @@ async function tellWho(server: Server & { through: string }, script: string, tim
  */
 async function addThrough(io: CliIO, said: string): Promise<Status> {
   const server = await reachedThrough(io, said)
-  const session = await openSession(server, io.exec ? { exec: io.exec } : {})
+  const session = await openSession(server, sshOf(io))
   let id: string | undefined
   try {
     const ran = await session.run(SERVER_USER, devicesScript(), WHO_TIMEOUT_MS)
@@ -524,9 +516,7 @@ async function addThrough(io: CliIO, said: string): Promise<Status> {
   if (id === undefined) throw new Refused(`${server.address} keeps no line to ${host} yet: press Update on its row.`)
   const added = (await (io.ask ?? ((fn, args) => askOpenAgent(io.env, fn, args)))('sendAddComputerThrough', [server.through, id])) as { ok?: boolean; error?: unknown } | undefined
   if (!added?.ok) throw new Refused(typeof added?.error === 'string' ? added.error : `${host} did not save ${server.address}.`)
-  await update(io.env, store => {
-    const saved = store.servers.find(candidate => candidate.address === server.address)
-    if (!saved) return
+  await changeServer(io.env, server.address, saved => {
     saved.line = id
     saved.adding = false
   })
@@ -552,7 +542,7 @@ export async function runCli(args: string[], io: CliIO): Promise<number> {
     io.stdout(JSON.stringify(value))
     return 0
   }
-  const over = { env: io.env, ...(io.exec ? { exec: io.exec } : {}) }
+  const ssh = sshOf(io)
   try {
     switch (command) {
       case 'status':
@@ -573,7 +563,7 @@ export async function runCli(args: string[], io: CliIO): Promise<number> {
         const at = addressOf(address)
         if (at === undefined) throw new Refused(`${address} is not a server's number or name`)
         if (!isUser(user)) throw new Refused(`${user} is not a user name`)
-        return print(await testConnection({ address: at, user }, { ...(io.exec ? { exec: io.exec } : {}), ...(io.ownKey ? { key: io.ownKey } : {}) }))
+        return print(await testConnection({ address: at, user }, { ...ssh, ...(io.ownKey ? { key: io.ownKey } : {}) }))
       }
       case 'add-through': {
         const [address] = rest
@@ -602,7 +592,7 @@ export async function runCli(args: string[], io: CliIO): Promise<number> {
         const name = person === undefined ? undefined : nameOf(person)
         if (person !== undefined && name === undefined) throw new Refused(`${person} is not a name: letters, digits, spaces, dots, apostrophes and dashes, at most 40`)
         const server = await still(io, address)
-        const link = await askLink(server, io.exec ? { exec: io.exec } : {}, name, await doorsOf(io.env, server.address))
+        const link = await askLink(server, ssh, name, await doorsOf(io.env, server.address))
         if (!link.ok) throw new Refused(link.error)
         return print({ url: link.url, where: link.where, code: link.code, expires: link.expires })
       }
@@ -611,14 +601,12 @@ export async function runCli(args: string[], io: CliIO): Promise<number> {
         const [address, name] = rest
         if (rest.length !== 2 || !address || !name) break
         const server = await still(io, address)
-        const over = io.exec ? { exec: io.exec } : {}
-        const status = devicesOf(await (command === 'owner' ? nameOwner : removePerson)(server, name, over), await ownLine(io, server))
+        const status = devicesOf(await (command === 'owner' ? nameOwner : removePerson)(server, name, ssh), await ownLine(io, server))
         // A person removed from a computer reached through a server is no longer named on its line there.
         if (command === 'remove-person' && server.people?.includes(name))
-          await update(io.env, store => {
-            const saved = store.servers.find(candidate => candidate.address === server.address)
-            if (saved?.people) saved.people = saved.people.filter(named => named !== name)
-            if (saved && !saved.people?.length) delete saved.people
+          await changeServer(io.env, server.address, saved => {
+            if (saved.people) saved.people = saved.people.filter(named => named !== name)
+            if (!saved.people?.length) delete saved.people
           })
         return print(await kept(io, server.address, status))
       }
@@ -631,7 +619,7 @@ export async function runCli(args: string[], io: CliIO): Promise<number> {
           if (said === undefined) throw new Refused(`${server.address} was not listed here yet`)
           return print(said)
         }
-        return print(await kept(io, server.address, devicesOf(await readDevices(server, io.exec ? { exec: io.exec } : {}), await ownLine(io, server))))
+        return print(await kept(io, server.address, devicesOf(await readDevices(server, ssh), await ownLine(io, server))))
       }
       case 'remove-device': {
         const [address, id] = rest
@@ -639,25 +627,21 @@ export async function runCli(args: string[], io: CliIO): Promise<number> {
         const server = await still(io, address)
         if (!isDeviceId(id)) throw new Refused(`${id} is not a device's id`)
         const line = await ownLine(io, server)
-        const over = io.exec ? { exec: io.exec } : {}
         // Taken out there, the line would go on asking with a key that opens nothing: it is this computer's to end.
         // A computer is taken out whole, so the server is asked first which row the id is of.
         if (line?.id !== undefined) {
-          const listed = await readDevices(server, over)
+          const listed = await readDevices(server, ssh)
           if (!listed.ok) throw new Refused(listed.error)
           const row = listed.devices.find(device => idsOf(device).includes(id))
           if (id === line.id || (row !== undefined && idsOf(row).includes(line.id))) throw new Refused(`That device is the line this computer keeps open to ${server.address}. To take it out, remove the server here.`)
         }
-        return print(await kept(io, server.address, devicesOf(await removeDevice(server, id, over), line)))
+        return print(await kept(io, server.address, devicesOf(await removeDevice(server, id, ssh), line)))
       }
       case 'added': {
         const [address] = rest
         if (rest.length !== 1 || !address) break
         const { address: at } = await saved(io, address)
-        await update(io.env, store => {
-          const server = store.servers.find(candidate => candidate.address === at)
-          if (server) server.adding = false
-        })
+        await changeServer(io.env, at, server => void (server.adding = false))
         return print(statusOf(await readStore(io.env), io.env))
       }
       case 'github': {
@@ -688,7 +672,7 @@ export async function runCli(args: string[], io: CliIO): Promise<number> {
       }
       case 'own': {
         const name = person(io)
-        const own = { env: io.env, ...(io.exec ? { exec: io.exec } : {}) }
+        const own = { env: io.env, ...ssh }
         const [what, kind, ...flags] = rest
         if (rest.length === 0) return print(ownStatusOf(await readStore(io.env), name))
         // A login handed over may be a copy from the person's own OpenAgent on a server, which names
@@ -747,7 +731,7 @@ export async function runCli(args: string[], io: CliIO): Promise<number> {
         if (rest.length !== 2 || !address || !version) break
         if (!isVersion(version)) throw new Refused(`${version} is not a version of OpenAgent`)
         const { address: at } = await saved(io, address)
-        await untilStopped(io, signal => install({ ...over, address: at, version, signal }))
+        await untilStopped(io, signal => install({ env: io.env, ...ssh, address: at, version, signal }))
         return 0
       }
       default:
