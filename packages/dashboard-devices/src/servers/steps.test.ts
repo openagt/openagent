@@ -188,6 +188,8 @@ test("a person logged in to the server gets its devices as the server's user, an
   await run('sh', ['-n', '-c', DEVICES])
   const people = STEPS.find(step => step.id === 'people')!.script(FACTS)
   assert.ok(people.includes(`put ${DEVICES_COMMAND} 755 "$DEVICES"`))
+  // A door opened on Tailscale later is the server's user's to serve: every install and update says so to Tailscale, where it is there.
+  assert.ok(people.includes('if command -v tailscale >/dev/null 2>&1; then tailscale set --operator=openagent >/dev/null 2>&1 || true; fi'))
   // As the service runs the door: its user, and the helper that makes a person's user.
   assert.match(DEVICES, /^exec runuser -u openagent -- env OPENAGENT_PERSON_HELPER=\/opt\/openagent\/bin\/openagent-person \/opt\/openagent\/node\/bin\/node \S+\/bin\/devices "\$@"$/m)
   // Root already: no sudo. A code for nobody would be the owner's, and is refused before anything runs as the server's user.

@@ -1,6 +1,6 @@
 import { lastLines, openSession, withAdvice, type Exec } from './ssh.js'
 import { PERSON_TIMEOUT_MS, SERVER_USER, devicesScript, ownerScript, removeDeviceScript, removePersonScript } from './steps.js'
-import { isMachineUrl, type Server } from './store.js'
+import { addressOf, isMachineUrl, type Server } from './store.js'
 import { nameOf } from '../door/store.js'
 
 /**
@@ -46,7 +46,13 @@ export interface ServerPerson {
 /** Every id a row is listed under: its own, and those of what else the computer holds there. */
 export const idsOf = (device: Pick<ServerDevice, 'id' | 'also'>): string[] => [device.id, ...(device.also ?? [])]
 
-export type Devices = { ok: true; devices: ServerDevice[]; persons: ServerPerson[] } | { ok: false; error: string }
+/** Where the server's door is open, as its door says: at its number or name on the internet, at its name on Tailscale, or at neither (a computer reached by its line alone). */
+export interface DoorAddresses {
+  https?: string
+  tailscale?: string
+}
+
+export type Devices = { ok: true; devices: ServerDevice[]; persons: ServerPerson[]; door?: DoorAddresses } | { ok: false; error: string }
 
 /** How long the server gets to answer: less than a page's command has, so the line is always hung up. */
 const DEVICES_TIMEOUT_MS = 20_000
@@ -72,8 +78,14 @@ const MAX_SAID = 2_000
 /** A person's name as a door writes it. */
 const nameIn = (said: unknown): string | undefined => (typeof said === 'string' && nameOf(said) === said ? said : undefined)
 
-/** The devices and persons in what a door's `status` printed, or `undefined` for what is no such answer. */
-export function devicesIn(out: string): { devices: ServerDevice[]; persons: ServerPerson[] } | undefined {
+/** An address as a door says one, or nothing: what a server says of where it is open is read as an address and no more. */
+function doorAddress(value: unknown): string | undefined {
+  const said = value && typeof value === 'object' ? (value as Record<string, unknown>).address : undefined
+  return typeof said === 'string' ? addressOf(said) : undefined
+}
+
+/** The devices and persons in what a door's `status` printed, with where the door is open, or `undefined` for what is no such answer. */
+export function devicesIn(out: string): { devices: ServerDevice[]; persons: ServerPerson[]; door?: DoorAddresses } | undefined {
   let answer: Record<string, unknown> | null
   try {
     answer = JSON.parse(out.trim().split('\n').at(-1) ?? '') as Record<string, unknown> | null
@@ -115,7 +127,9 @@ export function devicesIn(out: string): { devices: ServerDevice[]; persons: Serv
     const words = typeof name === 'string' ? name.replace(/[\p{Cc}\p{Cf}\p{Zl}\p{Zp}]/gu, ' ').trim().slice(0, MAX_NAME) : ''
     devices.push({ id, name: words || 'A device', added: since, ...(last !== undefined ? { seen: last } : {}), ...(line === true ? { line: true } : {}), ...(others.length ? { also: others } : {}), ...(whose !== undefined && persons.some(known => known.name === whose) ? { person: whose } : {}) })
   }
-  return { devices, persons }
+  const [https, tailscale] = [doorAddress(answer?.https), doorAddress(answer?.tailscale)]
+  const door: DoorAddresses = { ...(https !== undefined ? { https } : {}), ...(tailscale !== undefined ? { tailscale } : {}) }
+  return { devices, persons, ...(https !== undefined || tailscale !== undefined ? { door } : {}) }
 }
 
 async function ask(server: Pick<Server, 'address' | 'user'>, script: string, opts: { exec?: Exec }, timeoutMs = DEVICES_TIMEOUT_MS): Promise<Devices> {

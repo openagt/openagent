@@ -101,6 +101,8 @@ export interface DevicesRead {
   devices: DeviceRow[]
   /** None until the server's owner is named. */
   persons: PersonRow[]
+  /** Where the server's door is open, as it said: on the internet, on Tailscale, or neither. */
+  door?: { https?: string; tailscale?: string }
   /** The server said no to the key this computer asks for its line with. */
   lineRefused: boolean
 }
@@ -144,8 +146,11 @@ export function readServers(output: unknown): ServerRow[] | undefined {
 
 export function readDevices(output: unknown): DevicesRead | undefined {
   if (!output || typeof output !== 'object') return undefined
-  const { devices, lineRefused, persons } = output as Record<string, unknown>
+  const { devices, lineRefused, persons, door } = output as Record<string, unknown>
   if (!Array.isArray(devices)) return undefined
+  const { https, tailscale } = (door && typeof door === 'object' ? door : {}) as Record<string, unknown>
+  const [atHttps, atTailscale] = [text(https), text(tailscale)]
+  const where = atHttps || atTailscale ? { ...(atHttps ? { https: atHttps } : {}), ...(atTailscale ? { tailscale: atTailscale } : {}) } : undefined
   const rows: DeviceRow[] = []
   for (const entry of devices) {
     if (!entry || typeof entry !== 'object') continue
@@ -162,7 +167,7 @@ export function readDevices(output: unknown): DevicesRead | undefined {
     if (known && !people.some(person => person.name === known))
       people.push({ name: known, ...(owner === true ? { owner: true as const } : {}), ...(working === true ? { working: true as const } : {}), ...(why ? { problem: why } : {}), ...(via ? { from: via } : {}), ...(removed === true ? { removed: true as const } : {}), ...(kept === true ? { kept: true as const } : {}) })
   }
-  return { devices: rows, persons: people, lineRefused: lineRefused === true }
+  return { devices: rows, persons: people, ...(where ? { door: where } : {}), lineRefused: lineRefused === true }
 }
 
 function readLink(output: unknown): DoorLink | undefined {

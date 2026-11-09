@@ -264,8 +264,8 @@ test('rename calls a device by the name picked, a computer under both its entrie
 test('a line the server said no to is told as refused, and is not told what the server may do: it is asked for anew; that the server may do less is written all the same', async () => {
   const home = await testHome()
   try {
-    await update(home.env, store => void (store.lines = [{ url: 'https://box.example.com', pin: 'p'.repeat(43), key: '0f9e8d7c6b5a.the-secret', mode: 'full', refused: true }]))
-    assert.deepEqual(((await run(home.env, ['status'])).out as { lines: unknown }).lines, [{ url: 'https://box.example.com', mode: 'full', id: '0f9e8d7c6b5a', refused: true }])
+    await update(home.env, store => void (store.lines = [{ url: 'https://box.example.com', pin: 'p'.repeat(43), key: '0f9e8d7c6b5a.the-secret', mode: 'full', name: 'Box', refused: true }]))
+    assert.deepEqual(((await run(home.env, ['status'])).out as { lines: unknown }).lines, [{ url: 'https://box.example.com', mode: 'full', id: '0f9e8d7c6b5a', name: 'Box', refused: true }])
     const told = await run(home.env, ['line', 'full', 'box.example.com'])
     assert.equal(told.code, 1)
     assert.deepEqual(told.err, ['The server at box.example.com no longer lets this computer in for its line. Ask for the line anew, with a new link.'])

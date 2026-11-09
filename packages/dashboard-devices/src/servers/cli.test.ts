@@ -313,3 +313,36 @@ test('reach asks the server for a link once and has this computer\'s own door ke
     await home.remove()
   }
 })
+
+test('a server is reached the way it was first connected: Set up again another way says it is connected already, and how; an update that says no way keeps it', async () => {
+  const home = await testHome()
+  try {
+    const gone = await new Promise<number>(resolve => {
+      void import('node:child_process').then(({ spawn }) => {
+        const child = spawn(process.execPath, ['-e', ''])
+        child.once('exit', () => resolve(child.pid!))
+      })
+    })
+    const startWork = (): number => gone
+    assert.equal((await run(home.env, ['connect', 'box.tail1234.ts.net', 'rom', '1.2.3', '--through', 'https://203.0.113.5'], { startWork })).code, 0)
+    const asTailscale = await run(home.env, ['connect', 'box.tail1234.ts.net', 'rom', '1.2.4', '--tailscale'], { startWork })
+    assert.equal(asTailscale.code, 1)
+    assert.deepEqual(asTailscale.err, ['box.tail1234.ts.net is connected already, through 203.0.113.5. Its page updates it.'])
+    const update = await run(home.env, ['connect', 'box.tail1234.ts.net', 'rom', '1.2.4'], { startWork })
+    assert.equal(update.code, 0)
+    assert.equal(serversOf(update)[0]!.through, 'https://203.0.113.5')
+
+    assert.equal((await run(home.env, ['connect', 'pc.tail1234.ts.net', 'rom', '1.2.3', '--tailscale'], { startWork })).code, 0)
+    const asHome = await run(home.env, ['connect', 'pc.tail1234.ts.net', 'rom', '1.2.3', '--through', 'https://203.0.113.5'], { startWork })
+    assert.equal(asHome.code, 1)
+    assert.deepEqual(asHome.err, ['pc.tail1234.ts.net is connected already, on your Tailscale network. Its page updates it.'])
+
+    assert.equal((await run(home.env, ['connect', '203.0.113.5', 'root', '1.2.3'], { startWork })).code, 0)
+    const vpsAsTailscale = await run(home.env, ['connect', '203.0.113.5', 'root', '1.2.3', '--tailscale'], { startWork })
+    assert.equal(vpsAsTailscale.code, 1)
+    assert.deepEqual(vpsAsTailscale.err, ['203.0.113.5 is not a name on Tailscale: connect it by its name there, like name.tail1234.ts.net'])
+    assert.deepEqual((await readStore(home.env)).servers.map(server => [server.address, server.through, server.tailscale]), [['203.0.113.5', undefined, undefined], ['pc.tail1234.ts.net', undefined, true], ['box.tail1234.ts.net', 'https://203.0.113.5', undefined]])
+  } finally {
+    await home.remove()
+  }
+})

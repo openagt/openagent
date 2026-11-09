@@ -11,11 +11,11 @@ const status = (devices: unknown): string => JSON.stringify({ on: false, listeni
 
 test('the server\'s door is asked which devices are in, as the server\'s own user', async () => {
   const server = pretendServer(() => ({ out: status([PHONE, LAPTOP]) }))
-  assert.deepEqual(await readDevices(SERVER, { exec: server.exec }), { ok: true, devices: [PHONE, LAPTOP], persons: [] })
+  assert.deepEqual(await readDevices(SERVER, { exec: server.exec }), { ok: true, devices: [PHONE, LAPTOP], persons: [], door: { https: SERVER.address } })
   assert.deepEqual(server.calls.map(call => call.remote), ["runuser -l openagent -c 'bash -s'"])
   assert.match(server.calls[0]!.script, /devices\/bin\/devices status\n/)
 
-  assert.deepEqual(await readDevices(SERVER, { exec: pretendServer(() => ({ out: status([]) })).exec }), { ok: true, devices: [], persons: [] })
+  assert.deepEqual(await readDevices(SERVER, { exec: pretendServer(() => ({ out: status([]) })).exec }), { ok: true, devices: [], persons: [], door: { https: SERVER.address } })
   const NOT_DEVICES = { ok: false, error: 'The server answered something else than the devices that are in.' }
   for (const out of ['Welcome to Debian\n', '{}\n', JSON.stringify({ devices: 'none' }), 'null\n']) assert.deepEqual(await readDevices(SERVER, { exec: pretendServer(() => ({ out })).exec }), NOT_DEVICES, out)
   assert.deepEqual(await readDevices(SERVER, { exec: pretendServer(() => ({ code: 1, err: 'the door is not installed' })).exec }), { ok: false, error: 'the door is not installed' })
@@ -73,7 +73,7 @@ test('what a server lists is read as data: only what a device is, as many as a d
 
 test('a device is taken out by its id, which goes to the server as one word of the script; what is no id never reaches a server', async () => {
   const server = pretendServer(() => ({ out: status([LAPTOP]) }))
-  assert.deepEqual(await removeDevice(SERVER, PHONE.id, { exec: server.exec }), { ok: true, devices: [LAPTOP], persons: [] })
+  assert.deepEqual(await removeDevice(SERVER, PHONE.id, { exec: server.exec }), { ok: true, devices: [LAPTOP], persons: [], door: { https: SERVER.address } })
   assert.match(server.calls[0]!.script, /^ID='a1b2c3d4e5f6'$/m)
   assert.match(server.calls[0]!.script, /devices\/bin\/devices remove "\$ID"\n/)
 
@@ -106,4 +106,13 @@ test('the owner is named and a person removed at the server\'s door, each name o
   assert.deepEqual(await nameOwner(SERVER, "x'; reboot", { exec: untouched.exec }), { ok: false, error: "x'; reboot is not a name: letters, digits, spaces, dots, apostrophes and dashes, at most 40" })
   assert.deepEqual(await removePerson(SERVER, '-rf', { exec: untouched.exec }), { ok: false, error: '-rf is no person\'s name' })
   assert.deepEqual(untouched.calls, [])
+})
+
+test('where the door is open comes with the devices: a number on the internet, a name on Tailscale, both, or neither; what is no address is dropped', () => {
+  const at = (more: object): unknown => devicesIn(JSON.stringify({ on: false, listening: true, devices: [], lines: [], ...more }) + '\n')!.door
+  assert.deepEqual(at({ https: { address: '203.0.113.5' } }), { https: '203.0.113.5' })
+  assert.deepEqual(at({ tailscale: { address: 'Experiment.tail928322.ts.net' } }), { tailscale: 'experiment.tail928322.ts.net' })
+  assert.deepEqual(at({ https: { address: '203.0.113.5' }, tailscale: { address: 'box.tail1234.ts.net' } }), { https: '203.0.113.5', tailscale: 'box.tail1234.ts.net' })
+  assert.equal(at({}), undefined)
+  assert.equal(at({ tailscale: { address: '-oProxyCommand=sh' }, https: 'yes' }), undefined)
 })

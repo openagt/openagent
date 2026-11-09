@@ -382,6 +382,8 @@ export async function enterForLine(link: LineLink, name: string, computer?: stri
 export interface MeThere {
   person?: string
   persons?: string[]
+  /** The server's name, as its owner named it, when its door said. */
+  name?: string
 }
 
 /** Ask a server's door, with the key of this computer's line there, who this computer's person is there. Nothing when it did not say. */
@@ -390,10 +392,12 @@ export async function askMe(line: { url: string; pin: string; key: string }): Pr
     const socket = await dial(line.url, line.pin)
     const answer = await exchange(socket, 'GET', new URL(`${line.url}${ME_PATH}`), { Authorization: `Bearer ${line.key}` })
     if (answer.status !== 200) return undefined
-    const { person, persons } = JSON.parse(answer.body) as Record<string, unknown>
+    const { person, persons, name } = JSON.parse(answer.body) as Record<string, unknown>
     const known = typeof person === 'string' ? nameOf(person) : undefined
     const theirs = Array.isArray(persons) ? persons.flatMap(other => (typeof other === 'string' && nameOf(other) === other ? [other] : [])) : undefined
-    return { ...(known !== undefined ? { person: known } : {}), ...(theirs ? { persons: theirs } : {}) }
+    // A computer's name is any words: shown as such, with nothing in it that moves a line.
+    const called = typeof name === 'string' ? name.replace(/[\x00-\x1f\x7f]/g, ' ').trim().slice(0, 60) : ''
+    return { ...(known !== undefined ? { person: known } : {}), ...(theirs ? { persons: theirs } : {}), ...(called ? { name: called } : {}) }
   } catch {
     return undefined
   }

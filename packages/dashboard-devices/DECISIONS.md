@@ -204,3 +204,6 @@ already made, and lists it in its pull request; for anything else it proposes an
   one wait for the whole install.
 - When the server falls behind this computer, its row says so and has an "Update" button.
   Picked over a server that updates by itself, which can come later.
+- A server is reached the way it was first connected. Set up a server with its address again,
+  another way, says it is connected already and how, and does nothing. Picked over quietly running
+  an update the first way.

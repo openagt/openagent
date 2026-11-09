@@ -1,15 +1,15 @@
 import { useEffect, useState } from 'react'
 import { ChevronLeft, Ellipsis, House, Monitor, Plus, Server, Smartphone, Tablet, UserRound } from 'lucide-react'
 import { Button, ConfirmDialog, Dialog, DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, Input, formatDateTime, formatRelative, usePolled, useSettingsCrumb } from '@openagt/dashboard/module'
-import { keepPerson, loadMine, removeDevice, removeMine, removePerson, renameDevice, setTailscale, type Answer, type DeviceRow, type DoorStatus, type Mine, type PersonRow } from './devices.js'
+import { keepPerson, loadMine, removeDevice, removeMine, removePerson, renameDevice, setTailscale, type Answer, type DeviceRow, type DoorStatus, type LineRow, type Mine, type PersonRow } from './devices.js'
 import { removeDevice as removeServerDevice } from './servers.js'
 import { AddDevice, type Adding } from './AddDevice.js'
 import { ComputerPage } from './ComputerPage.js'
 import { JoinedPage, OtherPage } from './JoinedPage.js'
 import { ServerPage } from './ServerPage.js'
 import { ThisComputer } from './ThisComputer.js'
-import { hasServer, reachedAt, type Item, type PhoneItem } from './model.js'
-import { Problem, Row, State, hostOf, olderThan } from './parts.js'
+import { hasServer, labelOf, reachedAt, type Item, type PhoneItem } from './model.js'
+import { Problem, Row, State, olderThan } from './parts.js'
 import { useDevices, type Devices, type Paces } from './use-devices.js'
 
 // Settings › Devices: this computer, how the person's devices reach it, and every device of
@@ -184,7 +184,7 @@ function List({ d, onOpen, onAdd }: { d: Devices; onOpen: (item: Item) => void; 
           <ItemRow key={item.key} d={d} item={item} onOpen={() => onOpen(item)} />
         ))}
       </ul>
-      {persons.length > 0 && <DoorPeople d={d} persons={persons} devices={status?.devices ?? []} />}
+      {persons.length > 0 && <DoorPeople d={d} persons={persons} devices={status?.devices ?? []} lines={status?.lines ?? []} />}
     </div>
   )
 }
@@ -210,7 +210,7 @@ function ItemRow({ d, item, onOpen }: { d: Devices; item: Item; onOpen: () => vo
       <Row
         icon={home ? House : Server}
         name={item.name}
-        facts={[state, home ? 'Server at home' : 'Server', home ? `through ${hostOf(server.through!)}` : undefined, item.people !== undefined ? `${item.people} ${item.people === 1 ? 'person' : 'people'}` : undefined, behind && <span className="rounded-full border border-[var(--color-warning)] px-1.5 text-[10px] font-medium text-warning">Update</span>]}
+        facts={[state, home ? 'Server at home' : 'Server', home ? `through ${labelOf(d.machines?.machines ?? [], server.through!)}` : undefined, item.door?.tailscale !== undefined ? `on Tailscale at ${item.door.tailscale}` : undefined, item.people !== undefined ? `${item.people} ${item.people === 1 ? 'person' : 'people'}` : undefined, behind && <span className="rounded-full border border-[var(--color-warning)] px-1.5 text-[10px] font-medium text-warning">Update</span>]}
         onOpen={onOpen}
       />
     )
@@ -338,10 +338,12 @@ function DoorDevice({ device, mine, busy, onRemove }: { device: DeviceRow; mine:
 }
 
 /** On a computer several people use: its door's devices by person, the owner first, and what is become of each person. */
-function DoorPeople({ d, persons, devices }: { d: Devices; persons: PersonRow[]; devices: DeviceRow[] }) {
+function DoorPeople({ d, persons, devices, lines }: { d: Devices; persons: PersonRow[]; devices: DeviceRow[]; /** The servers this computer keeps a line to: how the owner, and the people a line made, use it. */ lines: LineRow[] }) {
   const { host } = d
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | undefined>()
+  // A server by the name its door said, as the line keeps it; by its address until it said.
+  const nameAt = (url: string): string => lines.find(line => line.url === url)?.name ?? labelOf(d.machines?.machines ?? [], url)
   const act = async (change: () => Promise<Answer<DoorStatus>>): Promise<void> => {
     setBusy(true)
     setError(undefined)
@@ -362,11 +364,20 @@ function DoorPeople({ d, persons, devices }: { d: Devices; persons: PersonRow[];
               </p>
               {!person.owner && !(person.removed && !person.kept) && <RemovePerson name={person.name} label="Remove person" busy={busy} onConfirm={() => act(() => removePerson(host, person.name))} />}
             </div>
+            {/* The owner uses this computer through each server it keeps a line to, as their phone there does. */}
+            {person.owner &&
+              lines
+                .filter(line => !line.refused)
+                .map(line => (
+                  <p key={line.url} className="pt-1 text-xs text-muted-foreground">
+                    {line.mode === 'watch' ? `${nameAt(line.url)} only sees this computer's runs.` : `Uses this computer through ${nameAt(line.url)}.`}
+                  </p>
+                ))}
             {/* A person of a server whose line lets everyone there start runs here: where they come from, and whether that server still has them. */}
-            {person.from !== undefined && !(person.removed && !person.kept) && <p className="pt-1 text-xs text-muted-foreground">{person.removed ? `Removed from ${hostOf(person.from)}. Kept here, switched off.` : `Uses this computer through ${hostOf(person.from)}.`}</p>}
+            {person.from !== undefined && !(person.removed && !person.kept) && <p className="pt-1 text-xs text-muted-foreground">{person.removed ? `Removed from ${nameAt(person.from)}. Kept here, switched off.` : `Uses this computer through ${nameAt(person.from)}.`}</p>}
             {person.from !== undefined && person.removed && !person.kept && (
-              <div role="group" aria-label={`${person.name} was removed from ${hostOf(person.from)}`} className="flex flex-wrap items-center justify-between gap-2 pt-1">
-                <p className="text-xs text-warning">{`Removed from ${hostOf(person.from)}.`}</p>
+              <div role="group" aria-label={`${person.name} was removed from ${nameAt(person.from)}`} className="flex flex-wrap items-center justify-between gap-2 pt-1">
+                <p className="text-xs text-warning">{`Removed from ${nameAt(person.from)}.`}</p>
                 <div className="flex gap-2">
                   <Button size="sm" variant="outline" disabled={busy} onClick={() => void act(() => keepPerson(host, person.name))}>
                     Keep, switched off

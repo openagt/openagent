@@ -39,6 +39,18 @@ export interface PersonRow {
 /** Every id a row is listed under. */
 export const idsOf = (device: Pick<DeviceRow, 'id' | 'also'>): string[] => [device.id, ...(device.also ?? [])]
 
+/** A line this computer keeps open to a server: the server starts runs here through it, or only sees them. */
+export interface LineRow {
+  /** The server's door, as an origin. */
+  url: string
+  mode: 'full' | 'watch'
+  /** Everyone at the server may start runs here, each as a user of their own. */
+  for?: 'everyone'
+  /** The server's name, as its door said it. */
+  name?: string
+  refused?: true
+}
+
 /** The door as `status` tells it. */
 export interface DoorStatus {
   on: boolean
@@ -55,6 +67,8 @@ export interface DoorStatus {
   devices: DeviceRow[]
   /** None until the owner is named. */
   persons: PersonRow[]
+  /** The servers this computer keeps a line open to. */
+  lines: LineRow[]
   /**
    * Set on the OpenAgent of one person on a computer several people use, to their name:
    * their devices are the door's, asked of it with {@link loadMine}, and this OpenAgent has none of its own.
@@ -78,9 +92,15 @@ const text = (value: unknown): string | undefined => (typeof value === 'string' 
 
 export function readStatus(output: unknown): DoorStatus | undefined {
   if (!output || typeof output !== 'object') return undefined
-  const { on, listening, problem, https, tailscale, wifi, fixAt, devices, persons, person } = output as Record<string, unknown>
+  const { on, listening, problem, https, tailscale, wifi, fixAt, devices, persons, person, lines } = output as Record<string, unknown>
   if (typeof on !== 'boolean' || !Array.isArray(devices)) return undefined
   const rows = readDevices(devices)
+  const kept: LineRow[] = []
+  for (const entry of Array.isArray(lines) ? lines : []) {
+    const { url, mode, for: who, name, refused } = (entry && typeof entry === 'object' ? entry : {}) as Record<string, unknown>
+    const [at, called] = [text(url), text(name)]
+    if (at && !kept.some(line => line.url === at)) kept.push({ url: at, mode: mode === 'watch' ? 'watch' : 'full', ...(who === 'everyone' ? { for: 'everyone' as const } : {}), ...(called ? { name: called } : {}), ...(refused === true ? { refused: true as const } : {}) })
+  }
   const people: PersonRow[] = []
   for (const entry of Array.isArray(persons) ? persons : []) {
     const { name, owner, ready, working, problem, from, removed, kept } = (entry && typeof entry === 'object' ? entry : {}) as Record<string, unknown>
@@ -115,6 +135,7 @@ export function readStatus(output: unknown): DoorStatus | undefined {
     ...(named && beside ? { wifi: { listening: beside.listening === true, ...(wifiWhy ? { problem: wifiWhy } : {}) } } : {}),
     devices: rows,
     persons: people,
+    lines: kept,
     ...(own ? { person: own } : {}),
   }
 }

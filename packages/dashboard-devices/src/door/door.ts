@@ -265,6 +265,8 @@ export interface Me {
   devices: ListedDevice[]
   /** To a computer whose line is for everyone here: every person here, the owner first, by their name. */
   persons?: string[]
+  /** This computer's name, as its owner named it, when the door knows it: what the computer that keeps a line here lists this one under. */
+  name?: string
 }
 
 /**
@@ -272,13 +274,14 @@ export interface Me {
  * their devices. A computer whose line is for everyone is told who everyone is, so it knows who
  * of those it gave a user of their own is no longer here.
  */
-export function me(store: Store, person: string | undefined, forEveryone = false): Me {
+export function me(store: Store, person: string | undefined, forEveryone = false, name?: string): Me {
   const owner = store.persons.find(candidate => candidate.owner)?.name
   return {
     ...(person !== undefined ? { person } : {}),
     owner: person === undefined || person === owner,
     devices: listedDevices(store).filter(device => device.person === person),
     ...(forEveryone ? { persons: store.persons.map(candidate => candidate.name) } : {}),
+    ...(name !== undefined ? { name } : {}),
   }
 }
 
@@ -622,7 +625,7 @@ export async function openDoor(opts: DoorOptions): Promise<Door> {
       if (req.method !== 'GET') return refuse(res, 405, 'method not allowed')
       const store = await currentStore()
       const forEveryone = store.devices.find(device => device.id === who.entry.id)?.line?.others !== undefined
-      return json(200, me(store, who.person, forEveryone))
+      return json(200, me(store, who.person, forEveryone, opts.ownersName?.()))
     }
     if (req.method !== 'POST') return refuse(res, 405, 'method not allowed')
     if (path === ME_REMOVE_PATH) {

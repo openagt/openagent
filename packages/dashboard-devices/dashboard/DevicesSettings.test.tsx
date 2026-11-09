@@ -726,22 +726,23 @@ describe('Settings › Devices: a computer several people use', () => {
     let persons: object[] = [{ name: 'Rom', owner: true }, { name: 'Ada', ready: true, from }, { name: 'Kim', ready: true, from, removed: true }]
     const { host, runComputerCommand } = door(args => {
       if (args[0] === 'keep') persons = persons.map(person => ((person as { name: string }).name === args[1] ? { ...person, kept: true } : person))
-      return ok({ ...OPEN, persons, devices: [] })
+      return ok({ ...OPEN, persons, devices: [], lines: [{ url: from, mode: 'full', name: 'OpenAgentVPS' }] })
     })
     show(host)
-    expect(await screen.findByText('Uses this computer through 165.245.244.10.')).toBeTruthy()
+    // The owner's own row says it too, by the name the line heard: their phone there starts runs here.
+    expect(await screen.findAllByText('Uses this computer through OpenAgentVPS.')).toHaveLength(2)
     // Their devices are the server's: none here is none missing. The owner's own none is said.
     expect(screen.getAllByText('No device yet.')).toHaveLength(1)
-    const marked = screen.getByRole('group', { name: 'Kim was removed from 165.245.244.10' })
-    expect(marked.textContent).toContain('Removed from 165.245.244.10.')
+    const marked = screen.getByRole('group', { name: 'Kim was removed from OpenAgentVPS' })
+    expect(marked.textContent).toContain('Removed from OpenAgentVPS.')
     // Remove asks first, as Remove person does.
     fireEvent.click(within(marked).getByRole('button', { name: 'Remove Kim' }))
     expect((await screen.findByRole('alertdialog')).textContent).toContain('their own user on this computer is deleted with everything in it')
     fireEvent.click(within(screen.getByRole('alertdialog')).getByRole('button', { name: 'Cancel' }))
-    fireEvent.click(within(screen.getByRole('group', { name: 'Kim was removed from 165.245.244.10' })).getByRole('button', { name: 'Keep, switched off' }))
+    fireEvent.click(within(screen.getByRole('group', { name: 'Kim was removed from OpenAgentVPS' })).getByRole('button', { name: 'Keep, switched off' }))
     await waitFor(() => expect(runComputerCommand).toHaveBeenCalledWith(['keep', 'Kim']))
-    expect(await screen.findByText('Removed from 165.245.244.10. Kept here, switched off.')).toBeTruthy()
-    expect(screen.queryByRole('group', { name: 'Kim was removed from 165.245.244.10' })).toBeNull()
+    expect(await screen.findByText('Removed from OpenAgentVPS. Kept here, switched off.')).toBeTruthy()
+    expect(screen.queryByRole('group', { name: 'Kim was removed from OpenAgentVPS' })).toBeNull()
     expect(screen.getByRole('button', { name: 'Remove Kim' }).textContent).toBe('Remove person')
   })
 
