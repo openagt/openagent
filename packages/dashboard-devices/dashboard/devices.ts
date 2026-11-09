@@ -79,10 +79,10 @@ export interface DoorStatus {
   person?: string
 }
 
-/** The link a new device gets in with: what the QR code holds. */
-export interface AddLink {
+/** A code as a door gives it: the link a new device gets in with, which the QR code holds, and what is typed instead, where and the code. */
+export interface Given {
   url: string
-  /** The same link by this computer's number, when `url` goes by its name. */
+  /** The same link by the computer's number, when `url` goes by its name. */
   numberUrl?: string
   /** Behind Tailscale, the same code at the Wi-Fi's door beside it, for a device not on Tailscale. */
   wifiUrl?: string
@@ -211,7 +211,7 @@ export const loadMine = (fetchFn?: typeof fetch): Promise<Answer<PersonThere>> =
 /** Take one of this person's devices out, a computer with all it holds there. */
 export const removeMine = (id: string, fetchFn?: typeof fetch): Promise<Answer<PersonThere>> => askDoor(`${ME_PATH}/remove`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ id }) }, fetchFn)
 
-function readLink(output: unknown): AddLink | undefined {
+function readLink(output: unknown): Given | undefined {
   if (!output || typeof output !== 'object') return undefined
   const { url, numberUrl, wifiUrl, where, code, expires } = output as Record<string, unknown>
   const [link, byNumber, byWifi, at, typed, until] = [text(url), text(numberUrl), text(wifiUrl), text(where), text(code), text(expires)]
@@ -230,7 +230,7 @@ export const loadStatus = (host: ModuleHost): Promise<Answer<DoorStatus>> => run
 export const setSwitch = (host: ModuleHost, on: boolean): Promise<Answer<DoorStatus>> => runDevices(host, [on ? 'on' : 'off'], readStatus)
 /** Behind Tailscale or not: the door is open to the person's own devices on their Tailscale network. */
 export const setTailscale = (host: ModuleHost, on: boolean): Promise<Answer<DoorStatus>> => runDevices(host, ['tailscale', on ? 'on' : 'off'], readStatus)
-export const addDevice = (host: ModuleHost, person?: string): Promise<Answer<AddLink>> => runDevices(host, ['add', ...(person !== undefined ? ['--for', person] : [])], readLink)
+export const addDevice = (host: ModuleHost, person?: string): Promise<Answer<Given>> => runDevices(host, ['add', ...(person !== undefined ? ['--for', person] : [])], readLink)
 export const nameOwner = (host: ModuleHost, name: string): Promise<Answer<DoorStatus>> => runDevices(host, ['owner', name], readStatus)
 export const removePerson = (host: ModuleHost, name: string): Promise<Answer<DoorStatus>> => runDevices(host, ['remove-person', name], readStatus)
 /** Keep a person a server's line made here, though that server no longer has them. */

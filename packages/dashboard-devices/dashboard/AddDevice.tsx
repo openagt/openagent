@@ -1,9 +1,9 @@
 import { useEffect, useRef, useState, type ComponentType } from 'react'
 import { Globe, Loader2, Monitor, Server, Smartphone, Ticket, Waypoints, Wifi } from 'lucide-react'
 import { Button, Dialog, buttonVariants, cn, type ModuleMachine } from '@openagt/dashboard/module'
-import { addDevice, findComputers, readPersonThere, setSwitch, type FoundComputer } from './devices.js'
+import { addDevice, findComputers, readPersonThere, setSwitch, type Answer, type FoundComputer, type Given } from './devices.js'
 import { askLink } from './servers.js'
-import { CodeCard, Joined, NoCodeYet, PhoneCode, RanOut, Waiting, clock, useCode, type Given, type GivenAnswer } from './codes.js'
+import { CodeCard, Joined, NoCodeYet, PhoneCode, RanOut, Waiting, clock, useCode } from './codes.js'
 import { ConnectServer } from './ConnectServer.js'
 import { JoinDialog } from './Join.js'
 import { Connecting } from './Pairing.js'
@@ -115,7 +115,7 @@ export const serversOf = (d: Devices): ModuleMachine[] =>
   (d.machines?.machines ?? []).filter(machine => hasDoor(machine) && machine.owner === undefined && !d.servers.some(server => server.url === machine.url && (server.working || !server.steps.every(step => step.state === 'done'))))
 
 /** A code from a server's door, as the dialogs show it. */
-const codeAt = async (d: Devices, server: ModuleMachine): Promise<GivenAnswer> => {
+const codeAt = async (d: Devices, server: ModuleMachine): Promise<Answer<Given>> => {
   const asked = await d.host.machineCode(server.id)
   return asked.ok ? { ok: true, value: asked.value } : asked
 }
@@ -128,7 +128,7 @@ interface Place {
   address: string
   /** A door on Tailscale: the phone must be on it. */
   tailscale?: string
-  ask: () => Promise<GivenAnswer>
+  ask: () => Promise<Answer<Given>>
 }
 
 /** Where a phone of this person's gets a code from here: each server this computer is in at, and each server at home it installed whose door opened on Tailscale since, asked over SSH. */
