@@ -1,5 +1,5 @@
 import { spawn } from 'node:child_process'
-import { devicesIn, idsOf, isDeviceId, nameOwner, readDevices, removeDevice, removePerson, type Devices, type DoorAddresses, type ServerDevice, type ServerPerson } from './devices.js'
+import { devicesIn, idsOf, isDeviceId, lineIn, nameOwner, readDevices, removeDevice, removePerson, type Devices, type DoorAddresses, type ListedLine, type ServerDevice, type ServerPerson } from './devices.js'
 import { AlreadyWorking, askLink, install } from './install.js'
 import { testConnection } from './connection.js'
 import type { Mint } from '@openagt/agent-driver-claude'
@@ -343,24 +343,8 @@ async function setReach(io: CliIO, said: string, mode: Reach): Promise<Status> {
   return statusOf(await readStore(io.env), io.env)
 }
 
-/**
- * The line this computer keeps open to a server, as this computer's own door says: its id among
- * the server's devices, and whether the server said no to its key. `undefined` when this computer
- * keeps no line to that server, and when its door did not say. Asked of the door whatever this
- * package's own file says of a line: the door is the one that keeps it.
- */
-async function ownLine(io: CliIO, server: Server): Promise<{ id?: string; refused: boolean } | undefined> {
-  const answer = await (io.door ?? ownDoor)(['status'], io.env)
-  if (!answer.ok || answer.out === undefined) return undefined
-  try {
-    const { lines } = JSON.parse(answer.out) as { lines?: unknown }
-    const line = Array.isArray(lines) ? (lines as Record<string, unknown>[]).find(candidate => candidate?.url === doorUrl(server.address)) : undefined
-    if (!line) return undefined
-    return { ...(typeof line.id === 'string' && isDeviceId(line.id) ? { id: line.id } : {}), refused: line.refused === true }
-  } catch {
-    return undefined
-  }
-}
+/** The line this computer keeps open to a server it set up, as this computer's own door says; `undefined` when it keeps none, or its door did not say. */
+const ownLine = (io: CliIO, server: Server): Promise<ListedLine | undefined> => lineTo(io.env, doorUrl(server.address), io.door ?? ownDoor)
 
 /** What `devices` and `remove-device` answer. */
 export interface DevicesStatus {
@@ -380,7 +364,7 @@ async function kept(io: CliIO, address: string, status: DevicesStatus): Promise<
   return status
 }
 
-function devicesOf(answer: Devices, line: { id?: string; refused: boolean } | undefined): DevicesStatus {
+function devicesOf(answer: Devices, line: ListedLine | undefined): DevicesStatus {
   if (!answer.ok) throw new Refused(answer.error)
   const own = line?.id
   return {
@@ -502,13 +486,8 @@ async function addThrough(io: CliIO, said: string): Promise<Status> {
   try {
     const ran = await session.run(SERVER_USER, devicesScript(), WHO_TIMEOUT_MS)
     if (ran.code !== 0) throw new Refused(withAdvice(server, lastLines(ran) || 'The computer did not answer.'))
-    try {
-      const { lines } = JSON.parse(ran.out.trim().split('\n').at(-1) ?? '') as { lines?: unknown }
-      const line = Array.isArray(lines) ? (lines as Record<string, unknown>[]).find(candidate => candidate?.url === server.through) : undefined
-      if (typeof line?.id === 'string' && isDeviceId(line.id)) id = line.id
-    } catch {
-      // Told below, as a computer that keeps no line there.
-    }
+    // Told below, as a computer that keeps no line there, when it lists none.
+    id = lineIn(ran.out, server.through)?.id
   } finally {
     await session.close()
   }

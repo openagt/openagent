@@ -1,3 +1,4 @@
+import { lineIn } from './devices.js'
 import { askOpenAgent } from './shared.js'
 import { exec as realExec, lastLines, openSession, withAdvice, type Exec, type Session } from './ssh.js'
 import { PERSON_TIMEOUT_MS, SERVER_USER, devicesScript, linkScript, reachedOf, stepsFor, type Facts, type StepId } from './steps.js'
@@ -36,13 +37,8 @@ const LINES_TIMEOUT_MS = 20_000
 /** Whether the computer keeps a line to the server at `url` that the server still lets in, as its own door says. */
 async function keepsLine(session: Session, url: string): Promise<boolean> {
   const said = await session.run(SERVER_USER, devicesScript(), LINES_TIMEOUT_MS)
-  if (said.code !== 0) return false
-  try {
-    const { lines } = JSON.parse(said.out.trim().split('\n').at(-1) ?? '') as { lines?: unknown }
-    return Array.isArray(lines) && (lines as Record<string, unknown>[]).some(line => line?.url === url && line.refused !== true)
-  } catch {
-    return false
-  }
+  const line = said.code === 0 ? lineIn(said.out, url) : undefined
+  return line !== undefined && !line.refused
 }
 
 /**

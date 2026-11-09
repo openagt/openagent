@@ -84,14 +84,37 @@ function doorAddress(value: unknown): string | undefined {
   return typeof said === 'string' ? addressOf(said) : undefined
 }
 
-/** The devices and persons in what a door's `status` printed, with where the door is open, or `undefined` for what is no such answer. */
-export function devicesIn(out: string): { devices: ServerDevice[]; persons: ServerPerson[]; door?: DoorAddresses } | undefined {
-  let answer: Record<string, unknown> | null
+/** What a door's `status` printed, last in a script's output, as the object it is; `undefined` for what is none. */
+function statusIn(out: string): Record<string, unknown> | undefined {
   try {
-    answer = JSON.parse(out.trim().split('\n').at(-1) ?? '') as Record<string, unknown> | null
+    const said: unknown = JSON.parse(out.trim().split('\n').at(-1) ?? '')
+    return said && typeof said === 'object' && !Array.isArray(said) ? (said as Record<string, unknown>) : undefined
   } catch {
     return undefined
   }
+}
+
+/** A line a door keeps open to a server, as its `status` lists it. */
+export interface ListedLine {
+  /** What the server may do through it. */
+  mode: 'full' | 'watch'
+  /** The server said no to the key the line is asked for with. */
+  refused: boolean
+  /** The id the line has among the server's devices. */
+  id?: string
+}
+
+/** The line to the server at `url` in what a door's `status` printed, or `undefined` when it lists none there. */
+export function lineIn(out: string, url: string): ListedLine | undefined {
+  const lines = statusIn(out)?.lines
+  const line = Array.isArray(lines) ? (lines as unknown[]).find((candidate): candidate is Record<string, unknown> => !!candidate && typeof candidate === 'object' && (candidate as Record<string, unknown>).url === url) : undefined
+  if (!line || (line.mode !== 'full' && line.mode !== 'watch')) return undefined
+  return { mode: line.mode, refused: line.refused === true, ...(typeof line.id === 'string' && isDeviceId(line.id) ? { id: line.id } : {}) }
+}
+
+/** The devices and persons in what a door's `status` printed, with where the door is open, or `undefined` for what is no such answer. */
+export function devicesIn(out: string): { devices: ServerDevice[]; persons: ServerPerson[]; door?: DoorAddresses } | undefined {
+  const answer = statusIn(out)
   const listed = answer?.devices
   if (!Array.isArray(listed)) return undefined
   // The owner first and once, then each other person once: a door that says otherwise is read as having none.

@@ -1,4 +1,5 @@
 import { claudeAccountHere, mintClaude, type Mint } from '@openagt/agent-driver-claude'
+import { lineIn, type ListedLine } from './devices.js'
 import { ownGithubLogin } from './logins.js'
 import { ownDoor, type OwnDoor } from './own-door.js'
 import type { Exec } from './ssh.js'
@@ -147,18 +148,14 @@ export async function startMint(env: NodeJS.ProcessEnv, machine: string, startWo
   }
 }
 
-/** The line this computer keeps open to a server, as its own door says: what the server may do, and whether it said no to the key. */
-export async function lineTo(env: NodeJS.ProcessEnv, machine: string, door: OwnDoor = ownDoor): Promise<{ mode: Reach; refused: boolean; id?: string } | undefined> {
+/**
+ * The line this computer keeps open to the server at `machine`, as its own door says: what the
+ * server may do, whether it said no to the key, and the line's id among its devices. Asked of the
+ * door whatever this package's own file says of a line: the door is the one that keeps it.
+ */
+export async function lineTo(env: NodeJS.ProcessEnv, machine: string, door: OwnDoor = ownDoor): Promise<ListedLine | undefined> {
   const answer = await door(['status'], env)
-  if (!answer.ok || answer.out === undefined) return undefined
-  try {
-    const { lines } = JSON.parse(answer.out) as { lines?: unknown }
-    const line = Array.isArray(lines) ? (lines as Record<string, unknown>[]).find(candidate => candidate?.url === machine) : undefined
-    if (!line || (line.mode !== 'full' && line.mode !== 'watch')) return undefined
-    return { mode: line.mode, refused: line.refused === true, ...(typeof line.id === 'string' ? { id: line.id } : {}) }
-  } catch {
-    return undefined
-  }
+  return answer.ok && answer.out !== undefined ? lineIn(answer.out, machine) : undefined
 }
 
 /**
