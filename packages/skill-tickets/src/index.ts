@@ -48,5 +48,5 @@ export {
   type TicketsFunnel,
   type LinkFs,
 } from './store.js'
-export { runCli, USAGE, type CliIo, type CliRefusal } from './cli.js'
+export { runCli, USAGE, type CliIo } from './cli.js'
 export { CLI_BIN_DIR, SKILL_DIR, SKILL_NAME } from './bin-dir.js'
