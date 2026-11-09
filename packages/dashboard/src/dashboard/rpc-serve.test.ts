@@ -282,8 +282,9 @@ test("the changes stream tells the page each time a project's runs change on a s
     listening.get(dir)!()
     assert.equal((await frames(2)).length, 2)
     page.abort()
-    for (let i = 0; i < 500 && stopped === 0; i++) await new Promise(resolve => setTimeout(resolve, 10))
-    assert.equal(stopped, 1)
+    // Both followed on the machines stop with the page: the project, and the sessions with no project.
+    for (let i = 0; i < 500 && stopped < 2; i++) await new Promise(resolve => setTimeout(resolve, 10))
+    assert.equal(stopped, 2)
   } finally {
     page.abort()
     await server.close()

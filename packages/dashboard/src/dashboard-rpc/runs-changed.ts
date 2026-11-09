@@ -59,8 +59,8 @@ export function followRunsChanged(send: (change: RunsChanged) => void): () => vo
       // Another computer's project has no runs here: that computer's are all it has.
       const elsewhere = project.machine !== undefined
       const own = elsewhere ? () => {} : ownRunsWatch.follow(project.path, () => tell(project.id))
-      // A session with no project runs on this computer only: no machine has runs of it.
-      const machines = project.id === SESSIONS_ID ? () => {} : elsewhere ? contextRemote().followElsewhereRuns(project.id, () => tell(project.id)) : contextRemote().followRuns(project.path, () => tell(project.id))
+      // The sessions with no project are followed on the machines too: each runs its own, under the same name.
+      const machines = elsewhere ? contextRemote().followElsewhereRuns(project.id, () => tell(project.id)) : contextRemote().followRuns(project.path, () => tell(project.id))
       followed.set(project.id, {
         path: project.path,
         stop: () => {

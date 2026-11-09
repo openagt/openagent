@@ -429,6 +429,8 @@ export function createProjectRuntime({ cwd, env, clone = cloneProject, logins = 
   // project each time. Only an address is kept: a folder that had none is asked again.
   const addresses = new Map<string, { address: string; until: number }>()
   const addressOf = async (path: string): Promise<string | undefined> => {
+    // The sessions with no project go by their own name on every machine: each has a sessions home of its own, which answers to it.
+    if (path === sessionsHome(env)) return SESSIONS_ID
     const kept = addresses.get(path)
     if (kept && kept.until > Date.now()) return kept.address
     const address = await repositoryAddress(path)
