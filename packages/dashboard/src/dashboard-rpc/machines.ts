@@ -1,6 +1,6 @@
 import { computerHealth, type Health } from '../health.js'
 import { projectNameOf, readSharing, repositoryAddress, repositorySpelling } from '@openagt/agent-data'
-import { THROUGH_PATH, deviceIdOf, enterRemote, giveRemoteLogins, leaveRemote, machineCall, pingRemote, remoteAddMachine, remoteComputers, remoteDoor, remoteFacts, remoteLogins, remoteProject, relayRpc, type BringProject, type RelayProject, type RemoteTarget } from '../dashboard/remote-run.js'
+import { THROUGH_PATH, deviceIdOf, enterRemote, giveRemoteLogins, leaveRemote, machineCall, pingRemote, remoteAddMachine, remoteComputers, remoteDoor, remoteFacts, remoteLogins, remoteProject, relayRpc, targetOf, type BringProject, type RelayProject, type RemoteTarget } from '../dashboard/remote-run.js'
 import { isElsewhereId, lineNameOf } from '../dashboard/elsewhere.js'
 import { isClaudeAccountId, isLoginWord, type MachineLogins } from '../dashboard/machine-logins.js'
 import { errorMessage } from '../error-message.js'
@@ -448,7 +448,7 @@ async function onMachine(projectId: string, machineId: string): Promise<{ ok: tr
   // A session with no project is named by the sessions' own id, on every machine.
   const name = projectId === SESSIONS_ID ? SESSIONS_ID : project.home?.machine === machine.id ? project.home.line : project.address
   if (!name) return { ok: false, error: 'This project has no repository address, so it cannot be sent to another machine.' }
-  return { ok: true, machine, project, target: { url: machine.url, key: machine.key, ...(machine.pin ? { pin: machine.pin } : {}), project: name } }
+  return { ok: true, machine, project, target: targetOf(machine, name) }
 }
 
 /**

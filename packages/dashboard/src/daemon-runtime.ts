@@ -9,7 +9,7 @@ import { OPENAGENT_DIR } from './openagent-dir.js'
 import type { OpenAgentEvent } from './events.js'
 import type { StartAgentOptions, StartAgentResult, AddProjectResult, RemoveProjectResult, StartedInResult } from './dashboard/types.js'
 import type { EventsSource, RemoteAgents, SavedMachine } from './dashboard/rpc-serve.js'
-import { RelayedAgents, machineCall, relayRpc, remoteFacts, startRemoteAgent, type BringProject, type RelayProject, type RemoteTarget } from './dashboard/remote-run.js'
+import { RelayedAgents, machineCall, relayRpc, remoteFacts, startRemoteAgent, targetOf, type BringProject, type RelayProject, type RemoteTarget } from './dashboard/remote-run.js'
 import { OwnProjectsAsked, elsewhereHomes, elsewhereId, elsewhereSummary, homeOf as elsewhereHomeOf, idInLineName, isElsewhereId, lineNameOf, type ElsewhereHome, type OwnProject } from './dashboard/elsewhere.js'
 import { AnswersKept, interventionsOf, namedHere, type MachinesQueue } from './dashboard/machine-interventions.js'
 import type { Intervention } from './dashboard/interventions.js'
@@ -212,7 +212,7 @@ export function createProjectRuntime({ cwd, env, clone = cloneProject, logins = 
       const saved = savedAt(machine.url)
       if (!saved) return Promise.reject(new Error('that machine is no longer saved'))
       // The machine holds the call until its runs change: it is given that long and a while more to answer.
-      return relayRpc({ url: saved.url, key: saved.key, ...(saved.pin ? { pin: saved.pin } : {}), project: address }, 'onOwnRuns', [null, since ?? null, RUNS_WAIT_MS], RUNS_WAIT_MS + RUNS_ASKED_MS)
+      return relayRpc(targetOf(saved, address), 'onOwnRuns', [null, since ?? null, RUNS_WAIT_MS], RUNS_WAIT_MS + RUNS_ASKED_MS)
     },
     (machine, at) => {
       const saved = savedAt(machine.url)
@@ -312,7 +312,7 @@ export function createProjectRuntime({ cwd, env, clone = cloneProject, logins = 
   const elsewhereAt = async (id: string): Promise<{ home: ElsewhereHome<MachineRecord>; target: RemoteTarget } | undefined> => {
     if (callerAtPage() !== undefined) return undefined
     const home = elsewhereHomeOf(await ownMachines(), id)
-    return home && { home, target: { url: home.machine.url, key: home.machine.key, ...(home.machine.pin ? { pin: home.machine.pin } : {}), project: lineNameOf(home.project) } }
+    return home && { home, target: targetOf(home.machine, lineNameOf(home.project)) }
   }
 
   // A run of a project by its id: its record here, else what the saved machine it runs on said of
@@ -350,7 +350,7 @@ export function createProjectRuntime({ cwd, env, clone = cloneProject, logins = 
       const queued = (await machinesQueue()).said.flatMap(said => said.items).find(item => item.projectId === project && item.agentId === agentId)?.computer?.id
       const machine = queued === undefined ? undefined : (await ownMachines()).find(saved => saved.id === queued)
       const address = machine ? await addressOf(projectCwd) : undefined
-      return machine && address !== undefined ? keep({ target: { url: machine.url, key: machine.key, ...(machine.pin ? { pin: machine.pin } : {}), project: address }, label: machine.label }, HOME_KEPT_MS) : undefined
+      return machine && address !== undefined ? keep({ target: targetOf(machine, address), label: machine.label }, HOME_KEPT_MS) : undefined
     }
     // A run's computer never changes: this one's own, and one whose record names none, is not looked up again.
     if (!isHostName(agent.host) || agent.host === hostname()) return keep(undefined, OWN_KEPT_MS)
@@ -358,7 +358,7 @@ export function createProjectRuntime({ cwd, env, clone = cloneProject, logins = 
     const machine = machineOf(agent.host)
     const address = machine ? await addressOf(projectCwd) : undefined
     if (!machine || address === undefined) return keep(undefined, HOME_KEPT_MS)
-    return keep({ target: { url: machine.url, key: machine.key, ...(machine.pin ? { pin: machine.pin } : {}), project: address }, label: machine.label }, HOME_KEPT_MS)
+    return keep({ target: targetOf(machine, address), label: machine.label }, HOME_KEPT_MS)
   }
 
   // The relayed-agent lookup the dashboard's read RPCs consult (#1067 slice 2): is this agentId remote, and
@@ -553,7 +553,7 @@ export function createProjectRuntime({ cwd, env, clone = cloneProject, logins = 
     const { machine: _id, base: _thisMachines, prBase: _thisMachinesToo, repos: _folders, ...forwarded } = options
     const machine = (await listMachines(env)).find(saved => saved.id === id)
     if (!machine) return { ok: false, error: 'That machine is no longer saved. Pick another place to run.' }
-    const target = { url: machine.url, key: machine.key, ...(machine.pin ? { pin: machine.pin } : {}), project: project.address }
+    const target = targetOf(machine, project.address)
     // Another person's computer: a run there uses this person's own logins, which this server
     // copies there first. Only a server's OpenAgent copies: a laptop's logins are made for it
     // alone, so a laptop only looks that they are there.

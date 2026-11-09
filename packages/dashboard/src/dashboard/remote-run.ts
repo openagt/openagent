@@ -37,6 +37,11 @@ export interface RemoteTarget extends MachineAccess {
   project: string
 }
 
+/** Where a call about a project on a saved machine goes: how the machine is reached, and the project there by the name the machine knows it by. */
+export function targetOf(machine: MachineAccess, project: string): RemoteTarget {
+  return { url: machine.url, key: machine.key, ...(machine.pin ? { pin: machine.pin } : {}), project }
+}
+
 /** What a relay start forwards to the remote's `/_relay/start`, beside the project. */
 export interface RelayStartBody {
   prompt: string
