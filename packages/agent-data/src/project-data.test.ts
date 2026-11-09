@@ -6,19 +6,15 @@ import { test } from 'node:test'
 import { nodeGitRunner, type GitRunner } from './git.js'
 import { readSharing, writeSharing } from './file-branch.js'
 import { clearRemoteAccount, readRemoteAccount, writeRemoteAccount, type RemoteAccount } from './remote-account.js'
+import { personalFolder, readPersonalFolder, sendPersonalFolderAs, stopSyncingPersonalFolder, syncPersonalFolder } from './personal-folder.js'
 import {
   listProjectDir,
   openProjectReader,
-  personalFolder,
   projectDataPlace,
   projectKey,
   pullProjectData,
-  readPersonalFolder,
   readProjectFile,
   removePersonalData,
-  sendPersonalFolderAs,
-  stopSyncingPersonalFolder,
-  syncPersonalFolder,
   shareProjectData,
   withProjectData,
   writeProjectDataDetached,

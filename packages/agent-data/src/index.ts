@@ -49,13 +49,21 @@ export { NoRemoteAccountError, accountGit, clearRemoteAccount, noAccountSentence
 export { addressOfRemote, spellingOfRemote } from './repository-address.js'
 export { originUrl, repositoryAddress, repositorySpelling, projectNameOf } from './origin.js'
 export {
-  PROJECTS_DIR,
   personalFolder,
+  withPersonalFolder,
+  readPersonalFolder,
+  syncPersonalFolder,
+  sendPersonalFolderAs,
+  stopSyncingPersonalFolder,
+  type PersonalFolderDeps,
+  type PersonalFolderState,
+} from './personal-folder.js'
+export {
+  PROJECTS_DIR,
   projectKey,
   projectDataPlace,
   projectDataDir,
   projectDataDirs,
-  withPersonalFolder,
   withProjectData,
   writeProjectDataDetached,
   readProjectFile,
@@ -65,11 +73,6 @@ export {
   shareProjectData,
   shareProjectDataAs,
   removePersonalData,
-  readPersonalFolder,
-  syncPersonalFolder,
-  sendPersonalFolderAs,
-  stopSyncingPersonalFolder,
-  type PersonalFolderState,
   type DataPlace,
   type ProjectDataDeps,
   type ProjectReader,
