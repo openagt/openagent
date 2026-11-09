@@ -8,7 +8,8 @@ import { nameAddress, onOwnNetwork, plainAddress, serverWhere, urlHost, type Add
 import { doorFingerprint, type Secured } from './certificate.js'
 import { deviceName } from './device-name.js'
 import { listen, readFields, refuse, sendJson, shut } from './http.js'
-import { LINE_FOR_HEADER, LINE_PATH, LINE_PROTOCOL, namesIn } from './line-out.js'
+import { LINE_FOR_HEADER, LINE_PROTOCOL, namesIn } from './line-out.js'
+import { ASK_PATH, COMPUTERS_PATH, DOOR_PREFIX, ENTER_PATH, LINE_PATH, ME_CODE_PATH, ME_LINE_PATH, ME_PATH, ME_REMOVE_PATH, VIA_PREFIX } from './paths.js'
 import { enterPage, notInPage, type DoorKind } from './pages.js'
 import { COMPUTER_HEADER, COMPUTER_NAME_HEADER, OWNERS_NAME_HEADER, PERSON_HEADER, addAsk, addCode, askOf, dropAsk, nameWord, shownCode, enter, isComputerId, isIn, listedDevices, nameComputer, personOf, portOf, readStore, removeComputer, removeDevice, sha256, shareLine, storePath, update, type Entry, type ListedDevice, type Store } from './store.js'
 
@@ -57,24 +58,6 @@ import { COMPUTER_HEADER, COMPUTER_NAME_HEADER, OWNERS_NAME_HEADER, PERSON_HEADE
  * Allowed, it is handed a code made that moment, and gets in with it as with any code.
  */
 
-/** Every path of the door's own; never passed on. */
-export const DOOR_PREFIX = '/_devices'
-/** Where a scanned code lands, and where its page sends the code. */
-export const ENTER_PATH = `${DOOR_PREFIX}/enter`
-/** The computers that keep a line open here, for another computer's OpenAgent that is in. */
-export const COMPUTERS_PATH = `${DOOR_PREFIX}/computers`
-/** Where another computer's OpenAgent asks a computer on a line: `<VIA_PREFIX>/<its device id>/_relay/…`. */
-export const VIA_PREFIX = `${DOOR_PREFIX}/via`
-/** Who a device is here: its person, whether that is the owner, and that person's devices. */
-export const ME_PATH = `${DOOR_PREFIX}/me`
-/** Where a device takes one of its own person's devices out. */
-export const ME_REMOVE_PATH = `${ME_PATH}/remove`
-/** Where a computer that is in asks for a code its line gets in with, for its own person. */
-export const ME_LINE_PATH = `${ME_PATH}/line`
-/** Where a computer that is in asks for a code a device of its own person gets in with: a device that is in gives the code for the next one. */
-export const ME_CODE_PATH = `${ME_PATH}/code`
-/** Where a computer on this Wi-Fi asks to get in, hears the answer, and takes its ask away. */
-export const ASK_PATH = `${DOOR_PREFIX}/ask`
 /** The cookie a device that is in carries: its id, a dot, its key. */
 export const DEVICE_COOKIE = 'oa_device'
 

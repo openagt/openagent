@@ -1,5 +1,6 @@
 import { readFile } from 'node:fs/promises'
 import { urlHost } from '../door/address.js'
+import { VIA_PREFIX } from '../door/paths.js'
 import { isAddress, isLineUrl, nameOf } from '../door/store.js'
 import { Unreadable, homeFile, jsonFile, withLock, writeWhole } from '../home-file.js'
 import { pidAlive } from '../process.js'
@@ -207,7 +208,7 @@ export const freshSteps = (reached: Reached = 'internet'): Step[] => stepIdsFor(
 
 /** Where a computer reached through a server is among OpenAgent's machines: through that server's door, down its line. */
 export function throughUrl(server: Pick<Server, 'through' | 'line'>): string | undefined {
-  return server.through !== undefined && server.line !== undefined ? `${server.through}/_devices/via/${server.line}` : undefined
+  return server.through !== undefined && server.line !== undefined ? `${server.through}${VIA_PREFIX}/${server.line}` : undefined
 }
 
 const WHO: readonly Who[] = ['nobody', 'me']
@@ -303,7 +304,7 @@ export function sanitize(value: unknown): Store {
  */
 export function isThroughUrl(said: string): boolean {
   // One no URL reads is none: it never fails the file it is in, nor the command it was given to.
-  return /^https:\/\/[^/?#\s]+\/_devices\/via\/[a-z0-9]{6,32}$/.test(said) && URL.canParse(said)
+  return new RegExp(`^https://[^/?#\\s]+${VIA_PREFIX}/[a-z0-9]{6,32}$`).test(said) && URL.canParse(said)
 }
 
 export function isMachineUrl(said: string): boolean {

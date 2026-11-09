@@ -1,4 +1,4 @@
-import { ASK_PATH } from './door.js'
+import { ASK_PATH } from './paths.js'
 import { liveAsks, type Store } from './store.js'
 
 /**

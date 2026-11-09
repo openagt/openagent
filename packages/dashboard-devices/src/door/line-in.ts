@@ -1,7 +1,8 @@
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from 'node:http'
 import { PassThrough, Readable, type Duplex } from 'node:stream'
-import { DATA, END, HEAD, Link, RESET, carriedHeaders, carriedPath, carriedValue, readHead, sendBody, type Frame } from './frames.js'
+import { CARRIED_HEADERS, DATA, END, HEAD, LINE_QUIET_MS, Link, RESET, carriedHeaders, carriedPath, carriedValue, readHead, sendBody, type Frame } from './frames.js'
 import { listen, refuse, sendJson, shut } from './http.js'
+import { ENTER_PATH } from './paths.js'
 import { PERSON_HEADER, nameWord, personLinePorts, personOf, type Store } from './store.js'
 
 /**
@@ -32,13 +33,6 @@ import { PERSON_HEADER, nameWord, personLinePorts, personOf, type Store } from '
  * The door passes another computer's OpenAgent down a line too ({@link Lines.pass}), so a laptop
  * reaches a computer at home through the server both are in at.
  */
-
-/** Where OpenAgent is let in at a machine, and takes itself out: answered here for a computer on a line. */
-const ENTER_PATH = '/_devices/enter'
-/** How long a line may say nothing before it is dropped: the computer asks every fifteen seconds. */
-export const LINE_QUIET_MS = 45_000
-/** The headers of a call that go down the line: what its body is, and what answer is wanted. Never a key or a cookie. */
-const CARRIED_HEADERS: readonly string[] = ['content-type', 'accept']
 
 const NOT_CONNECTED = 'This computer is not connected. It must be on, with OpenAgent running.'
 
