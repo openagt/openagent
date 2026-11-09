@@ -84,6 +84,18 @@ describe('the "Run on" pick in the row under the box', () => {
     expect(screen.getByText('This project has no repository address, so it cannot be sent to another machine.')).toBeTruthy()
   })
 
+  test('a session with no project goes to a machine too, in a folder of its own there: the machines can be picked, and the menu says so', async () => {
+    const connection = renderMenu({ noProject: true, selectedMachineId: 'studio' })
+    await openMenu(trigger())
+    expect(screen.getByRole('menuitem', { name: /^This machine/ }).textContent).toContain('Runs here, in a folder of its own.')
+    const studio = screen.getByRole('menuitem', { name: /^Studio/ })
+    expect(studio.getAttribute('aria-disabled')).not.toBe('true')
+    expect(studio.textContent).toContain('Runs there, in a folder of its own.')
+    fireEvent.click(studio)
+    expect(connection.onSelect).toHaveBeenCalled()
+    expect(screen.queryByText('This project has no repository address, so it cannot be sent to another machine.')).toBeNull()
+  })
+
   test('its menu lists this machine, the machines and "Add a machine…", and a click picks', async () => {
     const connection = renderMenu({ selectedMachineId: 'studio' })
     await openMenu(trigger())

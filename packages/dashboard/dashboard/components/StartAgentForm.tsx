@@ -147,7 +147,8 @@ export function StartAgentForm({
   const machines = useMachines()
   const selectedMachineId = useSelectedMachineId()
   useEffect(() => followProjectHome(home), [projectId, home])
-  const machine = runTarget(machines, selectedMachineId, launcher, home)
+  // A session with no project goes to any machine: nothing is cloned, it works in that machine's own folder for them.
+  const machine = runTarget(machines, selectedMachineId, noProject ? { address: SESSIONS_ID } : launcher, home)
   const atHome = home !== undefined && machine?.id === home
   // A machine that is not where the launcher was read: its own copy is not read at all.
   const foreign = machine !== undefined && !atHome
@@ -239,7 +240,7 @@ export function StartAgentForm({
       ...(startFrom ? startFromBase(startFromPick, startFrom.main, startFrom.local) : {}),
       ...(prInto !== undefined ? { prBase: prInto } : {}),
       ...(machine ? { machine: machine.id } : {}),
-      ...(noProject && repos.length > 0 ? { repos: repos.map(repo => repo.path) } : {}),
+      ...(noProject && !machine && repos.length > 0 ? { repos: repos.map(repo => repo.path) } : {}),
       ...(!noProject && remote && account !== undefined ? { account } : {}),
       ...(agentId !== undefined ? { agent: agentId } : {}),
       ...pickedSkills,
@@ -261,7 +262,7 @@ export function StartAgentForm({
         ...(preferences.driver ? { driver: preferences.driver } : {}),
         ...(preferences.model ? { model: preferences.model } : {}),
         ...(preferences.effort ? { effort: preferences.effort } : {}),
-        ...(noProject && repos.length > 0 ? { repos: repos.map(repo => ({ name: repo.name, from: repo.path })) } : {}),
+        ...(noProject && !machine && repos.length > 0 ? { repos: repos.map(repo => ({ name: repo.name, from: repo.path })) } : {}),
       }) // select the run we just started (#761)
       composerRef.current?.clear()
       setRepos([])
@@ -295,7 +296,8 @@ export function StartAgentForm({
         startsAt={
           <>
             <ProjectPicker look="row" none={{ label: 'No project', tip: 'The session works in a folder of its own' }} picked={noProject ? null : projectId} pickedName={projectName} projects={projects} busy={busy} onPick={id => pickProject(id ?? SESSIONS_ID)} onProjectAdded={onProjectAdded} />
-            {noProject && <SessionRepoPicks picked={repos} projects={projects} busy={busy} onChange={setRepos} />}
+            {/* Repos are folders on this computer, copied into the session's folder here: on a machine there is nothing to copy. */}
+            {noProject && !machine && <SessionRepoPicks picked={repos} projects={projects} busy={busy} onChange={setRepos} />}
             {!noProject && projectName && startFrom && preferencesLoaded && <StartFromMenu projectId={projectId} main={startFrom.main} local={startFrom.local} pick={startFromPick} onPick={pickStartFrom} busy={busy} />}
           </>
         }

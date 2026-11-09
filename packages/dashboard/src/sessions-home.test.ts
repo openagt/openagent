@@ -38,7 +38,7 @@ test("the sessions home gets the runner's start, resume and check lines, written
   })
 })
 
-test('a Start with no project runs the start line of the sessions home, with no level; a branch, a machine, a level or an account is refused', async () => {
+test('a Start with no project runs the start line of the sessions home, with no level; a branch, a level or an account is refused, and a machine takes it', async () => {
   await withConfigHome(async env => {
     const home = sessionsHome(env)
     await mkdir(join(home, '.openagent'), { recursive: true })
@@ -48,10 +48,11 @@ test('a Start with no project runs the start line of the sessions home, with no 
     try {
       assert.deepEqual(await runtime.onStart('Read the news', {}, SESSIONS_ID), { ok: true, agentId: '2026-11-06T10-00-00-000Z' })
       assert.equal(await readFile(join(home, 'started.txt'), 'utf8'), 'Read the news|none')
-      const refused = { ok: false, error: 'A session with no project runs on this computer, with no branch, nothing to publish, no account at a git host and no project skills.' }
+      const refused = { ok: false, error: 'A session with no project runs with no branch, nothing to publish, no account at a git host and no project skills.' }
       assert.deepEqual(await runtime.onStart('x', { publish: 'pr' }, SESSIONS_ID), refused)
       assert.deepEqual(await runtime.onStart('x', { base: 'main' }, SESSIONS_ID), refused)
-      assert.deepEqual(await runtime.onStart('x', { machine: 'm-1' }, SESSIONS_ID), refused)
+      // A machine takes a session with no project: this one is not saved, which is the only thing against it.
+      assert.deepEqual(await runtime.onStart('x', { machine: 'm-1' }, SESSIONS_ID), { ok: false, error: 'That machine is no longer saved. Pick another place to run.' })
       assert.deepEqual(await runtime.onStart('x', { account: 'octo-agent' }, SESSIONS_ID), refused)
       assert.deepEqual(await runtime.onStart('x', { projectSkills: 'none' }, SESSIONS_ID), refused)
     } finally {

@@ -598,12 +598,21 @@ test('a run started on another machine is followed only under an id that is a ru
   execFileSync('git', ['commit', '-q', '--allow-empty', '-m', 'seed'], { cwd: shop, env: { ...process.env, GIT_AUTHOR_NAME: 't', GIT_AUTHOR_EMAIL: 't@t', GIT_COMMITTER_NAME: 't', GIT_COMMITTER_EMAIL: 't@t' } })
   await addWorktree(shop, { agentId: 'mine-1', branch: agentBranchName('mine-1') }, nodeGitRunner())
 
-  // The machine: whatever id it is told to answer a start with, and whatever coding agent.
+  // The machine: whatever id it is told to answer a start with, and whatever coding agent; what each start named as its project.
   let answers = 'run-on-the-machine'
   let driver: unknown
+  const sent: { project?: unknown; options?: Record<string, unknown> }[] = []
   const machine = createServer((req, res) => {
+    if (req.url?.startsWith('/_relay/start')) {
+      let body = ''
+      req.on('data', chunk => (body += chunk))
+      req.on('end', () => {
+        sent.push(JSON.parse(body) as { project?: unknown })
+        res.writeHead(200, { 'content-type': 'application/json' }).end(JSON.stringify({ ok: true, agentId: answers, ...(driver !== undefined ? { driver } : {}) }))
+      })
+      return
+    }
     req.resume()
-    if (req.url?.startsWith('/_relay/start')) return void res.writeHead(200, { 'content-type': 'application/json' }).end(JSON.stringify({ ok: true, agentId: answers, ...(driver !== undefined ? { driver } : {}) }))
     res.writeHead(200, { 'content-type': 'application/x-ndjson' }).end()
   })
   await new Promise<void>(resolve => machine.listen(0, '127.0.0.1', resolve))
@@ -633,6 +642,15 @@ test('a run started on another machine is followed only under an id that is a ru
     answers = '../../etc'
     assert.deepEqual(await start(), refused)
     assert.equal(runtime.remoteAgents.target('../../etc'), undefined)
+
+    // A session with no project goes to a machine too, named by the sessions' own id, which every machine
+    // answers for with its own folder for them. Its repos are folders here, and go nowhere.
+    answers = 'run-with-no-project'
+    assert.deepEqual(await runtime.onStart('go', { machine: url }, 'session'), { ok: true, agentId: 'run-with-no-project' })
+    assert.equal(sent.at(-1)!.project, 'session')
+    assert.equal(sent.at(-1)!.options?.repos, undefined)
+    assert.equal(await runtime.projectAt('session'), 'session')
+    assert.deepEqual(await runtime.onStart('go', { machine: url, repos: [shop] }, 'session'), { ok: false, error: 'The repos are folders on this computer: a session with them runs here. Pick this computer, or start without them.' })
   } finally {
     await runtime.dispose()
     machine.closeAllConnections()
