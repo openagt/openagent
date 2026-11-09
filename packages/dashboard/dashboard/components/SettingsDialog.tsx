@@ -522,13 +522,13 @@ function BridgeBrowserChoice({ daemonBrowser, onChange }: { daemonBrowser: boole
           true,
           'A browser the daemon runs — recommended',
           'Chrome for Testing, downloaded once, signed in once, kept minimized. Web runs work with your own Chrome closed.',
-          <BridgeBrowserSettings enabled />,
+          <BridgeBrowserSettings />,
         )}
         {option(
           false,
           'Your own Chrome',
           'Install the extension, open its options and paste the token. Web runs need your Chrome open.',
-          <BridgeSettings enabled onChange={() => {}} />,
+          <BridgeSettings />,
         )}
       </RadioGroup>
     </div>
