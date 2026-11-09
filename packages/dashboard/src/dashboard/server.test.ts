@@ -8,7 +8,7 @@ import { networkInterfaces, tmpdir, hostname } from 'node:os'
 import { join } from 'node:path'
 import { startDashboard, type Dashboard, type DashboardOptions } from './server.js'
 import { isExpectedHost, isSameOriginRequest } from './rpc-serve.js'
-import { testDashboardOptions } from '../dashboard-rpc/test-context.js'
+import { testDashboardContext, testDashboardOptions } from '../dashboard-rpc/test-context.js'
 import type { OpenAgentEvent } from '../events.js'
 import { openagentVersion } from '../version.js'
 import { computerName } from '../computer-name.js'
@@ -302,7 +302,7 @@ async function relayDashboard(): Promise<{
     brought.push({ address, ...(how ? { bring: how } : {}) })
     return { state: address === SHOP ? 'there' : how ? 'coming' : 'missing' }
   }
-  const dash = await dashboard({ clientBundleDir: bundle, onStart, relay: { project, tailEvents, rpc, bring } })
+  const dash = await dashboard({ clientBundleDir: bundle, context: testDashboardContext({ startAgent: onStart }), relay: { project, tailEvents, rpc, bring } })
   return {
     base: dash.url,
     starts,

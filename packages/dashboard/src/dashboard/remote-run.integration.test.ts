@@ -6,7 +6,7 @@ import { tmpdir, hostname } from 'node:os'
 import { basename, join } from 'node:path'
 import { EventStream } from '../event-stream.js'
 import { startDashboard, type Dashboard } from './server.js'
-import { testDashboardOptions } from '../dashboard-rpc/test-context.js'
+import { testDashboardContext, testDashboardOptions } from '../dashboard-rpc/test-context.js'
 import { relayRpc, remoteProject } from './remote-run.js'
 import type { Cloned } from '../clone-project.js'
 import { readSharing } from '@openagt/agent-data'
@@ -132,7 +132,7 @@ async function twoMachines(opts: { shopOnB?: boolean; machineCalls?: (fn: string
   const b = await startDashboard(
     testDashboardOptions({
       clientBundleDir: bundle,
-      onStart: bStart,
+      context: testDashboardContext({ startAgent: bStart }),
       relay: { project: runtimeB.projectAt, tailEvents: bTail, rpc: runtimeB.onRelayRpc, machine: (fn, args) => opts.machineCalls?.(fn, args) ?? dispatchMachineRpc(fn, args), bring: runtimeB.bringProject },
     }),
   )

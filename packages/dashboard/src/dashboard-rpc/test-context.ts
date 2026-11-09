@@ -44,12 +44,11 @@ export function testDashboardContext(over: Partial<DashboardContext> = {}): Dash
 }
 
 /**
- * The same wiring as {@link testDashboardContext}, in the shape {@link startDashboard} takes: a
- * test asserting one route still stands up the same server the product does.
+ * The same wiring as {@link testDashboardContext}, as {@link startDashboard} takes it, on an
+ * ephemeral port: a test asserting one route still stands up the same server the product does.
  */
 export function testDashboardOptions(over: Partial<DashboardOptions> = {}): DashboardOptions {
-  const { startAgent, addProject, startedIn, removeProject, prepareStart, ...rest } = testDashboardContext()
-  return { port: 0, onStart: startAgent, onAddProject: addProject, onStartedIn: startedIn, onRemoveProject: removeProject, onPrepareStart: prepareStart, ...rest, ...over }
+  return { port: 0, context: testDashboardContext(), ...over }
 }
 
 /**

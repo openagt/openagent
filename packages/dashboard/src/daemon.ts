@@ -155,32 +155,35 @@ export async function runDaemon(cwd: string, opts: RunDaemonOptions = {}): Promi
   })
   const dashboard: Dashboard = await startDashboard({
     port,
-    quota,
-    models,
-    agentUpdates: agentUpdates({ models }),
-    onStart: runtime.onStart,
-    onAddProject: runtime.onAddProject,
-    onStartedIn: runtime.onStartedIn,
-    onPrepareStart: runtime.onPrepareStart,
-    onRemoveProject: runtime.onRemoveProject,
-    // Relay an agent to/from a saved machine (#1067): the events source streams an agent this daemon
-    // is relaying, `remote` lets the read RPCs forward a remote agent's reads/steer/push to its machine
-    // (slice 2), and the `/_relay/*` endpoints let another daemon run + read + steer a session here.
-    eventsSource: runtime.remoteEventsSource,
-    remote: runtime.remoteAgents,
-    // A person's own OpenAgent on a computer several people use keeps their logins there: another
-    // OpenAgent of theirs hands them over through the relay.
+    context: {
+      startAgent: runtime.onStart,
+      addProject: runtime.onAddProject,
+      startedIn: runtime.onStartedIn,
+      prepareStart: runtime.onPrepareStart,
+      removeProject: runtime.onRemoveProject,
+      // Relay an agent to/from a saved machine (#1067): the events source streams an agent this daemon
+      // is relaying, and `remote` lets the read RPCs forward a remote agent's reads/steer/push to its
+      // machine (slice 2).
+      eventsSource: runtime.remoteEventsSource,
+      remote: runtime.remoteAgents,
+      // The bridge browser follows its switch (#1332): on launches it, off closes it, without a restart.
+      preferences: registryPreferencesStore(nodeRegistryFs(), env, written => {
+        if (written.bridgeBrowser === true) void bridgeBrowser.start()
+        if (written.bridgeBrowser === false) void bridgeBrowser.stop()
+      }),
+      quota,
+      models,
+      agentUpdates: agentUpdates({ models }),
+      projectErrors: projectErrors.read,
+      bridgeBrowser,
+    },
+    // The `/_relay/*` endpoints let another daemon run + read + steer a session here. A person's own
+    // OpenAgent on a computer several people use keeps their logins there: another OpenAgent of
+    // theirs hands them over through the relay.
     relay: { project: runtime.projectAt, tailEvents: runtime.tailRelayEvents, rpc: runtime.onRelayRpc, reads: isRelayReadCall, machine: dispatchMachineRpc, bring: runtime.bringProject, ...(env.OPENAGENT_PERSON ? { logins: personLogins(runComputerCommand) } : {}) },
     screen: runtime.screenOf,
     // The browser bridge (#1237): absent unless the preference is on, which 404s every route.
     ...(bridgeToken ? { bridgeToken, bridgeSessions: () => listBridgeSessions(env) } : {}),
-    // The bridge browser follows its switch (#1332): on launches it, off closes it, without a restart.
-    preferences: registryPreferencesStore(nodeRegistryFs(), env, written => {
-      if (written.bridgeBrowser === true) void bridgeBrowser.start()
-      if (written.bridgeBrowser === false) void bridgeBrowser.stop()
-    }),
-    projectErrors: projectErrors.read,
-    bridgeBrowser,
     ...(clientBundleDir ? { clientBundleDir } : {}),
     ...(secure ? { secure: { ...secure, port: SECURE_PORT } } : {}),
     ...(websiteDir ? { websiteDir } : {}),
