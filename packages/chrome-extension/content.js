@@ -233,8 +233,9 @@ function reportTranscript() {
         transcriptStatus = reply?.error ?? 'failed'
       }
     })
-  } catch {
-    // Worker asleep or context invalidated; the next mutation retries.
+  } catch (err) {
+    // Worker asleep or context invalidated: said on the panel, as the question's line says it; the next mutation retries.
+    transcriptStatus = String(err?.message ?? err)
   }
 }
 
