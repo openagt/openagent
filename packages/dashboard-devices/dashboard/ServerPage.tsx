@@ -64,7 +64,9 @@ export function ServerPage({ d, item, onBack, invite = false }: { d: Devices; it
     <State tone="quiet">{`Logs in as ${server.user}`}</State>
   )
 
-  const tabs: { id: Tab; title: string }[] = home || !done ? [{ id: 'overview', title: 'Overview' }] : [
+  // A server at home has people once it has a door of its own to let them in at: one on Tailscale, opened since it was connected.
+  const ownDoor = item.door?.https ?? item.door?.tailscale
+  const tabs: { id: Tab; title: string }[] = !done || (home && ownDoor === undefined) ? [{ id: 'overview', title: 'Overview' }] : [
     { id: 'overview', title: 'Overview' },
     { id: 'people', title: 'People' },
   ]
@@ -102,14 +104,14 @@ export function ServerPage({ d, item, onBack, invite = false }: { d: Devices; it
               Add person
             </Button>
           </div>
-          <People d={d} address={server.address} ownDevice={machine?.device} />
+          <People d={d} address={server.address} ownDevice={machine?.device} {...(server.through !== undefined ? { through: labelOf(d.machines?.machines ?? [], server.through) } : {})} />
         </Part>
       )}
       {d.error !== undefined && <Problem>{d.error}</Problem>}
       {inviting && (
         <Invite
           label={item.name}
-          tailscale={server.tailscale === true}
+          tailscale={server.tailscale === true || (item.door?.tailscale !== undefined && item.door.https === undefined)}
           ask={person => askLink(host, server.address, person)}
           persons={{
             owner,
@@ -429,7 +431,7 @@ function DeviceLine({ device, address, busy, ownKey, onRemove }: { device: Devic
 }
 
 /** Who is in on a server, as its door lists them, by person. Read by the page with the rest, over SSH. */
-function People({ d, address, ownDevice }: { d: Devices; address: string; ownDevice: string | undefined }) {
+function People({ d, address, ownDevice, through }: { d: Devices; address: string; ownDevice: string | undefined; /** A server at home: the server it is reached through, by its name, which its owner uses it through too. */ through?: string }) {
   const { host, busy } = d
   const read = d.devices[address]
   const error = d.devicesError[address]
@@ -465,6 +467,7 @@ function People({ d, address, ownDevice }: { d: Devices; address: string; ownDev
                   <UserRound className="h-3.5 w-3.5 shrink-0" aria-hidden />
                   <span className="truncate">{person.owner ? `${person.name}, the owner` : person.name}</span>
                 </p>
+                {person.owner && through !== undefined && <p className="text-muted-foreground">{`Uses this computer through ${through}.`}</p>}
                 {!person.owner && (
                   <ConfirmDialog
                     trigger={

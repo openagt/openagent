@@ -167,18 +167,21 @@ const LINK_TIMEOUT_MS = 20_000
 /**
  * Ask the server's door for a link a new machine gets in with: good once, for ten minutes.
  * Only a link to that very server is one: what a server answers is not trusted to say where
- * this computer goes to be let in.
+ * this computer goes to be let in. `doors` are the addresses the server's door said it is open
+ * at when its devices were last read (a server at home that opened a door on Tailscale since):
+ * a link to one of those is the server's own too.
  */
-export async function askLink(server: Pick<Server, 'address' | 'user'>, opts: { exec?: Exec } = {}, person?: string): Promise<Link> {
+export async function askLink(server: Pick<Server, 'address' | 'user'>, opts: { exec?: Exec } = {}, person?: string, doors: readonly string[] = []): Promise<Link> {
+  const own = new Set([doorUrl(server.address), ...doors.map(doorUrl)])
   const session = await openSession(server, opts)
   try {
     const said = await session.run(SERVER_USER, linkScript(person), person === undefined ? LINK_TIMEOUT_MS : PERSON_TIMEOUT_MS)
     if (said.code !== 0) return { ok: false, error: withAdvice(server, lastLines(said) || 'The server did not answer.') }
     try {
       const { url, where, code, expires } = JSON.parse(said.out.trim().split('\n').at(-1) ?? '') as Record<string, unknown>
-      if (typeof url === 'string' && url.length <= LINK_MAX && typeof expires === 'string' && Number.isFinite(Date.parse(expires)) && new URL(url).origin === doorUrl(server.address)) {
+      if (typeof url === 'string' && url.length <= LINK_MAX && typeof expires === 'string' && Number.isFinite(Date.parse(expires)) && own.has(new URL(url).origin)) {
         // A server from before typed codes gives a link only: it is updated first.
-        if (typeof where !== 'string' || typeof code !== 'string' || new URL(`https://${where}`).origin !== doorUrl(server.address) || !/^[A-Z0-9-]{1,16}$/.test(code)) return { ok: false, error: 'The server gives no code to type yet: update it first.' }
+        if (typeof where !== 'string' || typeof code !== 'string' || new URL(`https://${where}`).origin !== new URL(url).origin || !/^[A-Z0-9-]{1,16}$/.test(code)) return { ok: false, error: 'The server gives no code to type yet: update it first.' }
         return { ok: true, url, where, code, expires }
       }
     } catch {
