@@ -310,22 +310,18 @@ function inFirstMessage(el, first) {
   return false
 }
 
-/** Every JSON object carrying `options` in the text, in the order they appear. */
-function extractChoices(text, stats) {
-  const found = []
-  collectChoices(text, stats, found)
-  return found
-}
-
 /**
- * Brace-match every `options` object out of arbitrary surrounding text.
+ * Every JSON object carrying `options` in the text, in the order they appear, brace-matched out of
+ * whatever surrounds them. `stats`, when given, counts the candidates and those that did not
+ * parse, and keeps the last one's error.
  *
  * Round 2 reached the text but could not read it, because matching on the fixed prefixes
  * `{"title"` and `{\n  "title"` guesses at an indentation nobody promised, and the block
  * arrives with prose around it. Strings and escapes are tracked so a brace inside a label
  * cannot close the object early.
  */
-function collectChoices(text, stats, found) {
+function extractChoices(text, stats) {
+  const found = []
   if (!text.includes('"options"')) return found
   for (let i = 0; i < text.length; i++) {
     if (text[i] !== '{') continue
@@ -361,7 +357,7 @@ function collectChoices(text, stats, found) {
               // Keep scanning past this object: the spec comes first and the real question
               // after it, so the last one is the one that matters.
               i = j
-            } else if (stats) stats.parsedWithoutOptions++
+            }
           } catch (err) {
             // Not this one, or still streaming. Record why, so a failing report says whether
             // the block was never found or found and unparseable.
@@ -1223,7 +1219,7 @@ function diagnostics() {
   const deep = deepText()
   // Did the brace matcher find object-shaped candidates, and did any fail to parse? This is
   // what separates "never found it" from "found it and could not read it".
-  const stats = { candidates: 0, parseErrors: 0, parsedWithoutOptions: 0, lastError: '' }
+  const stats = { candidates: 0, parseErrors: 0, lastError: '' }
   const all = extractChoices(deep, stats)
   return {
     frame: IS_TOP ? 'top' : 'child',
