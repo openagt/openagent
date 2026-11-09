@@ -1,6 +1,5 @@
 import { afterEach, describe, expect, test, vi } from 'vitest'
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
-import { cloneElement, type ReactElement, type ReactNode } from 'react'
 import { forgetRemembered } from '../lib/use-async.js'
 import { hoverTooltip, openMenu } from '../test-utils.js'
 

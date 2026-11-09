@@ -69,12 +69,6 @@ function messageText(e: OpenAgentEvent): string | null {
   return null
 }
 
-// Long enough that an inline row truncates to one line and offers to expand. Mirrors terminal.ts's
-// `truncate`: collapse whitespace, trim, compare to 100.
-function isLong(text: string): boolean {
-  return text.replace(/\s+/g, ' ').trim().length > 100
-}
-
 /** Grouping key for a run of same-kind rows: the user's prompt stands apart from the agent's work. */
 function rowGroup(e: OpenAgentEvent): string {
   if (e.kind === 'driver') return e.event.type === 'start' || e.event.type === 'steered' ? 'you' : 'agent'

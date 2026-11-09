@@ -1,6 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
 import type { OpenAgentEvent } from '../../src/index.js'
-import type { LiveFeedEvent } from '../../src/dashboard-rpc/index.js'
 import { onEvents, type EventChannel } from '../rpc/events.js'
 import { currentAgentEvents } from './live-state.js'
 

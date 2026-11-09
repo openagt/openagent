@@ -1,6 +1,5 @@
 import { afterEach, describe, expect, test, vi } from 'vitest'
 import { cleanup, render, screen, waitFor } from '@testing-library/react'
-import type { OpenAgentEvent } from '../../src/index.js'
 
 // Record what the feed subscribes to. The channel never sends; we only care about addressing.
 const onEvents = vi.hoisted(() => vi.fn())

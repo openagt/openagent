@@ -1,6 +1,6 @@
-import { useEffect, useId, useRef, useState, type ComponentType, type ReactNode } from 'react'
+import { useId, useRef, useState, type ComponentType, type ReactNode } from 'react'
 import { Dialog as BaseDialog } from '@base-ui/react/dialog'
-import { ArrowLeft, Bell, Bot, ChevronRight, Database, FolderGit2, Globe, KeyRound, Palette, Puzzle, UserRound, X, FolderSearch } from 'lucide-react'
+import { ArrowLeft, Bell, Bot, ChevronRight, Database, FolderGit2, Globe, Palette, Puzzle, UserRound, X, FolderSearch } from 'lucide-react'
 import { ACCENTS, DEFAULT_ACCENT_LABELS, accentOf, CODE_FONTS, DOCUMENT_FONTS, DRIVERS, FONTS, PALETTES, PALETTE_LABELS, type Accent, type CodeFont, type DocumentFont, type Font, type Palette as ColourPalette } from '../../src/client.js'
 import { driverOptions, useModels } from '../lib/models.js'
 import { NO_MODEL_PINNED } from '../lib/agent-settings.js'
