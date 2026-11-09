@@ -11,7 +11,7 @@ import { serve } from './serve.js'
 import { announce, find } from './wifi.js'
 import { tailscaleName, tailscaleRun, type TailscaleRun } from './tailscale.js'
 import { renderUnicodeCompact } from 'uqr'
-import { MAX_LINES, answerAsk, readStoreStrict, nameFromWord, nameOf, nameWord, addCode, shownCode, addPerson, addressOf, computerWordFor, isComputerId, listedDevices, nameOwner, readStore, removeComputer, removePerson, renameComputer, samePerson, update, type Line, type ListedDevice, type Store } from './store.js'
+import { MAX_LINES, answerAsk, readStoreStrict, nameFromWord, nameOf, nameWord, notAName, addCode, shownCode, addPerson, addressOf, computerWordFor, isComputerId, listedDevices, nameOwner, readStore, removeComputer, removePerson, renameComputer, samePerson, update, type Line, type ListedDevice, type Store } from './store.js'
 import { Unreadable } from '../home-file.js'
 import { pidAlive } from '../process.js'
 
@@ -110,6 +110,13 @@ export interface CliIO {
 }
 
 class Refused extends Error {}
+
+/** `said` as a name, or a refusal that says what a name is. */
+function toName(said: string): string {
+  const name = nameOf(said)
+  if (name === undefined) throw new Refused(notAName(said))
+  return name
+}
 
 /** What `status` answers. */
 export interface Status {
@@ -364,8 +371,7 @@ async function addDevice(io: CliIO, said?: string): Promise<Given> {
  * person whose user could not be made, the helper is started again.
  */
 async function forPerson(io: CliIO, store: Store, said: string): Promise<string | undefined> {
-  const name = nameOf(said)
-  if (name === undefined) throw new Refused(`${said} is not a name: letters, digits, spaces, dots, apostrophes and dashes, at most 40`)
+  const name = toName(said)
   const owner = store.persons.find(person => person.owner)
   if (!owner) throw new Refused('Name the owner first: devices owner <your name>')
   if (samePerson(owner.name, name)) return undefined
@@ -627,8 +633,7 @@ export async function runCli(args: string[], io: CliIO): Promise<number> {
       case 'owner': {
         const [said] = rest
         if (rest.length !== 1 || !said) break
-        const name = nameOf(said)
-        if (name === undefined) throw new Refused(`${said} is not a name: letters, digits, spaces, dots, apostrophes and dashes, at most 40`)
+        const name = toName(said)
         if (!(await nameOwner(io.env, name))) throw new Refused(`This computer's owner is ${(await readStore(io.env)).persons[0]?.name}.`)
         return print(statusOf(await readStore(io.env), io.env))
       }
@@ -690,15 +695,7 @@ export async function runCli(args: string[], io: CliIO): Promise<number> {
         // A link holds a code that works once: a program hands it over on standard input, where no other program sees it.
         if (what === 'add' && at && (rest.length === 2 || (rest.length === 3 && how === 'watch'))) return print(await addLine(io, at === '-' ? await (io.stdin ?? ownStdin)() : at, how === 'watch' ? 'watch' : 'full'))
         if ((what === 'full' || what === 'watch') && at && rest.length === 2) return print(await setLineMode(io, at, what))
-        if (what === 'for' && at) {
-          const people: string[] = []
-          for (const said of rest.slice(2)) {
-            const name = nameOf(said)
-            if (name === undefined) throw new Refused(`${said} is not a name: letters, digits, spaces, dots, apostrophes and dashes, at most 40`)
-            if (!people.includes(name)) people.push(name)
-          }
-          return print(await setLineMode(io, at, 'full', people))
-        }
+        if (what === 'for' && at) return print(await setLineMode(io, at, 'full', [...new Set(rest.slice(2).map(toName))]))
         if (what === 'remove' && at && rest.length === 2) return print(await removeLine(io, at))
         break
       }

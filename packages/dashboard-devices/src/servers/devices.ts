@@ -1,7 +1,7 @@
 import { lastLines, openSession, withAdvice, type Exec } from './ssh.js'
 import { PERSON_TIMEOUT_MS, SERVER_USER, devicesScript, ownerScript, removeDeviceScript, removePersonScript } from './steps.js'
 import type { Server } from './store.js'
-import { addressOf, isLineUrl, nameOf } from '../door/store.js'
+import { addressOf, isLineUrl, nameOf, notAName } from '../door/store.js'
 
 /**
  * The devices that are in on a server, as its door lists them: asked over SSH, so a person sees
@@ -173,7 +173,7 @@ export const readDevices = (server: Pick<Server, 'address' | 'user'>, opts: { ex
 /** Name the server's owner at its door, by their name: the devices already in are theirs. */
 export function nameOwner(server: Pick<Server, 'address' | 'user'>, said: string, opts: { exec?: Exec } = {}): Promise<Devices> {
   const name = nameOf(said)
-  if (name === undefined) return Promise.resolve({ ok: false, error: `${said} is not a name: letters, digits, spaces, dots, apostrophes and dashes, at most 40` })
+  if (name === undefined) return Promise.resolve({ ok: false, error: notAName(said) })
   return ask(server, ownerScript(name), opts)
 }
 

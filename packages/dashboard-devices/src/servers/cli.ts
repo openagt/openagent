@@ -10,7 +10,7 @@ import { askOpenAgent, copyGithubToOther, isOtherUrl, lineTo, mintFor, otherLogi
 import { lastLines, openSession, withAdvice, type Exec } from './ssh.js'
 import { PERSON_TIMEOUT_MS, SERVER_MARK, SERVER_USER, devicesScript, peopleScript, reachedOf, stepLabel, stepsFor, whoScript, type Who } from './steps.js'
 import { LOGIN_KINDS, isServerName, atWork, changeServer, doorUrl, freshSteps, isUser, isVersion, keepDevices, keptDevices, readStore, throughUrl, update, working, type Login, type LoginKind, type Reach, type Server, type StepState, type Store } from './store.js'
-import { addressOf, isLineUrl, nameOf } from '../door/store.js'
+import { addressOf, isLineUrl, nameOf, notAName } from '../door/store.js'
 import { Unreadable } from '../home-file.js'
 
 /**
@@ -152,6 +152,13 @@ export interface SharedStatus {
 }
 
 class Refused extends Error {}
+
+/** `said` as a name, or a refusal that says what a name is. */
+function toName(said: string): string {
+  const name = nameOf(said)
+  if (name === undefined) throw new Refused(notAName(said))
+  return name
+}
 
 /** One login, as `own` and `other` tell it. The login itself is never told: this computer does not keep it. */
 export interface LoginStatus {
@@ -557,19 +564,12 @@ export async function runCli(args: string[], io: CliIO): Promise<number> {
       case 'people': {
         const [address, ...said] = rest
         if (!address) break
-        const people: string[] = []
-        for (const word of said) {
-          const name = nameOf(word)
-          if (name === undefined) throw new Refused(`${word} is not a name: letters, digits, spaces, dots, apostrophes and dashes, at most 40`)
-          if (!people.includes(name)) people.push(name)
-        }
-        return print(await setPeople(io, address, people))
+        return print(await setPeople(io, address, [...new Set(said.map(toName))]))
       }
       case 'link': {
         const [address, flag, person] = rest
         if (!address || !(rest.length === 1 || (rest.length === 3 && flag === '--for' && person))) break
-        const name = person === undefined ? undefined : nameOf(person)
-        if (person !== undefined && name === undefined) throw new Refused(`${person} is not a name: letters, digits, spaces, dots, apostrophes and dashes, at most 40`)
+        const name = person === undefined ? undefined : toName(person)
         const server = await still(io, address)
         const link = await askLink(server, ssh, name, await doorsOf(io.env, server.address))
         if (!link.ok) throw new Refused(link.error)

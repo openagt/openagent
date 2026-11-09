@@ -150,6 +150,9 @@ export function nameOf(said: string): string | undefined {
   return /^[\p{L}\p{N}][\p{L}\p{M}\p{N} .'’-]{0,39}$/u.test(name) ? name : undefined
 }
 
+/** Why `said` is no name, in the words a command refuses it with. */
+export const notAName = (said: string): string => `${said} is not a name: letters, digits, spaces, dots, apostrophes and dashes, at most 40`
+
 /**
  * A name as it is written where only plain letters go: a header, the file a person's service
  * reads, the helper's word. Every letter that is not a plain one is `%` and its number.
