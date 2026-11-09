@@ -36,9 +36,9 @@ export function moduleBuild(configUrl: string): UserConfig {
 }
 
 /**
- * The module's unit tests: the JSX transform, a DOM, and `@openagt/dashboard/module` resolved to
- * OpenAgent's own source, since the tests render the module inside a fake host and never load the
- * dashboard.
+ * The module's unit tests: the JSX transform, a DOM, and `@openagt/dashboard/module` with its test
+ * kit, `@openagt/dashboard/module/testing`, resolved to OpenAgent's own source, since the tests
+ * render the module inside a fake host and never load the dashboard.
  */
 export function moduleTests(configUrl: string): ViteUserConfig {
   const here = (path: string) => fileURLToPath(new URL(path, import.meta.url))
@@ -46,7 +46,10 @@ export function moduleTests(configUrl: string): ViteUserConfig {
     root: fileURLToPath(new URL('.', configUrl)),
     plugins: [react()],
     resolve: {
-      alias: [{ find: /^@openagt\/dashboard\/module$/, replacement: here('./index.ts') }],
+      alias: [
+        { find: /^@openagt\/dashboard\/module$/, replacement: here('./index.ts') },
+        { find: /^@openagt\/dashboard\/module\/testing$/, replacement: here('./testing.tsx') },
+      ],
     },
     test: {
       environment: 'jsdom',
