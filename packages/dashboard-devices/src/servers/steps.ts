@@ -665,6 +665,8 @@ export const STEPS: readonly StepDef[] = [
   fi
   # Each person who has a user already gets what a new one gets: a coding agent the install brings since then.
   ${PERSON_HELPER} agents
+  # A door opened on Tailscale later is served by the server's user: where Tailscale is on the server, it lets that user serve.
+  if command -v tailscale >/dev/null 2>&1; then tailscale set --operator=${SERVER_USER} >/dev/null 2>&1 || true; fi
 `,
       ),
   },

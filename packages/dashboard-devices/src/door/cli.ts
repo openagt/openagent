@@ -158,7 +158,7 @@ export interface Status {
    * computer's person there, the id this computer has among that server's devices, and whether
    * the server said no to its key.
    */
-  lines: { url: string; mode: Line['mode']; for?: 'everyone'; person?: string; id?: string; refused?: true }[]
+  lines: { url: string; mode: Line['mode']; for?: 'everyone'; person?: string; id?: string; name?: string; refused?: true }[]
 }
 
 /** Whether the door should be open: the switch is on, or the computer is a server, or it is reached over Tailscale. */
@@ -219,9 +219,9 @@ function statusOf(store: Store, env: NodeJS.ProcessEnv): Status {
       ...(from !== undefined && goneFrom(store, name, from) ? { removed: true as const } : {}),
       ...(kept ? { kept } : {}),
     })),
-    lines: store.lines.map(({ url, mode, for: who, person, key, refused }) => {
+    lines: store.lines.map(({ url, mode, for: who, person, key, name, refused }) => {
       const id = readKeyWord(key)?.id
-      return { url, mode, ...(who ? { for: who } : {}), ...(person !== undefined ? { person } : {}), ...(id ? { id } : {}), ...(refused ? { refused: true as const } : {}) }
+      return { url, mode, ...(who ? { for: who } : {}), ...(person !== undefined ? { person } : {}), ...(id ? { id } : {}), ...(name !== undefined ? { name } : {}), ...(refused ? { refused: true as const } : {}) }
     }),
   }
 }
@@ -498,9 +498,9 @@ async function addLine(io: CliIO, pasted: string, mode: Line['mode']): Promise<S
   const computer = isComputerId(io.env.OPENAGENT_COMPUTER) ? computerWordFor(io.env.OPENAGENT_COMPUTER, link.url) : undefined
   const entered = await (io.enterForLine ?? enterForLine)(link, ownName(), computer)
   if (!entered.ok) throw new Refused(`The server did not give a line: ${entered.error}`)
-  // Who this computer's person is there: a call down the line for anyone else is no call of theirs.
-  const person = (await (io.askMe ?? askMe)({ url: link.url, pin: link.pin, key: entered.key }))?.person
-  const line: Line = { url: link.url, pin: link.pin, key: entered.key, mode, ...(person !== undefined ? { person } : {}) }
+  // Who this computer's person is there: a call down the line for anyone else is no call of theirs. And the server's name, which the line is listed under here.
+  const said = await (io.askMe ?? askMe)({ url: link.url, pin: link.pin, key: entered.key })
+  const line: Line = { url: link.url, pin: link.pin, key: entered.key, mode, ...(said?.person !== undefined ? { person: said.person } : {}), ...(said?.name !== undefined ? { name: said.name } : {}) }
   const old = await update(io.env, store => {
     const had = lineAt(store, link.url)
     store.lines = [...store.lines.filter(kept => kept !== had), line]

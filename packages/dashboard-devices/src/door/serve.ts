@@ -232,12 +232,13 @@ export async function serve(opts: ServeOptions): Promise<void> {
   const tailscale = opts.tailscale ?? tailscaleRun(env, signal)
 
   // This computer's name as its owner named it, asked of the owner's OpenAgent now and then: the
-  // door says it to each person's own OpenAgent, which goes by it.
-  // Asked only where a person has an OpenAgent of their own, and never waited for: a look goes on.
+  // door says it to each person's own OpenAgent, which goes by it, and to a computer that keeps a
+  // line here, which lists this one under it. Asked only where someone would hear it, and never
+  // waited for: a look goes on.
   let ownersName: string | undefined
   let ownersNameAt = -Infinity
   const hearOwnersName = (): void => {
-    if (!latest?.persons.some(person => !person.owner && person.port !== undefined)) return
+    if (!latest?.persons.some(person => !person.owner && person.port !== undefined) && !latest?.devices.some(device => device.line !== undefined)) return
     if (Date.now() - ownersNameAt < (opts.ownersNameMs ?? OWNERS_NAME_MS)) return
     ownersNameAt = Date.now()
     void nameAt(opts.target).then(name => void (ownersName = name ?? ownersName))
@@ -403,13 +404,14 @@ export async function serve(opts: ServeOptions): Promise<void> {
       void (opts.askMe ?? askMe)(line)
         .then(async (said: MeThere | undefined) => {
           if (!said) return
-          const same = (kept: Line): boolean => (said.person === undefined || kept.person === said.person) && (said.persons === undefined || JSON.stringify(kept.persons) === JSON.stringify(said.persons))
+          const same = (kept: Line): boolean => (said.person === undefined || kept.person === said.person) && (said.persons === undefined || JSON.stringify(kept.persons) === JSON.stringify(said.persons)) && (said.name === undefined || kept.name === said.name)
           if (same(line)) return
           await update(env, store => {
             const kept = store.lines.find(candidate => candidate.url === line.url && candidate.key === line.key)
             if (!kept || same(kept)) return
             if (said.person !== undefined) kept.person = said.person
             if (said.persons !== undefined && kept.for === 'everyone') kept.persons = said.persons
+            if (said.name !== undefined) kept.name = said.name
           })
         })
         .catch(err => log(`devices: ${new URL(line.url).host} could not be asked who is there: ${err instanceof Error ? err.message : String(err)}`))

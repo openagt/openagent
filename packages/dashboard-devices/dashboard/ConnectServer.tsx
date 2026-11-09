@@ -3,7 +3,7 @@ import { Check, CircleCheck, CircleX, Cloud, House, Loader2, PlugZap, Waypoints 
 import { Button, Checkbox, Dialog, Input, Select, SelectContent, SelectItem, SelectTrigger, SelectValue, cn } from '@openagt/dashboard/module'
 import { testConnection, type Answer, type ServerRow, type Tested } from './servers.js'
 import { CopyButton } from './codes.js'
-import { hasDoor } from './model.js'
+import { hasDoor, labelOf } from './model.js'
 import { Problem, StepLine, StepMark } from './parts.js'
 import { WhoCanStart } from './ServerPage.js'
 import type { Devices } from './use-devices.js'
@@ -45,6 +45,9 @@ export function ConnectServer({ d, onClose, onInvite }: { d: Devices; onClose: (
   const at = address.trim()
   const as = user.trim()
   const current = tested?.for === `${at} ${as}` ? tested.answer : undefined
+  // A server this computer connected already is not set up anew another way: its own page updates it.
+  const known = d.servers.find(server => server.address === at.toLowerCase())
+  const knownWords = known !== undefined ? `${d.items.find(item => item.kind === 'server' && item.server.address === known.address)?.name ?? known.address} is connected already${known.through !== undefined ? `, through ${labelOf(d.machines?.machines ?? [], known.through)}` : known.tailscale ? ', on your Tailscale network' : ''}. Update it from its page.` : undefined
 
   const pickKind = (next: Kind): void => {
     setKind(next)
@@ -92,17 +95,18 @@ export function ConnectServer({ d, onClose, onInvite }: { d: Devices; onClose: (
                 ? 'Your own user on the PC, which becomes root without a password: only to install and to update. What runs there afterwards runs as a user of its own, openagent.'
                 : 'root, or a user that becomes root without a password: only to install and to update. What runs there afterwards runs as a user of its own, openagent.'}
             </p>
-            <Button size="sm" type="submit" variant="outline" disabled={testing || !at || !as}>
+            <Button size="sm" type="submit" variant="outline" disabled={testing || !at || !as || knownWords !== undefined}>
               {testing ? <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden /> : <PlugZap className="h-3.5 w-3.5" aria-hidden />}
               Test connection
             </Button>
+            {knownWords !== undefined && <p role="status" className="text-xs">{knownWords}</p>}
             {kind === 'tailscale' && at !== '' && !/\.ts\.net$/i.test(at) && <p className="text-xs text-muted-foreground">Its full name on Tailscale, as Tailscale shows it, like homepc.tail1234.ts.net: the door is at that name.</p>}
             {current !== undefined && !testing && <TestResult answer={current} address={at} user={as} home={pc} />}
             <Footer>
               <Button size="sm" type="button" variant="ghost" onClick={() => setStage('where')}>
                 Back
               </Button>
-              <Button size="sm" type="button" disabled={!current?.ok || !current.value.ok || (kind === 'tailscale' && !/\.ts\.net$/i.test(at))} onClick={() => setStage('logins')}>
+              <Button size="sm" type="button" disabled={!current?.ok || !current.value.ok || knownWords !== undefined || (kind === 'tailscale' && !/\.ts\.net$/i.test(at))} onClick={() => setStage('logins')}>
                 Continue
               </Button>
             </Footer>

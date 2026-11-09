@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { ChevronRight, CircleCheck, House, Laptop, Loader2, Server, UserPlus, UserRound } from 'lucide-react'
 import { Button, ConfirmDialog, Dialog, RadioGroup, RadioGroupOption, formatDateTime, formatRelative, usePolled, type ModuleAccountsAgent, type ModuleComputersThrough, type ModuleHost, type ModuleMachine, type ModuleMachineAccount } from '@openagt/dashboard/module'
 import { idsOf, loadDevices, nameOwner, removeDevice, removePerson, setWho, askLink, type Answer, type DeviceRow, type ServerRow, type Who } from './servers.js'
-import type { ServerItem } from './model.js'
+import { labelOf, type ServerItem } from './model.js'
 import { Invite } from './codes.js'
 import { myName } from './devices.js'
 import { Head, Part, Problem, Said, State, StepLine, Tabs, hostOf, named, olderThan } from './parts.js'
@@ -75,7 +75,7 @@ export function ServerPage({ d, item, onBack, invite = false }: { d: Devices; it
         icon={home ? House : Server}
         name={item.name}
         badge={home ? 'Server at home' : 'Server'}
-        facts={[state, home ? `through ${hostOf(server.through!)}` : server.tailscale ? 'on your Tailscale network' : item.name !== server.address ? server.address : undefined, machine?.version !== undefined ? `OpenAgent ${machine.version}` : undefined]}
+        facts={[state, home ? `through ${labelOf(d.machines?.machines ?? [], server.through!)}` : server.tailscale ? 'on your Tailscale network' : item.name !== server.address ? server.address : undefined, item.door?.tailscale !== undefined && !server.tailscale ? `on Tailscale at ${item.door.tailscale}` : undefined, machine?.version !== undefined ? `OpenAgent ${machine.version}` : undefined]}
         {...(machine ? { rename: async (name: string) => {
           const renamed = await host.renameMachine(machine.id, name)
           await d.reloadMachines().catch(() => {})

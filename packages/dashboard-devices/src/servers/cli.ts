@@ -1,5 +1,5 @@
 import { spawn } from 'node:child_process'
-import { devicesIn, idsOf, isDeviceId, nameOwner, readDevices, removeDevice, removePerson, type Devices, type ServerDevice, type ServerPerson } from './devices.js'
+import { devicesIn, idsOf, isDeviceId, nameOwner, readDevices, removeDevice, removePerson, type Devices, type DoorAddresses, type ServerDevice, type ServerPerson } from './devices.js'
 import { AlreadyWorking, askLink, install } from './install.js'
 import { testConnection } from './connection.js'
 import type { Mint } from '@openagt/agent-driver-claude'
@@ -271,7 +271,11 @@ async function connect(io: CliIO, said: { address: string; user: string; version
   await update(io.env, store => {
     const known = store.servers.find(server => server.address === address)
     if (known && working(known)) throw new Refused(`OpenAgent is being installed on ${address} right now`)
-    // Reached the way it was first connected: an update says nothing of it.
+    // Reached the way it was first connected: an update says nothing of it, and a second Set up that says another way is no update.
+    if (known && (said.through !== undefined || said.tailscale) && (said.through !== known.through || (said.tailscale === true) !== (known.tailscale === true))) {
+      const how = known.through !== undefined ? `, through ${new URL(known.through).host}` : known.tailscale ? ', on your Tailscale network' : ''
+      throw new Refused(`${address} is connected already${how}. Its page updates it.`)
+    }
     const through = said.through ?? known?.through
     const tailscale = through === undefined && (said.tailscale ?? known?.tailscale) === true
     const fresh: Server = {
@@ -365,6 +369,8 @@ export interface DevicesStatus {
   devices: ServerDevice[]
   /** The persons on the server, the owner first; none until the owner is named. */
   persons: ServerPerson[]
+  /** Where the server's door is open, as it said: a server set up at home may have opened one on Tailscale since. */
+  door?: DoorAddresses
   /** The server said no to the key this computer asks for its line with: the line is to be asked for anew. */
   lineRefused?: true
 }
@@ -382,6 +388,7 @@ function devicesOf(answer: Devices, line: { id?: string; refused: boolean } | un
   return {
     devices: answer.devices.map(device => (device.line && own !== undefined && idsOf(device).includes(own) ? { ...device, own: true as const } : device)),
     persons: answer.persons,
+    ...(answer.door ? { door: answer.door } : {}),
     ...(line?.refused ? { lineRefused: true as const } : {}),
   }
 }

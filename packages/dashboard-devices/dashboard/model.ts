@@ -55,6 +55,8 @@ export interface ServerItem {
   machine?: ModuleMachine
   /** How many people its door lists, once read. */
   people?: number
+  /** Where its door is open, as it said when its devices were read: on the internet, on Tailscale, or both ways a computer is reached. */
+  door?: { https?: string; tailscale?: string }
 }
 
 /** A server this person is in at, set up from somewhere else: theirs from another computer, or someone's who invited them. */
@@ -103,6 +105,9 @@ export const reachedAt = (machine: Pick<ModuleMachine, 'url'> | undefined): stri
 /** The server a machine reached through one is reached through, by its address. */
 export const throughOf = (machine: Pick<ModuleMachine, 'url'>): string | undefined => (machine.url.includes(THROUGH) ? machine.url.slice(0, machine.url.indexOf(THROUGH)) : undefined)
 
+/** A server by its name, when it is among the saved machines; by its address otherwise. */
+export const labelOf = (machines: readonly Pick<ModuleMachine, 'url' | 'label'>[], url: string): string => machines.find(machine => machine.url === url)?.label ?? url.replace(/^https?:\/\//, '')
+
 /** Whether a device in at a door is another computer's OpenAgent, by what it holds or how it named itself. */
 export const isComputer = (device: Pick<DoorDevice, 'name' | 'line'>): boolean => device.line === true || AGENT_NAME.test(device.name)
 
@@ -116,7 +121,6 @@ export function itemsOf(sources: Sources): Item[] {
   const items: Item[] = []
   const doorDevices = door?.devices ?? []
   const installed = (machine: ModuleMachine): ServerRow | undefined => servers.find(server => server.url === machine.url)
-  const labelOf = (url: string): string => machines.find(machine => machine.url === url)?.label ?? url.replace(/^https?:\/\//, '')
   const here: PhoneItem['via'] = door?.https ? { internet: true } : door?.tailscale ? { tailscale: true } : { wifi: true }
 
   // This computer's door: phones and browsers, and computers that start runs here.
@@ -153,7 +157,7 @@ export function itemsOf(sources: Sources): Item[] {
     const device = doorDevices.find(candidate => isComputer(candidate) && computerOf(candidate) === machine)
     if (device) matched.add(device.id)
     const through = throughOf(machine)
-    items.push({ kind: 'computer', key: `machine:${machine.id}`, name: machine.label, machine, ...(device ? { door: device } : {}), ...(through !== undefined ? { through: { url: through, label: labelOf(through) } } : {}), ...(reachedByLine(machine.url) ? { line: true as const } : {}) })
+    items.push({ kind: 'computer', key: `machine:${machine.id}`, name: machine.label, machine, ...(device ? { door: device } : {}), ...(through !== undefined ? { through: { url: through, label: labelOf(machines, through) } } : {}), ...(reachedByLine(machine.url) ? { line: true as const } : {}) })
   }
   // And each computer in at this door that is no saved machine: it starts runs here, and runs do not go there.
   for (const device of doorDevices) if (isComputer(device) && !matched.has(device.id)) items.push({ kind: 'computer', key: `door:${device.id}`, name: device.name.replace(AGENT_NAME, ''), door: device })
@@ -162,7 +166,7 @@ export function itemsOf(sources: Sources): Item[] {
   for (const server of servers) {
     const machine = machines.find(candidate => candidate.url === server.url)
     const read = devices[server.address]
-    items.push({ kind: 'server', key: `server:${server.address}`, name: machine?.label ?? server.address, server, ...(machine ? { machine } : {}), ...(read && read.persons.length ? { people: read.persons.length } : {}) })
+    items.push({ kind: 'server', key: `server:${server.address}`, name: machine?.label ?? server.address, server, ...(machine ? { machine } : {}), ...(read && read.persons.length ? { people: read.persons.length } : {}), ...(read?.door ? { door: read.door } : {}) })
   }
   for (const machine of machines) {
     const person = people[machine.id]

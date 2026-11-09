@@ -140,9 +140,9 @@ export function useDevices({ everyMs, devicesEveryMs, devicesAnswerMs = DEVICES_
   const { value: sharedRead, reload: reloadShared } = usePolled<Answer<SharedRow[]> | undefined>(doors.length ? () => loadShared(host, doors.map(machine => machine.url)) : null, undefined, Math.max(everyMs, 10_000), [doorIds], 'previous')
   const shared = sharedRead?.ok ? sharedRead.value : []
 
-  // Who is in at each server this computer installed: asked over SSH, one read at a time each.
+  // Who is in at each server this computer installed, a computer at home too: asked over SSH, one read at a time each.
   const [awaited, setAwaited] = useState<string | undefined>()
-  const asked = servers.filter(server => server.through === undefined && !server.working && server.steps.every(step => step.state === 'done')).map(server => server.address)
+  const asked = servers.filter(server => !server.working && server.steps.every(step => step.state === 'done')).map(server => server.address)
   const lastDevices = useRef<Record<string, DevicesRead | undefined>>({})
   const [devicesError, setDevicesError] = useState<Record<string, string | undefined>>({})
   const [, setDevicesTick] = useState(0)

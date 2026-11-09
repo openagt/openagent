@@ -583,6 +583,8 @@ test("a person's own OpenAgent is told the computer's name as its owner named it
       return `${DEVICE_COOKIE}=${entry.id}.${entry.key}`
     }
     const [ada, rom] = [await cookieOf(), await cookieOf('rom')]
+    // Whoever asks who they are here is told the name too: a computer that keeps a line here lists this one under it.
+    assert.equal(((await (await fetch(`${r.at}${ME_PATH}`, { headers: { cookie: rom } })).json()) as { name?: string }).name, 'שרת של עדה')
     await fetch(`${r.at}/`, { headers: { cookie: rom, [OWNERS_NAME_HEADER]: 'mallory' } })
     assert.equal(decodeURIComponent(String(roms.asked.at(-1)!.headers[OWNERS_NAME_HEADER])), 'שרת של עדה')
     await fetch(`${r.at}/`, { headers: { cookie: ada, [OWNERS_NAME_HEADER]: 'mallory' } })
@@ -590,6 +592,7 @@ test("a person's own OpenAgent is told the computer's name as its owner named it
     owners = undefined
     await fetch(`${r.at}/`, { headers: { cookie: rom, [OWNERS_NAME_HEADER]: 'mallory' } })
     assert.equal(roms.asked.at(-1)!.headers[OWNERS_NAME_HEADER], undefined, 'nothing while the name is not known')
+    assert.equal(((await (await fetch(`${r.at}${ME_PATH}`, { headers: { cookie: ada } })).json()) as { name?: string }).name, undefined)
   } finally {
     await roms.close()
     await r.close()

@@ -223,6 +223,8 @@ export interface Line {
   person?: string
   /** For a line for everyone: the server's persons, as its door last said them. */
   persons?: string[]
+  /** The server's name, as its owner named it and its door said: what a page here lists the line under. */
+  name?: string
   /** The server said no to this computer's key when the line was last asked for: nothing changes that but the person. */
   refused?: true
 }
@@ -442,12 +444,13 @@ export function sanitize(value: unknown): Store {
   for (const entry of Array.isArray(obj.lines) ? obj.lines : []) {
     if (lines.length >= MAX_LINES) break
     if (!entry || typeof entry !== 'object') continue
-    const { url, pin, key, mode, refused, for: who, person, persons: theirs } = entry as Record<string, unknown>
+    const { url, pin, key, mode, refused, for: who, person, persons: theirs, name } = entry as Record<string, unknown>
     if (!isLineUrl(url) || typeof pin !== 'string' || !pin || typeof key !== 'string' || !key) continue
     if (lines.some(line => line.url === url)) continue
     const everyone = who === 'everyone'
     const heard = everyone && Array.isArray(theirs) ? [...new Set(theirs.filter(isName))].slice(0, MAX_PERSONS) : undefined
-    lines.push({ url, pin, key, mode: mode === 'watch' ? 'watch' : 'full', ...(everyone ? { for: 'everyone' as const } : {}), ...(isName(person) ? { person } : {}), ...(heard ? { persons: heard } : {}), ...(refused === true ? { refused: true } : {}) })
+    const called = typeof name === 'string' ? name.trim().slice(0, 60) : ''
+    lines.push({ url, pin, key, mode: mode === 'watch' ? 'watch' : 'full', ...(everyone ? { for: 'everyone' as const } : {}), ...(isName(person) ? { person } : {}), ...(heard ? { persons: heard } : {}), ...(called ? { name: called } : {}), ...(refused === true ? { refused: true } : {}) })
   }
   const codes: Code[] = []
   for (const entry of Array.isArray(obj.codes) ? obj.codes : []) {

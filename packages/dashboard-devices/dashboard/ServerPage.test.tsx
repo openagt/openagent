@@ -996,6 +996,20 @@ describe('Settings › Devices: a computer at home set up as a server, through a
     await waitFor(() => expect(ran()).toContain('who 192.168.1.20 everyone'))
   })
 
+  test('a server at home whose door opened on Tailscale since says so on its row and its page, and names the server it goes through', async () => {
+    const saved: ModuleMachines = { ...SAVED, machines: [{ ...SAVED.machines[0]!, label: 'OpenAgentVPS' }, SAVED.machines[1]!] }
+    const { host } = dashboard(() => ok({ servers: [box()] }), saved, undefined, undefined, () => ok({ devices: [], persons: [{ name: 'rom', owner: true }], door: { tailscale: 'rom-box.tail1234.ts.net' } }))
+    show(host)
+    const row = await screen.findByRole('listitem', { name: 'rom-box' })
+    await waitFor(() => expect(row.textContent).toContain('on Tailscale at rom-box.tail1234.ts.net'))
+    expect(row.textContent).toContain('through OpenAgentVPS')
+    expect(row.textContent).toContain('1 person')
+    expect(row.textContent).not.toContain('165.245.244.10')
+    await open('rom-box')
+    expect((await screen.findAllByText('on Tailscale at rom-box.tail1234.ts.net')).length).toBeGreaterThan(0)
+    expect(screen.getAllByText('through OpenAgentVPS').length).toBeGreaterThan(0)
+  })
+
   test('from everyone to fewer, it asks first what becomes of the others\' users there: they go, or stay switched off', async () => {
     const persons = [{ name: 'rom', owner: true }, { name: 'suleimansh', from: VPS }, { name: 'dani', from: VPS }]
     const { host, ran } = dashboard(() => ok({ servers: [box({ who: 'everyone' })] }), SAVED, undefined, undefined, () => ok({ devices: [], persons }))
@@ -1052,6 +1066,20 @@ describe('Settings › Devices: Set up a server, in steps', () => {
     if (user !== undefined) fireEvent.change(screen.getByLabelText('User name'), { target: { value: user } })
     fireEvent.click(button('Test connection'))
   }
+
+  test('an address this computer connected already is not set up anew: the page says it is connected, and how, and goes no further', async () => {
+    const { host, ran } = dashboard(
+      () => ok({ servers: [server(ALL_DONE, { address: 'box.tail1234.ts.net', url: VIA, user: 'rom', adding: false, through: VPS, who: 'me' })] }),
+      { version: '1.2.3', machines: [{ id: VPS, label: 'OpenAgentVPS', url: VPS, version: '1.2.3' }, { id: VIA, label: 'rom-box', url: VIA, version: '1.2.3' }] },
+    )
+    show(host)
+    await toConnect()
+    fireEvent.change(screen.getByLabelText("The server's address"), { target: { value: 'Box.tail1234.ts.net' } })
+    expect(await screen.findByText('rom-box is connected already, through OpenAgentVPS. Update it from its page.')).toBeTruthy()
+    expect(button('Test connection').disabled).toBe(true)
+    expect(button('Continue').disabled).toBe(true)
+    expect(ran().some(line => line.startsWith('test '))).toBe(false)
+  })
 
   test('a cloud server: Where, a test that goes through, its logins, then Install starts this computer\'s own OpenAgent there, in no project', async () => {
     const { host, ran } = dashboard(() => ok({ servers: [] }))
