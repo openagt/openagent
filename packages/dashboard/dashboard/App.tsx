@@ -35,7 +35,6 @@ import { runsAgain, useRunsPace } from './lib/runs-changed.js'
 import { AGENTS_PAGE, PERMISSIONS_PAGE, useRoute } from './lib/use-route.js'
 import { formatRoute, type Route } from './lib/route.js'
 import { projectAddresses, SESSIONS_ID } from '../src/project-address.js'
-import { dataLinkRoute } from './lib/data-link.js'
 import { useActivityNotifications, useInterventionNotifications } from './lib/use-notifications.js'
 import { usePreferences, notificationsEnabled, newActivityEnabled, humanInterventionEnabled, OpenProjectContext } from './lib/preferences.js'
 import { useDocumentTitle } from './lib/document-title.js'
@@ -334,14 +333,6 @@ export function App() {
   // A module's page (#1774): its own segment, in the picked project, like the Overview.
   const showPage = (segment: string) => {
     go({ projectId: null, agentId: null, page: segment })
-  }
-
-  // A link into a project's files (#1774) — `tickets/<file>` — opens the mounted module page named
-  // by its first segment in that project, at `/<project>/<segment>/<rest>`; the dashboard has no
-  // page of its own for any such path and names no module. Nothing opens when no page claims it.
-  const openDataLink = (id: string, href: string) => {
-    const target = dataLinkRoute(id, href, modulePages)
-    if (target) go(target)
   }
 
   // The shell's services for modules (#1774): what a module page or a link action may ask of the
