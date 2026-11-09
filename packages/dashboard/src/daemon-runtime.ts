@@ -22,7 +22,7 @@ import { screenInDiary } from './dashboard/screen.js'
 import { dispatchRelayRpc } from './dashboard-rpc/relay-dispatch.js'
 import { asRecorded, gitUserOf, onMachine } from './dashboard-rpc/reads.js'
 import { tailAgentEvents } from './dashboard-rpc/events-tail.js'
-import { addProject, isHostName, listMachines, listProjects, machineNamed, nameMachine, noteProjects, noteSeen, noteServer, projectId, readPreferences, removeProject, type MachineRecord, type Preferences } from './registry.js'
+import { addProject, isHostName, listMachines, listProjects, machineNamed, nameMachine, noteProjects, noteSeen, noteServer, projectId, readPreferences, removeProject, type MachineRecord } from './registry.js'
 import { writeHookLines } from './built-in.js'
 import { fileBranchRepo, installProject, isAgentId, projectKey, projectNameOf, repositoryAddress, sessionsHome, writeSharing, isSkillName } from '@openagt/agent-data'
 import { publishedBranch } from '@openagt/agent-data/names'
@@ -181,8 +181,7 @@ export function createProjectRuntime({ cwd, env, clone = cloneProject, logins = 
       () => void (asking = undefined),
     ))
   const machineNames = async (): Promise<(host: string) => SavedMachine | undefined> => {
-    // A list that could not be read keeps the last one: a read that fails once does not hand a machine's runs back to this computer.
-    const read = async (): Promise<void> => void (machines = await listMachines(undefined, env).catch(() => machines))
+    const read = async (): Promise<void> => void (machines = await listMachines(undefined, env))
     await read()
     for (const url of asked.keys()) if (!machines.some(machine => machine.url === url)) asked.delete(url)
     const now = Date.now()
@@ -261,7 +260,7 @@ export function createProjectRuntime({ cwd, env, clone = cloneProject, logins = 
   // so they stay listed while it is off. One whose repository is a project here is listed as this computer's.
   // They are the owner's: a person the owner invited, whose device the door passes to this OpenAgent,
   // is listed none and reaches none of them.
-  const ownMachines = async (): Promise<MachineRecord[]> => (await listMachines(undefined, env).catch(() => machines)).filter(machine => machine.owner === undefined)
+  const ownMachines = async (): Promise<MachineRecord[]> => (await listMachines(undefined, env)).filter(machine => machine.owner === undefined)
   const projectsAsked = new OwnProjectsAsked<MachineRecord>(
     async machine => {
       const said = await machineCall(machine, 'onOwnProjects', [], PROJECTS_ASKED_MS)
@@ -274,7 +273,7 @@ export function createProjectRuntime({ cwd, env, clone = cloneProject, logins = 
     if (callerAtPage() !== undefined) return []
     await projectsAsked.refresh(await ownMachines())
     const own = await ownMachines()
-    const addresses = await Promise.all((await listProjects(undefined, env).catch(() => [])).map(record => addressOf(record.path)))
+    const addresses = await Promise.all((await listProjects(undefined, env)).map(record => addressOf(record.path)))
     return elsewhereHomes(own, new Set(addresses.filter(address => address !== undefined))).map(elsewhereSummary)
   }
   // The Human Queues of the person's other computers (machine-interventions.ts): each says its own
@@ -288,7 +287,7 @@ export function createProjectRuntime({ cwd, env, clone = cloneProject, logins = 
   const machinesQueue = async (): Promise<MachinesQueue> => {
     if (callerAtPage() !== undefined) return { said: [], unread: [] }
     const own = (await ownMachines()).filter(machine => (machine.projects ?? []).length > 0)
-    const [answers, records] = await Promise.all([queuesAsked.of(own), listProjects(undefined, env).catch(() => [])])
+    const [answers, records] = await Promise.all([queuesAsked.of(own), listProjects(undefined, env)])
     // A project as it is listed here, by its repository's address, else by its computer and its id there: as elsewhereHomes lists them.
     const keyOf = (machine: MachineRecord, project: OwnProject): string => project.address ?? `${machine.url} ${lineNameOf(project)}`
     const listed = new Map<string, string>()
@@ -419,7 +418,7 @@ export function createProjectRuntime({ cwd, env, clone = cloneProject, logins = 
   const resolveProject = async (id: string | undefined): Promise<string | undefined> => {
     if (!id || id === homeId) return cwd
     if (id === SESSIONS_ID) return sessionsHome(env)
-    const records = await listProjects(undefined, env).catch(() => [])
+    const records = await listProjects(undefined, env)
     return records.find(record => record.id === id)?.path
   }
 
@@ -443,8 +442,8 @@ export function createProjectRuntime({ cwd, env, clone = cloneProject, logins = 
     if (address === SESSIONS_ID) return SESSIONS_ID
     // A project with no address is named by its id here, by the person's other computer that lists it.
     const id = idInLineName(address)
-    if (id !== undefined) return (await listProjects(undefined, env).catch(() => [])).some(record => record.id === id) ? id : undefined
-    for (const record of await listProjects(undefined, env).catch(() => [])) {
+    if (id !== undefined) return (await listProjects(undefined, env)).some(record => record.id === id) ? id : undefined
+    for (const record of await listProjects(undefined, env)) {
       if ((await addressOf(record.path)) === address) return record.id
     }
     return undefined
@@ -506,7 +505,7 @@ export function createProjectRuntime({ cwd, env, clone = cloneProject, logins = 
     const publish = noProject ? undefined : publishLevelOf(publishPickIn(options.publish, (await projectGitHost(projectCwd).catch(() => undefined)) !== undefined, await hasRemote(projectCwd)))
     // Named unless the person turned naming off: read here rather than sent from the page, so a
     // run a schedule starts is named exactly as one a person starts is.
-    const nameRun = (await readPreferences(undefined, env).catch((): Preferences => ({}))).nameRuns !== false
+    const nameRun = (await readPreferences(undefined, env)).nameRuns !== false
     // The run's name, asked as the run is started rather than once its process is up: of a naming
     // session waiting for this project's runs, it is in about a second after Start. The run is
     // handed a file to find it in, and the page asks for it here (`started-names.ts`).
@@ -668,7 +667,7 @@ export function createProjectRuntime({ cwd, env, clone = cloneProject, logins = 
 
   const onStartedIn = async (folder: string): Promise<StartedInResult> => {
     const path = resolve(folder)
-    const holding = (await listProjects(undefined, env).catch(() => [])).find(project => path === project.path || path.startsWith(project.path + sep))
+    const holding = (await listProjects(undefined, env)).find(project => path === project.path || path.startsWith(project.path + sep))
     if (!holding) {
       const added = await onAddProject(path)
       if (!added.ok) return added
@@ -677,7 +676,7 @@ export function createProjectRuntime({ cwd, env, clone = cloneProject, logins = 
     // The address the page writes: by the projects it lists, those whose folder is there, in the
     // registry's order. A module's page words are the browser's alone, so a folder named as one
     // (`logs`) is printed by its name where the page shows its id; both open it.
-    const listed = await listProjects(undefined, env).catch(() => [])
+    const listed = await listProjects(undefined, env)
     const present = await Promise.all(listed.map(async project => ((await stat(project.path).then(s => s.isDirectory(), () => false)) ? [project.id] : [])))
     return { ok: true, id, path: holding?.path ?? path, added: !holding, address: projectAddresses(present.flat(), []).addressOf(id) }
   }
@@ -721,7 +720,7 @@ export function createProjectRuntime({ cwd, env, clone = cloneProject, logins = 
   // Remove a project: it leaves the Projects list and nothing in its folder is deleted. Found in
   // the list by its id and not through its folder, so a project whose folder is gone goes too.
   const onRemoveProject = async (id: string, files = false): Promise<RemoveProjectResult> => {
-    const listed = await listProjects(undefined, env).catch(() => [])
+    const listed = await listProjects(undefined, env)
     const record = listed.find(project => project.id === id)
     if (!record) return { ok: false, error: 'no project with that id is on the list' }
     const here = await stat(record.path).then(s => s.isDirectory()).catch(() => false)
@@ -792,7 +791,7 @@ export function createProjectRuntime({ cwd, env, clone = cloneProject, logins = 
     const picked = driver ?? DEFAULT_DRIVER
     if (!isDriverName(picked)) return
     void (async () => {
-      if ((await readPreferences(undefined, env).catch((): Preferences => ({}))).nameRuns === false) return
+      if ((await readPreferences(undefined, env)).nameRuns === false) return
       const projectCwd = await resolveProject(targetProjectId)
       if (projectCwd) await naming.prepare(projectCwd, picked)
     })()

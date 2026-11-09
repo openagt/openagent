@@ -1,5 +1,4 @@
 import { computerHealth, type Health } from '../health.js'
-import { computerName } from '../computer-name.js'
 import { projectNameOf, readSharing, repositoryAddress, repositorySpelling } from '@openagt/agent-data'
 import { THROUGH_PATH, deviceIdOf, enterRemote, giveRemoteLogins, leaveRemote, machineCall, pingRemote, remoteAddMachine, remoteComputers, remoteDoor, remoteFacts, remoteLogins, remoteProject, relayRpc, type BringProject, type RelayProject, type RemoteTarget } from '../dashboard/remote-run.js'
 import { isElsewhereId, lineNameOf } from '../dashboard/elsewhere.js'
@@ -55,7 +54,7 @@ function throughOf(server: Pick<MachineRecord, 'url'>, saved: readonly MachineRe
 
 /** This computer's name as the other machine lists it, among the devices that are in there. */
 async function ownName(): Promise<string> {
-  return (await thisComputerName().catch(() => computerName())) || 'another computer'
+  return (await thisComputerName()) || 'another computer'
 }
 
 /**

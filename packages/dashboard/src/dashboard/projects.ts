@@ -137,7 +137,7 @@ export interface ProviderDeps {
  * that comes back (renamed back, a volume remounted) is a project again on the next read.
  */
 export function defaultProjectsProvider(deps: ProviderDeps = {}): ProjectsProvider {
-  const listRecords = deps.listRecords ?? (() => listProjects().catch(() => []))
+  const listRecords = deps.listRecords ?? (() => listProjects())
   const isDirectory = deps.isDirectory ?? nodeFs().isDirectory
   const summarize = deps.summarize ?? (record => summarizeProject(record))
   const present = async (): Promise<ProjectRecord[]> => {

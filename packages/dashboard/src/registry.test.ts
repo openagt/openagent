@@ -147,6 +147,23 @@ test('listProjects on an empty / malformed / non-array file is []', async () => 
   }
 })
 
+test('a read of the registry never fails, whatever the disk does or the file holds: its callers do not guard it', async () => {
+  const unreadable: RegistryFs = {
+    ...memFs(),
+    read: async () => {
+      throw new Error('EACCES: permission denied')
+    },
+  }
+  assert.deepEqual(await readRegistry(unreadable, ENV), { projects: [], preferences: {} })
+  assert.deepEqual(await readPreferences(unreadable, ENV), {})
+  assert.deepEqual(await listMachines(unreadable, ENV), [])
+  assert.equal(await readBridgeToken(unreadable, ENV), undefined)
+  assert.equal(await thisComputerName(unreadable, ENV), computerName())
+  // Every field of the wrong shape, as a hand edit could leave it.
+  const junk = { projects: [1, null, {}], preferences: { model: 3, startFrom: [1], overviewLayouts: 'x', customPresets: {} }, machines: [null, 5, { label: 1 }], forgotten: 'x', repoFolders: [3], computer: {}, name: [] }
+  assert.deepEqual(await readRegistry(memFs({ [FILE]: JSON.stringify(junk) }), ENV), { projects: [], preferences: {} })
+})
+
 test('listProjects round-trips a well-formed file and drops malformed records', async () => {
   const raw = JSON.stringify({ projects: [APP_A, { id: 'no-path' }, 'nope', APP_B], preferences: {} })
   assert.deepEqual(await listProjects(memFs({ [FILE]: raw }), ENV), [APP_A, APP_B])

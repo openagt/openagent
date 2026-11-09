@@ -60,7 +60,7 @@ export const loginsWiring: {
   ready: driver => (driver === 'codex' ? codexReady({ addedAccount: hasAddedAccount('codex') }) : claudeCodeReady({ addedAccount: hasAddedAccount('claude') })),
   fix: runFix,
   driver: async () => {
-    const picked = (await readPreferences().catch(() => ({}) as { driver?: string })).driver
+    const picked = (await readPreferences()).driver
     return picked !== undefined && isDriverName(picked) ? picked : 'claude-code'
   },
 }

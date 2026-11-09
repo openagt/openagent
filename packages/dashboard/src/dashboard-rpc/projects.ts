@@ -182,7 +182,7 @@ export interface ReposRead {
  * already. The kept list, so the picker opens at once; an old one is crawled again behind it.
  */
 export async function onRepos(): Promise<ReposRead> {
-  const [found, projects, hosted] = await Promise.all([thisComputersRepos().read(), listProjects().catch(() => []), readHosted()])
+  const [found, projects, hosted] = await Promise.all([thisComputersRepos().read(), listProjects(), readHosted()])
   const repos = found.repos
   const pinned = new Set(projects.map(project => project.path))
   // A repository at a host that is here already, as a repo or a project, is listed once: by its folder.
@@ -210,7 +210,7 @@ export interface RepoSources {
 }
 
 export async function onRepoSources(): Promise<RepoSources> {
-  const [folders, owners] = await Promise.all([listRepoFolders().catch(() => []), readRepoOwners()])
+  const [folders, owners] = await Promise.all([listRepoFolders(), readRepoOwners()])
   return { folders, owners }
 }
 

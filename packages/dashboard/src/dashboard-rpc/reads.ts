@@ -28,7 +28,7 @@ import type { OpenAgentEvent } from '../events.js'
 import { bridgeQuestions } from '../dashboard/bridge-store.js'
 import type { BridgeEvent, BridgeHello, BridgeQuestion } from '../dashboard/bridge-endpoints.js'
 import type { BridgeAnswer, BridgeContact, BridgeVersion } from '../dashboard/bridge-store.js'
-import { isHostName, readBridgeToken, readPreferences, type Preferences } from '../registry.js'
+import { isHostName, readBridgeToken, readPreferences } from '../registry.js'
 import { machineKind, machineName } from '../reached-by-line.js'
 import type { SavedMachine } from '../dashboard/rpc-serve.js'
 import { hostname } from 'node:os'
@@ -659,9 +659,9 @@ export async function onBridgeStatus(): Promise<{
  * open `~/.openagent.json` and copy a field out of it.
  */
 export async function onBridgeToken(): Promise<string | null> {
-  const preferences = await readPreferences().catch((): Preferences => ({}))
+  const preferences = await readPreferences()
   if (preferences.bridge !== true) return null
-  return (await readBridgeToken().catch(() => undefined)) ?? null
+  return (await readBridgeToken()) ?? null
 }
 
 /**
