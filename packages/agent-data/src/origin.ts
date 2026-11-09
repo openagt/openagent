@@ -8,13 +8,22 @@ import { addressOfRemote, spellingOfRemote } from './repository-address.js'
  * project's name that comes of it.
  */
 
+/** Where the repository at `cwd` fetches from and pushes to, as its `origin` remote was given; none when it has no `origin`. */
+export async function originUrl(cwd: string, git: GitRunner = nodeGitRunner()): Promise<string | undefined> {
+  return git(['remote', 'get-url', 'origin'], cwd).then(
+    out => out.trim() || undefined,
+    () => undefined,
+  )
+}
+
 /**
  * The address of the repository at `cwd`: its `origin` remote, the one every push goes to. A
  * project with no `origin`, or one that is a folder on this disk, has none and runs on this
  * machine only.
  */
 export async function repositoryAddress(cwd: string, git: GitRunner = nodeGitRunner()): Promise<string | undefined> {
-  return git(['remote', 'get-url', 'origin'], cwd).then(addressOfRemote, () => undefined)
+  const url = await originUrl(cwd, git)
+  return url === undefined ? undefined : addressOfRemote(url)
 }
 
 /**
@@ -28,5 +37,6 @@ export async function projectNameOf(cwd: string, git: GitRunner = nodeGitRunner(
 
 /** The same address in the letters the `origin` remote is written with: see {@link spellingOfRemote}. */
 export async function repositorySpelling(cwd: string, git: GitRunner = nodeGitRunner()): Promise<string | undefined> {
-  return git(['remote', 'get-url', 'origin'], cwd).then(spellingOfRemote, () => undefined)
+  const url = await originUrl(cwd, git)
+  return url === undefined ? undefined : spellingOfRemote(url)
 }

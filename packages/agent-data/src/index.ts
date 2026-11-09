@@ -47,7 +47,7 @@ export { REPO_OWNERS_FILE, isRepoOwner, readRepoOwners, writeRepoOwners } from '
 export { PERSON_FILE, isPersonRecordName, isPictureAddress, readPersonRecord, removePersonRecord, writePersonRecord, type PersonRecord } from './person.js'
 export { NoRemoteAccountError, accountGit, clearRemoteAccount, noAccountSentence, readRemoteAccount, remoteHostOf, writeRemoteAccount, type RemoteAccount } from './remote-account.js'
 export { addressOfRemote, spellingOfRemote } from './repository-address.js'
-export { repositoryAddress, repositorySpelling, projectNameOf } from './origin.js'
+export { originUrl, repositoryAddress, repositorySpelling, projectNameOf } from './origin.js'
 export {
   PROJECTS_DIR,
   personalFolder,

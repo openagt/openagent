@@ -4,7 +4,7 @@ import { join, sep } from 'node:path'
 import { DATA_BRANCH } from './names.js'
 import { nodeGitRunner, type GitRunner } from './git.js'
 import { withLockFile } from './checkout-lock.js'
-import { repositoryAddress } from './origin.js'
+import { originUrl, repositoryAddress } from './origin.js'
 import { NoRemoteAccountError, accountGit, clearRemoteAccount, readRemoteAccount, writeRemoteAccount, type RemoteAccount } from './remote-account.js'
 import { SESSIONS_DIR, sessionsHomeOf } from './sessions.js'
 import {
@@ -145,14 +145,6 @@ function serialize<T>(folder: string, deps: ProjectDataDeps, task: () => Promise
 /** The branch the personal folder is on, here and on its remote. */
 const FOLDER_BRANCH = 'main'
 
-/** The personal folder's remote, `origin`, by the address it was given; `undefined` when it has none. */
-async function folderRemote(folder: string, git: GitRunner): Promise<string | undefined> {
-  return git(['remote', 'get-url', 'origin'], folder).then(
-    out => out.trim() || undefined,
-    () => undefined,
-  )
-}
-
 /**
  * Take in what the remote has: fetch, then merge origin's tip, origin's side winning a line both
  * changed. A merge, not a rebase, so a commit of this machine's that never reached the remote is
@@ -192,7 +184,7 @@ export async function withPersonalFolder(folder: string, message: CommitMessage,
   return serialize(folder, deps, async (): Promise<FileBranchWrite> => {
     try {
       await ensurePersonalFolder(folder, git)
-      const remote = (await folderRemote(folder, git)) !== undefined
+      const remote = (await originUrl(folder, git)) !== undefined
       for (let attempt = 0; ; attempt++) {
         if (remote) await takeRemote(folder, git)
         const before = (await git(['rev-parse', 'HEAD'], folder)).trim()
@@ -241,7 +233,7 @@ export async function readPersonalFolder(deps: ProjectDataDeps = {}): Promise<Pe
   const folder = deps.folder ?? personalFolder()
   const made = await stat(join(folder, '.git')).then(() => true, () => false)
   if (!made) return { path: folder, unsent: 0 }
-  const remote = await folderRemote(folder, git)
+  const remote = await originUrl(folder, git)
   const unsent = remote
     ? await git(['rev-list', '--count', `refs/remotes/origin/${FOLDER_BRANCH}..HEAD`], folder).then(
         out => Number(out.trim()) || 0,
@@ -291,7 +283,7 @@ export async function syncPersonalFolder(address: string, account: RemoteAccount
 export async function sendPersonalFolderAs(account: RemoteAccount, deps: ProjectDataDeps = {}): Promise<{ ok: true } | { ok: false; error: string }> {
   const git = deps.git ?? nodeGitRunner()
   const folder = deps.folder ?? personalFolder()
-  if (!(await folderRemote(folder, git))) return { ok: false, error: 'the personal folder syncs with no repository' }
+  if (!(await originUrl(folder, git))) return { ok: false, error: 'the personal folder syncs with no repository' }
   const before = await readRemoteAccount(folder, git).catch(() => undefined)
   const named = await serialize(folder, deps, () => writeRemoteAccount(folder, account, git)).then(
     () => undefined,
