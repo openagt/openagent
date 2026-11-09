@@ -483,14 +483,9 @@ function gitCommonDir(cwd: string): Promise<string | undefined> {
 }
 
 /**
- * What a Codex tool item did, on one line: the command without the shell wrapper Codex puts around
- * it, the files a change touches, the MCP tool, or the web search.
+ * What a Codex tool item was given, as it was given: the command without the shell wrapper Codex
+ * puts around it, the files a change touches, the MCP tool, or the web search.
  */
-export function codexDetail(item: Record<string, unknown>): string | undefined {
-  return callArgument(codexArgument(item)).detail
-}
-
-/** What a Codex tool item was given, as it was given: see {@link codexDetail}. */
 function codexArgument(item: Record<string, unknown>): string | undefined {
   const command = item['command']
   if (typeof command === 'string') return command.replace(/^\S*sh -lc (['"])([\s\S]*)\1$/, '$2')

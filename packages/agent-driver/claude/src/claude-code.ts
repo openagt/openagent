@@ -476,11 +476,6 @@ function withinSubagent(obj: Record<string, unknown>): string | undefined {
   return typeof parent === 'string' && parent !== '' ? parent : undefined
 }
 
-/** The one argument that says what a tool call did, on one line and cut short. */
-export function toolDetail(input: unknown): string | undefined {
-  return callArgument(toolArgument(input)).detail
-}
-
 /**
  * What a tool gave back, from a `tool_result` block: its `content` is the text itself, or a list
  * of blocks whose text ones hold it (an image block holds none).
