@@ -2,7 +2,7 @@ import { strict as assert } from 'node:assert'
 import { test } from 'node:test'
 import { readFile, stat, writeFile } from 'node:fs/promises'
 import { STEP_IDS } from './steps.js'
-import { SILENT_MS, doorUrl, freshSteps, heartbeat, isUser, isVersion, readStore, sanitize, storePath, update, working } from './store.js'
+import { SILENT_MS, doorUrl, freshSteps, heartbeat, isThroughUrl, isUser, isVersion, readStore, sanitize, storePath, update, working } from './store.js'
 import { testHome } from './test-home.js'
 import { Unreadable } from '../home-file.js'
 
@@ -37,6 +37,14 @@ test('a file is read forgivingly: what is malformed is left out, and every step 
   assert.equal(first!.adding, true)
   assert.deepEqual(second, { address: '203.0.113.7', user: 'ada', steps: freshSteps(), adding: false })
   assert.deepEqual(sanitize('nonsense'), { servers: [], shared: [] })
+})
+
+test('an address no URL reads is no computer reached through a server: a file that holds one is read all the same', () => {
+  const through = 'https://box.example.com/_devices/via/abcdef'
+  const unreadable = 'https://bo^x.example.com/_devices/via/abcdef'
+  assert.equal(isThroughUrl(through), true)
+  assert.equal(isThroughUrl(unreadable), false)
+  assert.deepEqual(sanitize({ shared: [{ url: unreadable }, { url: through }] }).shared, [{ url: through }])
 })
 
 test('an install runs while its process is there and said so a moment ago: a number alone, which another program may hold by now, is no proof', () => {

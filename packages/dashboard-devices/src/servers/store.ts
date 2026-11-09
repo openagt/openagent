@@ -302,7 +302,8 @@ export function sanitize(value: unknown): Store {
  * server's door, then where it passes a call down that computer's line.
  */
 export function isThroughUrl(said: string): boolean {
-  return /^https:\/\/[^/?#\s]+\/_devices\/via\/[a-z0-9]{6,32}$/.test(said) && isMachineUrl(new URL(said).origin)
+  // One no URL reads is none: it never fails the file it is in, nor the command it was given to.
+  return /^https:\/\/[^/?#\s]+\/_devices\/via\/[a-z0-9]{6,32}$/.test(said) && URL.canParse(said)
 }
 
 export function isMachineUrl(said: string): boolean {
