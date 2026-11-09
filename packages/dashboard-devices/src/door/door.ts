@@ -332,6 +332,20 @@ export async function openDoor(opts: DoorOptions): Promise<Door> {
     for (const other of [...wrongTries.keys()]) triesOf(other)
     wrongTries.set(peer, [...triesOf(peer), now()])
   }
+  /**
+   * A call on `socket` from the device `id`, which is in: when it was last seen, which computer it
+   * says it is (`computer`), and what it holds open, cut once it is taken out. The first word of a
+   * computer counts: what an entry says it is, is not changed by what its key's holder says later.
+   */
+  const heardFrom = (id: string, socket: Socket, computer: string | undefined): void => {
+    seen.set(id, now())
+    if (computer !== undefined && !said.has(id)) said.set(id, computer)
+    let held = sockets.get(id)
+    if (!held) sockets.set(id, (held = new Set()))
+    if (held.has(socket)) return
+    held.add(socket)
+    socket.once('close', () => held.delete(socket))
+  }
 
   const flushSeen = async (): Promise<void> => {
     if (seen.size === 0) return
@@ -528,23 +542,13 @@ export async function openDoor(opts: DoorOptions): Promise<Door> {
       if (!fromOwnPage(req, secure, opts.origin)) return refuse(res, 403, 'forbidden')
 
       const { entry, byBearer, person, owner, port } = who
-      seen.set(entry.id, now())
       // Only a computer says which one it is: a page's word for it is not taken.
-      const computer = byBearer ? saidComputer(req) : undefined
-      // The first word counts: what an entry says it is, is not changed by what its key's holder says later.
-      if (computer !== undefined && !said.has(entry.id)) said.set(entry.id, computer)
+      heardFrom(entry.id, req.socket, byBearer ? saidComputer(req) : undefined)
       // A computer's name is its own, said with every call: renamed there, it is listed here by the new one.
       const heard = byBearer ? saidComputerName(req) : undefined
       if (heard !== undefined && names.get(entry.id) !== heard) {
         names.set(entry.id, heard)
         void nameComputer(env, entry.id, device => (device.line ? heard : computerName(heard))).catch(() => names.delete(entry.id))
-      }
-      let held = sockets.get(entry.id)
-      if (!held) sockets.set(entry.id, (held = new Set()))
-      if (!held.has(req.socket)) {
-        const socket = req.socket
-        held.add(socket)
-        socket.once('close', () => held.delete(socket))
       }
       // OpenAgent shows the person at the page: the owner's own device is the owner at their own page, said by nobody.
       passOn(req, res, entry, byBearer, owner ? undefined : person, port)
@@ -671,13 +675,7 @@ export async function openDoor(opts: DoorOptions): Promise<Door> {
       if (share(looked)) await update(env, kept => void (kept.devices.find(candidate => candidate.id === device.id)?.line && share(kept)))
       // Gone while the file was read: there is no line to give.
       if (socket.destroyed) return
-      seen.set(device.id, now())
-      const computer = saidComputer(req)
-      if (computer !== undefined && !said.has(device.id)) said.set(device.id, computer)
-      let held = sockets.get(device.id)
-      if (!held) sockets.set(device.id, (held = new Set()))
-      held.add(socket as Socket)
-      socket.once('close', () => held.delete(socket as Socket))
+      heardFrom(device.id, socket as Socket, saidComputer(req))
       socket.write(`HTTP/1.1 101 Switching Protocols\r\nConnection: Upgrade\r\nUpgrade: ${LINE_PROTOCOL}\r\n\r\n`)
       opts.lines.take(device.id, socket, head)
     })().catch(() => socket.destroy())
