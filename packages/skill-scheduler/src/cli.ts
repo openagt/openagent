@@ -1,5 +1,4 @@
-import { parseArgs } from 'node:util'
-import { nodeGitRunner, type GitRunner } from '@openagt/agent-data'
+import { Refused, UsageError, inRepo, nodeGitRunner, parseCommandArgs, runCommandLine, type Command, type GitRunner } from '@openagt/agent-data'
 import { projectRoot } from '@openagt/skill-branches'
 import { driverFor } from '@openagt/agent-runner'
 import { runNow, schedulerStatus, startScheduler, stopScheduler, tickProject } from './scheduler.js'
@@ -90,56 +89,20 @@ export interface CliIo {
   stderr: (line: string) => void
 }
 
-export type CliRefusal = { ok: false; reason: string; [key: string]: unknown }
-
-class Refused extends Error {
-  constructor(readonly outcome: CliRefusal, readonly line: string) {
-    super(line)
-  }
+export function runCli(argv: string[], io: CliIo, git: GitRunner = nodeGitRunner()): Promise<number> {
+  return runCommandLine(argv, io, { usage: USAGE, commands: COMMANDS }, io, git)
 }
 
-class Usage extends Error {}
-
-export async function runCli(argv: string[], io: CliIo, git: GitRunner = nodeGitRunner()): Promise<number> {
-  const [command, ...rest] = argv
-  const run = command && Object.hasOwn(COMMANDS, command) ? COMMANDS[command] : undefined
-  if (!run) {
-    io.stderr(USAGE)
-    return 2
-  }
-  try {
-    const result = await run(rest, io, git)
-    io.stdout(JSON.stringify(result))
-    return 0
-  } catch (err) {
-    if (err instanceof Usage) {
-      io.stderr(`${err.message}\n\n${USAGE}`)
-      return 2
-    }
-    if (err instanceof Refused) {
-      io.stdout(JSON.stringify(err.outcome))
-      io.stderr(err.line)
-      return 1
-    }
-    const detail = err instanceof Error ? err.message : String(err)
-    io.stdout(JSON.stringify({ ok: false, reason: 'failed', detail }))
-    io.stderr(detail)
-    return 1
-  }
-}
-
-type Command = (args: string[], io: CliIo, git: GitRunner) => Promise<unknown>
-
-const COMMANDS: Record<string, Command> = {
+const COMMANDS: Record<string, Command<[CliIo, GitRunner]>> = {
   async tick(args, io, git) {
-    parse(args, {}, 0)
+    parseCommandArgs(args, {}, 0)
     const repo = await project(io.cwd, git)
     const record = await tickProject(repo, { git, log: io.stderr })
     return { ok: true, ...record }
   },
 
   async init(args, io, git) {
-    parse(args, {}, 0)
+    parseCommandArgs(args, {}, 0)
     const repo = await project(io.cwd, git)
     const outcome = await initHooks(repo)
     if (outcome.ok) return outcome
@@ -148,7 +111,7 @@ const COMMANDS: Record<string, Command> = {
   },
 
   async start(args, io, git) {
-    const { values } = parse(args, { foreground: { type: 'boolean' }, 'keep-alive': { type: 'boolean' } }, 0)
+    const { values } = parseCommandArgs(args, { foreground: { type: 'boolean' }, 'keep-alive': { type: 'boolean' } }, 0)
     const repo = await project(io.cwd, git)
     const state = await startScheduler(repo, {
       ...(values.foreground ? { foreground: true } : {}),
@@ -159,7 +122,7 @@ const COMMANDS: Record<string, Command> = {
   },
 
   async stop(args, io, git) {
-    const { values } = parse(args, { 'unless-keep-alive': { type: 'boolean' } }, 0)
+    const { values } = parseCommandArgs(args, { 'unless-keep-alive': { type: 'boolean' } }, 0)
     const repo = await project(io.cwd, git)
     const state = await stopScheduler(repo, { ...(values['unless-keep-alive'] ? { unlessKeepAlive: true } : {}) })
     if (state.kept) io.stderr('keep-alive is on, the scheduler keeps running')
@@ -167,33 +130,33 @@ const COMMANDS: Record<string, Command> = {
   },
 
   async status(args, io, git) {
-    parse(args, {}, 0)
+    parseCommandArgs(args, {}, 0)
     const repo = await project(io.cwd, git)
     return { ok: true, ...(await schedulerStatus(repo)) }
   },
 
   async model(args, io, git) {
-    const { positionals } = parse(args, {}, 1, 2)
+    const { positionals } = parseCommandArgs(args, {}, 1, 2)
     const repo = await project(io.cwd, git)
     if (positionals.length === 1) {
       // One word is the scheduler's own model. A command's name, or `skill`, is a model's id forgotten: taken as an id it would be every row's model.
       const word = positionals[0]!
-      if (word === 'skill' || (await readSchedule(repo)).commands.some(c => c.name === word || c.name.split(' ')[0] === word)) throw new Usage(`${word} is no model: a command's model is set with model <command> <id|skill>`)
+      if (word === 'skill' || (await readSchedule(repo)).commands.some(c => c.name === word || c.name.split(' ')[0] === word)) throw new UsageError(`${word} is no model: a command's model is set with model <command> <id|skill>`)
       return { ok: true, ...(await updateState(repo, s => ({ ...s, model: word }), git)) }
     }
     const [name, to] = positionals as [string, string]
     // Taking a model back needs no scheduled command: one left for a skill that is gone can always be taken back.
     if (to === 'skill') return { ok: true, ...(await updateState(repo, s => withModel(s, name, undefined), git)) }
-    if (!to.trim()) throw new Usage('a model is the id its coding agent knows it by')
+    if (!to.trim()) throw new UsageError('a model is the id its coding agent knows it by')
     const command = await scheduled(repo, name)
     // A model is one agent's: the pick is kept with the agent the command runs on here, and holds only while it does.
     return { ok: true, ...(await updateState(repo, s => withModel(s, name, { agent: agentInForce(s, command), model: to }), git)) }
   },
 
   async agent(args, io, git) {
-    const { positionals } = parse(args, {}, 2)
+    const { positionals } = parseCommandArgs(args, {}, 2)
     const [name, to] = positionals as [string, string]
-    if (to !== 'skill' && !isAgent(to)) throw new Usage(`${to} is none of skill, ${AGENTS.join(', ')}`)
+    if (to !== 'skill' && !isAgent(to)) throw new UsageError(`${to} is none of skill, ${AGENTS.join(', ')}`)
     const repo = await project(io.cwd, git)
     // Taking an agent back needs no scheduled command: one left for a skill that is gone can always be taken back.
     if (to === 'skill') return { ok: true, ...(await updateState(repo, s => withAgent(s, name, undefined), git)) }
@@ -204,17 +167,17 @@ const COMMANDS: Record<string, Command> = {
   },
 
   async offset(args, io, git) {
-    const { positionals } = parse(args, {}, 1)
+    const { positionals } = parseCommandArgs(args, {}, 1)
     const points = Number(positionals[0])
-    if (!Number.isFinite(points)) throw new Usage(`${positionals[0]} is not a number of percentage points`)
+    if (!Number.isFinite(points)) throw new UsageError(`${positionals[0]} is not a number of percentage points`)
     const repo = await project(io.cwd, git)
     return { ok: true, ...(await updateState(repo, s => ({ ...s, spendOffset: points }), git)) }
   },
 
   async switch(args, io, git) {
-    const { positionals } = parse(args, {}, 2)
+    const { positionals } = parseCommandArgs(args, {}, 2)
     const [name, to] = positionals as [string, string]
-    if (to !== 'on' && to !== 'off') throw new Usage(`${to} is neither on nor off`)
+    if (to !== 'on' && to !== 'off') throw new UsageError(`${to} is neither on nor off`)
     const repo = await project(io.cwd, git)
     // Off needs no scheduled command: a switch left on for a skill that is gone can always be taken back.
     if (to === 'on') await scheduled(repo, name)
@@ -226,22 +189,22 @@ const COMMANDS: Record<string, Command> = {
   },
 
   async publish(args, io, git) {
-    const { positionals } = parse(args, {}, 2)
+    const { positionals } = parseCommandArgs(args, {}, 2)
     const [name, to] = positionals as [string, string]
-    if (!(PUBLISH_PICKS as readonly string[]).includes(to)) throw new Usage(`${to} is none of ${PUBLISH_PICKS.join(', ')}`)
+    if (!(PUBLISH_PICKS as readonly string[]).includes(to)) throw new UsageError(`${to} is none of ${PUBLISH_PICKS.join(', ')}`)
     const repo = await project(io.cwd, git)
     await scheduled(repo, name)
     return { ok: true, ...(await updateState(repo, s => withPublish(s, name, to as PublishPick), git)) }
   },
 
   async pace(args, io, git) {
-    const { positionals } = parse(args, {}, 2, 3)
+    const { positionals } = parseCommandArgs(args, {}, 2, 3)
     const [name, to, at] = positionals as [string, string, string | undefined]
     const interval = parseInterval(to)
-    if (to !== 'skill' && to !== 'work' && !interval) throw new Usage(`${to} is none of skill, work, or an interval like 15m, 6h, 2d, 2w, 1mo`)
+    if (to !== 'skill' && to !== 'work' && !interval) throw new UsageError(`${to} is none of skill, work, or an interval like 15m, 6h, 2d, 2w, 1mo`)
     const time = at === undefined ? undefined : parseTimeOfDay(at)
-    if (at !== undefined && !time) throw new Usage(`${at} is no time of day like 10:00`)
-    if (time && !(interval && takesTimeOfDay(interval))) throw new Usage('a time of day goes with days, weeks or months')
+    if (at !== undefined && !time) throw new UsageError(`${at} is no time of day like 10:00`)
+    if (time && !(interval && takesTimeOfDay(interval))) throw new UsageError('a time of day goes with days, weeks or months')
     const repo = await project(io.cwd, git)
     // Taking a pace back needs no scheduled command: one left for a skill that is gone can always be taken back.
     if (to === 'skill') return { ok: true, ...(await updateState(repo, s => withPace(s, name, undefined), git)) }
@@ -265,10 +228,10 @@ const COMMANDS: Record<string, Command> = {
   },
 
   async agents(args, io, git) {
-    const { positionals } = parse(args, {}, 2)
+    const { positionals } = parseCommandArgs(args, {}, 2)
     const [name, to] = positionals as [string, string]
     const count = /^\d+$/.test(to) ? Number(to) : undefined
-    if (to !== 'skill' && !isAgents(count)) throw new Usage(`${to} is neither skill nor a whole number from 1 to ${MAX_AGENTS}`)
+    if (to !== 'skill' && !isAgents(count)) throw new UsageError(`${to} is neither skill nor a whole number from 1 to ${MAX_AGENTS}`)
     const repo = await project(io.cwd, git)
     // Taking a number back needs no scheduled command: one left for a skill that is gone can always be taken back.
     if (to !== 'skill') await scheduled(repo, name)
@@ -276,8 +239,8 @@ const COMMANDS: Record<string, Command> = {
   },
 
   async add(args, io, git) {
-    const { positionals, values } = parse(args, { prompt: { type: 'string' }, every: { type: 'string' }, when: { type: 'string' }, 'waits-for': { type: 'string' }, private: { type: 'boolean' } }, 1)
-    if (values.prompt === undefined) throw new Usage('add needs --prompt, what the agent is told')
+    const { positionals, values } = parseCommandArgs(args, { prompt: { type: 'string' }, every: { type: 'string' }, when: { type: 'string' }, 'waits-for': { type: 'string' }, private: { type: 'boolean' } }, 1)
+    if (values.prompt === undefined) throw new UsageError('add needs --prompt, what the agent is told')
     const repo = await project(io.cwd, git)
     const outcome = await addAutomation(repo, typed(positionals[0]!, values.prompt, values), git, values.private ? { onThisMachine: true } : {})
     if (outcome.ok) {
@@ -289,15 +252,15 @@ const COMMANDS: Record<string, Command> = {
   },
 
   async show(args, io, git) {
-    const { positionals } = parse(args, {}, 1)
+    const { positionals } = parseCommandArgs(args, {}, 1)
     const found = await savedAutomation(await project(io.cwd, git), positionals[0]!)
     if ('reason' in found) throw new Refused(found, refusal(found))
     return { ok: true, ...found.automation, file: found.file, version: found.version, ...(found.onThisMachine ? { onThisMachine: true } : {}) }
   },
 
   async edit(args, io, git) {
-    const { positionals, values } = parse(args, { prompt: { type: 'string' }, every: { type: 'string' }, when: { type: 'string' }, 'waits-for': { type: 'string' }, was: { type: 'string' } }, 1)
-    if (values.prompt === undefined && values.every === undefined && values.when === undefined && values['waits-for'] === undefined) throw new Usage('edit needs what to change: --prompt, --every, --when or --waits-for')
+    const { positionals, values } = parseCommandArgs(args, { prompt: { type: 'string' }, every: { type: 'string' }, when: { type: 'string' }, 'waits-for': { type: 'string' }, was: { type: 'string' } }, 1)
+    if (values.prompt === undefined && values.every === undefined && values.when === undefined && values['waits-for'] === undefined) throw new UsageError('edit needs what to change: --prompt, --every, --when or --waits-for')
     // A flag left out leaves that part as the file says it; a schedule flag given empty takes its part out.
     const part = (typed: string | undefined): string | null | undefined => (typed === undefined ? undefined : typed.trim() === '' ? null : typed)
     const outcome = await editAutomation(await project(io.cwd, git), positionals[0]!, { prompt: values.prompt, every: part(values.every), when: part(values.when), waitsFor: part(values['waits-for']) }, git, values.was !== undefined ? { was: values.was } : {})
@@ -306,7 +269,7 @@ const COMMANDS: Record<string, Command> = {
   },
 
   async remove(args, io, git) {
-    const { positionals } = parse(args, {}, 1)
+    const { positionals } = parseCommandArgs(args, {}, 1)
     const repo = await project(io.cwd, git)
     const outcome = await removeAutomation(repo, positionals[0]!, git)
     if (!outcome.ok) throw new Refused(outcome, refusal(outcome))
@@ -316,7 +279,7 @@ const COMMANDS: Record<string, Command> = {
   },
 
   async now(args, io, git) {
-    const { positionals } = parse(args, {}, 1)
+    const { positionals } = parseCommandArgs(args, {}, 1)
     const repo = await project(io.cwd, git)
     const command = await scheduled(repo, positionals[0]!)
     const started = await runNow(repo, command, { git, log: io.stderr })
@@ -325,18 +288,18 @@ const COMMANDS: Record<string, Command> = {
   },
 
   async try(args, io, git) {
-    const { values } = parse(args, { when: { type: 'string' } }, 0)
-    if (values.when === undefined || !values.when.trim()) throw new Usage('try needs --when, the shell line to run')
+    const { values } = parseCommandArgs(args, { when: { type: 'string' } }, 0)
+    if (values.when === undefined || !values.when.trim()) throw new UsageError('try needs --when, the shell line to run')
     const repo = await project(io.cwd, git)
     return { ok: true, ...(await tryCheck(repo, values.when.trim(), new Date())) }
   },
 
   async 'write-line'(args, io, git) {
-    const { values } = parse(args, { words: { type: 'string' }, agent: { type: 'string' } }, 0)
+    const { values } = parseCommandArgs(args, { words: { type: 'string' }, agent: { type: 'string' } }, 0)
     const words = values.words?.trim()
-    if (!words) throw new Usage('write-line needs --words, what the line waits for in plain words')
+    if (!words) throw new UsageError('write-line needs --words, what the line waits for in plain words')
     const agent = values.agent ?? DEFAULT_AGENT
-    if (!isAgent(agent)) throw new Usage(`--agent is one of ${AGENTS.join(', ')}`)
+    if (!isAgent(agent)) throw new UsageError(`--agent is one of ${AGENTS.join(', ')}`)
     const repo = await project(io.cwd, git)
     // None of the person's own setup: the session answers in words, and what it would load is only cost.
     const driver = driverFor(agent, 'write-line', { memory: false, connectors: false, skills: false })
@@ -346,7 +309,7 @@ const COMMANDS: Record<string, Command> = {
   },
 
   async cleanup(args, io, git) {
-    parse(args, {}, 0)
+    parseCommandArgs(args, {}, 0)
     const outcome = await cleanup(await project(io.cwd, git), { git })
     if (outcome.ok) return outcome
     throw new Refused(outcome, `the scheduler is running here (pid ${outcome.pid}): stop it first with npx @openagt/skill-scheduler@0.1 stop`)
@@ -385,26 +348,6 @@ async function scheduled(repo: string, name: string): Promise<ScheduledCommand> 
 }
 
 /** The project the working directory belongs to, even from inside a checkout under `.branches/`. */
-async function project(cwd: string, git: GitRunner): Promise<string> {
-  try {
-    return await projectRoot(cwd, git)
-  } catch (err) {
-    if (!/not a git repository/i.test(err instanceof Error ? err.message : String(err))) throw err
-    throw new Refused({ ok: false, reason: 'not-a-repo' }, 'not inside a git repository')
-  }
+function project(cwd: string, git: GitRunner): Promise<string> {
+  return inRepo(() => projectRoot(cwd, git))
 }
-
-type Options = Record<string, { type: 'string' | 'boolean' }>
-
-function parse<O extends Options>(args: string[], options: O, min: number, max: number = min) {
-  try {
-    const parsed = parseArgs({ args, options, allowPositionals: true, strict: true })
-    if (parsed.positionals.length < min || parsed.positionals.length > max) {
-      throw new Usage(`expected ${max === min ? min : `${min} to ${max}`} argument(s), got ${parsed.positionals.length}`)
-    }
-    return parsed
-  } catch (err) {
-    throw err instanceof Usage ? err : new Usage(err instanceof Error ? err.message : String(err))
-  }
-}
-

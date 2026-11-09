@@ -9,6 +9,6 @@ export { inFlight, lastRuns, lastStart, commandOf, type LastRun } from './record
 export { MAX_COUNT, parseInterval, parseTimeOfDay, paceInForce, dueFrom, type Interval, type Pace, type PacePick, type PaceUnit } from './pace.js'
 export { tick, startNow, runCheck, type TickDeps, type CheckResult } from './tick.js'
 export { tickProject, runNow, startScheduler, stopScheduler, schedulerStatus, type Status, type StatusCommand } from './scheduler.js'
-export { runCli, USAGE, type CliIo, type CliRefusal } from './cli.js'
+export { runCli, USAGE, type CliIo } from './cli.js'
 export { initHooks, removeHooks, HOOK_LINES, type InitOutcome, type RemoveOutcome } from './init.js'
 export { WRITE_LINE_SYSTEM, writeLine, writeLinePrompt, writtenOf, lineOf, lineContext, type LineContext, type WrittenLine } from './write-line.js'
