@@ -598,6 +598,9 @@ function chips() {
   return deepQueryAll('button[role="combobox"]').filter(usable).map(el => ({ el, via: 'combobox', text: controlText(el) }))
 }
 
+/** What the chips read, for a note that says what the page showed. */
+const chipTexts = () => JSON.stringify(chips().map(c => c.text))
+
 /** The entries an open picker currently offers — visible options only, the closed ones stay in the DOM. */
 function menuEntries() {
   return deepQueryAll('[role="option"]')
@@ -656,7 +659,7 @@ async function chooseFrom(trigger, wanted, hint) {
   }
   if (!hit) {
     const seen = entries()
-    const diag = `search ${search ? `"${search.placeholder}"` : 'none'}, ${seen.length} visible of ${deepQueryAll('[role="option"]').length} options${seen.length ? `: ${seen.slice(0, 5).map(e => JSON.stringify(e.text.slice(0, 40))).join(', ')}` : ''}; chips ${JSON.stringify(chips().map(c => c.text))}`
+    const diag = `search ${search ? `"${search.placeholder}"` : 'none'}, ${seen.length} visible of ${deepQueryAll('[role="option"]').length} options${seen.length ? `: ${seen.slice(0, 5).map(e => JSON.stringify(e.text.slice(0, 40))).join(', ')}` : ''}; chips ${chipTexts()}`
     document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))
     return { ok: false, note: `${hint}: the list offered no "${wanted[0]}" (${diag})` }
   }
@@ -782,13 +785,14 @@ async function createSession({ repo, branch, prompt, model }) {
 
   const bare = String(repo).split('/').pop() ?? repo
   const repoWanted = [String(repo).toLowerCase(), bare.toLowerCase()]
+  const readsRepo = () => (repoWanted.includes(chips()[0]?.text.toLowerCase()) ? chips()[0] : undefined)
   const selectRepo = () => menuTriggers().find(t => /select repo|add repo|choose repo/i.test(t.text) || /select repo|choose repo/i.test(t.el.getAttribute('aria-label') ?? ''))
   // The chips render a beat after the composer: wait for either a chip or the bare picker.
   await waitFor(() => chips().some(c => c.text) || selectRepo(), MENU_WAIT_MS)
   await sleep(window.__oaMenuSettleMs ?? 800)
 
   let repoNote
-  if (repoWanted.includes(chips()[0]?.text.toLowerCase())) {
+  if (readsRepo()) {
     repoNote = `repo already ${chips()[0].text}`
   } else {
     // A remembered other repository's chip is the picker; with nothing remembered, the page offers one.
@@ -798,19 +802,18 @@ async function createSession({ repo, branch, prompt, model }) {
     if (!pick.ok) {
       // The page may have finished loading its remembered repository under us: read again once.
       await sleep(1500)
-      if (repoWanted.includes(chips()[0]?.text.toLowerCase())) pick = { ok: true, note: `repo already ${chips()[0].text} (after a late render)` }
+      if (readsRepo()) pick = { ok: true, note: `repo already ${chips()[0].text} (after a late render)` }
       else return pick
     }
     repoNote = pick.note
-    const chip = await waitFor(() => (repoWanted.includes(chips()[0]?.text.toLowerCase()) ? chips()[0] : undefined), MENU_WAIT_MS)
-    if (!chip) return { ok: false, note: `${repoNote}, but the repo chip does not read "${repo}" afterwards (chips: ${JSON.stringify(chips().map(c => c.text))})` }
+    if (!(await waitFor(readsRepo, MENU_WAIT_MS))) return { ok: false, note: `${repoNote}, but the repo chip does not read "${repo}" afterwards (chips: ${chipTexts()})` }
   }
 
   // The branch chip appears beside the repo chip once a repository is chosen, reading the default branch.
   const branchWanted = [String(branch).toLowerCase()]
   const readsBranch = () => (chips()[1]?.text.toLowerCase() === branchWanted[0] ? chips()[1] : undefined)
   let branchChip = await waitFor(() => (chips()[1]?.text ? chips()[1] : undefined), MENU_WAIT_MS)
-  if (!branchChip) return { ok: false, note: `${repoNote}; no branch chip appeared beside the repo (chips: ${JSON.stringify(chips().map(c => c.text))})` }
+  if (!branchChip) return { ok: false, note: `${repoNote}; no branch chip appeared beside the repo (chips: ${chipTexts()})` }
   let branchNote
   if (readsBranch()) {
     branchNote = `branch already ${branchChip.text}`
@@ -819,7 +822,7 @@ async function createSession({ repo, branch, prompt, model }) {
     if (!pick.ok) return { ok: false, note: `${repoNote}; ${pick.note}` }
     branchNote = pick.note
     branchChip = await waitFor(readsBranch, MENU_WAIT_MS)
-    if (!branchChip) return { ok: false, note: `${repoNote}; ${branchNote}, but the branch chip does not read "${branch}" — not sending (chips: ${JSON.stringify(chips().map(c => c.text))})` }
+    if (!branchChip) return { ok: false, note: `${repoNote}; ${branchNote}, but the branch chip does not read "${branch}" — not sending (chips: ${chipTexts()})` }
   }
 
   // The model picker remembers the last pick too, so it is read before it is opened.
