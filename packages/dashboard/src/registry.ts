@@ -882,40 +882,34 @@ export async function addMachine(
 
 /**
  * Keep the computer's own name a saved machine says, and the one it went by before, whose runs are
- * still known as its. One saved again (a new link) starts without one: `key` is the key the machine
- * was asked with, and a machine saved anew since is not named by an answer to the old one. A name
- * another saved machine goes by is not taken, nor does another person's computer change its name:
- * it would be given runs that are not its. Answers whether the name was written.
+ * still known as its. One saved again (a new link) starts without one: a machine saved anew since
+ * is not named by an answer to the old one ({@link changeMachine}). A name another saved machine
+ * goes by is not taken, nor does another person's computer change its name: it would be given runs
+ * that are not its. Answers whether the name was written.
  */
 export async function nameMachine(machine: { id: string; key: string }, host: string, fs: RegistryFs = nodeRegistryFs(), env: NodeJS.ProcessEnv = process.env): Promise<boolean> {
-  const { id, key } = machine
   if (!isHostName(host)) return false
-  return serialize(async () => {
-    const registry = await readRegistry(fs, env)
-    const machines = registry.machines ?? []
-    const saved = machines.find(candidate => candidate.id === id)
-    if (!saved || saved.key !== key || saved.host === host) return false
-    if (saved.host !== undefined) {
-      if (saved.owner !== undefined) return false
-      if (machines.some(other => other !== saved && (other.host === host || other.formerHosts?.includes(host)))) return false
-    }
-    const formerHosts = [...(saved.formerHosts ?? []), ...(saved.host !== undefined ? [saved.host] : [])].filter(name => name !== host)
-    const { formerHosts: _before, ...rest } = saved
-    const named: MachineRecord = { ...rest, host, ...(formerHosts.length > 0 ? { formerHosts } : {}) }
-    await writeRegistry({ ...registry, machines: machines.map(candidate => (candidate === saved ? named : candidate)) }, fs, env)
-    return true
-  })
+  const named = await changeMachine(
+    machine,
+    (saved, machines) => {
+      if (saved.host === host) return undefined
+      if (saved.host !== undefined) {
+        if (saved.owner !== undefined) return undefined
+        if (machines.some(other => other !== saved && (other.host === host || other.formerHosts?.includes(host)))) return undefined
+      }
+      const formerHosts = [...(saved.formerHosts ?? []), ...(saved.host !== undefined ? [saved.host] : [])].filter(name => name !== host)
+      const { formerHosts: _before, ...rest } = saved
+      return { ...rest, host, ...(formerHosts.length > 0 ? { formerHosts } : {}) }
+    },
+    fs,
+    env,
+  )
+  return named === 'changed'
 }
 
 /** Keep whether a saved machine says it is a server, as it was asked. */
 export async function noteServer(machine: { id: string; key: string }, server: boolean, fs: RegistryFs = nodeRegistryFs(), env: NodeJS.ProcessEnv = process.env): Promise<void> {
-  await serialize(async () => {
-    const registry = await readRegistry(fs, env)
-    const saved = (registry.machines ?? []).find(candidate => candidate.id === machine.id)
-    if (!saved || saved.key !== machine.key || (saved.server === true) === server) return
-    const { server: _before, ...rest } = saved
-    await writeRegistry({ ...registry, machines: (registry.machines ?? []).map(candidate => (candidate === saved ? { ...rest, ...(server ? { server: true as const } : {}) } : candidate)) }, fs, env)
-  })
+  await changeMachine(machine, ({ server: was, ...rest }) => ((was === true) === server ? undefined : { ...rest, ...(server ? { server: true as const } : {}) }), fs, env)
 }
 
 /** The one saved machine a run's recorded name belongs to: the one going by it now, else the one that went by it. A name two say is neither's. */
@@ -926,54 +920,30 @@ export function machineNamed(machines: readonly MachineRecord[], host: string): 
   return before.length === 1 ? before[0] : undefined
 }
 
-/**
- * Keep the ids a saved machine said it is listed under at the doors it saved, when they changed.
- * `key` is the key the machine was asked with: a machine saved anew since keeps what it says itself.
- */
+/** Keep the ids a saved machine said it is listed under at the doors it saved, when they changed. */
 export async function noteListed(machine: { id: string; key: string }, listed: string[], fs: RegistryFs = nodeRegistryFs(), env: NodeJS.ProcessEnv = process.env): Promise<void> {
   const ids = listed.filter(id => DEVICE_ID.test(id)).slice(0, MACHINE_LIMITS.count)
-  await serialize(async () => {
-    const registry = await readRegistry(fs, env)
-    const saved = (registry.machines ?? []).find(candidate => candidate.id === machine.id)
-    if (!saved || saved.key !== machine.key || (saved.listed ?? []).join(' ') === ids.join(' ')) return
-    const { listed: _old, ...rest } = saved
-    const kept: MachineRecord = ids.length ? { ...rest, listed: ids } : rest
-    await writeRegistry({ ...registry, machines: (registry.machines ?? []).map(candidate => (candidate.id === machine.id ? kept : candidate)) }, fs, env)
-  })
+  await changeMachine(machine, ({ listed: was, ...rest }) => ((was ?? []).join(' ') === ids.join(' ') ? undefined : ids.length ? { ...rest, listed: ids } : rest), fs, env)
 }
-
 
 /**
  * Keep the name a saved machine says it has now, when it changed: a page shows a machine under its
- * own name, and the one kept here is what it is shown under while it does not answer. `key` is the
- * key the machine was asked with: a machine saved anew since says its own.
+ * own name, and the one kept here is what it is shown under while it does not answer.
  */
 export async function noteName(machine: { id: string; key: string }, said: string, fs: RegistryFs = nodeRegistryFs(), env: NodeJS.ProcessEnv = process.env): Promise<void> {
   const label = computerNameOf(said)
   if (label === undefined) return
-  await serialize(async () => {
-    const registry = await readRegistry(fs, env)
-    const saved = (registry.machines ?? []).find(candidate => candidate.id === machine.id)
-    if (!saved || saved.key !== machine.key || saved.label === label) return
-    await writeRegistry({ ...registry, machines: (registry.machines ?? []).map(candidate => (candidate.id === machine.id ? { ...saved, label } : candidate)) }, fs, env)
-  })
+  await changeMachine(machine, saved => (saved.label === label ? undefined : { ...saved, label }), fs, env)
 }
 
 /**
  * Keep whose computer a saved machine is, once its door said this computer's person is not its
- * owner: another person's, which this computer's syncs hand nothing of this computer's to. `key` is
- * the key the machine was asked with: a machine saved anew since says for itself. One that is
- * another person's already stays theirs.
+ * owner: another person's, which this computer's syncs hand nothing of this computer's to. One
+ * that is another person's already stays theirs. Answers whether the owner was written.
  */
 export async function noteOwner(machine: { id: string; key: string }, owner: string, fs: RegistryFs = nodeRegistryFs(), env: NodeJS.ProcessEnv = process.env): Promise<boolean> {
   if (!isPersonName(owner)) return false
-  return serialize(async () => {
-    const registry = await readRegistry(fs, env)
-    const saved = (registry.machines ?? []).find(candidate => candidate.id === machine.id)
-    if (!saved || saved.key !== machine.key || saved.owner !== undefined) return false
-    await writeRegistry({ ...registry, machines: (registry.machines ?? []).map(candidate => (candidate.id === machine.id ? { ...saved, owner } : candidate)) }, fs, env)
-    return true
-  })
+  return (await changeMachine(machine, saved => (saved.owner !== undefined ? undefined : { ...saved, owner }), fs, env)) === 'changed'
 }
 
 /** How stale the kept time a machine was last seen may be before it is written again. */
@@ -981,46 +951,46 @@ const SEEN_KEPT_MS = 60_000
 
 /** Keep when a saved machine last answered, once a minute at most: the file is not written at each answer. */
 export async function noteSeen(machine: { id: string; key: string }, at: string, fs: RegistryFs = nodeRegistryFs(), env: NodeJS.ProcessEnv = process.env): Promise<void> {
-  await serialize(async () => {
-    const registry = await readRegistry(fs, env)
-    const saved = (registry.machines ?? []).find(candidate => candidate.id === machine.id)
-    if (!saved || saved.key !== machine.key || (saved.seenAt !== undefined && Date.parse(at) - Date.parse(saved.seenAt) < SEEN_KEPT_MS)) return
-    await writeRegistry({ ...registry, machines: (registry.machines ?? []).map(candidate => (candidate.id === machine.id ? { ...saved, seenAt: at } : candidate)) }, fs, env)
-  })
+  await changeMachine(machine, saved => (saved.seenAt !== undefined && Date.parse(at) - Date.parse(saved.seenAt) < SEEN_KEPT_MS ? undefined : { ...saved, seenAt: at }), fs, env)
 }
 
-/** Keep what a saved machine said of its own projects: the same machine, by its key, or nothing is written. */
+/** Keep what a saved machine said of its own projects. */
 export async function noteProjects(machine: { id: string; key: string }, projects: OwnProject[], fs: RegistryFs = nodeRegistryFs(), env: NodeJS.ProcessEnv = process.env): Promise<void> {
-  await serialize(async () => {
-    const registry = await readRegistry(fs, env)
-    const saved = (registry.machines ?? []).find(candidate => candidate.id === machine.id)
-    if (!saved || saved.key !== machine.key) return
-    await writeRegistry({ ...registry, machines: (registry.machines ?? []).map(candidate => (candidate.id === machine.id ? { ...saved, projects } : candidate)) }, fs, env)
-  })
+  await changeMachine(machine, saved => ({ ...saved, projects }), fs, env)
 }
 
 /** Write down that the person was told their logins are copied to a saved machine of another person's. Answers whether it is saved. */
 export async function tellMachine(id: string, fs: RegistryFs = nodeRegistryFs(), env: NodeJS.ProcessEnv = process.env): Promise<boolean> {
-  return serialize(async () => {
-    const registry = await readRegistry(fs, env)
-    const saved = (registry.machines ?? []).find(candidate => candidate.id === id)
-    if (!saved) return false
-    if (saved.told) return true
-    await writeRegistry({ ...registry, machines: (registry.machines ?? []).map(machine => (machine.id === id ? { ...machine, told: true as const } : machine)) }, fs, env)
-    return true
-  })
+  return (await changeMachine({ id }, saved => (saved.told ? undefined : { ...saved, told: true as const }), fs, env)) !== 'unsaved'
 }
 
 /** Say whether a saved server uses this computer's logins. Answers whether it is saved. */
 export async function useLoginsOn(id: string, on: boolean, fs: RegistryFs = nodeRegistryFs(), env: NodeJS.ProcessEnv = process.env): Promise<boolean> {
+  return (await changeMachine({ id }, ({ logins: _was, ...rest }) => (on ? { ...rest, logins: true as const } : rest), fs, env)) !== 'unsaved'
+}
+
+/**
+ * Change one saved machine, serialized with the other mutators: `change` is handed the machine as
+ * saved, and the whole list, and answers the record that takes its place, or nothing to write
+ * nothing. A machine asked about with a `key` is only the one saved with that key, the key it was
+ * asked with: a machine saved anew since (a new link, a new key) says for itself, and is not
+ * changed by an answer to the old one. Answers `unsaved` when there is no such machine.
+ */
+async function changeMachine(
+  machine: { id: string; key?: string },
+  change: (saved: MachineRecord, machines: readonly MachineRecord[]) => MachineRecord | undefined,
+  fs: RegistryFs,
+  env: NodeJS.ProcessEnv,
+): Promise<'unsaved' | 'unchanged' | 'changed'> {
   return serialize(async () => {
     const registry = await readRegistry(fs, env)
-    const saved = (registry.machines ?? []).find(candidate => candidate.id === id)
-    if (!saved) return false
-    const { logins: _was, ...rest } = saved
-    const next: MachineRecord = on ? { ...rest, logins: true } : rest
-    await writeRegistry({ ...registry, machines: (registry.machines ?? []).map(machine => (machine.id === id ? next : machine)) }, fs, env)
-    return true
+    const machines = registry.machines ?? []
+    const saved = machines.find(candidate => candidate.id === machine.id)
+    if (!saved || (machine.key !== undefined && saved.key !== machine.key)) return 'unsaved'
+    const changed = change(saved, machines)
+    if (changed === undefined) return 'unchanged'
+    await writeRegistry({ ...registry, machines: machines.map(candidate => (candidate === saved ? changed : candidate)) }, fs, env)
+    return 'changed'
   })
 }
 
