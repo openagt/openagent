@@ -12,6 +12,8 @@ import { isPersonName } from '../registry.js'
  */
 export interface Person {
   name: string
+  /** The email git commits as on this computer, lowered: what the records of their runs are kept under. */
+  email?: string
   /** A picture of them: an https address. */
   avatar?: string
   /** The GitHub login the name and picture were copied from. */
@@ -59,15 +61,22 @@ export function personAtPage(own: Person, name = caller.getStore()): Person {
   return name === undefined ? own : { name }
 }
 
-/** The person this computer's OpenAgent knows: their own record, else git's name or this computer's user. */
-export async function readPerson(deps: { record?: () => Promise<PersonRecord | undefined>; gitName?: () => Promise<string | undefined> } = {}): Promise<Person> {
-  const record = await (deps.record ?? (() => readPersonRecord()))().catch(() => undefined)
-  if (record) return { name: record.name, ...(record.picture ? { avatar: record.picture } : {}), ...(record.github ? { github: record.github } : {}), own: true }
-  return { name: (await (deps.gitName ?? readGitName)()) ?? userInfo().username }
+/** The person this computer's OpenAgent knows: their own record, else git's name or this computer's user; and git's email, which their runs are kept under. */
+export async function readPerson(deps: { record?: () => Promise<PersonRecord | undefined>; gitName?: () => Promise<string | undefined>; gitEmail?: () => Promise<string | undefined> } = {}): Promise<Person> {
+  const [record, email] = await Promise.all([(deps.record ?? (() => readPersonRecord()))().catch(() => undefined), (deps.gitEmail ?? readGitEmail)()])
+  const mail = email !== undefined ? { email } : {}
+  if (record) return { name: record.name, ...mail, ...(record.picture ? { avatar: record.picture } : {}), ...(record.github ? { github: record.github } : {}), own: true }
+  return { name: (await (deps.gitName ?? readGitName)()) ?? userInfo().username, ...mail }
 }
 
 /** git's `user.name`, as it is set for this person (asked from their home, so no project's own setting answers). */
 async function readGitName(): Promise<string | undefined> {
   const name = (await nodeGitRunner()(['config', '--get', 'user.name'], homedir()).catch(() => '')).trim()
   return name || undefined
+}
+
+/** git's `user.email`, the same way, lowered as the runs' records keep it. */
+async function readGitEmail(): Promise<string | undefined> {
+  const email = (await nodeGitRunner()(['config', '--get', 'user.email'], homedir()).catch(() => '')).trim().toLowerCase()
+  return email || undefined
 }

@@ -49,6 +49,7 @@ import { HideSidebarButton } from './SidebarToggle.js'
 import { readAgentLogAhead } from '../lib/agent-log.js'
 import { onGitHostPeople } from '../rpc/people.js'
 import { personSaid, useGitHostPeople } from '../lib/use-git-host-people.js'
+import { usePerson } from '../lib/use-person.js'
 
 // One rendered row of the rail, from either source (a project's own run, or a pooled cross-project
 // recent): the AgentMeta to show, an optional project label (only on the Overview, where the rail
@@ -256,6 +257,9 @@ export function AgentHistory({
   // Each row's person, in its own project: a row of the picked project's list on a page of no project says none.
   const projectOf = (row: Row): string | null => row.projectId ?? scope
   const accountOf = useGitHostPeople(rows.map(row => ({ projectId: projectOf(row), person: row.agent.person })), onGitHostPeople, 'sidebar:people')
+  // Your own runs with no git host to ask, a session with no project say: your own picture, as the sidebar's foot shows it.
+  const { person: me } = usePerson()
+  const ownPicture = (person: string | undefined): string | undefined => (person !== undefined && me?.avatar !== undefined && me.email !== undefined && person.toLowerCase() === me.email ? me.avatar : undefined)
 
   const models = useModels()
   const renderRow = (row: Row, subagent: boolean, status: AgentStatus = row.agent.status, fold?: SubagentsFold) => (
@@ -271,7 +275,7 @@ export function AgentHistory({
       naming={!subagent && awaitingName(row.agent, preferences.nameRuns !== false)}
       driver={row.agent.driver}
       // A subagent is its main agent's, whose row says whose.
-      {...(row.agent.person && !subagent ? { person: row.agent.person, account: accountOf(projectOf(row), row.agent.person) } : {})}
+      {...(row.agent.person && !subagent ? { person: row.agent.person, account: accountOf(projectOf(row), row.agent.person), picture: ownPicture(row.agent.person) } : {})}
       {...(row.agent.model ? { model: modelName(models?.[driverFromImpl(row.agent.driver) ?? 'claude-code'], row.agent.model) } : {})}
       // On the Overview the project is what tells the rows apart, so the row still names it; a
       // project's own rail already knows its project, and a subagent is in its main agent's.
@@ -605,6 +609,7 @@ function AgentHistoryRow({
   gitHost = true,
   person,
   account,
+  picture,
 }: {
   status: AgentStatus
   /** The row's subagents, folded or open under it: a count at the row's end, so a row with subagents is no taller than one without. */
@@ -654,6 +659,8 @@ function AgentHistoryRow({
   person?: string | undefined
   /** Their account at the project's git host, when it said: their picture. */
   account?: ModuleHostPerson | undefined
+  /** Their picture when the git host has none to give: the person's own, for their own runs. */
+  picture?: string | undefined
 }) {
   // A run that ended on its question waits on you (#785), and so does a web run whose cloud
   // session the bridge reports as parked (#1668).
@@ -837,7 +844,7 @@ function AgentHistoryRow({
           place with an empty circle, so its title has the same room when the run's own row lands. */}
       {personWords ? (
         <RowMark said={personWords}>
-          <PersonMark email={person} picture={account?.avatar} className={PERSON_MARK} />
+          <PersonMark email={person} picture={account?.avatar ?? picture} className={PERSON_MARK} />
         </RowMark>
       ) : (
         standIn && <PersonMark className={PERSON_MARK} />

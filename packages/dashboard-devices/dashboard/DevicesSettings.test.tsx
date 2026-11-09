@@ -355,6 +355,25 @@ describe('Settings › Devices: this computer, and how devices reach it', () => 
     expect(screen.getByRole('listitem', { name: 'iPhone, Safari' })).toBeTruthy()
   })
 
+  test('a device being removed says so on its row until the row is gone', async () => {
+    let state: object = { ...OFF, devices: [PHONE] }
+    let answerRemove: (() => void) | undefined
+    const { host } = door(async args => {
+      if (args[0] === 'remove') {
+        await new Promise<void>(resolve => void (answerRemove = resolve))
+        state = { ...OFF, devices: [] }
+      }
+      return ok(state)
+    })
+    show(host)
+    await fromMenu('iPhone, Safari', 'Remove')
+    const row = await screen.findByRole('listitem', { name: 'iPhone, Safari' })
+    await waitFor(() => expect(row.textContent).toContain('Removing…'))
+    expect(screen.getByRole('button', { name: 'iPhone, Safari: more' }).hasAttribute('disabled')).toBe(true)
+    answerRemove!()
+    await waitFor(() => expect(screen.queryByRole('listitem', { name: 'iPhone, Safari' })).toBeNull())
+  })
+
   test('a phone is renamed from its menu: the door calls it by the name picked', async () => {
     let name = PHONE.name
     const { host, runComputerCommand } = door(args => {

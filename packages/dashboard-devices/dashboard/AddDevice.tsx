@@ -28,22 +28,32 @@ const KINDS: readonly { id: Exclude<Adding, 'choose'>; icon: ComponentType<{ cla
   { id: 'code', icon: Ticket, title: 'I have a code', words: 'Join a server of yours, or a computer someone shared with you.' },
 ]
 
-/** The names of the devices on the list, and whose new one got in: what a code's dialog says once one did. */
-export function useJoined(d: Devices, waiting: boolean): string | undefined {
+/** A Tailscale address is reached the first time only once its certificate is fetched, which Safari may sit out as a black page. */
+const TAILSCALE_FIRST_OPEN = 'The first open of a Tailscale address can take a few seconds. If the page stays black, reload it.'
+
+/**
+ * The names of the devices on the list, and whose new one got in: what a code's dialog says once
+ * one did. A code from a server's door (`at`, by its address) is watched on that server's own list
+ * of devices, as the list of this computer's devices never shows a server at home's.
+ */
+export function useJoined(d: Devices, waiting: boolean, at?: string): string | undefined {
   const before = useRef<Set<string> | undefined>(undefined)
   const [joined, setJoined] = useState<string | undefined>()
-  const keys = d.items.map(item => item.key).join(' ')
+  const listed = (): { key: string; name: string }[] => (at !== undefined ? (d.devices[at]?.devices ?? []).map(device => ({ key: device.id, name: device.name })) : d.items)
+  const keys = listed()
+    .map(item => item.key)
+    .join(' ')
   useEffect(() => {
     if (!waiting) {
       before.current = undefined
       return
     }
     if (before.current === undefined) {
-      before.current = new Set(d.items.map(item => item.key))
+      before.current = new Set(listed().map(item => item.key))
       setJoined(undefined)
       return
     }
-    const fresh = d.items.find(item => !before.current!.has(item.key))
+    const fresh = listed().find(item => !before.current!.has(item.key))
     if (fresh) setJoined(fresh.name)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [waiting, keys])
@@ -142,8 +152,9 @@ function AddPhone({ d, onClose }: { d: Devices; onClose: () => void }) {
   const [turning, setTurning] = useState(false)
   const [error, setError] = useState<string | undefined>()
   const [code, setCode] = useState<Given | undefined>()
-  const joined = useJoined(d, code !== undefined)
   const server = places.find(candidate => candidate.id === where)
+  // A code from a server at home is watched on that server's devices; a server on the internet lists its phones here, as this computer's own door does.
+  const joined = useJoined(d, code !== undefined, server?.tailscale !== undefined ? server.address : undefined)
   useEffect(() => {
     d.await(server ? server.address : undefined)
     return () => d.await(undefined)
@@ -241,6 +252,7 @@ function AddPhone({ d, onClose }: { d: Devices; onClose: () => void }) {
       // The person's own phone: at a server through its door, else at this computer's. Someone else's device is added with Add person.
       ask={server ? server.ask : () => addDevice(host)}
       {...(server ? { openHere: true } : {})}
+      {...(server?.tailscale !== undefined || (!server && status?.tailscale) ? { hint: TAILSCALE_FIRST_OPEN } : {})}
       joined={joined}
       onCode={setCode}
       onClose={onClose}

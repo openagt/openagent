@@ -7,6 +7,7 @@ import type { ProvidedCommand } from '@openagt/agent-data'
 import { loginsWiring } from './logins.js'
 import { provideTestContext } from './test-context.js'
 import { onPerson, sendRemovePersonPicture, sendSavePersonName, sendSyncPersonFromGitHub } from './person.js'
+import type { Person } from './person.js'
 
 // The person's own name and picture through the dashboard's calls: the personal folder under a temp
 // $XDG_CONFIG_HOME, GitHub's profile as the host's package would answer it.
@@ -41,19 +42,24 @@ async function withComputer(body: (asked: string[][], folder: string) => Promise
 
 test('Sync from GitHub copies the profile into the person\'s own record once; after that, the person is read with no git host asked', () =>
   withComputer(async (asked, folder) => {
+    // The email is this computer's git's, whatever it is here: what the record holds is the point.
+    const said = async (): Promise<Omit<Person, 'email'>> => {
+      const { email: _email, ...rest } = await onPerson()
+      return rest
+    }
     assert.equal((await onPerson()).own, undefined, 'none set yet: the computer\'s name')
     assert.deepEqual(await sendSyncPersonFromGitHub('@ada'), { ok: true, changed: true, login: 'ada' })
     assert.deepEqual(asked.filter(args => args[0] === 'profile'), [['profile', 'ada']])
     assert.deepEqual(JSON.parse(readFileSync(join(folder, 'person.json'), 'utf8')), { name: 'Ada Lovelace', picture: 'https://avatars.githubusercontent.com/u/1', github: 'ada' })
     asked.length = 0
-    assert.deepEqual(await onPerson(), { name: 'Ada Lovelace', avatar: 'https://avatars.githubusercontent.com/u/1', github: 'ada', own: true })
+    assert.deepEqual(await said(), { name: 'Ada Lovelace', avatar: 'https://avatars.githubusercontent.com/u/1', github: 'ada', own: true })
     assert.deepEqual(asked, [], 'nothing is read live from GitHub')
 
     // The name is the person's to change; the picture stays, and can go.
     assert.deepEqual(await sendSavePersonName('Ada King'), { ok: true })
-    assert.deepEqual(await onPerson(), { name: 'Ada King', avatar: 'https://avatars.githubusercontent.com/u/1', github: 'ada', own: true })
+    assert.deepEqual(await said(), { name: 'Ada King', avatar: 'https://avatars.githubusercontent.com/u/1', github: 'ada', own: true })
     assert.deepEqual(await sendRemovePersonPicture(), { ok: true })
-    assert.deepEqual(await onPerson(), { name: 'Ada King', github: 'ada', own: true })
+    assert.deepEqual(await said(), { name: 'Ada King', github: 'ada', own: true })
     assert.equal((await sendSavePersonName('a\nb')).ok, false)
     assert.deepEqual(await sendSyncPersonFromGitHub('nobody'), { ok: false, error: 'GitHub has no user nobody' })
   }))

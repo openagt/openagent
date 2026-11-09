@@ -525,7 +525,9 @@ function People({ d, address, ownDevice, through, picks = false }: { d: Devices;
                   <UserRound className="h-3.5 w-3.5 shrink-0" aria-hidden />
                   <span className="truncate">{person.owner ? `${person.name}, the owner` : person.name}</span>
                 </p>
+                {/* The owner of a server at home, and a person a server's line named here: they reach it through that server, and their devices are in there, not here. */}
                 {person.owner && through !== undefined && <p className="text-muted-foreground">{`Uses this computer through ${through}.`}</p>}
+                {!person.owner && person.from !== undefined && <p className="text-muted-foreground">{`Uses this computer through ${labelOf(d.machines?.machines ?? [], person.from)}.`}</p>}
                 {!person.owner && (
                   <ConfirmDialog
                     trigger={
@@ -544,7 +546,7 @@ function People({ d, address, ownDevice, through, picks = false }: { d: Devices;
             )}
             {person?.working && <p className="text-muted-foreground">{`Making ${person.name}'s own user on the server, with their own OpenAgent. This takes a minute or two.`}</p>}
             {person?.problem !== undefined && !person.working && <p role="alert" className="text-danger">{`${person.name}'s own user on the server could not be made: ${person.problem.replace(/\.?$/, '.')} Add them again to try again.`}</p>}
-            {person !== undefined && theirs.length === 0 && <p className="text-muted-foreground">No device yet.</p>}
+            {person !== undefined && theirs.length === 0 && (person.owner || person.from === undefined) && <p className="text-muted-foreground">No device yet.</p>}
             {theirs.length > 0 && (
               <ul aria-label={person !== undefined ? `Devices of ${person.name} on ${address}` : `The devices that are in on ${address}`} className="space-y-2">
                 {theirs.map(device => (

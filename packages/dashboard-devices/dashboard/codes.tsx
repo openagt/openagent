@@ -198,6 +198,7 @@ export function PhoneCode({
   steps = ["Open the phone's camera and point it at the code.", 'Tap the link it shows. OpenAgent opens, and stays in.'],
   camera = true,
   openHere = false,
+  hint,
   joined,
   onCode,
   onClose,
@@ -206,6 +207,8 @@ export function PhoneCode({
   ask: () => Promise<GivenAnswer>
   /** What the person does with the code, step by step. */
   steps?: readonly string[]
+  /** A word under the steps about where the code opens, when it needs one. */
+  hint?: string
   /** The code is for a phone's camera: the link is for one with no camera. */
   camera?: boolean
   /** The link may be opened in this browser: it lets this browser in, and spends the code. */
@@ -242,6 +245,7 @@ export function PhoneCode({
                   </Step>
                 ))}
               </ol>
+              {hint !== undefined && <p className="text-xs text-muted-foreground">{hint}</p>}
               {code.wifiUrl !== undefined && !byWifi && (
                 <button type="button" className="mr-3 text-xs underline" onClick={() => setByWifi(true)}>
                   Not on Tailscale? Use this Wi-Fi.

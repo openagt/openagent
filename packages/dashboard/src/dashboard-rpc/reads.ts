@@ -201,7 +201,7 @@ const GIT_USER_KEPT_MS = 60_000
 const gitUsers = new Map<string, { person?: string; until: number }>()
 
 /** Whom git commits as in the project, as the runs' records are kept under it: its email, lowered. */
-async function gitUserOf(cwd: string): Promise<string | undefined> {
+export async function gitUserOf(cwd: string): Promise<string | undefined> {
   const kept = gitUsers.get(cwd)
   if (kept && kept.until > Date.now()) return kept.person
   const said = await nodeGitRunner()(['config', 'user.email'], cwd).then(
