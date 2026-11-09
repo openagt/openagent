@@ -12,7 +12,7 @@ import type { Cloned } from '../clone-project.js'
 import { readSharing } from '@openagt/agent-data'
 import { createProjectRuntime, type ProjectRuntime } from '../daemon-runtime.js'
 import { forwardStream } from '../dashboard-rpc/stream-forward.js'
-import { dispatchMachineRpc } from '../dashboard-rpc/relay-dispatch.js'
+import { dispatchMachineRpc, dispatchRelayRpc } from '../dashboard-rpc/relay-dispatch.js'
 import { asCaller } from './person.js'
 import { elsewhereId } from './elsewhere.js'
 import type { ProjectLauncher } from '../dashboard-rpc/projects.js'
@@ -133,7 +133,7 @@ async function twoMachines(opts: { shopOnB?: boolean; machineCalls?: (fn: string
     testDashboardOptions({
       clientBundleDir: bundle,
       context: testDashboardContext({ startAgent: bStart }),
-      relay: { project: runtimeB.projectAt, tailEvents: bTail, rpc: runtimeB.onRelayRpc, machine: (fn, args) => opts.machineCalls?.(fn, args) ?? dispatchMachineRpc(fn, args), bring: runtimeB.bringProject },
+      relay: { project: runtimeB.projectAt, tailEvents: bTail, rpc: dispatchRelayRpc, machine: (fn, args) => opts.machineCalls?.(fn, args) ?? dispatchMachineRpc(fn, args), bring: runtimeB.bringProject },
     }),
   )
 

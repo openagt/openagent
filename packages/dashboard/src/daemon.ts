@@ -27,7 +27,7 @@ import { personLogins } from './dashboard/copy-logins.js'
 import { startLoginsSync } from './dashboard/logins-sync.js'
 import { startComputersSync } from './dashboard/computers-sync.js'
 import { runComputerCommand } from './dashboard-rpc/modules.js'
-import { dispatchMachineRpc, isRelayReadCall } from './dashboard-rpc/relay-dispatch.js'
+import { dispatchMachineRpc, dispatchRelayRpc, isRelayReadCall } from './dashboard-rpc/relay-dispatch.js'
 
 /**
  * The dashboard process (#302). It is a pure projection of files: a run's tool keeps the run's
@@ -180,7 +180,7 @@ export async function runDaemon(cwd: string, opts: RunDaemonOptions = {}): Promi
     // The `/_relay/*` endpoints let another daemon run + read + steer a session here. A person's own
     // OpenAgent on a computer several people use keeps their logins there: another OpenAgent of
     // theirs hands them over through the relay.
-    relay: { project: runtime.projectAt, tailEvents: runtime.tailRelayEvents, rpc: runtime.onRelayRpc, reads: isRelayReadCall, machine: dispatchMachineRpc, bring: runtime.bringProject, ...(env.OPENAGENT_PERSON ? { logins: personLogins(runComputerCommand) } : {}) },
+    relay: { project: runtime.projectAt, tailEvents: runtime.tailRelayEvents, rpc: dispatchRelayRpc, reads: isRelayReadCall, machine: dispatchMachineRpc, bring: runtime.bringProject, ...(env.OPENAGENT_PERSON ? { logins: personLogins(runComputerCommand) } : {}) },
     screen: runtime.screenOf,
     // The browser bridge (#1237): absent unless the preference is on, which 404s every route.
     ...(bridgeToken ? { bridgeToken, bridgeSessions: () => listBridgeSessions(env) } : {}),

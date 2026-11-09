@@ -19,7 +19,6 @@ import { ownRunsWatch } from './dashboard/runs-watch.js'
 import { cloneProject, cloneTarget } from './clone-project.js'
 import { copyLoginsTo, loginsAreThere, ownLogins, type OwnLogins } from './dashboard/copy-logins.js'
 import { screenInDiary } from './dashboard/screen.js'
-import { dispatchRelayRpc } from './dashboard-rpc/relay-dispatch.js'
 import { asRecorded, gitUserOf, onMachine } from './dashboard-rpc/reads.js'
 import { tailAgentEvents } from './dashboard-rpc/events-tail.js'
 import { addProject, isHostName, listMachines, listProjects, machineNamed, nameMachine, noteProjects, noteSeen, noteServer, projectId, readPreferences, removeProject, type MachineRecord } from './registry.js'
@@ -142,9 +141,6 @@ export interface ProjectRuntime {
   /** The relayed-agent lookup the dashboard's read RPCs consult (#1067 slice 2): which machine a remote
    *  run runs on, so a run-scoped RPC forwards there instead of resolving a local checkout. */
   remoteAgents: RemoteAgents
-  /** The machine side of the relay (#1067 slice 2): run one whitelisted read/steer/handoff RPC against
-   *  this daemon's own copy of the project, for a daemon that relayed an agent here. */
-  onRelayRpc: (projectId: string, fn: string, args: unknown[]) => Promise<unknown>
   /** Where the live screen of a run on this computer answers, as its diary names it; nothing when
    *  the run has none: it opened no screen, closed it, or ended. */
   screenOf: (projectId: string, agentId: string) => Promise<string | undefined>
@@ -409,9 +405,6 @@ export function createProjectRuntime({ cwd, env, clone = cloneProject, logins = 
     const projectCwd = await resolveProject(project)
     return projectCwd ? runOf(projectCwd, agentId) : undefined
   }
-  // The machine side of the relay (#1067 slice 2): run one whitelisted read/steer/handoff RPC against this
-  // daemon's own copy of the project the call named, for a daemon that relayed an agent here.
-  const onRelayRpc = (project: string, fn: string, args: unknown[]): Promise<unknown> => dispatchRelayRpc(project, fn, args)
 
   // A project id resolves to its repo path via the registry; the home id (or none)
   // resolves to the daemon's own `cwd` without a lookup.
@@ -803,5 +796,5 @@ export function createProjectRuntime({ cwd, env, clone = cloneProject, logins = 
     await naming?.close()
   }
 
-  return { onStart, onAddProject, onStartedIn, onRemoveProject, onPrepareStart, remoteEventsSource, projectAt, bringProject, tailRelayEvents, remoteAgents, onRelayRpc, screenOf, dispose }
+  return { onStart, onAddProject, onStartedIn, onRemoveProject, onPrepareStart, remoteEventsSource, projectAt, bringProject, tailRelayEvents, remoteAgents, screenOf, dispose }
 }
