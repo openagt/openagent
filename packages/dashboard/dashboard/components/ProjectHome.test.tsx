@@ -12,7 +12,6 @@ vi.mock('./ProjectActions.js', () => ({ ProjectActions: () => null }))
 vi.mock('./ProjectErrorBanner.js', () => ({ ProjectErrorBanner: () => null }))
 vi.mock('./ProjectSkills.js', () => ({ ProjectSkillsLine: () => <div>skills line</div> }))
 vi.mock('./StartAgentForm.js', () => ({ StartAgentForm: () => <div>start form</div> }))
-vi.mock('./AgentOverview.js', () => ({ AgentOverview: () => <div>overview</div> }))
 vi.mock('./HumanQueueList.js', () => ({ HumanQueueList: ({ items }: { items: unknown[] }) => <div>{items.length} rows</div> }))
 
 const { ProjectHome } = await import('./ProjectHome.js')
@@ -31,7 +30,6 @@ describe('ProjectHome', () => {
       <ProjectHome
         projectId="p1"
         waiting={[WAITS]}
-        events={[]}
         files={[]}
         context={new Set()}
         addContext={() => {}}
@@ -63,7 +61,7 @@ describe('ProjectHome', () => {
   })
 
   test('nothing waits: no section, no heading', () => {
-    render(<ProjectHome projectId="p1" waiting={[]} events={[]} files={[]} context={new Set()} addContext={() => {}} removeContext={() => {}} toggleContext={() => {}} onOpenAgent={() => {}} projects={[]} onPickProject={() => {}} onProjectAdded={() => {}} />)
+    render(<ProjectHome projectId="p1" waiting={[]} files={[]} context={new Set()} addContext={() => {}} removeContext={() => {}} toggleContext={() => {}} onOpenAgent={() => {}} projects={[]} onPickProject={() => {}} onProjectAdded={() => {}} />)
     expect(screen.queryByRole('region', { name: 'Waiting on you' })).toBeNull()
     expect(screen.queryByText(/Waiting on you/)).toBeNull()
   })

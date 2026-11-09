@@ -445,7 +445,6 @@ export function App() {
           projectName={projectName}
           home={project?.machine}
           waiting={interventions}
-          events={events}
           onAgentStarted={onAgentStarted}
           files={files}
           context={context}
