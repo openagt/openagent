@@ -18,8 +18,8 @@ test('the hosts line is added once, however often, and taken off with the rest l
   try {
     // A last line with no end: the install's must not be joined to it.
     await writeFile(hosts, '127.0.0.1 localhost\n255.255.255.255 broadcasthost')
-    sh(addHostsLine(hosts, ADDRESS))
-    sh(addHostsLine(hosts, ADDRESS))
+    sh(addHostsLine(hosts))
+    sh(addHostsLine(hosts))
     assert.equal(await readFile(hosts, 'utf8'), `127.0.0.1 localhost\n255.255.255.255 broadcasthost\n${LOOPBACK_ADDRESS} ${ADDRESS} # OpenAgent\n`)
     sh(removeHostsLine(hosts))
     assert.equal(await readFile(hosts, 'utf8'), '127.0.0.1 localhost\n255.255.255.255 broadcasthost\n')
@@ -39,7 +39,7 @@ test('a hosts file that is a link stays a link, and the file it points at gets t
   try {
     await writeFile(real, '127.0.0.1 localhost\n')
     await symlink(real, hosts)
-    sh(addHostsLine(hosts, ADDRESS))
+    sh(addHostsLine(hosts))
     assert.equal(await readFile(real, 'utf8'), `127.0.0.1 localhost\n${LOOPBACK_ADDRESS} ${ADDRESS} # OpenAgent\n`)
     sh(removeHostsLine(hosts))
     assert.equal(await readFile(real, 'utf8'), '127.0.0.1 localhost\n')

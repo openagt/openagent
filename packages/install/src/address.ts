@@ -33,30 +33,28 @@ export function removeHostsLine(file: string): string {
   return `if grep -q ${quoted(` ${HOSTS_MARK}$`)} ${quoted(file)}; then sed ${quoted(`/ ${HOSTS_MARK}$/d`)} ${quoted(file)} > ${kept} && cat ${kept} > ${quoted(file)} && rm ${kept}; fi`
 }
 
-/** Shell lines that point `name` at this computer in the hosts file `file`, once, however often they run. */
-export function addHostsLine(file: string, name: string): string {
+/** Shell lines that point the address at this computer in the hosts file `file`, once, however often they run. */
+export function addHostsLine(file: string): string {
   return [
     removeHostsLine(file),
     // A file that does not end its last line would have this one joined to it.
     `if [ -s ${quoted(file)} ] && [ -n "$(tail -c 1 ${quoted(file)})" ]; then echo >> ${quoted(file)}; fi`,
-    `printf '%s\\n' ${quoted(`${LOOPBACK_ADDRESS} ${name} ${HOSTS_MARK}`)} >> ${quoted(file)}`,
+    `printf '%s\\n' ${quoted(`${LOOPBACK_ADDRESS} ${ADDRESS} ${HOSTS_MARK}`)} >> ${quoted(file)}`,
   ].join('\n')
 }
 
-/** The certificate's openssl settings: for `name` alone, for a server, and no authority over any other. */
-export function certificateConfig(name: string): string {
-  return `[req]
+/** The certificate's openssl settings: for the address alone, for a server, and no authority over any other. */
+export const CERTIFICATE_CONFIG = `[req]
 distinguished_name = dn
 prompt = no
 [dn]
-CN = ${name}
+CN = ${ADDRESS}
 [ext]
-subjectAltName = DNS:${name}
+subjectAltName = DNS:${ADDRESS}
 basicConstraints = critical, CA:FALSE
 keyUsage = critical, digitalSignature, keyEncipherment
 extendedKeyUsage = serverAuth
 `
-}
 
 /** The longest a certificate may last for Safari and macOS: 825 days. */
 export const CERTIFICATE_DAYS = 825

@@ -4,6 +4,7 @@ import { execFileSync } from 'node:child_process'
 import { mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
+import { SECURE_PORT } from '@openagt/dashboard/secure-address'
 import { LOOPBACK_ADDRESS } from './address.js'
 import { adminInstallScript, adminUninstallScript, dashboardPlist, portPlist, portRule } from './mac.js'
 
@@ -30,7 +31,7 @@ test('the launch agent and the launch daemon are property lists macOS reads', on
 })
 
 test('the port rule touches the address alone, not all of 127.0.0.1', () => {
-  assert.equal(portRule(4243), `rdr pass on lo0 inet proto tcp from any to ${LOOPBACK_ADDRESS} port 443 -> 127.0.0.1 port 4243\n`)
+  assert.equal(portRule(), `rdr pass on lo0 inet proto tcp from any to ${LOOPBACK_ADDRESS} port 443 -> 127.0.0.1 port ${SECURE_PORT}\n`)
 })
 
 test('the administrator scripts are whole shell scripts', () => {

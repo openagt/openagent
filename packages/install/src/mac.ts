@@ -69,8 +69,8 @@ export function dashboardPlist(opts: { node: string; dashboard: string; home: st
 }
 
 /** The rule that sends the address's port 443 to the dashboard's secure port. */
-export function portRule(port: number = SECURE_PORT): string {
-  return `rdr pass on lo0 inet proto tcp from any to ${LOOPBACK_ADDRESS} port 443 -> 127.0.0.1 port ${port}\n`
+export function portRule(): string {
+  return `rdr pass on lo0 inet proto tcp from any to ${LOOPBACK_ADDRESS} port 443 -> 127.0.0.1 port ${SECURE_PORT}\n`
 }
 
 /**
@@ -90,9 +90,9 @@ export function portPlist(): string {
 const FORGET_NAMES = 'dscacheutil -flushcache; killall -HUP mDNSResponder 2>/dev/null || true'
 
 /** The install's one script as the administrator: the hosts line, and the port rule with its launch daemon, started now. */
-export function adminInstallScript(name: string = ADDRESS): string {
+export function adminInstallScript(): string {
   return `set -e
-${addHostsLine('/etc/hosts', name)}
+${addHostsLine('/etc/hosts')}
 printf '%s' ${quoted(portRule())} > ${PORT_RULE_FILE}
 printf '%s' ${quoted(portPlist())} > ${PORT_PLIST}
 chown root:wheel ${PORT_RULE_FILE} ${PORT_PLIST}
@@ -135,7 +135,7 @@ export const mac: Platform = {
   prepare: async () => {},
   adminInstall: () => ({
     says: `your password as the administrator, once: ${ADDRESS} is pointed at this Mac (/etc/hosts), and its port 443 at the dashboard (a packet filter rule).`,
-    script: adminInstallScript(ADDRESS),
+    script: adminInstallScript(),
   }),
   async trust(certFile, io, env) {
     // Trusted already, by an install before: macOS asks nothing.

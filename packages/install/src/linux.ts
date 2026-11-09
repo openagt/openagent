@@ -111,12 +111,12 @@ WantedBy=default.target
 }
 
 /** The nftables commands that send the address's port 443 to the dashboard's secure port, however often they run. */
-export function portRule(port: number = SECURE_PORT): string {
+export function portRule(): string {
   return [
     `add table ${PORT_TABLE}`,
     `flush table ${PORT_TABLE}`,
     `add chain ${PORT_TABLE} output { type nat hook output priority -100 ; }`,
-    `add rule ${PORT_TABLE} output ip daddr ${LOOPBACK_ADDRESS} tcp dport 443 redirect to :${port}`,
+    `add rule ${PORT_TABLE} output ip daddr ${LOOPBACK_ADDRESS} tcp dport 443 redirect to :${SECURE_PORT}`,
   ].join('; ')
 }
 
@@ -143,9 +143,9 @@ WantedBy=multi-user.target nftables.service
 }
 
 /** The install's script as the administrator: the hosts line, the port rule's service, started now, and the certificate in the system's store. */
-export function adminInstallScript(certFile: string, store: SystemStore | undefined, name: string = ADDRESS): string {
+export function adminInstallScript(certFile: string, store: SystemStore | undefined): string {
   return `set -e
-${addHostsLine('/etc/hosts', name)}
+${addHostsLine('/etc/hosts')}
 printf '%s' ${quoted(portUnit())} > ${PORT_UNIT_FILE}
 chmod 644 ${PORT_UNIT_FILE}
 systemctl daemon-reload

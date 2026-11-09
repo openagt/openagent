@@ -5,7 +5,7 @@ import { createRequire } from 'node:module'
 import { connect } from 'node:net'
 import { dirname, join } from 'node:path'
 import { CERTIFICATE_FILE, KEY_FILE, readSecureAddress, secureAddressDir } from '@openagt/dashboard/secure-address'
-import { ADDRESS, CERTIFICATE_DAYS, LOOPBACK_ADDRESS, certificateConfig } from './address.js'
+import { ADDRESS, CERTIFICATE_CONFIG, CERTIFICATE_DAYS, LOOPBACK_ADDRESS } from './address.js'
 import { linux } from './linux.js'
 import { mac } from './mac.js'
 import type { InstallIO, Platform } from './platform.js'
@@ -68,7 +68,7 @@ async function ensureCertificate(env: NodeJS.ProcessEnv): Promise<string> {
   const dir = secureAddressDir(env)
   await mkdir(dir, { recursive: true, mode: 0o700 })
   const config = join(dir, 'openssl.cnf')
-  await writeFile(config, certificateConfig(ADDRESS))
+  await writeFile(config, CERTIFICATE_CONFIG)
   await run('openssl', ['req', '-x509', '-newkey', 'rsa:2048', '-nodes', '-keyout', join(dir, KEY_FILE), '-out', join(dir, CERTIFICATE_FILE), '-days', String(CERTIFICATE_DAYS), '-config', config, '-extensions', 'ext'])
   await rm(config)
   return readFile(join(dir, CERTIFICATE_FILE), 'utf8')
