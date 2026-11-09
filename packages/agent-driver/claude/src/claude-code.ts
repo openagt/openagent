@@ -159,7 +159,7 @@ export class ClaudeCodeSession implements DriverSession {
   private lastSessionId: string | undefined
   readonly log?: SessionLog
   private readonly startOpts: DriverStartOptions
-  /** How hard the model thinks: the one picked, else the one Claude Code's settings set, read once for the session. */
+  /** {@link effortInForce}, read once for the session. */
   private effort: Promise<string | undefined> | undefined
   /** The Claude account the session is on, by name, when it runs on accounts: kept until its limit moves it on. */
   private readonly current: { account?: string } = {}
@@ -179,36 +179,8 @@ export class ClaudeCodeSession implements DriverSession {
   }
 
   async prompt(text: string, opts: DriverPromptOptions = {}): Promise<DriverTurn> {
-    const system = combineFraming(this.startOpts.system, opts.system)
-    const effort = await (this.effort ??= this.startOpts.effort !== undefined ? Promise.resolve(this.startOpts.effort) : settingsEffort(this.cwd, (this.config.env ?? process.env)['HOME'] ?? homedir(), this.config.personal?.skills !== false))
-    const emit = withEffort(makeEmit(this.startOpts.onEvent, 'claude-code'), effort)
-    const signals = combineSignals(this.startOpts.signal, opts.signal)
+    const emit = withEffort(makeEmit(this.startOpts.onEvent, 'claude-code'), await this.effortInForce())
     const env = this.config.env ?? process.env
-    const turnOn = (said: string, sent: DriverPromptOptions, parser: StreamJsonParser, turnEnv: NodeJS.ProcessEnv): Promise<DriverTurn> => {
-      const resumeId = sent.resume ? this.lastSessionId : undefined
-      const agent = (id: string | undefined, emitFn: (event: DriverEvent) => void): Promise<DriverTurn> =>
-        runCliSession({
-          bin: this.config.bin ?? 'claude',
-          args: this.buildArgs(system, id),
-          cwd: this.cwd,
-          env: agentEnv(turnEnv, this.log),
-          prompt: said,
-          ...(sent.added !== undefined ? { added: sent.added } : {}),
-          ...(sent.attached !== undefined ? { attached: sent.attached } : {}),
-          spawn: this.config.spawn ?? (nodeSpawn as unknown as SpawnLike),
-          emit: emitFn,
-          signals,
-          parser: talking(parser, promptSent(said, sent)),
-          driver: 'claude-code',
-          ...(this.startOpts.stop ? { stop: this.startOpts.stop } : {}),
-          ...(sent.inbox !== undefined ? { inbox: sent.inbox, steered: line => steeredWords(line, sent) } : {}),
-        })
-      // The id we captured may outlive what the CLI will resume (#778): its retention, a cleared
-      // history, another machine. There is no way to ask first, so the turn tries, and a gone
-      // conversation is the caller's to go on without.
-      return resumeId === undefined ? agent(undefined, emit) : continuingTurn('claude-code', resumeId, emit, isConversationGone, held => agent(resumeId, held))
-    }
-
     const accounts = this.config.accounts
     const turn = accounts
       ? await accounts.turn(env, {
@@ -225,7 +197,7 @@ export class ClaudeCodeSession implements DriverSession {
             let turn: DriverTurn | undefined
             let failure: unknown
             try {
-              turn = await turnOn(said, sent, parser, accountEnv(account, env))
+              turn = await this.turnOn(said, sent, parser, accountEnv(account, env), emit)
             } catch (err) {
               failure = err
             }
@@ -239,10 +211,44 @@ export class ClaudeCodeSession implements DriverSession {
             }
           },
         })
-      : await turnOn(text, opts, new StreamJsonParser(), env)
+      : await this.turnOn(text, opts, new StreamJsonParser(), env, emit)
     // Track the agent's session so a later resume continues this exact conversation.
     if (turn.sessionId) this.lastSessionId = turn.sessionId
     return finishTurn(this, turn, opts, emit)
+  }
+
+  /** How hard the model thinks: the one picked, else the one Claude Code's settings set, read once for the session. */
+  private effortInForce(): Promise<string | undefined> {
+    return (this.effort ??= this.startOpts.effort !== undefined ? Promise.resolve(this.startOpts.effort) : settingsEffort(this.cwd, (this.config.env ?? process.env)['HOME'] ?? homedir(), this.config.personal?.skills !== false))
+  }
+
+  /**
+   * One turn, its own `claude` process, with `env`'s login: on the session's conversation for a
+   * `resume` prompt, else a fresh one with the framing.
+   */
+  private turnOn(said: string, sent: DriverPromptOptions, parser: StreamJsonParser, env: NodeJS.ProcessEnv, emit: (event: DriverEvent) => void): Promise<DriverTurn> {
+    const resumeId = sent.resume ? this.lastSessionId : undefined
+    const agent = (emitFn: (event: DriverEvent) => void): Promise<DriverTurn> =>
+      runCliSession({
+        bin: this.config.bin ?? 'claude',
+        args: this.buildArgs(combineFraming(this.startOpts.system, sent.system), resumeId),
+        cwd: this.cwd,
+        env: agentEnv(env, this.log),
+        prompt: said,
+        ...(sent.added !== undefined ? { added: sent.added } : {}),
+        ...(sent.attached !== undefined ? { attached: sent.attached } : {}),
+        spawn: this.config.spawn ?? (nodeSpawn as unknown as SpawnLike),
+        emit: emitFn,
+        signals: combineSignals(this.startOpts.signal, sent.signal),
+        parser: talking(parser, promptSent(said, sent)),
+        driver: 'claude-code',
+        ...(this.startOpts.stop ? { stop: this.startOpts.stop } : {}),
+        ...(sent.inbox !== undefined ? { inbox: sent.inbox, steered: line => steeredWords(line, sent) } : {}),
+      })
+    // The id we captured may outlive what the CLI will resume (#778): its retention, a cleared
+    // history, another machine. There is no way to ask first, so the turn tries, and a gone
+    // conversation is the caller's to go on without.
+    return resumeId === undefined ? agent(emit) : continuingTurn('claude-code', resumeId, emit, isConversationGone, agent)
   }
 
   /**
