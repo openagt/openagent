@@ -382,19 +382,10 @@ export function App() {
         return { ...versions, ...(name !== undefined ? { name } : {}) }
       },
       // Through the dashboard's own list, so the launcher's "Run on" shows the change at once.
-      addMachine: async (link, label) => {
-        const added = await addMachine(link, label)
-        return added.ok ? { ok: true } : added
-      },
+      addMachine,
       removeMachine,
-      renameMachine: async (id, label) => {
-        const renamed = await renameMachine(id, label)
-        return renamed.ok ? { ok: true } : renamed
-      },
-      renameComputer: async name => {
-        const renamed = await renameComputer(name)
-        return renamed.ok ? { ok: true } : renamed
-      },
+      renameMachine,
+      renameComputer,
       letMachineIn: sendLetMachineIn,
       machineCode: sendMachineCode,
       computersThrough: onComputersThrough,
@@ -408,10 +399,7 @@ export function App() {
       useLoginsOn: sendUseLoginsOn,
       syncDataOn: sendSyncPersonalFolderOn,
       agentDataRemote: async () => (await onPersonalFolder()).remote,
-      addComputerThrough: async (machineId, computerId) => {
-        const added = await addComputerThrough(machineId, computerId)
-        return added.ok ? { ok: true } : added
-      },
+      addComputerThrough,
       watchScreen,
       sendToScreen,
   })
