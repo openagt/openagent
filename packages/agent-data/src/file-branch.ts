@@ -2,7 +2,7 @@ import { lstat, mkdir, mkdtemp, readdir, readFile, realpath, rm, rmdir, writeFil
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { BRANCHES_DIR } from './names.js'
-import { errorMessage, nodeGitRunner, type GitRunner } from './git.js'
+import { EMPTY_TREE, errorMessage, nodeGitRunner, type GitRunner } from './git.js'
 import { accountGit } from './remote-account.js'
 import { excludeFromGit, repositoryCheckouts, unexcludeFromGit } from './git-exclude.js'
 import { withCheckoutLock, type CheckoutLockDeps } from './checkout-lock.js'
@@ -52,13 +52,6 @@ function cloneHome(cwd: string, git: GitRunner): Promise<string> {
   }
   return home
 }
-
-/**
- * git's well-known empty tree, present in every repository without being written first. Committing
- * it is how a branch is born parentless with no working-tree gymnastics: `git commit-tree` +
- * `git branch` never touches any checkout, and no code commit is ever an ancestor of the history.
- */
-const EMPTY_TREE = '4b825dc642cb6eb9a060e54bf8d69288fbee4904'
 
 /** Injectable seams; production takes the defaults. */
 export interface FileBranchDeps {
@@ -157,9 +150,17 @@ async function ensureBranchRef(repo: string, branch: string, git: GitRunner): Pr
   if (await refExists(repo, `refs/remotes/origin/${branch}`, git)) {
     await git(['branch', '--no-track', branch, `origin/${branch}`], repo)
   } else {
-    const commit = (await git(['commit-tree', EMPTY_TREE, '-m', `create the ${branch} branch`], repo)).trim()
-    await git(['branch', branch, commit], repo)
+    await git(['branch', branch, await birthCommit(repo, branch, git)], repo)
   }
+}
+
+/**
+ * The commit a branch is born on: parentless, holding git's empty tree. How a branch is born with
+ * no working-tree gymnastics: `git commit-tree` never touches any checkout, and no code commit is
+ * ever an ancestor of the history.
+ */
+async function birthCommit(repo: string, branch: string, git: GitRunner): Promise<string> {
+  return (await git(['commit-tree', EMPTY_TREE, '-m', `create the ${branch} branch`], repo)).trim()
 }
 
 /** The branch HEAD is attached to in a checkout, or `undefined` when HEAD is detached. */
@@ -630,7 +631,7 @@ export async function writeFileBranchDetached(
   const tip = async (): Promise<string> => {
     await r.git(['fetch', 'origin', branch], cwd).catch(() => {})
     if (await refExists(cwd, `refs/remotes/origin/${branch}`, r.git)) return `origin/${branch}`
-    return (await r.git(['commit-tree', EMPTY_TREE, '-m', `create the ${branch} branch`], cwd)).trim()
+    return birthCommit(cwd, branch, r.git)
   }
   try {
     await r.git(['worktree', 'add', '--detach', dir, await tip()], cwd)
