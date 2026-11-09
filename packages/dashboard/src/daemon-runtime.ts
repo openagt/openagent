@@ -24,7 +24,7 @@ import { fileBranchRepo, installProject, isAgentId, projectKey, projectNameOf, r
 import { publishedBranch } from '@openagt/agent-data/names'
 import { branchesOnOrigin } from './dashboard/start-branch.js'
 import { removeProjectFiles } from './remove-files.js'
-import { runProjectHooks, runStartHook } from './project-hooks.js'
+import { runProjectHooks, runStartHook, type StartHookInput } from './project-hooks.js'
 import { publishLevelOf, publishPickIn } from './publish-levels.js'
 import { isBranchName } from './branch-name.js'
 import { hasRemote } from './has-remote.js'
@@ -61,6 +61,16 @@ const DEFAULT_DRIVER = 'claude-code'
 /** How long a name handed to a run waits for it: a start line of another tool never takes it. */
 const HANDED_NAME_KEPT_MS = 2 * 60_000
 
+/** A run's name as it is asked while the run starts: what the start line is given of it, and what follows once the line answered. */
+interface StartName {
+  /** Whether the run is named at all, and the file it finds the name asked here in. */
+  input: Pick<StartHookInput, 'nameRun' | 'nameFile'>
+  /** The line started the run: the name, once in, is handed to it and shown for it. */
+  started: (agentId: string) => void
+  /** The line started nothing: the name is not asked for any more. */
+  failed: () => void
+}
+
 /**
  * Hand the run the name asked for it: written whole, then renamed into place, so the run never
  * reads half of one. `{}` when none came: the run asks on its own then.
@@ -70,6 +80,34 @@ async function handName(file: string, title: string | undefined): Promise<void> 
     .then(() => rename(`${file}.part`, file))
     .catch(() => {})
   setTimeout(() => void rm(file, { force: true }).catch(() => {}), HANDED_NAME_KEPT_MS).unref()
+}
+
+/**
+ * Why a Start's picks are refused before anything is asked of the project, or nothing: a pick
+ * reaches the start line's environment, so only what reads as the thing it names goes there. The
+ * branches are checked once the run is known to start here: a machine picked to run on is sent none.
+ */
+function refusedPicks(options: StartAgentOptions, noProject: boolean): string | undefined {
+  // A session with no project: with no branch, and nothing committed or published; the repos it
+  // has are copied into its folder.
+  if (noProject && (options.base !== undefined || options.prBase !== undefined || options.publish !== undefined || options.account !== undefined || options.projectSkills !== undefined)) {
+    return 'A session with no project runs with no branch, nothing to publish, no account at a git host and no project skills.'
+  }
+  // Its repos are folders on this computer, copied into its folder here: on a machine there is nothing to copy.
+  if (noProject && options.machine !== undefined && options.repos !== undefined) return 'The repos are folders on this computer: a session with them runs here. Pick this computer, or start without them.'
+  // The login reaches the run's environment: one word, as a login is.
+  if (options.account !== undefined && !(typeof options.account === 'string' && /^\S+$/.test(options.account))) return 'An account is named by its login.'
+  if (options.agent !== undefined && !isAgentId(options.agent)) return 'An agent is named by its id.'
+  // The picks of skills reach the environment as lists of names: only names go there.
+  const skillList = (value: unknown): value is string[] => Array.isArray(value) && value.length > 0 && value.every(isSkillName)
+  if ((options.skillsOn !== undefined && !skillList(options.skillsOn)) || (options.skillsOff !== undefined && !skillList(options.skillsOff))) return 'Skills are named by their names.'
+  if (options.projectSkills !== undefined && options.projectSkills !== 'none' && !skillList(options.projectSkills)) return 'Project skills are none, or named by their names.'
+  if (!noProject && options.repos !== undefined) return 'Repos are added to a session with no project: a project works in its own checkout.'
+  // The folders reach the line one per line: only whole paths go there.
+  if (options.repos !== undefined && !(Array.isArray(options.repos) && options.repos.every(folder => typeof folder === 'string' && isAbsolute(folder) && !folder.includes('\n')))) {
+    return 'A repo is named by the path of its folder on this computer.'
+  }
+  return undefined
 }
 
 /** Inputs to {@link createProjectRuntime}. */
@@ -177,26 +215,10 @@ export function createProjectRuntime({ cwd, env, clone = cloneProject, logins = 
   // the brake), no process to stop at shutdown. A project without the line cannot start a run here.
   const onStart = async (prompt: string, options: StartAgentOptions = {}, targetProjectId?: string): Promise<StartAgentResult> => {
     if (isElsewhereId(targetProjectId)) return startElsewhere(prompt, options, targetProjectId)
-    // A session with no project: in a folder of its own in the sessions home, on this computer,
-    // with no branch, and nothing committed or published; the repos it has are copied into it.
+    // A session with no project runs in a folder of its own in the sessions home, on this computer.
     const noProject = targetProjectId === SESSIONS_ID
-    if (noProject && (options.base !== undefined || options.prBase !== undefined || options.publish !== undefined || options.account !== undefined || options.projectSkills !== undefined)) {
-      return { ok: false, error: 'A session with no project runs with no branch, nothing to publish, no account at a git host and no project skills.' }
-    }
-    // Its repos are folders on this computer, copied into its folder here: on a machine there is nothing to copy.
-    if (noProject && options.machine !== undefined && options.repos !== undefined) return { ok: false, error: 'The repos are folders on this computer: a session with them runs here. Pick this computer, or start without them.' }
-    // The login reaches the run's environment: one word, as a login is.
-    if (options.account !== undefined && !(typeof options.account === 'string' && /^\S+$/.test(options.account))) return { ok: false, error: 'An account is named by its login.' }
-    if (options.agent !== undefined && !isAgentId(options.agent)) return { ok: false, error: 'An agent is named by its id.' }
-    // The picks of skills reach the environment as lists of names: only names go there.
-    const skillList = (value: unknown): value is string[] => Array.isArray(value) && value.length > 0 && value.every(isSkillName)
-    if ((options.skillsOn !== undefined && !skillList(options.skillsOn)) || (options.skillsOff !== undefined && !skillList(options.skillsOff))) return { ok: false, error: 'Skills are named by their names.' }
-    if (options.projectSkills !== undefined && options.projectSkills !== 'none' && !skillList(options.projectSkills)) return { ok: false, error: 'Project skills are none, or named by their names.' }
-    if (!noProject && options.repos !== undefined) return { ok: false, error: 'Repos are added to a session with no project: a project works in its own checkout.' }
-    // The folders reach the line one per line: only whole paths go there.
-    if (options.repos !== undefined && !(Array.isArray(options.repos) && options.repos.every(folder => typeof folder === 'string' && isAbsolute(folder) && !folder.includes('\n')))) {
-      return { ok: false, error: 'A repo is named by the path of its folder on this computer.' }
-    }
+    const refused = refusedPicks(options, noProject)
+    if (refused !== undefined) return { ok: false, error: refused }
     const projectCwd = noProject ? await readySessionsHome(sessionsHome(env)) : await resolveProject(targetProjectId)
     if (!projectCwd) return { ok: false, error: `unknown project: ${targetProjectId}` }
     // Run on a saved machine (#1067): forward the start to its daemon, which runs the hook of its
@@ -226,21 +248,10 @@ export function createProjectRuntime({ cwd, env, clone = cloneProject, logins = 
     // it goes as far as the project does with no pull request: its branch pushed, or its work
     // committed where there is no remote.
     const publish = noProject ? undefined : publishLevelOf(publishPickIn(options.publish, (await projectGitHost(projectCwd).catch(() => undefined)) !== undefined, await hasRemote(projectCwd)))
-    // Named unless the person turned naming off: read here rather than sent from the page, so a
-    // run a schedule starts is named exactly as one a person starts is.
-    const nameRun = (await readPreferences(env)).nameRuns !== false
-    // The run's name, asked as the run is started rather than once its process is up: of a naming
-    // session waiting for this project's runs, it is in about a second after Start. The run is
-    // handed a file to find it in, and the page asks for it here (`started-names.ts`).
-    const driver = options.driver ?? DEFAULT_DRIVER
-    const namedHere = naming !== undefined && nameRun && isDriverName(driver) && naming.names(prompt, driver)
-    const nameFile = namedHere ? join(tmpdir(), `openagent-name-${randomUUID()}.json`) : undefined
-    const stopNaming = new AbortController()
-    const name = namedHere && isDriverName(driver) ? naming.name(projectCwd, prompt, driver, stopNaming.signal) : undefined
+    const name = await nameAsStarted(projectCwd, prompt, options.driver ?? DEFAULT_DRIVER)
     const started = await runStartHook(projectCwd, {
       prompt,
-      ...(nameRun ? {} : { nameRun: false }),
-      ...(nameFile !== undefined ? { nameFile } : {}),
+      ...name.input,
       ...(options.driver !== undefined ? { driver: options.driver } : {}),
       ...(options.model !== undefined ? { model: options.model } : {}),
       ...(options.effort !== undefined ? { effort: options.effort } : {}),
@@ -259,14 +270,30 @@ export function createProjectRuntime({ cwd, env, clone = cloneProject, logins = 
     if (started.ok) {
       projectBranches.changed(projectCwd)
       ownRunsWatch.poke(projectCwd)
-    }
-    if (name !== undefined && nameFile !== undefined) {
-      if (started.ok) {
-        nameStarted(started.id, name)
-        void name.then(title => handName(nameFile, title)).then(() => ownRunsWatch.poke(projectCwd))
-      } else stopNaming.abort()
-    }
+      name.started(started.id)
+    } else name.failed()
     return started.ok ? { ok: true, agentId: started.id, ...(started.driver !== undefined ? { driver: started.driver } : {}) } : { ok: false, error: started.error }
+  }
+
+  // The run's name, asked as the run is started rather than once its process is up: of a naming
+  // session waiting for this project's runs, it is in about a second after Start. The run is
+  // handed a file to find it in, and the page asks for it here (`started-names.ts`). Named unless
+  // the person turned naming off: read here rather than sent from the page, so a run a schedule
+  // starts is named exactly as one a person starts is.
+  const nameAsStarted = async (projectCwd: string, prompt: string, driver: string): Promise<StartName> => {
+    const nameRun = (await readPreferences(env)).nameRuns !== false
+    if (naming === undefined || !nameRun || !isDriverName(driver) || !naming.names(prompt, driver)) return { input: nameRun ? {} : { nameRun: false }, started: () => {}, failed: () => {} }
+    const nameFile = join(tmpdir(), `openagent-name-${randomUUID()}.json`)
+    const stop = new AbortController()
+    const name = naming.name(projectCwd, prompt, driver, stop.signal)
+    return {
+      input: { nameFile },
+      started: id => {
+        nameStarted(id, name)
+        void name.then(title => handName(nameFile, title)).then(() => ownRunsWatch.poke(projectCwd))
+      },
+      failed: () => stop.abort(),
+    }
   }
 
   // Send a start to a saved machine, which runs the hook of its own copy of the project and is
