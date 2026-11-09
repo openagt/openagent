@@ -96,11 +96,9 @@ export const Composer = forwardRef<ComposerHandle, {
   submitLabel: string
   submitBusyLabel: string
   placeholder?: string | undefined
-  /** Off inside a session (#831): a session is bound to the agent it started with, so the select
-   *  would only ever rewrite the *next* session's default. Chosen at the launcher instead. */
-  showDriverModel?: boolean | undefined
   /** Inside a session: the "Run on" pick is the launcher's, since a session already runs where it
-   *  was started. */
+   *  was started, and so is the agent/model select (#831): a session is bound to the agent it
+   *  started with, so the select would only ever rewrite the *next* session's default. */
   inAgent?: boolean | undefined
   /** Inside a session: the row above the box, which says what the launcher's row picks. */
   sessionRow?: ReactNode
@@ -114,7 +112,7 @@ export const Composer = forwardRef<ComposerHandle, {
   /** The saved machine the project is on, when only another computer of the person's has it (elsewhere.ts). */
   home?: string | undefined
 }>(function Composer(
-  { files, addContext, removeContext, startsAt, controls, controlsEnd, sessionModel, sessionContext, onSubmit, onPromptChange, onPreset, busy, submitLabel, submitBusyLabel, placeholder, showDriverModel = true, inAgent = false, sessionRow, canSubmit = true, idleControl, home },
+  { files, addContext, removeContext, startsAt, controls, controlsEnd, sessionModel, sessionContext, onSubmit, onPromptChange, onPreset, busy, submitLabel, submitBusyLabel, placeholder, inAgent = false, sessionRow, canSubmit = true, idleControl, home },
   ref,
 ) {
   const [prompt, setPrompt] = useState('')
@@ -170,9 +168,9 @@ export const Composer = forwardRef<ComposerHandle, {
   // Each agent's accounts on that computer, in its part of the agent picker: the one picked is the
   // one its runs take first there, so the run goes with it. An agent not installed there has none
   // to pick, and Codex's accounts are there once it is installed or has some added, as on Settings.
-  const accountsOn = inAgent || !showDriverModel ? undefined : selectedMachine?.id
-  const claudeAccounts = useAccountsOn('claude', accountsOn, !inAgent && showDriverModel)
-  const codexAccounts = useAccountsOn('codex', accountsOn, !inAgent && showDriverModel)
+  const accountsOn = inAgent ? undefined : selectedMachine?.id
+  const claudeAccounts = useAccountsOn('claude', accountsOn, !inAgent)
+  const codexAccounts = useAccountsOn('codex', accountsOn, !inAgent)
   const accountsOf = (name: DriverName): Pick<DriverOption, 'account' | 'accounts'> => {
     const { view, pick } = name === 'codex' ? codexAccounts : claudeAccounts
     const answer = models?.[name]
@@ -268,7 +266,7 @@ export const Composer = forwardRef<ComposerHandle, {
 
   // The agent/model select. Every value is preferences-backed and global: what it picks is what the
   // next start runs on, wherever that start is made.
-  const driverModelEl = showDriverModel && (
+  const driverModelEl = !inAgent && (
     <DriverModelMenu
       drivers={driverOptions(models, theirs && selectedMachine ? machineName(selectedMachine) : undefined).map(d => ({ ...d, ...DRIVER_UI[d.value as DriverName], ...accountsOf(d.value as DriverName) }))}
       driver={driver}

@@ -132,8 +132,8 @@ describe('Composer (#721)', () => {
     expect(screen.getByRole('button', { name: /Start session/ })).toBeTruthy()
   })
 
-  test('showDriverModel={false} (#831) drops the agent/model select, keeping the rest of the row', () => {
-    const { onSubmit } = renderComposer({ showDriverModel: false })
+  test('in a session (#831) there is no agent/model select, and the rest of the row stays', () => {
+    const { onSubmit } = renderComposer({ inAgent: true })
     // An in-session composer: the session is bound to the agent it started with, so offering the
     // select there would only ever rewrite the next session's default.
     expect(screen.queryByRole('button', { name: /^Driver: / })).toBeNull()
@@ -391,7 +391,7 @@ describe('the rows around the box', () => {
   })
 
   test('in a session the model is said in words where the select would be, and is no button', () => {
-    renderComposer({ inAgent: true, showDriverModel: false, sessionModel: 'Opus 5.5' })
+    renderComposer({ inAgent: true, sessionModel: 'Opus 5.5' })
     const row = box().nextElementSibling!
     const said = screen.getByText('Opus 5.5')
     expect(row.contains(said)).toBe(true)
@@ -400,7 +400,7 @@ describe('the rows around the box', () => {
   })
 
   test('a session whose model is not known says none', () => {
-    renderComposer({ inAgent: true, showDriverModel: false })
+    renderComposer({ inAgent: true })
     expect(box().nextElementSibling!.textContent).toBe('')
   })
 
@@ -448,7 +448,7 @@ describe('in a session', () => {
   })
 
   test('there is no row above the box: the box is the first thing the composer draws', () => {
-    renderComposer({ inAgent: true, showDriverModel: false })
+    renderComposer({ inAgent: true })
     expect(box().previousElementSibling).toBeNull()
   })
 })
