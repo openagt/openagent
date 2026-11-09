@@ -4,7 +4,7 @@
 // What this does NOT prove is the only thing left: whether claude.ai's real DOM puts the block
 // somewhere these strategies reach. That is what loading the extension answers.
 //
-//   node --experimental-vm-modules check.mjs      (from this directory, after a repo pnpm install)
+//   node check.mjs      (after a repo pnpm install: jsdom comes from the dashboard's dependencies)
 
 import { readFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'

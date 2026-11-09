@@ -47,6 +47,9 @@ function sessionIdFromUrl() {
   return match ? match[1] : undefined
 }
 
+/** What the daemon last said about our report, so the panel can say why nothing arrived. */
+let bridgeStatus = 'not sent yet'
+
 /**
  * Hand a found question to the service worker, which owns the token and the fetch.
  *
@@ -54,9 +57,6 @@ function sessionIdFromUrl() {
  * where there is no extension runtime. Failures are swallowed: a page that cannot reach the
  * daemon must still show its panel rather than throw inside a DOM observer.
  */
-/** What the daemon last said about our report, so the panel can say why nothing arrived. */
-let bridgeStatus = 'not sent yet'
-
 function reportToDaemon(parsed) {
   const sessionId = sessionIdFromUrl()
   if (!sessionId) return
@@ -451,7 +451,7 @@ function findPendingChoice() {
   return found ?? undefined
 }
 
-/** The box an answer would be typed into, if this ever becomes two-way. */
+/** The box an answer is typed into. */
 function findComposer() {
   const editable = deepQueryAll('div[contenteditable="true"]')[0]
   if (editable) return { via: 'contenteditable', el: editable }
