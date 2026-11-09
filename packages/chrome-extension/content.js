@@ -481,7 +481,7 @@ function fillComposer(composer, text) {
   if (composer.via === 'textarea') {
     composer.el.value = text
     composer.el.dispatchEvent(new Event('input', { bubbles: true }))
-    return true
+    return
   }
   composer.el.focus()
   let inserted = false
@@ -496,7 +496,6 @@ function fillComposer(composer, text) {
     composer.el.textContent = text
     composer.el.dispatchEvent(new InputEvent('input', { bubbles: true, inputType: 'insertText', data: text }))
   }
-  return true
 }
 
 /** The button that sends the composer, wherever the page keeps it this week. */
@@ -1398,19 +1397,11 @@ if (!IS_TOP) {
     panel.appendChild(button('Copy report', () => {
       void navigator.clipboard.writeText(JSON.stringify(latest, null, 2))
     }))
-    // Fills without submitting, on purpose: it proves the write path exists without the
-    // extension ever speaking for the user.
+    // Fills without submitting, on purpose: it proves the write path an answer takes, without
+    // the extension ever speaking for the user.
     panel.appendChild(button('Fill composer (does not send)', () => {
       const composer = findComposer()
-      if (!composer) return
-      const text = winner.choiceOptions?.[0] ?? 'test'
-      if (composer.via === 'textarea') {
-        composer.el.value = text
-        composer.el.dispatchEvent(new Event('input', { bubbles: true }))
-      } else {
-        composer.el.focus()
-        document.execCommand('insertText', false, text)
-      }
+      if (composer) fillComposer(composer, winner.choiceOptions?.[0] ?? 'test')
     }))
   })
 
