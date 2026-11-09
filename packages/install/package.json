@@ -1,6 +1,6 @@
 {
   "name": "@openagt/install",
-  "version": "0.2.4",
+  "version": "0.2.5",
   "description": "Install OpenAgent on this computer: the dashboard starts when you log in, at https://openagent.build, which this computer then answers itself. `npx @openagt/uninstall` takes it all off again.",
   "license": "MIT",
   "repository": {
