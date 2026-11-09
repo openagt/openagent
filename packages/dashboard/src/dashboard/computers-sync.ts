@@ -6,13 +6,16 @@ import { THROUGH_PATH, machineCall } from './remote-run.js'
  * save too, and one the person removes on one of them, the others take out. So every computer's
  * page reaches every other, whichever page the person opens.
  *
- * Each computer, now and then, asks each of the person's computers it reaches at an address (a
- * server, or a computer on Tailscale) what it has and what it removed. What that computer lacks,
- * this one hands it: for each of its other computers reached at an address, and for itself when
- * it has one, a code that computer gets in with, fetched from the door it is for, so every
- * computer holds a key of its own. What that computer removed after it was saved here is taken out
- * here, and what was removed here, it takes out. A computer that keeps a line to a server of the
- * person's is saved through that server, by every computer that is in there.
+ * Each computer, now and then, asks each of the person's computers it reaches, at an address (a
+ * server, or a computer on Tailscale), through a server, or by a line it keeps here, what it has
+ * and what it removed. What that computer lacks, this one hands it: for each of its other
+ * computers reached at an address, and for itself when it has one, a code that computer gets in
+ * with, fetched from the door it is for, so every computer holds a key of its own. What that
+ * computer removed after it was saved here is taken out here, and what was removed here, it takes
+ * out. A computer that keeps a line to a server of the person's is saved through that server, by
+ * every computer that is in there. So a server at home, reached through a server, is handed that
+ * server by the laptop, and by the server itself down the line; it then saves the laptop through
+ * the server on its own, and its page lists the laptop's and the server's projects too.
  *
  * Only the person's own computers: a computer of another person's, shared on a server, is never
  * handed on. Each computer still says only its own projects and runs; it only knows the others.
@@ -153,13 +156,13 @@ export const computersWiring: {
 /** When each computer was last handed one it could not take, by both their addresses. */
 const tried = new Map<string, number>()
 
-/** One round: each of the person's computers reached at an address is brought up to this one's, and this one to theirs. */
+/** One round: each of the person's computers this one reaches is brought up to this one's reached at an address, and this one to theirs. */
 export async function syncComputers(): Promise<void> {
   const w = computersWiring
   const [saved, forgotten, door] = await Promise.all([w.machines(), w.forgotten(), w.door().catch((): OwnDoor => ({ lines: [] }))])
   const own = saved.filter(machine => machine.owner === undefined)
   const atAddress = own.filter(reachedAtAddress)
-  for (const there of atAddress) {
+  for (const there of own) {
     const said = await w.call(there, 'onOwnComputers', [])
     if (!said.ok) continue
     const theirs = ownComputersOf(said.ret)

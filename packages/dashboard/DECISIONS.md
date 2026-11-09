@@ -655,6 +655,12 @@ already made, and lists it in its pull request; for anything else it proposes an
   words written for that machine's own terminal.
 - A machine is picked in "Run on" and removed on its page under Devices. Picked over a remove
   in the menu, one slip of the pointer from picking it.
+- The person's computers are the same on every one of them: a computer one of them saves,
+  the others save too, each with a key of its own there, and one reached only through a server,
+  or by the line it keeps to a server, is told of the others the same way, by the server down
+  the line and by the laptop through it. So a server at home lists the laptop's and the server's
+  projects, and runs on them, as the laptop does. Picked over each computer knowing only the
+  computers that were saved on it by hand, which left a server at home knowing nothing but itself.
 - The machine picked in "Run on" is kept for the next opening of the page, as the model is.
   One no longer saved, or offline as the page opens, is not picked: the run starts on this
   machine, and the page says so. Picked over going back to this machine at each opening.

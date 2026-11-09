@@ -117,9 +117,32 @@ test('a round hands each computer reached at an address what it lacks, by a code
     [box.url, `${studio.url}/_devices/enter#CODE`, 'Studio', null],
     [box.url, 'https://laptop.tail1234.ts.net/_devices/enter#SELFCODE', 'Laptop', null],
   ])
-  // Another person's computer, and one on a Wi-Fi, are never asked or handed.
-  assert.equal(w.asked.some(call => call.to === 'https://rom.example' || call.to === 'http://studio.local:4201'), false)
+  // Another person's computer is never asked or handed; one on a Wi-Fi is asked, never handed.
+  assert.equal(w.asked.some(call => call.to === 'https://rom.example'), false)
+  assert.deepEqual(w.asked.filter(call => call.to === 'http://studio.local:4201').map(call => call.fn), ['onOwnComputers'])
   assert.deepEqual(w.codes, [studio.url, 'self'])
+})
+
+test('a computer reached through a server, or by a line it keeps here, is brought up too: handed the servers and this computer, never itself, and what it has is left', async () => {
+  const box = saved('https://203.0.113.8', { label: 'Box' })
+  const home = saved(`${box.url}/_devices/via/home00`, { label: 'Home server (through Box)' })
+  const onLine = saved('http://127.0.0.1:4210', { label: 'Laptop' })
+  const w = wired({
+    machines: [box, home, onLine, saved(`${box.url}/_devices/via/roms00`, { label: "Rom's PC (through Box)", owner: 'rom' })],
+    door: { address: 'https://laptop.tail1234.ts.net', lines: [] },
+    said: {
+      [box.url]: { computers: [{ url: 'https://laptop.tail1234.ts.net', label: 'Laptop' }], forgotten: [] },
+      [home.url]: { door: 'https://home.tail1234.ts.net', computers: [], forgotten: [] },
+      [onLine.url]: { computers: [{ url: box.url, label: 'Box' }, { url: 'https://laptop.tail1234.ts.net', label: 'Laptop' }], forgotten: [] },
+    },
+  })
+  await syncComputers()
+  const handed = w.asked.filter(call => call.fn === 'sendAddComputer').map(call => [call.to, ...call.args])
+  assert.deepEqual(handed, [
+    [home.url, `${box.url}/_devices/enter#CODE`, 'Box', null],
+    [home.url, 'https://laptop.tail1234.ts.net/_devices/enter#SELFCODE', 'Laptop', null],
+  ])
+  assert.equal(w.asked.some(call => call.to.includes('roms00')), false)
 })
 
 test('a computer that could not take one is not handed it again for an hour: each try makes a code at a door', async () => {
