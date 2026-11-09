@@ -1,6 +1,3 @@
-import { basename } from 'node:path'
-import { nodeGitRunner, type GitRunner } from './git.js'
-
 /**
  * The one name a project has on every machine: where its repository was cloned from, as
  * `host/path` (`github.com/me/shop`). A project's id is made from its folder's path, which is
@@ -14,6 +11,9 @@ import { nodeGitRunner, type GitRunner } from './git.js'
  * What it does not see through: a host that serves the two ways under two names or two paths
  * (`ssh.github.com`, Azure DevOps). Such a project reads as two, and the other machine says it
  * does not have it.
+ *
+ * Pure: no node imports, so browser-side code can read an address too. The address of the
+ * repository in a folder is asked of git, in `origin.ts`.
  */
 export function addressOfRemote(remote: string): string | undefined {
   return spellingOfRemote(remote)?.toLowerCase()
@@ -35,27 +35,4 @@ export function spellingOfRemote(remote: string): string | undefined {
   if (host === undefined || rest === undefined || host.length < 2) return undefined
   const path = rest.replace(/\/+$/, '').replace(/\.git$/i, '').replace(/^\/+|\/+$/g, '')
   return path ? `${host}/${path}` : undefined
-}
-
-/**
- * The address of the repository at `cwd`: its `origin` remote, the one every push goes to. A
- * project with no `origin`, or one that is a folder on this disk, has none and runs on this
- * machine only.
- */
-export async function repositoryAddress(cwd: string, git: GitRunner = nodeGitRunner()): Promise<string | undefined> {
-  return git(['remote', 'get-url', 'origin'], cwd).then(addressOfRemote, () => undefined)
-}
-
-/**
- * A project's name: its repository's, the last part of its address in the letters `origin` writes
- * it with, so the project reads the same on every computer whatever its folder there is called.
- * A project with no address is its folder's.
- */
-export async function projectNameOf(cwd: string, git: GitRunner = nodeGitRunner()): Promise<string> {
-  return (await repositorySpelling(cwd, git))?.split('/').at(-1) ?? basename(cwd)
-}
-
-/** The same address in the letters the `origin` remote is written with: see {@link spellingOfRemote}. */
-export async function repositorySpelling(cwd: string, git: GitRunner = nodeGitRunner()): Promise<string | undefined> {
-  return git(['remote', 'get-url', 'origin'], cwd).then(spellingOfRemote, () => undefined)
 }

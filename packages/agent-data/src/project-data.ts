@@ -4,7 +4,7 @@ import { join, sep } from 'node:path'
 import { DATA_BRANCH } from './names.js'
 import { nodeGitRunner, type GitRunner } from './git.js'
 import { withLockFile } from './checkout-lock.js'
-import { repositoryAddress } from './repository-address.js'
+import { repositoryAddress } from './origin.js'
 import { NoRemoteAccountError, accountGit, clearRemoteAccount, readRemoteAccount, writeRemoteAccount, type RemoteAccount } from './remote-account.js'
 import { SESSIONS_DIR, sessionsHomeOf } from './sessions.js'
 import {
