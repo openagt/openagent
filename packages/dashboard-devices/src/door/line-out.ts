@@ -122,8 +122,11 @@ export function knock(socket: Duplex, url: string, key: string, computer?: strin
   })
 }
 
-/** Where one call down a line goes: an OpenAgent on this computer, or nowhere, with the answer the server is given instead (plain words, unless it says its type). */
-/** Where a call goes: an OpenAgent here, with this computer's name as its owner named it for a person's own one, or an answer given here. */
+/**
+ * Where one call down a line goes: an OpenAgent on this computer, with this computer's name as its
+ * owner named it for a person's own one; or nowhere, with the answer the server is given instead
+ * (plain words, unless it says its type).
+ */
 export type Route = { target: string; ownersName?: string } | { status: number; text: string; type?: string }
 
 export interface CarryOptions {

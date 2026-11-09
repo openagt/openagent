@@ -79,11 +79,12 @@ export interface Devices {
   /** Run a change, and read the servers again; whether it went. */
   act: (change: () => Promise<Answer<unknown>>) => Promise<boolean>
   /**
-   * Install OpenAgent at a server, or update it there; whether the install started. With `logins`,
-   * whether the server uses this computer's logins once it is saved among the machines; unsaid, as
-   * the person last said for it.
+   * Install OpenAgent at a server, or update it there; whether the install started. `through`: the
+   * server a computer at home is reached through, or `tailscale` for one on the person's Tailscale
+   * network. With `logins`, whether the server uses this computer's logins once it is saved among
+   * the machines, and with `data`, whether it syncs this computer's agent data; unsaid, as the person
+   * last said for it.
    */
-  /** `through`: the server a computer at home is reached through, or `tailscale` for one on the person's Tailscale network. */
   install: (address: string, user: string, through?: string | 'tailscale', logins?: boolean, data?: boolean) => Promise<boolean>
   /** Save a server whose install ended among the machines. */
   addToMachines: (server: ServerRow) => Promise<void>

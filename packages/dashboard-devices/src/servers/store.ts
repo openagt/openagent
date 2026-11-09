@@ -297,7 +297,6 @@ export function sanitize(value: unknown): Store {
   return { servers, ...(Object.keys(own).length ? { own } : {}), shared }
 }
 
-/** Whether `said` is a saved machine's address as OpenAgent keeps it: an origin, over HTTPS or on this computer's own network. */
 /**
  * Whether `said` names a computer saved through a server, the way OpenAgent's machines do: the
  * server's door, then where it passes a call down that computer's line.
@@ -307,6 +306,7 @@ export function isThroughUrl(said: string): boolean {
   return new RegExp(`^https://[^/?#\\s]+${VIA_PREFIX}/[a-z0-9]{6,32}$`).test(said) && URL.canParse(said)
 }
 
+/** Whether `said` is a saved machine's address as OpenAgent keeps it: an origin, over HTTPS or on this computer's own network. */
 export function isMachineUrl(said: string): boolean {
   try {
     const url = new URL(said)

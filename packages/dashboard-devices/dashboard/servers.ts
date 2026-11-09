@@ -200,10 +200,10 @@ export function readStatus(output: unknown): ServersRead | undefined {
 
 export const loadServers = (host: ModuleHost): Promise<Answer<ServersRead>> => run(host, ['status'], readStatus)
 /**
- * Install OpenAgent at `version` on the server, or go on where the install failed, or bring a server that fell behind to it.
- * With `through`, the computer has no door of its own on the internet: it keeps a line to that server instead.
+ * Install OpenAgent at `version` on the server, or go on where the install failed, or bring a server
+ * that fell behind to it: one on the internet, one reached through the server at `through`, which it
+ * keeps a line to in place of a door of its own, or one on the person's Tailscale network.
  */
-/** Install OpenAgent on a server: one on the internet, one reached through the server at `through`, or one on the person's Tailscale network. */
 export const connect = (host: ModuleHost, address: string, user: string, version: string, through?: string | 'tailscale'): Promise<Answer<ServerRow[]>> =>
   run(host, ['connect', address, user, version, ...(through === 'tailscale' ? ['--tailscale'] : through !== undefined ? ['--through', through] : [])], readServers)
 /** What failed at a "Test connection", by what a person does about it. */
@@ -225,7 +225,7 @@ function readTested(output: unknown): Tested | undefined {
 export const testConnection = (host: ModuleHost, address: string, user: string): Promise<Answer<Tested>> => run(host, ['test', address, user], readTested)
 /** Save a computer reached through a server among the machines, through that server, once its install is done. */
 export const addThrough = (host: ModuleHost, address: string): Promise<Answer<ServerRow[]>> => run(host, ['add-through', address], readServers)
-/** Say who on its server may start runs on a computer reached through it: nobody, or only its own person; the users of the people named before go. */
+/** Say whether its server may start its own person's runs on a computer reached through it, or only show them: the people named on it stay as they are. */
 export const setWho = (host: ModuleHost, address: string, who: Who): Promise<Answer<DevicesRead>> => run(host, ['who', address, who], readDevices)
 /** Name the people on its server who may start runs on a computer reached through it, besides its own person. */
 export const setPeople = (host: ModuleHost, address: string, people: readonly string[]): Promise<Answer<DevicesRead>> => run(host, ['people', address, ...people], readDevices)

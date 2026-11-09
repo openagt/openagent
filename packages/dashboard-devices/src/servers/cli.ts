@@ -364,13 +364,13 @@ export interface DevicesStatus {
   lineRefused?: true
 }
 
-/** The devices a server's door listed, with this computer's own line among them marked; a refusal for a server that did not say. */
 /** Who is in at a server, as just listed, kept for the next `devices <address> --last`. */
 async function kept(io: CliIO, address: string, status: DevicesStatus): Promise<DevicesStatus> {
   await keepDevices(io.env, address, status)
   return status
 }
 
+/** The devices a server's door listed, with this computer's own line among them marked; a refusal for a server that did not say. */
 function devicesOf(answer: Devices, line: ListedLine | undefined): DevicesStatus {
   if (!answer.ok) throw new Refused(answer.error)
   const own = line?.id
