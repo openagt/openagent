@@ -1,9 +1,10 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 
 // A run just started: its title comes in letter by letter, each out of a light blur, as Claude
 // Code on the web shows a new session's. The stand-in row starts it; the run's own row, taking that
 // row's place a moment later, goes on from where it was, so the title neither restarts nor jumps
-// to whole. Kept by the title's words, for as long as a reveal lasts.
+// to whole. Kept by the title's words, for as long as a reveal lasts. Once it is over the title is
+// plain text again: letters left as finished animations are what iOS Safari leaves half drawn.
 const REVEAL_STEP_MS = 30
 const REVEAL_LETTERS = 24
 const REVEAL_MS = REVEAL_STEP_MS * REVEAL_LETTERS + 90
@@ -20,7 +21,13 @@ export function RevealedTitle({ text, start }: { text: string; start: boolean })
     revealedSince.set(text, now)
     return 0
   })
-  if (elapsed >= REVEAL_MS) return text
+  const [over, setOver] = useState(elapsed >= REVEAL_MS)
+  useEffect(() => {
+    if (over) return
+    const timer = setTimeout(() => setOver(true), REVEAL_MS - elapsed)
+    return () => clearTimeout(timer)
+  }, [over, elapsed])
+  if (over) return text
   const letters = [...text]
   const delay = (at: number) => ({ animationDelay: `${Math.min(at, REVEAL_LETTERS) * REVEAL_STEP_MS - elapsed}ms` })
   return (

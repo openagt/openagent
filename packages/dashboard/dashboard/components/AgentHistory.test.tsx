@@ -28,7 +28,8 @@ vi.mock('../rpc/people.js', () => ({ onGitHostPeople }))
 // list, not the menu (each has its own suite), so stub them out, and the person is a name.
 vi.mock('./ThemeSubmenu.js', () => ({ ThemeSubmenu: () => null }))
 vi.mock('./NotificationsSubmenu.js', () => ({ NotificationsSubmenu: () => null }))
-vi.mock('../rpc/person.js', () => ({ onPerson: () => Promise.resolve({ name: 'Ada Lovelace' }) }))
+const onPerson = vi.hoisted(() => vi.fn(async () => ({ name: 'Ada Lovelace' }) as { name: string; email?: string; avatar?: string }))
+vi.mock('../rpc/person.js', () => ({ onPerson }))
 
 // The rail asks the person's preferences two things: whether a run is named, which decides whether a
 // row waits for that name or prints the prompt, and the order of the list, which it also writes.
@@ -435,6 +436,17 @@ describe('whose run a row is', () => {
     expect(within(row(/^His/)).getByRole('img', { name: 'rom@y.dev' }).textContent).toBe('RO')
     // The row's own sentence says it too.
     expect(row(/^Hers/).getAttribute('aria-label')).toContain('ada@x.dev · ada')
+  })
+
+  test("your own run where no git host answers, a session with no project say: your own picture, as the sidebar's foot shows it", async () => {
+    onPerson.mockResolvedValue({ name: 'Ada Lovelace', email: 'ada@x.dev', avatar: 'https://avatars.githubusercontent.com/u/9' })
+    try {
+      renderRail(<AgentHistory projectId="session" scope="session" agents={[agent({ id: 'r1', title: 'Hi five', person: 'Ada@x.dev' }), agent({ id: 'r2', title: 'His', person: 'rom@y.dev' })]} selectedAgentId={null} onSelect={() => {}} />)
+      await waitFor(() => expect(row(/^Hi five/).querySelector('img')?.getAttribute('src')).toBe('https://avatars.githubusercontent.com/u/9'))
+      expect(row(/^His/).querySelector('img')).toBeNull()
+    } finally {
+      onPerson.mockResolvedValue({ name: 'Ada Lovelace' })
+    }
   })
 
   test('a run that names nobody has no mark', () => {

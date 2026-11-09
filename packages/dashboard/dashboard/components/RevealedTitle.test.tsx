@@ -1,5 +1,5 @@
-import { cleanup, render } from '@testing-library/react'
-import { afterEach, expect, test } from 'vitest'
+import { act, cleanup, render } from '@testing-library/react'
+import { afterEach, expect, test, vi } from 'vitest'
 import { RevealedTitle } from './RevealedTitle.js'
 
 afterEach(cleanup)
@@ -10,6 +10,19 @@ test('a title that was waited for comes in letter by letter', () => {
   const { container } = render(<RevealedTitle text="Git cheat sheet" start />)
   expect(letters(container)).toBe('Git cheat sheet'.length)
   expect(container.textContent).toBe('Git cheat sheet')
+})
+
+test('once the reveal is over the title is plain text again: no letter is left as a finished animation', () => {
+  vi.useFakeTimers()
+  try {
+    const { container } = render(<RevealedTitle text="Greeting session" start />)
+    expect(letters(container)).toBe('Greeting session'.length)
+    act(() => void vi.advanceTimersByTime(2_000))
+    expect(letters(container)).toBe(0)
+    expect(container.textContent).toBe('Greeting session')
+  } finally {
+    vi.useRealTimers()
+  }
 })
 
 test('a title shown at once, as a session opened later has one, is plain text', () => {

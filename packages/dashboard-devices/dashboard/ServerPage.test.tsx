@@ -1084,11 +1084,15 @@ describe('Settings › Devices: a computer at home set up as a server, through a
   test('a server at home with a door on Tailscale has People: Add person asks its door over SSH and says to share it in Tailscale, the owner uses it through the server, and a phone of this person\'s gets a code at that door', async () => {
     const saved: ModuleMachines = { ...SAVED, machines: [{ ...SAVED.machines[0]!, label: 'OpenAgentVPS' }, SAVED.machines[1]!] }
     const link = { url: 'https://rom-box.tail1234.ts.net/_devices/enter#K7P4QX9M', where: 'rom-box.tail1234.ts.net', code: 'K7P4-QX9M', expires: new Date(Date.now() + 10 * 60_000).toISOString() }
-    const { host, ran } = dashboard(args => (args[0] === 'link' ? ok(link) : ok({ servers: [box({ people: ['ada'] })] })), saved, undefined, undefined, () => ok({ devices: [], persons: [{ name: 'rom', owner: true }, { name: 'ada', from: VPS }], door: { tailscale: 'rom-box.tail1234.ts.net' } }))
+    let devices: object[] = []
+    const { host, ran } = dashboard(args => (args[0] === 'link' ? ok(link) : ok({ servers: [box({ people: ['ada'] })] })), saved, undefined, undefined, () => ok({ devices, persons: [{ name: 'rom', owner: true }, { name: 'ada', from: VPS }], door: { tailscale: 'rom-box.tail1234.ts.net' } }))
     show(host)
     await open('rom-box')
     await tab('People')
-    expect(await screen.findByText('Uses this computer through OpenAgentVPS.')).toBeTruthy()
+    // The owner reaches it through the server, and so does a person its line named there: neither has a device at its own door.
+    expect((await screen.findAllByText('Uses this computer through OpenAgentVPS.')).length).toBe(2)
+    // The owner may still add a device at its own door; a person named through the server has theirs there.
+    expect(screen.getAllByText('No device yet.').length).toBe(1)
     await invite('Dani', '192.168.1.20')
     await waitFor(() => expect(ran()).toContain('link 192.168.1.20 --for Dani'))
     expect(await screen.findByText('rom-box is on your Tailscale network: Dani reaches it only once you share it with them in Tailscale (its machine in the Tailscale admin › Share), with Tailscale on their device.')).toBeTruthy()
@@ -1103,7 +1107,11 @@ describe('Settings › Devices: a computer at home set up as a server, through a
     fireEvent.click(screen.getByRole('button', { name: 'Show the code' }))
     expect(await screen.findByRole('img', { name: 'The code a new device scans' })).toBeTruthy()
     await waitFor(() => expect(ran()).toContain('link 192.168.1.20'))
-  })
+    expect(screen.getByText('The first open of a Tailscale address can take a few seconds. If the page stays black, reload it.')).toBeTruthy()
+    // The phone got in at rom-box's own door: its row lands on rom-box's list, which the dialog watches.
+    devices = [{ id: 'new000new000', name: 'iPhone, Safari', added: new Date().toISOString() }]
+    expect(await screen.findByText('iPhone, Safari is in.', {}, { timeout: 15_000 })).toBeTruthy()
+  }, 20_000)
 
   test('from people to fewer, it asks first: the users the others have there go, with everything in them', async () => {
     const persons = [{ name: 'rom', owner: true }, { name: 'suleimansh', from: VPS }, { name: 'dani', from: VPS }]

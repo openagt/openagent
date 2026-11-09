@@ -20,7 +20,7 @@ import { cloneProject, cloneTarget } from './clone-project.js'
 import { copyLoginsTo, loginsAreThere, ownLogins, type OwnLogins } from './dashboard/copy-logins.js'
 import { screenInDiary } from './dashboard/screen.js'
 import { dispatchRelayRpc } from './dashboard-rpc/relay-dispatch.js'
-import { asRecorded, onMachine } from './dashboard-rpc/reads.js'
+import { asRecorded, gitUserOf, onMachine } from './dashboard-rpc/reads.js'
 import { tailAgentEvents } from './dashboard-rpc/events-tail.js'
 import { addProject, isHostName, listMachines, listProjects, machineNamed, nameMachine, noteProjects, noteSeen, noteServer, projectId, readPreferences, removeProject, type MachineRecord, type Preferences } from './registry.js'
 import { writeHookLines } from './built-in.js'
@@ -575,14 +575,16 @@ export function createProjectRuntime({ cwd, env, clone = cloneProject, logins = 
     if (!isRunId(result.agentId) || (project.cwd !== undefined && (await findCheckout(project.cwd, result.agentId, projectBranches)))) {
       return { ok: false, error: `${machine.label} answered with a run this computer cannot follow.` }
     }
-    return followSent(result.agentId, result.driver, prompt, machine, target, project.id)
+    return followSent(result.agentId, result.driver, prompt, machine, target, project.id, project.cwd)
   }
 
   // A run this computer sent to a machine, followed from here as a run of the project.
-  const followSent = (agentId: string, driver: unknown, prompt: string, machine: MachineRecord, target: RemoteTarget, project: string): StartAgentResult => {
+  const followSent = async (agentId: string, driver: unknown, prompt: string, machine: MachineRecord, target: RemoteTarget, project: string, cwd?: string): Promise<StartAgentResult> => {
     // A relayed agent has no local checkout or pid, so its list row is a memory-only stub (#1077):
     // registered here so onAgents can show it and a dashboard reload re-opens it. Never written to disk.
     const now = new Date().toISOString()
+    // Whose run it is: this computer's git user, as the record the machine writes will say of its own.
+    const person = await gitUserOf(cwd ?? sessionsHome(env))
     const meta: AgentMeta = {
       status: 'running',
       id: agentId,
@@ -590,6 +592,7 @@ export function createProjectRuntime({ cwd, env, clone = cloneProject, logins = 
       updatedAt: now,
       target: 'remote',
       intent: prompt,
+      ...(person !== undefined ? { person } : {}),
       ...onMachine(machine),
       // The machine's word, as the run is: its record, which names the coding agent, never comes here.
       ...(typeof driver === 'string' && driver.length <= MAX_DRIVER_NAME ? { driver } : {}),

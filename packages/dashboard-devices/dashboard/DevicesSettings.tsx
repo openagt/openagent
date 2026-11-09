@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { ChevronLeft, Ellipsis, House, Monitor, Plus, Server, Smartphone, Tablet, UserPlus, UserRound } from 'lucide-react'
+import { ChevronLeft, Ellipsis, House, Loader2, Monitor, Plus, Server, Smartphone, Tablet, UserPlus, UserRound } from 'lucide-react'
 import { Button, ConfirmDialog, Dialog, DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, Input, formatDateTime, formatRelative, usePolled, useSettingsCrumb } from '@openagt/dashboard/module'
 import { addDevice, keepPerson, loadMine, myName, nameOwner, removeDevice, removeMine, removePerson, renameDevice, setTailscale, type Answer, type DeviceRow, type DoorStatus, type LineRow, type Mine, type PersonRow } from './devices.js'
 import { removeDevice as removeServerDevice } from './servers.js'
@@ -270,13 +270,18 @@ function PhoneRow({ d, item }: { d: Devices; item: PhoneItem }) {
   const [renaming, setRenaming] = useState(false)
   const [name, setName] = useState(item.name)
   const [busy, setBusy] = useState(false)
+  // Being removed: said on the row from the press until the row is gone, which is the next read of its list; a removal that failed says why instead.
+  const [removing, setRemoving] = useState(false)
   const [error, setError] = useState<string | undefined>()
   const where = 'wifi' in item.via ? 'on this Wi-Fi' : 'internet' in item.via ? 'from anywhere' : 'tailscale' in item.via ? 'on your Tailscale network' : `through ${item.via.label}`
   const act = async (change: () => Promise<Answer<unknown> | { ok: true } | { ok: false; error: string }>): Promise<boolean> => {
     setBusy(true)
     setError(undefined)
     const answer = await change()
-    if (!answer.ok) setError(answer.error)
+    if (!answer.ok) {
+      setError(answer.error)
+      setRemoving(false)
+    }
     await Promise.all([d.reloadDoor(), d.reloadDevices(), d.reloadMachines()]).catch(() => {})
     setBusy(false)
     return answer.ok
@@ -297,15 +302,15 @@ function PhoneRow({ d, item }: { d: Devices; item: PhoneItem }) {
       <Row
         icon={icon}
         name={item.name}
-        facts={[word, where, <span title={formatDateTime(item.seen ?? item.added)}>{seenWords(item.seen, item.added)}</span>]}
+        facts={[word, where, <span title={formatDateTime(item.seen ?? item.added)}>{seenWords(item.seen, item.added)}</span>, ...(removing ? [<State tone="working">Removing…</State>] : [])]}
         end={
           <DropdownMenu>
-            <DropdownMenuTrigger aria-label={`${item.name}: more`} disabled={busy} className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-muted-foreground hover:bg-accent hover:text-accent-foreground">
-              <Ellipsis className="h-4 w-4" aria-hidden />
+            <DropdownMenuTrigger aria-label={`${item.name}: more`} disabled={busy || removing} className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-muted-foreground hover:bg-accent hover:text-accent-foreground">
+              {removing ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden /> : <Ellipsis className="h-4 w-4" aria-hidden />}
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">
               {item.door && <DropdownMenuItem onClick={() => (setName(item.name), setRenaming(true))}>Rename</DropdownMenuItem>}
-              <DropdownMenuItem className="text-danger" onClick={() => void act(remove)}>
+              <DropdownMenuItem className="text-danger" onClick={() => (setRemoving(true), void act(remove))}>
                 Remove
               </DropdownMenuItem>
             </DropdownMenuContent>
