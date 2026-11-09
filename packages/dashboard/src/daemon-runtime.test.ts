@@ -38,7 +38,7 @@ test('onStart runs the start hook of the project addressed, home or registered, 
   const other = await project(START)
   const env = { XDG_CONFIG_HOME: join(home, 'cfg') }
   await mkdir(env.XDG_CONFIG_HOME, { recursive: true })
-  const record = await addProject(other, new Date().toISOString(), undefined, env)
+  const record = await addProject(other, new Date().toISOString(), env)
   const runtime = createProjectRuntime({ cwd: home, env })
   try {
     assert.deepEqual(await runtime.onStart('/work-queue', { driver: 'codex', model: 'gpt-5' }), { ok: true, agentId: 'run-7' })
@@ -272,17 +272,17 @@ test('removing a project runs its close hooks and takes it off the list, and del
   const runtime = createProjectRuntime({ cwd: cfg, env })
   try {
     assert.deepEqual(await runtime.onAddProject(folder, false), { ok: true, alreadyActivated: false })
-    const [project] = await listProjects(undefined, env)
+    const [project] = await listProjects(env)
     assert.equal(project?.path, folder)
     await writeFile(join(folder, PROJECT_HOOKS_FILE), 'close:\n  - echo closed > closed.txt\n')
     await writeFile(join(folder, 'mine.txt'), 'mine\n')
     const kept = execFileSync('git', ['log', '--format=%H'], { cwd: folder, encoding: 'utf8' })
 
     assert.deepEqual(await runtime.onRemoveProject('nope-123'), { ok: false, error: 'no project with that id is on the list' })
-    assert.equal((await listProjects(undefined, env)).length, 1)
+    assert.equal((await listProjects(env)).length, 1)
 
     assert.deepEqual(await runtime.onRemoveProject(project!.id), { ok: true })
-    assert.deepEqual(await listProjects(undefined, env), [])
+    assert.deepEqual(await listProjects(env), [])
     assert.equal(await readFile(join(folder, 'closed.txt'), 'utf8'), 'closed\n', 'the close line ran, in the project')
     // Nothing of the folder is deleted: the person's file, OpenAgent's directory, the commits.
     assert.equal(await readFile(join(folder, 'mine.txt'), 'utf8'), 'mine\n')
@@ -311,7 +311,7 @@ test('a project with an agent at work is not removed, a card left "running" by a
   const runtime = createProjectRuntime({ cwd: cfg, env })
   try {
     assert.deepEqual(await runtime.onAddProject(folder, false), { ok: true, alreadyActivated: false })
-    const [project] = await listProjects(undefined, env)
+    const [project] = await listProjects(env)
     // A run's checkout with its live card: this process stands in for the agent at work.
     const id = '2026-10-06T10-00-00-000Z'
     const checkout = join(folder, '.branches', `agent-${id}`)
@@ -321,18 +321,18 @@ test('a project with an agent at work is not removed, a card left "running" by a
     await writeFile(join(checkout, '.openagent', `${id}.json`), card(process.pid))
 
     assert.deepEqual(await runtime.onRemoveProject(project!.id), { ok: false, error: 'An agent is working in this project. Stop it, then remove the project.' })
-    assert.equal((await listProjects(undefined, env)).length, 1, 'still on the list')
+    assert.equal((await listProjects(env)).length, 1, 'still on the list')
 
     // The process died and nothing healed the card: nothing is working there.
     await writeFile(join(checkout, '.openagent', `${id}.json`), card(2 ** 31 - 1))
     assert.deepEqual(await runtime.onRemoveProject(project!.id), { ok: true })
-    assert.deepEqual(await listProjects(undefined, env), [])
+    assert.deepEqual(await listProjects(env), [])
 
     // A project whose folder was deleted by hand can still be taken off the list.
     assert.deepEqual(await runtime.onAddProject(folder, false), { ok: true, alreadyActivated: true })
     await rm(folder, { recursive: true, force: true })
     assert.deepEqual(await runtime.onRemoveProject(project!.id), { ok: true })
-    assert.deepEqual(await listProjects(undefined, env), [])
+    assert.deepEqual(await listProjects(env), [])
   } finally {
     await runtime.dispose()
     for (const [key, value] of Object.entries(before)) {
@@ -383,7 +383,7 @@ test('removing a project with its files: OpenAgent\'s own go, each named; the pe
     const remote = git('ls-remote', 'origin')
     const head = git('rev-parse', 'HEAD')
     const worked = git('rev-parse', 'agent-worked')
-    const [project] = await listProjects(undefined, env)
+    const [project] = await listProjects(env)
 
     const outcome = await runtime.onRemoveProject(project!.id, true)
     assert.deepEqual(outcome, {
@@ -394,7 +394,7 @@ test('removing a project with its files: OpenAgent\'s own go, each named; the pe
         failed: [],
       },
     })
-    assert.deepEqual(await listProjects(undefined, env), [])
+    assert.deepEqual(await listProjects(env), [])
     assert.deepEqual((await readdir(folder)).sort(), ['.git', 'mine.txt'], 'only the person\'s own is left in the folder')
     assert.equal(await readFile(join(folder, 'mine.txt'), 'utf8'), 'mine\n')
     assert.equal(git('rev-parse', 'HEAD'), head, 'the person\'s branch is where it was')
@@ -438,7 +438,7 @@ test('removing a project with its files keeps what is not OpenAgent\'s to delete
     // A second checkout of the same repository, on the list as a project of its own.
     git('worktree', 'add', '-q', '-b', 'second', second)
     assert.deepEqual(await runtime.onAddProject(second, false), { ok: true, alreadyActivated: false })
-    const project = (await listProjects(undefined, env)).find(listed => listed.path === folder)
+    const project = (await listProjects(env)).find(listed => listed.path === folder)
 
     const outcome = await runtime.onRemoveProject(project!.id, true)
     assert.equal(outcome.ok, true)
@@ -456,7 +456,7 @@ test('removing a project with its files keeps what is not OpenAgent\'s to delete
     assert.equal(await readFile(join(folder, '.agent-runner', 'config.yml'), 'utf8'), 'ended: say done\n')
     assert.equal(await readFile(join(folder, '.branches', DATA_BRANCH, 'card.json'), 'utf8'), '{}\n', 'the records the other project reads are whole')
     assert.equal(git('status', '--porcelain').trim(), '', 'what stays is still hidden from git')
-    assert.deepEqual((await listProjects(undefined, env)).map(listed => listed.path), [second])
+    assert.deepEqual((await listProjects(env)).map(listed => listed.path), [second])
   } finally {
     await runtime.dispose()
     for (const [key, value] of Object.entries(before)) {
@@ -481,7 +481,7 @@ test('removing a project with its files while a run of this machine is still ali
     await usedProject(runtime, folder)
     // A run that holds its lock and has no card yet: still booting, so the dashboard's own check sees no agent at work.
     await writeFile(join(folder, '.agent-runner', 'runs', 'booting.lock'), `${process.pid}\n`)
-    const [project] = await listProjects(undefined, env)
+    const [project] = await listProjects(env)
 
     const outcome = await runtime.onRemoveProject(project!.id, true)
     const cleanup = outcome.ok ? outcome.cleanup : undefined
@@ -521,7 +521,7 @@ test('a relayed call\'s project is this machine\'s own, found by its repository\
   const local = await clone(base, 'notes')
   const first = await clone(base, 'shop', 'https://github.com/Acme/Shop.git')
   const second = await clone(base, 'shop-again', 'git@github.com:acme/shop.git')
-  for (const dir of [other, local, first, second]) await addProject(dir, at, undefined, env)
+  for (const dir of [other, local, first, second]) await addProject(dir, at, env)
   const runtime = createProjectRuntime({ cwd: other, env })
   try {
     // Two folders cloned from one repository: the one added first, and the same one on every call,
@@ -532,7 +532,7 @@ test('a relayed call\'s project is this machine\'s own, found by its repository\
     assert.equal(await runtime.projectAt('github.com/acme/nowhere'), undefined)
     assert.equal(await runtime.projectAt(''), undefined)
     // Off the list, the first is no longer this machine's project, and the second answers.
-    await removeProject(projectId(first), undefined, env)
+    await removeProject(projectId(first), env)
     assert.equal(await runtime.projectAt('github.com/acme/shop'), projectId(second))
   } finally {
     await runtime.dispose()
@@ -559,7 +559,7 @@ test('a relayed run\'s events are read from the project the call names, not from
   await mkdir(join(worktree, OPENAGENT_DIR), { recursive: true })
   await writeFile(join(worktree, OPENAGENT_DIR, `${agentId}.json`), JSON.stringify({ id: agentId, startedAt: '2026-07-19T10:00:00.000Z', status: 'running', caller: { pid: process.pid, host: hostname() } }))
   await writeFile(join(worktree, OPENAGENT_DIR, `${agentId}.jsonl`), JSON.stringify({ kind: 'said', text: 'from the shop' }) + '\n')
-  await addProject(shop, new Date().toISOString(), undefined, env)
+  await addProject(shop, new Date().toISOString(), env)
   const runtime = createProjectRuntime({ cwd: home, env })
   // What is expected is waited for until it is there, however busy the computer is; what must
   // not come is given the time it would take.
@@ -594,7 +594,7 @@ test('a run started on another machine is followed only under an id that is a ru
   const env = { XDG_CONFIG_HOME: join(base, 'cfg') }
   await mkdir(env.XDG_CONFIG_HOME, { recursive: true })
   const shop = await clone(base, 'shop', 'https://github.com/acme/shop.git')
-  await addProject(shop, new Date().toISOString(), undefined, env)
+  await addProject(shop, new Date().toISOString(), env)
   // A run of this computer's own: a checkout the project's branches list names.
   execFileSync('git', ['commit', '-q', '--allow-empty', '-m', 'seed'], { cwd: shop, env: { ...process.env, GIT_AUTHOR_NAME: 't', GIT_AUTHOR_EMAIL: 't@t', GIT_COMMITTER_NAME: 't', GIT_COMMITTER_EMAIL: 't@t' } })
   await addWorktree(shop, { agentId: 'mine-1', branch: agentBranchName('mine-1') }, nodeGitRunner())
@@ -618,7 +618,7 @@ test('a run started on another machine is followed only under an id that is a ru
   })
   await new Promise<void>(resolve => machine.listen(0, '127.0.0.1', resolve))
   const url = `http://127.0.0.1:${(machine.address() as AddressInfo).port}`
-  await addMachine({ url, key: 'id.key', door: `${url}/_devices/enter`, label: 'Server' }, undefined, env)
+  await addMachine({ url, key: 'id.key', door: `${url}/_devices/enter`, label: 'Server' }, env)
   const runtime = createProjectRuntime({ cwd: shop, env })
   try {
     const start = () => runtime.onStart('go', { machine: url })
@@ -665,7 +665,7 @@ test('a run sent to another person\'s computer first has the server\'s logins co
   const env = { XDG_CONFIG_HOME: join(base, 'cfg'), OPENAGENT_SERVER: '1', CLAUDE_CODE_OAUTH_TOKEN: 'sk-ant-oat01-mine' }
   await mkdir(env.XDG_CONFIG_HOME, { recursive: true })
   const shop = await clone(base, 'shop', 'https://github.com/acme/shop.git')
-  await addProject(shop, new Date().toISOString(), undefined, env)
+  await addProject(shop, new Date().toISOString(), env)
   // Another person's computer, as its line's address on this server: it says which logins it has, and takes them.
   const asked: string[] = []
   let place: 'ready' | 'making' = 'making'
@@ -681,7 +681,7 @@ test('a run sent to another person\'s computer first has the server\'s logins co
   })
   await new Promise<void>(resolve => machine.listen(0, '127.0.0.1', resolve))
   const url = `http://127.0.0.1:${(machine.address() as AddressInfo).port}`
-  await addMachine({ url, key: 'line', door: `${url}/_devices/enter`, label: 'rom-desktop', owner: 'rom' }, undefined, env)
+  await addMachine({ url, key: 'line', door: `${url}/_devices/enter`, label: 'rom-desktop', owner: 'rom' }, env)
   // This server's own logins, as its user's gh and its service say them: never this test computer's.
   const logins = async (said: NodeJS.ProcessEnv) => ({ github: 'gho_mine123', ...(said.CLAUDE_CODE_OAUTH_TOKEN ? { claude: said.CLAUDE_CODE_OAUTH_TOKEN } : {}) })
   const runtime = createProjectRuntime({ cwd: shop, env, logins })
@@ -690,7 +690,7 @@ test('a run sent to another person\'s computer first has the server\'s logins co
     // Nothing is copied before the person said OK to the line that says it is.
     assert.deepEqual(await runtime.onStart('go', { machine: url }), { ok: false, error: "Your own logins are used on rom's computer for a run there: say OK to that above the message box first." })
     assert.equal(asked.length, 0)
-    await tellMachine(url, undefined, env)
+    await tellMachine(url, env)
     assert.deepEqual(await runtime.onStart('go', { machine: url }), { ok: false, error: "rom-desktop: @sul's place on this computer is being made. Try again in a minute." })
     assert.deepEqual(asked, ['GET /_relay/logins'], 'no run is sent before the logins are there')
     place = 'ready'
@@ -736,7 +736,7 @@ test('a run whose record names a saved machine\'s computer is that machine\'s, w
       await mkdir(card, { recursive: true })
       await writeFile(join(card, `${agentId}.json`), JSON.stringify({ id: agentId, startedAt: '2026-07-19T10:00:00.000Z', status: 'waiting', driver: 'claude-code', branch: agentBranchName(agentId), caller: { pid: 1, host } }))
     }
-    await addProject(dir, new Date().toISOString(), undefined, env)
+    await addProject(dir, new Date().toISOString(), env)
     return projectId(dir)
   }
   // Three runs: a saved machine's, this computer's, a teammate's.
@@ -772,7 +772,7 @@ test('a run whose record names a saved machine\'s computer is that machine\'s, w
   let said: string | undefined = 'server-box'
   const machine = await machineAt(() => said)
   const { url } = machine
-  await addMachine({ url, key: 'id.key', door: `${url}/_devices/enter`, label: 'Server' }, undefined, env)
+  await addMachine({ url, key: 'id.key', door: `${url}/_devices/enter`, label: 'Server' }, env)
   let runtime = createProjectRuntime({ cwd: join(base, 'shop'), env })
   const closing = [machine.close]
   try {
@@ -828,16 +828,16 @@ test('a run whose record names a saved machine\'s computer is that machine\'s, w
     await new Promise(resolve => setTimeout(resolve, 100))
     assert.equal((await runtime.remoteAgents.machineNames())('renamed-box')?.label, 'Server')
     await again('server-box')
-    for (let i = 0; i < 100 && (await listMachines(undefined, env))[0]!.host !== 'server-box'; i++) {
+    for (let i = 0; i < 100 && (await listMachines(env))[0]!.host !== 'server-box'; i++) {
       await runtime.remoteAgents.machineNames()
       await new Promise(resolve => setTimeout(resolve, 50))
     }
-    assert.equal((await listMachines(undefined, env)).find(saved => saved.url === url)!.host, 'server-box')
+    assert.equal((await listMachines(env)).find(saved => saved.url === url)!.host, 'server-box')
 
     // A second machine that says the same name: the name is neither's, and the run is asked of no machine.
     const twin = await machineAt(() => 'server-box')
     closing.push(twin.close)
-    await addMachine({ url: twin.url, key: 'id.twin', door: `${twin.url}/_devices/enter`, label: 'Twin' }, undefined, env)
+    await addMachine({ url: twin.url, key: 'id.twin', door: `${twin.url}/_devices/enter`, label: 'Twin' }, env)
     await runtime.dispose()
     runtime = createProjectRuntime({ cwd: join(base, 'shop'), env })
     assert.equal(await named(runtime.remoteAgents, 'server-box', undefined), undefined)
@@ -846,13 +846,13 @@ test('a run whose record names a saved machine\'s computer is that machine\'s, w
     // A machine that does not say its name, an older one, is asked and keeps none.
     const quiet = await machineAt(() => undefined)
     closing.push(quiet.close)
-    await addMachine({ url: quiet.url, key: 'id.quiet', door: `${quiet.url}/_devices/enter`, label: 'Quiet' }, undefined, env)
+    await addMachine({ url: quiet.url, key: 'id.quiet', door: `${quiet.url}/_devices/enter`, label: 'Quiet' }, env)
     for (let i = 0; i < 100 && !asked.includes('Bearer id.quiet /_relay/ping'); i++) {
       await runtime.remoteAgents.machineNames()
       await new Promise(resolve => setTimeout(resolve, 50))
     }
     assert.ok(asked.includes('Bearer id.quiet /_relay/ping'))
-    assert.equal((await listMachines(undefined, env)).find(saved => saved.url === quiet.url)!.host, undefined)
+    assert.equal((await listMachines(env)).find(saved => saved.url === quiet.url)!.host, undefined)
   } finally {
     for (const res of open) res.end()
     await runtime.dispose()
@@ -870,7 +870,7 @@ test("a saved machine is asked for its own runs over its relay, and a run of its
   await git(['config', 'user.email', 't@t'], dir)
   await git(['config', 'user.name', 't'], dir)
   await git(['commit', '-q', '--allow-empty', '-m', 'init'], dir)
-  await addProject(dir, new Date().toISOString(), undefined, env)
+  await addProject(dir, new Date().toISOString(), env)
   const shop = projectId(dir)
   // A run of the laptop's that never reached this computer's records.
   const ONLY_THERE = '2026-07-19T11-00-00-000Z'
@@ -892,7 +892,7 @@ test("a saved machine is asked for its own runs over its relay, and a run of its
   })
   await new Promise<void>(resolve => server.listen(0, '127.0.0.1', resolve))
   const url = `http://127.0.0.1:${(server.address() as AddressInfo).port}`
-  await addMachine({ url, key: 'id.key', door: `${url}/_devices/enter`, label: 'Laptop' }, undefined, env)
+  await addMachine({ url, key: 'id.key', door: `${url}/_devices/enter`, label: 'Laptop' }, env)
   const runtime = createProjectRuntime({ cwd: dir, env })
   try {
     const [laptop] = await runtime.remoteAgents.machineRuns(dir)
@@ -900,8 +900,8 @@ test("a saved machine is asked for its own runs over its relay, and a run of its
     // Asked of the project by its address, from the start, for as long as the machine holds the call while nothing changes.
     assert.deepEqual(asked[0], { fn: 'onOwnRuns', args: [null, null, 25_000], project: 'github.com/acme/shop' })
     // When it answered is kept with it, for while it does not: written behind the list's back.
-    for (let i = 0; i < 40 && !(await listMachines(undefined, env))[0]!.seenAt; i++) await new Promise(resolve => setTimeout(resolve, 50))
-    assert.ok((await listMachines(undefined, env))[0]!.seenAt)
+    for (let i = 0; i < 40 && !(await listMachines(env))[0]!.seenAt; i++) await new Promise(resolve => setTimeout(resolve, 50))
+    assert.ok((await listMachines(env))[0]!.seenAt)
     // The run is the machine's: asked of it, and followed from here.
     assert.deepEqual(await runtime.remoteAgents.home(shop, ONLY_THERE), { url, key: 'id.key', project: 'github.com/acme/shop' })
     await runtime.remoteAgents.follow(shop, ONLY_THERE)
@@ -930,7 +930,7 @@ test("a run a saved machine's Human Queue names, which no record here has, is th
   await git(['config', 'user.email', 't@t'], dir)
   await git(['config', 'user.name', 't'], dir)
   await git(['commit', '-q', '--allow-empty', '-m', 'init'], dir)
-  await addProject(dir, new Date().toISOString(), undefined, env)
+  await addProject(dir, new Date().toISOString(), env)
   const shop = projectId(dir)
   // An old run of the server's, waiting on a question: in no list of runs, in its Human Queue only.
   const ASKING = '2026-07-13T00-22-59-512Z'
@@ -948,11 +948,11 @@ test("a run a saved machine's Human Queue names, which no record here has, is th
   })
   await new Promise<void>(resolve => server.listen(0, '127.0.0.1', resolve))
   const url = `http://127.0.0.1:${(server.address() as AddressInfo).port}`
-  await addMachine({ url, key: 'id.key', door: `${url}/_devices/enter`, label: 'Server' }, undefined, env)
+  await addMachine({ url, key: 'id.key', door: `${url}/_devices/enter`, label: 'Server' }, env)
   const runtime = createProjectRuntime({ cwd: dir, env })
   try {
     // The machine said its projects, as the page's lists ask them.
-    for (let i = 0; i < 40 && !(await listMachines(undefined, env))[0]!.projects; i++) {
+    for (let i = 0; i < 40 && !(await listMachines(env))[0]!.projects; i++) {
       await runtime.remoteAgents.elsewhere()
       await new Promise(resolve => setTimeout(resolve, 50))
     }

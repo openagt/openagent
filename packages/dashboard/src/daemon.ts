@@ -9,7 +9,7 @@ import { startBackgroundServices } from './daemon-services.js'
 import { projectErrorStore } from './project-errors.js'
 import { resolveDashboardBundle } from './dashboard/bundle.js'
 import { resolveWebsite } from './dashboard/website.js'
-import { ensureBridgeToken, ensureComputerId, listProjects, nodeRegistryFs, readPreferences, registryPreferencesStore, thisComputerName } from './registry.js'
+import { ensureBridgeToken, ensureComputerId, listProjects, readPreferences, registryPreferencesStore, thisComputerName } from './registry.js'
 import { sayComputer, sayName } from './dashboard/machine-call.js'
 import { bridgeSessionsFrom } from './dashboard/bridge-sessions.js'
 import { bridgeQuestions } from './dashboard/bridge-store.js'
@@ -104,13 +104,13 @@ export async function runDaemon(cwd: string, opts: RunDaemonOptions = {}): Promi
   withLocalBin(process.env)
   // The browser bridge (#1237). Opt-in, because it opens the daemon's one route reachable from
   // another origin, behind a key of its own. The key may not exist yet, hence ensure, not read.
-  const bridgeOn = (await readPreferences(undefined, env)).bridge === true
-  const bridgeToken = bridgeOn ? await ensureBridgeToken(undefined, env) : undefined
+  const bridgeOn = (await readPreferences(env)).bridge === true
+  const bridgeToken = bridgeOn ? await ensureBridgeToken(env) : undefined
   // Which computer this is, said to every machine it gets into and to its own packages' services:
   // a machine lists this computer once by it. A home file that cannot be written says nothing.
-  const computer = await ensureComputerId(undefined, env).catch(() => undefined)
+  const computer = await ensureComputerId(env).catch(() => undefined)
   sayComputer(computer)
-  sayName(await thisComputerName(undefined, env))
+  sayName(await thisComputerName(env))
   // Everything the dashboard drives per project (a run's start, project install, the machine
   // relay) lives in the runtime, so this body stays about the daemon's own lifecycle.
   // A run's name is asked of a naming session kept waiting for it (agent-runner's `ReadyNaming`), so
@@ -136,7 +136,7 @@ export async function runDaemon(cwd: string, opts: RunDaemonOptions = {}): Promi
     if (!bridgeToken || !daemonUrl) {
       // The token is minted at boot, from the bridge preference as it stood then (above). A bridge
       // switched on since is a restart away; a bridge that is off wants switching on first.
-      const bridgeOnNow = (await readPreferences(undefined, env)).bridge === true
+      const bridgeOnNow = (await readPreferences(env)).bridge === true
       throw new Error(
         bridgeOnNow
           ? 'the browser bridge was switched on after the dashboard started — restart the dashboard, and the browser launches on its own'
@@ -167,7 +167,7 @@ export async function runDaemon(cwd: string, opts: RunDaemonOptions = {}): Promi
       eventsSource: runtime.remoteEventsSource,
       remote: runtime.remoteAgents,
       // The bridge browser follows its switch (#1332): on launches it, off closes it, without a restart.
-      preferences: registryPreferencesStore(nodeRegistryFs(), env, written => {
+      preferences: registryPreferencesStore(env, written => {
         if (written.bridgeBrowser === true) void bridgeBrowser.start()
         if (written.bridgeBrowser === false) void bridgeBrowser.stop()
       }),
@@ -210,14 +210,14 @@ export async function runDaemon(cwd: string, opts: RunDaemonOptions = {}): Promi
   // The bridge browser comes up in the background (#1332): its first launch downloads Chrome,
   // and the dashboard must not wait on that. Read here rather than with the bridge preference
   // above: the launch needs the address the dashboard only has now.
-  if ((await readPreferences(undefined, env)).bridgeBrowser === true) void bridgeBrowser.start()
+  if ((await readPreferences(env)).bridgeBrowser === true) void bridgeBrowser.start()
 
   // Each project's open hooks (#1774): the lines its own `.openagent/hooks.yml` names, run in
   // the project once the dashboard listens, so a slow line never delays the URL. The daemon names
   // no tool; the file does. Bounded and logged, never a reason the daemon did not come up.
   // The folder the caller named comes first, so its page opens before the other projects' lines
   // have run. The list is read before it is added: adding runs the new project's own open lines.
-  const listed = await listProjects(undefined, env)
+  const listed = await listProjects(env)
   if (opts.project !== undefined) {
     const started = await runtime.onStartedIn(opts.project)
     if (started.ok) opts.onProject?.({ id: started.id, path: started.path, added: started.added, address: started.address })
@@ -273,7 +273,7 @@ export async function runDaemon(cwd: string, opts: RunDaemonOptions = {}): Promi
     await services.quiesce()
     // Each project's close hooks (#1774), the counterpart of the open hooks above. A run in flight
     // is not the daemon's process: it goes on to its end, and the next dashboard shows it.
-    for (const record of await listProjects(undefined, env)) {
+    for (const record of await listProjects(env)) {
       step = `the close hooks of ${record.path}`
       await runProjectHooks(record.path, 'close', { log: console.log })
     }
@@ -327,7 +327,7 @@ function waitForShutdown(signal?: AbortSignal): Promise<void> {
  * checkout, and best-effort per project so one unreadable repo cannot empty the list.
  */
 async function listBridgeSessions(env: NodeJS.ProcessEnv): Promise<BridgeSession[]> {
-  const projects = await listProjects(undefined, env)
+  const projects = await listProjects(env)
   const agents = (await Promise.all(projects.map(p => readAllAgents(p.path).catch(() => [])))).flat()
   return bridgeSessionsFrom(agents, new Date(), bridgeQuestions().pendingAnswerSessions())
 }

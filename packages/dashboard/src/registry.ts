@@ -353,7 +353,7 @@ export interface RegistryFs {
 }
 
 /** A {@link RegistryFs} backed by `node:fs/promises`. See {@link nodeFs}. */
-export function nodeRegistryFs(): RegistryFs {
+function nodeRegistryFs(): RegistryFs {
   const { read, write, mkdir, rename, chmod } = nodeFs()
   return { read, write, mkdir, rename, chmod }
 }
@@ -550,8 +550,8 @@ const DEVICE_ID = /^[a-z0-9]{6,32}$/
  * path and unknown preference fields are dropped.
  */
 export async function readRegistry(
-  fs: RegistryFs = nodeRegistryFs(),
   env: NodeJS.ProcessEnv = process.env,
+  fs: RegistryFs = nodeRegistryFs(),
 ): Promise<Registry> {
   const empty: Registry = { projects: [], preferences: {} }
   let parsed: unknown
@@ -593,7 +593,7 @@ export async function readRegistry(
  * The mode is set on the temp file, before the rename — narrowing after it would leave a window
  * where the real path is readable. Best-effort: a filesystem with no permission bits still writes.
  */
-async function writeRegistry(registry: Registry, fs: RegistryFs, env: NodeJS.ProcessEnv): Promise<void> {
+async function writeRegistry(registry: Registry, env: NodeJS.ProcessEnv, fs: RegistryFs): Promise<void> {
   const file = registryPath(env)
   const { projects, preferences, bridgeToken, machines, computer, name, forgotten, repoFolders } = registry
   const contents = {
@@ -640,10 +640,10 @@ function serialize<T>(mutate: () => Promise<T>): Promise<T> {
  * file yields `[]`, never throws. Deduped by resolved path, first wins.
  */
 export async function listProjects(
-  fs: RegistryFs = nodeRegistryFs(),
   env: NodeJS.ProcessEnv = process.env,
+  fs: RegistryFs = nodeRegistryFs(),
 ): Promise<ProjectRecord[]> {
-  return (await readRegistry(fs, env)).projects
+  return (await readRegistry(env, fs)).projects
 }
 
 /**
@@ -654,18 +654,18 @@ export async function listProjects(
 export async function addProject(
   path: string,
   addedAt: string,
-  fs: RegistryFs = nodeRegistryFs(),
   env: NodeJS.ProcessEnv = process.env,
+  fs: RegistryFs = nodeRegistryFs(),
 ): Promise<ProjectRecord> {
   return serialize(async () => {
     const absolute = resolve(path)
-    const registry = await readRegistry(fs, env)
+    const registry = await readRegistry(env, fs)
     const existing = registry.projects.find(project => resolve(project.path) === absolute)
     if (existing) return existing
 
     const record: ProjectRecord = { id: projectId(absolute), path: absolute, addedAt }
     registry.projects.push(record)
-    await writeRegistry(registry, fs, env)
+    await writeRegistry(registry, env, fs)
     return record
   })
 }
@@ -677,66 +677,66 @@ export async function addProject(
  */
 export async function removeProject(
   id: string,
-  fs: RegistryFs = nodeRegistryFs(),
   env: NodeJS.ProcessEnv = process.env,
+  fs: RegistryFs = nodeRegistryFs(),
 ): Promise<ProjectRecord | undefined> {
   return serialize(async () => {
-    const registry = await readRegistry(fs, env)
+    const registry = await readRegistry(env, fs)
     const removed = registry.projects.find(project => project.id === id)
     if (!removed) return undefined
     registry.projects = registry.projects.filter(project => project.id !== id)
-    await writeRegistry(registry, fs, env)
+    await writeRegistry(registry, env, fs)
     return removed
   })
 }
 
 /** The folders the person added to look for repos in (dashboard/repos.ts). Forgiving, like {@link listProjects}. */
-export async function listRepoFolders(fs: RegistryFs = nodeRegistryFs(), env: NodeJS.ProcessEnv = process.env): Promise<string[]> {
-  return (await readRegistry(fs, env)).repoFolders ?? []
+export async function listRepoFolders(env: NodeJS.ProcessEnv = process.env, fs: RegistryFs = nodeRegistryFs()): Promise<string[]> {
+  return (await readRegistry(env, fs)).repoFolders ?? []
 }
 
 /** Add a folder to look for repos in, by its absolute path; one already there is not added again. */
-export async function addRepoFolder(folder: string, fs: RegistryFs = nodeRegistryFs(), env: NodeJS.ProcessEnv = process.env): Promise<void> {
+export async function addRepoFolder(folder: string, env: NodeJS.ProcessEnv = process.env, fs: RegistryFs = nodeRegistryFs()): Promise<void> {
   return serialize(async () => {
     const absolute = resolve(folder)
-    const registry = await readRegistry(fs, env)
+    const registry = await readRegistry(env, fs)
     const folders = registry.repoFolders ?? []
     if (folders.includes(absolute) || folders.length >= MAX_REPO_FOLDERS) return
     registry.repoFolders = [...folders, absolute]
-    await writeRegistry(registry, fs, env)
+    await writeRegistry(registry, env, fs)
   })
 }
 
 /** Stop looking for repos in a folder the person added; one not there changes nothing. */
-export async function removeRepoFolder(folder: string, fs: RegistryFs = nodeRegistryFs(), env: NodeJS.ProcessEnv = process.env): Promise<void> {
+export async function removeRepoFolder(folder: string, env: NodeJS.ProcessEnv = process.env, fs: RegistryFs = nodeRegistryFs()): Promise<void> {
   return serialize(async () => {
-    const registry = await readRegistry(fs, env)
+    const registry = await readRegistry(env, fs)
     const folders = registry.repoFolders ?? []
     if (!folders.includes(folder)) return
     const kept = folders.filter(one => one !== folder)
     if (kept.length) registry.repoFolders = kept
     else delete registry.repoFolders
-    await writeRegistry(registry, fs, env)
+    await writeRegistry(registry, env, fs)
   })
 }
 
 /** The user's dashboard preferences (#410), or `{}` when none are stored. */
 export async function readPreferences(
-  fs: RegistryFs = nodeRegistryFs(),
   env: NodeJS.ProcessEnv = process.env,
+  fs: RegistryFs = nodeRegistryFs(),
 ): Promise<Preferences> {
-  return (await readRegistry(fs, env)).preferences
+  return (await readRegistry(env, fs)).preferences
 }
 
 /** Persist the dashboard preferences (#410), sanitized, preserving the project list. */
 export async function writePreferences(
   preferences: Preferences,
-  fs: RegistryFs = nodeRegistryFs(),
   env: NodeJS.ProcessEnv = process.env,
+  fs: RegistryFs = nodeRegistryFs(),
 ): Promise<void> {
   return serialize(async () => {
-    const registry = await readRegistry(fs, env)
-    await writeRegistry({ ...registry, preferences: sanitizePreferences(preferences) }, fs, env)
+    const registry = await readRegistry(env, fs)
+    await writeRegistry({ ...registry, preferences: sanitizePreferences(preferences) }, env, fs)
   })
 }
 
@@ -754,13 +754,13 @@ export async function writePreferences(
  */
 export async function patchPreferences(
   patch: Preferences,
-  fs: RegistryFs = nodeRegistryFs(),
   env: NodeJS.ProcessEnv = process.env,
+  fs: RegistryFs = nodeRegistryFs(),
 ): Promise<Preferences> {
   return serialize(async () => {
-    const registry = await readRegistry(fs, env)
+    const registry = await readRegistry(env, fs)
     const preferences = sanitizePreferences({ ...registry.preferences, ...patch })
-    await writeRegistry({ ...registry, preferences }, fs, env)
+    await writeRegistry({ ...registry, preferences }, env, fs)
     return preferences
   })
 }
@@ -771,14 +771,14 @@ export async function patchPreferences(
  * with the other mutators so two concurrent starts can't each write a different key.
  */
 export async function ensureBridgeToken(
-  fs: RegistryFs = nodeRegistryFs(),
   env: NodeJS.ProcessEnv = process.env,
+  fs: RegistryFs = nodeRegistryFs(),
 ): Promise<string> {
   return serialize(async () => {
-    const registry = await readRegistry(fs, env)
+    const registry = await readRegistry(env, fs)
     if (registry.bridgeToken) return registry.bridgeToken
     const bridgeToken = randomBytes(32).toString('base64url')
-    await writeRegistry({ ...registry, bridgeToken }, fs, env)
+    await writeRegistry({ ...registry, bridgeToken }, env, fs)
     return bridgeToken
   })
 }
@@ -788,14 +788,14 @@ export async function ensureBridgeToken(
  * Serialized with the other mutators, so two starts at once do not each make another.
  */
 export async function ensureComputerId(
-  fs: RegistryFs = nodeRegistryFs(),
   env: NodeJS.ProcessEnv = process.env,
+  fs: RegistryFs = nodeRegistryFs(),
 ): Promise<string> {
   return serialize(async () => {
-    const registry = await readRegistry(fs, env)
+    const registry = await readRegistry(env, fs)
     if (registry.computer) return registry.computer
     const computer = randomBytes(16).toString('hex')
-    await writeRegistry({ ...registry, computer }, fs, env)
+    await writeRegistry({ ...registry, computer }, env, fs)
     return computer
   })
 }
@@ -808,34 +808,34 @@ export function computerNameOf(value: unknown): string | undefined {
 }
 
 /** This computer's own name: the one the person gave it, else its host name. */
-export async function thisComputerName(fs: RegistryFs = nodeRegistryFs(), env: NodeJS.ProcessEnv = process.env): Promise<string> {
-  return (await readRegistry(fs, env)).name ?? computerName()
+export async function thisComputerName(env: NodeJS.ProcessEnv = process.env, fs: RegistryFs = nodeRegistryFs()): Promise<string> {
+  return (await readRegistry(env, fs)).name ?? computerName()
 }
 
 /** Give this computer the name the person picked. Answers the name as kept; nothing for an empty one. */
-export async function renameThisComputer(picked: string, fs: RegistryFs = nodeRegistryFs(), env: NodeJS.ProcessEnv = process.env): Promise<string | undefined> {
+export async function renameThisComputer(picked: string, env: NodeJS.ProcessEnv = process.env, fs: RegistryFs = nodeRegistryFs()): Promise<string | undefined> {
   const name = computerNameOf(picked)
   if (name === undefined) return undefined
   return serialize(async () => {
-    await writeRegistry({ ...(await readRegistry(fs, env)), name }, fs, env)
+    await writeRegistry({ ...(await readRegistry(env, fs)), name }, env, fs)
     return name
   })
 }
 
 /** The persisted bridge key, or `undefined` when none exists. A pure read: it never generates one. */
 export async function readBridgeToken(
-  fs: RegistryFs = nodeRegistryFs(),
   env: NodeJS.ProcessEnv = process.env,
+  fs: RegistryFs = nodeRegistryFs(),
 ): Promise<string | undefined> {
-  return (await readRegistry(fs, env)).bridgeToken
+  return (await readRegistry(env, fs)).bridgeToken
 }
 
 /** The saved machines, newest first. Forgiving like every read of this file: none on a bad file. */
 export async function listMachines(
-  fs: RegistryFs = nodeRegistryFs(),
   env: NodeJS.ProcessEnv = process.env,
+  fs: RegistryFs = nodeRegistryFs(),
 ): Promise<MachineRecord[]> {
-  return (await readRegistry(fs, env)).machines ?? []
+  return (await readRegistry(env, fs)).machines ?? []
 }
 
 /**
@@ -846,11 +846,11 @@ export async function listMachines(
  */
 export async function addMachine(
   machine: { url: string; key: string; door: string; pin?: string; label?: string; owner?: string },
-  fs: RegistryFs = nodeRegistryFs(),
   env: NodeJS.ProcessEnv = process.env,
+  fs: RegistryFs = nodeRegistryFs(),
 ): Promise<{ record: MachineRecord; displaced: MachineRecord[] }> {
   return serialize(async () => {
-    const registry = await readRegistry(fs, env)
+    const registry = await readRegistry(env, fs)
     const before = registry.machines ?? []
     const record: MachineRecord = {
       id: machine.url,
@@ -864,7 +864,7 @@ export async function addMachine(
       added: before.find(saved => saved.id === machine.url)?.added ?? new Date().toISOString(),
     }
     const machines = [record, ...before.filter(saved => saved.id !== record.id)].slice(0, MACHINE_LIMITS.count)
-    await writeRegistry({ ...registry, machines }, fs, env)
+    await writeRegistry({ ...registry, machines }, env, fs)
     return { record, displaced: before.filter(saved => !machines.includes(saved)) }
   })
 }
@@ -876,7 +876,7 @@ export async function addMachine(
  * goes by is not taken, nor does another person's computer change its name: it would be given runs
  * that are not its. Answers whether the name was written.
  */
-export async function nameMachine(machine: { id: string; key: string }, host: string, fs: RegistryFs = nodeRegistryFs(), env: NodeJS.ProcessEnv = process.env): Promise<boolean> {
+export async function nameMachine(machine: { id: string; key: string }, host: string, env: NodeJS.ProcessEnv = process.env, fs: RegistryFs = nodeRegistryFs()): Promise<boolean> {
   if (!isHostName(host)) return false
   const named = await changeMachine(
     machine,
@@ -890,15 +890,15 @@ export async function nameMachine(machine: { id: string; key: string }, host: st
       const { formerHosts: _before, ...rest } = saved
       return { ...rest, host, ...(formerHosts.length > 0 ? { formerHosts } : {}) }
     },
-    fs,
     env,
+    fs,
   )
   return named === 'changed'
 }
 
 /** Keep whether a saved machine says it is a server, as it was asked. */
-export async function noteServer(machine: { id: string; key: string }, server: boolean, fs: RegistryFs = nodeRegistryFs(), env: NodeJS.ProcessEnv = process.env): Promise<void> {
-  await changeMachine(machine, ({ server: was, ...rest }) => ((was === true) === server ? undefined : { ...rest, ...(server ? { server: true as const } : {}) }), fs, env)
+export async function noteServer(machine: { id: string; key: string }, server: boolean, env: NodeJS.ProcessEnv = process.env, fs: RegistryFs = nodeRegistryFs()): Promise<void> {
+  await changeMachine(machine, ({ server: was, ...rest }) => ((was === true) === server ? undefined : { ...rest, ...(server ? { server: true as const } : {}) }), env, fs)
 }
 
 /** The one saved machine a run's recorded name belongs to: the one going by it now, else the one that went by it. A name two say is neither's. */
@@ -910,19 +910,19 @@ export function machineNamed(machines: readonly MachineRecord[], host: string): 
 }
 
 /** Keep the ids a saved machine said it is listed under at the doors it saved, when they changed. */
-export async function noteListed(machine: { id: string; key: string }, listed: string[], fs: RegistryFs = nodeRegistryFs(), env: NodeJS.ProcessEnv = process.env): Promise<void> {
+export async function noteListed(machine: { id: string; key: string }, listed: string[], env: NodeJS.ProcessEnv = process.env, fs: RegistryFs = nodeRegistryFs()): Promise<void> {
   const ids = listed.filter(id => DEVICE_ID.test(id)).slice(0, MACHINE_LIMITS.count)
-  await changeMachine(machine, ({ listed: was, ...rest }) => ((was ?? []).join(' ') === ids.join(' ') ? undefined : ids.length ? { ...rest, listed: ids } : rest), fs, env)
+  await changeMachine(machine, ({ listed: was, ...rest }) => ((was ?? []).join(' ') === ids.join(' ') ? undefined : ids.length ? { ...rest, listed: ids } : rest), env, fs)
 }
 
 /**
  * Keep the name a saved machine says it has now, when it changed: a page shows a machine under its
  * own name, and the one kept here is what it is shown under while it does not answer.
  */
-export async function noteName(machine: { id: string; key: string }, said: string, fs: RegistryFs = nodeRegistryFs(), env: NodeJS.ProcessEnv = process.env): Promise<void> {
+export async function noteName(machine: { id: string; key: string }, said: string, env: NodeJS.ProcessEnv = process.env, fs: RegistryFs = nodeRegistryFs()): Promise<void> {
   const label = computerNameOf(said)
   if (label === undefined) return
-  await changeMachine(machine, saved => (saved.label === label ? undefined : { ...saved, label }), fs, env)
+  await changeMachine(machine, saved => (saved.label === label ? undefined : { ...saved, label }), env, fs)
 }
 
 /**
@@ -930,32 +930,32 @@ export async function noteName(machine: { id: string; key: string }, said: strin
  * owner: another person's, which this computer's syncs hand nothing of this computer's to. One
  * that is another person's already stays theirs. Answers whether the owner was written.
  */
-export async function noteOwner(machine: { id: string; key: string }, owner: string, fs: RegistryFs = nodeRegistryFs(), env: NodeJS.ProcessEnv = process.env): Promise<boolean> {
+export async function noteOwner(machine: { id: string; key: string }, owner: string, env: NodeJS.ProcessEnv = process.env, fs: RegistryFs = nodeRegistryFs()): Promise<boolean> {
   if (!isPersonName(owner)) return false
-  return (await changeMachine(machine, saved => (saved.owner !== undefined ? undefined : { ...saved, owner }), fs, env)) === 'changed'
+  return (await changeMachine(machine, saved => (saved.owner !== undefined ? undefined : { ...saved, owner }), env, fs)) === 'changed'
 }
 
 /** How stale the kept time a machine was last seen may be before it is written again. */
 const SEEN_KEPT_MS = 60_000
 
 /** Keep when a saved machine last answered, once a minute at most: the file is not written at each answer. */
-export async function noteSeen(machine: { id: string; key: string }, at: string, fs: RegistryFs = nodeRegistryFs(), env: NodeJS.ProcessEnv = process.env): Promise<void> {
-  await changeMachine(machine, saved => (saved.seenAt !== undefined && Date.parse(at) - Date.parse(saved.seenAt) < SEEN_KEPT_MS ? undefined : { ...saved, seenAt: at }), fs, env)
+export async function noteSeen(machine: { id: string; key: string }, at: string, env: NodeJS.ProcessEnv = process.env, fs: RegistryFs = nodeRegistryFs()): Promise<void> {
+  await changeMachine(machine, saved => (saved.seenAt !== undefined && Date.parse(at) - Date.parse(saved.seenAt) < SEEN_KEPT_MS ? undefined : { ...saved, seenAt: at }), env, fs)
 }
 
 /** Keep what a saved machine said of its own projects. */
-export async function noteProjects(machine: { id: string; key: string }, projects: OwnProject[], fs: RegistryFs = nodeRegistryFs(), env: NodeJS.ProcessEnv = process.env): Promise<void> {
-  await changeMachine(machine, saved => ({ ...saved, projects }), fs, env)
+export async function noteProjects(machine: { id: string; key: string }, projects: OwnProject[], env: NodeJS.ProcessEnv = process.env, fs: RegistryFs = nodeRegistryFs()): Promise<void> {
+  await changeMachine(machine, saved => ({ ...saved, projects }), env, fs)
 }
 
 /** Write down that the person was told their logins are copied to a saved machine of another person's. Answers whether it is saved. */
-export async function tellMachine(id: string, fs: RegistryFs = nodeRegistryFs(), env: NodeJS.ProcessEnv = process.env): Promise<boolean> {
-  return (await changeMachine({ id }, saved => (saved.told ? undefined : { ...saved, told: true as const }), fs, env)) !== 'unsaved'
+export async function tellMachine(id: string, env: NodeJS.ProcessEnv = process.env, fs: RegistryFs = nodeRegistryFs()): Promise<boolean> {
+  return (await changeMachine({ id }, saved => (saved.told ? undefined : { ...saved, told: true as const }), env, fs)) !== 'unsaved'
 }
 
 /** Say whether a saved server uses this computer's logins. Answers whether it is saved. */
-export async function useLoginsOn(id: string, on: boolean, fs: RegistryFs = nodeRegistryFs(), env: NodeJS.ProcessEnv = process.env): Promise<boolean> {
-  return (await changeMachine({ id }, ({ logins: _was, ...rest }) => (on ? { ...rest, logins: true as const } : rest), fs, env)) !== 'unsaved'
+export async function useLoginsOn(id: string, on: boolean, env: NodeJS.ProcessEnv = process.env, fs: RegistryFs = nodeRegistryFs()): Promise<boolean> {
+  return (await changeMachine({ id }, ({ logins: _was, ...rest }) => (on ? { ...rest, logins: true as const } : rest), env, fs)) !== 'unsaved'
 }
 
 /**
@@ -968,17 +968,17 @@ export async function useLoginsOn(id: string, on: boolean, fs: RegistryFs = node
 async function changeMachine(
   machine: { id: string; key?: string },
   change: (saved: MachineRecord, machines: readonly MachineRecord[]) => MachineRecord | undefined,
-  fs: RegistryFs,
   env: NodeJS.ProcessEnv,
+  fs: RegistryFs,
 ): Promise<'unsaved' | 'unchanged' | 'changed'> {
   return serialize(async () => {
-    const registry = await readRegistry(fs, env)
+    const registry = await readRegistry(env, fs)
     const machines = registry.machines ?? []
     const saved = machines.find(candidate => candidate.id === machine.id)
     if (!saved || (machine.key !== undefined && saved.key !== machine.key)) return 'unsaved'
     const changed = change(saved, machines)
     if (changed === undefined) return 'unchanged'
-    await writeRegistry({ ...registry, machines: machines.map(candidate => (candidate === saved ? changed : candidate)) }, fs, env)
+    await writeRegistry({ ...registry, machines: machines.map(candidate => (candidate === saved ? changed : candidate)) }, env, fs)
     return 'changed'
   })
 }
@@ -986,39 +986,39 @@ async function changeMachine(
 /** Take a saved machine off the list, by id. Answers the one that was there. */
 export async function removeMachine(
   id: string,
-  fs: RegistryFs = nodeRegistryFs(),
   env: NodeJS.ProcessEnv = process.env,
+  fs: RegistryFs = nodeRegistryFs(),
 ): Promise<MachineRecord | undefined> {
   return serialize(async () => {
-    const registry = await readRegistry(fs, env)
+    const registry = await readRegistry(env, fs)
     const removed = (registry.machines ?? []).find(saved => saved.id === id)
     if (!removed) return undefined
-    await writeRegistry({ ...registry, machines: (registry.machines ?? []).filter(saved => saved.id !== id) }, fs, env)
+    await writeRegistry({ ...registry, machines: (registry.machines ?? []).filter(saved => saved.id !== id) }, env, fs)
     return removed
   })
 }
 
 /** The computers the person removed, the newest last. */
-export async function listForgotten(fs: RegistryFs = nodeRegistryFs(), env: NodeJS.ProcessEnv = process.env): Promise<ForgottenMachine[]> {
-  return (await readRegistry(fs, env)).forgotten ?? []
+export async function listForgotten(env: NodeJS.ProcessEnv = process.env, fs: RegistryFs = nodeRegistryFs()): Promise<ForgottenMachine[]> {
+  return (await readRegistry(env, fs)).forgotten ?? []
 }
 
 /** Remember that the person removed the computer at `url`, at `at`; a later removal of it replaces an earlier one. */
-export async function forgetMachine(url: string, at: string, fs: RegistryFs = nodeRegistryFs(), env: NodeJS.ProcessEnv = process.env): Promise<void> {
+export async function forgetMachine(url: string, at: string, env: NodeJS.ProcessEnv = process.env, fs: RegistryFs = nodeRegistryFs()): Promise<void> {
   await serialize(async () => {
-    const registry = await readRegistry(fs, env)
+    const registry = await readRegistry(env, fs)
     const was = (registry.forgotten ?? []).find(gone => gone.url === url)
     if (was && Date.parse(was.at) >= Date.parse(at)) return
-    await writeRegistry({ ...registry, forgotten: [...(registry.forgotten ?? []).filter(gone => gone.url !== url), { url, at }].slice(-MAX_FORGOTTEN) }, fs, env)
+    await writeRegistry({ ...registry, forgotten: [...(registry.forgotten ?? []).filter(gone => gone.url !== url), { url, at }].slice(-MAX_FORGOTTEN) }, env, fs)
   })
 }
 
 /** The person saved the computer at `url` again: it is no longer one they removed. */
-export async function unforgetMachine(url: string, fs: RegistryFs = nodeRegistryFs(), env: NodeJS.ProcessEnv = process.env): Promise<void> {
+export async function unforgetMachine(url: string, env: NodeJS.ProcessEnv = process.env, fs: RegistryFs = nodeRegistryFs()): Promise<void> {
   await serialize(async () => {
-    const registry = await readRegistry(fs, env)
+    const registry = await readRegistry(env, fs)
     if (!(registry.forgotten ?? []).some(gone => gone.url === url)) return
-    await writeRegistry({ ...registry, forgotten: (registry.forgotten ?? []).filter(gone => gone.url !== url) }, fs, env)
+    await writeRegistry({ ...registry, forgotten: (registry.forgotten ?? []).filter(gone => gone.url !== url) }, env, fs)
   })
 }
 
@@ -1041,9 +1041,9 @@ function hostOf(url: string): string {
  * reach the daemon's own services without a restart.
  */
 export function registryPreferencesStore(
-  fs: RegistryFs = nodeRegistryFs(),
   env: NodeJS.ProcessEnv = process.env,
   onChange?: (written: Preferences) => void,
+  fs: RegistryFs = nodeRegistryFs(),
 ): PreferencesStore {
   const changed = <T>(written: Preferences, result: T): T => {
     try {
@@ -1054,8 +1054,8 @@ export function registryPreferencesStore(
     return result
   }
   return {
-    read: () => readPreferences(fs, env),
-    save: async preferences => changed(preferences, await writePreferences(preferences, fs, env)),
-    patch: async patch => changed(patch, await patchPreferences(patch, fs, env)),
+    read: () => readPreferences(env, fs),
+    save: async preferences => changed(preferences, await writePreferences(preferences, env, fs)),
+    patch: async patch => changed(patch, await patchPreferences(patch, env, fs)),
   }
 }

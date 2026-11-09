@@ -107,8 +107,8 @@ async function twoMachines(opts: { shopOnB?: boolean; machineCalls?: (fn: string
   // B: another project first on its list, then (unless the test says not) the shop, cloned over HTTPS.
   const otherB = await repository(join(root, 'b'), 'other', 'https://github.com/acme/other.git')
   const shopB = await repository(join(root, 'b'), 'work-shop', 'https://github.com/Acme/Shop.git')
-  await addProject(otherB, at, undefined, envB)
-  if (opts.shopOnB !== false) await addProject(shopB, at, undefined, envB)
+  await addProject(otherB, at, envB)
+  if (opts.shopOnB !== false) await addProject(shopB, at, envB)
   const bClones: TwoMachines['bClones'] = []
   const runtimeB = createProjectRuntime({ cwd: otherB, env: envB, clone: from => new Promise<Cloned>(land => bClones.push({ from, land })) })
 
@@ -140,9 +140,9 @@ async function twoMachines(opts: { shopOnB?: boolean; machineCalls?: (fn: string
   // A: the shop cloned over SSH into another folder, a project with no remote, and B saved as a machine.
   const shopA = await repository(join(root, 'a'), 'shop', 'git@github.com:acme/shop.git')
   const localOnlyA = await repository(join(root, 'a'), 'notes')
-  await addProject(shopA, at, undefined, envA)
-  await addProject(localOnlyA, at, undefined, envA)
-  const machineB = (await addMachine({ url: b.url, key: KEY, door: `${b.url}/_devices/enter`, label: 'Studio' }, undefined, envA)).record.id
+  await addProject(shopA, at, envA)
+  await addProject(localOnlyA, at, envA)
+  const machineB = (await addMachine({ url: b.url, key: KEY, door: `${b.url}/_devices/enter`, label: 'Studio' }, envA)).record.id
   const a = createProjectRuntime({ cwd: shopA, env: envA })
 
   return {
