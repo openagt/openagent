@@ -10,7 +10,7 @@ import { WARNING } from './ThisComputer.js'
 const OFF = { on: false, listening: false, devices: [], persons: [] }
 const OPEN = { on: true, listening: true, devices: [], persons: [] }
 const PHONE = { id: 'abc123def456', name: 'iPhone, Safari', added: new Date(Date.now() - 3 * 60_000).toISOString(), seen: new Date(Date.now() - 60_000).toISOString() }
-const LINK = { url: 'http://adas-macbook.local:4201/_devices/enter#code', numberUrl: 'http://192.168.1.23:4201/_devices/enter#code', expires: new Date(Date.now() + 5 * 60_000).toISOString() }
+const LINK = { url: 'http://adas-macbook.local:4201/_devices/enter#code', numberUrl: 'http://192.168.1.23:4201/_devices/enter#code', where: 'adas-macbook.local:4201', code: 'K7P4-QX9M', expires: new Date(Date.now() + 5 * 60_000).toISOString() }
 
 /**
  * A host whose `devices` command (this computer's door) answers what `answer` says for its words,
@@ -239,9 +239,9 @@ describe('Settings › Devices: this computer, and how devices reach it', () => 
     // A server sets up no server.
     expect(screen.queryByRole('radio', { name: /^Server/ })).toBeNull()
     fireEvent.click(screen.getByRole('button', { name: 'Continue' }))
-    // Who it is for, on a computer several people use: "Me".
-    fireEvent.click(await screen.findByRole('button', { name: 'Continue' }))
+    // Nobody is asked who it is for: a device is the person's own. Someone else is Add person, beside it.
     await screen.findByRole('img', { name: 'The code a new device scans' })
+    expect(screen.queryByRole('radio', { name: /Someone else/ })).toBeNull()
     expect(await copiedLink()).toBe(link.url)
     expect(screen.queryByRole('button', { name: 'Phone does not open it? Use the number.' })).toBeNull()
     unmount()
@@ -638,7 +638,7 @@ describe('Settings › Devices: with a server', () => {
 })
 
 describe('Settings › Devices: a computer several people use', () => {
-  test('Someone else: the owner names themselves first, starting from the name git knows here, then the code is for the person typed, by their name', async () => {
+  test('Add person: the owner names themselves first, starting from the name git knows here, then the code is for the person typed, by their name', async () => {
     const SERVER = { on: false, listening: true, https: { address: '203.0.113.5' }, devices: [] }
     let persons: unknown[] = []
     let devices: unknown[] = []
@@ -653,34 +653,38 @@ describe('Settings › Devices: a computer several people use', () => {
       () => ok({ server: true, servers: [] }),
     )
     show(host)
+    // Add device asks nobody who it is for any more: a device is the person's own. Someone else is Add person.
     await addPhone()
-    fireEvent.click(await screen.findByRole('radio', { name: /Someone else/ }))
+    expect(await screen.findByRole('img', { name: 'The code a new device scans' })).toBeTruthy()
+    expect(screen.queryByRole('radio', { name: /Someone else/ })).toBeNull()
+    fireEvent.click(screen.getByRole('button', { name: 'Cancel' }))
+    fireEvent.click(await screen.findByRole('button', { name: 'Add person' }))
     const field = await screen.findByRole('textbox', { name: 'Their name' })
     fireEvent.change(field, { target: { value: '<not a name>' } })
     expect(screen.getByText('A name is letters and digits, with spaces, dots, apostrophes or dashes between, at most 40.')).toBeTruthy()
-    expect((screen.getByRole('button', { name: 'Continue' }) as HTMLButtonElement).disabled).toBe(true)
+    expect((screen.getByRole('button', { name: 'Make the code' }) as HTMLButtonElement).disabled).toBe(true)
     fireEvent.change(field, { target: { value: ' Rom  Brillout ' } })
-    fireEvent.click(screen.getByRole('button', { name: 'Continue' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Make the code' }))
     const own = (await screen.findByRole('textbox', { name: 'First, your name?' })) as HTMLInputElement
     await waitFor(() => expect(own.value).toBe('Ada Lovelace'))
     fireEvent.change(own, { target: { value: 'Ada' } })
     fireEvent.click(screen.getByRole('button', { name: 'Continue' }))
-    expect(await screen.findByText('For Rom Brillout. Send them the link.')).toBeTruthy()
+    expect(await screen.findByText('Rom Brillout gets a user of their own on Adas-MacBook: their own runs, with their own logins. Send them this:')).toBeTruthy()
+    expect(screen.getByRole('group', { name: 'The code' }).textContent).toContain('K7P4-QX9M')
     expect(runComputerCommand).toHaveBeenCalledWith(['owner', 'Ada'])
     expect(runComputerCommand).toHaveBeenCalledWith(['add', '--for', 'Rom Brillout'])
     // The page goes on reading the list: the device that gets in with the code is told.
     devices = [{ ...PHONE, person: 'Rom Brillout' }]
-    expect(await screen.findByText('iPhone, Safari is in.')).toBeTruthy()
+    expect(await screen.findByText('iPhone, Safari is in, for Rom Brillout.')).toBeTruthy()
   })
 
   test('with no name git knows here, the owner types theirs; nothing is named until they do', async () => {
     const SERVER = { on: false, listening: true, https: { address: '203.0.113.5' }, devices: [], persons: [] }
     const { host, runComputerCommand } = door(args => (args[0] === 'me' ? ok({}) : ok(SERVER)), [], () => ok({ server: true, servers: [] }))
     show(host)
-    await addPhone()
-    fireEvent.click(await screen.findByRole('radio', { name: /Someone else/ }))
+    fireEvent.click(await screen.findByRole('button', { name: 'Add person' }))
     fireEvent.change(await screen.findByRole('textbox', { name: 'Their name' }), { target: { value: 'Rom' } })
-    fireEvent.click(screen.getByRole('button', { name: 'Continue' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Make the code' }))
     const own = (await screen.findByRole('textbox', { name: 'First, your name?' })) as HTMLInputElement
     await waitFor(() => expect(runComputerCommand).toHaveBeenCalledWith(['me']))
     expect(own.value).toBe('')
@@ -704,12 +708,12 @@ describe('Settings › Devices: a computer several people use', () => {
     fireEvent.click(within(screen.getByRole('alertdialog')).getByRole('button', { name: 'Remove person' }))
     await waitFor(() => expect(runComputerCommand).toHaveBeenCalledWith(['remove-person', 'Rom']))
 
-    await addPhone()
-    fireEvent.click(await screen.findByRole('radio', { name: /Someone else/ }))
+    fireEvent.click(screen.getByRole('button', { name: 'Add person' }))
     fireEvent.change(await screen.findByRole('textbox', { name: 'Their name' }), { target: { value: 'eve' } })
-    fireEvent.click(screen.getByRole('button', { name: 'Continue' }))
-    // The name of a person here already, in other letters' case, is that person.
-    expect(await screen.findByText('For eve. Send them the link.')).toBeTruthy()
+    fireEvent.click(screen.getByRole('button', { name: 'Make the code' }))
+    // The owner is named already: the code is asked at once, for the name typed.
+    expect(await screen.findByText(/^eve gets a user of their own on Adas-MacBook/)).toBeTruthy()
+    expect(runComputerCommand).toHaveBeenCalledWith(['add', '--for', 'eve'])
     expect(runComputerCommand.mock.calls.some(([args]) => args[0] === 'me' || args[0] === 'owner')).toBe(false)
   })
 

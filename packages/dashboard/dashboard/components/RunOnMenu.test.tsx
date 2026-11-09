@@ -155,7 +155,7 @@ describe('a saved machine that is a person\'s own computer, reached by the line 
     renderMenu({ machines: [box], status: { box: 'online' } })
     await openMenu(trigger())
     const item = screen.getByRole('menuitem', { name: /^rom-desktop/ })
-    expect(item.textContent).toBe("rom-desktop@rom's server. Runs use your own logins.")
+    expect(item.textContent).toBe("rom-desktoprom's, shared with you. Runs use your own logins.")
     expect(item.querySelector('svg.lucide-users')).toBeTruthy()
     expect(item.querySelector('svg.lucide-server')).toBeNull()
     expect(item.querySelector('svg.lucide-laptop')).toBeNull()

@@ -669,7 +669,7 @@ test('a run sent to another person\'s computer first has the server\'s logins co
   const laptop = createProjectRuntime({ cwd: shop, env: { ...env, OPENAGENT_SERVER: '' }, logins })
   try {
     // Nothing is copied before the person said OK to the line that says it is.
-    assert.deepEqual(await runtime.onStart('go', { machine: url }), { ok: false, error: "Your logins are copied to @rom's server for a run there: say OK to that above the message box first." })
+    assert.deepEqual(await runtime.onStart('go', { machine: url }), { ok: false, error: "Your own logins are used on rom's computer for a run there: say OK to that above the message box first." })
     assert.equal(asked.length, 0)
     await tellMachine(url, undefined, env)
     assert.deepEqual(await runtime.onStart('go', { machine: url }), { ok: false, error: "rom-desktop: @sul's place on this computer is being made. Try again in a minute." })

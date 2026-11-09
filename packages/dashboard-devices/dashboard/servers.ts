@@ -276,16 +276,18 @@ export interface PersonThere {
   /** Their name there, once the server has persons. */
   person?: string
   owner: boolean
+  /** The owner's name, once the server has persons: whose computer it is when it is not this person's. */
+  ownerName?: string
   devices: DeviceRow[]
 }
 
 /** The door's answer, read as another computer's data: anything that is not what it should be is left out. */
 export function readPersonThere(said: unknown): PersonThere | undefined {
   if (!said || typeof said !== 'object') return undefined
-  const { person, owner } = said as Record<string, unknown>
+  const { person, owner, ownerName } = said as Record<string, unknown>
   const listed = readDevices(said)
-  const who = text(person)
-  return listed && typeof owner === 'boolean' ? { ...(who ? { person: who } : {}), owner, devices: listed.devices } : undefined
+  const [who, whose] = [text(person), text(ownerName)]
+  return listed && typeof owner === 'boolean' ? { ...(who ? { person: who } : {}), owner, ...(whose ? { ownerName: whose } : {}), devices: listed.devices } : undefined
 }
 
 /** What this computer keeps for servers someone invited its person to, by their addresses. */

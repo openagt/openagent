@@ -13,9 +13,9 @@ const LABELS = { login: 'Log in', user: 'A user of its own, openagent', tools: '
 const LINK = { url: 'https://203.0.113.5/_devices/enter#K7P4QX9M.pin', where: '203.0.113.5', code: 'K7P4-QX9M', expires: new Date(Date.now() + 10 * 60_000).toISOString() }
 /** The server's people, with its owner named. */
 const OWNED = (): ModuleCommandResult => ({ ok: true, output: { devices: [], persons: [{ name: 'Ada', owner: true }] } })
-/** Invite, then their name, then the code. */
+/** Add person, then their name, then the code. */
 async function invite(name: string, at = '203.0.113.5'): Promise<void> {
-  fireEvent.click(await screen.findByRole('button', { name: `Invite to ${at}` }))
+  fireEvent.click(await screen.findByRole('button', { name: `Add person to ${at}` }))
   fireEvent.change(await screen.findByRole('textbox', { name: 'Their name' }), { target: { value: name } })
   fireEvent.click(screen.getByRole('button', { name: 'Make the code' }))
 }
@@ -255,7 +255,7 @@ describe('Settings › Devices: a server this computer installed', () => {
     expect(screen.getByRole('img', { name: 'The code a new device scans' })).toBeTruthy()
     expect(card()).toBeNull()
     fireEvent.click(screen.getByRole('button', { name: 'Done' }))
-    await waitFor(() => expect(screen.queryByText('Invite to 203.0.113.5', { selector: 'h2' })).toBeNull())
+    await waitFor(() => expect(screen.queryByText('Add person to 203.0.113.5', { selector: 'h2' })).toBeNull())
 
     // A code that runs out says so, and a new one is a press away.
     link = ok({ ...LINK, expires: new Date(Date.now() + 80).toISOString() })
@@ -280,7 +280,7 @@ describe('Settings › Devices: a server this computer installed', () => {
     await open('203.0.113.5')
     await screen.findByRole('button', { name: 'Try 203.0.113.5 again' })
     expect(screen.queryByRole('tab', { name: 'People' })).toBeNull()
-    expect(screen.queryByRole('button', { name: 'Invite to 203.0.113.5' })).toBeNull()
+    expect(screen.queryByRole('button', { name: 'Add person to 203.0.113.5' })).toBeNull()
   })
 
   test('a server that could not be saved says why, and is tried again on a press, not by itself', async () => {
@@ -919,7 +919,7 @@ describe('Settings › Devices: a server this computer installed', () => {
     )
     computersThrough.mockImplementation(async () => ({ ok: true, computers: [{ id: 'b0x1d2', name: 'rom-desktop', online: true, added: true, owner: 'rom' }] }))
     show(host)
-    expect((await screen.findByRole('listitem', { name: 'rom-desktop (through 203.0.113.5)' })).textContent).toContain("rom's server")
+    expect((await screen.findByRole('listitem', { name: 'rom-desktop (through 203.0.113.5)' })).textContent).toContain("rom's, shared with you")
     await open('203.0.113.5')
     const list = await screen.findByRole('list', { name: 'The computers on 203.0.113.5' })
     expect(list.textContent).toContain("rom-desktop· rom's · for everyone")
@@ -940,6 +940,40 @@ describe('Settings › Devices: a server this computer installed', () => {
     await waitFor(() => expect(logins_.textContent).toContain('GitHub: made here.'))
     fireEvent.click(screen.getByRole('button', { name: 'Log in to Claude on rom-desktop (through 203.0.113.5) instead' }))
     await waitFor(() => expect(runComputerCommand).toHaveBeenCalledWith(['other-login', BOX, 'claude']))
+  })
+})
+
+describe('Settings › Devices: a computer someone shared with this person at its own door', () => {
+  test('it is listed as theirs, shared with this person, with who this person is there; its page has their logins and this person\'s own devices there; Remove takes it off and this computer out', async () => {
+    const PC = 'https://dani-pc.tail1234.ts.net'
+    const saved: ModuleMachines = { version: '1.2.3', machines: [{ id: PC, label: 'dani-pc', url: PC, version: '1.2.3', owner: 'Dani', device: 'k1abcd' }] }
+    const { host, runComputerCommand, machinePerson, removeMachineDevice, removeMachine } = dashboard(
+      args => (args[0] === 'status' ? ok({ servers: [] }) : args[0] === 'other' ? ok({ other: [{ url: PC, logins: {}, claude: { there: false, working: false } }] }) : ok({ shared: [] })),
+      saved,
+      { ok: true },
+      OCTOCAT,
+    )
+    machinePerson.mockImplementation(async () => ({ ok: true, said: { person: 'Suleiman', owner: false, ownerName: 'Dani', devices: [{ id: 'k1abcd', name: 'OpenAgent on Suleimans-MacBook-Pro', added: '2026-11-09T00:00:00.000Z' }, { id: 'p1abcd', name: 'iPhone, Safari', added: '2026-11-09T00:00:00.000Z' }] } }))
+    removeMachineDevice.mockImplementation(async () => ({ ok: true, said: { person: 'Suleiman', owner: false, ownerName: 'Dani', devices: [] } }))
+    show(host)
+    const row = await screen.findByRole('listitem', { name: 'dani-pc' })
+    await waitFor(() => expect(row.textContent).toContain('you are Suleiman'))
+    expect(row.textContent).toContain("Dani's, shared with you")
+    // No line through it: it is no server of this person's.
+    expect(screen.queryByRole('switch', { name: 'From anywhere, through dani-pc' })).toBeNull()
+    await open('dani-pc')
+    expect(await screen.findByText("Dani's computer, shared with you. A run there runs as you, in your own OpenAgent on it, with your own logins.")).toBeTruthy()
+    expect(screen.getByText('Log them in here before your first run there.')).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'Log in to GitHub on dani-pc instead' }).textContent).toBe('Log in here')
+    await tab('Your devices')
+    const devices = await screen.findByRole('list', { name: 'Your devices on dani-pc' })
+    expect(within(devices).queryByRole('button', { name: 'Remove OpenAgent on Suleimans-MacBook-Pro from dani-pc' })).toBeNull()
+    fireEvent.click(within(devices).getByRole('button', { name: 'Remove iPhone, Safari from dani-pc' }))
+    await waitFor(() => expect(removeMachineDevice).toHaveBeenCalledWith(PC, 'p1abcd'))
+    await tab('Overview')
+    fireEvent.click(screen.getByRole('button', { name: 'Remove dani-pc' }))
+    await waitFor(() => expect(removeMachine).toHaveBeenCalledWith(PC))
+    expect(runComputerCommand.mock.calls.some(([args]) => args[0] === 'shared-forget')).toBe(false)
   })
 })
 
@@ -988,7 +1022,7 @@ describe('Settings › Devices: a computer at home set up as a server, through a
     await waitFor(() => expect(within(group).getByRole('radio', { name: /Everyone on 165\.245\.244\.10 \(3 people\)/ })).toBeTruthy())
     expect(group.textContent).toContain("Each person's runs use their own logins, never yours.")
     expect(group.textContent).toContain('Their agents run on your home network.')
-    expect(screen.queryByRole('button', { name: 'Invite to 192.168.1.20' })).toBeNull()
+    expect(screen.queryByRole('button', { name: 'Add person to 192.168.1.20' })).toBeNull()
     expect(screen.queryByRole('tab', { name: 'People' })).toBeNull()
     expect(screen.queryByRole('tab', { name: 'Logins' })).toBeNull()
 
@@ -1260,8 +1294,8 @@ describe('Settings › Devices: Set up a server, in steps', () => {
     expect(now()).toBe('Ready: now')
     // Once, however often the page looks.
     expect(useLoginsOn).toHaveBeenCalledTimes(1)
-    fireEvent.click(button('Invite people'))
-    expect(await screen.findByText('Invite to 203.0.113.5')).toBeTruthy()
+    fireEvent.click(button('Add people'))
+    expect(await screen.findByText('Add person to 203.0.113.5')).toBeTruthy()
     // Under it, the server's own page, on its people.
     expect(screen.getByRole('tab', { name: 'People', selected: true, hidden: true })).toBeTruthy()
   })
@@ -1345,7 +1379,7 @@ describe('Settings › Devices: Set up a server, in steps', () => {
     expect(await screen.findByText('rom-box is ready.')).toBeTruthy()
     expect(screen.getByText('Your runs can go there from here. Who else uses it?')).toBeTruthy()
     expect(screen.getByRole('radiogroup', { name: 'Who can start runs on 192.168.1.20' })).toBeTruthy()
-    expect(screen.queryByRole('button', { name: 'Invite people' })).toBeNull()
+    expect(screen.queryByRole('button', { name: 'Add people' })).toBeNull()
     expect(ran()).toContain('add-through 192.168.1.20')
     expect(useLoginsOn).not.toHaveBeenCalled()
   })

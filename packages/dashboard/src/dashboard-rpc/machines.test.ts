@@ -43,7 +43,7 @@ const ENTER = '/_devices/enter'
  * computer in once and answers a key, a key takes its computer out again, and a ping is answered
  * only to a key that is in, with the OpenAgent the machine runs when it says.
  */
-async function machine(codes: string[] = [], version?: string, computers?: unknown[], listed?: unknown): Promise<{ url: string; link: (code: string) => string; in: Map<string, string>; saved: unknown[]; name: { kept?: string; heard?: string }; close: () => Promise<void> }> {
+async function machine(codes: string[] = [], version?: string, computers?: unknown[], listed?: unknown, me?: unknown): Promise<{ url: string; link: (code: string) => string; in: Map<string, string>; saved: unknown[]; name: { kept?: string; heard?: string }; close: () => Promise<void> }> {
   const good = new Set(codes)
   const inside = new Map<string, string>()
   let made = 0
@@ -80,6 +80,8 @@ async function machine(codes: string[] = [], version?: string, computers?: unkno
     }
     // A server's door lists the computers on a line there, to a key that is in.
     if (req.url === '/_devices/computers' && computers) return void (key && inside.has(key) ? res.writeHead(200, { 'content-type': 'application/json' }).end(JSON.stringify({ computers })) : res.writeHead(401).end())
+    // A door with persons says who a key's computer is there, and whose computer it is.
+    if (req.url === '/_devices/me' && me !== undefined) return void (key && inside.has(key) ? res.writeHead(200, { 'content-type': 'application/json' }).end(JSON.stringify(me)) : res.writeHead(401).end())
     if (req.url !== ENTER) return void res.writeHead(404).end()
     if (req.method === 'DELETE') {
       const was = key !== undefined && inside.delete(key)
@@ -661,6 +663,31 @@ test('a machine that is no server has no computers through it, and one whose key
       assert.deepEqual(await onComputersThrough('http://10.9.9.9:4201'), { ok: false, error: 'That machine is no longer saved.' })
     } finally {
       await plain.close()
+    }
+  })
+})
+
+test("a link to a computer whose door says this computer's person is not its owner saves it as that owner's, shared with this person; one whose door says owner, or says nothing, is this person's own", async () => {
+  await withHome(async file => {
+    const dani = await machine(['c0de'], '1.2.3', undefined, undefined, { person: 'Suleiman', owner: false, ownerName: 'Dani', devices: [] })
+    const own = await machine(['c1de'], '1.2.3', undefined, undefined, { person: 'Suleiman', owner: true, ownerName: 'Suleiman', devices: [] })
+    const mute = await machine(['c2de'], '1.2.3')
+    try {
+      assert.deepEqual(await sendAddMachine(dani.link('c0de'), 'dani-pc'), { ok: true, machine: { id: dani.url, label: 'dani-pc', url: dani.url, owner: 'Dani' } })
+      assert.deepEqual(await sendAddMachine(own.link('c1de'), 'vps'), { ok: true, machine: { id: own.url, label: 'vps', url: own.url } })
+      assert.deepEqual(await sendAddMachine(mute.link('c2de'), 'studio'), { ok: true, machine: { id: mute.url, label: 'studio', url: mute.url } })
+      const saved = JSON.parse(await readFile(file, 'utf8')).machines as { url: string; owner?: string }[]
+      assert.deepEqual(saved.map(machine => [machine.url, machine.owner]), [[mute.url, undefined], [own.url, undefined], [dani.url, 'Dani']])
+      // Asked again who this computer is there, a machine saved before its door said is kept as its owner's from then on.
+      const late = await machine(['c3de'], '1.2.3')
+      try {
+        assert.equal((await sendAddMachine(late.link('c3de'), 'late')).ok, true)
+        assert.equal(((await onMachines()).find(machine => machine.url === late.url) as { owner?: string }).owner, undefined)
+      } finally {
+        await late.close()
+      }
+    } finally {
+      await Promise.all([dani.close(), own.close(), mute.close()])
     }
   })
 })

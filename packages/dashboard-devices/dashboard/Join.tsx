@@ -48,7 +48,7 @@ export function linkOf(where: string, code: string): string | undefined {
   return origin && /^[A-Z0-9]{4,32}$/.test(typed) ? `${origin}/_devices/enter#${typed}` : undefined
 }
 
-export function JoinDialog({ d, onClose }: { d: Devices; onClose: () => void }) {
+export function JoinDialog({ d, onClose, onJoined }: { d: Devices; onClose: () => void; /** The code was someone else's computer's: its page opens, where their logins are set. */ onJoined?: (machineId: string) => void }) {
   const { host } = d
   const [where, setWhere] = useState('')
   const [code, setCode] = useState('')
@@ -101,6 +101,8 @@ export function JoinDialog({ d, onClose }: { d: Devices; onClose: () => void }) 
     await Promise.all([d.reloadMachines(), d.reloadShared()]).catch(() => {})
     setJoining(false)
     if (problems.length) setError(`Joined. ${problems.join(' ')}`)
+    // Someone else's computer: its page says whose it is, and takes this person's logins for it.
+    else if (machine?.owner !== undefined && onJoined) onJoined(machine.id)
     else onClose()
   }
 

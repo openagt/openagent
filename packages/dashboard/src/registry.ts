@@ -959,6 +959,23 @@ export async function noteName(machine: { id: string; key: string }, said: strin
   })
 }
 
+/**
+ * Keep whose computer a saved machine is, once its door said this computer's person is not its
+ * owner: another person's, which this computer's syncs hand nothing of this computer's to. `key` is
+ * the key the machine was asked with: a machine saved anew since says for itself. One that is
+ * another person's already stays theirs.
+ */
+export async function noteOwner(machine: { id: string; key: string }, owner: string, fs: RegistryFs = nodeRegistryFs(), env: NodeJS.ProcessEnv = process.env): Promise<boolean> {
+  if (!isPersonName(owner)) return false
+  return serialize(async () => {
+    const registry = await readRegistry(fs, env)
+    const saved = (registry.machines ?? []).find(candidate => candidate.id === machine.id)
+    if (!saved || saved.key !== machine.key || saved.owner !== undefined) return false
+    await writeRegistry({ ...registry, machines: (registry.machines ?? []).map(candidate => (candidate.id === machine.id ? { ...saved, owner } : candidate)) }, fs, env)
+    return true
+  })
+}
+
 /** How stale the kept time a machine was last seen may be before it is written again. */
 const SEEN_KEPT_MS = 60_000
 

@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { useModuleHost, usePolled, type ModuleHost, type ModuleMachines } from '@openagt/dashboard/module'
 import { loadStatus, type DoorStatus } from './devices.js'
 import { addThrough, askLink, connect, forget, loadDevices, loadServers, loadShared, markAdded, ownGithub, reach, readPersonThere, type Answer, type DevicesRead, type OwnGithub, type PersonThere, type ServerRow, type ServersRead, type SharedRow, type StepState } from './servers.js'
-import { hasDoor, itemsOf, type Item, type Sources } from './model.js'
+import { hasDoor, itemsOf, onTailscale, type Item, type Sources } from './model.js'
 
 // What Settings › Devices reads, read once for the list and every page of it: this computer's
 // door, the servers it installed and what each is doing, the saved machines, what each server's
@@ -121,8 +121,8 @@ export function useDevices({ everyMs, devicesEveryMs, devicesAnswerMs = DEVICES_
   const account = own?.ok && 'account' in own.value ? own.value.account : undefined
   const noLogin = own === undefined || account !== undefined ? undefined : own.ok ? ('problem' in own.value ? own.value.problem : undefined) : own.error
 
-  // What each server with a door of its own, set up elsewhere, says of this computer's person there.
-  const doors = (machines?.machines ?? []).filter(machine => hasDoor(machine) && !installed(machine.url))
+  // What each server with a door of its own, set up elsewhere, says of this computer's person there; a computer on Tailscale says too.
+  const doors = (machines?.machines ?? []).filter(machine => (hasDoor(machine) || onTailscale(machine)) && !installed(machine.url))
   const doorIds = doors.map(machine => machine.id).join(' ')
   const { value: people } = usePolled<Record<string, PersonThere | undefined>>(
     doors.length

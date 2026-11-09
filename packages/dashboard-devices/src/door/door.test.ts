@@ -614,8 +614,8 @@ test('a device asks who it is here, and takes out a device of its own person and
     const romCookie = `${DEVICE_COOKIE}=${romsPhone.id}.${romsPhone.key}`
     const romBearer = { authorization: `Bearer ${romsLaptop.id}.${romsLaptop.key}` }
 
-    const mine = (await (await fetch(`${r.at}${ME_PATH}`, { headers: romBearer })).json()) as { person: string; owner: boolean; devices: { id: string; person: string }[] }
-    assert.deepEqual([mine.person, mine.owner, mine.devices.map(device => [device.id, device.person])], ['rom', false, [[romsPhone.id, 'rom'], [romsLaptop.id, 'rom']]])
+    const mine = (await (await fetch(`${r.at}${ME_PATH}`, { headers: romBearer })).json()) as { person: string; owner: boolean; ownerName?: string; devices: { id: string; person: string }[] }
+    assert.deepEqual([mine.person, mine.owner, mine.ownerName, mine.devices.map(device => [device.id, device.person])], ['rom', false, 'ada', [[romsPhone.id, 'rom'], [romsLaptop.id, 'rom']]])
     const owners = (await (await fetch(`${r.at}${ME_PATH}`, { headers: { cookie: phone.cookie } })).json()) as { person: string; owner: boolean; devices: { id: string }[] }
     assert.deepEqual([owners.person, owners.owner, owners.devices.map(device => device.id)], ['ada', true, [phone.entry.id]])
 

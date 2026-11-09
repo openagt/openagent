@@ -75,6 +75,8 @@ export interface OtherItem {
   name: string
   machine: ModuleMachine
   owner: string
+  /** What its door says of this person there, once asked: a computer shared with them at its own door. */
+  person?: PersonThere
 }
 
 export type Item = PhoneItem | ComputerItem | ServerItem | JoinedItem | OtherItem
@@ -93,7 +95,7 @@ export interface Sources {
   devices: Readonly<Record<string, DevicesRead | undefined>>
 }
 
-/** A computer reached over the person's Tailscale network, at its name there: its door is its own, and it keeps no line for anyone. */
+/** A computer reached over the person's Tailscale network, at its name there: its door is its own, and it keeps no line for anyone. Its door says who this person is there, as a server's does. */
 export const onTailscale = (machine: Pick<ModuleMachine, 'url'>): boolean => /^https:\/\/[^/]+\.ts\.net(:\d+)?$/i.test(machine.url)
 
 /** A server with a door of its own on the internet: one that can say who this computer's person is there. */
@@ -170,9 +172,13 @@ export function itemsOf(sources: Sources): Item[] {
   }
   for (const machine of machines) {
     const person = people[machine.id]
-    if (person && !installed(machine)) items.push({ kind: 'joined', key: `joined:${machine.id}`, name: machine.label, machine, person })
+    if (person && !installed(machine) && machine.owner === undefined) items.push({ kind: 'joined', key: `joined:${machine.id}`, name: machine.label, machine, person })
   }
-  for (const machine of machines) if (machine.owner !== undefined && !installed(machine)) items.push({ kind: 'other', key: `other:${machine.id}`, name: machine.label, machine, owner: machine.owner })
+  for (const machine of machines) {
+    if (machine.owner === undefined || installed(machine)) continue
+    const person = people[machine.id]
+    items.push({ kind: 'other', key: `other:${machine.id}`, name: machine.label, machine, owner: machine.owner, ...(person ? { person } : {}) })
+  }
 
   return items
 }
