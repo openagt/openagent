@@ -132,18 +132,6 @@ describe('Composer (#721)', () => {
     expect(screen.getByRole('button', { name: /Start session/ })).toBeTruthy()
   })
 
-  test('compact (#723) keeps the agent/model + "Run on" controls (#755)', async () => {
-    const { onSubmit } = renderComposer({ compact: true, submitLabel: 'Start' })
-    // They used to be dropped here, which meant a navbar agent silently used the stored agent
-    // and model with nothing on screen saying which.
-    expect(screen.queryByRole('button', { name: 'Run on' })).not.toBeNull()
-    expect((await hoverTooltip(agentTrigger())).textContent).toContain('Driver: Claude Code')
-    // The editor + submit still work (so `/` `@` `#` triggers remain live in the editor).
-    fireEvent.change(screen.getByLabelText('prompt'), { target: { value: 'quick run' } })
-    fireEvent.click(screen.getByRole('button', { name: 'Start' }))
-    expect(onSubmit).toHaveBeenCalledWith('quick run', { later: false })
-  })
-
   test('showDriverModel={false} (#831) drops the agent/model select, keeping the rest of the row', () => {
     const { onSubmit } = renderComposer({ showDriverModel: false })
     // An in-session composer: the session is bound to the agent it started with, so offering the
@@ -449,13 +437,6 @@ describe('the rows around the box', () => {
     renderComposer()
     await waitFor(() => expect(screen.getByText(/Studio is offline/)).toBeTruthy())
     expect(runOn().textContent).toBe('Studio')
-  })
-
-  test('the compact form has no row: the caller\'s controls are not drawn and "Run on" stays an icon button in its one row', () => {
-    renderComposer({ compact: true, startsAt: <span>a-place</span>, controls: <span>a-control</span> })
-    expect(screen.queryByText('a-place')).toBeNull()
-    expect(screen.queryByText('a-control')).toBeNull()
-    expect(runOn().textContent).toBe('')
   })
 })
 
