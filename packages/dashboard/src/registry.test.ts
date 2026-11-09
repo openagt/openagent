@@ -620,12 +620,17 @@ test('the registry file is written owner-only, and the mode is set before the re
   assert.deepEqual([...fs.modes.keys()], [FILE])
 })
 
-test('a filesystem with no chmod still writes the registry (#1095)', async () => {
+test('a filesystem that cannot narrow a mode still writes the registry (#1095)', async () => {
   const fs = memFs()
-  const { chmod: _dropped, ...noChmod } = fs
-  const token = await ensureBridgeToken(noChmod, ENV)
+  const noModes: RegistryFs = {
+    ...fs,
+    chmod: async () => {
+      throw new Error('EPERM: the volume keeps no permission bits')
+    },
+  }
+  const token = await ensureBridgeToken(noModes, ENV)
 
-  assert.equal(await readBridgeToken(noChmod, ENV), token)
+  assert.equal(await readBridgeToken(noModes, ENV), token)
 })
 
 const STUDIO = 'http://192.168.1.5:4201'

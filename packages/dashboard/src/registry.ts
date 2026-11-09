@@ -342,18 +342,14 @@ export interface RegistryFs {
   write(path: string, contents: string): Promise<void>
   /** Recursive; used on the registry file's parent dir. */
   mkdir(path: string): Promise<void>
+  /** Replace `to` with `from`, atomically: how {@link writeRegistry} avoids a truncate-then-write (#991). */
+  rename(from: string, to: string): Promise<void>
   /**
-   * Replace `to` with `from`, atomically. Optional only so an existing implementation of this
-   * seam keeps compiling; without it {@link writeRegistry} falls back to the truncate-then-write
-   * this method exists to avoid (#991).
+   * Narrow a file's permissions. Best-effort at the call site: this file holds the bridge's key and
+   * the saved machines' keys, so it is written owner-only — but a filesystem that cannot express
+   * that (Windows, a FAT volume) must not fail the write.
    */
-  rename?(from: string, to: string): Promise<void>
-  /**
-   * Narrow a file's permissions. Optional, and best-effort at the call site: this file holds the
-   * bridge's key and the saved machines' keys, so it is written owner-only — but a
-   * filesystem that cannot express that (Windows, a FAT volume) must not fail the write.
-   */
-  chmod?(path: string, mode: number): Promise<void>
+  chmod(path: string, mode: number): Promise<void>
 }
 
 /** A {@link RegistryFs} backed by `node:fs/promises`. See {@link nodeFs}. */
@@ -586,12 +582,11 @@ export async function readRegistry(
 /**
  * Write the registry back as pretty object-form JSON, creating the parent dir.
  *
- * Atomic (#991): the JSON goes to a temp file beside the real one and is then renamed over it,
- * the same shape #922 gave the daemon state file. A direct write truncates first, so a crash, a
- * kill or a full disk mid-write left a half file — and {@link readRegistry} reports a malformed
- * file as an empty registry, so every project and preference vanished silently. A failed write
- * now only ever damages the temp file. The temp is left behind on failure rather than swept up:
- * one stray file is the cheaper half of that trade.
+ * Atomic (#991): the JSON goes to a temp file beside the real one and is then renamed over it.
+ * A direct write truncates first, so a crash, a kill or a full disk mid-write left a half file —
+ * and {@link readRegistry} reports a malformed file as an empty registry, so every project and
+ * preference vanished silently. A failed write now only ever damages the temp file. The temp is
+ * left behind on failure rather than swept up: one stray file is the cheaper half of that trade.
  *
  * Written owner-only (#1095): the file carries the bridge's key and the saved machines' keys, so a default-umask 0644 in a
  * shared home would hand it to every other account on the machine.
@@ -613,15 +608,9 @@ async function writeRegistry(registry: Registry, fs: RegistryFs, env: NodeJS.Pro
   }
   const json = JSON.stringify(contents, null, 2)
   await fs.mkdir(dirname(file))
-  const restrict = (path: string) => fs.chmod?.(path, REGISTRY_FILE_MODE).catch(() => {})
-  if (!fs.rename) {
-    await fs.write(file, json)
-    await restrict(file)
-    return
-  }
   const temp = `${file}.${process.pid}.tmp`
   await fs.write(temp, json)
-  await restrict(temp)
+  await fs.chmod(temp, REGISTRY_FILE_MODE).catch(() => {})
   await fs.rename(temp, file)
 }
 
