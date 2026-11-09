@@ -1,3 +1,4 @@
+import { appendFile, mkdir, readFile, rename, writeFile } from 'node:fs/promises'
 import { join, isAbsolute } from 'node:path'
 import { nodeGitRunner, type GitRunner } from './git.js'
 
@@ -12,16 +13,16 @@ export interface ExcludeFs {
 }
 
 function nodeExcludeFs(): ExcludeFs {
-  const fs = () => import('node:fs/promises')
   return {
-    read: path => fs().then(f => f.readFile(path, 'utf8')),
-    mkdir: path => fs().then(f => f.mkdir(path, { recursive: true })).then(() => {}),
-    append: (path, contents) => fs().then(f => f.appendFile(path, contents)),
+    read: path => readFile(path, 'utf8'),
+    mkdir: async path => {
+      await mkdir(path, { recursive: true })
+    },
+    append: (path, contents) => appendFile(path, contents),
     write: async (path, contents) => {
-      const f = await fs()
       const temp = `${path}.${process.pid}.tmp`
-      await f.writeFile(temp, contents)
-      await f.rename(temp, path)
+      await writeFile(temp, contents)
+      await rename(temp, path)
     },
   }
 }

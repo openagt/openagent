@@ -1,3 +1,5 @@
+import { lstat, mkdir, mkdtemp, readdir, readFile, realpath, rm, rmdir, writeFile } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { BRANCHES_DIR } from './names.js'
 import { nodeGitRunner, type GitRunner } from './git.js'
@@ -196,7 +198,6 @@ async function attachedBranch(path: string, git: GitRunner): Promise<string | un
  * worktree owns) reads as absent, and so does a registration whose directory is gone.
  */
 async function checkoutRegistered(repo: string, path: string, git: GitRunner): Promise<boolean> {
-  const { realpath } = await import('node:fs/promises')
   const want = await realpath(path).catch(() => undefined)
   if (!want) return false
   const list = await git(['worktree', 'list', '--porcelain'], repo).catch(() => '')
@@ -306,7 +307,6 @@ export type FileBranchRemoval =
  */
 export async function removeFileBranch(cwd: string, branch: string, deps: FileBranchDeps = {}): Promise<FileBranchRemoval> {
   const r = resolveDeps(deps)
-  const { lstat, realpath } = await import('node:fs/promises')
   const repo = await cloneHome(cwd, r.git)
   const path = checkoutPath(repo, branch)
   const rel = `${BRANCHES_DIR}/${branch}`
@@ -346,7 +346,6 @@ export async function removeFileBranch(cwd: string, branch: string, deps: FileBr
  * whether the directory went.
  */
 async function removeCheckoutsDir(repo: string, git: GitRunner): Promise<boolean> {
-  const { lstat, rmdir } = await import('node:fs/promises')
   if (!(await rmdir(join(repo, BRANCHES_DIR)).then(() => true, () => false))) return false
   const checkouts = await repositoryCheckouts(repo, git).catch(() => undefined)
   if (checkouts) {
@@ -540,7 +539,6 @@ export async function readBranchFile(
       () => false,
     )
     if (fromCheckout) {
-      const { readFile } = await import('node:fs/promises')
       const md = await readFile(join(path, rel), 'utf8').catch(() => undefined)
       if (md !== undefined) return md
     }
@@ -649,8 +647,6 @@ export async function writeFileBranchDetached(
     if (!local.ok) throw new Error(local.error)
     return { changed: local.changed }
   }
-  const { mkdtemp, rm } = await import('node:fs/promises')
-  const { tmpdir } = await import('node:os')
   // A slash in the branch name would name a directory under tmpdir that does not exist (#1762).
   const dir = await mkdtemp(join(tmpdir(), `${branch.replace(/[\\/]/g, '-')}-write-`))
   // The remote's tip, or a parentless start for a branch origin does not have yet.
@@ -702,15 +698,13 @@ export interface BranchFileFs {
 
 /** {@link BranchFileFs} over `node:fs/promises`. */
 export function nodeBranchFileFs(): BranchFileFs {
-  const fs = () => import('node:fs/promises')
   return {
-    read: path => fs().then(f => f.readFile(path, 'utf8')),
+    read: path => readFile(path, 'utf8'),
     write: async (path, content) => {
-      const f = await fs()
-      await f.mkdir(dirname(path), { recursive: true })
-      await f.writeFile(path, content, 'utf8')
+      await mkdir(dirname(path), { recursive: true })
+      await writeFile(path, content, 'utf8')
     },
-    remove: path => fs().then(f => f.rm(path)),
-    list: dir => fs().then(f => f.readdir(dir)).catch((): string[] => []),
+    remove: path => rm(path),
+    list: dir => readdir(dir).catch((): string[] => []),
   }
 }

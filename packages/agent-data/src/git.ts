@@ -1,3 +1,5 @@
+import { execFile } from 'node:child_process'
+
 /**
  * Running git: one `execFile`-backed runner with a per-subcommand timeout, and the two readings
  * of a failed invocation every caller wants — was it a timeout kill, and which line is worth
@@ -129,7 +131,6 @@ export function isGitTimeout(err: unknown): err is GitTimeoutError {
  */
 export function nodeGitRunner(env?: Record<string, string>): GitRunner {
   return async (args, cwd) => {
-    const { execFile } = await import('node:child_process')
     const timeoutMs = gitTimeoutMs(args)
     return new Promise<string>((resolvePromise, rejectPromise) => {
       execFile('git', args, { cwd, timeout: timeoutMs, maxBuffer: 16 * 1024 * 1024, ...(env ? { env: { ...process.env, ...env } } : {}) }, (err, stdout) => {
