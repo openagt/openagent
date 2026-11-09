@@ -1,7 +1,6 @@
 packages:
   - packages/*
   - packages/agent-driver/*
-  - examples/*
 
 # pnpm 11 prompts before purging node_modules on a store-version change;
 # disable so non-TTY installs (CI, scripts) don't abort.
