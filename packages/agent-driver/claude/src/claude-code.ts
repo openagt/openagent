@@ -785,7 +785,6 @@ export class StreamJsonParser {
     return [named]
   }
 
-  /** A subagent's row over, said again whole, so a reader replaces the row by its id without having to remember what the first one carried. */
   /** What a subagent handed back when it ended, as its own text, when it said nothing that is its text: a handback is no message of its. */
   private reported(id: string, text: unknown): DriverEvent[] {
     if (typeof text !== 'string' || text.trim() === '' || this.saidBy.has(id)) return []
@@ -815,6 +814,7 @@ export class StreamJsonParser {
     return [named]
   }
 
+  /** A subagent's row over, said again whole, so a reader replaces the row by its id without having to remember what the first one carried. */
   private endSubagent(id: string, failed: boolean): DriverEvent[] {
     const subagent = this.subagents.get(id)
     if (subagent === undefined) return []
@@ -964,11 +964,6 @@ function rateWindows(raw: unknown): DriverRateWindow[] {
 }
 
 /**
- * Pull token + cost accounting off Claude Code's `result` line (#322):
- * `total_cost_usd` plus a `usage` object of token counts. Returns undefined when
- * the line carries neither, so a driver/agent that omits usage stays usage-free.
- */
-/**
  * How full the conversation was at one model call: the whole prompt it was given (the cached part
  * included) and what it wrote back. `undefined` when the message carries no usage.
  */
@@ -983,6 +978,11 @@ export function contextOf(raw: unknown): number | undefined {
   return total > 0 ? total : undefined
 }
 
+/**
+ * Pull token + cost accounting off Claude Code's `result` line (#322):
+ * `total_cost_usd` plus a `usage` object of token counts. Returns undefined when
+ * the line carries neither, so a driver/agent that omits usage stays usage-free.
+ */
 function parseUsage(obj: Record<string, unknown>): DriverUsage | undefined {
   const cost = obj['total_cost_usd']
   const raw = obj['usage']

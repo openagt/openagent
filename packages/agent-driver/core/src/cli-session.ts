@@ -42,7 +42,7 @@ export interface SpawnedProcess {
 /**
  * The slice of a driver's output parser {@link runCliSession} drives: fed one line
  * at a time, asked for the turn at the end. Each wrapped agent speaks its own
- * dialect ({@link StreamJsonParser} for Claude Code, `CodexJsonParser` for
+ * dialect (`StreamJsonParser` for Claude Code, `CodexAppServerParser` for
  * Codex), but the process handling around it is identical.
  */
 export interface AgentCliParser {
