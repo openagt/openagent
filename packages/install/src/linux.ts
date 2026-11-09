@@ -1,7 +1,7 @@
 import { existsSync } from 'node:fs'
 import { mkdir, readFile, readdir, rm, writeFile } from 'node:fs/promises'
 import { homedir, release } from 'node:os'
-import { join } from 'node:path'
+import { dirname, join } from 'node:path'
 import { SECURE_PORT } from '@openagt/dashboard/secure-address'
 import { ADDRESS, LOOPBACK_ADDRESS, addHostsLine, quoted, removeHostsLine } from './address.js'
 import type { Platform } from './platform.js'
@@ -68,8 +68,9 @@ rm -f "$said"
 export const SYSTEM_STORE = { file: `/usr/local/share/ca-certificates/${ADDRESS}.crt`, refresh: 'update-ca-certificates' }
 export type SystemStore = typeof SYSTEM_STORE
 
+/** The system's store, on a computer that has its folder. */
 function systemStore(): SystemStore | undefined {
-  return existsSync(SYSTEM_STORE.file.slice(0, SYSTEM_STORE.file.lastIndexOf('/'))) ? SYSTEM_STORE : undefined
+  return existsSync(dirname(SYSTEM_STORE.file)) ? SYSTEM_STORE : undefined
 }
 
 /** `value` as one word of a systemd unit file; `exec` for a command line, which also reads `$`. */
@@ -191,6 +192,12 @@ function places(env: NodeJS.ProcessEnv) {
   }
 }
 
+/** What the packages file lists; nothing when the install put no package on this computer. */
+async function readPackages(file: string): Promise<{ manager?: PackageManager; packages: string[] }> {
+  const text = await readFile(file, 'utf8').catch(() => undefined)
+  return text === undefined ? { packages: [] } : (JSON.parse(text) as { manager: PackageManager; packages: string[] })
+}
+
 /** The commands the install needs that this computer lacks. */
 async function missingTools(env: NodeJS.ProcessEnv): Promise<Tool[]> {
   const missing: Tool[] = []
@@ -264,7 +271,7 @@ export const linux: Platform = {
   },
   async startDashboard(opts, env) {
     const place = places(env)
-    await mkdir(join(place.unit, '..'), { recursive: true })
+    await mkdir(dirname(place.unit), { recursive: true })
     await writeFile(place.unit, dashboardUnit(opts))
     await run('systemctl', user(['daemon-reload']))
     await run('systemctl', user(['enable', DASHBOARD_UNIT]))
@@ -282,19 +289,17 @@ export const linux: Platform = {
       await run('certutil', ['-D', '-d', `sql:${store}`, '-n', NSS_NICKNAME]).catch(() => {})
     }
   },
-  adminUninstall: () => ({
-    says: `your password as the administrator, once: the hosts line for ${ADDRESS} and its port rule are taken off${systemStore() ? ', and the system trusts its certificate no more' : ''}.`,
-    script: adminUninstallScript(systemStore()),
-  }),
+  adminUninstall() {
+    const store = systemStore()
+    return {
+      says: `your password as the administrator, once: the hosts line for ${ADDRESS} and its port rule are taken off${store ? ', and the system trusts its certificate no more' : ''}.`,
+      script: adminUninstallScript(store),
+    }
+  },
   folders: env => [places(env).app],
   async leftBehind(env) {
     const { manager, packages } = await readPackages(places(env).packages)
     if (!manager || packages.length === 0) return undefined
     return `${packages.join(', ')} ${packages.length === 1 ? 'stays' : 'stay'} installed, as other programs may use ${packages.length === 1 ? 'it' : 'them'}: \`sudo ${PACKAGE_MANAGERS[manager].remove} ${packages.join(' ')}\` takes ${packages.length === 1 ? 'it' : 'them'} off.`
   },
-}
-
-async function readPackages(file: string): Promise<{ manager?: PackageManager; packages: string[] }> {
-  const text = await readFile(file, 'utf8').catch(() => undefined)
-  return text === undefined ? { packages: [] } : (JSON.parse(text) as { manager: PackageManager; packages: string[] })
 }
