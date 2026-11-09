@@ -5,11 +5,6 @@ import type { Intervention, Activity, ProjectionRead, ProjectSummary, RecentAgen
 import { onProjectFiles, onInterventions, onActivity, onRecentAgents, onStartedName } from './rpc/reads.js'
 import { sendStart } from './rpc/control.js'
 import { onProjects } from './rpc/projects.js'
-import { onComputersThrough, onMachineAgentAccounts, onMachinePerson, onMachineVersions, sendLetMachineIn, sendMachineCode, sendMachineRemoveAgentAccount, sendRemoveMachineDevice } from './rpc/machines.js'
-import { onGitHostPeople } from './rpc/people.js'
-import { sendSyncPersonalFolderOn, sendUseLoginsOn } from './rpc/server-logins.js'
-import { onPersonalFolder } from './rpc/personal-folder.js'
-import { addComputerThrough, addMachine, removeMachine, renameComputer, renameMachine } from './lib/machines.js'
 import { AgentHistory } from './components/AgentHistory.js'
 import { SidebarProvider } from './components/ui/sidebar.js'
 import { setSidebarHidden, useSidebarHidden, useSidebarWidth } from './lib/sidebar-width.js'
@@ -31,13 +26,11 @@ import { NotFound } from './components/NotFound.js'
 import { ModulePageView, ModuleSlot } from './components/ModulePageView.js'
 import { useModules, ModulesContext } from './lib/use-modules.js'
 import { HostServicesContext, useSteadyServices } from './lib/host-services.js'
-import { sendToScreen, watchScreen } from './lib/screen.js'
+import { DAEMON_SERVICES } from './lib/daemon-services.js'
 import { startPicks } from './lib/use-start-agent.js'
-import { ownComputerName } from './lib/this-machine.js'
 import { stashPendingDraft } from './lib/draft-handoff.js'
 import { useLiveEvents } from './lib/use-live-events.js'
 import { STARTING_AT_MOST_MS, useAgents } from './lib/use-agents.js'
-import { readModuleAgents } from './lib/module-agents.js'
 import { runsAgain, useRunsPace } from './lib/runs-changed.js'
 import { AGENTS_PAGE, PERMISSIONS_PAGE, useRoute } from './lib/use-route.js'
 import { formatRoute, type Route } from './lib/route.js'
@@ -353,55 +346,28 @@ export function App() {
 
   // The shell's services for modules (#1774): what a module page or a link action may ask of the
   // dashboard, none of it naming a skill. Bound to each module's package where its host is built.
+  // The daemon's questions are the same on every page (`daemon-services.ts`); what navigates is
+  // the shell's own.
   const hostServices = useSteadyServices({
-      openAgent: selectAgentInProject,
-      openPage: (segment, path, inProject) => go({ projectId: null, agentId: null, page: segment, ...(path && path.length ? { pagePath: path } : {}), ...(inProject ? { scope: inProject } : {}) }),
-      pageHref: segment => formatRoute({ projectId: null, agentId: null, page: segment, ...(scope ? { scope } : {}) }, addresses),
-      openSettings: entry => showSettings(entry),
-      gitHostPeople: onGitHostPeople,
-      startRun: async (inProject, prompt, opts) => {
-        const result = await sendStart(inProject, prompt, startPicks(preferences))
-        if (!result.ok) return result
-        // A module starting several runs in a row asks not to land (#1818): the rail still learns of the run.
-        if (opts?.land ?? true) agentStarted(inProject, prompt, result.agentId)
-        else reload()
-        return result
-      },
-      // The launcher rehydrates a stashed draft once as it mounts (#1066): the same carry every
-      // "Configure first, then run" uses.
-      configureRun: (inProject, prompt) => {
-        stashPendingDraft(prompt)
-        selectProject(inProject)
-      },
-      // Asked at once by two cards, or soon again, the same runs are read once.
-      agents: (inProject, wanted) => readModuleAgents(inProject, wanted),
-      // This computer by the name the page says it everywhere else: one computer, one name.
-      machines: async () => {
-        const versions = await onMachineVersions()
-        const name = ownComputerName(versions.name)
-        return { ...versions, ...(name !== undefined ? { name } : {}) }
-      },
-      // Through the dashboard's own list, so the launcher's "Run on" shows the change at once.
-      addMachine,
-      removeMachine,
-      renameMachine,
-      renameComputer,
-      letMachineIn: sendLetMachineIn,
-      machineCode: sendMachineCode,
-      computersThrough: onComputersThrough,
-      machinePerson: onMachinePerson,
-      removeMachineDevice: sendRemoveMachineDevice,
-      machineAccounts: async (machineId, agent) => {
-        const view = await onMachineAgentAccounts(machineId, agent)
-        return view && view.accounts.map((account, i) => ({ id: account.id, name: account.name, own: account.own, ...(account.from !== undefined ? { from: account.from } : {}), first: account.state === 'in-use' || (i === 0 && view.accounts.length === 1) }))
-      },
-      removeMachineAccount: sendMachineRemoveAgentAccount,
-      useLoginsOn: sendUseLoginsOn,
-      syncDataOn: sendSyncPersonalFolderOn,
-      agentDataRemote: async () => (await onPersonalFolder()).remote,
-      addComputerThrough,
-      watchScreen,
-      sendToScreen,
+    ...DAEMON_SERVICES,
+    openAgent: selectAgentInProject,
+    openPage: (segment, path, inProject) => go({ projectId: null, agentId: null, page: segment, ...(path && path.length ? { pagePath: path } : {}), ...(inProject ? { scope: inProject } : {}) }),
+    pageHref: segment => formatRoute({ projectId: null, agentId: null, page: segment, ...(scope ? { scope } : {}) }, addresses),
+    openSettings: entry => showSettings(entry),
+    startRun: async (inProject, prompt, opts) => {
+      const result = await sendStart(inProject, prompt, startPicks(preferences))
+      if (!result.ok) return result
+      // A module starting several runs in a row asks not to land (#1818): the rail still learns of the run.
+      if (opts?.land ?? true) agentStarted(inProject, prompt, result.agentId)
+      else reload()
+      return result
+    },
+    // The launcher rehydrates a stashed draft once as it mounts (#1066): the same carry every
+    // "Configure first, then run" uses.
+    configureRun: (inProject, prompt) => {
+      stashPendingDraft(prompt)
+      selectProject(inProject)
+    },
   })
 
   // The live agent feed is owned here: the main view and the panes' count of its events read one
