@@ -504,10 +504,26 @@ function findSendButton() {
   return labelled.at(-1) ?? deepQueryAll('button[type="submit"]').at(-1)
 }
 
+/** Type `text` into the composer and send it: with the send button, or Enter on a page that shows none. Says which. */
+async function submitComposer(composer, text) {
+  fillComposer(composer, text)
+  // Let the editor's own event handling settle before submitting, or the click sends nothing.
+  await sleep(400)
+  const button = findSendButton()
+  if (button) {
+    button.click()
+    return 'button'
+  }
+  for (const type of ['keydown', 'keyup']) {
+    composer.el.dispatchEvent(new KeyboardEvent(type, { key: 'Enter', code: 'Enter', keyCode: 13, which: 13, bubbles: true, cancelable: true }))
+  }
+  return 'enter'
+}
+
 /**
  * Type the dashboard's pick into the composer and submit it (#1237).
  *
- * This is the one place the extension acts rather than observes, so it reports exactly what it
+ * Here the extension speaks for the user rather than observing, so it reports exactly what it
  * did: which fill path, and whether the send was a button click or an Enter fallback. The text
  * only ever comes from the daemon, which only accepts a label of the parked question, so what
  * can be typed here is bounded by what the session itself offered.
@@ -516,32 +532,14 @@ async function deliverAnswer(text) {
   // Wait for the composer rather than failing on its absence: the first live delivery landed
   // right after a tab revive, and claude.ai takes well over the naive 5 seconds to render, so
   // "no composer on the page" mostly means "not yet". The harness shortens the wait.
-  const deadline = Date.now() + (window.__oaComposerWaitMs ?? 20000)
-  let composer = findComposer()
-  while (!composer && Date.now() < deadline) {
-    await sleep(500)
-    composer = findComposer()
-  }
+  const composer = await waitFor(findComposer, window.__oaComposerWaitMs ?? 20000, 500)
   if (!composer) {
     answerStatus = 'failed: no composer on the page'
     return { ok: false, note: 'no composer on the page' }
   }
-  fillComposer(composer, text)
-  // Let the editor's own event handling settle before submitting, or the click sends nothing.
-  await sleep(400)
-  const button = findSendButton()
-  if (button) {
-    button.click()
-    answerStatus = `sent via ${composer.via} + button`
-    return { ok: true, note: `filled ${composer.via}, clicked send button` }
-  }
-  for (const type of ['keydown', 'keyup']) {
-    composer.el.dispatchEvent(
-      new KeyboardEvent(type, { key: 'Enter', code: 'Enter', keyCode: 13, which: 13, bubbles: true, cancelable: true }),
-    )
-  }
-  answerStatus = `sent via ${composer.via} + enter`
-  return { ok: true, note: `filled ${composer.via}, no send button, sent Enter` }
+  const sent = await submitComposer(composer, text)
+  answerStatus = `sent via ${composer.via} + ${sent}`
+  return { ok: true, note: sent === 'button' ? `filled ${composer.via}, clicked send button` : `filled ${composer.via}, no send button, sent Enter` }
 }
 
 // ---------------------------------------------------------------------------
@@ -843,20 +841,11 @@ async function createSession({ repo, branch, prompt, model }) {
     }
   }
 
-  fillComposer(composer, prompt)
-  await sleep(400)
-  const button = findSendButton()
-  if (button) button.click()
-  else {
-    for (const type of ['keydown', 'keyup']) {
-      composer.el.dispatchEvent(new KeyboardEvent(type, { key: 'Enter', code: 'Enter', keyCode: 13, which: 13, bubbles: true, cancelable: true }))
-    }
-  }
-
+  const sent = await submitComposer(composer, prompt)
   const sessionId = await waitFor(sessionIdFromUrl, window.__oaSessionWaitMs ?? 60000, 500)
   const notes = [repoNote, branchNote, ...(modelNote ? [modelNote] : [])].join('; ')
   if (!sessionId) return { ok: false, note: `sent, but the page never became a session URL (${notes})` }
-  return { ok: true, sessionId, note: `${notes}; sent via ${button ? 'button' : 'enter'}` }
+  return { ok: true, sessionId, note: `${notes}; sent via ${sent}` }
 }
 
 
