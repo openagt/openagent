@@ -29,33 +29,26 @@ export const NSS_NICKNAME = `OpenAgent (${ADDRESS})`
  */
 export const NSS_TRUST = 'CP,,'
 
-/** The package managers the install knows, each with how it installs and removes packages. */
-export type PackageManager = 'apt-get' | 'dnf' | 'pacman' | 'zypper'
-
-const INSTALL_PACKAGES: Record<PackageManager, string> = {
-  'apt-get': 'DEBIAN_FRONTEND=noninteractive apt-get install -y',
-  dnf: 'dnf install -y',
-  pacman: 'pacman -S --needed --noconfirm',
-  zypper: 'zypper --non-interactive install',
+/** The package managers the install knows: how each installs packages, and how a person removes them again. */
+const PACKAGE_MANAGERS = {
+  'apt-get': { install: 'DEBIAN_FRONTEND=noninteractive apt-get install -y', remove: 'apt-get remove' },
+  dnf: { install: 'dnf install -y', remove: 'dnf remove' },
+  pacman: { install: 'pacman -S --needed --noconfirm', remove: 'pacman -R' },
+  zypper: { install: 'zypper --non-interactive install', remove: 'zypper remove' },
 }
-const REMOVE_PACKAGES: Record<PackageManager, string> = {
-  'apt-get': 'apt-get remove',
-  dnf: 'dnf remove',
-  pacman: 'pacman -R',
-  zypper: 'zypper remove',
-}
+export type PackageManager = keyof typeof PACKAGE_MANAGERS
 
-/** The commands the install runs that a Linux computer may lack, and the package that has each, by package manager. */
-export const TOOLS: Record<'openssl' | 'certutil' | 'nft', Record<PackageManager, string>> = {
-  openssl: { 'apt-get': 'openssl', dnf: 'openssl', pacman: 'openssl', zypper: 'openssl' },
-  certutil: { 'apt-get': 'libnss3-tools', dnf: 'nss-tools', pacman: 'nss', zypper: 'mozilla-nss-tools' },
-  nft: { 'apt-get': 'nftables', dnf: 'nftables', pacman: 'nftables', zypper: 'nftables' },
+/** The commands the install runs that a Linux computer may lack: what each does for the install, and the package that has it, by package manager. */
+export const TOOLS: Record<'openssl' | 'certutil' | 'nft', { does: string; package: Record<PackageManager, string> }> = {
+  openssl: { does: 'makes the certificate', package: { 'apt-get': 'openssl', dnf: 'openssl', pacman: 'openssl', zypper: 'openssl' } },
+  certutil: { does: 'puts the certificate in the browsers', package: { 'apt-get': 'libnss3-tools', dnf: 'nss-tools', pacman: 'nss', zypper: 'mozilla-nss-tools' } },
+  nft: { does: 'sends port 443 to the dashboard', package: { 'apt-get': 'nftables', dnf: 'nftables', pacman: 'nftables', zypper: 'nftables' } },
 }
 export type Tool = keyof typeof TOOLS
 
 /** The shell line that installs `packages` with `manager`. An `apt-get` that knows no package yet reads the list of packages first. */
 export function installPackagesLine(manager: PackageManager, packages: string[]): string {
-  const line = `${INSTALL_PACKAGES[manager]} ${packages.map(quoted).join(' ')}`
+  const line = `${PACKAGE_MANAGERS[manager].install} ${packages.map(quoted).join(' ')}`
   return manager === 'apt-get' ? `${line} || { apt-get update && ${line}; }` : line
 }
 
@@ -206,15 +199,8 @@ async function missingTools(env: NodeJS.ProcessEnv): Promise<Tool[]> {
 }
 
 async function packageManager(env: NodeJS.ProcessEnv): Promise<PackageManager | undefined> {
-  for (const manager of Object.keys(INSTALL_PACKAGES) as PackageManager[]) if (await installed(manager, env.PATH)) return manager
+  for (const manager of Object.keys(PACKAGE_MANAGERS) as PackageManager[]) if (await installed(manager, env.PATH)) return manager
   return undefined
-}
-
-/** What the install says each missing command is for. */
-const FOR: Record<Tool, string> = {
-  openssl: 'makes the certificate',
-  certutil: 'puts the certificate in the browsers',
-  nft: 'sends port 443 to the dashboard',
 }
 
 const user = (args: string[]) => ['--user', ...args]
@@ -229,7 +215,7 @@ export const linux: Platform = {
     }
     const missing = await missingTools(env)
     if (missing.length > 0 && !(await packageManager(env))) {
-      return `Install the commands ${missing.join(', ')} (${missing.map(tool => TOOLS[tool]['apt-get']).join(', ')} on Debian), then run this again.`
+      return `Install the commands ${missing.join(', ')} (${missing.map(tool => TOOLS[tool].package['apt-get']).join(', ')} on Debian), then run this again.`
     }
     return undefined
   },
@@ -243,10 +229,10 @@ export const linux: Platform = {
     const missing = await missingTools(env)
     const manager = await packageManager(env)
     if (missing.length === 0 || !manager) return
-    const packages = missing.map(tool => TOOLS[tool][manager])
+    const packages = missing.map(tool => TOOLS[tool].package[manager])
     await asAdmin(
       {
-        says: `your password as the administrator: ${packages.join(', ')} ${packages.length === 1 ? 'is' : 'are'} installed (${missing.map(tool => `${tool}, which ${FOR[tool]}`).join('; ')}).`,
+        says: `your password as the administrator: ${packages.join(', ')} ${packages.length === 1 ? 'is' : 'are'} installed (${missing.map(tool => `${tool}, which ${TOOLS[tool].does}`).join('; ')}).`,
         script: installPackagesScript(manager, packages),
       },
       io,
@@ -304,7 +290,7 @@ export const linux: Platform = {
   async leftBehind(env) {
     const { manager, packages } = await readPackages(places(env).packages)
     if (!manager || packages.length === 0) return undefined
-    return `${packages.join(', ')} ${packages.length === 1 ? 'stays' : 'stay'} installed, as other programs may use ${packages.length === 1 ? 'it' : 'them'}: \`sudo ${REMOVE_PACKAGES[manager]} ${packages.join(' ')}\` takes ${packages.length === 1 ? 'it' : 'them'} off.`
+    return `${packages.join(', ')} ${packages.length === 1 ? 'stays' : 'stay'} installed, as other programs may use ${packages.length === 1 ? 'it' : 'them'}: \`sudo ${PACKAGE_MANAGERS[manager].remove} ${packages.join(' ')}\` takes ${packages.length === 1 ? 'it' : 'them'} off.`
   },
 }
 
