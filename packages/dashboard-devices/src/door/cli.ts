@@ -11,7 +11,9 @@ import { HTTPS_PORT, serve } from './serve.js'
 import { announce, find } from './wifi.js'
 import { tailscaleName, tailscaleRun, type TailscaleRun } from './tailscale.js'
 import { renderUnicodeCompact } from 'uqr'
-import { MAX_LINES, Unreadable, answerAsk, readStoreStrict, nameFromWord, nameOf, nameWord, addCode, shownCode, addPerson, addressOf, computerWordFor, isComputerId, listedDevices, nameOwner, pidAlive, readStore, removeComputer, removePerson, renameComputer, samePerson, update, type Line, type ListedDevice, type Store } from './store.js'
+import { MAX_LINES, answerAsk, readStoreStrict, nameFromWord, nameOf, nameWord, addCode, shownCode, addPerson, addressOf, computerWordFor, isComputerId, listedDevices, nameOwner, readStore, removeComputer, removePerson, renameComputer, samePerson, update, type Line, type ListedDevice, type Store } from './store.js'
+import { Unreadable } from '../home-file.js'
+import { pidAlive } from '../process.js'
 
 /**
  * The command line: JSON on stdout, one line for a person on stderr, and the exit code says how

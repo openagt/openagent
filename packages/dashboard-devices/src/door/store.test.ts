@@ -1,8 +1,9 @@
 import { strict as assert } from 'node:assert'
 import { test } from 'node:test'
 import { readFile, stat, writeFile } from 'node:fs/promises'
-import { CODE_LIFETIME_MS, MAX_DEVICES, Unreadable, nameOf, addCode, addPerson, computerWordFor, enter, isComputerId, isIn, nameComputer, nameOwner, personLinePorts, personOf, portOf, portsOf, readStore, readStoreStrict, removeComputer, removeDevice, removePerson, sanitize, sha256, shareLine, shownCode, storePath, update } from './store.js'
+import { CODE_LIFETIME_MS, MAX_DEVICES, nameOf, addCode, addPerson, computerWordFor, enter, isComputerId, isIn, nameComputer, nameOwner, personLinePorts, personOf, portOf, portsOf, readStore, readStoreStrict, removeComputer, removeDevice, removePerson, sanitize, sha256, shareLine, shownCode, storePath, update } from './store.js'
 import { testHome } from './test-home.js'
+import { Unreadable } from '../home-file.js'
 
 test('no file reads as a closed door with nobody in', async () => {
   const home = await testHome()

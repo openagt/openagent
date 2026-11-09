@@ -2,8 +2,9 @@ import { strict as assert } from 'node:assert'
 import { test } from 'node:test'
 import { readFile, stat, writeFile } from 'node:fs/promises'
 import { STEP_IDS } from './steps.js'
-import { SILENT_MS, Unreadable, addressOf, doorUrl, freshSteps, heartbeat, isUser, isVersion, readStore, sanitize, storePath, update, working } from './store.js'
+import { SILENT_MS, addressOf, doorUrl, freshSteps, heartbeat, isUser, isVersion, readStore, sanitize, storePath, update, working } from './store.js'
 import { testHome } from './test-home.js'
+import { Unreadable } from '../home-file.js'
 
 test('the file is beside OpenAgent\'s own home file', () => {
   assert.equal(storePath({ HOME: '/home/ada' }), '/home/ada/.openagent-servers.json')

@@ -9,8 +9,9 @@ import { OwnAtWork, giveOwnClaude, giveOwnGithub, isClaudeAccountId, personHere,
 import { askOpenAgent, copyGithubToOther, isOtherUrl, isSharedUrl, lineTo, mintFor, otherLogins, setSharedReach, startMint } from './shared.js'
 import { lastLines, openSession, withAdvice, type Exec } from './ssh.js'
 import { PERSON_TIMEOUT_MS, SERVER_MARK, SERVER_USER, devicesScript, peopleScript, reachedOf, stepLabel, stepsFor, whoScript, type Who } from './steps.js'
-import { LOGIN_KINDS, Unreadable, addressOf, isServerName, atWork, doorUrl, freshSteps, isMachineUrl, isUser, isVersion, keepDevices, keptDevices, readStore, throughUrl, update, working, type Login, type LoginKind, type Reach, type Server, type StepState, type Store } from './store.js'
+import { LOGIN_KINDS, addressOf, isServerName, atWork, doorUrl, freshSteps, isMachineUrl, isUser, isVersion, keepDevices, keptDevices, readStore, throughUrl, update, working, type Login, type LoginKind, type Reach, type Server, type StepState, type Store } from './store.js'
 import { nameOf } from '../door/store.js'
+import { Unreadable } from '../home-file.js'
 
 /**
  * The command line: JSON on stdout, one line for a person on stderr, and the exit code says how

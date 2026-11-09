@@ -10,7 +10,8 @@ import { askMe, keepLine, type MeThere, type Route } from './line-out.js'
 import { startPersonWork } from './persons.js'
 import { announce, type Announcing } from './wifi.js'
 import { servedAt, serveDoor, stopServing, tailscaleRun, type TailscaleRun } from './tailscale.js'
-import { addPerson, computerWordFor, isComputerId, pidAlive, readStore, readStoreStrict, shareLine, storePath, update, type Line, type Store } from './store.js'
+import { addPerson, computerWordFor, isComputerId, readStore, readStoreStrict, shareLine, storePath, update, type Line, type Store } from './store.js'
+import { pidAlive } from '../process.js'
 
 /**
  * The door's process: it runs for as long as OpenAgent runs, and follows the file. With the

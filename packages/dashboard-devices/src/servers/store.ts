@@ -1,8 +1,8 @@
-import { randomBytes } from 'node:crypto'
-import { mkdir, readFile, rename, rm, stat, writeFile } from 'node:fs/promises'
+import { readFile } from 'node:fs/promises'
 import { isIP } from 'node:net'
-import { dirname, join } from 'node:path'
 import { nameOf } from '../door/store.js'
+import { Unreadable, homeFile, jsonFile, withLock, writeWhole } from '../home-file.js'
+import { pidAlive } from '../process.js'
 import { reachedOf, stepIdsFor, type Reached, type StepId, type Who } from './steps.js'
 
 /**
@@ -117,21 +117,8 @@ export interface Store {
 export const MAX_SERVERS = 50
 const MAX_SAID = 4_000
 
-const FILE = 'openagent-servers.json'
-
-/** The file's path: beside OpenAgent's own home file, by the same rule. */
-export function storePath(env: NodeJS.ProcessEnv): string {
-  if (env.XDG_CONFIG_HOME) return join(env.XDG_CONFIG_HOME, FILE)
-  return join(env.HOME ?? '', '.' + FILE)
-}
-
-const DEVICES_FILE = 'openagent-servers-devices.json'
-
 /** Where who is in at each server is kept, as last listed: beside the servers' file, by the same rule. */
-export function keptDevicesPath(env: NodeJS.ProcessEnv): string {
-  if (env.XDG_CONFIG_HOME) return join(env.XDG_CONFIG_HOME, DEVICES_FILE)
-  return join(env.HOME ?? '', '.' + DEVICES_FILE)
-}
+const keptDevicesPath = (env: NodeJS.ProcessEnv): string => homeFile(env, 'openagent-servers-devices.json')
 
 async function readKeptDevices(env: NodeJS.ProcessEnv): Promise<Record<string, unknown>> {
   try {
@@ -154,13 +141,11 @@ export async function keptDevices(env: NodeJS.ProcessEnv, address: string): Prom
  */
 export async function keepDevices(env: NodeJS.ProcessEnv, address: string, said: unknown): Promise<void> {
   const path = keptDevicesPath(env)
-  await withLock(path, async () => {
+  await withLock(path, 'the servers file', async () => {
     const kept = await readKeptDevices(env)
     delete kept[address]
     if (said !== undefined) kept[address] = said
-    const tmp = `${path}.${process.pid}.tmp`
-    await writeFile(tmp, JSON.stringify(Object.fromEntries(Object.entries(kept).slice(-MAX_SERVERS))) + '\n', { mode: 0o600 })
-    await rename(tmp, path)
+    await writeWhole(path, JSON.stringify(Object.fromEntries(Object.entries(kept).slice(-MAX_SERVERS))) + '\n')
   })
 }
 
@@ -344,86 +329,20 @@ export function isMachineUrl(said: string): boolean {
   }
 }
 
-/** The file is there and cannot be read as what it should hold: a typo made by hand, a disk that failed. */
-export class Unreadable extends Error {
-  constructor(path: string) {
-    super(`${path} cannot be read: correct it, or delete it to start with no server`)
-  }
-}
+const file = jsonFile('openagent-servers.json', 'server', sanitize)
+
+/** The file's path: beside OpenAgent's own home file, by the same rule. */
+export const storePath = file.path
 
 /** The file as it stands; no file reads as no server. Throws {@link Unreadable} for a file that is there and cannot be read. */
 export async function readStore(env: NodeJS.ProcessEnv): Promise<Store> {
-  const path = storePath(env)
-  let text: string
-  try {
-    text = await readFile(path, 'utf8')
-  } catch (err) {
-    if ((err as NodeJS.ErrnoException).code === 'ENOENT') return sanitize(undefined)
-    throw new Unreadable(path)
-  }
-  try {
-    const value: unknown = JSON.parse(text)
-    if (value && typeof value === 'object' && !Array.isArray(value)) return sanitize(value)
-  } catch {
-    // Told below, as any file that holds something else.
-  }
-  throw new Unreadable(path)
+  const store = await file.read(env)
+  if (store === 'unreadable') throw new Unreadable(storePath(env), 'server')
+  return store
 }
 
-/** How long a writer waits for the lock, and how old a lock is taken over whoever holds it: a change takes milliseconds. */
-const LOCK_WAIT_MS = 5_000
-const LOCK_OLD_MS = 30_000
-
-/** Whether the lock is one left behind: its writer is gone, or it is far older than any change takes. */
-async function leftBehind(lock: string): Promise<boolean> {
-  const [held, age] = await Promise.all([readFile(lock, 'utf8').catch(() => undefined), stat(lock).then(s => Date.now() - s.mtimeMs, () => 0)])
-  if (held === undefined) return false
-  const pid = Number(held.split(':')[0])
-  return age > LOCK_OLD_MS || !Number.isInteger(pid) || !pidAlive(pid)
-}
-
-async function withLock<T>(path: string, run: () => Promise<T>): Promise<T> {
-  const lock = `${path}.lock`
-  // The writer's name on the lock: a writer never removes a lock that is not its own.
-  const mine = `${process.pid}:${randomBytes(8).toString('hex')}`
-  await mkdir(dirname(path), { recursive: true })
-  const deadline = Date.now() + LOCK_WAIT_MS
-  for (;;) {
-    try {
-      await writeFile(lock, mine, { flag: 'wx', mode: 0o600 })
-      break
-    } catch (err) {
-      if ((err as NodeJS.ErrnoException).code !== 'EEXIST') throw err
-      // A writer that died holding the lock must not shut every later one out. Looked at twice,
-      // so a lock another waiter just took over is not taken from it.
-      if ((await leftBehind(lock)) && (await leftBehind(lock))) await rm(lock, { force: true })
-      else if (Date.now() > deadline) throw new Error('the servers file is held by another writer')
-      else await new Promise(resolve => setTimeout(resolve, 20))
-    }
-  }
-  try {
-    return await run()
-  } finally {
-    if ((await readFile(lock, 'utf8').catch(() => undefined)) === mine) await rm(lock, { force: true })
-  }
-}
-
-/**
- * Change the file: read it, apply `change`, write it back, with no other writer in between.
- * Written to a temporary file and renamed, so a reader never sees half a file, owner-only.
- * `change` answers what the caller wants to know of the change.
- */
-export async function update<T>(env: NodeJS.ProcessEnv, change: (store: Store) => T): Promise<T> {
-  const path = storePath(env)
-  return withLock(path, async () => {
-    const store = await readStore(env)
-    const answer = change(store)
-    const tmp = `${path}.${process.pid}.tmp`
-    await writeFile(tmp, JSON.stringify(sanitize(store), null, 2) + '\n', { mode: 0o600 })
-    await rename(tmp, path)
-    return answer
-  })
-}
+/** Change the file: read it, apply `change`, write it back, with no other writer in between; one that cannot be read is never written over. */
+export const update = file.update
 
 /** Change the one server at `address`, when the file still holds it; answers what `apply` did, or `undefined` for a server that is gone. */
 export function changeServer<T>(env: NodeJS.ProcessEnv, address: string, apply: (server: Server) => T): Promise<T | undefined> {
@@ -431,14 +350,4 @@ export function changeServer<T>(env: NodeJS.ProcessEnv, address: string, apply: 
     const kept = store.servers.find(candidate => candidate.address === address)
     return kept ? apply(kept) : undefined
   })
-}
-
-/** Whether a process with this id is running. */
-export function pidAlive(pid: number): boolean {
-  try {
-    process.kill(pid, 0)
-    return true
-  } catch (err) {
-    return (err as NodeJS.ErrnoException).code === 'EPERM'
-  }
 }

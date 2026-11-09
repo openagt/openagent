@@ -1,7 +1,6 @@
 import { createHash, createHmac, randomBytes, randomInt, timingSafeEqual } from 'node:crypto'
-import { mkdir, readFile, rename, rm, stat, writeFile } from 'node:fs/promises'
 import { isIP } from 'node:net'
-import { dirname, join } from 'node:path'
+import { jsonFile } from '../home-file.js'
 
 /**
  * The door's own file, in the person's home folder: whether the door is open, the devices that
@@ -333,14 +332,6 @@ export const MAX_PERSONS = 50
 const MAX_NAME = 80
 const MAX_PROBLEM = 400
 
-const FILE = 'openagent-devices.json'
-
-/** The file's path: beside OpenAgent's own home file, by the same rule. */
-export function storePath(env: NodeJS.ProcessEnv): string {
-  if (env.XDG_CONFIG_HOME) return join(env.XDG_CONFIG_HOME, FILE)
-  return join(env.HOME ?? '', '.' + FILE)
-}
-
 export function sha256(text: string): string {
   return createHash('sha256').update(text).digest('hex')
 }
@@ -490,28 +481,13 @@ export function sanitize(value: unknown): Store {
   }
 }
 
-/** The file is there and cannot be read as what it should hold: a typo made by hand, a disk that failed. */
-export class Unreadable extends Error {
-  constructor(path: string) {
-    super(`${path} cannot be read: correct it, or delete it to start with no device`)
-  }
-}
+const file = jsonFile('openagent-devices.json', 'device', sanitize)
+
+/** The file's path: beside OpenAgent's own home file, by the same rule. */
+export const storePath = file.path
 
 /** The file as it stands, or `'unreadable'`; no file reads as a closed door with nobody in. */
-export async function readStoreStrict(env: NodeJS.ProcessEnv): Promise<Store | 'unreadable'> {
-  let text: string
-  try {
-    text = await readFile(storePath(env), 'utf8')
-  } catch (err) {
-    return (err as NodeJS.ErrnoException).code === 'ENOENT' ? sanitize(undefined) : 'unreadable'
-  }
-  try {
-    const value: unknown = JSON.parse(text)
-    return value && typeof value === 'object' && !Array.isArray(value) ? sanitize(value) : 'unreadable'
-  } catch {
-    return 'unreadable'
-  }
-}
+export const readStoreStrict = file.read
 
 /** The same for a reader that lets nobody in on a doubt: an unreadable file reads as a closed door with nobody in. */
 export async function readStore(env: NodeJS.ProcessEnv): Promise<Store> {
@@ -519,73 +495,8 @@ export async function readStore(env: NodeJS.ProcessEnv): Promise<Store> {
   return store === 'unreadable' ? sanitize(undefined) : store
 }
 
-/** How long a writer waits for the lock, and how old a lock is taken over whoever holds it: a change takes milliseconds. */
-const LOCK_WAIT_MS = 5_000
-const LOCK_OLD_MS = 30_000
-
-/** Whether the lock is one left behind: its writer is gone, or it is far older than any change takes. */
-async function leftBehind(lock: string): Promise<boolean> {
-  const [held, age] = await Promise.all([readFile(lock, 'utf8').catch(() => undefined), stat(lock).then(s => Date.now() - s.mtimeMs, () => 0)])
-  if (held === undefined) return false
-  const pid = Number(held.split(':')[0])
-  return age > LOCK_OLD_MS || !Number.isInteger(pid) || !pidAlive(pid)
-}
-
-async function withLock<T>(path: string, run: () => Promise<T>): Promise<T> {
-  const lock = `${path}.lock`
-  // The writer's name on the lock: a writer never removes a lock that is not its own.
-  const mine = `${process.pid}:${randomBytes(8).toString('hex')}`
-  await mkdir(dirname(path), { recursive: true })
-  const deadline = Date.now() + LOCK_WAIT_MS
-  for (;;) {
-    try {
-      await writeFile(lock, mine, { flag: 'wx', mode: 0o600 })
-      break
-    } catch (err) {
-      if ((err as NodeJS.ErrnoException).code !== 'EEXIST') throw err
-      // A writer that died holding the lock must not shut every later one out. Looked at twice,
-      // so a lock another waiter just took over is not taken from it.
-      if ((await leftBehind(lock)) && (await leftBehind(lock))) await rm(lock, { force: true })
-      else if (Date.now() > deadline) throw new Error('the devices file is held by another writer')
-      else await new Promise(resolve => setTimeout(resolve, 20))
-    }
-  }
-  try {
-    return await run()
-  } finally {
-    if ((await readFile(lock, 'utf8').catch(() => undefined)) === mine) await rm(lock, { force: true })
-  }
-}
-
-/**
- * Change the file: read it, apply `change`, write it back, with no other writer in between.
- * Written to a temporary file and renamed, so a reader never sees half a file, owner-only.
- * `change` answers what the caller wants to know of the change. Throws {@link Unreadable} for a
- * file that is there and cannot be read.
- */
-export async function update<T>(env: NodeJS.ProcessEnv, change: (store: Store) => T): Promise<T> {
-  const path = storePath(env)
-  return withLock(path, async () => {
-    const store = await readStoreStrict(env)
-    // Never written over: what a person typed wrong is theirs to correct, with every device still in it.
-    if (store === 'unreadable') throw new Unreadable(path)
-    const answer = change(store)
-    const tmp = `${path}.${process.pid}.tmp`
-    await writeFile(tmp, JSON.stringify(sanitize(store), null, 2) + '\n', { mode: 0o600 })
-    await rename(tmp, path)
-    return answer
-  })
-}
-
-/** Whether a process with this id is running. */
-export function pidAlive(pid: number): boolean {
-  try {
-    process.kill(pid, 0)
-    return true
-  } catch (err) {
-    return (err as NodeJS.ErrnoException).code === 'EPERM'
-  }
-}
+/** Change the file: read it, apply `change`, write it back, with no other writer in between; one that cannot be read is never written over. */
+export const update = file.update
 
 /** The codes still good at `now`. */
 export function liveCodes(codes: readonly Code[], now: number): Code[] {
