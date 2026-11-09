@@ -26,7 +26,7 @@
     "prepack": "node -e \"if(!process.env.npm_config_user_agent?.startsWith('pnpm/')){console.error('Pack and publish with pnpm: it replaces workspace:* with the real version, npm does not');process.exit(1)}\"",
     "typecheck": "tsc --noEmit",
     "test": "echo 'no tests: the command is the install package'\"'\"'s uninstall'",
-    "clean": "rm -rf dist dist-test"
+    "clean": "rm -rf dist"
   },
   "dependencies": {
     "@openagt/install": "workspace:*"
