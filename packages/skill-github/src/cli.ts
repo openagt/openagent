@@ -1,5 +1,4 @@
-import { parseArgs } from 'node:util'
-import { nodeGitRunner, type GitRunner } from '@openagt/agent-data'
+import { Refused, UsageError, errorMessage, nodeGitRunner, parseCommandArgs, runCommandLine, type Command, type Failure, type GitRunner } from '@openagt/agent-data'
 import { nodeGhRunner, type GhRunner } from './gh.js'
 import { listRequests } from './requests.js'
 import { openRequest, type OpenOutcome } from './open.js'
@@ -21,12 +20,7 @@ import { HOST, accountDir, accountsRoot, asAccount, forgetAccount, ghState, gitC
  * The command line over the package (#1820): the same functions for an agent in a shell, and for
  * OpenAgent and the scheduler, which run this command as the project's git host provider,
  * declared in package.json as `"openagent": { "git-host": "github" }`. One implementation, every
- * surface a caller.
- *
- * The contract, the same as the other skills' commands: JSON on stdout, one line for a person on
- * stderr, and the exit code says how it went — 0 for a result, 1 for a refusal or a failure, 2 for
- * a command that could not be read. A refusal is reported on stdout as `{ ok: false, reason }` so
- * a caller parsing the output learns why, and on stderr so a person does.
+ * surface a caller. It answers as every OpenAgent command does (`runCommandLine`).
  *
  * Every command acts on the repository the working directory is in: `gh` finds the repository
  * and its remote from there, as it does for a person.
@@ -117,28 +111,17 @@ export interface CliDeps {
   fetch?: ProfileFetch
 }
 
-/** A refusal: a rule said no, and the caller learns which. */
-export type CliRefusal = { ok: false; reason: string; [key: string]: unknown }
-
-/** Thrown inside a command to end it with a refusal. */
-class Refused extends Error {
-  constructor(readonly outcome: CliRefusal, readonly line: string) {
-    super(line)
-  }
+/** Run the CLI: `argv` is everything after the program name. Resolves to the exit code. */
+export function runCli(argv: string[], io: CliIo, deps: CliDeps = {}): Promise<number> {
+  return runCommandLine(argv, io, { usage: USAGE, commands: COMMANDS, failure: GIT_HOST_FAILED }, contextOf(io, deps))
 }
 
-/** Thrown inside a command for an argument that cannot be read: usage on stderr, exit 2. */
-class Usage extends Error {}
+/** A failure no command meant: the git host, or `gh` talking to it, said no in a way no rule names. */
+const GIT_HOST_FAILED: Failure = { reason: 'git-host-failed', detail: errorMessage }
 
-/** Run the CLI: `argv` is everything after the program name. Resolves to the exit code. */
-export async function runCli(argv: string[], io: CliIo, deps: CliDeps = {}): Promise<number> {
-  const [command, ...rest] = argv
-  const run = command && Object.hasOwn(COMMANDS, command) ? COMMANDS[command] : undefined
-  if (!run) {
-    io.stderr(USAGE)
-    return 2
-  }
-  const context: Context = {
+/** What every command is handed: the real gh, git and the rest, unless a test gave its own. */
+function contextOf(io: CliIo, deps: CliDeps): Context {
+  return {
     cwd: io.cwd,
     gh: deps.gh ?? nodeGhRunner(),
     git: deps.git ?? nodeGitRunner(),
@@ -153,25 +136,6 @@ export async function runCli(argv: string[], io: CliIo, deps: CliDeps = {}): Pro
     stopLogin: deps.stopLogin ?? (root => stopLogin(root)),
     stdin: deps.stdin ?? readStdin,
     fetch: deps.fetch ?? fetch,
-  }
-  try {
-    if (WORK.has(command!)) context.gh = await workingGh(context)
-    io.stdout(JSON.stringify(await run(rest, context)))
-    return 0
-  } catch (err) {
-    if (err instanceof Usage) {
-      io.stderr(`${err.message}\n\n${USAGE}`)
-      return 2
-    }
-    if (err instanceof Refused) {
-      io.stdout(JSON.stringify(err.outcome))
-      io.stderr(err.line)
-      return 1
-    }
-    const detail = err instanceof Error ? err.message : String(err)
-    io.stdout(JSON.stringify({ ok: false, reason: 'git-host-failed', detail }))
-    io.stderr(detail)
-    return 1
   }
 }
 
@@ -199,8 +163,10 @@ async function readStdin(): Promise<string> {
   return said
 }
 
-/** The commands that talk to GitHub: they work as one of OpenAgent's accounts. */
-const WORK = new Set(['requests', 'replies', 'comment', 'open', 'merge', 'watch', 'create', 'people'])
+/** A command that talks to GitHub: it works as one of OpenAgent's accounts, its `gh` made so before it runs. */
+function asOpenAgent(command: Command<[Context]>): Command<[Context]> {
+  return async (args, ctx) => command(args, { ...ctx, gh: await workingGh(ctx) })
+}
 
 /**
  * `gh` working as one of OpenAgent's accounts: the one a run was given, when this runs inside
@@ -279,35 +245,33 @@ const TOKEN = /^[A-Za-z0-9_]{20,255}$/
 /** The logo OpenAgent draws the host's card with. */
 const LOGO = readFileSync(new URL('../assets/github.svg', import.meta.url), 'utf8').trim()
 
-type Command = (args: string[], ctx: Context) => Promise<unknown>
-
-const COMMANDS: Record<string, Command> = {
-  async requests(args, { cwd, gh }) {
-    const { values } = parse(args, { branch: { type: 'string' }, state: { type: 'string' }, since: { type: 'string' } }, 0)
+const COMMANDS: Record<string, Command<[Context]>> = {
+  requests: asOpenAgent(async (args, { cwd, gh }) => {
+    const { values } = parseCommandArgs(args, { branch: { type: 'string' }, state: { type: 'string' }, since: { type: 'string' } }, 0)
     const state = values.state ?? 'all'
-    if (state !== 'open' && state !== 'merged' && state !== 'all') throw new Usage(`--state is open, merged or all, not ${state}`)
+    if (state !== 'open' && state !== 'merged' && state !== 'all') throw new UsageError(`--state is open, merged or all, not ${state}`)
     try {
       return await listRequests(cwd, { ...(values.branch ? { branch: values.branch } : {}), state, ...(values.since ? { since: values.since } : {}) }, gh)
     } catch (err) {
       const detail = err instanceof Error ? err.message : String(err)
       throw new Refused({ ok: false, reason: 'git-host-failed', detail }, `the pull requests could not be read: ${detail}`)
     }
-  },
+  }),
 
-  async replies(args, { cwd, gh }) {
-    const { values } = parse(args, { since: { type: 'string' } }, 0)
-    if (values.since !== undefined && Number.isNaN(Date.parse(values.since))) throw new Usage(`--since is a time, like 2026-10-09T10:00:00Z, not "${values.since}"`)
+  replies: asOpenAgent(async (args, { cwd, gh }) => {
+    const { values } = parseCommandArgs(args, { since: { type: 'string' } }, 0)
+    if (values.since !== undefined && Number.isNaN(Date.parse(values.since))) throw new UsageError(`--since is a time, like 2026-10-09T10:00:00Z, not "${values.since}"`)
     try {
       return await listReplies(cwd, { gh, ...(values.since !== undefined ? { since: values.since } : {}) })
     } catch (err) {
       const detail = err instanceof Error ? err.message : String(err)
       throw new Refused({ ok: false, reason: 'git-host-failed', detail }, `the pull requests could not be read: ${detail}`)
     }
-  },
+  }),
 
-  async comment(args, { cwd, gh, env }) {
-    const { values, positionals } = parse(args, { body: { type: 'string' } }, 1)
-    if (values.body === undefined || !values.body.trim()) throw new Usage('--body is required: the text of the comment')
+  comment: asOpenAgent(async (args, { cwd, gh, env }) => {
+    const { values, positionals } = parseCommandArgs(args, { body: { type: 'string' } }, 1)
+    if (values.body === undefined || !values.body.trim()) throw new UsageError('--body is required: the text of the comment')
     const number = numberArg(positionals[0]!)
     try {
       return { ok: true, ...(await writeComment(cwd, number, values.body, await byline(env[DIARY_ENV]), gh)) }
@@ -315,13 +279,13 @@ const COMMANDS: Record<string, Command> = {
       const detail = err instanceof Error ? err.message : String(err)
       throw new Refused({ ok: false, reason: 'git-host-failed', detail }, `the comment could not be written: ${detail}`)
     }
-  },
+  }),
 
-  async open(args, { cwd, gh, git, watch }) {
-    const { values } = parse(args, { branch: { type: 'string' }, title: { type: 'string' }, body: { type: 'string' }, base: { type: 'string' }, merge: { type: 'boolean' }, draft: { type: 'boolean' } }, 0)
-    if (!values.title?.trim()) throw new Usage('--title is required: one line naming what the change does')
-    if (values.branch !== undefined && !values.branch.trim()) throw new Usage('--branch names a branch')
-    if (values.base !== undefined && !values.base.trim()) throw new Usage('--base names a branch')
+  open: asOpenAgent(async (args, { cwd, gh, git, watch }) => {
+    const { values } = parseCommandArgs(args, { branch: { type: 'string' }, title: { type: 'string' }, body: { type: 'string' }, base: { type: 'string' }, merge: { type: 'boolean' }, draft: { type: 'boolean' } }, 0)
+    if (!values.title?.trim()) throw new UsageError('--title is required: one line naming what the change does')
+    if (values.branch !== undefined && !values.branch.trim()) throw new UsageError('--branch names a branch')
+    if (values.base !== undefined && !values.base.trim()) throw new UsageError('--base names a branch')
     const outcome = await openRequest(cwd, {
       ...(values.branch ? { branch: values.branch } : {}),
       title: values.title.trim(),
@@ -335,38 +299,38 @@ const COMMANDS: Record<string, Command> = {
     })
     if (!outcome.ok) throw new Refused(outcome, openRefusalLine(cwd, outcome))
     return outcome
-  },
+  }),
 
-  async merge(args, { cwd, gh, watch }) {
-    const number = numberArg(parse(args, {}, 1).positionals[0]!)
+  merge: asOpenAgent(async (args, { cwd, gh, watch }) => {
+    const number = numberArg(parseCommandArgs(args, {}, 1).positionals[0]!)
     const outcome = await mergeRequest(cwd, number, { gh, ...(watch ? { watch } : {}) })
     if (outcome.outcome === 'not-open') throw new Refused({ ok: false, reason: 'not-open', number, state: outcome.state }, `pull request ${number} is ${outcome.state.toLowerCase()}, not open`)
     if (outcome.outcome === 'failed') throw new Refused({ ok: false, reason: 'merge-failed', number, detail: outcome.error }, `pull request ${number} could not be landed: ${outcome.error}`)
     return { ok: true, number, outcome: outcome.outcome }
-  },
+  }),
 
-  async watch(args, { cwd, gh, stderr }) {
-    const number = numberArg(parse(args, {}, 1).positionals[0]!)
+  watch: asOpenAgent(async (args, { cwd, gh, stderr }) => {
+    const number = numberArg(parseCommandArgs(args, {}, 1).positionals[0]!)
     const outcome = await watchAndMerge(cwd, number, { gh, log: stderr })
     return { ok: outcome.outcome === 'merged', number, ...outcome }
-  },
+  }),
 
-  async create(args, { cwd, gh, git }) {
-    const { values } = parse(args, { check: { type: 'boolean' } }, 0)
+  create: asOpenAgent(async (args, { cwd, gh, git }) => {
+    const { values } = parseCommandArgs(args, { check: { type: 'boolean' } }, 0)
     const outcome = values.check ? await offerRepository(cwd, { gh, git }) : await createRepository(cwd, { gh, git })
     if (!outcome.ok) throw new Refused(outcome, createRefusalLine(outcome))
     return { ...outcome, name: GIT_HOST_NAME }
-  },
+  }),
 
   async home(args, { cwd, git }) {
-    parse(args, {}, 0)
+    parseCommandArgs(args, {}, 0)
     const url = await homeUrlFor(cwd, git)
     if (!url) throw new Refused({ ok: false, reason: 'no-remote' }, 'no origin remote on GitHub')
     return { ok: true, url, name: GIT_HOST_NAME }
   },
 
   async accounts(args, { cwd, gh, env, hasBrew, underWay, installing }) {
-    const { values } = parse(args, { host: { type: 'string' } }, 0)
+    const { values } = parseCommandArgs(args, { host: { type: 'string' } }, 0)
     if (values.host !== undefined && values.host.toLowerCase() !== HOST) throw new Refused({ ok: false, reason: 'not-mine', host: values.host }, `this package answers for ${HOST}, not ${values.host}`)
     const root = accountsRoot(env)
     await settleAdded(root, gh, cwd).catch(() => undefined)
@@ -394,7 +358,7 @@ const COMMANDS: Record<string, Command> = {
   },
 
   async use(args, { cwd, gh, env }) {
-    const login = parse(args, {}, 1).positionals[0]!
+    const login = parseCommandArgs(args, {}, 1).positionals[0]!
     const state = await ghState(accountsRoot(env), cwd, gh)
     try {
       useForRuns(login, state.installed ? state.accounts : [], picksPath(env))
@@ -405,7 +369,7 @@ const COMMANDS: Record<string, Command> = {
   },
 
   async login(args, { cwd, gh, env, login }) {
-    parse(args, {}, 0)
+    parseCommandArgs(args, {}, 0)
     const root = accountsRoot(env)
     const state = await ghState(root, cwd, gh)
     if (!state.installed) throw new Refused({ ok: false, reason: 'not-installed' }, 'gh is not on this computer: run github install first')
@@ -418,13 +382,13 @@ const COMMANDS: Record<string, Command> = {
   },
 
   async 'stop-login'(args, { env, stopLogin }) {
-    parse(args, {}, 0)
+    parseCommandArgs(args, {}, 0)
     stopLogin(accountsRoot(env))
     return { ok: true }
   },
 
   async install(args, { hasBrew, shell }) {
-    parse(args, {}, 0)
+    parseCommandArgs(args, {}, 0)
     const command = installCommand(await hasBrew())
     if (command === undefined) throw new Refused({ ok: false, reason: 'no-build' }, `GitHub makes no gh for this computer (${process.platform} ${process.arch}): install it by hand, https://cli.github.com`)
     try {
@@ -437,14 +401,14 @@ const COMMANDS: Record<string, Command> = {
   },
 
   async env(args, { cwd, gh, env }) {
-    const { values } = parse(args, { user: { type: 'string' } }, 0)
+    const { values } = parseCommandArgs(args, { user: { type: 'string' } }, 0)
     // No account: a run never falls back on the person's own gh.
     const { login, dir } = await accountNamed(values.user, cwd, gh, env)
     return { ok: true, login, env: runEnv(await tokenOf(login, dir, cwd, gh), dir, readFacts(dir), env) }
   },
 
   async repos(args, { cwd, gh, env }) {
-    const { values } = parse(args, { user: { type: 'string' }, owner: { type: 'string' } }, 0)
+    const { values } = parseCommandArgs(args, { user: { type: 'string' }, owner: { type: 'string' } }, 0)
     if (values.owner !== undefined && !isGithubLogin(values.owner)) throw new Refused({ ok: false, reason: 'no-owner', owner: values.owner }, `${values.owner} is no GitHub user or organization`)
     const { login, dir } = await accountNamed(values.user, cwd, gh, env)
     const owner = values.owner ?? login
@@ -452,15 +416,15 @@ const COMMANDS: Record<string, Command> = {
   },
 
   async 'git-config'(args, { cwd, gh, env }) {
-    const { values } = parse(args, { user: { type: 'string' } }, 0)
+    const { values } = parseCommandArgs(args, { user: { type: 'string' } }, 0)
     const { login, dir } = await accountNamed(values.user, cwd, gh, env)
     return { ok: true, login, host: HOST, config: gitConfig(dir) }
   },
 
   async token(args, { cwd, gh, env }) {
-    const { values } = parse(args, { user: { type: 'string' } }, 0)
+    const { values } = parseCommandArgs(args, { user: { type: 'string' } }, 0)
     const login = values.user
-    if (login === undefined) throw new Usage('token needs --user <login>')
+    if (login === undefined) throw new UsageError('token needs --user <login>')
     const root = accountsRoot(env)
     const state = await ghState(root, cwd, gh)
     if (!(state.installed ? state.accounts : []).some(a => a.login === login)) throw new Refused({ ok: false, reason: 'no-account', login }, `OpenAgent has no GitHub account ${login} on this computer`)
@@ -468,7 +432,7 @@ const COMMANDS: Record<string, Command> = {
   },
 
   async take(args, { cwd, gh, env, stdin }) {
-    parse(args, {}, 0)
+    parseCommandArgs(args, {}, 0)
     const token = (await stdin()).trim()
     if (!TOKEN.test(token)) throw new Refused({ ok: false, reason: 'no-token' }, 'what was handed over is no GitHub token')
     const facts = await factsOfToken(token, cwd, gh)
@@ -482,23 +446,23 @@ const COMMANDS: Record<string, Command> = {
   },
 
   async forget(args, { env }) {
-    const login = parse(args, {}, 1).positionals[0]!
+    const login = parseCommandArgs(args, {}, 1).positionals[0]!
     try {
       // Only OpenAgent's copy goes: the token itself goes on working wherever else it is.
       forgetAccount(accountsRoot(env), login, picksPath(env))
     } catch (err) {
-      throw new Usage(err instanceof Error ? err.message : String(err))
+      throw new UsageError(err instanceof Error ? err.message : String(err))
     }
     return { ok: true, login }
   },
 
-  async people(args, { cwd, gh }) {
-    const { positionals } = parse(args, {}, 1, MAX_PEOPLE)
+  people: asOpenAgent(async (args, { cwd, gh }) => {
+    const { positionals } = parseCommandArgs(args, {}, 1, MAX_PEOPLE)
     return peopleByEmail(cwd, positionals.filter(email => /^[^\s@]+@[^\s@]+$/.test(email)), gh)
-  },
+  }),
 
   async profile(args, { fetch }) {
-    const { positionals } = parse(args, {}, 1)
+    const { positionals } = parseCommandArgs(args, {}, 1)
     const login = positionals[0]!
     if (!isGithubLogin(login)) throw new Refused({ ok: false, reason: 'no-user', detail: `${login} is no GitHub login` }, `${login} is no GitHub login`)
     const outcome = await publicProfile(login, fetch)
@@ -533,19 +497,6 @@ function openRefusalLine(cwd: string, outcome: OpenOutcome & { ok: false }): str
 
 function numberArg(arg: string): number {
   const number = Number(arg)
-  if (!Number.isInteger(number) || number <= 0) throw new Usage(`${arg} is not a pull request number`)
+  if (!Number.isInteger(number) || number <= 0) throw new UsageError(`${arg} is not a pull request number`)
   return number
-}
-
-type Options = Record<string, { type: 'string' | 'boolean' }>
-
-/** `parseArgs` with the positional count checked: too few or too many is a usage error. */
-function parse<O extends Options>(args: string[], options: O, min: number, max: number = min) {
-  try {
-    const parsed = parseArgs({ args, options, allowPositionals: true, strict: true })
-    if (parsed.positionals.length < min || parsed.positionals.length > max) throw new Usage(`expected ${max === min ? min : `${min} to ${max}`} argument(s), got ${parsed.positionals.length}`)
-    return parsed
-  } catch (err) {
-    throw err instanceof Usage ? err : new Usage(err instanceof Error ? err.message : String(err))
-  }
 }

@@ -4,7 +4,7 @@ export { openRequest, currentBranch, requestNumber, type OpenOptions, type OpenO
 export { armMerge, mergeRequest, type MergeArming, type MergeOutcome, type MergeOptions, type WatchStarter } from './merge.js'
 export { readPr, watchAndMerge, spawnMergeWatch, NO_CHECKS_GRACE_MS, WATCH_EVERY_MS, WATCH_FOR_MS, WATCH_LOG_DIR, type ChecksState, type WatchOptions, type WatchOutcome } from './merge-watch.js'
 export { homeUrlFromRemote, homeUrlFor, GIT_HOST_NAME } from './home.js'
-export { runCli, USAGE, type CliIo, type CliDeps, type CliRefusal } from './cli.js'
+export { runCli, USAGE, type CliIo, type CliDeps } from './cli.js'
 export { createRepository, offerRepository, type CreateOffer, type CreateOutcome } from './create.js'
 export { publicProfile, type ProfileOutcome } from './profile.js'
 export { answersFor, listReplies, parseThreads, repliesArgs, seenArgs, MENTION, REPLIES_LIMIT, WHOLE_READ_EVERY_MS, type Answer, type Thread, type Told } from './replies.js'
