@@ -151,25 +151,6 @@ function errorMessage(err: unknown): string {
 }
 
 /**
- * One cycle at a time per branch of a project, so a writer and the eager pull can never
- * interleave: within the process the promise chain orders them, and across processes on the
- * clone the checkout's lock file does; every public entry point below joins both. Rejects when
- * another process holds the lock past the wait.
- */
-const chains = new Map<string, Promise<unknown>>()
-
-function serialize<T>(repo: string, branch: string, lock: CheckoutLockDeps, task: () => Promise<T>): Promise<T> {
-  const key = `${repo}\0${branch}`
-  const locked = () => withCheckoutLock(repo, branch, task, lock)
-  const next = (chains.get(key) ?? Promise.resolve()).then(locked, locked)
-  chains.set(
-    key,
-    next.catch(() => {}),
-  )
-  return next
-}
-
-/**
  * Make the branch exist locally: origin's copy when there is one, else born here, parentless. Never
  * tracking (`--no-track`): setting up tracking writes the repository's shared `.git/config`, whose
  * lock a coding agent's own `git config` or `git push -u` in its checkout would then fail on.
@@ -228,7 +209,7 @@ async function attachBranch(path: string, branch: string, git: GitRunner): Promi
 
 /**
  * The unserialized ensure: branch and checkout. Split from {@link ensureFileBranch} so the
- * writer and the pull can run it inside the cycle they already hold the chain for.
+ * writer and the pull can run it inside the cycle they already hold the checkout's lock for.
  */
 async function ensureCore(repo: string, branch: string, r: Resolved): Promise<void> {
   const path = checkoutPath(repo, branch)
@@ -281,7 +262,7 @@ async function syncCore(repo: string, branch: string, r: Resolved): Promise<void
 export async function ensureFileBranch(cwd: string, branch: string, deps: FileBranchDeps = {}): Promise<{ ok: boolean; error?: string }> {
   const r = resolveDeps(deps)
   const repo = await cloneHome(cwd, r.git)
-  return serialize(repo, branch, r.lock, async () => {
+  return withCheckoutLock(repo, branch, r.lock, async () => {
     await ensureCore(repo, branch, r)
     return { ok: true }
   }).catch(err => ({ ok: false, error: errorMessage(err) }))
@@ -315,7 +296,7 @@ export async function removeFileBranch(cwd: string, branch: string, deps: FileBr
   try {
     if ((await realpath(cwd)) !== (await realpath(repo))) return { ok: true, removed: [], kept: [{ path: label, reason: `it belongs to the repository at ${repo}` }] }
     if (!(await there()) && !(await refExists(repo, `refs/heads/${branch}`, r.git))) return { ok: true, removed: [], kept: [] }
-    return await serialize(repo, branch, r.lock, async (): Promise<FileBranchRemoval> => {
+    return await withCheckoutLock(repo, branch, r.lock, async (): Promise<FileBranchRemoval> => {
       const removed: string[] = []
       const kept: { path: string; reason: string }[] = []
       if (await checkoutRegistered(repo, path, r.git)) {
@@ -413,7 +394,7 @@ export async function withFileBranch(
   const r = resolveDeps(deps)
   const repo = await cloneHome(cwd, r.git)
   const path = checkoutPath(repo, branch)
-  return serialize(repo, branch, r.lock, async (): Promise<FileBranchWrite> => {
+  return withCheckoutLock(repo, branch, r.lock, async (): Promise<FileBranchWrite> => {
     for (let locked = 0; ; locked++) {
       const outcome = await cycle(repo, branch, path, message, op, r)
       if (outcome.ok || !isGitLocked(outcome.error) || locked >= LOCK_RETRIES) return outcome

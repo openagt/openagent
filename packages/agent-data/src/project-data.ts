@@ -126,20 +126,9 @@ async function ensurePersonalFolder(folder: string, git: GitRunner): Promise<voi
   await git(['commit', '-q', '--allow-empty', '-m', 'create the personal folder'], folder)
 }
 
-/** One write at a time per personal folder: a promise chain within the process, the lock file across processes. */
-const chains = new Map<string, Promise<unknown>>()
-
-function serialize<T>(folder: string, deps: ProjectDataDeps, task: () => Promise<T>): Promise<T> {
-  const locked = async () => {
-    await mkdir(folder, { recursive: true })
-    return withLockFile(join(folder, LOCK_FILE), task, deps.lock)
-  }
-  const next = (chains.get(folder) ?? Promise.resolve()).then(locked, locked)
-  chains.set(
-    folder,
-    next.catch(() => {}),
-  )
-  return next
+/** One write at a time per personal folder, within this process and across every other: the folder's lock file. */
+function withFolderLock<T>(folder: string, deps: ProjectDataDeps, task: () => Promise<T>): Promise<T> {
+  return withLockFile(join(folder, LOCK_FILE), deps.lock, task)
 }
 
 /** The branch the personal folder is on, here and on its remote. */
@@ -181,7 +170,7 @@ function gitReason(err: unknown): string {
  */
 export async function withPersonalFolder(folder: string, message: CommitMessage, op: () => Promise<void>, deps: ProjectDataDeps = {}): Promise<FileBranchWrite> {
   const git = accountGit(deps.git ?? nodeGitRunner())
-  return serialize(folder, deps, async (): Promise<FileBranchWrite> => {
+  return withFolderLock(folder, deps, async (): Promise<FileBranchWrite> => {
     try {
       await ensurePersonalFolder(folder, git)
       const remote = (await originUrl(folder, git)) !== undefined
@@ -285,14 +274,14 @@ export async function sendPersonalFolderAs(account: RemoteAccount, deps: Project
   const folder = deps.folder ?? personalFolder()
   if (!(await originUrl(folder, git))) return { ok: false, error: 'the personal folder syncs with no repository' }
   const before = await readRemoteAccount(folder, git).catch(() => undefined)
-  const named = await serialize(folder, deps, () => writeRemoteAccount(folder, account, git)).then(
+  const named = await withFolderLock(folder, deps, () => writeRemoteAccount(folder, account, git)).then(
     () => undefined,
     err => errorMessage(err),
   )
   if (named !== undefined) return { ok: false, error: named }
   const sent = await withPersonalFolder(folder, 'sync', async () => {}, deps)
   if (sent.ok) return { ok: true }
-  await serialize(folder, deps, () => (before ? writeRemoteAccount(folder, before, git) : clearRemoteAccount(folder, git))).catch(() => {})
+  await withFolderLock(folder, deps, () => (before ? writeRemoteAccount(folder, before, git) : clearRemoteAccount(folder, git))).catch(() => {})
   return { ok: false, error: sent.error }
 }
 
@@ -300,7 +289,7 @@ export async function sendPersonalFolderAs(account: RemoteAccount, deps: Project
 export async function stopSyncingPersonalFolder(deps: ProjectDataDeps = {}): Promise<{ ok: true } | { ok: false; error: string }> {
   const git = deps.git ?? nodeGitRunner()
   const folder = deps.folder ?? personalFolder()
-  return serialize(folder, deps, async () => {
+  return withFolderLock(folder, deps, async () => {
     await git(['remote', 'remove', 'origin'], folder).catch(() => {})
     await clearRemoteAccount(folder, git)
     return { ok: true as const }
