@@ -15,7 +15,7 @@ test('the launch agent and the launch daemon are property lists macOS reads', on
   const dir = await mkdtemp(join(tmpdir(), 'install-plist-'))
   try {
     const files = {
-      agent: dashboardPlist({ node: '/usr/local/bin/node', dashboard: '/x/a & b/<bin>.js', home: '/Users/x', env: { PATH: '/usr/bin:/bin' }, log: '/Users/x/Library/Logs/OpenAgent/dashboard.log' }),
+      agent: dashboardPlist({ node: '/usr/local/bin/node', dashboard: '/x/a & b/<bin>.js', home: '/Users/x', vars: { PATH: '/usr/bin:/bin' }, log: '/Users/x/Library/Logs/OpenAgent/dashboard.log' }),
       port: portPlist(),
     }
     for (const [name, text] of Object.entries(files)) {
