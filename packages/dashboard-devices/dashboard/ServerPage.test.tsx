@@ -1012,7 +1012,7 @@ describe('Settings › Devices: a computer at home set up as a server, through a
   }
   const SAVED: ModuleMachines = { version: '1.2.3', machines: [{ id: VPS, label: '165.245.244.10', url: VPS, version: '1.2.3' }, { id: VIA, label: 'rom-box', url: VIA, version: '1.2.3' }] }
 
-  test('its page is a server at home, reached through another: who may start runs on it, picked by name among the people on that server, with no code; and no line from this computer', async () => {
+  test('its page is a server at home, reached through another: one switch says whether that server may start runs on it; its people are picked by name among the people on that server, with no code; and no line from this computer', async () => {
     const { host, ran, machinePerson } = dashboard(args => (args[0] === 'people' ? ok({ devices: [], persons: [{ name: 'rom', owner: true }] }) : ok({ servers: [box()] })), SAVED)
     machinePerson.mockImplementation(async id => (id === VPS ? { ok: true, said: { person: 'rom', owner: false, devices: [], persons: ['suleimansh', 'rom', 'dani'] } } : { ok: false, error: 'not said', unknown: true }))
     show(host)
@@ -1021,17 +1021,20 @@ describe('Settings › Devices: a computer at home set up as a server, through a
     expect(row.textContent).toContain('through 165.245.244.10')
     expect(screen.queryByRole('switch', { name: 'From anywhere, through rom-box' })).toBeNull()
     await open('rom-box')
-    const group = await screen.findByRole('radiogroup', { name: 'Who can start runs on 192.168.1.20' })
-    expect(within(group).getByRole('radio', { name: /Only me/ }).getAttribute('aria-checked')).toBe('true')
-    expect(within(group).getByRole('radio', { name: /Nobody: its runs only show on 165\.245\.244\.10/ })).toBeTruthy()
-    expect(within(group).getByRole('radio', { name: /Me and people I pick on 165\.245\.244\.10/ })).toBeTruthy()
-    expect(group.textContent).toContain("Each person's runs use their own logins, never yours.")
-    expect(group.textContent).toContain('Their agents run on your home network.')
+    const toggle = await screen.findByRole('switch', { name: 'Your runs can go here from 165.245.244.10' })
+    expect(toggle.getAttribute('aria-checked')).toBe('true')
+    expect(screen.getByText('Pick rom-box under "Run on" on 165.245.244.10. The people on its People run here too, each as themselves.')).toBeTruthy()
+    expect(screen.queryByRole('radiogroup')).toBeNull()
     expect(screen.queryByRole('button', { name: 'Add person to 192.168.1.20' })).toBeNull()
     expect(screen.queryByRole('tab', { name: 'Logins' })).toBeNull()
+    // Off: the server only shows its runs; who is named stays as it is.
+    fireEvent.click(toggle)
+    await waitFor(() => expect(ran()).toContain('who 192.168.1.20 nobody'))
 
-    // Picking people opens the list of the server's people: not this person, each with a box; no code.
-    fireEvent.click(within(group).getByRole('radio', { name: /Me and people I pick/ }))
+    // Its People: Add person opens the list of the server's people, with no door of its own to give a code at: not this person, each with a box.
+    await tab('People')
+    expect(await screen.findByText('Nobody yet. Add person picks someone on 165.245.244.10; they get a user of their own here.')).toBeTruthy()
+    fireEvent.click(screen.getByRole('button', { name: 'Add person to 192.168.1.20' }))
     const list = await screen.findByRole('list', { name: 'The people on 165.245.244.10' })
     expect(within(list).getAllByRole('checkbox').map(box => box.getAttribute('aria-label'))).toEqual(['suleimansh', 'dani'])
     expect(screen.getByRole('dialog', { name: 'Add person to rom-box' })).toBeTruthy()
@@ -1044,23 +1047,17 @@ describe('Settings › Devices: a computer at home set up as a server, through a
     fireEvent.click(screen.getByRole('button', { name: 'Add 2 people' }))
     await waitFor(() => expect(ran()).toContain('people 192.168.1.20 dani suleimansh'))
     await waitFor(() => expect(screen.queryByRole('list', { name: 'The people on 165.245.244.10' })).toBeNull())
-
-    // Its People: the same pick, from Add person; nobody named yet says so.
-    await tab('People')
-    expect(await screen.findByText('Nobody yet. Add person picks someone on 165.245.244.10; they get a user of their own here.')).toBeTruthy()
-    fireEvent.click(screen.getByRole('button', { name: 'Add person to 192.168.1.20' }))
-    expect(await screen.findByRole('list', { name: 'The people on 165.245.244.10' })).toBeTruthy()
-    fireEvent.click(screen.getByRole('button', { name: 'Cancel' }))
-    expect(ran().filter(line => line.startsWith('who '))).toEqual([])
+    expect(ran().filter(line => line.startsWith('who '))).toEqual(['who 192.168.1.20 nobody'])
   })
 
-  test('with people named, the choice says who; the people named already and this person are not offered again', async () => {
-    const { host, machinePerson } = dashboard(() => ok({ servers: [box({ people: ['dani'] })] }), SAVED)
+  test('with the server switched off, the switch is off; the people named already and this person are not offered again', async () => {
+    const { host, machinePerson } = dashboard(() => ok({ servers: [box({ who: 'nobody', people: ['dani'] })] }), SAVED)
     machinePerson.mockImplementation(async id => (id === VPS ? { ok: true, said: { person: 'rom', owner: false, devices: [], persons: ['suleimansh', 'rom', 'dani'] } } : { ok: false, error: 'not said', unknown: true }))
     show(host)
     await open('rom-box')
-    const group = await screen.findByRole('radiogroup', { name: 'Who can start runs on 192.168.1.20' })
-    expect(within(group).getByRole('radio', { name: /Me and dani/ }).getAttribute('aria-checked')).toBe('true')
+    const toggle = await screen.findByRole('switch', { name: 'Your runs can go here from 165.245.244.10' })
+    expect(toggle.getAttribute('aria-checked')).toBe('false')
+    expect(screen.getByText('Off: its runs only show on 165.245.244.10.')).toBeTruthy()
     await tab('People')
     fireEvent.click(await screen.findByRole('button', { name: 'Add person to 192.168.1.20' }))
     const list = await screen.findByRole('list', { name: 'The people on 165.245.244.10' })
@@ -1081,7 +1078,7 @@ describe('Settings › Devices: a computer at home set up as a server, through a
     expect(screen.getAllByText('through OpenAgentVPS').length).toBeGreaterThan(0)
   })
 
-  test('a server at home with a door on Tailscale has People: Add person asks its door over SSH and says to share it in Tailscale, the owner uses it through the server, and a phone of this person\'s gets a code at that door', async () => {
+  test('a server at home with a door on Tailscale has People: Add person asks which way, and with a code asks its door over SSH and says to share it in Tailscale; the owner uses it through the server, and a phone of this person\'s gets a code at that door', async () => {
     const saved: ModuleMachines = { ...SAVED, machines: [{ ...SAVED.machines[0]!, label: 'OpenAgentVPS' }, SAVED.machines[1]!] }
     const link = { url: 'https://rom-box.tail1234.ts.net/_devices/enter#K7P4QX9M', where: 'rom-box.tail1234.ts.net', code: 'K7P4-QX9M', expires: new Date(Date.now() + 10 * 60_000).toISOString() }
     let devices: object[] = []
@@ -1093,7 +1090,17 @@ describe('Settings › Devices: a computer at home set up as a server, through a
     expect((await screen.findAllByText('Uses this computer through OpenAgentVPS.')).length).toBe(2)
     // The owner may still add a device at its own door; a person named through the server has theirs there.
     expect(screen.getAllByText('No device yet.').length).toBe(1)
-    await invite('Dani', '192.168.1.20')
+    // Both ways are open here: picked on the server, or a code at its own door. Add person asks.
+    fireEvent.click(screen.getByRole('button', { name: 'Add person to 192.168.1.20' }))
+    expect(await screen.findByText('Who is it?')).toBeTruthy()
+    fireEvent.click(screen.getByRole('button', { name: /Someone on 165\.245\.244\.10/ }))
+    // The picker: the server has not said who is there in this test, so it still asks.
+    expect(await screen.findByText('Asking 165.245.244.10 who is there…')).toBeTruthy()
+    fireEvent.click(screen.getByRole('button', { name: 'Cancel' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Add person to 192.168.1.20' }))
+    fireEvent.click(await screen.findByRole('button', { name: /Someone on your Tailscale network/ }))
+    fireEvent.change(await screen.findByRole('textbox', { name: 'Their name' }), { target: { value: 'Dani' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Make the code' }))
     await waitFor(() => expect(ran()).toContain('link 192.168.1.20 --for Dani'))
     expect(await screen.findByText('rom-box is on your Tailscale network: Dani reaches it only once you share it with them in Tailscale (its machine in the Tailscale admin › Share), with Tailscale on their device.')).toBeTruthy()
     expect(screen.getByRole('group', { name: 'The code' }).textContent).toContain('rom-box.tail1234.ts.net')
@@ -1113,30 +1120,19 @@ describe('Settings › Devices: a computer at home set up as a server, through a
     expect(await screen.findByText('iPhone, Safari is in.', {}, { timeout: 15_000 })).toBeTruthy()
   }, 20_000)
 
-  test('from people to fewer, it asks first: the users the others have there go, with everything in them', async () => {
+  test('the switch only turns the server on or off here: the people named stay named, with their users', async () => {
     const persons = [{ name: 'rom', owner: true }, { name: 'suleimansh', from: VPS }, { name: 'dani', from: VPS }]
     const { host, ran } = dashboard(() => ok({ servers: [box({ people: ['suleimansh', 'dani'] })] }), SAVED, undefined, undefined, () => ok({ devices: [], persons }))
     show(host)
     await open('rom-box')
-    const group = () => screen.getByRole('radiogroup', { name: 'Who can start runs on 192.168.1.20' })
-    await screen.findByRole('radiogroup', { name: 'Who can start runs on 192.168.1.20' })
-    expect(within(group()).getByRole('radio', { name: /Me and suleimansh and dani/ }).getAttribute('aria-checked')).toBe('true')
-    fireEvent.click(within(group()).getByRole('radio', { name: /Only me/ }))
-    expect(await screen.findByText('suleimansh and dani have their own users on 192.168.1.20.')).toBeTruthy()
-    expect(screen.getByText('Work they did not push goes with them.')).toBeTruthy()
-    expect(screen.queryByRole('button', { name: 'Keep them, switched off' })).toBeNull()
-    fireEvent.click(screen.getByRole('button', { name: 'Remove them, with their logins and projects' }))
-    await waitFor(() => expect(ran()).toContain('who 192.168.1.20 me'))
-
-    fireEvent.click(within(group()).getByRole('radio', { name: /Nobody/ }))
-    fireEvent.click(await screen.findByRole('button', { name: 'Remove them, with their logins and projects' }))
+    const toggle = await screen.findByRole('switch', { name: 'Your runs can go here from 165.245.244.10' })
+    expect(toggle.getAttribute('aria-checked')).toBe('true')
+    fireEvent.click(toggle)
     await waitFor(() => expect(ran()).toContain('who 192.168.1.20 nobody'))
-
-    // Cancel changes nothing.
-    fireEvent.click(within(group()).getByRole('radio', { name: /Only me/ }))
-    fireEvent.click(await screen.findByRole('button', { name: 'Cancel' }))
-    await waitFor(() => expect(screen.queryByText(/have their own users/)).toBeNull())
-    expect(ran().filter(line => line.startsWith('who '))).toEqual(['who 192.168.1.20 me', 'who 192.168.1.20 nobody'])
+    expect(screen.queryByRole('dialog')).toBeNull()
+    expect(ran().some(line => line.startsWith('remove-person'))).toBe(false)
+    await tab('People')
+    expect((await screen.findAllByText('Uses this computer through 165.245.244.10.')).length).toBe(3)
   })
 
   test('once installed it is saved through its server, by its line, and no link is asked of it', async () => {
@@ -1488,9 +1484,9 @@ describe('Settings › Devices: Set up a server, in steps', () => {
     fireEvent.click(button('Install'))
     await waitFor(() => expect(ran()).toContain(`connect 192.168.1.20 rom 1.2.3 --through ${VPS}`))
     expect(await screen.findByText('rom-box is ready.')).toBeTruthy()
-    expect(screen.getByText('Your runs can go there from here. Who else uses it?')).toBeTruthy()
-    expect(screen.getByRole('radiogroup', { name: 'Who can start runs on 192.168.1.20' })).toBeTruthy()
-    expect(screen.queryByRole('button', { name: 'Add people' })).toBeNull()
+    expect(screen.getByText('Your runs can go there from here. Anyone else? Add them: each works there with their own logins.')).toBeTruthy()
+    expect(screen.getByRole('switch', { name: 'Your runs can go here from 165.245.244.10' }).getAttribute('aria-checked')).toBe('true')
+    expect(screen.getByRole('button', { name: 'Add people' })).toBeTruthy()
     expect(ran()).toContain('add-through 192.168.1.20')
     expect(useLoginsOn).not.toHaveBeenCalled()
   })

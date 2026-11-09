@@ -49,10 +49,10 @@ export const USAGE = `usage: devices <command>
                  keep a line open to a server, so a run can be started on this computer from the server's page;
                  the link is the one the server gives for a new device, or - to read it from standard input;
                  with watch the server only reads
-  line full <at> only this computer's own person at the server at this number or name may start runs here through its line
+  line full <at> the server at this number or name may start runs here through its line; who there may is as named
   line for <at> [<name>...]
-                 these people at that server may too, each as a user of their own here; only where OPENAGENT_PERSON_HELPER
-                 names the helper, on a computer set up as a server; with no name, only this computer's own person again
+                 this computer's own person there, and these people, each as a user of their own here; only where
+                 OPENAGENT_PERSON_HELPER names the helper, on a computer set up as a server; with no name, its own person only
   line watch <at>
                  it may only read: this computer's runs are seen from the server's page, and none is started or told anything
   line remove <at>
@@ -512,19 +512,20 @@ async function addLine(io: CliIO, pasted: string, mode: Line['mode']): Promise<S
 }
 
 /**
- * What the server may do through its line, and for whom: `full` for this computer's own person
- * there, `watch` only to read, or `full` for its own person and the people named, each as a user
- * of their own here.
+ * What the server may do through its line: everything (`full`) or only read (`watch`); and, with
+ * `people`, for whom besides this computer's own person there, each as a user of their own here.
+ * The mode and the people are two settings: a mode alone leaves the people as they are.
  */
-async function setLineMode(io: CliIO, at: string, mode: Line['mode'], people: readonly string[] = []): Promise<Status> {
+async function setLineMode(io: CliIO, at: string, mode: Line['mode'], people?: readonly string[]): Promise<Status> {
   // Each person named gets a user of their own here: only a computer set up as a server makes them.
-  if (people.length && !io.env.OPENAGENT_PERSON_HELPER) throw new Refused('This computer is not set up as a server: only a server lets people at another start runs on it, each as a user of their own.')
+  if (people?.length && !io.env.OPENAGENT_PERSON_HELPER) throw new Refused('This computer is not set up as a server: only a server lets people at another start runs on it, each as a user of their own.')
   const found = await update(io.env, store => {
     const line = lineAt(store, at)
     // A line the server said no to is not one any more: it is asked for anew, with a new link.
     // Letting the server do less is written all the same: what it may do, should the old line ever carry again, is the least the person said.
     if (line && (!line.refused || mode === 'watch')) {
       line.mode = mode
+      if (people === undefined) return line
       if (people.length) line.for = [...people]
       else delete line.for
     }

@@ -828,19 +828,21 @@ export function stepLabel(step: StepDef, through: string | undefined): string {
   return step.id === 'line' && through !== undefined ? `Its line to ${new URL(through).host}` : step.label
 }
 
-/** The door's command that says who at the server may start runs on the computer: the server only watches, its person, or its person and the people named. */
-const lineFor = (who: Who, people: readonly string[] = []): string => (who === 'me' && people.length ? `${WITH_HELPER} ${DOOR} line for "$URL" ${people.map(quoted).join(' ')} >/dev/null` : `${WITH_HELPER} ${DOOR} line ${LINE_MODE[who]} "$URL" >/dev/null`)
+/**
+ * The door's commands that say what the server may do on the computer through its line, both
+ * settings as this computer holds them: who is named there (`line for`, nobody when none), then
+ * whether the server only watches or starts runs. The mode never changes who is named.
+ */
+const lineFor = (who: Who, people: readonly string[] = []): string => `${WITH_HELPER} ${DOOR} line for "$URL"${people.map(person => ` ${quoted(person)}`).join('')} >/dev/null\n  ${WITH_HELPER} ${DOOR} line ${LINE_MODE[who]} "$URL" >/dev/null`
 
 /**
- * The script that tells the door of a computer reached through a server who there may start runs
- * on it: nobody, or only its own person; the user of each person named before (`remove`) is taken
- * away, with everything in it. Run as the server's own user.
+ * The script that tells the door of a computer reached through a server whether the server may
+ * start runs on it, or only show them. Who is named there stays. Run as the server's own user.
  */
-export function whoScript(url: string, who: Who, remove: readonly string[] = []): string {
+export function whoScript(url: string, who: Who): string {
   return script(SERVER_USER, { URL: url }, `
-  ${lineFor(who)}
-${remove.map(person => `  ${WITH_HELPER} ${DOOR} remove-person ${quoted(person)} >/dev/null
-`).join('')}  ${DOOR} status
+  ${WITH_HELPER} ${DOOR} line ${LINE_MODE[who]} "$URL" >/dev/null
+  ${DOOR} status
 `)
 }
 
@@ -849,9 +851,9 @@ ${remove.map(person => `  ${WITH_HELPER} ${DOOR} remove-person ${quoted(person)}
  * through it, besides its own person: each gets a user of their own on it at their first run.
  * Run as the server's own user.
  */
-export function peopleScript(url: string, people: readonly string[]): string {
+export function peopleScript(url: string, people: readonly string[], who: Who): string {
   return script(SERVER_USER, { URL: url }, `
-  ${lineFor('me', people)}
+  ${lineFor(who, people)}
   ${DOOR} status
 `)
 }
