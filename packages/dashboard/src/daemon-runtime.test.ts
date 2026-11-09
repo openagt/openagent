@@ -15,8 +15,9 @@ import { PROJECT_HOOKS_FILE } from './project-hooks.js'
 import { OPENAGENT_DIR } from './openagent-dir.js'
 import { addMachine, addProject, listMachines, listProjects, projectId, removeProject, tellMachine } from './registry.js'
 import type { OpenAgentEvent } from './events.js'
-import { nodeGitRunner } from '@openagt/agent-data'
+import { nodeGitRunner, sessionsHome } from '@openagt/agent-data'
 import { publishedBase } from '@openagt/agent-data/names'
+import { SESSIONS_ID } from './project-address.js'
 import { addWorktree, agentBranchName, worktreePath } from '@openagt/skill-branches'
 import { DATA_BRANCH, SHARE_SETTING, excludeFromGit, readSharing, withFileBranch, writeSharing } from '@openagt/agent-data'
 
@@ -905,6 +906,12 @@ test("a saved machine is asked for its own runs over its relay, and a run of its
     assert.deepEqual(await runtime.remoteAgents.home(shop, ONLY_THERE), { url, key: 'id.key', project: 'github.com/acme/shop' })
     await runtime.remoteAgents.follow(shop, ONLY_THERE)
     assert.deepEqual(runtime.remoteAgents.list(shop).map(row => [row.id, row.remoteLabel, row.person]), [[ONLY_THERE, 'Laptop', 'me@laptop']])
+
+    // The sessions with no project too: the machine is asked for its own under their one name, and one of its own is followed there.
+    const [sessions] = await runtime.remoteAgents.machineRuns(sessionsHome(env))
+    assert.deepEqual([sessions!.host, sessions!.runs.map(run => run.id)], ['laptop-box', [ONLY_THERE]])
+    assert.deepEqual(asked.at(-1), { fn: 'onOwnRuns', args: [null, null, 25_000], project: SESSIONS_ID })
+    assert.deepEqual(await runtime.remoteAgents.home(SESSIONS_ID, ONLY_THERE), { url, key: 'id.key', project: SESSIONS_ID })
   } finally {
     for (const res of open) res.end()
     await runtime.dispose()
