@@ -265,6 +265,19 @@ function deepText() {
   return text
 }
 
+const sleep = ms => new Promise(resolve => setTimeout(resolve, ms))
+
+/** Wait for `read` to return something truthy, or give up. */
+async function waitFor(read, timeoutMs, stepMs = 150) {
+  const deadline = Date.now() + timeoutMs
+  for (;;) {
+    const value = read()
+    if (value) return value
+    if (Date.now() >= deadline) return undefined
+    await sleep(stepMs)
+  }
+}
+
 /**
  * Our own await-protocol spec is part of the system prompt, and the page renders the prompt,
  * so a session shows a JSON block with `options` before the agent has asked anything. Its
@@ -506,7 +519,7 @@ async function deliverAnswer(text) {
   const deadline = Date.now() + (window.__oaComposerWaitMs ?? 20000)
   let composer = findComposer()
   while (!composer && Date.now() < deadline) {
-    await new Promise(resolve => setTimeout(resolve, 500))
+    await sleep(500)
     composer = findComposer()
   }
   if (!composer) {
@@ -515,7 +528,7 @@ async function deliverAnswer(text) {
   }
   fillComposer(composer, text)
   // Let the editor's own event handling settle before submitting, or the click sends nothing.
-  await new Promise(resolve => setTimeout(resolve, 400))
+  await sleep(400)
   const button = findSendButton()
   if (button) {
     button.click()
@@ -603,17 +616,6 @@ function typeInto(input, text) {
   if (setter) setter.call(input, text)
   else input.value = text
   input.dispatchEvent(new Event('input', { bubbles: true }))
-}
-
-/** Wait for `read` to return something truthy, or give up. */
-async function waitFor(read, timeoutMs, stepMs = 150) {
-  const deadline = Date.now() + timeoutMs
-  for (;;) {
-    const value = read()
-    if (value) return value
-    if (Date.now() >= deadline) return undefined
-    await new Promise(resolve => setTimeout(resolve, stepMs))
-  }
 }
 
 /** How long to wait for a picker to render its entries, and for the chips to settle. */
@@ -782,7 +784,7 @@ async function createSession({ repo, branch, prompt, model }) {
   const selectRepo = () => menuTriggers().find(t => /select repo|add repo|choose repo/i.test(t.text) || /select repo|choose repo/i.test(t.el.getAttribute('aria-label') ?? ''))
   // The chips render a beat after the composer: wait for either a chip or the bare picker.
   await waitFor(() => chips().some(c => c.text) || selectRepo(), MENU_WAIT_MS)
-  await new Promise(resolve => setTimeout(resolve, window.__oaMenuSettleMs ?? 800))
+  await sleep(window.__oaMenuSettleMs ?? 800)
 
   let repoNote
   if (repoWanted.includes(chips()[0]?.text.toLowerCase())) {
@@ -794,7 +796,7 @@ async function createSession({ repo, branch, prompt, model }) {
     let pick = await chooseFrom(trigger, repoWanted, 'repo')
     if (!pick.ok) {
       // The page may have finished loading its remembered repository under us: read again once.
-      await new Promise(resolve => setTimeout(resolve, 1500))
+      await sleep(1500)
       if (repoWanted.includes(chips()[0]?.text.toLowerCase())) pick = { ok: true, note: `repo already ${chips()[0].text} (after a late render)` }
       else return pick
     }
@@ -842,7 +844,7 @@ async function createSession({ repo, branch, prompt, model }) {
   }
 
   fillComposer(composer, prompt)
-  await new Promise(resolve => setTimeout(resolve, 400))
+  await sleep(400)
   const button = findSendButton()
   if (button) button.click()
   else {
@@ -1055,7 +1057,7 @@ async function visitSession(visit) {
   // The address changes before the page does: wait for turn rows that are not the previous
   // session's, so what is surveyed and typed into is this session's page.
   await waitFor(() => turnRows().some(r => !stale.has(r)), ROWS_WAIT_MS)
-  await new Promise(resolve => setTimeout(resolve, window.__oaSettleMs ?? 1500))
+  await sleep(window.__oaSettleMs ?? 1500)
   const found = findPendingChoice()
   const result = { id: visit.id, ok: true, rows: turnRows().length, ...(found ? { question: String(found.parsed.title ?? '').slice(0, 100) } : {}) }
   if (visit.answer) {
@@ -1090,7 +1092,7 @@ async function drive({ visits = [], start }) {
     const wasHome = atHome()
     const there = wasHome || (await goHome())
     // A navigation home swaps the page under us a beat after the address changes.
-    if (there && !wasHome) await new Promise(resolve => setTimeout(resolve, window.__oaSettleMs ?? 1500))
+    if (there && !wasHome) await sleep(window.__oaSettleMs ?? 1500)
     started = there ? await createSession(start) : { ok: false, note: 'could not reach the new-session page' }
     driverLog(`create: ${started.ok ? started.sessionId : started.note}`)
   }
