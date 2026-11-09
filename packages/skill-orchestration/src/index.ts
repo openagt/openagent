@@ -13,8 +13,6 @@ export {
   subagentPrompt,
   retryText,
   SUBAGENT_LINES,
-  Refused,
-  type Refusal,
   type SharedFiles,
   type Started,
   type Subagent,

@@ -1,5 +1,5 @@
 import { stat } from 'node:fs/promises'
-import { gitReason, type FileBranchWrite, type GitRunner } from '@openagt/agent-data'
+import { Refused, gitReason, type FileBranchWrite, type GitRunner } from '@openagt/agent-data'
 import { isAgentBranch, removeWorktree, worktreeBranch, worktreeClean, worktreePath } from '@openagt/skill-branches'
 import { agentLines, findRun, listRuns, publicCard, readDiary, type RunCard } from '@openagt/skill-logs'
 import { AGENT_ID_ENV, isDriverName, markerCard, readLiveCard, recordRun, runIdFrom, runnerMark, type DriverName, type readyToRun, type spawnRun } from '@openagt/agent-runner'
@@ -48,15 +48,6 @@ export function retryText(task: string, feedback: string): string {
 /** The task a subagent was given, off its record: its prompt without the lines the command added. */
 function taskOf(intent: string): string {
   return intent.endsWith(SUBAGENT_LINES) ? intent.slice(0, -SUBAGENT_LINES.length).trimEnd() : intent
-}
-
-export type Refusal = { ok: false; reason: string; [key: string]: unknown }
-
-/** A command refused: the JSON it answers and the line for a person. */
-export class Refused extends Error {
-  constructor(readonly outcome: Refusal, readonly line: string) {
-    super(line)
-  }
 }
 
 export interface SubagentDeps {
