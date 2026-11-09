@@ -9,7 +9,7 @@ export { isPidAlive, lockHolder, runLockPath, runStderrPath } from './run-lock.j
 export { projectGitHost, gitHostEnv, type GitHost, type BranchRequest } from './git-host.js'
 export { readLiveCard, readLiveDiary, endLiveCard, liveDir, inboxPath, LIVE_DIR, INBOX_FILE } from './live-card.js'
 export { initHooks, writeHookLines, HOOK_LINES, type InitOutcome } from './init.js'
-export { runCli, USAGE, type CliIo, type CliRefusal } from './cli.js'
+export { runCli, USAGE, type CliIo } from './cli.js'
 export { ReadyNaming, namingSetup, READY_NAMING_MAX_WAIT_MS, READY_NAMING_MAX_WAITING, type NamingSetup, type ReadyNamingDeps } from './ready-naming.js'
 export { NAME_FILE_ENV } from './title.js'
 export { agentNamed, anySkillPick, runAgent, skillPicksNamed, type ProjectSkillsPick, type SkillPicks } from './agent.js'
