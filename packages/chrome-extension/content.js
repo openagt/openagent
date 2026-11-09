@@ -52,16 +52,36 @@ function extensionVersion() {
   return typeof chrome !== 'undefined' && chrome.runtime?.getManifest ? chrome.runtime.getManifest().version : '?'
 }
 
+/** Whether there is a worker to send to: an extension runtime, which check.mjs's jsdom lacks. */
+function hasWorker() {
+  return typeof chrome !== 'undefined' && Boolean(chrome.runtime?.sendMessage)
+}
+
+/**
+ * Hand `message` to the service worker, the only part that talks to the daemon; `onReply(reply,
+ * error)` hears its answer, or why there is none. Nothing is sent where there is no worker, and a
+ * send that throws (the worker asleep, a context an extension reload invalidated) is an error
+ * handed to `onReply`: a page that cannot reach the daemon must still show its panel rather than
+ * throw inside a DOM observer.
+ */
+function toWorker(message, onReply = () => {}) {
+  if (!hasWorker()) return
+  try {
+    chrome.runtime.sendMessage(message, reply => {
+      // Read in every reply, or Chrome logs the error as unchecked.
+      const failed = chrome.runtime.lastError
+      if (failed) onReply(undefined, failed.message ?? 'worker unreachable')
+      else onReply(reply, undefined)
+    })
+  } catch (err) {
+    onReply(undefined, String(err?.message ?? err))
+  }
+}
+
 /** What the daemon last said about our report, so the panel can say why nothing arrived. */
 let bridgeStatus = 'not sent yet'
 
-/**
- * Hand a found question to the service worker, which owns the token and the fetch.
- *
- * Guarded on `chrome` existing so the offline harness (check.mjs) can run this file in jsdom,
- * where there is no extension runtime. Failures are swallowed: a page that cannot reach the
- * daemon must still show its panel rather than throw inside a DOM observer.
- */
+/** Hand a found question to the service worker, which owns the token and the fetch. */
 function reportToDaemon(parsed) {
   const sessionId = sessionIdFromUrl()
   if (!sessionId) return
@@ -90,23 +110,15 @@ function reportToDaemon(parsed) {
   if (!question.title || !question.options.length) return
   // Offline (check.mjs, no extension runtime): expose what would have been posted, so the
   // harness can pin the shape the daemon receives, not just the panel's summary of it.
-  if (typeof chrome === 'undefined') {
-    window.__oaBridgeQuestion = question
-    return
-  }
-  if (!chrome.runtime?.sendMessage) return
-  try {
-    chrome.runtime.sendMessage({ type: 'oa-question', question }, reply => {
-      // Silence here was the first thing to go wrong live: the worker answered "no token set"
-      // and nobody ever saw it, so a configured-looking extension simply did nothing.
-      if (chrome.runtime.lastError) bridgeStatus = chrome.runtime.lastError.message ?? 'worker unreachable'
-      else if (!reply) bridgeStatus = 'no reply from the worker'
-      else if (reply.ok) bridgeStatus = reply.skipped ? `sent (${reply.skipped})` : 'sent'
-      else bridgeStatus = reply.error ?? 'failed'
-    })
-  } catch (err) {
-    bridgeStatus = String(err?.message ?? err)
-  }
+  if (typeof chrome === 'undefined') window.__oaBridgeQuestion = question
+  toWorker({ type: 'oa-question', question }, (reply, error) => {
+    // Silence here was the first thing to go wrong live: the worker answered "no token set"
+    // and nobody ever saw it, so a configured-looking extension simply did nothing.
+    if (error !== undefined) bridgeStatus = error
+    else if (!reply) bridgeStatus = 'no reply from the worker'
+    else if (reply.ok) bridgeStatus = reply.skipped ? `sent (${reply.skipped})` : 'sent'
+    else bridgeStatus = reply.error ?? 'failed'
+  })
 }
 
 /**
@@ -180,16 +192,11 @@ function cleanText(text) {
  * last scrape found.
  */
 function sayHello(sessionId, note) {
-  if (typeof chrome === 'undefined' || !chrome.runtime?.sendMessage) return
-  try {
-    chrome.runtime.sendMessage({ type: 'oa-hello', sessionId, version: extensionVersion(), note }, reply => {
-      // The worker's reply says whether this tab is the Driver (#1332): the overlay goes up
-      // the moment the page loads, not when the first cycle reaches it.
-      if (!chrome.runtime.lastError && reply?.driver) setDriver(true)
-    })
-  } catch {
-    // Nothing to do; the next pass tries again.
-  }
+  toWorker({ type: 'oa-hello', sessionId, version: extensionVersion(), note }, reply => {
+    // The worker's reply says whether this tab is the Driver (#1332): the overlay goes up
+    // the moment the page loads, not when the first cycle reaches it.
+    if (reply?.driver) setDriver(true)
+  })
 }
 
 /**
@@ -213,30 +220,22 @@ function reportTranscript() {
   }
   const kinds = [...new Set(rows.map(row => row.getAttribute('data-perf-row') ?? '?'))].join(',')
   sayHello(sessionId, `rows ${rows.length} (${kinds}), turns ${blocks.length}, ${transcriptStatus}`)
-  if (typeof chrome === 'undefined' || !chrome.runtime?.sendMessage) return
+  if (!hasWorker()) return
   const events = blocks.filter(event => sentEvents.get(`${sessionId}#${event.seq}`) !== event.text)
   if (!events.length) {
     transcriptStatus = `${blocks.length} turn(s), unchanged`
     return
   }
-  try {
-    chrome.runtime.sendMessage({ type: 'oa-events', sessionId, events }, reply => {
-      if (chrome.runtime.lastError) {
-        transcriptStatus = chrome.runtime.lastError.message ?? 'worker unreachable'
-        return
-      }
-      // Only remember what the daemon actually took, so a rejected batch is retried.
-      if (reply?.ok) {
-        for (const event of events) sentEvents.set(`${sessionId}#${event.seq}`, event.text)
-        transcriptStatus = `sent ${events.length} of ${blocks.length} turn(s)`
-      } else {
-        transcriptStatus = reply?.error ?? 'failed'
-      }
-    })
-  } catch (err) {
-    // Worker asleep or context invalidated: said on the panel, as the question's line says it; the next mutation retries.
-    transcriptStatus = String(err?.message ?? err)
-  }
+  toWorker({ type: 'oa-events', sessionId, events }, (reply, error) => {
+    // Only remember what the daemon actually took, so a rejected batch is retried by the next
+    // page change.
+    if (reply?.ok) {
+      for (const event of events) sentEvents.set(`${sessionId}#${event.seq}`, event.text)
+      transcriptStatus = `sent ${events.length} of ${blocks.length} turn(s)`
+    } else {
+      transcriptStatus = error ?? reply?.error ?? 'failed'
+    }
+  })
 }
 
 /** Every element matching a selector, including inside open shadow roots. */
@@ -929,12 +928,7 @@ function driverLog(line) {
   driverLines.push(stamped)
   if (driverLines.length > LOG_LINES) driverLines.shift()
   renderOverlay()
-  if (typeof chrome === 'undefined' || !chrome.runtime?.sendMessage) return
-  try {
-    chrome.runtime.sendMessage({ type: 'oa-driver-log', line: stamped }, () => void chrome.runtime.lastError)
-  } catch {
-    // Dead context; the log still renders.
-  }
+  toWorker({ type: 'oa-driver-log', line: stamped })
 }
 
 /** What the list's status icon says about a session row. */
