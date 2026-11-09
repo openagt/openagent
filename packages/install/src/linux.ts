@@ -5,7 +5,7 @@ import { join } from 'node:path'
 import { SECURE_PORT } from '@openagt/dashboard/secure-address'
 import { ADDRESS, LOOPBACK_ADDRESS, addHostsLine, quoted, removeHostsLine } from './address.js'
 import type { Platform } from './platform.js'
-import { installed, run, succeeds } from './run.js'
+import { asAdmin, installed, run, succeeds } from './run.js'
 
 /**
  * What the install puts on a Linux computer. Its files and its scripts as the administrator are
@@ -244,8 +244,13 @@ export const linux: Platform = {
     const manager = await packageManager(env)
     if (missing.length === 0 || !manager) return
     const packages = missing.map(tool => TOOLS[tool][manager])
-    io.out(`◆ your password as the administrator: ${packages.join(', ')} ${packages.length === 1 ? 'is' : 'are'} installed (${missing.map(tool => `${tool}, which ${FOR[tool]}`).join('; ')}).`)
-    await run('sudo', ['/bin/sh', '-c', installPackagesScript(manager, packages)], { interactive: true })
+    await asAdmin(
+      {
+        says: `your password as the administrator: ${packages.join(', ')} ${packages.length === 1 ? 'is' : 'are'} installed (${missing.map(tool => `${tool}, which ${FOR[tool]}`).join('; ')}).`,
+        script: installPackagesScript(manager, packages),
+      },
+      io,
+    )
     const place = places(env)
     const before = await readPackages(place.packages)
     await mkdir(place.app, { recursive: true })

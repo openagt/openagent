@@ -9,7 +9,7 @@ import { ADDRESS, CERTIFICATE_CONFIG, CERTIFICATE_DAYS, LOOPBACK_ADDRESS } from 
 import { linux } from './linux.js'
 import { mac } from './mac.js'
 import type { InstallIO, Platform } from './platform.js'
-import { run } from './run.js'
+import { asAdmin, run } from './run.js'
 
 export type { InstallIO }
 
@@ -94,12 +94,6 @@ async function waitUntilAnswers(cert: string, ms: number): Promise<boolean> {
     await new Promise(resolvePromise => setTimeout(resolvePromise, 500))
   }
   return false
-}
-
-/** Runs `step` as the administrator, in this terminal, which asks for the password. */
-function asAdmin(step: { says: string; script: string }, io: InstallIO): Promise<void> {
-  io.out(`◆ ${step.says}`)
-  return run('sudo', ['/bin/sh', '-c', step.script], { interactive: true })
 }
 
 /**
