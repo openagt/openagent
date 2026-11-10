@@ -449,8 +449,7 @@ export async function runHost(opts: HostOptions): Promise<void> {
 
   const telling = setInterval(() => void tell().catch(() => {}), 1000)
 
-  // Where the run's diary stood when this started: an `ended` line after it is this run ending.
-  let diaryOffset = opts.diary ? (await stat(opts.diary).catch(() => undefined))?.size ?? 0 : 0
+  const diary = opts.diary ? await followDiary(opts.diary) : undefined
   let runEnded = false
 
   /**
@@ -470,29 +469,22 @@ export async function runHost(opts: HostOptions): Promise<void> {
     void (async () => {
       // Once the run has ended the browser is the person's alone: it goes sooner when they leave it.
       if (Date.now() - lastUse > (runEnded ? AFTER_RUN_MS : opts.idleMs)) return end()
-      if (opts.diary) {
-        const read = await readFrom(opts.diary, diaryOffset)
-        // The run's checkout is reclaimed: there is nowhere left to say what the browser shows.
-        if (read === undefined) return end()
-        // A diary written back shorter (a run resumed from its record) is followed from its end.
-        if (read.size < diaryOffset) diaryOffset = read.size
-        const fresh = read.bytes
-        // Only whole lines are read: a line still being written is read again, complete, next time.
-        const whole = fresh.lastIndexOf(0x0a) + 1
-        diaryOffset += whole
-        for (const line of diaryLines(fresh.subarray(0, whole))) {
-          // A run that stops on a question ends `waiting`, and its browser is for the answer: it
-          // stays while the person is there, as a run still going does.
-          if (line['kind'] === 'ended' && line['status'] !== 'waiting') runEnded = true
-          // The run goes again, on an answer or on more work: anything but its own end and this
-          // browser's own lines says so, and the browser is the run's again, not the person's alone.
-          else if (line['kind'] !== 'screen' && line['kind'] !== 'ended') {
-            runEnded = false
-            keptUntil = 0
-          }
+      if (!diary) return
+      const lines = await diary()
+      // The run's checkout is reclaimed: there is nowhere left to say what the browser shows.
+      if (lines === undefined) return end()
+      for (const line of lines) {
+        // A run that stops on a question ends `waiting`, and its browser is for the answer: it
+        // stays while the person is there, as a run still going does.
+        if (line['kind'] === 'ended' && line['status'] !== 'waiting') runEnded = true
+        // The run goes again, on an answer or on more work: anything but its own end and this
+        // browser's own lines says so, and the browser is the run's again, not the person's alone.
+        else if (line['kind'] !== 'screen' && line['kind'] !== 'ended') {
+          runEnded = false
+          keptUntil = 0
         }
-        if (runEnded) await keepAfterRun()
       }
+      if (runEnded) await keepAfterRun()
     })()
   }, 2000)
 
@@ -511,6 +503,25 @@ function sameToken(said: string | string[] | null | undefined, token: string): b
   const a = Buffer.from(said)
   const b = Buffer.from(token)
   return a.length === b.length && timingSafeEqual(a, b)
+}
+
+/**
+ * Follow the run's diary at `path` from where it stands now: each call answers the lines written
+ * since the call before, parsed, or `undefined` once the file is gone. An `ended` line is then
+ * this run ending, not an earlier one. Only whole lines are read: a line still being written is
+ * read again, complete, next time. A diary written back shorter (a run resumed from its record) is
+ * followed from its end.
+ */
+async function followDiary(path: string): Promise<() => Promise<Record<string, unknown>[] | undefined>> {
+  let offset = (await stat(path).catch(() => undefined))?.size ?? 0
+  return async () => {
+    const read = await readFrom(path, offset)
+    if (read === undefined) return undefined
+    if (read.size < offset) offset = read.size
+    const whole = read.bytes.lastIndexOf(0x0a) + 1
+    offset += whole
+    return diaryLines(read.bytes.subarray(0, whole))
+  }
 }
 
 /** The file's bytes from `offset` on and its size, or `undefined` when the file is gone. */
