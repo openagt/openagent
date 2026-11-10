@@ -125,7 +125,7 @@ describe('Composer (#721)', () => {
     // Commands have a visible surface (#948): the `/` menu stays the fast path, the button is
     // the discoverable one.
     expect(screen.getByRole('button', { name: 'Commands' })).toBeTruthy()
-    expect(screen.getByRole('button', { name: 'Run on' })).toBeTruthy()
+    expect(screen.getByRole('button', { name: /^Run on: / })).toBeTruthy()
     expect((await hoverTooltip(agentTrigger())).textContent).toContain('Driver: Claude Code')
     // The submit button appears only once the prompt has text (#721).
     fireEvent.change(screen.getByLabelText('prompt'), { target: { value: 'x' } })
@@ -277,11 +277,11 @@ describe('Composer (#721)', () => {
     const box = () => screen.getByRole('button', { name: 'Commands' }).closest('.rounded-xl')!
     const followedByBox = (el: Element) => el.closest('.h-8')!.nextElementSibling === box()
     expect(followedByBox(screen.getByText("the launcher's place"))).toBe(true)
-    expect(followedByBox(screen.getByRole('button', { name: 'Run on' }))).toBe(true)
+    expect(followedByBox(screen.getByRole('button', { name: /^Run on: / }))).toBe(true)
     cleanup()
     renderComposer({ inAgent: true, sessionRow: <div className="h-8"><span>where it started</span></div> })
     expect(followedByBox(screen.getByText('where it started'))).toBe(true)
-    expect(screen.queryByRole('button', { name: 'Run on' })).toBeNull()
+    expect(screen.queryByRole('button', { name: /^Run on: / })).toBeNull()
   })
 
   // #1073: pressing Start on an offline "Run on" machine would silently attempt the ~15s relay, so
@@ -382,7 +382,7 @@ describe('the box', () => {
     expect(box().contains(screen.getByRole('button', { name: 'Send' }))).toBe(true)
     expect(box().contains(commands())).toBe(true)
     expect(box().contains(agentTrigger())).toBe(false)
-    expect(box().contains(screen.getByRole('button', { name: 'Run on' }))).toBe(false)
+    expect(box().contains(screen.getByRole('button', { name: /^Run on: / }))).toBe(false)
   })
 
   test('the commands menu is at the left of the text, the submit at its right, both kept at its last line', () => {
@@ -400,7 +400,7 @@ describe('the box', () => {
   })
 })
 
-const runOn = () => screen.getByRole('button', { name: 'Run on' })
+const runOn = () => screen.getByRole('button', { name: /^Run on: / })
 
 describe('the rows around the box', () => {
   test('where the agent starts is a row above the box: "Run on", then the caller\'s words; under it, the caller\'s controls, then the caller\'s end controls and the model at the right', () => {
@@ -420,7 +420,7 @@ describe('the rows around the box', () => {
     expect(under.contains(control)).toBe(true)
     expect(under.contains(select)).toBe(true)
     expect(control.compareDocumentPosition(select) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
-    expect(screen.getAllByRole('button', { name: 'Run on' })).toHaveLength(1)
+    expect(screen.getAllByRole('button', { name: /^Run on: / })).toHaveLength(1)
     // Said in words, drawn as every item of the rows is: no border of its own.
     expect(runOn().textContent).toBe('This machine')
     expect(runOn().className).not.toContain('border')
@@ -492,7 +492,7 @@ describe('the rows around the box', () => {
 describe('in a session', () => {
   test('there is no "Run on" pick: a session already runs where it was started', () => {
     renderComposer({ inAgent: true })
-    expect(screen.queryByRole('button', { name: 'Run on' })).toBeNull()
+    expect(screen.queryByRole('button', { name: /^Run on: / })).toBeNull()
     expect(screen.getByRole('button', { name: 'Commands' })).toBeTruthy()
   })
 

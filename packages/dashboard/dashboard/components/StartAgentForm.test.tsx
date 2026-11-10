@@ -136,7 +136,7 @@ const COMMANDS = [{ name: 'work-queue', description: 'Work the agent queue' }]
 const noop = () => {}
 
 /** The launcher's "Auto" menu button; its text says the publish pick. */
-const autoMenu = () => screen.getByRole('button', { name: 'Auto' })
+const autoMenu = () => screen.getByRole('button', { name: /^Auto: / })
 /** The labels of the publish options the open "Auto" menu lists. */
 const publishOptions = () => screen.getAllByRole('menuitemradio').map(item => item.querySelector('span > span')!.textContent)
 /** The launcher's "start from" chip, when there is one. */

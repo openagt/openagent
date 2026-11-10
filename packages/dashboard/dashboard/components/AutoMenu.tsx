@@ -61,7 +61,6 @@ export function AutoMenu({
             <DropdownMenuTrigger
               type="button"
               disabled={busy}
-              aria-label="Auto"
               // A branch's name can run long: of a set width at most, as the branch button is, phone too.
               className={cn(rowButtonClass, 'max-w-[20rem]!')}
             />

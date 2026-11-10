@@ -14,7 +14,7 @@ function renderMenu(over: Partial<Parameters<typeof AutoMenu>[0]> = {}) {
   return { onPublish, ...view }
 }
 
-const trigger = () => screen.getByRole('button', { name: 'Auto' })
+const trigger = () => screen.getByRole('button', { name: /^Auto: / })
 /** What the button reads with the menu shut. */
 const label = (over: Partial<Parameters<typeof AutoMenu>[0]>): string => {
   cleanup()

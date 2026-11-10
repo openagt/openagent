@@ -59,7 +59,7 @@ const GITHUB = {
 }
 
 const renderComposer = () => render(<Composer files={[]} onSubmit={vi.fn()} busy={false} submitLabel="Send" submitBusyLabel="Sending…" />)
-const runOn = () => screen.getByRole('button', { name: 'Run on' })
+const runOn = () => screen.getByRole('button', { name: /^Run on: / })
 
 beforeEach(async () => {
   prefs = {}
