@@ -26,7 +26,7 @@ import { useMachines, useMachinesRead, tellMachine, type Machine } from '../lib/
 import { restoreRunOn, runTarget, useRunOnFallback, useSelectedMachineId, selectMachine } from '../lib/remote-target.js'
 import { thisMachineName } from '../lib/this-machine.js'
 import { useMachineStatus } from '../lib/use-machine-status.js'
-import { takePendingDraft } from '../lib/draft-handoff.js'
+import { keepDraft, keptDraft, takePendingDraft } from '../lib/draft-handoff.js'
 import { driverOptions, modelEfforts, readMachineModelsAhead, useModelsOn } from '../lib/models.js'
 import { readyCommands, useProjectLauncher } from '../lib/use-project-launcher.js'
 import { AgentAccountItems, firstAccount, readMachineAccountsAhead, useAccountsOn } from './AgentAccounts.js'
@@ -111,8 +111,10 @@ export const Composer = forwardRef<ComposerHandle, {
   idleControl?: ReactNode
   /** The saved machine the project is on, when only another computer of the person's has it (elsewhere.ts). */
   home?: string | undefined
+  /** Which box this is, by project or session: what is typed in it is kept in this browser, across a navigation and a reload, until it is sent. */
+  draftKey?: string | undefined
 }>(function Composer(
-  { files, addContext, removeContext, startsAt, controls, controlsEnd, sessionModel, sessionContext, onSubmit, onPromptChange, onPreset, busy, submitLabel, submitBusyLabel, placeholder, inAgent = false, sessionRow, canSubmit = true, idleControl, home },
+  { files, addContext, removeContext, startsAt, controls, controlsEnd, sessionModel, sessionContext, onSubmit, onPromptChange, onPreset, busy, submitLabel, submitBusyLabel, placeholder, inAgent = false, sessionRow, canSubmit = true, idleControl, home, draftKey },
   ref,
 ) {
   const [prompt, setPrompt] = useState('')
@@ -203,13 +205,14 @@ export const Composer = forwardRef<ComposerHandle, {
     },
   }))
 
-  // Rehydrate a draft carried in from the click that navigated here (#1139), launcher-only.
+  // Rehydrate a draft carried in from the click that navigated here (#1139), launcher-only, else the
+  // draft this box was left with before a navigation or a reload.
   //
   // Handed to the editor as `initialText` rather than pushed through the handle: the draft is taken
   // once and cleared, while `loadTemplate` silently does nothing until Tiptap has resolved
   // (`immediatelyRender: false`), so pushing it at mount dropped the draft and left an empty
   // composer. `prompt` then arrives the normal way, through the editor's own onChange.
-  const [carriedDraft, setCarriedDraft] = useState<string | undefined>(undefined)
+  const [carriedDraft, setCarriedDraft] = useState<string | undefined>(() => (draftKey !== undefined ? keptDraft(draftKey) : undefined))
   useEffect(() => {
     if (inAgent) return
     const carried = takePendingDraft()
@@ -240,6 +243,7 @@ export const Composer = forwardRef<ComposerHandle, {
 
   const onPromptEdit = (value: string) => {
     setPrompt(value)
+    if (draftKey !== undefined) keepDraft(draftKey, value)
     onPromptChange?.(value)
   }
 

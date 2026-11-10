@@ -216,6 +216,40 @@ describe('Composer (#721)', () => {
     expect(editorText()).toBe(draft)
   })
 
+  test('what is typed is back when the box is drawn again, after a navigation or a reload, for that box alone, until it is sent', () => {
+    renderComposer({ draftKey: 'launcher:p1' })
+    fireEvent.change(screen.getByLabelText('prompt'), { target: { value: 'a long draft I care about' } })
+    cleanup()
+    renderComposer({ draftKey: 'p1:run-2' })
+    expect(editorText()).toBe('')
+    cleanup()
+    renderComposer({ draftKey: 'launcher:p1' })
+    expect(editorText()).toBe('a long draft I care about')
+    // Sent: the caller empties the box, and nothing is kept.
+    fireEvent.change(screen.getByLabelText('prompt'), { target: { value: '' } })
+    cleanup()
+    renderComposer({ draftKey: 'launcher:p1' })
+    expect(editorText()).toBe('')
+  })
+
+  test('a browser that keeps nothing still has the draft in the box, and it is sent', () => {
+    const refuse = () => {
+      throw new DOMException('The storage is off', 'SecurityError')
+    }
+    const refused = (['getItem', 'setItem', 'removeItem'] as const).map(method => vi.spyOn(Storage.prototype, method).mockImplementation(refuse))
+    try {
+      const onPromptChange = vi.fn()
+      const { onSubmit } = renderComposer({ inAgent: true, draftKey: 'p1:run-2', onPromptChange })
+      fireEvent.change(screen.getByLabelText('prompt'), { target: { value: 'a draft with nowhere to go' } })
+      expect(editorText()).toBe('a draft with nowhere to go')
+      expect(onPromptChange).toHaveBeenLastCalledWith('a draft with nowhere to go')
+      fireEvent.click(screen.getByText('editor-submit'))
+      expect(onSubmit).toHaveBeenCalledWith('a draft with nowhere to go', { later: false })
+    } finally {
+      for (const spy of refused) spy.mockRestore()
+    }
+  })
+
   test('an in-session composer does not rehydrate a carried draft (#1066)', () => {
     sessionStorage.setItem('oa.pending-draft', 'not for here')
     renderComposer({ inAgent: true })

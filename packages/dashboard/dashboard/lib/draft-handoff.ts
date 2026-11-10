@@ -1,6 +1,6 @@
 // The composer draft carried across a navigation inside the app, held in sessionStorage so the
 // typed prompt never sits in the address bar, history, or a Referer header. The launcher
-// rehydrates from it once.
+// rehydrates from it once. And the draft each box keeps in this browser, until it is sent.
 
 /** sessionStorage key holding a carried draft, until the launcher takes it. */
 const PENDING_DRAFT_KEY = 'oa.pending-draft'
@@ -33,4 +33,26 @@ export function takePendingDraft(): string | null {
   const draft = s.getItem(PENDING_DRAFT_KEY)
   if (draft !== null) s.removeItem(PENDING_DRAFT_KEY)
   return draft
+}
+
+/** localStorage key prefix of the draft each box keeps: the launcher's by project, a session's by session. */
+const KEPT_DRAFT_KEY = 'oa.draft:'
+
+/** The draft the box `key` names was left with, as a chat app keeps one across a reload and a closed tab. */
+export function keptDraft(key: string): string | undefined {
+  try {
+    return globalThis.localStorage?.getItem(KEPT_DRAFT_KEY + key) || undefined
+  } catch {
+    return undefined
+  }
+}
+
+/** Keep what the box `key` names holds; an empty box, as a sent prompt leaves it, keeps nothing. */
+export function keepDraft(key: string, text: string): void {
+  try {
+    if (text.trim() === '') globalThis.localStorage?.removeItem(KEPT_DRAFT_KEY + key)
+    else globalThis.localStorage?.setItem(KEPT_DRAFT_KEY + key, text)
+  } catch {
+    // A browser that keeps nothing still has the draft for this page's life.
+  }
 }

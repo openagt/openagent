@@ -221,7 +221,10 @@ export function AgentComposer({
     <div className="mx-auto w-full max-w-3xl p-2">
       {surfacedError && <p role="alert" className="mb-1 px-2 text-xs text-danger">{surfacedError}</p>}
       <Composer
+        // A box of its own per session, with the draft it was left with.
+        key={agentId}
         ref={composerRef}
+        draftKey={`${projectId}:${agentId}`}
         files={files}
         onSubmit={send}
         busy={busy}

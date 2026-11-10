@@ -284,6 +284,7 @@ export function StartAgentForm({
         // A box of its own per project, so the prompt carried over from the picker lands in it (below).
         key={projectId}
         ref={composerRef}
+        draftKey={`launcher:${projectId}`}
         home={home}
         files={files}
         addContext={addContext}
