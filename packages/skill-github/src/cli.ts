@@ -11,10 +11,9 @@ import { isGithubLogin, publicProfile, type ProfileFetch } from './profile.js'
 import { listRepos } from './repos.js'
 import { listReplies } from './replies.js'
 import { DIARY_ENV, byline, writeComment } from './comment.js'
-import { mkdtempSync, readFileSync, rmSync } from 'node:fs'
-import { tmpdir } from 'node:os'
-import { join } from 'node:path'
-import { HOST, accountDir, accountsRoot, asAccount, forgetAccount, ghState, gitConfig, hasBrew, installCommand, isAccountDir, jobFiles, jobState, loginUnderWay, picksPath, stopLogin, readFacts, runEnv, runsAccount, settleAdded, startJob, startLogin, takeToken, useForRuns, whoAmI, type AccountFacts, type JobState, type LoggingIn } from './accounts.js'
+import { readFileSync } from 'node:fs'
+import { HOST, accountDir, accountsRoot, asAccount, forgetAccount, ghState, gitConfig, hasBrew, installCommand, installedAccounts, jobFiles, jobState, loginUnderWay, picksPath, stopLogin, readFacts, runEnv, runsAccount, settleAdded, startJob, startLogin, takeToken, useForRuns, type JobState, type LoggingIn } from './accounts.js'
+import { accountNamed, factsOfToken, tokenOf, workingGh } from './working-account.js'
 
 /**
  * The command line over the package (#1820): the same functions for an agent in a shell, and for
@@ -154,80 +153,9 @@ async function readStdin(): Promise<string> {
   return said
 }
 
-/** A command that talks to GitHub: it works as one of OpenAgent's accounts, its `gh` made so before it runs. */
+/** A command that talks to GitHub: it works as one of OpenAgent's accounts, its `gh` made so before it runs (`working-account.ts`). */
 function asOpenAgent(command: Command<[Context]>): Command<[Context]> {
   return async (args, ctx) => command(args, { ...ctx, gh: await workingGh(ctx) })
-}
-
-/**
- * `gh` working as one of OpenAgent's accounts: the one a run was given, when this runs inside
- * one; else the account runs use, with its token for git too, so a push `gh` makes goes as it.
- */
-async function workingGh(ctx: Context): Promise<GhRunner> {
-  const root = accountsRoot(ctx.env)
-  const given = ctx.env['GH_CONFIG_DIR']
-  if (given !== undefined && isAccountDir(root, given)) return asAccount(ctx.gh, given)
-  const state = await ghState(root, ctx.cwd, ctx.gh)
-  const login = runsAccount(state.installed ? state.accounts : [], picksPath(ctx.env))
-  if (login === undefined) throw noAccount()
-  const dir = accountDir(root, login)
-  const gh = ctx.gh
-  const env = runEnv(await tokenOf(login, dir, ctx.cwd, gh), dir, readFacts(dir), ctx.env)
-  return (args, cwd, more, input) => gh(args, cwd, { ...env, ...more }, input)
-}
-
-/** One of OpenAgent's accounts: `user`, when named, else the one runs use; refused when OpenAgent has no such account. */
-async function accountNamed(user: string | undefined, cwd: string, gh: GhRunner, env: NodeJS.ProcessEnv): Promise<{ login: string; dir: string }> {
-  const root = accountsRoot(env)
-  const state = await ghState(root, cwd, gh)
-  const accounts = state.installed ? state.accounts : []
-  if (user !== undefined && !accounts.some(a => a.login === user)) {
-    throw new Refused({ ok: false, reason: 'no-account', login: user }, `OpenAgent has no GitHub account ${user} on this computer: add it in OpenAgent's Permissions`)
-  }
-  const login = user ?? runsAccount(accounts, picksPath(env))
-  if (login === undefined) throw noAccount()
-  return { login, dir: accountDir(root, login) }
-}
-
-function noAccount(): Refused {
-  return new Refused({ ok: false, reason: 'no-account' }, `OpenAgent has no GitHub account: add one in OpenAgent's Permissions`)
-}
-
-/**
- * `login`'s token as OpenAgent keeps it, once GitHub said it is that account's: a login kept under
- * one name can be another account's, and nothing must go out as someone else than it says.
- */
-async function tokenOf(login: string, dir: string, cwd: string, gh: GhRunner): Promise<string> {
-  let token: string
-  try {
-    token = (await asAccount(gh, dir)(['auth', 'token', '--hostname', HOST], cwd)).trim()
-  } catch (err) {
-    const detail = errorMessage(err)
-    throw new Refused({ ok: false, reason: 'no-token', login, detail }, `OpenAgent has no token for ${login}: ${detail}`)
-  }
-  const whose = await whoseToken(token, cwd, gh, login)
-  if (whose.toLowerCase() !== login.toLowerCase()) {
-    throw new Refused({ ok: false, reason: 'not-that-account', login, whose }, `the login OpenAgent keeps for ${login} is ${whose}'s on GitHub: add ${login} again in OpenAgent's Permissions`)
-  }
-  return token
-}
-
-/** The account GitHub says a token is: `login`, when given, names the account it was asked for. */
-async function whoseToken(token: string, cwd: string, gh: GhRunner, login?: string): Promise<string> {
-  return (await factsOfToken(token, cwd, gh, login)).login
-}
-
-/** Who GitHub says a token is, asked with that token alone: no account's folder, and not the person's. */
-async function factsOfToken(token: string, cwd: string, gh: GhRunner, login?: string): Promise<AccountFacts> {
-  const none = mkdtempSync(join(tmpdir(), 'openagent-gh-'))
-  try {
-    return await whoAmI((args, at, env, input) => asAccount(gh, none)(args, at, { ...env, GH_TOKEN: token }, input), cwd)
-  } catch (err) {
-    const detail = errorMessage(err)
-    throw new Refused({ ok: false, reason: 'no-token', ...(login !== undefined ? { login } : {}), detail }, `GitHub did not take ${login !== undefined ? `${login}'s login` : 'the login'}: ${detail}`)
-  } finally {
-    rmSync(none, { recursive: true, force: true })
-  }
 }
 
 /** What a GitHub token reads as: letters, digits and underscores, nothing a line could break on. */
@@ -350,9 +278,9 @@ const COMMANDS: Record<string, Command<[Context]>> = {
 
   async use(args, { cwd, gh, env }) {
     const login = parseCommandArgs(args, {}, 1).positionals[0]!
-    const state = await ghState(accountsRoot(env), cwd, gh)
+    const accounts = await installedAccounts(accountsRoot(env), cwd, gh)
     try {
-      useForRuns(login, state.installed ? state.accounts : [], picksPath(env))
+      useForRuns(login, accounts, picksPath(env))
     } catch (err) {
       throw new Refused({ ok: false, reason: 'no-account', login }, errorMessage(err))
     }
@@ -417,8 +345,7 @@ const COMMANDS: Record<string, Command<[Context]>> = {
     const login = values.user
     if (login === undefined) throw new UsageError('token needs --user <login>')
     const root = accountsRoot(env)
-    const state = await ghState(root, cwd, gh)
-    if (!(state.installed ? state.accounts : []).some(a => a.login === login)) throw new Refused({ ok: false, reason: 'no-account', login }, `OpenAgent has no GitHub account ${login} on this computer`)
+    if (!(await installedAccounts(root, cwd, gh)).some(a => a.login === login)) throw new Refused({ ok: false, reason: 'no-account', login }, `OpenAgent has no GitHub account ${login} on this computer`)
     return { ok: true, login, token: await tokenOf(login, accountDir(root, login), cwd, gh) }
   },
 

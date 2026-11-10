@@ -171,6 +171,12 @@ export async function ghState(root: string, cwd: string, gh: GhRunner): Promise<
   return { installed: true, accounts }
 }
 
+/** OpenAgent's accounts, as {@link ghState} reads them: none while `gh` is not on this computer. */
+export async function installedAccounts(root: string, cwd: string, gh: GhRunner): Promise<GhAccount[]> {
+  const state = await ghState(root, cwd, gh)
+  return state.installed ? state.accounts : []
+}
+
 /** The account runs use: the one picked, while OpenAgent still has it; else the first, kept as the pick from now on. */
 export function runsAccount(accounts: readonly GhAccount[], path: string = picksPath()): string | undefined {
   const picks = readPicks(path)
