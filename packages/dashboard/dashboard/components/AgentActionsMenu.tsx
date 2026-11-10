@@ -3,7 +3,7 @@ import { useEffect, useRef, useState } from 'react'
 import type { GitHostHome, OpenAgentEvent, RepositoryOffer } from '../../src/index.js'
 import { sessionInfo } from '../../src/client.js'
 import { RevealedTitle } from './RevealedTitle.js'
-import { MoreVertical, ChevronDown, FolderOpen, Code, Check, ExternalLink, Square, FolderX, Trash2, Copy, CloudUpload, Database, Info } from 'lucide-react'
+import { MoreVertical, ChevronDown, FolderOpen, Code, Check, ExternalLink, Square, FolderX, Trash2, Copy, CloudUpload, Database, Info, PanelBottomOpen } from 'lucide-react'
 import { onGitHostHome, onRepositoryOffer } from '../rpc/reads.js'
 import { openSettings } from '../lib/use-route.js'
 import { PROJECT_AGENT_DATA_ENTRY } from './ProjectAgentDataSettings.js'
@@ -61,6 +61,7 @@ export function AgentActionsMenu({
   onProjectRemoved,
   details,
   size,
+  showWorkBar,
 }: {
   projectId: string
   agentId?: string | null | undefined
@@ -78,6 +79,8 @@ export function AgentActionsMenu({
   details?: { open: boolean; onToggle: () => void } | undefined
   /** The size on disk of the session's worktree, said beside "Remove worktree". */
   size?: string | undefined
+  /** Given while the session's work bar is put away: brings it back. */
+  showWorkBar?: (() => void) | undefined
 }) {
   // Given an agent, this is its page's menu, under the session's name; with none, the ⋮ of a page with no session.
   const session = !!agentId
@@ -203,6 +206,11 @@ export function AgentActionsMenu({
           {details && (
             <DropdownMenuItem onClick={details.onToggle}>
               <Info className="h-3.5 w-3.5 shrink-0" /> {details.open ? 'Hide details' : 'Show details'}
+            </DropdownMenuItem>
+          )}
+          {showWorkBar && (
+            <DropdownMenuItem onClick={showWorkBar}>
+              <PanelBottomOpen className="h-3.5 w-3.5 shrink-0" /> Show the work bar
             </DropdownMenuItem>
           )}
           {!session && homeItem}

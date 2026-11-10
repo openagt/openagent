@@ -47,9 +47,10 @@ vi.mock('../lib/preferences.js', () => ({
 // The `actions` and `summary` slots of the bar above the message box ARE rendered, so the handoff
 // cluster and the modules' summaries stay reachable.
 vi.mock('./AgentActionBar.js', () => ({
-  AgentActionBar: ({ ready, checkout, onToggle, onProjectRemoved }: { ready?: boolean; checkout: unknown; onToggle?: () => void; onProjectRemoved?: () => void }) => (
+  AgentActionBar: ({ ready, checkout, onToggle, onProjectRemoved, onShowWorkBar }: { ready?: boolean; checkout: unknown; onToggle?: () => void; onProjectRemoved?: () => void; onShowWorkBar?: () => void }) => (
     <>
       <span data-testid="bar-frame" />
+      {onShowWorkBar && <button type="button" onClick={onShowWorkBar}>Show the work bar</button>}
       <button type="button" onClick={onProjectRemoved}>project removed</button>
       <button type="button" onClick={onToggle}>details</button>
       <span data-testid="bar-ready">{String(ready)}</span>
@@ -58,8 +59,9 @@ vi.mock('./AgentActionBar.js', () => ({
   ),
 }))
 vi.mock('./AgentWorkBar.js', () => ({
-  AgentWorkBar: ({ actions, summary, checkout, show }: { actions?: ReactNode; summary?: ReactNode; checkout: unknown; show: boolean }) => (
-    <div data-testid="work-bar" data-show={String(show)}>
+  AgentWorkBar: ({ actions, summary, checkout, show, away, onHide }: { actions?: ReactNode; summary?: ReactNode; checkout: unknown; show: boolean; away: boolean; onHide: () => void }) => (
+    <div data-testid="work-bar" data-show={String(show)} data-away={String(away)}>
+      <button type="button" onClick={onHide}>Hide this bar</button>
       <span data-testid="work-checkout">{JSON.stringify(checkout)}</span>
       {summary}
       {actions}
@@ -297,6 +299,27 @@ describe('AgentView: when the bar above the message box is there', () => {
     onAgentWorktree.mockResolvedValue({ branch: 'agent-z', pr: { number: 3, url: 'https://x/pull/3', state: 'OPEN', title: 'T' } })
     render(view({ agentId: 'run-3' }))
     await waitFor(() => expect(shown()).toBe('true'))
+  })
+
+  test('a bar put away is offered back in Session actions, which brings it back, after a reload too', async () => {
+    onAgent.mockResolvedValue(ARCHIVED)
+    onAgentWorktree.mockResolvedValue({ branch: 'agent-w', pr: { number: 4, url: 'https://x/pull/4', state: 'OPEN', title: 'T' } })
+    render(view({ agentId: 'run-4' }))
+    await waitFor(() => expect(shown()).toBe('true'))
+    expect(screen.queryByRole('button', { name: 'Show the work bar' })).toBeNull()
+    fireEvent.click(screen.getByRole('button', { name: 'Hide this bar' }))
+    expect(screen.getByTestId('work-bar').dataset.away).toBe('true')
+    cleanup()
+    render(view({ agentId: 'run-4' }))
+    await waitFor(() => expect(shown()).toBe('true'))
+    expect(screen.getByTestId('work-bar').dataset.away).toBe('true')
+    fireEvent.click(screen.getByRole('button', { name: 'Show the work bar' }))
+    expect(screen.getByTestId('work-bar').dataset.away).toBe('false')
+    expect(screen.queryByRole('button', { name: 'Show the work bar' })).toBeNull()
+    cleanup()
+    render(view({ agentId: 'run-4' }))
+    await waitFor(() => expect(shown()).toBe('true'))
+    expect(screen.getByTestId('work-bar').dataset.away).toBe('false')
   })
 
   test('on a first visit, a run whose pull request turns out merged never shows the bar while the request is read', async () => {

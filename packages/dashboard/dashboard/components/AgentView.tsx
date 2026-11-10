@@ -15,6 +15,7 @@ import { AgentComposer, type QueuedMessage } from './AgentComposer.js'
 import { sendNow, withdrawMessage } from '../rpc/control.js'
 import type { WaitingMessage } from './EventList.js'
 import { AgentWorkBar } from './AgentWorkBar.js'
+import { useWorkBarAway } from '../lib/work-bar-away.js'
 import { AgentFeed } from './AgentFeed.js'
 import { IssueLinks } from './Markdown.js'
 import { OpenFile } from './ToolCalls.js'
@@ -324,6 +325,8 @@ export function AgentView({
   // What the bar is about right now, so the ✕ hides this and not the next thing the agent does:
   // the run, its branch, how much work is on it, and where that work has got to.
   const workState = [agentId, barCheckout?.branch ?? '', onBranch?.commits.length ?? 0, onBranch?.pendingFiles?.length ?? 0, onBranch?.insertions ?? 0, onBranch?.deletions ?? 0, onBranch?.pushed ?? false, pr?.number ?? '', pr?.state ?? ''].join('|')
+  // Put away, Session actions brings it back: the run may still wait on the person for its next step.
+  const workBar = useWorkBarAway(agentId, workState)
 
   return (
     <ChatPane
@@ -343,6 +346,7 @@ export function AgentView({
             onToggle={toggle}
             ready={ready}
             checkout={checkout}
+            {...(workBar.away && say ? { onShowWorkBar: workBar.show } : {})}
           />
           {/* The always-available session-details strip: agent + spend (#322). What the run changed is
               in the Changes pane, not here. */}
@@ -383,7 +387,8 @@ export function AgentView({
             }
             error={ready && showHandoff ? handoff.error : undefined}
             show={say}
-            state={workState}
+            away={workBar.away}
+            onHide={workBar.hide}
           />
           {card?.otherHost && card.host ? (
             // A run another computer started, which is no saved machine, is only read here: a

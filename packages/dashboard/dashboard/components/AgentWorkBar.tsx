@@ -1,4 +1,4 @@
-import { useState, type ReactNode } from 'react'
+import type { ReactNode } from 'react'
 import type { AgentWorktree } from '../../src/index.js'
 import { X } from 'lucide-react'
 import { Tooltip, TooltipTrigger, TooltipContent } from './ui/tooltip.js'
@@ -18,7 +18,8 @@ export function AgentWorkBar({
   actions,
   error,
   show,
-  state,
+  away,
+  onHide,
 }: {
   /** The agent's checkout as the page read it: its branch and its pull request. */
   checkout: AgentWorktree | null
@@ -30,17 +31,13 @@ export function AgentWorkBar({
   error?: string | null | undefined
   /** Whether there is something to say: changes, a pull request or a next step. Nothing to say, no bar. */
   show: boolean
-  /**
-   * What the bar is about, as one string: the ✕ hides the bar for this state only, so it comes
-   * back on its own once the work moves on (another commit, a pull request opened, a merge).
-   * Absent, the ✕ hides it for as long as the branch and its pull request stay as they are.
-   */
-  state?: string | undefined
+  /** Put away by its ✕ at what it is about now (`useWorkBarAway`): it comes back on its own once the work moves on. */
+  away: boolean
+  /** The ✕. */
+  onHide: () => void
 }) {
   const branch = checkout?.branch
-  const signature = state ?? `${branch ?? ''}|${checkout?.pr?.number ?? ''}|${checkout?.pr?.state ?? ''}`
-  const [hiddenAt, setHiddenAt] = useState<string | null>(null)
-  if (branch === undefined || !show || hiddenAt === signature) return null
+  if (branch === undefined || !show || away) return null
   return (
     <div className="mx-auto w-full max-w-3xl px-2 pt-2">
       {/* One line; on a phone it is as many as its parts need, the next step on a line of its own.
@@ -76,7 +73,7 @@ export function AgentWorkBar({
             type="button"
             aria-label="Hide this bar"
             title="Hide this bar"
-            onClick={() => setHiddenAt(signature)}
+            onClick={onHide}
             className="flex h-6 w-6 shrink-0 items-center justify-center rounded text-muted-foreground hover:bg-accent hover:text-accent-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-primary)]"
           >
             <X className="h-3.5 w-3.5" />
