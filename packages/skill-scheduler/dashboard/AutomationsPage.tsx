@@ -86,6 +86,11 @@ export function AutomationsPage({ projects }: ModulePageProps) {
     setPanel(current => (current?.id === id ? undefined : current))
     setTimeout(() => editButtons.current.get(id)?.focus())
   }
+  const newButtons = useRef(new Map<string, HTMLButtonElement>())
+  /** Hand the keyboard to a project's "New automation" button, once the form or the note that stood in its place is closed. */
+  const backToNew = (projectId: string): void => {
+    setTimeout(() => newButtons.current.get(projectId)?.focus())
+  }
   // Saves go one at a time: each is a command that reads the state file, changes it and writes it
   // back. A command that could not even be asked is a save not taken, and the next one still runs.
   const queue = useRef<Promise<unknown>>(Promise.resolve())
@@ -157,9 +162,12 @@ export function AutomationsPage({ projects }: ModulePageProps) {
                 </span>
               )}
               {row.error === undefined && creating !== row.project.id && (
-                <Button
-                  variant="outline"
-                  size="xs"
+                <button
+                  type="button"
+                  ref={button => {
+                    if (button) newButtons.current.set(row.project.id, button)
+                    else newButtons.current.delete(row.project.id)
+                  }}
                   disabled={held}
                   onClick={() => {
                     asked.current++
@@ -167,17 +175,36 @@ export function AutomationsPage({ projects }: ModulePageProps) {
                     setCreating(row.project.id)
                   }}
                   aria-label={`New automation in ${row.project.name}`}
-                  className="ml-auto"
+                  className={cn(buttonVariants({ variant: 'outline', size: 'xs' }), 'ml-auto')}
                 >
                   New automation
-                </Button>
+                </button>
               )}
             </div>
-            {creating === row.project.id && <AutomationForm project={row.project} run={args => run(row.project, args)} onDirty={setDirty} onClose={() => setCreating(undefined)} onSaved={() => void reload().catch(() => {})} />}
+            {creating === row.project.id && (
+              <AutomationForm
+                project={row.project}
+                run={args => run(row.project, args)}
+                onDirty={setDirty}
+                onClose={() => {
+                  setCreating(undefined)
+                  backToNew(row.project.id)
+                }}
+                onSaved={() => void reload().catch(() => {})}
+              />
+            )}
             {removed?.project === row.project.id && (
               <div role="status" aria-label="Removed" className="mt-3 flex items-start justify-between gap-3 rounded-md border border-border bg-muted/40 p-3 text-sm">
                 <p>{removed.text}</p>
-                <Button variant="outline" size="sm" onClick={() => setRemoved(undefined)}>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  autoFocus
+                  onClick={() => {
+                    setRemoved(undefined)
+                    backToNew(row.project.id)
+                  }}
+                >
                   Done
                 </Button>
               </div>

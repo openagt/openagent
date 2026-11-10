@@ -935,6 +935,18 @@ describe("the Edit panel of a skill's row", () => {
     expect(saves(runCommand)).toEqual([['publish', 'post-merge-cleanup', 'pr']])
   })
 
+  test('the "New automation" form, closed by Escape or Cancel, hands the keyboard back to its button', async () => {
+    const { host } = scheduler()
+    show(host)
+    fireEvent.click(await screen.findByRole('button', { name: 'New automation in gemstack' }))
+    const form = screen.getByRole('group', { name: 'New automation' })
+    fireEvent.keyDown(within(form).getByRole('textbox', { name: 'Name' }), { key: 'Escape' })
+    await waitFor(() => expect(document.activeElement).toBe(screen.getByRole('button', { name: 'New automation in gemstack' })))
+    fireEvent.click(screen.getByRole('button', { name: 'New automation in gemstack' }))
+    fireEvent.click(within(screen.getByRole('group', { name: 'New automation' })).getByRole('button', { name: 'Cancel' }))
+    await waitFor(() => expect(document.activeElement).toBe(screen.getByRole('button', { name: 'New automation in gemstack' })))
+  })
+
   test('the keyboard follows the panel: opening it lands on the pace in force; Escape closes it while nothing is changed and hands the keyboard back to its Edit button; with a pick not saved Escape closes nothing, and Cancel does', async () => {
     const { host, runCommand } = scheduler()
     show(host)
@@ -1350,8 +1362,11 @@ describe('the Edit panel of a row a person made', () => {
     expect(row('tidy')).toBeTruthy()
     // What was typed went with the row: nothing is held any more.
     await waitFor(() => expect(disabled(screen.getByRole('button', { name: 'Edit tidy' }))).toBe(false))
+    // The keyboard is on the note's Done, and once it is put away, on New automation.
+    expect(document.activeElement).toBe(within(note).getByRole('button', { name: 'Done' }))
     fireEvent.click(within(note).getByRole('button', { name: 'Done' }))
     expect(screen.queryByRole('status', { name: 'Removed' })).toBeNull()
+    await waitFor(() => expect(document.activeElement).toBe(screen.getByRole('button', { name: 'New automation in gemstack' })))
   })
 
   test('removing an automation kept on this machine says first that it cannot be brought back; a removal that is refused says why in the question, and the row stays', async () => {
