@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Button, Input, RadioGroup, RadioGroupOption, type ModuleCommandResult, type ModuleProject } from '@openagt/dashboard/module'
-import { EMPTY_DRAFT, addArgs, draftProblem, draftSentence, isUntouched, ownPaceArgs, savedFile, savedWords, whereHint, type AutomationDraft, type OwnPace } from './automation-form.js'
+import { EMPTY_DRAFT, addArgs, draftProblem, draftSentence, isUntouched, nameProblem, ownPaceArgs, whatAndWhenProblem, savedFile, savedWords, whereHint, type AutomationDraft, type OwnPace } from './automation-form.js'
 import { PaceFields, SaidFields, Section } from './fields.js'
 import { DEFAULT_AGENT } from '../src/names.js'
 
@@ -42,6 +42,7 @@ export function AutomationForm({
     setFailed(undefined)
   }
   const problem = draftProblem(draft)
+  const badName = nameProblem(draft.name)
   const sentence = draftSentence(draft)
   const dirty = !isUntouched(draft) && !saved
   useEffect(() => onDirty(dirty), [dirty])
@@ -104,8 +105,24 @@ export function AutomationForm({
           <div className="flex items-center gap-1 text-sm">
             {/* A shared one is a command a person can type; one kept on this machine is no command, so it has no slash. */}
             {!draft.onThisMachine && <span className="font-mono text-muted-foreground">/</span>}
-            <Input type="text" autoFocus value={draft.name} onChange={e => set({ name: e.target.value })} placeholder="answer-comments" aria-label="Name" className="h-8 w-64 max-w-full bg-background px-2 font-mono" />
+            <Input
+              type="text"
+              id="automation-name"
+              autoFocus
+              value={draft.name}
+              onChange={e => set({ name: e.target.value })}
+              placeholder="answer-comments"
+              aria-label="Name"
+              aria-invalid={badName !== undefined}
+              {...(badName !== undefined ? { 'aria-describedby': 'automation-name-problem' } : {})}
+              className="h-8 w-64 max-w-full bg-background px-2 font-mono"
+            />
           </div>
+          {badName !== undefined && (
+            <p id="automation-name-problem" className="mt-1.5 text-xs text-danger">
+              {badName}
+            </p>
+          )}
         </Section>
         <Section title="What it does">
           <SaidFields project={project} said={draft} agent={DEFAULT_AGENT} autoFocus={false} onChange={set} />
@@ -136,7 +153,7 @@ export function AutomationForm({
           </RadioGroup>
         </Section>
       </fieldset>
-      <p className="rounded-md border border-border bg-background px-3 py-2 text-sm">{problem ?? `${sentence}.`}</p>
+      <p className="rounded-md border border-border bg-background px-3 py-2 text-sm">{(badName === undefined ? problem : whatAndWhenProblem(draft)) ?? `${sentence}.`}</p>
       {failed !== undefined && (
         <p role="alert" className="text-xs text-danger">
           {failed}

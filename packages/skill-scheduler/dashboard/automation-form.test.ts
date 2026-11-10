@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'vitest'
-import { EMPTY_DRAFT, TEXT_MAX, addArgs, atRowsPace, draftProblem, draftRow, draftSentence, editArgs, editedWords, isUntouched, keptWhereHint, openedAutomation, ownPaceArgs, removeWarning, removedWords, savedFile, savedWords, saysTheSame, startsWhen, triedLine, whereHint, type AutomationDraft, type OwnPace } from './automation-form.js'
+import { EMPTY_DRAFT, TEXT_MAX, addArgs, atRowsPace, draftProblem, draftRow, draftSentence, editArgs, editedWords, isUntouched, keptWhereHint, openedAutomation, ownPaceArgs, removeWarning, removedWords, whatAndWhenProblem, savedFile, savedWords, saysTheSame, startsWhen, triedLine, whereHint, type AutomationDraft, type OwnPace } from './automation-form.js'
 
 // The automation form as data: what keeps a draft from being saved, the command that saves it, the sentence its row would say, what a try answered, an automation opened from its row to be saved again, and what is said of one removed.
 
@@ -36,6 +36,15 @@ describe('a new automation', () => {
     expect(draftProblem(draft({ when: CHECK, waitsFor: 'x'.repeat(TEXT_MAX + 1) }))).toBe('What the line waits for is 4001 characters, and this form takes 4000 at most.')
     expect(draftProblem(draft({ name: 'a---b' }))).toBe('A name is lower-case letters, digits and dashes, never three dashes in a row, like answer-comments.')
     expect(addArgs(draft({ prompt: 'p'.repeat(TEXT_MAX) }))!.every(arg => arg.length <= 4096)).toBe(true)
+  })
+
+  test("what else keeps a draft from being saved, its name aside: said while the name typed cannot be one, which is said under its own field", () => {
+    const badName = (over: Partial<AutomationDraft> = {}): AutomationDraft => draft({ name: 'Answer comments', ...over })
+    expect(whatAndWhenProblem(badName({ pace: every('') }))).toBe('Type a whole number, from 1 to 9999.')
+    expect(whatAndWhenProblem(badName({ pace: { ...every('2'), atHalfTyped: true } }))).toBe('Finish the time, like 10:00, or clear it.')
+    expect(whatAndWhenProblem(badName({ pace: WORK }))).toBe('Say when it runs: on a pace, by a shell line, or both.')
+    expect(whatAndWhenProblem(badName({ prompt: '' }))).toBe('Write what the agent is told.')
+    expect(whatAndWhenProblem(badName())).toBeUndefined()
   })
 
   test('a form nothing was typed into, which Escape may close', () => {

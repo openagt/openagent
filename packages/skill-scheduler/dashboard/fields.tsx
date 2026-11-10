@@ -216,7 +216,7 @@ export function PaceFields({
   const interval = (
     // A field typed into is the pick: nobody types a wait and means another choice.
     <div className={cn('flex flex-wrap items-center gap-2 text-sm', !own && 'opacity-60')}>
-      <Input type="number" min={1} max={MAX_COUNT} value={typed.count} disabled={disabled} onChange={e => onChange({ ...typed, count: e.target.value })} aria-label="How long" className="h-8 w-20 bg-background px-2" />
+      <Input type="number" name="every" min={1} max={MAX_COUNT} value={typed.count} disabled={disabled} onChange={e => onChange({ ...typed, count: e.target.value })} aria-label="How long" className="h-8 w-20 bg-background px-2" />
       <Select items={PACE_UNITS.map(unit => ({ value: unit, label: unitWord(unit, typed.count) }))} value={typed.unit} disabled={disabled} onValueChange={unit => onChange({ ...typed, unit: unit as PaceUnit })}>
         <SelectTrigger size="sm" aria-label="Unit" className="w-28">
           <SelectValue />
@@ -234,6 +234,7 @@ export function PaceFields({
           <span>{work ? 'not before' : 'at'}</span>
           <Input
             type="time"
+            name="at"
             value={typed.at}
             disabled={disabled}
             // A time left half typed has no text; the browser says so on the field itself.
@@ -309,7 +310,7 @@ export function AgentsFields({ name, draft, asSaid, start, where, disabled, onCh
   const count = (
     <div className={cn('flex flex-wrap items-center gap-2 text-sm', draft.kind !== 'own' && 'opacity-60')}>
       <span>Up to</span>
-      <Input type="number" min={1} max={MAX_AGENTS} value={typed.count} disabled={disabled} onChange={e => onChange({ kind: 'own', count: e.target.value })} aria-label="How many agents" className="h-8 w-20 bg-background px-2" />
+      <Input type="number" name="agents" min={1} max={MAX_AGENTS} value={typed.count} disabled={disabled} onChange={e => onChange({ kind: 'own', count: e.target.value })} aria-label="How many agents" className="h-8 w-20 bg-background px-2" />
       <span>{Number(typed.count) === 1 ? 'agent' : 'agents'} at once</span>
     </div>
   )

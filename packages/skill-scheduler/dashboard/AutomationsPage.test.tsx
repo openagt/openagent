@@ -1940,6 +1940,40 @@ describe('the "New automation" form', () => {
     expect(screen.getByRole('group', { name: 'New automation' }).textContent).not.toMatch(/scheduler is not running/)
   })
 
+  test("a name that cannot be one says why under its field, which is marked invalid and points at the rule", async () => {
+    const { host } = scheduler()
+    show(host)
+    fireEvent.click(await screen.findByRole('button', { name: 'New automation in gemstack' }))
+    const form = screen.getByRole('group', { name: 'New automation' })
+    const name = within(form).getByRole('textbox', { name: 'Name' })
+    expect(name.getAttribute('aria-invalid')).toBe('false')
+    fireEvent.change(name, { target: { value: 'Nightly Check' } })
+    expect(name.getAttribute('aria-invalid')).toBe('true')
+    const rule = document.getElementById(name.getAttribute('aria-describedby')!)!
+    expect(rule.textContent).toBe('A name is lower-case letters, digits and dashes, never three dashes in a row, like answer-comments.')
+    expect(name.parentElement!.parentElement!.contains(rule)).toBe(true)
+    // Said once, under the field.
+    expect(within(form).getAllByText(/^A name is lower-case/)).toHaveLength(1)
+    expect(disabled(within(form).getByRole('button', { name: 'Save' }))).toBe(true)
+    fireEvent.change(name, { target: { value: 'nightly-check' } })
+    expect(name.getAttribute('aria-invalid')).toBe('false')
+    expect(name.hasAttribute('aria-describedby')).toBe(false)
+  })
+
+  test('while the name cannot be one, the line under the form says what else is missing, and when the row would run once nothing else is', async () => {
+    const { host } = scheduler()
+    show(host)
+    fireEvent.click(await screen.findByRole('button', { name: 'New automation in gemstack' }))
+    const form = screen.getByRole('group', { name: 'New automation' })
+    fireEvent.change(within(form).getByRole('textbox', { name: 'Name' }), { target: { value: 'Answer comments' } })
+    expect(within(form).getByText('Write what the agent is told.')).toBeTruthy()
+    fireEvent.change(within(form).getByLabelText('What the agent is told'), { target: { value: 'Answer each new comment below.' } })
+    expect(within(form).getByText('Every day.')).toBeTruthy()
+    fireEvent.change(within(form).getByLabelText('How long'), { target: { value: '' } })
+    expect(within(form).getByText('Type a whole number, from 1 to 9999.')).toBeTruthy()
+    expect(within(form).queryByText(/undefined/)).toBeNull()
+  })
+
   test('while the scheduler is off, the form promises a start kept on this machine only once the scheduler runs', async () => {
     const { host } = hostAnswering(() => ({ ok: true, output: { ...STATUS, on: false, running: false } }))
     show(host)
