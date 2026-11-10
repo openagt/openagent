@@ -5,7 +5,8 @@ import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { isSignInCode } from '@openagt/agent-driver-claude'
 import type { AccountsAgent } from './accounts.js'
-import { nameTaken, signIn, type LoginWiring, type SignInSaid } from './login.js'
+import { nameTaken, signIn, type SignInSaid } from './login.js'
+import type { LoginWiring } from './wiring.js'
 
 // Adding an account takes as long as the person takes to sign in, and on a computer with no browser
 // it needs them twice: to open a page on another device, and to bring its code back. A command ends

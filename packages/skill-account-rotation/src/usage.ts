@@ -3,7 +3,8 @@ import { homedir } from 'node:os'
 import { dirname, join } from 'node:path'
 import type { AgentAccount, DriverQuota, DriverRateWindow } from '@openagt/agent-driver'
 import { readAccounts, type AccountsAgent } from './accounts.js'
-import { ownLoginThere, type LoginWiring } from './login.js'
+import { ownLoginThere } from './login.js'
+import type { LoginWiring } from './wiring.js'
 
 // How full each account is, now where it can be known. The person's own Claude login says so
 // through Claude Code's `/usage`, every Codex login through Codex; an added Claude login only in

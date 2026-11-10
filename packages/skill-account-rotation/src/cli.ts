@@ -1,7 +1,8 @@
 import { hostname } from 'node:os'
 import { handedOverBy, OWN_NAME, readAccounts, shownAccounts, useFirst, type AccountsAgent, type ShownAccount } from './accounts.js'
 import { addingNow, beginAdding, bringCode, cancelAdding, runAdding } from './adding.js'
-import { comesBackFrom, logOut, loginWiring, ownLoginThere, ownName, removeAdded, type LoginWiring } from './login.js'
+import { comesBackFrom, logOut, ownLoginThere, ownName, removeAdded } from './login.js'
+import { loginWiring, type LoginWiring } from './wiring.js'
 import { readUsage } from './usage.js'
 
 /**
