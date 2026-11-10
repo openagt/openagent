@@ -23,6 +23,14 @@ already made, and lists it in its pull request; for anything else it proposes an
   pages of the skills it picked. Picked over the skills with pages coming with every run,
   which gave a new project Tickets, Queue and Logs pages it never asked for; and over every
   skill of the list, each one more description in every agent's context.
+- The dashboard carries only the skills its own pages, buttons and automations are built on:
+  the tickets and the queue with the automations that move a ticket to work (plan,
+  plan-tickets, triage, update-tickets, work-queue), orchestration, the logs, account
+  rotation, reply, the scheduler, the browser and Discord. The prompts for code reviews and
+  research, the ticket suggestions and the post-merge clean-up are not carried: their texts
+  stay in the repository's `skills` folder, where `npx skills add` takes them from, and one
+  comes back by its name in the list and its package. Picked over carrying every skill
+  written so far: a list too long to pick from, most of it nothing in the product uses.
 - Typed inside a Git repository, the command adds that repository to the projects, by
   its top folder, as "Add project" does, with the agents' records kept on this computer.
   The server adds no folder by itself: the command names the one it was typed in.
