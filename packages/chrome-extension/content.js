@@ -195,7 +195,7 @@ function sayHello(sessionId, note) {
   toWorker({ type: 'oa-hello', sessionId, version: extensionVersion(), note }, reply => {
     // The worker's reply says whether this tab is the Driver (#1332): the overlay goes up
     // the moment the page loads, not when the first cycle reaches it.
-    if (reply?.driver) setDriver(true)
+    if (reply?.driver) becomeDriver()
   })
 }
 
@@ -914,8 +914,9 @@ async function whileFree(work) {
   }
 }
 
-function setDriver(on) {
-  if (!on || isDriver) return
+/** This tab is the Driver from now on: its overlay goes up, once. */
+function becomeDriver() {
+  if (isDriver) return
   isDriver = true
   ensureOverlay()
   driverLog(`driver armed on ${location.pathname}`)
@@ -1075,7 +1076,7 @@ async function visitSession(visit) {
  * new-session page is where a cycle starts — then the visits, then home.
  */
 async function drive({ visits = [], start }) {
-  setDriver(true)
+  becomeDriver()
   driverLog(`cycle: ${start ? 'one session to create, ' : ''}${visits.length} visit(s)`)
   let started
   if (start) {
@@ -1164,7 +1165,7 @@ function renderOverlay() {
 if (IS_TOP && typeof chrome !== 'undefined' && chrome.runtime?.onMessage) {
   chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
     if (message?.type === 'oa-read-list' && Array.isArray(message.ids)) {
-      setDriver(true)
+      becomeDriver()
       void whileFree(() => readSessionList(message.ids.filter(id => typeof id === 'string')))
         .then(sendResponse)
         .catch(err => sendResponse({ ok: false, note: String(err?.message ?? err) }))
