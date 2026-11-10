@@ -69,7 +69,7 @@ describe('TicketDetailPage (#1144)', () => {
     expect(screen.getAllByText('The thing is not done.')).toHaveLength(1)
     expect(screen.queryByText('Priority: 8', { selector: 'p' })).toBeNull()
     // A bare "8" would be cryptic on its own (#1265); the badge spells out what it rates.
-    expect(screen.getByText('Priority: 8')).toBeTruthy()
+    expect(screen.getByText('Priority 8')).toBeTruthy()
     expect(screen.getByText('planned')).toBeTruthy()
     expect(host.runCommand).toHaveBeenCalledWith('p1', ['show', '2026-07-20_do-the-thing.md', '--local'])
   })

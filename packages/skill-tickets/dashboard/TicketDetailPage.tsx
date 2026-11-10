@@ -108,7 +108,7 @@ export function TicketDetailPage({
             </span>
             {ticket.priority && (
               <Badge className={cn('border-transparent px-0 text-[10px]', priorityTone(ticket.priority))}>
-                Priority: {ticket.priority}
+                Priority {ticket.priority}
               </Badge>
             )}
             {ticket.issue && (

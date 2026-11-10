@@ -172,7 +172,7 @@ describe('TicketsPanel (#697/#1144)', () => {
       />,
     )
     // A bare "8" would be cryptic on its own; the row spells out what it is a rating of.
-    expect(await screen.findByText('Priority: 8')).toBeTruthy()
+    expect(await screen.findByText('Priority 8')).toBeTruthy()
     expect(screen.getByText('dx')).toBeTruthy()
     expect(screen.getByText('ui')).toBeTruthy()
     expect(screen.getByText('2d ago')).toBeTruthy()
