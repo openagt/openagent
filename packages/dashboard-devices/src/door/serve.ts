@@ -581,42 +581,28 @@ export async function serve(opts: ServeOptions): Promise<void> {
       delete s.wifiProblem
     })
     log('devices: the door behind Tailscale is closed')
+    stamp = undefined
   }
 
-  const reconcile = async (): Promise<void> => {
-    const now = await stat(storePath(env)).then(s => `${s.mtimeMs}:${s.size}`, () => 'none')
-    const retry = failedAt !== undefined && Date.now() - failedAt > (opts.retryMs ?? 10_000)
-    if (now === stamp && !retry && !turned) return
-    stamp = now
-    turned = false
-    const store = await readStoreStrict(env)
-    // A file that cannot be read is left as it is, and so is the door: it lets nobody in until the file reads again.
-    if (store === 'unreadable') return log(`devices: ${storePath(env)} cannot be read; nobody gets in until it is corrected`)
-    followLines(store)
-    // No longer a server, or one at another address: what was open for the old address is closed.
-    if (served && served.address !== store.https?.address) {
-      await closeServed()
-      await door?.close()
-      door = undefined
-      failedAt = undefined
-      stamp = undefined
-      await update(env, s => {
-        delete s.listening
-        delete s.problem
-      })
-      log('devices: the door is closed')
-      return
-    }
-    // No longer behind Tailscale, or at another name: Tailscale lets go of the door, and it is closed.
-    if (behind && behind.address !== store.tailscale?.address) {
-      await leaveTailscale()
-      stamp = undefined
-      return
-    }
-    if (store.https) return reconcileServed(store, store.https.address)
-    if (store.tailscale) await reconcileBehind(store, store.tailscale.address)
-    // The Wi-Fi's door, by the switch: the door, or one beside the door behind Tailscale, whose
-    // place in the file it then leaves alone.
+  /** No longer a server, or one at another address: what was open for the old address is closed. */
+  const leaveServer = async (): Promise<void> => {
+    await closeServed()
+    await door?.close()
+    door = undefined
+    failedAt = undefined
+    stamp = undefined
+    await update(env, s => {
+      delete s.listening
+      delete s.problem
+    })
+    log('devices: the door is closed')
+  }
+
+  /**
+   * The Wi-Fi's door, by the switch: the door, or one beside the door behind Tailscale, whose
+   * place in the file it then leaves alone.
+   */
+  const reconcileWifi = async (store: Store): Promise<void> => {
     const beside = store.tailscale !== undefined
     const heard = beside ? store.wifiListening : store.listening
     const said = beside ? store.wifiProblem : store.problem
@@ -668,6 +654,24 @@ export async function serve(opts: ServeOptions): Promise<void> {
     }
     startAnnouncing(door.port)
     door.dropRemoved(store)
+  }
+
+  const reconcile = async (): Promise<void> => {
+    const now = await stat(storePath(env)).then(s => `${s.mtimeMs}:${s.size}`, () => 'none')
+    const retry = failedAt !== undefined && Date.now() - failedAt > (opts.retryMs ?? 10_000)
+    if (now === stamp && !retry && !turned) return
+    stamp = now
+    turned = false
+    const store = await readStoreStrict(env)
+    // A file that cannot be read is left as it is, and so is the door: it lets nobody in until the file reads again.
+    if (store === 'unreadable') return log(`devices: ${storePath(env)} cannot be read; nobody gets in until it is corrected`)
+    followLines(store)
+    if (served && served.address !== store.https?.address) return leaveServer()
+    // No longer behind Tailscale, or at another name: Tailscale lets go of the door, and it is closed.
+    if (behind && behind.address !== store.tailscale?.address) return leaveTailscale()
+    if (store.https) return reconcileServed(store, store.https.address)
+    if (store.tailscale) await reconcileBehind(store, store.tailscale.address)
+    await reconcileWifi(store)
   }
 
   // One look at a time: a look that opens the door writes the file, which the next look reads.
