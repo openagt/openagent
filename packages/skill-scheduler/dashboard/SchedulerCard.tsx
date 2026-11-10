@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { CalendarClock } from 'lucide-react'
 import { Button, Card, CardContent, CardHeader, CardTitleLink, Tooltip, TooltipContent, TooltipTrigger, cn, formatAge, formatDateTime, useModuleHost, usePolled, type ModuleCardProps, type ModuleProject } from '@openagt/dashboard/module'
+import { CodeWords } from './CodeWords.js'
 import { cannotRun, notAsked, readSchedulers, schedulersKey, rowTitle, schedulerStatus, schedulerStopped, startedNow, startsNext, unlistedWords, type Answered, type SchedulerCommand, type SchedulerRow } from './schedulers.js'
 
 // The Overview's Automations card: what starts by itself in every project that has this package,
@@ -143,8 +144,16 @@ function OnRow({ project, command, stopped, lookedAt, onOpenRun, reload }: { pro
           {said?.started ? 'Started: open it' : `Started an agent${lookedAt !== undefined ? ` ${formatAge(lookedAt)}` : ''}: open it`}
         </button>
       )}
-      {said?.note && <span title={said.note} className="min-w-0 truncate text-xs text-muted-foreground">{said.note}</span>}
-      {said?.failed && <span title={said.failed} className="min-w-0 truncate text-xs text-danger">{said.failed}</span>}
+      {said?.note && (
+        <span title={said.note} className="min-w-0 truncate text-xs text-muted-foreground">
+          <CodeWords text={said.note} />
+        </span>
+      )}
+      {said?.failed && (
+        <span title={said.failed} className="min-w-0 truncate text-xs text-danger">
+          <CodeWords text={said.failed} />
+        </span>
+      )}
       {/* Under the pointer, or with the keyboard on it; a phone has no hover, and there it always shows. */}
       {cannotRun(command) === undefined && (
         <Button

@@ -304,7 +304,9 @@ describe('the Automations page: its rows', () => {
     await waitFor(() => expect(within(queue).getByRole('alert').textContent).toBe('No answer in time. A run may have started all the same: if one did, the row says when it last ran.'))
     // A reason that ends with its own full stop gets no second one.
     now()
-    await waitFor(() => expect(within(queue).getByRole('alert').textContent).toBe('Nothing started. Not ready: `claude` is not logged in. Run `claude /login`, then start again.'))
+    await waitFor(() => expect(within(queue).getByRole('alert').textContent).toBe('Nothing started. Not ready: claude is not logged in. Run claude /login, then start again.'))
+    // What the command puts in backticks is set as code.
+    expect(within(queue).getByText('claude /login').tagName).toBe('CODE')
     // One that starts takes the failure away.
     now()
     await within(queue).findByText('Started a run.')
@@ -407,12 +409,21 @@ describe('the Automations page: its rows', () => {
     const other = screen.getByRole('region', { name: 'other' })
     expect(within(other).getByText('Scheduler off')).toBeTruthy()
     expect(within(other).queryByText(/: off/)).toBeNull()
-    expect(within(other).getByText('The scheduler is off in this project, so nothing here starts by itself. It starts with the dashboard once the project has run `npx @openagt/skill-scheduler@0.1 init`, or by hand with `npx @openagt/skill-scheduler@0.1 start`.')).toBeTruthy()
+    expect(within(other).getByText(/^The scheduler is off in this project, so nothing here starts by itself/)).toBeTruthy()
+    // How it starts with the dashboard: the project's Skills page, whose tick does it, or `init`.
+    fireEvent.click(within(other).getByRole('button', { name: 'Skills page' }))
+    expect(host.openSettings).toHaveBeenCalledWith('skills')
+    // The two commands, `start` (now) and `init`, each set as code with a button that copies it.
+    expect(within(other).getByText('npx @openagt/skill-scheduler@0.1 init').tagName).toBe('CODE')
+    expect(within(other).getByText('npx @openagt/skill-scheduler@0.1 start').tagName).toBe('CODE')
+    expect(within(other).getAllByRole('button', { name: 'Copy the command' })).toHaveLength(2)
     expect(within(gemstack).queryByText(/so nothing here starts/)).toBeNull()
     cleanup()
     const { host: stopped } = hostAnswering(() => ({ ok: true, output: { ...STATUS, running: false } }))
     show(stopped)
-    expect(await screen.findByText('The scheduler is on but its process is not running, so nothing here starts by itself. `npx @openagt/skill-scheduler@0.1 start`, run in the project, starts it.')).toBeTruthy()
+    expect(await screen.findByText(/^The scheduler is on but its process is not running, so nothing here starts by itself/)).toBeTruthy()
+    expect(screen.getByText('npx @openagt/skill-scheduler@0.1 start').tagName).toBe('CODE')
+    expect(screen.getAllByRole('button', { name: 'Copy the command' })).toHaveLength(1)
   })
 
   test('a row switched on while the scheduler is off, or not running, is not green: it says it does not start', async () => {
@@ -1510,6 +1521,16 @@ describe('what a row runs on', () => {
     // A row with no model of its skill's follows the scheduler's.
     const other = await edit('/post-merge-cleanup')
     await waitFor(async () => expect((await choices(menu(other, 'Model')))[0]).toBe("The scheduler's model (Opus 5.5)"))
+  })
+
+  test("why an agent lists no model is said in its own words, what it puts in backticks set as code", async () => {
+    const { onModels } = await import('../../dashboard/dashboard/rpc/models.js')
+    vi.mocked(onModels).mockResolvedValueOnce({ 'claude-code': { models: [], error: '`claude` could not start: spawn claude ENOENT' }, codex: { models: [] } })
+    show(runs().host)
+    await screen.findByRole('region', { name: 'gemstack' })
+    const panel = await edit('/update-tickets')
+    expect((await within(panel).findByText('claude')).tagName).toBe('CODE')
+    expect(within(panel).getByText(/could not start: spawn claude ENOENT/).textContent).toBe('claude could not start: spawn claude ENOENT')
   })
 
   test('picking another agent starts its model from what follows there, says what cannot be read of it, and Save runs `agent`, then `model` only when one was picked; the agent its skill is made for is picked back with `skill`', async () => {

@@ -609,6 +609,7 @@ export function useModuleHost(): ModuleHost {
 
 // The dashboard's own building blocks, so a module looks like the rest of the page.
 export { Button, buttonVariants, type ButtonProps } from '../components/ui/button.js'
+export { CopyButton } from '../components/ui/copy-button.js'
 export { Card, CardHeader, CardTitle, CardTitleLink, CardContent } from '../components/ui/card.js'
 export { Skeleton } from '../components/ui/skeleton.js'
 export { Input } from '../components/ui/input.js'

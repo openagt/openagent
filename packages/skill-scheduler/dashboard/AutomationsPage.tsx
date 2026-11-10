@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { Page, Switch, Tooltip, TooltipContent, TooltipTrigger, Button, buttonVariants, cn, formatAge, formatDateTime, useCodingAgents, useModuleHost, usePolled, type ModuleCommandResult, type ModuleHost, type ModuleProject } from '@openagt/dashboard/module'
 import type { ModulePageProps } from '@openagt/dashboard/module'
 import { AutomationForm } from './AutomationForm.js'
+import { CodeWords, Command } from './CodeWords.js'
 import { EditPanel } from './EditPanel.js'
 import { openedAutomation, type OpenedAutomation } from './automation-form.js'
 import { atOnce, atOnceWords, cannotRun, decided, notAsked, startedNow, type Answered, isOwn, ownPace, pace, publishes, readSchedulers, schedulersKey, rowTitle, runsOnWords, saysAtOnce, schedulerStatus, schedulerStopped, unlistedWords, type AgentModels, type SchedulerCommand, type SchedulerRow } from './schedulers.js'
@@ -25,6 +26,10 @@ import { atOnce, atOnceWords, cannotRun, decided, notAsked, startedNow, type Ans
 // tracked file changes. A command is off until its switch is flipped here.
 
 const EMPTY: SchedulerRow[] = []
+
+/** The commands that start the scheduler, run in the project: with the dashboard from then on, or once, now. */
+const INIT = 'npx @openagt/skill-scheduler@0.1 init'
+const START = 'npx @openagt/skill-scheduler@0.1 start'
 
 /** The tick's note that says the project schedules nothing: the page says it in its own words under the heading. */
 const NOTHING_SCHEDULED = 'no skill of this project schedules a command'
@@ -178,8 +183,24 @@ export function AutomationsPage({ projects }: ModulePageProps) {
               </div>
             )}
             {row.error !== undefined && <p role="alert" className="py-3 text-sm text-danger">{`The scheduler could not be read: ${row.error}`}</p>}
-            {row.error === undefined && !row.on && <p className="py-3 text-sm text-muted-foreground">The scheduler is off in this project, so nothing here starts by itself. It starts with the dashboard once the project has run `npx @openagt/skill-scheduler@0.1 init`, or by hand with `npx @openagt/skill-scheduler@0.1 start`.</p>}
-            {row.error === undefined && row.on && !row.running && <p className="py-3 text-sm text-warning">The scheduler is on but its process is not running, so nothing here starts by itself. `npx @openagt/skill-scheduler@0.1 start`, run in the project, starts it.</p>}
+            {row.error === undefined && !row.on && (
+              <p className="py-3 text-sm text-muted-foreground">
+                The scheduler is off in this project, so nothing here starts by itself. To start it now, run in the project:
+                <Command text={START} />
+                It starts with the dashboard once it is ticked on the project's{' '}
+                <button type="button" onClick={() => host.openSettings('skills')} className="underline hover:text-foreground">
+                  Skills page
+                </button>
+                , or once the project has run:
+                <Command text={INIT} />
+              </p>
+            )}
+            {row.error === undefined && row.on && !row.running && (
+              <p className="py-3 text-sm text-warning">
+                The scheduler is on but its process is not running, so nothing here starts by itself. To start it, run in the project:
+                <Command text={START} />
+              </p>
+            )}
             {row.unreadable.map((unreadable, index) => (
               <p key={`${index}/${unreadable.skill}`} role="alert" className="py-3 text-sm text-danger">
                 {unlistedWords(unreadable)}
@@ -277,12 +298,12 @@ export function AutomationsPage({ projects }: ModulePageProps) {
                             )}
                             {says?.note !== undefined && (
                               <p role="status" className="mt-2 text-xs text-muted-foreground">
-                                {says.note}
+                                <CodeWords text={says.note} />
                               </p>
                             )}
                             {says?.failed !== undefined && (
                               <p role="alert" className="mt-2 text-xs text-danger">
-                                {says.failed}
+                                <CodeWords text={says.failed} />
                               </p>
                             )}
                           </li>

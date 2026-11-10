@@ -4,6 +4,7 @@ import type { PublishPick } from '../src/state.js'
 import { AGENTS, AGENT_LABELS, AGENT_SKILLS_DIR, DEFAULT_AGENT, MAX_AGENTS, type AgentName } from '../src/names.js'
 import { MAX_COUNT, PACE_UNITS, takesTimeOfDay, type PaceUnit } from '../src/pace.js'
 import { triedLine, writtenLine, type TriedLine } from './automation-form.js'
+import { CodeWords } from './CodeWords.js'
 import { PRINTS_SOMETHING, UNIT_WORDS, modelLabel, notAsked, publishChoices, stopped, publishLabel, type AgentModels, type AgentsDraft, type PaceDraft, type SchedulerCommand } from './schedulers.js'
 
 // The fields of the Automations page, shared by the Edit panel of a row and the "New automation"
@@ -424,7 +425,7 @@ export function RunsOnFields({
         </Select>
       </div>
       {/* Why the agent's own models are not offered: it is still being asked, or could not say. A model can still be picked by its id from the command line. */}
-      {listed.length === 0 && lists?.modelsNote !== undefined && <p className="text-xs text-muted-foreground">{lists.modelsNote}</p>}
+      {listed.length === 0 && lists?.modelsNote !== undefined && <p className="text-xs text-muted-foreground"><CodeWords text={lists.modelsNote} /></p>}
       {unable.map(a => (
         <p key={a} className="text-xs text-muted-foreground">
           {AGENT_LABELS[a]} cannot run this row: it reads the project's skills from <span className="font-mono">{AGENT_SKILLS_DIR[a]}</span>, and this row's skill is not there.
