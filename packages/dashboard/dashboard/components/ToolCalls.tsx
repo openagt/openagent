@@ -8,7 +8,7 @@ import { formatElapsed } from '../lib/format-date.js'
 import { Markdown } from './Markdown.js'
 import { CROSS_FADE_MS, CrossFade } from './CrossFade.js'
 import { CopyButton } from './ui/copy-button.js'
-import { languageOf, Pieces, useHighlightedIn, type Piece } from '../lib/highlight.js'
+import { ColouredLines, languageOf, Pieces, useHighlightedIn, type Piece } from '../lib/highlight.js'
 
 /**
  * What a file named in a step does on a click: opens the pane that shows the run's files, on it.
@@ -259,14 +259,7 @@ function GivenDetail({ label, call, whole, output, card }: { label: string; call
         <div className="relative rounded-lg border border-border">
           <pre aria-label={command ? 'Command' : 'Detail'} className={cn(CODE, 'py-1.5 pl-3 pr-10 text-foreground')}>
             {command && <span className="select-none text-muted-foreground">$ </span>}
-            {coloured
-              ? coloured.map((pieces, i) => (
-                  <Fragment key={i}>
-                    <Pieces pieces={pieces} />
-                    {i < coloured.length - 1 ? '\n' : null}
-                  </Fragment>
-                ))
-              : given}
+            {coloured ? <ColouredLines lines={coloured} /> : given}
           </pre>
           <CopyButton text={given} label={command ? 'Copy the command' : 'Copy'} className="absolute top-[7px] right-2" />
         </div>

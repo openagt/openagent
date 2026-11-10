@@ -1,6 +1,6 @@
 import { Children, cloneElement, createContext, Fragment, isValidElement, useContext, useRef, type ReactElement, type ReactNode } from 'react'
 import { wordShownAt } from '../lib/use-steady-text.js'
-import { languageOfFence, Pieces, useHighlightedIn } from '../lib/highlight.js'
+import { ColouredLines, languageOfFence, useHighlightedIn } from '../lib/highlight.js'
 import { cn } from '../lib/utils.js'
 import { ImageIcon } from 'lucide-react'
 import { CopyButton } from './ui/copy-button.js'
@@ -120,12 +120,7 @@ function CodeBlock({ lines, language, document }: { lines: string[]; language: s
                 </span>
               ))
             : coloured
-              ? coloured.map((pieces, i) => (
-                  <Fragment key={i}>
-                    <Pieces pieces={pieces} />
-                    {i < coloured.length - 1 ? '\n' : null}
-                  </Fragment>
-                ))
+              ? <ColouredLines lines={coloured} />
               : text}
         </code>
       </pre>
