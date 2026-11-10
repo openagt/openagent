@@ -1,11 +1,12 @@
 import { mkdir, readdir, readFile, realpath, rename, rmdir, unlink, writeFile } from 'node:fs/promises'
 import { dirname, join } from 'node:path'
-import { excludeFromGit, originDefaultBranch, type GitRunner } from '@openagt/agent-data'
+import { excludeFromGit, type GitRunner } from '@openagt/agent-data'
 import { HARNESS_SKILL_DIRS } from '@openagt/skill-branches'
 import { MAX_NAME, OWN_AUTOMATIONS_DIR, OWN_TEXT_MAX, RUN_SKILLS_DIR, SKILL_FILE, STATE_DIR, isCommandName } from './names.js'
 import { createHash } from 'node:crypto'
 import { FOLDER_LITTER, HALF_SAVED, automationOf, automationSkill, frontMatterOf, wellFormed, type NewAutomation } from './automation-file.js'
 import { readSchedule, skillFile, skillSchedule, whyUnlisted } from './schedule.js'
+import { startRef } from './start-point.js'
 
 /**
  * A person's own automation: a prompt they wrote, saved as a command skill of the project, so it
@@ -94,8 +95,7 @@ export async function addAutomation(repo: string, automation: NewAutomation, git
   }
   const kept = (await readdir(join(repo, OWN_AUTOMATIONS_DIR)).catch((): string[] => [])).find(file => file.toLowerCase() === `${automation.name}.md`)
   if (kept !== undefined) return { ok: false, reason: 'taken', folder: `${OWN_AUTOMATIONS_DIR}/${kept}` }
-  const origin = await originDefaultBranch(repo, git).catch(() => undefined)
-  const startsFrom = origin ?? 'HEAD'
+  const startsFrom = await startRef(repo, git)
   if (opts.onThisMachine) {
     // Its text travels to each run as one command-line argument: a longer one could be saved and never listed.
     const length = automation.prompt.trim().length
@@ -226,8 +226,7 @@ export async function editAutomation(repo: string, name: string, change: Automat
     await unlink(`${path}.new`).catch(() => {})
     throw err
   }
-  const startsFrom = (await originDefaultBranch(repo, git).catch(() => undefined)) ?? 'HEAD'
-  return { ok: true, command: name, file: found.file, startsFrom, version: versionOf(text), ...(found.onThisMachine ? { onThisMachine: true as const } : {}) }
+  return { ok: true, command: name, file: found.file, startsFrom: await startRef(repo, git), version: versionOf(text), ...(found.onThisMachine ? { onThisMachine: true as const } : {}) }
 }
 
 /** What removing an automation did, and what whoever asked needs to say about it. */
@@ -276,6 +275,5 @@ export async function removeAutomation(repo: string, name: string, git: GitRunne
   await rmdir(folder).catch(() => {})
   // One line for the one file, its first letter what the index holds: `A` for a file added and never committed.
   const held = await git(['status', '--porcelain', '--', join(folder, SKILL_FILE)], repo).catch(() => undefined)
-  const startsFrom = (await originDefaultBranch(repo, git).catch(() => undefined)) ?? 'HEAD'
-  return { ok: true, command: name, file: found.file, git: held === undefined ? 'unknown' : held.trim() === '' ? 'nothing' : held.startsWith('A') ? 'staged' : 'committed', startsFrom }
+  return { ok: true, command: name, file: found.file, git: held === undefined ? 'unknown' : held.trim() === '' ? 'nothing' : held.startsWith('A') ? 'staged' : 'committed', startsFrom: await startRef(repo, git) }
 }
