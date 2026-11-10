@@ -327,6 +327,15 @@ function CopyMessage({ text }: { text: string }) {
   )
 }
 
+/** How long ago a message was said, small and grey, the whole time on hover. */
+function Age({ at }: { at: string }) {
+  return (
+    <time dateTime={at} title={new Date(at).toLocaleString()} className="px-1 text-[11px]">
+      {formatAge(at)}
+    </time>
+  )
+}
+
 /**
  * Under the agent's last message of a turn it finished: a button that copies it, and how long ago
  * it was said, as Claude Code on the web puts them under its messages. Shown while the pointer is
@@ -337,11 +346,7 @@ function ReplyFooter({ text, at }: { text: string; at?: string | undefined }) {
   return (
     <div className="turn-footer flex h-6 items-center gap-1 font-sans text-muted-foreground opacity-0 transition-opacity focus-within:opacity-100">
       <CopyMessage text={text} />
-      {at !== undefined && (
-        <time dateTime={at} title={new Date(at).toLocaleString()} className="px-1 text-[11px]">
-          {formatAge(at)}
-        </time>
-      )}
+      {at !== undefined && <Age at={at} />}
     </div>
   )
 }
@@ -409,11 +414,7 @@ function Prompt({ text, at, waiting, attached, fresh = false }: { text: string; 
           below the box so a button's hover does not touch it. A waiting one says so instead of its time. */}
       <div className="mt-1.5 flex h-6 items-center gap-1 text-muted-foreground">
         <div className="flex items-center gap-1 opacity-0 transition-opacity focus-within:opacity-100 group-hover/prompt:opacity-100">
-          {!waiting && at !== undefined && (
-            <time dateTime={at} title={new Date(at).toLocaleString()} className="px-1 text-[11px]">
-              {formatAge(at)}
-            </time>
-          )}
+          {!waiting && at !== undefined && <Age at={at} />}
           <CopyMessage text={text} />
           {waiting?.onEdit && (
             <button type="button" aria-label="Cancel and edit message" title="Cancel and edit message" onClick={waiting.onEdit} className="flex h-6 w-6 items-center justify-center rounded-md hover:bg-accent hover:text-accent-foreground">
@@ -936,6 +937,8 @@ export function EventList({
               // The prompt the agent was resumed with after an answer in its card: a box, not a message.
               const answer = own && message !== null ? answeredQuestion(message) : undefined
               const inPlace = e === answeredInPlace
+              // The last row of a turn the agent finished: its copy and its time under it.
+              const footer = footers.has(e) ? <ReplyFooter text={footers.get(e)!} at={at} /> : undefined
               return (
                 <Fragment key={idOf(e)}>
                 {changes.ended.has(e) && (
@@ -966,10 +969,10 @@ export function EventList({
                     <SubagentMessage name={runRow(end.agent, undefined).name} text={endMessage(end.rest)} status={end.status} detail={end.detail} />
                   ) : message !== null ? (
                     // The agent's reply, shown whole, and the last of a finished turn with its footer.
-                    footers.has(e) ? (
+                    footer ? (
                       <div className="flex min-w-0 flex-1 flex-col gap-1.5">
                         <Reply text={message} />
-                        <ReplyFooter text={footers.get(e)!} at={at} />
+                        {footer}
                       </div>
                     ) : (
                       <Reply text={message} />
@@ -977,18 +980,18 @@ export function EventList({
                   ) : steps.has(e) ? (
                     <ToolCalls steps={steps.get(e)!} lead={setupInSteps && i === setupAt ? setupLead : undefined} live={e === liveHead && current !== undefined ? { call: current, since: turnStart } : undefined} />
                   ) : choiceRow?.passed ? (
-                    <PassedChoice choice={choiceRow.choice} footer={footers.has(e) ? <ReplyFooter text={footers.get(e)!} at={at} /> : undefined} />
+                    <PassedChoice choice={choiceRow.choice} footer={footer} />
                   ) : choiceRow && choiceRow.pick === undefined && projectId !== undefined && agentId !== undefined ? (
                     // The question the agent waits on, answered here, under what it said.
                     typing ? null : <div className="mt-1 flex min-w-0 flex-1 flex-col gap-1.5">
                       <QuestionPanel key={`${agentId}:${choiceRow.choice.id}`} projectId={projectId} agentId={agentId} choice={choiceRow.choice} active={e === asking} onSaid={onSaid} />
-                      {footers.has(e) && <ReplyFooter text={footers.get(e)!} at={at} />}
+                      {footer}
                     </div>
                   ) : choiceRow?.pick !== undefined ? (
                     // What was asked and what was picked. font-sans: a card, not log text.
                     <div className="flex min-w-0 flex-1 flex-col gap-1 font-sans">
                       <AnsweredChoice choice={choiceRow.choice} pick={choiceRow.pick} />
-                      {footers.has(e) && <ReplyFooter text={footers.get(e)!} at={at} />}
+                      {footer}
                     </div>
                   ) : words ? (
                     <RowLine words={words} tone={rowTone(e)} />
@@ -1001,7 +1004,7 @@ export function EventList({
                   )}
                   {/* A line of steps, a message or a subagent's message has no time at its end, as Claude
                       Code's has none: the column it takes would narrow a message being written as it lands. */}
-                  {!own && !end && message === null && chunkHead && at !== undefined && !footers.has(e) && !steps.has(e) && (
+                  {!own && !end && message === null && chunkHead && at !== undefined && footer === undefined && !steps.has(e) && (
                     <Tooltip>
                       <TooltipTrigger render={<span className={TIME} />}>
                         {formatTime(at)}
