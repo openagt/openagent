@@ -1,5 +1,5 @@
 import { nodeGitRunner, pushBranch, type GitRunner } from '@openagt/agent-data'
-import { currentBranch, isWorktreeRoot, projectRoot, worktreeBranch, worktreeClean, worktreeDirEntries } from './worktree.js'
+import { checkoutOn, currentBranch, isWorktreeRoot, projectRoot, worktreeClean } from './worktree.js'
 
 /**
  * Pushing a branch to origin (#1820): the last git step of an agent's work, and the step before
@@ -38,9 +38,7 @@ export async function pushCheckout(path: string, git: GitRunner = nodeGitRunner(
   const branch = await currentBranch(path, git)
   if (!branch) return { ok: false, reason: 'no-branch' }
   if (!(await worktreeClean(path, git).catch(() => false))) return { ok: false, reason: 'dirty', branch }
-  const pushed = await pushBranch(await projectRoot(path, git), branch, git)
-  if (!pushed.ok) return { ok: false, reason: 'push-failed', branch, detail: pushed.error }
-  return { ok: true, branch, pushed: true }
+  return push(await projectRoot(path, git), branch, git)
 }
 
 /**
@@ -51,16 +49,17 @@ export async function pushCheckout(path: string, git: GitRunner = nodeGitRunner(
  * with nothing here to push). Neither: `no-branch`.
  */
 export async function pushBranchByName(repo: string, branch: string, git: GitRunner = nodeGitRunner()): Promise<PushOutcome> {
-  for (const entry of await worktreeDirEntries(repo)) {
-    if ((await worktreeBranch(entry.path, git)) === branch) return pushCheckout(entry.path, git)
-  }
+  const checkout = await checkoutOn(repo, branch, git)
+  if (checkout !== undefined) return pushCheckout(checkout, git)
   const local = await git(['rev-parse', '--verify', '--quiet', `refs/heads/${branch}`], repo).then(out => out.trim() !== '', () => false)
-  if (local) {
-    const pushed = await pushBranch(repo, branch, git)
-    if (!pushed.ok) return { ok: false, reason: 'push-failed', branch, detail: pushed.error }
-    return { ok: true, branch, pushed: true }
-  }
+  if (local) return push(repo, branch, git)
   const remote = await git(['rev-parse', '--verify', '--quiet', `refs/remotes/origin/${branch}`], repo).then(out => out.trim() !== '', () => false)
   if (!remote) return { ok: false, reason: 'no-branch', branch }
   return { ok: true, branch, pushed: false }
+}
+
+/** Push `branch` to origin, from `repo`: pushed, or git's own line on why not. */
+async function push(repo: string, branch: string, git: GitRunner): Promise<PushOutcome> {
+  const pushed = await pushBranch(repo, branch, git)
+  return pushed.ok ? { ok: true, branch, pushed: true } : { ok: false, reason: 'push-failed', branch, detail: pushed.error }
 }

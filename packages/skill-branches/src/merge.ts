@@ -1,6 +1,6 @@
 import { gitReason, nodeGitRunner, type GitRunner } from '@openagt/agent-data'
 import { isAgentBranch } from './branch-names.js'
-import { currentBranch, worktreeBranch, worktreeClean, worktreeDirEntries } from './worktree.js'
+import { checkoutOn, currentBranch, worktreeClean } from './worktree.js'
 
 /**
  * Merging a finished agent's branch into the project's default branch, on this machine: how the
@@ -63,10 +63,7 @@ export async function mergeBranch(repo: string, branch: string, git: GitRunner =
   if (current !== into) return { ok: false, reason: 'not-on-default', branch, into, ...(current ? { current } : {}) }
 
   // The agent's own checkout, when it is still there, holds the branch: what is merged is what is committed.
-  let checkout: string | undefined
-  for (const entry of await worktreeDirEntries(repo)) {
-    if ((await worktreeBranch(entry.path, git)) === branch) checkout = entry.path
-  }
+  const checkout = await checkoutOn(repo, branch, git)
   if (checkout && !(await worktreeClean(checkout, git).catch(() => false))) return { ok: false, reason: 'dirty', branch }
 
   const from = (await git(['merge-base', into, commit], repo)).trim()

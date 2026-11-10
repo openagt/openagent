@@ -311,6 +311,15 @@ export async function worktreeBranch(path: string, git: GitRunner = nodeGitRunne
 }
 
 /**
+ * The agent's checkout under `.branches/` that is on `branch`, when one still is: a command that
+ * acts on a branch by name holds it to that checkout's rules.
+ */
+export async function checkoutOn(repo: string, branch: string, git: GitRunner = nodeGitRunner()): Promise<string | undefined> {
+  for (const entry of await worktreeDirEntries(repo)) if ((await worktreeBranch(entry.path, git)) === branch) return entry.path
+  return undefined
+}
+
+/**
  * The branch checked out at `path`, or `undefined` when detached / not a repo.
  * Forgiving, like {@link listWorktrees}: callers use it to decide, not to fail.
  */
