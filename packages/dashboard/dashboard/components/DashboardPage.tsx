@@ -21,7 +21,7 @@ import { YourAgentsTile } from './YourAgentsTile.js'
 // The Overview landing page (#1139): a focused at-a-glance board — usage first, then what needs a
 // human (Human Queue) beside the agents working now, then the cards the installed packages
 // declare, in two columns (#1818: the queue package's AI Queue, the tickets package's hot tickets,
-// the scheduler package's Automations). What is empty is not drawn: no card for no agent at work. OpenAgent's own cards are projections of the same .openagent files
+// the scheduler package's Automations). A card with nothing to show says so in a sentence ("No agent is at work."). OpenAgent's own cards are projections of the same .openagent files
 // over the shell's own polls (the agents at work, the Human Queue), so they stay live; selecting a row jumps into its project or
 // straight into a session. With one project picked in the sidebar's project select (#1513), every
 // part but the usage bar shows that project's only, and the cards of packages it does not have are
