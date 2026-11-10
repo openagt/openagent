@@ -74,15 +74,15 @@ function firstWords(text: string): string {
 // printed, once taller than their limit.
 const CODE = 'max-h-64 overflow-auto whitespace-pre-wrap break-all font-mono text-[13px] leading-[19px]'
 
+/** The calls that start a subagent: their detail is the task the agent wrote for it. */
+const SUBAGENT_CALLS = new Set(['Agent', 'Task'])
+
 // One tool call: the verb in grey, what it was done to in dark, on one line. A command the coding
 // agent said in a few words of its own reads as those words ("List project files"), the command
 // itself one click further. With a detail or an output it opens, on a click: the detail whole in a
 // box (a command with "$" in front) and, under it, what the call printed, in a box that scrolls; a
 // call that failed says so, with its exit code when it has one. A call still going on (`live`)
 // reads in the present ("Running"), shimmers, and counts the seconds when it says since when.
-/** The calls that start a subagent: their detail is the task the agent wrote for it. */
-const SUBAGENT_CALLS = new Set(['Agent', 'Task'])
-
 function CallLine(call: Call) {
   const [open, setOpen] = useState(false)
   const openFile = useContext(OpenFile)

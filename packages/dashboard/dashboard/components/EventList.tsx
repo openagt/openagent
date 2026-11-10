@@ -60,8 +60,8 @@ import {
 // the moment the reader scrolls up, replay renders static from the top, and the "Jump to latest"
 // chip is the scroller's own inert-when-not-scrollable button.
 
-// The conversation text — the user's prompt and the agent's reply (AGENT). Both are rendered
-// as Markdown: the agent writes in Markdown, and a prompt may too.
+// The conversation text — the user's prompt and the agent's reply. Both are rendered as Markdown:
+// the agent writes in Markdown, and a prompt may too.
 function messageText(e: OpenAgentEvent): string | null {
   if (e.kind !== 'driver') return null
   if (e.event.type === 'start') return e.event.prompt
@@ -80,13 +80,13 @@ function steeredText(e: OpenAgentEvent): string | undefined {
   return e.kind === 'driver' && e.event.type === 'steered' ? e.event.text : undefined
 }
 
-// A driver `start` opens a fresh prompt turn.
 /** The later of two times, either one absent. */
 function later(a: string | undefined, b: string | undefined): string | undefined {
   if (a === undefined || b === undefined) return a ?? b
   return Date.parse(a) >= Date.parse(b) ? a : b
 }
 
+/** A driver `start` opens a fresh prompt turn. */
 function isTurnBoundary(e: OpenAgentEvent): boolean {
   return e.kind === 'driver' && e.event.type === 'start'
 }
@@ -579,7 +579,6 @@ function ScreenRow({ label, onOpen }: { label: string; onOpen?: (() => void) | u
 const TIME = 'ml-auto shrink-0 pt-0.5 text-[10px] tabular-nums text-muted-foreground opacity-0 transition-opacity group-hover/row:opacity-100'
 
 /** The grouping key of a row about one of the run's subagents. */
-
 const SUBAGENT = 'subagent'
 /** How near its end a chat counts as being at it, in pixels: the scroller's own measure. */
 const AT_END = 8
@@ -664,7 +663,7 @@ export function EventList({
   onOpenScreen,
 }: {
   events: OpenAgentEvent[]
-  /** The message the agent is writing, as far as it has got: an AGENT row after the last, drawn
+  /** The message the agent is writing, as far as it has got: the agent's row after the last, drawn
    *  as a finished reply is. Never an event: its whole message's row replaces it. */
   writing?: string
   /** A message just sent to an ended agent: the last prompt row, until the prompt's own line

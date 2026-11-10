@@ -58,12 +58,11 @@ const EMPTY_INTERVENTIONS: ProjectionRead<Intervention> = { items: [], whole: []
 /** Stable initial for the activity poll (#627), so it does not churn on every render. */
 const EMPTY_ACTIVITY: ProjectionRead<Activity> = { items: [], whole: [] }
 
-// The dashboard shell (#405 phase 2): Sessions | main | the panes, with the project
-// selection in the top nav as a dropdown since #772 (it used to be a rail of its own). The main pane
-// is one of three views chosen by the selection: the project home/launcher (Live, the default —
-// Start form + cards) or one session's own view (AgentView), live or finished — the same frame
-// either way (#1026). Everything over the wire is `POST /_rpc/<name>`. A projection of the files
-// each run's own tool writes: its card and its diary.
+// The dashboard shell (#405 phase 2): the sidebar | the main pane | the panes beside it. The main
+// pane is the page the address names: the Overview, a module's page, the Agents or Permissions
+// page, a project's "New agent session" page (ProjectHome), or one session's own view (AgentView),
+// live or finished — the same frame either way (#1026). Everything over the wire is
+// `POST /_rpc/<name>`. A projection of the files each run's own tool writes: its card and its diary.
 //
 // The selection IS the URL (#784): `/` the Overview, `/{project}` the project home,
 // `/{project}/{agentId}` one session. It used to be three pieces of React state — the
