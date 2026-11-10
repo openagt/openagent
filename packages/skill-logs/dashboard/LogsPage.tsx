@@ -106,9 +106,12 @@ export function byDay(rows: Row[], now: Date = new Date()): { day: string; rows:
   return days
 }
 
-/** How long a run took, from its start to its end; nothing for one still going. */
+/** The statuses of a run that is over: a waiting run's end is only its last turn's. */
+const ENDED = ['done', 'stopped', 'failed']
+
+/** How long a run took, from its start to its end; nothing for one not over. */
 function took(card: Row['card']): string {
-  return card.endedAt ? formatDuration(Date.parse(card.endedAt) - Date.parse(card.startedAt)) : '—'
+  return card.endedAt && ENDED.includes(card.status) ? formatDuration(Date.parse(card.endedAt) - Date.parse(card.startedAt)) : '—'
 }
 
 /** What a run is called on its row: its short name, else what it was asked while it has none, else its id. */
