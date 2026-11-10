@@ -287,12 +287,6 @@ export function stopLogin(root: string, files = jobFiles('login')): void {
 }
 
 /**
- * The environment to work as an account: its folder for `gh`, its token for `gh` and for git's
- * pushes and fetches to GitHub, whatever the person's own git keeps for it (the keychain, a
- * different helper, an ssh key), and its name on the commits. Set through git's environment, so
- * nothing of the person's own settings changes. The settings already in the environment are kept.
- */
-/**
  * The git settings that make git use the account in `dir` at GitHub, with no secret in them: an
  * empty helper drops every helper set before it (the person's keychain among them), then gh,
  * working in the account's folder only, answers git's ask for the login; a remote written for
@@ -309,6 +303,12 @@ export function gitConfig(dir: string): [string, string][] {
   ]
 }
 
+/**
+ * The environment to work as an account: its folder for `gh`, its token for `gh` and for git's
+ * pushes and fetches to GitHub, whatever the person's own git keeps for it (the keychain, a
+ * different helper, an ssh key), and its name on the commits. Set through git's environment, so
+ * nothing of the person's own settings changes. The settings already in the environment are kept.
+ */
 export function runEnv(token: string, dir: string, facts: AccountFacts | undefined, env: NodeJS.ProcessEnv = process.env): Record<string, string> {
   const given = Number(env['GIT_CONFIG_COUNT'] ?? 0) || 0
   const lines: [string, string][] = [
