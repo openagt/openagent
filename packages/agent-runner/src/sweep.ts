@@ -15,8 +15,8 @@ import { SESSION_FOLDER_STAYS } from './session-folder.js'
  * A checkout whose live card says `running` under a dead pid is a run that died mid-work: its
  * record is written `failed` from what it left, and the checkout is reclaimed under the branches
  * rule (a dirty tree stays). A checkout whose card says the run ended is one whose process died
- * between the end and the record, or whose checkout held uncommitted work: recorded again, idempotent,
- * and reclaimed again; a run that ended `waiting` keeps its checkout for the answer. A running
+ * between the end and the record, or whose checkout held uncommitted work: recorded when its record
+ * does not say that end yet, and reclaimed again; a run that ended `waiting` keeps its checkout for the answer. A running
  * card on the branch from this machine with no checkout behind it is a run that never started:
  * `failed` with the stderr the spawn left, else `stopped`.
  *
@@ -77,8 +77,13 @@ export async function sweep(repo: string, deps: SweepDeps): Promise<SweepResult>
     const died = card.status === 'running'
     if (died) card = await endLiveCard(entry.path, card, 'failed', DIED_DETAIL, now().toISOString())
     const diary = await readLiveDiary(entry.path, card.id)
-    const written = await recordRun(repo, card, diary, logs)
-    if (written.ok || written.committed) result.recorded.push({ id: card.id, status: card.status })
+    // A record that already says this end is not written again: a write reaches the remote, and a
+    // run that waits for its answer is here at every tick, as is one whose checkout holds work.
+    const ended = card
+    if (!recorded.some(run => run.id === ended.id && run.status === ended.status && run.endedAt === ended.endedAt)) {
+      const written = await recordRun(repo, card, diary, logs)
+      if (written.ok || written.committed) result.recorded.push({ id: card.id, status: card.status })
+    }
     if (sessions !== undefined) {
       result.kept.push({ id: card.id, reason: card.status === 'waiting' ? 'waiting' : SESSION_FOLDER_STAYS })
       if (died) await tell(card, DIED_DETAIL, undefined)

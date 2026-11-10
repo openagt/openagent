@@ -82,6 +82,10 @@ test('a run that ended but whose process died before the record: recorded as it 
     assert.deepEqual(result.kept, [{ id: 'asked', reason: 'waiting' }])
     assert.equal((await findRun(repo, 'asked'))?.status, 'waiting')
     assert.equal(await stat(worktreePath(repo, 'asked')).then(() => true, () => false), true, 'the answer resumes the run there')
+    // The next tick finds the waiting run as it left it: kept, and its record, which says so already, is not written again.
+    const again = await sweep(repo, { host: 'this-box', isAlive: () => false, now: () => NOW })
+    assert.deepEqual(again.recorded, [])
+    assert.deepEqual(again.kept, [{ id: 'asked', reason: 'waiting' }])
   } finally {
     await removeRepo(repo)
   }
