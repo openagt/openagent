@@ -11,9 +11,9 @@ import { Checkbox } from './ui/checkbox.js'
 const name = 'font-medium text-foreground'
 
 // "Remove project…", asked first. Removing takes the project off the list and deletes nothing,
-// unless the person ticks the box: then OpenAgent's own files in the folder go too, and the dialog
-// stays to say what went and what stayed before the page moves on. The box is never ticked for
-// them, and what it deletes is said the moment it is ticked, not after.
+// unless the person ticks the box: then OpenAgent's own files in the folder go too. Either way the
+// dialog stays to say it is done, and with the box ticked what went and what stayed, before the page
+// moves on. The box is never ticked for them, and what it deletes is said the moment it is ticked, not after.
 export function RemoveProjectDialog({
   projectId,
   open,
@@ -27,7 +27,8 @@ export function RemoveProjectDialog({
   onRemoved: () => void
 }) {
   const [files, setFiles] = useState(false)
-  const [report, setReport] = useState<CleanupReport | null>(null)
+  // Removed: what happened to OpenAgent's files in the folder, when the person asked for them to go.
+  const [removed, setRemoved] = useState<{ report?: CleanupReport } | null>(null)
   const { busy, error, run, reset } = useAction()
 
   // Each time it opens the box is unticked and an old error is gone: the menu opens it from
@@ -47,8 +48,7 @@ export function RemoveProjectDialog({
     void run(() => sendRemoveProject(projectId, files), 'Could not remove the project.').then(outcome => {
       if (!outcome.ok) return
       const cleanup = outcome.value.cleanup
-      if (cleanup) setReport(cleanup)
-      else finish()
+      setRemoved(cleanup ? { report: cleanup } : {})
     })
   }
 
@@ -58,24 +58,32 @@ export function RemoveProjectDialog({
       onOpenChange={next => {
         // Never closed while the removal runs, nor past the report: the project is already gone
         // then, and "Done" is the one way on.
-        if (busy || report) return
+        if (busy || removed) return
         onOpenChange(next)
       }}
     >
       <AlertDialog.Portal>
         <AlertDialog.Backdrop className="fixed inset-0 z-50 bg-black/40 backdrop-blur-[1px]" />
         <AlertDialog.Popup className="fixed left-1/2 top-1/2 z-50 max-h-[calc(100vh-2rem)] w-[min(28rem,calc(100vw-2rem))] -translate-x-1/2 -translate-y-1/2 overflow-y-auto rounded-lg border border-border bg-card p-5 text-card-foreground shadow-lg">
-          {report ? (
+          {removed ? (
             <>
               <AlertDialog.Title className="text-sm font-semibold">Project removed</AlertDialog.Title>
-              <AlertDialog.Description className="mt-2 text-xs leading-relaxed text-muted-foreground">
-                It left the dashboard&rsquo;s list. This is what happened to OpenAgent&rsquo;s files in the folder.
-              </AlertDialog.Description>
-              <ReportList title="Deleted" empty="Nothing: there was nothing of OpenAgent&rsquo;s to delete." lines={report.removed} />
-              {report.kept.length > 0 && <ReportList title="Kept" lines={report.kept.map(kept => `${kept.path}: ${kept.reason}`)} />}
-              {report.failed.length > 0 && <ReportList title="Could not be cleaned" lines={report.failed} danger />}
+              {removed.report ? (
+                <>
+                  <AlertDialog.Description className="mt-2 text-xs leading-relaxed text-muted-foreground">
+                    It left the dashboard&rsquo;s list. This is what happened to OpenAgent&rsquo;s files in the folder.
+                  </AlertDialog.Description>
+                  <ReportList title="Deleted" empty="Nothing: there was nothing of OpenAgent&rsquo;s to delete." lines={removed.report.removed} />
+                  {removed.report.kept.length > 0 && <ReportList title="Kept" lines={removed.report.kept.map(kept => `${kept.path}: ${kept.reason}`)} />}
+                  {removed.report.failed.length > 0 && <ReportList title="Could not be cleaned" lines={removed.report.failed} danger />}
+                </>
+              ) : (
+                <AlertDialog.Description className="mt-2 text-xs leading-relaxed text-muted-foreground">
+                  It left the dashboard&rsquo;s list, and nothing in the folder was deleted. Add the folder again to bring the project back.
+                </AlertDialog.Description>
+              )}
               <div className="mt-4 flex justify-end">
-                <Button size="sm" onClick={finish}>
+                <Button size="sm" autoFocus onClick={finish}>
                   Done
                 </Button>
               </div>
