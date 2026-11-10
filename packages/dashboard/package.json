@@ -54,9 +54,10 @@
     "dev:daemon": "cd dashboard && OPENAGENT_DEV_DAEMON=1 vite",
     "design:build": "tsx --tsconfig dashboard/tsconfig.json dashboard/design/build.mts",
     "typecheck": "tsc --noEmit && tsc --noEmit -p dashboard/tsconfig.json",
-    "test": "pnpm test:node && pnpm test:dashboard",
+    "test": "pnpm test:node && pnpm test:dashboard && pnpm test:extension",
     "test:node": "tsc -p tsconfig.test.json && node ../../scripts/test-node.mjs",
     "test:dashboard": "cd dashboard && vitest run",
+    "test:extension": "node --experimental-vm-modules ../chrome-extension/check.mjs",
     "demo": "tsc -p tsconfig.test.json && node dist-test/e2e/demo-bin.js",
     "clean": "rm -rf dist dist-test"
   },

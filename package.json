@@ -23,8 +23,8 @@
     "website": "cd packages/openagent.build/ && pnpm run dev",
     "// Build website for production": "",
     "website:build": "cd packages/openagent.build/ && pnpm run build",
-    "// Test website (CI)": "",
-    "website:test": "cd packages/openagent.build/ && echo 'no tests yet'"
+    "// Test website: every page prerendered with its words (after `pnpm build`)": "",
+    "website:test": "cd packages/openagent.build/ && pnpm run test"
   },
   "devDependencies": {
     "@openagt/skill-branches": "workspace:*",

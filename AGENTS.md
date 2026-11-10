@@ -1,2 +1,8 @@
 - The project isn't released, it has zero external users
   - Breaking changes aren't a problem => you must always prefer clean code over backwards compatibility (it's unnecessary code)
+- Testing
+  - `pnpm build` first: the packages import each other's builds
+  - Before pushing: `pnpm typecheck`, and the tests of the packages you changed and of those depending on them: `pnpm -r --no-bail --filter '...[origin/main]' test` (`pnpm test` runs all of them, ~10 min)
+  - One package: `pnpm --filter <package> test`. One node test file, in its package: `pnpm exec tsc -p tsconfig.test.json && node ../../scripts/test-node.mjs dist-test/<path>.test.js`, plus `--test-name-pattern=<re>` for one test. One UI test file: `cd <package>/dashboard && npx vitest run <path>`
+  - To see a flow work in the real dashboard, offline, with a scripted agent: `pnpm demo` (`packages/dashboard/src/e2e/README.md`)
+  - The tests that reach the network run with `OPENAGENT_NETWORK_TESTS=1`

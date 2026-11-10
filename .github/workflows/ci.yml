@@ -22,6 +22,9 @@ jobs:
             run: pnpm -C packages/dashboard test:dashboard
           - name: dashboard node tests
             run: pnpm -C packages/dashboard test:node
+          # The browser extension the dashboard ships (packages/chrome-extension, no package of its own).
+          - name: chrome extension check
+            run: pnpm -C packages/dashboard test:extension
           # --no-bail: a red package does not stop the next one either.
           - name: agent packages tests
             run: pnpm -r --workspace-concurrency=1 --no-bail --filter @openagt/agent-runner --filter @openagt/skill-scheduler --filter @openagt/skill-orchestration run test
