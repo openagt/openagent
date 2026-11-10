@@ -23,8 +23,8 @@ import { createContext, useCallback, useContext, useEffect, useRef, useState, ty
  *   ever shown. Every read under one key is one read: the Overview's tile and card asking the
  *   same question wait for the same answer, and each answer reaches both.
  * - `{ remember: key, stored: true }`: also kept in this browser, for the next time the page is
- *   opened: it shows the last answer from its first frame, faded ({@link StaleReads}) until the
- *   fresh one lands. For what a person opens the page to glance at (the Overview's cards).
+ *   opened: it shows the last answer from its first frame, faded ({@link StaleReads}) when the
+ *   fresh one is slow, until it lands. For what a person opens the page to glance at (the Overview's cards).
  */
 export type Keep = 'previous' | { remember: string; stored?: true }
 

@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest'
-import { cleanup, fireEvent, render, screen, within } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, screen, within } from '@testing-library/react'
 import type { ActiveAgent, Intervention } from '../../src/index.js'
 
 // The Overview's own layout: its cards on a grid, ordered, sized and hidden by the person's layout
@@ -16,6 +16,7 @@ const prefs = vi.hoisted(() => ({ value: { onboardingDismissed: true } as Record
 vi.mock('../lib/preferences.js', () => ({ usePreferences: () => prefs.value, usePreferencesLoaded: () => prefs.loaded, updatePreferences: prefs.updatePreferences }))
 
 const { DashboardPage } = await import('./DashboardPage.js')
+const { FADE_AFTER_MS } = await import('./CustomizeOverview.js')
 
 const active = (agentId: string, projectId = 'p1'): ActiveAgent => ({ projectId, projectName: projectId, agentId, cwd: `/repos/${agentId}`, status: 'running', updatedAt: '2026-07-25T10:00:00.000Z', intent: `working on ${agentId}` })
 const projects = [{ id: 'p1', name: 'alpha' }, { id: 'p2', name: 'beta' }] as never[]
@@ -183,21 +184,31 @@ describe('the Overview', () => {
     expect(saved.find(place => place.id === 'usage')).toEqual({ id: 'usage' })
   })
 
-  test('a card showing only what an earlier visit read is faded, until it is read again', async () => {
-    working = [active('r1', 'p1')]
-    show(null, { interventions: true, active: false })
-    await screen.findByText('working on r1')
-    const faded = () => [...document.querySelectorAll<HTMLElement>('[data-stale]')].map(el => el.dataset['card'])
-    expect(faded()).toEqual(['needs-you', 'human-queue'])
-    expect(document.querySelector('[data-card="needs-you"]')!.className).toContain('opacity-60')
-    cleanup()
-    show(null, { interventions: false, active: true })
-    await screen.findByText('working on r1')
-    expect(faded()).toEqual(['working-now', 'working'])
-    cleanup()
-    show()
-    await screen.findByText('working on r1')
-    expect(faded()).toEqual([])
+  test('a card showing only what an earlier visit read is faded once its fresh read has been out for a second, until it is read again', async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true })
+    try {
+      working = [active('r1', 'p1')]
+      show(null, { interventions: true, active: false })
+      await screen.findByText('working on r1')
+      const faded = () => [...document.querySelectorAll<HTMLElement>('[data-stale]')].map(el => el.dataset['card'])
+      // A read that answers within the second never fades its card: no flicker on every load.
+      expect(faded()).toEqual([])
+      act(() => vi.advanceTimersByTime(FADE_AFTER_MS))
+      expect(faded()).toEqual(['needs-you', 'human-queue'])
+      expect(document.querySelector('[data-card="needs-you"]')!.className).toContain('opacity-60')
+      cleanup()
+      show(null, { interventions: false, active: true })
+      await screen.findByText('working on r1')
+      act(() => vi.advanceTimersByTime(FADE_AFTER_MS))
+      expect(faded()).toEqual(['working-now', 'working'])
+      cleanup()
+      show()
+      await screen.findByText('working on r1')
+      act(() => vi.advanceTimersByTime(FADE_AFTER_MS))
+      expect(faded()).toEqual([])
+    } finally {
+      vi.useRealTimers()
+    }
   })
 
   test('no card is drawn before the layout is read: a card taken off never reads anything', async () => {

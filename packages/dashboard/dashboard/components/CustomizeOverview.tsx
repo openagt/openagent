@@ -1,4 +1,4 @@
-import { useCallback, useState, type DragEvent, type ReactNode } from 'react'
+import { useCallback, useEffect, useState, type DragEvent, type ReactNode } from 'react'
 import { flushSync } from 'react-dom'
 import { ChevronLeft, ChevronRight, GripVertical, Plus, X } from 'lucide-react'
 import { widthsFor, type CardWidth, type OverviewLayouts } from '../../src/client.js'
@@ -51,9 +51,13 @@ export function CardGrid({ cards }: { cards: Placed[] }) {
 
 const NONE_STALE: ReadonlySet<object> = new Set()
 
+/** How long a card shows what an earlier visit read at full strength: a fresh answer within it shows no fade, as a card faded and unfaded at once flickers. */
+export const FADE_AFTER_MS = 1000
+
 /**
- * One card in its cell, faded while what it shows is only what an earlier visit read: the page
- * opens with the last numbers at once, and each card turns full as its fresh answer lands.
+ * One card in its cell, faded while what it shows is only what an earlier visit read and the fresh
+ * read has been out for {@link FADE_AFTER_MS}: the page opens with the last numbers at once, and a
+ * card whose read is slow or failing says so.
  */
 function CardCell({ card, className }: { card: OverviewCard; className: string }) {
   const [staleReads, setStaleReads] = useState(NONE_STALE)
@@ -67,8 +71,18 @@ function CardCell({ card, className }: { card: OverviewCard; className: string }
     })
   }, [])
   const stale = card.stale === true || staleReads.size > 0
+  const [late, setLate] = useState(false)
+  useEffect(() => {
+    if (!stale) return
+    const timer = setTimeout(() => setLate(true), FADE_AFTER_MS)
+    return () => {
+      clearTimeout(timer)
+      setLate(false)
+    }
+  }, [stale])
+  const faded = stale && late
   return (
-    <div data-card={card.id} data-stale={stale || undefined} className={cn(className, 'transition-opacity duration-300', stale && 'opacity-60')}>
+    <div data-card={card.id} data-stale={faded || undefined} className={cn(className, 'transition-opacity duration-300', faded && 'opacity-60')}>
       <StaleReads.Provider value={told}>{card.node}</StaleReads.Provider>
     </div>
   )
