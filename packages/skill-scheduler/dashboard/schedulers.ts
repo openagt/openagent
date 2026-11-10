@@ -1,4 +1,4 @@
-import type { ModuleCommandResult, ModuleHost, ModuleProject } from '@openagt/dashboard/module'
+import { MAX_SPEND_OFFSET, type ModuleCommandResult, type ModuleHost, type ModuleProject } from '@openagt/dashboard/module'
 import type { PublishPick, TickDecision } from '../src/state.js'
 import { AGENTS, AGENT_LABELS, AGENT_SKILLS_DIR, DEFAULT_AGENT, DEFAULT_PUBLISH, isAgent, isAgents, isTime, type AgentName } from '../src/names.js'
 import { MAX_COUNT, dueFrom, paceInForce, parseInterval, parseTimeOfDay, takesTimeOfDay, type PacePick, type PaceUnit } from '../src/pace.js'
@@ -24,10 +24,6 @@ export function publishLabel(pick: PublishPick, own: boolean): string {
 }
 
 const PUBLISH_PICKS = Object.keys(PUBLISH_LABELS) as PublishPick[]
-
-/** How far the spend offset reaches either side of the quota boundary, in percentage points: the reach of the usage bar's handle. */
-import { MAX_SPEND_OFFSET } from '@openagt/dashboard/module'
-export { MAX_SPEND_OFFSET }
 
 /** One command the project's skills schedule, as its file says it now, with this machine's switch and publish pick. */
 export interface SchedulerCommand {
