@@ -150,7 +150,7 @@ function agentBusyWords(state: AgentState): string {
   return state.fixing === 'install' ? `Installing ${name}…` : `Say yes in the page this computer's browser opened to log ${name} in.`
 }
 
-/** The agent's fix as one press: [Install Claude Code] or [Log in to Claude Code], with the command; nothing when no press fixes it. */
+/** The agent's fix as one press: [Install Claude Code] or [Log this computer in to Claude Code], with the command; nothing when no press fixes it. */
 export function AgentFix({ state, onChanged, size }: { state: AgentState; onChanged: () => void; size?: 'sm' | 'xs' | undefined }) {
   const [error, setError] = useState<string | undefined>()
   if (state.ready || !state.fix) return null
@@ -164,7 +164,7 @@ export function AgentFix({ state, onChanged, size }: { state: AgentState; onChan
   return (
     <FixAction
       size={size}
-      label={state.fix.kind === 'install' ? `Install ${name}` : `Log in to ${name}`}
+      label={state.fix.kind === 'install' ? `Install ${name}` : `Log this computer in to ${name}`}
       busy={state.fixing !== undefined}
       busyWords={agentBusyWords(state)}
       command={state.fix.command}

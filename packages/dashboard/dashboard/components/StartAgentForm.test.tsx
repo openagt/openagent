@@ -502,7 +502,7 @@ describe('StartAgentForm (#1774)', () => {
     expect(refusal!.contains(press)).toBe(true)
     expect(other!.textContent).toBe('something else')
     // This computer's own login press is no fix for the machine.
-    expect(screen.queryByRole('button', { name: 'Log in to Claude Code' })).toBeNull()
+    expect(screen.queryByRole('button', { name: 'Log this computer in to Claude Code' })).toBeNull()
     fireEvent.click(press)
     await waitFor(() => expect(serverLogins.sendUseLoginsOn).toHaveBeenCalledWith('d1'))
   })
@@ -606,7 +606,7 @@ describe('StartAgentForm (#1774)', () => {
       return { ok: true }
     })
     render(<StartAgentForm {...props} />)
-    const press = await screen.findByRole('button', { name: 'Log in to Claude Code' })
+    const press = await screen.findByRole('button', { name: 'Log this computer in to Claude Code' })
     // The press is inside the red line, which says it in the agent's own words.
     const refusal = screen.getByRole('alert')
     expect(refusal.contains(press)).toBe(true)

@@ -20,6 +20,8 @@ const AGENTS = [
   {
     id: 'claude',
     name: 'Claude Code',
+    /** What the account is, by its service: an account at claude.ai. */
+    account: 'Claude',
     Logo: ClaudeLogo,
     logIn: 'Log in to Claude',
     help: "Opens this computer's browser, where you say yes once, signed in to that account. The login is kept on this computer alone and lasts a year.",
@@ -31,6 +33,7 @@ const AGENTS = [
   {
     id: 'codex',
     name: 'Codex',
+    account: 'Codex',
     Logo: CodexLogo,
     logIn: 'Log in to Codex',
     help: "Opens this computer's browser, where you sign in once to that account. If the browser is signed in to another account, copy the link into a private window. The login is kept on this computer alone.",
@@ -172,7 +175,7 @@ function SigningIn({ agent, adding, noBrowser, onChanged }: { agent: (typeof AGE
             void send()
           }}
         >
-          <Input aria-label="Code from Claude" placeholder="2. Paste the code it shows" value={code} onChange={event => setCode(event.target.value)} className="h-9 min-w-0 flex-1 basis-40 text-sm" />
+          <Input aria-label="Code from Claude" placeholder="2. Paste the code it shows" value={code} onChange={event => setCode(event.target.value)} className="h-9 min-w-0 grow basis-40 text-sm" />
           <Button size="sm" type="submit" disabled={code.trim() === '' || adding.checking === true}>
             {adding.checking ? 'Checking…' : 'Done'}
           </Button>
@@ -238,7 +241,7 @@ function AddAccount({ agent, now, failed, from, onChanged, onClose }: { agent: (
               void start()
             }}
           >
-            <Input autoFocus aria-label="Whose account" placeholder="Whose account, e.g. Dani" value={name} onChange={event => setName(event.target.value)} className="h-8 min-w-0 flex-1 basis-32" />
+            <Input autoFocus aria-label="Whose account" placeholder="Whose account, e.g. Dani" value={name} onChange={event => setName(event.target.value)} className="h-8 min-w-0 grow basis-32" />
             <Button size="sm" type="submit" disabled={busy || name.trim() === ''}>
               {agent.logIn}
             </Button>
@@ -567,18 +570,21 @@ export function AccountsCard({ accountWhere }: ModuleCardProps) {
         })}
         {/* No account at all: the press is said in the card too, where a newcomer looks, not only at its corner. */}
         {none && (
+          // The presses go beside the sentence together, else under it. `grow`, not `flex-1`: another module's stylesheet loaded later has a `.flex-1` that undoes `basis-48`.
           <div className="flex flex-wrap items-center gap-2">
-            <p className="min-w-0 flex-1 basis-48 text-sm text-muted-foreground">No account yet. Runs need one to start.</p>
-            {AGENTS.map(agent => (
-              <Button key={agent.id} size="sm" variant="outline" onClick={() => setNaming(agent.id)}>
-                <agent.Logo className="size-3.5" />
-                {agent.logIn}
-              </Button>
-            ))}
+            <p className="min-w-0 grow basis-48 text-sm text-muted-foreground">No account yet. Runs need one to start.</p>
+            <div className="flex flex-wrap gap-2">
+              {AGENTS.map(agent => (
+                <Button key={agent.id} size="sm" variant="outline" onClick={() => setNaming(agent.id)}>
+                  <agent.Logo className="size-3.5" />
+                  Add a {agent.account} account
+                </Button>
+              ))}
+            </div>
           </div>
         )}
       </CardContent>
-      <Dialog open={namingAgent !== undefined} onOpenChange={open => !open && close()} title={namingAgent ? `Add a ${namingAgent.name} account` : ''}>
+      <Dialog open={namingAgent !== undefined} onOpenChange={open => !open && close()} title={namingAgent ? `Add a ${namingAgent.account} account` : ''}>
         {namingAgent && (
           <AddAccount
             key={namingAgent.id}
