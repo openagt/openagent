@@ -8,7 +8,7 @@ import { readClaudeQuota } from '@openagt/agent-driver-claude'
 import { accountFolder, personalCodexHome, readCodexUsage } from '@openagt/agent-driver-codex'
 import { gitHostEnv, isPidAlive, lockHolder, readyToRun, resumeDetached, runIdFrom, spawnResume, spawnRun, sweep, withdrawMarker, writeMarker } from '@openagt/agent-runner'
 import { findRun } from '@openagt/skill-logs'
-import { nodeGitRunner, pullProjectData, remoteHostOf, type GitRunner } from '@openagt/agent-data'
+import { nodeGitRunner, originUrl, pullProjectData, remoteHostOf, type GitRunner } from '@openagt/agent-data'
 import { CHECK_TIMEOUT_MS, GLANCE_MS, NOW_CHECK_TIMEOUT_MS, QUOTA_KEPT_MS, SCHEDULER_LOG, TICK_MS } from './names.js'
 import { inFlight, lastRuns, lastStart, type LastRun } from './records.js'
 import { readSchedule, type Schedule, type ScheduledCommand, type Unlisted } from './schedule.js'
@@ -27,7 +27,7 @@ export function fetchingAsRunsAccount(repo: string, git: GitRunner, asAccount: (
   return async (args, cwd) => {
     if (args[0] !== 'fetch') return git(args, cwd)
     // A remote that is a folder on this disk asks no login.
-    const url = (await git(['remote', 'get-url', 'origin'], cwd).catch(() => '')).trim()
+    const url = await originUrl(cwd, git)
     if (!url || remoteHostOf(url) === undefined) return git(args, cwd)
     const account = await gitHostEnv(repo)
     if (!account.ok) throw new Error(account.error)

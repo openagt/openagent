@@ -1,6 +1,6 @@
 import { spawn } from 'node:child_process'
 import { homedir } from 'node:os'
-import { nodeGitRunner, runPackageCommand, type ProvidedCommand } from '@openagt/agent-data'
+import { originUrl, runPackageCommand, type ProvidedCommand } from '@openagt/agent-data'
 import type { DriverFix, DriverReadiness } from '@openagt/agent-driver'
 import { claudeCodeReady } from '@openagt/agent-driver-claude'
 import { codexReady } from '@openagt/agent-driver-codex'
@@ -49,11 +49,7 @@ export const loginsWiring: {
   fix: (command: string) => Promise<void>
   driver: () => Promise<DriverName>
 } = {
-  origin: root =>
-    nodeGitRunner()(['remote', 'get-url', 'origin'], root).then(
-      url => url.trim() || undefined,
-      () => undefined,
-    ),
+  origin: root => originUrl(root),
   gitHost: root => providedCommand(root, 'git-host').catch(() => undefined),
   run: runPackageCommand,
   home: () => homedir(),

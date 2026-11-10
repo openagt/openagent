@@ -1,4 +1,4 @@
-import { accountGit, nodeGitRunner, noAccountSentence, readRemoteAccount, remoteHostOf, type GitRunner, type RemoteAccount } from '@openagt/agent-data'
+import { accountGit, nodeGitRunner, noAccountSentence, originUrl, readRemoteAccount, remoteHostOf, type GitRunner, type RemoteAccount } from '@openagt/agent-data'
 import { typedRepository } from '../typed-repository.js'
 import { gitHostPackages, onGitHosts } from './logins.js'
 
@@ -60,10 +60,7 @@ export async function cloneAccountFor(typed: string): Promise<RemoteAccount | un
 
 /** The host the repository at `root` has its origin on; none for no origin, or one in a folder on this disk. */
 export async function originHost(root: string): Promise<string | undefined> {
-  const url = await nodeGitRunner()(['remote', 'get-url', 'origin'], root).then(
-    out => out.trim(),
-    () => '',
-  )
+  const url = await originUrl(root)
   return url ? remoteHostOf(url) : undefined
 }
 

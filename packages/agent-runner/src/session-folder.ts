@@ -1,6 +1,6 @@
 import { mkdir, stat } from 'node:fs/promises'
 import { basename, join } from 'node:path'
-import { checkoutRoot, nodeGitRunner, sessionFolder, type GitRunner } from '@openagt/agent-data'
+import { checkoutRoot, nodeGitRunner, originUrl, sessionFolder, type GitRunner } from '@openagt/agent-data'
 import { agentBranchName, linkSkillsInFolder, type SkillLink } from '@openagt/skill-branches'
 import type { SessionRepo } from './records.js'
 
@@ -48,7 +48,7 @@ export async function openSessionFolder(home: string, id: string, skills: readon
     const copy = join(path, repo.name)
     if (await stat(copy).then(() => true, () => false)) continue
     await git(['clone', '--quiet', '--', repo.from, copy], path)
-    const origin = (await git(['remote', 'get-url', 'origin'], repo.from).catch(() => '')).trim()
+    const origin = await originUrl(repo.from, git)
     await git(origin ? ['remote', 'set-url', 'origin', origin] : ['remote', 'remove', 'origin'], copy)
     await git(['checkout', '--quiet', '-b', agentBranchName(id)], copy)
   }

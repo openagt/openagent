@@ -1,4 +1,4 @@
-import { nodeGitRunner } from '@openagt/agent-data'
+import { originUrl } from '@openagt/agent-data'
 import { projectSkillNames } from '@openagt/agent-runner'
 import { skillsOn, uncommittedSkills } from '../project-skills/branch.js'
 import { carriedSkills, GROUPS } from '../project-skills/catalogue.js'
@@ -84,8 +84,7 @@ export async function onProjectSkills(projectId: string): Promise<ProjectSkills 
 }
 
 async function remoteName(cwd: string): Promise<string> {
-  const address = await nodeGitRunner()(['remote', 'get-url', 'origin'], cwd).catch(() => '')
-  return remoteHostName(address) ?? 'the remote'
+  return remoteHostName((await originUrl(cwd)) ?? '') ?? 'the remote'
 }
 
 /** What a change of skills answered: what was written and deleted, what was left as it is, and the scheduler when the change switched it. */
