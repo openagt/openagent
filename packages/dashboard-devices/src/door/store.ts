@@ -99,6 +99,12 @@ export function portsOf(device: Device): number[] {
   return device.line ? [device.line.port, ...Object.values(device.line.others ?? {})] : []
 }
 
+/** A port of `block` for an address: the one it `had` while that is in the block and nobody else's, else the first nobody has. */
+function portIn(block: { from: number; count: number }, taken: ReadonlySet<number>, had?: number): number | undefined {
+  if (had !== undefined && had >= block.from && had < block.from + block.count && !taken.has(had)) return had
+  return Array.from({ length: block.count }, (_, at) => block.from + at).find(candidate => !taken.has(candidate))
+}
+
 /**
  * Give a computer an address for each person its line names (`line.for`) who is here and is not
  * its own: one among the lines' ports of that person's own OpenAgent, the owner's in `ownerPorts`.
@@ -116,9 +122,7 @@ export function shareLine(store: Store, device: Device, ownerPorts: { from: numb
   const named = device.line.for ?? []
   for (const person of store.persons) {
     if (person.name === own || !named.includes(person.name) || (!person.owner && person.port === undefined)) continue
-    const block = person.owner ? ownerPorts : personLinePorts(person.port!)
-    const kept = had[person.name]
-    const port = kept !== undefined && kept >= block.from && kept < block.from + block.count && !taken.has(kept) ? kept : Array.from({ length: block.count }, (_, at) => block.from + at).find(candidate => !taken.has(candidate))
+    const port = portIn(person.owner ? ownerPorts : personLinePorts(person.port!), taken, had[person.name])
     if (port === undefined) continue
     taken.add(port)
     others[person.name] = port
@@ -630,9 +634,7 @@ export async function enter(env: NodeJS.ProcessEnv, code: string, name: string, 
     // A computer that got in for a line gets the port it had, or the first of the lines' ports no other computer has.
     const own = portOf(store, match.person)
     const ports = line && (own !== undefined ? personLinePorts(own) : line)
-    const taken = new Set(others.flatMap(portsOf))
-    const had = before.find(device => device.line !== undefined)?.line?.port
-    const port = ports && (had !== undefined && had >= ports.from && had < ports.from + ports.count ? had : Array.from({ length: ports.count }, (_, at) => ports.from + at).find(candidate => !taken.has(candidate)))
+    const port = ports && portIn(ports, new Set(others.flatMap(portsOf)), before.find(device => device.line !== undefined)?.line?.port)
     if (ports && port === undefined) return undefined
     const entry: Entered = { id: randomBytes(6).toString('hex'), key: newSecret(), ...(match.person !== undefined ? { person: match.person } : {}) }
     store.devices = [...others, { id: entry.id, name, key: sha256(entry.key), added: new Date(now).toISOString(), ...(port !== undefined ? { line: { port } } : {}), ...(computer !== undefined ? { computer } : {}), ...(match.person !== undefined ? { person: match.person } : {}) }]
@@ -667,6 +669,11 @@ export async function removeComputer(env: NodeJS.ProcessEnv, id: string, whose?:
   })
 }
 
+/** The entries here of `entry`'s computer, of the same person: the entry itself, and the other one the same computer said it is. */
+function entriesOf(store: Store, entry: Device): Device[] {
+  return store.devices.filter(device => device === entry || (entry.computer !== undefined && device.computer === entry.computer && device.person === entry.person))
+}
+
 /** Give a device the name the person picked: a computer under both its entries. False when no device has that id, or the name is empty. */
 export async function renameComputer(env: NodeJS.ProcessEnv, id: string, name: string): Promise<boolean> {
   const picked = name.trim().slice(0, MAX_NAME)
@@ -674,7 +681,7 @@ export async function renameComputer(env: NodeJS.ProcessEnv, id: string, name: s
   return update(env, store => {
     const named = store.devices.find(device => device.id === id)
     if (!named) return false
-    for (const device of store.devices) if (device === named || (named.computer !== undefined && device.computer === named.computer && device.person === named.person)) device.name = picked
+    for (const device of entriesOf(store, named)) device.name = picked
     return true
   })
 }
@@ -688,8 +695,7 @@ export async function nameComputer(env: NodeJS.ProcessEnv, id: string, named: (d
   const renamed = (store: Store): [Device, string][] => {
     const entry = store.devices.find(device => device.id === id)
     if (!entry) return []
-    return store.devices
-      .filter(device => device === entry || (entry.computer !== undefined && device.computer === entry.computer && device.person === entry.person))
+    return entriesOf(store, entry)
       .map((device): [Device, string] => [device, named(device).slice(0, MAX_NAME)])
       .filter(([device, name]) => device.name !== name)
   }
