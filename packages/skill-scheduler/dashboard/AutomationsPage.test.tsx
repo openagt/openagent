@@ -3,7 +3,7 @@ import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-li
 import { ModuleHostContext, type ModuleCommandResult, type ModuleHost, type ModuleProject } from '@openagt/dashboard/module'
 import { AutomationsPage } from './AutomationsPage.js'
 import { ANY_AGENT, ON_CLAUDE, STATUS, hostAnswering } from './fixtures.js'
-import { checked, choices, offered, openList, pick, queryRadio, radio, radioNames, showing } from './test-controls.js'
+import { checked, choices, offered, openList, pick, queryRadio, radio, radioNames, showing } from '../../dashboard/dashboard/test-controls.js'
 
 // The coding agents' own lists, as the dashboard asked them: what a row's agent and model are picked from, and named by.
 vi.mock('../../dashboard/dashboard/rpc/models.js', () => ({
