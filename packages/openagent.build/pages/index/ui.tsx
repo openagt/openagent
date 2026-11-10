@@ -6,6 +6,13 @@ export const NPM_URL = 'https://www.npmjs.com/package/@openagt/dashboard'
 
 export const mono = "'IBM Plex Mono', monospace" as const
 
+/** The three claims under the hero's title, each in its color; the banner says them too. */
+export const BADGES = [
+  ['100% Open Source', '#a7c080'],
+  ['100% Free', '#dbbc7f'],
+  ['100% Local', '#7fbbb3'],
+] as const
+
 // A content section: max-width column with the shared vertical rhythm. The
 // rhythm is a MARGIN, not padding: anchors target the border box, so nav
 // clicks land on the section's content instead of a screen of padding.

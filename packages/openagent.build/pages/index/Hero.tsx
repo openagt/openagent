@@ -1,7 +1,7 @@
 import type { CSSProperties } from 'react'
 import { CommandChip, CommandLine, PmTabs, pickedCommand } from './commands'
 import { useCopy } from './copy'
-import { kickerStyle, mono } from './ui'
+import { BADGES, kickerStyle, mono } from './ui'
 import { useDashboardHref } from './ViewToggle'
 
 const commentStyle: CSSProperties = { color: '#859289' }
@@ -60,13 +60,7 @@ export function Hero() {
           fontFamily: mono,
         }}
       >
-        {(
-          [
-            ['100% Open Source', '#a7c080'],
-            ['100% Free', '#dbbc7f'],
-            ['100% Local', '#7fbbb3'],
-          ] as const
-        ).map(([label, color]) => (
+        {BADGES.map(([label, color]) => (
           <span
             key={label}
             style={{
