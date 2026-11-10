@@ -3,7 +3,7 @@ import { hostname } from 'node:os'
 import { nodeGitRunner, originDefaultBranch, type GitRunner } from '@openagt/agent-data'
 import type { MergeLookup, ModuleServerHost } from '@openagt/dashboard/module-server'
 import { listFiles } from './list.js'
-import { cutToPreview, readFileContent, safeRepoPath, type FileContent } from './read.js'
+import { fileContent, readFileContent, safeRepoPath, type FileContent } from './read.js'
 
 // A run's files, for the agent page's Files pane, for as long as git still has them. The run's
 // checkout while it exists; once it is reclaimed, the run's branch, local or on origin; once the
@@ -139,8 +139,5 @@ export async function readAgentFileContent(root: string, at: AgentFilesAt, path:
   if (at.source === 'checkout') return readFileContent(at.path, path)
   if (!safeRepoPath(path)) return null
   const raw = await git(['show', `${at.ref}:${path}`], root).catch(() => undefined)
-  if (raw === undefined) return null
-  if (raw.includes('\0')) return { path, text: '', truncated: false, binary: true }
-  const { body, truncated } = cutToPreview(raw.replace(/\n$/, ''))
-  return { path, text: body, truncated, binary: false }
+  return raw === undefined ? null : fileContent(path, raw)
 }
