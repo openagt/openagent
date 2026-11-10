@@ -203,7 +203,7 @@ const COMMANDS: Record<string, Command<[CliIo, GitRunner]>> = {
     if (to !== 'skill' && to !== 'work' && !interval) throw new UsageError(`${to} is none of skill, work, or an interval like 15m, 6h, 2d, 2w, 1mo`)
     const time = at === undefined ? undefined : parseTimeOfDay(at)
     if (at !== undefined && !time) throw new UsageError(`${at} is no time of day like 10:00`)
-    if (time && !(interval && takesTimeOfDay(interval))) throw new UsageError('a time of day goes with days, weeks or months')
+    if (time && !(interval && takesTimeOfDay(interval.unit))) throw new UsageError('a time of day goes with days, weeks or months')
     const repo = await project(io.cwd, git)
     // Taking a pace back needs no scheduled command: one left for a skill that is gone can always be taken back.
     if (to === 'skill') return saved(repo, s => withPick(s, 'paces', name, undefined), git)

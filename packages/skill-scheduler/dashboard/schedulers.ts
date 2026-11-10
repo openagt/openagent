@@ -374,7 +374,7 @@ export function draftOf(command: SchedulerCommand): PaceDraft {
   if ('work' in pick && pick.work === true) return command.when !== undefined && command.every !== undefined ? { kind: 'work' } : { kind: 'skill' }
   const every = 'every' in pick ? parseInterval(pick.every) : undefined
   if (!every || !('every' in pick)) return { kind: 'skill' }
-  const at = takesTimeOfDay(every) && pick.at !== undefined ? parseTimeOfDay(pick.at) : undefined
+  const at = takesTimeOfDay(every.unit) && pick.at !== undefined ? parseTimeOfDay(pick.at) : undefined
   return { kind: 'every', count: String(every.count), unit: every.unit, at: at?.text ?? '' }
 }
 
@@ -388,7 +388,7 @@ export function paceArgs(draft: PaceDraft): string[] | undefined {
   if (draft.kind !== 'every') return [draft.kind]
   const every = /^\d+$/.test(draft.count.trim()) ? parseInterval(`${draft.count.trim()}${draft.unit}`) : undefined
   if (!every) return undefined
-  if (!takesTimeOfDay(every)) return [every.text]
+  if (!takesTimeOfDay(every.unit)) return [every.text]
   if (draft.atHalfTyped) return undefined
   if (draft.at.trim() === '') return [every.text]
   const at = parseTimeOfDay(draft.at.trim())

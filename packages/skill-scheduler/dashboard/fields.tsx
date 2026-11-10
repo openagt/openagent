@@ -204,7 +204,7 @@ export function PaceFields({
   onChange: (next: PaceDraft) => void
 }) {
   const typed = draft.kind === 'every' ? draft : { kind: 'every' as const, count: String(start.count), unit: start.unit, at: '' }
-  const timed = takesTimeOfDay({ count: 1, unit: typed.unit, ms: 0, text: '' })
+  const timed = takesTimeOfDay(typed.unit)
   // A pick of "No wait" made before its shell line was taken away still shows, so the person sees what to change.
   const offersNoWait = noWait || draft.kind === 'work'
   const choice = asSaid !== undefined || offersNoWait
