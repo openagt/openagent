@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react'
 import { Button, LinkActions, Page, usePolled, useAction, useModuleHost, type ProjectLinks, type ModuleLink, type ModuleProject } from '@openagt/dashboard/module'
-import { heldBack, holderAgent, planLink, planTicketPrompt, ticketLink, withHolder, workOnTicketPrompt } from '../src/module.js'
+import { heldBack, holderAgent, planLink, ticketLink, withHolder } from '../src/module.js'
 import type { ProjectTickets, WorkspaceTicket } from './lib/types.js'
 import { listTickets } from './lib/list.js'
 import {
@@ -93,14 +93,11 @@ export function TicketsPage({ projects }: { projects: ModuleProject[] }) {
   const filtered = hasAnyFilter(view.filters)
 
   // Flat mode renders rows outside any TicketsPanel, so the plan and start columns need their own
-  // actions with the row's own project (a panel binds one projectId; the flat list has one per row).
+  // action with the row's own project (a panel binds one projectId; the flat list has one per row).
   // The dashboard starts the run with the person's own picks and lands on it.
   const { busy, error, run } = useAction()
-  const startPlan = async (projectId: string, file: string) => {
-    await run(() => host.startRun(projectId, planTicketPrompt(file)), 'The planning agent could not be started.')
-  }
-  const startWork = async (projectId: string, file: string) => {
-    await run(() => host.startRun(projectId, workOnTicketPrompt(file)), 'The work agent could not be started.')
+  const startSession = async (projectId: string, prompt: string, failure: string) => {
+    await run(() => host.startRun(projectId, prompt), failure)
   }
   // The page-wide adds: every unclaimed shown ticket handed, as a link, to the actions the
   // installed modules offer on links — "Add to queue" when a project has a queue package — as the
@@ -311,11 +308,9 @@ export function TicketsPage({ projects }: { projects: ModuleProject[] }) {
                     selected={selected.has(`${r.projectId}/${r.ticket.file}`)}
                     onToggleSelect={() => toggleSelected(`${r.projectId}/${r.ticket.file}`)}
                     onOpen={() => onOpenTicket(r.projectId, r.ticket.file)}
-                    onStartWork={() => void startWork(r.projectId, r.ticket.file)}
-                    onConfigureWork={() => host.configureRun(r.projectId, workOnTicketPrompt(r.ticket.file))}
+                    onStart={(prompt, failure) => void startSession(r.projectId, prompt, failure)}
+                    onConfigure={prompt => host.configureRun(r.projectId, prompt)}
                     onOpenPlan={() => onOpenTicketPlan(r.projectId, r.ticket.file)}
-                    onStartPlan={() => void startPlan(r.projectId, r.ticket.file)}
-                    onConfigurePlan={() => host.configureRun(r.projectId, planTicketPrompt(r.ticket.file))}
                     onTopicClick={addTopic}
                     onClaimedClick={filterClaimed}
                     onOpenAgent={agentId => onOpenAgent(r.projectId, agentId)}
