@@ -7,7 +7,7 @@ import { AnswersKept, interventionsOf, namedHere, type MachinesQueue } from './d
 import type { Intervention } from './dashboard/interventions.js'
 import type { ProjectSummary, ProjectionRead } from './dashboard/projects.js'
 import { MachineRunsKept, RUNS_WAIT_MS, type MachineRuns } from './dashboard/machine-runs.js'
-import { asRecorded, onMachine } from './dashboard-rpc/reads.js'
+import { asRecorded, onMachine } from './dashboard/run-rows.js'
 import { isHostName, listMachines, listProjects, machineNamed, nameMachine, noteProjects, noteSeen, noteServer, type MachineRecord } from './registry.js'
 import { callerAtPage } from './dashboard/person.js'
 import { machineKind, machineName } from './reached-by-line.js'
