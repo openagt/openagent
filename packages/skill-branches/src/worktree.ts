@@ -1,5 +1,6 @@
+import { execFile } from 'node:child_process'
 import { basename, dirname, join } from 'node:path'
-import { realpath, stat } from 'node:fs/promises'
+import { readdir, realpath, stat } from 'node:fs/promises'
 import { nodeGitRunner, checkoutRoot, gitReason, originDefaultBranch, type GitRunner, BRANCHES_DIR } from '@openagt/agent-data'
 import { AGENT_BRANCH_PREFIX, isSafeAgentId, isAgentBranch, agentBranchName, agentIdFromWorktreeDir } from './branch-names.js'
 import { DATA_BRANCH, publishedBranch } from '@openagt/agent-data/names'
@@ -29,7 +30,6 @@ export interface WorktreeDirEntry {
 export type DirReader = (path: string) => Promise<string[]>
 
 async function nodeReaddir(path: string): Promise<string[]> {
-  const { readdir } = await import('node:fs/promises')
   const entries = await readdir(path, { withFileTypes: true }).catch(() => [])
   return entries.filter(entry => entry.isDirectory()).map(entry => entry.name)
 }
@@ -428,11 +428,7 @@ export type SizeRunner = (path: string) => Promise<string>
 export function nodeSizeRunner(): SizeRunner {
   return path =>
     new Promise((resolvePromise, rejectPromise) => {
-      void import('node:child_process').then(({ execFile }) => {
-        execFile('du', ['-sk', path], { timeout: 5_000 }, (err, stdout) =>
-          err ? rejectPromise(err) : resolvePromise(stdout),
-        )
-      })
+      execFile('du', ['-sk', path], { timeout: 5_000 }, (err, stdout) => (err ? rejectPromise(err) : resolvePromise(stdout)))
     })
 }
 
