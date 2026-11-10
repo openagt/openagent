@@ -521,7 +521,24 @@ function sanitizeMachines(value: unknown): MachineRecord[] {
     if (typeof label !== 'string' || typeof url !== 'string' || typeof key !== 'string' || typeof door !== 'string') continue
     if (!url || !key || !door || seen.has(url)) continue
     seen.add(url)
-    machines.push({ id: url, label: label.trim().slice(0, MACHINE_LIMITS.label) || url, url, key, door, ...(typeof pin === 'string' && pin ? { pin } : {}), ...(isHostName(host) ? { host } : {}), ...(Array.isArray(formerHosts) && formerHosts.some(isHostName) ? { formerHosts: formerHosts.filter(isHostName).slice(-MACHINE_LIMITS.count) } : {}), ...(server === true ? { server: true as const } : {}), ...(isPersonName(owner) ? { owner } : {}), ...(told === true ? { told: true as const } : {}), ...(logins === true ? { logins: true as const } : {}), ...(ids.length ? { listed: ids } : {}), ...(typeof seenAt === 'string' && !Number.isNaN(Date.parse(seenAt)) ? { seenAt } : {}), ...(Array.isArray(projects) ? { projects: ownProjectsOf(projects) } : {}), ...(isTime(added) ? { added } : {}) })
+    machines.push({
+      id: url,
+      label: label.trim().slice(0, MACHINE_LIMITS.label) || url,
+      url,
+      key,
+      door,
+      ...(typeof pin === 'string' && pin ? { pin } : {}),
+      ...(isHostName(host) ? { host } : {}),
+      ...(Array.isArray(formerHosts) && formerHosts.some(isHostName) ? { formerHosts: formerHosts.filter(isHostName).slice(-MACHINE_LIMITS.count) } : {}),
+      ...(server === true ? { server: true as const } : {}),
+      ...(isPersonName(owner) ? { owner } : {}),
+      ...(told === true ? { told: true as const } : {}),
+      ...(logins === true ? { logins: true as const } : {}),
+      ...(ids.length ? { listed: ids } : {}),
+      ...(isTime(seenAt) ? { seenAt } : {}),
+      ...(Array.isArray(projects) ? { projects: ownProjectsOf(projects) } : {}),
+      ...(isTime(added) ? { added } : {}),
+    })
   }
   return machines
 }
