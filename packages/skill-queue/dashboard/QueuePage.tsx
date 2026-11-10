@@ -122,7 +122,7 @@ function ProjectQueue({ read, titled, schedule, names, starts, reload }: { read:
   const host = useModuleHost()
   const { project, entries, error, working } = read
   const raw = (entries ?? []).map(placed => placed.entry)
-  const count = Math.min(starts.countOf(project.id), Math.max(raw.length, 1))
+  const count = starts.batchOf(project.id, raw)
   return (
     <section aria-label={project.name}>
       <div className="flex flex-wrap items-center gap-x-3 gap-y-2">

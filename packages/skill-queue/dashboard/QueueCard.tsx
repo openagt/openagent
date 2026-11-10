@@ -56,7 +56,7 @@ export function QueueCard({ projects }: ModuleCardProps) {
           <ul className="space-y-4">
             {shown.map(read => {
               const { project, entries } = read
-              const count = Math.min(starts.countOf(project.id), Math.max(entries.length, 1))
+              const count = starts.batchOf(project.id, entries)
               return (
                 <li key={project.id}>
                   <div className="flex w-full items-center gap-2">
