@@ -8,6 +8,7 @@ import {
   bucketUnionRange,
   defaultView,
   hasAnyFilter,
+  rangeClauses,
   rangeFacetCounts,
   sortByKey,
   stageFacetCounts,
@@ -79,11 +80,6 @@ function FacetTrigger({ label, active, ...props }: { label: string; active: numb
       <ChevronDown className="h-3 w-3 opacity-60" aria-hidden />
     </Button>
   )
-}
-
-/** How many clauses a range facet has active — what its trigger badge shows. */
-function rangeClauses(f: RangeFilter): number {
-  return f.buckets.length + (f.range ? 1 : 0) + (f.none ? 1 : 0)
 }
 
 /**

@@ -142,9 +142,7 @@ export function defaultView(): TicketsView {
 export function hasAnyFilter(f: TicketFilters): boolean {
   return (
     f.q.trim() !== '' ||
-    rangeActive(f.priority) ||
-    rangeActive(f.effort) ||
-    rangeActive(f.uncertainty) ||
+    RANGE_FACET_IDS.some(facet => rangeClauses(f[facet]) > 0) ||
     f.topics.length > 0 ||
     f.topicsNone ||
     f.stage.length > 0 ||
@@ -152,8 +150,10 @@ export function hasAnyFilter(f: TicketFilters): boolean {
   )
 }
 
-function rangeActive(f: RangeFilter): boolean {
-  return f.buckets.length > 0 || f.range !== null || f.none
+/** How many clauses a numeric facet's selection holds — its buckets, its range, its `none` — what
+ *  its trigger's badge counts. None is no filter at all. */
+export function rangeClauses(f: RangeFilter): number {
+  return f.buckets.length + (f.range ? 1 : 0) + (f.none ? 1 : 0)
 }
 
 /** A ticket's topics, lowercased — the one casing both matching and the facet list use. */
@@ -164,7 +164,7 @@ function normalTopics(ticket: WorkspaceTicket): string[] {
 /** A ticket against one numeric facet's selection: inactive passes everything; a missing value only
  *  passes on `none`; a present one passes any selected bucket or the range (both inclusive). */
 function matchesRange(ticket: WorkspaceTicket, filter: RangeFilter, facet: RangeFacetId): boolean {
-  if (!rangeActive(filter)) return true
+  if (rangeClauses(filter) === 0) return true
   const value = RANGE_FACETS[facet].value(ticket)
   if (value === undefined) return filter.none
   if (filter.buckets.some(id => inBucket(value, id, RANGE_FACETS[facet].buckets))) return true
@@ -262,8 +262,7 @@ export function bucketUnionRange(filter: RangeFilter, buckets: readonly RangeBuc
 // inputs disagreeing about the range is the state this rules out. `none` survives both.
 
 export function withBucketToggled(f: RangeFilter, id: string): RangeFilter {
-  const buckets = f.buckets.includes(id) ? f.buckets.filter(b => b !== id) : [...f.buckets, id]
-  return { buckets, range: null, none: f.none }
+  return { buckets: toggled(f.buckets, id), range: null, none: f.none }
 }
 
 export function withRange(f: RangeFilter, range: [number, number] | null): RangeFilter {
