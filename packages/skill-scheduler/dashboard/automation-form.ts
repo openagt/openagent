@@ -202,9 +202,12 @@ export function savedFile(output: unknown): { file: string; startsFrom: string; 
   return { file: typeof answer['file'] === 'string' ? answer['file'] : 'a skill file', startsFrom: typeof answer['startsFrom'] === 'string' ? answer['startsFrom'] : 'HEAD', onThisMachine: answer['onThisMachine'] === true, ...(typeof answer['version'] === 'string' ? { version: answer['version'] } : {}) }
 }
 
+/** When a row kept on this machine can start: at once once switched on while the scheduler runs, else once it runs too. */
+const canStart = (schedulerRuns: boolean): string => (schedulerRuns ? 'can start as soon as you switch it on' : 'can start once you switch it on and the scheduler runs')
+
 /** What a saved automation is and what the person has to do with it, in a sentence: a shared one is a file to commit that must reach where a run's checkout starts; one kept on this machine needs nothing. */
-export function savedWords(saved: { startsFrom: string; onThisMachine: boolean }): string {
-  if (saved.onThisMachine) return 'It is kept on this machine alone: nothing to commit, and nobody else gets the row. Its row can start as soon as you switch it on. Its prompt is in the record of each run, which is shared where this project shares its records.'
+export function savedWords(saved: { startsFrom: string; onThisMachine: boolean }, schedulerRuns: boolean): string {
+  if (saved.onThisMachine) return `It is kept on this machine alone: nothing to commit, and nobody else gets the row. Its row ${canStart(schedulerRuns)}. Its prompt is in the record of each run, which is shared where this project shares its records.`
   return `It is a file of yours, in this project, and nothing was committed for you. ${startsWhen(saved.startsFrom)}`
 }
 
@@ -254,8 +257,8 @@ export function removedWords(title: string, output: unknown): string {
 }
 
 /** What the form says of where a draft will be saved, under its two choices. */
-export function whereHint(draft: AutomationDraft): string {
-  return draft.onThisMachine ? 'Kept on this machine alone, outside git. The row starts switched off, and can start as soon as you switch it on.' : 'Saved as a skill file in this project, which you commit. The row starts switched off.'
+export function whereHint(draft: AutomationDraft, schedulerRuns: boolean): string {
+  return draft.onThisMachine ? `Kept on this machine alone, outside git. The row starts switched off, and ${canStart(schedulerRuns)}.` : 'Saved as a skill file in this project, which you commit. The row starts switched off.'
 }
 
 /** Where a saved automation's file has to get to before its row can start, in a sentence. */

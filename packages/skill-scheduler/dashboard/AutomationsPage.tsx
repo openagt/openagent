@@ -195,6 +195,7 @@ export function AutomationsPage({ projects }: ModulePageProps) {
             {creating === row.project.id && (
               <AutomationForm
                 project={row.project}
+                schedulerRuns={schedulerStopped(row) === undefined}
                 run={args => run(row.project, args)}
                 onDirty={setDirty}
                 onClose={() => {

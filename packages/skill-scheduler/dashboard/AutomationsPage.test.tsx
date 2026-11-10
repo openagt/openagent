@@ -1938,6 +1938,15 @@ describe('the "New automation" form', () => {
     expect(screen.getByRole('group', { name: 'New automation' }).textContent).not.toMatch(/scheduler is not running/)
   })
 
+  test('while the scheduler is off, the form promises a start kept on this machine only once the scheduler runs', async () => {
+    const { host } = hostAnswering(() => ({ ok: true, output: { ...STATUS, on: false, running: false } }))
+    show(host)
+    fireEvent.click(await screen.findByRole('button', { name: 'New automation in gemstack' }))
+    const form = screen.getByRole('group', { name: 'New automation' })
+    fireEvent.click(radio(within(form).getByRole('radiogroup', { name: 'Who gets the automation' }), 'Only on this machine'))
+    expect(within(form).getByText('Kept on this machine alone, outside git. The row starts switched off, and can start once you switch it on and the scheduler runs.')).toBeTruthy()
+  })
+
   test('"Who gets it": shared with the project by default; "Only on this machine" saves with --private, and the saved panel says nothing is to commit and the row can start at once', async () => {
     const { host, runCommand } = scheduler((_, args) => (args[0] === 'add' ? { ok: true, output: { ok: true, command: 'watch-competitor', file: '.scheduler/automations/watch-competitor.md', startsFrom: 'origin/main', onThisMachine: true } } : { ok: true, output: { ok: true } }))
     show(host)

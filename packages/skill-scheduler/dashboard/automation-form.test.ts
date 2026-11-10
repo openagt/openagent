@@ -96,10 +96,13 @@ describe('a new automation', () => {
     expect(savedFile({ ok: true, file: 'f', startsFrom: 'HEAD', version: 7 })).toEqual({ file: 'f', startsFrom: 'HEAD', onThisMachine: false })
     expect(savedFile({ ok: true, file: '.scheduler/automations/x.md', startsFrom: 'origin/main', onThisMachine: true })).toEqual({ file: '.scheduler/automations/x.md', startsFrom: 'origin/main', onThisMachine: true })
     // What the person has to do with it: a shared one is theirs to commit and bring where a checkout starts; one kept here needs nothing.
-    expect(savedWords({ startsFrom: 'origin/main', onThisMachine: false })).toBe('It is a file of yours, in this project, and nothing was committed for you. Its row cannot start before the file is on origin/main: commit it and bring it there.')
-    expect(savedWords({ startsFrom: 'origin/main', onThisMachine: true })).toBe('It is kept on this machine alone: nothing to commit, and nobody else gets the row. Its row can start as soon as you switch it on. Its prompt is in the record of each run, which is shared where this project shares its records.')
-    expect(whereHint(draft())).toBe('Saved as a skill file in this project, which you commit. The row starts switched off.')
-    expect(whereHint(draft({ onThisMachine: true }))).toBe('Kept on this machine alone, outside git. The row starts switched off, and can start as soon as you switch it on.')
+    expect(savedWords({ startsFrom: 'origin/main', onThisMachine: false }, true)).toBe('It is a file of yours, in this project, and nothing was committed for you. Its row cannot start before the file is on origin/main: commit it and bring it there.')
+    expect(savedWords({ startsFrom: 'origin/main', onThisMachine: true }, true)).toBe('It is kept on this machine alone: nothing to commit, and nobody else gets the row. Its row can start as soon as you switch it on. Its prompt is in the record of each run, which is shared where this project shares its records.')
+    expect(whereHint(draft(), true)).toBe('Saved as a skill file in this project, which you commit. The row starts switched off.')
+    expect(whereHint(draft({ onThisMachine: true }), true)).toBe('Kept on this machine alone, outside git. The row starts switched off, and can start as soon as you switch it on.')
+    // While the scheduler does not run, switching it on is not enough.
+    expect(savedWords({ startsFrom: 'origin/main', onThisMachine: true }, false)).toContain('Its row can start once you switch it on and the scheduler runs.')
+    expect(whereHint(draft({ onThisMachine: true }), false)).toBe('Kept on this machine alone, outside git. The row starts switched off, and can start once you switch it on and the scheduler runs.')
     expect(startsWhen('origin/main')).toBe('Its row cannot start before the file is on origin/main: commit it and bring it there.')
     expect(startsWhen('HEAD')).toBe('Its row cannot start before you commit the file.')
   })

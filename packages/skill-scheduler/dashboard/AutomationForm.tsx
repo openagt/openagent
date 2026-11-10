@@ -17,12 +17,15 @@ import { DEFAULT_AGENT } from '../src/names.js'
 
 export function AutomationForm({
   project,
+  schedulerRuns,
   run,
   onDirty,
   onClose,
   onSaved,
 }: {
   project: ModuleProject
+  /** Whether the project's scheduler is on and running: else a row switched on does not start yet. */
+  schedulerRuns: boolean
   /** Run one command of the scheduler in the project, in turn with the page's other saves. */
   run: (args: string[]) => Promise<ModuleCommandResult>
   /** Whether something is typed and not saved: closing the form then would lose it. */
@@ -70,7 +73,7 @@ export function AutomationForm({
         <p>
           Saved <span className="font-mono">{saved.onThisMachine ? saved.command : `/${saved.command}`}</span> as <span className="font-mono">{saved.file}</span>.
         </p>
-        <p className="mt-2">{savedWords(saved)}</p>
+        <p className="mt-2">{savedWords(saved, schedulerRuns)}</p>
         {saved.timeNotKept !== undefined && (
           <p role="alert" className="mt-2 text-danger">
             Its time of day was not kept: {saved.timeNotKept}. Its row's Edit sets it.
@@ -140,7 +143,7 @@ export function AutomationForm({
         </p>
       )}
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <p className="min-w-0 flex-1 text-xs text-muted-foreground">{whereHint(draft)}</p>
+        <p className="min-w-0 flex-1 text-xs text-muted-foreground">{whereHint(draft, schedulerRuns)}</p>
         <div className="flex gap-2">
           <Button variant="outline" size="sm" disabled={saving} onClick={onClose}>
             Cancel
