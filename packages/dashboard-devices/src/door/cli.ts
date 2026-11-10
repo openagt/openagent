@@ -380,13 +380,15 @@ async function forPerson(io: CliIO, store: Store, said: string): Promise<string 
   const person = await addPerson(io.env, name, Date.now(), helper !== undefined)
   if (!person) throw new Refused('This computer has as many persons as it can: remove one first.')
   if (helper && person.port !== undefined && !person.ready && !(person.worker !== undefined && pidAlive(person.worker))) {
+    const known = (kept: Store): Store['persons'][number] | undefined => kept.persons.find(candidate => candidate.name === person.name && !candidate.owner)
+    // Why the last try failed is forgotten before the next one starts, never after: one that fails at once has said why by then.
+    await update(io.env, kept => void delete known(kept)?.problem)
     const worker = (io.startWork ?? startPersonWork)(io.env, person.name)
-    await update(io.env, kept => {
-      const known = kept.persons.find(candidate => candidate.name === person.name && !candidate.owner)
-      if (!known) return
-      delete known.problem
-      if (worker !== undefined) known.worker = worker
-    })
+    if (worker !== undefined)
+      await update(io.env, kept => {
+        const them = known(kept)
+        if (them) them.worker = worker
+      })
   }
   return person.name
 }
