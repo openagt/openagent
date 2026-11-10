@@ -53,6 +53,9 @@ function sourceCaption(tree: AgentTree): string | undefined {
 
 const nameOf = (path: string) => path.slice(path.lastIndexOf('/') + 1)
 
+/** The last ask from the chat that was taken: a pane opened again later does not take it a second time. */
+let showTaken = 0
+
 /**
  * The file of the tree a path names: the path itself, or the longest file it ends with, for a
  * path whole on the computer the run is on ("/home/user/test-project/index.html").
@@ -142,10 +145,9 @@ export function FilesPane({ projectId, agentId, activity, show, context }: Modul
   // A file asked for from the chat, by the path its agent named it by: whole, on whichever computer
   // the run is on, so it is found in the tree by its end. Opened as a click in the tree opens one,
   // once the tree has it; each ask once.
-  const shownAsk = useRef(0)
   useEffect(() => {
-    if (show === undefined || show.at <= shownAsk.current || files.length === 0) return
-    shownAsk.current = show.at
+    if (show === undefined || show.at <= showTaken || files.length === 0) return
+    showTaken = show.at
     const path = fileAt(files, show.path)
     if (path !== undefined) open(path, false)
   }, [show, files])

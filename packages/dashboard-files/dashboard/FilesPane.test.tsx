@@ -261,6 +261,19 @@ describe('opening files, as Claude Code on the web does', () => {
     expect(tabs()).toEqual([])
   })
 
+  test('an ask already taken is not taken again by a pane opened later', async () => {
+    readTree.mockResolvedValue({ source: 'checkout', files: ['index.html'] })
+    const taken = { path: '/home/user/project/index.html', at: 3 }
+    const first = render(<FilesPane projectId="p1" agentId="run-1" context={context()} show={taken} />)
+    await waitFor(() => expect(tabs()).toEqual([['index.html', 'true', 'preview']]))
+    fireEvent.click(screen.getByRole('button', { name: 'Close index.html' }))
+    first.unmount()
+    render(<FilesPane projectId="p1" agentId="run-1" context={context()} show={taken} />)
+    await waitFor(() => expect(within(treeOf()).getByTitle('index.html')).toBeTruthy())
+    await new Promise(resolve => setTimeout(resolve, 20))
+    expect(tabs()).toEqual([])
+  })
+
   test('a right click on a file attaches it to the Context, and a file in it is ticked', async () => {
     const toggle = vi.fn()
     const { rerender } = render(<FilesPane projectId="p1" context={context([], toggle)} />)
