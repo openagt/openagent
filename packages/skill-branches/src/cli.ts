@@ -2,19 +2,8 @@ import { basename, resolve } from 'node:path'
 import { realpath, stat } from 'node:fs/promises'
 import { GIT_FAILED, Refused, UsageError, checkoutRoot, inRepo, nodeGitRunner, parseCommandArgs, runCommandLine, type Command, type GitRunner } from '@openagt/agent-data'
 import { agentBranchName, agentIdFromWorktreeDir, isSafeAgentId, sessionNameOf } from './branch-names.js'
-import {
-  branchPushed,
-  currentBranch,
-  isWorktreeRoot,
-  nameBranch,
-  projectRoot,
-  type NameBranchRefusal,
-  worktreeBranch,
-  worktreeClean,
-  worktreeDirEntries,
-  worktreePath,
-  worktreeSize,
-} from './worktree.js'
+import { branchPushed, currentBranch, isWorktreeRoot, projectRoot, worktreeBranch, worktreeClean, worktreeDirEntries, worktreePath, worktreeSize } from './worktree.js'
+import { nameBranch, type NameBranchRefusal } from './name.js'
 import { createCheckout, attachCheckout } from './checkout.js'
 import { reconcileBranchLinks } from './branch-links.js'
 import { discardWorktree, reclaimWorktree, type ReclaimOutcome, type ReclaimRefusal } from './reclaim.js'

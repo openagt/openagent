@@ -5,7 +5,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { nodeGitRunner } from '@openagt/agent-data'
 import { createCheckout } from './checkout.js'
-import { nameBranch } from './worktree.js'
+import { nameBranch } from './name.js'
 import { parseCommits, parseNumstat, parsePorcelain, readBranchStates } from './branch-state.js'
 import { runCli } from './cli.js'
 

@@ -5,7 +5,6 @@ import { mkdir, mkdtemp, rm, writeFile, stat, realpath, symlink } from 'node:fs/
 import { tmpdir } from 'node:os'
 import { nodeGitRunner, type GitRunner, BRANCHES_DIR } from '@openagt/agent-data'
 import {
-  nameBranch,
   addWorktree,
   attachWorktree,
   deleteBranch,
@@ -418,33 +417,6 @@ test('listWorktreeDirs never mistakes a rename link for a checkout: a link is no
   } finally {
     await rm(repo, { recursive: true, force: true })
   }
-})
-
-test('nameBranch: a rename lost to a sibling naming the same thing at the same moment takes the next suffix (review)', async () => {
-  // The branches read says `agent-x` is free; the rename then loses the race; the re-read shows it taken.
-  let renames = 0
-  const racing: GitRunner = async (args, cwd) => {
-    if (args[0] === 'rev-parse' && args[1] === '--show-toplevel') return cwd + '\n'
-    if (args[0] === 'rev-parse') return 'agent-1\n'
-    if (args[0] === 'for-each-ref') return renames === 0 ? 'refs/heads/agent-1\n' : 'refs/heads/agent-1\nrefs/heads/agent-x\n'
-    if (args[0] === 'branch' && args[1] === '-m') {
-      if (renames++ === 0) throw new Error("fatal: a branch named 'agent-x' already exists")
-      return ''
-    }
-    throw new Error(`unexpected git ${args.join(' ')}`)
-  }
-  const wt = await realpath(tmpdir())
-  assert.deepEqual(await nameBranch(wt, 'x', racing), { ok: true, branch: 'agent-x-2' })
-  assert.equal(renames, 2)
-
-  // Any other rename failure is the caller's to see.
-  const broken: GitRunner = async (args, cwd) => {
-    if (args[0] === 'rev-parse' && args[1] === '--show-toplevel') return cwd + '\n'
-    if (args[0] === 'rev-parse') return 'agent-1\n'
-    if (args[0] === 'for-each-ref') return ''
-    throw new Error('fatal: disk full')
-  }
-  await assert.rejects(() => nameBranch(wt, 'x', broken), /disk full/)
 })
 
 test('a new checkout started from a published base takes origin\'s copy, fetched then, whatever this clone holds of that branch; one gone from origin leaves no checkout and no branch', async () => {
