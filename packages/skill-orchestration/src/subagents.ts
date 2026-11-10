@@ -316,9 +316,7 @@ function sharedFiles(plan: Plan, task: PlanTask, mine: readonly RunCard[]): Shar
  */
 async function taskOfPlan(repo: string, main: string, id: string, deps: SubagentDeps): Promise<{ plan: Plan; task: PlanTask & { level: Level } }> {
   const plan = await approvedPlan(repo, main, deps)
-  const task = plan.tasks.find(one => one.id === id)
-  const tasks = plan.tasks.map(one => one.id)
-  if (task === undefined) throw new Refused({ ok: false, reason: 'no-task', task: id, tasks }, `your plan has no task "${id}": its tasks are ${tasks.join(', ')}`)
+  const task = planTask(plan, id)
   if (task.uncertainty === undefined) throw new Refused({ ok: false, reason: 'no-uncertainty', task: id }, `the task "${task.name}" has no \`Uncertainty:\` line: rate it 0 to 10 in the plan, 0 when it holds no meaningful alternatives, and save the plan again`)
   if (task.uncertainty > 0)
     throw new Refused(
@@ -327,6 +325,14 @@ async function taskOfPlan(repo: string, main: string, id: string, deps: Subagent
     )
   if (task.level === undefined) throw new Refused({ ok: false, reason: 'no-level', task: id }, `the task "${task.name}" has no \`Level:\` line: say ${LEVELS.join(' or ')} in the plan and save it again, since the person's settings pick the model for it`)
   return { plan, task: { ...task, level: task.level } }
+}
+
+/** The task of the caller's plan that `id` names; a refusal naming the plan's tasks when it names none. */
+function planTask(plan: Plan, id: string): PlanTask {
+  const task = plan.tasks.find(one => one.id === id)
+  if (task !== undefined) return task
+  const tasks = plan.tasks.map(one => one.id)
+  throw new Refused({ ok: false, reason: 'no-task', task: id, tasks }, `your plan has no task "${id}": its tasks are ${tasks.join(', ')}`)
 }
 
 /** The caller's plan, saved and approved by the person as it is saved now; either missing is a refusal of its own. */
@@ -393,7 +399,7 @@ export async function retrySubagent(repo: string, env: NodeJS.ProcessEnv, id: st
 /** The caller's subagents, newest first. */
 export async function listSubagents(repo: string, env: NodeJS.ProcessEnv): Promise<Subagent[]> {
   const main = await mainAgent(repo, env)
-  return (await listRuns(repo)).filter(card => runnerMark(card)?.parent === main.id).map(view)
+  return (await subagentsOf(repo, main.id)).map(view)
 }
 
 /** One of the caller's subagents, with its last reply as `result` once it has one on its record. */
@@ -580,6 +586,15 @@ function projectCheck(plan: Plan, finished: ReadonlySet<string>, then: string): 
   }
 }
 
+/**
+ * The checks that finishing `task` runs: its own `Check:` line, then the plan's when `task` is the
+ * last of the plan to be finished (`finished` counts it already). Each says `then` when it fails.
+ */
+function checksOf(plan: Plan, task: PlanTask | undefined, finished: ReadonlySet<string>, then: { task: string; plan: string }): CheckToRun[] {
+  const project = projectCheck(plan, finished, then.plan)
+  return [...(task?.check !== undefined ? [taskCheck(task, task.check, then.task)] : []), ...(project !== undefined ? [project] : [])]
+}
+
 /** Run each check in the main agent's checkout, in turn; the first that fails is a refusal naming the command and what it printed. */
 async function runChecks(checks: readonly CheckToRun[], checkout: string, named: Record<string, string>, deps: SubagentDeps): Promise<{ check?: string; projectCheck?: string }> {
   for (const check of checks) {
@@ -604,16 +619,11 @@ async function landChecks(repo: string, main: string, card: RunCard, deps: Subag
   const plan = parsePlan(text)
   const id = card.id
   const task = plan.tasks.find(one => one.id === taskIdOf(card))
-  const checks: CheckToRun[] = []
-  if (task?.check !== undefined)
-    checks.push(
-      taskCheck(task, task.check, `the merge is still in and the branch of ${id} is still there, so fix it on your branch, commit, and land ${id} again, which only runs the check — or retry the task with \`retry ${id} "<what to do differently>"\``),
-    )
   // Finished as of this land: the one being landed counts, since nothing is recorded yet.
   const { finished } = await finishedTasks(repo, main, await subagentsOf(repo, main))
   if (task !== undefined) finished.add(task.id)
-  const project = projectCheck(plan, finished, `the merge is still in and the branch of ${id} is still there, so fix it on your branch, commit, and land ${id} again`)
-  if (project !== undefined) checks.push(project)
+  const again = `the merge is still in and the branch of ${id} is still there, so fix it on your branch, commit, and land ${id} again`
+  const checks = checksOf(plan, task, finished, { task: `${again}, which only runs the check — or retry the task with \`retry ${id} "<what to do differently>"\``, plan: again })
   const unchecked: Unchecked | undefined = task === undefined ? (taskIdOf(card) === undefined ? 'no-task-on-record' : 'task-gone') : task.check === undefined ? 'no-check-line' : undefined
   return { checks, ...(unchecked !== undefined ? { unchecked } : {}) }
 }
@@ -634,9 +644,7 @@ export async function markTaskDone(repo: string, env: NodeJS.ProcessEnv, which: 
   const main = await mainAgent(repo, env)
   if (runnerMark(main)?.parent !== undefined) throw new Refused({ ok: false, reason: 'subagent' }, 'a subagent has no plan: say in your last reply what you did')
   const plan = await approvedPlan(repo, main.id, deps)
-  const task = plan.tasks.find(one => one.id === which)
-  const ids = plan.tasks.map(one => one.id)
-  if (task === undefined) throw new Refused({ ok: false, reason: 'no-task', task: which, tasks: ids }, `your plan has no task "${which}": its tasks are ${ids.join(', ')}`)
+  const task = planTask(plan, which)
   const mine = await subagentsOf(repo, main.id)
   const runs = runsOn(mine, task.id)
   const lander = runs.find(landed)
@@ -652,8 +660,7 @@ export async function markTaskDone(repo: string, env: NodeJS.ProcessEnv, which: 
   if (!(await worktreeClean(checkout, deps.git).catch(() => false))) throw new Refused({ ok: false, reason: 'uncommitted' }, 'your checkout has uncommitted changes: commit your work on the task, then mark it done')
   const again = `fix it on your branch, commit, and mark it with \`done ${task.id}\` again; nothing is marked yet`
   tasks.finished.add(task.id)
-  const checks = [...(task.check !== undefined ? [taskCheck(task, task.check, again)] : []), ...[projectCheck(plan, tasks.finished, again)].filter(check => check !== undefined)]
-  const passed = await runChecks(checks, checkout, { task: task.id }, deps)
+  const passed = await runChecks(checksOf(plan, task, tasks.finished, { task: again, plan: again }), checkout, { task: task.id }, deps)
   await markDone(repo, main.id, task.id, deps.now().toISOString())
   return { task: task.id, name: task.name, ...passed, ...(task.check === undefined ? { unchecked: 'no-check-line' as const } : {}) }
 }
