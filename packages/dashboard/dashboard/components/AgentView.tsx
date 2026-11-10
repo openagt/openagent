@@ -16,6 +16,7 @@ import { sendNow, withdrawMessage } from '../rpc/control.js'
 import type { WaitingMessage } from './EventList.js'
 import { AgentWorkBar } from './AgentWorkBar.js'
 import { useWorkBarAway } from '../lib/work-bar-away.js'
+import { keepWaiting, keptWaiting, onKeptWaiting } from '../lib/draft-handoff.js'
 import { AgentFeed } from './AgentFeed.js'
 import { IssueLinks } from './Markdown.js'
 import { OpenFile } from './ToolCalls.js'
@@ -477,6 +478,9 @@ export function AgentView({
   )
 }
 
+/** A message sent to a working agent, with how many prompts its log held then: a later prompt of its text is it, read. */
+type Queued = QueuedMessage & { prompts: number }
+
 /**
  * The messages on their way to an agent, shown in its feed until the agent's own line of each
  * arrives: the one just sent to the ended agent (`sending`, which `onSending` sets), or the prompt
@@ -509,24 +513,34 @@ function useMessagesOnTheirWay(
   // The messages sent while the agent works that it has not read yet, each shown waiting until the
   // agent reads it: at its next step, where its `steered` line lands, or, sent for later or not
   // taken in time, as the prompt of its next turn. An agent that stopped working without reading
-  // them (it failed, it was stopped) shows them no longer.
-  const [queued, setQueued] = useState<(QueuedMessage & { prompts: number })[]>([])
-  useEffect(() => setQueued([]), [agentId])
+  // them (it failed, it was stopped) shows them no longer. Kept per run in this browser, so a
+  // visit or a reload shows them too, until the run's events say they are read, and each tab open
+  // on the run takes the list another tab keeps, so a send there adds to it.
+  const [kept, setKept] = useState(() => ({ run: agentId, messages: keptWaiting<Queued>(agentId) }))
+  const queued = kept.run === agentId ? kept.messages : keptWaiting<Queued>(agentId)
+  const setQueued = useCallback(
+    (next: (was: Queued[]) => Queued[]) => setKept(was => ({ run: agentId, messages: next(was.run === agentId ? was.messages : keptWaiting<Queued>(agentId)) })),
+    [agentId],
+  )
+  useEffect(() => {
+    if (kept.run === agentId) keepWaiting(agentId, kept.messages)
+  }, [kept, agentId])
+  useEffect(() => onKeptWaiting<Queued>(agentId, messages => setKept({ run: agentId, messages })), [agentId])
   const isRead = useMemo(() => {
     const steered = new Set(shown.flatMap(e => (e.kind === 'driver' && e.event.type === 'steered' && e.event.id !== undefined ? [e.event.id] : [])))
     const starts = shown.flatMap(e => (e.kind === 'driver' && e.event.type === 'start' ? [e.event.prompt] : []))
-    return (message: QueuedMessage & { prompts: number }) => steered.has(message.id) || starts.slice(message.prompts).includes(message.text)
+    return (message: Queued) => steered.has(message.id) || starts.slice(message.prompts).includes(message.text)
   }, [shown])
   const unread = queued.filter(message => !isRead(message))
   useEffect(() => {
-    if (unread.length !== queued.length) setQueued(unread)
+    if (unread.length !== queued.length) setQueued(() => unread)
   }, [unread.length, queued.length]) // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => {
     if (queued.length === 0 || feedLive) return
-    const timer = setTimeout(() => setQueued([]), QUEUED_UNREAD_MS)
+    const timer = setTimeout(() => setQueued(() => []), QUEUED_UNREAD_MS)
     return () => clearTimeout(timer)
-  }, [queued.length, feedLive])
-  const onQueued = useCallback((message: QueuedMessage) => setQueued(was => [...was, { ...message, prompts }]), [prompts])
+  }, [queued.length, feedLive, setQueued])
+  const onQueued = useCallback((message: QueuedMessage) => setQueued(was => [...was, { ...message, prompts }]), [setQueued, prompts])
   // Cancel and edit puts the message back in the box; the composer says how.
   const editInBox = useRef<((text: string) => void) | null>(null)
   const waiting: WaitingMessage[] = unread.map(({ prompts: _prompts, ...message }) => ({

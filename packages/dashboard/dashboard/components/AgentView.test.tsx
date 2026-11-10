@@ -690,6 +690,45 @@ describe('a message sent while the agent works', () => {
     expect(queuedBoxes()).toHaveLength(0)
   })
 
+  test('it is still waiting after the page is left or reloaded, with Send now and Cancel and edit, until the agent reads it', () => {
+    const before = [start('go'), text]
+    render(view({ live: true, events: before }))
+    fireEvent.click(screen.getByText('queue-one'))
+    const first = `m${queuedIds}`
+    fireEvent.click(screen.getByText('queue-one'))
+    const second = `m${queuedIds}`
+    cleanup()
+    const { rerender } = render(view({ live: true, events: before }))
+    expect(queuedBoxes().map(n => n.textContent)).toEqual(['and then this', 'and then this'])
+    fireEvent.click(screen.getAllByRole('button', { name: 'Send now' })[1]!)
+    expect(sendNow).toHaveBeenCalledWith('p1', 'run-1')
+    fireEvent.click(screen.getAllByRole('button', { name: 'Cancel and edit message' })[0]!)
+    expect(withdrawMessage).toHaveBeenCalledWith('p1', 'run-1', first)
+    const read = [...before, { kind: 'driver', event: { type: 'steered', text: 'and then this', id: second } } as OpenAgentEvent]
+    rerender(view({ live: true, events: read }))
+    expect(queuedBoxes()).toHaveLength(0)
+    cleanup()
+    render(view({ live: true, events: before }))
+    expect(queuedBoxes()).toHaveLength(0)
+  })
+
+  test('two tabs open on the run each keep the message the other sent: both show both, and both are still waiting after a reload', () => {
+    const before = [start('go'), text]
+    const one = render(view({ live: true, events: before }))
+    const two = render(view({ live: true, events: before }))
+    // The browser tells every other tab of a write, never the one that wrote.
+    const sendIn = (tab: typeof one) => {
+      fireEvent.click(within(tab.container).getByText('queue-one'))
+      act(() => void window.dispatchEvent(new StorageEvent('storage', { key: 'oa.waiting:run-1' })))
+    }
+    sendIn(one)
+    sendIn(two)
+    for (const tab of [one, two]) expect(within(tab.container).queryAllByLabelText('Your message, waiting')).toHaveLength(2)
+    cleanup()
+    render(view({ live: true, events: before }))
+    expect(queuedBoxes()).toHaveLength(2)
+  })
+
   test('queued before the agent\'s first event, it is the chat\'s only row, not hidden behind the waiting words', () => {
     render(view({ live: true, events: [] }))
     fireEvent.click(screen.getByText('queue-one'))
