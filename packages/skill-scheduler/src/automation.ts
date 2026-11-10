@@ -2,11 +2,10 @@ import { mkdir, readdir, readFile, realpath, rename, rmdir, unlink, writeFile } 
 import { dirname, join } from 'node:path'
 import { excludeFromGit, originDefaultBranch, type GitRunner } from '@openagt/agent-data'
 import { HARNESS_SKILL_DIRS } from '@openagt/skill-branches'
-import { MAX_NAME, NEVER_STARTED_SINCE_MS, OWN_AUTOMATIONS_DIR, OWN_TEXT_MAX, RUN_SKILLS_DIR, SKILL_FILE, STATE_DIR, TRY_TIMEOUT_MS, isCommandName } from './names.js'
+import { MAX_NAME, OWN_AUTOMATIONS_DIR, OWN_TEXT_MAX, RUN_SKILLS_DIR, SKILL_FILE, STATE_DIR, isCommandName } from './names.js'
 import { createHash } from 'node:crypto'
 import { FOLDER_LITTER, HALF_SAVED, automationOf, automationSkill, frontMatterOf, wellFormed, type NewAutomation } from './automation-file.js'
-import { foundOutput, isDue, lastRunValue, readSchedule, skillFile, skillSchedule } from './schedule.js'
-import { runCheck } from './tick.js'
+import { readSchedule, skillFile, skillSchedule } from './schedule.js'
 
 /**
  * A person's own automation: a prompt they wrote, saved as a command skill of the project, so it
@@ -279,39 +278,4 @@ export async function removeAutomation(repo: string, name: string, git: GitRunne
   const held = await git(['status', '--porcelain', '--', join(folder, SKILL_FILE)], repo).catch(() => undefined)
   const startsFrom = (await originDefaultBranch(repo, git).catch(() => undefined)) ?? 'HEAD'
   return { ok: true, command: name, file: found.file, git: held === undefined ? 'unknown' : held.trim() === '' ? 'nothing' : held.startsWith('A') ? 'staged' : 'committed', startsFrom }
-}
-
-
-/** How much of a failed check's last line of error is answered, in characters. */
-const ERROR_MAX = 500
-
-/** What trying a check answered. */
-export interface Tried {
-  /** The time the check was given as `$LAST_RUN`. */
-  lastRun: string
-  /** Whether the check ran to its end without an error. */
-  ran: boolean
-  /** Whether what it printed would start an agent. */
-  due: boolean
-  /** What it printed, cut as a run is handed it, with the line that says it was cut. */
-  printed: string
-  /** Why it did not run, when it did not: that it took too long, or the last line of what it said went wrong. */
-  error?: string
-}
-
-/**
- * Run a check once, as the tick would, and say what it printed and whether an agent would start:
- * nothing is saved and nothing is started. It asks what is new since a day ago. A try has less
- * time than a tick gives a check ({@link TRY_TIMEOUT_MS}): whoever asks, a dashboard, waits for
- * the answer, and gives up before a tick would.
- */
-export async function tryCheck(repo: string, shell: string, now: Date, check: typeof runCheck = runCheck, budgetMs: number = TRY_TIMEOUT_MS): Promise<Tried> {
-  const lastRun = lastRunValue(new Date(now.getTime() - NEVER_STARTED_SINCE_MS).toISOString())
-  const started = Date.now()
-  const checked = await check(repo, shell, budgetMs, lastRun)
-  const printed = foundOutput(checked.stdout, lastRun)
-  if (checked.ok) return { lastRun, ran: true, due: isDue(checked.stdout), printed }
-  const said = checked.stderr.trim().split('\n').at(-1) ?? ''
-  const error = Date.now() - started >= budgetMs ? `it took longer than ${budgetMs / 1000} seconds` : said.length > ERROR_MAX ? `${said.slice(0, ERROR_MAX)}…` : said
-  return { lastRun, ran: false, due: false, printed, error }
 }

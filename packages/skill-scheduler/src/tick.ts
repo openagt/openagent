@@ -3,12 +3,13 @@ import type { AgentAccount } from '@openagt/agent-driver'
 import { markerCard, runnerMark, type Publish, type RunnerMark } from '@openagt/agent-runner'
 import type { FileBranchWrite } from '@openagt/agent-data'
 import type { RunCard } from '@openagt/skill-logs'
-import { AGENT_LABELS, AGENT_SKILLS_DIR, DEFAULT_AGENT, LAST_RUN_ENV, NEVER_STARTED_SINCE_MS, SWITCHED_ON_ENV, NOW_READY_MS, isAgent, type AgentName } from './names.js'
+import { AGENT_LABELS, AGENT_SKILLS_DIR, DEFAULT_AGENT, NEVER_STARTED_SINCE_MS, NOW_READY_MS, isAgent, type AgentName } from './names.js'
 import type { LastRun } from './records.js'
 import { dueFrom, localStamp, paceInForce, paceText } from './pace.js'
 import { quotaBoundaryStatus, quotaHeadroom } from './quota-boundary.js'
 import { accountWithRoom, readClaudeAccount, readCodexAccount } from './accounts.js'
-import { ableAgents, checkFound, commandPrompt, homeAgent, isDue, lastRunValue, ownAttached, resumeText, eachItems, skillFile, type Schedule, type ScheduledCommand, type StartItem } from './schedule.js'
+import { checkFound, eachItems, isDue, lastRunValue, ownAttached, resumeText, type CheckResult, type StartItem } from './check.js'
+import { ableAgents, commandPrompt, homeAgent, skillFile, type Schedule, type ScheduledCommand } from './schedule.js'
 import type { StartPoint } from './start-point.js'
 import { agentInForce, capInForce, modelInForce, publishInForce, switchedOnAt, type ListedCommand, type State, type TickDecision, type TickRecord } from './state.js'
 
@@ -27,13 +28,6 @@ import { agentInForce, capInForce, modelInForce, publishInForce, switchedOnAt, t
  * marker that landed second past the cap is withdrawn, and that machine does not spawn. A push
  * that fails twice means another machine got there first; no spawn either.
  */
-
-/** What a check said. */
-export interface CheckResult {
-  ok: boolean
-  stdout: string
-  stderr: string
-}
 
 export interface TickDeps {
   state: State
@@ -400,24 +394,6 @@ function age(ms: number): string {
 function describe(card: RunCard): string {
   const host = runnerMark(card)?.host
   return host ? `${card.id} on ${host}` : card.id
-}
-
-/**
- * Run a check at the repository root through the shell, within its budget; the check reads
- * `lastRun` as `$LAST_RUN`, and `switchedOn` as `$SWITCHED_ON` when given. `account` is the
- * environment of the account runs work as at the git host, so a check that asks `gh` asks as it.
- */
-export async function runCheck(repo: string, shell: string, timeoutMs: number, lastRun: string, switchedOn?: string, account: Record<string, string> = {}): Promise<CheckResult> {
-  const { execFile } = await import('node:child_process')
-  return new Promise<CheckResult>(resolve => {
-    const child = execFile('sh', ['-c', shell], { cwd: repo, timeout: timeoutMs, maxBuffer: 4 * 1024 * 1024, env: { ...process.env, ...account, [LAST_RUN_ENV]: lastRun, ...(switchedOn !== undefined ? { [SWITCHED_ON_ENV]: switchedOn } : {}) } }, (err, stdout, stderr) => {
-      // A check ended for running out of its time says so: what it had printed to then says nothing of why it failed.
-      const why = err?.killed ? `it took longer than ${timeoutMs / 1000} seconds` : err && !String(stderr).trim() ? err.message : String(stderr)
-      resolve({ ok: !err, stdout: String(stdout), stderr: why })
-    })
-    // Nobody types to a check: one that reads its input finds it at its end at once, where it would wait out its whole budget.
-    child.stdin?.end()
-  })
 }
 
 export type { TickDecision }

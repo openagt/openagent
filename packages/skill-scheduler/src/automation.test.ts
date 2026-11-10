@@ -3,11 +3,10 @@ import { test } from 'node:test'
 import { mkdir, mkdtemp, readdir, readFile, realpath, rm, symlink, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { addAutomation, automationProblem, editAutomation, removeAutomation, savedAutomation, tryCheck } from './automation.js'
+import { addAutomation, automationProblem, editAutomation, removeAutomation, savedAutomation } from './automation.js'
 import { automationOf, automationSkill, type NewAutomation } from './automation-file.js'
-import { FOUND_MAX, MAX_NAME, TRY_TIMEOUT_MS } from './names.js'
+import { MAX_NAME } from './names.js'
 import { readSchedule, skillSchedule } from './schedule.js'
-import { runCheck } from './tick.js'
 import { RETRIED_RM, git, removeRepo, testRepo, writeSkill } from './test-repo.js'
 
 // A person's own automation: the skill file it becomes, what is refused, the file written into the project, and a check tried once.
@@ -512,31 +511,4 @@ test('a project whose skills folder is a link to another one: a shared automatio
   } finally {
     await rm(repo, RETRIED_RM)
   }
-})
-
-test('trying a check runs it once as a tick would, asking what is new since a day ago, and says what it printed and whether an agent would start; a check that fails says its last line', async () => {
-  const now = new Date('2026-10-09T10:00:00.400Z')
-  const found = await tryCheck(process.cwd(), 'printf \'["since %s"]\' "$LAST_RUN"', now)
-  assert.deepEqual(found, { lastRun: '2026-10-08T10:00:00Z', ran: true, due: true, printed: '["since 2026-10-08T10:00:00Z"]' })
-  assert.deepEqual(await tryCheck(process.cwd(), 'echo "[]"', now), { lastRun: '2026-10-08T10:00:00Z', ran: true, due: false, printed: '[]' })
-  assert.deepEqual(await tryCheck(process.cwd(), 'true', now), { lastRun: '2026-10-08T10:00:00Z', ran: true, due: false, printed: '' })
-  const failed = await tryCheck(process.cwd(), 'echo half; echo first >&2; echo "no such thing" >&2; exit 3', now)
-  assert.deepEqual(failed, { lastRun: '2026-10-08T10:00:00Z', ran: false, due: false, printed: 'half', error: 'no such thing' })
-  // A long output is cut as a run is handed it, and says so.
-  const long = await tryCheck(process.cwd(), 'unused', now, async () => ({ ok: true, stdout: 'y'.repeat(FOUND_MAX + 10), stderr: '' }))
-  assert.equal(long.printed, `${'y'.repeat(FOUND_MAX)}\n(cut: the check printed ${FOUND_MAX + 10} characters, these are the first ${FOUND_MAX}; it asked what is new since 2026-10-08T10:00:00Z)`)
-  // The check is the tick's own runner, with less time: a dashboard waits for the answer and gives up before a tick would.
-  const seen: unknown[] = []
-  await tryCheck('/repo', 'npx queue', now, async (...args) => (seen.push(args), { ok: true, stdout: '', stderr: '' }))
-  assert.deepEqual(seen, [['/repo', 'npx queue', TRY_TIMEOUT_MS, '2026-10-08T10:00:00Z']])
-  assert.ok(TRY_TIMEOUT_MS < 30_000, 'under the 30 seconds a dashboard gives a command')
-  // A line that outlives its time says so, not the shell's own words; one that reads its input finds none and ends at once.
-  const slow = await tryCheck(process.cwd(), 'sleep 5', now, runCheck, 300)
-  assert.deepEqual(slow, { lastRun: '2026-10-08T10:00:00Z', ran: false, due: false, printed: '', error: 'it took longer than 0.3 seconds' })
-  const reading = Date.now()
-  assert.deepEqual(await tryCheck(process.cwd(), 'cat', now, runCheck, 5_000), { lastRun: '2026-10-08T10:00:00Z', ran: true, due: false, printed: '' })
-  assert.ok(Date.now() - reading < 3_000, 'it did not wait out its time')
-  // A very long last line of error is cut.
-  const loud = await tryCheck(process.cwd(), 'unused', now, async () => ({ ok: false, stdout: '', stderr: `first\n${'e'.repeat(2000)}\n` }))
-  assert.equal(loud.error, `${'e'.repeat(500)}…`)
 })

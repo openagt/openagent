@@ -8,7 +8,8 @@ import { PUBLISH_PICKS, agentInForce, isSwitchedOn, readState, updateState, with
 import { parseInterval, parseTimeOfDay, sinceNow, takesTimeOfDay } from './pace.js'
 import { AGENTS, AGENT_LABELS, AGENT_SKILLS_DIR, DEFAULT_AGENT, MAX_AGENTS, WRITE_LINE_TIMEOUT_MS, isAgent, isAgents } from './names.js'
 import { ableAgents, homeAgent, readSchedule, type ScheduledCommand } from './schedule.js'
-import { addAutomation, editAutomation, removeAutomation, savedAutomation, tryCheck, type AddRefusal, type ChangedSince, type NotAnAutomation } from './automation.js'
+import { addAutomation, editAutomation, removeAutomation, savedAutomation, type AddRefusal, type ChangedSince, type NotAnAutomation } from './automation.js'
+import { tryCheck } from './check.js'
 import type { NewAutomation } from './automation-file.js'
 import { lineContext, writeLine } from './write-line.js'
 

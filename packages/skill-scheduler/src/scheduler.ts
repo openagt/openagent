@@ -14,7 +14,8 @@ import { inFlight, lastRuns, lastStart, type LastRun } from './records.js'
 import { readSchedule, type Schedule, type ScheduledCommand } from './schedule.js'
 import { isSwitchedOn, namesGivenUp, readState, stateDir, updateState, withoutListed, withoutName, withoutPid, type ListedCommand, type State, type TickRecord } from './state.js'
 import { atStartOf } from './start-point.js'
-import { glance, listed, runCheck, startNow, tick, type StartedNow, type TickDeps } from './tick.js'
+import { glance, listed, startNow, tick, type StartedNow, type TickDeps } from './tick.js'
+import { runCheck } from './check.js'
 import { accountsPath, readAccounts } from '@openagt/skill-account-rotation'
 
 /**
