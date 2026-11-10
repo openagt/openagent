@@ -107,6 +107,22 @@ describe('module pages in the shell (#1774)', () => {
     expect(await screen.findByText('No such page')).toBeTruthy()
   })
 
+  test("on a phone the bar names the dashboard's own pages, as it names a module's", async () => {
+    answerShell([{ package: '@acme/logs', url: moduleModule('__phoneLogs', { pages: [{ segment: 'logs', label: 'Logs', Page: () => null }] }), projects: [PROJECT.id] }])
+    const wide = phoneScreen()
+    try {
+      for (const [path, name] of [['/logs', 'Logs'], ['/agents', 'Agents'], ['/permissions', 'Permissions']]) {
+        window.history.replaceState(null, '', path)
+        render(<App />)
+        const bar = (await screen.findByRole('button', { name: 'Open the menu' })).parentElement!
+        await waitFor(() => expect(bar.textContent).toBe(name))
+        cleanup()
+      }
+    } finally {
+      wide()
+    }
+  })
+
   test('a skill saved in Settings gives or takes a page: the projects and their modules are read again at once', async () => {
     answerShell([])
     render(<App />)
