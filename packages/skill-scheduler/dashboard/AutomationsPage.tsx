@@ -45,6 +45,9 @@ export function AutomationsPage({ projects }: ModulePageProps) {
   })
   /** The rows with a save waiting or in flight, each as often as it has one. */
   const [busy, setBusy] = useState<readonly string[]>([])
+  /** Hold a row for one more thing of its own in flight, and let it go of one once that is over. */
+  const hold = (id: string): void => setBusy(current => [...current, id])
+  const letGo = (id: string): void => setBusy(current => current.filter((_, index) => index !== current.indexOf(id)))
   /** What the last save or start on a row answered, said on that row. */
   const [said, setSaid] = useState<{ id: string } & Answered>()
   /** The row whose panel is open, with its own automation as its file says it when it is one a person made, or why that could not be read. */
@@ -90,11 +93,11 @@ export function AutomationsPage({ projects }: ModulePageProps) {
   const ask = (project: ModuleProject, args: string[]): Promise<ModuleCommandResult> => host.runCommand(project.id, args).catch(notAsked)
   /** One save or start of a row's own: the row is held until what it did has been read back, so it never shows the old value as if nothing had happened. */
   const save = async (id: string, pending: Promise<ModuleCommandResult>, answered: (answer: ModuleCommandResult) => Answered | undefined): Promise<void> => {
-    setBusy(current => [...current, id])
+    hold(id)
     setSaid(current => (current?.id === id ? undefined : current))
     const answer = await pending
     await reload().catch(() => {})
-    setBusy(current => current.filter((_, index) => index !== current.indexOf(id)))
+    letGo(id)
     const says = answered(answer)
     if (says) setSaid({ id, ...says })
   }
@@ -111,9 +114,9 @@ export function AutomationsPage({ projects }: ModulePageProps) {
       setCreating(undefined)
       return setPanel({ id })
     }
-    setBusy(current => [...current, id])
+    hold(id)
     const answer = await ask(project, ['show', scheduled.command])
-    setBusy(current => current.filter((_, index) => index !== current.indexOf(id)))
+    letGo(id)
     // Nothing opens over a change made, meanwhile, in what is open.
     if (asked.current !== mine || dirtyNow.current) return
     const opened = answer.ok ? openedAutomation(answer.output) : undefined
