@@ -1,4 +1,4 @@
-import { FadeWhileStale, FilterChips, Page, PersonMark, STATUS_DOT, STATUS_RING, STATUS_TONE, Table, TableBody, TableCell, TableHead, TableHeader, TableRow, cn, formatDateTime, formatDuration, personSaid, runName, useGitHostPeople, useModuleHost, usePolled, type ModuleAgent, type ModuleHostPerson, type ModulePageProps, type ModuleProject } from '@openagt/dashboard/module'
+import { FadeWhileStale, FilterChips, Page, PersonMark, STATUS_DOT, STATUS_RING, Table, TableBody, TableCell, TableHead, TableHeader, TableRow, cn, formatDateTime, formatDuration, personSaid, runName, useGitHostPeople, useModuleHost, usePolled, type ModuleAgent, type ModuleHostPerson, type ModulePageProps, type ModuleProject } from '@openagt/dashboard/module'
 import type { RunCard } from '../src/run.js'
 
 /** How many runs each project lists: the command's own default page is 20; the page shows more. */
@@ -72,10 +72,10 @@ const NOTHING_READ: Read = { rows: [], failed: [] }
 /** The statuses a chip picks, in this order: what is going, then how runs ended, then the runs whose computer does not answer. */
 const STATUSES = ['running', 'waiting', 'done', 'stopped', 'failed', 'unknown']
 
-/** A run's status as a dot and its word, in the dashboard's colors: the dot filled while something is going on, a ring once nothing is. One whose computer does not answer says which, pointed at. */
+/** A run's status as a dot in the dashboard's colors and its word: the dot filled while something is going on, a ring once nothing is. One whose computer does not answer says which, pointed at. */
 function Status({ status, offline }: { status: string; offline?: string | undefined }) {
   return (
-    <span className={cn('inline-flex items-center gap-1.5', STATUS_TONE[status] ?? 'text-muted-foreground')} {...(offline ? { title: offline } : {})}>
+    <span className="inline-flex items-center gap-1.5" {...(offline ? { title: offline } : {})}>
       <span aria-hidden className={cn('size-1.5 shrink-0 rounded-full', STATUS_DOT[status] ?? cn('border', STATUS_RING[status] ?? STATUS_RING['done']))} />
       {status === 'unknown' ? 'status unknown' : status}
     </span>
