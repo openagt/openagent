@@ -1,4 +1,4 @@
-import type { ReactNode } from 'react'
+import type { CSSProperties, ReactNode } from 'react'
 import type { EmojiChar } from './ui'
 import { cardStyle, CodeChip, Emoji, h3Style } from './ui'
 
@@ -8,14 +8,14 @@ function P({ children }: { children: ReactNode }) {
   return <p style={{ margin: 0, fontSize: 14, lineHeight: 1.6, color: '#9da9a0' }}>{children}</p>
 }
 
-function QueueCard({ title, icon, children, style }: { title: string; icon: EmojiChar; children: ReactNode, style?: React.CSSProperties }) {
+function QueueCard({ title, icon, iconStyle, children }: { title: string; icon: EmojiChar; iconStyle: CSSProperties; children: ReactNode }) {
   return (
     <div
       style={{ ...cardStyle, padding: 'clamp(16px, 4.5vw, 24px)', display: 'flex', flexDirection: 'column', gap: 10 }}
     >
       <h4 style={{ margin: 0, fontSize: 17, fontWeight: 600 }}>
         {title}{' '}
-        <span aria-hidden style={{ marginLeft: 4, ...style }}>
+        <span aria-hidden style={{ marginLeft: 4, ...iconStyle }}>
           <Emoji e={icon} />
         </span>
       </h4>
@@ -35,7 +35,7 @@ export function Queues() {
           gap: 18,
         }}
       >
-        <QueueCard title="AI Queue" icon="🤖" style={{ verticalAlign: 1 }}>
+        <QueueCard title="AI Queue" icon="🤖" iconStyle={{ verticalAlign: 1 }}>
           <P>
             Queue of upcoming AI tasks — tasks are added by humans, or by{' '}
             agents (autonomously if no uncertainty, or after human
@@ -48,7 +48,7 @@ export function Queues() {
             Technically, it's just a <CodeChip fontSize={12}>TODO_AGENTS.md</CodeChip> file in your Git repositories.
           </P>
         </QueueCard>
-        <QueueCard title="Human Queue" icon="🙋" style={{ verticalAlign: 0 }}>
+        <QueueCard title="Human Queue" icon="🙋" iconStyle={{ verticalAlign: 0 }}>
           <P>
             Queue of pending human reviews — populated when agents need you to review
             (important) decisions with subtle pros and cons.
