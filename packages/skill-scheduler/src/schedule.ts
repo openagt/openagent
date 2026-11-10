@@ -111,11 +111,23 @@ export interface ScheduledCommand {
   editable?: true
 }
 
+/** A skill whose `schedule` could not be read, with why; or, marked `own`, an automation kept on this machine that is not listed. */
+export interface Unlisted {
+  skill: string
+  reason: string
+  own?: true
+}
+
+/** Why the schedule lists nothing under a name, in one line for a person. */
+export function whyUnlisted(unlisted: Unlisted): string {
+  return `${unlisted.own ? `the automation ${unlisted.skill}, kept on this machine, is not listed` : `the schedule of ${unlisted.skill} cannot be read`}: ${unlisted.reason}`
+}
+
 /** The schedule as read. */
 export interface Schedule {
   commands: ScheduledCommand[]
-  /** The skills whose `schedule` could not be read, each with why; and, marked `own`, the automations kept on this machine that are not listed. */
-  unreadable: { skill: string; reason: string; own?: true }[]
+  /** The skills whose `schedule` could not be read, and the automations kept on this machine that are not listed. */
+  unreadable: Unlisted[]
   /** The names a skill of the project and an automation kept on this machine both have: neither is listed, and this machine's picks under such a name are taken back. */
   clashes?: string[]
 }

@@ -5,7 +5,7 @@ import { HARNESS_SKILL_DIRS } from '@openagt/skill-branches'
 import { MAX_NAME, OWN_AUTOMATIONS_DIR, OWN_TEXT_MAX, RUN_SKILLS_DIR, SKILL_FILE, STATE_DIR, isCommandName } from './names.js'
 import { createHash } from 'node:crypto'
 import { FOLDER_LITTER, HALF_SAVED, automationOf, automationSkill, frontMatterOf, wellFormed, type NewAutomation } from './automation-file.js'
-import { readSchedule, skillFile, skillSchedule } from './schedule.js'
+import { readSchedule, skillFile, skillSchedule, whyUnlisted } from './schedule.js'
 
 /**
  * A person's own automation: a prompt they wrote, saved as a command skill of the project, so it
@@ -167,7 +167,7 @@ export async function savedAutomation(repo: string, name: string): Promise<Saved
   if (!command) {
     const unlisted = schedule.unreadable.find(u => u.skill === name)
     if (!unlisted) return none(`the schedule lists nothing named ${name}`)
-    return none(`${unlisted.own ? `the automation ${name}, kept on this machine, is not listed` : `the schedule of ${name} cannot be read`}: ${unlisted.reason}`)
+    return none(whyUnlisted(unlisted))
   }
   const kept = command.text !== undefined
   const file = kept ? `${OWN_AUTOMATIONS_DIR}/${name}.md` : skillFile(command)

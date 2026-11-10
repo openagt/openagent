@@ -11,7 +11,7 @@ import { findRun } from '@openagt/skill-logs'
 import { nodeGitRunner, pullProjectData, remoteHostOf, type GitRunner } from '@openagt/agent-data'
 import { CHECK_TIMEOUT_MS, GLANCE_MS, NOW_CHECK_TIMEOUT_MS, QUOTA_KEPT_MS, SCHEDULER_LOG, TICK_MS } from './names.js'
 import { inFlight, lastRuns, lastStart, type LastRun } from './records.js'
-import { readSchedule, type Schedule, type ScheduledCommand } from './schedule.js'
+import { readSchedule, type Schedule, type ScheduledCommand, type Unlisted } from './schedule.js'
 import { isSwitchedOn, listed, namesGivenUp, readState, stateDir, updateState, withoutListed, withoutName, withoutPid, type ListedCommand, type State, type TickRecord } from './state.js'
 import { atStartOf } from './start-point.js'
 import { glance, startNow, tick, type StartedNow, type TickDeps } from './tick.js'
@@ -259,7 +259,7 @@ export async function stopScheduler(repo: string, opts: { unlessKeepAlive?: bool
 export type StatusCommand = ListedCommand & { lastRun?: LastRun }
 
 /** What `status` answers: the state, whether its process is alive, and the schedule as the project's files say it now. */
-export type Status = State & { running: boolean; schedule: StatusCommand[]; unreadable: Schedule['unreadable'] }
+export type Status = State & { running: boolean; schedule: StatusCommand[]; unreadable: Unlisted[] }
 
 /**
  * `status`: the state, whether its process is alive, and the schedule read now, each command with

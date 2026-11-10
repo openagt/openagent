@@ -7,7 +7,7 @@ import { cleanup } from './cleanup.js'
 import { PUBLISH_PICKS, agentInForce, readState, updateState, withAgent, withoutCommand, withoutListed, withPacePicked, withPick, withSwitchedOn, type PublishPick, type State } from './state.js'
 import { parseInterval, parseTimeOfDay, takesTimeOfDay } from './pace.js'
 import { AGENTS, AGENT_LABELS, AGENT_SKILLS_DIR, DEFAULT_AGENT, MAX_AGENTS, WRITE_LINE_TIMEOUT_MS, isAgent, isAgents } from './names.js'
-import { ableAgents, homeAgent, readSchedule, type ScheduledCommand } from './schedule.js'
+import { ableAgents, homeAgent, readSchedule, whyUnlisted, type ScheduledCommand } from './schedule.js'
 import { addAutomation, editAutomation, removeAutomation, savedAutomation, type AddRefusal, type ChangedSince, type NotAnAutomation } from './automation.js'
 import { tryCheck } from './check.js'
 import type { NewAutomation } from './automation-file.js'
@@ -333,8 +333,7 @@ async function scheduled(repo: string, name: string): Promise<ScheduledCommand> 
   if (command) return command
   const skill = name.split(' ')[0]!
   const unreadable = schedule.unreadable.find(u => u.skill === skill)
-  if (unreadable?.own) throw new Refused({ ok: false, reason: 'unlisted-automation', automation: skill, detail: unreadable.reason }, `the automation ${skill}, kept on this machine, is not listed: ${unreadable.reason}`)
-  if (unreadable) throw new Refused({ ok: false, reason: 'unreadable-schedule', skill, detail: unreadable.reason }, `the schedule of ${skill} cannot be read: ${unreadable.reason}`)
+  if (unreadable) throw new Refused(unreadable.own ? { ok: false, reason: 'unlisted-automation', automation: skill, detail: unreadable.reason } : { ok: false, reason: 'unreadable-schedule', skill, detail: unreadable.reason }, whyUnlisted(unreadable))
   throw new Refused({ ok: false, reason: 'not-scheduled', command: name }, `no skill of this project schedules ${name}`)
 }
 
