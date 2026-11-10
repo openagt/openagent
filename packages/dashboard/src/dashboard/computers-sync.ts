@@ -149,7 +149,7 @@ export const computersWiring: {
     const asked = await (await import('../dashboard-rpc/machines.js')).onComputersThrough(server.id)
     return asked.ok ? asked.computers : undefined
   },
-  saveThrough: async (server, id) => void (await (await import('../dashboard-rpc/machines.js')).saveComputerThrough(server.id, id)),
+  saveThrough: async (server, id) => void (await (await import('../dashboard-rpc/save-machine.js')).saveComputerThrough(server.id, id)),
   now: () => Date.now(),
 }
 

@@ -1,13 +1,14 @@
 import { computerHealth, type Health } from '../health.js'
 import { projectNameOf, readSharing, repositoryAddress, repositorySpelling } from '@openagt/agent-data'
-import { THROUGH_PATH, deviceIdOf, enterRemote, giveRemoteLogins, leaveRemote, machineCall, pingRemote, remoteAddMachine, remoteComputers, remoteDoor, remoteFacts, remoteLogins, remoteProject, relayRpc, targetOf, type BringProject, type RelayProject, type RemoteTarget } from '../dashboard/remote-run.js'
+import { THROUGH_PATH, deviceIdOf, giveRemoteLogins, leaveRemote, machineCall, pingRemote, remoteAddMachine, remoteComputers, remoteDoor, remoteFacts, remoteLogins, remoteProject, relayRpc, targetOf, type BringProject, type RelayProject, type RemoteTarget } from '../dashboard/remote-run.js'
 import { isElsewhereId, lineNameOf } from '../dashboard/elsewhere.js'
 import { isClaudeAccountId, isLoginWord, type MachineLogins } from '../dashboard/machine-logins.js'
 import { errorMessage } from '../error-message.js'
 import { contextRemote, resolveProjectPath } from './context.js'
-import { addMachine, forgetMachine, isPersonName, listMachines, noteListed, noteName, noteOwner, removeMachine, renameThisComputer, tellMachine, thisComputerName, unforgetMachine, useLoginsOn, type MachineRecord } from '../registry.js'
+import { forgetMachine, isPersonName, listMachines, noteListed, noteName, noteOwner, removeMachine, renameThisComputer, tellMachine, unforgetMachine, type MachineRecord } from '../registry.js'
 import { sayName } from '../dashboard/machine-call.js'
-import { callerAtPage } from '../dashboard/person.js'
+import { ownerAsks } from '../dashboard/person.js'
+import { ownName, saveComputerThrough, saveMachine, shown, throughOf } from './save-machine.js'
 import { syncComputersSoon } from '../dashboard/computers-sync.js'
 import { parseMachineLink } from '../machine-link.js'
 import { SESSIONS_ID } from '../project-address.js'
@@ -35,26 +36,11 @@ export interface Machine {
   server?: true
 }
 
-/** A saved machine as the browser is handed it. */
-function shown({ id, label, url, owner, told, server }: MachineRecord): Machine {
-  return { id, label, url, ...(owner !== undefined ? { owner } : {}), ...(told ? { told } : {}), ...(server ? { server } : {}) }
-}
-
 export type AddMachineResult = { ok: true; machine: Machine } | { ok: false; error: string }
 
 /** The saved machines, newest first. */
 export async function onMachines(): Promise<Machine[]> {
   return (await listMachines()).map(shown)
-}
-
-/** The machines saved through a server: computers at home it keeps a line to, reached at its address with this computer's key there. */
-function throughOf(server: Pick<MachineRecord, 'url'>, saved: readonly MachineRecord[]): MachineRecord[] {
-  return saved.filter(machine => machine.url.startsWith(`${server.url}${THROUGH_PATH}`))
-}
-
-/** This computer's name as the other machine lists it, among the devices that are in there. */
-async function ownName(): Promise<string> {
-  return (await thisComputerName()) || 'another computer'
 }
 
 /**
@@ -72,43 +58,6 @@ export async function sendAddMachine(pasted: string, label?: string, owner?: str
   if (added.ok) await unforgetMachine(added.machine.url)
   if (added.ok) syncComputersSoon()
   return added
-}
-
-/** Get in at the machine a link names and save it, with this computer's own key there. */
-export async function saveMachine(pasted: string, label?: string, owner?: string): Promise<AddMachineResult> {
-  const link = typeof pasted === 'string' ? parseMachineLink(pasted) : null
-  if (!link) return { ok: false, error: 'That is not a link another OpenAgent gives: on the other machine, open Settings, find Devices, and press Add device.' }
-  // Asked before the link is spent: the key a run at work is read with is not replaced under it.
-  const saved = (await listMachines()).find(machine => machine.id === link.url)
-  if (saved && contextRemote().working(saved.url)) return { ok: false, error: `An agent is working on ${saved.label}. Stop it, or wait until it ends, then add the machine again.` }
-  const entered = await enterRemote(link.door, link.code, await ownName(), link.pin)
-  if (!entered.ok) return entered
-  const access = { url: link.url, key: entered.key, door: link.door, ...(link.pin ? { pin: link.pin } : {}) }
-  // Whose computer it is: its door says whether this computer's person is its owner. Another
-  // person's is saved as theirs, so nothing of this computer's (its keys, its logins) is handed to it.
-  let whose = isPersonName(owner) ? owner : undefined
-  if (whose === undefined) {
-    const me = await remoteDoor(access, { what: 'me' })
-    const said = me.ok && me.said && typeof me.said === 'object' ? (me.said as { owner?: unknown; ownerName?: unknown }) : undefined
-    if (said?.owner === false && isPersonName(said.ownerName)) whose = said.ownerName
-  }
-  let added: Awaited<ReturnType<typeof addMachine>>
-  try {
-    added = await addMachine({ ...access, ...(typeof label === 'string' ? { label } : {}), ...(whose !== undefined ? { owner: whose } : {}) })
-  } catch (err) {
-    // A key nobody holds is not left on the machine.
-    void leaveRemote(access)
-    return { ok: false, error: `The machine could not be saved: ${errorMessage(err)}` }
-  }
-  // The runs that ended there before go on being read, with the new key; the old keys are of no use any more.
-  contextRemote().rekey(link.url, entered.key, link.pin)
-  // The computers saved through this server are reached with its key: they take the new one too.
-  for (const through of throughOf(added.record, await listMachines())) {
-    await addMachine({ url: through.url, key: entered.key, door: through.door, label: through.label, ...(link.pin ? { pin: link.pin } : {}) })
-    contextRemote().rekey(through.url, entered.key, link.pin)
-  }
-  for (const old of added.displaced) void leaveRemote(old)
-  return { ok: true, machine: shown(added.record) }
 }
 
 export type RemoveMachineResult = { ok: true } | { ok: false; error: string }
@@ -176,21 +125,6 @@ export async function sendAddComputerThrough(machineId: string, computerId: stri
   const added = await saveComputerThrough(machineId, computerId)
   if (added.ok) await unforgetMachine(added.machine.url)
   return added
-}
-
-/** Save a computer on a line at a saved server, through that server. */
-export async function saveComputerThrough(machineId: string, computerId: string): Promise<AddMachineResult> {
-  const server = (await listMachines()).find(machine => machine.id === machineId)
-  if (!server || server.url.includes(THROUGH_PATH)) return { ok: false, error: 'That server is no longer saved.' }
-  const asked = await remoteComputers(server)
-  if (!asked.ok) return { ok: false, error: `${server.label} could not be asked for its computers: ${asked.error}` }
-  const computer = asked.computers.find(candidate => candidate.id === computerId)
-  if (!computer) return { ok: false, error: `${server.label} has no such computer on a line now.` }
-  const url = `${server.url}${THROUGH_PATH}${computer.id}`
-  const before = (await listMachines()).find(machine => machine.id === url)
-  const { record } = await addMachine({ url, key: server.key, door: `${url}/_devices/enter`, label: `${computer.name} (through ${server.label})`, ...(server.pin ? { pin: server.pin } : {}), ...(computer.owner !== undefined ? { owner: computer.owner } : {}) })
-  if (before?.logins) await useLoginsOn(record.id, true)
-  return { ok: true, machine: shown(record) }
 }
 
 /** Write down that the person was told their logins are copied to a saved machine of another person's: the page says it once. */
@@ -360,14 +294,6 @@ export type RenameComputerResult = { ok: true; name: string } | { ok: false; err
 
 /** Said to anyone but the owner who renames this computer. */
 export const ONLY_THE_OWNER = "Only this computer's owner names it."
-
-/**
- * Whether the person asking is this computer's owner, who alone names it: not a person the owner
- * invited, at the owner's OpenAgent (the door says who), nor on an OpenAgent of their own here.
- */
-export function ownerAsks(): boolean {
-  return callerAtPage() === undefined && !process.env.OPENAGENT_PERSON
-}
 
 /**
  * Give this computer the name the person picked, here or from a page of another of their

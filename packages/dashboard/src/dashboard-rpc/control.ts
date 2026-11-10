@@ -29,7 +29,7 @@ import { isPublishPick, type PublishPick } from '../publish-levels.js'
  * the path is the branches provider's to know, and an Open PR on a run whose checkout is gone
  * still locks the run.
  */
-export function agentLockKey(cwd: string, agentId: string): string {
+function agentLockKey(cwd: string, agentId: string): string {
   return `${cwd}\0${agentId}`
 }
 
