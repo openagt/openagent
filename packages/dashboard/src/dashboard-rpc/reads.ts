@@ -40,27 +40,6 @@ import { asRecorded, forDashboard, markMachine, recordedRuns, withFollowed, with
 // browser's own tree so it can serve them in-process; the dashboard calls them by name over
 // `POST /_rpc/<name>`. The live agent stream is its own endpoint (`GET /_rpc/events`).
 
-/**
- * Resolve a project id and run a forgiving read against its workspace: an unknown project
- * or a failing read both fall back to `empty`. The uniform readers below are one call each
- * over this; the agent history and null-returning git readers stay bespoke (extra logic or a
- * distinct empty).
- */
-async function withProject<T>(projectId: string, read: (cwd: string) => Promise<T>, empty: T): Promise<T> {
-  const cwd = await resolveProjectPath(projectId)
-  return cwd ? read(cwd).catch(() => empty) : empty
-}
-
-/**
- * The `withProject` twin for a run-scoped read: resolve the checkout a `agentId` names (its own
- * worktree while live, else the project root, #738), then read forgivingly. An absent project
- * or a failing read both fall back to `empty`.
- */
-async function withAgentPath<T>(projectId: string, agentId: string | undefined, read: (cwd: string) => Promise<T>, empty: T): Promise<T> {
-  const cwd = await resolveAgentPath(projectId, agentId)
-  return cwd ? read(cwd).catch(() => empty) : empty
-}
-
 /** Run a cross-project rollup over every registered project, tolerating a failed registry read. */
 async function withProjects<T>(build: (projects: ProjectSummary[]) => Promise<T>): Promise<T> {
   const projects = await contextProjects().list().catch(() => [])
@@ -266,7 +245,8 @@ export async function onAgentsDoing(projectId: string, agentIds: string[]): Prom
 
 /** The surfaced PLAN/TODO docs at the workspace root, in sidebar order (or `[]`). */
 export async function onDocs(projectId: string): Promise<WorkspaceDoc[]> {
-  return withProject(projectId, readDocs, [])
+  const cwd = await resolveProjectPath(projectId)
+  return cwd ? readDocs(cwd).catch(() => []) : []
 }
 
 /** The aggregated open TODO queue across every registered project (#438), most-open first. */
@@ -373,7 +353,11 @@ let buildingDashboard: Promise<DashboardData> | undefined
  * Files pane reads its own list, through its module.
  */
 export async function onProjectFiles(projectId: string, agentId?: string): Promise<string[]> {
-  return relayOr(agentId, 'onProjectFiles', [projectId, agentId], () => withAgentPath(projectId, agentId, crawlRepoFiles, []), [])
+  return relayOr(agentId, 'onProjectFiles', [projectId, agentId], async () => {
+    // The checkout `agentId` names: its own while the run is live, else the project's root (#738).
+    const cwd = await resolveAgentPath(projectId, agentId)
+    return cwd ? crawlRepoFiles(cwd).catch(() => []) : []
+  }, [])
 }
 
 /**
