@@ -3,21 +3,15 @@
 // names `fake-run-bin.js` as its start and resume lines, so a Start goes the whole production
 // way (the RPC, the hook, a detached run writing the files the dashboard reads) offline.
 import { mkdtempSync } from 'node:fs'
-import { copyFile, mkdir, readFile, rm, writeFile } from 'node:fs/promises'
-import { PROJECT_HOOKS_FILE } from '../project-hooks.js'
-import { execFile } from 'node:child_process'
+import { readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
-import { dirname, join, resolve } from 'node:path'
-import { fileURLToPath } from 'node:url'
-import { promisify } from 'node:util'
+import { join, resolve } from 'node:path'
 import { setDashboardContext } from '../dashboard-rpc/context.js'
 import { createProjectRuntime, type ProjectRuntime } from '../daemon-runtime.js'
 import { registryPreferencesStore, projectId } from '../registry.js'
 import { fromDiaryLine, projectBranches, projectRuns, resolveAgentDiary, type AgentMeta, type AgentStatus, type AnyDiaryLine } from '../store/index.js'
-import { withFileBranch, DATA_BRANCH } from '@openagt/agent-data'
 import { worktreePath } from '@openagt/skill-branches'
-import { TICKETS_DIR } from '@openagt/skill-tickets'
-import { QUEUE_FILE } from '@openagt/skill-queue'
+import { makeFixtureRepo, writeFakeRunHooks } from './fixture.js'
 import { tailAgentEvents } from '../dashboard-rpc/events-tail.js'
 import { sendAddProject, sendShareRecords } from '../dashboard-rpc/projects.js'
 import { sendStart, sendStop } from '../dashboard-rpc/control.js'
@@ -26,30 +20,13 @@ import type { OpenAgentEvent } from '../events.js'
 import type { StartAgentOptions } from '../dashboard/types.js'
 import type { QuotaView } from '../dashboard/quota.js'
 
-/**
- * The two skills every fixture project holds, by the name of each one's folder, with the package
- * whose text it is, read from this workspace's own install: the tickets and the queue. Holding a
- * skill's text is what gives a project that skill's package in the dashboard.
- */
-const packageDir = (name: string): string => resolve(dirname(fileURLToPath(import.meta.resolve(name))), '..')
-const SKILL_PACKAGES: Record<string, string> = {
-  tickets: packageDir('@openagt/skill-tickets'),
-  queue: packageDir('@openagt/skill-queue'),
-}
+export { git } from './fixture.js'
 
 // Re-home the process-global config home FIRST: the registry, preferences, and daemon state all
-// resolve through $XDG_CONFIG_HOME at call time, and run-tests.mjs gives the whole suite ONE
+// resolve through $XDG_CONFIG_HOME at call time, and scripts/test-node.mjs gives the whole suite ONE
 // shared throwaway home — so without this, story files running as sibling processes would see
 // each other's registered projects in every cross-project rollup (onProjects, onQueue, onOverview).
 process.env.XDG_CONFIG_HOME = mkdtempSync(join(tmpdir(), 'openagent-e2e-config-'))
-
-const exec = promisify(execFile)
-
-/** Run `git <args>` in `cwd`, failing the story loudly on error (a broken fixture is a test bug). */
-export async function git(cwd: string, ...args: string[]): Promise<string> {
-  const { stdout } = await exec('git', args, { cwd })
-  return stdout
-}
 
 /** One registered project inside a {@link StoryWorld}: a real git repo the stories act on. */
 export interface StoryProject {
@@ -155,7 +132,6 @@ export async function makeWorld(): Promise<StoryWorld> {
   const home = mkdtempSync(join(tmpdir(), 'openagent-e2e-home-'))
   const startsFile = join(home, 'hook-calls.jsonl')
   process.env.OPENAGENT_E2E_STARTS_FILE = startsFile
-  const fakeRun = fileURLToPath(new URL('./fake-run-bin.js', import.meta.url))
 
   const runtime = createProjectRuntime({ cwd: home, env: process.env })
 
@@ -208,48 +184,13 @@ export async function makeWorld(): Promise<StoryWorld> {
     async addProject(files = {}) {
       const cwd = mkdtempSync(join(tmpdir(), 'openagent-e2e-repo-'))
       repos.push(cwd)
-      await git(cwd, 'init', '-q', '-b', 'main')
-      await git(cwd, 'config', 'user.email', 'e2e@test')
-      await git(cwd, 'config', 'user.name', 'e2e')
-      const seeded = Object.keys(files).length ? files : { 'README.md': '# story fixture\n' }
-      // The tickets and the queue live on the `agent-data` branch (#1748), never in the working
-      // tree: a story that seeds them names the same paths, and they land where the product reads.
-      const onBranch = Object.entries(seeded).filter(([file]) => file.startsWith(`${TICKETS_DIR}/`) || file === QUEUE_FILE)
-      for (const [file, text] of Object.entries(seeded)) {
-        if (onBranch.some(([f]) => f === file)) continue
-        await mkdir(dirname(join(cwd, file)), { recursive: true })
-        await writeFile(join(cwd, file), text)
-      }
-      // The project keeps its tickets and queue the way a real one does: it holds the two skills'
-      // texts, so the dashboard brings their packages to it; its runs and checkouts come from the
-      // packages every project has.
-      for (const [skill, pkg] of Object.entries(SKILL_PACKAGES)) {
-        await mkdir(join(cwd, '.claude', 'skills', skill), { recursive: true })
-        await copyFile(join(pkg, 'SKILL.md'), join(cwd, '.claude', 'skills', skill, 'SKILL.md'))
-      }
-      await git(cwd, 'add', '-A')
-      await git(cwd, 'commit', '-q', '-m', 'seed')
-      if (onBranch.length) {
-        const result = await withFileBranch(cwd, DATA_BRANCH, 'seed', async dir => {
-          for (const [file, text] of onBranch) {
-            await mkdir(dirname(join(dir, file)), { recursive: true })
-            await writeFile(join(dir, file), text)
-          }
-        })
-        if (!result.ok) throw new Error(`could not seed the ${DATA_BRANCH} branch: ${result.error}`)
-      }
-      // A bare repo standing in for `origin`, because a real project has one: an agent's branch
-      // starts from its default branch, and whether a run's work reached it is what a story reads.
-      const origin = join(cwd, 'origin.git')
-      await git(cwd, 'init', '-q', '--bare', origin)
-      await git(cwd, 'remote', 'add', 'origin', origin)
+      await makeFixtureRepo(cwd, files)
       const added = await rpc(sendAddProject)(cwd)
       if (!added.ok) throw new Error(`could not register the fixture repo: ${added.error}`)
       // Its records go to its remote, as a team's do.
       const shared = await rpc(sendShareRecords)(projectId(resolve(cwd)), true)
       if (!shared.ok) throw new Error(`could not share the fixture repo's records: ${shared.error}`)
-      // The project's own start and resume lines: this machine's file, under the ignored directory.
-      await writeFile(join(cwd, PROJECT_HOOKS_FILE), `start: node ${JSON.stringify(fakeRun)} start\nresume: node ${JSON.stringify(fakeRun)} resume\n`)
+      await writeFakeRunHooks(cwd)
       return { id: projectId(resolve(cwd)), cwd }
     },
 

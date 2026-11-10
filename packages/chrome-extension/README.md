@@ -70,6 +70,8 @@ catches the session's own DOM changes immediately; the slow interval is only a b
 node check.mjs
 ```
 
+`pnpm -C packages/dashboard test:extension` runs it too, as the dashboard's tests and CI do.
+
 The extraction cases, including the four that broke it on a real session (`<code>` with no
 `<pre>`, content behind a shadow root, an indentation the parser had not guessed, and our own
 protocol spec appearing on the page as a decoy); the block's `multi`/`default`/`stop` reaching the

@@ -80,6 +80,9 @@ async function wired(command: string) {
     ANTHROPIC_API_KEY: 'sk-ant-wire-test',
     CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC: '1',
     DISABLE_TELEMETRY: '1',
+    // A throwaway home against a stand-in API is a sandbox, and says so: run as root, as in a
+    // container, `claude` refuses --dangerously-skip-permissions anywhere else.
+    IS_SANDBOX: '1',
   }
   const events: DriverEvent[] = []
   let onAction: () => void = () => {}

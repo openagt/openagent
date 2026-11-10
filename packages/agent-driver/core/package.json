@@ -28,7 +28,7 @@
   "scripts": {
     "build": "tsc -p tsconfig.build.json",
     "typecheck": "tsc --noEmit",
-    "test": "tsc -p tsconfig.test.json && node --test --test-timeout=60000 'dist-test/**/*.test.js'",
+    "test": "tsc -p tsconfig.test.json && node ../../../scripts/test-node.mjs",
     "clean": "rm -rf dist dist-test"
   },
   "devDependencies": {
