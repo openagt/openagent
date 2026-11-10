@@ -127,7 +127,7 @@ export function hostWords(row: GitHostRow): string {
 }
 
 /** A press that fixes one thing: its button, what it is doing while it does, the command it runs, why it failed. */
-export function FixAction({ label, busy, busyWords, command, failed, onPress, size = 'sm' }: { label: string; busy: boolean; busyWords: string; command?: string; failed?: string; onPress: () => void; size?: 'sm' | 'xs' | undefined }) {
+export function FixAction({ label, busy, busyWords, command, failed, onPress, size = 'sm', variant }: { label: string; busy: boolean; busyWords: string; command?: string; failed?: string; onPress: () => void; size?: 'sm' | 'xs' | undefined; variant?: 'outline' | undefined }) {
   return (
     <div className="min-w-0 space-y-1">
       {busy ? (
@@ -135,7 +135,7 @@ export function FixAction({ label, busy, busyWords, command, failed, onPress, si
           {busyWords}
         </p>
       ) : (
-        <Button size={size} onClick={onPress}>
+        <Button size={size} variant={variant} onClick={onPress}>
           {label}
         </Button>
       )}
@@ -156,7 +156,7 @@ function agentBusyWords(state: AgentState): string {
 }
 
 /** The agent's fix as one press: [Install Claude Code] or [Log this computer in to Claude Code], with the command; the command alone where it is typed; nothing when nothing fixes it. */
-export function AgentFix({ state, onChanged, size }: { state: AgentState; onChanged: () => void; size?: 'sm' | 'xs' | undefined }) {
+export function AgentFix({ state, onChanged, size, variant }: { state: AgentState; onChanged: () => void; size?: 'sm' | 'xs' | undefined; variant?: 'outline' | undefined }) {
   const [error, setError] = useState<string | undefined>()
   if (state.ready || !state.fix) return null
   if (state.typed)
@@ -176,6 +176,7 @@ export function AgentFix({ state, onChanged, size }: { state: AgentState; onChan
   return (
     <FixAction
       size={size}
+      variant={variant}
       label={state.fix.kind === 'install' ? `Install ${name}` : `Log this computer in to ${name}`}
       busy={state.fixing !== undefined}
       busyWords={agentBusyWords(state)}
