@@ -296,7 +296,6 @@ export function AutomationsPage({ projects }: ModulePageProps) {
   )
 }
 
-/** What a save or a start on a row answered, for the row to say: why it was not taken, that nothing was to do, or the run it started (empty when the answer names none). */
 /**
  * Where a row stands, in one line: on or off; when it last ran, or that its last run failed, which
  * opens that run; and what the scheduler last decided for it while it is on. A command the coding
