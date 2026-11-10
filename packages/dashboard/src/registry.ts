@@ -106,14 +106,6 @@ export function isPersonName(value: unknown): value is string {
 const MACHINE_LIMITS = { count: 50, label: 60 } as const
 
 /**
- * The dashboard's Global options (#410), persisted next to the project list so they
- * survive restarts without localStorage — the daemon reads/writes them, the SPA reads
- * them over `POST /_rpc/onPreferences`. Mostly flat booleans mirroring the Start form's
- * toggles; every field is optional and absent means off, except where a field documents its
- * own default below.
- */
-
-/**
  * A user-defined preset (#626): a named prompt the user saved to re-run their own high-signal
  * prompts, listed as a saved prompt in the launcher's Commands menu beside the project's commands.
  * Just data — the label is the menu item, the prompt is loaded verbatim into the editor. `id` is
@@ -146,6 +138,13 @@ export function startFromPick(value: unknown): StartFromPick | undefined {
   return kind === 'published' && isBranchName(branch) ? { kind, branch } : undefined
 }
 
+/**
+ * The dashboard's Global options (#410), persisted next to the project list so they
+ * survive restarts without localStorage — the daemon reads/writes them, the SPA reads
+ * them over `POST /_rpc/onPreferences`. Mostly flat booleans mirroring the Start form's
+ * toggles; every field is optional and absent means off, except where a field documents its
+ * own default below.
+ */
 export interface Preferences {
   /** Fire a browser notification when a new item lands on the "needs you" queue (#627). Absent = on. */
   notifyBrowser?: boolean
@@ -405,11 +404,11 @@ const BOOLEAN_PREFERENCES: Record<BooleanPreferenceKey, true> = {
 
 const PREFERENCE_KEYS = Object.keys(BOOLEAN_PREFERENCES) as BooleanPreferenceKey[]
 
-/** Keep only the known preference fields, so a hand-edited or browser-supplied
- * object never lands junk (or the wrong type) in the user's home file. */
 /** The color themes the dashboard offers (#725); anything else means the default `system`. */
 const KNOWN_THEMES = ['system', 'light', 'dark'] as const
 
+/** Keep only the known preference fields, so a hand-edited or browser-supplied
+ * object never lands junk (or the wrong type) in the user's home file. */
 function sanitizePreferences(value: unknown): Preferences {
   if (typeof value !== 'object' || value === null) return {}
   const input = value as Record<string, unknown>
@@ -614,9 +613,9 @@ async function writeRegistry(registry: Registry, env: NodeJS.ProcessEnv, fs: Reg
 
 /**
  * Serializes the read-modify-write mutators below (#991). Each reads the whole registry, edits it
- * and writes it back, and one daemon runs several concurrently: `daemon.ts` and `daemon-runtime.ts`
- * both call {@link addProject} while the dashboard's savePreferences RPC writes through
- * {@link registryPreferencesStore}. Interleaved, the later write was computed from a read taken
+ * and writes it back, and one daemon runs several concurrently: a project added while the
+ * dashboard's savePreferences RPC writes through {@link registryPreferencesStore}, a machine's
+ * name noted while another is saved. Interleaved, the later write was computed from a read taken
  * before the earlier one landed, so it silently dropped it. One tail promise for the module, not
  * one per file: the writes are small, and the registry is a single file per machine anyway.
  */

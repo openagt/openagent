@@ -62,7 +62,7 @@ async function withAgentPath<T>(projectId: string, agentId: string | undefined, 
 }
 
 /** Run a cross-project rollup over every registered project, tolerating a failed registry read. */
-async function withProjects<T>(build: (projects: Awaited<ReturnType<ReturnType<typeof contextProjects>['list']>>) => Promise<T>): Promise<T> {
+async function withProjects<T>(build: (projects: ProjectSummary[]) => Promise<T>): Promise<T> {
   const projects = await contextProjects().list().catch(() => [])
   return build(projects)
 }
@@ -101,11 +101,8 @@ export async function onStartedName(projectId: string, agentId: string): Promise
 
 /** A project's runs as its list shows them: off its folder here (`cwd`), else as the computer it is on says them. */
 async function runRows(projectId: string, cwd: string | undefined): Promise<AgentMeta[]> {
-  // The relayed-agent stubs (#1077). Read up front by habit rather than by necessity now: the
-  // context was request-scoped and evaporated at the first await, so reading it late dropped
-  // every remote agent from the list on a reload. It is wired once at start-up (F3), so an await
-  // no longer costs anything — nothing here depends on this staying above one.
-  const remote = contextRemote()?.list(projectId) ?? []
+  // The relayed-agent stubs (#1077): a run this daemon follows on a machine lives in its memory only.
+  const remote = contextRemote().list(projectId)
   const machineOf = await contextRemote().machineNames()
   const local = cwd ? withStartedNames(await withRowMarks(cwd, (await listedRuns(cwd)).map(agent => forDashboard(agent, machineOf)))) : isElsewhereId(projectId) ? (await elsewhereRuns(projectId)).map(agent => forDashboard(agent, machineOf)) : []
   return withFollowed(remote, local, agentId => contextRemote().sent(agentId))
