@@ -17,7 +17,7 @@ import {
   worktreeClean,
   worktreePath,
   currentBranch,
-  listWorktreeDirs,
+  worktreeDirEntries,
   leaveOut,
   FRESH_START_FETCH_MS,
 } from './worktree.js'
@@ -397,15 +397,18 @@ test('currentBranch reads the checked-out branch, and reads detached/non-repo as
 /** A directory reader over one listing: `entries[dir]` are the directory names under `dir`. */
 const listing = (entries: Record<string, string[]>) => async (dir: string) => entries[dir] ?? []
 
-test('listWorktreeDirs lists the agent-branch-named dirs under .branches/ and nothing else (#737/#1580)', async () => {
+test('worktreeDirEntries lists the agent-branch-named dirs under .branches/ and nothing else (#737/#1580)', async () => {
   const root = join('/repo', BRANCHES_DIR)
   // `agent-data` is the data branch's checkout, not agent `data`'s.
   const readdir = listing({ [root]: ['agent-r1', 'agent-r2', '.tmp', 'agent-data'] })
-  assert.deepEqual((await listWorktreeDirs('/repo', readdir)).sort(), ['r1', 'r2'])
-  assert.deepEqual(await listWorktreeDirs('/never-ran', readdir), [])
+  assert.deepEqual(await worktreeDirEntries('/repo', readdir), [
+    { path: join(root, 'agent-r1'), agentId: 'r1' },
+    { path: join(root, 'agent-r2'), agentId: 'r2' },
+  ])
+  assert.deepEqual(await worktreeDirEntries('/never-ran', readdir), [])
 })
 
-test('listWorktreeDirs never mistakes a rename link for a checkout: a link is not a directory (#1580)', async () => {
+test('worktreeDirEntries never mistakes a rename link for a checkout: a link is not a directory (#1580)', async () => {
   // A rename link beside the checkouts is named as an agent branch too; only the real directory
   // is a checkout, so the default reader must tell them apart by type, not by name.
   const repo = await realpath(await mkdtemp(join(tmpdir(), 'worktree-')))
@@ -413,7 +416,7 @@ test('listWorktreeDirs never mistakes a rename link for a checkout: a link is no
     await mkdir(join(repo, BRANCHES_DIR, 'agent-r1'), { recursive: true })
     await symlink('agent-r1', join(repo, BRANCHES_DIR, 'agent-cool-name'))
     await writeFile(join(repo, BRANCHES_DIR, 'agent-note'), 'not a checkout either\n')
-    assert.deepEqual(await listWorktreeDirs(repo), ['r1'])
+    assert.deepEqual(await worktreeDirEntries(repo), [{ path: join(repo, BRANCHES_DIR, 'agent-r1'), agentId: 'r1' }])
   } finally {
     await rm(repo, { recursive: true, force: true })
   }

@@ -49,14 +49,6 @@ export async function worktreeDirEntries(repo: string, readdir: DirReader = node
   return entries
 }
 
-/**
- * The agent ids that have a worktree directory (#737/#1580). Forgiving — a project that never ran
- * concurrently has no such dir and yields `[]`.
- */
-export async function listWorktreeDirs(repo: string, readdir: DirReader = nodeReaddir): Promise<string[]> {
-  return [...new Set((await worktreeDirEntries(repo, readdir)).map(entry => entry.agentId))]
-}
-
 /** One entry parsed from `git worktree list --porcelain`. */
 export interface WorktreeInfo {
   /** Absolute worktree path (the main checkout included). */

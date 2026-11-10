@@ -23,7 +23,6 @@ export {
   worktreeClean,
   repoHasRemote,
   worktreeDirEntries,
-  listWorktreeDirs,
   type SizeRunner,
   type WorktreeInfo,
   type AddWorktreeOptions,
