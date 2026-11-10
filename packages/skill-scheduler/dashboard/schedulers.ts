@@ -337,6 +337,9 @@ export function spelled(every: string): string {
 
 const sentence = (text: string): string => text.charAt(0).toUpperCase() + text.slice(1)
 
+/** A sentence with its full stop, added only when it has none. */
+export const stopped = (text: string): string => (/[.!?]$/.test(text.trim()) ? text.trim() : `${text.trim()}.`)
+
 /** What a row with a shell line waits for, when its words do not say: the line itself. */
 export const PRINTS_SOMETHING = 'when its shell line prints something'
 

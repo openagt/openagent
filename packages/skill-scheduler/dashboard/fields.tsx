@@ -4,7 +4,7 @@ import type { PublishPick } from '../src/state.js'
 import { AGENTS, AGENT_LABELS, AGENT_SKILLS_DIR, DEFAULT_AGENT, MAX_AGENTS, type AgentName } from '../src/names.js'
 import { MAX_COUNT, PACE_UNITS, takesTimeOfDay, type PaceUnit } from '../src/pace.js'
 import { triedLine, writtenLine, type TriedLine } from './automation-form.js'
-import { PRINTS_SOMETHING, UNIT_WORDS, modelLabel, notAsked, publishChoices, publishLabel, type AgentModels, type AgentsDraft, type PaceDraft, type SchedulerCommand } from './schedulers.js'
+import { PRINTS_SOMETHING, UNIT_WORDS, modelLabel, notAsked, publishChoices, stopped, publishLabel, type AgentModels, type AgentsDraft, type PaceDraft, type SchedulerCommand } from './schedulers.js'
 
 // The fields of the Automations page, shared by the Edit panel of a row and the "New automation"
 // form, so a thing is picked the same way wherever it is picked: what the agent is told and the
@@ -14,9 +14,6 @@ import { PRINTS_SOMETHING, UNIT_WORDS, modelLabel, notAsked, publishChoices, pub
 
 /** A small text beside or under a field: what it means, or that it is optional. */
 const hint = 'text-xs text-muted-foreground'
-
-/** A sentence with its full stop, added only when it has none. */
-const stopped = (text: string): string => (/[.!?]$/.test(text.trim()) ? text.trim() : `${text.trim()}.`)
 
 /** A part of a panel: its name, then its fields. */
 export function Section({ title, children }: { title: string; children: ReactNode }) {
