@@ -189,7 +189,8 @@ function isPace(value: unknown): boolean {
   return pick['work'] === true || (typeof pick['every'] === 'string' && parseInterval(pick['every']) !== undefined)
 }
 
-function record(value: unknown): Record<string, unknown> {
+/** A command's answer, or a value in it, read as its fields: anything but an object has none. */
+export function record(value: unknown): Record<string, unknown> {
   return value && typeof value === 'object' && !Array.isArray(value) ? (value as Record<string, unknown>) : {}
 }
 
@@ -608,7 +609,7 @@ export interface Answered {
  */
 export function startedNow(answer: ModuleCommandResult): Answered {
   if (answer.ok) {
-    const output = typeof answer.output === 'object' && answer.output !== null ? (answer.output as Record<string, unknown>) : {}
+    const output = record(answer.output)
     return { started: typeof output['run'] === 'string' ? output['run'] : '', ...(output['resumed'] === true ? { resumed: true as const } : {}) }
   }
   if (answer.error === 'not due') return { note: 'Nothing started. No work: its shell line printed nothing.' }
