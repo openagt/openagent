@@ -7,8 +7,9 @@ import { contextBridgeBrowser, contextPreferences, contextStartAgent, resolvePro
 import type { BridgeBrowserAction } from '../bridge-browser.js'
 import { isArrived, relayOr } from './relay-agent.js'
 import { hostname } from 'node:os'
-import { findAgent, isPidAlive, isRunId, loadAgentEvents, projectRuns, readLiveMetas, type AgentMeta } from '../store/index.js'
+import { findAgent, isPidAlive, isRunId, loadAgentEvents, projectRuns, type AgentMeta } from '../store/index.js'
 import { withAgentLock } from '../agent-locks.js'
+import { STARTING_AT_MOST_MS } from '../starting.js'
 import { removeProjectWorktree, deleteProjectAgent } from '../worktrees.js'
 import { mergeAgentPr, openAgentPullRequest, mergeAgentBranch, pushAgentBranch, type HandoffResult } from '../dashboard/agent-handoff.js'
 import { pendingChoices } from '../open-choices.js'
@@ -44,14 +45,14 @@ function agentLockKey(cwd: string, agentId: string): string {
  * Stop a live agent (the Stop button): SIGINT to the process the run's own card names, when it is
  * this machine's and alive. The run's tool asks its agent to end the turn where it is, as Esc does
  * in Claude Code; a message continues it. The card is the file the dashboard shows the run from, and its pid is
- * whoever runs the agent; OpenAgent names no tool. Nothing else: a run without a live pid
- * here has nothing to stop.
+ * whoever runs the agent; OpenAgent names no tool. A run still starting is stopped once its card
+ * names its pid. Nothing else: a run without a live pid here has nothing to stop.
  */
 export async function sendStop(projectId: string, agentId?: string): Promise<void> {
   return relayOr(agentId, 'sendStop', [projectId, agentId], async () => {
     const cwd = await resolveProjectPath(projectId)
     if (!cwd || !agentId) return
-    const meta = (await readLiveMetas(cwd).catch(() => [])).find(agent => agent.id === agentId)
+    const meta = await cardOnceUp(cwd, agentId)
     if (!meta || meta.status !== 'running' || meta.pid === undefined || meta.host !== hostname() || !isPidAlive(meta.pid)) return
     try {
       process.kill(meta.pid, 'SIGINT')
@@ -59,6 +60,20 @@ export async function sendStop(projectId: string, agentId?: string): Promise<voi
       // Gone between the probe and the signal.
     }
   }, undefined)
+}
+
+/**
+ * The run's card once it names the run's process, or its card or record says it ended. A run just
+ * started has neither yet: a Stop pressed then waits for it, as long as the page shows the run as
+ * starting, rather than being lost while the run goes on. A run whose card never comes is left as it is.
+ */
+async function cardOnceUp(cwd: string, agentId: string): Promise<AgentMeta | undefined> {
+  const deadline = Date.now() + STARTING_AT_MOST_MS
+  for (;;) {
+    const meta = await findAgent(cwd, agentId)
+    if ((meta && (meta.status !== 'running' || meta.pid !== undefined)) || Date.now() >= deadline) return meta
+    await new Promise(resolve => setTimeout(resolve, 250))
+  }
 }
 
 /**
