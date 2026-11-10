@@ -439,7 +439,7 @@ export function AgentView({
           writing={feedLive ? writing : ''}
           {...(shownSending !== undefined ? { sending: shownSending } : {})}
           working={feedLive || shownSending !== undefined}
-          queued={waiting.length > 0 ? waiting : undefined}
+          queued={waiting}
           waitingOn={!going && live === false && outcome?.ok !== false && !outcome?.waiting ? subagentsRunning : 0}
           {...(feedLive ? {} : { openAt: 'end' as const, emptyLabel: 'This agent has no events.' })}
           // A message just sent to an ended agent: the chat follows its end from the send on, not

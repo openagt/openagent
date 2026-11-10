@@ -1,90 +1,23 @@
-import type { ReactNode } from 'react'
-import type { AgentDoing, AgentMeta, OpenAgentEvent } from '../../src/index.js'
+import type { ComponentProps } from 'react'
 import { ChatNote } from './ChatPane.js'
-import { EventList, type WaitingMessage } from './EventList.js'
-import type { SessionSetup } from './SessionLine.js'
+import { EventList } from './EventList.js'
 
 // One agent's feed: the live/replayed event log, or a waiting placeholder before anything has
 // streamed. Rendered by the agent's own view (AgentView), whose action bar already carries the
 // session link, the session name and the status.
 export function AgentFeed({
-  events,
-  writing = '',
-  sending,
-  working = false,
-  queued,
-  waitingOn,
-  stick = true,
-  openAt,
   emptyLabel = 'Waiting for the session to start…',
-  tail,
-  projectId,
-  agentId,
-  onSaid,
-  subagents,
-  doing,
-  setup,
-  onOpenSubagent,
-  onOpenChange,
-  onOpenScreen,
-}: {
-  events: OpenAgentEvent[]
+  ...log
+}: ComponentProps<typeof EventList> & {
   /** The feed's own project and agent: with them, an answered question is its ✓ card and an open
    *  one is the question's card, answered in place. Required, so no caller shows an open question
    *  as log text by leaving them out. */
   projectId: string
   agentId: string | undefined
-  /** Told what an answer said to the agent, so the chat can show it at once. */
-  onSaid?: ((text: string) => void) | undefined
-  /** The message the agent is writing, as far as it has got: a row after the last, growing as it comes. */
-  writing?: string
-  /** A message just sent to an ended agent, shown as the last prompt until its own line arrives. */
-  sending?: string | undefined
-  /** The agent is working: a spinner row closes the feed while it writes nothing. */
-  working?: boolean
-  /** Messages the working agent has not read yet, and how many subagents an ended turn waits on: the feed's last rows. */
-  queued?: readonly WaitingMessage[] | undefined
-  waitingOn?: number | undefined
-  /** A finished log is static (#1026): it does not follow new output, and opens at its end. */
-  stick?: boolean
-  openAt?: 'start' | 'end'
   /** What an empty feed says: a live agent is waiting, a finished one has nothing to replay. */
   emptyLabel?: string
-  /** Rendered after the last log row, inside the scroller (#1265): a web agent's live mirror box. */
-  tail?: ReactNode
-  /** The run's subagents, what each is doing now, and how a click on one's row opens it. */
-  subagents?: readonly AgentMeta[] | undefined
-  doing?: Record<string, AgentDoing> | undefined
-  /** What was set up for the agent before it began: the chat's "Initialized session" line. */
-  setup?: SessionSetup | undefined
-  onOpenSubagent?: ((key: string) => void) | undefined
-  /** Show a changed file's change: a click on a file's row at the end of a turn; with no path, all of them. */
-  onOpenChange?: ((path?: string) => void) | undefined
-  /** Show the run's live screen: what the row of a live screen does on a click. */
-  onOpenScreen?: (() => void) | undefined
 }) {
   // A message that waits is a row too: with no event yet it is the feed's only one.
-  if (events.length === 0 && sending === undefined && !queued?.length) return <ChatNote>{emptyLabel}</ChatNote>
-  return (
-    <EventList
-      events={events}
-      writing={writing}
-      {...(sending !== undefined ? { sending } : {})}
-      working={working}
-      {...(queued ? { queued } : {})}
-      {...(waitingOn ? { waitingOn } : {})}
-      stick={stick}
-      {...(openAt ? { openAt } : {})}
-      {...(tail ? { tail } : {})}
-      projectId={projectId}
-      agentId={agentId}
-      onSaid={onSaid}
-      {...(subagents ? { subagents } : {})}
-      {...(doing ? { doing } : {})}
-      setup={setup}
-      onOpenSubagent={onOpenSubagent}
-      onOpenChange={onOpenChange}
-      onOpenScreen={onOpenScreen}
-    />
-  )
+  if (log.events.length === 0 && log.sending === undefined && !log.queued?.length) return <ChatNote>{emptyLabel}</ChatNote>
+  return <EventList {...log} />
 }
