@@ -10,7 +10,7 @@ const sendPersonalFolderAs = vi.fn(async (_login: string) => ({ ok: true as cons
 vi.mock('../rpc/personal-folder.js', () => ({ onPersonalFolder, sendSyncPersonalFolder, sendStopSyncingPersonalFolder, sendPersonalFolderAs }))
 // The notice of what is not backed up has its own tests (BackupNotice.test.tsx).
 vi.mock('./BackupNotice.js', async importOriginal => ({ ...(await importOriginal<object>()), BackupNotice: () => null }))
-const logins = vi.hoisted(() => ({ onGitHosts: vi.fn(), sendUseGitHostAccount: vi.fn(), sendForgetGitHostAccount: vi.fn(), sendGitHostLogin: vi.fn(), sendGitHostInstall: vi.fn(), onAgentState: vi.fn(), sendAgentFix: vi.fn() }))
+const logins = vi.hoisted(() => ({ onGitHosts: vi.fn(), sendUseGitHostAccount: vi.fn(), sendForgetGitHostAccount: vi.fn(), sendGitHostLogin: vi.fn(), sendStopGitHostLogin: vi.fn(async () => ({ ok: true })), sendGitHostInstall: vi.fn(), onAgentState: vi.fn(), sendAgentFix: vi.fn() }))
 vi.mock('../rpc/logins.js', () => logins)
 const github = (accounts: { login: string; runs: boolean; ok: boolean }[]) => ({
   hosts: [{ host: 'github.com', projects: [], provider: { name: 'GitHub', requestWord: 'pull request', logo: '<svg/>', tool: 'gh', installed: true, install: 'brew install gh', accounts } }],
@@ -24,7 +24,7 @@ beforeEach(() => {
   sendSyncPersonalFolder.mockClear()
   sendStopSyncingPersonalFolder.mockClear()
   logins.onGitHosts.mockResolvedValue(github([{ login: 'me-agent', runs: false, ok: true }, { login: 'reviewer-agent', runs: true, ok: true }]))
-  logins.sendGitHostLogin.mockResolvedValue({ ok: true })
+  logins.sendGitHostLogin.mockResolvedValue({ ok: true, code: 'ABCD-1234', url: 'https://github.com/login/device' })
 })
 afterEach(cleanup)
 

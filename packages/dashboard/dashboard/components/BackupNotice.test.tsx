@@ -1,8 +1,8 @@
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest'
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { forgetRemembered } from '../lib/use-async.js'
 
-const logins = vi.hoisted(() => ({ onGitHosts: vi.fn(), sendUseGitHostAccount: vi.fn(), sendForgetGitHostAccount: vi.fn(), sendGitHostLogin: vi.fn(), sendGitHostInstall: vi.fn(), onAgentState: vi.fn(), sendAgentFix: vi.fn() }))
+const logins = vi.hoisted(() => ({ onGitHosts: vi.fn(), sendUseGitHostAccount: vi.fn(), sendForgetGitHostAccount: vi.fn(), sendGitHostLogin: vi.fn(), sendStopGitHostLogin: vi.fn(), sendGitHostInstall: vi.fn(), onAgentState: vi.fn(), sendAgentFix: vi.fn() }))
 vi.mock('../rpc/logins.js', () => logins)
 const backup = vi.hoisted(() => ({ onBackup: vi.fn(), sendBackUpAs: vi.fn() }))
 vi.mock('../rpc/backup.js', () => backup)
@@ -27,7 +27,8 @@ const SHOP = { kind: 'project', projectId: 'p1', project: 'shop', address: 'gith
 beforeEach(() => {
   backup.onBackup.mockResolvedValue({ gaps: [PERSONAL] })
   backup.sendBackUpAs.mockResolvedValue({ ok: true })
-  logins.sendGitHostLogin.mockResolvedValue({ ok: true })
+  logins.sendGitHostLogin.mockResolvedValue({ ok: true, code: 'ABCD-1234', url: 'https://github.com/login/device' })
+  logins.sendStopGitHostLogin.mockResolvedValue({ ok: true })
 })
 
 afterEach(() => {
@@ -59,10 +60,12 @@ describe('what is not backed up, at the top of Settings › Agent data', () => {
     expect(screen.queryByRole('button', { name: 'Back up' })).toBeNull()
   })
 
-  test('the login under way: its code is shown in the notice', async () => {
+  test('the login under way: its code is shown in the dialog the press opens, and no second code is asked for', async () => {
     logins.onGitHosts.mockResolvedValue(hosts([], { loggingIn: { code: 'ABCD-1234', url: 'https://github.com/login/device' } }))
     render(<BackupNotice />)
-    expect(await screen.findByText('ABCD-1234')).toBeTruthy()
+    fireEvent.click(await screen.findByRole('button', { name: 'Add a GitHub account' }))
+    expect(await within(await screen.findByRole('dialog', { name: 'Add a GitHub account' })).findByText('ABCD-1234')).toBeTruthy()
+    expect(logins.sendGitHostLogin).not.toHaveBeenCalled()
   })
 
   test('with accounts: the person picks one, the one runs use first, and Back up sends as it', async () => {

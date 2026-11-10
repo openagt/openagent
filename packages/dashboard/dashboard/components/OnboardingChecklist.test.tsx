@@ -113,17 +113,21 @@ describe('the first steps on the Overview', () => {
     await waitFor(() => expect(document.body.textContent).toContain('makes no commit on your branch and pushes nothing'))
   })
 
-  test('a login started can be given up: Cancel stops it, and the press to add an account is back', async () => {
+  test('the account is added in a dialog: its code is shown there, and Cancel gives the login up', async () => {
     onDashboard.mockResolvedValue(EMPTY)
-    logins.onGitHosts.mockResolvedValue(github([]))
     logins.sendStopGitHostLogin.mockResolvedValue({ ok: true })
-    logins.onGitHosts.mockResolvedValue({ hosts: [{ ...github([]).hosts[0]!, provider: { ...github([]).hosts[0]!.provider, loggingIn: { code: 'ABCD-1234', url: 'https://github.com/login/device' } } }] })
-    steps()
-    expect(await screen.findByText('ABCD-1234')).toBeTruthy()
+    logins.sendGitHostLogin.mockResolvedValue({ ok: true, code: 'ABCD-1234', url: 'https://github.com/login/device' })
     logins.onGitHosts.mockResolvedValue(github([]))
-    fireEvent.click(screen.getByRole('button', { name: 'Cancel' }))
+    steps()
+    fireEvent.click(await screen.findByRole('button', { name: 'Add a GitHub account' }))
+    logins.onGitHosts.mockResolvedValue({ hosts: [{ ...github([]).hosts[0]!, provider: { ...github([]).hosts[0]!.provider, loggingIn: { code: 'ABCD-1234', url: 'https://github.com/login/device' } } }] })
+    const dialog = await screen.findByRole('dialog', { name: 'Add a GitHub account' })
+    expect(await within(dialog).findByText('ABCD-1234')).toBeTruthy()
+    logins.onGitHosts.mockResolvedValue(github([]))
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Cancel' }))
     await waitFor(() => expect(logins.sendStopGitHostLogin).toHaveBeenCalledWith('github.com'))
-    expect(await screen.findByRole('button', { name: 'Add a GitHub account' })).toBeTruthy()
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
+    expect(screen.getByRole('button', { name: 'Add a GitHub account' })).toBeTruthy()
   })
 
   test('one step open at a time, numbered: the next to do with its words and its press; the others only their titles, each a press from open', async () => {

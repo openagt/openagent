@@ -1,9 +1,10 @@
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 import { Bot, Check, Loader2, Pencil, Plus, RefreshCw, Trash2 } from 'lucide-react'
 import { onAgentLogins, onAgentsList, sendCopyAgentLogins, sendRemoveAgent, sendSaveAgent, type AgentLoginsOn, type AgentRecord, type AgentsView } from '../rpc/agents.js'
 import { DEFAULT_AGENT } from '../../src/client.js'
 import { usePolled } from '../lib/use-async.js'
 import { cn } from '../lib/utils.js'
+import { useAddGitAccount } from './AddGitAccount.js'
 import { Button } from './ui/button.js'
 import { Card, CardContent, CardHeader, CardTitle } from './ui/card.js'
 import { Checkbox } from './ui/checkbox.js'
@@ -85,7 +86,7 @@ export function AgentsPage() {
         <Skeleton className="h-32 w-full" />
       ) : (
         <div className="space-y-4">
-          {adding && <AgentEditor view={view} onDone={async saved => (setAdding(false), saved ? changed() : undefined)} />}
+          {adding && <AgentEditor view={view} onAccounts={reload} onDone={async saved => (setAdding(false), saved ? changed() : undefined)} />}
           {view.agents.map(agent => (
             <AgentCard key={agent.id} agent={agent} view={view} devices={devices} onChanged={changed} />
           ))}
@@ -99,7 +100,7 @@ export function AgentsPage() {
 function AgentCard({ agent, view, devices, onChanged }: { agent: AgentRecord; view: AgentsView; devices: AgentLoginsOn[] | undefined; onChanged: () => Promise<void> }) {
   const [editing, setEditing] = useState(false)
   const isDefault = agent.id === DEFAULT_AGENT
-  if (editing) return <AgentEditor agent={agent} view={view} onDone={async saved => (setEditing(false), saved ? onChanged() : undefined)} />
+  if (editing) return <AgentEditor agent={agent} view={view} onAccounts={onChanged} onDone={async saved => (setEditing(false), saved ? onChanged() : undefined)} />
   const accounts = [
     agent.accounts.github !== undefined ? `@${agent.accounts.github} on GitHub` : 'GitHub: whatever the computer uses',
     ...(agent.accounts.claude ? [`Claude: ${agent.accounts.claude.map(id => view.claude.find(account => account.id === id)?.name ?? id).join(', ')}`] : []),
@@ -216,12 +217,20 @@ function OnDevices({ login, devices, onCopied }: { login: string; devices: Agent
 /** No account of the agent's own, whatever the computer uses: the value of the select for an agent that names none. */
 const COMPUTERS = ''
 
-/** An agent edited in place, or a new one: the name, the skills ticked, the accounts picked; Save writes it, Cancel leaves it. */
-function AgentEditor({ agent, view, onDone }: { agent?: AgentRecord; view: AgentsView; onDone: (saved: boolean) => Promise<void> | void }) {
+/**
+ * An agent edited in place, or a new one: the name, the skills ticked, the accounts picked; Save
+ * writes it, Cancel leaves it. A GitHub account OpenAgent does not have yet is added from here, in
+ * its dialog, and is then the one picked; `onAccounts` reads the accounts again.
+ */
+function AgentEditor({ agent, view, onAccounts, onDone }: { agent?: AgentRecord; view: AgentsView; onAccounts: () => Promise<void>; onDone: (saved: boolean) => Promise<void> | void }) {
+  // What is being typed is the editor's own from its first frame: the page reading the agents again changes nothing in it.
   const [draft, setDraft] = useState<Draft>(() => draftOf(agent))
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | undefined>()
-  useEffect(() => setDraft(draftOf(agent)), [agent])
+  const addingAccount = useAddGitAccount(async login => {
+    setDraft(d => ({ ...d, github: login }))
+    await onAccounts()
+  })
   const isDefault = agent?.id === DEFAULT_AGENT
   const tick = (set: 'skills' | 'claude' | 'codex', name: string, on: boolean) =>
     setDraft(d => {
@@ -247,7 +256,7 @@ function AgentEditor({ agent, view, onDone }: { agent?: AgentRecord; view: Agent
       setBusy(false)
     }
   }
-  const githubItems = [{ value: COMPUTERS, label: 'None — whatever the computer uses' }, ...(view.github?.accounts ?? []).map(login => ({ value: login, label: `@${login}` }))]
+  const githubItems = [{ value: COMPUTERS, label: 'None — whatever the computer uses' }, ...[...new Set([...(view.github?.accounts ?? []), ...(draft.github !== undefined ? [draft.github] : [])])].map(login => ({ value: login, label: `@${login}` }))]
   return (
     <Card role="region" aria-label={agent ? `Editing ${agent.name}` : 'New agent'}>
       <CardHeader>
@@ -289,19 +298,28 @@ function AgentEditor({ agent, view, onDone }: { agent?: AgentRecord; view: Agent
           <p className="text-sm font-medium">Accounts</p>
           <div className="space-y-1.5">
             <Label htmlFor="agent-github">GitHub</Label>
-            <Select items={githubItems} value={draft.github ?? COMPUTERS} onValueChange={next => setDraft(d => ({ ...d, ...(next ? { github: String(next) } : {}), ...(next ? {} : { github: undefined }) }))} disabled={busy}>
-              <SelectTrigger id="agent-github" size="sm" aria-label="GitHub account" className="max-w-sm">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {githubItems.map(item => (
-                  <SelectItem key={item.value} value={item.value}>
-                    {item.label}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            <div className="flex flex-wrap items-center gap-2">
+              <Select items={githubItems} value={draft.github ?? COMPUTERS} onValueChange={next => setDraft(d => ({ ...d, ...(next ? { github: String(next) } : {}), ...(next ? {} : { github: undefined }) }))} disabled={busy}>
+                <SelectTrigger id="agent-github" size="sm" aria-label="GitHub account" className="min-w-0 max-w-sm flex-1 basis-48">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {githubItems.map(item => (
+                    <SelectItem key={item.value} value={item.value}>
+                      {item.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              {view.github && (
+                <Button type="button" size="sm" variant="outline" disabled={busy} onClick={() => addingAccount.add(view.github!.host)}>
+                  <Plus className="size-3.5" aria-hidden />
+                  Add account
+                </Button>
+              )}
+            </div>
             <p className="text-xs text-muted-foreground">Runs push and open pull requests as this account. An account this computer does not have refuses the start.</p>
+            {addingAccount.dialog}
           </div>
           <AccountPicks label="Claude" accounts={view.claude} picked={draft.claude} busy={busy} onTick={(id, on) => tick('claude', id, on)} />
           <AccountPicks label="Codex" accounts={view.codex} picked={draft.codex} busy={busy} onTick={(id, on) => tick('codex', id, on)} />

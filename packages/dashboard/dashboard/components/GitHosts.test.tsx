@@ -3,7 +3,7 @@ import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-li
 import { forgetRemembered } from '../lib/use-async.js'
 import { openMenu } from '../test-utils.js'
 
-const logins = vi.hoisted(() => ({ onGitHosts: vi.fn(), sendUseGitHostAccount: vi.fn(), sendForgetGitHostAccount: vi.fn(), sendGitHostLogin: vi.fn(), sendGitHostInstall: vi.fn(), onAgentState: vi.fn(), sendAgentFix: vi.fn() }))
+const logins = vi.hoisted(() => ({ onGitHosts: vi.fn(), sendUseGitHostAccount: vi.fn(), sendForgetGitHostAccount: vi.fn(), sendGitHostLogin: vi.fn(), sendStopGitHostLogin: vi.fn(), sendGitHostInstall: vi.fn(), onAgentState: vi.fn(), sendAgentFix: vi.fn() }))
 vi.mock('../rpc/logins.js', () => logins)
 vi.mock('../rpc/server-logins.js', () => ({ onServerLogins: vi.fn(async () => ({ computer: 'Studio', servers: [] })), sendUseLoginsOn: vi.fn(), sendAllowLogins: vi.fn(), sendSettleLogin: vi.fn() }))
 
@@ -28,6 +28,7 @@ beforeEach(() => {
   logins.sendForgetGitHostAccount.mockResolvedValue({ ok: true })
   logins.sendGitHostInstall.mockResolvedValue({ ok: true })
   logins.sendGitHostLogin.mockResolvedValue({ ok: true, code: 'ABCD-1234', url: 'https://github.com/login/device' })
+  logins.sendStopGitHostLogin.mockResolvedValue({ ok: true })
 })
 
 afterEach(() => {
@@ -89,7 +90,7 @@ describe('the git host in a session\'s row', () => {
 })
 
 describe('Git hosts', () => {
-  test('one card, "Git host accounts", a section per host drawn from its package: OpenAgent\u2019s own accounts, the one runs use; another is used for runs with a press; the -agent advice behind an ⓘ; a host with no package is one line', async () => {
+  test('one card, "Git host accounts", a section per host drawn from its package: OpenAgent\u2019s own accounts, the one runs use; another is used for runs with a press; one more is added from the card\u2019s title; a host with no package is one line', async () => {
     logins.onGitHosts.mockResolvedValue({ hosts: [{ host: 'github.com', projects: ['site', 'gemskills'], provider: provider() }, { host: 'gitlab.example.com', projects: ['tool'] }] })
     render(<GitHostsCard />)
     const card = await screen.findByRole('region', { name: 'GitHub' })
@@ -98,8 +99,9 @@ describe('Git hosts', () => {
     expect(within(card).getByText('Used by site, gemskills')).toBeTruthy()
     const octo = within(card).getByRole('listitem', { name: '@octo' })
     expect(octo.textContent).toContain('added to OpenAgent')
-    // octo is no account of an agent's own: the advice says to make one, quietly, beside Add account.
-    expect(within(card).getByRole('button', { name: 'Why an account of its own for your agents' })).toBeTruthy()
+    // One host an account can be added at: its press is at the card's title, and none at the host's own line.
+    expect(screen.getByRole('button', { name: 'Add a GitHub account' }).textContent).toBe('Add')
+    expect(within(card).queryByRole('button', { name: /Add/ })).toBeNull()
     expect(card.textContent).not.toContain('We recommend')
     expect(octo.textContent).toContain('Runs use this')
     await openMenu(within(card).getByRole('button', { name: 'More for @octo-agent' }))
@@ -151,41 +153,57 @@ describe('Git hosts', () => {
     expect((await within(card).findByRole('alert')).textContent).toBe('gh could not forget it.')
   })
 
-  test('Add account asks the package for a code, and the card shows it with the page to type it at while the login waits', async () => {
-    logins.onGitHosts.mockResolvedValueOnce({ hosts: [{ host: 'github.com', projects: ['site'], provider: provider() }] })
-    logins.onGitHosts.mockResolvedValue({ hosts: [{ host: 'github.com', projects: ['site'], provider: provider({ loggingIn: { code: 'ABCD-1234', url: 'https://github.com/login/device' } }) }] })
-    let answer: (value: { ok: true }) => void = () => {}
-    logins.sendGitHostLogin.mockImplementation(() => new Promise(resolve => (answer = resolve)))
+  test('Add, at the card\u2019s title, opens the dialog: it asks the package for a code, shows it with the page to type it at, and closes on the account once it is there', async () => {
+    logins.onGitHosts.mockResolvedValue({ hosts: [{ host: 'github.com', projects: ['site'], provider: provider() }] })
     render(<GitHostsCard />)
-    const card = await screen.findByRole('region', { name: 'GitHub' })
-    const add = within(card).getByRole('button', { name: 'Add account' }) as HTMLButtonElement
-    fireEvent.click(add)
+    await screen.findByRole('region', { name: 'GitHub' })
+    logins.onGitHosts.mockResolvedValue({ hosts: [{ host: 'github.com', projects: ['site'], provider: provider({ loggingIn: { code: 'ABCD-1234', url: 'https://github.com/login/device' } }) }] })
+    fireEvent.click(screen.getByRole('button', { name: 'Add a GitHub account' }))
+    const dialog = await screen.findByRole('dialog', { name: 'Add a GitHub account' })
     await waitFor(() => expect(logins.sendGitHostLogin).toHaveBeenCalledWith('github.com'))
-    // While the package asks for a code, the press spins and takes no other.
-    await waitFor(() => expect(add.disabled).toBe(true))
-    expect(add.querySelector('.animate-spin')).not.toBeNull()
-    answer({ ok: true })
-    expect(await screen.findByText('ABCD-1234')).toBeTruthy()
-    expect(screen.getByRole('link', { name: 'github.com/login/device' }).getAttribute('href')).toBe('https://github.com/login/device')
+    expect(await within(dialog).findByText('ABCD-1234')).toBeTruthy()
+    expect(within(dialog).getByRole('link', { name: 'github.com/login/device' }).getAttribute('href')).toBe('https://github.com/login/device')
+    expect(within(dialog).getByText('Waiting for you at GitHub…')).toBeTruthy()
+    // Rom's advice, where the account is chosen.
+    expect(dialog.textContent).toContain('name it like you-agent')
+    // The code is in the dialog alone: the card behind it stays as it was.
+    expect(within(screen.getByRole('region', { name: 'GitHub', hidden: true })).queryByText('ABCD-1234')).toBeNull()
   })
 
-  test('no tool: said, with the press that installs it and the command it runs, and why the last install failed; no account: said, with the press that adds one', async () => {
+  test('no tool, or no account: said in the card, with the press that opens the dialog; the dialog installs the tool with the command it runs, and says why the last install failed', async () => {
     logins.onGitHosts.mockResolvedValue({ hosts: [{ host: 'github.com', projects: ['site'], provider: provider({ installed: false, accounts: [], installFailed: 'curl: could not resolve host' }) }] })
     render(<GitHostsCard />)
     const card = await screen.findByRole('region', { name: 'GitHub' })
     expect(within(card).getByText('gh, the tool for GitHub, is not installed.')).toBeTruthy()
-    expect(within(card).getByText('brew install gh')).toBeTruthy()
-    expect(within(card).getByRole('alert').textContent).toBe('curl: could not resolve host')
-    fireEvent.click(within(card).getByRole('button', { name: 'Install gh' }))
+    fireEvent.click(within(card).getByRole('button', { name: 'Add a GitHub account' }))
+    const dialog = await screen.findByRole('dialog', { name: 'Add a GitHub account' })
+    expect(within(dialog).getByText('brew install gh')).toBeTruthy()
+    expect(within(dialog).getByRole('alert').textContent).toBe('curl: could not resolve host')
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Install gh' }))
     await waitFor(() => expect(logins.sendGitHostInstall).toHaveBeenCalledWith('github.com'))
+    // No code is asked for before the tool is there.
+    expect(logins.sendGitHostLogin).not.toHaveBeenCalled()
     cleanup()
 
     logins.onGitHosts.mockResolvedValue({ hosts: [{ host: 'github.com', projects: ['site'], provider: provider({ accounts: [] }) }] })
     render(<GitHostsCard />)
     const out = await screen.findByRole('region', { name: 'GitHub' })
     expect(within(out).getByText('OpenAgent has no GitHub account yet.')).toBeTruthy()
+    // One press, where what is missing is said: not a second one at the card's title.
+    expect(screen.getAllByRole('button', { name: 'Add a GitHub account' })).toHaveLength(1)
     fireEvent.click(within(out).getByRole('button', { name: 'Add a GitHub account' }))
     await waitFor(() => expect(logins.sendGitHostLogin).toHaveBeenCalledWith('github.com'))
+  })
+
+  test('two hosts with a package: Add is a menu of them', async () => {
+    logins.onGitHosts.mockResolvedValue({ hosts: [{ host: 'github.com', projects: ['site'], provider: provider() }, { host: 'git.example.com', projects: ['tool'], provider: provider({ name: 'Forge', tool: 'forge', accounts: [] }) }] })
+    render(<GitHostsCard />)
+    await screen.findByRole('region', { name: 'Forge' })
+    await openMenu(screen.getByRole('button', { name: 'Add a git host account' }))
+    expect(screen.getAllByRole('menuitem').map(item => item.textContent)).toEqual(['GitHub', 'Forge'])
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Forge' }))
+    expect(await screen.findByRole('dialog', { name: 'Add a Forge account' })).toBeTruthy()
+    await waitFor(() => expect(logins.sendGitHostLogin).toHaveBeenCalledWith('git.example.com'))
   })
 
   test('no project with a remote: no card, one line saying when one comes', async () => {
