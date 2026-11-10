@@ -439,7 +439,11 @@ test('a birth branch another worktree has checked out is not named as deleted (#
   }
 })
 
-test('a checkout git cannot remove even by force is not reported as reclaimed (#1757)', async () => {
+// Root unlinks inside a read-only directory all the same, so as root (a container's user) the
+// failed removal cannot be staged this way.
+const asRoot = process.getuid?.() === 0 ? { skip: 'run as root: a read-only directory does not stop root' } : {}
+
+test('a checkout git cannot remove even by force is not reported as reclaimed (#1757)', asRoot, async () => {
   const { repo, path } = await repoWithDirtyWorktree()
   const git = nodeGitRunner()
   try {

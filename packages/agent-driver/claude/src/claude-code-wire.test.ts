@@ -89,6 +89,9 @@ test('the installed claude asks AskUserQuestion over stdin as the driver reads i
       ANTHROPIC_API_KEY: 'sk-ant-wire-test',
       CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC: '1',
       DISABLE_TELEMETRY: '1',
+      // A throwaway home against a stand-in API is a sandbox, and says so: run as root, as in a
+      // container, `claude` refuses --dangerously-skip-permissions anywhere else.
+      IS_SANDBOX: '1',
     }
     const events: DriverEvent[] = []
     const session = await new ClaudeCodeDriver({ env, permissionMode: 'bypassPermissions' }).start({ cwd, model: 'claude-sonnet-5-5', signal: stop.signal, onEvent: e => events.push(e) })
