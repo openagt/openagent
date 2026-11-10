@@ -50,6 +50,16 @@ const NO_PERSON = /noreply|no-reply|\[bot\]/i
 /** GitHub's own address for a person's account, what a server's git signs with: it says no-reply, and is theirs. A bot's has `[bot]` in it. */
 const PERSONS_OWN_ADDRESS = /^[^[\]]+@users\.noreply\.github\.com$/i
 
+/** The busiest first: the most runs and commits together, then the most lately active. */
+function busiestFirst(a: PersonActivity, b: PersonActivity): number {
+  return b.runs + b.commits - (a.runs + a.commits) || b.lastAt.localeCompare(a.lastAt)
+}
+
+/** A sum of US dollars, to the cent. */
+function toCents(usd: number): number {
+  return Math.round(usd * 100) / 100
+}
+
 /**
  * Each person who started runs under `dir` or made commits among `commits`, the busiest first:
  * their runs and commits since `since`, when they last did either, and their name from the commits.
@@ -76,7 +86,7 @@ export async function peopleOf(reader: RecordsReader, dir: string, since: number
       if (card.status === 'running') person.running++
       person.cost += card.cost ?? 0
     }
-    person.cost = Math.round(person.cost * 100) / 100
+    person.cost = toCents(person.cost)
   }
   // The commits, newest first: a person's name is the one their newest commit carries.
   for (const commit of commits) {
@@ -90,7 +100,7 @@ export async function peopleOf(reader: RecordsReader, dir: string, since: number
       if (new Date(commit.at).toISOString() > person.lastAt) person.lastAt = new Date(commit.at).toISOString()
     }
   }
-  return [...byEmail.values()].sort((a, b) => b.runs + b.commits - (a.runs + a.commits) || b.lastAt.localeCompare(a.lastAt))
+  return [...byEmail.values()].sort(busiestFirst)
 }
 
 /** A run as the dashboard lists it: whose it is, when it started, how it stands, what it cost. */
@@ -120,8 +130,8 @@ export function peopleWithRuns(people: readonly PersonActivity[], runs: readonly
     if (run.startedAt > person.lastAt) person.lastAt = run.startedAt
   }
   return [...byEmail.values()]
-    .map(person => ({ ...person, cost: Math.round(person.cost * 100) / 100 }))
-    .sort((a, b) => b.runs + b.commits - (a.runs + a.commits) || b.lastAt.localeCompare(a.lastAt))
+    .map(person => ({ ...person, cost: toCents(person.cost) }))
+    .sort(busiestFirst)
 }
 
 /** One person, over every project shown. */
@@ -149,10 +159,10 @@ export function membersOf(reads: { project: string; people: PersonActivity[] }[]
       known.commits += activity.commits
       if (known.name === undefined && activity.name !== undefined) known.name = activity.name
       known.running += activity.running
-      known.cost = Math.round((known.cost + activity.cost) * 100) / 100
+      known.cost = toCents(known.cost + activity.cost)
       if (activity.lastAt > known.lastAt) known.lastAt = activity.lastAt
       if (activity.you) known.you = true
       if (!known.projects.includes(project)) known.projects.push(project)
     }
-  return [...byPerson.values()].sort((a, b) => Number(b.running > 0) - Number(a.running > 0) || b.runs + b.commits - (a.runs + a.commits) || b.lastAt.localeCompare(a.lastAt))
+  return [...byPerson.values()].sort((a, b) => Number(b.running > 0) - Number(a.running > 0) || busiestFirst(a, b))
 }
