@@ -157,7 +157,7 @@ export async function click(page: CdpSession, ref: number): Promise<Point> {
  * Put `text` in element `ref`, replacing what it held. A `select` takes the option whose text or
  * value is `text`; anything else is focused, its content selected, and the text typed over it.
  */
-export async function type(page: CdpSession, ref: number, text: string): Promise<Point> {
+export async function typeInto(page: CdpSession, ref: number, text: string): Promise<Point> {
   const at = await locate(page, ref)
   const outcome = await evaluate<string>(
     page,
@@ -266,7 +266,7 @@ export async function screenshot(page: CdpSession): Promise<Buffer> {
 }
 
 /** Run `script` in the page and print what it returns, as JSON. */
-export async function run(page: CdpSession, script: string): Promise<string> {
+export async function runScript(page: CdpSession, script: string): Promise<string> {
   const value = await evaluate<unknown>(page, script, true)
   if (value instanceof Unserializable) return value.text
   return value === undefined ? 'undefined' : JSON.stringify(value, null, 2)

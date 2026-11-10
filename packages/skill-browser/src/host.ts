@@ -6,7 +6,7 @@ import { dirname } from 'node:path'
 import { activePage, connectCdp, listPages, type CdpSession, type PageTarget } from './cdp.js'
 import { launchChrome, type Chrome } from './chrome.js'
 import { consoleLog, errorsNote, heardOnce, listenToConsole, printConsole, went, type Said } from './console.js'
-import { click, cursorAt, navigate, PageError, press, readPage, run, screenshot, selectionIn, type } from './page.js'
+import { click, cursorAt, navigate, PageError, press, readPage, runScript, screenshot, selectionIn, typeInto } from './page.js'
 import { inputCalls, stepHistory, type ScreenInput } from './screen.js'
 import { CURSORS, MAX_SELECTION, MAX_TITLE, MAX_URL } from './stream.js'
 import { screenWatchers } from './watchers.js'
@@ -354,7 +354,7 @@ export async function runHost(opts: HostOptions): Promise<void> {
         watchers.acted({ ...(await click(p, ref())), act: 'click' })
         return { ok: true, output: await readPage(await current()) }
       case 'type':
-        watchers.acted({ ...(await type(p, ref(), second)), act: 'type' })
+        watchers.acted({ ...(await typeInto(p, ref(), second)), act: 'type' })
         return { ok: true, output: await readPage(await current()) }
       case 'press':
         await press(p, first)
@@ -362,7 +362,7 @@ export async function runHost(opts: HostOptions): Promise<void> {
       case 'screenshot':
         return { ok: true, output: '', png: (await screenshot(p)).toString('base64') }
       case 'eval':
-        return { ok: true, output: await run(p, first) }
+        return { ok: true, output: await runScript(p, first) }
       case 'close':
         setImmediate(() => void end())
         return { ok: true, output: 'The browser is closed.' }
