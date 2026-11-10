@@ -50,8 +50,9 @@ options page's "Open the Driver tab now" resumes it. Use another tab for claude.
 | `content.js` | finds the question in the page, hands it to the worker, mirrors the transcript; in the Driver tab reads the session list, visits sessions in-app, types answers, draws the overlay |
 | `background.js` | holds the token, runs the Driver cycle twice a minute: lists sessions, reads statuses, plans visits, acks deliveries, creates sessions |
 | `driver-plan.js` | which sessions a cycle visits — shared by the worker and the harness |
+| `fingerprint.js` | the extension's files and their fingerprint, which the worker compares every beat to reload itself after an edit — shared by the worker, the harness and the dashboard's build, which copies exactly those files |
 | `options.js` | where the token and dashboard URL are set, plus a connection test and the Driver's on-demand cycle |
-| `check.mjs` | runs `content.js` and `driver-plan.js` against synthetic pages in jsdom, no browser needed |
+| `check.mjs` | runs `content.js` against synthetic pages, and `driver-plan.js` and `fingerprint.js` on their own, in jsdom, no browser needed |
 
 **The token lives in the worker, never in the page.** A content script shares a tab with
 claude.ai, and nothing on that page should be able to read the secret that talks to a daemon. The

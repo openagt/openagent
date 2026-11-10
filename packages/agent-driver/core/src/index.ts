@@ -18,9 +18,9 @@ export type {
   ReadyPrompt,
 } from './types.js'
 export { isTransientQuotaReason, PERSONAL_PARTS } from './types.js'
-export { parseQuestion, toolQuestion, continuationPrompt, fencedBlocks, QUESTION_TAG, type Question, type QuestionOption } from './question.js'
+export { parseQuestion, toolQuestion, continuationPrompt, QUESTION_TAG, type Question, type QuestionOption } from './question.js'
 export { appendInbox, takeInbox, promptOf, promptLines, steeredWords, finishTurn, type InboxLine, type PromptLine } from './inbox.js'
-export { SessionLog, attachLog, logCardFile, logDiaryFile, logLiveFile, diaryLine, agentEnv, DIARY_ENV, type LogCard, type LogEndStatus, type SessionLogOptions, type WrittenCard } from './session-log.js'
+export { SessionLog, attachLog, logCardFile, logDiaryFile, logLiveFile, agentEnv, DIARY_ENV, type LogCard, type LogEndStatus, type SessionLogOptions, type WrittenCard } from './session-log.js'
 export { checkCliReady, probeCli, type CliProbe, type CliSpec, type DriverReadiness, type DriverReadyOptions, type DriverFix } from './ready.js'
 export { FakeDriver, FakeDriverSession, type FakeTurn, type FakeDriverOptions } from './fake.js'
 // What an adapter package builds its driver with: the event stream, the framing and stop
@@ -28,7 +28,7 @@ export { FakeDriver, FakeDriverSession, type FakeTurn, type FakeDriverOptions } 
 export { makeEmit, promptSent, startEvent, type PromptExtras, combineFraming, combineSignals, readWorkspaceFile, oneLine, cutOutput, callArgument, lineCount, patchSize, hunkLines, OUTPUT_MAX } from './session-support.js'
 export { ConversationGoneError, continuingTurn } from './gone.js'
 export { readyPrompt } from './ready-prompt.js'
-export type { AgentAccount, AccountTurn, AccountRotation, RotatedTurn } from './accounts.js'
+export { accountTurn, type AgentAccount, type AccountReading, type AccountTurn, type AccountRotation, type RotatedTurn } from './accounts.js'
 export {
   runCliSession,
   AgentExitError,

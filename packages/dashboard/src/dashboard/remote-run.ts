@@ -7,6 +7,7 @@ import { errorMessage } from '../error-message.js'
 import { machineFetch } from './machine-call.js'
 import { computerNameOf, isHostName, isPersonName } from '../registry.js'
 import { readLogins, type GivenLogins, type MachineLogins } from './machine-logins.js'
+import { isDeviceId } from '../machine-link.js'
 
 /**
  * The server-side half of "run on a saved machine" (#1067). The local daemon holds this computer's
@@ -35,6 +36,11 @@ export interface MachineAccess {
 /** Where a relayed agent works: a machine, and the project there, by its repository's address. */
 export interface RemoteTarget extends MachineAccess {
   project: string
+}
+
+/** Where a call about a project on a saved machine goes: how the machine is reached, and the project there by the name the machine knows it by. */
+export function targetOf(machine: MachineAccess, project: string): RemoteTarget {
+  return { url: machine.url, key: machine.key, ...(machine.pin ? { pin: machine.pin } : {}), project }
 }
 
 /** What a relay start forwards to the remote's `/_relay/start`, beside the project. */
@@ -86,7 +92,7 @@ export async function remoteFacts(target: MachineAccess): Promise<{ version?: st
   const { version, host, name, listed, server, health } = (said && typeof said === 'object' ? said : {}) as Record<string, unknown>
   const shownAs = computerNameOf(name)
   const stands = readHealth(health)
-  const ids = Array.isArray(listed) ? listed.filter((id): id is string => typeof id === 'string' && DEVICE_ID.test(id)).slice(0, MAX_LISTED) : []
+  const ids = Array.isArray(listed) ? listed.filter(isDeviceId).slice(0, MAX_LISTED) : []
   return {
     // What a machine says is shown on a page: only what reads as a version is one.
     ...(typeof version === 'string' && /^[0-9A-Za-z.+-]{1,64}$/.test(version) ? { version } : {}),
@@ -96,11 +102,6 @@ export async function remoteFacts(target: MachineAccess): Promise<{ version?: st
     ...(server === true ? { server: true as const } : {}),
     ...(stands ? { health: stands } : {}),
   }
-}
-
-/** The OpenAgent a saved machine runs, as its ping tells it; nothing for a machine that does not answer, or does not say. */
-export async function remoteVersion(target: MachineAccess): Promise<string | undefined> {
-  return (await remoteFacts(target)).version
 }
 
 /** The two headers every relay request carries: JSON, and this computer's key there. No Origin on purpose. */
@@ -172,11 +173,9 @@ export async function enterRemote(door: string, code: string, name: string, pin?
  */
 export function deviceIdOf(key: string): string | undefined {
   const id = key.slice(0, Math.max(0, key.indexOf('.')))
-  return DEVICE_ID.test(id) ? id : undefined
+  return isDeviceId(id) ? id : undefined
 }
 
-/** What a door names a device by. */
-const DEVICE_ID = /^[a-z0-9]{6,32}$/
 /** How many of a machine's ids at other doors are read: as many machines as one saves. */
 const MAX_LISTED = 50
 
@@ -218,7 +217,7 @@ export async function remoteComputers(machine: MachineAccess): Promise<{ ok: tru
     for (const entry of Array.isArray(listed) ? listed : []) {
       const { id, name, online, owner } = (entry && typeof entry === 'object' ? entry : {}) as Record<string, unknown>
       // An id is a word a door makes: it goes into an address, so nothing else is taken.
-      if (typeof id === 'string' && /^[a-z0-9]{6,32}$/.test(id) && typeof name === 'string' && name.trim()) computers.push({ id, name: name.trim().slice(0, 80), online: online === true, ...(isPersonName(owner) ? { owner } : {}) })
+      if (isDeviceId(id) && typeof name === 'string' && name.trim()) computers.push({ id, name: name.trim().slice(0, 80), online: online === true, ...(isPersonName(owner) ? { owner } : {}) })
     }
     return { ok: true, computers }
   } catch (err) {
@@ -576,28 +575,47 @@ export function foldRelayedEvent(meta: AgentMeta, event: OpenAgentEvent, at: str
 const COMMAND_TIMEOUT_MS = 45_000
 
 /**
+ * POST a call to a machine with this computer's key there, and read its JSON answer with `read`:
+ * why not, in words, when the machine did not answer, no longer lets this computer in, or refused.
+ */
+async function postToMachine<T>(machine: MachineAccess, path: string, body: unknown, timeoutMs: number, read: (answer: unknown) => T): Promise<T | { ok: false; error: string }> {
+  try {
+    const res = await machineFetch(`${trimSlashes(machine.url)}${path}`, machine.pin, {
+      method: 'POST',
+      headers: relayHeaders(machine.key),
+      body: JSON.stringify(body),
+      signal: AbortSignal.timeout(timeoutMs),
+    })
+    if (res.status === 401) return { ok: false, error: NOT_IN }
+    if (!res.ok) return { ok: false, error: (await refusalOf(res)) ?? `the machine answered ${res.status}` }
+    return read(await res.json())
+  } catch (err) {
+    return { ok: false, error: errorMessage(err) }
+  }
+}
+
+/**
+ * Call one of the RPCs of a machine's own page, by its name, as that page calls it, and read the
+ * `{ ok, ... }` it answers: the machine's own words when it said no.
+ */
+function pageRpcOn(machine: MachineAccess, name: string, args: unknown[]): Promise<{ ok: true; said: Record<string, unknown> } | { ok: false; error: string }> {
+  return postToMachine(machine, `/_rpc/${name}`, args, COMMAND_TIMEOUT_MS, answer => {
+    const ret = (answer as { ret?: unknown }).ret
+    const said = (ret && typeof ret === 'object' ? ret : {}) as Record<string, unknown>
+    if (said.ok === true) return { ok: true as const, said }
+    return { ok: false as const, error: typeof said.error === 'string' && said.error ? said.error.slice(0, MAX_SAID) : 'the machine answered something else than expected' }
+  })
+}
+
+/**
  * Run one of a computer package's own commands on a machine, as that machine's own page runs it:
  * a module on this computer reads and changes what the same package keeps over there. `input` is
  * what the command reads on standard input there; it travels in the call's body, never in an
  * address. The machine answers as its page is answered.
  */
 export async function remoteComputerCommand(machine: MachineAccess, pkg: string, args: readonly string[], command?: string, input?: string): Promise<{ ok: true; output: unknown } | { ok: false; error: string }> {
-  try {
-    const res = await machineFetch(`${trimSlashes(machine.url)}/_rpc/runComputerCommand`, machine.pin, {
-      method: 'POST',
-      headers: relayHeaders(machine.key),
-      body: JSON.stringify([pkg, args, command ?? null, input ?? null]),
-      signal: AbortSignal.timeout(COMMAND_TIMEOUT_MS),
-    })
-    if (res.status === 401) return { ok: false, error: NOT_IN }
-    if (!res.ok) return { ok: false, error: (await refusalOf(res)) ?? `the machine answered ${res.status}` }
-    const said = ((await res.json()) as { ret?: unknown }).ret
-    const { ok, output, error } = (said && typeof said === 'object' ? said : {}) as Record<string, unknown>
-    if (ok === true) return { ok: true, output }
-    return { ok: false, error: typeof error === 'string' && error ? error.slice(0, MAX_SAID) : 'the machine answered something else than expected' }
-  } catch (err) {
-    return { ok: false, error: errorMessage(err) }
-  }
+  const ran = await pageRpcOn(machine, 'runComputerCommand', [pkg, args, command ?? null, input ?? null])
+  return ran.ok ? { ok: true, output: ran.said.output } : ran
 }
 
 /**
@@ -606,22 +624,8 @@ export async function remoteComputerCommand(machine: MachineAccess, pkg: string,
  * would add a machine; what it answers is its own words.
  */
 export async function remoteAddMachine(machine: MachineAccess, link: string, label: string): Promise<{ ok: true } | { ok: false; error: string }> {
-  try {
-    const res = await machineFetch(`${trimSlashes(machine.url)}/_rpc/sendAddMachine`, machine.pin, {
-      method: 'POST',
-      headers: relayHeaders(machine.key),
-      body: JSON.stringify([link, label]),
-      signal: AbortSignal.timeout(COMMAND_TIMEOUT_MS),
-    })
-    if (res.status === 401) return { ok: false, error: NOT_IN }
-    if (!res.ok) return { ok: false, error: (await refusalOf(res)) ?? `the machine answered ${res.status}` }
-    const said = ((await res.json()) as { ret?: unknown }).ret
-    const { ok, error } = (said && typeof said === 'object' ? said : {}) as Record<string, unknown>
-    if (ok === true) return { ok: true }
-    return { ok: false, error: typeof error === 'string' && error ? error.slice(0, MAX_SAID) : 'the machine answered something else than expected' }
-  } catch (err) {
-    return { ok: false, error: errorMessage(err) }
-  }
+  const added = await pageRpcOn(machine, 'sendAddMachine', [link, label])
+  return added.ok ? { ok: true } : added
 }
 
 /**
@@ -629,20 +633,8 @@ export async function remoteAddMachine(machine: MachineAccess, link: string, lab
  * there: through the relay, so a computer reached through a server is asked as a server is. What
  * the machine answers is its own words, to read as data. Why not, when it did not answer.
  */
-export async function machineCall(machine: MachineAccess, fn: string, args: unknown[], timeoutMs = COMMAND_TIMEOUT_MS): Promise<{ ok: true; ret: unknown } | { ok: false; error: string }> {
-  try {
-    const res = await machineFetch(`${trimSlashes(machine.url)}/_relay/machine`, machine.pin, {
-      method: 'POST',
-      headers: relayHeaders(machine.key),
-      body: JSON.stringify({ fn, args }),
-      signal: AbortSignal.timeout(timeoutMs),
-    })
-    if (res.status === 401) return { ok: false, error: NOT_IN }
-    if (!res.ok) return { ok: false, error: (await refusalOf(res)) ?? `the machine answered ${res.status}` }
-    return { ok: true, ret: ((await res.json()) as { result?: unknown }).result }
-  } catch (err) {
-    return { ok: false, error: errorMessage(err) }
-  }
+export function machineCall(machine: MachineAccess, fn: string, args: unknown[], timeoutMs = COMMAND_TIMEOUT_MS): Promise<{ ok: true; ret: unknown } | { ok: false; error: string }> {
+  return postToMachine(machine, '/_relay/machine', { fn, args }, timeoutMs, answer => ({ ok: true as const, ret: (answer as { result?: unknown }).result }))
 }
 
 /** How long a machine gets to say, or take, the logins there: handing a GitHub login over has it asked of GitHub. */

@@ -1,14 +1,15 @@
+import { execFile } from 'node:child_process'
 import { basename, dirname, join } from 'node:path'
-import { realpath, stat } from 'node:fs/promises'
+import { readdir, realpath, stat } from 'node:fs/promises'
 import { nodeGitRunner, checkoutRoot, gitReason, originDefaultBranch, type GitRunner, BRANCHES_DIR } from '@openagt/agent-data'
-import { AGENT_BRANCH_PREFIX, isSafeAgentId, isAgentBranch, agentBranchName, agentIdFromWorktreeDir } from './branch-names.js'
-import { DATA_BRANCH, publishedBranch } from '@openagt/agent-data/names'
+import { isSafeAgentId, isAgentBranch, agentBranchName, agentIdFromWorktreeDir } from './branch-names.js'
+import { publishedBranch } from '@openagt/agent-data/names'
 
 /**
  * Git-worktree lifecycle for concurrent agents (#453/#735): give each agent its own
  * checkout so N agents on one repo never fight over the working tree. Pure plumbing
- * over the {@link GitRunner} seam: this module only knows how to add, list, name,
- * remove, and prune worktrees, and to read what a retention decision needs.
+ * over the {@link GitRunner} seam: this module only knows how to add, list, remove,
+ * and prune worktrees, and to read what a retention decision needs.
  */
 
 /** The path an agent's worktree gets (#1580): `<repo>/.branches/<agent branch>`. */
@@ -29,7 +30,6 @@ export interface WorktreeDirEntry {
 export type DirReader = (path: string) => Promise<string[]>
 
 async function nodeReaddir(path: string): Promise<string[]> {
-  const { readdir } = await import('node:fs/promises')
   const entries = await readdir(path, { withFileTypes: true }).catch(() => [])
   return entries.filter(entry => entry.isDirectory()).map(entry => entry.name)
 }
@@ -47,14 +47,6 @@ export async function worktreeDirEntries(repo: string, readdir: DirReader = node
     if (isAgentBranch(name) && isSafeAgentId(agentId)) entries.push({ path: join(root, name), agentId })
   }
   return entries
-}
-
-/**
- * The agent ids that have a worktree directory (#737/#1580). Forgiving — a project that never ran
- * concurrently has no such dir and yields `[]`.
- */
-export async function listWorktreeDirs(repo: string, readdir: DirReader = nodeReaddir): Promise<string[]> {
-  return [...new Set((await worktreeDirEntries(repo, readdir)).map(entry => entry.agentId))]
 }
 
 /** One entry parsed from `git worktree list --porcelain`. */
@@ -170,9 +162,9 @@ export async function leaveOut(path: string, without: LeaveOut | undefined, git:
  * upstream set, as in {@link addWorktree}; else, gone everywhere, a new branch where the agent's
  * first one started: the base the caller names, as this clone has it or else as origin does, and
  * with none, or one that is gone too, where a new agent branch starts ({@link freshStart}); the
- * answer then says the branch was made again. The
- * only branch the package deletes is one that held nothing past a commit the remote already had,
- * so nothing of the agent's is lost. Anything git refuses — the branch checked out elsewhere, say —
+ * answer then says the branch was made again. Every
+ * branch the package deletes held no commit of its own, so nothing of the agent's is lost.
+ * Anything git refuses — the branch checked out elsewhere, say —
  * rejects, like {@link addWorktree}: a continued agent needs its checkout.
  */
 export async function attachWorktree(
@@ -234,6 +226,19 @@ export function parseWorktreeList(porcelain: string): WorktreeInfo[] {
 }
 
 /**
+ * The checkouts under `.branches/`, by the branch each is on: one `git worktree list`. The
+ * project's own folder is not one of them, whatever it has out. Forgiving, like
+ * {@link listWorktrees}: a git that cannot answer reads as no checkout.
+ */
+export async function checkoutsByBranch(repo: string, git: GitRunner = nodeGitRunner()): Promise<Map<string, string>> {
+  const checkouts = new Map<string, string>()
+  for (const { path, branch } of await listWorktrees(repo, git)) {
+    if (branch && basename(dirname(path)) === BRANCHES_DIR && !checkouts.has(branch)) checkouts.set(branch, path)
+  }
+  return checkouts
+}
+
+/**
  * Remove an agent's worktree. Tolerant of an already-gone / never-registered path so
  * teardown stays idempotent (a caller may run it twice).
  *
@@ -263,7 +268,7 @@ export async function removeWorktree(repo: string, path: string, git: GitRunner 
 
 /**
  * Delete a branch that holds nothing (#1650). `-D`, because "merged" in git's eyes is the wrong
- * test: the caller proved the tip is a commit the remote already has, which is the stronger fact.
+ * test: the caller proved the branch holds no commit of its own, which is the fact that counts.
  * Forgiving: the checkout is already gone by the time this runs, and a branch that would not
  * delete is a leftover name, not lost work. Says whether it went, so a caller names only the
  * branches that are actually gone (#1757).
@@ -306,6 +311,15 @@ export async function worktreeBranch(path: string, git: GitRunner = nodeGitRunne
 }
 
 /**
+ * The agent's checkout under `.branches/` that is on `branch`, when one still is: a command that
+ * acts on a branch by name holds it to that checkout's rules.
+ */
+export async function checkoutOn(repo: string, branch: string, git: GitRunner = nodeGitRunner()): Promise<string | undefined> {
+  for (const entry of await worktreeDirEntries(repo)) if ((await worktreeBranch(entry.path, git)) === branch) return entry.path
+  return undefined
+}
+
+/**
  * The branch checked out at `path`, or `undefined` when detached / not a repo.
  * Forgiving, like {@link listWorktrees}: callers use it to decide, not to fail.
  */
@@ -331,84 +345,6 @@ export async function projectRoot(cwd: string, git: GitRunner = nodeGitRunner())
   return basename(parent) === BRANCHES_DIR ? dirname(parent) : checkout
 }
 
-/** A session name as the agent picks it: the charset the skill asks for. */
-export function isSessionName(name: string): boolean {
-  return /^[a-z0-9-]+$/.test(name)
-}
-
-/** Why {@link nameBranch} left the branch as it was. */
-export type NameBranchRefusal =
-  /** Not `[a-z0-9-]+`. */
-  | 'invalid-name'
-  /** The directory is not a git worktree root: nothing was run in it. */
-  | 'not-a-worktree'
-  /** The checkout is on no branch (detached). */
-  | 'no-branch'
-  /** The checkout is on a branch the package did not mint — the user's own. */
-  | 'not-an-agent-branch'
-
-export type NameBranchOutcome =
-  | {
-      ok: true
-      /** The name the branch ends up with: `agent-<name>`, suffixed when that was taken. */
-      branch: string
-    }
-  | { ok: false; reason: NameBranchRefusal }
-
-/** How often a rename lost to a sibling naming the same thing at the same moment is retried. */
-const NAME_ATTEMPTS = 3
-
-/**
- * Name the session (#1725): rename the checkout's branch to `agent-<name>`. A rename, not a new
- * branch, so the branch the checkout was born on is the branch it ends on and nothing is left
- * behind to clean up. Only a branch the package minted is ever renamed: an agent that somehow
- * runs in the user's own checkout must not rename `main`.
- *
- * A taken name gets a numeric suffix (`agent-<name>-2`, `-3`, …) rather than a refusal: the agent
- * asked for a name, and the caller reads back the one it got. Taken means any local branch or
- * any remote-tracking branch, so the later push does not land on someone else's branch — except
- * the checkout's own branch, pushed or not, which is why asking again for the name the checkout
- * already carries (suffixed or not) changes nothing. Two checkouts naming the same thing at the
- * same moment race on the rename itself; the loser reads the branches again and takes the next
- * free suffix.
- */
-export async function nameBranch(path: string, name: string, git: GitRunner = nodeGitRunner()): Promise<NameBranchOutcome> {
-  if (!isSessionName(name)) return { ok: false, reason: 'invalid-name' }
-  const wanted = `${AGENT_BRANCH_PREFIX}${name}`
-  if (!(await isWorktreeRoot(path, git))) return { ok: false, reason: 'not-a-worktree' }
-  const current = await currentBranch(path, git)
-  if (!current) return { ok: false, reason: 'no-branch' }
-  if (!isAgentBranch(current)) return { ok: false, reason: 'not-an-agent-branch' }
-  for (let attempt = 1; ; attempt++) {
-    const taken = await branchNames(path, git)
-    taken.delete(current)
-    // The data branch is nobody's session, whether or not this repo has it yet: `name data` gets `-2`.
-    taken.add(DATA_BRANCH)
-    let branch = wanted
-    for (let n = 2; taken.has(branch); n++) branch = `${wanted}-${n}`
-    if (branch === current) return { ok: true, branch }
-    try {
-      await git(['branch', '-m', current, branch], path)
-      return { ok: true, branch }
-    } catch (err) {
-      if (attempt >= NAME_ATTEMPTS || !/already exists/.test(err instanceof Error ? err.message : String(err))) throw err
-    }
-  }
-}
-
-/** Every branch name the repo knows, local and remote-tracking, without the remote's prefix. */
-async function branchNames(path: string, git: GitRunner): Promise<Set<string>> {
-  const out = await git(['for-each-ref', '--format=%(refname)', 'refs/heads/', 'refs/remotes/'], path)
-  const names = new Set<string>()
-  for (const ref of out.split('\n')) {
-    const heads = ref.match(/^refs\/heads\/(.+)$/)
-    if (heads?.[1]) names.add(heads[1])
-    const remotes = ref.match(/^refs\/remotes\/[^/]+\/(.+)$/)
-    if (remotes?.[1]) names.add(remotes[1])
-  }
-  return names
-}
-
 /**
  * `git worktree prune`: drop administrative entries for worktree dirs a crash left
  * behind. Never removes a live worktree, so it is always safe. Forgiving.
@@ -428,11 +364,7 @@ export type SizeRunner = (path: string) => Promise<string>
 export function nodeSizeRunner(): SizeRunner {
   return path =>
     new Promise((resolvePromise, rejectPromise) => {
-      void import('node:child_process').then(({ execFile }) => {
-        execFile('du', ['-sk', path], { timeout: 5_000 }, (err, stdout) =>
-          err ? rejectPromise(err) : resolvePromise(stdout),
-        )
-      })
+      execFile('du', ['-sk', path], { timeout: 5_000 }, (err, stdout) => (err ? rejectPromise(err) : resolvePromise(stdout)))
     })
 }
 

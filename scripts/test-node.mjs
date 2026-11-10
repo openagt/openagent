@@ -2,8 +2,9 @@
 // package runs them: `node ../../scripts/test-node.mjs [<file>…] [--test-name-pattern=<re>] [--test-timeout=<ms>]`.
 //
 // - A throwaway config home, removed afterwards (#765). The machine-global state lives at
-//   `$XDG_CONFIG_HOME` (the registry, the daemon state file), and a test that found the developer's
-//   live daemon there wired its watcher and hung until it timed out.
+//   `$XDG_CONFIG_HOME`: the registry, with the developer's own projects, preferences and saved
+//   machines. A test that read or wrote the real one would see their projects as its own, and
+//   change them.
 // - None of the variables an OpenAgent run hands its agent (`OPENAGENT_*`, `AGENT_ID`). An agent
 //   that ran a project's tests passed its own skills on, so a test's empty project held tickets and
 //   a queue, and seven tests failed in every agent's checkout alone. Kept: `OPENAGENT_NETWORK_TESTS`,

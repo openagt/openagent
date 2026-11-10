@@ -4,14 +4,12 @@ import { DATA_BRANCH, addressOfRemote, isRepoOwner, originDefaultBranch, readRep
 import { readHosted, refreshHosted, type HostedRepo } from './hosted-repos.js'
 import { cloneAccountFor, originHost, remoteAccount } from './send-as.js'
 import { readProjectHooks, runCheckHook, startLineTakesBase, startLineTakesPrBase, type StartReadiness } from '../project-hooks.js'
-import { isPublishPick, publishPickIn, type PublishPick } from '../publish-levels.js'
 import { hasRemote } from '../has-remote.js'
 import { openagentVersion } from '../version.js'
 import { currentBranch } from '../dashboard/git-status.js'
 import { branchesOnOrigin, waitingSkills } from '../dashboard/start-branch.js'
 import { addRepoFolder, listProjects, listRepoFolders, removeRepoFolder, startFromPick, type StartFromPick } from '../registry.js'
 import { thisComputersRepos, type FoundRepo } from '../dashboard/repos.js'
-import { homedir } from 'node:os'
 import { canRead, cloneProject, cloneTargetOf } from '../clone-project.js'
 import { isDriverName } from '../driver-names.js'
 import { loginsWiring } from './logins.js'
@@ -23,9 +21,8 @@ import type { OwnProject } from '../dashboard/elsewhere.js'
 import type { AddProjectResult, RemoveProjectResult, StartedInResult } from '../dashboard/types.js'
 
 // The Projects sidebar behind the new dashboard (#405): the global registry (#390) the
-// daemon and CLI write — id, path, name, activated, last activity. The per-agent
-// foreground dashboard (#427) scopes this to a single project via the request context.
-// The live event stream is its own endpoint rather than a call (`GET /_rpc/events`).
+// daemon and CLI write — id, path, name, activated, last activity. The live event stream is its
+// own endpoint rather than a call (`GET /_rpc/events`).
 //
 // Each project also carries what the daemon's background jobs found wrong with it (#1500) —
 // a data branch that cannot reach origin, say (#1599) — and why its data stays on this machine, if it does.
@@ -182,7 +179,7 @@ export interface ReposRead {
  * already. The kept list, so the picker opens at once; an old one is crawled again behind it.
  */
 export async function onRepos(): Promise<ReposRead> {
-  const [found, projects, hosted] = await Promise.all([thisComputersRepos().read(), listProjects().catch(() => []), readHosted()])
+  const [found, projects, hosted] = await Promise.all([thisComputersRepos().read(), listProjects(), readHosted()])
   const repos = found.repos
   const pinned = new Set(projects.map(project => project.path))
   // A repository at a host that is here already, as a repo or a project, is listed once: by its folder.
@@ -210,7 +207,7 @@ export interface RepoSources {
 }
 
 export async function onRepoSources(): Promise<RepoSources> {
-  const [folders, owners] = await Promise.all([listRepoFolders().catch(() => []), readRepoOwners()])
+  const [folders, owners] = await Promise.all([listRepoFolders(), readRepoOwners()])
   return { folders, owners }
 }
 

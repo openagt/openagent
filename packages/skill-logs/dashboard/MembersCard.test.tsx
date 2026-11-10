@@ -1,6 +1,7 @@
 import { afterEach, expect, test, vi } from 'vitest'
 import { cleanup, fireEvent, render, screen, within } from '@testing-library/react'
-import { ModuleHostContext, type ModuleHost, type ModuleHostPerson } from '@openagt/dashboard/module'
+import { ModuleHostContext, type ModuleAgent, type ModuleHost, type ModuleHostPerson } from '@openagt/dashboard/module'
+import { fakeHost, type FakeHost } from '@openagt/dashboard/module/testing'
 import { MembersCard } from './MembersCard.js'
 
 // The Overview's Members card, from `logs people` in each project and the git host's accounts
@@ -10,18 +11,15 @@ const NOW = new Date().toISOString()
 const person = (email: string, over: Record<string, unknown> = {}) => ({ person: email, runs: 0, running: 0, cost: 0, commits: 0, lastAt: NOW, ...over })
 
 /** A host whose `logs people` says `people`; the runs it lists are `runs`, and with none it cannot list them. */
-function hostWith(people: unknown[], accounts: ModuleHostPerson[], runs?: unknown[]): ModuleHost {
-  return {
-    package: '@openagt/skill-logs',
-    runCommand: vi.fn(async () => ({ ok: true as const, output: people })),
-    agents: vi.fn(async () => {
+function hostWith(people: unknown[], accounts: ModuleHostPerson[], runs?: unknown[]): FakeHost {
+  return fakeHost('@openagt/skill-logs', {
+    runCommand: async () => ({ ok: true as const, output: people }),
+    agents: async () => {
       if (!runs) throw new Error('no runs listed')
-      return runs
-    }),
-    gitHostPeople: vi.fn(async () => accounts),
-    openPage: vi.fn(),
-    pageHref: (segment: string) => `/${segment}`,
-  } as unknown as ModuleHost
+      return runs as ModuleAgent[]
+    },
+    gitHostPeople: async () => accounts,
+  })
 }
 
 const show = (host: ModuleHost) =>

@@ -28,7 +28,7 @@ import { MachineLogins } from './ServerLogins.js'
 import { agentPicks, SkillsMenu, type SkillPicks } from './SkillsMenu.js'
 import { GitAccountMenu, useSessionAccount } from './GitHosts.js'
 import { AgentMenu } from './AgentMenu.js'
-import { useAgents } from './AgentsPage.js'
+import { useAgentsList } from './AgentsPage.js'
 import { SESSIONS_ID } from '../../src/project-address.js'
 
 /** The note while the start is asked for: what the chat's first line says next. */
@@ -214,7 +214,7 @@ export function StartAgentForm({
   }, [fixable, agent?.ready])
 
   // The agent the session is on: the saved pick, while there is such an agent; the default otherwise.
-  const { view: agentsView } = useAgents()
+  const { view: agentsView } = useAgentsList()
   const onAgent = agentsView?.agents.find(one => one.id === (preferences.agent ?? DEFAULT_AGENT)) ?? agentsView?.agents[0]
   const agentId = onAgent !== undefined && onAgent.id !== DEFAULT_AGENT ? onAgent.id : undefined
   // The git host account picked for this session, when the person picked one; the agent's, else the computer's, otherwise.
@@ -315,7 +315,7 @@ export function StartAgentForm({
         controlsEnd={
           !noProject && (
             <>
-              {remote && <GitAccountMenu address={address} machineId={machine?.id} on={name} busy={busy} picked={pickedAccount} onPick={setPickedAccount} onAdd={() => (machine ? openSettings('devices', machine.id) : openPermissions())} />}
+              {remote && <GitAccountMenu address={address} machineId={machine?.id} on={name} busy={busy} picked={pickedAccount} onPick={setPickedAccount} onAddThere={() => machine && openSettings('devices', machine.id)} />}
               <AutoMenu publish={publishPick} picks={offeredPublishPicks(gitHost, remote)} onPublish={pick => updatePreferences({ publish: pick })} target={prTarget} busy={busy} />
             </>
           )

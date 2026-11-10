@@ -3,7 +3,6 @@ export {
   copiedPath,
   handedOverBy,
   type HandedOver,
-  accountRotation,
   hasAddedAccount,
   readAccounts,
   changeAccounts,
@@ -18,14 +17,11 @@ export {
   noteWindows,
   freesIn,
   shownAccounts,
-  turnOnAccounts,
-  goOn,
-  UsageLimitError,
   OWN_NAME,
   type AccountsAgent,
   type ShownAccount,
-  type AccountsOption,
-  type TurnOnAccounts,
 } from './accounts.js'
+export { accountRotation, turnOnAccounts, goOn, UsageLimitError, type AccountsOption, type TurnOnAccounts } from './rotation.js'
 export { claudeUsagePath, keepClaudeReading, readUsage, READING_KEPT_MS, type AccountUsage, type UsageWindow } from './usage.js'
-export { comesBackFrom, loginWiring, ownLoginThere, ownName, removeAdded, type LoginWiring } from './login.js'
+export { comesBackFrom, ownLoginThere, ownName, removeAdded } from './login.js'
+export { loginWiring, type LoginWiring } from './wiring.js'

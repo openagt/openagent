@@ -1,6 +1,7 @@
 import { sayToRun, type SteerResult } from '../dashboard/run-inbox.js'
 export type { SteerResult }
 import { bridgeQuestions } from '../dashboard/bridge-store.js'
+import { isCloudSessionId } from '../dashboard/bridge-endpoints.js'
 import { openInApp, type OpenTarget, type OpenResult } from '../dashboard/open-in-app.js'
 import { contextBridgeBrowser, contextPreferences, contextStartAgent, resolveProjectPath, resolveAgentPath } from './context.js'
 import type { BridgeBrowserAction } from '../bridge-browser.js'
@@ -29,7 +30,7 @@ import { isPublishPick, type PublishPick } from '../publish-levels.js'
  * the path is the branches provider's to know, and an Open PR on a run whose checkout is gone
  * still locks the run.
  */
-export function agentLockKey(cwd: string, agentId: string): string {
+function agentLockKey(cwd: string, agentId: string): string {
   return `${cwd}\0${agentId}`
 }
 
@@ -104,7 +105,7 @@ export async function sendChoice(projectId: string, id: string, pick: string | s
  * relay: the bridge lives on the daemon the extension talks to.
  */
 export async function sendBridgeAnswer(sessionId: string, labels: string[]): Promise<{ ok: boolean; error?: string }> {
-  if (typeof sessionId !== 'string' || !/^session_[A-Za-z0-9]{1,128}$/.test(sessionId)) return { ok: false, error: 'unknown session' }
+  if (!isCloudSessionId(sessionId)) return { ok: false, error: 'unknown session' }
   if (!Array.isArray(labels) || !labels.every(label => typeof label === 'string' && label.trim())) return { ok: false, error: 'answer labels are required' }
   const queued = bridgeQuestions().queueAnswer(sessionId, labels)
   return typeof queued === 'string' ? { ok: false, error: queued } : { ok: true }
@@ -112,7 +113,7 @@ export async function sendBridgeAnswer(sessionId: string, labels: string[]): Pro
 
 /** Withdraw a queued bridge answer (#1237). A no-op once the extension has delivered it. */
 export async function sendBridgeAnswerCancel(sessionId: string): Promise<void> {
-  if (typeof sessionId !== 'string' || !/^session_[A-Za-z0-9]{1,128}$/.test(sessionId)) return
+  if (!isCloudSessionId(sessionId)) return
   bridgeQuestions().cancelAnswer(sessionId)
 }
 
@@ -219,8 +220,8 @@ export async function sendStart(projectId: string, prompt: string, options: Star
 
 /**
  * Open a project in the OS file manager or an editor (#490). Localhost-only: the daemon
- * spawns a local command against the project's own registered path. A public host has no
- * local path to resolve, so it returns an error rather than spawning anything.
+ * spawns a local command against the project's own registered path. A project with no folder
+ * here returns an error rather than spawning anything.
  *
  * With a `agentId` it opens that session's own checkout instead (#798) — the whole point of
  * opening it is to look at what the agent is doing, which is not in the project's tree.
@@ -230,7 +231,7 @@ export async function sendOpenInApp(projectId: string, target: OpenTarget, agent
   if (!cwd) return { ok: false, error: 'this project has no local path on this server' }
   // #727: honour the stored editor preference; absent falls back to $OPENAGENT_EDITOR, then `code`.
   const editor =
-    target === 'editor' ? (await contextPreferences()?.read().catch((): Preferences => ({})))?.editor : undefined
+    target === 'editor' ? (await contextPreferences().read().catch((): Preferences => ({}))).editor : undefined
   return openInApp(cwd, target, undefined, editor)
 }
 

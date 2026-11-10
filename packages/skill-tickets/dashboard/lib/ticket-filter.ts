@@ -47,6 +47,21 @@ export const UNCERTAINTY_BUCKETS: readonly RangeBucket[] = [
 ]
 
 /**
+ * The numeric facets, by the name the filters and the address give each: where it reads its
+ * value on a ticket, and its quick buckets. Filtering, counting, sorting and the URL all go
+ * through this, so a facet is read the same way everywhere.
+ */
+export const RANGE_FACETS = {
+  priority: { value: (t: WorkspaceTicket) => parsePriority(t.priority), buckets: PRIORITY_BUCKETS },
+  effort: { value: (t: WorkspaceTicket) => t.effort, buckets: EFFORT_BUCKETS },
+  uncertainty: { value: (t: WorkspaceTicket) => t.uncertainty, buckets: UNCERTAINTY_BUCKETS },
+}
+
+export type RangeFacetId = keyof typeof RANGE_FACETS
+
+const RANGE_FACET_IDS = Object.keys(RANGE_FACETS) as RangeFacetId[]
+
+/**
  * One numeric facet's selection: named buckets (unioned), a fine-grained min-max range, and the
  * tickets that name no value at all. Buckets and the range are two ways to say the same thing, so
  * the update helpers keep them mutually exclusive; `none` composes with either — "critical OR
@@ -127,9 +142,7 @@ export function defaultView(): TicketsView {
 export function hasAnyFilter(f: TicketFilters): boolean {
   return (
     f.q.trim() !== '' ||
-    rangeActive(f.priority) ||
-    rangeActive(f.effort) ||
-    rangeActive(f.uncertainty) ||
+    RANGE_FACET_IDS.some(facet => rangeClauses(f[facet]) > 0) ||
     f.topics.length > 0 ||
     f.topicsNone ||
     f.stage.length > 0 ||
@@ -137,8 +150,10 @@ export function hasAnyFilter(f: TicketFilters): boolean {
   )
 }
 
-function rangeActive(f: RangeFilter): boolean {
-  return f.buckets.length > 0 || f.range !== null || f.none
+/** How many clauses a numeric facet's selection holds — its buckets, its range, its `none` — what
+ *  its trigger's badge counts. None is no filter at all. */
+export function rangeClauses(f: RangeFilter): number {
+  return f.buckets.length + (f.range ? 1 : 0) + (f.none ? 1 : 0)
 }
 
 /** A ticket's topics, lowercased — the one casing both matching and the facet list use. */
@@ -146,12 +161,13 @@ function normalTopics(ticket: WorkspaceTicket): string[] {
   return (ticket.topics ?? []).map(t => t.toLowerCase())
 }
 
-/** A numeric field against its facet: inactive passes everything; a missing value only passes on
- *  `none`; a present one passes any selected bucket or the range (both inclusive). */
-function matchesRange(value: number | undefined, filter: RangeFilter, buckets: readonly RangeBucket[]): boolean {
-  if (!rangeActive(filter)) return true
+/** A ticket against one numeric facet's selection: inactive passes everything; a missing value only
+ *  passes on `none`; a present one passes any selected bucket or the range (both inclusive). */
+function matchesRange(ticket: WorkspaceTicket, filter: RangeFilter, facet: RangeFacetId): boolean {
+  if (rangeClauses(filter) === 0) return true
+  const value = RANGE_FACETS[facet].value(ticket)
   if (value === undefined) return filter.none
-  if (filter.buckets.some(id => inBucket(value, id, buckets))) return true
+  if (filter.buckets.some(id => inBucket(value, id, RANGE_FACETS[facet].buckets))) return true
   return filter.range !== null && value >= filter.range[0] && value <= filter.range[1]
 }
 
@@ -177,9 +193,7 @@ function matchesQuery(row: TicketRow, q: string): boolean {
 function matchesFilters(row: TicketRow, f: TicketFilters): boolean {
   const t = row.ticket
   if (!matchesQuery(row, f.q)) return false
-  if (!matchesRange(parsePriority(t.priority), f.priority, PRIORITY_BUCKETS)) return false
-  if (!matchesRange(t.effort, f.effort, EFFORT_BUCKETS)) return false
-  if (!matchesRange(t.uncertainty, f.uncertainty, UNCERTAINTY_BUCKETS)) return false
+  if (!RANGE_FACET_IDS.every(facet => matchesRange(t, f[facet], facet))) return false
   if (f.topics.length > 0 || f.topicsNone) {
     const topics = normalTopics(t)
     const hit = f.topics.some(topic => topics.includes(topic)) || (f.topicsNone && topics.length === 0)
@@ -198,9 +212,9 @@ export function filterRows(rows: TicketRow[], f: TicketFilters): TicketRow[] {
 // must not bury the list under the unprioritized tickets it is trying to rank.
 function sortValue(row: TicketRow, key: SortKey): number | string | undefined {
   if (key === 'date') return row.ticket.date
-  if (key === 'priority') return parsePriority(row.ticket.priority)
   if (key === 'title') return row.ticket.title.toLowerCase()
-  return row.ticket.effort
+  // Priority and effort sort by the very values their facets filter on.
+  return RANGE_FACETS[key].value(row.ticket)
 }
 
 /** Ordered copy: by the sort key with missing-last, ties falling back to newest-first — the one
@@ -248,8 +262,7 @@ export function bucketUnionRange(filter: RangeFilter, buckets: readonly RangeBuc
 // inputs disagreeing about the range is the state this rules out. `none` survives both.
 
 export function withBucketToggled(f: RangeFilter, id: string): RangeFilter {
-  const buckets = f.buckets.includes(id) ? f.buckets.filter(b => b !== id) : [...f.buckets, id]
-  return { buckets, range: null, none: f.none }
+  return { buckets: toggled(f.buckets, id), range: null, none: f.none }
 }
 
 export function withRange(f: RangeFilter, range: [number, number] | null): RangeFilter {
@@ -278,15 +291,9 @@ export interface RangeFacetCounts {
   none: number
 }
 
-export function rangeFacetCounts(
-  rows: TicketRow[],
-  f: TicketFilters,
-  facet: 'priority' | 'effort' | 'uncertainty',
-  buckets: readonly RangeBucket[],
-): RangeFacetCounts {
+export function rangeFacetCounts(rows: TicketRow[], f: TicketFilters, facet: RangeFacetId): RangeFacetCounts {
   const pool = rowsForFacet(rows, f, { [facet]: { ...INACTIVE_RANGE } })
-  const value = (t: WorkspaceTicket) =>
-    facet === 'priority' ? parsePriority(t.priority) : facet === 'effort' ? t.effort : t.uncertainty
+  const { value, buckets } = RANGE_FACETS[facet]
   const counts: Record<string, number> = {}
   for (const bucket of buckets) {
     counts[bucket.id] = pool.filter(r => {
@@ -361,9 +368,7 @@ export function parseTicketsView(search: string): TicketsView {
   const params = new URLSearchParams(search)
   const view = defaultView()
   view.filters.q = params.get('q') ?? ''
-  view.filters.priority = parseRangeFilter(params.get('priority'), PRIORITY_BUCKETS)
-  view.filters.effort = parseRangeFilter(params.get('effort'), EFFORT_BUCKETS)
-  view.filters.uncertainty = parseRangeFilter(params.get('uncertainty'), UNCERTAINTY_BUCKETS)
+  for (const facet of RANGE_FACET_IDS) view.filters[facet] = parseRangeFilter(params.get(facet), RANGE_FACETS[facet].buckets)
   const topics = (params.get('topics') ?? '').split(',').filter(Boolean)
   // `none` is a reserved token, not a topic name — same word the numeric facets use.
   view.filters.topicsNone = topics.includes('none')
@@ -393,13 +398,9 @@ export function formatTicketsView(view: TicketsView, search = ''): string {
   for (const name of VIEW_PARAMS) params.delete(name)
   const f = view.filters
   if (f.q.trim()) params.set('q', f.q.trim())
-  for (const [name, filter] of [
-    ['priority', f.priority],
-    ['effort', f.effort],
-    ['uncertainty', f.uncertainty],
-  ] as const) {
-    const value = formatRangeFilter(filter)
-    if (value) params.set(name, value)
+  for (const facet of RANGE_FACET_IDS) {
+    const value = formatRangeFilter(f[facet])
+    if (value) params.set(facet, value)
   }
   const topics = [...f.topics, ...(f.topicsNone ? ['none'] : [])]
   if (topics.length) params.set('topics', topics.join(','))

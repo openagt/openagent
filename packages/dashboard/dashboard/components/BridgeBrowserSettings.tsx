@@ -17,14 +17,10 @@ import { Button } from './ui/button.js'
  * browser's tab is on — rather than from the bridge's last hello, which the user's own Chrome
  * may have written a second ago.
  */
-export function BridgeBrowserSettings({ enabled }: { enabled: boolean }) {
+export function BridgeBrowserSettings() {
   const [status, setStatus] = useState<BridgeBrowserStatus | null>(null)
 
   useEffect(() => {
-    if (!enabled) {
-      setStatus(null)
-      return
-    }
     let live = true
     const read = () =>
       void onBridgeBrowser()
@@ -38,9 +34,9 @@ export function BridgeBrowserSettings({ enabled }: { enabled: boolean }) {
       live = false
       clearInterval(timer)
     }
-  }, [enabled])
+  }, [])
 
-  if (!enabled || !status) return null
+  if (!status) return null
   const act = (action: 'show' | 'hide' | 'restart') => void sendBridgeBrowser(action).catch(() => {})
   return (
     <div className="mt-2 space-y-2 rounded-md border border-border bg-muted/30 p-3 text-xs">

@@ -6,6 +6,13 @@ export const NPM_URL = 'https://www.npmjs.com/package/@openagt/dashboard'
 
 export const mono = "'IBM Plex Mono', monospace" as const
 
+/** The three claims under the hero's title, each in its color; the banner says them too. */
+export const BADGES = [
+  ['100% Open Source', '#a7c080'],
+  ['100% Free', '#dbbc7f'],
+  ['100% Local', '#7fbbb3'],
+] as const
+
 // A content section: max-width column with the shared vertical rhythm. The
 // rhythm is a MARGIN, not padding: anchors target the border box, so nav
 // clicks land on the section's content instead of a screen of padding.
@@ -51,7 +58,7 @@ export const kickerStyle: CSSProperties = {
 // Centered chapter break: the one centered element on a left-anchored page, so
 // the eye finds section boundaries instantly. The accent bar is straight — at
 // this size a tilt reads as misalignment, not as a hero-strike echo.
-export function SectionHead({ title, sub }: { title: ReactNode; sub?: string | React.ReactNode }) {
+export function SectionHead({ title, sub }: { title: ReactNode; sub?: string }) {
   return (
     <div
       style={{
@@ -72,7 +79,7 @@ export function SectionHead({ title, sub }: { title: ReactNode; sub?: string | R
 }
 
 // The note look, shared with note-shaped blocks that can't be a <p> (e.g. the
-// prompts band, whose chip row needs a block container).
+// prompts band, whose chip row needs a block container): this box, around NoteText.
 export const noteContainerStyle: CSSProperties = {
   margin: 0,
   fontSize: 14,
@@ -84,7 +91,7 @@ export const noteContainerStyle: CSSProperties = {
   padding: '12px 16px',
 }
 
-export const noteLabelStyle: CSSProperties = {
+const noteLabelStyle: CSSProperties = {
   fontFamily: mono,
   fontSize: 11,
   fontWeight: 600,
@@ -94,47 +101,43 @@ export const noteLabelStyle: CSSProperties = {
   marginRight: 10,
 }
 
-export function Note({ children, style, label }: { children: ReactNode; style?: CSSProperties; label?: ReactNode }) {
+/** A note's words: its "Note" label, then the note in italics. */
+export function NoteText({ children }: { children: ReactNode }) {
+  return (
+    <>
+      <span style={noteLabelStyle}>Note</span>{' '}
+      <span style={{ fontStyle: 'italic' }}>{children}</span>
+    </>
+  )
+}
+
+export function Note({ children, style }: { children: ReactNode; style?: CSSProperties }) {
   return (
     <p style={{ ...noteContainerStyle, ...style }}>
-      {label ?? <span style={noteLabelStyle}>Note</span>}{' '}
-      <span
-        style={{
-          fontStyle: 'italic',
-        }}
-      >
-        {children}
-      </span>
+      <NoteText>{children}</NoteText>
     </p>
   )
 }
 
-export function WipBadge({ style, icon = true }: { style?: CSSProperties; icon?: boolean }) {
+/** "Coming soon", beside a feature that is not there yet. */
+export function WipBadge() {
   return (
-    <>
-      {icon && (
-        <>
-          <Emoji e="🚧" />{' '}
-        </>
-      )}
-      <span
-        style={{
-          fontStyle: 'normal',
-          fontFamily: mono,
-          fontSize: 10.5,
-          fontWeight: 600,
-          letterSpacing: '0.08em',
-          color: '#dbbc7f',
-          border: '1px solid rgba(219, 188, 127, 0.4)',
-          borderRadius: 4,
-          padding: '1px 6px',
-          whiteSpace: 'nowrap',
-          ...style,
-        }}
-      >
-         Coming soon
-      </span>
-    </>
+    <span
+      style={{
+        fontStyle: 'normal',
+        fontFamily: mono,
+        fontSize: 10.5,
+        fontWeight: 600,
+        letterSpacing: '0.08em',
+        color: '#dbbc7f',
+        border: '1px solid rgba(219, 188, 127, 0.4)',
+        borderRadius: 4,
+        padding: '1px 6px',
+        whiteSpace: 'nowrap',
+      }}
+    >
+      Coming soon
+    </span>
   )
 }
 
@@ -152,14 +155,8 @@ const EMOJIS = {
 } as const
 export type EmojiChar = keyof typeof EMOJIS
 
-export function Emoji({ e, style }: { e: EmojiChar; style?: CSSProperties }) {
-  return (
-    <img
-      src={`/assets/emoji-${EMOJIS[e]}.svg`}
-      alt={e}
-      style={{ height: '1em', verticalAlign: '-0.12em', ...style }}
-    />
-  )
+export function Emoji({ e }: { e: EmojiChar }) {
+  return <img src={`/assets/emoji-${EMOJIS[e]}.svg`} alt={e} style={{ height: '1em', verticalAlign: '-0.12em' }} />
 }
 
 export function CodeChip({ children, fontSize }: { children: string; fontSize: number }) {

@@ -63,7 +63,7 @@ let heard: string | undefined
  * On a person's own OpenAgent: keep the computer's name the door said, when it changed, and say it
  * from here on. Anywhere else the header is nobody's to say, and is not read.
  */
-export function noteOwnersName(header: string | string[] | undefined, env: NodeJS.ProcessEnv = process.env, keep: (name: string) => Promise<unknown> = name => renameThisComputer(name, undefined, env)): void {
+export function noteOwnersName(header: string | string[] | undefined, env: NodeJS.ProcessEnv = process.env, keep: (name: string) => Promise<unknown> = name => renameThisComputer(name, env)): void {
   if (!env.OPENAGENT_PERSON || typeof header !== 'string') return
   let name: string | undefined
   try {

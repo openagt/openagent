@@ -1,10 +1,11 @@
 import { useEffect, useState } from 'react'
 import { Server } from 'lucide-react'
 import { Button, ConfirmDialog, formatDateTime, formatRelative, usePolled } from '@openagt/dashboard/module'
-import { idsOf, loadOther, otherLogin, readPersonThere, sharedForget, type Answer, type DeviceRow, type OtherLogin, type OtherRow } from './servers.js'
-import { hasDoor, type JoinedItem, type OtherItem } from './model.js'
+import { idsOf, readPersonThere, type Answer, type DeviceRow } from './devices.js'
+import { loadOther, otherLogin, sharedForget, type OtherLogin, type OtherRow } from './servers.js'
+import { hasDoor, throughOf, type JoinedItem, type OtherItem } from './model.js'
 import { ComputersThrough } from './ServerPage.js'
-import { Head, LoginLine, Part, Problem, State, Tabs, hostOf } from './parts.js'
+import { Head, LoginLine, Part, Problem, State, Tabs, hostOf, useChange } from './parts.js'
 import type { Devices } from './use-devices.js'
 
 // The page of a server this person is in at, set up from somewhere else: their own from another
@@ -25,19 +26,9 @@ export function JoinedPage({ d, item, onBack }: { d: Devices; item: JoinedItem; 
   const { machine, person } = item
   const owner = person.owner
   const [tab, setTab] = useState<Tab>('overview')
-  const [busy, setBusy] = useState(false)
-  const [error, setError] = useState<string | undefined>()
+  const { busy, setBusy, error, setError, act } = useChange(() => d.reloadShared())
   const here = d.shared.find(row => row.url === machine.url)
 
-  const act = async (change: () => Promise<Answer<unknown>>): Promise<boolean> => {
-    setBusy(true)
-    setError(undefined)
-    const answer = await change()
-    if (!answer.ok) setError(answer.error)
-    await d.reloadShared().catch(() => {})
-    setBusy(false)
-    return answer.ok
-  }
   const tabs: { id: Tab; title: string }[] = [{ id: 'overview', title: 'Overview' }, { id: 'devices', title: 'Your devices' }]
 
   return (
@@ -168,27 +159,17 @@ export function OtherPage({ d, item, onBack }: { d: Devices; item: OtherItem; on
   const [working, setWorking] = useState(false)
   const pace = working ? 3_000 : 30_000
   const { value: read, reload } = usePolled<Answer<OtherRow[]> | undefined>(() => loadOther(host, [machine.url]), undefined, pace, [machine.url, pace], 'previous')
-  const [busy, setBusy] = useState(false)
-  const [error, setError] = useState<string | undefined>()
+  const { busy, setBusy, error, setError, act } = useChange(reload)
   const row = read?.ok ? read.value.find(candidate => candidate.url === machine.url) : undefined
   const making = row?.making ?? { working: false }
   useEffect(() => setWorking(making.working), [making.working])
   const name = item.name
   // Shared on a server both are in at, where copies come from; or shared with this person at its own door.
-  const via = machine.url.includes('/_devices/via/')
+  const via = throughOf(machine) !== undefined
   const server = via ? hostOf(machine.url) : undefined
   const copies = via ? ` A copy from ${server} no longer takes its place.` : ''
   const here = d.shared.find(kept => kept.url === machine.url)
   const tabs: { id: Tab; title: string }[] = person ? [{ id: 'overview', title: 'Overview' }, { id: 'devices', title: 'Your devices' }] : [{ id: 'overview', title: 'Overview' }]
-
-  const act = async (change: () => Promise<Answer<unknown>>): Promise<void> => {
-    setBusy(true)
-    setError(undefined)
-    const answer = await change()
-    if (!answer.ok) setError(answer.error)
-    await reload().catch(() => {})
-    setBusy(false)
-  }
   return (
     <div>
       <Head icon={Server} name={name} badge={`${owner}'s`} facts={[machine.version !== undefined ? <State tone="good">Online</State> : <State tone="quiet">Offline</State>, via ? `shared with you on ${server}` : 'shared with you', person?.person !== undefined ? `you are ${person.person}` : undefined]} />

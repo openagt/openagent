@@ -2,8 +2,8 @@ import { existsSync } from 'node:fs'
 import { hostname } from 'node:os'
 import { nodeGitRunner, originDefaultBranch, type GitRunner } from '@openagt/agent-data'
 import type { MergeLookup, ModuleServerHost } from '@openagt/dashboard/module-server'
-import { listFiles } from './list.js'
-import { cutToPreview, readFileContent, safeRepoPath, type FileContent } from './read.js'
+import { listCommitFiles, listFiles } from './list.js'
+import { fileContent, readFileContent, safeRepoPath, type FileContent } from './read.js'
 
 // A run's files, for the agent page's Files pane, for as long as git still has them. The run's
 // checkout while it exists; once it is reclaimed, the run's branch, local or on origin; once the
@@ -115,12 +115,6 @@ async function starting(ask: (args: string[]) => Promise<string>, root: string, 
   return ref ? { source: 'starting', ref } : { source: 'pending' }
 }
 
-/** Every path in a commit's tree. */
-async function treeAt(git: GitRunner, cwd: string, ref: string): Promise<string[]> {
-  const out = await git(['ls-tree', '-r', '--name-only', '-z', ref], cwd).catch(() => '')
-  return out.split('\0').filter(Boolean)
-}
-
 /**
  * The Files pane's answer for a resolved source: every file git sees in a checkout, or the tree of
  * the commit a branch, a merge, a landed run, an unchanged or a starting one is read at.
@@ -128,7 +122,7 @@ async function treeAt(git: GitRunner, cwd: string, ref: string): Promise<string[
 export async function readAgentTree(root: string, at: AgentFilesAt, git: GitRunner = nodeGitRunner()): Promise<AgentTree> {
   if (at.source === 'pending' || at.source === 'gone') return at
   if (at.source === 'checkout') return { source: 'checkout', files: await listFiles(at.path, git) }
-  const files = await treeAt(git, root, at.ref)
+  const files = await listCommitFiles(root, at.ref, git)
   if (at.source === 'branch') return { source: 'branch', branch: at.branch, files }
   return at.source === 'merge' ? { source: 'merge', number: at.number, files } : { source: at.source, files }
 }
@@ -139,8 +133,5 @@ export async function readAgentFileContent(root: string, at: AgentFilesAt, path:
   if (at.source === 'checkout') return readFileContent(at.path, path)
   if (!safeRepoPath(path)) return null
   const raw = await git(['show', `${at.ref}:${path}`], root).catch(() => undefined)
-  if (raw === undefined) return null
-  if (raw.includes('\0')) return { path, text: '', truncated: false, binary: true }
-  const { body, truncated } = cutToPreview(raw.replace(/\n$/, ''))
-  return { path, text: body, truncated, binary: false }
+  return raw === undefined ? null : fileContent(path, raw)
 }

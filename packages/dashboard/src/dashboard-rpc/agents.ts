@@ -12,7 +12,7 @@ export type { AgentLoginsOn } from '../dashboard/logins-sync.js'
 
 // The Agents page (Rom's design): an agent is a name, a set of skills and a set of accounts, kept
 // as one file each in the personal folder, so every computer that syncs it has the same agents.
-// The page lists them, edits them in place, makes new ones and removes them; the default agent is
+// The page lists them, edits them in a dialog, makes new ones and removes them; the default agent is
 // edited like the others and never removed. What an agent can be given is what this computer
 // knows: the skills the dashboard carries, OpenAgent's own GitHub accounts here, and the Claude
 // and Codex accounts of the Permissions page.
@@ -32,8 +32,8 @@ export interface AgentsView {
   agents: AgentRecord[]
   /** The skills to pick from, in groups: the default agent's first, then the catalogue's. */
   skills: { title: string; skills: AgentSkillChoice[] }[]
-  /** OpenAgent's GitHub accounts on this computer. */
-  github?: { accounts: string[] }
+  /** OpenAgent's GitHub accounts on this computer, and the host one more is added at. */
+  github?: { host: string; accounts: string[] }
   /** The Claude accounts of the Permissions page, by id and name. */
   claude: { id: string; name: string }[]
   /** The Codex accounts, the same way. */
@@ -80,7 +80,7 @@ export async function onAgentsList(): Promise<AgentsView> {
   return {
     agents,
     skills,
-    ...(provider ? { github: { accounts: provider.accounts.filter(account => account.ok).map(account => account.login) } } : {}),
+    ...(provider ? { github: { host: GITHUB, accounts: provider.accounts.filter(account => account.ok).map(account => account.login) } } : {}),
     claude: claude.accounts.map(account => ({ id: account.id, name: account.name })),
     codex: codex.accounts.map(account => ({ id: account.id, name: account.name })),
   }

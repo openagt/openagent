@@ -1,7 +1,8 @@
 import { useEffect, useState, type ComponentType, type FormEvent, type ReactNode } from 'react'
 import { Check, CircleCheck, CircleX, Cloud, House, Loader2, PlugZap, Waypoints } from 'lucide-react'
 import { Button, Checkbox, Dialog, Input, Select, SelectContent, SelectItem, SelectTrigger, SelectValue, cn, usePolled } from '@openagt/dashboard/module'
-import { testConnection, type Answer, type ServerRow, type Tested } from './servers.js'
+import type { Answer } from './devices.js'
+import { installDone, installFailed, testConnection, type ServerRow, type Tested } from './servers.js'
 import { CopyButton } from './codes.js'
 import { hasDoor, labelOf } from './model.js'
 import { Problem, StepLine, StepMark } from './parts.js'
@@ -339,8 +340,8 @@ function TestResult({ answer, address, user, home }: { answer: Answer<Tested>; a
 }
 
 function Installing({ d, server, useMine, syncData, onReady, onClose }: { d: Devices; server: ServerRow | undefined; /** The server is to use this computer's logins. */ useMine: boolean; /** And to sync this computer's agent data. */ syncData: boolean; onReady: () => void; onClose: () => void }) {
-  const done = server !== undefined && !server.working && server.steps.every(step => step.state === 'done')
-  const failed = server !== undefined && !server.working && server.steps.some(step => step.state === 'failed')
+  const done = server !== undefined && installDone(server)
+  const failed = server !== undefined && installFailed(server)
   const item = d.items.find(candidate => candidate.kind === 'server' && candidate.server.address === server?.address)
   const saved = item?.kind === 'server' && item.machine !== undefined && server?.adding === false
   const reason = server !== undefined ? d.notAdded[server.address] : undefined

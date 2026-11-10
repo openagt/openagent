@@ -204,7 +204,7 @@ export function thisComputersRepos(): RepoIndex {
   thisComputer ??= repoIndex(async () => {
     const { homedir } = await import('node:os')
     const { listRepoFolders } = await import('../registry.js')
-    return [homedir(), ...(await listRepoFolders().catch(() => []))]
+    return [homedir(), ...(await listRepoFolders())]
   })
   return thisComputer
 }

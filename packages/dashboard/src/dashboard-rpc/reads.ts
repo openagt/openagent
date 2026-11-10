@@ -4,7 +4,7 @@ import { originDefaultBranch } from '@openagt/agent-data'
 import { moduleAgents, type ModuleAgent, type ModuleAgentsWanted } from '../dashboard/module-agents.js'
 import { join } from 'node:path'
 import type { BridgeBrowserStatus } from '../bridge-browser.js'
-import { findAgent, findCheckout, readLiveMetas, readAllAgents, readDoing, loadAgentEvents, type AgentDoing, startedAtFromAgentId, isPidAlive, type AgentMeta, type AgentStatus, isRunId, projectBranches, type BranchesFor } from '../store/index.js'
+import { findAgent, findCheckout, readLiveMetas, readDoing, loadAgentEvents, type AgentDoing, startedAtFromAgentId, type AgentMeta, isRunId, projectBranches } from '../store/index.js'
 import { listProjectWorktrees } from '../worktrees.js'
 import { projectGitHost, type GitHostHome } from '../store/git-host.js'
 import { repositoryOffer, type RepositoryOffer } from '../store/repository.js'
@@ -18,25 +18,21 @@ import { buildActivity, type Activity } from '../dashboard/activity.js'
 import { buildDashboard, type DashboardData } from '../dashboard/dashboard.js'
 import { readGitStatus, type GitStatus } from '../dashboard/git-status.js'
 import { readRunHandoff, resolveAgentPr, type AgentHandoff } from '../dashboard/agent-handoff.js'
-import { cachedPrStates, type PrState } from '../dashboard/pull-requests.js'
-import { unpublishedRuns, type Unpublished } from '../dashboard/unpublished.js'
 import type { AgentWorktree } from '../dashboard/types.js'
 import { crawlRepoFiles } from '../project.js'
 import { contextBridgeBrowser, contextProjects, contextRemote, resolveProjectPath, resolveAgentPath } from './context.js'
 import { relayOr } from './relay-agent.js'
 import type { OpenAgentEvent } from '../events.js'
 import { bridgeQuestions } from '../dashboard/bridge-store.js'
-import type { BridgeEvent, BridgeHello, BridgeQuestion } from '../dashboard/bridge-endpoints.js'
+import { isCloudSessionId, type BridgeEvent, type BridgeHello, type BridgeQuestion } from '../dashboard/bridge-endpoints.js'
 import type { BridgeAnswer, BridgeContact, BridgeVersion } from '../dashboard/bridge-store.js'
-import { isHostName, readBridgeToken, readPreferences, type Preferences } from '../registry.js'
-import { machineKind, machineName } from '../reached-by-line.js'
-import type { SavedMachine } from '../dashboard/rpc-serve.js'
+import { readBridgeToken, readPreferences } from '../registry.js'
 import { hostname } from 'node:os'
-import { nodeGitRunner } from '@openagt/agent-data'
 import { RUNS_WAIT_MS, RunChanges, withMachineRuns, type MachineRuns, type OwnRuns } from '../dashboard/machine-runs.js'
 import { ownRunsWatch } from '../dashboard/runs-watch.js'
 import { startedName, withStartedNames } from '../started-names.js'
 import { isElsewhereId } from '../dashboard/elsewhere.js'
+import { asRecorded, forDashboard, markMachine, recordedRuns, withFollowed, withRowMarks } from '../dashboard/run-rows.js'
 
 // The read model behind the dashboard (#405): the agent history, an agent's replay, and the
 // surfaced PLAN/TODO docs — each keyed by project id and backed by
@@ -44,29 +40,8 @@ import { isElsewhereId } from '../dashboard/elsewhere.js'
 // browser's own tree so it can serve them in-process; the dashboard calls them by name over
 // `POST /_rpc/<name>`. The live agent stream is its own endpoint (`GET /_rpc/events`).
 
-/**
- * Resolve a project id and run a forgiving read against its workspace: an unknown project
- * or a failing read both fall back to `empty`. The uniform readers below are one call each
- * over this; the agent history and null-returning git readers stay bespoke (extra logic or a
- * distinct empty).
- */
-async function withProject<T>(projectId: string, read: (cwd: string) => Promise<T>, empty: T): Promise<T> {
-  const cwd = await resolveProjectPath(projectId)
-  return cwd ? read(cwd).catch(() => empty) : empty
-}
-
-/**
- * The `withProject` twin for a run-scoped read: resolve the checkout a `agentId` names (its own
- * worktree while live, else the project root, #738), then read forgivingly. An absent project
- * or a failing read both fall back to `empty`.
- */
-async function withAgentPath<T>(projectId: string, agentId: string | undefined, read: (cwd: string) => Promise<T>, empty: T): Promise<T> {
-  const cwd = await resolveAgentPath(projectId, agentId)
-  return cwd ? read(cwd).catch(() => empty) : empty
-}
-
 /** Run a cross-project rollup over every registered project, tolerating a failed registry read. */
-async function withProjects<T>(build: (projects: Awaited<ReturnType<ReturnType<typeof contextProjects>['list']>>) => Promise<T>): Promise<T> {
+async function withProjects<T>(build: (projects: ProjectSummary[]) => Promise<T>): Promise<T> {
   const projects = await contextProjects().list().catch(() => [])
   return build(projects)
 }
@@ -105,13 +80,10 @@ export async function onStartedName(projectId: string, agentId: string): Promise
 
 /** A project's runs as its list shows them: off its folder here (`cwd`), else as the computer it is on says them. */
 async function runRows(projectId: string, cwd: string | undefined): Promise<AgentMeta[]> {
-  // The relayed-agent stubs (#1077). Read up front by habit rather than by necessity now: the
-  // context was request-scoped and evaporated at the first await, so reading it late dropped
-  // every remote agent from the list on a reload. It is wired once at start-up (F3), so an await
-  // no longer costs anything — nothing here depends on this staying above one.
-  const remote = contextRemote()?.list(projectId) ?? []
+  // The relayed-agent stubs (#1077): a run this daemon follows on a machine lives in its memory only.
+  const remote = contextRemote().list(projectId)
   const machineOf = await contextRemote().machineNames()
-  const local = cwd ? withStartedNames(await withRowMarks(cwd, (await projectRuns(cwd)).map(agent => forDashboard(agent, machineOf)))) : isElsewhereId(projectId) ? (await elsewhereRuns(projectId)).map(agent => forDashboard(agent, machineOf)) : []
+  const local = cwd ? withStartedNames(await withRowMarks(cwd, (await listedRuns(cwd)).map(agent => forDashboard(agent, machineOf)))) : isElsewhereId(projectId) ? (await elsewhereRuns(projectId)).map(agent => forDashboard(agent, machineOf)) : []
   return withFollowed(remote, local, agentId => contextRemote().sent(agentId))
 }
 
@@ -136,23 +108,10 @@ export async function onModuleAgents(projectId: string, wanted: ModuleAgentsWant
 }
 
 /**
- * A project's runs as its records and checkouts say them, each as recorded: the ones this
- * computer runs, and every other computer's whose record came through the project's shared records.
- * A run of this computer's that has no record yet is its project's git user's, as its record will be.
- */
-export async function recordedRuns(cwd: string): Promise<AgentMeta[]> {
-  const runs = (await readAllAgents(cwd)).map(asRecorded)
-  const thisHost = hostname()
-  if (!runs.some(run => run.person === undefined && run.host === thisHost)) return runs
-  const person = await gitUserOf(cwd)
-  return person === undefined ? runs : runs.map(run => (run.person === undefined && run.host === thisHost ? { ...run, person } : run))
-}
-
-/**
  * A project's runs as the dashboard lists them: its records, with what each saved machine says of
  * its own runs right now taking over theirs (machine-runs.ts). Not marked yet for the dashboard.
  */
-export async function projectRuns(cwd: string): Promise<AgentMeta[]> {
+async function listedRuns(cwd: string): Promise<AgentMeta[]> {
   const [records, machines] = await Promise.all([recordedRuns(cwd), contextRemote().machineRuns(cwd).catch((): MachineRuns[] => [])])
   return withMachineRuns(records, machines.map(machine => ({ ...machine, runs: machine.runs.map(asRecorded) })))
 }
@@ -194,159 +153,6 @@ export async function onOwnRuns(projectId: string, since?: unknown, wait?: unkno
   } finally {
     stop()
   }
-}
-
-/** How long a project's git user is trusted before git is asked again. */
-const GIT_USER_KEPT_MS = 60_000
-const gitUsers = new Map<string, { person?: string; until: number }>()
-
-/** Whom git commits as in the project, as the runs' records are kept under it: its email, lowered. */
-export async function gitUserOf(cwd: string): Promise<string | undefined> {
-  const kept = gitUsers.get(cwd)
-  if (kept && kept.until > Date.now()) return kept.person
-  const said = await nodeGitRunner()(['config', 'user.email'], cwd).then(
-    out => out.trim().toLowerCase(),
-    () => '',
-  )
-  gitUsers.set(cwd, { ...(said ? { person: said } : {}), until: Date.now() + GIT_USER_KEPT_MS })
-  return said || undefined
-}
-
-/**
- * What a run's row marks beside its name, for both lists of runs, a project's and all projects'
- * together: how its pull request stands, and the work it left on this machine.
- */
-export async function withRowMarks(cwd: string, agents: AgentMeta[]): Promise<AgentMeta[]> {
-  return withUnpublished(cwd, await withPrStates(cwd, agents))
-}
-
-/**
- * Each run that has a pull request, marked with how the request stands, so its row can show it:
- * from one cached listing of the project's requests, read only when one of the runs has a request.
- */
-export async function withPrStates(cwd: string, agents: AgentMeta[], states: (cwd: string) => Promise<Map<string, PrState>> = cachedPrStates): Promise<AgentMeta[]> {
-  if (!agents.some(agent => agent.pr !== undefined || agent.earlierPrs?.length)) return agents
-  const known = await states(cwd)
-  return agents.map(agent => {
-    const prState = agent.pr && known.get(agent.pr.url)
-    const earlierPrs = agent.earlierPrs?.map(pr => {
-      const state = known.get(pr.url)
-      return state ? { ...pr, state } : pr
-    })
-    return prState || earlierPrs ? { ...agent, ...(prState ? { prState } : {}), ...(earlierPrs ? { earlierPrs } : {}) } : agent
-  })
-}
-
-/**
- * Each finished run whose work never left this machine, marked with how many files it left
- * uncommitted and how many commits wait, so its row can say so as the Human Queue does: the same
- * rule, {@link unpublishedRuns}. A provider that cannot be read marks nothing.
- */
-export async function withUnpublished(cwd: string, agents: AgentMeta[], branches?: BranchesFor): Promise<AgentMeta[]> {
-  const found = await unpublishedRuns(cwd, agents, branches).catch(() => new Map<string, Unpublished>())
-  if (found.size === 0) return agents
-  return agents.map(agent => {
-    const work = found.get(agent.id)
-    if (!work) return agent
-    return { ...agent, ...(work.commits > 0 ? { unpublished: work.commits } : {}), ...(work.uncommitted > 0 ? { uncommitted: work.uncommitted } : {}) }
-  })
-}
-
-/**
- * A project's runs with the ones this daemon follows on a machine (#1067), which live in its
- * memory. A run this computer sent that has no record here is listed first, as followed, so a
- * reload re-opens it instead of losing it. One that has a record keeps the record's row, in
- * its place, which holds more (its branch, its pull request, its parent), and takes from the
- * followed one what the machine said since: whether it works, and its session. A run followed
- * by its record is listed only while that record is there: deleted, it is gone from the list.
- */
-export function withFollowed(followed: AgentMeta[], local: AgentMeta[], sent: (agentId: string) => boolean): AgentMeta[] {
-  if (followed.length === 0) return local
-  const live = new Map(followed.map(run => [run.id, run]))
-  const recorded = new Set(local.map(agent => agent.id))
-  const rows = local.map(record => {
-    const run = live.get(record.id)
-    if (!run) return record
-    const { remoteLabel, remoteKind } = run
-    // Where it runs is known: this computer sent it there, whatever name the machine goes by now.
-    const { otherHost: _other, ...known } = record
-    return { ...known, status: run.status, updatedAt: run.updatedAt, target: 'remote' as const, ...(remoteLabel !== undefined ? { remoteLabel } : {}), ...(remoteKind !== undefined ? { remoteKind } : {}), ...(run.sessionId !== undefined ? { sessionId: run.sessionId } : {}) }
-  })
-  return [...followed.filter(run => !recorded.has(run.id) && sent(run.id)), ...rows]
-}
-
-/**
- * A web run whose cloud session is waiting on a human — the bridge holds its parked question, or
- * claude.ai's session list shows it awaiting input (#1332) — is marked waiting (#1668), so its row
- * says so instead of "in cloud": the archive on disk cannot know, only the daemon's bridge store
- * does. Every other run passes through untouched.
- */
-export function markCloudWaiting(agent: AgentMeta): AgentMeta {
-  if (agent.target !== 'web' || !agent.sessionId || !bridgeQuestions().waiting(agent.sessionId)) return agent
-  return { ...agent, cloudWaiting: true }
-}
-
-/**
- * A run another machine's daemon started is marked as from another host (#1648): the data branch
- * is shared precisely so other machines' runs show up here, and a row that looked exactly like
- * one of this daemon's own sent the user reading the archive by hand to learn whose it was. A run
- * with no recorded host predates the field and passes through untouched.
- */
-export function markOtherHost(agent: AgentMeta, thisHost: string = hostname()): AgentMeta {
-  // A run on a saved machine says where it runs by the machine's name, not as someone else's.
-  if (agent.host === undefined || agent.host === thisHost || agent.remoteLabel !== undefined) return agent
-  return { ...agent, otherHost: true }
-}
-
-/**
- * What a run's row says of the saved machine it runs on: its own name, and what it is, which its
- * icon draws, as every list of machines says them (reached-by-line.ts).
- */
-export function onMachine(machine: SavedMachine): Pick<AgentMeta, 'remoteLabel' | 'remoteKind'> {
-  return { remoteLabel: machineName(machine), remoteKind: machineKind(machine).kind }
-}
-
-/**
- * A run whose record names the computer of a saved machine runs on that machine, whoever started
- * it there, and reads like one this computer sent: by the name the machine was given. The record
- * comes through the project's shared records, so it is here for a run started on the machine's
- * own page too, and after this daemon forgot the runs it sent. A run of this computer, and one of
- * a computer that is no saved machine, pass through untouched.
- */
-export function markMachine(agent: AgentMeta, machineOf: (host: string) => SavedMachine | undefined, thisHost: string = hostname()): AgentMeta {
-  if (agent.host === undefined || agent.host === thisHost || agent.remoteLabel !== undefined) return agent
-  const machine = machineOf(agent.host)
-  return machine === undefined ? agent : { ...agent, target: 'remote', ...onMachine(machine) }
-}
-
-/**
- * A run that ended clean while the process its card names is still alive on this host is marked
- * saving: the tool that runs it saves the run's record and cleans up its checkout after the card says
- * done, and a row that said "done" through that window read as finished with nothing coming. A
- * run of another host, or with no recorded process, passes through untouched.
- */
-export function markSaving(agent: AgentMeta, thisHost: string = hostname(), alive: (pid: number) => boolean = isPidAlive): AgentMeta {
-  if (agent.status !== 'done' || agent.pid === undefined || agent.host !== thisHost || !alive(agent.pid)) return agent
-  return { ...agent, saving: true }
-}
-
-/** Every annotation a run gets on its way to the dashboard, once it is as recorded ({@link projectRuns}): what the daemon knows and the disk cannot. */
-function forDashboard(agent: AgentMeta, machineOf: (host: string) => SavedMachine | undefined): AgentMeta {
-  return markSaving(markOtherHost(markMachine(markCloudWaiting(agent), machineOf)))
-}
-
-/**
- * A run as its record may say it. A record is a file anyone with the project can write, and its
- * tool's own words are read into the row as they are, so the words only this daemon gives a row
- * are taken off it first: that it runs on a saved machine and which, that it is another
- * computer's, that it is being saved, when its computer was last seen. A computer's name that is
- * no name is none.
- */
-export function asRecorded(agent: AgentMeta): AgentMeta {
-  const { remoteLabel: _label, remoteKind: _kind, otherHost: _other, saving: _saving, cloudWaiting: _waiting, seenAt: _seen, ...said } = agent
-  if (said.target === 'remote') delete said.target
-  if (said.host !== undefined && !isHostName(said.host)) delete said.host
-  return said
 }
 
 /**
@@ -439,7 +245,8 @@ export async function onAgentsDoing(projectId: string, agentIds: string[]): Prom
 
 /** The surfaced PLAN/TODO docs at the workspace root, in sidebar order (or `[]`). */
 export async function onDocs(projectId: string): Promise<WorkspaceDoc[]> {
-  return withProject(projectId, readDocs, [])
+  const cwd = await resolveProjectPath(projectId)
+  return cwd ? readDocs(cwd).catch(() => []) : []
 }
 
 /** The aggregated open TODO queue across every registered project (#438), most-open first. */
@@ -514,7 +321,7 @@ export async function onActivity(): Promise<ProjectionRead<Activity>> {
   const elsewhere = await contextRemote()
     .elsewhere()
     .catch((): ProjectSummary[] => [])
-  return withProjects(projects => buildActivity([...projects, ...elsewhere], { readAgents: project => (project.machine === undefined ? projectRuns(project.path) : elsewhereRuns(project.id)) }))
+  return withProjects(projects => buildActivity([...projects, ...elsewhere], { readAgents: project => (project.machine === undefined ? listedRuns(project.path) : elsewhereRuns(project.id)) }))
 }
 
 /** The Overview dashboard page (#471): the {@link onOverview} rollup plus agent counts, run-status totals, and activity. */
@@ -541,12 +348,16 @@ let buildingDashboard: Promise<DashboardData> | undefined
 /**
  * The project's files for the `#` context picker (#504) and the Context's file count (#661): every
  * file git sees (tracked + untracked, honoring .gitignore), repo-relative and sorted, via
- * `git ls-files`. Localhost-only by nature — the relay has no checkout, so it resolves `[]`.
+ * `git ls-files`; `[]` for a project with no folder here.
  * Pass a live `agentId` to list that agent's worktree instead of the project root (#738). The
  * Files pane reads its own list, through its module.
  */
 export async function onProjectFiles(projectId: string, agentId?: string): Promise<string[]> {
-  return relayOr(agentId, 'onProjectFiles', [projectId, agentId], () => withAgentPath(projectId, agentId, crawlRepoFiles, []), [])
+  return relayOr(agentId, 'onProjectFiles', [projectId, agentId], async () => {
+    // The checkout `agentId` names: its own while the run is live, else the project's root (#738).
+    const cwd = await resolveAgentPath(projectId, agentId)
+    return cwd ? crawlRepoFiles(cwd).catch(() => []) : []
+  }, [])
 }
 
 /**
@@ -563,7 +374,7 @@ export async function onAgentMainBranch(projectId: string, agentId: string): Pro
   }, null)
 }
 
-/** The project's page on its git host and the git host's name (#489, #1820), or null: no git host package, no remote there, or the relay. */
+/** The project's page on its git host and the git host's name (#489, #1820), or null: no git host package, or no remote there. */
 export async function onGitHostHome(projectId: string): Promise<GitHostHome | null> {
   const cwd = await resolveProjectPath(projectId)
   if (!cwd) return null
@@ -571,7 +382,7 @@ export async function onGitHostHome(projectId: string): Promise<GitHostHome | nu
   return (await gitHost?.home()) ?? null
 }
 
-/** The repository the project's provider offers to create for it (a project with no remote), or null: no provider, a remote already there, the host out of reach, or the relay. */
+/** The repository the project's provider offers to create for it (a project with no remote), or null: no provider, a remote already there, or the host out of reach. */
 export async function onRepositoryOffer(projectId: string): Promise<RepositoryOffer | null> {
   const cwd = await resolveProjectPath(projectId)
   if (!cwd) return null
@@ -579,8 +390,8 @@ export async function onRepositoryOffer(projectId: string): Promise<RepositoryOf
 }
 
 /**
- * The project's git status (#491): active branch, dirty flag, linked PR. Null when not a repo /
- * relay. Pass a live `agentId` to read that agent's worktree, which is the branch and the dirty
+ * The project's git status (#491): active branch, dirty flag, linked PR. Null when not a repo.
+ * Pass a live `agentId` to read that agent's worktree, which is the branch and the dirty
  * state that actually belong to it (#738). A run-scoped read is since-filtered (#1255): an agent on
  * a reused pinned branch must not wear a predecessor's merged PR as its own badge.
  */
@@ -624,7 +435,7 @@ export async function onAgentHandoff(projectId: string, agentId: string): Promis
  * is not `web` renders exactly as it did before.
  */
 export async function onBridgeQuestion(sessionId: string): Promise<BridgeQuestion | null> {
-  if (typeof sessionId !== 'string' || !/^session_[A-Za-z0-9]{1,128}$/.test(sessionId)) return null
+  if (!isCloudSessionId(sessionId)) return null
   return bridgeQuestions().get(sessionId) ?? null
 }
 
@@ -659,9 +470,9 @@ export async function onBridgeStatus(): Promise<{
  * open `~/.openagent.json` and copy a field out of it.
  */
 export async function onBridgeToken(): Promise<string | null> {
-  const preferences = await readPreferences().catch((): Preferences => ({}))
+  const preferences = await readPreferences()
   if (preferences.bridge !== true) return null
-  return (await readBridgeToken().catch(() => undefined)) ?? null
+  return (await readBridgeToken()) ?? null
 }
 
 /**
@@ -669,13 +480,13 @@ export async function onBridgeToken(): Promise<string | null> {
  * extension, delivered, or failed with the extension's reason. Null when nothing was picked.
  */
 export async function onBridgeAnswer(sessionId: string): Promise<BridgeAnswer | null> {
-  if (typeof sessionId !== 'string' || !/^session_[A-Za-z0-9]{1,128}$/.test(sessionId)) return null
+  if (!isCloudSessionId(sessionId)) return null
   return bridgeQuestions().answer(sessionId) ?? null
 }
 
 /** What a Claude web session has said so far, as scraped by the browser bridge (#1237). */
 export async function onBridgeEvents(sessionId: string): Promise<BridgeEvent[]> {
-  if (typeof sessionId !== 'string' || !/^session_[A-Za-z0-9]{1,128}$/.test(sessionId)) return []
+  if (!isCloudSessionId(sessionId)) return []
   return bridgeQuestions().events(sessionId)
 }
 

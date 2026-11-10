@@ -16,7 +16,7 @@ import { MENU_ITEM_CLASS, MENU_POPUP_CLASS, MENU_TRIGGER_OPEN_CLASS } from './ui
 const ROWS_DRAWN = 200
 
 /** What the button reads for a pick (none is the main branch): the branch's name, the local one marked as such. */
-export function startFromLabel(pick: StartFromPick | undefined, main: string, local: string): string {
+function startFromLabel(pick: StartFromPick | undefined, main: string, local: string): string {
   if (pick?.kind === 'local') return `${local} (local)`
   return pick?.kind === 'published' ? pick.branch : main
 }

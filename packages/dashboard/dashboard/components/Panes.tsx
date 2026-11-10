@@ -85,6 +85,18 @@ const PanesContext = createContext<PanesValue>(NO_PANES)
 let revealShown = 0
 
 /**
+ * Open the page's pane `paneId` when an ask from the chat comes (`at`), once for each ask: an old
+ * one, met again on coming back to its page, opens nothing. No pane that takes it, nothing opens.
+ */
+function useOpenOnAsk(page: string, at: number | undefined, paneId: string | undefined): void {
+  useEffect(() => {
+    if (at === undefined || paneId === undefined || at <= revealShown) return
+    revealShown = at
+    setPaneOpen(page, paneId, true)
+  }, [at, paneId, page])
+}
+
+/**
  * The panes of the page on screen, for the top bar's icons and for the column beside the page.
  * `projectId` null, or `enabled` false, is a page with no panes: a module's own page, Settings,
  * the Overview.
@@ -161,39 +173,15 @@ export function PanesProvider({
 
   // A changed file asked for from the chat: the pane that lists changes is opened, and takes the file.
   const reveal = useRevealedChange(page)
-  const changesPane = panes.find(pane => pane.panel?.changes)?.id
-  const revealedAt = reveal?.at
-  useEffect(() => {
-    // Each ask opens the pane once: an old one, met again on coming back to its page, opens nothing.
-    if (revealedAt === undefined || changesPane === undefined || revealedAt <= revealShown) return
-    revealShown = revealedAt
-    setPaneOpen(page, changesPane, true)
-  }, [revealedAt, changesPane, page])
+  useOpenOnAsk(page, reveal?.at, panes.find(pane => pane.panel?.changes)?.id)
   // A file asked for from the chat: the pane that shows the run's files is opened, and takes the file.
   const show = useRevealedFile(page)
-  const filesPane = panes.find(pane => pane.panel?.files)?.id
-  const shownAt = show?.at
-  useEffect(() => {
-    if (shownAt === undefined || filesPane === undefined || shownAt <= revealShown) return
-    revealShown = shownAt
-    setPaneOpen(page, filesPane, true)
-  }, [shownAt, filesPane, page])
+  useOpenOnAsk(page, show?.at, panes.find(pane => pane.panel?.files)?.id)
   // A live screen asked for from the chat: the pane that shows it is opened.
   const screenAsked = useRevealedScreen(page)
-  const screenPane = panes.find(pane => pane.panel?.screen)?.id
-  useEffect(() => {
-    if (screenAsked === undefined || screenPane === undefined || screenAsked <= revealShown) return
-    revealShown = screenAsked
-    setPaneOpen(page, screenPane, true)
-  }, [screenAsked, screenPane, page])
-
+  useOpenOnAsk(page, screenAsked?.at, panes.find(pane => pane.panel?.screen)?.id)
   // A subagent asked for from the chat: its pane is opened.
-  const subagentAt = subagentAsked?.at
-  useEffect(() => {
-    if (subagentAt === undefined || !showsSubagent || subagentAt <= revealShown) return
-    revealShown = subagentAt
-    setPaneOpen(page, SUBAGENT, true)
-  }, [subagentAt, showsSubagent, page])
+  useOpenOnAsk(page, subagentAsked?.at, showsSubagent ? SUBAGENT : undefined)
 
   // The Context as a module's pane sees it: its files only, never the project paths the
   // launcher's project checkboxes also put in it (#661).

@@ -6,15 +6,16 @@ import { fileURLToPath } from 'node:url'
 import type { DriverQuota } from '@openagt/agent-driver'
 import { readClaudeQuota } from '@openagt/agent-driver-claude'
 import { accountFolder, personalCodexHome, readCodexUsage } from '@openagt/agent-driver-codex'
-import { gitHostEnv, isPidAlive, lockHolder, markerCard, readyToRun, resumeDetached, runIdFrom, spawnResume, spawnRun, sweep, withdrawMarker, writeMarker } from '@openagt/agent-runner'
+import { gitHostEnv, isPidAlive, lockHolder, readyToRun, resumeDetached, runIdFrom, spawnResume, spawnRun, sweep, withdrawMarker, writeMarker } from '@openagt/agent-runner'
 import { findRun } from '@openagt/skill-logs'
-import { nodeGitRunner, pullProjectData, remoteHostOf, type GitRunner } from '@openagt/agent-data'
+import { nodeGitRunner, originUrl, pullProjectData, remoteHostOf, type GitRunner } from '@openagt/agent-data'
 import { CHECK_TIMEOUT_MS, GLANCE_MS, NOW_CHECK_TIMEOUT_MS, QUOTA_KEPT_MS, SCHEDULER_LOG, TICK_MS } from './names.js'
 import { inFlight, lastRuns, lastStart, type LastRun } from './records.js'
-import { readSchedule, type Schedule, type ScheduledCommand } from './schedule.js'
-import { isSwitchedOn, namesGivenUp, readState, stateDir, updateState, withoutListed, withoutName, withoutPid, type ListedCommand, type State, type TickRecord } from './state.js'
+import { readSchedule, type Schedule, type ScheduledCommand, type Unlisted } from './schedule.js'
+import { isSwitchedOn, listed, namesGivenUp, readState, stateDir, updateState, withoutListed, withoutName, withoutPid, type ListedCommand, type State, type TickRecord } from './state.js'
 import { atStartOf } from './start-point.js'
-import { glance, listed, runCheck, startNow, tick, type StartedNow, type TickDeps } from './tick.js'
+import { glance, startNow, tick, type StartedNow, type TickDeps } from './tick.js'
+import { runCheck } from './check.js'
 import { accountsPath, readAccounts } from '@openagt/skill-account-rotation'
 
 /**
@@ -26,7 +27,7 @@ export function fetchingAsRunsAccount(repo: string, git: GitRunner, asAccount: (
   return async (args, cwd) => {
     if (args[0] !== 'fetch') return git(args, cwd)
     // A remote that is a folder on this disk asks no login.
-    const url = (await git(['remote', 'get-url', 'origin'], cwd).catch(() => '')).trim()
+    const url = await originUrl(cwd, git)
     if (!url || remoteHostOf(url) === undefined) return git(args, cwd)
     const account = await gitHostEnv(repo)
     if (!account.ok) throw new Error(account.error)
@@ -69,9 +70,18 @@ function keptQuota(repo: string): () => Promise<DriverQuota> {
   return keeper
 }
 
-/** A tick's hands on the real project: its records, its checks, the coding agent, and a run of `agent-runner` per start. */
-function projectDeps(repo: string, state: State, schedule: Schedule, opts: { git: GitRunner; log: (line: string) => void; now: () => Date; checkMs: number; stopped?: () => boolean }): TickDeps {
-  const { git, log, now } = opts
+/** What a tick of the real project is run with, where whoever runs it says: its git (node's, else), where its lines go (nowhere, else), and whether the scheduler was told to stop. */
+interface Wiring {
+  git?: GitRunner
+  log?: (line: string) => void
+  stopped?: () => boolean
+}
+
+/** A tick's hands on the real project: its records, its checks, which may run `checkMs` each, the coding agent, and a run of `agent-runner` per start. */
+function projectDeps(repo: string, state: State, schedule: Schedule, checkMs: number, wiring: Wiring): TickDeps {
+  const git = wiring.git ?? nodeGitRunner()
+  const log = wiring.log ?? (() => {})
+  const now = (): Date => new Date()
   const host = hostname()
   return {
     state,
@@ -85,7 +95,7 @@ function projectDeps(repo: string, state: State, schedule: Schedule, opts: { git
     check: async (shell, lastRun, switchedOn) => {
       const account = await gitHostEnv(repo)
       if (!account.ok) return { ok: false, stdout: '', stderr: account.error }
-      return runCheck(repo, shell, opts.checkMs, lastRun, switchedOn, account.env)
+      return runCheck(repo, shell, checkMs, lastRun, switchedOn, account.env)
     },
     stillOn: async command => isSwitchedOn(await readState(repo), command),
     lastStart: command => lastStart(repo, command, schedule, host),
@@ -103,7 +113,7 @@ function projectDeps(repo: string, state: State, schedule: Schedule, opts: { git
     withdrawMarker: id => withdrawMarker(repo, id),
     spawn: run => spawnRun(repo, run),
     resume: run => spawnResume(repo, run),
-    ...(opts.stopped ? { stopped: opts.stopped } : {}),
+    ...(wiring.stopped ? { stopped: wiring.stopped } : {}),
     log,
   }
 }
@@ -113,35 +123,32 @@ function projectDeps(repo: string, state: State, schedule: Schedule, opts: { git
  * scheduler running: the run is started from here. Its check has less time than a tick gives one:
  * whoever asked waits for the answer.
  */
-export async function runNow(repo: string, command: ScheduledCommand, opts: { git?: GitRunner; log?: (line: string) => void; now?: () => Date } = {}): Promise<StartedNow> {
-  const git = opts.git ?? nodeGitRunner()
-  return startNow(projectDeps(repo, await readState(repo), await readSchedule(repo), { git, log: opts.log ?? (() => {}), now: opts.now ?? (() => new Date()), checkMs: NOW_CHECK_TIMEOUT_MS }), command)
+export async function runNow(repo: string, command: ScheduledCommand, wiring: Omit<Wiring, 'stopped'> = {}): Promise<StartedNow> {
+  return startNow(projectDeps(repo, await readState(repo), await readSchedule(repo), NOW_CHECK_TIMEOUT_MS, wiring), command)
 }
 
 /** One tick of the real project, and the state written with what it decided. */
-export async function tickProject(repo: string, opts: { git?: GitRunner; log?: (line: string) => void; now?: () => Date; stopped?: () => boolean } = {}): Promise<TickRecord> {
-  const git = opts.git ?? nodeGitRunner()
-  const log = opts.log ?? (() => {})
-  const now = opts.now ?? (() => new Date())
+export async function tickProject(repo: string, wiring: Wiring = {}): Promise<TickRecord> {
   const schedule = await readSchedule(repo)
+  const read = await readState(repo)
   // What an automation kept on this machine was given goes when it goes, and when a skill has its
   // name too: a switch left under the name would start the skill's command unasked.
-  const givenUp = namesGivenUp((await readState(repo)).lastTick, schedule)
-  const state = givenUp.length ? await updateState(repo, s => givenUp.reduce(withoutName, s), git) : await readState(repo)
-  const decided = await tick(projectDeps(repo, state, schedule, { git, log, now, checkMs: CHECK_TIMEOUT_MS, ...(opts.stopped ? { stopped: opts.stopped } : {}) }))
+  const givenUp = namesGivenUp(read.lastTick, schedule)
+  const state = givenUp.length ? await updateState(repo, s => givenUp.reduce(withoutName, s), wiring.git) : read
+  const decided = await tick(projectDeps(repo, state, schedule, CHECK_TIMEOUT_MS, wiring))
   let record = decided
   // A tick cut short by a stop records nothing: `stop` already took this scheduler off the state,
   // and a write now would put the state file back after a clean-up removed it.
-  if (!opts.stopped?.()) {
+  if (!wiring.stopped?.()) {
     // A command whose file went while the tick ran, removed by its person, is not on the record: what lists the record's commands would show it for another minute.
     // An automation kept on this machine that went so is given up here: off the record, the next tick would not know it had been listed.
     const there = new Set((await readSchedule(repo)).commands.map(c => c.name))
     const gone = decided.schedule.filter(c => !there.has(c.command))
-    const written = await updateState(repo, s => gone.reduce<State>((state, c) => withoutListed(c.onThisMachine ? withoutName(state, c.command) : state, c.command), { ...s, lastTick: decided }), git)
+    const written = await updateState(repo, s => gone.reduce<State>((state, c) => withoutListed(c.onThisMachine ? withoutName(state, c.command) : state, c.command), { ...s, lastTick: decided }), wiring.git)
     // What is answered and logged is the record as written.
     record = written.lastTick ?? decided
   }
-  for (const line of describe(record)) log(line)
+  for (const line of describe(record)) wiring.log?.(line)
   return record
 }
 
@@ -149,12 +156,11 @@ export async function tickProject(repo: string, opts: { git?: GitRunner; log?: (
  * Between the minute's ticks, the rows of the real project that may be checked more often and are
  * due again by `due`; what one of them started or resumed is a log line.
  */
-export async function glanceProject(repo: string, opts: { due: (command: ScheduledCommand) => boolean; git?: GitRunner; log?: (line: string) => void; now?: () => Date; stopped?: () => boolean }): Promise<void> {
+async function glanceProject(repo: string, due: (command: ScheduledCommand) => boolean, wiring: Wiring): Promise<void> {
   const schedule = await readSchedule(repo)
   if (!schedule.commands.some(command => command.checkEvery)) return
-  const log = opts.log ?? (() => {})
-  const decided = await glance(projectDeps(repo, await readState(repo), schedule, { git: opts.git ?? nodeGitRunner(), log, now: opts.now ?? (() => new Date()), checkMs: CHECK_TIMEOUT_MS, ...(opts.stopped ? { stopped: opts.stopped } : {}) }), opts.due)
-  for (const decision of decided) if (decision.run !== undefined) log(`[scheduler] between ticks: ${decision.command}: ${decision.outcome}`)
+  const decided = await glance(projectDeps(repo, await readState(repo), schedule, CHECK_TIMEOUT_MS, wiring), due)
+  for (const decision of decided) if (decision.run !== undefined) wiring.log?.(`[scheduler] between ticks: ${decision.command}: ${decision.outcome}`)
 }
 
 /** `start`: the state on, and the scheduler's own process ticking until `stop`, unless this process is it. */
@@ -180,7 +186,8 @@ export async function startScheduler(repo: string, opts: { foreground?: boolean;
 
 /**
  * The scheduler's process: a tick now and every interval, until SIGINT or SIGTERM. The stop waits
- * for the tick in flight, which starts nothing more and records nothing once the stop is in; and it
+ * for the tick in flight, which starts nothing more and records nothing once the stop is in, and
+ * for no other: one that waited behind it does not run; and it
  * clears only this process's pid from the state, writing nothing when the state names another: a
  * dashboard's close hook stops this scheduler and its open hook starts the next one before this
  * tick is over, and that one's pid must stay.
@@ -189,8 +196,18 @@ async function loop(repo: string, everyMs: number, log: (line: string) => void):
   await updateState(repo, s => ({ ...s, pid: process.pid, startedAt: new Date().toISOString() }))
   let stopped = false
   let inflight: Promise<unknown> = Promise.resolve()
+  // One tick waits at most: a tick that outlasts the interval (a slow pull, a check at its limit)
+  // must not queue the minutes it missed behind it, which a stop would then have to wait out.
+  let queued = false
   const once = (): void => {
-    inflight = inflight.then(() => tickProject(repo, { log, stopped: () => stopped })).catch(err => log(`[scheduler] tick failed: ${err instanceof Error ? err.message : String(err)}`))
+    if (queued) return
+    queued = true
+    inflight = inflight
+      .then(() => {
+        queued = false
+        return stopped ? undefined : tickProject(repo, { log, stopped: () => stopped })
+      })
+      .catch(err => log(`[scheduler] tick failed: ${err instanceof Error ? err.message : String(err)}`))
   }
   // Between ticks, the rows that may be checked more often, each when its own interval is over;
   // one look at a time, after the tick in flight, and none queued while one waits.
@@ -208,7 +225,7 @@ async function loop(repo: string, everyMs: number, log: (line: string) => void):
     inflight = inflight
       .then(() => {
         waiting = false
-        return stopped ? undefined : glanceProject(repo, { due, log, stopped: () => stopped })
+        return stopped ? undefined : glanceProject(repo, due, { log, stopped: () => stopped })
       })
       .catch(err => log(`[scheduler] look between ticks failed: ${err instanceof Error ? err.message : String(err)}`))
   }
@@ -258,7 +275,7 @@ export async function stopScheduler(repo: string, opts: { unlessKeepAlive?: bool
 export type StatusCommand = ListedCommand & { lastRun?: LastRun }
 
 /** What `status` answers: the state, whether its process is alive, and the schedule as the project's files say it now. */
-export type Status = State & { running: boolean; schedule: StatusCommand[]; unreadable: Schedule['unreadable'] }
+export type Status = State & { running: boolean; schedule: StatusCommand[]; unreadable: Unlisted[] }
 
 /**
  * `status`: the state, whether its process is alive, and the schedule read now, each command with

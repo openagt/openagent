@@ -6,19 +6,15 @@ import { test } from 'node:test'
 import { nodeGitRunner, type GitRunner } from './git.js'
 import { readSharing, writeSharing } from './file-branch.js'
 import { clearRemoteAccount, readRemoteAccount, writeRemoteAccount, type RemoteAccount } from './remote-account.js'
+import { personalFolder, readPersonalFolder, sendPersonalFolderAs, stopSyncingPersonalFolder, syncPersonalFolder } from './personal-folder.js'
 import {
   listProjectDir,
   openProjectReader,
-  personalFolder,
   projectDataPlace,
   projectKey,
   pullProjectData,
-  readPersonalFolder,
   readProjectFile,
   removePersonalData,
-  sendPersonalFolderAs,
-  stopSyncingPersonalFolder,
-  syncPersonalFolder,
   shareProjectData,
   withProjectData,
   writeProjectDataDetached,
@@ -321,7 +317,8 @@ test('a repository that cannot be reached is said, and the folder keeps no remot
   try {
     await withProjectData(repo, 'a note', writeNote('kept\n'), { folder, git })
     const refused = await syncPersonalFolder(join(folder, 'nowhere.git'), undefined, { folder, git })
-    assert.equal(refused.ok, false)
+    // git's own reason, not the last of the lines git adds after it ("…and the repository exists.").
+    assert.match((refused as { error: string }).error, /^the repository could not be reached: '.+nowhere\.git' does not appear to be a git repository$/)
     assert.equal((await readPersonalFolder({ folder, git })).remote, undefined)
     assert.deepEqual(await syncPersonalFolder('--upload-pack=touch /tmp/x', undefined, { folder, git }), { ok: false, error: 'no repository address given' })
 

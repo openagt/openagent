@@ -23,6 +23,14 @@ already made, and lists it in its pull request; for anything else it proposes an
   pages of the skills it picked. Picked over the skills with pages coming with every run,
   which gave a new project Tickets, Queue and Logs pages it never asked for; and over every
   skill of the list, each one more description in every agent's context.
+- The dashboard carries only the skills its own pages, buttons and automations are built on:
+  the tickets and the queue with the automations that move a ticket to work (plan,
+  plan-tickets, triage, update-tickets, work-queue), orchestration, the logs, account
+  rotation, reply, the scheduler, the browser and Discord. The prompts for code reviews and
+  research, the ticket suggestions and the post-merge clean-up are not carried: their texts
+  stay in the repository's `skills` folder, where `npx skills add` takes them from, and one
+  comes back by its name in the list and its package. Picked over carrying every skill
+  written so far: a list too long to pick from, most of it nothing in the product uses.
 - Typed inside a Git repository, the command adds that repository to the projects, by
   its top folder, as "Add project" does, with the agents' records kept on this computer.
   The server adds no folder by itself: the command names the one it was typed in.
@@ -184,11 +192,11 @@ already made, and lists it in its pull request; for anything else it proposes an
   Share switch each name one of OpenAgent's accounts at the repository's host, picked where they
   are turned on (the one runs use first), and so do the Skills page's Send and the clean-up of
   Claude Code web's branches (the Share switch's account, else the one runs use). With no
-  account there, nothing is sent, and the page says where one is added. Picked over pushing with
+  account there, nothing is sent, and the page says so with the press that adds one. Picked over pushing with
   whatever login the computer has (Rom: "scary").
 - What is not backed up (the personal folder, or a shared project's data, at a git host with no
   account named) is said once: an item in the person's menu, and a notice at the top of
-  Settings › Agent data with the fix in it, adding an account there (its code shown in place),
+  Settings › Agent data with the fix in it, adding an account there (in the dialog every place uses),
   then "Back up as" and one press that sends what waited. The person picks the account even
   when there is only one. Picked over each save failing with the reason, a trip to the
   Permissions page, and the only account being used without asking (an agent's own account
@@ -322,6 +330,13 @@ already made, and lists it in its pull request; for anything else it proposes an
   can reach what its accounts can; a repository is no permission. Where an account at a git
   host is not named like an agent's own (`-agent`), the page says to make one with limited
   access. Picked over the accounts being one entry among the Settings.
+- An account at a git host is added in one dialog, the same wherever one is added: "Add" at the
+  title of the git hosts' card, the Overview's first step, an agent's accounts on the Agents
+  page, the account under the message box, "Back up as". It installs the host's tool where it
+  is missing, shows the code to type at the host, says the advice of an account of the agents'
+  own, and closes on the account once it is there, which is then the one picked where it was
+  asked for; closing it gives the login up. Picked over the code shown in each place's own
+  layout, and over a trip to the Permissions page from a place that had no account to pick.
 - The Skills page ticks nothing in a project that has no skills yet: the person picks what
   the project needs. Picked over ticking every group but the ones that need a setup of
   their own, a long list picked for them.
@@ -446,8 +461,11 @@ already made, and lists it in its pull request; for anything else it proposes an
 ## The agents
 - An agent (Rom's design) is a name, a set of skills and a set of accounts, made once on the
   Agents page and used in any project or none: the page lists them, the default first, and edits
-  each in place, its skills ticked from the list the Skills page has, plus the two every agent
-  starts with, its accounts among the ones the Permissions page knows. The session's agent is
+  each in a dialog over the page, as a new one is made, its skills ticked from the list the
+  Skills page has, plus the two every agent starts with, its accounts among the ones the
+  Permissions page knows. The dialog scrolls under its title with Save and Cancel always in
+  view, and a click beside it closes nothing: a form that long is not lost to a stray click
+  (before, the editor took the card's place in the list, which moved the page under the person). The session's agent is
   the "Agent" menu first under the box, saved like the model; its GitHub account is what the
   account control shows until the person picks another for the session. The run's record keeps
   the agent, and the session's box says it where the launcher's menu is. An agent that names

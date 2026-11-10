@@ -1,11 +1,5 @@
 import '../index/styles.css'
-import { mono } from '../index/ui'
-
-const BADGES = [
-  ['100% Open Source', '#a7c080'],
-  ['100% Free', '#dbbc7f'],
-  ['100% Local', '#7fbbb3'],
-] as const
+import { BADGES, mono } from '../index/ui'
 
 // A 1200x630 banner (the Open Graph image size), rendered for screenshotting —
 // no site chrome on purpose. Sized to stay legible at ~40% scale (X/Slack

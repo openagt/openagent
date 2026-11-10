@@ -1,13 +1,13 @@
 import { useEffect, useRef, useState, type ComponentType } from 'react'
 import { Globe, Loader2, Monitor, Server, Smartphone, Ticket, Waypoints, Wifi } from 'lucide-react'
 import { Button, Dialog, buttonVariants, cn, type ModuleMachine } from '@openagt/dashboard/module'
-import { addDevice, findComputers, setSwitch, type FoundComputer } from './devices.js'
-import { askLink, readPersonThere } from './servers.js'
-import { CodeCard, Joined, NoCodeYet, PhoneCode, RanOut, Waiting, clock, useCode, type Given, type GivenAnswer } from './codes.js'
+import { addDevice, findComputers, readPersonThere, setSwitch, type Answer, type FoundComputer, type Given } from './devices.js'
+import { askLink, installDone } from './servers.js'
+import { CodeCard, Joined, NoCodeYet, PhoneCode, RanOut, Waiting, clock, useCode } from './codes.js'
 import { ConnectServer } from './ConnectServer.js'
 import { JoinDialog } from './Join.js'
 import { Connecting } from './Pairing.js'
-import { hasDoor, isComputer } from './model.js'
+import { computerName, hasDoor, isComputer } from './model.js'
 import { Problem, hostOf } from './parts.js'
 import { WARNING } from './ThisComputer.js'
 import type { Devices } from './use-devices.js'
@@ -112,10 +112,10 @@ function Choose({ kinds, onPicked, onClose }: { kinds: typeof KINDS; onPicked: (
  * installed here or set up elsewhere, done; never another person's computer.
  */
 export const serversOf = (d: Devices): ModuleMachine[] =>
-  (d.machines?.machines ?? []).filter(machine => hasDoor(machine) && machine.owner === undefined && !d.servers.some(server => server.url === machine.url && (server.working || !server.steps.every(step => step.state === 'done'))))
+  (d.machines?.machines ?? []).filter(machine => hasDoor(machine) && machine.owner === undefined && !d.servers.some(server => server.url === machine.url && !installDone(server)))
 
 /** A code from a server's door, as the dialogs show it. */
-const codeAt = async (d: Devices, server: ModuleMachine): Promise<GivenAnswer> => {
+const codeAt = async (d: Devices, server: ModuleMachine): Promise<Answer<Given>> => {
   const asked = await d.host.machineCode(server.id)
   return asked.ok ? { ok: true, value: asked.value } : asked
 }
@@ -128,14 +128,14 @@ interface Place {
   address: string
   /** A door on Tailscale: the phone must be on it. */
   tailscale?: string
-  ask: () => Promise<GivenAnswer>
+  ask: () => Promise<Answer<Given>>
 }
 
 /** Where a phone of this person's gets a code from here: each server this computer is in at, and each server at home it installed whose door opened on Tailscale since, asked over SSH. */
 function placesOf(d: Devices): Place[] {
   const servers = serversOf(d).map((server): Place => ({ id: server.id, label: server.label, address: hostOf(server.url), ask: () => codeAt(d, server) }))
   const homes = d.items.flatMap((item): Place[] => {
-    if (item.kind !== 'server' || item.server.through === undefined || item.server.working || !item.server.steps.every(step => step.state === 'done') || item.door?.tailscale === undefined) return []
+    if (item.kind !== 'server' || item.server.through === undefined || !installDone(item.server) || item.door?.tailscale === undefined) return []
     const { address } = item.server
     return [{ id: `home:${address}`, label: item.name, address, tailscale: item.door.tailscale, ask: () => askLink(d.host, address) }]
   })
@@ -357,9 +357,6 @@ function AddComputer({ d, onClose }: { d: Devices; onClose: () => void }) {
 
 /** How often a server is asked whether the computer got in, while its code is on the page: one call to the server's door. */
 const JOIN_POLL_MS = 3_000
-
-/** A computer's name as a door lists the OpenAgent on it. */
-const computerName = (listed: string): string => listed.replace(/^OpenAgent on /, '')
 
 /**
  * Another computer of this person's, somewhere else, gets in at their server with a code typed

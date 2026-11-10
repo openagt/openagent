@@ -1,10 +1,10 @@
 import { useEffect, useState } from 'react'
 import { ChevronRight, CircleCheck, House, Laptop, Loader2, Server, UserPlus, UserRound } from 'lucide-react'
 import { Button, Checkbox, ConfirmDialog, Dialog, Switch, formatDateTime, formatRelative, usePolled, type ModuleAccountsAgent, type ModuleComputersThrough, type ModuleHost, type ModuleMachine, type ModuleMachineAccount } from '@openagt/dashboard/module'
-import { idsOf, nameOwner, removeDevice, removePerson, setPeople, setWho, askLink, type Answer, type DeviceRow, type ServerRow } from './servers.js'
+import { idsOf, myName, type Answer, type DeviceRow } from './devices.js'
+import { installDone, installFailed, nameOwner, removeDevice, removePerson, setPeople, setWho, askLink, type ServerRow } from './servers.js'
 import { labelOf, type ServerItem } from './model.js'
 import { Invite } from './codes.js'
-import { myName } from './devices.js'
 import { Head, Part, Problem, Said, State, StepLine, SwitchLine, Tabs, hostOf, olderThan } from './parts.js'
 import type { Devices } from './use-devices.js'
 
@@ -41,11 +41,11 @@ export function ServerPage({ d, item, onBack, invite = false }: { d: Devices; it
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [codeOn])
 
-  const failed = !server.working && server.steps.some(step => step.state === 'failed')
+  const failed = installFailed(server)
   const behind = machine?.version !== undefined && d.machines !== undefined && olderThan(machine.version, d.machines.version)
   // A step this computer's OpenAgent brings and the server's install never ran: the same press as an update runs it.
   const unfinished = !server.working && !failed && server.steps.some(step => step.state === 'waiting')
-  const done = !server.working && server.steps.every(step => step.state === 'done')
+  const done = installDone(server)
   const reason = d.notAdded[server.address]
   const doing = machine ? 'Updating' : 'Installing'
   const current = server.steps.findIndex(step => step.state !== 'done')
@@ -163,7 +163,7 @@ function Overview({ d, item }: { d: Devices; item: ServerItem }) {
   const { host, busy } = d
   const { server, machine } = item
   const [opened, setOpened] = useState(false)
-  const done = !server.working && server.steps.every(step => step.state === 'done')
+  const done = installDone(server)
   const reason = d.notAdded[server.address]
   const sendable = machine ? 'done' : reason !== undefined ? 'failed' : server.adding ? 'running' : 'waiting'
   // The steps fold into one line once there is nothing left to see in them.

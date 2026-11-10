@@ -190,8 +190,8 @@ export const mintClaude: Mint = ({ signal, timeoutMs = MINT_TIMEOUT_MS, command 
     let lentTo: number | undefined
     let linked = false
     let ended = false
-    /** Where in what is shown the words about the last code pasted start; none while no code waits for an answer. */
-    let answerFrom: number | undefined
+    /** What Claude Code showed since the last code pasted was entered, its reply to the code; none while no code waits for one. */
+    let reply: string | undefined
     let enter: NodeJS.Timeout | undefined
     const end = (answer: { ok: true; login: string } | Failed): void => {
       if (ended) return
@@ -216,17 +216,12 @@ export const mintClaude: Mint = ({ signal, timeoutMs = MINT_TIMEOUT_MS, command 
     const timer = setTimeout(() => end({ ok: false, error: `No yes came from the browser in ${Math.round(timeoutMs / 60_000)} minutes.` }), timeoutMs)
     signal?.addEventListener('abort', stopped, { once: true })
     if (signal?.aborted) stopped()
-    /** How much was ever shown: what is kept of it is only its end. */
-    let shownEver = 0
-    let answer = ''
     const read = (said: string): void => {
       shown = (shown + said).slice(-SHOWN)
-      shownEver += said.length
-      if (answerFrom !== undefined) {
-        answer = (answer + said).slice(-SHOWN)
-        if (REFUSED.test(words(answer))) {
-          answerFrom = undefined
-          answer = ''
+      if (reply !== undefined) {
+        reply = (reply + said).slice(-SHOWN)
+        if (REFUSED.test(words(reply))) {
+          reply = undefined
           child.stdin.write('\r')
           onRefused?.()
         }
@@ -241,8 +236,7 @@ export const mintClaude: Mint = ({ signal, timeoutMs = MINT_TIMEOUT_MS, command 
           if (ended || !isSignInCode(word)) return false
           child.stdin.write(word)
           enter = setTimeout(() => {
-            answerFrom = shownEver
-            answer = ''
+            reply = ''
             child.stdin.write('\r')
           }, ENTER_AFTER_MS)
           return true

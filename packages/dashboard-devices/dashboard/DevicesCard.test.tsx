@@ -1,6 +1,7 @@
 import { afterEach, expect, test, vi } from 'vitest'
 import { cleanup, fireEvent, render, screen, within } from '@testing-library/react'
 import { ModuleHostContext, forgetRemembered, type ModuleHost, type ModuleMachine, type ModuleMachines } from '@openagt/dashboard/module'
+import { fakeHost, type FakeHost } from '@openagt/dashboard/module/testing'
 import { DevicesCard } from './DevicesCard.js'
 
 // The Overview's Devices card: this computer and its saved machines, each with whether it answers
@@ -11,17 +12,11 @@ const GB = 1024 ** 3
 const NOW = new Date()
 
 /** A host with these machines saved and this door, whose every other service is not here. */
-function hostWith(machines: ModuleMachines, devices: unknown[] = []): ModuleHost {
-  const none = vi.fn(async () => ({ ok: false as const, error: 'not here' }))
-  return {
-    package: '@openagt/dashboard-devices',
-    machines: vi.fn(async () => machines),
-    runComputerCommand: vi.fn(async (args: string[]) => (args[0] === 'status' ? { ok: true as const, output: { on: true, listening: true, devices, persons: [] } } : { ok: false as const, error: 'not here' })),
-    openSettings: vi.fn(),
-    runCommand: none,
-    act: none,
-    runComputerCommandOn: none,
-  } as unknown as ModuleHost
+function hostWith(machines: ModuleMachines, devices: unknown[] = []): FakeHost {
+  return fakeHost('@openagt/dashboard-devices', {
+    machines: async () => machines,
+    runComputerCommand: async (args: string[]) => (args[0] === 'status' ? { ok: true as const, output: { on: true, listening: true, devices, persons: [] } } : { ok: false as const, error: 'not here' }),
+  })
 }
 
 const show = (host: ModuleHost) =>

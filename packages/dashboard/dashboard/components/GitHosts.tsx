@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Check, ChevronDown, GitBranch, Info, Loader2, MoreHorizontal, Plus } from 'lucide-react'
+import { Check, ChevronDown, GitBranch, Loader2, MoreHorizontal, Plus } from 'lucide-react'
 import type { GitHostHome } from '../../src/index.js'
 import { sendForgetGitHostAccount, sendUseGitHostAccount, type GitHostRow, type GitHostsView } from '../rpc/logins.js'
 import { onMachineGitHosts } from '../rpc/machines.js'
@@ -7,7 +7,8 @@ import { readAhead, usePolled } from '../lib/use-async.js'
 import { cn } from '../lib/utils.js'
 import { Button } from './ui/button.js'
 import { Card, CardContent, CardHeader, CardTitle } from './ui/card.js'
-import { DeviceCode, HostFix, PackageLogo, hostWords, useGitHosts, useHostLogin } from './Logins.js'
+import { HostFix, useAddGitAccount } from './AddGitAccount.js'
+import { PackageLogo, hostWords, useGitHosts } from './Logins.js'
 import { AccountWhere, useServers } from './ServerLogins.js'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuGroup, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from './ui/dropdown-menu.js'
 import { Tooltip, TooltipContent, TooltipTrigger } from './ui/tooltip.js'
@@ -24,15 +25,46 @@ import { RowOff, rowButtonClass } from './ui/row-item.js'
 /** The git hosts' card: a section for each host, by its package's name and logo, with its accounts. */
 export function GitHostsCard() {
   const { view, reload } = useGitHosts()
+  const adding = useAddGitAccount(reload)
+  // The hosts an account can be added at: the ones a package answers for. With no account at any, the
+  // press is the one in the host's own section, where what is missing is said: not a second one here.
+  const withPackage = (view?.hosts ?? []).filter(row => row.provider)
+  const hosts = withPackage.some(row => row.provider!.installed && row.provider!.accounts.length > 0) ? withPackage : []
   return (
     <Card>
       <CardHeader className="gap-1">
-        <CardTitle className="text-base">
-          <span className="inline-flex items-center gap-2">
-            <GitBranch className="h-4 w-4 text-muted-foreground" aria-hidden />
-            Git host accounts
-          </span>
-        </CardTitle>
+        <div className="flex items-center justify-between gap-2">
+          <CardTitle className="text-base">
+            <span className="inline-flex items-center gap-2">
+              <GitBranch className="h-4 w-4 text-muted-foreground" aria-hidden />
+              Git host accounts
+            </span>
+          </CardTitle>
+          {/* Another account, at the card's title as the coding agents' card has it: the one host's dialog at once, a menu of them with more. */}
+          {hosts.length === 1 && (
+            <Button size="sm" variant="outline" aria-label={`Add a ${hosts[0]!.provider!.name} account`} onClick={() => adding.add(hosts[0]!.host)}>
+              <Plus className="size-3.5" aria-hidden />
+              Add
+            </Button>
+          )}
+          {hosts.length > 1 && (
+            <DropdownMenu>
+              <DropdownMenuTrigger render={<Button size="sm" variant="outline" aria-label="Add a git host account" />}>
+                <Plus className="size-3.5" aria-hidden />
+                Add
+                <ChevronDown className="size-3 opacity-70" aria-hidden />
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="min-w-[10rem]">
+                {hosts.map(row => (
+                  <DropdownMenuItem key={row.host} onClick={() => adding.add(row.host)}>
+                    <PackageLogo svg={row.provider!.logo} className="size-3.5" />
+                    {row.provider!.name}
+                  </DropdownMenuItem>
+                ))}
+              </DropdownMenuContent>
+            </DropdownMenu>
+          )}
+        </div>
         <p className="text-sm text-muted-foreground">Runs push with the one in use at each host, never your own login.</p>
       </CardHeader>
       <CardContent className="flex flex-col gap-4">
@@ -42,6 +74,7 @@ export function GitHostsCard() {
           (view?.hosts ?? []).map(row => (row.provider ? <HostAccounts key={row.host} row={row} onChanged={reload} /> : <NoPackage key={row.host} row={row} />))
         )}
       </CardContent>
+      {adding.dialog}
     </Card>
   )
 }
@@ -62,7 +95,6 @@ function NoPackage({ row }: { row: GitHostRow }) {
 function HostAccounts({ row, onChanged }: { row: GitHostRow; onChanged: () => Promise<void> }) {
   const p = row.provider!
   const [error, setError] = useState<string | undefined>()
-  const login = useHostLogin(onChanged)
   const servers = useServers()
   // The account whose removal waits for the person's yes, and the press under way: its words say so until the answer.
   const [removing, setRemoving] = useState<string | undefined>()
@@ -80,7 +112,6 @@ function HostAccounts({ row, onChanged }: { row: GitHostRow; onChanged: () => Pr
       setPending(undefined)
     }
   }
-  const shownError = error ?? login.error
   const empty = !p.installed || p.accounts.length === 0
   return (
     <section aria-label={p.name} className="space-y-2">
@@ -88,24 +119,6 @@ function HostAccounts({ row, onChanged }: { row: GitHostRow; onChanged: () => Pr
         <PackageLogo svg={p.logo} />
         <h3 className="text-sm font-medium">{p.name}</h3>
         <span className="min-w-0 flex-1 truncate text-xs text-muted-foreground">{usedBy(row)}</span>
-        {/* Another account, at the host's line: the empty host has its own press below. */}
-        {!empty && !p.loggingIn && (
-          <div className="flex shrink-0 items-center gap-1">
-            <Button size="xs" variant="ghost" className="font-normal" disabled={login.busy} title={`Adds an account to OpenAgent with a code you type at ${p.name}. Your own logins stay as they are.`} onClick={() => void login.start(row.host)}>
-              {login.busy ? <Loader2 className="size-3.5 animate-spin" aria-hidden /> : <Plus className="size-3.5" aria-hidden />}
-              Add account
-            </Button>
-            {/* Rom's advice, where an account is added: an agent's own account limits what a run can reach. Said once it matters, quietly. */}
-            {p.accounts.some(account => !account.login.toLowerCase().endsWith('-agent')) && (
-              <Tooltip>
-                <TooltipTrigger render={<button type="button" aria-label="Why an account of its own for your agents" className="text-muted-foreground hover:text-foreground" />}>
-                  <Info className="size-3.5" aria-hidden />
-                </TooltipTrigger>
-                <TooltipContent className="max-w-xs">An account of its own for your agents, with access to only what they need, is safer: name it like you-agent.</TooltipContent>
-              </Tooltip>
-            )}
-          </div>
-        )}
       </header>
       {p.accounts.length > 0 && (
         <ul className="space-y-2">
@@ -167,7 +180,7 @@ function HostAccounts({ row, onChanged }: { row: GitHostRow; onChanged: () => Pr
           })}
         </ul>
       )}
-      {empty ? (
+      {empty && (
         // What is missing on the left, its press at the row's end, as the Overview's first steps have them (a phone stacks them).
         <div className="flex items-center gap-3 pt-1 max-sm:flex-col max-sm:items-start">
           <p className="min-w-0 flex-1 text-xs text-muted-foreground">{hostWords(row)}</p>
@@ -175,12 +188,10 @@ function HostAccounts({ row, onChanged }: { row: GitHostRow; onChanged: () => Pr
             <HostFix row={row} onChanged={onChanged} />
           </div>
         </div>
-      ) : (
-        p.loggingIn && <DeviceCode code={p.loggingIn.code} url={p.loggingIn.url} host={row.host} onChanged={onChanged} />
       )}
-      {shownError !== undefined && (
+      {error !== undefined && (
         <p role="alert" className="text-xs text-danger">
-          {shownError}
+          {error}
         </p>
       )}
     </section>
@@ -206,7 +217,7 @@ export function readMachineGitHostsAhead(machineId: string): void {
 }
 
 /** A git host's accounts on the computer a run goes to: this computer's, or a saved machine's, asked there. */
-export function useGitHostsOn(machineId: string | undefined): GitHostsView | undefined {
+function useGitHostsOn(machineId: string | undefined): GitHostsView | undefined {
   const own = useGitHosts()
   const theirs = usePolled<GitHostsView | null | undefined>(machineId !== undefined ? () => onMachineGitHosts(machineId) : null, undefined, 30_000, [machineId], machineId !== undefined ? { remember: machineGitHostsKey(machineId) } : undefined)
   return machineId === undefined ? own.view : (theirs.value ?? undefined)
@@ -231,22 +242,29 @@ export function useSessionAccount(address: string | undefined, machineId: string
  * makes, stays what it is; or adds one. A host with no account logged in says so, and its press
  * goes where one is. Nothing for a project with no remote, or a host no package answers for.
  */
-export function GitAccountMenu({ address, machineId, on, busy, picked, onPick, onAdd }: { address: string | undefined; machineId: string | undefined; on: string | undefined; busy: boolean; picked: string | undefined; onPick: (login: string) => void; onAdd: () => void }) {
+export function GitAccountMenu({ address, machineId, on, busy, picked, onPick, onAddThere }: { address: string | undefined; machineId: string | undefined; on: string | undefined; busy: boolean; picked: string | undefined; onPick: (login: string) => void; /** Where another computer's accounts are added: its own page. */ onAddThere: () => void }) {
   const view = useGitHostsOn(machineId)
   const account = useSessionAccount(address, machineId, picked)
+  // One added from here is the one this session works as.
+  const adding = useAddGitAccount(login => onPick(login))
   const host = address?.split('/')[0]
   const row = host === undefined ? undefined : view?.hosts.find(one => one.host === host)
   const p = row?.provider
   if (!row || !p) return null
+  const onAdd = machineId === undefined ? () => adding.add(row.host) : onAddThere
   if (account === undefined)
     return (
-      <button type="button" disabled={busy} onClick={onAdd} className={cn(rowButtonClass, 'text-warning')}>
-        <PackageLogo svg={p.logo} className="size-3.5" />
-        <span className="truncate">{p.installed ? `Add a ${p.name} account` : `${p.tool} not installed`}</span>
-      </button>
+      <>
+        <button type="button" disabled={busy} onClick={onAdd} className={cn(rowButtonClass, 'text-warning')}>
+          <PackageLogo svg={p.logo} className="size-3.5" />
+          <span className="truncate">{p.installed ? `Add a ${p.name} account` : `${p.tool} not installed`}</span>
+        </button>
+        {adding.dialog}
+      </>
     )
   const said = `This session pushes and opens pull requests as @${account}${on !== undefined ? ` on ${on}` : ''}`
   return (
+    <>
     <DropdownMenu>
       <Tooltip>
         <TooltipTrigger render={<DropdownMenuTrigger type="button" disabled={busy} aria-label={`${p.name} account: @${account}`} className={rowButtonClass} />}>
@@ -274,6 +292,8 @@ export function GitAccountMenu({ address, machineId, on, busy, picked, onPick, o
         </DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>
+    {adding.dialog}
+    </>
   )
 }
 

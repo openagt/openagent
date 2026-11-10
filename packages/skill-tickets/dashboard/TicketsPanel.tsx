@@ -25,11 +25,9 @@ export function TicketRow({
   selected,
   onToggleSelect,
   onOpen,
-  onStartWork,
-  onConfigureWork,
+  onStart,
+  onConfigure,
   onOpenPlan,
-  onStartPlan,
-  onConfigurePlan,
   onTopicClick,
   onClaimedClick,
   onOpenAgent,
@@ -45,14 +43,13 @@ export function TicketRow({
   selected?: boolean | undefined
   onToggleSelect?: (() => void) | undefined
   onOpen: () => void
-  /** The start column: spin up an agent implementing this one ticket. */
-  onStartWork: () => void
-  /** Its chevron (#1507): open this ticket's project launcher, prefilled with the same ask. */
-  onConfigureWork: () => void
+  /** Spin up an agent with one of the row's asks — the start column's (implement this one
+   *  ticket) or the plan column's (write its plan) — in the ticket's project; `failure` is what
+   *  to say when it cannot start and says no more. */
+  onStart: (prompt: string, failure: string) => void
+  /** A start button's chevron (#1507): the ticket's project launcher, prefilled with that button's ask. */
+  onConfigure: (prompt: string) => void
   onOpenPlan?: (() => void) | undefined
-  onStartPlan: () => void
-  /** The plan column's chevron (#1507): the launcher, prefilled with the plan ask. */
-  onConfigurePlan: () => void
   /** Click-to-filter (#1144): a topic badge adds its topic to the page's filter. Without a
    *  handler the topics render as plain badges. */
   onTopicClick?: ((topic: string) => void) | undefined
@@ -66,6 +63,8 @@ export function TicketRow({
   const holder = ticket.lockedByAgent?.name ?? ticket.lockedBy
   // In review or waiting: no agent is started on it nor on its plan, the tickets skill's own rule.
   const held = heldBack(ticket)
+  const workPrompt = workOnTicketPrompt(ticket.file)
+  const planPrompt = planTicketPrompt(ticket.file)
   return (
     // On a phone the title is the row's first line, across the whole width, and every control and
     // fact is under it. A class that holds on a phone only is never laid over a plain one
@@ -96,9 +95,9 @@ export function TicketRow({
             menuAriaLabel={`Other ways to work on ${ticket.title}`}
             tooltip="Spin up an agent working on this ticket"
             busy={busy}
-            onStart={onStartWork}
-            onConfigure={onConfigureWork}
-            prompt={workOnTicketPrompt(ticket.file)}
+            onStart={() => onStart(workPrompt, 'The work agent could not be started.')}
+            onConfigure={() => onConfigure(workPrompt)}
+            prompt={workPrompt}
             configureDescription="Opens the launcher with this ticket's prompt, so you can set the model and where it runs."
             // Quiet like the plan column's create button: an available action, not a state.
             className="text-muted-foreground/50 hover:text-foreground"
@@ -245,9 +244,9 @@ export function TicketRow({
             menuAriaLabel={`Other ways to plan ${ticket.title}`}
             tooltip="Plan this ticket — starts an agent to write its plan"
             busy={busy}
-            onStart={onStartPlan}
-            onConfigure={onConfigurePlan}
-            prompt={planTicketPrompt(ticket.file)}
+            onStart={() => onStart(planPrompt, 'The planning agent could not be started.')}
+            onConfigure={() => onConfigure(planPrompt)}
+            prompt={planPrompt}
             configureDescription="Opens the launcher with the plan prompt, so you can set the model and where it runs."
             // Light grey, lighter than the row's "4d ago" date, against the view
             // button's bold blue: a plan yet to be written is the quiet state, an
@@ -336,7 +335,7 @@ export function TicketsPanel({
   // Every "Configure first, then run" on the panel lands in the same place: this project's own
   // launcher, with the button's prompt drafted in, where the model, the run target and the prompt
   // itself can all be changed.
-  const configure = (prompt: string) => () => host.configureRun(projectId, prompt)
+  const configure = (prompt: string) => host.configureRun(projectId, prompt)
 
   // The dashboard starts the run with the person's own picks and lands on it, so its progress
   // is watchable instead of the panel sitting on stale rows until files land.
@@ -345,11 +344,6 @@ export function TicketsPanel({
   }
 
   const updateTickets = () => startSession(UPDATE_TICKETS_PROMPT, 'The update could not be started.')
-  // A plan is written per-ticket for a human to read: the reader reviews the result through the
-  // plan column's link.
-  const startPlan = (file: string) => startSession(planTicketPrompt(file), 'The planning agent could not be started.')
-  // The start column (#855's play button, on the backlog): one agent on this one ticket.
-  const startWork = (file: string) => startSession(workOnTicketPrompt(file), 'The work agent could not be started.')
 
   if (tickets.length === 0 && hiddenByFilter > 0) {
     // Filtered to nothing, not genuinely empty (#1144/#1230): offering an import here would ask
@@ -376,7 +370,7 @@ export function TicketsPanel({
           plans from.
         </p>
         {error && <p className="text-xs text-danger">{error}</p>}
-        <UpdateTicketsButton busy={busy} onStart={() => void updateTickets()} onConfigure={configure(UPDATE_TICKETS_PROMPT)} />
+        <UpdateTicketsButton busy={busy} onStart={() => void updateTickets()} onConfigure={() => configure(UPDATE_TICKETS_PROMPT)} />
       </div>
     )
   }
@@ -397,7 +391,7 @@ export function TicketsPanel({
         <UpdateTicketsButton
           busy={busy}
           onStart={() => void updateTickets()}
-          onConfigure={configure(UPDATE_TICKETS_PROMPT)}
+          onConfigure={() => configure(UPDATE_TICKETS_PROMPT)}
           lastImportedAt={meta.lastImportedAt}
           className="h-6 gap-1 px-2 text-xs"
         />
@@ -411,11 +405,9 @@ export function TicketsPanel({
             selected={isSelected?.(ticket.file) ?? false}
             onToggleSelect={onToggleSelect ? () => onToggleSelect(ticket.file) : undefined}
             onOpen={() => onOpen(ticket.file)}
-            onStartWork={() => void startWork(ticket.file)}
-            onConfigureWork={configure(workOnTicketPrompt(ticket.file))}
+            onStart={(prompt, failure) => void startSession(prompt, failure)}
+            onConfigure={configure}
             onOpenPlan={onOpenPlan ? () => onOpenPlan(ticket.file) : undefined}
-            onStartPlan={() => void startPlan(ticket.file)}
-            onConfigurePlan={configure(planTicketPrompt(ticket.file))}
             onTopicClick={onTopicClick}
             onClaimedClick={onClaimedClick}
             onOpenAgent={onOpenAgent}

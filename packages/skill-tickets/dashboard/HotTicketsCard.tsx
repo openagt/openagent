@@ -1,7 +1,7 @@
 import { useState, type ReactNode } from 'react'
 import { ArrowUp, Bot, CirclePause, Clock, Flame, WifiOff, type LucideIcon } from 'lucide-react'
 import { Button, Card, CardContent, CardHeader, CardTitleLink, LinkActions, cn, formatDateTime, usePolled, useModuleHost, type ModuleCardProps, type ModuleProject } from '@openagt/dashboard/module'
-import { heldBack, holderAgent, hotLane, ticketLink } from '../src/module.js'
+import { claimState, heldBack, holderAgent, hotLane, ticketLink, withHolder, type ClaimState, type HotLane } from '../src/module.js'
 import { listTickets } from './lib/list.js'
 import type { WorkspaceTicket } from './lib/types.js'
 import { releaseClaim } from './lib/release.js'
@@ -13,13 +13,8 @@ import { releaseClaim } from './lib/release.js'
 // the installed modules offer on a ticket as a link ("Add to queue" where the project has a queue
 // package), so the card names no queue and still leads to one.
 
-/**
- * The card's lanes. A claim is told apart by its run: one still at it (working, or waiting on the
- * person's answer) is being worked on; one whose run stopped, failed or ended, or is not among the
- * project's runs, holds the ticket for nobody, and nothing lifts it but a person. One whose
- * computer does not answer is neither: how its run stands is not known.
- */
-type CardLane = 'working' | 'offline' | 'stale' | 'high-priority' | 'waiting'
+/** The card's lanes: a claim, told apart by how its run stands ({@link claimState}), and the card's other two. */
+type CardLane = ClaimState | Exclude<HotLane, 'claimed'>
 
 /** One ticket on the card, tagged with its project and lane, and the run holding it when one does. */
 interface HotTicket {
@@ -29,9 +24,6 @@ interface HotTicket {
   /** The run holding it: how it stands, and, while its computer does not answer, which computer and when it was last seen. */
   holder?: { id: string; status: string; machine?: string; seenAt?: string }
 }
-
-/** Whether a holder's run still holds its claim for a reason: at work, or stopped on a question. */
-const holds = (status: string): boolean => status === 'running' || status === 'waiting'
 
 /** What one read of every project answered: the hot tickets, and the projects whose command failed. */
 interface Read {
@@ -70,11 +62,11 @@ export function HotTicketsCard({ projects }: ModuleCardProps) {
             const hotIn = hotLane(ticket)
             if (!hotIn) continue
             const agent = holderAgent(agents, ticket.lockedBy)
-            const lane: CardLane = hotIn !== 'claimed' ? hotIn : agent && holds(agent.status) ? 'working' : agent?.status === 'unknown' ? 'offline' : 'stale'
+            const lane: CardLane = hotIn === 'claimed' ? claimState(agent?.status) : hotIn
             hot.push({
               project,
               lane,
-              ticket: agent ? { ...ticket, lockedByAgent: { id: agent.id, ...(agent.name ? { name: agent.name } : {}) } } : ticket,
+              ticket: withHolder(ticket, agent),
               ...(agent ? { holder: { id: agent.id, status: agent.status, ...(agent.machine ? { machine: agent.machine } : {}), ...(agent.seenAt ? { seenAt: agent.seenAt } : {}) } } : {}),
             })
           }

@@ -16,7 +16,7 @@ import { CopyButton } from './ui/copy-button.js'
  * because a secret sitting permanently on screen is a secret in every screen recording and
  * screenshot, and this dashboard is demoed.
  */
-export function BridgeSettings({ enabled, onChange }: { enabled: boolean; onChange: (next: boolean) => void }) {
+export function BridgeSettings() {
   const [token, setToken] = useState<string | null>(null)
   const [shown, setShown] = useState(false)
   const [blocked, setBlocked] = useState<{ got: string; expected: string } | null>(null)
@@ -30,11 +30,6 @@ export function BridgeSettings({ enabled, onChange }: { enabled: boolean; onChan
   // store's refused-contact slot is the only trace, and without this line that failure is
   // silent everywhere.
   useEffect(() => {
-    if (!enabled) {
-      setBlocked(null)
-      setRefused(false)
-      return
-    }
     let live = true
     const read = () =>
       void onBridgeStatus()
@@ -50,14 +45,9 @@ export function BridgeSettings({ enabled, onChange }: { enabled: boolean; onChan
       live = false
       clearInterval(timer)
     }
-  }, [enabled])
+  }, [])
 
   useEffect(() => {
-    if (!enabled) {
-      setToken(null)
-      setShown(false)
-      return
-    }
     let live = true
     void onBridgeToken()
       .then(next => {
@@ -67,9 +57,8 @@ export function BridgeSettings({ enabled, onChange }: { enabled: boolean; onChan
     return () => {
       live = false
     }
-  }, [enabled])
+  }, [])
 
-  if (!enabled) return null
   return (
     <div className="mt-2 space-y-2 rounded-md border border-border bg-muted/30 p-3 text-xs">
       <p className="text-muted-foreground">

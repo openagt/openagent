@@ -36,7 +36,7 @@ const onMachineLogins = vi.hoisted(() => vi.fn())
 vi.mock('../rpc/machines.js', () => ({ onMachineStartCheck, onMachineLogins }))
 // The agents as read, and the menu as a press that picks the second one.
 const agentsList = vi.hoisted(() => ({ agents: [{ id: 'default', name: 'Default', skills: ['ask', 'github'], accounts: {}, projectSkills: true }, { id: 'reviewer', name: 'Reviewer', skills: ['ask'], accounts: { github: 'octo-agent' }, projectSkills: false }] }))
-vi.mock('./AgentsPage.js', () => ({ useAgents: () => ({ view: agentsList, reload: async () => {} }) }))
+vi.mock('./AgentsPage.js', () => ({ useAgentsList: () => ({ view: agentsList, reload: async () => {} }) }))
 vi.mock('./AgentMenu.js', () => ({
   AgentMenu: ({ picked, onPick }: { picked: string | undefined; onPick: (id: string) => void }) => (
     <button type="button" onClick={() => onPick('reviewer')}>{`agent:${picked ?? ''}`}</button>

@@ -1,11 +1,11 @@
 import { spawn } from 'node:child_process'
-import { chmodSync, mkdirSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs'
-import { homedir } from 'node:os'
-import { dirname, join } from 'node:path'
+import { readFileSync, rmSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { isSignInCode } from '@openagt/agent-driver-claude'
 import type { AccountsAgent } from './accounts.js'
-import { nameTaken, signIn, type LoginWiring, type SignInSaid } from './login.js'
+import { configFile, writePrivate } from './files.js'
+import { nameTaken, signIn, type SignInSaid } from './login.js'
+import type { LoginWiring } from './wiring.js'
 
 // Adding an account takes as long as the person takes to sign in, and on a computer with no browser
 // it needs them twice: to open a page on another device, and to bring its code back. A command ends
@@ -63,8 +63,7 @@ const NOT_WAITING = 'No login waits for a code: start it again.'
 
 /** Where an agent's sign-in says how it goes: `$XDG_CONFIG_HOME/openagent-<agent>-adding.json`, else dotted under the home. */
 export function addingPath(agent: AccountsAgent, env: NodeJS.ProcessEnv = process.env): string {
-  if (env['XDG_CONFIG_HOME']) return join(env['XDG_CONFIG_HOME'], `openagent-${agent}-adding.json`)
-  return join(env['HOME'] ?? homedir(), `.openagent-${agent}-adding.json`)
+  return configFile(`openagent-${agent}-adding.json`, env)
 }
 
 /** Start the sign-in's own process: this package's command, on its own, holding on to nothing of the one that started it. */
@@ -80,14 +79,6 @@ function readFile(path: string): AddingFile | undefined {
   } catch {
     return undefined
   }
-}
-
-function writePrivate(path: string, text: string): void {
-  mkdirSync(dirname(path), { recursive: true })
-  const next = `${path}.${process.pid}.new`
-  writeFileSync(next, text, { mode: 0o600 })
-  chmodSync(next, 0o600)
-  renameSync(next, path)
 }
 
 const writeFile = (path: string, file: AddingFile): void => writePrivate(path, `${JSON.stringify(file)}\n`)

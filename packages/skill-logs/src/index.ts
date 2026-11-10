@@ -22,5 +22,5 @@ export {
   type AnyDiaryLine,
 } from './run.js'
 export { listRuns, findRun, runFiles, readDiary, writeRun, patchRun, deleteRun, runsPath, logsFunnel, resolveLogsDeps, type LogsDeps, type LogsFiles, type LogsFunnel } from './store.js'
-export { runCli, USAGE, DEFAULT_LIMIT, type CliIo, type CliRefusal } from './cli.js'
+export { runCli, USAGE, DEFAULT_LIMIT, type CliIo } from './cli.js'
 export { CLI_BIN_DIR, SKILL_DIR, SKILL_NAME } from './bin-dir.js'

@@ -13,13 +13,7 @@ describe('AgentErrorCount', () => {
     expect(container.textContent).toBe('')
   })
 
-  test('one error reads singular, with its headline where the row has room', () => {
-    render(<AgentErrorCount events={[{ kind: 'error', headline: 'gh is not logged in' }]} headline />)
-    expect(screen.getByText('1 error')).toBeTruthy()
-    expect(screen.getByText(/gh is not logged in/)).toBeTruthy()
-  })
-
-  test('a tight row shows the count alone — a clipped headline is worse than none', () => {
+  test('one error reads singular, the count alone: its headline is the hover', () => {
     render(<AgentErrorCount events={[{ kind: 'error', headline: 'gh is not logged in' }]} />)
     expect(screen.getByText('1 error')).toBeTruthy()
     expect(screen.queryByText(/gh is not logged in/)).toBeNull()
@@ -39,14 +33,12 @@ describe('AgentErrorCount', () => {
     expect(screen.getByText('1 error')).toBeTruthy()
   })
 
-  test('several errors read plural, and the LATEST headline is the one shown', () => {
+  test('several errors read plural', () => {
     const events: OpenAgentEvent[] = [
       { kind: 'error', headline: 'first thing broke' },
       { kind: 'error', headline: 'second thing broke' },
     ]
-    render(<AgentErrorCount events={events} headline />)
+    render(<AgentErrorCount events={events} />)
     expect(screen.getByText('2 errors')).toBeTruthy()
-    expect(screen.getByText(/second thing broke/)).toBeTruthy()
-    expect(screen.queryByText(/first thing broke/)).toBeNull()
   })
 })

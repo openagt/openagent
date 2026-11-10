@@ -2,6 +2,7 @@ import { appendFile, mkdir, readFile, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { logCardFile, logDiaryFile } from '@openagt/agent-driver'
 import { parseDiary, parseRunCard, type AnyDiaryLine, type RunCard, type RunStatus } from '@openagt/skill-logs'
+import { DASHBOARD_DIR } from './names.js'
 import { runnerMark } from './records.js'
 
 /**
@@ -11,14 +12,12 @@ import { runnerMark } from './records.js'
  * reads them to find a run whose process died, and closes them from outside.
  */
 
-/** The dashboard's directory in a checkout, where the two files live. */
-export const LIVE_DIR = '.openagent'
-
 /** The inbox's file name under the live directory: what reaches the agent from outside. */
 export const INBOX_FILE = 'inbox.jsonl'
 
+/** The dashboard's directory in a checkout, where the two files live: the one it has in the project itself. */
 export function liveDir(checkout: string): string {
-  return join(checkout, LIVE_DIR)
+  return join(checkout, DASHBOARD_DIR)
 }
 
 export function inboxPath(checkout: string): string {

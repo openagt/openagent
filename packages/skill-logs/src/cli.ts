@@ -1,8 +1,8 @@
-import { parseArgs } from 'node:util'
-import { runsRootOf, gitReason, nodeGitRunner, openProjectReader, type ProjectReader, type GitRunner } from '@openagt/agent-data'
+import { GIT_FAILED, Refused, UsageError, inRepo, nodeBranchFileFs, nodeGitRunner, openProjectReader, parseCommandArgs, runCommandLine, runsRootOf, type Command, type GitRunner } from '@openagt/agent-data'
 import { RUNS_DIR } from './names.js'
-import { agentLines, isRunId, newestFirst, parseDiary, parseRunCard, publicCard, runCardFile, runDiaryFile, runIdOfFile, type ListedRun, type RunCard, type RunPatch } from './run.js'
-import { deleteRun, findRun, listRuns, patchRun, readDiary, resolveLogsDeps, runFiles, runsPath } from './store.js'
+import { agentLines, isRunId, publicCard, type ListedRun, type RunCard, type RunPatch } from './run.js'
+import { deleteRun, patchRun, runFiles, runsPath } from './store.js'
+import { findEntry, readCard, readRunDiary, runEntries, type RecordsReader } from './records.js'
 import { peopleOf, readCommitLines } from './people.js'
 import { skillUseOf } from './skill-use.js'
 
@@ -17,10 +17,8 @@ import { skillUseOf } from './skill-use.js'
  * key, every diary line), and `delete` / `patch` are its Delete and Open-PR buttons, written
  * through that directory like the writer's own records.
  *
- * The contract: JSON on stdout, one line for a person on stderr, and the exit code says how it
- * went — 0 for a result, 1 for a refusal or a git failure, 2 for a command that could not be
- * read. A refusal is a rule saying no (there is no such run); it is reported on stdout as
- * `{ ok: false, reason }` so a caller parsing the output learns why, and on stderr so a person does.
+ * It answers as every OpenAgent command does (`runCommandLine`); a refusal here is a rule saying
+ * no: there is no such run.
  *
  * Reads of a shared project go to origin's copy of its branch, fetched once, so a command sees
  * every run every machine pushed; a project kept on this machine reads its directory in the
@@ -64,72 +62,26 @@ export interface CliIo {
   stderr: (line: string) => void
 }
 
-/** A refusal: a rule said no, and the caller learns which. */
-export type CliRefusal = { ok: false; reason: string; [key: string]: unknown }
-
-/** Thrown inside a command to end it with a refusal. */
-class Refused extends Error {
-  constructor(
-    readonly outcome: CliRefusal,
-    readonly line: string,
-  ) {
-    super(line)
-  }
-}
-
-/** Thrown inside a command for an argument that cannot be read: usage on stderr, exit 2. */
-class Usage extends Error {}
-
 /** Run the CLI: `argv` is everything after the program name. Resolves to the exit code. */
-export async function runCli(argv: string[], io: CliIo, git: GitRunner = nodeGitRunner()): Promise<number> {
-  const [command, ...rest] = argv
-  const run = command === undefined || command.startsWith('--') ? list : Object.hasOwn(COMMANDS, command) ? COMMANDS[command] : undefined
-  const args = command === undefined || command.startsWith('--') ? argv : rest
-  if (!run) {
-    io.stderr(USAGE)
-    return 2
-  }
-  try {
-    io.stdout(JSON.stringify(await run(args, io, git)))
-    return 0
-  } catch (err) {
-    if (err instanceof Usage) {
-      io.stderr(`${err.message}\n\n${USAGE}`)
-      return 2
-    }
-    if (err instanceof Refused) {
-      io.stdout(JSON.stringify(err.outcome))
-      io.stderr(err.line)
-      return 1
-    }
-    const detail = gitReason(err)
-    io.stdout(JSON.stringify({ ok: false, reason: 'git-failed', detail }))
-    io.stderr(detail)
-    return 1
-  }
+export function runCli(argv: string[], io: CliIo, git: GitRunner = nodeGitRunner()): Promise<number> {
+  return runCommandLine(argv, io, { usage: USAGE, commands: COMMANDS, bare: list, failure: GIT_FAILED }, io, git)
 }
-
-type Command = (args: string[], io: CliIo, git: GitRunner) => Promise<unknown>
 
 /** The bare command: the runs, newest first, filtered and capped. */
-const list: Command = async (args, io, git) => {
-  const { values } = parse(args, { branch: { type: 'string' }, limit: { type: 'string' }, ...READ_FLAGS }, 0)
-  const limit = values.limit === undefined ? DEFAULT_LIMIT : limitArg(values.limit)
+const list: Command<[CliIo, GitRunner]> = async (args, io, git) => {
+  const { values } = parseCommandArgs(args, { branch: { type: 'string' }, limit: { type: 'string' }, ...READ_FLAGS }, 0)
+  const limit = values.limit === undefined ? DEFAULT_LIMIT : wholeAbove0('--limit', values.limit)
   const keep = (card: RunCard): boolean => values.branch === undefined || card.branch === values.branch
   // Each card with the person it is kept under, whichever way it is printed.
   const shown = ({ person, ...card }: ListedRun) => ({ ...(values.full ? card : publicCard(card)), person })
-  if (values.local) {
-    const root = await inRepo(() => runsRootOf(io.cwd, git))
-    return (await listRuns(root, {}, { git })).filter(keep).slice(0, limit).map(shown)
-  }
-  const reader = await open(io.cwd, git)
+  const { reader, dir } = await records(io.cwd, values.local, git)
   const cards: ListedRun[] = []
   // Newest first, and no further than the cap: the cards past it are never read.
-  for (const { person, id } of await runEntries(reader)) {
+  for (const run of await runEntries(reader, dir)) {
     if (cards.length >= limit) break
-    const card = parseRunCard((await reader.read(`${RUNS_DIR}/${person}/${runCardFile(id)}`)) ?? '')
+    const card = await readCard(reader, dir, run)
     if (!card || !keep(card)) continue
-    cards.push({ ...card, person })
+    cards.push({ ...card, person: run.person })
   }
   return cards.map(shown)
 }
@@ -137,56 +89,39 @@ const list: Command = async (args, io, git) => {
 /** The two flags either read takes: where it reads, and how much it prints. */
 const READ_FLAGS = { local: { type: 'boolean' }, full: { type: 'boolean' } } as const
 
-const COMMANDS: Record<string, Command> = {
+/** The flags of the reads of the last days, `people` and `skills`: how many days, and where they read. */
+const DAYS_FLAGS = { days: { type: 'string' }, local: { type: 'boolean' } } as const
+
+const COMMANDS: Record<string, Command<[CliIo, GitRunner]>> = {
   async skills(args, io, git) {
-    const { values } = parse(args, { days: { type: 'string' }, local: { type: 'boolean' } }, 0)
-    if (values.days !== undefined && (!/^\d+$/.test(values.days) || Number(values.days) < 1)) throw new Usage(`--days takes a whole number above 0, got ${values.days}`)
-    const since = Date.now() - Number(values.days ?? 30) * 86_400_000
-    if (values.local) {
-      const root = await inRepo(() => runsRootOf(io.cwd, git))
-      const files = resolveLogsDeps({ git })
-      return skillUseOf({ list: dir => files.list(dir), read: path => files.read(path).catch(() => undefined) }, await runsPath(root, git), since)
-    }
-    const reader = await open(io.cwd, git)
-    return skillUseOf({ list: dir => reader.list(dir), read: path => reader.read(path) }, RUNS_DIR, since)
+    const { values } = parseCommandArgs(args, DAYS_FLAGS, 0)
+    const since = sinceDays(values.days)
+    const { reader, dir } = await records(io.cwd, values.local, git)
+    return skillUseOf(reader, dir, since)
   },
   async people(args, io, git) {
-    const { values } = parse(args, { days: { type: 'string' }, local: { type: 'boolean' } }, 0)
-    if (values.days !== undefined && (!/^\d+$/.test(values.days) || Number(values.days) < 1)) throw new Usage(`--days takes a whole number above 0, got ${values.days}`)
-    const since = Date.now() - Number(values.days ?? 30) * 86_400_000
+    const { values } = parseCommandArgs(args, DAYS_FLAGS, 0)
+    const since = sinceDays(values.days)
     const me = (await git(['config', 'user.email'], io.cwd).catch(() => '')).trim() || undefined
     // The main branch's commits, newest first: the default branch as origin names it, else what is checked out.
     const main = (await git(['symbolic-ref', '--short', 'refs/remotes/origin/HEAD'], io.cwd).catch(() => '')).trim() || 'HEAD'
     const commits = readCommitLines(await git(['log', main, '-n', '5000', '--format=%ae%x09%an%x09%at'], io.cwd).catch(() => ''))
-    if (values.local) {
-      const root = await inRepo(() => runsRootOf(io.cwd, git))
-      const files = resolveLogsDeps({ git })
-      return peopleOf({ list: dir => files.list(dir), read: path => files.read(path).catch(() => undefined) }, await runsPath(root, git), since, me, commits)
-    }
-    const reader = await open(io.cwd, git)
-    return peopleOf({ list: dir => reader.list(dir), read: path => reader.read(path) }, RUNS_DIR, since, me, commits)
+    const { reader, dir } = await records(io.cwd, values.local, git)
+    return peopleOf(reader, dir, since, me, commits)
   },
   async show(args, io, git) {
-    const { values, positionals } = parse(args, READ_FLAGS, 1)
+    const { values, positionals } = parseCommandArgs(args, READ_FLAGS, 1)
     const id = runIdArg(positionals[0]!)
-    let card: RunCard | undefined
-    let diary: ReturnType<typeof parseDiary> = []
-    if (values.local) {
-      const root = await inRepo(() => runsRootOf(io.cwd, git))
-      card = await findRun(root, id, { git })
-      diary = card ? ((await readDiary(root, id, { git })) ?? []) : []
-    } else {
-      const reader = await open(io.cwd, git)
-      const entry = (await runEntries(reader)).find(e => e.id === id)
-      card = entry ? parseRunCard((await reader.read(`${RUNS_DIR}/${entry.person}/${runCardFile(id)}`)) ?? '') : undefined
-      if (entry && card) diary = parseDiary((await reader.read(`${RUNS_DIR}/${entry.person}/${runDiaryFile(id)}`)) ?? '')
-    }
-    if (!card) throw noRun(id)
+    const { reader, dir } = await records(io.cwd, values.local, git)
+    const run = await findEntry(reader, dir, id)
+    const card = run && (await readCard(reader, dir, run))
+    if (!run || !card) throw noRun(id)
+    const diary = await readRunDiary(reader, dir, run)
     return values.full ? { ...card, diary } : { ...publicCard(card), diary: agentLines(diary) }
   },
 
   async delete(args, io, git) {
-    const { positionals } = parse(args, {}, 1)
+    const { positionals } = parseCommandArgs(args, {}, 1)
     const id = runIdArg(positionals[0]!)
     const root = await inRepo(() => runsRootOf(io.cwd, git))
     // The run is looked for inside the write cycle, after it synced the checkout: a run another
@@ -198,19 +133,19 @@ const COMMANDS: Record<string, Command> = {
   },
 
   async patch(args, io, git) {
-    const { values, positionals } = parse(args, { branch: { type: 'string' }, pr: { type: 'string' }, 'pr-url': { type: 'string' }, landed: { type: 'string' }, from: { type: 'string' } }, 1)
+    const { values, positionals } = parseCommandArgs(args, { branch: { type: 'string' }, pr: { type: 'string' }, 'pr-url': { type: 'string' }, landed: { type: 'string' }, from: { type: 'string' } }, 1)
     const id = runIdArg(positionals[0]!)
-    if ((values.pr === undefined) !== (values['pr-url'] === undefined)) throw new Usage('--pr and --pr-url go together')
-    if (values.pr !== undefined && !/^\d+$/.test(values.pr)) throw new Usage(`--pr takes the pull request's number, got ${values.pr}`)
-    if ((values.landed === undefined) !== (values.from === undefined)) throw new Usage('--landed and --from go together')
-    for (const commit of [values.landed, values.from]) if (commit !== undefined && !/^[0-9a-f]{40}$/.test(commit)) throw new Usage(`--landed and --from take full commit ids, got ${commit}`)
-    if (values.landed !== undefined && values.branch !== undefined) throw new Usage('--landed removes the branch: it does not go with --branch')
+    if ((values.pr === undefined) !== (values['pr-url'] === undefined)) throw new UsageError('--pr and --pr-url go together')
+    if (values.pr !== undefined && !/^\d+$/.test(values.pr)) throw new UsageError(`--pr takes the pull request's number, got ${values.pr}`)
+    if ((values.landed === undefined) !== (values.from === undefined)) throw new UsageError('--landed and --from go together')
+    for (const commit of [values.landed, values.from]) if (commit !== undefined && !/^[0-9a-f]{40}$/.test(commit)) throw new UsageError(`--landed and --from take full commit ids, got ${commit}`)
+    if (values.landed !== undefined && values.branch !== undefined) throw new UsageError('--landed removes the branch: it does not go with --branch')
     const patch: RunPatch = {
       ...(values.branch !== undefined ? { branch: values.branch } : {}),
       ...(values.pr !== undefined ? { pr: { number: Number(values.pr), url: values['pr-url']! } } : {}),
       ...(values.landed !== undefined ? { landed: { commit: values.landed, from: values.from! } } : {}),
     }
-    if (Object.keys(patch).length === 0) throw new Usage('patch needs --branch, --pr or --landed')
+    if (Object.keys(patch).length === 0) throw new UsageError('patch needs --branch, --pr or --landed')
     const root = await inRepo(() => runsRootOf(io.cwd, git))
     if (await patchRun(root, id, patch, { git })) return { ok: true, id }
     // Not patched: the cycle synced the checkout first, so a run it does not hold is no run at all.
@@ -220,7 +155,7 @@ const COMMANDS: Record<string, Command> = {
 }
 
 function runIdArg(id: string): string {
-  if (!isRunId(id)) throw new Usage(`not a run id: ${id}`)
+  if (!isRunId(id)) throw new UsageError(`not a run id: ${id}`)
   return id
 }
 
@@ -228,52 +163,26 @@ function noRun(id: string): Refused {
   return new Refused({ ok: false, reason: 'no-run', id }, `no run is named ${id}`)
 }
 
-/** Every run of the project by person and id, newest first, from the directory listings alone. */
-async function runEntries(reader: ProjectReader): Promise<Array<{ person: string; id: string }>> {
-  const entries: Array<{ person: string; id: string }> = []
-  for (const person of await reader.list(RUNS_DIR)) {
-    for (const name of await reader.list(`${RUNS_DIR}/${person}`)) {
-      const id = runIdOfFile(name)
-      if (id !== undefined) entries.push({ person, id })
-    }
-  }
-  return newestFirst(entries)
+/**
+ * The records a read goes through, and where the runs are in them: origin's copy, fetched once,
+ * or with `--local` this machine's, the writer's checkout read where it lies, with no fetch. From
+ * wherever the command runs, in a project or among the sessions with no project (the sessions
+ * home); outside both, a refusal.
+ */
+async function records(cwd: string, local: boolean | undefined, git: GitRunner): Promise<{ reader: RecordsReader; dir: string }> {
+  const root = await inRepo(() => runsRootOf(cwd, git))
+  if (!local) return { reader: await openProjectReader(cwd, { git }), dir: RUNS_DIR }
+  const files = nodeBranchFileFs()
+  return { reader: { list: files.list, read: path => files.read(path).catch(() => undefined) }, dir: await runsPath(root, git) }
 }
 
-/** The project's data opened for reading, from wherever the command runs, or the sessions with no project's, from the sessions home; outside both, a refusal. */
-async function open(cwd: string, git: GitRunner): Promise<ProjectReader> {
-  await inRepo(() => runsRootOf(cwd, git))
-  return openProjectReader(cwd, { git })
-}
-
-function limitArg(value: string): number {
-  if (!/^\d+$/.test(value) || Number(value) < 1) throw new Usage(`--limit takes a whole number above 0, got ${value}`)
+/** A flag's value that must be a whole number above 0: `--limit`, `--days`. */
+function wholeAbove0(flag: string, value: string): number {
+  if (!/^\d+$/.test(value) || Number(value) < 1) throw new UsageError(`${flag} takes a whole number above 0, got ${value}`)
   return Number(value)
 }
 
-/**
- * Outside a repo, the commands have nothing to act on: said as a refusal, not a git failure.
- * Only git's own "not a git repository" reads as that; a timeout, a missing git, or a corrupt
- * repo stays the failure it is.
- */
-async function inRepo<T>(read: () => Promise<T>): Promise<T> {
-  try {
-    return await read()
-  } catch (err) {
-    if (!/not a git repository/i.test(err instanceof Error ? err.message : String(err))) throw err
-    throw new Refused({ ok: false, reason: 'not-a-repo' }, 'not inside a git repository')
-  }
-}
-
-type Options = Record<string, { type: 'string' | 'boolean' }>
-
-/** `parseArgs` with the positional count checked: too few or too many is a usage error. */
-function parse<O extends Options>(args: string[], options: O, min: number, max: number = min) {
-  try {
-    const parsed = parseArgs({ args, options, allowPositionals: true, strict: true })
-    if (parsed.positionals.length < min || parsed.positionals.length > max) throw new Usage(`expected ${max === min ? min : `${min} to ${max}`} argument(s), got ${parsed.positionals.length}`)
-    return parsed
-  } catch (err) {
-    throw err instanceof Usage ? err : new Usage(err instanceof Error ? err.message : String(err))
-  }
+/** When the days a read looks back over began: `--days` of them, 30 unless said. */
+function sinceDays(days: string | undefined): number {
+  return Date.now() - (days === undefined ? 30 : wholeAbove0('--days', days)) * 86_400_000
 }

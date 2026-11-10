@@ -201,8 +201,28 @@ async function starting(ask: (args: string[]) => Promise<string>, root: string, 
   return (await commitOf(ask, base ?? (await originDefaultBranch(root, git)) ?? 'HEAD')) ? { source: 'starting' } : { source: 'pending' }
 }
 
-/** `git diff --name-status` between two commits, as marks; a rename reads as a deletion and an addition. */
-async function changedPaths(git: GitRunner, cwd: string, from: string, to: string): Promise<Record<string, FileMark>> {
+/**
+ * A source's committed work: the repository it is read in, the commit its changes are measured
+ * from, and its last commit.
+ */
+interface Span {
+  cwd: string
+  from: string
+  to: string
+}
+
+/**
+ * Where a source's committed work is read. None for a source with nothing measured: a run that
+ * changed nothing, one starting, pending or gone, and one whose start is not known.
+ */
+function spanOf(root: string, at: AgentWorkAt): Span | undefined {
+  if (at.source === 'checkout') return at.base ? { cwd: at.path, from: at.base, to: 'HEAD' } : undefined
+  if (at.source === 'branch' || at.source === 'merge' || at.source === 'landed') return at.base ? { cwd: root, from: at.base, to: at.ref } : undefined
+  return undefined
+}
+
+/** `git diff --name-status` over a span, as marks; a rename reads as a deletion and an addition. */
+async function changedPaths(git: GitRunner, { cwd, from, to }: Span): Promise<Record<string, FileMark>> {
   const out = await git(['diff', '--name-status', '--no-renames', '-z', from, to], cwd).catch(() => '')
   const parts = out.split('\0')
   const changes: Record<string, FileMark> = {}
@@ -215,14 +235,21 @@ async function changedPaths(git: GitRunner, cwd: string, from: string, to: strin
   return changes
 }
 
-/** {@link changedPaths}, each with its line counts from `git diff --numstat`. */
-async function committedChanges(git: GitRunner, cwd: string, from: string, to: string): Promise<Record<string, FileMark>> {
-  const [changes, numstat] = await Promise.all([changedPaths(git, cwd, from, to), git(['-c', 'core.quotePath=false', 'diff', '--numstat', '--no-renames', from, to], cwd).catch(() => '')])
+/** What a span's commits changed, each path with its line counts from `git diff --numstat`; nothing without a span. */
+async function committedChanges(git: GitRunner, span: Span | undefined): Promise<Record<string, FileMark>> {
+  if (!span) return {}
+  const [changes, numstat] = await Promise.all([changedPaths(git, span), git(['-c', 'core.quotePath=false', 'diff', '--numstat', '--no-renames', span.from, span.to], span.cwd).catch(() => '')])
   for (const count of parseNumstat(numstat)) {
     const mark = changes[count.path]
     if (mark && !count.binary) changes[count.path] = { ...mark, added: count.added, removed: count.removed }
   }
   return changes
+}
+
+/** One file's diff over a span; null for a path the span did not change. */
+async function committedFileDiff(git: GitRunner, span: Span, path: string, context: number): Promise<FileDiff | null> {
+  const mark = (await changedPaths(git, span))[path]
+  return mark ? readFileDiff(span.cwd, path, mark.status, { range: span, context }, git) : null
 }
 
 /** What is changed on disk in the checkout at `cwd` and not committed, with line counts. */
@@ -243,13 +270,14 @@ export async function pendingChanges(cwd: string, git: GitRunner = nodeGitRunner
 export async function readAgentChanges(root: string, at: AgentWorkAt, git: GitRunner = nodeGitRunner()): Promise<AgentChanges> {
   if (at.source === 'pending' || at.source === 'gone') return at
   if (at.source === 'unchanged' || at.source === 'starting') return { source: at.source, changes: {} }
+  const span = spanOf(root, at)
   if (at.source === 'checkout') {
-    const [committed, pending] = await Promise.all([at.base ? committedChanges(git, at.path, at.base, 'HEAD') : ({} as Record<string, FileMark>), pendingChanges(at.path, git)])
+    const [committed, pending] = await Promise.all([committedChanges(git, span), pendingChanges(at.path, git)])
     const changes: Record<string, FileMark> = { ...committed, ...pending }
     // Merged only with nothing left on disk: uncommitted work is not in the default branch.
     return { source: 'checkout', changes, merged: at.merged && Object.keys(committed).length > 0 && Object.keys(pending).length === 0 }
   }
-  const changes = at.base ? await committedChanges(git, root, at.base, at.ref) : {}
+  const changes = await committedChanges(git, span)
   // A run that changed nothing has nothing merged.
   const merged = (at.source === 'branch' ? at.merged : true) && Object.keys(changes).length > 0
   if (at.source === 'landed') return { source: 'landed', changes, merged }
@@ -262,18 +290,14 @@ export async function readAgentChanges(root: string, at: AgentWorkAt, git: GitRu
  * the fork point to the checkout's last commit. On a branch, a merge or a landed commit it is the
  * commit's own change. Null for a path that is unsafe or not changed there.
  */
-export async function readAgentFileDiff(root: string, at: AgentWorkAt, path: string, git: GitRunner = nodeGitRunner(), context: number = CONTEXT_LINES): Promise<FileDiff | null> {
-  if (at.source === 'pending' || at.source === 'gone' || at.source === 'unchanged' || at.source === 'starting' || !safeRepoPath(path)) return null
+export async function readAgentFileDiff(root: string, at: AgentWorkAt, path: string, context: number = CONTEXT_LINES, git: GitRunner = nodeGitRunner()): Promise<FileDiff | null> {
+  if (!safeRepoPath(path)) return null
   if (at.source === 'checkout') {
     const pending = (await readFileStatuses(at.path, git))[path]
-    if (pending) return readFileDiff(at.path, path, pending, git, undefined, context)
-    if (!at.base) return null
-    const mark = (await changedPaths(git, at.path, at.base, 'HEAD'))[path]
-    return mark ? readFileDiff(at.path, path, mark.status, git, { from: at.base, to: 'HEAD' }, context) : null
+    if (pending) return readFileDiff(at.path, path, pending, { context }, git)
   }
-  if (!at.base) return null
-  const mark = (await changedPaths(git, root, at.base, at.ref))[path]
-  return mark ? readFileDiff(root, path, mark.status, git, { from: at.base, to: at.ref }, context) : null
+  const span = spanOf(root, at)
+  return span ? committedFileDiff(git, span, path, context) : null
 }
 
 /** One commit of a run's work. */
@@ -294,17 +318,6 @@ const MAX_COMMITS = 200
 const EMPTY_TREE = '4b825dc642cb6eb9a060e54bf8d69288fbee4904'
 
 /**
- * Where a source's commits are read: the repository, the commit its changes are measured from and
- * its last commit. None for a source with nothing measured: a run that changed nothing, one
- * starting, pending or gone, and one whose start is not known.
- */
-function spanOf(root: string, at: AgentWorkAt): { cwd: string; from: string; to: string } | undefined {
-  if (at.source === 'checkout') return at.base ? { cwd: at.path, from: at.base, to: 'HEAD' } : undefined
-  if (at.source === 'branch' || at.source === 'merge' || at.source === 'landed') return at.base ? { cwd: root, from: at.base, to: at.ref } : undefined
-  return undefined
-}
-
-/**
  * The commits of a run's work, newest first, from the same source its changes are read from: the
  * ones between the commit its changes are measured from and its last commit. Uncommitted work is
  * in no commit, so a checkout's list may be shorter than what the pane lists.
@@ -322,10 +335,11 @@ export async function readAgentCommits(root: string, at: AgentWorkAt, git: GitRu
 }
 
 /**
- * One commit of the run's work as a range, or undefined for a commit that is not one of them: a
- * read names a commit by the id the list gave, and no other commit of the repository is shown.
+ * One commit of the run's work as a span of its own, from the commit before it; undefined for a
+ * commit that is not one of them: a read names a commit by the id the list gave, and no other
+ * commit of the repository is shown.
  */
-async function commitRange(root: string, at: AgentWorkAt, sha: string, git: GitRunner): Promise<{ cwd: string; from: string; to: string } | undefined> {
+async function commitSpan(root: string, at: AgentWorkAt, sha: string, git: GitRunner): Promise<Span | undefined> {
   const span = spanOf(root, at)
   if (!span || !/^[0-9a-f]{40}$/.test(sha)) return undefined
   const ask = asker(git, span.cwd)
@@ -335,15 +349,13 @@ async function commitRange(root: string, at: AgentWorkAt, sha: string, git: GitR
 
 /** What one commit of the run's work changed, against the commit before it; null for a commit that is not the run's. */
 export async function readAgentCommitChanges(root: string, at: AgentWorkAt, sha: string, git: GitRunner = nodeGitRunner()): Promise<Record<string, FileMark> | null> {
-  const range = await commitRange(root, at, sha, git)
-  return range ? committedChanges(git, range.cwd, range.from, range.to) : null
+  const commit = await commitSpan(root, at, sha, git)
+  return commit ? committedChanges(git, commit) : null
 }
 
 /** One file's diff in one commit of the run's work; null for a commit that is not the run's, or a path it did not change. */
-export async function readAgentCommitFileDiff(root: string, at: AgentWorkAt, sha: string, path: string, git: GitRunner = nodeGitRunner(), context: number = CONTEXT_LINES): Promise<FileDiff | null> {
+export async function readAgentCommitFileDiff(root: string, at: AgentWorkAt, sha: string, path: string, context: number = CONTEXT_LINES, git: GitRunner = nodeGitRunner()): Promise<FileDiff | null> {
   if (!safeRepoPath(path)) return null
-  const range = await commitRange(root, at, sha, git)
-  if (!range) return null
-  const mark = (await changedPaths(git, range.cwd, range.from, range.to))[path]
-  return mark ? readFileDiff(range.cwd, path, mark.status, git, { from: range.from, to: range.to }, context) : null
+  const commit = await commitSpan(root, at, sha, git)
+  return commit ? committedFileDiff(git, commit, path, context) : null
 }

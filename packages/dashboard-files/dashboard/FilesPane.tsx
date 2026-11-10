@@ -53,6 +53,9 @@ function sourceCaption(tree: AgentTree): string | undefined {
 
 const nameOf = (path: string) => path.slice(path.lastIndexOf('/') + 1)
 
+/** The last ask from the chat that was taken: a pane opened again later does not take it a second time. */
+let showTaken = 0
+
 /**
  * The file of the tree a path names: the path itself, or the longest file it ends with, for a
  * path whole on the computer the run is on ("/home/user/test-project/index.html").
@@ -77,6 +80,84 @@ function Tab({ tab, shown, onShow, onKeep, onClose }: { tab: OpenTab; shown: boo
         <X aria-hidden className="size-3" />
       </button>
     </div>
+  )
+}
+
+/**
+ * The pane's header: the opened files as tabs (the word "Files" while none is), then search, the
+ * button that hides the tree, and the ⋮ menu of the pane's settings.
+ */
+function FilesHeader({ page, tabs, active, tree, onOpen, onSearch, onShowTree }: {
+  page: string
+  tabs: OpenTab[]
+  active: string | undefined
+  /** Whether the tree shows. */
+  tree: boolean
+  onOpen: (path: string, keep: boolean) => void
+  onSearch: () => void
+  onShowTree: (shown: boolean) => void
+}) {
+  const settings = useFilesSettings()
+  // The tab shown is in view, though the header has room for fewer tabs than are open.
+  const tablist = useRef<HTMLDivElement>(null)
+  useEffect(() => {
+    tablist.current?.querySelector('[aria-selected=true]')?.scrollIntoView({ block: 'nearest', inline: 'nearest' })
+  }, [active, tabs.length])
+  return (
+    <>
+      <PaneTitle>
+        {tabs.length === 0 ? (
+          <h2 className="truncate pl-2 text-[13px] text-muted-foreground">Files</h2>
+        ) : (
+          <div ref={tablist} role="tablist" aria-label="Open files" className="flex min-w-0 items-center gap-0.5 overflow-x-auto [scrollbar-width:none]">
+            {tabs.map(tab => (
+              <Tab key={tab.path} tab={tab} shown={tab.path === active} onShow={() => showFile(page, tab.path)} onKeep={() => onOpen(tab.path, true)} onClose={() => closeFile(page, tab.path)} />
+            ))}
+          </div>
+        )}
+      </PaneTitle>
+      <PaneActions>
+        <Tooltip>
+          <TooltipTrigger render={<Button variant="ghost" size="icon-sm" className="shrink-0 text-muted-foreground" aria-label="Search files" onClick={onSearch} />}>
+            <Search className="size-3.5" />
+          </TooltipTrigger>
+          <TooltipContent>Search files</TooltipContent>
+        </Tooltip>
+        <Tooltip>
+          <TooltipTrigger
+            render={
+              <Button
+                variant="ghost"
+                size="icon-sm"
+                className={cn('shrink-0 text-muted-foreground', tree && 'bg-accent text-accent-foreground')}
+                aria-label={tree ? 'Hide the file tree' : 'Show the file tree'}
+                aria-pressed={tree}
+                onClick={() => onShowTree(!tree)}
+              />
+            }
+          >
+            <ListTree className="size-4" />
+          </TooltipTrigger>
+          <TooltipContent>{tree ? 'Hide the file tree' : 'Show the file tree'}</TooltipContent>
+        </Tooltip>
+        <DropdownMenu>
+          <DropdownMenuTrigger aria-label="The pane’s settings" className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-muted-foreground hover:bg-accent hover:text-accent-foreground">
+            <MoreVertical aria-hidden className="size-4" />
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end" className="min-w-[11rem]">
+            <DropdownMenuCheckboxItem checked={tree} onCheckedChange={onShowTree}>
+              Show file tree
+            </DropdownMenuCheckboxItem>
+            <DropdownMenuCheckboxItem checked={settings.previews} onCheckedChange={checked => setFilesSetting('previews', checked)}>
+              Preview tabs
+            </DropdownMenuCheckboxItem>
+            <DropdownMenuCheckboxItem checked={settings.wrap} onCheckedChange={checked => setFilesSetting('wrap', checked)}>
+              Word wrap
+            </DropdownMenuCheckboxItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
+      </PaneActions>
+    </>
   )
 }
 
@@ -142,87 +223,25 @@ export function FilesPane({ projectId, agentId, activity, show, context }: Modul
   // A file asked for from the chat, by the path its agent named it by: whole, on whichever computer
   // the run is on, so it is found in the tree by its end. Opened as a click in the tree opens one,
   // once the tree has it; each ask once.
-  const shownAsk = useRef(0)
   useEffect(() => {
-    if (show === undefined || show.at <= shownAsk.current || files.length === 0) return
-    shownAsk.current = show.at
+    if (show === undefined || show.at <= showTaken || files.length === 0) return
+    showTaken = show.at
     const path = fileAt(files, show.path)
     if (path !== undefined) open(path, false)
   }, [show, files])
-  // The tab shown is in view, though the header has room for fewer tabs than are open.
-  const tablist = useRef<HTMLDivElement>(null)
-  useEffect(() => {
-    tablist.current?.querySelector('[aria-selected=true]')?.scrollIntoView({ block: 'nearest', inline: 'nearest' })
-  }, [active, tabs.length])
-
   const header = (
-    <>
-      <PaneTitle>
-        {tabs.length === 0 ? (
-          <h2 className="truncate pl-2 text-[13px] text-muted-foreground">Files</h2>
-        ) : (
-          <div ref={tablist} role="tablist" aria-label="Open files" className="flex min-w-0 items-center gap-0.5 overflow-x-auto [scrollbar-width:none]">
-            {tabs.map(tab => (
-              <Tab key={tab.path} tab={tab} shown={tab.path === active} onShow={() => showFile(page, tab.path)} onKeep={() => open(tab.path, true)} onClose={() => closeFile(page, tab.path)} />
-            ))}
-          </div>
-        )}
-      </PaneTitle>
-      <PaneActions>
-        <Tooltip>
-          <TooltipTrigger
-            render={
-              <Button
-                variant="ghost"
-                size="icon-sm"
-                className="shrink-0 text-muted-foreground"
-                aria-label="Search files"
-                onClick={() => {
-                  showTree(true)
-                  setSearch(n => n + 1)
-                }}
-              />
-            }
-          >
-            <Search className="size-3.5" />
-          </TooltipTrigger>
-          <TooltipContent>Search files</TooltipContent>
-        </Tooltip>
-        <Tooltip>
-          <TooltipTrigger
-            render={
-              <Button
-                variant="ghost"
-                size="icon-sm"
-                className={cn('shrink-0 text-muted-foreground', tree && 'bg-accent text-accent-foreground')}
-                aria-label={tree ? 'Hide the file tree' : 'Show the file tree'}
-                aria-pressed={tree}
-                onClick={() => showTree(!tree)}
-              />
-            }
-          >
-            <ListTree className="size-4" />
-          </TooltipTrigger>
-          <TooltipContent>{tree ? 'Hide the file tree' : 'Show the file tree'}</TooltipContent>
-        </Tooltip>
-        <DropdownMenu>
-          <DropdownMenuTrigger aria-label="The pane’s settings" className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-muted-foreground hover:bg-accent hover:text-accent-foreground">
-            <MoreVertical aria-hidden className="size-4" />
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="end" className="min-w-[11rem]">
-            <DropdownMenuCheckboxItem checked={tree} onCheckedChange={showTree}>
-              Show file tree
-            </DropdownMenuCheckboxItem>
-            <DropdownMenuCheckboxItem checked={settings.previews} onCheckedChange={checked => setFilesSetting('previews', checked)}>
-              Preview tabs
-            </DropdownMenuCheckboxItem>
-            <DropdownMenuCheckboxItem checked={settings.wrap} onCheckedChange={checked => setFilesSetting('wrap', checked)}>
-              Word wrap
-            </DropdownMenuCheckboxItem>
-          </DropdownMenuContent>
-        </DropdownMenu>
-      </PaneActions>
-    </>
+    <FilesHeader
+      page={page}
+      tabs={tabs}
+      active={active}
+      tree={tree}
+      onOpen={open}
+      onSearch={() => {
+        showTree(true)
+        setSearch(n => n + 1)
+      }}
+      onShowTree={showTree}
+    />
   )
 
   const line = (text: string) => (

@@ -132,20 +132,8 @@ describe('Composer (#721)', () => {
     expect(screen.getByRole('button', { name: /Start session/ })).toBeTruthy()
   })
 
-  test('compact (#723) keeps the agent/model + "Run on" controls (#755)', async () => {
-    const { onSubmit } = renderComposer({ compact: true, submitLabel: 'Start' })
-    // They used to be dropped here, which meant a navbar agent silently used the stored agent
-    // and model with nothing on screen saying which.
-    expect(screen.queryByRole('button', { name: 'Run on' })).not.toBeNull()
-    expect((await hoverTooltip(agentTrigger())).textContent).toContain('Driver: Claude Code')
-    // The editor + submit still work (so `/` `@` `#` triggers remain live in the editor).
-    fireEvent.change(screen.getByLabelText('prompt'), { target: { value: 'quick run' } })
-    fireEvent.click(screen.getByRole('button', { name: 'Start' }))
-    expect(onSubmit).toHaveBeenCalledWith('quick run', { later: false })
-  })
-
-  test('showDriverModel={false} (#831) drops the agent/model select, keeping the rest of the row', () => {
-    const { onSubmit } = renderComposer({ showDriverModel: false })
+  test('in a session (#831) there is no agent/model select, and the rest of the row stays', () => {
+    const { onSubmit } = renderComposer({ inAgent: true })
     // An in-session composer: the session is bound to the agent it started with, so offering the
     // select there would only ever rewrite the next session's default.
     expect(screen.queryByRole('button', { name: /^Driver: / })).toBeNull()
@@ -403,7 +391,7 @@ describe('the rows around the box', () => {
   })
 
   test('in a session the model is said in words where the select would be, and is no button', () => {
-    renderComposer({ inAgent: true, showDriverModel: false, sessionModel: 'Opus 5.5' })
+    renderComposer({ inAgent: true, sessionModel: 'Opus 5.5' })
     const row = box().nextElementSibling!
     const said = screen.getByText('Opus 5.5')
     expect(row.contains(said)).toBe(true)
@@ -412,7 +400,7 @@ describe('the rows around the box', () => {
   })
 
   test('a session whose model is not known says none', () => {
-    renderComposer({ inAgent: true, showDriverModel: false })
+    renderComposer({ inAgent: true })
     expect(box().nextElementSibling!.textContent).toBe('')
   })
 
@@ -450,13 +438,6 @@ describe('the rows around the box', () => {
     await waitFor(() => expect(screen.getByText(/Studio is offline/)).toBeTruthy())
     expect(runOn().textContent).toBe('Studio')
   })
-
-  test('the compact form has no row: the caller\'s controls are not drawn and "Run on" stays an icon button in its one row', () => {
-    renderComposer({ compact: true, startsAt: <span>a-place</span>, controls: <span>a-control</span> })
-    expect(screen.queryByText('a-place')).toBeNull()
-    expect(screen.queryByText('a-control')).toBeNull()
-    expect(runOn().textContent).toBe('')
-  })
 })
 
 describe('in a session', () => {
@@ -467,7 +448,7 @@ describe('in a session', () => {
   })
 
   test('there is no row above the box: the box is the first thing the composer draws', () => {
-    renderComposer({ inAgent: true, showDriverModel: false })
+    renderComposer({ inAgent: true })
     expect(box().previousElementSibling).toBeNull()
   })
 })

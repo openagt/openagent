@@ -9,8 +9,11 @@ import { onOwnComputers, sendAddComputer, sendForgetComputers } from './computer
 import { sendAddMachine, sendRemoveMachine } from './machines.js'
 import { computersWiring, type OwnDoor } from '../dashboard/computers-sync.js'
 import { setDashboardContext } from './context.js'
-import { NO_ELSEWHERE, testDashboardContext } from './test-context.js'
+import { NO_ELSEWHERE, provideTestContext, testDashboardContext } from './test-context.js'
 import { addMachine, listForgotten, listMachines } from '../registry.js'
+
+// The host's capabilities, wired as the daemon wires them (D3); a test that needs other ones wires its own.
+provideTestContext()
 
 // Against the real registry, pointed at a temp $XDG_CONFIG_HOME, with this computer's door said
 // by the test: what the person's computers ask each other to keep the same computers.

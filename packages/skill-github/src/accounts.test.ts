@@ -5,7 +5,8 @@ import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, wr
 import { tmpdir } from 'node:os'
 import { basename, join } from 'node:path'
 import type { GhRunner } from './gh.js'
-import { accountLogins, ghState, installCommand, isAccountDir, jobState, loginUnderWay, runEnv, runsAccount, settleAdded, startJob, startLogin, stopLogin, useForRuns } from './accounts.js'
+import { accountLogins, ghState, isAccountDir, loginUnderWay, runEnv, runsAccount, settleAdded, startLogin, stopLogin, useForRuns } from './accounts.js'
+import { jobState, startJob } from './job.js'
 import { runCli, type CliDeps } from './cli.js'
 
 // OpenAgent's own GitHub accounts, one gh folder each, and the one runs use: the person's own gh,
@@ -133,26 +134,6 @@ test('runEnv: the account\u2019s folder for gh, its name on commits; git asks th
   assert.match(said, /^password=tok-123$/m)
   const url = execFileSync('git', ['ls-remote', '--get-url', 'git@github.com:o/r.git'], { env: { ...process.env, ...runEnv('t', '/d', undefined) }, encoding: 'utf8' })
   assert.equal(url.trim(), 'https://github.com/o/r.git')
-})
-
-test('installCommand: Homebrew where it is, else GitHub’s build for this computer into ~/.local/bin; none where GitHub makes none', () => {
-  assert.equal(installCommand(true), 'brew install gh')
-  const mac = installCommand(false, 'darwin', 'arm64')!
-  assert.match(mac, /releases\/download\/v\$v\/gh_\$\{v\}_macOS_arm64\.zip/)
-  assert.match(mac, /unzip -q/)
-  assert.match(mac, /mv "\$d"\/gh_\*\/bin\/gh ~\/\.local\/bin\//)
-  assert.match(installCommand(false, 'linux', 'x64')!, /linux_amd64\.tar\.gz.*tar -xzf/)
-  assert.equal(installCommand(false, 'win32', 'x64'), undefined)
-})
-
-test('the install, run for real in a home of its own, puts a working gh in its ~/.local/bin', { skip: process.env['OPENAGENT_NETWORK_TESTS'] !== '1' && 'reaches GitHub: OPENAGENT_NETWORK_TESTS=1' }, () => {
-  const home = mkdtempSync(join(tmpdir(), 'gh-home-'))
-  try {
-    execFileSync('sh', ['-c', installCommand(false)!], { env: { ...process.env, HOME: home } })
-    assert.match(execFileSync(join(home, '.local', 'bin', 'gh'), ['--version'], { encoding: 'utf8' }), /^gh version/)
-  } finally {
-    rmSync(home, { recursive: true, force: true })
-  }
 })
 
 test(
@@ -385,23 +366,6 @@ test('a login given up: its gh stops waiting, and nothing of it is kept, not eve
     assert.equal(jobState(files), undefined)
     assert.equal(loginUnderWay(files), undefined)
     assert.equal(existsSync(join(dir, '.adding')), false)
-  } finally {
-    rmSync(dir, { recursive: true, force: true })
-  }
-})
-
-test('a job goes on after the command answered, says how it ended, and a failed one its last lines', async () => {
-  const dir = mkdtempSync(join(tmpdir(), 'gh-job-'))
-  try {
-    const files = { log: join(dir, 'j.log'), pid: join(dir, 'j.pid'), exit: join(dir, 'j.exit') }
-    assert.equal(jobState(files), undefined)
-    await startJob(files, 'echo "one-time code: ABCD-1234"; sleep 0.3; echo "$1"', ['done'])
-    assert.equal(jobState(files)?.running, true)
-    await new Promise(resolve => setTimeout(resolve, 900))
-    assert.deepEqual(jobState(files), { running: false, said: 'one-time code: ABCD-1234\ndone\n' })
-    await startJob(files, 'echo "curl: could not resolve"; exit 6')
-    await new Promise(resolve => setTimeout(resolve, 400))
-    assert.deepEqual(jobState(files), { running: false, failed: 'curl: could not resolve', said: 'curl: could not resolve\n' })
   } finally {
     rmSync(dir, { recursive: true, force: true })
   }

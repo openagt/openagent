@@ -1,7 +1,7 @@
 import { test } from 'node:test'
 import { hostname } from 'node:os'
 import assert from 'node:assert/strict'
-import { answeredBefore, readAgentHandoff, readRunHandoff, leftNothing, resolveAgentPr, mergeAgentPr, agentBranchFor, openAgentPullRequest, openRemoteBranchPullRequest, pushAgentBranch, mergeAgentBranch, type HandoffAgent } from './agent-handoff.js'
+import { answeredBefore, readAgentHandoff, readRunHandoff, leftNothing, resolveAgentPr, mergeAgentPr, openAgentPullRequest, openRemoteBranchPullRequest, pushAgentBranch, mergeAgentBranch, type HandoffAgent } from './agent-handoff.js'
 import { pickAgentPr, type LinkedPr } from './pull-requests.js'
 import type { BranchState, BranchesFor, BranchesSource } from '../store/branches.js'
 import type { GitHostFor, GitHostSource } from '../store/git-host.js'
@@ -77,12 +77,6 @@ function fakeBranches(
 const noPr = async (): Promise<LinkedPr | undefined> => undefined
 const noBranches: BranchesFor = async () => undefined
 const noGitHost: GitHostFor = async () => undefined
-
-test('the branch an agent\'s work is on is the one its record carries, and nothing else (#799/#1725)', () => {
-  assert.equal(agentBranchFor({ id: 'r1', branch: 'feat/mine' }), 'feat/mine')
-  assert.equal(agentBranchFor({ id: 'r1', branch: 'agent-named' }), 'agent-named')
-  assert.equal(agentBranchFor({ id: 'r1' }), undefined)
-})
 
 test('a project with no branches provider, or a branch the provider does not answer for, yields no handoff at all', async () => {
   assert.equal(await readAgentHandoff('/repo', 'b', { branches: noBranches, pr: noPr }), undefined)

@@ -5,8 +5,9 @@ import type { RunCard } from '@openagt/skill-logs'
 import type { RunnerMark } from '@openagt/agent-runner'
 import { DEFAULT_STATE, type State } from './state.js'
 import { parseInterval, type Interval } from './pace.js'
-import { FOUND_OPENING, FOUND_OPENING_OWN, RESUMED_OPENING, skillSchedule, type ScheduledCommand } from './schedule.js'
-import { glance, runCheck, startNow, tick, type TickDeps } from './tick.js'
+import { skillSchedule, type ScheduledCommand } from './schedule.js'
+import { FOUND_OPENING, FOUND_OPENING_OWN, RESUMED_OPENING, runCheck } from './check.js'
+import { glance, startNow, tick, type TickDeps } from './tick.js'
 
 // The tick's decisions with every reading injected: what it reads, in which order, and the one
 // line each outcome leaves in the state. The wiring to a real project is scheduler.ts's.
@@ -292,15 +293,6 @@ test('a run handed a cut output is told the time its check was given, so its age
   const { deps: d, seen } = deps({ commands: [command('answer-comments', { when: 'gh api comments' })], check: async () => ({ ok: true, stdout: 'x'.repeat(9000), stderr: '' }), lastStart: async () => '2026-09-16T13:40:07.912Z' })
   await tick(d)
   assert.match(seen.spawned[0]!.attached!, /; it asked what is new since 2026-09-16T13:40:07Z\)$/)
-})
-
-test('a check reads the time it is given as $LAST_RUN, run through the shell at the repository root', async () => {
-  const printed = await runCheck(process.cwd(), 'printf "%s|%s|%s" "$LAST_RUN" "$(basename "$PWD")" "$HOME"', 10_000, '2026-10-09T10:00:00Z')
-  // The rest of the environment comes along: a check needs its PATH, its HOME and its logins.
-  assert.deepEqual(printed, { ok: true, stdout: `2026-10-09T10:00:00Z|${process.cwd().split('/').at(-1)}|${process.env['HOME']}`, stderr: '' })
-  // One that runs out of its time says so, whatever it had printed; one that fails says its own error.
-  assert.deepEqual(await runCheck(process.cwd(), 'echo half; echo oops >&2; sleep 5', 300, 'x'), { ok: false, stdout: 'half\n', stderr: 'it took longer than 0.3 seconds' })
-  assert.deepEqual(await runCheck(process.cwd(), 'echo oops >&2; exit 3', 10_000, 'x'), { ok: false, stdout: '', stderr: 'oops\n' })
 })
 
 test('a run is handed what its check printed, and only a run a check started: a command its pace alone starts is handed nothing', async () => {

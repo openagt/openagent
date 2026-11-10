@@ -1,6 +1,6 @@
 import { useEffect, useState, type ReactNode } from 'react'
 import { DRIVER_LABELS, type DriverName } from '../../src/client.js'
-import { onAgentState, onGitHosts, sendAgentFix, sendGitHostInstall, sendGitHostLogin, sendStopGitHostLogin, type AgentState, type GitHostRow, type GitHostsView } from '../rpc/logins.js'
+import { onAgentState, onGitHosts, sendAgentFix, type AgentState, type GitHostRow, type GitHostsView } from '../rpc/logins.js'
 import { usePolled } from '../lib/use-async.js'
 import { cn } from '../lib/utils.js'
 import { Button } from './ui/button.js'
@@ -9,6 +9,7 @@ import { CopyButton } from './ui/copy-button.js'
 // What runs log in with, and what is missing for them to (#2194's accounts, a step further): the
 // coding agent's CLI, installed and logged in, and the tool of each git host the projects are on.
 // Each is drawn from its own package's answers; a press runs the command that package declared.
+// An account at a git host is added in a dialog of its own (`AddGitAccount.tsx`).
 // Four places show it: the cards of the Permissions page, the Overview's "Get ready" step, the
 // start form's red line, and the dot on the person's picture.
 
@@ -66,7 +67,7 @@ const PILL: Record<Exclude<LoginState, 'connected'>, { words: string; tone: stri
 }
 
 /** A state in a word or two, on a pill of its colour. */
-export function Pill({ words, tone, dot }: { words: string; tone: string; dot: string }) {
+function Pill({ words, tone, dot }: { words: string; tone: string; dot: string }) {
   return (
     <span className={cn('inline-flex shrink-0 items-center gap-1.5 rounded-full px-2 py-0.5 text-xs font-medium', tone)}>
       <span aria-hidden className={cn('size-1.5 rounded-full', dot)} />
@@ -92,7 +93,7 @@ export function PackageLogo({ svg, className }: { svg: string | undefined; class
 const LONG = 72
 
 /** The command a press runs, under its button, so the person sees what is done on their computer. A long one is a line, whole on a press. */
-export function CommandLine({ command }: { command: string }) {
+function CommandLine({ command }: { command: string }) {
   const [whole, setWhole] = useState(false)
   const long = command.length > LONG
   return (
@@ -173,77 +174,6 @@ export function AgentFix({ state, onChanged, size }: { state: AgentState; onChan
   )
 }
 
-/** A login at the git host under way, said as one sentence: the page to open, the code to enter (with a copy), and Cancel, which gives it up. */
-export function DeviceCode({ code, url, host, onChanged }: { code: string; url: string; host: string; onChanged: () => Promise<void> }) {
-  const [stopping, setStopping] = useState(false)
-  const cancel = async () => {
-    setStopping(true)
-    try {
-      await sendStopGitHostLogin(host).catch(() => undefined)
-      await onChanged()
-    } finally {
-      setStopping(false)
-    }
-  }
-  return (
-    <div role="status" className="space-y-1 text-xs">
-      {/* One sentence, as a person says it (his pick over a label above a row of parts). */}
-      <p className="flex flex-wrap items-center gap-x-1.5 gap-y-1 text-sm">
-        <span>Open</span>
-        <a href={url} target="_blank" rel="noreferrer" className="font-medium text-[var(--color-primary)] underline-offset-2 hover:underline">
-          {url.replace(/^https:\/\//, '')}
-        </a>
-        <span>and enter</span>
-        <code className="rounded bg-muted px-1.5 py-0.5 font-mono text-sm font-medium tracking-wider">{code}</code>
-        <CopyButton text={code} label="Copy the code" />
-        <Button size="xs" variant="ghost" className="text-muted-foreground" disabled={stopping} onClick={() => void cancel()}>
-          {stopping ? 'Cancelling…' : 'Cancel'}
-        </Button>
-      </p>
-      <p className="text-muted-foreground">Sign in there as the account OpenAgent should use.</p>
-    </div>
-  )
-}
-
-/** The press that logs another account in at a host: it asks the package for a code, and the card shows it while the login waits. */
-export function useHostLogin(reload: () => Promise<void>): { start: (host: string) => Promise<void>; error: string | undefined; busy: boolean } {
-  const [error, setError] = useState<string | undefined>()
-  const [busy, setBusy] = useState(false)
-  const start = async (host: string) => {
-    setBusy(true)
-    setError(undefined)
-    try {
-      const done = await sendGitHostLogin(host)
-      if (!done.ok) setError(done.error)
-      await reload()
-    } finally {
-      setBusy(false)
-    }
-  }
-  return { start, error, busy }
-}
-
-/** The host's fix as one press, with no account or no tool: install it, else log in. */
-export function HostFix({ row, onChanged, size }: { row: GitHostRow; onChanged: () => Promise<void>; size?: 'sm' | 'xs' | undefined }) {
-  const [error, setError] = useState<string | undefined>()
-  const login = useHostLogin(onChanged)
-  const p = row.provider
-  if (!p) return null
-  if (!p.installed) {
-    if (!p.install) return <p className="text-xs text-muted-foreground">{`Install ${p.tool} by hand: ${p.name} makes none for this computer.`}</p>
-    const install = async () => {
-      setError(undefined)
-      const done = await sendGitHostInstall(row.host)
-      if (!done.ok) setError(done.error)
-      await onChanged()
-    }
-    return <FixAction size={size} label={`Install ${p.tool}`} busy={p.installing === true} busyWords={`Installing ${p.tool}…`} command={p.install} {...((error ?? p.installFailed) !== undefined ? { failed: (error ?? p.installFailed)! } : {})} onPress={() => void install()} />
-  }
-  if (p.loggingIn) return <DeviceCode code={p.loggingIn.code} url={p.loggingIn.url} host={row.host} onChanged={onChanged} />
-  if (p.accounts.length > 0) return null
-  return <FixAction size={size} label={`Add a ${p.name} account`} busy={login.busy} busyWords="Asking for a code…" {...(login.error !== undefined ? { failed: login.error } : {})} onPress={() => void login.start(row.host)} />
-}
-
 /** One thing missing before runs can start; the Permissions page shows it whole. */
 export interface Missing {
   key: string
@@ -251,8 +181,8 @@ export interface Missing {
   name: string
   /** What is missing, in words. */
   words: string
-  /** The press that fixes it. */
-  fix: ReactNode
+  /** The press that fixes it, for the coding agent: a git host's account is added in its dialog (`AddGitAccount.tsx`). */
+  fix?: ReactNode
 }
 
 /** What is missing, in the order a person sets things up: the coding agent first, then the git hosts. Nothing while it is not read yet. With it, the git hosts as read, for a place that shows them too. */
@@ -279,7 +209,6 @@ export function useMissing(): { missing: Missing[]; reload: () => Promise<void>;
       key: `host:${row.host}`,
       name: p.name,
       words: hostWords(row),
-      fix: <HostFix row={row} onChanged={reloadHosts} />,
     })
   }
   return { missing, reload, hosts: view }

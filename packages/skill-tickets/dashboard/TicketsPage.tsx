@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react'
 import { Button, LinkActions, Page, usePolled, useAction, useModuleHost, type ProjectLinks, type ModuleLink, type ModuleProject } from '@openagt/dashboard/module'
-import { heldBack, holderAgent, planLink, planTicketPrompt, ticketLink, workOnTicketPrompt } from '../src/module.js'
+import { heldBack, holderAgent, planLink, ticketLink, withHolder } from '../src/module.js'
 import type { ProjectTickets, WorkspaceTicket } from './lib/types.js'
 import { listTickets } from './lib/list.js'
 import {
@@ -52,10 +52,7 @@ export function TicketsPage({ projects }: { projects: ModuleProject[] }) {
         projects.map(async (project): Promise<ProjectRead> => {
           const [listed, agents] = await Promise.all([listTickets(host, project.id), host.agents(project.id).catch(() => [])])
           if ('error' in listed) return { projectId: project.id, projectName: project.name, tickets: [], error: listed.error }
-          const tickets: WorkspaceTicket[] = listed.tickets.map(ticket => {
-            const agent = holderAgent(agents, ticket.lockedBy)
-            return agent ? { ...ticket, lockedByAgent: { id: agent.id, ...(agent.name ? { name: agent.name } : {}) } } : ticket
-          })
+          const tickets = listed.tickets.map(ticket => withHolder(ticket, holderAgent(agents, ticket.lockedBy)))
           return { projectId: project.id, projectName: project.name, tickets }
         }),
       ),
@@ -96,14 +93,11 @@ export function TicketsPage({ projects }: { projects: ModuleProject[] }) {
   const filtered = hasAnyFilter(view.filters)
 
   // Flat mode renders rows outside any TicketsPanel, so the plan and start columns need their own
-  // actions with the row's own project (a panel binds one projectId; the flat list has one per row).
+  // action with the row's own project (a panel binds one projectId; the flat list has one per row).
   // The dashboard starts the run with the person's own picks and lands on it.
   const { busy, error, run } = useAction()
-  const startPlan = async (projectId: string, file: string) => {
-    await run(() => host.startRun(projectId, planTicketPrompt(file)), 'The planning agent could not be started.')
-  }
-  const startWork = async (projectId: string, file: string) => {
-    await run(() => host.startRun(projectId, workOnTicketPrompt(file)), 'The work agent could not be started.')
+  const startSession = async (projectId: string, prompt: string, failure: string) => {
+    await run(() => host.startRun(projectId, prompt), failure)
   }
   // The page-wide adds: every unclaimed shown ticket handed, as a link, to the actions the
   // installed modules offer on links — "Add to queue" when a project has a queue package — as the
@@ -111,25 +105,6 @@ export function TicketsPage({ projects }: { projects: ModuleProject[] }) {
   // section entries keep the order the reader saw. What is already there is the action's own to
   // leave alone: this page knows nothing of a queue. No agent starts here. Each stops at the
   // first failure, whose reason lands under the buttons.
-
-  /** The links grouped by project, in the shown order, one group per project in order of first appearance. */
-  const grouped = (rows: { projectId: string; link: ModuleLink }[]): ProjectLinks[] => {
-    const groups: ProjectLinks[] = []
-    for (const { projectId, link } of rows) {
-      const group = groups.find(g => g.projectId === projectId)
-      if (group) group.links.push(link)
-      else groups.push({ projectId, links: [link] })
-    }
-    return groups
-  }
-
-  // The tickets themselves, exactly as the detail page hands its one ticket over: the title as
-  // the link, pointing back at the ticket, its priority picking the section.
-  const ticketTargets = (targets: { projectId: string; ticket: WorkspaceTicket }[]) => grouped(targets.map(({ projectId, ticket }) => ({ projectId, link: ticketLink(ticket) })))
-
-  // The tickets' PLANS: one `Create tickets/<stem>.plan.md` ask each, recognized by its exact text,
-  // so the agent that works the entry writes the plan.
-  const planAsks = (targets: { projectId: string; ticket: WorkspaceTicket }[]) => grouped(targets.map(({ projectId, ticket }) => ({ projectId, link: planLink(ticket) })))
 
   const flatRows = sortRows(visible, view.sort)
 
@@ -173,28 +148,8 @@ export function TicketsPage({ projects }: { projects: ModuleProject[] }) {
   // buttons, and stopping saying "all" the moment their count differs from the set's tally,
   // never promising a ticket they will skip. Each is the object of the module's own verb:
   // "Add to queue: all 5 tickets shown below".
-  const queueObject = hasSelection
-    ? targets.length === 1
-      ? `the ${skippedShown > 0 ? 'one ready ' : ''}selected ticket`
-      : skippedShown > 0
-        ? `the ${targets.length} ready selected tickets`
-        : `the ${targets.length} selected tickets`
-    : targets.length === 1
-      ? `the ${skippedShown > 0 ? 'one ready ' : ''}ticket shown below`
-      : skippedShown > 0
-        ? `the ${targets.length} ready tickets shown below`
-        : `all ${targets.length} tickets shown below`
-  const planObject = hasSelection
-    ? planTargets.length === 1
-      ? `a plan for the ${planSkipped > 0 ? 'one unplanned ' : ''}selected ticket`
-      : planSkipped > 0
-        ? `plans for the ${planTargets.length} unplanned selected tickets`
-        : `plans for the ${planTargets.length} selected tickets`
-    : planTargets.length === 1
-      ? `a plan for the ${planSkipped > 0 ? 'one unplanned ' : ''}ticket shown below`
-      : planSkipped > 0
-        ? `plans for the ${planTargets.length} unplanned tickets shown below`
-        : `plans for all ${planTargets.length} tickets shown below`
+  const queueObject = ticketsWord(targets.length, 'ready', skippedShown > 0, hasSelection)
+  const planObject = `${planTargets.length === 1 ? 'a plan' : 'plans'} for ${ticketsWord(planTargets.length, 'unplanned', planSkipped > 0, hasSelection)}`
   const projectsShown = [...new Set(scope.map(r => r.projectId))]
 
   return (
@@ -231,7 +186,7 @@ export function TicketsPage({ projects }: { projects: ModuleProject[] }) {
           {loaded && planTargets.length > 0 && (
             <LinkActions
               projects={projectsShown}
-              targets={planAsks(planTargets)}
+              targets={linksByProject(planTargets, planLink)}
               resetKey={`plans\n${planKey}`}
               label={action => `${action.label}: ${planObject}`}
               disabled={busy}
@@ -248,7 +203,7 @@ export function TicketsPage({ projects }: { projects: ModuleProject[] }) {
           {loaded && targets.length > 0 && (
             <LinkActions
               projects={projectsShown}
-              targets={ticketTargets(targets)}
+              targets={linksByProject(targets, ticketLink)}
               resetKey={`tickets\n${queueKey}`}
               label={action => `${action.label}: ${queueObject}`}
               disabled={busy}
@@ -314,11 +269,9 @@ export function TicketsPage({ projects }: { projects: ModuleProject[] }) {
                     selected={selected.has(`${r.projectId}/${r.ticket.file}`)}
                     onToggleSelect={() => toggleSelected(`${r.projectId}/${r.ticket.file}`)}
                     onOpen={() => onOpenTicket(r.projectId, r.ticket.file)}
-                    onStartWork={() => void startWork(r.projectId, r.ticket.file)}
-                    onConfigureWork={() => host.configureRun(r.projectId, workOnTicketPrompt(r.ticket.file))}
+                    onStart={(prompt, failure) => void startSession(r.projectId, prompt, failure)}
+                    onConfigure={prompt => host.configureRun(r.projectId, prompt)}
                     onOpenPlan={() => onOpenTicketPlan(r.projectId, r.ticket.file)}
-                    onStartPlan={() => void startPlan(r.projectId, r.ticket.file)}
-                    onConfigurePlan={() => host.configureRun(r.projectId, planTicketPrompt(r.ticket.file))}
                     onTopicClick={addTopic}
                     onClaimedClick={filterClaimed}
                     onOpenAgent={agentId => onOpenAgent(r.projectId, agentId)}
@@ -362,4 +315,31 @@ export function TicketsPage({ projects }: { projects: ModuleProject[] }) {
       )}
     </Page>
   )
+}
+
+/**
+ * What a page-wide add hands the link actions: each ticket as a link — the ticket itself
+ * (`ticketLink`), or the ask for its plan (`planLink`) — grouped by project in the shown order,
+ * one group per project in order of first appearance.
+ */
+function linksByProject(rows: readonly { projectId: string; ticket: WorkspaceTicket }[], asLink: (ticket: WorkspaceTicket) => ModuleLink): ProjectLinks[] {
+  const groups: ProjectLinks[] = []
+  for (const { projectId, ticket } of rows) {
+    const group = groups.find(g => g.projectId === projectId)
+    if (group) group.links.push(asLink(ticket))
+    else groups.push({ projectId, links: [asLink(ticket)] })
+  }
+  return groups
+}
+
+/**
+ * The tickets a page-wide add acts on, as the object of its verb: "all 5 tickets shown below",
+ * "the 2 ready selected tickets", "the one unplanned ticket shown below". `kept` is the word for
+ * the ones it keeps while it skips others (`ready`, `unplanned`).
+ */
+function ticketsWord(count: number, kept: string, skipping: boolean, selection: boolean): string {
+  const [one, many] = selection ? ['selected ticket', 'selected tickets'] : ['ticket shown below', 'tickets shown below']
+  if (count === 1) return `the ${skipping ? `one ${kept} ` : ''}${one}`
+  if (skipping) return `the ${count} ${kept} ${many}`
+  return selection ? `the ${count} ${many}` : `all ${count} ${many}`
 }

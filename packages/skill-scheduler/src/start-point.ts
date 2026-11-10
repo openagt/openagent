@@ -19,15 +19,20 @@ export interface StartPoint {
   reached: boolean
 }
 
+/** What a run's checkout starts from, as git names it, with nothing fetched: origin's default branch, or `HEAD` in a repository with no remote. */
+export async function startRef(repo: string, git: GitRunner): Promise<string> {
+  return (await originDefaultBranch(repo, git).catch(() => undefined)) ?? 'HEAD'
+}
+
 /**
  * The start point, brought up to date the way a run's checkout is: origin's default branch is
  * fetched, waited for {@link START_POINT_FETCH_MS} at most. A fetch that fails (offline) or runs
  * longer leaves the copy this clone has, and the start point says origin was not reached.
  */
 export async function readStartPoint(repo: string, git: GitRunner): Promise<StartPoint> {
-  const origin = await originDefaultBranch(repo, git).catch(() => undefined)
-  if (origin === undefined) return { ref: 'HEAD', reached: true }
-  const fetched = git(['fetch', '--quiet', '--no-write-fetch-head', 'origin', origin.slice('origin/'.length)], repo).then(
+  const ref = await startRef(repo, git)
+  if (ref === 'HEAD') return { ref, reached: true }
+  const fetched = git(['fetch', '--quiet', '--no-write-fetch-head', 'origin', ref.slice('origin/'.length)], repo).then(
     () => true,
     () => false,
   )
@@ -38,7 +43,7 @@ export async function readStartPoint(repo: string, git: GitRunner): Promise<Star
   })
   const reached = await Promise.race([fetched, capped])
   clearTimeout(timer)
-  return { ref: origin, reached }
+  return { ref, reached }
 }
 
 /**

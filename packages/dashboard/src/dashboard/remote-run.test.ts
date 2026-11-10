@@ -2,7 +2,7 @@ import { strict as assert } from 'node:assert'
 import { test } from 'node:test'
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from 'node:http'
 import type { AddressInfo } from 'node:net'
-import { deviceIdOf, enterRemote, leaveRemote, machineCall, remoteFacts, remoteProject, startRemoteAgent, streamRemoteEvents, pingRemote, relayRpc, remoteVersion, MachineRefusal, RelayedAgents, foldRelayedEvent, type RemoteTarget } from './remote-run.js'
+import { deviceIdOf, enterRemote, leaveRemote, machineCall, remoteFacts, remoteProject, startRemoteAgent, streamRemoteEvents, pingRemote, relayRpc, MachineRefusal, RelayedAgents, foldRelayedEvent, type RemoteTarget } from './remote-run.js'
 import { type AgentMeta } from '../store/index.js'
 import type { OpenAgentEvent } from '../events.js'
 import { handleRelayRequest } from './relay-endpoints.js'
@@ -147,11 +147,11 @@ test('a machine\'s ping tells the OpenAgent it runs; what does not read as a ver
   })
   try {
     const target = { url: srv.url, key: 'd1.sekret' }
-    assert.equal(await remoteVersion(target), '0.10.1')
+    assert.equal((await remoteFacts(target)).version, '0.10.1')
     // What a machine says is shown on a page: only a version is one.
     for (const odd of [{}, { version: 7 }, { version: '' }, { version: '<img src=x onerror=alert(1)>' }, { version: 'a'.repeat(65) }, 'not json', '']) {
       answer = odd
-      assert.equal(await remoteVersion(target), undefined, JSON.stringify(odd))
+      assert.equal((await remoteFacts(target)).version, undefined, JSON.stringify(odd))
     }
     // Its computer's own name comes with it, as the records of its runs carry it; a name that is no name is none.
     answer = { version: '0.10.1', host: 'ubuntu-fra1' }
@@ -162,12 +162,12 @@ test('a machine\'s ping tells the OpenAgent it runs; what does not read as a ver
     }
     answer = { version: '0.10.1' }
     status = 401 // this computer was taken out there
-    assert.equal(await remoteVersion(target), undefined)
+    assert.equal((await remoteFacts(target)).version, undefined)
     assert.deepEqual(await remoteFacts(target), {})
   } finally {
     await srv.close()
   }
-  assert.equal(await remoteVersion({ url: 'http://127.0.0.1:1', key: 'd1.t' }), undefined)
+  assert.equal((await remoteFacts({ url: 'http://127.0.0.1:1', key: 'd1.t' })).version, undefined)
 })
 
 test('streamRemoteEvents parses ndjson lines in order and ends when the body closes (#1067)', async () => {

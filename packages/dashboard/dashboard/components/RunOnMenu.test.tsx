@@ -12,7 +12,7 @@ const MACBOOK: Machine = { id: 'macbook', url: 'http://127.0.0.1:4210', label: '
 // A server: what speaks HTTPS.
 const VPS: Machine = { id: 'vps', url: 'https://165.245.244.10', label: '165.245.244.10' }
 
-function renderMenu(over: Partial<ConnectionControl> = {}, inRow = true) {
+function renderMenu(over: Partial<ConnectionControl> = {}) {
   const connection: ConnectionControl = {
     machines: [STUDIO],
     selectedMachineId: null,
@@ -23,7 +23,7 @@ function renderMenu(over: Partial<ConnectionControl> = {}, inRow = true) {
     status: {},
     ...over,
   }
-  render(<RunOnMenu connection={connection} busy={false} inRow={inRow} />)
+  render(<RunOnMenu connection={connection} busy={false} />)
   return connection
 }
 
@@ -186,17 +186,14 @@ describe('a saved machine that is a person\'s own computer, reached by the line 
     expect(connection.onSelect).toHaveBeenCalledWith(MACBOOK)
   })
 
-  test('picked, the words and the icon button draw a computer; a picked server draws a server', () => {
-    for (const inRow of [true, false]) {
-      renderMenu({ machines: [MACBOOK, STUDIO], selectedMachineId: 'macbook' }, inRow)
-      expect(trigger().querySelector('svg.lucide-laptop')).toBeTruthy()
-      expect(trigger().querySelector('svg.lucide-server')).toBeNull()
-      cleanup()
-      renderMenu({ machines: [MACBOOK, VPS], selectedMachineId: 'vps' }, inRow)
-      expect(trigger().querySelector('svg.lucide-server')).toBeTruthy()
-      expect(trigger().querySelector('svg.lucide-laptop')).toBeNull()
-      cleanup()
-    }
+  test('picked, the words draw a computer; a picked server draws a server', () => {
+    renderMenu({ machines: [MACBOOK, STUDIO], selectedMachineId: 'macbook' })
+    expect(trigger().querySelector('svg.lucide-laptop')).toBeTruthy()
+    expect(trigger().querySelector('svg.lucide-server')).toBeNull()
+    cleanup()
+    renderMenu({ machines: [MACBOOK, VPS], selectedMachineId: 'vps' })
+    expect(trigger().querySelector('svg.lucide-server')).toBeTruthy()
+    expect(trigger().querySelector('svg.lucide-laptop')).toBeNull()
   })
 })
 
@@ -223,21 +220,5 @@ describe('the page opened from somewhere else than the computer it is on', () =>
     cleanup()
     renderMenu({ selectedMachineId: 'studio' })
     expect(trigger().textContent).toBe('Studio')
-  })
-})
-
-describe('the "Run on" pick as an icon button', () => {
-  test('it shows no words, and its tooltip names the target', async () => {
-    renderMenu({ selectedMachineId: 'studio' }, false)
-    expect(trigger().textContent).toBe('')
-    expect(trigger().className).not.toContain('rounded-full')
-    expect((await hoverTooltip(trigger())).textContent).toBe('Run on — Studio')
-  })
-
-  test('its menu is the same one', async () => {
-    const connection = renderMenu({}, false)
-    await openMenu(trigger())
-    fireEvent.click(screen.getByRole('menuitem', { name: /^Studio/ }))
-    expect(connection.onSelect).toHaveBeenCalledWith(STUDIO)
   })
 })

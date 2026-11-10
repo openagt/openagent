@@ -3,8 +3,7 @@ import { basename, dirname, join } from 'node:path'
 import { BRANCHES_DIR, nodeGitRunner, repositoryCheckouts, unexcludeFromGit, type GitRunner } from '@openagt/agent-data'
 import { reconcileBranchLinks } from './branch-links.js'
 import { isAgentBranch } from './branch-names.js'
-import { COMMAND_LINKS } from './command-link.js'
-import { HARNESS_SKILL_DIRS, SKILL_NAME, skillLinkPaths, type SkillLink } from './skill-links.js'
+import { OWN_SKILL, skillLinkPaths, type SkillLink } from './skill-links.js'
 import { worktreeDirEntries } from './worktree.js'
 
 /**
@@ -69,10 +68,8 @@ export async function cleanup(repo: string, reclaimOne: (agentId: string) => Pro
     const checkouts = await repositoryCheckouts(repo, git).catch(() => undefined)
     if (checkouts) {
       // A link lives in an agent's checkout: with none left in the repository, the rules hide nothing.
-      if (!kept.some(entry => isAgentBranch(basename(entry.path))) && !checkouts.some(path => basename(dirname(path)) === BRANCHES_DIR && isAgentBranch(basename(path)))) {
-        for (const rule of [...COMMAND_LINKS.map(link => `/${link}`), ...HARNESS_SKILL_DIRS.map(skills => `/${skills}/${SKILL_NAME}`)]) {
-          await unexcludeFromGit(repo, rule, undefined, git).catch(() => {})
-        }
+      if (!kept.some(entry => isAgentBranch(basename(entry.path))) && !checkouts.some(isAgentCheckout)) {
+        for (const path of skillLinkPaths(OWN_SKILL)) await unexcludeFromGit(repo, `/${path}`, undefined, git).catch(() => {})
       }
       if (gone && !(await anyHolds(checkouts, BRANCHES_DIR))) await unexcludeFromGit(repo, `/${BRANCHES_DIR}`, undefined, git).catch(() => {})
     }
@@ -89,10 +86,16 @@ export async function cleanup(repo: string, reclaimOne: (agentId: string) => Pro
 export async function liftSkillRules(repo: string, skills: readonly SkillLink[], git: GitRunner = nodeGitRunner()): Promise<void> {
   const checkouts = await repositoryCheckouts(repo, git).catch(() => undefined)
   if (!checkouts) return
-  if ((await worktreeDirEntries(repo)).length > 0 || checkouts.some(path => basename(dirname(path)) === BRANCHES_DIR && isAgentBranch(basename(path)))) return
+  if ((await worktreeDirEntries(repo)).length > 0 || checkouts.some(isAgentCheckout)) return
   for (const skill of skills) for (const path of skillLinkPaths(skill)) await unexcludeFromGit(repo, `/${path}`, undefined, git).catch(() => {})
 }
 
+/** Whether a checkout of the repository is an agent's: a folder under `.branches/` named as an agent branch. */
+function isAgentCheckout(path: string): boolean {
+  return basename(dirname(path)) === BRANCHES_DIR && isAgentBranch(basename(path))
+}
+
+/** Whether any of `checkouts` holds something at `name`. */
 async function anyHolds(checkouts: readonly string[], name: string): Promise<boolean> {
   for (const checkout of checkouts) if (await lstat(join(checkout, name)).then(() => true, () => false)) return true
   return false

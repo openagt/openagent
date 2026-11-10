@@ -29,7 +29,7 @@ describe('BridgeSettings version gate (#1519)', () => {
       page: null,
       version: { got: '0.7.3', expected: '0.8.0', blocked: true, at: '2026-08-17T12:00:00.000Z' },
     })
-    render(<BridgeSettings enabled onChange={() => {}} />)
+    render(<BridgeSettings />)
     const notice = await screen.findByText(/blocked/)
     expect(notice.textContent).toContain('0.7.3')
     expect(notice.textContent).toContain('0.8.0')
@@ -43,7 +43,7 @@ describe('BridgeSettings version gate (#1519)', () => {
       page: null,
       version: { got: '0.8.0', expected: '0.8.0', blocked: false, at: '2026-08-17T12:00:00.000Z' },
     })
-    render(<BridgeSettings enabled onChange={() => {}} />)
+    render(<BridgeSettings />)
     // The token row proves the panel rendered before asserting the absence.
     await screen.findByText(/paste this token/)
     expect(screen.queryByText(/blocked/)).toBeNull()
@@ -60,7 +60,7 @@ describe('BridgeSettings refused contact (#1225)', () => {
       page: null,
       version: null,
     })
-    render(<BridgeSettings enabled onChange={() => {}} />)
+    render(<BridgeSettings />)
     const notice = await screen.findByText(/token this dashboard rejects/)
     expect(notice.textContent).toContain('save the token')
   })
@@ -72,7 +72,7 @@ describe('BridgeSettings refused contact (#1225)', () => {
       page: null,
       version: { got: '0.8.0', expected: '0.8.0', blocked: false, at: '2026-08-17T12:00:00.000Z' },
     })
-    render(<BridgeSettings enabled onChange={() => {}} />)
+    render(<BridgeSettings />)
     await screen.findByText(/paste this token/)
     expect(screen.queryByText(/rejects/)).toBeNull()
   })
@@ -86,7 +86,7 @@ describe('BridgeSettings refused contact (#1225)', () => {
       page: null,
       version: { got: '0.7.3', expected: '0.8.0', blocked: true, at: '2026-08-17T12:00:00.000Z' },
     })
-    render(<BridgeSettings enabled onChange={() => {}} />)
+    render(<BridgeSettings />)
     await screen.findByText(/blocked/)
     expect(screen.queryByText(/token this dashboard rejects/)).toBeNull()
   })

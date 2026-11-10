@@ -1,7 +1,7 @@
 import { readdir, readFile, rm, writeFile } from 'node:fs/promises'
 import { mkdir } from 'node:fs/promises'
 import { join } from 'node:path'
-import { personalFolder, withPersonalFolder, type ProjectDataDeps } from './project-data.js'
+import { personalFolder, withPersonalFolder, type PersonalFolderDeps } from './personal-folder.js'
 import type { FileBranchWrite } from './file-branch.js'
 
 /**
@@ -143,7 +143,7 @@ export async function listAgents(folder: string = personalFolder()): Promise<Age
  * Write an agent: its file in the personal folder, committed there, so it goes to every computer
  * that syncs the folder. Only the names of its accounts are written, never a token.
  */
-export async function writeAgent(record: AgentRecord, deps: ProjectDataDeps = {}): Promise<FileBranchWrite> {
+export async function writeAgent(record: AgentRecord, deps: PersonalFolderDeps = {}): Promise<FileBranchWrite> {
   const folder = deps.folder ?? personalFolder()
   const file = agentFile(folder, record.id)
   const body = JSON.stringify({ name: record.name, skills: record.skills, accounts: record.accounts, projectSkills: record.projectSkills }, null, 2) + '\n'
@@ -159,7 +159,7 @@ export async function writeAgent(record: AgentRecord, deps: ProjectDataDeps = {}
 }
 
 /** Remove an agent's file; the default agent stays. */
-export async function removeAgent(id: string, deps: ProjectDataDeps = {}): Promise<FileBranchWrite> {
+export async function removeAgent(id: string, deps: PersonalFolderDeps = {}): Promise<FileBranchWrite> {
   if (id === DEFAULT_AGENT) throw new Error('the default agent cannot be removed')
   const folder = deps.folder ?? personalFolder()
   const file = agentFile(folder, id)

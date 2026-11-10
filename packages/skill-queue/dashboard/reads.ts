@@ -1,4 +1,5 @@
 import { usePolled, useModuleHost, type ModuleProject } from '@openagt/dashboard/module'
+import { isEntryLine, readEntries } from '../src/module.js'
 
 /** One project's open entries as read, or why the command failed. */
 export interface ProjectRead {
@@ -21,10 +22,8 @@ export function useQueueReads(projects: ModuleProject[]): { reads: ProjectRead[]
     () =>
       Promise.all(
         projects.map(async (project): Promise<ProjectRead> => {
-          const result = await host.runCommand(project.id, ['--local'])
-          if (!result.ok) return { project, entries: [], error: result.error }
-          if (!Array.isArray(result.output)) return { project, entries: [], error: 'the queue command did not print a list' }
-          return { project, entries: result.output.filter((entry): entry is string => typeof entry === 'string') }
+          const read = readEntries(await host.runCommand(project.id, ['--local']), isEntryLine)
+          return 'error' in read ? { project, entries: [], error: read.error } : { project, entries: read.entries }
         }),
       ),
     NOTHING_READ,

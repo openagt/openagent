@@ -5,7 +5,6 @@ import { thisMachineName } from '../lib/this-machine.js'
 import { machineKind, machineName, reachedByLine } from '../../src/client.js'
 import { MACHINE_ICONS, MachineMark } from './MachineMark.js'
 import { cn } from '../lib/utils.js'
-import { buttonVariants } from './ui/button.js'
 import { rowButtonClass } from './ui/row-item.js'
 import { OptionLabel } from './ui/option-label.js'
 import { Tooltip, TooltipTrigger, TooltipContent } from './ui/tooltip.js'
@@ -69,10 +68,9 @@ export function RunOnWords({ icon: Icon, elsewhere, label }: { icon: LucideIcon;
 }
 
 // One flat "Run on" list (#1067): this machine, then the saved machines and "Add a machine",
-// with a single checkmark.
-// Two looks for the one menu: an icon button for the compact single row, and the target in words,
-// drawn as the rows around the box draw their items, for the row above it (`inRow`).
-export function RunOnMenu({ connection, busy, inRow = false }: { connection: ConnectionControl; busy: boolean; inRow?: boolean | undefined }) {
+// with a single checkmark. Its button is the target in words, drawn as the rows around the box draw
+// their items, for the row above it.
+export function RunOnMenu({ connection, busy }: { connection: ConnectionControl; busy: boolean }) {
   // The selected machine (#1067). An id pointing at a removed machine reads as none, and so does
   // any pick on a project that runs here only.
   const selectedMachine =
@@ -88,31 +86,15 @@ export function RunOnMenu({ connection, busy, inRow = false }: { connection: Con
       <Tooltip>
         <TooltipTrigger
           render={
-            <DropdownMenuTrigger
-              type="button"
-              disabled={busy}
-              aria-label="Run on"
-              className={
-                inRow
-                  ? rowButtonClass
-                  : cn(buttonVariants({ variant: 'ghost', size: 'icon-sm' }), 'relative h-8 w-8')
-              }
-            />
+            <DropdownMenuTrigger type="button" disabled={busy} aria-label="Run on" className={rowButtonClass} />
           }
         >
-          {inRow ? (
-            <RunOnWords icon={Icon} elsewhere={!onThisMachine} label={summary} />
-          ) : (
-            <>
-              <Icon className="h-4 w-4" />
-              {!onThisMachine && <span className="absolute -right-0.5 -top-0.5 h-2 w-2 rounded-full bg-[var(--color-primary)]" />}
-            </>
-          )}
+          <RunOnWords icon={Icon} elsewhere={!onThisMachine} label={summary} />
         </TooltipTrigger>
         <TooltipContent>{`Run on — ${selectedMachine?.label ?? here}`}</TooltipContent>
       </Tooltip>
-      {/* The words are at the row's left, the icon button at the compact row's right: the menu opens inward. */}
-      <DropdownMenuContent align={inRow ? 'start' : 'end'} className="min-w-[19rem] max-w-[22rem]">
+      {/* The words are at the row's left: the menu opens inward. */}
+      <DropdownMenuContent align="start" className="min-w-[19rem] max-w-[22rem]">
         <DropdownMenuGroup>
           <DropdownMenuLabel>Run on</DropdownMenuLabel>
           {/* Each row leads with its machine's mark; the pick is the tick at the row's end. */}

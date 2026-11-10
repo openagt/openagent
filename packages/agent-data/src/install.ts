@@ -1,14 +1,13 @@
 import { access, mkdir, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
-import { nodeGitRunner, type GitRunner } from './git.js'
+import { EMPTY_TREE, errorMessage, isGitRepo, nodeGitRunner, type GitRunner } from './git.js'
 import { OPENAGENT_DIR } from './names.js'
 import { openagentGitignore, gitignorePath } from './openagent-gitignore.js'
 
 /**
  * Make a folder a project of OpenAgent's (#391): create the `.openagent/` marker and its ignore
  * file. Nothing is committed on a branch that has a commit. What a dashboard's "Add project" does
- * to a folder. Pure core over a
- * {@link GitRunner} and the three file operations it needs.
+ * to a folder. Pure core over a {@link GitRunner} and the three file operations it needs.
  */
 
 /** The file operations an install needs; `node:fs/promises` in production. */
@@ -31,9 +30,6 @@ export function nodeInstallFs(): InstallFs {
 
 /** The message of the empty commit an install gives a repository that has none. */
 export const FIRST_COMMIT_MESSAGE = '[OpenAgent] first commit'
-
-/** Git's tree with no file in it. */
-const EMPTY_TREE = '4b825dc642cb6eb9a060e54bf8d69288fbee4904'
 
 /** The outcome of {@link installProject}. Failures are values, never throws. */
 export type InstallResult =
@@ -61,9 +57,7 @@ export async function installProject(cwd: string, deps: InstallDeps = {}): Promi
   try {
     // Auto-initialize a repo when the folder isn't one yet: OpenAgent treats
     // git as the source of truth, so `git init` it for the user rather than erroring.
-    const insideRepo = await git(['rev-parse', '--is-inside-work-tree'], cwd)
-      .then(out => out.trim() === 'true')
-      .catch(() => false)
+    const insideRepo = await isGitRepo(cwd, git)
     if (!insideRepo) await git(['init'], cwd)
 
     // A repository with no commit cannot give an agent's branch a start. Its first commit is
@@ -82,6 +76,6 @@ export async function installProject(cwd: string, deps: InstallDeps = {}): Promi
     await fs.write(gitignorePath(cwd), openagentGitignore())
     return insideRepo ? { ok: true } : { ok: true, initialized: true }
   } catch (err) {
-    return { ok: false, error: err instanceof Error ? err.message : String(err) }
+    return { ok: false, error: errorMessage(err) }
   }
 }

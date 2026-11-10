@@ -50,8 +50,8 @@ interface PromptEditorProps {
   customPresets?: CustomPreset[]
   /** The open project's shared saved prompts (#1025), committed in its repo; loaded verbatim like the user's. */
   projectPresets?: CustomPreset[]
-  /** Open the create panel from the `/` menu's "Save prompt…" (#722). Omit where there is no panel
-   *  (the compact navbar launch), which also drops the item. */
+  /** Open the create panel from the `/` menu's "Save prompt…" (#722). Omit where there is no panel,
+   *  which also drops the item. */
   onNewPreset?: () => void
   disabled?: boolean
   placeholder?: string
@@ -64,8 +64,6 @@ interface PromptEditorProps {
    * lets the editor apply it when it is ready instead of the caller guessing when that is.
    */
   initialText?: string | undefined
-  /** A shorter surface for the navbar quick-launch (#723): starts one line tall instead of ~three. */
-  compact?: boolean
 }
 
 /** Insert a token chip at the suggestion range, followed by a space. */
@@ -92,7 +90,7 @@ function applyTemplate(editor: Editor, text: string): void {
 }
 
 export const PromptEditor = forwardRef<PromptEditorHandle, PromptEditorProps>(function PromptEditor(
-  { onChange, onSubmit, onPreset, onMentionProject, onMentionFile, onMentionRemoved, projects, files = [], commands, customPresets = [], projectPresets = [], onNewPreset, disabled = false, placeholder = 'Describe what to do…', initialText, compact = false },
+  { onChange, onSubmit, onPreset, onMentionProject, onMentionFile, onMentionRemoved, projects, files = [], commands, customPresets = [], projectPresets = [], onNewPreset, disabled = false, placeholder = 'Describe what to do…', initialText },
   ref,
 ) {
   const [isEmpty, setIsEmpty] = useState(true)
@@ -165,6 +163,16 @@ export const PromptEditor = forwardRef<PromptEditorHandle, PromptEditorProps>(fu
     return replaced
   }
 
+  // What a `/` menu item loads, and what the form's note calls it: a command as `/<name> `, for the
+  // person to add an argument or send; a saved prompt, the user's own (#626) or the project's
+  // (#1025), verbatim.
+  const loadedBy = (id: string): { label: string; text: string } | undefined => {
+    const command = commandsRef.current.find(c => `command:${c.name}` === id)
+    if (command) return { label: `/${command.name}`, text: `/${command.name} ` }
+    const preset = customPresetsRef.current.find(p => `custom-preset:${p.id}` === id) ?? projectPresetsRef.current.find(p => `project-preset:${p.id}` === id)
+    return preset && { label: preset.label, text: preset.prompt }
+  }
+
   const editor = useEditor({
     immediatelyRender: false,
     extensions: [
@@ -193,8 +201,7 @@ export const PromptEditor = forwardRef<PromptEditorHandle, PromptEditorProps>(fu
           const projectItems: SuggestionItem[] = projectPresetsRef.current
             .filter(p => p.label.toLowerCase().includes(q))
             .map(p => ({ id: `project-preset:${p.id}`, label: p.label, hint: 'project saved prompt', group: 'Saved prompts' }))
-          // "Save prompt…" to capture the current prompt (#722), only where the create panel exists
-          // (the full composer, not the compact navbar launch, which passes no onNewPreset).
+          // "Save prompt…" to capture the current prompt (#722), only where the create panel exists.
           const newPresetItem: SuggestionItem[] =
             onNewPresetRef.current && 'save prompt'.includes(q)
               ? [{ id: 'new-preset', label: 'Save prompt…', hint: 'save the current prompt', group: 'Saved prompts' }]
@@ -202,39 +209,18 @@ export const PromptEditor = forwardRef<PromptEditorHandle, PromptEditorProps>(fu
           return [...commandItems, ...customItems, ...projectItems, ...newPresetItem]
         },
         onSelect: (item, { editor: ed, range }) => {
-          if (item.id.startsWith('command:')) {
-            const command = commandsRef.current.find(c => `command:${c.name}` === item.id)
-            if (command) {
-              // Drop the `/query` trigger first so it does not count as a replaced draft.
-              ed.chain().focus().deleteRange(range).run()
-              const replaced = loadTemplateInto(ed, `/${command.name} `)
-              onPresetRef.current?.(`/${command.name}`, replaced)
-            }
-            return
-          }
-          if (item.id.startsWith('custom-preset:')) {
-            const preset = customPresetsRef.current.find(p => `custom-preset:${p.id}` === item.id)
-            if (preset) {
-              ed.chain().focus().deleteRange(range).run()
-              const replaced = loadTemplateInto(ed, preset.prompt)
-              onPresetRef.current?.(preset.label, replaced)
-            }
-            return
-          }
-          if (item.id.startsWith('project-preset:')) {
-            const preset = projectPresetsRef.current.find(p => `project-preset:${p.id}` === item.id)
-            if (preset) {
-              ed.chain().focus().deleteRange(range).run()
-              const replaced = loadTemplateInto(ed, preset.prompt)
-              onPresetRef.current?.(preset.label, replaced)
-            }
-            return
-          }
           if (item.id === 'new-preset') {
             // Drop the `/query` trigger so the create panel captures the real prompt, not the slash.
             ed.chain().focus().deleteRange(range).run()
             onNewPresetRef.current?.()
+            return
           }
+          const loaded = loadedBy(item.id)
+          if (!loaded) return
+          // Drop the `/query` trigger first so it does not count as a replaced draft.
+          ed.chain().focus().deleteRange(range).run()
+          const replaced = loadTemplateInto(ed, loaded.text)
+          onPresetRef.current?.(loaded.label, replaced)
         },
       }),
       // `@` — references: the registered projects, by name.
@@ -337,29 +323,26 @@ export const PromptEditor = forwardRef<PromptEditorHandle, PromptEditorProps>(fu
     loadTemplateInto(editor, initialText)
   }, [editor, initialText])
 
-  // The placeholder is absolutely positioned, so it must share the editor's padding to sit exactly
-  // where the first typed character will (#721). The full composer's box is one line tall when
-  // empty, as tall as the submit beside it; the compact navbar row stays tight. One line too: on a
-  // phone a long one is cut short, where a second line would hang out of the box.
-  const pad = compact ? 'px-2 py-1.5' : 'px-3 py-2.5'
-  const placeholderInset = compact ? 'inset-x-2 top-1.5' : 'inset-x-3 top-2.5'
+  // The placeholder is absolutely positioned, so it must share the editor's padding (`px-3 py-2.5`)
+  // to sit exactly where the first typed character will (#721). The composer's box is one line tall
+  // when empty, as tall as the submit beside it. One line too: on a phone a long one is cut short,
+  // where a second line would hang out of the box.
   return (
     <div className="relative">
       {/* The scroll rides a ScrollArea (#1046) so a long prompt shows our thin overlay bar, not the
           OS one. The resting height is deliberately short (#756): the editor grows with its content
           up to max-h, so the tall empty box no longer reserves room for text nobody has typed.
-          Compact (navbar) keeps its own border+ring; the full composer's border lives on the
-          surrounding composer box (#721) so the editor and its controls read as one surface. */}
+          The border lives on the surrounding composer box (#721) so the editor and its controls
+          read as one surface. */}
       <ScrollArea
-        className={compact ? 'rounded-md border border-border focus-within:ring-2 focus-within:ring-[var(--color-primary)]' : ''}
         // The height cap goes on the viewport (the scroller), not the Root — a Root max-h cannot be
         // resolved by the viewport's height, so the editor would grow instead of scrolling.
-        viewportClassName={compact ? 'max-h-32 min-h-8' : 'max-h-64 min-h-10'}
+        viewportClassName="max-h-64 min-h-10"
       >
-        <EditorContent editor={editor} className={`w-full bg-transparent text-sm pointer-coarse:text-base ${pad}`} />
+        <EditorContent editor={editor} className="w-full bg-transparent text-sm pointer-coarse:text-base px-3 py-2.5" />
       </ScrollArea>
       {isEmpty && (
-        <span className={`pointer-events-none absolute truncate text-sm text-muted-foreground pointer-coarse:text-base ${placeholderInset}`}>
+        <span className="pointer-events-none absolute truncate text-sm text-muted-foreground pointer-coarse:text-base inset-x-3 top-2.5">
           {placeholder}
         </span>
       )}

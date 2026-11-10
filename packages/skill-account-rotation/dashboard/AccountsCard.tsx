@@ -1,9 +1,10 @@
 import { useEffect, useRef, useState } from 'react'
-import { Check, Copy, Info, KeyRound, MoreHorizontal } from 'lucide-react'
-import { Button, Card, CardContent, CardHeader, CardTitle, ClaudeLogo, CodexLogo, GaugeFace, Input, Skeleton, Tooltip, TooltipContent, TooltipTrigger, cn, useModuleHost, usePolled, type ModuleCardProps, type ModuleHost } from '@openagt/dashboard/module'
+import { Check, ChevronDown, Copy, Info, KeyRound, MoreHorizontal, Plus } from 'lucide-react'
+import { Button, Card, CardContent, CardHeader, CardTitle, ClaudeLogo, CodexLogo, Dialog, DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, GaugeFace, Input, Skeleton, Tooltip, TooltipContent, TooltipTrigger, cn, useModuleHost, usePolled, type ModuleCardProps, type ModuleHost } from '@openagt/dashboard/module'
 
 // The accounts each coding agent's runs try, in order: how full each one is, whether it is at a
-// limit, adding one: the command's own sign-in, which goes on by itself while the card follows it.
+// limit, adding one: the command's own sign-in, which goes on by itself while the card follows it,
+// in a dialog the "Add" at the card's title opens (his pick over a sign-in unfolding inside the card).
 // A row looks as the Overview's other cards' do: the agent's mark, who, where it comes from, and how
 // full it is in rings as Devices has them. Pressing it opens what can be done with it: putting it
 // first, removing it, logging out.
@@ -197,91 +198,74 @@ function SigningIn({ agent, adding, noBrowser, onChanged }: { agent: (typeof AGE
 }
 
 /**
- * The foot of an agent's accounts: asking whose account to add, the sign-in under way, and why the
- * last one did not go through. On a server that uses a computer's logins, `from`, adding it there is
- * said first: signing in here is the longer way.
+ * What the dialog that adds an account holds: asking whose account it is, the sign-in under way,
+ * and why the last one did not go through. On a server that uses a computer's logins, `from`,
+ * adding it there is said first: signing in here is the longer way. `onClose` closes the dialog,
+ * which gives up a sign-in under way.
  */
-function AddAccount({ agent, now, from, naming, onNaming, onChanged }: { agent: (typeof AGENTS)[number]; now: AddingNow; from: string | undefined; naming: boolean; onNaming: (naming: boolean) => void; onChanged: () => void }) {
+function AddAccount({ agent, now, failed, from, onChanged, onClose }: { agent: (typeof AGENTS)[number]; now: AddingNow; failed: string | undefined; from: string | undefined; onChanged: () => void; onClose: () => void }) {
   const host = useModuleHost()
   const [name, setName] = useState('')
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string>()
   const [here, setHere] = useState(false)
-  const close = (): void => {
-    onNaming(false)
-    setHere(false)
-    setError(undefined)
-  }
-  const run = async (args: string[], then?: () => void): Promise<void> => {
+  const start = async (): Promise<void> => {
     setBusy(true)
     setError(undefined)
-    const done = await host.runComputerCommand(args)
+    const done = await host.runComputerCommand(['add', agent.id, name])
     setBusy(false)
-    if (done.ok) then?.()
-    else setError(done.error)
+    if (!done.ok) setError(done.error)
     onChanged()
   }
-  const shownError = error ?? now.failed
-  if (!now.adding && !naming && shownError === undefined) return null
+  const shownError = error ?? failed
   return (
-    <div className="space-y-2 pb-1.5 pt-1">
+    <div className="space-y-3">
       {now.adding ? (
+        <SigningIn agent={agent} adding={now.adding} noBrowser={now.noBrowser === true} onChanged={onChanged} />
+      ) : from !== undefined && !here ? (
         <>
-          <SigningIn agent={agent} adding={now.adding} noBrowser={now.noBrowser === true} onChanged={onChanged} />
-          <Button size="xs" variant="ghost" className="text-muted-foreground" disabled={busy} onClick={() => void run(['add-cancel', agent.id])}>
-            Cancel
+          <p className="text-sm">{agent.easiest(from)}</p>
+          <Button size="sm" variant="outline" onClick={() => setHere(true)}>
+            Sign in here instead
           </Button>
         </>
       ) : (
-        naming &&
-        (from !== undefined && !here ? (
-          <>
-            <p className="text-xs text-muted-foreground">{agent.easiest(from)}</p>
-            <div className="flex flex-wrap items-center gap-2">
-              <Button size="xs" variant="ghost" className="bg-muted" onClick={() => setHere(true)}>
-                Sign in here instead
-              </Button>
-              <Button size="xs" variant="ghost" onClick={close}>
-                Cancel
-              </Button>
-            </div>
-          </>
-        ) : (
-          <>
-            <form
-              className="flex flex-wrap items-center gap-2"
-              onSubmit={event => {
-                event.preventDefault()
-                void run(['add', agent.id, name], () => {
-                  close()
-                  setName('')
-                })
-              }}
-            >
-              <Input autoFocus aria-label="Whose account" placeholder="Whose account, e.g. Dani" value={name} onChange={event => setName(event.target.value)} className="h-8 min-w-0 flex-1 basis-32" />
-              <Button size="sm" type="submit" disabled={busy || name.trim() === ''}>
-                {agent.logIn}
-              </Button>
-              <Button size="sm" variant="ghost" type="button" onClick={close}>
-                Cancel
-              </Button>
-            </form>
-            <p className="text-xs text-muted-foreground">{now.noBrowser ? agent.helpNoBrowser : agent.help}</p>
-          </>
-        ))
+        <>
+          <form
+            className="flex flex-wrap items-center gap-2"
+            onSubmit={event => {
+              event.preventDefault()
+              void start()
+            }}
+          >
+            <Input autoFocus aria-label="Whose account" placeholder="Whose account, e.g. Dani" value={name} onChange={event => setName(event.target.value)} className="h-8 min-w-0 flex-1 basis-32" />
+            <Button size="sm" type="submit" disabled={busy || name.trim() === ''}>
+              {agent.logIn}
+            </Button>
+          </form>
+          <p className="text-xs text-muted-foreground">{now.noBrowser ? agent.helpNoBrowser : agent.help}</p>
+        </>
       )}
       {shownError !== undefined && (
         <p role="alert" className="whitespace-pre-line text-xs text-danger">
           {shownError}
         </p>
       )}
+      <div className="flex justify-end">
+        <Button size="sm" variant="ghost" onClick={onClose}>
+          Cancel
+        </Button>
+      </div>
     </div>
   )
 }
 
-function AgentAccounts({ agent, accounts, usage, reading, adding, from, naming, onNaming, where, onPress, onChanged, busy }: { agent: (typeof AGENTS)[number]; accounts: Account[]; usage: Usage[]; reading: boolean; adding: AddingNow; from: string | undefined; naming: boolean; onNaming: (naming: boolean) => void; where: ModuleCardProps['accountWhere']; onPress: (args: string[]) => void; onChanged: () => void; busy: boolean }) {
-  // The row that is open, and the press that waits for a yes in it: taking an account off is a sign-in to undo.
-  const [open, setOpen] = useState<{ name: string; asking?: 'remove' | 'logout' }>()
+/** An open row, and the press that waits for a yes in it: taking an account off is a sign-in to undo. */
+type Opened = { asking?: 'remove' | 'logout' }
+
+function AgentAccounts({ agent, accounts, usage, reading, where, onPress, busy }: { agent: (typeof AGENTS)[number]; accounts: Account[]; usage: Usage[]; reading: boolean; where: ModuleCardProps['accountWhere']; onPress: (args: string[]) => void; busy: boolean }) {
+  // One row is open at a time.
+  const [open, setOpen] = useState<{ name: string } & Opened>()
   const now = Date.now()
   const free = freeOnes(accounts, now)
   const press = (args: string[]): void => {
@@ -292,102 +276,152 @@ function AgentAccounts({ agent, accounts, usage, reading, adding, from, naming, 
     <section aria-label={agent.name} className="space-y-1 empty:hidden">
       {accounts.length > 0 && (
         <ul className="space-y-1">
-          {accounts.map((account, index) => {
-            const reads = usage.find(each => each.name === account.name)
-            const limited = isLimited(account, now)
-            const shown = account.who ?? account.name
-            const isOpen = open?.name === account.name
-            const more = details(account, reads, accounts.length > 1 && free[1] === account)
-            return (
-              <li key={account.name}>
-                <button
-                  type="button"
-                  aria-label={`Details of ${shown}`}
-                  aria-expanded={isOpen}
-                  onClick={() => setOpen(isOpen ? undefined : { name: account.name })}
-                  className="group -mx-2 flex w-[calc(100%+1rem)] min-w-0 items-center gap-2.5 rounded-md px-2 py-1 text-left transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-primary)]"
-                >
-                  <agent.Logo className="size-4 shrink-0 text-muted-foreground" />
-                  <span className="min-w-0 flex-1">
-                    <span className="flex min-w-0 items-center gap-1.5 text-sm">
-                      <span className="min-w-0 truncate font-medium">{shown}</span>
-                      {accounts.length > 1 && free[0] === account && <span className="shrink-0 text-xs text-success">in use</span>}
-                    </span>
-                    <span className={cn('block truncate text-xs', limited ? 'text-warning' : 'text-muted-foreground')}>{limited ? `limited, free in ${inWords(account.limitedUntil!, now)}` : source(account)}</span>
-                  </span>
-                  <MoreHorizontal className={cn('size-4 shrink-0 text-muted-foreground transition-opacity', isOpen ? 'opacity-100' : 'opacity-0 group-hover:opacity-100 group-focus-visible:opacity-100')} aria-hidden />
-                  {reading ? (
-                    <Skeleton className="size-8 shrink-0 rounded-full" />
-                  ) : (reads?.windows.length ?? 0) > 0 ? (
-                    <span className="flex shrink-0 gap-1.5">
-                      {reads!.windows.map(window => {
-                        const words = WINDOWS[window.window]
-                        const share = Math.round(window.percentUsed)
-                        return (
-                          <span key={window.window} role="meter" aria-label={words?.label ?? window.window} aria-valuenow={share} aria-valuemin={0} aria-valuemax={100} title={`${share}% ${words?.said ?? ''}`} className="flex w-8 flex-col items-center">
-                            <GaugeFace label={words?.label ?? window.window} share={share} />
-                          </span>
-                        )
-                      })}
-                    </span>
-                  ) : (
-                    // Every row has its ring, so a row with nothing to say still lines up; a dash claims no number.
-                    <span title={account.own ? 'No reading of its usage yet' : 'Not used yet'} className="flex w-8 shrink-0 flex-col items-center">
-                      <GaugeFace label="usage" share={undefined} />
-                    </span>
-                  )}
-                </button>
-                {/* Where it works, as the page it is on says it (the Permissions page: the person's devices). */}
-                {where && <div className="pl-[1.625rem]">{where({ agent: agent.id, own: account.own, name: account.name })}</div>}
-                {isOpen && (
-                  <div className="space-y-1.5 pb-1.5 pl-[1.625rem] pt-1">
-                    {open.asking ? (
-                      <>
-                        <p className="text-xs text-muted-foreground">
-                          {open.asking === 'logout' ? `Logs ${agent.name} out on ${account.computer ?? 'this computer'}, your terminal too.` : agent.remove}
-                          {open.asking === 'remove' && account.from !== undefined ? ` It stays off until you press Allow on ${account.from}.` : ''}
-                        </p>
-                        <div role="group" aria-label={open.asking === 'logout' ? `Log out ${shown}` : `Remove ${shown}'s account`} className="flex items-center gap-1">
-                          <Button size="xs" variant="destructive" disabled={busy} onClick={() => press(open.asking === 'logout' ? ['logout', agent.id] : ['remove', agent.id, account.name])}>
-                            {open.asking === 'logout' ? 'Log out' : 'Remove'}
-                          </Button>
-                          <Button size="xs" variant="ghost" disabled={busy} onClick={() => setOpen({ name: account.name })}>
-                            Cancel
-                          </Button>
-                        </div>
-                      </>
-                    ) : (
-                      <>
-                        {more !== '' && <p className="text-xs text-muted-foreground">{more}</p>}
-                        <div className="-ml-2 flex items-center gap-1">
-                          {index > 0 && (
-                            <Button variant="ghost" size="xs" disabled={busy} aria-label={`Use ${shown} first`} onClick={() => press(['use-first', agent.id, account.name])}>
-                              Use first
-                            </Button>
-                          )}
-                          {account.own && (
-                            <Button variant="ghost" size="xs" className="hover:text-danger" disabled={busy} aria-label={`Log out ${shown}`} onClick={() => setOpen({ name: account.name, asking: 'logout' })}>
-                              Log out
-                            </Button>
-                          )}
-                          {/* One a computer hands over as it is would be back within a minute: it is removed there. */}
-                          {!account.own && !account.comesBack && (
-                            <Button variant="ghost" size="xs" className="hover:text-danger" disabled={busy} aria-label={`Remove ${shown}'s account`} onClick={() => setOpen({ name: account.name, asking: 'remove' })}>
-                              Remove
-                            </Button>
-                          )}
-                        </div>
-                      </>
-                    )}
-                  </div>
-                )}
-              </li>
-            )
-          })}
+          {accounts.map((account, index) => (
+            <AccountRow
+              key={account.name}
+              agent={agent}
+              account={account}
+              reads={usage.find(each => each.name === account.name)}
+              reading={reading}
+              now={now}
+              inUse={accounts.length > 1 && free[0] === account}
+              next={accounts.length > 1 && free[1] === account}
+              first={index === 0}
+              where={where}
+              open={open?.name === account.name ? open : undefined}
+              onOpen={opened => setOpen(opened && { ...opened, name: account.name })}
+              onPress={press}
+              busy={busy}
+            />
+          ))}
         </ul>
       )}
-      <AddAccount agent={agent} now={adding} from={from} naming={naming} onNaming={onNaming} onChanged={onChanged} />
     </section>
+  )
+}
+
+/** One account's row: who it is, where it comes from, how full it is; pressed, what can be done with it. */
+function AccountRow({
+  agent,
+  account,
+  reads,
+  reading,
+  now,
+  inUse,
+  next,
+  first,
+  where,
+  open,
+  onOpen,
+  onPress,
+  busy,
+}: {
+  agent: (typeof AGENTS)[number]
+  account: Account
+  reads: Usage | undefined
+  reading: boolean
+  now: number
+  /** Runs are on it now, of two accounts or more. */
+  inUse: boolean
+  /** Runs go to it next, of two accounts or more. */
+  next: boolean
+  /** First in the order already. */
+  first: boolean
+  where: ModuleCardProps['accountWhere']
+  /** Undefined while the row is closed. */
+  open: Opened | undefined
+  onOpen: (open: Opened | undefined) => void
+  onPress: (args: string[]) => void
+  busy: boolean
+}) {
+  const limited = isLimited(account, now)
+  const shown = account.who ?? account.name
+  const isOpen = open !== undefined
+  const more = details(account, reads, next)
+  return (
+    <li>
+      <button
+        type="button"
+        aria-label={`Details of ${shown}`}
+        aria-expanded={isOpen}
+        onClick={() => onOpen(isOpen ? undefined : {})}
+        className="group -mx-2 flex w-[calc(100%+1rem)] min-w-0 items-center gap-2.5 rounded-md px-2 py-1 text-left transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-primary)]"
+      >
+        <agent.Logo className="size-4 shrink-0 text-muted-foreground" />
+        <span className="min-w-0 flex-1">
+          <span className="flex min-w-0 items-center gap-1.5 text-sm">
+            <span className="min-w-0 truncate font-medium">{shown}</span>
+            {inUse && <span className="shrink-0 text-xs text-success">in use</span>}
+          </span>
+          <span className={cn('block truncate text-xs', limited ? 'text-warning' : 'text-muted-foreground')}>{limited ? `limited, free in ${inWords(account.limitedUntil!, now)}` : source(account)}</span>
+        </span>
+        <MoreHorizontal className={cn('size-4 shrink-0 text-muted-foreground transition-opacity', isOpen ? 'opacity-100' : 'opacity-0 group-hover:opacity-100 group-focus-visible:opacity-100')} aria-hidden />
+        {reading ? (
+          <Skeleton className="size-8 shrink-0 rounded-full" />
+        ) : (reads?.windows.length ?? 0) > 0 ? (
+          <span className="flex shrink-0 gap-1.5">
+            {reads!.windows.map(window => {
+              const words = WINDOWS[window.window]
+              const share = Math.round(window.percentUsed)
+              return (
+                <span key={window.window} role="meter" aria-label={words?.label ?? window.window} aria-valuenow={share} aria-valuemin={0} aria-valuemax={100} title={`${share}% ${words?.said ?? ''}`} className="flex w-8 flex-col items-center">
+                  <GaugeFace label={words?.label ?? window.window} share={share} />
+                </span>
+              )
+            })}
+          </span>
+        ) : (
+          // Every row has its ring, so a row with nothing to say still lines up; a dash claims no number.
+          <span title={account.own ? 'No reading of its usage yet' : 'Not used yet'} className="flex w-8 shrink-0 flex-col items-center">
+            <GaugeFace label="usage" share={undefined} />
+          </span>
+        )}
+      </button>
+      {/* Where it works, as the page it is on says it (the Permissions page: the person's devices). */}
+      {where && <div className="pl-[1.625rem]">{where({ agent: agent.id, own: account.own, name: account.name })}</div>}
+      {isOpen && (
+        <div className="space-y-1.5 pb-1.5 pl-[1.625rem] pt-1">
+          {open.asking ? (
+            <>
+              <p className="text-xs text-muted-foreground">
+                {open.asking === 'logout' ? `Logs ${agent.name} out on ${account.computer ?? 'this computer'}, your terminal too.` : agent.remove}
+                {open.asking === 'remove' && account.from !== undefined ? ` It stays off until you press Allow on ${account.from}.` : ''}
+              </p>
+              <div role="group" aria-label={open.asking === 'logout' ? `Log out ${shown}` : `Remove ${shown}'s account`} className="flex items-center gap-1">
+                <Button size="xs" variant="destructive" disabled={busy} onClick={() => onPress(open.asking === 'logout' ? ['logout', agent.id] : ['remove', agent.id, account.name])}>
+                  {open.asking === 'logout' ? 'Log out' : 'Remove'}
+                </Button>
+                <Button size="xs" variant="ghost" disabled={busy} onClick={() => onOpen({})}>
+                  Cancel
+                </Button>
+              </div>
+            </>
+          ) : (
+            <>
+              {more !== '' && <p className="text-xs text-muted-foreground">{more}</p>}
+              <div className="-ml-2 flex items-center gap-1">
+                {!first && (
+                  <Button variant="ghost" size="xs" disabled={busy} aria-label={`Use ${shown} first`} onClick={() => onPress(['use-first', agent.id, account.name])}>
+                    Use first
+                  </Button>
+                )}
+                {account.own && (
+                  <Button variant="ghost" size="xs" className="hover:text-danger" disabled={busy} aria-label={`Log out ${shown}`} onClick={() => onOpen({ asking: 'logout' })}>
+                    Log out
+                  </Button>
+                )}
+                {/* One a computer hands over as it is would be back within a minute: it is removed there. */}
+                {!account.own && !account.comesBack && (
+                  <Button variant="ghost" size="xs" className="hover:text-danger" disabled={busy} aria-label={`Remove ${shown}'s account`} onClick={() => onOpen({ asking: 'remove' })}>
+                    Remove
+                  </Button>
+                )}
+              </div>
+            </>
+          )}
+        </div>
+      )}
+    </li>
   )
 }
 
@@ -407,12 +441,22 @@ export function AccountsCard({ accountWhere }: ModuleCardProps) {
     [following],
     'previous',
   )
-  const underWay = AGENTS.some(agent => adding?.[agent.id]?.adding !== undefined)
+  // The agent an account is being added for: the dialog is open on it, from the press until the account is there or the dialog is closed.
+  const [naming, setNaming] = useState<AgentId>()
+  // Why the last sign-in did not go through, once the person closed the dialog on it: not said again when it opens next.
+  const [dismissed, setDismissed] = useState<string>()
+  const signingIn = AGENTS.find(agent => adding?.[agent.id]?.adding !== undefined)?.id
+  const underWay = signingIn !== undefined
   const wasUnderWay = useRef(false)
   useEffect(() => {
-    if (underWay) setFollowing(true)
-    else if (wasUnderWay.current) {
+    if (underWay) {
+      setFollowing(true)
+      // A sign-in found under way, started before this page was opened, is shown as it is.
+      setNaming(now => now ?? signingIn)
+    } else if (wasUnderWay.current) {
       setFollowing(false)
+      // The account is there: the dialog closes on it. One that did not go through stays, with why.
+      setNaming(now => (now !== undefined && adding?.[now]?.failed === undefined ? undefined : now))
       void reload()
       void reloadUsage()
     }
@@ -426,7 +470,6 @@ export function AccountsCard({ accountWhere }: ModuleCardProps) {
   }
   const [busy, setBusy] = useState(false)
   const [failed, setFailed] = useState<string>()
-  const [naming, setNaming] = useState<AgentId>()
 
   const press = (args: string[]): void => {
     setBusy(true)
@@ -440,27 +483,60 @@ export function AccountsCard({ accountWhere }: ModuleCardProps) {
       .finally(() => setBusy(false))
   }
 
+  /** Closing the dialog gives up the sign-in under way, as its Cancel does. */
+  const close = (): void => {
+    const agent = naming
+    setNaming(undefined)
+    if (agent === undefined) return
+    setDismissed(adding?.[agent]?.failed)
+    if (adding?.[agent]?.adding) void host.runComputerCommand(['add-cancel', agent]).then(changed)
+  }
+
   // Rotation does something only for an agent with two accounts or more.
-  const rotates = list?.ok === true && AGENTS.some(agent => (list.accounts[agent.id] ?? []).filter(account => !account.signedOut).length > 1)
+  const shown = (agent: AgentId): Account[] => (list?.ok ? (list.accounts[agent] ?? []).filter(account => !account.signedOut) : [])
+  const rotates = AGENTS.some(agent => shown(agent.id).length > 1)
+  const none = list?.ok === true && AGENTS.every(agent => shown(agent.id).length === 0)
+  const namingAgent = AGENTS.find(agent => agent.id === naming)
+  const namingNow = (naming !== undefined ? adding?.[naming] : undefined) ?? {}
 
   return (
     <Card>
       <CardHeader>
-        <CardTitle className="text-base">
-          <span className="inline-flex items-center gap-2">
-            <KeyRound className="h-4 w-4 text-muted-foreground" aria-hidden />
-            Coding agent accounts
-            {/* What this card's package does with them, said only where it does something: an agent with two accounts or more. */}
-            {rotates && (
-              <Tooltip>
-                <TooltipTrigger render={<button type="button" aria-label="What happens at an account's limit" className="font-normal text-muted-foreground hover:text-foreground" />}>
-                  <Info className="h-3.5 w-3.5" aria-hidden />
-                </TooltipTrigger>
-                <TooltipContent className="max-w-xs">When an account hits its limit, the next free one of the same agent takes the run over where it stopped.</TooltipContent>
-              </Tooltip>
-            )}
-          </span>
-        </CardTitle>
+        <div className="flex items-center justify-between gap-2">
+          <CardTitle className="text-base">
+            <span className="inline-flex items-center gap-2">
+              <KeyRound className="h-4 w-4 text-muted-foreground" aria-hidden />
+              Coding agent accounts
+              {/* What this card's package does with them, said only where it does something: an agent with two accounts or more. */}
+              {rotates && (
+                <Tooltip>
+                  <TooltipTrigger render={<button type="button" aria-label="What happens at an account's limit" className="font-normal text-muted-foreground hover:text-foreground" />}>
+                    <Info className="h-3.5 w-3.5" aria-hidden />
+                  </TooltipTrigger>
+                  <TooltipContent className="max-w-xs">When an account hits its limit, the next free one of the same agent takes the run over where it stopped.</TooltipContent>
+                </Tooltip>
+              )}
+            </span>
+          </CardTitle>
+          {/* Another account, at the card's title: whose agent it is for, then its sign-in in a dialog. With none yet, the presses are in the card. */}
+          {list?.ok && !none && (
+            <DropdownMenu>
+              <DropdownMenuTrigger render={<Button size="sm" variant="outline" aria-label="Add an account" />}>
+                <Plus className="size-3.5" aria-hidden />
+                Add
+                <ChevronDown className="size-3 opacity-70" aria-hidden />
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="min-w-[10rem]">
+                {AGENTS.map(agent => (
+                  <DropdownMenuItem key={agent.id} aria-label={`Add ${agent.name} account`} onClick={() => setNaming(agent.id)}>
+                    <agent.Logo className="size-3.5" />
+                    {agent.name}
+                  </DropdownMenuItem>
+                ))}
+              </DropdownMenuContent>
+            </DropdownMenu>
+          )}
+        </div>
       </CardHeader>
       <CardContent className="flex flex-col gap-1">
         {list === undefined && !loaded && <Skeleton className="h-16 w-full" />}
@@ -470,33 +546,51 @@ export function AccountsCard({ accountWhere }: ModuleCardProps) {
             <AgentAccounts
               key={agent.id}
               agent={agent}
-              // A login that is not there has no row: the agent still has its press to add one, a server's first included.
-              accounts={(list.accounts[agent.id] ?? []).filter(account => !account.signedOut)}
+              // A login that is not there has no row: the card says so below, with the press to add one, a server's first included.
+              accounts={shown(agent.id)}
               usage={usage?.ok ? (usage.accounts[agent.id] ?? []) : []}
               reading={usage === undefined}
-              adding={adding?.[agent.id] ?? {}}
-              naming={naming === agent.id}
-              onNaming={on => setNaming(on ? agent.id : undefined)}
               where={accountWhere}
-              from={AGENTS.flatMap(each => list.accounts[each.id] ?? []).find(account => account.from !== undefined)?.from}
               busy={busy}
               onPress={press}
-              onChanged={changed}
             />
           ))}
         {failed !== undefined && <p className="text-sm text-danger">{failed}</p>}
-        {list?.ok && (
-          <div className="flex flex-wrap items-center gap-x-1 pt-1.5">
-            <span className="text-xs text-muted-foreground">Add account</span>
-            {AGENTS.filter(agent => !adding?.[agent.id]?.adding).map(agent => (
-              <Button key={agent.id} size="xs" variant="ghost" className="font-normal" aria-label={`Add ${agent.name} account`} onClick={() => setNaming(agent.id)}>
+        {/* A sign-in that did not go through while nobody watched it, a page opened since: said here, as the dialog is closed. */}
+        {AGENTS.map(agent => {
+          const why = adding?.[agent.id]?.failed
+          return why !== undefined && why !== dismissed && naming !== agent.id ? (
+            <p key={agent.id} role="alert" className="whitespace-pre-line text-xs text-danger">
+              {`${agent.name}: ${why}`}
+            </p>
+          ) : null
+        })}
+        {/* No account at all: the press is said in the card too, where a newcomer looks, not only at its corner. */}
+        {none && (
+          <div className="flex flex-wrap items-center gap-2">
+            <p className="min-w-0 flex-1 basis-48 text-sm text-muted-foreground">No account yet. Runs need one to start.</p>
+            {AGENTS.map(agent => (
+              <Button key={agent.id} size="sm" variant="outline" onClick={() => setNaming(agent.id)}>
                 <agent.Logo className="size-3.5" />
-                {agent.name}
+                {agent.logIn}
               </Button>
             ))}
           </div>
         )}
       </CardContent>
+      <Dialog open={namingAgent !== undefined} onOpenChange={open => !open && close()} title={namingAgent ? `Add a ${namingAgent.name} account` : ''}>
+        {namingAgent && (
+          <AddAccount
+            key={namingAgent.id}
+            agent={namingAgent}
+            now={namingNow}
+            failed={namingNow.failed !== dismissed ? namingNow.failed : undefined}
+            from={list?.ok ? AGENTS.flatMap(each => list.accounts[each.id] ?? []).find(account => account.from !== undefined)?.from : undefined}
+            onChanged={changed}
+            onClose={close}
+          />
+        )}
+      </Dialog>
     </Card>
   )
 }

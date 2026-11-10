@@ -1,14 +1,21 @@
 import { useEffect, useRef, useState } from 'react'
-import type { MouseEvent } from 'react'
+import type { MouseEvent, ReactNode } from 'react'
 import { mono } from './ui'
 
-export const SECTIONS = [
+const SECTIONS: { id: string; title: ReactNode }[] = [
   { id: 'stop-babysitting', title: 'Stop babysitting' },
   { id: 'autonomous-ai', title: 'Autonomous AI' },
   { id: 'how-it-works', title: 'How it works' },
   { id: 'features', title: 'Features' },
-  { id: 'your-framework', title: 'Your framework', italicFirst: true },
-] as const
+  {
+    id: 'your-framework',
+    title: (
+      <>
+        <em style={{ fontStyle: 'italic' }}>Your</em> framework
+      </>
+    ),
+  },
+]
 
 function scrollTop(e: MouseEvent) {
   e.preventDefault()
@@ -153,13 +160,7 @@ export function SectionNav() {
               className={'section-link' + (active === s.id ? ' active' : '')}
               style={{ flex: 'none', padding: '17px 2px 15px' }}
             >
-              {'italicFirst' in s && s.italicFirst ? (
-                <>
-                  <em style={{ fontStyle: 'italic' }}>Your</em> framework
-                </>
-              ) : (
-                s.title
-              )}
+              {s.title}
             </a>
           ))}
           <span style={{ flex: 1 }} />

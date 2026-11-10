@@ -3,7 +3,7 @@ import { join } from 'node:path'
 import { parse as parseYaml } from 'yaml'
 import { HARNESS_SKILL_DIRS } from '@openagt/skill-branches'
 import { automationOf, isPlainFile, standsAlone } from './automation-file.js'
-import { AGENTS, AGENT_SKILLS_DIR, DEFAULT_AGENT, DEFAULT_CAP, FOUND_MAX, MAX_AGENTS, OWN_AUTOMATIONS_DIR, OWN_TEXT_MAX, RUN_SKILLS_DIR, SKILL_FILE, isAgent, isAgents, type AgentName } from './names.js'
+import { AGENTS, AGENT_SKILLS_DIR, DEFAULT_AGENT, DEFAULT_CAP, MAX_AGENTS, OWN_AUTOMATIONS_DIR, OWN_TEXT_MAX, RUN_SKILLS_DIR, SKILL_FILE, isAgent, isAgents, type AgentName } from './names.js'
 import { parseInterval, type Interval } from './pace.js'
 
 /**
@@ -111,11 +111,23 @@ export interface ScheduledCommand {
   editable?: true
 }
 
+/** A skill whose `schedule` could not be read, with why; or, marked `own`, an automation kept on this machine that is not listed. */
+export interface Unlisted {
+  skill: string
+  reason: string
+  own?: true
+}
+
+/** Why the schedule lists nothing under a name, in one line for a person. */
+export function whyUnlisted(unlisted: Unlisted): string {
+  return `${unlisted.own ? `the automation ${unlisted.skill}, kept on this machine, is not listed` : `the schedule of ${unlisted.skill} cannot be read`}: ${unlisted.reason}`
+}
+
 /** The schedule as read. */
 export interface Schedule {
   commands: ScheduledCommand[]
-  /** The skills whose `schedule` could not be read, each with why; and, marked `own`, the automations kept on this machine that are not listed. */
-  unreadable: { skill: string; reason: string; own?: true }[]
+  /** The skills whose `schedule` could not be read, and the automations kept on this machine that are not listed. */
+  unreadable: Unlisted[]
   /** The names a skill of the project and an automation kept on this machine both have: neither is listed, and this machine's picks under such a name are taken back. */
   clashes?: string[]
 }
@@ -327,133 +339,12 @@ export function homeAgent(command: Pick<ScheduledCommand, 'agent' | 'dirs' | 'te
  * The prompt a command runs with: its slash command, which the agent's harness expands, the word
  * after it handed to the skill. An automation kept on this machine is no command in a run's
  * checkout: its prompt is its name alone, with no slash, and its text is handed over with it
- * ({@link ownAttached}). Either way the prompt names the command, which is what its runs are
+ * (`ownAttached`, in `check.ts`). Either way the prompt names the command, which is what its runs are
  * counted by, whatever its text says and however the text changes.
  */
 export function commandPrompt(command: Pick<ScheduledCommand, 'name' | 'text'>): string {
   return command.text === undefined ? `/${command.name}` : command.name
 }
-
-/**
- * What a run of an automation kept on this machine is handed with its prompt: the automation's
- * text, and after it, when a check started the run, the sentence that says so and what the check
- * printed.
- */
-export function ownAttached(text: string, found?: { stdout: string; lastRun: string }): string {
-  return found ? `${text}\n\n${FOUND_OPENING_OWN}\n${foundOutput(found.stdout, found.lastRun)}` : text
-}
-
-/** What is said before a check's output to a run of an automation kept on this machine: its work is said by the text above, not by a command. */
-export const FOUND_OPENING_OWN = 'The scheduler starts this when its check prints something, and this time the check printed what is below. It says why this run started; what the work is, the text above says.'
-
-/**
- * The time a check is given as `$LAST_RUN`: an ISO time in UTC to the whole second
- * (`2026-10-09T10:00:00Z`), the shape `gh --search`, a GitHub `since` and `jq`'s `fromdate` all
- * read. The fraction of a second is dropped, never rounded up: a thing that came in that same
- * second is found twice rather than never.
- */
-export function lastRunValue(iso: string): string {
-  return new Date(Math.floor(Date.parse(iso) / 1000) * 1000).toISOString().replace('.000Z', 'Z')
-}
-
-/**
- * What a run is handed with its prompt when a check started it: {@link FOUND_OPENING}, then what
- * the check printed, so an agent whose command asks for the new thing has it. The command's prompt
- * stays the command alone: it is what the run is counted under.
- *
- * A NUL character is dropped: the text travels as a command-line argument, which can hold none.
- * Output past {@link FOUND_MAX} characters is cut at the end of the last whole line that fits,
- * mid-line when its first line alone is longer. A last line then says how much was printed and
- * the time the check was given: the next check asks from this run's start, so what was cut is
- * found again only by an agent that asks from that earlier time itself.
- */
-export function checkFound(stdout: string, lastRun: string): string {
-  return `${FOUND_OPENING}\n${foundOutput(stdout, lastRun)}`
-}
-
-/** What a check printed, as a run is handed it and as a person trying the check is shown it: without NUL characters and outer blank lines, cut when it is long, the cut said in a last line. */
-export function foundOutput(stdout: string, lastRun: string): string {
-  const printed = stdout.replaceAll('\0', '').trim()
-  if (printed.length <= FOUND_MAX) return printed
-  const fits = printed.slice(0, FOUND_MAX)
-  // A line that ends exactly at the limit is whole: the line end is the next character.
-  const lineEnd = printed[FOUND_MAX] === '\n' ? FOUND_MAX : fits.lastIndexOf('\n')
-  const shown = lineEnd > 0 ? fits.slice(0, lineEnd) : fits
-  return `${shown}\n(cut: the check printed ${printed.length} characters, these are the first ${shown.length}; it asked what is new since ${lastRun})`
-}
-
-/**
- * What is said before a check's output. The agent has never seen the check, and a check may print
- * only a sign that there is work (one issue of five that changed): so the words say what the
- * output is, and that the command, not the output, says what the work is.
- */
-export const FOUND_OPENING = 'The scheduler starts this command when its check prints something, and this time the check printed what is below. It says why this run started; what the work is, the command says.'
-
-/** An item a row with `each` printed: a run to continue, with its words. */
-export interface ResumeItem {
-  run: string
-  text: string
-}
-
-/** An item a row with `each` printed: what a new run is for, its words, and the branch it works on when one is named. */
-export interface StartItem {
-  for: string
-  text: string
-  branch?: string
-}
-
-/**
- * What a row with `each` printed: each run it names with its words, a run named twice once with
- * its words joined, and each new run it asks for, what it is for named twice once, the same way.
- * Nothing for output that says no work ({@link isDue}); a reason for output that is no such list.
- */
-export function eachItems(stdout: string): { resumes: ResumeItem[]; starts: StartItem[] } | string {
-  if (!isDue(stdout)) return { resumes: [], starts: [] }
-  let value: unknown
-  try {
-    value = JSON.parse(stdout)
-  } catch {
-    return 'the check printed no JSON'
-  }
-  if (!Array.isArray(value)) return 'the check printed no list'
-  const runs = new Map<string, string[]>()
-  const starts = new Map<string, { texts: string[]; branch?: string }>()
-  for (const item of value) {
-    const field = (key: string): string | undefined => (isMap(item) && typeof item[key] === 'string' && item[key].trim() ? item[key].trim() : undefined)
-    const [text, run, what, branch] = [field('text'), field('run'), field('for'), field('branch')]
-    const named = isMap(item) && item['branch'] !== undefined
-    if (text === undefined || (run === undefined) === (what === undefined) || (named && (branch === undefined || run !== undefined))) return 'an item of the list is no { "run": "<id>", "text": "…" } and no { "for": "<what>", "text": "…" }, with "branch" only beside "for"'
-    if (run !== undefined) runs.set(run, [...(runs.get(run) ?? []), text])
-    else {
-      // What a run is for named twice: its words joined, on the first branch named.
-      const before = starts.get(what!)
-      const on = before?.branch ?? branch
-      starts.set(what!, { texts: [...(before?.texts ?? []), text], ...(on !== undefined ? { branch: on } : {}) })
-    }
-  }
-  return {
-    resumes: [...runs].map(([run, texts]) => ({ run, text: texts.join('\n\n') })),
-    starts: [...starts].map(([what, { texts, branch }]) => ({ for: what, text: texts.join('\n\n'), ...(branch !== undefined ? { branch } : {}) })),
-  }
-}
-
-/**
- * What a run a row resumes is told: the command, as a run it starts is sent, then
- * {@link RESUMED_OPENING} and the check's words for that run; for an automation kept on this
- * machine, its name, its text, then the opening and the words. One text: a resume takes no
- * attached text.
- */
-export function resumeText(command: Pick<ScheduledCommand, 'name' | 'text'>, words: string, lastRun: string): string {
-  const found = foundOutput(words, lastRun)
-  const said = command.text !== undefined ? `${command.text}\n\n${RESUMED_OPENING_OWN}\n${found}` : `${RESUMED_OPENING}\n${found}`
-  return `${commandPrompt(command)}\n\n${said}`
-}
-
-/** What is said before the check's words to a run a row resumes: the run has never seen the check, and the command, not the words, says what the work is. */
-export const RESUMED_OPENING = 'The scheduler continues this run with this command when its check names the run, and this time the check said what is below for it. It says why the run continues; what the work is, the command says.'
-
-/** The same for a run an automation kept on this machine resumes: its work is said by the text above. */
-export const RESUMED_OPENING_OWN = 'The scheduler continues this run with this when its check names the run, and this time the check said what is below for it. It says why the run continues; what the work is, the text above says.'
 
 /**
  * The command a run's prompt is counted under, so a run a person started counts against that
@@ -474,25 +365,4 @@ export function promptCommand(prompt: string, schedule: Schedule): string | unde
   if (skills.some(c => c.name === named)) return named
   const first = named.split(/\s+/)[0]!
   return skills.some(c => c.name === first) ? first : undefined
-}
-
-/**
- * Whether a check's output says the command is due (#1774): the output parsed as JSON is
- * something other than empty — `[]`, `{}`, `null`, `false`, `""`, `0` and no output at all are not
- * due. Every skill command prints JSON on stdout, so a check like `npx @openagt/skill-queue@0.1` needs no piping.
- * Output that is not JSON counts by its text: anything non-blank is due.
- */
-export function isDue(stdout: string): boolean {
-  const text = stdout.trim()
-  if (!text) return false
-  let value: unknown
-  try {
-    value = JSON.parse(text)
-  } catch {
-    return true
-  }
-  if (value === null || value === false || value === '' || value === 0) return false
-  if (Array.isArray(value)) return value.length > 0
-  if (typeof value === 'object') return Object.keys(value as object).length > 0
-  return true
 }

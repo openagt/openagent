@@ -1,12 +1,12 @@
 import { mkdir, readdir, readFile, realpath, rename, rmdir, unlink, writeFile } from 'node:fs/promises'
 import { dirname, join } from 'node:path'
-import { excludeFromGit, originDefaultBranch, type GitRunner } from '@openagt/agent-data'
+import { excludeFromGit, type GitRunner } from '@openagt/agent-data'
 import { HARNESS_SKILL_DIRS } from '@openagt/skill-branches'
-import { MAX_NAME, NEVER_STARTED_SINCE_MS, OWN_AUTOMATIONS_DIR, OWN_TEXT_MAX, RUN_SKILLS_DIR, SKILL_FILE, STATE_DIR, TRY_TIMEOUT_MS, isCommandName } from './names.js'
+import { MAX_NAME, OWN_AUTOMATIONS_DIR, OWN_TEXT_MAX, RUN_SKILLS_DIR, SKILL_FILE, STATE_DIR, isCommandName } from './names.js'
 import { createHash } from 'node:crypto'
 import { FOLDER_LITTER, HALF_SAVED, automationOf, automationSkill, frontMatterOf, wellFormed, type NewAutomation } from './automation-file.js'
-import { foundOutput, isDue, lastRunValue, readSchedule, skillFile, skillSchedule } from './schedule.js'
-import { runCheck } from './tick.js'
+import { readSchedule, skillFile, skillSchedule, whyUnlisted } from './schedule.js'
+import { startRef } from './start-point.js'
 
 /**
  * A person's own automation: a prompt they wrote, saved as a command skill of the project, so it
@@ -53,6 +53,12 @@ export function automationProblem(automation: NewAutomation): AddRefusal | undef
   return undefined
 }
 
+/** Why an automation's prompt is too long to keep on this machine, or nothing: its text travels to each run as one command-line argument, so a longer one could be saved and never listed. */
+function tooLongHere(automation: NewAutomation): AddRefusal | undefined {
+  const length = automation.prompt.trim().length
+  return length > OWN_TEXT_MAX ? { ok: false, reason: 'long-prompt', detail: `the prompt is ${length} characters, and one kept on this machine has ${OWN_TEXT_MAX} at most` } : undefined
+}
+
 /** Where an automation's file was written, new or anew, and what whoever asked needs to say about it. */
 export interface Written {
   ok: true
@@ -95,12 +101,10 @@ export async function addAutomation(repo: string, automation: NewAutomation, git
   }
   const kept = (await readdir(join(repo, OWN_AUTOMATIONS_DIR)).catch((): string[] => [])).find(file => file.toLowerCase() === `${automation.name}.md`)
   if (kept !== undefined) return { ok: false, reason: 'taken', folder: `${OWN_AUTOMATIONS_DIR}/${kept}` }
-  const origin = await originDefaultBranch(repo, git).catch(() => undefined)
-  const startsFrom = origin ?? 'HEAD'
+  const startsFrom = await startRef(repo, git)
   if (opts.onThisMachine) {
-    // Its text travels to each run as one command-line argument: a longer one could be saved and never listed.
-    const length = automation.prompt.trim().length
-    if (length > OWN_TEXT_MAX) return { ok: false, reason: 'long-prompt', detail: `the prompt is ${length} characters, and one kept on this machine has ${OWN_TEXT_MAX} at most` }
+    const tooLong = tooLongHere(automation)
+    if (tooLong) return tooLong
     const file = `${OWN_AUTOMATIONS_DIR}/${automation.name}.md`
     await mkdir(join(repo, OWN_AUTOMATIONS_DIR), { recursive: true })
     // The tool's folder is hidden from git before anything of a person's is in it; best-effort, as for the state.
@@ -168,7 +172,7 @@ export async function savedAutomation(repo: string, name: string): Promise<Saved
   if (!command) {
     const unlisted = schedule.unreadable.find(u => u.skill === name)
     if (!unlisted) return none(`the schedule lists nothing named ${name}`)
-    return none(`${unlisted.own ? `the automation ${name}, kept on this machine, is not listed` : `the schedule of ${name} cannot be read`}: ${unlisted.reason}`)
+    return none(whyUnlisted(unlisted))
   }
   const kept = command.text !== undefined
   const file = kept ? `${OWN_AUTOMATIONS_DIR}/${name}.md` : skillFile(command)
@@ -215,8 +219,8 @@ export async function editAutomation(repo: string, name: string, change: Automat
   const automation: NewAutomation = { name, prompt: change.prompt ?? was.prompt, ...(every !== undefined ? { every } : {}), ...(when !== undefined ? { when } : {}), ...(waitsFor !== undefined ? { waitsFor } : {}) }
   const problem = automationProblem(automation)
   if (problem) return problem
-  const length = automation.prompt.trim().length
-  if (found.onThisMachine && length > OWN_TEXT_MAX) return { ok: false, reason: 'long-prompt', detail: `the prompt is ${length} characters, and one kept on this machine has ${OWN_TEXT_MAX} at most` }
+  const tooLong = found.onThisMachine ? tooLongHere(automation) : undefined
+  if (tooLong) return tooLong
   // Written beside the file and moved over it: a write that fails midway leaves the automation as it was, not a cut file.
   const path = join(repo, found.file)
   const text = automationSkill(automation)
@@ -227,8 +231,7 @@ export async function editAutomation(repo: string, name: string, change: Automat
     await unlink(`${path}.new`).catch(() => {})
     throw err
   }
-  const startsFrom = (await originDefaultBranch(repo, git).catch(() => undefined)) ?? 'HEAD'
-  return { ok: true, command: name, file: found.file, startsFrom, version: versionOf(text), ...(found.onThisMachine ? { onThisMachine: true as const } : {}) }
+  return { ok: true, command: name, file: found.file, startsFrom: await startRef(repo, git), version: versionOf(text), ...(found.onThisMachine ? { onThisMachine: true as const } : {}) }
 }
 
 /** What removing an automation did, and what whoever asked needs to say about it. */
@@ -277,41 +280,5 @@ export async function removeAutomation(repo: string, name: string, git: GitRunne
   await rmdir(folder).catch(() => {})
   // One line for the one file, its first letter what the index holds: `A` for a file added and never committed.
   const held = await git(['status', '--porcelain', '--', join(folder, SKILL_FILE)], repo).catch(() => undefined)
-  const startsFrom = (await originDefaultBranch(repo, git).catch(() => undefined)) ?? 'HEAD'
-  return { ok: true, command: name, file: found.file, git: held === undefined ? 'unknown' : held.trim() === '' ? 'nothing' : held.startsWith('A') ? 'staged' : 'committed', startsFrom }
-}
-
-
-/** How much of a failed check's last line of error is answered, in characters. */
-const ERROR_MAX = 500
-
-/** What trying a check answered. */
-export interface Tried {
-  /** The time the check was given as `$LAST_RUN`. */
-  lastRun: string
-  /** Whether the check ran to its end without an error. */
-  ran: boolean
-  /** Whether what it printed would start an agent. */
-  due: boolean
-  /** What it printed, cut as a run is handed it, with the line that says it was cut. */
-  printed: string
-  /** Why it did not run, when it did not: that it took too long, or the last line of what it said went wrong. */
-  error?: string
-}
-
-/**
- * Run a check once, as the tick would, and say what it printed and whether an agent would start:
- * nothing is saved and nothing is started. It asks what is new since a day ago. A try has less
- * time than a tick gives a check ({@link TRY_TIMEOUT_MS}): whoever asks, a dashboard, waits for
- * the answer, and gives up before a tick would.
- */
-export async function tryCheck(repo: string, shell: string, now: Date, check: typeof runCheck = runCheck, budgetMs: number = TRY_TIMEOUT_MS): Promise<Tried> {
-  const lastRun = lastRunValue(new Date(now.getTime() - NEVER_STARTED_SINCE_MS).toISOString())
-  const started = Date.now()
-  const checked = await check(repo, shell, budgetMs, lastRun)
-  const printed = foundOutput(checked.stdout, lastRun)
-  if (checked.ok) return { lastRun, ran: true, due: isDue(checked.stdout), printed }
-  const said = checked.stderr.trim().split('\n').at(-1) ?? ''
-  const error = Date.now() - started >= budgetMs ? `it took longer than ${budgetMs / 1000} seconds` : said.length > ERROR_MAX ? `${said.slice(0, ERROR_MAX)}…` : said
-  return { lastRun, ran: false, due: false, printed, error }
+  return { ok: true, command: name, file: found.file, git: held === undefined ? 'unknown' : held.trim() === '' ? 'nothing' : held.startsWith('A') ? 'staged' : 'committed', startsFrom: await startRef(repo, git) }
 }

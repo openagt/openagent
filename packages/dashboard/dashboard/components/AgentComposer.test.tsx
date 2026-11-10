@@ -36,7 +36,7 @@ vi.mock('./Composer.js', async () => {
         submit later
       </button>
       <span data-testid="composer-props">
-        {JSON.stringify({ showDriverModel: props.showDriverModel, inAgent: props.inAgent, busyLabel: props.submitBusyLabel, placeholder: props.placeholder, sessionModel: props.sessionModel })}
+        {JSON.stringify({ inAgent: props.inAgent, busyLabel: props.submitBusyLabel, placeholder: props.placeholder, sessionModel: props.sessionModel })}
       </span>
       {/* The empty-box slot control (#1455), rendered so the Stop/Resume tests can press it. */}
       {props.idleControl}
@@ -56,7 +56,7 @@ function renderComposer(over: Partial<Parameters<typeof AgentComposer>[0]> = {})
   return { onAgentStarted }
 }
 
-const props = (): { showDriverModel: boolean; inAgent: boolean; busyLabel: string; placeholder: string; sessionModel?: string } =>
+const props = (): { inAgent: boolean; busyLabel: string; placeholder: string; sessionModel?: string } =>
   JSON.parse(screen.getByTestId('composer-props').textContent ?? '{}')
 
 beforeEach(() => {
@@ -259,7 +259,6 @@ describe('AgentComposer, ended (#720, #1774)', () => {
 
   test('offers no driver/model select and no "Run on", since a session cannot change either (#831)', () => {
     renderComposer({ live: false })
-    expect(props().showDriverModel).toBe(false)
     expect(props().inAgent).toBe(true)
   })
 })

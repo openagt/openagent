@@ -1,36 +1,8 @@
 // The dashboard's RPC surface (#405), served in-process by the daemon so `sendStart` can reach
-// the daemon's own `startAgent`. The browser calls these by name over `POST /_rpc/<name>`; the
-// dashboard's `rpc/` modules are typed stubs against these signatures, so a rename that misses
-// one is a type error rather than a 404 at runtime.
-export { onAgents, onStartedName, onModuleAgents, onAgent, onAgentsDoing, onDocs, onQueue, onOverview, onRecentAgents, onInterventions, onActivity, onDashboard, onGitHostHome, onRepositoryOffer, onGitStatus, onProjectFiles, onRetainedWorktrees, onAgentWorktree, onAgentMainBranch, onAgentHandoff, onBridgeQuestion, onBridgeStatus, onBridgeToken, onBridgeEvents, onBridgeAnswer, onBridgeBrowser } from './reads.js'
-export { sendStop, sendChoice, sendBridgeAnswer, sendBridgeAnswerCancel, sendBridgeBrowser, sendMessage, sendStart, sendOpenInApp, sendRemoveWorktree, sendDeleteAgent, sendOpenPullRequest, sendPush, sendMergeBranch, sendMerge, sendCreateRepository } from './control.js'
-export { streamAgentEvents, type LiveFeedEvent, type PartialMessage, type StreamSync } from './events.js'
-export { onProjects, sendAddProject, sendStartedAgain, onCloneTarget, sendAddProjectFromAddress, sendRemoveProject, sendShareRecords, sendPickProjectDirectory, onRepos, sendAddRepoFolder, onCommands, onStartBranches, onStartCheck, onCloneCheck, type ProjectLauncher } from './projects.js'
-export {
-  onPreferences,
-  savePreferences,
-  patchPreferences,
-  onProjectPresets,
-  saveProjectPresets,
-  onEditors,
-  type SavePreferencesResult,
-  type PatchPreferencesResult,
-} from './preferences.js'
-export { type EditorInfo } from '../dashboard/open-in-app.js'
-export { onQuota } from './quota.js'
-export { onModels } from './models.js'
-export { onMachines, sendAddMachine, sendRemoveMachine, onMachinesReachable, onMachineVersions, sendProjectToMachine, onProjectOnMachine, onMachineStartCheck, onComputersThrough, sendAddComputerThrough, onMachinePerson, sendRemoveMachineDevice, sendRenameMachine, sendRenameComputer, sendLetMachineIn, sendMachineLineLink, sendMachineCode, sendMachineTold, onMachineLogins, sendMachineLogins, type Machine, type MachineLoginsResult, type AddMachineResult, type MachineVersions, type ProjectOnMachine, type RenameComputerResult, type ComputersThrough, type MachinePerson, type MachineCode } from './machines.js'
-export { onModules, runModuleCommand, runComputerCommand, runComputerCommandOn, readModule, type DashboardModule, type ModuleCommandResult, type ModuleReadResult } from './modules.js'
-export { onProjectSkills, sendChangeSkills, sendProjectSkills, type ProjectSkills, type ProjectSkill, type ChangeSkillsResult } from './skills.js'
-export { onPerson, type Person } from './person.js'
-export { onGitHostPeople, type HostPerson } from './people.js'
-export { onAgentsList, sendSaveAgent, sendRemoveAgent, onAgentLogins, sendCopyAgentLogins, type AgentsView, type AgentChange, type AgentSkillChoice, type AgentLoginsOn } from './agents.js'
-export { onGitHosts, sendUseGitHostAccount, sendForgetGitHostAccount, sendGitHostLogin, sendGitHostInstall, onAgentState, sendAgentFix, type GitHostsView, type GitHostRow, type GitHostAccount, type GitHostProvider, type AgentState } from './logins.js'
-export { onPersonalFolder, sendSyncPersonalFolder, sendStopSyncingPersonalFolder, type PersonalFolderView } from './personal-folder.js'
-export { onProjectAgentData, type ProjectAgentData, type KeptData } from './project-agent-data.js'
-export { onServerLogins, sendUseLoginsOn, sendSyncPersonalFolderOn, sendAllowLogins, sendSettleLogin, type ServerLoginsView, type ServerLogins, type LoginThere } from './server-logins.js'
-export { onCopiedLogins, sendCopiedLogin, sendForgetCopiedLogin, sendKeepCopiedLogin, sendCopiedUsage, type CopiedView } from './copied-logins.js'
-export { onAgentAccounts, sendRemoveAgentAccount, sendUseAgentAccountFirst, type AccountsAgent, type AccountRow, type AccountWindow, type AccountsView, type AccountResult } from './accounts.js'
+// the daemon's own `startAgent`. The browser calls the functions of the modules below by name over
+// `POST /_rpc/<name>`; the dashboard's `rpc/` modules are typed stubs against their signatures, so
+// a rename that misses one is a type error rather than a 404 at runtime.
+export type { LiveFeedEvent } from './events.js'
 
 import * as reads from './reads.js'
 import * as control from './control.js'

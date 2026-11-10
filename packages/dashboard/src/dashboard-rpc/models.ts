@@ -1,5 +1,5 @@
 import { contextAgentUpdates, contextModels } from './context.js'
-import { ownerAsks } from './machines.js'
+import { ownerAsks } from '../dashboard/person.js'
 import type { AgentUpdate, AgentUpdateResult } from '../dashboard/agent-updates.js'
 import { isDriverName } from '../driver-names.js'
 import type { ModelsView } from '../dashboard/models.js'

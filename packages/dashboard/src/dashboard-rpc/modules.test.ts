@@ -8,7 +8,10 @@ import { projectQueue } from '../store/queue.js'
 import { onModules, readModule, runComputerCommand, runModuleCommand } from './modules.js'
 import { asCaller } from '../dashboard/person.js'
 import { setDashboardContext } from './context.js'
-import { NO_ELSEWHERE, testDashboardContext } from './test-context.js'
+import { NO_ELSEWHERE, provideTestContext, testDashboardContext } from './test-context.js'
+
+// The host's capabilities, wired as the daemon wires them (D3); a test that needs other ones wires its own.
+provideTestContext()
 
 /** A project with a package.json and installed packages, each `{ exports, bin }` plus files. */
 async function project(dir: string, packages: Record<string, { manifest: Record<string, unknown>; files?: Record<string, string> }>): Promise<void> {

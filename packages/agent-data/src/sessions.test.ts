@@ -3,7 +3,8 @@ import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { test } from 'node:test'
-import { personalFolder, projectDataPlace, withProjectData } from './project-data.js'
+import { personalFolder } from './personal-folder.js'
+import { projectDataPlace, withProjectData } from './project-data.js'
 import { listSessionFolders, runsRootOf, sessionFolder, sessionsHome, sessionsHomeOf, SESSIONS_DIR } from './sessions.js'
 
 test('the sessions home sits beside the personal folder, never in it', () => {

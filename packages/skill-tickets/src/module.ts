@@ -2,7 +2,7 @@
 // are unit-tested like the rest of the package: the sentences the pages start agents with, how a
 // page finds the agent behind a claim or a plan, how the module's URL reads, what a ticket is as
 // a link, which lane of the Overview card a ticket sits in, and how the command's answers are read back.
-import { TICKETS_DIR, isTicketFile, queuePriorityForTicket, ticketPlanName } from './names.js'
+import { TICKETS_DIR, isTicketFile, nameInTickets, queuePriorityForTicket, ticketOfPlan, ticketPlanName } from './names.js'
 import type { Ticket, TicketDetail, TicketsMeta } from './tickets.js'
 
 export type { Ticket, TicketDetail, TicketsMeta }
@@ -17,7 +17,7 @@ export const UPDATE_TICKETS_PROMPT = '/update-tickets'
  * wrote a plan is found by it.
  */
 export function planTicketPrompt(file: string): string {
-  return `Create ${TICKETS_DIR}/${ticketPlanName(file)}`
+  return `Create ${planPath(file)}`
 }
 
 /** The prompt the start column fires a session with: work on this one ticket, nothing else. */
@@ -60,6 +60,33 @@ export function holderAgent<A extends AgentLike>(agents: readonly A[], lockedBy:
   return lockedBy === undefined ? undefined : agents.find(agent => agent.id === lockedBy)
 }
 
+/** The run behind a claim, as a page names it: its id and, once the run is named, its session name. */
+export interface HoldingRun {
+  id: string
+  name?: string
+}
+
+/** The ticket with the run its claim names ({@link holderAgent}), when that run is one of the project's; else as it is. */
+export function withHolder<T extends object>(ticket: T, agent: AgentLike | undefined): T & { lockedByAgent?: HoldingRun } {
+  return agent ? { ...ticket, lockedByAgent: { id: agent.id, ...(agent.name ? { name: agent.name } : {}) } } : ticket
+}
+
+/** How a claim stands, told by the run holding it: see {@link claimState}. */
+export type ClaimState = 'working' | 'offline' | 'stale'
+
+/**
+ * How a claim stands, by the status of the run holding it (`undefined` when no run of the
+ * project's holds it): `working` while that run is at it, or stopped on a question to the
+ * person; `offline` while its computer does not answer, so how it stands is not known; `stale`
+ * when it stopped, failed or ended, or there is no such run — a claim held for nobody, which
+ * nothing lifts but a person.
+ */
+export function claimState(holderStatus: string | undefined): ClaimState {
+  if (holderStatus === 'running' || holderStatus === 'waiting') return 'working'
+  if (holderStatus === 'unknown') return 'offline'
+  return 'stale'
+}
+
 /** Where the module's URL points: the list of tickets, one ticket, or its plan. */
 export type ModuleRoute = { view: 'list' } | { view: 'ticket'; projectId: string; file: string } | { view: 'plan'; projectId: string; file: string } | { view: 'unknown' }
 
@@ -95,14 +122,14 @@ export function namesOf(paths: readonly string[], tickets: readonly { file: stri
   const titles = new Map(tickets.map(ticket => [ticket.file, ticket.title]))
   const named: Record<string, NamedPath> = {}
   for (const path of paths) {
-    if (!path.startsWith(`${TICKETS_DIR}/`)) continue
-    const file = path.slice(TICKETS_DIR.length + 1)
+    const file = nameInTickets(path)
+    if (file === undefined) continue
     const title = titles.get(file)
     if (title !== undefined) {
       named[path] = { title }
       continue
     }
-    const ticket = file.endsWith('.plan.md') ? `${file.slice(0, -'.plan.md'.length)}.md` : undefined
+    const ticket = ticketOfPlan(file)
     const planned = ticket === undefined ? undefined : titles.get(ticket)
     if (ticket !== undefined && planned !== undefined) named[path] = { title: `Plan: ${planned}`, href: `${TICKETS_DIR}/${ticket}` }
   }

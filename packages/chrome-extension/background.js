@@ -18,6 +18,38 @@ const DEFAULT_DAEMON = 'http://localhost:4200'
 // so the daemon blocks rather than degrades, and the error it answers names both versions.
 const VERSION_HEADER = { 'x-oa-extension-version': chrome.runtime.getManifest().version }
 
+/**
+ * The daemon as the options page set it up, or undefined while no token is set: its address, and
+ * a GET and a POST that carry the token and this extension's version.
+ */
+async function daemon() {
+  const { daemonUrl, token } = await chrome.storage.local.get(['daemonUrl', 'token'])
+  if (!token) return undefined
+  const base = (daemonUrl || DEFAULT_DAEMON).replace(/\/+$/, '')
+  const headers = { authorization: `Bearer ${token}`, ...VERSION_HEADER }
+  return {
+    base,
+    get: path => fetch(`${base}${path}`, { headers }),
+    post: (path, body) => fetch(`${base}${path}`, { method: 'POST', headers: { 'content-type': 'application/json', ...headers }, body: JSON.stringify(body) }),
+  }
+}
+
+/** What the page is told when no token is set. */
+const NO_TOKEN = { ok: false, error: 'no token set: open the extension options' }
+
+/** The daemon's refusal, as the page's status line shows it. */
+async function refusal(res) {
+  return `daemon answered ${res.status}: ${(await res.text()).slice(0, 200)}`
+}
+
+/** One POST to the daemon: whether it took it, and why not. */
+async function post(path, body) {
+  const to = await daemon()
+  if (!to) return NO_TOKEN
+  const res = await to.post(path, body)
+  return res.ok ? { ok: true } : { ok: false, error: await refusal(res) }
+}
+
 /** What we last successfully reported per session, so a re-render does not re-post. */
 const lastSent = new Map()
 
@@ -44,7 +76,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     return false
   }
   if (message?.type === 'oa-events') {
-    void postEvents(message)
+    void post('/_bridge/events', { sessionId: message.sessionId, events: message.events })
       .then(sendResponse)
       .catch(err => sendResponse({ ok: false, error: String(err?.message ?? err) }))
     return true
@@ -59,23 +91,18 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 
 async function report(question) {
   if (!question?.sessionId) return { ok: false, error: 'no session id' }
-  const { daemonUrl, token } = await chrome.storage.local.get(['daemonUrl', 'token'])
-  if (!token) return { ok: false, error: 'no token set: open the extension options' }
+  const to = await daemon()
+  if (!to) return NO_TOKEN
 
   // Same question, same session: say so and spend nothing. The content script re-surveys on every
   // DOM change, and a parked question can sit there for an hour.
   const fingerprint = JSON.stringify([question.title, question.options, question.recommended])
   if (lastSent.get(question.sessionId) === fingerprint) return { ok: true, skipped: 'unchanged' }
 
-  const base = (daemonUrl || DEFAULT_DAEMON).replace(/\/+$/, '')
-  const res = await fetch(`${base}/_bridge/question`, {
-    method: 'POST',
-    headers: { 'content-type': 'application/json', authorization: `Bearer ${token}`, ...VERSION_HEADER },
-    body: JSON.stringify(question),
-  })
+  const res = await to.post('/_bridge/question', question)
   if (!res.ok) {
     // Do not remember a failure, so the next DOM change retries rather than going quiet.
-    return { ok: false, error: `daemon answered ${res.status}: ${(await res.text()).slice(0, 200)}` }
+    return { ok: false, error: await refusal(res) }
   }
   lastSent.set(question.sessionId, fingerprint)
   return { ok: true }
@@ -93,13 +120,9 @@ const pendingAcks = new Map()
 
 /** Tell the daemon what a delivery did. A failed ack is kept and retried, never dropped: an
  * unacked delivered answer would sit `queued` in the dashboard after being typed into the page. */
-async function ack(base, token, body) {
+async function ack(to, body) {
   try {
-    const res = await fetch(`${base}/_bridge/answered`, {
-      method: 'POST',
-      headers: { 'content-type': 'application/json', authorization: `Bearer ${token}`, ...VERSION_HEADER },
-      body: JSON.stringify(body),
-    })
+    const res = await to.post('/_bridge/answered', body)
     if (res.ok || res.status === 400) {
       pendingAcks.delete(body.id)
       return
@@ -111,11 +134,9 @@ async function ack(base, token, body) {
 }
 
 /** The answer the dashboard queued for that session, or undefined. */
-async function fetchAnswer(base, token, sessionId) {
+async function fetchAnswer(to, sessionId) {
   try {
-    const res = await fetch(`${base}/_bridge/answer?sessionId=${sessionId}`, {
-      headers: { authorization: `Bearer ${token}`, ...VERSION_HEADER },
-    })
+    const res = await to.get(`/_bridge/answer?sessionId=${sessionId}`)
     if (!res.ok) return undefined
     const answer = (await res.json())?.answer
     return answer?.id && typeof answer.text === 'string' ? answer : undefined
@@ -125,43 +146,15 @@ async function fetchAnswer(base, token, sessionId) {
 }
 
 /** The next session the daemon wants created, claimed by this read (#1328), or undefined. */
-async function claimStart(base, token) {
+async function claimStart(to) {
   try {
-    const res = await fetch(`${base}/_bridge/start`, { headers: { authorization: `Bearer ${token}`, ...VERSION_HEADER } })
+    const res = await to.get('/_bridge/start')
     if (!res.ok) return undefined
     const start = (await res.json())?.start
     return start?.id && typeof start.repo === 'string' && typeof start.branch === 'string' && typeof start.prompt === 'string' ? start : undefined
   } catch {
     return undefined
   }
-}
-
-/** One authenticated POST to the daemon. */
-async function post(path, body) {
-  const { daemonUrl, token } = await chrome.storage.local.get(['daemonUrl', 'token'])
-  if (!token) return { ok: false, error: 'no token set' }
-  const base = (daemonUrl || DEFAULT_DAEMON).replace(/\/+$/, '')
-  const res = await fetch(`${base}${path}`, {
-    method: 'POST',
-    headers: { 'content-type': 'application/json', authorization: `Bearer ${token}`, ...VERSION_HEADER },
-    body: JSON.stringify(body),
-  })
-  if (!res.ok) return { ok: false, error: `daemon answered ${res.status}: ${(await res.text()).slice(0, 200)}` }
-  return { ok: true }
-}
-
-/** Send a batch of transcript entries. Same token and same discipline as the question. */
-async function postEvents({ sessionId, events }) {
-  const { daemonUrl, token } = await chrome.storage.local.get(['daemonUrl', 'token'])
-  if (!token) return { ok: false, error: 'no token set: open the extension options' }
-  const base = (daemonUrl || DEFAULT_DAEMON).replace(/\/+$/, '')
-  const res = await fetch(`${base}/_bridge/events`, {
-    method: 'POST',
-    headers: { 'content-type': 'application/json', authorization: `Bearer ${token}`, ...VERSION_HEADER },
-    body: JSON.stringify({ sessionId, events }),
-  })
-  if (!res.ok) return { ok: false, error: `daemon answered ${res.status}: ${(await res.text()).slice(0, 200)}` }
-  return { ok: true }
 }
 
 // ---------------------------------------------------------------------------
@@ -326,30 +319,30 @@ async function cycle() {
 }
 
 async function runCycle() {
-  const { daemonUrl, token, autoOpen } = await chrome.storage.local.get(['daemonUrl', 'token', 'autoOpen'])
-  if (!token) return { ok: false, reason: 'no token set' }
-  const base = (daemonUrl || DEFAULT_DAEMON).replace(/\/+$/, '')
+  const to = await daemon()
+  if (!to) return { ok: false, reason: 'no token set' }
+  const { autoOpen } = await chrome.storage.local.get('autoOpen')
   // Whatever the Driver's state, what is owed to the daemon is paid first: acknowledgements that
   // never landed, and — with the Driver off or paused — an honest failure for any session request,
   // since one left queued would be created hours later, for a run long gone.
-  for (const body of [...pendingAcks.values()]) await ack(base, token, body)
+  for (const body of [...pendingAcks.values()]) await ack(to, body)
   const { driverPaused } = await driverState.get('driverPaused')
   // Opt-in: driving a tab on someone's behalf should be asked for, not assumed.
   const stopped =
     autoOpen === false ? 'the Driver tab is switched off' : driverPaused ? 'the Driver tab was closed; "Open the Driver tab" on the options page resumes it' : undefined
   if (stopped) {
-    const start = await claimStart(base, token)
-    if (start) await reportStarted(base, token, start.id, { ok: false, note: stopped })
+    const start = await claimStart(to)
+    if (start) await reportStarted(to, start.id, { ok: false, note: stopped })
     return { ok: false, reason: stopped }
   }
 
   let sessions
   try {
-    const res = await fetch(`${base}/_bridge/sessions`, { headers: { authorization: `Bearer ${token}`, ...VERSION_HEADER } })
+    const res = await to.get('/_bridge/sessions')
     if (!res.ok) return { ok: false, reason: `daemon answered ${res.status} listing sessions` }
     sessions = (await res.json())?.sessions
   } catch (err) {
-    return { ok: false, reason: `could not reach ${base}: ${String(err?.message ?? err)}` }
+    return { ok: false, reason: `could not reach ${to.base}: ${String(err?.message ?? err)}` }
   }
   sessions = (Array.isArray(sessions) ? sessions : []).filter(s => s?.id)
 
@@ -357,11 +350,11 @@ async function runCycle() {
   const answers = new Map()
   for (const session of sessions) {
     if (!session.answerQueued) continue
-    const answer = await fetchAnswer(base, token, session.id)
+    const answer = await fetchAnswer(to, session.id)
     if (answer && !deliveredAnswers.has(answer.id)) answers.set(session.id, answer)
   }
   // Claim-on-read (#1328): from here on the request is ours to report, success or failure.
-  const start = await claimStart(base, token)
+  const start = await claimStart(to)
   if (!sessions.length && !start) return { ok: true, reason: 'nothing to drive: no recent cloud sessions, no session to create' }
 
   const tab = await ensureDriverTab()
@@ -371,12 +364,12 @@ async function runCycle() {
   if (!read.ok) {
     // A Driver still busy with an earlier cycle's drive is left alone, claim included: the claim
     // expires on the daemon and the request is offered again once the page is free.
-    if (start && !read.busy) await reportStarted(base, token, start.id, { ok: false, note: read.note })
+    if (start && !read.busy) await reportStarted(to, start.id, { ok: false, note: read.note })
     return { ok: false, reason: read.note ?? 'the Driver could not read the session list' }
   }
   const statuses = Array.isArray(read.statuses) ? read.statuses : []
   if (statuses.length) {
-    await post('/_bridge/statuses', { statuses: statuses.map(({ sessionId, status, label }) => ({ sessionId, status, ...(label ? { label } : {}) })) })
+    await to.post('/_bridge/statuses', { statuses: statuses.map(({ sessionId, status, label }) => ({ sessionId, status, ...(label ? { label } : {}) })) })
   }
 
   const now = Date.now()
@@ -402,32 +395,9 @@ async function runCycle() {
   }
   const visited = Array.isArray(driven.visited) ? driven.visited : []
   const delivered = Array.isArray(driven.delivered) ? driven.delivered : []
-  // A session planned but not reached this beat — cut by the cap, or a visit that failed — keeps
-  // its earlier status, so the change that made it due is still a change next time.
-  const unreached = id => planned.some(v => v.id === id) && !visited.some(v => v.id === id && v.ok)
-  for (const { sessionId, status } of statuses) {
-    if (unreached(sessionId)) continue
-    const before = seen.get(sessionId)
-    seen.set(sessionId, { status, visitedAt: visited.some(v => v.id === sessionId && v.ok) ? now : (before?.visitedAt ?? 0) })
-  }
-  // Every answer handed over is accounted for. A delivery the page attempted is acknowledged as
-  // it reported it, sent or failed. One the visit never got to — the session not on the list,
-  // the page not becoming it, a Driver that did not answer — stays queued on the daemon and is
-  // released here, so the next beat tries again. The one exception is a page torn down
-  // mid-drive: its answer may already be typed, so that is acknowledged as failed with a note
-  // saying to check the session before picking again.
-  for (const visit of visits) {
-    if (!visit.answer) continue
-    const outcome = delivered.find(d => d.id === visit.answer.id)
-    if (!outcome && !driven.tornDown) {
-      deliveredAnswers.delete(visit.answer.id)
-      continue
-    }
-    const report = outcome ?? { sessionId: visit.id, id: visit.answer.id, ok: false, note: driven.note }
-    if (!report.ok) deliveredAnswers.delete(visit.answer.id)
-    await ack(base, token, { sessionId: report.sessionId, id: report.id, ok: Boolean(report.ok), ...(report.note ? { note: String(report.note).slice(0, 300) } : {}) })
-  }
-  if (start) await reportStarted(base, token, start.id, driven.started ?? { ok: false, note: driven.note ?? 'the Driver did not create the session' })
+  remember(statuses, planned, visited, now)
+  await accountForAnswers(to, visits, driven, delivered)
+  if (start) await reportStarted(to, start.id, driven.started ?? { ok: false, note: driven.note ?? 'the Driver did not create the session' })
 
   const counts = {
     awaiting: statuses.filter(s => s.status === 'awaiting').length,
@@ -440,19 +410,51 @@ async function runCycle() {
   }
 }
 
+/**
+ * What the list said, kept for the next cycle's planVisits. A session planned but not reached this
+ * beat — cut by the cap, or a visit that failed — keeps its earlier status, so the change that
+ * made it due is still a change next time.
+ */
+function remember(statuses, planned, visited, now) {
+  const unreached = id => planned.some(v => v.id === id) && !visited.some(v => v.id === id && v.ok)
+  for (const { sessionId, status } of statuses) {
+    if (unreached(sessionId)) continue
+    const before = seen.get(sessionId)
+    seen.set(sessionId, { status, visitedAt: visited.some(v => v.id === sessionId && v.ok) ? now : (before?.visitedAt ?? 0) })
+  }
+}
+
+/**
+ * Every answer handed over to the Driver, accounted for. A delivery the page attempted is
+ * acknowledged as it reported it, sent or failed. One the visit never got to — the session not on
+ * the list, the page not becoming it, a Driver that did not answer — stays queued on the daemon
+ * and is released here, so the next beat tries again. The one exception is a page torn down
+ * mid-drive: its answer may already be typed, so that is acknowledged as failed with a note
+ * saying to check the session before picking again.
+ */
+async function accountForAnswers(to, visits, driven, delivered) {
+  for (const visit of visits) {
+    if (!visit.answer) continue
+    const outcome = delivered.find(d => d.id === visit.answer.id)
+    if (!outcome && !driven.tornDown) {
+      deliveredAnswers.delete(visit.answer.id)
+      continue
+    }
+    const delivery = outcome ?? { sessionId: visit.id, id: visit.answer.id, ok: false, note: driven.note }
+    if (!delivery.ok) deliveredAnswers.delete(visit.answer.id)
+    await ack(to, { sessionId: delivery.sessionId, id: delivery.id, ok: Boolean(delivery.ok), ...(delivery.note ? { note: String(delivery.note).slice(0, 300) } : {}) })
+  }
+}
+
 /** Report what a creation attempt did (#1328); the daemon's claim expires on its own if this never lands. */
-async function reportStarted(base, token, id, outcome) {
+async function reportStarted(to, id, outcome) {
   const ok = Boolean(outcome?.ok && outcome?.sessionId)
   try {
-    await fetch(`${base}/_bridge/started`, {
-      method: 'POST',
-      headers: { 'content-type': 'application/json', authorization: `Bearer ${token}`, ...VERSION_HEADER },
-      body: JSON.stringify({
-        id,
-        ok,
-        ...(ok ? { sessionId: outcome.sessionId } : {}),
-        ...(outcome?.note ? { note: String(outcome.note).slice(0, 1500) } : {}),
-      }),
+    await to.post('/_bridge/started', {
+      id,
+      ok,
+      ...(ok ? { sessionId: outcome.sessionId } : {}),
+      ...(outcome?.note ? { note: String(outcome.note).slice(0, 1500) } : {}),
     })
   } catch {
     // The claim expires on the daemon, and the request is offered again.

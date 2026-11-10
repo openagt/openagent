@@ -3,7 +3,7 @@ import { test } from 'node:test'
 import { chmod, mkdir, mkdtemp, readFile, realpath, rm, symlink, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { delimiter, join } from 'node:path'
-import { lookupProvidedCommand, readProvidedCommand, runPackageCommand } from './provided-command.js'
+import { callPackageCommand, lookupProvidedCommand, readProvidedCommand, runPackageCommand } from './provided-command.js'
 
 // Which package provides a kind (#1774, #1820), against real files: a throwaway project whose
 // package.json lists dependencies, each installed under node_modules with its own package.json.
@@ -169,6 +169,27 @@ test('a package command runs with Node in the project and answers its JSON, its 
     await writeFile(join(dir, 'read.cjs'), `let s = ''; process.stdin.on('data', d => (s += d)).on('end', () => process.stdout.write(JSON.stringify(s)))`)
     assert.deepEqual(await runPackageCommand(root, { name: 'tool', bin: join(dir, 'read.cjs') }, [], undefined, 'a login'), { ok: true, output: 'a login' })
     assert.deepEqual(await runPackageCommand(root, { name: 'tool', bin: join(dir, 'read.cjs') }, []), { ok: true, output: '' })
+  } finally {
+    await rm(root, { recursive: true, force: true })
+  }
+})
+
+test('a package command called in this process answers as one run with Node does: its JSON, its last stderr line, or what a wrong command line was told first', async () => {
+  const root = await project({ tool: { main: 'index.mjs', bin: { tool: 'cmd.cjs' }, openagent: { thing: 'tool' } } })
+  const dir = join(root, 'node_modules', 'tool')
+  await writeFile(
+    join(dir, 'index.mjs'),
+    `export async function runCli(argv, io) {
+      if (argv[0] === 'refuse') { io.stderr('first'); io.stderr('no such thing'); return 1 }
+      if (argv[0] === 'misread') { io.stderr('no such option\\n\\nusage: tool\\nthe usage ends here'); return 2 }
+      io.stdout(JSON.stringify(argv)); return 0
+    }`,
+  )
+  try {
+    const command = (await readProvidedCommand(root, 'thing'))!
+    assert.deepEqual(await callPackageCommand(root, command, ['list', '--all']), { ok: true, output: ['list', '--all'] })
+    assert.deepEqual(await callPackageCommand(root, command, ['refuse']), { ok: false, error: 'no such thing' })
+    assert.deepEqual(await callPackageCommand(root, command, ['misread']), { ok: false, error: 'no such option' })
   } finally {
     await rm(root, { recursive: true, force: true })
   }

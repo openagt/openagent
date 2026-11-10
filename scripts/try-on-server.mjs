@@ -36,16 +36,10 @@ function userAt(at) {
 }
 const login = `${userAt(address)}@${address}`
 
-/** Every package of the repository by its name: its folder and what it says of itself. */
+/** Every package of the repository by its name, as pnpm lists the workspace: its folder and what it says of itself. */
 const packages = new Map()
-// The same folders as pnpm-workspace.yaml: the drivers sit one level deeper.
-for (const parent of ['packages', join('packages', 'agent-driver')]) {
-  for (const folder of readdirSync(join(repo, parent))) {
-    const file = join(repo, parent, folder, 'package.json')
-    if (!existsSync(file)) continue
-    const manifest = JSON.parse(readFileSync(file, 'utf8'))
-    if (!manifest.private) packages.set(manifest.name, { dir: join(repo, parent, folder), manifest })
-  }
+for (const { name, path, private: isPrivate } of JSON.parse(execFileSync('pnpm', ['ls', '-r', '--depth', '-1', '--json'], { cwd: repo, encoding: 'utf8' }))) {
+  if (!isPrivate) packages.set(name, { dir: path, manifest: JSON.parse(readFileSync(join(path, 'package.json'), 'utf8')) })
 }
 
 /** `@openagt/dashboard` and every package of the repository it needs, however deep. */

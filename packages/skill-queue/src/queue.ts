@@ -1,7 +1,5 @@
-import { join } from 'node:path'
-import { fileBranchRepo, readProjectFile } from '@openagt/agent-data'
+import { readProjectFile } from '@openagt/agent-data'
 import { QUEUE_FILE } from './names.js'
-import { resolveQueueDeps, type QueueDeps } from './store.js'
 
 // The agent queue, `TODO_AGENTS.md`: every task agents will work on next, in markdown list items
 // banded by `## Priority N` sections from 10 down to 0, first within a band first to be taken. An
@@ -136,31 +134,5 @@ export function removeQueueEntry(md: string, entry: string): string {
  */
 export async function readQueue(cwd: string, opts: { fresh?: boolean } = {}): Promise<string | undefined> {
   return readProjectFile(cwd, QUEUE_FILE, opts)
-}
-
-/** What a queue edit did: landed (and whether it changed anything), or did not land. */
-export type QueueEdit = { ok: true; changed: boolean } | { ok: false }
-
-/**
- * One edit of the queue file through the caller's funnel, from anywhere in the repository: the
- * repository root is resolved, the pure edit applied, the funnel commits and pushes. Never throws —
- * a resume note is queued while a process is already unwinding, and must not mask why it stopped.
- */
-async function editQueue(cwd: string, message: string, edit: (md: string) => string, deps: QueueDeps): Promise<QueueEdit> {
-  const r = resolveQueueDeps(deps)
-  const root = await fileBranchRepo(cwd).catch(() => undefined)
-  if (!root) return { ok: false }
-  const result = await r.funnel(root, message, async dir => {
-    const path = join(dir, QUEUE_FILE)
-    const md = await r.read(path).catch(() => '')
-    const next = edit(md)
-    if (next !== md) await r.write(path, next)
-  })
-  return result.ok ? { ok: true, changed: result.changed } : { ok: false }
-}
-
-/** Put `entry` on the queue: in its priority section when a priority is given, else at the end. */
-export async function queueAdd(cwd: string, entry: string, priority?: number, deps: QueueDeps = {}): Promise<QueueEdit> {
-  return editQueue(cwd, `queue add: ${entry}`, md => (priority === undefined ? appendQueueEntry(md, entry) : insertQueueEntry(md, entry, priority)), deps)
 }
 

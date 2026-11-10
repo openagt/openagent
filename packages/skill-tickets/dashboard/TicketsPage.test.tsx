@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest'
 import { cleanup, fireEvent, screen, waitFor } from '@testing-library/react'
 import { configureFirst } from '../../dashboard/dashboard/test-utils.js'
-import type { MountedModules } from '../../dashboard/dashboard/lib/use-modules.js'
+import type { MountedModules } from '@openagt/dashboard/module/testing'
 import { workOnTicketPrompt } from '../src/module.js'
 import { fakeHost, renderWithHost, type Answers, type FakeHost } from './test-host.js'
 import { TicketsPage } from './TicketsPage.js'

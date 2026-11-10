@@ -1,13 +1,13 @@
 import { appendFile, mkdir, readFile, rename, rm } from 'node:fs/promises'
 import { dirname } from 'node:path'
 import type { DriverPromptOptions, DriverSession, DriverTurn } from './types.js'
-import { continuationPrompt, parseQuestion } from './question.js'
+import { continuationPrompt, parseQuestion, type Question } from './question.js'
 import { promptSent } from './session-support.js'
 
 /**
  * The inbox: what reaches a running agent from outside, a file at a path the caller gives, one
  * JSON line per message or answer. Whoever shows the agent (a dashboard) appends lines. While a
- * turn runs, the driver reads them as they come ({@link watchInbox}) and hands each message to
+ * turn runs, the driver reads them as they come (`cli-session.ts`) and hands each message to
  * the agent at once, which reads it between two of its steps, as Claude Code's own chat does; a
  * message sent for later, or one the agent could not take, waits for the turn's end. When a turn
  * ends, the driver sends what waits as the next prompts of the same session, in order, until the
@@ -110,7 +110,7 @@ export async function finishTurn(
   session: DriverSession,
   turn: DriverTurn,
   opts: DriverPromptOptions,
-  emit: (event: { type: 'question'; question: NonNullable<ReturnType<typeof parseQuestion>> }) => void,
+  emit: (event: { type: 'question'; question: Question }) => void,
 ): Promise<DriverTurn> {
   const question = turn.question ?? parseQuestion(turn.text)
   if (question) emit({ type: 'question', question })

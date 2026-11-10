@@ -19,10 +19,8 @@ function memFs(seed: Record<string, string> = {}): StoreFs & { files: Map<string
       return v
     },
     async write(path, contents) { files.set(path, contents) },
-    async append(path, contents) { files.set(path, (files.get(path) ?? '') + contents) },
     async exists(path) { return files.has(path) },
     async mkdir() {},
-    async readdir() { return [] },
   }
 }
 

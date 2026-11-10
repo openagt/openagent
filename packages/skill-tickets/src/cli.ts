@@ -1,20 +1,15 @@
-import { parseArgs } from 'node:util'
 import { join } from 'node:path'
-import { checkoutRoot, gitReason, listProjectDir, nodeBranchFileFs, nodeGitRunner, openProjectReader, readProjectFile, writeProjectDataDetached, type ProjectReader, type GitRunner } from '@openagt/agent-data'
-import { isTicketFile, isTicketPath, META_FILE, TICKETS_DIR, ticketLockName, ticketPlanName, ticketStem } from './names.js'
-import { readTicket, readTickets, readTicketsMeta, type TicketsFs } from './tickets.js'
-import { applyClaims, applyRelease, claimHistory, claimMessage, lockHolder, releaseMessage } from './locks.js'
+import { GIT_FAILED, Refused, commandReader, commandWrite, inRepo, nodeBranchFileFs, nodeGitRunner, parseCommandArgs, runCommandLine, type BranchFileFs, type Command, type GitRunner } from '@openagt/agent-data'
+import { isTicketFile, META_FILE, nameInTickets, TICKETS_DIR, ticketLockName, ticketOfPlan, ticketPlanName, ticketStem } from './names.js'
+import { readTicket, readTickets, readTicketsMeta } from './tickets.js'
+import { applyClaims, applyRelease, claimHistory, claimMessage, lockOn, releaseMessage } from './locks.js'
 import { holderOf } from './holder.js'
 
 /**
  * The command line over the package: the same operations a daemon calls, for an agent (and a
- * person) in a shell, in any clone of the repository.
- *
- * The contract: JSON on stdout, one line for a person on stderr, and the exit code says how it
- * went — 0 for a result, 1 for a refusal or a git failure, 2 for a command that could not be
- * read. A refusal is a rule saying no (the ticket is someone else's, there is no such ticket); it
- * is reported on stdout as `{ ok: false, reason }` so a caller parsing the output learns why, and
- * on stderr so a person does.
+ * person) in a shell, in any clone of the repository. It answers as every OpenAgent command does
+ * (`runCommandLine`); a refusal here is a rule saying no: the ticket is someone else's, there is
+ * no such ticket.
  *
  * A project kept on this machine reads and writes its directory in the personal folder, one
  * commit per write. A shared project reads origin's copy of its branch, fetched first, so a
@@ -49,67 +44,26 @@ export interface CliIo {
   stderr: (line: string) => void
 }
 
-/** A refusal: a rule said no, and the caller learns which. */
-export type CliRefusal = { ok: false; reason: string; [key: string]: unknown }
-
-/** Thrown inside a command to end it with a refusal. */
-class Refused extends Error {
-  constructor(
-    readonly outcome: CliRefusal,
-    readonly line: string,
-  ) {
-    super(line)
-  }
-}
-
-/** Thrown inside a command for an argument that cannot be read: usage on stderr, exit 2. */
-class Usage extends Error {}
-
 /** Run the CLI: `argv` is everything after the program name. Resolves to the exit code. */
-export async function runCli(argv: string[], io: CliIo, git: GitRunner = nodeGitRunner()): Promise<number> {
-  const [command, ...rest] = argv
-  const run = command && Object.hasOwn(COMMANDS, command) ? COMMANDS[command] : undefined
-  if (!run) {
-    io.stderr(USAGE)
-    return 2
-  }
-  try {
-    io.stdout(JSON.stringify(await run(rest, io, git)))
-    return 0
-  } catch (err) {
-    if (err instanceof Usage) {
-      io.stderr(`${err.message}\n\n${USAGE}`)
-      return 2
-    }
-    if (err instanceof Refused) {
-      io.stdout(JSON.stringify(err.outcome))
-      io.stderr(err.line)
-      return 1
-    }
-    const detail = gitReason(err)
-    io.stdout(JSON.stringify({ ok: false, reason: 'git-failed', detail }))
-    io.stderr(detail)
-    return 1
-  }
+export function runCli(argv: string[], io: CliIo, git: GitRunner = nodeGitRunner()): Promise<number> {
+  return runCommandLine(argv, io, { usage: USAGE, commands: COMMANDS, failure: GIT_FAILED }, io, git)
 }
 
-type Command = (args: string[], io: CliIo, git: GitRunner) => Promise<unknown>
-
-const COMMANDS: Record<string, Command> = {
+const COMMANDS: Record<string, Command<[CliIo, GitRunner]>> = {
   async list(args, io, git) {
-    const { values } = parse(args, LOCAL, 0)
-    return readTickets(TICKETS_DIR, await ticketsFs(io.cwd, values.local, git))
+    const { values } = parseCommandArgs(args, LOCAL, 0)
+    return readTickets(TICKETS_DIR, await commandReader(io.cwd, values.local, git))
   },
 
   async meta(args, io, git) {
-    const { values } = parse(args, LOCAL, 0)
-    return readTicketsMeta(TICKETS_DIR, await ticketsFs(io.cwd, values.local, git))
+    const { values } = parseCommandArgs(args, LOCAL, 0)
+    return readTicketsMeta(TICKETS_DIR, await commandReader(io.cwd, values.local, git))
   },
 
   async show(args, io, git) {
-    const { positionals, values } = parse(args, LOCAL, 1)
+    const { positionals, values } = parseCommandArgs(args, LOCAL, 1)
     const file = ticketArg(positionals[0]!)
-    const fs = await ticketsFs(io.cwd, values.local, git)
+    const fs = await commandReader(io.cwd, values.local, git)
     const ticket = await readTicket(TICKETS_DIR, file, fs)
     if (!ticket) throw noTicket(file)
     const plan = await fs.read(`${TICKETS_DIR}/${ticketPlanName(file)}`)
@@ -117,40 +71,31 @@ const COMMANDS: Record<string, Command> = {
   },
 
   async put(args, io, git) {
-    const { positionals } = parse(args, {}, 1)
+    const { positionals } = parseCommandArgs(args, {}, 1)
     // The bare filename, or the `tickets/<file>` path a queue entry links to, like every other command.
-    const file = positionals[0]!.startsWith(`${TICKETS_DIR}/`) ? positionals[0]!.slice(TICKETS_DIR.length + 1) : positionals[0]!
-    // A ticket, its plan, or the meta file — never a lock: claims go through `claim`.
-    if (!(isTicketFile(file) || (isTicketFile(file.replace(/\.plan\.md$/, '.md')) && file.endsWith('.plan.md')) || file === META_FILE))
+    const file = nameInTickets(positionals[0]!) ?? positionals[0]!
+    if (!isPutFile(file))
       throw new Refused({ ok: false, reason: 'invalid-path', file }, `${file} is not a file under ${TICKETS_DIR}/ this command writes: a ticket, its .plan.md, or ${META_FILE}`)
     const content = await io.stdin()
-    await write(io.cwd, `put ${TICKETS_DIR}/${file}`, async dir => {
+    await commandWrite(io.cwd, `put ${TICKETS_DIR}/${file}`, async dir => {
       await nodeBranchFileFs().write(join(dir, TICKETS_DIR, file), content)
     }, git)
     return { ok: true, file: `${TICKETS_DIR}/${file}` }
   },
 
   async close(args, io, git) {
-    const { positionals } = parse(args, {}, 1)
+    const { positionals } = parseCommandArgs(args, {}, 1)
     const file = ticketArg(positionals[0]!)
     const holder = await identity(io.cwd, git)
     type CloseOutcome = { ok: true } | { ok: false; reason: 'no-ticket' } | { ok: false; reason: 'not-holder'; holder?: string }
-    let outcome = { ok: true } as CloseOutcome
-    await write(io.cwd, `close ${TICKETS_DIR}/${ticketStem(file)}`, async dir => {
+    const outcome = await commandWrite(io.cwd, `close ${TICKETS_DIR}/${ticketStem(file)}`, async (dir): Promise<CloseOutcome> => {
       const fs = nodeBranchFileFs()
-      if (!(await fs.read(join(dir, TICKETS_DIR, file)).then(() => true, () => false))) {
-        outcome = { ok: false, reason: 'no-ticket' }
-        return
-      }
+      if (!(await holdsTicket(dir, file, fs))) return { ok: false, reason: 'no-ticket' }
       // Someone else's claim outranks the close: closing takes their lock with the ticket.
-      const lock = await fs.read(join(dir, TICKETS_DIR, ticketLockName(file))).catch(() => undefined)
-      const other = lock === undefined ? undefined : lockHolder(lock)
-      if (lock !== undefined && other !== holder) {
-        outcome = { ok: false, reason: 'not-holder', ...(other === undefined ? {} : { holder: other }) }
-        return
-      }
-      outcome = { ok: true }
+      const lock = await lockOn(dir, file, fs)
+      if (lock && lock.holder !== holder) return { ok: false, reason: 'not-holder', ...(lock.holder === undefined ? {} : { holder: lock.holder }) }
       for (const name of [file, ticketPlanName(file), ticketLockName(file)]) await fs.remove(join(dir, TICKETS_DIR, name)).catch(() => {})
+      return { ok: true }
     }, git)
     if (!outcome.ok) {
       if (outcome.reason === 'no-ticket') throw noTicket(file)
@@ -160,30 +105,24 @@ const COMMANDS: Record<string, Command> = {
   },
 
   async claim(args, io, git) {
-    const { positionals } = parse(args, {}, 1)
+    const { positionals } = parseCommandArgs(args, {}, 1)
     const file = ticketArg(positionals[0]!)
     const holder = await identity(io.cwd, git)
     type ClaimOutcome = { ok: true; earlier: string[] } | { ok: false; reason: 'no-ticket' } | { ok: false; reason: 'claimed'; holder?: string }
-    // Assigned inside the op, which a lost race re-runs: typed wide so the read below sees every case.
-    let outcome = { ok: true, earlier: [] } as ClaimOutcome
-    await write(io.cwd, claimMessage([{ ticket: file, holder }]), async dir => {
+    const outcome = await commandWrite(io.cwd, claimMessage([{ ticket: file, holder }]), async (dir): Promise<ClaimOutcome> => {
       const fs = nodeBranchFileFs()
-      if (!(await fs.read(join(dir, TICKETS_DIR, file)).then(() => true, () => false))) {
-        outcome = { ok: false, reason: 'no-ticket' }
-        return
-      }
+      if (!(await holdsTicket(dir, file, fs))) return { ok: false, reason: 'no-ticket' }
       // A claim to plan or to work: an existing plan is not in the way, only someone's lock is.
       const locked = await applyClaims(dir, [{ ticket: file, holder }], 'drain', fs)
       if (locked.length) {
         // Who claimed it before, read off the lock's history at origin's tip: this claim is not
         // committed yet, so every holder there is an earlier one, bar this holder claiming again.
         const patch = await git(['log', '-p', '--format=', '--no-renames', '--', `${TICKETS_DIR}/${ticketLockName(file)}`], dir)
-        outcome = { ok: true, earlier: claimHistory(patch).filter(h => h !== holder) }
-        return
+        return { ok: true, earlier: claimHistory(patch).filter(h => h !== holder) }
       }
       // The holder as the lock names it; a lock that names nobody readable is still a claim.
-      const existing = lockHolder((await fs.read(join(dir, TICKETS_DIR, ticketLockName(file))).catch(() => '')) ?? '')
-      outcome = { ok: false, reason: 'claimed', ...(existing === undefined ? {} : { holder: existing }) }
+      const existing = (await lockOn(dir, file, fs))?.holder
+      return { ok: false, reason: 'claimed', ...(existing === undefined ? {} : { holder: existing }) }
     }, git)
     if (!outcome.ok) {
       if (outcome.reason === 'no-ticket') throw noTicket(file)
@@ -193,17 +132,16 @@ const COMMANDS: Record<string, Command> = {
   },
 
   async release(args, io, git) {
-    const { positionals, values } = parse(args, { force: { type: 'boolean' } }, 1)
+    const { positionals, values } = parseCommandArgs(args, { force: { type: 'boolean' } }, 1)
     const file = ticketArg(positionals[0]!)
     // `--force` lifts whoever's claim, so it needs no identity of its own: a person's act, from
     // the dashboard, on a claim nobody answers to any more.
     const holder = values.force ? undefined : await identity(io.cwd, git)
-    let outcome = 'released' as 'released' | 'no-lock' | 'not-holder'
-    let other: string | undefined
-    await write(io.cwd, releaseMessage(file), async dir => {
+    const { outcome, other } = await commandWrite(io.cwd, releaseMessage(file), async dir => {
       const fs = nodeBranchFileFs()
-      outcome = await applyRelease(dir, file, holder, fs)
-      if (outcome === 'not-holder') other = lockHolder((await fs.read(join(dir, TICKETS_DIR, ticketLockName(file))).catch(() => '')) ?? '')
+      const outcome = await applyRelease(dir, file, holder, fs)
+      // Whose claim stood in the way, for the refusal to name.
+      return { outcome, other: outcome === 'not-holder' ? (await lockOn(dir, file, fs))?.holder : undefined }
     }, git)
     if (outcome === 'no-lock') throw new Refused({ ok: false, reason: 'no-lock', file }, `${TICKETS_DIR}/${file} is not claimed`)
     if (outcome === 'not-holder') throw new Refused({ ok: false, reason: 'not-holder', file, holder: other }, `${TICKETS_DIR}/${file} is claimed by ${other ?? 'someone else'}, not by you`)
@@ -214,29 +152,9 @@ const COMMANDS: Record<string, Command> = {
 /** The one flag every read takes. */
 const LOCAL = { local: { type: 'boolean' } } as const
 
-/** The project's data opened for reading, from wherever the command runs; outside a repo, a refusal. */
-async function open(cwd: string, git: GitRunner): Promise<ProjectReader> {
-  await inRepo(() => checkoutRoot(cwd, git))
-  return openProjectReader(cwd, { git })
-}
-
-/**
- * The ticket reader a read goes through, paths relative to the project's data (`tickets/<file>`):
- * see {@link open}, or with `--local` this machine's copy with no fetch, for the dashboard's polling.
- */
-async function ticketsFs(cwd: string, local: boolean | undefined, git: GitRunner): Promise<TicketsFs> {
-  if (!local) {
-    const reader = await open(cwd, git)
-    return { list: dir => reader.list(dir), read: path => reader.read(path) }
-  }
-  await inRepo(() => checkoutRoot(cwd, git))
-  return { list: dir => listProjectDir(cwd, dir, {}, { git }), read: path => readProjectFile(cwd, path, {}, { git }) }
-}
-
-/** One write as a one-shot writer: to origin when the project is shared, else as a local commit. */
-async function write(cwd: string, message: string, op: (dir: string) => Promise<void>, git: GitRunner): Promise<void> {
-  await inRepo(() => checkoutRoot(cwd, git))
-  await writeProjectDataDetached(cwd, message, op, { git })
+/** Whether a checkout of the project's data holds the ticket: whether its file reads. */
+function holdsTicket(dir: string, file: string, fs: BranchFileFs): Promise<boolean> {
+  return fs.read(join(dir, TICKETS_DIR, file)).then(() => true, () => false)
 }
 
 /** Who this command claims as; a checkout on no branch has no identity to claim with. */
@@ -250,36 +168,15 @@ function noTicket(file: string): Refused {
   return new Refused({ ok: false, reason: 'no-ticket', file }, `no ticket ${TICKETS_DIR}/${file}`)
 }
 
+/** Whether `put` writes a file: a ticket, a ticket's plan, or the meta file — never a lock: claims go through `claim`. */
+function isPutFile(file: string): boolean {
+  const planned = ticketOfPlan(file)
+  return isTicketFile(file) || (planned !== undefined && isTicketFile(planned)) || file === META_FILE
+}
+
 /** A ticket named by its bare filename, or by its `tickets/<file>` path. */
 function ticketArg(arg: string): string {
-  const file = isTicketPath(arg) ? arg.slice(TICKETS_DIR.length + 1) : arg
+  const file = nameInTickets(arg) ?? arg
   if (!isTicketFile(file)) throw new Refused({ ok: false, reason: 'invalid-path', file: arg }, `${arg} is not a ticket filename`)
   return file
-}
-
-/**
- * Outside a repo, the commands have nothing to act on: said as a refusal, not a git failure.
- * Only git's own "not a git repository" reads as that; a timeout, a missing git, or a corrupt
- * repo stays the failure it is.
- */
-async function inRepo<T>(read: () => Promise<T>): Promise<T> {
-  try {
-    return await read()
-  } catch (err) {
-    if (!/not a git repository/i.test(err instanceof Error ? err.message : String(err))) throw err
-    throw new Refused({ ok: false, reason: 'not-a-repo' }, 'not inside a git repository')
-  }
-}
-
-type Options = Record<string, { type: 'string' | 'boolean' }>
-
-/** `parseArgs` with the positional count checked: too few or too many is a usage error. */
-function parse<O extends Options>(args: string[], options: O, min: number, max: number = min) {
-  try {
-    const parsed = parseArgs({ args, options, allowPositionals: true, strict: true })
-    if (parsed.positionals.length < min || parsed.positionals.length > max) throw new Usage(`expected ${max === min ? min : `${min} to ${max}`} argument(s), got ${parsed.positionals.length}`)
-    return parsed
-  } catch (err) {
-    throw err instanceof Usage ? err : new Usage(err instanceof Error ? err.message : String(err))
-  }
 }

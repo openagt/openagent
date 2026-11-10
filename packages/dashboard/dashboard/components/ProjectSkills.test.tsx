@@ -1,6 +1,5 @@
 import { afterEach, describe, expect, test, vi } from 'vitest'
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
-import type { ProjectSummary } from '../../src/index.js'
 import { onSkillsSaved, skillsSaved } from '../lib/skills-saved.js'
 import type { ProjectSkills } from '../rpc/skills.js'
 

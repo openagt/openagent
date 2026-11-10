@@ -1,10 +1,9 @@
-import { parseArgs } from 'node:util'
-import { nodeGitRunner, runPackageCommand, sessionsHomeOf, type GitRunner, PROJECT_SKILLS_ENV, SKILLS_OFF_ENV, SKILLS_ON_ENV } from '@openagt/agent-data'
+import { AGENT_ENV, Refused, UsageError, errorMessage, inRepo, nodeGitRunner, parseCommandArgs, runCommandLine, runPackageCommand, sessionsHomeOf, type Command, type GitRunner, PROJECT_SKILLS_ENV, SKILLS_OFF_ENV, SKILLS_ON_ENV } from '@openagt/agent-data'
 import { liftSkillRules, projectRoot } from '@openagt/skill-branches'
 import { findRun } from '@openagt/skill-logs'
-import { DRIVER_NAMES, GIT_ACCOUNT_ENV, agentLoginFor, detachResume, detachRun, isDriverName, readyToRun, resumeProject, runProject } from './runner.js'
-import { agentNamed, anySkillPick, runAgent, skillPicksNamed, type SkillPicks } from './agent.js'
-import { AGENT_ENV } from '@openagt/agent-data'
+import { DRIVER_NAMES, GIT_ACCOUNT_ENV, agentLoginFor, detachResume, detachRun, isDriverName, readyToRun, resumeProject, runProject, type DriverName, type SpawnedResume } from './runner.js'
+import type { RunOutcome, RunRequest } from './run.js'
+import { agentNamed, anySkillPick, runAgent, skillPicksNamed } from './agent.js'
 import { initHooks } from './init.js'
 import { cleanup } from './cleanup.js'
 import { everyBasicSkill } from './basic-skills.js'
@@ -89,145 +88,102 @@ export interface CliIo {
   stderr: (line: string) => void
 }
 
-export type CliRefusal = { ok: false; reason: string; [key: string]: unknown }
-
-class Refused extends Error {
-  constructor(readonly outcome: CliRefusal, readonly line: string) {
-    super(line)
-  }
+export function runCli(argv: string[], io: CliIo, git: GitRunner = nodeGitRunner()): Promise<number> {
+  return runCommandLine(argv, io, { usage: USAGE, commands: COMMANDS }, io, git)
 }
 
-class Usage extends Error {}
+/** The flags of `run`: what a run is asked, how its process is started, and what a resume continues it with. */
+const RUN_FLAGS = {
+  id: { type: 'string' },
+  model: { type: 'string' },
+  effort: { type: 'string' },
+  resume: { type: 'string' },
+  answer: { type: 'string' },
+  detach: { type: 'boolean' },
+  mark: { type: 'boolean' },
+  driver: { type: 'string' },
+  publish: { type: 'string' },
+  attach: { type: 'string' },
+  started: { type: 'string' },
+  parent: { type: 'string' },
+  base: { type: 'string' },
+  'pr-base': { type: 'string' },
+  branch: { type: 'string' },
+  for: { type: 'string' },
+  by: { type: 'string' },
+  repos: { type: 'string' },
+} as const
 
-export async function runCli(argv: string[], io: CliIo, git: GitRunner = nodeGitRunner()): Promise<number> {
-  const [command, ...rest] = argv
-  const run = command && Object.hasOwn(COMMANDS, command) ? COMMANDS[command] : undefined
-  if (!run) {
-    io.stderr(USAGE)
-    return 2
-  }
-  try {
-    const result = await run(rest, io, git)
-    io.stdout(JSON.stringify(result))
-    return 0
-  } catch (err) {
-    if (err instanceof Usage) {
-      io.stderr(`${err.message}\n\n${USAGE}`)
-      return 2
-    }
-    if (err instanceof Refused) {
-      io.stdout(JSON.stringify(err.outcome))
-      io.stderr(err.line)
-      return 1
-    }
-    const detail = err instanceof Error ? err.message : String(err)
-    io.stdout(JSON.stringify({ ok: false, reason: 'failed', detail }))
-    io.stderr(detail)
-    return 1
-  }
-}
-
-type Command = (args: string[], io: CliIo, git: GitRunner) => Promise<unknown>
-
-const COMMANDS: Record<string, Command> = {
+const COMMANDS: Record<string, Command<[CliIo, GitRunner]>> = {
   async run(args, io, git) {
-    const { positionals, values } = parse(args, { id: { type: 'string' }, model: { type: 'string' }, effort: { type: 'string' }, resume: { type: 'string' }, answer: { type: 'string' }, detach: { type: 'boolean' }, mark: { type: 'boolean' }, driver: { type: 'string' }, publish: { type: 'string' }, attach: { type: 'string' }, started: { type: 'string' }, parent: { type: 'string' }, base: { type: 'string' }, 'pr-base': { type: 'string' }, branch: { type: 'string' }, for: { type: 'string' }, by: { type: 'string' }, repos: { type: 'string' } }, 0, 1)
+    const { positionals, values } = parseWithTexts(args, RUN_FLAGS, 0, 1)
     const repo = await project(io.cwd, git)
     const driver = values.driver
-    if (driver !== undefined && !isDriverName(driver)) throw new Usage(`unknown driver "${driver}"; the drivers are ${DRIVER_NAMES.join(' and ')}`)
+    if (driver !== undefined && !isDriverName(driver)) throw new UsageError(`unknown driver "${driver}"; the drivers are ${DRIVER_NAMES.join(' and ')}`)
     const publish = isPublish(values.publish) ? values.publish : undefined
     // A resume may also take the run's level away: from there on its prompts go as written.
     const noLevel = values.resume !== undefined && values.publish === NO_PUBLISH
-    if (values.publish !== undefined && publish === undefined && !noLevel) throw new Usage(`unknown publish level "${values.publish}"; the levels are ${PUBLISH_LEVELS.join(', ')}${values.resume !== undefined ? `, or ${NO_PUBLISH}` : ''}`)
+    if (values.publish !== undefined && publish === undefined && !noLevel) throw new UsageError(`unknown publish level "${values.publish}"; the levels are ${PUBLISH_LEVELS.join(', ')}${values.resume !== undefined ? `, or ${NO_PUBLISH}` : ''}`)
     if (values.resume !== undefined) {
-      if (driver !== undefined) throw new Usage('--resume takes no --driver: a run continues on the coding agent its record names')
-      if (values.id !== undefined) throw new Usage('--resume takes no --id: a run continues under its own')
-      if (values.attach !== undefined) throw new Usage('--resume takes no --attach: a text is handed over with a run\'s first prompt only')
-      if (values.started !== undefined) throw new Usage('--resume takes no --started: a run continues from the start its record names')
-      if (values.parent !== undefined) throw new Usage('--resume takes no --parent: a run continues for the parent its record names')
-      if (values.base !== undefined) throw new Usage('--resume takes no --base: a run continues on its own branch')
-      if (values['pr-base'] !== undefined) throw new Usage('--resume takes no --pr-base: a run continues into the branch its record names')
-      if (values.branch !== undefined) throw new Usage('--resume takes no --branch: a run continues on its own branch')
-      if (values.for !== undefined) throw new Usage('--resume takes no --for: a run continues for what its record names')
-      if (values.repos !== undefined) throw new Usage('--resume takes no --repos: a session continues with the repos its record names')
-      if (positionals[0] === undefined && values.answer === undefined) throw new Usage('a text or --answer is needed to resume a run')
+      if (driver !== undefined) throw new UsageError('--resume takes no --driver: a run continues on the coding agent its record names')
+      if (values.id !== undefined) throw new UsageError('--resume takes no --id: a run continues under its own')
+      if (values.attach !== undefined) throw new UsageError('--resume takes no --attach: a text is handed over with a run\'s first prompt only')
+      if (values.started !== undefined) throw new UsageError('--resume takes no --started: a run continues from the start its record names')
+      if (values.parent !== undefined) throw new UsageError('--resume takes no --parent: a run continues for the parent its record names')
+      if (values.base !== undefined) throw new UsageError('--resume takes no --base: a run continues on its own branch')
+      if (values['pr-base'] !== undefined) throw new UsageError('--resume takes no --pr-base: a run continues into the branch its record names')
+      if (values.branch !== undefined) throw new UsageError('--resume takes no --branch: a run continues on its own branch')
+      if (values.for !== undefined) throw new UsageError('--resume takes no --for: a run continues for what its record names')
+      if (values.repos !== undefined) throw new UsageError('--resume takes no --repos: a session continues with the repos its record names')
+      if (positionals[0] === undefined && values.answer === undefined) throw new UsageError('a text or --answer is needed to resume a run')
     }
-    if (values.by !== undefined && (values.resume === undefined || !values.by.trim())) throw new Usage('--by names who resumes a run, with --resume')
-    if (values.branch !== undefined && values.base !== undefined) throw new Usage('--branch takes no --base: the run works on a branch that exists')
-    if (values.branch !== undefined && !values.branch.trim()) throw new Usage('--branch needs a branch name')
-    if (values['pr-base'] !== undefined && !values['pr-base'].trim()) throw new Usage('--pr-base needs a branch name')
-    if (values.for !== undefined && !values.for.trim()) throw new Usage('--for needs what the run is for')
-    if (values.attach !== undefined && !values.attach.trim()) throw new Usage('--attach needs a text')
+    if (values.by !== undefined && (values.resume === undefined || !values.by.trim())) throw new UsageError('--by names who resumes a run, with --resume')
+    if (values.branch !== undefined && values.base !== undefined) throw new UsageError('--branch takes no --base: the run works on a branch that exists')
+    if (values.branch !== undefined && !values.branch.trim()) throw new UsageError('--branch needs a branch name')
+    if (values['pr-base'] !== undefined && !values['pr-base'].trim()) throw new UsageError('--pr-base needs a branch name')
+    if (values.for !== undefined && !values.for.trim()) throw new UsageError('--for needs what the run is for')
+    if (values.attach !== undefined && !values.attach.trim()) throw new UsageError('--attach needs a text')
     // A session with no project works in a folder with no git: no branch to start from or work on, nothing to commit or publish.
     const noProject = (await sessionsHomeOf(repo)) !== undefined
     if (noProject) {
       const gitFlag = (['publish', 'base', 'pr-base', 'branch'] as const).find(flag => values[flag] !== undefined && !(flag === 'publish' && noLevel))
-      if (gitFlag !== undefined) throw new Usage(`--${gitFlag} is for a run in a project: a session with no project has no git`)
+      if (gitFlag !== undefined) throw new UsageError(`--${gitFlag} is for a run in a project: a session with no project has no git`)
     } else if (values.repos !== undefined) {
-      throw new Usage('--repos is for a session with no project: a run in a project works in its own checkout')
+      throw new UsageError('--repos is for a session with no project: a run in a project works in its own checkout')
     }
     // The repos a session has as context, one folder per line, each copied into the session's folder.
     const folders = (values.repos ?? '').split('\n').map(line => line.trim()).filter(Boolean)
     const repos = folders.length > 0 ? await sessionRepos(folders, git).catch((err: unknown) => {
-      const line = err instanceof Error ? err.message : String(err)
+      const line = errorMessage(err)
       throw new Refused({ ok: false, reason: 'not-a-repo', detail: line }, line)
     }) : undefined
-    if (values.started !== undefined && (values.id === undefined || Number.isNaN(Date.parse(values.started)))) throw new Usage('--started is the time a run spawned with --id was asked for, like 2026-10-09T10:00:00.000Z')
+    if (values.started !== undefined && (values.id === undefined || Number.isNaN(Date.parse(values.started)))) throw new UsageError('--started is the time a run spawned with --id was asked for, like 2026-10-09T10:00:00.000Z')
     // A parent this project has no record of is refused while someone is still listening; a run
     // spawned with its id was asked about already.
     if (values.parent !== undefined && values.id === undefined && !(await findRun(repo, values.parent))) {
       throw new Refused({ ok: false, reason: 'no-parent', parent: values.parent }, `no run ${values.parent} in this project`)
     }
-    // A person's run is refused before it spends a checkout when its coding agent cannot start;
-    // a scheduler asks the same before it marks, and a resumed run's agent already ran once here.
     // The account at the git host picked for this session, by whoever started the run: in the environment ({@link GIT_ACCOUNT_ENV}).
     const gitAccount = process.env[GIT_ACCOUNT_ENV]?.trim() || undefined
-    if (gitAccount !== undefined && values.resume !== undefined) throw new Usage(`${GIT_ACCOUNT_ENV} is for a new run: a run continues as the account its record names`)
+    if (gitAccount !== undefined && values.resume !== undefined) throw new UsageError(`${GIT_ACCOUNT_ENV} is for a new run: a run continues as the account its record names`)
     // The agent the run is on, by its id, in the environment too ({@link AGENT_ENV}); a resumed run goes on with the one its record names.
-    let agent: string | undefined
-    try {
-      agent = agentNamed()
-    } catch (err) {
-      throw new Usage(err instanceof Error ? err.message : String(err))
-    }
-    if (process.env[AGENT_ENV]?.trim() && values.resume !== undefined) throw new Usage(`${AGENT_ENV} is for a new run: a run continues on the agent its record names`)
+    const agent = fromEnvironment(agentNamed)
+    if (process.env[AGENT_ENV]?.trim() && values.resume !== undefined) throw new UsageError(`${AGENT_ENV} is for a new run: a run continues on the agent its record names`)
     // The session's picks of skills, in the environment the same way; a resumed run goes on with the ones its record keeps.
-    let skills: SkillPicks
-    try {
-      skills = skillPicksNamed()
-    } catch (err) {
-      throw new Usage(err instanceof Error ? err.message : String(err))
-    }
-    if (anySkillPick(skills) && values.resume !== undefined) throw new Usage(`${SKILLS_ON_ENV}, ${SKILLS_OFF_ENV} and ${PROJECT_SKILLS_ENV} are for a new run: a run continues with the skills its record names`)
-    if (skills.project !== undefined && noProject) throw new Usage(`${PROJECT_SKILLS_ENV} is for a run in a project: a session with no project has no project skills`)
+    const skills = fromEnvironment(skillPicksNamed)
+    if (anySkillPick(skills) && values.resume !== undefined) throw new UsageError(`${SKILLS_ON_ENV}, ${SKILLS_OFF_ENV} and ${PROJECT_SKILLS_ENV} are for a new run: a run continues with the skills its record names`)
+    if (skills.project !== undefined && noProject) throw new UsageError(`${PROJECT_SKILLS_ENV} is for a run in a project: a session with no project has no project skills`)
+    // A person's run is refused before it spends a checkout when its coding agent cannot start;
+    // a scheduler asks the same before it marks, and a resumed run's agent already ran once here.
     if (values.resume === undefined && values.id === undefined) {
       // The session's account, or its agent's: an account this computer cannot use stops the run here, naming it.
       const login = gitAccount ?? (await agentLoginFor(repo, await runAgent(agent, io.stderr)))
       const ready = await readyToRun(repo, driver ?? 'claude-code', login !== undefined ? { login } : {})
       if (ready.problems.length > 0) throw new Refused({ ok: false, reason: 'not-ready', ...ready }, ready.problems.join(' '))
     }
-    const named = { ...(publish !== undefined ? { publish } : {}), ...(values.attach !== undefined ? { attached: values.attach } : {}), ...(values.parent !== undefined ? { parent: values.parent } : {}), ...(values.base !== undefined ? { base: values.base } : {}), ...(values['pr-base'] !== undefined ? { prBase: values['pr-base'].trim() } : {}), ...(values.branch !== undefined ? { branch: values.branch.trim() } : {}), ...(values.for !== undefined ? { for: values.for.trim() } : {}), ...(repos !== undefined ? { repos } : {}) }
-    const picked = anySkillPick(skills) ? { skills } : {}
-    if (values.detach && values.resume !== undefined) {
-      const resumed = await detachResume(repo, {
-        id: values.resume,
-        ...(positionals[0] !== undefined ? { text: positionals[0] } : {}),
-        ...(values.answer !== undefined ? { answer: values.answer } : {}),
-        ...(values.model !== undefined ? { model: values.model } : {}),
-        ...(values.effort !== undefined ? { effort: values.effort } : {}),
-        ...(values.by !== undefined ? { by: values.by } : {}),
-        ...(publish !== undefined ? { publish } : noLevel ? { publish: NO_PUBLISH } : {}),
-      })
-      return { ok: true, detached: true, ...resumed }
-    }
-    if (values.detach) {
-      if (positionals[0] === undefined) throw new Usage('expected 1 argument(s), got 0')
-      if (values.id !== undefined) throw new Usage('--detach takes no --id: the run\'s id is minted and answered')
-      const started = await detachRun(repo, { prompt: positionals[0], ...(values.model !== undefined ? { model: values.model } : {}), ...(values.effort !== undefined ? { effort: values.effort } : {}), ...(driver !== undefined ? { driver } : {}), ...named })
-      return { ok: true, detached: true, ...started }
-    }
+
     if (values.resume !== undefined) {
-      const outcome = await resumeProject(repo, {
+      const resume: SpawnedResume = {
         id: values.resume,
         ...(positionals[0] !== undefined ? { text: positionals[0] } : {}),
         ...(values.answer !== undefined ? { answer: values.answer } : {}),
@@ -235,39 +191,55 @@ const COMMANDS: Record<string, Command> = {
         ...(values.effort !== undefined ? { effort: values.effort } : {}),
         ...(values.by !== undefined ? { by: values.by } : {}),
         ...(publish !== undefined ? { publish } : noLevel ? { publish: NO_PUBLISH } : {}),
-        log: io.stderr,
-      })
-      return { ok: outcome.status === 'done' || outcome.status === 'waiting', ...outcome }
+      }
+      if (values.detach) return { ok: true, detached: true, ...(await detachResume(repo, resume)) }
+      return answered(await resumeProject(repo, { ...resume, log: io.stderr }))
     }
-    if (positionals[0] === undefined) throw new Usage('expected 1 argument(s), got 0')
-    const outcome = await runProject(repo, {
+    if (positionals[0] === undefined) throw new UsageError('expected 1 argument(s), got 0')
+    // What the run is asked, the same whether it goes on in this process or in one of its own.
+    const asked: RunRequest & { driver?: DriverName } = {
       prompt: positionals[0],
-      ...picked,
-      ...(values.id !== undefined ? { id: values.id } : {}),
-      ...(values.started !== undefined ? { startedAt: new Date(values.started).toISOString() } : {}),
-      ...(values.mark ? { mark: true } : {}),
       ...(values.model !== undefined ? { model: values.model } : {}),
       ...(values.effort !== undefined ? { effort: values.effort } : {}),
       ...(driver !== undefined ? { driver } : {}),
-      ...named,
-      ...(gitAccount !== undefined ? { gitAccount } : {}),
-      ...(agent !== undefined ? { agent } : {}),
-      log: io.stderr,
-    })
-    return { ok: outcome.status === 'done' || outcome.status === 'waiting', ...outcome }
+      ...(publish !== undefined ? { publish } : {}),
+      ...(values.attach !== undefined ? { attached: values.attach } : {}),
+      ...(values.parent !== undefined ? { parent: values.parent } : {}),
+      ...(values.base !== undefined ? { base: values.base } : {}),
+      ...(values['pr-base'] !== undefined ? { prBase: values['pr-base'].trim() } : {}),
+      ...(values.branch !== undefined ? { branch: values.branch.trim() } : {}),
+      ...(values.for !== undefined ? { for: values.for.trim() } : {}),
+      ...(repos !== undefined ? { repos } : {}),
+    }
+    if (values.detach) {
+      if (values.id !== undefined) throw new UsageError('--detach takes no --id: the run\'s id is minted and answered')
+      return { ok: true, detached: true, ...(await detachRun(repo, asked)) }
+    }
+    return answered(
+      await runProject(repo, {
+        ...asked,
+        ...(anySkillPick(skills) ? { skills } : {}),
+        ...(values.id !== undefined ? { id: values.id } : {}),
+        ...(values.started !== undefined ? { startedAt: new Date(values.started).toISOString() } : {}),
+        ...(values.mark ? { mark: true } : {}),
+        ...(gitAccount !== undefined ? { gitAccount } : {}),
+        ...(agent !== undefined ? { agent } : {}),
+        log: io.stderr,
+      }),
+    )
   },
 
   async check(args, io, git) {
-    const { values } = parse(args, { driver: { type: 'string' } }, 0)
+    const { values } = parseWithTexts(args, { driver: { type: 'string' } }, 0)
     const driver = values.driver ?? 'claude-code'
-    if (!isDriverName(driver)) throw new Usage(`unknown driver "${driver}"; the drivers are ${DRIVER_NAMES.join(' and ')}`)
+    if (!isDriverName(driver)) throw new UsageError(`unknown driver "${driver}"; the drivers are ${DRIVER_NAMES.join(' and ')}`)
     const repo = await project(io.cwd, git)
     return { ok: true, ...(await readyToRun(repo, driver)) }
   },
 
   async 'git-host'(args, io, git) {
     // What follows is the git host's own command line, read by it, not here.
-    if (args.length === 0) throw new Usage('git-host needs the command to run')
+    if (args.length === 0) throw new UsageError('git-host needs the command to run')
     const repo = await project(io.cwd, git)
     const command = await gitHostCommand(repo)
     if (!command) throw new Refused({ ok: false, reason: 'no-git-host' }, 'this project has no git host package')
@@ -277,7 +249,7 @@ const COMMANDS: Record<string, Command> = {
   },
 
   async init(args, io, git) {
-    parse(args, {}, 0)
+    parseWithTexts(args, {}, 0)
     const repo = await project(io.cwd, git)
     const outcome = await initHooks(repo)
     if (outcome.ok) return outcome
@@ -286,7 +258,7 @@ const COMMANDS: Record<string, Command> = {
   },
 
   async cleanup(args, io, git) {
-    parse(args, {}, 0)
+    parseWithTexts(args, {}, 0)
     const repo = await project(io.cwd, git)
     const outcome = await cleanup(repo, { git })
     if (outcome.ok) {
@@ -298,6 +270,20 @@ const COMMANDS: Record<string, Command> = {
   },
 }
 
+/** A run's outcome as `run` answers it: ok when the run ended done, or waiting on a question. */
+function answered(outcome: RunOutcome): { ok: boolean } & RunOutcome {
+  return { ok: outcome.status === 'done' || outcome.status === 'waiting', ...outcome }
+}
+
+/** What `read` reads off the environment; a value it cannot read is a command line that cannot be read. */
+function fromEnvironment<T>(read: () => T): T {
+  try {
+    return read()
+  } catch (err) {
+    throw new UsageError(errorMessage(err))
+  }
+}
+
 /**
  * The project the working directory belongs to, even from inside a checkout under `.branches/`;
  * or the sessions home, from it or from a session's folder in it: the runs with no project.
@@ -305,12 +291,7 @@ const COMMANDS: Record<string, Command> = {
 async function project(cwd: string, git: GitRunner): Promise<string> {
   const sessions = await sessionsHomeOf(cwd)
   if (sessions !== undefined) return sessions
-  try {
-    return await projectRoot(cwd, git)
-  } catch (err) {
-    if (!/not a git repository/i.test(err instanceof Error ? err.message : String(err))) throw err
-    throw new Refused({ ok: false, reason: 'not-a-repo' }, 'not inside a git repository')
-  }
+  return inRepo(() => projectRoot(cwd, git))
 }
 
 type Options = Record<string, { type: 'string' | 'boolean' }>
@@ -348,15 +329,7 @@ function ownFlag(arg: string, options: Options): Options[string] | undefined {
   return name !== undefined && Object.hasOwn(options, name) ? options[name] : undefined
 }
 
-function parse<O extends Options>(args: string[], options: O, min: number, max: number = min) {
-  try {
-    const parsed = parseArgs({ args: withTextsApart(args, options), options, allowPositionals: true, strict: true })
-    if (parsed.positionals.length < min || parsed.positionals.length > max) {
-      throw new Usage(`expected ${max === min ? min : `${min} to ${max}`} argument(s), got ${parsed.positionals.length}`)
-    }
-    return parsed
-  } catch (err) {
-    throw err instanceof Usage ? err : new Usage(err instanceof Error ? err.message : String(err))
-  }
+/** The command's arguments read strictly, as {@link parseCommandArgs} reads them, each text set apart first by {@link withTextsApart}. */
+function parseWithTexts<O extends Options>(args: string[], options: O, min: number, max: number = min) {
+  return parseCommandArgs(withTextsApart(args, options), options, min, max)
 }
-

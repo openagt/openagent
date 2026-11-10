@@ -1,6 +1,5 @@
 import { afterEach, describe, expect, test, vi } from 'vitest'
 import { cleanup, render, screen, waitFor } from '@testing-library/react'
-import type { OpenAgentEvent } from '../../src/index.js'
 
 // Record what the feed subscribes to. The channel never sends; we only care about addressing.
 const onEvents = vi.hoisted(() => vi.fn())
@@ -53,10 +52,9 @@ describe('useLiveEvents addressing (#770)', () => {
     await waitFor(() => expect(onEvents).toHaveBeenCalledWith('p1', 'run-b'))
   })
 
-  test('no run id still subscribes per project (the non-git fallback path)', async () => {
-    onEvents.mockResolvedValue(fakeChannel().channel)
+  test('no run id subscribes to nothing: the daemon streams no run for none', () => {
     render(<Probe projectId="p1" />)
-    await waitFor(() => expect(onEvents).toHaveBeenCalledWith('p1', undefined))
+    expect(onEvents).not.toHaveBeenCalled()
   })
 })
 
@@ -98,8 +96,7 @@ describe('useLiveEvents stream loss (#948)', () => {
 
 // A resumed session (#762) appends a second `session` boundary to the SAME journal. An agent's own
 // tail (#749) holds nothing but that agent, so its feed must keep everything — slicing at the last
-// `session` hid the whole pre-resume transcript for as long as the agent was live. The project-root
-// fallback still slices: that subscription genuinely spans run boundaries.
+// `session` hid the whole pre-resume transcript for as long as the agent was live.
 describe('useLiveEvents run scoping', () => {
   const log = (message: string) => ({ kind: 'log', message })
 
@@ -118,17 +115,6 @@ describe('useLiveEvents run scoping', () => {
     ch.push({ kind: 'session' })
     ch.push(log('b'))
     await waitFor(() => expect(feed()).toBe('a,session,b'))
-  })
-
-  test('the project-root fallback still scopes to the newest session', async () => {
-    const ch = fakeChannel()
-    onEvents.mockResolvedValue(ch.channel)
-    render(<FeedProbe projectId="p1" />)
-    await waitFor(() => expect(onEvents).toHaveBeenCalledTimes(1))
-    ch.push(log('a'))
-    ch.push({ kind: 'session' })
-    ch.push(log('b'))
-    await waitFor(() => expect(feed()).toBe('session,b'))
   })
 })
 

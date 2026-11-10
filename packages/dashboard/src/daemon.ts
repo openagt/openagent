@@ -1,6 +1,6 @@
 import { ReadyNaming } from '@openagt/agent-runner'
 import { withLocalBin } from './local-bin.js'
-import { startDashboard, type Dashboard } from './dashboard/index.js'
+import { startDashboard, type Dashboard } from './dashboard/server.js'
 import { createProjectRuntime } from './daemon-runtime.js'
 import { defaultQuotaSource } from './dashboard/quota.js'
 import { defaultModelsSource } from './dashboard/models.js'
@@ -9,7 +9,7 @@ import { startBackgroundServices } from './daemon-services.js'
 import { projectErrorStore } from './project-errors.js'
 import { resolveDashboardBundle } from './dashboard/bundle.js'
 import { resolveWebsite } from './dashboard/website.js'
-import { ensureBridgeToken, ensureComputerId, listProjects, nodeRegistryFs, readPreferences, registryPreferencesStore, thisComputerName, type Preferences } from './registry.js'
+import { ensureBridgeToken, ensureComputerId, listProjects, readPreferences, registryPreferencesStore, thisComputerName } from './registry.js'
 import { sayComputer, sayName } from './dashboard/machine-call.js'
 import { bridgeSessionsFrom } from './dashboard/bridge-sessions.js'
 import { bridgeQuestions } from './dashboard/bridge-store.js'
@@ -21,12 +21,13 @@ import { readSecureAddress, SECURE_PORT, type SecureAddress } from './secure-add
 import { builtInServices } from './built-in.js'
 import { COMPUTER_ENV, sayOwnUrl, startPackageServices, type PackageServices, type PackageServicesOptions } from './package-services.js'
 import { readAllAgents } from './store/index.js'
-import type { BridgeSession, StartedProject } from './dashboard/index.js'
+import type { StartedProject } from './dashboard/types.js'
+import type { BridgeSession } from './dashboard/bridge-endpoints.js'
 import { personLogins } from './dashboard/copy-logins.js'
 import { startLoginsSync } from './dashboard/logins-sync.js'
 import { startComputersSync } from './dashboard/computers-sync.js'
 import { runComputerCommand } from './dashboard-rpc/modules.js'
-import { dispatchMachineRpc, isRelayReadCall } from './dashboard-rpc/relay-dispatch.js'
+import { dispatchMachineRpc, dispatchRelayRpc, isRelayReadCall } from './dashboard-rpc/relay-dispatch.js'
 
 /**
  * The dashboard process (#302). It is a pure projection of files: a run's tool keeps the run's
@@ -56,10 +57,6 @@ export interface DaemonState {
   /** ISO timestamp the daemon started. */
   startedAt: string
 }
-
-/** True when a process with this id is still running (best-effort, signal 0). The store's
- * {@link isPidAlive} under the daemon's historical public name -- the two were byte-identical. */
-export { isPidAlive as isProcessAlive } from './store/index.js'
 
 /** Options for {@link runDaemon}. */
 export interface RunDaemonOptions {
@@ -103,13 +100,13 @@ export async function runDaemon(cwd: string, opts: RunDaemonOptions = {}): Promi
   withLocalBin(process.env)
   // The browser bridge (#1237). Opt-in, because it opens the daemon's one route reachable from
   // another origin, behind a key of its own. The key may not exist yet, hence ensure, not read.
-  const bridgeOn = (await readPreferences(undefined, env).catch((): Preferences => ({}))).bridge === true
-  const bridgeToken = bridgeOn ? await ensureBridgeToken(undefined, env) : undefined
+  const bridgeOn = (await readPreferences(env)).bridge === true
+  const bridgeToken = bridgeOn ? await ensureBridgeToken(env) : undefined
   // Which computer this is, said to every machine it gets into and to its own packages' services:
   // a machine lists this computer once by it. A home file that cannot be written says nothing.
-  const computer = await ensureComputerId(undefined, env).catch(() => undefined)
+  const computer = await ensureComputerId(env).catch(() => undefined)
   sayComputer(computer)
-  sayName(await thisComputerName(undefined, env).catch(() => undefined))
+  sayName(await thisComputerName(env))
   // Everything the dashboard drives per project (a run's start, project install, the machine
   // relay) lives in the runtime, so this body stays about the daemon's own lifecycle.
   // A run's name is asked of a naming session kept waiting for it (agent-runner's `ReadyNaming`), so
@@ -135,7 +132,7 @@ export async function runDaemon(cwd: string, opts: RunDaemonOptions = {}): Promi
     if (!bridgeToken || !daemonUrl) {
       // The token is minted at boot, from the bridge preference as it stood then (above). A bridge
       // switched on since is a restart away; a bridge that is off wants switching on first.
-      const bridgeOnNow = (await readPreferences(undefined, env).catch((): Preferences => ({}))).bridge === true
+      const bridgeOnNow = (await readPreferences(env)).bridge === true
       throw new Error(
         bridgeOnNow
           ? 'the browser bridge was switched on after the dashboard started — restart the dashboard, and the browser launches on its own'
@@ -154,32 +151,35 @@ export async function runDaemon(cwd: string, opts: RunDaemonOptions = {}): Promi
   })
   const dashboard: Dashboard = await startDashboard({
     port,
-    quota,
-    models,
-    agentUpdates: agentUpdates({ models }),
-    onStart: runtime.onStart,
-    onAddProject: runtime.onAddProject,
-    onStartedIn: runtime.onStartedIn,
-    onPrepareStart: runtime.onPrepareStart,
-    onRemoveProject: runtime.onRemoveProject,
-    // Relay an agent to/from a saved machine (#1067): the events source streams an agent this daemon
-    // is relaying, `remote` lets the read RPCs forward a remote agent's reads/steer/push to its machine
-    // (slice 2), and the `/_relay/*` endpoints let another daemon run + read + steer a session here.
-    eventsSource: runtime.remoteEventsSource,
-    remote: runtime.remoteAgents,
-    // A person's own OpenAgent on a computer several people use keeps their logins there: another
-    // OpenAgent of theirs hands them over through the relay.
-    relay: { project: runtime.projectAt, tailEvents: runtime.tailRelayEvents, rpc: runtime.onRelayRpc, reads: isRelayReadCall, machine: dispatchMachineRpc, bring: runtime.bringProject, ...(env.OPENAGENT_PERSON ? { logins: personLogins(runComputerCommand) } : {}) },
+    context: {
+      startAgent: runtime.onStart,
+      addProject: runtime.onAddProject,
+      startedIn: runtime.onStartedIn,
+      prepareStart: runtime.onPrepareStart,
+      removeProject: runtime.onRemoveProject,
+      // Relay an agent to/from a saved machine (#1067): the events source streams an agent this daemon
+      // is relaying, and `remote` lets the read RPCs forward a remote agent's reads/steer/push to its
+      // machine (slice 2).
+      eventsSource: runtime.remoteEventsSource,
+      remote: runtime.remoteAgents,
+      // The bridge browser follows its switch (#1332): on launches it, off closes it, without a restart.
+      preferences: registryPreferencesStore(env, written => {
+        if (written.bridgeBrowser === true) void bridgeBrowser.start()
+        if (written.bridgeBrowser === false) void bridgeBrowser.stop()
+      }),
+      quota,
+      models,
+      agentUpdates: agentUpdates({ models }),
+      projectErrors: projectErrors.read,
+      bridgeBrowser,
+    },
+    // The `/_relay/*` endpoints let another daemon run + read + steer a session here. A person's own
+    // OpenAgent on a computer several people use keeps their logins there: another OpenAgent of
+    // theirs hands them over through the relay.
+    relay: { project: runtime.projectAt, tailEvents: runtime.tailRelayEvents, rpc: dispatchRelayRpc, reads: isRelayReadCall, machine: dispatchMachineRpc, bring: runtime.bringProject, ...(env.OPENAGENT_PERSON ? { logins: personLogins(runComputerCommand) } : {}) },
     screen: runtime.screenOf,
     // The browser bridge (#1237): absent unless the preference is on, which 404s every route.
     ...(bridgeToken ? { bridgeToken, bridgeSessions: () => listBridgeSessions(env) } : {}),
-    // The bridge browser follows its switch (#1332): on launches it, off closes it, without a restart.
-    preferences: registryPreferencesStore(nodeRegistryFs(), env, written => {
-      if (written.bridgeBrowser === true) void bridgeBrowser.start()
-      if (written.bridgeBrowser === false) void bridgeBrowser.stop()
-    }),
-    projectErrors: projectErrors.read,
-    bridgeBrowser,
     ...(clientBundleDir ? { clientBundleDir } : {}),
     ...(secure ? { secure: { ...secure, port: SECURE_PORT } } : {}),
     ...(websiteDir ? { websiteDir } : {}),
@@ -206,14 +206,14 @@ export async function runDaemon(cwd: string, opts: RunDaemonOptions = {}): Promi
   // The bridge browser comes up in the background (#1332): its first launch downloads Chrome,
   // and the dashboard must not wait on that. Read here rather than with the bridge preference
   // above: the launch needs the address the dashboard only has now.
-  if ((await readPreferences(undefined, env).catch((): Preferences => ({}))).bridgeBrowser === true) void bridgeBrowser.start()
+  if ((await readPreferences(env)).bridgeBrowser === true) void bridgeBrowser.start()
 
   // Each project's open hooks (#1774): the lines its own `.openagent/hooks.yml` names, run in
   // the project once the dashboard listens, so a slow line never delays the URL. The daemon names
   // no tool; the file does. Bounded and logged, never a reason the daemon did not come up.
   // The folder the caller named comes first, so its page opens before the other projects' lines
   // have run. The list is read before it is added: adding runs the new project's own open lines.
-  const listed = await listProjects(undefined, env).catch(() => [])
+  const listed = await listProjects(env)
   if (opts.project !== undefined) {
     const started = await runtime.onStartedIn(opts.project)
     if (started.ok) opts.onProject?.({ id: started.id, path: started.path, added: started.added, address: started.address })
@@ -249,28 +249,19 @@ export async function runDaemon(cwd: string, opts: RunDaemonOptions = {}): Promi
   stopLoginsSync()
   stopComputersSync()
 
-  // One Ctrl+C stops the dashboard (#2141): a step that hangs is logged and left behind once the
-  // deadline passes, and a second Ctrl+C stops at once.
-  const hurry = (): void => {
-    console.log('[openagent] stopping now')
-    process.exit(130)
-  }
-  process.on('SIGINT', hurry)
-  process.on('SIGTERM', hurry)
-  let step = 'starting to stop'
-  const teardown = async (): Promise<void> => {
-    step = "the services of OpenAgent's own packages"
+  await stopWithin(opts.shutdownDeadlineMs ?? SHUTDOWN_DEADLINE_MS, async step => {
+    step("the services of OpenAgent's own packages")
     await packageServices.stop()
     // The dashboard goes first after them: the port is free again, and an open tab sees the
     // dashboard is gone, while what is left stops behind it.
-    step = 'the dashboard'
+    step('the dashboard')
     await dashboard.close()
-    step = 'the background services'
+    step('the background services')
     await services.quiesce()
     // Each project's close hooks (#1774), the counterpart of the open hooks above. A run in flight
     // is not the daemon's process: it goes on to its end, and the next dashboard shows it.
-    for (const record of await listProjects(undefined, env).catch(() => [])) {
-      step = `the close hooks of ${record.path}`
+    for (const record of await listProjects(env)) {
+      step(`the close hooks of ${record.path}`)
       await runProjectHooks(record.path, 'close', { log: console.log })
     }
     // Stopped here as well as by the dashboard: a broken install serves 503s without ever taking
@@ -278,12 +269,26 @@ export async function runDaemon(cwd: string, opts: RunDaemonOptions = {}): Promi
     quota.stop()
     // The daemon's browser goes with the daemon (#1332): left running it would keep serving a
     // daemon that is gone, and the next daemon would find its profile held.
-    step = 'the bridge browser'
+    step('the bridge browser')
     await bridgeBrowser.stop()
-    step = 'the relayed runs'
+    step('the relayed runs')
     await runtime.dispose()
+  })
+}
+
+/**
+ * Run the teardown, giving up on what is left of it once `deadlineMs` has passed: one Ctrl+C
+ * stops the dashboard (#2141). The teardown names each step as it starts it, so a step that hangs
+ * is logged by its name and left behind, and a second Ctrl+C meanwhile stops at once.
+ */
+async function stopWithin(deadlineMs: number, teardown: (step: (name: string) => void) => Promise<void>): Promise<void> {
+  const hurry = (): void => {
+    console.log('[openagent] stopping now')
+    process.exit(130)
   }
-  const deadlineMs = opts.shutdownDeadlineMs ?? SHUTDOWN_DEADLINE_MS
+  process.on('SIGINT', hurry)
+  process.on('SIGTERM', hurry)
+  let step = 'starting to stop'
   let deadline: NodeJS.Timeout | undefined
   const late = new Promise<void>(resolvePromise => {
     deadline = setTimeout(() => {
@@ -292,7 +297,7 @@ export async function runDaemon(cwd: string, opts: RunDaemonOptions = {}): Promi
     }, deadlineMs).unref()
   })
   try {
-    await Promise.race([teardown(), late])
+    await Promise.race([teardown(name => void (step = name)), late])
   } finally {
     clearTimeout(deadline)
     process.off('SIGINT', hurry)
@@ -323,7 +328,7 @@ function waitForShutdown(signal?: AbortSignal): Promise<void> {
  * checkout, and best-effort per project so one unreadable repo cannot empty the list.
  */
 async function listBridgeSessions(env: NodeJS.ProcessEnv): Promise<BridgeSession[]> {
-  const projects = await listProjects(undefined, env).catch(() => [])
+  const projects = await listProjects(env)
   const agents = (await Promise.all(projects.map(p => readAllAgents(p.path).catch(() => [])))).flat()
   return bridgeSessionsFrom(agents, new Date(), bridgeQuestions().pendingAnswerSessions())
 }
