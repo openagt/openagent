@@ -1,5 +1,5 @@
 import { Bell, BellOff } from 'lucide-react'
-import { useNotificationPermission } from '../lib/notification-permission.js'
+import { setBrowserNotifications, useNotificationPermission } from '../lib/notification-permission.js'
 import { usePreferences, updatePreferences, notificationsEnabled, newActivityEnabled, humanInterventionEnabled } from '../lib/preferences.js'
 import { OptionLabel } from './ui/option-label.js'
 import {
@@ -28,12 +28,6 @@ export function NotificationsSubmenu() {
   // Browser delivery only actually fires once the browser has granted permission: only then are they "On".
   const active = browser && permission === 'granted'
 
-  const toggleBrowser = (next: boolean) => {
-    updatePreferences({ notifyBrowser: next })
-    // Asking for permission must ride this user gesture (turning it on).
-    if (next && permission === 'default') void Notification.requestPermission()
-  }
-
   const browserHint = blocked
     ? 'Blocked in your browser settings'
     : browser && permission === 'default'
@@ -56,7 +50,7 @@ export function NotificationsSubmenu() {
               <DropdownMenuCheckboxItem
                 checked={active}
                 disabled={blocked}
-                onCheckedChange={toggleBrowser}
+                onCheckedChange={setBrowserNotifications}
                 className="items-start"
               >
                 <OptionLabel label="Browser" description={browserHint} />

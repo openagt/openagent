@@ -217,6 +217,35 @@ describe('Settings on and off rows', () => {
     expect([checked(row('Human Queue')), checked(row('Browser'))]).toEqual([false, false])
   })
 
+  test('notifications the browser was not asked for yet: the Browser row reads off, and switching it on asks the browser', async () => {
+    const requestPermission = vi.fn(async () => 'default')
+    vi.stubGlobal('Notification', { permission: 'default', requestPermission })
+    prefsRead.mockResolvedValueOnce({ notifyBrowser: true })
+    refreshPreferences()
+    open('notifications')
+    const browser = row('Browser')
+    await waitFor(() => expect(checked(browser)).toBe(false))
+    fireEvent.click(browser)
+    expect(saves()).toEqual([{ notifyBrowser: true }])
+    expect(requestPermission).toHaveBeenCalled()
+  })
+
+  test('the browser refuses when asked: the Browser row says it is blocked as soon as the browser answers', async () => {
+    // The person answers the browser's question after the switch has saved and drawn.
+    let refuse = () => {}
+    const stub = { permission: 'default', requestPermission: vi.fn(() => new Promise<string>(resolve => (refuse = () => resolve((stub.permission = 'denied'))))) }
+    vi.stubGlobal('Notification', stub)
+    prefsRead.mockResolvedValueOnce({ notifyBrowser: false })
+    refreshPreferences()
+    open('notifications')
+    const browser = row('Browser')
+    fireEvent.click(browser)
+    await waitFor(() => expect(within(browser.parentElement!.parentElement!).getByText(/Switched on, the browser asks/)).toBeTruthy())
+    expect(saves()).toEqual([{ notifyBrowser: true }])
+    refuse()
+    await waitFor(() => expect(browser.getAttribute('aria-disabled')).toBe('true'), { timeout: 1000 })
+  })
+
   test('notifications the browser blocked: the Browser row says so, reads off, and cannot be switched', async () => {
     vi.stubGlobal('Notification', { permission: 'denied' })
     prefsRead.mockResolvedValueOnce({ notifyBrowser: true })

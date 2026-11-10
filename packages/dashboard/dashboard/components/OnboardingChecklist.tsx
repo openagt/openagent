@@ -8,7 +8,7 @@ import { cn } from '../lib/utils.js'
 import { Button } from './ui/button.js'
 import { Card, CardContent, CardHeader } from './ui/card.js'
 import { usePreferences, updatePreferences, notificationsEnabled } from '../lib/preferences.js'
-import { useNotificationPermission } from '../lib/notification-permission.js'
+import { setBrowserNotifications, useNotificationPermission } from '../lib/notification-permission.js'
 import { startPicks, useStartAgent } from '../lib/use-start-agent.js'
 import { AddProjectEffects } from './AddProjectEffects.js'
 import { ProjectPicker } from './ProjectPicker.js'
@@ -102,11 +102,7 @@ export function OnboardingChecklist({
   const hasTickets = data?.projects.some(p => p.hasTickets) ?? false
   const browserGranted = permission === 'granted' && notificationsEnabled(preferences)
 
-  const enableBrowserNotifications = () => {
-    updatePreferences({ notifyBrowser: true })
-    // Asking for permission must ride this user gesture.
-    if (permission === 'default') void Notification.requestPermission()
-  }
+  const enableBrowserNotifications = () => setBrowserNotifications(true)
 
   const populateTickets = async () => {
     if (!targetProjectId) return

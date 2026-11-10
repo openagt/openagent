@@ -10,7 +10,7 @@ import { SettingsCrumbContext, type SettingsCrumb } from '../lib/settings-crumb.
 import { useIsMobile } from '../lib/use-mobile.js'
 import { useDetectedEditors } from '../lib/editors.js'
 import { usePreferences, updatePreferences, themePreference, type ThemePreference } from '../lib/preferences.js'
-import { useNotificationPermission } from '../lib/notification-permission.js'
+import { setBrowserNotifications, useNotificationPermission } from '../lib/notification-permission.js'
 import { BridgeSettings } from './BridgeSettings.js'
 import { AGENT_DATA_ENTRY, AgentDataSettings } from './AgentDataSettings.js'
 import { PROFILE_ENTRY, ProfileSettings } from './ProfileSettings.js'
@@ -383,11 +383,13 @@ function useOwnEntries(): Entry[] {
             description={
               browserBlocked
                 ? 'Blocked in your browser settings'
-                : 'Desktop notifications while the dashboard is open.'
+                : permission === 'default'
+                  ? 'Desktop notifications while the dashboard is open. Switched on, the browser asks to allow them.'
+                  : 'Desktop notifications while the dashboard is open.'
             }
-            checked={(preferences.notifyBrowser ?? true) && !browserBlocked}
+            checked={(preferences.notifyBrowser ?? true) && permission !== 'default' && !browserBlocked}
             disabled={browserBlocked}
-            onChange={next => updatePreferences({ notifyBrowser: next })}
+            onChange={setBrowserNotifications}
           />
           <ToggleRow
             label="Human Queue"
