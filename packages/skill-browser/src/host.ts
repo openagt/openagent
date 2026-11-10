@@ -8,7 +8,7 @@ import { launchChrome, type Chrome } from './chrome.js'
 import { consoleCall, consoleLog, errorsNote, FLOOD_BYTES, FLOOD_LINES, flooded, heardOnce, logEntry, printConsole, thrown, went, type Said } from './console.js'
 import { click, cursorAt, navigate, PageError, press, readPage, run, screenshot, selectionIn, type } from './page.js'
 import { inputCalls, stepHistory, type ScreenInput } from './screen.js'
-import { ACTED, CONSOLE, CURSOR, CURSORS, FRAME, MAX_SELECTION, MAX_TITLE, MAX_URL, PULSE, SELECTED, STATE, streamPart, type ActedPoint, type Cursor } from './stream.js'
+import { ACTED, CONSOLE, CURSOR, CURSORS, FRAME, jsonPart, MAX_SELECTION, MAX_TITLE, MAX_URL, PULSE, SELECTED, STATE, streamPart, type ActedPoint, type Cursor } from './stream.js'
 
 /**
  * The browser's own process: started by the first `open`, it keeps Chrome, the page connection
@@ -177,7 +177,7 @@ export async function runHost(opts: HostOptions): Promise<void> {
   /** The console lines a watcher has not got, as far as its stream takes them; the rest at a later turn. */
   const pour = (viewer: Viewer): void => {
     for (let line = log.from(viewer.next); line && !viewer.res.writableNeedDrain; line = log.from(viewer.next)) {
-      viewer.res.write(streamPart(CONSOLE, Buffer.from(JSON.stringify(line))))
+      viewer.res.write(jsonPart(CONSOLE, line))
       viewer.next = line.n + 1
     }
   }
@@ -315,7 +315,7 @@ export async function runHost(opts: HostOptions): Promise<void> {
   const point = (viewer: Viewer): void => {
     if (viewer.shape === shape || viewer.res.writableNeedDrain) return
     viewer.shape = shape
-    viewer.res.write(streamPart(CURSOR, Buffer.from(JSON.stringify({ cursor: shape }))))
+    viewer.res.write(jsonPart(CURSOR, { cursor: shape }))
   }
 
   /**
@@ -343,7 +343,7 @@ export async function runHost(opts: HostOptions): Promise<void> {
   const tellSelection = (viewer: Viewer): void => {
     if (viewer.selected === selected || viewer.res.writableNeedDrain) return
     viewer.selected = selected
-    viewer.res.write(streamPart(SELECTED, Buffer.from(JSON.stringify({ text: selected }))))
+    viewer.res.write(jsonPart(SELECTED, { text: selected }))
   }
 
   /**
@@ -362,7 +362,7 @@ export async function runHost(opts: HostOptions): Promise<void> {
   /** Where the agent just acted, told to whoever watches, so they see the agent's own pointer move. */
   const tellActed = (where: ActedPoint): void => {
     acted = where
-    for (const viewer of viewers) if (!viewer.res.writableNeedDrain) viewer.res.write(streamPart(ACTED, Buffer.from(JSON.stringify(where))))
+    for (const viewer of viewers) if (!viewer.res.writableNeedDrain) viewer.res.write(jsonPart(ACTED, where))
   }
 
   /** Chrome draws pictures of the page the agent is on while someone watches, and none otherwise. */
@@ -516,7 +516,7 @@ export async function runHost(opts: HostOptions): Promise<void> {
       if (latest) show(viewer, latest)
       point(viewer)
       tellSelection(viewer)
-      if (acted) viewer.res.write(streamPart(ACTED, Buffer.from(JSON.stringify(acted))))
+      if (acted) viewer.res.write(jsonPart(ACTED, acted))
       pour(viewer)
       void cast()
       void tell().catch(() => {})
