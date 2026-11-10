@@ -28,7 +28,6 @@ export function fakeGitHost(branch: string, hook?: () => Promise<void>): GitHost
   }
 }
 
-
 /** A fake session with something done before each prompt, handed the prompt as the agent is sent it, the attached text and the added sentence after it: the spread of a class instance loses its methods, so the wrapper is explicit. */
 export function wrap(fake: FakeDriverSession, before: (text: string) => Promise<void>): DriverSession & { prompts: string[] } {
   return {
@@ -67,7 +66,6 @@ export function committingDriver(): Driver {
     },
   }
 }
-
 
 /** A clock a minute on at every reading: two runs of one process get two ids. */
 export function ticking(): () => Date {
