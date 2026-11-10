@@ -252,9 +252,9 @@ export function App() {
   // An agent just started in `inProject`, which is not always the selected one: the onboarding
   // checklist starts one from the Overview, where nothing is selected (#1169).
   const agentStarted = (inProject: string | null, intent: string, startedId: string, runsOn?: string, picks?: StartPicks) => {
-    // Continuing the agent already on screen (#762) appends to its journal — nothing truncates, so
-    // nothing would re-replay after a reset. Bumping the tick here is what blanked the transcript
-    // the moment a message resumed an ended session; a continuation keeps the feed instead.
+    // Continuing the agent already on screen (#762) starts no new run: its journal goes on, nothing
+    // truncates, and its row is in the rail already, so no "starting…" row comes up for it and it
+    // is not named again.
     const continued = startedId === agentId && inProject === projectId
     setAgentStart(prev => ({ tick: continued ? prev.tick : prev.tick + 1, intent, id: startedId, projectId: inProject, at: Date.now(), ...(runsOn ? { runsOn } : {}), ...(picks ? { picks } : {}) }))
     // The picked Context went with that run; the next launch starts from a clean focus (#948).
