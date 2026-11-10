@@ -175,11 +175,13 @@ export function LogsPage({ projects, path }: ModulePageProps) {
   const shown = status === null ? read.rows : read.rows.filter(row => row.card.status === status)
   const days = byDay(shown)
   const many = projects.length > 1
+  // A project that gave a whole page may have older runs the page does not list.
+  const capped = projects.some(project => recorded.rows.filter(row => row.project.id === project.id).length >= LIMIT)
 
   return (
     <Page
       title="Logs"
-      description={`Every run recorded in ${projects.length === 1 ? 'this project' : 'these projects'}, newest first.`}
+      description={capped ? `The last ${LIMIT} runs recorded in ${many ? 'each of these projects' : 'this project'}, newest first.` : `Every run recorded in ${many ? 'these projects' : 'this project'}, newest first.`}
       bar={<FilterChips chips={counts} total={read.rows.length} picked={status} onPick={value => host.openPage('logs', value === null ? [] : [value])} />}
     >
       {read.failed.map(({ project, error }) => (
