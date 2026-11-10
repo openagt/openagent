@@ -186,7 +186,8 @@ export async function startScheduler(repo: string, opts: { foreground?: boolean;
 
 /**
  * The scheduler's process: a tick now and every interval, until SIGINT or SIGTERM. The stop waits
- * for the tick in flight, which starts nothing more and records nothing once the stop is in; and it
+ * for the tick in flight, which starts nothing more and records nothing once the stop is in, and
+ * for no other: one that waited behind it does not run; and it
  * clears only this process's pid from the state, writing nothing when the state names another: a
  * dashboard's close hook stops this scheduler and its open hook starts the next one before this
  * tick is over, and that one's pid must stay.
@@ -195,8 +196,18 @@ async function loop(repo: string, everyMs: number, log: (line: string) => void):
   await updateState(repo, s => ({ ...s, pid: process.pid, startedAt: new Date().toISOString() }))
   let stopped = false
   let inflight: Promise<unknown> = Promise.resolve()
+  // One tick waits at most: a tick that outlasts the interval (a slow pull, a check at its limit)
+  // must not queue the minutes it missed behind it, which a stop would then have to wait out.
+  let queued = false
   const once = (): void => {
-    inflight = inflight.then(() => tickProject(repo, { log, stopped: () => stopped })).catch(err => log(`[scheduler] tick failed: ${err instanceof Error ? err.message : String(err)}`))
+    if (queued) return
+    queued = true
+    inflight = inflight
+      .then(() => {
+        queued = false
+        return stopped ? undefined : tickProject(repo, { log, stopped: () => stopped })
+      })
+      .catch(err => log(`[scheduler] tick failed: ${err instanceof Error ? err.message : String(err)}`))
   }
   // Between ticks, the rows that may be checked more often, each when its own interval is over;
   // one look at a time, after the tick in flight, and none queued while one waits.
