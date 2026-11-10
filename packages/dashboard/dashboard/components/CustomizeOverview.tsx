@@ -282,10 +282,6 @@ export function EditOverview({ arranged, layouts, layoutKey }: { arranged: Place
           >
             {/* Where the dragged card lands: a bar in the gap at this card's edge, laid over the page. */}
             {dragging && aimed !== undefined && (aimed === 'end' ? card.id === last && <DropBar side="after" /> : aimed.id === card.id && <DropBar side={aimed.side} />)}
-            {/* The card as it stands, its own buttons asleep while it is being arranged. */}
-            <div aria-hidden className="pointer-events-none flex flex-1 select-none flex-col *:flex-1">
-              {card.node}
-            </div>
             <CardBar
               label={card.label}
               widths={widthsFor(card)}
@@ -296,6 +292,10 @@ export function EditOverview({ arranged, layouts, layoutKey }: { arranged: Place
               onWidth={picked => change(card.id, { width: picked })}
               onHide={() => change(card.id, { hidden: true })}
             />
+            {/* The card as it stands, its own buttons asleep while it is being arranged. */}
+            <div inert className="flex flex-1 select-none flex-col *:flex-1">
+              {card.node}
+            </div>
           </div>
         ))}
       </Grid>
@@ -303,10 +303,10 @@ export function EditOverview({ arranged, layouts, layoutKey }: { arranged: Place
   )
 }
 
-/** The bar on a card's top edge while the page is arranged: its handle, its widths, and ✕. */
+/** The bar above a card while the page is arranged, so it covers none of the card: its handle, its widths, and ✕. */
 function CardBar({ label, widths, width, first, last, onStep, onWidth, onHide }: { label: string; widths: CardWidth[]; width: CardWidth; first: boolean; last: boolean; onStep: (by: -1 | 1) => void; onWidth: (width: CardWidth) => void; onHide: () => void }) {
   return (
-    <div role="toolbar" aria-label={label} className="absolute top-2 right-2 z-10 flex items-center gap-1 rounded-md border border-border bg-popover p-0.5 text-popover-foreground shadow-sm">
+    <div role="toolbar" aria-label={label} className="mb-1.5 flex items-center gap-1 self-end rounded-md border border-border bg-popover p-0.5 text-popover-foreground shadow-sm">
       <button
         type="button"
         aria-label={`Move ${label}: arrow keys`}

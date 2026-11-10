@@ -124,6 +124,14 @@ describe('the Overview', () => {
     expect(screen.queryByRole('toolbar')).toBeNull()
   })
 
+  test("while the page is arranged, a card's own buttons are asleep: no focus, no press", async () => {
+    show()
+    fireEvent.click(await screen.findByRole('button', { name: 'Customize' }))
+    expect(screen.getByText("a package's card").closest('[inert]')).not.toBeNull()
+    fireEvent.click(screen.getByRole('button', { name: 'Done' }))
+    expect(screen.getByText("a package's card").closest('[inert]')).toBeNull()
+  })
+
   test('a card dragged from the tray shows where it lands, a bar beside the card under the pointer or at the end, and lands there', async () => {
     working = []
     prefs.value = { onboardingDismissed: true, overviewLayouts: { '*': [{ id: 'needs-you', hidden: true }] } }
