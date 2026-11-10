@@ -233,6 +233,141 @@ function ChangeSearch({ paths, changes, onPick }: { paths: string[]; changes: Re
   )
 }
 
+/**
+ * A run's `value`, held as it was when last kept (`keep`) while the run's files move as it ends
+ * (`moving`): the run answers pending for a moment, and what the pane last showed stays. Held for
+ * the run it was read for: another run's is never shown.
+ */
+function useHeld<T>(agentId: string | undefined, value: T, keep: boolean, moving: boolean): T {
+  const held = useRef<{ agentId: string; value: T } | null>(null)
+  if (agentId && keep) held.current = { agentId, value }
+  const last = held.current
+  return moving && last !== null && last.agentId === agentId ? last.value : value
+}
+
+/**
+ * The pane's header: the branches the changes are between and whether they are merged, or the
+ * pane's name; then search, the button that hides the list, and the ⋮ menu.
+ */
+function ChangesHeader({ between, merged, page, paths, changes, listShown, onPick, onToggleList, onRefresh }: {
+  between: string | undefined
+  merged: boolean | undefined
+  page: string
+  paths: string[]
+  changes: Record<string, FileMark>
+  listShown: boolean
+  onPick: (path: string) => void
+  onToggleList: () => void
+  onRefresh: () => void
+}) {
+  const settings = useChangesSettings()
+  return (
+    <>
+      <PaneTitle>
+        {/* One line, cut at its end on a narrow pane: the branches come first. */}
+        {between ? (
+          <h2 className="min-w-0 truncate pl-2 text-[13px] text-muted-foreground" title={between}>
+            {between}
+            {merged !== undefined && <span className="pl-1 text-xs text-muted-foreground">{merged ? '· merged' : '· not merged yet'}</span>}
+          </h2>
+        ) : (
+          <h2 className="truncate pl-2 text-[13px] text-muted-foreground">Changes</h2>
+        )}
+      </PaneTitle>
+      <PaneActions>
+        <ChangeSearch paths={paths} changes={changes} onPick={onPick} />
+        <Tooltip>
+          <TooltipTrigger
+            render={
+              <Button
+                variant="ghost"
+                size="icon-sm"
+                className={cn('shrink-0 text-muted-foreground', listShown && 'bg-accent text-accent-foreground')}
+                aria-label={listShown ? 'Hide the list of files' : 'Show the list of files'}
+                aria-pressed={listShown}
+                onClick={onToggleList}
+              />
+            }
+          >
+            <ListTree className="size-4" />
+          </TooltipTrigger>
+          <TooltipContent>{listShown ? 'Hide the list of files' : 'Show the list of files'}</TooltipContent>
+        </Tooltip>
+        <DropdownMenu>
+          <DropdownMenuTrigger aria-label="The pane’s settings" className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-muted-foreground hover:bg-accent hover:text-accent-foreground">
+            <MoreVertical aria-hidden className="size-4" />
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end" className="min-w-[12rem]">
+            <DropdownMenuCheckboxItem checked={settings.group} onCheckedChange={checked => setChangesSetting('group', checked)}>
+              Group files by folder
+            </DropdownMenuCheckboxItem>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem onClick={() => foldAll(page, paths)}>Collapse all files</DropdownMenuItem>
+            <DropdownMenuItem onClick={() => foldAll(page, null)}>Expand all files</DropdownMenuItem>
+            <DropdownMenuSeparator />
+            <DropdownMenuCheckboxItem checked={settings.wrap} onCheckedChange={checked => setChangesSetting('wrap', checked)}>
+              Word wrap
+            </DropdownMenuCheckboxItem>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem onClick={onRefresh}>Refresh</DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
+      </PaneActions>
+    </>
+  )
+}
+
+/** The changed files, in folders or each by its whole path, the one picked lit. */
+function ChangeList({ paths, changes, group, picked, onPick }: { paths: string[]; changes: Record<string, FileMark>; group: boolean; picked: string | undefined; onPick: (path: string) => void }) {
+  const rowOf = (path: string, label: string) => <ChangeRow key={path} path={path} mark={changes[path]!} label={label} picked={path === picked} onPick={() => onPick(path)} />
+  const folderOf = (node: Folder): ReactNode => (
+    <>
+      {[...node.dirs.values()]
+        .sort((a, b) => a.name.localeCompare(b.name))
+        .map(dir => (
+          <li key={dir.path}>
+            <details open className="group">
+              <summary className="flex h-6 cursor-pointer list-none items-center gap-1.5 rounded-md px-2 text-[13px] text-muted-foreground hover:bg-accent">
+                <ChevronRight aria-hidden className="size-3 shrink-0 group-open:rotate-90" />
+                <span className="truncate">{dir.name}</span>
+              </summary>
+              <ul className="ml-2.5">{folderOf(dir)}</ul>
+            </details>
+          </li>
+        ))}
+      {node.files.map(path => rowOf(path, nameOf(path)))}
+    </>
+  )
+  return (
+    <ul aria-label="Changed files" className="min-h-0 flex-auto space-y-0.5 overflow-y-auto p-1">
+      {group ? folderOf(foldersOf(paths)) : paths.map(path => rowOf(path, path))}
+    </ul>
+  )
+}
+
+/** The run's commits, newest first, with "All changes" above them, under a heading that folds them away. */
+function CommitList({ commits, picked, open, onOpen, onPick }: { commits: AgentCommit[]; picked: string | undefined; open: boolean; onOpen: (open: boolean) => void; onPick: (sha: string | undefined) => void }) {
+  return (
+    <section aria-label="Commits" className={cn('flex shrink-0 flex-col border-t border-border', open && 'max-h-[45%]')}>
+      <h3>
+        <button type="button" aria-expanded={open} onClick={() => onOpen(!open)} className="mt-1 flex h-6 w-full items-center gap-1.5 px-3 text-[13px] text-muted-foreground hover:text-foreground">
+          <ChevronRight aria-hidden className={cn('size-3 shrink-0', open && 'rotate-90')} />
+          <span className="flex-1 text-start">Commits</span>
+          <span className="text-xs">{commits.length}</span>
+        </button>
+      </h3>
+      {open && (
+        <ul className="min-h-0 space-y-0.5 overflow-y-auto p-1 pt-0">
+          <CommitRow label="All changes" picked={picked === undefined} onPick={() => onPick(undefined)} />
+          {commits.map(c => (
+            <CommitRow key={c.sha} label={c.subject} detail={`${c.short} · ${c.author} · ${formatRelative(c.date)}`} title={c.subject} picked={c.sha === picked} onPick={() => onPick(c.sha)} />
+          ))}
+        </ul>
+      )}
+    </section>
+  )
+}
+
 export function ChangesPanel({ projectId, agentId, activity, reveal }: ModulePanelProps) {
   const host = useModuleHost()
   const page = `${projectId}/${agentId ?? ''}`
@@ -248,16 +383,11 @@ export function ChangesPanel({ projectId, agentId, activity, reveal }: ModulePan
   const { value: projectChanges, loaded: projectLoaded, reload: reloadProject } = usePolled<Record<string, FileMark>>(agentId ? null : () => readProject(host, projectId), NO_CHANGES, 8_000, [projectId, agentId], { remember: projectKey(projectId) })
   const { value: answer, loaded: runLoaded, reload } = usePolled<RunChanges | null>(agentId ? () => readRun(host, projectId, agentId) : null, null, 8_000, [projectId, agentId], agentId ? { remember: runKey(projectId, agentId) } : undefined)
   // A run whose files move as it ends answers pending for a moment: the list it last showed stays.
-  const lastRun = useRef<{ agentId: string; changes: RunChanges } | null>(null)
-  if (agentId && answer && 'changes' in answer) lastRun.current = { agentId, changes: answer }
-  const last = lastRun.current
-  const run = answer?.source === 'pending' && last !== null && last.agentId === agentId ? last.changes : answer
+  const moving = answer?.source === 'pending'
+  const run = useHeld(agentId, answer, answer !== null && 'changes' in answer, moving)
   const { value: commitsRead, loaded: commitsLoaded, reload: reloadCommits } = usePolled<AgentCommit[]>(agentId ? () => readCommits(host, projectId, agentId) : null, NO_COMMITS, 8_000, [projectId, agentId], agentId ? { remember: commitsKey(projectId, agentId) } : undefined)
   // As with the list of files: while the run's files move as it ends, the commits last read stay.
-  const lastCommits = useRef<{ agentId: string; commits: AgentCommit[] } | null>(null)
-  if (agentId && commitsLoaded && answer?.source !== 'pending') lastCommits.current = { agentId, commits: commitsRead }
-  const heldCommits = lastCommits.current
-  const commits = answer?.source === 'pending' && heldCommits !== null && heldCommits.agentId === agentId ? heldCommits.commits : commitsRead
+  const commits = useHeld(agentId, commitsRead, commitsLoaded && !moving, moving)
   // The commit picked on this page, while it is still one of the run's; none picked is "All changes".
   const [commitClick, setCommitClick] = useState<{ agentId: string; sha: string } | null>(null)
   const commit = commitClick !== null && commitClick.agentId === agentId ? commits.find(c => c.sha === commitClick.sha) : undefined
@@ -329,67 +459,22 @@ export function ChangesPanel({ projectId, agentId, activity, reveal }: ModulePan
     if (allAsked !== undefined) diffsElement?.scrollTo({ top: 0 })
   }, [allAsked, diffsElement])
   const header = (
-    <>
-      <PaneTitle>
-        {/* One line, cut at its end on a narrow pane: the branches come first. */}
-        {between ? (
-          <h2 className="min-w-0 truncate pl-2 text-[13px] text-muted-foreground" title={between}>
-            {between}
-            {merged !== undefined && <span className="pl-1 text-xs text-muted-foreground">{merged ? '· merged' : '· not merged yet'}</span>}
-          </h2>
-        ) : (
-          <h2 className="truncate pl-2 text-[13px] text-muted-foreground">Changes</h2>
-        )}
-      </PaneTitle>
-      <PaneActions>
-        <ChangeSearch paths={paths} changes={changes} onPick={pick} />
-        <Tooltip>
-          <TooltipTrigger
-            render={
-              <Button
-                variant="ghost"
-                size="icon-sm"
-                className={cn('shrink-0 text-muted-foreground', listShown && 'bg-accent text-accent-foreground')}
-                aria-label={listShown ? 'Hide the list of files' : 'Show the list of files'}
-                aria-pressed={listShown}
-                onClick={() => (narrow ? setPeek(!peek) : setChangesSetting('list', !settings.list))}
-              />
-            }
-          >
-            <ListTree className="size-4" />
-          </TooltipTrigger>
-          <TooltipContent>{listShown ? 'Hide the list of files' : 'Show the list of files'}</TooltipContent>
-        </Tooltip>
-        <DropdownMenu>
-          <DropdownMenuTrigger aria-label="The pane’s settings" className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-muted-foreground hover:bg-accent hover:text-accent-foreground">
-            <MoreVertical aria-hidden className="size-4" />
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="end" className="min-w-[12rem]">
-            <DropdownMenuCheckboxItem checked={settings.group} onCheckedChange={checked => setChangesSetting('group', checked)}>
-              Group files by folder
-            </DropdownMenuCheckboxItem>
-            <DropdownMenuSeparator />
-            <DropdownMenuItem onClick={() => foldAll(page, paths)}>Collapse all files</DropdownMenuItem>
-            <DropdownMenuItem onClick={() => foldAll(page, null)}>Expand all files</DropdownMenuItem>
-            <DropdownMenuSeparator />
-            <DropdownMenuCheckboxItem checked={settings.wrap} onCheckedChange={checked => setChangesSetting('wrap', checked)}>
-              Word wrap
-            </DropdownMenuCheckboxItem>
-            <DropdownMenuSeparator />
-            <DropdownMenuItem
-              onClick={() => {
-                reload()
-                reloadCommits()
-                reloadProject()
-                setRefresh(n => n + 1)
-              }}
-            >
-              Refresh
-            </DropdownMenuItem>
-          </DropdownMenuContent>
-        </DropdownMenu>
-      </PaneActions>
-    </>
+    <ChangesHeader
+      between={between}
+      merged={merged}
+      page={page}
+      paths={paths}
+      changes={changes}
+      listShown={listShown}
+      onPick={pick}
+      onToggleList={() => (narrow ? setPeek(!peek) : setChangesSetting('list', !settings.list))}
+      onRefresh={() => {
+        reload()
+        reloadCommits()
+        reloadProject()
+        setRefresh(n => n + 1)
+      }}
+    />
   )
 
   const line = (text: string) => (
@@ -413,25 +498,6 @@ export function ChangesPanel({ projectId, agentId, activity, reveal }: ModulePan
   const caption = commit ? `${commit.short} ${commit.subject}` : agentId ? undefined : 'Changed in the project’s folder, not committed.'
   // What stands where the diffs would be, when the list is empty.
   const nothing = commit ? (commitLoaded ? 'This commit changed no files.' : 'Reading the commit…') : 'No change is left: the commits cancel out.'
-  const rowOf = (path: string, label: string) => <ChangeRow key={path} path={path} mark={changes[path]!} label={label} picked={path === picked} onPick={() => pick(path)} />
-  const folderOf = (node: Folder): ReactNode => (
-    <>
-      {[...node.dirs.values()]
-        .sort((a, b) => a.name.localeCompare(b.name))
-        .map(dir => (
-          <li key={dir.path}>
-            <details open className="group">
-              <summary className="flex h-6 cursor-pointer list-none items-center gap-1.5 rounded-md px-2 text-[13px] text-muted-foreground hover:bg-accent">
-                <ChevronRight aria-hidden className="size-3 shrink-0 group-open:rotate-90" />
-                <span className="truncate">{dir.name}</span>
-              </summary>
-              <ul className="ml-2.5">{folderOf(dir)}</ul>
-            </details>
-          </li>
-        ))}
-      {node.files.map(path => rowOf(path, nameOf(path)))}
-    </>
-  )
   return (
     <>
       {header}
@@ -439,28 +505,8 @@ export function ChangesPanel({ projectId, agentId, activity, reveal }: ModulePan
       <div ref={setBody} className="flex min-h-0 min-w-0 flex-auto border-t border-border">
         {listShown && (
           <div className={cn('flex min-h-0 flex-col', narrow ? 'w-full' : 'w-1/3 max-w-72 min-w-40 shrink-0 border-r border-border')}>
-            <ul aria-label="Changed files" className="min-h-0 flex-auto space-y-0.5 overflow-y-auto p-1">
-              {settings.group ? folderOf(foldersOf(paths)) : paths.map(path => rowOf(path, path))}
-            </ul>
-            {agentId && commits.length > 0 && (
-              <section aria-label="Commits" className={cn('flex shrink-0 flex-col border-t border-border', commitsOpen && 'max-h-[45%]')}>
-                <h3>
-                  <button type="button" aria-expanded={commitsOpen} onClick={() => setCommitsOpen(!commitsOpen)} className="mt-1 flex h-6 w-full items-center gap-1.5 px-3 text-[13px] text-muted-foreground hover:text-foreground">
-                    <ChevronRight aria-hidden className={cn('size-3 shrink-0', commitsOpen && 'rotate-90')} />
-                    <span className="flex-1 text-start">Commits</span>
-                    <span className="text-xs">{commits.length}</span>
-                  </button>
-                </h3>
-                {commitsOpen && (
-                  <ul className="min-h-0 space-y-0.5 overflow-y-auto p-1 pt-0">
-                    <CommitRow label="All changes" picked={commit === undefined} onPick={() => setCommitClick(null)} />
-                    {commits.map(c => (
-                      <CommitRow key={c.sha} label={c.subject} detail={`${c.short} · ${c.author} · ${formatRelative(c.date)}`} title={c.subject} picked={c.sha === sha} onPick={() => setCommitClick({ agentId, sha: c.sha })} />
-                    ))}
-                  </ul>
-                )}
-              </section>
-            )}
+            <ChangeList paths={paths} changes={changes} group={settings.group} picked={picked} onPick={pick} />
+            {agentId && commits.length > 0 && <CommitList commits={commits} picked={sha} open={commitsOpen} onOpen={setCommitsOpen} onPick={chosen => setCommitClick(chosen === undefined ? null : { agentId, sha: chosen })} />}
           </div>
         )}
         {!(narrow && listShown) && (
