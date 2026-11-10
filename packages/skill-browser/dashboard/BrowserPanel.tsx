@@ -31,11 +31,109 @@ const CONSOLE_OPEN_KEY = 'oa.browser-console'
  */
 export function BrowserPanel({ projectId, agentId, activity }: ModulePanelProps) {
   const host = useModuleHost()
+  const canvas = useRef<HTMLCanvasElement>(null)
+  const { live, address, setAddress, editing, lines, cursor, agent, picture, selected } = useScreen(projectId, agentId, activity, canvas)
+
+  if (!agentId) return <Nothing>Open a session to see its browser.</Nothing>
+
+  const send = (input: ScreenInput): void => void host.sendToScreen(projectId, agentId, input)
+  const onKey = (e: KeyboardEvent): void => {
+    // Copy and paste are the browser's own events, below; select-all is not, so it is sent as
+    // the command it stands for. Every other key with a hold on it belongs to the dashboard.
+    if (e.metaKey || e.ctrlKey) {
+      if (e.key === 'a' && !e.altKey) {
+        send({ type: 'selectAll' })
+        e.preventDefault()
+      }
+      return
+    }
+    if (e.altKey) return
+    if (NAMED_KEYS.has(e.key)) send({ type: 'key', key: e.key })
+    else if (e.key.length === 1) send({ type: 'text', text: e.key })
+    else return
+    e.preventDefault()
+  }
+  const go = (e: FormEvent): void => {
+    e.preventDefault()
+    const typed = address.trim()
+    if (!typed) return
+    send({ type: 'navigate', url: /^https?:\/\//i.test(typed) ? typed : `http://${typed}` })
+    ;(document.activeElement as HTMLElement | null)?.blur()
+  }
+
+  return (
+    <div className="flex h-full min-h-0 flex-col">
+      <form onSubmit={go} className="flex items-center gap-1 border-b border-border p-2">
+        <Button type="button" variant="ghost" size="icon-sm" className="h-7 w-7 shrink-0" aria-label="Back" disabled={!live} onClick={() => send({ type: 'back' })}>
+          <ArrowLeft className="h-4 w-4" />
+        </Button>
+        <Button type="button" variant="ghost" size="icon-sm" className="h-7 w-7 shrink-0" aria-label="Forward" disabled={!live} onClick={() => send({ type: 'forward' })}>
+          <ArrowRight className="h-4 w-4" />
+        </Button>
+        <Button type="button" variant="ghost" size="icon-sm" className="h-7 w-7 shrink-0" aria-label="Reload" disabled={!live} onClick={() => send({ type: 'reload' })}>
+          <RotateCw className="h-4 w-4" />
+        </Button>
+        <Input
+          aria-label="Address"
+          className="h-7 min-w-0 flex-1 text-xs"
+          spellCheck={false}
+          autoComplete="off"
+          autoCapitalize="off"
+          disabled={!live}
+          value={address}
+          onChange={e => setAddress(e.target.value)}
+          onFocus={() => (editing.current = true)}
+          onBlur={() => (editing.current = false)}
+        />
+      </form>
+      {/* A phone has no keys until a field has the focus: what is typed here goes to the page. */}
+      {live && <TypeHere send={send} />}
+      <div className="relative flex min-h-0 flex-1 items-start justify-center overflow-hidden bg-muted">
+        <Hand canvas={canvas} send={send}>
+          <canvas
+            ref={canvas}
+            tabIndex={0}
+            role="img"
+            aria-label="The agent's browser"
+            style={live ? { cursor } : undefined}
+            className={live ? 'max-h-full max-w-full touch-none outline-none focus-visible:ring-2 focus-visible:ring-ring' : 'hidden'}
+            onKeyDown={onKey}
+            // What the page has selected is already in hand, so a copy answers at once, as a
+            // copy must: there is no asking the other computer in the moment the keys are down.
+            onCopy={e => {
+              if (!selected.current) return
+              e.clipboardData.setData('text/plain', selected.current)
+              e.preventDefault()
+            }}
+            // What their own browser took off their clipboard goes into the page as typing.
+            onPaste={e => {
+              const text = e.clipboardData.getData('text/plain').slice(0, MAX_SELECTION)
+              if (text) send({ type: 'text', text })
+              e.preventDefault()
+            }}
+          />
+        </Hand>
+        {live && agent && picture && <AgentPointer at={agent.at} n={agent.n} canvas={canvas} picture={picture} />}
+        {!live && <Nothing>No browser is open in this session. When the agent opens one, it shows here, live.</Nothing>}
+      </div>
+      {live && <Console lines={lines} />}
+    </div>
+  )
+}
+
+/**
+ * What the browser's stream says, read while the page is on screen, its pictures drawn on `canvas`
+ * as they come: whether a browser is live, what its address bar says (left alone while the person
+ * edits it), the console's lines, the shape of the pointer, where the agent last acted, how large
+ * the picture is, and what the page has selected. A session with no browser is asked again every
+ * few seconds, and at once when the agent does something (`activity`).
+ */
+function useScreen(projectId: string, agentId: string | undefined, activity: number | undefined, canvas: RefObject<HTMLCanvasElement | null>) {
+  const host = useModuleHost()
   // The host is a new object on every render, with the same services: the effects read the newest.
   const services = useRef(host)
   services.current = host
 
-  const canvas = useRef<HTMLCanvasElement>(null)
   const [live, setLive] = useState(false)
   const [address, setAddress] = useState('')
   const [lines, setLines] = useState<ConsoleLine[]>([])
@@ -47,6 +145,7 @@ export function BrowserPanel({ projectId, agentId, activity }: ModulePanelProps)
   const selected = useRef('')
   /** How large the picture is, in its own pixels: where on it the agent's pointer belongs. */
   const [picture, setPicture] = useState<{ width: number; height: number } | undefined>(undefined)
+  /** Whether the person is editing the address bar. */
   const editing = useRef(false)
   const visible = usePageVisible()
   /** Ask again now whether the session has a browser, when it had none. */
@@ -142,91 +241,7 @@ export function BrowserPanel({ projectId, agentId, activity }: ModulePanelProps)
   // The agent did something: it may have opened its browser just now.
   useEffect(() => askNow.current?.(), [activity])
 
-  if (!agentId) return <Nothing>Open a session to see its browser.</Nothing>
-
-  const send = (input: ScreenInput): void => void services.current.sendToScreen(projectId, agentId, input)
-  const onKey = (e: KeyboardEvent): void => {
-    // Copy and paste are the browser's own events, below; select-all is not, so it is sent as
-    // the command it stands for. Every other key with a hold on it belongs to the dashboard.
-    if (e.metaKey || e.ctrlKey) {
-      if (e.key === 'a' && !e.altKey) {
-        send({ type: 'selectAll' })
-        e.preventDefault()
-      }
-      return
-    }
-    if (e.altKey) return
-    if (NAMED_KEYS.has(e.key)) send({ type: 'key', key: e.key })
-    else if (e.key.length === 1) send({ type: 'text', text: e.key })
-    else return
-    e.preventDefault()
-  }
-  const go = (e: FormEvent): void => {
-    e.preventDefault()
-    const typed = address.trim()
-    if (!typed) return
-    send({ type: 'navigate', url: /^https?:\/\//i.test(typed) ? typed : `http://${typed}` })
-    ;(document.activeElement as HTMLElement | null)?.blur()
-  }
-
-  return (
-    <div className="flex h-full min-h-0 flex-col">
-      <form onSubmit={go} className="flex items-center gap-1 border-b border-border p-2">
-        <Button type="button" variant="ghost" size="icon-sm" className="h-7 w-7 shrink-0" aria-label="Back" disabled={!live} onClick={() => send({ type: 'back' })}>
-          <ArrowLeft className="h-4 w-4" />
-        </Button>
-        <Button type="button" variant="ghost" size="icon-sm" className="h-7 w-7 shrink-0" aria-label="Forward" disabled={!live} onClick={() => send({ type: 'forward' })}>
-          <ArrowRight className="h-4 w-4" />
-        </Button>
-        <Button type="button" variant="ghost" size="icon-sm" className="h-7 w-7 shrink-0" aria-label="Reload" disabled={!live} onClick={() => send({ type: 'reload' })}>
-          <RotateCw className="h-4 w-4" />
-        </Button>
-        <Input
-          aria-label="Address"
-          className="h-7 min-w-0 flex-1 text-xs"
-          spellCheck={false}
-          autoComplete="off"
-          autoCapitalize="off"
-          disabled={!live}
-          value={address}
-          onChange={e => setAddress(e.target.value)}
-          onFocus={() => (editing.current = true)}
-          onBlur={() => (editing.current = false)}
-        />
-      </form>
-      {/* A phone has no keys until a field has the focus: what is typed here goes to the page. */}
-      {live && <TypeHere send={send} />}
-      <div className="relative flex min-h-0 flex-1 items-start justify-center overflow-hidden bg-muted">
-        <Hand canvas={canvas} send={send}>
-          <canvas
-            ref={canvas}
-            tabIndex={0}
-            role="img"
-            aria-label="The agent's browser"
-            style={live ? { cursor } : undefined}
-            className={live ? 'max-h-full max-w-full touch-none outline-none focus-visible:ring-2 focus-visible:ring-ring' : 'hidden'}
-            onKeyDown={onKey}
-            // What the page has selected is already in hand, so a copy answers at once, as a
-            // copy must: there is no asking the other computer in the moment the keys are down.
-            onCopy={e => {
-              if (!selected.current) return
-              e.clipboardData.setData('text/plain', selected.current)
-              e.preventDefault()
-            }}
-            // What their own browser took off their clipboard goes into the page as typing.
-            onPaste={e => {
-              const text = e.clipboardData.getData('text/plain').slice(0, MAX_SELECTION)
-              if (text) send({ type: 'text', text })
-              e.preventDefault()
-            }}
-          />
-        </Hand>
-        {live && agent && picture && <AgentPointer at={agent.at} n={agent.n} canvas={canvas} picture={picture} />}
-        {!live && <Nothing>No browser is open in this session. When the agent opens one, it shows here, live.</Nothing>}
-      </div>
-      {live && <Console lines={lines} />}
-    </div>
-  )
+  return { live, address, setAddress, editing, lines, cursor, agent, picture, selected }
 }
 
 const TONE: Record<ConsoleLevel, string> = { error: 'text-danger', warning: 'text-warning', info: '', log: '', debug: 'text-muted-foreground', went: 'text-muted-foreground' }
