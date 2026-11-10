@@ -4,6 +4,7 @@ import { createRequire } from 'node:module'
 import { tmpdir } from 'node:os'
 import { delimiter, join, sep } from 'node:path'
 import { pathToFileURL } from 'node:url'
+import { errorMessage } from './git.js'
 
 /**
  * Which of a project's packages provides one kind of OpenAgent's data, and how its command is
@@ -262,9 +263,7 @@ export async function runPackageCommand(root: string, command: { name: string; b
       { cwd: root, timeout: COMMAND_TIMEOUT_MS, maxBuffer: COMMAND_MAX_OUTPUT, encoding: 'utf8', ...(more ? { env: { ...process.env, ...more } } : {}) },
       (error, stdout, stderr) => {
         if (!error) return resolvePromise({ stdout })
-        // A refusal's reason is its last line. A wrong command line (exit 2) says what was wrong first, then the usage.
-        const lines = stderr.trim().split('\n')
-        const said = ((error as { code?: unknown }).code === 2 ? lines[0] : lines.at(-1))?.trim()
+        const said = failureLine(stderr, (error as { code?: unknown }).code)
         const failed =
           (error as NodeJS.ErrnoException).code === 'ERR_CHILD_PROCESS_STDIO_MAXBUFFER'
             ? `${name} printed too much`
@@ -284,6 +283,12 @@ export async function runPackageCommand(root: string, command: { name: string; b
   } catch {
     return { ok: false, error: `${name} printed no JSON` }
   }
+}
+
+/** What a failed command said, as one line: a refusal's reason is its last line; a wrong command line (exit 2) says what was wrong first, then the usage. */
+function failureLine(stderr: string, code: unknown): string | undefined {
+  const lines = stderr.trim().split('\n')
+  return (code === 2 ? lines[0] : lines.at(-1))?.trim()
 }
 
 /** The function a package's command script calls, exported beside it: the same command line, the same JSON on `stdout`, the exit code it answers. */
@@ -318,20 +323,20 @@ export async function callPackageCommand(root: string, command: ProvidedCommand,
   const cli = await packageCli(command)
   if (!cli) return runPackageCommand(root, command, args)
   let stdout = ''
-  let said = ''
+  let stderr = ''
   const code = await cli([...args], {
     cwd: root,
     stdout: line => {
       stdout += `${line}\n`
     },
     stderr: line => {
-      said = line
+      stderr += `${line}\n`
     },
   }).catch((err: unknown) => {
-    said = err instanceof Error ? err.message : String(err)
+    stderr += errorMessage(err)
     return 1
   })
-  if (code !== 0) return { ok: false, error: said.trim().split('\n').at(-1)?.trim() || `${command.name} failed` }
+  if (code !== 0) return { ok: false, error: failureLine(stderr, code) || `${command.name} failed` }
   try {
     return { ok: true, output: JSON.parse(stdout) as unknown }
   } catch {
