@@ -2,8 +2,8 @@ import { Refused, UsageError, errorMessage, nodeGitRunner, parseCommandArgs, run
 import { nodeGhRunner, type GhRunner } from './gh.js'
 import { listRequests } from './requests.js'
 import { openRequest, type OpenOutcome } from './open.js'
-import { mergeRequest } from './merge.js'
-import { watchAndMerge } from './merge-watch.js'
+import { mergeRequest, type WatchStarter } from './merge.js'
+import { spawnMergeWatch, watchAndMerge } from './merge-watch.js'
 import { GIT_HOST_NAME, homeUrlFor } from './home.js'
 import { MAX_PEOPLE, peopleByEmail } from './people.js'
 import { createRepository, offerRepository, type CreateOffer, type CreateOutcome } from './create.js'
@@ -85,76 +85,67 @@ export interface CliIo {
   stderr: (line: string) => void
 }
 
-/** What a run of the CLI may be given instead of the real gh and git: for tests. */
-export interface CliDeps {
-  gh?: GhRunner
-  git?: GitRunner
+/** What the commands work with besides the command line: gh, git, and what reaches past this process. */
+interface Services {
+  gh: GhRunner
+  git: GitRunner
   /** Start the merge watcher for a request; the default starts this package's own process. */
-  watch?: (repo: string, number: number) => Promise<void>
+  watch: WatchStarter
   /** The environment the command runs in; the default is this process's. */
-  env?: NodeJS.ProcessEnv
+  env: NodeJS.ProcessEnv
   /** Whether Homebrew is here; the default asks. */
-  hasBrew?: () => Promise<boolean>
+  hasBrew: () => Promise<boolean>
   /** Start an install command, going on after the command answers; the default runs it in a shell of its own. */
-  shell?: (command: string) => Promise<void>
+  shell: (command: string) => Promise<void>
   /** How the install started last went; the default reads it off its files. */
-  installing?: () => JobState | undefined
+  installing: () => JobState | undefined
   /** Start a browser login into OpenAgent's accounts' folder; the default runs gh. */
-  login?: (root: string) => Promise<LoggingIn>
+  login: (root: string) => Promise<LoggingIn>
   /** The browser login under way; the default reads it off its files. */
-  underWay?: () => LoggingIn | undefined
+  underWay: () => LoggingIn | undefined
   /** Give up the browser login under way; the default stops its gh. */
-  stopLogin?: (root: string) => void
+  stopLogin: (root: string) => void
   /** What the command was handed on standard input; the default reads the process's. */
-  stdin?: () => Promise<string>
+  stdin: () => Promise<string>
   /** What reads a public profile from GitHub; the default is `fetch`. */
-  fetch?: ProfileFetch
+  fetch: ProfileFetch
+}
+
+/** What a run of the CLI may be given instead of the real services: for tests. */
+export type CliDeps = Partial<Services>
+
+/** The real services: this process's gh, git, environment, standard input and network. */
+function realServices(): Services {
+  return {
+    gh: nodeGhRunner(),
+    git: nodeGitRunner(),
+    watch: spawnMergeWatch,
+    env: process.env,
+    hasBrew,
+    shell: command => startJob(jobFiles('install'), command),
+    installing: () => jobState(jobFiles('install')),
+    login: startLogin,
+    underWay: loginUnderWay,
+    stopLogin,
+    stdin: readStdin,
+    fetch,
+  }
+}
+
+/** What every command is handed: the services, the directory it runs in, and the stream a person reads. */
+interface Context extends Services {
+  cwd: string
+  stderr: (line: string) => void
 }
 
 /** Run the CLI: `argv` is everything after the program name. Resolves to the exit code. */
 export function runCli(argv: string[], io: CliIo, deps: CliDeps = {}): Promise<number> {
-  return runCommandLine(argv, io, { usage: USAGE, commands: COMMANDS, failure: GIT_HOST_FAILED }, contextOf(io, deps))
+  const context: Context = { ...realServices(), ...deps, cwd: io.cwd, stderr: io.stderr }
+  return runCommandLine(argv, io, { usage: USAGE, commands: COMMANDS, failure: GIT_HOST_FAILED }, context)
 }
 
 /** A failure no command meant: the git host, or `gh` talking to it, said no in a way no rule names. */
 const GIT_HOST_FAILED: Failure = { reason: 'git-host-failed', detail: errorMessage }
-
-/** What every command is handed: the real gh, git and the rest, unless a test gave its own. */
-function contextOf(io: CliIo, deps: CliDeps): Context {
-  return {
-    cwd: io.cwd,
-    gh: deps.gh ?? nodeGhRunner(),
-    git: deps.git ?? nodeGitRunner(),
-    ...(deps.watch ? { watch: deps.watch } : {}),
-    env: deps.env ?? process.env,
-    stderr: io.stderr,
-    hasBrew: deps.hasBrew ?? (() => hasBrew()),
-    shell: deps.shell ?? (command => startJob(jobFiles('install'), command)),
-    installing: deps.installing ?? (() => jobState(jobFiles('install'))),
-    login: deps.login ?? (root => startLogin(root)),
-    underWay: deps.underWay ?? (() => loginUnderWay()),
-    stopLogin: deps.stopLogin ?? (root => stopLogin(root)),
-    stdin: deps.stdin ?? readStdin,
-    fetch: deps.fetch ?? fetch,
-  }
-}
-
-interface Context {
-  cwd: string
-  gh: GhRunner
-  git: GitRunner
-  watch?: (repo: string, number: number) => Promise<void>
-  env: NodeJS.ProcessEnv
-  stderr: (line: string) => void
-  hasBrew: () => Promise<boolean>
-  shell: (command: string) => Promise<void>
-  installing: () => JobState | undefined
-  login: (root: string) => Promise<LoggingIn>
-  underWay: () => LoggingIn | undefined
-  stopLogin: (root: string) => void
-  stdin: () => Promise<string>
-  fetch: ProfileFetch
-}
 
 /** All of the process's standard input, as text. */
 async function readStdin(): Promise<string> {
@@ -295,7 +286,7 @@ const COMMANDS: Record<string, Command<[Context]>> = {
       ...(values.draft ? { draft: true } : {}),
       gh,
       git,
-      ...(watch ? { watch } : {}),
+      watch,
     })
     if (!outcome.ok) throw new Refused(outcome, openRefusalLine(cwd, outcome))
     return outcome
@@ -303,7 +294,7 @@ const COMMANDS: Record<string, Command<[Context]>> = {
 
   merge: asOpenAgent(async (args, { cwd, gh, watch }) => {
     const number = numberArg(parseCommandArgs(args, {}, 1).positionals[0]!)
-    const outcome = await mergeRequest(cwd, number, { gh, ...(watch ? { watch } : {}) })
+    const outcome = await mergeRequest(cwd, number, { gh, watch })
     if (outcome.outcome === 'not-open') throw new Refused({ ok: false, reason: 'not-open', number, state: outcome.state }, `pull request ${number} is ${outcome.state.toLowerCase()}, not open`)
     if (outcome.outcome === 'failed') throw new Refused({ ok: false, reason: 'merge-failed', number, detail: outcome.error }, `pull request ${number} could not be landed: ${outcome.error}`)
     return { ok: true, number, outcome: outcome.outcome }
