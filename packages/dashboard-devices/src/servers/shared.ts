@@ -4,6 +4,7 @@ import { ownGithubLogin } from './logins.js'
 import { ownDoor, type OwnDoor } from './own-door.js'
 import type { Exec } from './ssh.js'
 import { BEAT_MS, atWork, heartbeat, isMachineUrl, isThroughUrl, update, type Login, type Reach, type Shared, type Store } from './store.js'
+import { callOpenAgent } from '../openagent.js'
 
 /**
  * A computer several people use, from the side of one of them who is not its owner: the server
@@ -32,15 +33,7 @@ export async function askOpenAgent(env: NodeJS.ProcessEnv, fn: string, args: unk
   if (!said) throw new Error('This is run by OpenAgent: OPENAGENT_URL says where it is, and it is not set.')
   const origin = new URL(said).origin
   if (!/^http:\/\/(127\.0\.0\.1|localhost|\[::1\]):\d+$/.test(origin)) throw new Error('OpenAgent is asked on this computer only.')
-  const res = await fetch(`${origin}/_rpc/${fn}`, {
-    method: 'POST',
-    // Asked as OpenAgent's own page asks: from its own address.
-    headers: { 'content-type': 'application/json', origin, 'sec-fetch-site': 'same-origin' },
-    body: JSON.stringify(args),
-    signal: AbortSignal.timeout(ASK_TIMEOUT_MS),
-  })
-  if (!res.ok) throw new Error(`OpenAgent answered ${res.status} to ${fn}`)
-  return ((await res.json()) as { ret?: unknown }).ret
+  return callOpenAgent(origin, fn, args, ASK_TIMEOUT_MS)
 }
 
 type Answered = { ok: true; output: unknown } | { ok: false; error: string }

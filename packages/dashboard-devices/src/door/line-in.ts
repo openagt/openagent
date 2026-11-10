@@ -2,6 +2,7 @@ import { createServer, type IncomingMessage, type Server, type ServerResponse } 
 import { PassThrough, Readable, type Duplex } from 'node:stream'
 import { CARRIED_HEADERS, DATA, END, HEAD, LINE_QUIET_MS, Link, RESET, carriedHeaders, carriedPath, carriedValue, readHead, sendBody, type Frame } from './frames.js'
 import { listen, refuse, sendJson, shut } from './http.js'
+import { callOpenAgent } from '../openagent.js'
 import { ENTER_PATH } from './paths.js'
 import { PERSON_HEADER, personLinePorts, personOf, type Store } from './store.js'
 import { nameWord } from './names.js'
@@ -384,18 +385,7 @@ interface SavedMachine {
  * tells again.
  */
 export async function tellOpenAgent(target: string, computers: readonly LineComputer[], ports: { from: number; count: number }, timeoutMs = 10_000): Promise<void> {
-  const origin = new URL(target).origin
-  const call = async (fn: string, args: unknown[]): Promise<unknown> => {
-    const res = await fetch(`${origin}/_rpc/${fn}`, {
-      method: 'POST',
-      // Asked as OpenAgent's own page asks: from its own address.
-      headers: { 'content-type': 'application/json', origin, 'sec-fetch-site': 'same-origin' },
-      body: JSON.stringify(args),
-      signal: AbortSignal.timeout(timeoutMs),
-    })
-    if (!res.ok) throw new Error(`OpenAgent answered ${res.status} to ${fn}`)
-    return ((await res.json()) as { ret?: unknown }).ret
-  }
+  const call = (fn: string, args: unknown[]): Promise<unknown> => callOpenAgent(new URL(target).origin, fn, args, timeoutMs)
   const said = await call('onMachines', [])
   const saved: SavedMachine[] = Array.isArray(said) ? said.filter((machine): machine is SavedMachine => !!machine && typeof machine === 'object' && typeof (machine as SavedMachine).id === 'string' && typeof (machine as SavedMachine).url === 'string') : []
   const wanted = new Set(computers.map(computer => lineAddress(computer.port)))
