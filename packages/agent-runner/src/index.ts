@@ -7,7 +7,7 @@ export { childEndedLine, tellParent, type ChildEnd, type ParentDeps } from './pa
 export { runProject, resumeProject, detachRun, detachResume, readyToRun, workAs, accountsOn, agentLoginFor, spawnRun, spawnResume, resumeDetached, driverFor, isDriverName, DRIVER_NAMES, AGENT_ID_ENV, ACCOUNT_ENV, GIT_ACCOUNT_ENV, type AgentAccounts, type DriverName, type SpawnedRun, type SpawnedResume } from './runner.js'
 export { isPidAlive, lockHolder, runLockPath, runStderrPath } from './run-lock.js'
 export { projectGitHost, gitHostEnv, type GitHost, type BranchRequest } from './git-host.js'
-export { readLiveCard, readLiveDiary, endLiveCard, liveDir, inboxPath, LIVE_DIR, INBOX_FILE } from './live-card.js'
+export { readLiveCard, readLiveDiary, endLiveCard, liveDir, inboxPath, INBOX_FILE } from './live-card.js'
 export { initHooks, writeHookLines, HOOK_LINES, type InitOutcome } from './init.js'
 export { runCli, USAGE, type CliIo } from './cli.js'
 export { ReadyNaming, namingSetup, READY_NAMING_MAX_WAIT_MS, READY_NAMING_MAX_WAITING, type NamingSetup, type ReadyNamingDeps } from './ready-naming.js'
