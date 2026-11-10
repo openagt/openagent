@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { Bot, ExternalLink, LockOpen, Play } from 'lucide-react'
 import { Badge, Button, LinkActions, Markdown, cn, formatAge, formatDateTime, useAction, usePolled, useModuleHost } from '@openagt/dashboard/module'
-import { claimState, heldBack, holderAgent, readShown, ticketLink, withHolder } from '../src/module.js'
+import { claimState, heldBack, holderAgent, readShown, ticketBody, ticketLink, withHolder } from '../src/module.js'
 import type { WorkspaceTicketDetail } from './lib/types.js'
 import { TicketPageShell, TicketPageNote } from './TicketPageShell.js'
 import { releaseClaim } from './lib/release.js'
@@ -11,7 +11,7 @@ import { priorityTone } from './lib/ticket-priority.js'
 /** The ticket, and how the run holding its claim stands when the claim is one of the project's runs. */
 type Read = { ticket: WorkspaceTicketDetail | null; holderStatus?: string } | { error: string }
 
-// One ticket's own page: its entire markdown, not just the head the list row reads — and where the
+// One ticket's own page: its whole text, not just the head the list row reads — and where the
 // actions on the ticket live now that the list is one-liners: the ticket is shown as a link, and
 // the installed modules' link actions ("Add to queue" when the project has a queue package) sit
 // beside it. `slug` is the same filename the list row and the URL carry, so this is a direct read
@@ -99,9 +99,8 @@ export function TicketDetailPage({
               {!heldBack(ticket) && !claimed && <LinkActions projects={[projectId]} targets={[{ projectId, links: [ticketLink(ticket)] }]} resetKey={ticket.file} disabled={busy} />}
             </div>
           </div>
-          {ticket.summary && <p className="mt-2 text-sm text-muted-foreground">{ticket.summary}</p>}
-          {/* All meta below the description (#1144/#1265): date, priority, then the issue
-              link lead in that order, followed by the rest of what is known about the ticket. */}
+          {/* All meta under the title, above the text that holds its one-line summary (#1144/#1265): date, priority,
+              then the issue link lead in that order, followed by the rest of what is known about the ticket. */}
           <div className="mt-2 flex flex-wrap items-center gap-1.5">
             <span className="text-[10px] text-muted-foreground/70" title={formatDateTime(ticket.date)}>
               {formatAge(ticket.date)}
@@ -168,7 +167,7 @@ export function TicketDetailPage({
           </div>
           {error && <p className="mt-2 text-xs text-danger">{error}</p>}
           <div className="mt-4">
-            <Markdown text={ticket.content} />
+            <Markdown text={ticketBody(ticket.content)} />
           </div>
         </>
       )}
