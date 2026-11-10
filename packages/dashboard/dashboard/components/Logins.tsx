@@ -62,7 +62,7 @@ export function hostLoginState(row: GitHostRow): LoginState | undefined {
 }
 
 const PILL: Record<Exclude<LoginState, 'connected'>, { words: string; tone: string; dot: string }> = {
-  step: { words: 'Log in', tone: 'bg-warning/10 text-warning', dot: 'bg-warning' },
+  step: { words: 'Not logged in', tone: 'bg-warning/10 text-warning', dot: 'bg-warning' },
   'not-installed': { words: 'Not installed', tone: 'bg-muted text-muted-foreground', dot: 'bg-muted-foreground' },
 }
 
@@ -98,7 +98,7 @@ function CommandLine({ command }: { command: string }) {
   const long = command.length > LONG
   return (
     <div className="flex min-w-0 items-start gap-1">
-      <code className={cn('min-w-0 flex-1 font-mono text-[11px] text-muted-foreground', long && !whole ? 'truncate' : 'break-all')}>{command}</code>
+      <code className={cn('min-w-0 font-mono text-[11px] text-muted-foreground', long && !whole ? 'truncate' : 'break-all')}>{command}</code>
       {long && (
         <button type="button" className="shrink-0 text-[11px] text-muted-foreground underline-offset-2 hover:text-foreground hover:underline" onClick={() => setWhole(!whole)}>
           {whole ? 'Less' : 'Show all'}

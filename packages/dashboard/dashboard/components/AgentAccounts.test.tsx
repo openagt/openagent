@@ -67,7 +67,7 @@ describe('Agent accounts', () => {
     states({ driver: 'claude-code', ready: false, problem: '`claude` is not logged in.', fix: { kind: 'log-in', command: 'claude auth login' }, fixing: 'log-in' })
     render(<AccountsList />)
     const out = await screen.findByRole('region', { name: 'Claude Code' })
-    expect(await within(out).findByText('Log in')).toBeTruthy()
+    expect(await within(out).findByText('Not logged in')).toBeTruthy()
     expect(within(out).getByRole('status').textContent).toMatch(/Say yes in the page this computer's browser opened/)
   })
 
