@@ -1,5 +1,5 @@
 import { join } from 'node:path'
-import { GIT_FAILED, Refused, UsageError, checkoutRoot, inRepo, listProjectDir, nodeBranchFileFs, nodeGitRunner, openProjectReader, parseCommandArgs, readProjectFile, runCommandLine, writeProjectDataDetached, type BranchFileFs, type Command, type ProjectReader, type GitRunner } from '@openagt/agent-data'
+import { GIT_FAILED, Refused, UsageError, checkoutRoot, inRepo, listProjectDir, nodeBranchFileFs, nodeGitRunner, openProjectReader, parseCommandArgs, readProjectFile, runCommandLine, writeProjectDataDetached, type BranchFileFs, type Command, type GitRunner } from '@openagt/agent-data'
 import { isTicketFile, META_FILE, nameInTickets, TICKETS_DIR, ticketLockName, ticketOfPlan, ticketPlanName, ticketStem } from './names.js'
 import { readTicket, readTickets, readTicketsMeta, type TicketsFs } from './tickets.js'
 import { applyClaims, applyRelease, claimHistory, claimMessage, lockOn, releaseMessage } from './locks.js'
@@ -152,22 +152,14 @@ const COMMANDS: Record<string, Command<[CliIo, GitRunner]>> = {
 /** The one flag every read takes. */
 const LOCAL = { local: { type: 'boolean' } } as const
 
-/** The project's data opened for reading, from wherever the command runs; outside a repo, a refusal. */
-async function open(cwd: string, git: GitRunner): Promise<ProjectReader> {
-  await inRepo(() => checkoutRoot(cwd, git))
-  return openProjectReader(cwd, { git })
-}
-
 /**
- * The ticket reader a read goes through, paths relative to the project's data (`tickets/<file>`):
- * see {@link open}, or with `--local` this machine's copy with no fetch, for the dashboard's polling.
+ * The ticket reader a read goes through, paths relative to the project's data (`tickets/<file>`),
+ * from wherever the command runs; outside a repository, a refusal. The project's data opened for
+ * reading, or with `--local` this machine's copy with no fetch, for the dashboard's polling.
  */
 async function ticketsFs(cwd: string, local: boolean | undefined, git: GitRunner): Promise<TicketsFs> {
-  if (!local) {
-    const reader = await open(cwd, git)
-    return { list: dir => reader.list(dir), read: path => reader.read(path) }
-  }
   await inRepo(() => checkoutRoot(cwd, git))
+  if (!local) return openProjectReader(cwd, { git })
   return { list: dir => listProjectDir(cwd, dir, {}, { git }), read: path => readProjectFile(cwd, path, {}, { git }) }
 }
 
