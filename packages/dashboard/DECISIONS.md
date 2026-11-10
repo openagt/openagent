@@ -453,8 +453,11 @@ already made, and lists it in its pull request; for anything else it proposes an
 ## The agents
 - An agent (Rom's design) is a name, a set of skills and a set of accounts, made once on the
   Agents page and used in any project or none: the page lists them, the default first, and edits
-  each in place, its skills ticked from the list the Skills page has, plus the two every agent
-  starts with, its accounts among the ones the Permissions page knows. The session's agent is
+  each in a dialog over the page, as a new one is made, its skills ticked from the list the
+  Skills page has, plus the two every agent starts with, its accounts among the ones the
+  Permissions page knows. The dialog scrolls under its title with Save and Cancel always in
+  view, and a click beside it closes nothing: a form that long is not lost to a stray click
+  (before, the editor took the card's place in the list, which moved the page under the person). The session's agent is
   the "Agent" menu first under the box, saved like the model; its GitHub account is what the
   account control shows until the person picks another for the session. The run's record keeps
   the agent, and the session's box says it where the launcher's menu is. An agent that names

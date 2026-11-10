@@ -12,7 +12,7 @@ export type { AgentLoginsOn } from '../dashboard/logins-sync.js'
 
 // The Agents page (Rom's design): an agent is a name, a set of skills and a set of accounts, kept
 // as one file each in the personal folder, so every computer that syncs it has the same agents.
-// The page lists them, edits them in place, makes new ones and removes them; the default agent is
+// The page lists them, edits them in a dialog, makes new ones and removes them; the default agent is
 // edited like the others and never removed. What an agent can be given is what this computer
 // knows: the skills the dashboard carries, OpenAgent's own GitHub accounts here, and the Claude
 // and Codex accounts of the Permissions page.
