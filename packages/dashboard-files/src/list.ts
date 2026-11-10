@@ -1,9 +1,9 @@
 import { nodeGitRunner, type GitRunner } from '@openagt/agent-data'
 
-/** One NUL-separated list of paths from git; none when git refuses. */
+/** One NUL-separated list of paths from git, each exactly as git names it; none when git refuses. */
 async function paths(git: GitRunner, cwd: string, args: string[]): Promise<string[]> {
   const out = await git(['ls-files', '-z', ...args], cwd).catch(() => '')
-  return out.split('\0').map(entry => entry.trim()).filter(Boolean)
+  return out.split('\0').filter(Boolean)
 }
 
 /**

@@ -57,3 +57,9 @@ test('a tree read for a run the host does not know yet is starting, from the pro
   assert.deepEqual(await read('tree', { agentId: 'run-unknown' }), { source: 'starting', files: ['a.txt'] })
   assert.deepEqual(await read('tree', {}), { source: 'gone' })
 })
+
+test('a file whose name begins with a space is listed by its own name, and opens', async () => {
+  await writeFile(join(root, ' spaced.txt'), 'spaced\n')
+  assert.ok(((await read('project', {})) as string[]).includes(' spaced.txt'))
+  assert.equal(((await read('content', { path: ' spaced.txt' })) as { text: string }).text, 'spaced')
+})
