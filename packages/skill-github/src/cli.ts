@@ -1,5 +1,5 @@
 import { Refused, UsageError, errorMessage, nodeGitRunner, parseCommandArgs, runCommandLine, type Command, type Failure, type GitRunner } from '@openagt/agent-data'
-import { nodeGhRunner, type GhRunner } from './gh.js'
+import { hasBrew, installCommand, nodeGhRunner, type GhRunner } from './gh.js'
 import { listRequests } from './requests.js'
 import { openRequest, type OpenOutcome } from './open.js'
 import { mergeRequest, type WatchStarter } from './merge.js'
@@ -12,7 +12,8 @@ import { listRepos } from './repos.js'
 import { listReplies } from './replies.js'
 import { DIARY_ENV, byline, writeComment } from './comment.js'
 import { readFileSync } from 'node:fs'
-import { HOST, accountDir, accountsRoot, asAccount, forgetAccount, ghState, gitConfig, hasBrew, installCommand, installedAccounts, jobFiles, jobState, loginUnderWay, picksPath, stopLogin, readFacts, runEnv, runsAccount, settleAdded, startJob, startLogin, takeToken, useForRuns, type JobState, type LoggingIn } from './accounts.js'
+import { HOST, accountDir, accountsRoot, asAccount, forgetAccount, ghState, gitConfig, installedAccounts, loginUnderWay, picksPath, stopLogin, readFacts, runEnv, runsAccount, settleAdded, startLogin, takeToken, useForRuns, type LoggingIn } from './accounts.js'
+import { jobFiles, jobState, startJob, type JobState } from './job.js'
 import { accountNamed, factsOfToken, tokenOf, workingGh } from './working-account.js'
 
 /**

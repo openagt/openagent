@@ -1,4 +1,4 @@
-export { nodeGhRunner, type GhRunner } from './gh.js'
+export { nodeGhRunner, installCommand, type GhRunner } from './gh.js'
 export { listRequests, parseRequests, requestsArgs, sinceFilter, openRequestOf, REQUESTS_LIMIT, type Request, type RequestsQuery } from './requests.js'
 export { openRequest, currentBranch, requestNumber, type OpenOptions, type OpenOutcome } from './open.js'
 export { armMerge, mergeRequest, type MergeArming, type MergeOutcome, type MergeOptions, type WatchStarter } from './merge.js'
@@ -9,4 +9,5 @@ export { createRepository, offerRepository, type CreateOffer, type CreateOutcome
 export { publicProfile, type ProfileOutcome } from './profile.js'
 export { answersFor, listReplies, parseThreads, repliesArgs, seenArgs, MENTION, REPLIES_LIMIT, WHOLE_READ_EVERY_MS, type Answer, type Thread, type Told } from './replies.js'
 export { writeComment, commentArgs, byline, COMMENT_MARK, DIARY_ENV, ASSETS_URL, type Comment } from './comment.js'
-export { HOST, accountsRoot, accountDir, accountLogins, asAccount, ghState, gitConfig, runsAccount, runsAccountDir, useForRuns, installCommand, picksPath, runEnv, startLogin, loginUnderWay, jobFiles, jobState, startJob, type AccountFacts, type JobState, type GhAccount, type GhState, type LoggingIn } from './accounts.js'
+export { HOST, accountsRoot, accountDir, accountLogins, asAccount, ghState, gitConfig, runsAccount, runsAccountDir, useForRuns, picksPath, runEnv, startLogin, loginUnderWay, type AccountFacts, type GhAccount, type GhState, type LoggingIn } from './accounts.js'
+export { jobFiles, jobState, startJob, type JobState } from './job.js'
