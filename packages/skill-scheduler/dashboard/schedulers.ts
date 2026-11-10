@@ -441,14 +441,6 @@ export function agentsArgs(draft: AgentsDraft): string[] | undefined {
   return /^\d+$/.test(typed) && isAgents(Number(typed)) ? [String(Number(typed))] : undefined
 }
 
-/** A command as it would read with a number of agents draft saved; the command as it is while the draft is no number yet. */
-export function withAgentsDraft(command: SchedulerCommand, draft: AgentsDraft): SchedulerCommand {
-  const args = agentsArgs(draft)
-  if (!args) return command
-  const { agents: _agents, ...rest } = command
-  return args[0] === 'skill' ? rest : { ...rest, agents: Number(args[0]) }
-}
-
 /**
  * How far a scheduled command's runs may publish on this machine, as a sentence. It says a limit,
  * not what a run will do: a run with nothing to commit commits nothing. With no level picked the

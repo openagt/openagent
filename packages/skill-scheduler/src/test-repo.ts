@@ -1,9 +1,7 @@
 import { mkdir, mkdtemp, realpath, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
-import { strict as assert } from 'node:assert'
 import { DATA_BRANCH, nodeGitRunner, writeSharing } from '@openagt/agent-data'
-import { readDiary, type AnyDiaryLine } from '@openagt/skill-logs'
 
 /**
  * A project for the tests: one commit on `main`, a bare `origin`, the `agent-data` branch born
@@ -50,13 +48,4 @@ export async function writeSkill(repo: string, name: string, frontMatter: string
 /** The repository and its origin go together. */
 export async function removeRepo(repo: string): Promise<void> {
   await rm(dirname(repo), RETRIED_RM)
-}
-
-/** A run's diary with each line's time checked and taken off: what is left is what happened. */
-export async function readUntimedDiary(repo: string, id: string): Promise<AnyDiaryLine[]> {
-  const lines = (await readDiary(repo, id)) ?? assert.fail(`no diary for ${id}`)
-  return lines.map(({ at, ...line }) => {
-    assert.equal(typeof at === 'string' && new Date(at).toISOString(), at, `a time on ${line.kind}`)
-    return line as AnyDiaryLine
-  })
 }

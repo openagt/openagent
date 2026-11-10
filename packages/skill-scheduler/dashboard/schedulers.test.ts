@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'vitest'
 import { STATUS, hostAnswering } from './fixtures.js'
-import { agentOf, modelLabel, modelOf, runsOnWords, agentsArgs, agentsDraftOf, atOnce, atOnceWords, saysAtOnce, cannotRun, decided, draftOf, isOwn, outcomeWords, loosestSpendOffset, nextWords, offsetsThatDiffer, ownPace, pace, paceArgs, paceProblem, publishChoices, publishLabel, publishes, readSchedulers, saveSpendOffset, schedulerRow, schedulerStatus, schedulerStopped, nextStart, startsNext, spelled, typedOffset, withAgentsDraft, withDraft, rowTitle, unlistedWords } from './schedulers.js'
+import { agentOf, modelLabel, modelOf, runsOnWords, agentsArgs, agentsDraftOf, atOnce, atOnceWords, saysAtOnce, cannotRun, decided, draftOf, isOwn, outcomeWords, loosestSpendOffset, nextWords, offsetsThatDiffer, ownPace, pace, paceArgs, paceProblem, publishChoices, publishLabel, publishes, readSchedulers, saveSpendOffset, schedulerRow, schedulerStatus, schedulerStopped, nextStart, startsNext, spelled, typedOffset, withDraft, rowTitle, unlistedWords } from './schedulers.js'
 
 const GEMSTACK = { id: 'p1', name: 'gemstack', gitHost: true }
 const OTHER = { id: 'p2', name: 'other', gitHost: false }
@@ -296,10 +296,6 @@ describe('in words', () => {
     expect(agentsArgs({ kind: 'own', count: ' 03 ' })).toEqual(['3'])
     for (const count of ['', '0', '1.5', '-2', 'two', '1e2', '100']) expect(agentsArgs({ kind: 'own', count }), count).toBeUndefined()
     expect(agentsArgs({ kind: 'own', count: '99' })).toEqual(['99'])
-    expect(atOnce(withAgentsDraft({ ...base, skillAgents: 2 }, { kind: 'own', count: '5' }))).toBe(5)
-    expect(atOnce(withAgentsDraft({ ...base, skillAgents: 2, agents: 5 }, { kind: 'skill' }))).toBe(2)
-    const half = { ...base, agents: 5 }
-    expect(withAgentsDraft(half, { kind: 'own', count: '' })).toBe(half)
   })
 
   test("a scheduled command carries its skill's number of agents at once when it is more than one, and the number a person set on this machine", () => {

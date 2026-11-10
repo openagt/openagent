@@ -4,7 +4,7 @@ import type { ModulePageProps } from '@openagt/dashboard/module'
 import { AutomationForm } from './AutomationForm.js'
 import { EditPanel } from './EditPanel.js'
 import { openedAutomation, type OpenedAutomation } from './automation-form.js'
-import { atOnce, atOnceWords, cannotRun, decided, startedNow, type Answered, isOwn, outcomeWords, ownPace, pace, publishes, readSchedulers, schedulersKey, rowTitle, runsOnWords, saysAtOnce, schedulerStatus, unlistedWords, type AgentModels, type SchedulerCommand, type SchedulerRow } from './schedulers.js'
+import { atOnce, atOnceWords, cannotRun, decided, startedNow, type Answered, isOwn, ownPace, pace, publishes, readSchedulers, schedulersKey, rowTitle, runsOnWords, saysAtOnce, schedulerStatus, unlistedWords, type AgentModels, type SchedulerCommand, type SchedulerRow } from './schedulers.js'
 
 // The Automations page: what starts by itself while nobody is at the keyboard. One part per
 // project the page is given (every project that has this package, or the one picked in the
@@ -89,7 +89,7 @@ export function AutomationsPage({ projects }: ModulePageProps) {
   /** A command asked without waiting for the saves: one that takes seconds and writes nothing a save reads. */
   const ask = (project: ModuleProject, args: string[]): Promise<ModuleCommandResult> => host.runCommand(project.id, args).catch((err: unknown) => ({ ok: false as const, error: err instanceof Error ? err.message : String(err) }))
   /** One save or start of a row's own: the row is held until what it did has been read back, so it never shows the old value as if nothing had happened. */
-  const save = async (id: string, project: ModuleProject, pending: Promise<ModuleCommandResult>, answered: (answer: ModuleCommandResult) => Answered | undefined): Promise<void> => {
+  const save = async (id: string, pending: Promise<ModuleCommandResult>, answered: (answer: ModuleCommandResult) => Answered | undefined): Promise<void> => {
     setBusy(current => [...current, id])
     setSaid(current => (current?.id === id ? undefined : current))
     const answer = await pending
@@ -215,7 +215,7 @@ export function AutomationsPage({ projects }: ModulePageProps) {
                                   variant="outline"
                                   size="xs"
                                   disabled={saving || cannotRun(scheduled) !== undefined}
-                                  onClick={() => void save(id, row.project, ask(row.project, ['now', scheduled.command]), startedNow)}
+                                  onClick={() => void save(id, ask(row.project, ['now', scheduled.command]), startedNow)}
                                   aria-label={`Run ${title} now`}
                                 >
                                   Run now
@@ -236,7 +236,7 @@ export function AutomationsPage({ projects }: ModulePageProps) {
                                 <Switch
                                   checked={scheduled.on}
                                   disabled={saving}
-                                  onCheckedChange={next => void save(id, row.project, run(row.project, ['switch', scheduled.command, next ? 'on' : 'off']), answer => (answer.ok ? undefined : { failed: `The switch was not saved: ${answer.error}` }))}
+                                  onCheckedChange={next => void save(id, run(row.project, ['switch', scheduled.command, next ? 'on' : 'off']), answer => (answer.ok ? undefined : { failed: `The switch was not saved: ${answer.error}` }))}
                                   aria-label={`Run ${title} by itself`}
                                 />
                               </div>
