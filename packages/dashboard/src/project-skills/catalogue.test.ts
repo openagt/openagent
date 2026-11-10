@@ -3,10 +3,12 @@ import { test } from 'node:test'
 import { carriedSkills, GROUPS, SKILL_NAMES } from './catalogue.js'
 import { olderThan, stamped, unstamped } from './skill-file.js'
 
-test('the list holds 25 skills in seven groups, and none every run gets by default', async () => {
-  assert.equal(SKILL_NAMES.length, 25)
-  assert.equal(new Set(SKILL_NAMES).size, 25, 'no skill twice')
-  assert.deepEqual(GROUPS.map(group => group.title), ['Tickets and queue', 'Agents', 'Pull requests', 'Automations', 'Code reviews', 'Research', 'Needs its own setup'])
+test('the list holds 14 skills in five groups, and none every run gets by default', async () => {
+  assert.equal(SKILL_NAMES.length, 14)
+  assert.equal(new Set(SKILL_NAMES).size, 14, 'no skill twice')
+  assert.deepEqual(GROUPS.map(group => group.title), ['Tickets and queue', 'Agents', 'Pull requests', 'Automations', 'Needs its own setup'])
+  // The prompts nothing in the product uses are not carried: their texts are in the repository's skills folder.
+  for (const left of ['readability', 'research', 'ux', 'post-merge-cleanup', 'suggest-new-tickets']) assert.ok(!SKILL_NAMES.includes(left), `${left} is not carried`)
   for (const basic of ['branches', 'ask', 'github']) assert.ok(!SKILL_NAMES.includes(basic), `${basic} comes with every run`)
   for (const picked of ['tickets', 'queue', 'orchestration', 'logs', 'account-rotation']) assert.ok(SKILL_NAMES.includes(picked), `${picked} is picked`)
 })
