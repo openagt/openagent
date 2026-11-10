@@ -1,7 +1,7 @@
 import { appendFile, mkdir, readFile, rename, rm } from 'node:fs/promises'
 import { dirname } from 'node:path'
 import type { DriverPromptOptions, DriverSession, DriverTurn } from './types.js'
-import { continuationPrompt, parseQuestion } from './question.js'
+import { continuationPrompt, parseQuestion, type Question } from './question.js'
 import { promptSent } from './session-support.js'
 
 /**
@@ -110,7 +110,7 @@ export async function finishTurn(
   session: DriverSession,
   turn: DriverTurn,
   opts: DriverPromptOptions,
-  emit: (event: { type: 'question'; question: NonNullable<ReturnType<typeof parseQuestion>> }) => void,
+  emit: (event: { type: 'question'; question: Question }) => void,
 ): Promise<DriverTurn> {
   const question = turn.question ?? parseQuestion(turn.text)
   if (question) emit({ type: 'question', question })
