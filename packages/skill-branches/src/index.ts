@@ -43,5 +43,5 @@ export { readBranchStates, parseCommits, parseNumstat, parsePorcelain, type Bran
 export { readBranchesAhead, type BranchAhead } from './branch-ahead.js'
 export { runCli, USAGE, type CliIo } from './cli.js'
 export { CLI_BIN_DIR } from './bin-dir.js'
-export { linkOwnCommand, linkPackage, packageLinkPaths, type PackageLink } from './command-link.js'
+export { linkPackage, packageLinkPaths, type PackageLink } from './command-link.js'
 export { linkSkill, linkSkillsInFolder, skillLinkPaths, HARNESS_SKILL_DIRS, SKILL_DIR, SKILL_NAME, OWN_SKILL, type SkillLink } from './skill-links.js'

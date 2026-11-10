@@ -4,6 +4,7 @@ import { fileURLToPath } from 'node:url'
 import { nodeGitRunner, type GitRunner, excludeFromGit } from '@openagt/agent-data'
 import { nodeLinkFs, type LinkFs } from './worktree-deps.js'
 import { entryExists, linkPackage, packageLinkPaths, type PackageLink } from './command-link.js'
+import { CLI_BIN_DIR } from './bin-dir.js'
 
 /**
  * The skill, where the agent's harness looks for one (#1739). A harness discovers skills under a
@@ -42,8 +43,11 @@ export interface SkillLink {
   package?: PackageLink
 }
 
-/** This package's own skill, as a {@link SkillLink}. */
-export const OWN_SKILL: SkillLink = { name: SKILL_NAME, dir: SKILL_DIR }
+/**
+ * This package's own skill, as a {@link SkillLink}, with its command: the skill's text runs
+ * `npx @openagt/skill-branches@0.1`, which finds this copy linked in the checkout (`command-link.ts`).
+ */
+export const OWN_SKILL: SkillLink = { name: SKILL_NAME, dir: SKILL_DIR, package: { name: '@openagt/skill-branches', dir: SKILL_DIR, bins: { branches: join(CLI_BIN_DIR, 'branches') } } }
 
 /**
  * Link the skill into `checkout` for every harness — this package's own, plus whatever `skills`
