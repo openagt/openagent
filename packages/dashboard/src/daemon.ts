@@ -253,28 +253,19 @@ export async function runDaemon(cwd: string, opts: RunDaemonOptions = {}): Promi
   stopLoginsSync()
   stopComputersSync()
 
-  // One Ctrl+C stops the dashboard (#2141): a step that hangs is logged and left behind once the
-  // deadline passes, and a second Ctrl+C stops at once.
-  const hurry = (): void => {
-    console.log('[openagent] stopping now')
-    process.exit(130)
-  }
-  process.on('SIGINT', hurry)
-  process.on('SIGTERM', hurry)
-  let step = 'starting to stop'
-  const teardown = async (): Promise<void> => {
-    step = "the services of OpenAgent's own packages"
+  await stopWithin(opts.shutdownDeadlineMs ?? SHUTDOWN_DEADLINE_MS, async step => {
+    step("the services of OpenAgent's own packages")
     await packageServices.stop()
     // The dashboard goes first after them: the port is free again, and an open tab sees the
     // dashboard is gone, while what is left stops behind it.
-    step = 'the dashboard'
+    step('the dashboard')
     await dashboard.close()
-    step = 'the background services'
+    step('the background services')
     await services.quiesce()
     // Each project's close hooks (#1774), the counterpart of the open hooks above. A run in flight
     // is not the daemon's process: it goes on to its end, and the next dashboard shows it.
     for (const record of await listProjects(env)) {
-      step = `the close hooks of ${record.path}`
+      step(`the close hooks of ${record.path}`)
       await runProjectHooks(record.path, 'close', { log: console.log })
     }
     // Stopped here as well as by the dashboard: a broken install serves 503s without ever taking
@@ -282,12 +273,26 @@ export async function runDaemon(cwd: string, opts: RunDaemonOptions = {}): Promi
     quota.stop()
     // The daemon's browser goes with the daemon (#1332): left running it would keep serving a
     // daemon that is gone, and the next daemon would find its profile held.
-    step = 'the bridge browser'
+    step('the bridge browser')
     await bridgeBrowser.stop()
-    step = 'the relayed runs'
+    step('the relayed runs')
     await runtime.dispose()
+  })
+}
+
+/**
+ * Run the teardown, giving up on what is left of it once `deadlineMs` has passed: one Ctrl+C
+ * stops the dashboard (#2141). The teardown names each step as it starts it, so a step that hangs
+ * is logged by its name and left behind, and a second Ctrl+C meanwhile stops at once.
+ */
+async function stopWithin(deadlineMs: number, teardown: (step: (name: string) => void) => Promise<void>): Promise<void> {
+  const hurry = (): void => {
+    console.log('[openagent] stopping now')
+    process.exit(130)
   }
-  const deadlineMs = opts.shutdownDeadlineMs ?? SHUTDOWN_DEADLINE_MS
+  process.on('SIGINT', hurry)
+  process.on('SIGTERM', hurry)
+  let step = 'starting to stop'
   let deadline: NodeJS.Timeout | undefined
   const late = new Promise<void>(resolvePromise => {
     deadline = setTimeout(() => {
@@ -296,7 +301,7 @@ export async function runDaemon(cwd: string, opts: RunDaemonOptions = {}): Promi
     }, deadlineMs).unref()
   })
   try {
-    await Promise.race([teardown(), late])
+    await Promise.race([teardown(name => void (step = name)), late])
   } finally {
     clearTimeout(deadline)
     process.off('SIGINT', hurry)
