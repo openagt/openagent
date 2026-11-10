@@ -1,6 +1,6 @@
 import { join } from 'node:path'
 import { GIT_FAILED, Refused, UsageError, checkoutRoot, inRepo, listProjectDir, nodeBranchFileFs, nodeGitRunner, openProjectReader, parseCommandArgs, readProjectFile, runCommandLine, writeProjectDataDetached, type BranchFileFs, type Command, type ProjectReader, type GitRunner } from '@openagt/agent-data'
-import { isTicketFile, isTicketPath, META_FILE, TICKETS_DIR, ticketLockName, ticketPlanName, ticketStem } from './names.js'
+import { isTicketFile, META_FILE, nameInTickets, TICKETS_DIR, ticketLockName, ticketOfPlan, ticketPlanName, ticketStem } from './names.js'
 import { readTicket, readTickets, readTicketsMeta, type TicketsFs } from './tickets.js'
 import { applyClaims, applyRelease, claimHistory, claimMessage, lockOn, releaseMessage } from './locks.js'
 import { holderOf } from './holder.js'
@@ -73,9 +73,8 @@ const COMMANDS: Record<string, Command<[CliIo, GitRunner]>> = {
   async put(args, io, git) {
     const { positionals } = parseCommandArgs(args, {}, 1)
     // The bare filename, or the `tickets/<file>` path a queue entry links to, like every other command.
-    const file = positionals[0]!.startsWith(`${TICKETS_DIR}/`) ? positionals[0]!.slice(TICKETS_DIR.length + 1) : positionals[0]!
-    // A ticket, its plan, or the meta file — never a lock: claims go through `claim`.
-    if (!(isTicketFile(file) || (isTicketFile(file.replace(/\.plan\.md$/, '.md')) && file.endsWith('.plan.md')) || file === META_FILE))
+    const file = nameInTickets(positionals[0]!) ?? positionals[0]!
+    if (!isPutFile(file))
       throw new Refused({ ok: false, reason: 'invalid-path', file }, `${file} is not a file under ${TICKETS_DIR}/ this command writes: a ticket, its .plan.md, or ${META_FILE}`)
     const content = await io.stdin()
     await write(io.cwd, `put ${TICKETS_DIR}/${file}`, async dir => {
@@ -202,9 +201,15 @@ function noTicket(file: string): Refused {
   return new Refused({ ok: false, reason: 'no-ticket', file }, `no ticket ${TICKETS_DIR}/${file}`)
 }
 
+/** Whether `put` writes a file: a ticket, a ticket's plan, or the meta file — never a lock: claims go through `claim`. */
+function isPutFile(file: string): boolean {
+  const planned = ticketOfPlan(file)
+  return isTicketFile(file) || (planned !== undefined && isTicketFile(planned)) || file === META_FILE
+}
+
 /** A ticket named by its bare filename, or by its `tickets/<file>` path. */
 function ticketArg(arg: string): string {
-  const file = isTicketPath(arg) ? arg.slice(TICKETS_DIR.length + 1) : arg
+  const file = nameInTickets(arg) ?? arg
   if (!isTicketFile(file)) throw new Refused({ ok: false, reason: 'invalid-path', file: arg }, `${arg} is not a ticket filename`)
   return file
 }

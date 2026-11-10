@@ -2,7 +2,7 @@
 // are unit-tested like the rest of the package: the sentences the pages start agents with, how a
 // page finds the agent behind a claim or a plan, how the module's URL reads, what a ticket is as
 // a link, which lane of the Overview card a ticket sits in, and how the command's answers are read back.
-import { TICKETS_DIR, isTicketFile, queuePriorityForTicket, ticketPlanName } from './names.js'
+import { TICKETS_DIR, isTicketFile, nameInTickets, queuePriorityForTicket, ticketOfPlan, ticketPlanName } from './names.js'
 import type { Ticket, TicketDetail, TicketsMeta } from './tickets.js'
 
 export type { Ticket, TicketDetail, TicketsMeta }
@@ -95,14 +95,14 @@ export function namesOf(paths: readonly string[], tickets: readonly { file: stri
   const titles = new Map(tickets.map(ticket => [ticket.file, ticket.title]))
   const named: Record<string, NamedPath> = {}
   for (const path of paths) {
-    if (!path.startsWith(`${TICKETS_DIR}/`)) continue
-    const file = path.slice(TICKETS_DIR.length + 1)
+    const file = nameInTickets(path)
+    if (file === undefined) continue
     const title = titles.get(file)
     if (title !== undefined) {
       named[path] = { title }
       continue
     }
-    const ticket = file.endsWith('.plan.md') ? `${file.slice(0, -'.plan.md'.length)}.md` : undefined
+    const ticket = ticketOfPlan(file)
     const planned = ticket === undefined ? undefined : titles.get(ticket)
     if (ticket !== undefined && planned !== undefined) named[path] = { title: `Plan: ${planned}`, href: `${TICKETS_DIR}/${ticket}` }
   }

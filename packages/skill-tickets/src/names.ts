@@ -30,6 +30,11 @@ export function ticketPlanName(file: string): string {
   return `${ticketStem(file)}.plan.md`
 }
 
+/** The ticket a plan sibling is the plan of, {@link ticketPlanName} read backwards: `a.plan.md` → `a.md`; `undefined` for a name that is no plan's. */
+export function ticketOfPlan(file: string): string | undefined {
+  return file.endsWith('.plan.md') ? `${file.slice(0, -'.plan.md'.length)}.md` : undefined
+}
+
 /** A ticket filename's lock sibling: `a.md` → `a.lock.md`. */
 export function ticketLockName(file: string): string {
   return `${ticketStem(file)}.lock.md`
@@ -49,13 +54,19 @@ export function isSibling(file: string): boolean {
   return SIBLING.test(file)
 }
 
+/** The name a `tickets/<name>` path gives inside `tickets/`; `undefined` for a path that is not under it. */
+export function nameInTickets(path: string): string | undefined {
+  return path.startsWith(`${TICKETS_DIR}/`) ? path.slice(TICKETS_DIR.length + 1) : undefined
+}
+
 /**
  * Whether a string names a ticket by path: `tickets/` followed by a name `isTicketFile` accepts, and
  * nothing else — so the two spellings of a name are refused alike. The one gate for both ends of a
  * queue link: what an entry is read as, and what a caller may record.
  */
 export function isTicketPath(path: string): boolean {
-  return path.startsWith(`${TICKETS_DIR}/`) && isTicketFile(path.slice(TICKETS_DIR.length + 1))
+  const name = nameInTickets(path)
+  return name !== undefined && isTicketFile(name)
 }
 
 /**
