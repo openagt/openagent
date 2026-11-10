@@ -1,6 +1,5 @@
 import type { AgentMeta } from '../store/index.js'
 import { projectBranches, type BranchAhead, type BranchesFor } from '../store/branches.js'
-import { agentBranchFor } from './agent-handoff.js'
 
 /**
  * A finished run's work that never left this machine: the branch it is on, the commits it holds
@@ -44,7 +43,7 @@ export interface Unpublished {
  */
 export async function unpublishedRuns(cwd: string, agents: readonly AgentMeta[], branches: BranchesFor = projectBranches): Promise<Map<string, Unpublished>> {
   const finished = agents.flatMap(agent => {
-    const branch = agentBranchFor(agent)
+    const branch = agent.branch
     return branch === undefined || agent.status === 'running' || agent.parent !== undefined ? [] : [{ agent, branch }]
   })
   const found = new Map<string, Unpublished>()
@@ -63,7 +62,7 @@ export async function unpublishedRuns(cwd: string, agents: readonly AgentMeta[],
   // The newest run on each branch, working or not: the one whose checkout is on it.
   const newest = new Map<string, AgentMeta>()
   for (const agent of agents) {
-    const branch = agentBranchFor(agent)
+    const branch = agent.branch
     const known = branch === undefined ? undefined : newest.get(branch)
     if (branch !== undefined && (!known || agent.startedAt > known.startedAt)) newest.set(branch, agent)
   }
