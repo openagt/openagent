@@ -1,5 +1,5 @@
 import type { CSSProperties } from 'react'
-import { cardStyle, noteContainerStyle, noteLabelStyle } from './ui'
+import { cardStyle, noteContainerStyle, NoteText } from './ui'
 
 const PACKS = ['Security audit', 'Code quality', 'Research', 'Product Management']
 
@@ -18,10 +18,9 @@ export function Prompts() {
     <section id="prompts">
       <div style={{ ...noteContainerStyle, display: 'flex', flexDirection: 'column', gap: 12 }}>
         <p style={{ margin: 0, textWrap: 'pretty' }}>
-          <span style={noteLabelStyle}>Note</span>{' '}
-          <span style={{ fontStyle: 'italic' }}>
+          <NoteText>
             Everything is powered by open source <b style={{ color: '#d3c6aa', fontWeight: 600 }}>state-of-the-art prompts</b> (you can also bring your own):
-          </span>
+          </NoteText>
         </p>
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10 }}>
           {PACKS.map((title) => (

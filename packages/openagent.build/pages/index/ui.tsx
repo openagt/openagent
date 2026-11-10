@@ -72,7 +72,7 @@ export function SectionHead({ title, sub }: { title: ReactNode; sub?: string }) 
 }
 
 // The note look, shared with note-shaped blocks that can't be a <p> (e.g. the
-// prompts band, whose chip row needs a block container).
+// prompts band, whose chip row needs a block container): this box, around NoteText.
 export const noteContainerStyle: CSSProperties = {
   margin: 0,
   fontSize: 14,
@@ -84,7 +84,7 @@ export const noteContainerStyle: CSSProperties = {
   padding: '12px 16px',
 }
 
-export const noteLabelStyle: CSSProperties = {
+const noteLabelStyle: CSSProperties = {
   fontFamily: mono,
   fontSize: 11,
   fontWeight: 600,
@@ -94,17 +94,20 @@ export const noteLabelStyle: CSSProperties = {
   marginRight: 10,
 }
 
+/** A note's words: its "Note" label, then the note in italics. */
+export function NoteText({ children }: { children: ReactNode }) {
+  return (
+    <>
+      <span style={noteLabelStyle}>Note</span>{' '}
+      <span style={{ fontStyle: 'italic' }}>{children}</span>
+    </>
+  )
+}
+
 export function Note({ children, style }: { children: ReactNode; style?: CSSProperties }) {
   return (
     <p style={{ ...noteContainerStyle, ...style }}>
-      <span style={noteLabelStyle}>Note</span>{' '}
-      <span
-        style={{
-          fontStyle: 'italic',
-        }}
-      >
-        {children}
-      </span>
+      <NoteText>{children}</NoteText>
     </p>
   )
 }
