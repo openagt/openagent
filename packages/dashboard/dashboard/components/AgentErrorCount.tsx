@@ -36,7 +36,7 @@ export function AgentErrorCount({ events }: { events: OpenAgentEvent[] }) {
  * again as "1 error" was the same fact twice. An error the run went on from, or that its failure
  * does not name, still counts.
  */
-export function errorsToCount(events: readonly OpenAgentEvent[]): AgentError[] {
+function errorsToCount(events: readonly OpenAgentEvent[]): AgentError[] {
   const errors = agentErrors(events)
   const outcome = agentOutcome(events)
   const failure = outcome && !outcome.ok && !outcome.stopped && !outcome.waiting ? outcome.detail : undefined

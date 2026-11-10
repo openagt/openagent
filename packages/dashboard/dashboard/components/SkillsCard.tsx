@@ -42,7 +42,7 @@ const LOGS = '@openagt/skill-logs'
 const TOP = 5
 
 /** Each skill's use over several projects, as one, the most used first. */
-export function usedOver(reads: readonly Pick<Read, 'used'>[]): SkillUse[] {
+function usedOver(reads: readonly Pick<Read, 'used'>[]): SkillUse[] {
   const bySkill = new Map<string, SkillUse>()
   for (const use of reads.flatMap(read => read.used)) {
     const known = bySkill.get(use.skill)

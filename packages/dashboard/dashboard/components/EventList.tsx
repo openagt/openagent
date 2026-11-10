@@ -484,7 +484,7 @@ function outputOf(e: OpenAgentEvent): (CallOutput & { id: string }) | undefined 
  * the last event is the call going on now (`current`): it is not in its run yet, the chat's last
  * line says it.
  */
-export function foldSteps(
+function foldSteps(
   events: readonly OpenAgentEvent[],
   live = false,
 ): { rows: OpenAgentEvent[]; steps: Map<OpenAgentEvent, ToolStep[]>; current?: Extract<ToolStep, { type: 'action' }> } {

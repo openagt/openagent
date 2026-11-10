@@ -22,11 +22,6 @@ export async function hoverTooltip(trigger: Element): Promise<HTMLElement> {
   )
 }
 
-/** Move off a trigger, so the next {@link hoverTooltip} is the only tooltip open. */
-export function unhoverTooltip(trigger: Element): void {
-  fireEvent.mouseLeave(trigger)
-}
-
 /**
  * Open a dropdown menu by its trigger and wait until the trigger reports it open (#1699).
  *

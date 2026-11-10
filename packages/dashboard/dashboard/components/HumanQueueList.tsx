@@ -21,7 +21,7 @@ export function needsWord(kind: Intervention['kind'], gitHost = true): string {
 }
 
 /** How many rows show before the list offers the rest. */
-export const SHOWN_AT_FIRST = 5
+const SHOWN_AT_FIRST = 5
 
 const MARKS: Record<Intervention['kind'], { Icon: ComponentType<{ className?: string }>; tone: string }> = {
   awaiting: { Icon: CircleHelp, tone: 'text-warning' },

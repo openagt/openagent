@@ -206,7 +206,7 @@ export function readMachineGitHostsAhead(machineId: string): void {
 }
 
 /** A git host's accounts on the computer a run goes to: this computer's, or a saved machine's, asked there. */
-export function useGitHostsOn(machineId: string | undefined): GitHostsView | undefined {
+function useGitHostsOn(machineId: string | undefined): GitHostsView | undefined {
   const own = useGitHosts()
   const theirs = usePolled<GitHostsView | null | undefined>(machineId !== undefined ? () => onMachineGitHosts(machineId) : null, undefined, 30_000, [machineId], machineId !== undefined ? { remember: machineGitHostsKey(machineId) } : undefined)
   return machineId === undefined ? own.view : (theirs.value ?? undefined)

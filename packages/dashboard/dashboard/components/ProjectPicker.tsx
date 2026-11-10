@@ -69,7 +69,7 @@ const matches = (row: Row, query: string): boolean => `${row.label}\n${row.searc
  * nothing that matches is not listed. Typed as a repository's address that no row has, one more
  * row offers to add it: cloned here and made a project, as the Add-by-address way did.
  */
-export function pickerGroups(none: Row | undefined, projects: readonly Row[], repos: readonly Row[], typed: string): Group[] {
+function pickerGroups(none: Row | undefined, projects: readonly Row[], repos: readonly Row[], typed: string): Group[] {
   const query = typed.trim().toLowerCase()
   const kept = (rows: readonly Row[], most: number) => (query ? rows.filter(row => matches(row, query)) : rows).slice(0, most)
   const address = typedRepository(typed)?.address

@@ -425,7 +425,7 @@ const OFFSET_WRITE_DELAY_MS = 500
  * module's read catches up with it, which is the point at which the two agree anyway. A save that
  * fails says why, and the handle follows the module's value again.
  */
-export function useSpendOffset(serverOffset: number | undefined, save: (offset: number) => Promise<UsageLimitSaved>): [number | undefined, (offset: number) => void, string | undefined] {
+function useSpendOffset(serverOffset: number | undefined, save: (offset: number) => Promise<UsageLimitSaved>): [number | undefined, (offset: number) => void, string | undefined] {
   const [local, setLocal] = useState(serverOffset)
   const [error, setError] = useState<string | undefined>()
   // What we last wrote, while the poll is still behind it. `null` means "follow the server".

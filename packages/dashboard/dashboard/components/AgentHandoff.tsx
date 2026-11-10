@@ -79,7 +79,7 @@ export function HandoffSummary({ handoff, subagent = false }: { handoff: AgentHa
  * lands that.
  */
 /** What the Commit button says to the agent: it commits its own work, in its own words. */
-export const COMMIT_MESSAGE = 'Commit your work.'
+const COMMIT_MESSAGE = 'Commit your work.'
 
 /** The next step's look: the one filled thing in the bar. */
 const NEXT_STEP = 'bg-background/60 hover:bg-background'

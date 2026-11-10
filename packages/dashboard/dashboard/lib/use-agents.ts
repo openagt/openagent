@@ -16,8 +16,8 @@ import { awaitingName } from './agent-label.js'
 // makes it, and at one read every two seconds a step that took one second was never seen, and a
 // name that came was shown up to two seconds late. Never for longer than `STARTING_AT_MOST_MS`: an
 // agent that runs elsewhere may name no branch here.
-export const STARTING_EVERY_MS = 400
-export const STARTING_AT_MOST_MS = 30_000
+const STARTING_EVERY_MS = 400
+const STARTING_AT_MOST_MS = 30_000
 
 /**
  * Read again every `everyMs` while a run just started is waited for (`waited` is set), for at most

@@ -194,7 +194,7 @@ interface FileLines {
  * a tab and the line ("1\t<!DOCTYPE html>"), an empty line as its number alone. A text that does
  * not open with them is no file's lines.
  */
-export function fileLines(text: string): FileLines | undefined {
+function fileLines(text: string): FileLines | undefined {
   const all = text.split('\n')
   const lines: FileLines['lines'] = []
   let at = 0
@@ -290,7 +290,7 @@ export function Caret({ open = false }: { open?: boolean }) {
  * small letters, a pixel and a half under the middle of the line (measured on the page's 14px
  * font), not with the line's middle, which reads as above the words.
  */
-export function LiveDots({ leaving = false }: { leaving?: boolean }) {
+function LiveDots({ leaving = false }: { leaving?: boolean }) {
   return (
     <span className={cn('relative top-[1.5px] flex w-[18px] shrink-0 items-center', leaving && 'dots-leave')}>
       <Dots />
