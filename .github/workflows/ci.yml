@@ -38,6 +38,14 @@ jobs:
       - run: pnpm install
       - run: pnpm build
       - run: ${{ matrix.run }}
+      # A browser smoke story that failed left a screenshot of its page there.
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: test-results-${{ strategy.job-index }}
+          path: packages/*/test-results/
+          if-no-files-found: ignore
+          retention-days: 7
 
   # The one check the merge rule on main waits for: green only when every part above is.
   build:

@@ -91,7 +91,15 @@ export async function startDemo(options: DemoOptions = {}): Promise<Demo> {
   // Started in the home, which is no repository, so the CLI adds no project of its own. A process
   // group of its own: a Ctrl+C at the terminal reaches only the demo, which stops the runs first.
   const cli = spawn(process.execPath, [CLI, '--port', String(options.port ?? 0)], { cwd: home, env, stdio: ['ignore', 'pipe', 'pipe'], detached: true })
-  const killCli = (): void => void cli.kill('SIGKILL')
+  /** Signal the dashboard and what it started that is still in its group (its long-polls outlive it a while). */
+  const signalGroup = (signal: NodeJS.Signals): void => {
+    try {
+      process.kill(-cli.pid!, signal)
+    } catch {
+      // Nothing of the group is left.
+    }
+  }
+  const killCli = (): void => signalGroup('SIGKILL')
   process.once('exit', killCli)
   const said: string[] = []
   const exited = new Promise<number | null>(resolvePromise => cli.once('exit', code => resolvePromise(code)))
@@ -151,7 +159,13 @@ export async function startDemo(options: DemoOptions = {}): Promise<Demo> {
       await exited
       clearTimeout(timer)
     }
-    await rm(home, { recursive: true, force: true })
+    // What the dashboard started and left behind in its group goes too: it writes into the home.
+    signalGroup('SIGTERM')
+    // Retried: what the dashboard started on its own (a coding agent's CLI asked for its usage)
+    // can still be writing into the home for a moment after the dashboard is gone.
+    await rm(home, { recursive: true, force: true, maxRetries: 10, retryDelay: 300 }).catch((err: unknown) => {
+      process.stderr.write(`the demo could not remove ${home}: ${err instanceof Error ? err.message : String(err)}\n`)
+    })
   }
 
   try {
