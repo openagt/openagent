@@ -285,6 +285,7 @@ export function ProjectPicker({
         isItemEqualToValue={sameRow}
         itemToStringLabel={row => row.label}
         inputValue={typed}
+        autoHighlight
         onInputValueChange={setTyped}
         open={open}
         onOpenChange={next => {

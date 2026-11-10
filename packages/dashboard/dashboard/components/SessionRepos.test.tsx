@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, test, vi } from 'vitest'
-import { cleanup, render, screen, waitFor } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { openMenu } from '../test-utils.js'
 import { forgetRemembered } from '../lib/use-async.js'
 
@@ -33,6 +33,19 @@ describe('"Add repo"', () => {
     expect(addRepoGroups(projects, repos, [{ path: '/home/me/alpha', name: 'alpha' }], '').map(group => group.label)).toEqual(['Repos'])
     expect(addRepoGroups(projects, repos, [], 'VIKEJS').flatMap(group => group.items.map(item => item.label))).toEqual(['vike'])
     expect(addRepoGroups(projects, repos, [], 'nothing-like-it')).toEqual([])
+  })
+
+  test('the first match of a search is highlighted, so Enter adds it', async () => {
+    onRepos.mockResolvedValue({ repos: [{ path: '/home/me/oss/vike', name: 'vike' }, { path: '/home/me/notes', name: 'notes' }], hosted: [], reposLoading: false, hostedLoading: false, canAddFolder: false })
+    const onChange = vi.fn()
+    render(<SessionRepoPicks picked={[]} projects={[]} busy={false} onChange={onChange} />)
+    await openMenu(screen.getByRole('combobox', { name: 'Add repo' }))
+    await screen.findByRole('option', { name: /notes/ })
+    const search = screen.getByRole('combobox', { name: 'Search repos' })
+    // Typed, as a person types: the combobox highlights on an input that carries its input type.
+    fireEvent.input(search, { target: { value: 'notes' }, inputType: 'insertText' })
+    fireEvent.keyDown(search, { key: 'Enter' })
+    expect(onChange).toHaveBeenLastCalledWith([{ path: '/home/me/notes', name: 'notes' }])
   })
 
   test('while the look through this computer is still on its way, the menu says so and asks again', async () => {

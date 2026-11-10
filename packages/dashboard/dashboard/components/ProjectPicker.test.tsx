@@ -199,6 +199,16 @@ describe('ProjectPicker', () => {
     expect(screen.getByText('No project or repo by that name.')).toBeTruthy()
   })
 
+  test('the first match of a search is highlighted, so Enter picks it', async () => {
+    const { onPick } = renderPicker()
+    await openMenu(trigger())
+    await screen.findByRole('option', { name: /vike/ })
+    // Typed, as a person types: the combobox highlights on an input that carries its input type.
+    fireEvent.input(search(), { target: { value: 'alp' }, inputType: 'insertText' })
+    fireEvent.keyDown(search(), { key: 'Enter' })
+    expect(onPick).toHaveBeenLastCalledWith('alpha-1')
+  })
+
   test('with nothing typed only the first repos are listed, and the search reaches the rest', async () => {
     const many = Array.from({ length: REPOS_SHOWN + 5 }, (_, i) => ({ path: `/home/me/r${i}`, name: `r${i}` }))
     onRepos.mockResolvedValue({ repos: many, hosted: [], reposLoading: false, hostedLoading: false, canAddFolder: false })

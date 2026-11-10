@@ -108,6 +108,7 @@ export function SessionRepoPicks({
         value={null}
         itemToStringLabel={row => row.label}
         inputValue={typed}
+        autoHighlight
         onInputValueChange={setTyped}
         open={open}
         onOpenChange={next => {
