@@ -799,6 +799,21 @@ describe('the shell on a phone', () => {
     }
   })
 
+  test('hiding or showing the sidebar by its button gives the focus to the button that takes its place', async () => {
+    answerShell([])
+    try {
+      render(<App />)
+      fireEvent.click(await screen.findByRole('button', { name: 'Hide the sidebar' }))
+      expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Show the sidebar' }))
+      fireEvent.click(screen.getByRole('button', { name: 'Show the sidebar' }))
+      expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Hide the sidebar' }))
+    } finally {
+      localStorage.removeItem('oa.sidebar-hidden')
+      const { setSidebarHidden } = await import('./lib/sidebar-width.js')
+      setSidebarHidden(false)
+    }
+  })
+
   test('on a wide screen there is no bar and no button: the sidebar is beside the page', async () => {
     answerShell([])
     render(<App />)

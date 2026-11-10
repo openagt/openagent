@@ -1,4 +1,5 @@
 import { PanelLeft } from 'lucide-react'
+import { flushSync } from 'react-dom'
 import { Button } from './ui/button.js'
 import { Tooltip, TooltipContent, TooltipTrigger } from './ui/tooltip.js'
 import { useOptionalSidebar, useSidebar } from './ui/sidebar.js'
@@ -28,9 +29,14 @@ export function ShowSidebarButton() {
 }
 
 function ToggleButton({ label, onClick }: { label: string; onClick: () => void }) {
+  // The pressed button goes with its press: the one drawn in its place takes the focus.
+  const press = (): void => {
+    flushSync(onClick)
+    document.querySelector<HTMLElement>('[data-sidebar-toggle]')?.focus()
+  }
   return (
     <Tooltip>
-      <TooltipTrigger render={<Button variant="ghost" size="icon-sm" className="shrink-0 text-muted-foreground" aria-label={label} onClick={onClick} />}>
+      <TooltipTrigger render={<Button data-sidebar-toggle variant="ghost" size="icon-sm" className="shrink-0 text-muted-foreground" aria-label={label} onClick={press} />}>
         <PanelLeft className="h-4 w-4" aria-hidden />
       </TooltipTrigger>
       <TooltipContent>
