@@ -4,7 +4,7 @@ import { isPidAlive, readAllAgents, type AgentMeta, type BranchesFor } from '../
 import { cachedPrStates, type PrState } from './pull-requests.js'
 import { unpublishedRuns, type Unpublished } from './unpublished.js'
 import { bridgeQuestions } from './bridge-store.js'
-import type { SavedMachine } from './rpc-serve.js'
+import type { SavedMachine } from '../dashboard-rpc/context.js'
 import { isHostName } from '../registry.js'
 import { machineKind, machineName } from '../reached-by-line.js'
 

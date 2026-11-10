@@ -1,7 +1,7 @@
 import { setDashboardContext } from './context.js'
 import { registryPreferencesStore } from '../registry.js'
 import { defaultQuotaSource } from '../dashboard/quota.js'
-import type { DashboardContext, RemoteAgents } from '../dashboard/rpc-serve.js'
+import type { DashboardContext, RemoteAgents } from './context.js'
 import type { DashboardOptions } from '../dashboard/server.js'
 
 /**

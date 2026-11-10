@@ -8,7 +8,7 @@ import { findCheckout, fromDiaryLine, isPidAlive, isRunId, projectBranches, read
 import { OPENAGENT_DIR } from './openagent-dir.js'
 import type { OpenAgentEvent } from './events.js'
 import type { StartAgentOptions, StartAgentResult, AddProjectResult, RemoveProjectResult, StartedInResult } from './dashboard/types.js'
-import type { EventsSource, RemoteAgents } from './dashboard/rpc-serve.js'
+import type { EventsSource, RemoteAgents } from './dashboard-rpc/context.js'
 import { relayRpc, startRemoteAgent, targetOf, type BringProject, type RelayProject, type RemoteTarget } from './dashboard/remote-run.js'
 import { idInLineName, isElsewhereId } from './dashboard/elsewhere.js'
 import { createRemoteAgents } from './remote-agents.js'

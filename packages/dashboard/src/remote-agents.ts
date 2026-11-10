@@ -1,6 +1,6 @@
 import { hostname } from 'node:os'
 import { findAgent, isRunId, type AgentMeta } from './store/index.js'
-import type { EventsSource, RemoteAgents, SavedMachine } from './dashboard/rpc-serve.js'
+import type { EventsSource, RemoteAgents, SavedMachine } from './dashboard-rpc/context.js'
 import { RelayedAgents, machineCall, relayRpc, remoteFacts, targetOf, type RemoteTarget } from './dashboard/remote-run.js'
 import { OwnProjectsAsked, elsewhereHomes, elsewhereId, elsewhereSummary, homeOf as elsewhereHomeOf, isElsewhereId, lineNameOf, type ElsewhereHome, type OwnProject } from './dashboard/elsewhere.js'
 import { AnswersKept, interventionsOf, namedHere, type MachinesQueue } from './dashboard/machine-interventions.js'
