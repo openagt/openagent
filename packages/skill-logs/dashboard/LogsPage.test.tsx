@@ -1,6 +1,6 @@
 import { afterEach, expect, test, vi } from 'vitest'
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
-import { ModuleHostContext, forgetRemembered, type ModuleAgent, type ModuleHost } from '@openagt/dashboard/module'
+import { ModuleHostContext, forgetRemembered, type ModuleAgent } from '@openagt/dashboard/module'
 import { fakeHost, type FakeHost } from '@openagt/dashboard/module/testing'
 import { LogsPage, dayOf } from './LogsPage.js'
 

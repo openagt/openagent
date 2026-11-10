@@ -247,7 +247,7 @@ test('the dashboard adds no folder by itself, not even its own start folder, so 
   const env = await configEnv(cwd)
   const ac = new AbortController()
   try {
-    const { done, state } = await startDaemon(cwd, { port: 0, signal: ac.signal, env })
+    const { done } = await startDaemon(cwd, { port: 0, signal: ac.signal, env })
     assert.deepEqual(await listProjects(env), [])
     ac.abort()
     await done

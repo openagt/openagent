@@ -10,7 +10,7 @@ import { acquireRunLock, releaseRunLock } from './run-lock.js'
 import { AFRESH_NOTICE, earlierWorkLine, PUBLISH_LINES, resumeRun, runCommand, STOPPED_DETAIL } from './run.js'
 import { recordRun, runnerMark } from './records.js'
 import type { GitHost } from './git-host.js'
-import { git, handDownBasicSkills, readUntimedDiary, removeRepo, testRepo } from './test-repo.js'
+import { handDownBasicSkills, readUntimedDiary, removeRepo, testRepo } from './test-repo.js'
 import { NOW, noGitHost, fakeGitHost, wrap, QUESTION, committingDriver, ticking } from './run-test-support.js'
 
 // A run as OpenAgent starts it: with the basic skills handed down.
