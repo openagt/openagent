@@ -1,5 +1,5 @@
 import { join } from 'node:path'
-import { isSibling, isTicketFile, META_FILE, ticketLockName, ticketPlanName, ticketStem } from './names.js'
+import { isSibling, isTicketFile, META_FILE, onScale, ticketLockName, ticketPlanName, ticketStem } from './names.js'
 import { lockHolder } from './locks.js'
 
 /**
@@ -177,25 +177,16 @@ async function ticketDate(dir: string, file: string, fs: TicketsFs): Promise<str
 }
 
 /**
- * A plan preamble's `0`-`10` value, or `undefined` when the key is missing or does not name one.
- * Out-of-range and fractional values are not clamped into something plausible: they are not a
- * value on this scale, and inventing one hides the typo.
+ * What a `.plan.md`'s preamble records: `Effort:`, `Uncertainty:` and `Outdated:`, the keys above
+ * the `# [Plan]` heading. A rating that is not on the 0-10 scale is no rating.
  */
-function planScale(preamble: readonly string[], key: string): number | undefined {
-  const written = keyValue(preamble, key)
-  if (written === undefined || !/^\d+$/.test(written)) return undefined
-  const value = Number(written)
-  return value >= 0 && value <= 10 ? value : undefined
-}
-
-/** What a `.plan.md`'s preamble records: `Effort:`, `Uncertainty:` and `Outdated:`, the keys above the `# [Plan]` heading. */
 function planMeta(md: string | undefined): { effort?: number; uncertainty?: number; outdated?: true } {
   if (md === undefined) return {}
   const lines = md.slice(0, MAX_TICKET_BYTES).split('\n')
   const headingAt = lines.findIndex(line => line.startsWith('# '))
   const preamble = headingAt === -1 ? lines : lines.slice(0, headingAt)
-  const effort = planScale(preamble, 'effort')
-  const uncertainty = planScale(preamble, 'uncertainty')
+  const effort = onScale(keyValue(preamble, 'effort'))
+  const uncertainty = onScale(keyValue(preamble, 'uncertainty'))
   const outdated = keyValue(preamble, 'outdated')?.toLowerCase() === 'yes'
   return { ...(effort === undefined ? {} : { effort }), ...(uncertainty === undefined ? {} : { uncertainty }), ...(outdated ? { outdated: true } : {}) }
 }
