@@ -1,8 +1,8 @@
-import { GIT_FAILED, Refused, UsageError, inRepo, nodeGitRunner, openProjectReader, parseCommandArgs, runCommandLine, runsRootOf, type Command, type ProjectReader, type GitRunner } from '@openagt/agent-data'
+import { GIT_FAILED, Refused, UsageError, inRepo, nodeBranchFileFs, nodeGitRunner, openProjectReader, parseCommandArgs, runCommandLine, runsRootOf, type Command, type GitRunner } from '@openagt/agent-data'
 import { RUNS_DIR } from './names.js'
-import { agentLines, isRunId, publicCard, type AnyDiaryLine, type ListedRun, type RunCard, type RunPatch } from './run.js'
-import { deleteRun, findRun, listRuns, patchRun, readDiary, resolveLogsDeps, runFiles, runsPath } from './store.js'
-import { findEntry, readCard, readRunDiary, runEntries } from './records.js'
+import { agentLines, isRunId, publicCard, type ListedRun, type RunCard, type RunPatch } from './run.js'
+import { deleteRun, patchRun, runFiles, runsPath } from './store.js'
+import { findEntry, readCard, readRunDiary, runEntries, type RecordsReader } from './records.js'
 import { peopleOf, readCommitLines } from './people.js'
 import { skillUseOf } from './skill-use.js'
 
@@ -70,20 +70,16 @@ export function runCli(argv: string[], io: CliIo, git: GitRunner = nodeGitRunner
 /** The bare command: the runs, newest first, filtered and capped. */
 const list: Command<[CliIo, GitRunner]> = async (args, io, git) => {
   const { values } = parseCommandArgs(args, { branch: { type: 'string' }, limit: { type: 'string' }, ...READ_FLAGS }, 0)
-  const limit = values.limit === undefined ? DEFAULT_LIMIT : limitArg(values.limit)
+  const limit = values.limit === undefined ? DEFAULT_LIMIT : wholeAbove0('--limit', values.limit)
   const keep = (card: RunCard): boolean => values.branch === undefined || card.branch === values.branch
   // Each card with the person it is kept under, whichever way it is printed.
   const shown = ({ person, ...card }: ListedRun) => ({ ...(values.full ? card : publicCard(card)), person })
-  if (values.local) {
-    const root = await inRepo(() => runsRootOf(io.cwd, git))
-    return (await listRuns(root, {}, { git })).filter(keep).slice(0, limit).map(shown)
-  }
-  const reader = await open(io.cwd, git)
+  const { reader, dir } = await records(io.cwd, values.local, git)
   const cards: ListedRun[] = []
   // Newest first, and no further than the cap: the cards past it are never read.
-  for (const run of await runEntries(reader, RUNS_DIR)) {
+  for (const run of await runEntries(reader, dir)) {
     if (cards.length >= limit) break
-    const card = await readCard(reader, RUNS_DIR, run)
+    const card = await readCard(reader, dir, run)
     if (!card || !keep(card)) continue
     cards.push({ ...card, person: run.person })
   }
@@ -93,51 +89,34 @@ const list: Command<[CliIo, GitRunner]> = async (args, io, git) => {
 /** The two flags either read takes: where it reads, and how much it prints. */
 const READ_FLAGS = { local: { type: 'boolean' }, full: { type: 'boolean' } } as const
 
+/** The flags of the reads of the last days, `people` and `skills`: how many days, and where they read. */
+const DAYS_FLAGS = { days: { type: 'string' }, local: { type: 'boolean' } } as const
+
 const COMMANDS: Record<string, Command<[CliIo, GitRunner]>> = {
   async skills(args, io, git) {
-    const { values } = parseCommandArgs(args, { days: { type: 'string' }, local: { type: 'boolean' } }, 0)
-    if (values.days !== undefined && (!/^\d+$/.test(values.days) || Number(values.days) < 1)) throw new UsageError(`--days takes a whole number above 0, got ${values.days}`)
-    const since = Date.now() - Number(values.days ?? 30) * 86_400_000
-    if (values.local) {
-      const root = await inRepo(() => runsRootOf(io.cwd, git))
-      const files = resolveLogsDeps({ git })
-      return skillUseOf({ list: dir => files.list(dir), read: path => files.read(path).catch(() => undefined) }, await runsPath(root, git), since)
-    }
-    const reader = await open(io.cwd, git)
-    return skillUseOf({ list: dir => reader.list(dir), read: path => reader.read(path) }, RUNS_DIR, since)
+    const { values } = parseCommandArgs(args, DAYS_FLAGS, 0)
+    const since = sinceDays(values.days)
+    const { reader, dir } = await records(io.cwd, values.local, git)
+    return skillUseOf(reader, dir, since)
   },
   async people(args, io, git) {
-    const { values } = parseCommandArgs(args, { days: { type: 'string' }, local: { type: 'boolean' } }, 0)
-    if (values.days !== undefined && (!/^\d+$/.test(values.days) || Number(values.days) < 1)) throw new UsageError(`--days takes a whole number above 0, got ${values.days}`)
-    const since = Date.now() - Number(values.days ?? 30) * 86_400_000
+    const { values } = parseCommandArgs(args, DAYS_FLAGS, 0)
+    const since = sinceDays(values.days)
     const me = (await git(['config', 'user.email'], io.cwd).catch(() => '')).trim() || undefined
     // The main branch's commits, newest first: the default branch as origin names it, else what is checked out.
     const main = (await git(['symbolic-ref', '--short', 'refs/remotes/origin/HEAD'], io.cwd).catch(() => '')).trim() || 'HEAD'
     const commits = readCommitLines(await git(['log', main, '-n', '5000', '--format=%ae%x09%an%x09%at'], io.cwd).catch(() => ''))
-    if (values.local) {
-      const root = await inRepo(() => runsRootOf(io.cwd, git))
-      const files = resolveLogsDeps({ git })
-      return peopleOf({ list: dir => files.list(dir), read: path => files.read(path).catch(() => undefined) }, await runsPath(root, git), since, me, commits)
-    }
-    const reader = await open(io.cwd, git)
-    return peopleOf({ list: dir => reader.list(dir), read: path => reader.read(path) }, RUNS_DIR, since, me, commits)
+    const { reader, dir } = await records(io.cwd, values.local, git)
+    return peopleOf(reader, dir, since, me, commits)
   },
   async show(args, io, git) {
     const { values, positionals } = parseCommandArgs(args, READ_FLAGS, 1)
     const id = runIdArg(positionals[0]!)
-    let card: RunCard | undefined
-    let diary: AnyDiaryLine[] = []
-    if (values.local) {
-      const root = await inRepo(() => runsRootOf(io.cwd, git))
-      card = await findRun(root, id, { git })
-      diary = card ? ((await readDiary(root, id, { git })) ?? []) : []
-    } else {
-      const reader = await open(io.cwd, git)
-      const run = await findEntry(reader, RUNS_DIR, id)
-      card = run && (await readCard(reader, RUNS_DIR, run))
-      if (run && card) diary = await readRunDiary(reader, RUNS_DIR, run)
-    }
-    if (!card) throw noRun(id)
+    const { reader, dir } = await records(io.cwd, values.local, git)
+    const run = await findEntry(reader, dir, id)
+    const card = run && (await readCard(reader, dir, run))
+    if (!run || !card) throw noRun(id)
+    const diary = await readRunDiary(reader, dir, run)
     return values.full ? { ...card, diary } : { ...publicCard(card), diary: agentLines(diary) }
   },
 
@@ -184,13 +163,26 @@ function noRun(id: string): Refused {
   return new Refused({ ok: false, reason: 'no-run', id }, `no run is named ${id}`)
 }
 
-/** The project's data opened for reading, from wherever the command runs, or the sessions with no project's, from the sessions home; outside both, a refusal. */
-async function open(cwd: string, git: GitRunner): Promise<ProjectReader> {
-  await inRepo(() => runsRootOf(cwd, git))
-  return openProjectReader(cwd, { git })
+/**
+ * The records a read goes through, and where the runs are in them: origin's copy, fetched once,
+ * or with `--local` this machine's, the writer's checkout read where it lies, with no fetch. From
+ * wherever the command runs, in a project or among the sessions with no project (the sessions
+ * home); outside both, a refusal.
+ */
+async function records(cwd: string, local: boolean | undefined, git: GitRunner): Promise<{ reader: RecordsReader; dir: string }> {
+  const root = await inRepo(() => runsRootOf(cwd, git))
+  if (!local) return { reader: await openProjectReader(cwd, { git }), dir: RUNS_DIR }
+  const files = nodeBranchFileFs()
+  return { reader: { list: files.list, read: path => files.read(path).catch(() => undefined) }, dir: await runsPath(root, git) }
 }
 
-function limitArg(value: string): number {
-  if (!/^\d+$/.test(value) || Number(value) < 1) throw new UsageError(`--limit takes a whole number above 0, got ${value}`)
+/** A flag's value that must be a whole number above 0: `--limit`, `--days`. */
+function wholeAbove0(flag: string, value: string): number {
+  if (!/^\d+$/.test(value) || Number(value) < 1) throw new UsageError(`${flag} takes a whole number above 0, got ${value}`)
   return Number(value)
+}
+
+/** When the days a read looks back over began: `--days` of them, 30 unless said. */
+function sinceDays(days: string | undefined): number {
+  return Date.now() - (days === undefined ? 30 : wholeAbove0('--days', days)) * 86_400_000
 }
