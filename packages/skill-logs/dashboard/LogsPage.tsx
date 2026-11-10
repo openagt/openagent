@@ -1,4 +1,3 @@
-import { useState } from 'react'
 import { FilterChips, Page, PersonMark, STATUS_DOT, STATUS_RING, STATUS_TONE, Table, TableBody, TableCell, TableHead, TableHeader, TableRow, cn, formatDateTime, formatDuration, personSaid, useGitHostPeople, useModuleHost, usePolled, type ModuleAgent, type ModuleHostPerson, type ModulePageProps, type ModuleProject } from '@openagt/dashboard/module'
 import type { RunCard } from '../src/run.js'
 
@@ -131,11 +130,11 @@ function dollars(cost: number): string {
 
 /**
  * The Logs page: every project's recorded runs, newest first, from `logs --limit 50` in each
- * project, each as the dashboard says it stands right now ({@link withLiveRuns}). A row opens the
- * run's own page in the dashboard. A project whose command fails is named with the command's own
- * reason, and the other projects still show.
+ * project, each as the dashboard says it stands right now ({@link withLiveRuns}). A chip shows one
+ * status, at `/logs/<status>`. A row opens the run's own page in the dashboard. A project whose
+ * command fails is named with the command's own reason, and the other projects still show.
  */
-export function LogsPage({ projects }: ModulePageProps) {
+export function LogsPage({ projects, path }: ModulePageProps) {
   const host = useModuleHost()
   const key = projects.map(p => p.id).join(',')
   const { value: live } = usePolled<LiveRuns[]>(
@@ -168,8 +167,9 @@ export function LogsPage({ projects }: ModulePageProps) {
   const read = { ...recorded, rows: withLiveRuns(recorded.rows, live) }
   const accountOf = useGitHostPeople(read.rows.map(({ project, card }) => ({ projectId: project.id, person: card.person })), host.gitHostPeople, 'skill-logs:people')
 
-  // Which status the list shows: every one, until a chip picks one. One no run has any more goes back to all.
-  const [picked, setPicked] = useState<string | null>(null)
+  // Which status the list shows: every one, until a chip picks one, kept in the address (`/logs/waiting`) so a
+  // reload or Back from a run shows the list the person left. One no run has any more goes back to all.
+  const picked = path[0] ?? null
   const counts = STATUSES.map(value => ({ value, label: value[0]!.toUpperCase() + value.slice(1), count: read.rows.filter(row => row.card.status === value).length })).filter(c => c.count > 0)
   const status = counts.some(c => c.value === picked) ? picked : null
   const shown = status === null ? read.rows : read.rows.filter(row => row.card.status === status)
@@ -180,7 +180,7 @@ export function LogsPage({ projects }: ModulePageProps) {
     <Page
       title="Logs"
       description={`Every run recorded in ${projects.length === 1 ? 'this project' : 'these projects'}, newest first.`}
-      bar={<FilterChips chips={counts} total={read.rows.length} picked={status} onPick={setPicked} />}
+      bar={<FilterChips chips={counts} total={read.rows.length} picked={status} onPick={value => host.openPage('logs', value === null ? [] : [value])} />}
     >
       {read.failed.map(({ project, error }) => (
         <p key={project.id} role="alert" className="mb-3 text-sm text-danger">

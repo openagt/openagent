@@ -37,11 +37,12 @@ test('the runs cut by day, each day with its runs and their cost; a run by its n
     { id: 'r2', startedAt: at(now - 2000), status: 'failed', intent: 'break it', cost: 0.25 },
     { id: 'r3', startedAt: at(noon - 24 * HOUR), endedAt: at(noon - 24 * HOUR + 120_000), status: 'done', intent: 'yesterday work', cost: 1 },
   ])
-  render(
+  const page = (path: string[]) => (
     <ModuleHostContext.Provider value={host}>
-      <LogsPage projects={[{ id: 'p1', name: 'alpha', gitHost: true }]} projectId={null} path={[]} />
-    </ModuleHostContext.Provider>,
+      <LogsPage projects={[{ id: 'p1', name: 'alpha', gitHost: true }]} projectId={null} path={path} />
+    </ModuleHostContext.Provider>
   )
+  const { rerender } = render(page([]))
   const today = (await screen.findAllByText('Today'))[0]!.closest('h2')!
   expect(today.textContent).toBe('Today2 runs · $0.75')
   expect(screen.getAllByText('Yesterday')[0]!.closest('h2')!.textContent).toBe('Yesterday1 run · $1.00')
@@ -49,11 +50,18 @@ test('the runs cut by day, each day with its runs and their cost; a run by its n
   const login = screen.getAllByText('Login page')[0]!.closest('tr')!
   expect(within(login).getByText('make the login page')).toBeTruthy()
   expect(screen.getAllByText('yesterday work')[0]!.closest('tr')!.textContent).toContain('2m')
-  // A chip per status the runs have, each with its count.
+  // A chip per status the runs have, each with its count; its pick is kept in the page's address.
   fireEvent.click(screen.getByRole('button', { name: /^Failed/ }))
+  expect(host.openPage).toHaveBeenLastCalledWith('logs', ['failed'])
+  rerender(page(['failed']))
   expect(screen.queryAllByText('Login page')).toHaveLength(0)
   expect(screen.getAllByText('break it').length).toBeGreaterThan(0)
   fireEvent.click(screen.getByRole('button', { name: /^All/ }))
+  expect(host.openPage).toHaveBeenLastCalledWith('logs', [])
+  rerender(page([]))
+  expect(screen.getAllByText('Login page').length).toBeGreaterThan(0)
+  // A status no run has any more shows them all.
+  rerender(page(['stopped']))
   expect(screen.getAllByText('Login page').length).toBeGreaterThan(0)
   // A row opens its run.
   fireEvent.click(screen.getAllByText('Login page')[0]!.closest('tr')!)
