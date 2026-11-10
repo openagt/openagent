@@ -69,7 +69,7 @@ describe('the Agents page', () => {
   test('a new agent: its name, the skills ticked from the list, the two every agent starts with ticked already; saved as the dashboard’s call, and the list read again', async () => {
     render(<AgentsPage />)
     fireEvent.click(await screen.findByRole('button', { name: 'New agent' }))
-    const editor = screen.getByRole('region', { name: 'New agent' })
+    const editor = screen.getByRole('dialog', { name: 'New agent' })
     expect((within(editor).getByLabelText('ask') as HTMLInputElement).getAttribute('aria-checked') ?? (within(editor).getByLabelText('ask') as HTMLInputElement).checked.toString()).toMatch(/true/)
     fireEvent.change(within(editor).getByLabelText('Name'), { target: { value: 'Social Media' } })
     fireEvent.click(within(editor).getByLabelText('ux'))
@@ -77,14 +77,14 @@ describe('the Agents page', () => {
     fireEvent.click(within(editor).getByRole('button', { name: 'Save' }))
     await waitFor(() => expect(rpc.sendSaveAgent).toHaveBeenCalledWith({ name: 'Social Media', skills: ['ask', 'github', 'ux'], accounts: { claude: ['Dani'] }, projectSkills: true }))
     await waitFor(() => expect(rpc.onAgentsList).toHaveBeenCalledTimes(2))
-    expect(screen.queryByRole('region', { name: 'New agent' })).toBeNull()
+    expect(screen.queryByRole('dialog', { name: 'New agent' })).toBeNull()
   })
 
   test('an agent edited in place keeps its id; a refusal is said under the editor and nothing closes', async () => {
     rpc.sendSaveAgent.mockResolvedValue({ ok: false, error: 'OpenAgent has no GitHub account stranger on this computer.' })
     render(<AgentsPage />)
     fireEvent.click(await screen.findByRole('button', { name: 'Edit Reviewer' }))
-    const editor = screen.getByRole('region', { name: 'Editing Reviewer' })
+    const editor = screen.getByRole('dialog', { name: 'Editing Reviewer' })
     fireEvent.click(within(editor).getByLabelText('readability'))
     // Its project-skills tick is off as its record says; ticked on, the save says so.
     expect(within(editor).getByLabelText('Project skills').getAttribute('aria-checked')).toBe('false')
@@ -108,7 +108,7 @@ describe('the Agents page', () => {
     logins.sendStopGitHostLogin.mockResolvedValue({ ok: true })
     render(<AgentsPage />)
     fireEvent.click(await screen.findByRole('button', { name: 'New agent' }))
-    const editor = screen.getByRole('region', { name: 'New agent' })
+    const editor = screen.getByRole('dialog', { name: 'New agent' })
     fireEvent.change(within(editor).getByLabelText('Name'), { target: { value: 'Social media' } })
     expect(within(editor).getByRole('combobox', { name: 'GitHub account' }).textContent).toContain('None')
     fireEvent.click(within(editor).getByRole('button', { name: 'Add account' }))
@@ -117,13 +117,33 @@ describe('the Agents page', () => {
     // Signed in at GitHub: the account is there, and the agents are read again with it.
     rpc.onAgentsList.mockResolvedValue({ ...VIEW, github: { host: 'github.com', accounts: ['me-agent'] } })
     logins.onGitHosts.mockResolvedValue(github(['me-agent']))
-    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull(), { timeout: 6000 })
-    const after = screen.getByRole('region', { name: 'New agent' })
+    // The account's dialog closes on it, and the agent's own is still there under it.
+    await waitFor(() => expect(screen.queryByRole('dialog', { name: 'Add a GitHub account' })).toBeNull(), { timeout: 6000 })
+    const after = screen.getByRole('dialog', { name: 'New agent' })
     expect(within(after).getByRole('combobox', { name: 'GitHub account' }).textContent).toContain('@me-agent')
     expect((within(after).getByLabelText('Name') as HTMLInputElement).value).toBe('Social media')
     fireEvent.click(within(after).getByRole('button', { name: 'Save' }))
     await waitFor(() => expect(rpc.sendSaveAgent).toHaveBeenCalledWith(expect.objectContaining({ name: 'Social media', accounts: { github: 'me-agent' } })))
   }, 15_000)
+
+  test('the editor is a dialog over the page: the agent\u2019s card stays under it, a click beside it closes nothing, and it says what every project run gets besides', async () => {
+    render(<AgentsPage />)
+    fireEvent.click(await screen.findByRole('button', { name: 'Edit Reviewer' }))
+    const editor = screen.getByRole('dialog', { name: 'Editing Reviewer' })
+    expect(screen.getByRole('region', { name: 'Reviewer', hidden: true })).toBeTruthy()
+    expect(within(editor).getByText(/every run also gets the branches skill/)).toBeTruthy()
+    // Save and Cancel are the dialog's own presses, outside what scrolls.
+    expect(within(editor).getByRole('button', { name: 'Save' })).toBeTruthy()
+    fireEvent.change(within(editor).getByLabelText('Name'), { target: { value: 'Reviewer two' } })
+    // A press on the dimmed page beside it, as a real pointer makes one.
+    const backdrop = document.querySelector('.fixed.inset-0')!
+    for (const press of [fireEvent.pointerDown, fireEvent.mouseDown, fireEvent.pointerUp, fireEvent.mouseUp, fireEvent.click]) press(backdrop)
+    await new Promise(resolve => setTimeout(resolve, 50))
+    expect((within(screen.getByRole('dialog', { name: 'Editing Reviewer' })).getByLabelText('Name') as HTMLInputElement).value).toBe('Reviewer two')
+    fireEvent.click(within(editor).getByRole('button', { name: 'Cancel' }))
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
+    expect(rpc.sendSaveAgent).not.toHaveBeenCalled()
+  })
 
   test('where an agent\u2019s GitHub account is: one line per device, on it or not, with why; "Copy again" for one that failed copies now and reads again; nothing for an agent that names none', async () => {
     rpc.onAgentLogins.mockResolvedValue([
