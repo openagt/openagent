@@ -158,6 +158,16 @@ function asOpenAgent(command: Command<[Context]>): Command<[Context]> {
   return async (args, ctx) => command(args, { ...ctx, gh: await workingGh(ctx) })
 }
 
+/** What GitHub answers `ask`; when it cannot, a `git-host-failed` refusal whose line says what could not be done, and why. */
+async function gitHostAnswer<T>(what: string, ask: () => Promise<T>): Promise<T> {
+  try {
+    return await ask()
+  } catch (err) {
+    const detail = errorMessage(err)
+    throw new Refused({ ok: false, reason: 'git-host-failed', detail }, `${what}: ${detail}`)
+  }
+}
+
 /** What a GitHub token reads as: letters, digits and underscores, nothing a line could break on. */
 const TOKEN = /^[A-Za-z0-9_]{20,255}$/
 
@@ -169,35 +179,22 @@ const COMMANDS: Record<string, Command<[Context]>> = {
     const { values } = parseCommandArgs(args, { branch: { type: 'string' }, state: { type: 'string' }, since: { type: 'string' } }, 0)
     const state = values.state ?? 'all'
     if (state !== 'open' && state !== 'merged' && state !== 'all') throw new UsageError(`--state is open, merged or all, not ${state}`)
-    try {
-      return await listRequests(cwd, { ...(values.branch ? { branch: values.branch } : {}), state, ...(values.since ? { since: values.since } : {}) }, gh)
-    } catch (err) {
-      const detail = errorMessage(err)
-      throw new Refused({ ok: false, reason: 'git-host-failed', detail }, `the pull requests could not be read: ${detail}`)
-    }
+    return gitHostAnswer('the pull requests could not be read', () => listRequests(cwd, { ...(values.branch ? { branch: values.branch } : {}), state, ...(values.since ? { since: values.since } : {}) }, gh))
   }),
 
   replies: asOpenAgent(async (args, { cwd, gh }) => {
     const { values } = parseCommandArgs(args, { since: { type: 'string' } }, 0)
     if (values.since !== undefined && Number.isNaN(Date.parse(values.since))) throw new UsageError(`--since is a time, like 2026-10-09T10:00:00Z, not "${values.since}"`)
-    try {
-      return await listReplies(cwd, { gh, ...(values.since !== undefined ? { since: values.since } : {}) })
-    } catch (err) {
-      const detail = errorMessage(err)
-      throw new Refused({ ok: false, reason: 'git-host-failed', detail }, `the pull requests could not be read: ${detail}`)
-    }
+    return gitHostAnswer('the pull requests could not be read', () => listReplies(cwd, { gh, ...(values.since !== undefined ? { since: values.since } : {}) }))
   }),
 
   comment: asOpenAgent(async (args, { cwd, gh, env }) => {
     const { values, positionals } = parseCommandArgs(args, { body: { type: 'string' } }, 1)
-    if (values.body === undefined || !values.body.trim()) throw new UsageError('--body is required: the text of the comment')
+    const body = values.body
+    if (body === undefined || !body.trim()) throw new UsageError('--body is required: the text of the comment')
     const number = numberArg(positionals[0]!)
-    try {
-      return { ok: true, ...(await writeComment(cwd, number, values.body, await byline(env[DIARY_ENV]), gh)) }
-    } catch (err) {
-      const detail = errorMessage(err)
-      throw new Refused({ ok: false, reason: 'git-host-failed', detail }, `the comment could not be written: ${detail}`)
-    }
+    const comment = await gitHostAnswer('the comment could not be written', async () => writeComment(cwd, number, body, await byline(env[DIARY_ENV]), gh))
+    return { ok: true, ...comment }
   }),
 
   open: asOpenAgent(async (args, { cwd, gh, git, watch }) => {
