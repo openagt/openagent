@@ -5,7 +5,7 @@ import type { AddressInfo } from 'node:net'
 import { dirname } from 'node:path'
 import { activePage, connectCdp, listPages, type CdpSession, type PageTarget } from './cdp.js'
 import { launchChrome, type Chrome } from './chrome.js'
-import { consoleCall, consoleLog, errorsNote, FLOOD_BYTES, FLOOD_LINES, flooded, heardOnce, logEntry, printConsole, thrown, went, type Said } from './console.js'
+import { consoleLog, errorsNote, heardOnce, listenToConsole, printConsole, went, type Said } from './console.js'
 import { click, cursorAt, navigate, PageError, press, readPage, run, screenshot, selectionIn, type } from './page.js'
 import { inputCalls, stepHistory, type ScreenInput } from './screen.js'
 import { CURSORS, MAX_SELECTION, MAX_TITLE, MAX_URL } from './stream.js'
@@ -200,71 +200,23 @@ export async function runHost(opts: HostOptions): Promise<void> {
       dialogs.push(`${String(params['type'])} ${JSON.stringify(String(params['message'] ?? ''))}`)
       void next.send('Page.handleJavaScriptDialog', { accept: true, ...(params['type'] === 'prompt' ? { promptText: String(params['defaultPrompt'] ?? '') } : {}) }).catch(() => {})
     })
-    // The page's console. While the listening settles, the page's kept lines are said again:
-    // that is not the page saying much, and the lines heard before are not heard twice.
+    // The page's console, its errors counted as the page's own.
     const id = target.id
-    let heard = once(id)
-    let settling = true
-    let deaf = false
-    let second = 0
-    let saidLines = 0
-    let saidBytes = 0
-    const listen = async (): Promise<void> => {
-      heard = once(id)
-      settling = true
-      second = 0
-      await Promise.all([next.send('Runtime.enable'), next.send('Log.enable')]).catch(() => {})
-      heard.settled()
-      settling = false
-    }
-    // The values a console call names are kept alive in the page for whoever asks for them:
-    // nobody here does, so they are let go, at most once a second.
-    let releasing = false
-    const release = (): void => {
-      if (releasing) return
-      releasing = true
-      setTimeout(() => {
-        releasing = false
-        if (next.open) void next.send('Runtime.releaseObjectGroup', { objectGroup: 'console' }).catch(() => {})
-      }, 1000).unref()
-    }
-    const hear = (said: Said | undefined, size: number): void => {
-      if (deaf) return
-      if (!settling) {
-        const now = Date.now()
-        if (now - second >= 1000) {
-          second = now
-          saidLines = 0
-          saidBytes = 0
-        }
-        saidBytes += size
-        if (++saidLines > FLOOD_LINES || saidBytes > FLOOD_BYTES) {
-          deaf = true
-          void Promise.all([next.send('Runtime.disable'), next.send('Log.disable')]).catch(() => {})
-          return note(flooded())
-        }
-      }
-      if (!said || !heard.fresh(said.at)) return
-      if (said.level === 'error') pageErrors.set(id, (pageErrors.get(id) ?? 0) + 1)
-      note(said)
-    }
-    next.on('Runtime.consoleAPICalled', (params, size) => {
-      hear(consoleCall(params), size)
-      release()
-    })
-    next.on('Runtime.exceptionThrown', (params, size) => hear(thrown(params), size))
-    next.on('Log.entryAdded', (params, size) => hear(logEntry(params), size))
+    const pageConsole = listenToConsole(
+      next,
+      () => once(id),
+      said => {
+        if (said.level === 'error') pageErrors.set(id, (pageErrors.get(id) ?? 0) + 1)
+        note(said)
+      },
+    )
     next.on('Page.frameNavigated', params => {
       const frame = params['frame'] as { parentId?: string; url?: string } | undefined
       if (!frame || frame.parentId || typeof frame.url !== 'string') return
       pageErrors.set(id, 0)
       watchers.actedNowhere()
       note(went(frame.url))
-      // Another address is another page: it is listened to, whatever the one before it said.
-      if (deaf) {
-        deaf = false
-        void listen()
-      }
+      pageConsole.went()
     })
     await next.send('Page.enable')
     const previous = page
@@ -274,7 +226,7 @@ export async function runHost(opts: HostOptions): Promise<void> {
     // The agent is on another tab now: the console says so, with the errors that tab had
     // said already when it is one the agent comes back to, then what the tab said meanwhile.
     if (previous) note(went(target.url, Date.now(), pageErrors.get(id)))
-    await listen()
+    await pageConsole.listen()
     await cast()
     return next
   }
