@@ -1,16 +1,8 @@
-import { setDashboardContext } from './context.js'
+import { setDashboardContext, type DashboardContext, type RemoteAgents } from './context.js'
 import { registryPreferencesStore } from '../registry.js'
 import { defaultQuotaSource } from '../dashboard/quota.js'
-import type { DashboardContext, RemoteAgents } from './context.js'
 import type { DashboardOptions } from '../dashboard/server.js'
 
-/**
- * What the dashboard host wires (D3), as a test would have it: every capability present, the two
- * that start work refusing, and the reads answering empty. There is one host and it wires every
- * capability, so an RPC reads its context as simply there — a missing field is a wiring bug, and
- * it throws. That makes this the one place a test says what the host would have wired, with only
- * the parts it cares about overridden.
- */
 /** No other computer of the person's: what a test that builds its own `remote` spreads in when it is about none. */
 export const NO_ELSEWHERE: Pick<RemoteAgents, 'elsewhere' | 'elsewhereRuns' | 'followElsewhereRuns' | 'elsewhereHome' | 'bringHere' | 'forward' | 'machinesQueue'> = {
   elsewhere: async () => [],
@@ -24,6 +16,13 @@ export const NO_ELSEWHERE: Pick<RemoteAgents, 'elsewhere' | 'elsewhereRuns' | 'f
   },
 }
 
+/**
+ * What the dashboard host wires (D3), as a test would have it: every capability present, the two
+ * that start work refusing, and the reads answering empty. There is one host and it wires every
+ * capability, so an RPC reads its context as simply there — a missing field is a wiring bug, and
+ * it throws. That makes this the one place a test says what the host would have wired, with only
+ * the parts it cares about overridden.
+ */
 export function testDashboardContext(over: Partial<DashboardContext> = {}): DashboardContext {
   return {
     startAgent: () => ({ ok: false, error: 'not wired in this test' }),
