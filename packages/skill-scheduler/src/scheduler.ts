@@ -130,10 +130,11 @@ export async function runNow(repo: string, command: ScheduledCommand, wiring: Om
 /** One tick of the real project, and the state written with what it decided. */
 export async function tickProject(repo: string, wiring: Wiring = {}): Promise<TickRecord> {
   const schedule = await readSchedule(repo)
+  const read = await readState(repo)
   // What an automation kept on this machine was given goes when it goes, and when a skill has its
   // name too: a switch left under the name would start the skill's command unasked.
-  const givenUp = namesGivenUp((await readState(repo)).lastTick, schedule)
-  const state = givenUp.length ? await updateState(repo, s => givenUp.reduce(withoutName, s), wiring.git) : await readState(repo)
+  const givenUp = namesGivenUp(read.lastTick, schedule)
+  const state = givenUp.length ? await updateState(repo, s => givenUp.reduce(withoutName, s), wiring.git) : read
   const decided = await tick(projectDeps(repo, state, schedule, CHECK_TIMEOUT_MS, wiring))
   let record = decided
   // A tick cut short by a stop records nothing: `stop` already took this scheduler off the state,
