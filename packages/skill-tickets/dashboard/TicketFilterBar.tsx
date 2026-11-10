@@ -263,7 +263,7 @@ export function TicketFilterBar({
         noneLabel="No priority"
         buckets={PRIORITY_BUCKETS}
         filter={f.priority}
-        counts={rangeFacetCounts(rows, f, 'priority', PRIORITY_BUCKETS)}
+        counts={rangeFacetCounts(rows, f, 'priority')}
         onChange={priority => set({ priority })}
       />
 
@@ -305,7 +305,7 @@ export function TicketFilterBar({
           noneLabel="No effort"
           buckets={EFFORT_BUCKETS}
           filter={f.effort}
-          counts={rangeFacetCounts(rows, f, 'effort', EFFORT_BUCKETS)}
+          counts={rangeFacetCounts(rows, f, 'effort')}
           onChange={effort => set({ effort })}
         />
       )}
@@ -316,7 +316,7 @@ export function TicketFilterBar({
           noneLabel="No uncertainty"
           buckets={UNCERTAINTY_BUCKETS}
           filter={f.uncertainty}
-          counts={rangeFacetCounts(rows, f, 'uncertainty', UNCERTAINTY_BUCKETS)}
+          counts={rangeFacetCounts(rows, f, 'uncertainty')}
           onChange={uncertainty => set({ uncertainty })}
         />
       )}
