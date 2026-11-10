@@ -89,7 +89,7 @@ describe('Settings › Devices: this computer, and how devices reach it', () => 
     expect(card.getByText("Nothing reaches it yet: only this computer's own browser opens OpenAgent.")).toBeTruthy()
     expect(screen.getByText('Add your first device')).toBeTruthy()
     expect(screen.getByText('Start runs and answer your agents from your phone, on the same Wi-Fi as this computer.')).toBeTruthy()
-    expect(screen.getByText('Run agents on your other Mac or PC, on the same Wi-Fi as this computer.')).toBeTruthy()
+    expect(screen.getByText('Run agents on your other computer, on the same Wi-Fi as this one.')).toBeTruthy()
     expect(screen.getByRole('button', { name: 'Set up a server' })).toBeTruthy()
     expect(screen.getByRole('button', { name: 'Join with a code' })).toBeTruthy()
     // Only the server's card says "anywhere": nothing reaches this computer from anywhere yet.
