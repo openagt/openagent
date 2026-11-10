@@ -135,7 +135,7 @@ export function checkFound(stdout: string, lastRun: string): string {
 }
 
 /** What a check printed, as a run is handed it and as a person trying the check is shown it: without NUL characters and outer blank lines, cut when it is long, the cut said in a last line. */
-export function foundOutput(stdout: string, lastRun: string): string {
+function foundOutput(stdout: string, lastRun: string): string {
   const printed = stdout.replaceAll('\0', '').trim()
   if (printed.length <= FOUND_MAX) return printed
   const fits = printed.slice(0, FOUND_MAX)

@@ -22,7 +22,7 @@ import { writeHookLines, type InitOutcome } from '@openagt/agent-runner'
  */
 
 /** The lines, in the order a new file lists them: `open` and `close`, each a list. */
-export const HOOK_LINES: Readonly<Record<string, string | readonly string[]>> = {
+const HOOK_LINES: Readonly<Record<string, string | readonly string[]>> = {
   open: ['scheduler start'],
   close: ['scheduler stop --unless-keep-alive'],
 }

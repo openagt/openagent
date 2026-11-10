@@ -19,7 +19,7 @@ import { lineContext, writeLine } from './write-line.js'
  * The same contract as the skills' commands, so a person and a dashboard read it the same way.
  */
 
-export const USAGE = `usage: scheduler <command>
+const USAGE = `usage: scheduler <command>
 
   tick                          pull agent-data, sweep, read the commands the project's skills schedule, start what is due, each a run of agent-runner
   init                          this tool's lines in the dashboard's .openagent/hooks.yml, so it runs while the dashboard is open; a line already there is kept
