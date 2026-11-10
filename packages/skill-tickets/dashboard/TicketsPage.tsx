@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react'
-import { Button, LinkActions, Page, usePolled, useAction, useModuleHost, type ProjectLinks, type ModuleLink, type ModuleProject } from '@openagt/dashboard/module'
+import { Button, FadeWhileStale, LinkActions, Page, usePolled, useAction, useModuleHost, type ProjectLinks, type ModuleLink, type ModuleProject } from '@openagt/dashboard/module'
 import { heldBack, holderAgent, planLink, ticketLink, withHolder } from '../src/module.js'
 import type { ProjectTickets, WorkspaceTicket } from './lib/types.js'
 import { listTickets } from './lib/list.js'
@@ -47,7 +47,7 @@ export function TicketsPage({ projects }: { projects: ModuleProject[] }) {
   // among the project's runs: a lock names a run's id, so a claim a run made links to its page
   // and reads as its session name. A project whose command fails is named with the command's own
   // reason, and the other projects still show. A local read, no fetch: cheap enough to poll.
-  const { value: groups, loaded } = usePolled<ProjectRead[]>(
+  const { value: groups, loaded, stale } = usePolled<ProjectRead[]>(
     () =>
       Promise.all(
         projects.map(async (project): Promise<ProjectRead> => {
@@ -249,7 +249,7 @@ export function TicketsPage({ projects }: { projects: ModuleProject[] }) {
         // The flat cross-project list: one pool, one order, rows carrying their project. No
         // per-project Update bars here — those belong to the sections, and grouped mode is a
         // menu click away.
-        <div className="space-y-2">
+        <FadeWhileStale stale={stale} className="space-y-2">
           {filtered && rows.length - visible.length > 0 && (
             <div className="flex items-center gap-3 text-xs text-muted-foreground">
               <span>
@@ -287,9 +287,9 @@ export function TicketsPage({ projects }: { projects: ModuleProject[] }) {
               </ul>
             </div>
           )}
-        </div>
+        </FadeWhileStale>
       ) : (
-        <div className="space-y-8">
+        <FadeWhileStale stale={stale} className="space-y-8">
           {groups.map(g => {
             const groupRows = visible.filter(r => r.projectId === g.projectId)
             const sorted = sortRows(groupRows, view.sort)
@@ -318,7 +318,7 @@ export function TicketsPage({ projects }: { projects: ModuleProject[] }) {
               </section>
             )
           })}
-        </div>
+        </FadeWhileStale>
       )}
     </Page>
   )

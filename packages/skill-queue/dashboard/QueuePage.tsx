@@ -4,6 +4,7 @@ import {
   Button,
   ConfirmDialog,
   Input,
+  FadeWhileStale,
   Page,
   Select,
   SelectContent,
@@ -78,6 +79,7 @@ export function QueuePage({ projects }: ModulePageProps) {
   const {
     value: reads,
     loaded,
+    stale,
     reload,
   } = usePolled<ProjectRead[]>(
     () =>
@@ -110,11 +112,11 @@ export function QueuePage({ projects }: ModulePageProps) {
           {starts.error}
         </p>
       )}
-      <div className="space-y-6">
+      <FadeWhileStale stale={stale} className="space-y-6">
         {reads.map(read => (
           <ProjectQueue key={read.project.id} read={read} titled={projects.length > 1} schedule={schedule} names={names} starts={starts} reload={reload} />
         ))}
-      </div>
+      </FadeWhileStale>
     </Page>
   )
 }

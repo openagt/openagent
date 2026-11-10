@@ -16,7 +16,7 @@ const prefs = vi.hoisted(() => ({ value: { onboardingDismissed: true } as Record
 vi.mock('../lib/preferences.js', () => ({ usePreferences: () => prefs.value, usePreferencesLoaded: () => prefs.loaded, updatePreferences: prefs.updatePreferences }))
 
 const { DashboardPage } = await import('./DashboardPage.js')
-const { FADE_AFTER_MS } = await import('./CustomizeOverview.js')
+const { FADE_AFTER_MS } = await import('./FadeWhileStale.js')
 
 const active = (agentId: string, projectId = 'p1'): ActiveAgent => ({ projectId, projectName: projectId, agentId, cwd: `/repos/${agentId}`, status: 'running', startedAt: '2026-07-25T09:00:00.000Z', updatedAt: '2026-07-25T10:00:00.000Z', intent: `working on ${agentId}` })
 const projects = [{ id: 'p1', name: 'alpha' }, { id: 'p2', name: 'beta' }] as never[]

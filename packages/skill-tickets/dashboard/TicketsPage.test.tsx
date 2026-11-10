@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest'
 import { cleanup, fireEvent, screen, waitFor } from '@testing-library/react'
 import { configureFirst } from '../../dashboard/dashboard/test-utils.js'
+import { forgetRemembered } from '@openagt/dashboard/module'
 import type { MountedModules } from '@openagt/dashboard/module/testing'
 import { workOnTicketPrompt } from '../src/module.js'
 import { fakeHost, renderWithHost, type Answers, type FakeHost } from './test-host.js'
@@ -134,6 +135,29 @@ describe('TicketsPage (#1144)', () => {
       await waitFor(() => expect(window.location.pathname).toBe('/p1/tickets/t.md'))
     }
     window.history.replaceState(null, '')
+  })
+
+  test('a second visit opens with the last list at once, faded once its fresh read has been out a second', async () => {
+    onAllTickets.mockResolvedValue([{ projectId: 'p1', projectName: 'Alpha', tickets: [ticket()] }])
+    render()
+    await screen.findByText('Do the thing')
+    cleanup()
+    forgetRemembered()
+    const slow = fakeHost()
+    // Answered only once the test has looked, so no read is left out for the next test.
+    const reads: (() => void)[] = []
+    slow.runCommand.mockImplementation(() => new Promise(resolve => reads.push(() => resolve({ ok: false, error: 'read too late' }))))
+    try {
+      renderWithHost(<TicketsPage projects={[{ id: 'p1', name: 'Alpha', gitHost: true }]} />, slow, modules())
+      const row = screen.getByText('Do the thing')
+      expect(row.closest('[data-stale]')).toBeNull()
+      await waitFor(() => expect(row.closest('[data-stale]')).not.toBeNull(), { timeout: 2000 })
+    } finally {
+      for (const answer of reads) answer()
+      await waitFor(() => expect(document.querySelector('[data-stale]')).toBeNull())
+      cleanup()
+      forgetRemembered()
+    }
   })
 
   test('a project with no tickets still offers its own update, not a dead end', async () => {

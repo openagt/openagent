@@ -1,4 +1,4 @@
-import { FilterChips, Page, PersonMark, STATUS_DOT, STATUS_RING, STATUS_TONE, Table, TableBody, TableCell, TableHead, TableHeader, TableRow, cn, formatDateTime, formatDuration, personSaid, runName, useGitHostPeople, useModuleHost, usePolled, type ModuleAgent, type ModuleHostPerson, type ModulePageProps, type ModuleProject } from '@openagt/dashboard/module'
+import { FadeWhileStale, FilterChips, Page, PersonMark, STATUS_DOT, STATUS_RING, STATUS_TONE, Table, TableBody, TableCell, TableHead, TableHeader, TableRow, cn, formatDateTime, formatDuration, personSaid, runName, useGitHostPeople, useModuleHost, usePolled, type ModuleAgent, type ModuleHostPerson, type ModulePageProps, type ModuleProject } from '@openagt/dashboard/module'
 import type { RunCard } from '../src/run.js'
 
 /** How many runs each project lists: the command's own default page is 20; the page shows more. */
@@ -132,14 +132,14 @@ function dollars(cost: number): string {
 export function LogsPage({ projects, path }: ModulePageProps) {
   const host = useModuleHost()
   const key = projects.map(p => p.id).join(',')
-  const { value: live } = usePolled<LiveRuns[]>(
+  const { value: live, stale: liveStale } = usePolled<LiveRuns[]>(
     () => Promise.all(projects.map(async project => ({ project, runs: await host.agents(project.id).catch((): ModuleAgent[] => []) }))),
     [],
     10_000,
     [key],
     { remember: `skill-logs:live:${key}`, stored: true },
   )
-  const { value: recorded, loaded } = usePolled<Read>(
+  const { value: recorded, loaded, stale: recordedStale } = usePolled<Read>(
     async () => {
       const results = await Promise.all(projects.map(async project => ({ project, result: await host.runCommand(project.id, ['--limit', String(LIMIT)]) })))
       const rows: Row[] = []
@@ -160,6 +160,7 @@ export function LogsPage({ projects, path }: ModulePageProps) {
     { remember: `skill-logs:runs:${key}`, stored: true },
   )
   const read = { ...recorded, rows: withLiveRuns(recorded.rows, live) }
+  const stale = liveStale || recordedStale
   const accountOf = useGitHostPeople(read.rows.map(({ project, card }) => ({ projectId: project.id, person: card.person })), host.gitHostPeople, 'skill-logs:people')
 
   // Which status the list shows: every one, until a chip picks one, kept in the address (`/logs/waiting`) so a
@@ -189,7 +190,7 @@ export function LogsPage({ projects, path }: ModulePageProps) {
       {days.length > 0 && (
         // One table for every day, so the columns stand in one place down the page; each day opens
         // with a row of its own: the day, how many runs it had and what they cost together.
-        <div className="max-md:hidden">
+        <FadeWhileStale stale={stale} className="max-md:hidden">
           <Table>
             <TableHeader>
               <TableRow>
@@ -250,11 +251,11 @@ export function LogsPage({ projects, path }: ModulePageProps) {
               ])}
             </TableBody>
           </Table>
-        </div>
+        </FadeWhileStale>
       )}
       {/* A phone has no width for the table's columns: there a run is two lines, its name and then
           the rest, and its branch is left to its own page. */}
-      <div className="space-y-5 md:hidden">
+      <FadeWhileStale stale={stale} className="space-y-5 md:hidden">
         {days.map(({ day, rows, cost }) => (
           <section key={day} aria-label={day}>
             <DayHeading day={day} runs={rows.length} cost={cost} />
@@ -281,7 +282,7 @@ export function LogsPage({ projects, path }: ModulePageProps) {
             </ul>
           </section>
         ))}
-      </div>
+      </FadeWhileStale>
     </Page>
   )
 }

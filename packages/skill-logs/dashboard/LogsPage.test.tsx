@@ -127,7 +127,7 @@ test('a run goes by the name every list gives it: with no short name and no prom
   expect(screen.getAllByRole('button', { name: 'r2' }).length).toBeGreaterThan(0)
 })
 
-test('a second visit opens with the last list at once, while the runs are read again', async () => {
+test('a second visit opens with the last list at once, while the runs are read again, faded once that read has been out a second', async () => {
   const page = (host: FakeHost) => (
     <ModuleHostContext.Provider value={host}>
       <LogsPage projects={[{ id: 'p1', name: 'alpha', gitHost: true }]} projectId={null} path={[]} />
@@ -141,6 +141,9 @@ test('a second visit opens with the last list at once, while the runs are read a
   render(page(fakeHost('@openagt/skill-logs', { runCommand: () => new Promise(() => {}), agents: () => new Promise(() => {}) })))
   expect(screen.getAllByText('Login page').length).toBeGreaterThan(0)
   expect(screen.queryByText('Loading…')).toBeNull()
+  const row = screen.getAllByText('Login page')[0]!
+  expect(row.closest('[data-stale]')).toBeNull()
+  await waitFor(() => expect(row.closest('[data-stale]')).not.toBeNull(), { timeout: 2000 })
 })
 
 test('each run as the dashboard says it stands: a record that still says running reads unknown while its computer is offline, and a run with no record yet is listed', async () => {
