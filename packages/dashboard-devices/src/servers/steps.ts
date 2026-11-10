@@ -106,7 +106,7 @@ const LOCK = '/run/openagent-install.lock'
  * Root finds its programs in the system's own folders only, and nothing the server's user can
  * write is ever on its way to one.
  */
-function script(as: StepDef['as'], vars: Record<string, string>, body: string): string {
+export function script(as: StepDef['as'], vars: Record<string, string>, body: string): string {
   const system = '/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin'
   return [
     'set -euo pipefail',
