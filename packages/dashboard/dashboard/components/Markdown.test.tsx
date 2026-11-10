@@ -24,6 +24,11 @@ describe('Markdown tables (#869)', () => {
     render(<Markdown text={'| a | b |\n| --- | --- |\n| only |'} />)
     expect(screen.getAllByRole('cell')).toHaveLength(2)
   })
+
+  test("a reply's table being written fades its words in with the rest of the message", () => {
+    render(<Markdown text={'| col a | col b |\n| --- | --- |\n| one | two |'} fade />)
+    expect(screen.getByRole('cell', { name: 'two' }).querySelector('.word-in')?.textContent).toBe('two')
+  })
 })
 
 describe('Markdown links (#948)', () => {
