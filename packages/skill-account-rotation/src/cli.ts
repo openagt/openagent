@@ -6,9 +6,9 @@ import { loginWiring, type LoginWiring } from './wiring.js'
 import { readUsage } from './usage.js'
 
 /**
- * The command line: JSON on stdout, one line for a person on stderr, and the exit code says how
- * it went: 0 for a result, 1 for a refusal or a failure, 2 for a command that could not be read.
- * The same contract as the skills' commands, so a person and an agent read it the same way.
+ * The command line: a result is one JSON document on stdout; a refusal is one line for a person on
+ * stderr, with nothing on stdout. The exit code says how it went: 0 for a result, 1 for a refusal
+ * or a failure, 2 for a command that could not be read.
  */
 
 export const USAGE = `usage: account-rotation <command>
