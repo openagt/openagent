@@ -305,9 +305,6 @@ export async function runHost(opts: HostOptions): Promise<void> {
     await appendFile(opts.diary, JSON.stringify({ ...line, at: new Date().toISOString() }) + '\n').catch(() => {})
   }
 
-  /** The command before, so the next one starts once it has answered. */
-  let queue: Promise<unknown> = Promise.resolve()
-
   let ending: Promise<void> | undefined
   const end = (): Promise<void> =>
     (ending ??= (async () => {
@@ -372,6 +369,34 @@ export async function runHost(opts: HostOptions): Promise<void> {
     }
   }
 
+  /** The command before, so the next one starts once it has answered. */
+  let queue: Promise<unknown> = Promise.resolve()
+
+  /** The answer to a command as it came, with what the agent would not see in it named first. */
+  const answer = async (body: unknown): Promise<HostAnswer> => {
+    let said: HostAnswer
+    try {
+      // One command at a time: two at once on one page would cancel each other's loads. The
+      // next waits for this one's answer, which comes within COMMAND_MS whatever the page does.
+      const turn = queue.then(() => withTimeout(command(body as HostCommand), COMMAND_MS))
+      queue = turn.catch(() => {})
+      said = await turn
+    } catch (err) {
+      said = { ok: false, reason: err instanceof Error ? err.message : String(err) }
+    }
+    const named = dialogs.map(d => `Dialog, accepted: ${d}`)
+    dialogs = []
+    // The page as printed says nothing of its console: an error it logged since the agent was
+    // last told is named before the print, so the agent knows to read the console.
+    const fresh = said.ok && PRINTS_THE_PAGE.has((body as HostCommand | undefined)?.name as HostCommand['name']) ? log.errorsAfter(toldUpTo) : 0
+    if (fresh > 0) {
+      named.push(errorsNote(fresh))
+      toldUpTo = log.newest
+    }
+    if (!named.length) return said
+    return said.ok ? { ...said, output: [...named, '', said.output].join('\n') } : { ok: false, reason: [...named, said.reason].join('\n') }
+  }
+
   const server = createServer((req, res) => {
     void serve(req, res).catch(err => {
       if (!res.headersSent) res.writeHead(500).end(err instanceof Error ? err.message : String(err))
@@ -417,29 +442,7 @@ export async function runHost(opts: HostOptions): Promise<void> {
       else if (calls.length && input?.type !== 'scroll') void readSelection(p).catch(() => {})
       return void res.writeHead(calls.length ? 204 : 400).end()
     }
-    if (url.pathname === '/command') {
-      let answer: HostAnswer
-      try {
-        // One command at a time: two at once on one page would cancel each other's loads. The
-        // next waits for this one's answer, which comes within COMMAND_MS whatever the page does.
-        const turn = queue.then(() => withTimeout(command(body as HostCommand), COMMAND_MS))
-        queue = turn.catch(() => {})
-        answer = await turn
-      } catch (err) {
-        answer = { ok: false, reason: err instanceof Error ? err.message : String(err) }
-      }
-      const named = dialogs.map(d => `Dialog, accepted: ${d}`)
-      dialogs = []
-      // The page as printed says nothing of its console: an error it logged since the agent was
-      // last told is named before the print, so the agent knows to read the console.
-      const fresh = answer.ok && PRINTS_THE_PAGE.has((body as HostCommand | undefined)?.name as HostCommand['name']) ? log.errorsAfter(toldUpTo) : 0
-      if (fresh > 0) {
-        named.push(errorsNote(fresh))
-        toldUpTo = log.newest
-      }
-      if (named.length) answer = answer.ok ? { ...answer, output: [...named, '', answer.output].join('\n') } : { ok: false, reason: [...named, answer.reason].join('\n') }
-      return void res.writeHead(200, { 'content-type': 'application/json' }).end(JSON.stringify(answer))
-    }
+    if (url.pathname === '/command') return void res.writeHead(200, { 'content-type': 'application/json' }).end(JSON.stringify(await answer(body)))
     res.writeHead(404).end()
   }
 
