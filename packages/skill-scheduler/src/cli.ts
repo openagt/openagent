@@ -143,15 +143,15 @@ const COMMANDS: Record<string, Command<[CliIo, GitRunner]>> = {
       // One word is the scheduler's own model. A command's name, or `skill`, is a model's id forgotten: taken as an id it would be every row's model.
       const word = positionals[0]!
       if (word === 'skill' || (await readSchedule(repo)).commands.some(c => c.name === word || c.name.split(' ')[0] === word)) throw new UsageError(`${word} is no model: a command's model is set with model <command> <id|skill>`)
-      return { ok: true, ...(await updateState(repo, s => ({ ...s, model: word }), git)) }
+      return saved(repo, s => ({ ...s, model: word }), git)
     }
     const [name, to] = positionals as [string, string]
     // Taking a model back needs no scheduled command: one left for a skill that is gone can always be taken back.
-    if (to === 'skill') return { ok: true, ...(await updateState(repo, s => withPick(s, 'models', name, undefined), git)) }
+    if (to === 'skill') return saved(repo, s => withPick(s, 'models', name, undefined), git)
     if (!to.trim()) throw new UsageError('a model is the id its coding agent knows it by')
     const command = await scheduled(repo, name)
     // A model is one agent's: the pick is kept with the agent the command runs on here, and holds only while it does.
-    return { ok: true, ...(await updateState(repo, s => withPick(s, 'models', name, { agent: agentInForce(s, command), model: to }), git)) }
+    return saved(repo, s => withPick(s, 'models', name, { agent: agentInForce(s, command), model: to }), git)
   },
 
   async agent(args, io, git) {
@@ -160,11 +160,11 @@ const COMMANDS: Record<string, Command<[CliIo, GitRunner]>> = {
     if (to !== 'skill' && !isAgent(to)) throw new UsageError(`${to} is none of skill, ${AGENTS.join(', ')}`)
     const repo = await project(io.cwd, git)
     // Taking an agent back needs no scheduled command: one left for a skill that is gone can always be taken back.
-    if (to === 'skill') return { ok: true, ...(await updateState(repo, s => withAgent(s, name, undefined), git)) }
+    if (to === 'skill') return saved(repo, s => withAgent(s, name, undefined), git)
     const command = await scheduled(repo, name)
     if (!ableAgents(command).includes(to)) throw new Refused({ ok: false, reason: 'no-skill-there', command: name, agent: to }, `${AGENT_LABELS[to]} reads a project's skills from ${AGENT_SKILLS_DIR[to]}, and the skill of ${name} is only under ${command.dirs.join(' and ')}`)
     // The agent the command is made for is no pick to keep: the command then follows its skill again. The model picked for the command goes either way: a model is one agent's.
-    return { ok: true, ...(await updateState(repo, s => withAgent(s, name, to === homeAgent(command) ? undefined : to), git)) }
+    return saved(repo, s => withAgent(s, name, to === homeAgent(command) ? undefined : to), git)
   },
 
   async offset(args, io, git) {
@@ -172,7 +172,7 @@ const COMMANDS: Record<string, Command<[CliIo, GitRunner]>> = {
     const points = Number(positionals[0])
     if (!Number.isFinite(points)) throw new UsageError(`${positionals[0]} is not a number of percentage points`)
     const repo = await project(io.cwd, git)
-    return { ok: true, ...(await updateState(repo, s => ({ ...s, spendOffset: points }), git)) }
+    return saved(repo, s => ({ ...s, spendOffset: points }), git)
   },
 
   async switch(args, io, git) {
@@ -181,10 +181,10 @@ const COMMANDS: Record<string, Command<[CliIo, GitRunner]>> = {
     if (to !== 'on' && to !== 'off') throw new UsageError(`${to} is neither on nor off`)
     const repo = await project(io.cwd, git)
     // Off needs no scheduled command: a switch left on for a skill that is gone can always be taken back.
-    if (to === 'off') return { ok: true, ...(await updateState(repo, s => withPick(s, 'switches', name, undefined), git)) }
+    if (to === 'off') return saved(repo, s => withPick(s, 'switches', name, undefined), git)
     await scheduled(repo, name)
     const now = new Date()
-    return { ok: true, ...(await updateState(repo, s => withSwitchedOn(s, name, now), git)) }
+    return saved(repo, s => withSwitchedOn(s, name, now), git)
   },
 
   async publish(args, io, git) {
@@ -193,7 +193,7 @@ const COMMANDS: Record<string, Command<[CliIo, GitRunner]>> = {
     if (!(PUBLISH_PICKS as readonly string[]).includes(to)) throw new UsageError(`${to} is none of ${PUBLISH_PICKS.join(', ')}`)
     const repo = await project(io.cwd, git)
     await scheduled(repo, name)
-    return { ok: true, ...(await updateState(repo, s => withPick(s, 'publishes', name, to as PublishPick), git)) }
+    return saved(repo, s => withPick(s, 'publishes', name, to as PublishPick), git)
   },
 
   async pace(args, io, git) {
@@ -206,11 +206,11 @@ const COMMANDS: Record<string, Command<[CliIo, GitRunner]>> = {
     if (time && !(interval && takesTimeOfDay(interval))) throw new UsageError('a time of day goes with days, weeks or months')
     const repo = await project(io.cwd, git)
     // Taking a pace back needs no scheduled command: one left for a skill that is gone can always be taken back.
-    if (to === 'skill') return { ok: true, ...(await updateState(repo, s => withPick(s, 'paces', name, undefined), git)) }
+    if (to === 'skill') return saved(repo, s => withPick(s, 'paces', name, undefined), git)
     const command = await scheduled(repo, name)
     if (to === 'work' && command.when === undefined) throw new Refused({ ok: false, reason: 'no-check', command: name }, `${name} has no check, so nothing would say when there is work`)
     const pace = interval ? { every: interval.text, ...(time ? { at: time.text } : {}) } : { work: true as const }
-    return { ok: true, ...(await updateState(repo, s => withPacePicked(s, name, pace, new Date()), git)) }
+    return saved(repo, s => withPacePicked(s, name, pace, new Date()), git)
   },
 
   async agents(args, io, git) {
@@ -221,7 +221,7 @@ const COMMANDS: Record<string, Command<[CliIo, GitRunner]>> = {
     const repo = await project(io.cwd, git)
     // Taking a number back needs no scheduled command: one left for a skill that is gone can always be taken back.
     if (to !== 'skill') await scheduled(repo, name)
-    return { ok: true, ...(await updateState(repo, s => withPick(s, 'agents', name, count), git)) }
+    return saved(repo, s => withPick(s, 'agents', name, count), git)
   },
 
   async add(args, io, git) {
@@ -300,6 +300,11 @@ const COMMANDS: Record<string, Command<[CliIo, GitRunner]>> = {
     if (outcome.ok) return outcome
     throw new Refused(outcome, `the scheduler is running here (pid ${outcome.pid}): stop it first with npx @openagt/skill-scheduler@0.1 stop`)
   },
+}
+
+/** Write a change of the state, and answer the state as written: what a command that sets something answers. */
+async function saved(repo: string, change: (state: State) => State, git: GitRunner): Promise<{ ok: true } & State> {
+  return { ok: true, ...(await updateState(repo, change, git)) }
 }
 
 /** Take something out of the state, writing it only when it held that: a save of a dashboard's own may be writing the state at this moment, and a project with no state gets none for nothing. */
