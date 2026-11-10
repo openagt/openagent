@@ -1,5 +1,5 @@
 import { join } from 'node:path'
-import { GIT_FAILED, Refused, UsageError, checkoutRoot, inRepo, listProjectDir, nodeBranchFileFs, nodeGitRunner, openProjectReader, parseCommandArgs, readProjectFile, runCommandLine, writeProjectDataDetached, type Command, type ProjectReader, type GitRunner } from '@openagt/agent-data'
+import { GIT_FAILED, Refused, UsageError, checkoutRoot, inRepo, listProjectDir, nodeBranchFileFs, nodeGitRunner, openProjectReader, parseCommandArgs, readProjectFile, runCommandLine, writeProjectDataDetached, type BranchFileFs, type Command, type ProjectReader, type GitRunner } from '@openagt/agent-data'
 import { isTicketFile, isTicketPath, META_FILE, TICKETS_DIR, ticketLockName, ticketPlanName, ticketStem } from './names.js'
 import { readTicket, readTickets, readTicketsMeta, type TicketsFs } from './tickets.js'
 import { applyClaims, applyRelease, claimHistory, claimMessage, lockOn, releaseMessage } from './locks.js'
@@ -89,21 +89,14 @@ const COMMANDS: Record<string, Command<[CliIo, GitRunner]>> = {
     const file = ticketArg(positionals[0]!)
     const holder = await identity(io.cwd, git)
     type CloseOutcome = { ok: true } | { ok: false; reason: 'no-ticket' } | { ok: false; reason: 'not-holder'; holder?: string }
-    let outcome = { ok: true } as CloseOutcome
-    await write(io.cwd, `close ${TICKETS_DIR}/${ticketStem(file)}`, async dir => {
+    const outcome = await write(io.cwd, `close ${TICKETS_DIR}/${ticketStem(file)}`, async (dir): Promise<CloseOutcome> => {
       const fs = nodeBranchFileFs()
-      if (!(await fs.read(join(dir, TICKETS_DIR, file)).then(() => true, () => false))) {
-        outcome = { ok: false, reason: 'no-ticket' }
-        return
-      }
+      if (!(await holdsTicket(dir, file, fs))) return { ok: false, reason: 'no-ticket' }
       // Someone else's claim outranks the close: closing takes their lock with the ticket.
       const lock = await lockOn(dir, file, fs)
-      if (lock && lock.holder !== holder) {
-        outcome = { ok: false, reason: 'not-holder', ...(lock.holder === undefined ? {} : { holder: lock.holder }) }
-        return
-      }
-      outcome = { ok: true }
+      if (lock && lock.holder !== holder) return { ok: false, reason: 'not-holder', ...(lock.holder === undefined ? {} : { holder: lock.holder }) }
       for (const name of [file, ticketPlanName(file), ticketLockName(file)]) await fs.remove(join(dir, TICKETS_DIR, name)).catch(() => {})
+      return { ok: true }
     }, git)
     if (!outcome.ok) {
       if (outcome.reason === 'no-ticket') throw noTicket(file)
@@ -117,26 +110,20 @@ const COMMANDS: Record<string, Command<[CliIo, GitRunner]>> = {
     const file = ticketArg(positionals[0]!)
     const holder = await identity(io.cwd, git)
     type ClaimOutcome = { ok: true; earlier: string[] } | { ok: false; reason: 'no-ticket' } | { ok: false; reason: 'claimed'; holder?: string }
-    // Assigned inside the op, which a lost race re-runs: typed wide so the read below sees every case.
-    let outcome = { ok: true, earlier: [] } as ClaimOutcome
-    await write(io.cwd, claimMessage([{ ticket: file, holder }]), async dir => {
+    const outcome = await write(io.cwd, claimMessage([{ ticket: file, holder }]), async (dir): Promise<ClaimOutcome> => {
       const fs = nodeBranchFileFs()
-      if (!(await fs.read(join(dir, TICKETS_DIR, file)).then(() => true, () => false))) {
-        outcome = { ok: false, reason: 'no-ticket' }
-        return
-      }
+      if (!(await holdsTicket(dir, file, fs))) return { ok: false, reason: 'no-ticket' }
       // A claim to plan or to work: an existing plan is not in the way, only someone's lock is.
       const locked = await applyClaims(dir, [{ ticket: file, holder }], 'drain', fs)
       if (locked.length) {
         // Who claimed it before, read off the lock's history at origin's tip: this claim is not
         // committed yet, so every holder there is an earlier one, bar this holder claiming again.
         const patch = await git(['log', '-p', '--format=', '--no-renames', '--', `${TICKETS_DIR}/${ticketLockName(file)}`], dir)
-        outcome = { ok: true, earlier: claimHistory(patch).filter(h => h !== holder) }
-        return
+        return { ok: true, earlier: claimHistory(patch).filter(h => h !== holder) }
       }
       // The holder as the lock names it; a lock that names nobody readable is still a claim.
       const existing = (await lockOn(dir, file, fs))?.holder
-      outcome = { ok: false, reason: 'claimed', ...(existing === undefined ? {} : { holder: existing }) }
+      return { ok: false, reason: 'claimed', ...(existing === undefined ? {} : { holder: existing }) }
     }, git)
     if (!outcome.ok) {
       if (outcome.reason === 'no-ticket') throw noTicket(file)
@@ -151,12 +138,11 @@ const COMMANDS: Record<string, Command<[CliIo, GitRunner]>> = {
     // `--force` lifts whoever's claim, so it needs no identity of its own: a person's act, from
     // the dashboard, on a claim nobody answers to any more.
     const holder = values.force ? undefined : await identity(io.cwd, git)
-    let outcome = 'released' as 'released' | 'no-lock' | 'not-holder'
-    let other: string | undefined
-    await write(io.cwd, releaseMessage(file), async dir => {
+    const { outcome, other } = await write(io.cwd, releaseMessage(file), async dir => {
       const fs = nodeBranchFileFs()
-      outcome = await applyRelease(dir, file, holder, fs)
-      if (outcome === 'not-holder') other = (await lockOn(dir, file, fs))?.holder
+      const outcome = await applyRelease(dir, file, holder, fs)
+      // Whose claim stood in the way, for the refusal to name.
+      return { outcome, other: outcome === 'not-holder' ? (await lockOn(dir, file, fs))?.holder : undefined }
     }, git)
     if (outcome === 'no-lock') throw new Refused({ ok: false, reason: 'no-lock', file }, `${TICKETS_DIR}/${file} is not claimed`)
     if (outcome === 'not-holder') throw new Refused({ ok: false, reason: 'not-holder', file, holder: other }, `${TICKETS_DIR}/${file} is claimed by ${other ?? 'someone else'}, not by you`)
@@ -186,10 +172,23 @@ async function ticketsFs(cwd: string, local: boolean | undefined, git: GitRunner
   return { list: dir => listProjectDir(cwd, dir, {}, { git }), read: path => readProjectFile(cwd, path, {}, { git }) }
 }
 
-/** One write as a one-shot writer: to origin when the project is shared, else as a local commit. */
-async function write(cwd: string, message: string, op: (dir: string) => Promise<void>, git: GitRunner): Promise<void> {
+/**
+ * One write as a one-shot writer: to origin when the project is shared, else as a local commit.
+ * Answers what `op` found the last time it ran: a write that loses a race runs it again on the
+ * new tip, and only that run's finding is what landed.
+ */
+async function write<T>(cwd: string, message: string, op: (dir: string) => Promise<T>, git: GitRunner): Promise<T> {
   await inRepo(() => checkoutRoot(cwd, git))
-  await writeProjectDataDetached(cwd, message, op, { git })
+  let found: T | undefined
+  await writeProjectDataDetached(cwd, message, async dir => {
+    found = await op(dir)
+  }, { git })
+  return found as T
+}
+
+/** Whether a checkout of the project's data holds the ticket: whether its file reads. */
+function holdsTicket(dir: string, file: string, fs: BranchFileFs): Promise<boolean> {
+  return fs.read(join(dir, TICKETS_DIR, file)).then(() => true, () => false)
 }
 
 /** Who this command claims as; a checkout on no branch has no identity to claim with. */
