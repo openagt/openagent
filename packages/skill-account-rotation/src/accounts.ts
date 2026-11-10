@@ -1,7 +1,6 @@
-import { chmodSync, mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs'
-import { homedir } from 'node:os'
-import { dirname, join } from 'node:path'
+import { readFileSync } from 'node:fs'
 import type { AgentAccount, DriverRateWindow } from '@openagt/agent-driver'
+import { configFile, writePrivate } from './files.js'
 
 // The accounts an agent's runs may use, when a person has more than one: their own login, which the
 // agent keeps where it always does, and the ones added beside it. What an added account's login is,
@@ -29,13 +28,12 @@ export type AccountsAgent = 'claude' | 'codex'
 
 /** Where an agent's file is: `$XDG_CONFIG_HOME/openagent-<agent>-accounts.json`, else dotted under the home. */
 export function accountsPath(agent: AccountsAgent, env: NodeJS.ProcessEnv = process.env): string {
-  if (env['XDG_CONFIG_HOME']) return join(env['XDG_CONFIG_HOME'], `openagent-${agent}-accounts.json`)
-  return join(env['HOME'] ?? homedir(), `.openagent-${agent}-accounts.json`)
+  return configFile(`openagent-${agent}-accounts.json`, env)
 }
 
 /** Where a server keeps what it knows of the logins the person's computers handed it, never a login: OpenAgent writes it, beside the accounts. */
 export function copiedPath(env: NodeJS.ProcessEnv = process.env): string {
-  return env['XDG_CONFIG_HOME'] ? join(env['XDG_CONFIG_HOME'], 'openagent-copied-logins.json') : join(env['HOME'] ?? homedir(), '.openagent-copied-logins.json')
+  return configFile('openagent-copied-logins.json', env)
 }
 
 /** Where an account a computer of the person's handed to this server came from. */
@@ -67,11 +65,7 @@ export function forgetHandedOver(agent: AccountsAgent, name: string, env: NodeJS
   const logins = readHandedOver(env) as { kind?: unknown; name?: unknown }[]
   const left = logins.filter(login => login?.kind !== agent || login.name !== name)
   if (left.length === logins.length) return
-  const path = copiedPath(env)
-  const next = `${path}.${process.pid}.new`
-  writeFileSync(next, `${JSON.stringify({ logins: left }, null, 2)}\n`, { mode: 0o600 })
-  chmodSync(next, 0o600)
-  renameSync(next, path)
+  writePrivate(copiedPath(env), `${JSON.stringify({ logins: left }, null, 2)}\n`)
 }
 
 /**
@@ -100,11 +94,7 @@ function isAccount(value: unknown): value is AgentAccount {
 /** The file as `change` leaves the accounts read now: written whole, then moved over the old one. */
 export function changeAccounts(change: (accounts: AgentAccount[]) => AgentAccount[], path: string): AgentAccount[] {
   const accounts = change(readAccounts(path))
-  mkdirSync(dirname(path), { recursive: true })
-  const next = `${path}.${process.pid}.new`
-  writeFileSync(next, `${JSON.stringify({ accounts } satisfies AccountsFile, null, 2)}\n`, { mode: 0o600 })
-  chmodSync(next, 0o600)
-  renameSync(next, path)
+  writePrivate(path, `${JSON.stringify({ accounts } satisfies AccountsFile, null, 2)}\n`)
   return accounts
 }
 
