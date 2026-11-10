@@ -3,6 +3,7 @@ import { Button, LinkActions, Page, usePolled, useAction, useModuleHost, type Pr
 import { heldBack, holderAgent, planLink, ticketLink, withHolder } from '../src/module.js'
 import type { ProjectTickets, WorkspaceTicket } from './lib/types.js'
 import { listTickets } from './lib/list.js'
+import { openFromList } from './lib/back-to-list.js'
 import {
   defaultView,
   filterRows,
@@ -61,8 +62,12 @@ export function TicketsPage({ projects }: { projects: ModuleProject[] }) {
     [key],
   )
   const [view, setViewState] = useState<TicketsView>(initialView)
-  const onOpenTicket = (projectId: string, file: string) => host.openPage('tickets', [file], projectId)
-  const onOpenTicketPlan = (projectId: string, file: string) => host.openPage('tickets', [file, 'plan'], projectId)
+  const open = (projectId: string, path: string[]) => {
+    openFromList(path)
+    host.openPage('tickets', path, projectId)
+  }
+  const onOpenTicket = (projectId: string, file: string) => open(projectId, [file])
+  const onOpenTicketPlan = (projectId: string, file: string) => open(projectId, [file, 'plan'])
   const onOpenAgent = (projectId: string, agentId: string) => host.openAgent(projectId, agentId)
 
   // Every view change mirrors into the query string — replaceState, not a navigation: filters are

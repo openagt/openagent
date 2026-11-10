@@ -15,6 +15,18 @@ test("the Tickets page lists the project's tickets", needsChrome, async () => {
   })
 })
 
+test("a ticket opened from every project's list goes back to that list from its page, after a reload too", needsChrome, async () => {
+  await flow('ticket-back', async page => {
+    await page.goto(`${demo().url}/tickets`)
+    await page.getByText('Login page', { exact: true }).first().click()
+    await page.waitForURL(url => url.pathname.endsWith('/tickets/2026-08-01_login-page.md'))
+    await page.reload()
+    await page.getByRole('main').getByRole('button', { name: 'Tickets', exact: true }).click()
+    await page.waitForURL(url => !url.pathname.endsWith('.md'))
+    assert.equal(new URL(page.url()).pathname, '/tickets')
+  })
+})
+
 test('a repository on the computer is added as a project from the picker', needsChrome, async () => {
   await flow('add-project', async page => {
     await page.getByLabel('Project: shop').click()

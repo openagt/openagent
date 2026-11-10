@@ -1,6 +1,7 @@
 import { Button, Markdown, Tooltip, TooltipTrigger, TooltipContent, usePolled, useModuleHost, type ModuleAgent } from '@openagt/dashboard/module'
 import { planAgentFor, planPath, readShown } from '../src/module.js'
 import { TicketPageShell, TicketPageNote } from './TicketPageShell.js'
+import { useBackToList } from './lib/back-to-list.js'
 
 /** The page's read: the plan's text (none when the ticket has no plan, or no ticket), or why the command failed. */
 type Read = { plan: string | null; agent: ModuleAgent | undefined } | { error: string }
@@ -20,6 +21,7 @@ export function TicketPlanPage({
 }) {
   const host = useModuleHost()
   const path = planPath(slug)
+  const onBack = useBackToList(host, [slug, 'plan'])
   const { value: read, loaded } = usePolled<Read | null>(
     async () => {
       const [shown, agents] = await Promise.all([host.runCommand(projectId, ['show', slug, '--local']).then(readShown), host.agents(projectId).catch(() => [])])
@@ -32,7 +34,7 @@ export function TicketPlanPage({
   )
 
   return (
-    <TicketPageShell onBack={() => host.openPage('tickets')} path={path}>
+    <TicketPageShell onBack={onBack} path={path}>
       {!loaded ? (
         <TicketPageNote>Loading…</TicketPageNote>
       ) : read && 'error' in read ? (

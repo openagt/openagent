@@ -5,6 +5,7 @@ import { claimState, heldBack, holderAgent, readShown, ticketBody, ticketLink, w
 import type { WorkspaceTicketDetail } from './lib/types.js'
 import { TicketPageShell, TicketPageNote } from './TicketPageShell.js'
 import { releaseClaim } from './lib/release.js'
+import { useBackToList } from './lib/back-to-list.js'
 import { priorityTone } from './lib/ticket-priority.js'
 
 /** The page's read: the ticket, or nothing (no such ticket), or why the command failed. */
@@ -41,7 +42,7 @@ export function TicketDetailPage({
   )
   const ticket = read && 'ticket' in read ? read.ticket : null
   const { busy, error, run } = useAction()
-  const onBack = () => host.openPage('tickets')
+  const onBack = useBackToList(host, [slug])
   const onOpenAgent = (agentId: string) => host.openAgent(projectId, agentId)
 
   // The manual lock release (`releaseClaim`): a dead agent's claim stands until a person lifts it
