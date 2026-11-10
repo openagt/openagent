@@ -466,6 +466,19 @@ function Attached({ text }: { text: string }) {
   )
 }
 
+/**
+ * How far the turn going on has got, what the live line says beside its seconds: the tokens it went
+ * through, said once it has answered something, as Claude Code on the web says them; before that,
+ * the line is the dots and the seconds.
+ */
+function turnTokens(told: readonly OpenAgentEvent[]): number | undefined {
+  let start = told.length
+  while (start > 0 && !isTurnBoundary(told[start - 1]!)) start--
+  const turn = told.slice(start)
+  const said = turn.some(e => e.kind === 'driver' && e.event.type === 'text' && e.event.subagent === undefined)
+  return said ? turn.flatMap(e => (e.kind === 'driver' && e.event.type === 'tokens' ? [e.event.tokens] : [])).at(-1) : undefined
+}
+
 /** A tool call or a thought of the coding agent: a step between two of its messages. */
 function stepOf(e: OpenAgentEvent): ToolStep | undefined {
   return e.kind === 'driver' && (e.event.type === 'action' || e.event.type === 'thought') ? { ...e.event } : undefined
@@ -790,15 +803,7 @@ export function EventList({
     const report = subagentReport(events, call.id)
     return report !== undefined ? [[`call:${call.id}`, report] as const] : []
   }))
-  // How far the turn going on has got: what the live line says beside its seconds.
-  let lastTurnAt = -1
-  told.forEach((e, at) => {
-    if (isTurnBoundary(e)) lastTurnAt = at
-  })
-  // The tokens the turn went through, said once it has answered something, as Claude Code on the
-  // web says them: before that, the line is the dots and the seconds.
-  const turnSaid = told.slice(lastTurnAt + 1).some(e => e.kind === 'driver' && e.event.type === 'text' && (e.event as { subagent?: string }).subagent === undefined)
-  const turnTokens = turnSaid ? told.slice(lastTurnAt + 1).flatMap(e => (e.kind === 'driver' && e.event.type === 'tokens' ? [e.event.tokens] : [])).at(-1) : undefined
+  const tokens = turnTokens(told)
   // Once the coding agent said its session began, it is set up: what goes on is its own thinking.
   const begun = events.some(e => e.kind === 'session-update')
   // The call going on now is its steps row's, as Claude Code on the web's is: the row it continues,
@@ -1029,7 +1034,7 @@ export function EventList({
                 {/* Under the reply as it streams, too: the agent is still at it, and Claude Code on
                     the web keeps its dots and its count there. The line said a word before, which
                     under a streaming reply read as a second thing going on. */}
-                {working && !settingUp && !waitsOnItsOwn && current === undefined && <LiveLine since={turnStart} tokens={turnTokens} />}
+                {working && !settingUp && !waitsOnItsOwn && current === undefined && <LiveLine since={turnStart} tokens={tokens} />}
               </div>
             )}
             {!working && waitingOn > 0 && (
