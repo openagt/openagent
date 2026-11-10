@@ -36,14 +36,13 @@ export type LogsFunnel = (root: string, message: CommitMessage, op: (dir: string
 export interface LogsDeps extends Partial<LogsFiles> {
   funnel?: LogsFunnel
   git?: GitRunner
-  log?: (message: string) => void
 }
 
 /** The default funnel: the project's data write. */
 export const logsFunnel: LogsFunnel = (root, message, op) => withProjectData(root, message, op)
 
 /** Fill in whatever a caller left out, so an operation reads the same way in tests and out. */
-export function resolveLogsDeps(deps: LogsDeps): LogsFiles & { funnel: LogsFunnel; git: GitRunner; log: (message: string) => void } {
+export function resolveLogsDeps(deps: LogsDeps): LogsFiles & { funnel: LogsFunnel; git: GitRunner } {
   const fs = nodeBranchFileFs()
   return {
     read: deps.read ?? fs.read,
@@ -52,7 +51,6 @@ export function resolveLogsDeps(deps: LogsDeps): LogsFiles & { funnel: LogsFunne
     list: deps.list ?? fs.list,
     funnel: deps.funnel ?? logsFunnel,
     git: deps.git ?? nodeGitRunner(),
-    log: deps.log ?? (() => {}),
   }
 }
 
