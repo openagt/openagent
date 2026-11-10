@@ -179,9 +179,9 @@ test('no start line, a broken file, a failing line, a line that answers no id, a
     assert.deepEqual(await runResumeHook(none, { runId: 'r', text: 'x' }), { ok: false, error: 'this project has no resume hook' })
     const said = await runStartHook(broken, { prompt: 'x' })
     assert.ok(!said.ok && /^ignoring .*hooks\.yml/.test(said.error), JSON.stringify(said))
-    assert.deepEqual(await runStartHook(failing, { prompt: 'x' }), { ok: false, error: 'the start hook: the project has no such command' })
-    assert.deepEqual(await runStartHook(mute, { prompt: 'x' }), { ok: false, error: 'the start hook: it answered no run id' })
-    assert.deepEqual(await runStartHook(hanging, { prompt: 'x' }, { timeoutMs: 300 }), { ok: false, error: 'the start hook: timed out after 0s' })
+    assert.deepEqual(await runStartHook(failing, { prompt: 'x' }), { ok: false, error: "This project's start line, in .openagent/hooks.yml, failed. It said: “the project has no such command”" })
+    assert.deepEqual(await runStartHook(mute, { prompt: 'x' }), { ok: false, error: "This project's start line, in .openagent/hooks.yml, failed. It answered no run id." })
+    assert.deepEqual(await runStartHook(hanging, { prompt: 'x' }, { timeoutMs: 300 }), { ok: false, error: "This project's start line, in .openagent/hooks.yml, failed. It ended: timed out after 0s." })
   } finally {
     for (const dir of [none, broken, failing, mute, hanging]) await rm(dir, { recursive: true, force: true })
   }
@@ -196,8 +196,8 @@ test('the check line gets the picked agent and answers its problems and warnings
     assert.deepEqual(await runCheckHook(cwd, { driver: 'codex' }), { ok: true, problems: ['codex is missing'], warnings: [] })
     assert.deepEqual(await runCheckHook(cwd, {}), { ok: true, problems: ['default is missing'], warnings: [] })
     assert.deepEqual(await runCheckHook(none, {}), { ok: false, error: 'this project has no check hook', noHook: true })
-    assert.deepEqual(await runCheckHook(failing, {}), { ok: false, error: 'the check hook: not inside a git repository' })
-    assert.deepEqual(await runCheckHook(mute, {}), { ok: false, error: 'the check hook: it answered no problems and warnings' })
+    assert.deepEqual(await runCheckHook(failing, {}), { ok: false, error: "This project's check line, in .openagent/hooks.yml, failed. It said: “not inside a git repository”" })
+    assert.deepEqual(await runCheckHook(mute, {}), { ok: false, error: "This project's check line, in .openagent/hooks.yml, failed. It answered no problems and warnings." })
   } finally {
     for (const dir of [cwd, none, failing, mute]) await rm(dir, { recursive: true, force: true })
   }

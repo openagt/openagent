@@ -242,9 +242,17 @@ async function runRunHook(cwd: string, kind: RunHookKind, vars: Record<string, s
   }
   const { id, driver } = (said && typeof said === 'object' ? said : {}) as Record<string, unknown>
   if (outcome.summary === 'exit 0' && typeof id === 'string' && id !== '') return { ok: true, id, ...(typeof driver === 'string' && driver !== '' ? { driver } : {}) }
-  // The tool's one line for a person is its last on stderr; without one, how the line ended.
+  return { ok: false, error: lineFailed(kind, outcome, 'no run id') }
+}
+
+/**
+ * A line that did not answer, said to the person who pressed: which line of which file, then the
+ * tool's one line for a person, its last on stderr; without one, how the line ended.
+ */
+function lineFailed(kind: RunHookKind | 'check', outcome: { summary: string; stderr: string }, expected: string): string {
   const lastSaid = outcome.stderr.split('\n').map(s => s.trim()).filter(Boolean).at(-1)
-  return { ok: false, error: `the ${kind} hook: ${lastSaid ?? (outcome.summary === 'exit 0' ? 'it answered no run id' : outcome.summary)}` }
+  const said = lastSaid !== undefined ? `It said: “${lastSaid}”` : outcome.summary === 'exit 0' ? `It answered ${expected}.` : `It ended: ${outcome.summary}.`
+  return `This project's ${kind} line, in ${PROJECT_HOOKS_FILE}, failed. ${said}`
 }
 
 /** What stands in the way of a run: problems stop it, warnings do not. One line each, each naming its fix. */
@@ -299,8 +307,7 @@ export async function runCheckHook(cwd: string, input: { driver?: string }, opts
   }
   const readiness = readinessOf(said)
   if (outcome.summary === 'exit 0' && readiness) return { ok: true, ...readiness }
-  const lastSaid = outcome.stderr.split('\n').map(s => s.trim()).filter(Boolean).at(-1)
-  return { ok: false, error: `the check hook: ${lastSaid ?? (outcome.summary === 'exit 0' ? 'it answered no problems and warnings' : outcome.summary)}` }
+  return { ok: false, error: lineFailed('check', outcome, 'no problems and warnings') }
 }
 
 /**
