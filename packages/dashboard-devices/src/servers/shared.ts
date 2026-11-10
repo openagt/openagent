@@ -52,10 +52,10 @@ function sharedIn(store: Store, url: string): Shared {
   return kept
 }
 
-/** Hand a login made here to the person's own OpenAgent on another person's computer: no copy, so no server's copy takes its place. */
-async function toOther(env: NodeJS.ProcessEnv, machine: string, given: { github?: string; claude?: string; claudeAccount?: string }): Promise<Answered> {
+/** What the person's own OpenAgent on another person's computer says of their logins there, after this computer's OpenAgent was asked `fn`. */
+async function loginsThere(env: NodeJS.ProcessEnv, fn: string, args: unknown[]): Promise<Answered> {
   try {
-    const said = (await askOpenAgent(env, 'sendMachineLogins', [machine, given])) as { ok?: unknown; logins?: unknown; error?: unknown } | undefined
+    const said = (await askOpenAgent(env, fn, args)) as { ok?: unknown; logins?: unknown; error?: unknown } | undefined
     if (said?.ok === true) return { ok: true, output: said.logins }
     return { ok: false, error: typeof said?.error === 'string' ? said.error : 'OpenAgent answered something else than expected.' }
   } catch (err) {
@@ -63,16 +63,11 @@ async function toOther(env: NodeJS.ProcessEnv, machine: string, given: { github?
   }
 }
 
+/** Hand a login made here to the person's own OpenAgent on another person's computer: no copy, so no server's copy takes its place. */
+const toOther = (env: NodeJS.ProcessEnv, machine: string, given: { github?: string; claude?: string; claudeAccount?: string }): Promise<Answered> => loginsThere(env, 'sendMachineLogins', [machine, given])
+
 /** What the person's own OpenAgent on another person's computer says of their logins there, through OpenAgent. */
-export async function otherLogins(env: NodeJS.ProcessEnv, machine: string): Promise<Answered> {
-  try {
-    const said = (await askOpenAgent(env, 'onMachineLogins', [machine])) as { ok?: unknown; logins?: unknown; error?: unknown } | undefined
-    if (said?.ok === true) return { ok: true, output: said.logins }
-    return { ok: false, error: typeof said?.error === 'string' ? said.error : 'OpenAgent answered something else than expected.' }
-  } catch (err) {
-    return { ok: false, error: err instanceof Error ? err.message : String(err) }
-  }
-}
+export const otherLogins = (env: NodeJS.ProcessEnv, machine: string): Promise<Answered> => loginsThere(env, 'onMachineLogins', [machine])
 
 /** Copy this computer's GitHub login to the person's own OpenAgent on another person's computer; answers what it says of the logins there. */
 export async function copyGithubToOther(env: NodeJS.ProcessEnv, machine: string, run?: Exec): Promise<Answered> {
