@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { Bot, ExternalLink, LockOpen, Play } from 'lucide-react'
 import { Badge, Button, LinkActions, Markdown, cn, formatAge, formatDateTime, useAction, usePolled, useModuleHost } from '@openagt/dashboard/module'
-import { heldBack, holderAgent, readShown, ticketLink } from '../src/module.js'
+import { heldBack, holderAgent, readShown, ticketLink, withHolder } from '../src/module.js'
 import type { WorkspaceTicketDetail } from './lib/types.js'
 import { TicketPageShell, TicketPageNote } from './TicketPageShell.js'
 import { releaseClaim } from './lib/release.js'
@@ -33,7 +33,7 @@ export function TicketDetailPage({
       if ('error' in shown) return shown
       if (!shown.shown) return { ticket: null }
       const agent = holderAgent(agents, shown.shown.ticket.lockedBy)
-      return agent ? { ticket: { ...shown.shown.ticket, lockedByAgent: { id: agent.id, ...(agent.name ? { name: agent.name } : {}) } }, holderStatus: agent.status } : { ticket: shown.shown.ticket }
+      return { ticket: withHolder(shown.shown.ticket, agent), ...(agent ? { holderStatus: agent.status } : {}) }
     },
     null,
     10_000,

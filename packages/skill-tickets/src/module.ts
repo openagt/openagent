@@ -60,6 +60,17 @@ export function holderAgent<A extends AgentLike>(agents: readonly A[], lockedBy:
   return lockedBy === undefined ? undefined : agents.find(agent => agent.id === lockedBy)
 }
 
+/** The run behind a claim, as a page names it: its id and, once the run is named, its session name. */
+export interface HoldingRun {
+  id: string
+  name?: string
+}
+
+/** The ticket with the run its claim names ({@link holderAgent}), when that run is one of the project's; else as it is. */
+export function withHolder<T extends object>(ticket: T, agent: AgentLike | undefined): T & { lockedByAgent?: HoldingRun } {
+  return agent ? { ...ticket, lockedByAgent: { id: agent.id, ...(agent.name ? { name: agent.name } : {}) } } : ticket
+}
+
 /** Where the module's URL points: the list of tickets, one ticket, or its plan. */
 export type ModuleRoute = { view: 'list' } | { view: 'ticket'; projectId: string; file: string } | { view: 'plan'; projectId: string; file: string } | { view: 'unknown' }
 
