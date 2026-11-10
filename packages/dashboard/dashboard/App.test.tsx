@@ -22,8 +22,15 @@ vi.mock('./lib/rpc.js', () => ({
 // Settings and a project's launcher read a dozen things of their own; these tests are about the
 // shell around them, so each is a line naming itself.
 vi.mock('./components/SettingsDialog.js', () => ({
-  SettingsDialog: ({ entry, onEntry, onClose }: { entry: string; onEntry: (id: string) => void; onClose: () => void }) =>
-    createElement('div', null, createElement('p', null, `the settings dialog on '${entry}'`), createElement('button', { onClick: () => onEntry('agent') }, 'to Agent'), createElement('button', { onClick: onClose }, 'shut the dialog')),
+  SettingsDialog: ({ entry, scope, onEntry, onClose }: { entry: string; scope: string | null; onEntry: (id: string) => void; onClose: () => void }) =>
+    createElement(
+      'div',
+      null,
+      createElement('p', null, `the settings dialog on '${entry}'`),
+      createElement('p', null, `its project: ${scope ?? 'every project'}`),
+      createElement('button', { onClick: () => onEntry('agent') }, 'to Agent'),
+      createElement('button', { onClick: onClose }, 'shut the dialog'),
+    ),
 }))
 vi.mock('./components/ProjectHome.js', () => ({
   ProjectHome: ({ projectName, onProjectRemoved }: { projectName?: string; onProjectRemoved?: () => void }) =>
@@ -461,6 +468,21 @@ describe('the project select (#1513)', () => {
     expect(screen.queryByText(/the settings dialog/)).toBeNull()
     fireEvent.click(await screen.findByText('site ran'))
     expect(url()).toBe('/site/3-s')
+  })
+
+  test("Settings opened by its address, on a first visit, waits for the projects: it opens on the address's project", async () => {
+    forgetRemembered()
+    localStorage.clear()
+    answerTwo()
+    const held: ((projects: unknown) => void)[] = []
+    answers.set('onProjects', () => new Promise(resolve => held.push(resolve)))
+    window.history.replaceState(null, '', '/site/overview?settings=notifications')
+    render(<App />)
+    await waitFor(() => expect(calls.some(call => call.name === 'onProjects')).toBe(true))
+    expect(screen.queryByText(/the settings dialog/)).toBeNull()
+    held.forEach(answer => answer([PROJECT, OTHER]))
+    expect(await screen.findByText("the settings dialog on 'notifications'")).toBeTruthy()
+    expect(screen.getByText(`its project: ${OTHER.id}`)).toBeTruthy()
   })
 
   test("a jump to another project's agent names it at once, before that project's agents are read", async () => {

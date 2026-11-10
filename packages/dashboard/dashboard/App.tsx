@@ -669,7 +669,8 @@ export function App() {
           <EveryPage />
         </ModuleSlot>
       ))}
-      {route.settings !== undefined && <SettingsDialog entry={route.settings} openItem={route.settingsItem} onEntry={showSettingsEntry} onClose={closeSettings} scope={scope} projects={projects} />}
+      {/* Once what the address names is read: the project its "Project" group opens on, and the entries the projects and their packages add. */}
+      {route.settings !== undefined && addressesRead && <SettingsDialog entry={route.settings} openItem={route.settingsItem} onEntry={showSettingsEntry} onClose={closeSettings} scope={scope} projects={projects} />}
     </SidebarProvider>
     </ProjectLabelsContext.Provider>
     </OpenProjectContext.Provider>
