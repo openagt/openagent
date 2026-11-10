@@ -1,19 +1,21 @@
 import { strict as assert } from 'node:assert'
 import { test } from 'node:test'
 import { execFileSync } from 'node:child_process'
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import type { ProvidedCommand } from '@openagt/agent-data'
 import { addProject } from '../registry.js'
 import { readProvider, remoteHost } from '../dashboard/git-hosts.js'
 import { accountsWiring } from './accounts.js'
-import { loginsWiring, onAgentState, onGitHosts, sendAgentFix, sendForgetGitHostAccount, sendGitHostLogin, sendUseGitHostAccount } from './logins.js'
+import { loginsWiring, onAgentState, onGitHosts, runningFixes, sendAgentFix, sendForgetGitHostAccount, sendGitHostLogin, sendUseGitHostAccount } from './logins.js'
 import { provideTestContext } from './test-context.js'
 import { accountsPath, addAccount } from '@openagt/skill-account-rotation'
 
 /** The real readiness question, before a test swaps it. */
 const realReady = loginsWiring.ready
+/** The real way a fix runs. */
+const realFix = loginsWiring.fix
 
 // The Permissions page, the agent's own fix, and a project's own accounts: drawn from what the
 // git host's package and the agent's package answer, never naming either.
@@ -166,6 +168,40 @@ test('the agent: what is in the way and the fix its package declared; a press ru
   } finally {
     Object.assign(loginsWiring, before)
     accountsWiring.headless = headless
+  }
+})
+
+test('a fix the dashboard started ends as it stops, with what the fix started: a login waiting on a browser does not outlive it', async () => {
+  const dir = mkdtempSync(join(tmpdir(), 'oa-fix-'))
+  const said = join(dir, 'pid')
+  try {
+    const fixing = realFix(`sleep 60 & echo $! > ${said}; wait`)
+    const pidOf = (): number => {
+      try {
+        return Number(readFileSync(said, 'utf8'))
+      } catch {
+        return 0
+      }
+    }
+    let sleeper = pidOf()
+    while (!sleeper) {
+      await new Promise(resolve => setTimeout(resolve, 20))
+      sleeper = pidOf()
+    }
+    runningFixes.end()
+    await assert.rejects(fixing)
+    const alive = (): boolean => {
+      try {
+        process.kill(sleeper, 0)
+        return true
+      } catch {
+        return false
+      }
+    }
+    for (let tries = 0; alive() && tries < 40; tries++) await new Promise(resolve => setTimeout(resolve, 50))
+    assert.equal(alive(), false, 'the sleep the fix started is gone')
+  } finally {
+    rmSync(dir, { recursive: true, force: true })
   }
 })
 

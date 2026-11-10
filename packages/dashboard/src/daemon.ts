@@ -27,6 +27,7 @@ import { personLogins } from './dashboard/copy-logins.js'
 import { startLoginsSync } from './dashboard/logins-sync.js'
 import { startComputersSync } from './dashboard/computers-sync.js'
 import { runComputerCommand } from './dashboard-rpc/modules.js'
+import { runningFixes } from './dashboard-rpc/logins.js'
 import { dispatchMachineRpc, dispatchRelayRpc, isRelayReadCall } from './dashboard-rpc/relay-dispatch.js'
 
 /**
@@ -256,6 +257,7 @@ export async function runDaemon(cwd: string, opts: RunDaemonOptions = {}): Promi
     // dashboard is gone, while what is left stops behind it.
     step('the dashboard')
     await dashboard.close()
+    runningFixes.end()
     step('the background services')
     await services.quiesce()
     // Each project's close hooks (#1774), the counterpart of the open hooks above. A run in flight
