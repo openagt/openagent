@@ -86,7 +86,7 @@ export function AgentView({
   /** Whether the agent is still running; `null` while the daemon's list of agents has not been read, so it is not known yet. */
   live: boolean | null
   /** What the run's card says, off the runs poll: what the feed cannot carry (the details strip's facts, how the agent was set up, whether it is a subagent, whether its record is being saved). Absent until the card is listed. */
-  card?: (AgentDetailsCard & Pick<AgentMeta, 'status' | 'saving' | 'parent' | 'workspace' | 'branch' | 'base' | 'baseCommit' | 'host' | 'otherHost' | 'publish' | 'prBase' | 'gitAccount' | 'earlierPrs' | 'remoteKind' | 'repos' | 'agent' | 'skillsOn' | 'skillsOff' | 'projectSkills'>) | undefined
+  card?: (AgentDetailsCard & Pick<AgentMeta, 'status' | 'intent' | 'saving' | 'parent' | 'workspace' | 'branch' | 'base' | 'baseCommit' | 'host' | 'otherHost' | 'publish' | 'prBase' | 'gitAccount' | 'earlierPrs' | 'remoteKind' | 'repos' | 'agent' | 'skillsOn' | 'skillsOff' | 'projectSkills'> & Partial<Pick<AgentMeta, 'startedAt'>>) | undefined
   /** What the launcher said about this run as it started it: shown until the run's record says it. */
   picks?: StartPicks | undefined
   /** The session's own name — the same label the rail shows (#1030). It leads the action bar as
@@ -192,7 +192,17 @@ export function AgentView({
   const toggle = useCallback(() => setOpen(o => !o), [])
 
   // The messages on their way to the agent, from the box under the chat to the feed above it.
-  const { sending: shownSending, onSending, waiting, onQueued, editInBox } = useMessagesOnTheirWay(projectId, agentId, shown, feedLive, startedWith)
+  // The prompt this page started the run with is on its way only until the run has ended.
+  const { sending: shownSending, onSending, waiting, onQueued, editInBox } = useMessagesOnTheirWay(projectId, agentId, shown, feedLive, live === false ? undefined : startedWith)
+  // A run writes its prompt line once its coding agent begins: one that ended before has its prompt,
+  // off its card, as the chat's first row.
+  const standIn = card?.intent ?? startedWith
+  const standsIn = live === false && standIn !== undefined && !shown.some(e => e.kind === 'driver' && e.event.type === 'start')
+  const startedAt = card?.startedAt
+  const chat = useMemo<OpenAgentEvent[]>(
+    () => (standsIn ? [{ kind: 'driver', event: { type: 'start', prompt: standIn }, ...(startedAt !== undefined ? { at: startedAt } : {}) }, ...shown] : shown),
+    [standsIn, standIn, startedAt, shown],
+  )
   // The agent works, or is about to: on a message just sent, or as its feed shows before the
   // agents poll does.
   const going = feedLive || shownSending !== undefined
@@ -432,7 +442,7 @@ export function AgentView({
         <OpenFile.Provider value={onOpenFile}>
         <AgentFeed
           key={agentId}
-          events={shown}
+          events={chat}
           projectId={projectId}
           agentId={agentId}
           onSaid={onSending}

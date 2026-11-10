@@ -242,11 +242,14 @@ export function withEarlyQuestion(events: OpenAgentEvent[]): OpenAgentEvent[] {
  * The ends that are no row: a clean one, one waiting on an answer, and one the person stopped. The
  * agent's last message is how a clean turn ends, and the question's card is how a waiting one does;
  * a line under them said it twice. A stopped one just ends where the person stopped it, as Claude
- * Code's chat shows it, with nothing after. A failed end is a row where it happened: it says why
- * the agent is not going on, and why the next prompt was needed.
+ * Code's chat shows it, with nothing after; unless it is the first thing after the prompt: its
+ * coding agent never began, and nothing else in the chat says it ended. A failed end is a row where
+ * it happened: it says why the agent is not going on, and why the next prompt was needed.
  */
 export function quietEnds(events: readonly OpenAgentEvent[]): Set<OpenAgentEvent> {
-  return new Set(events.filter(e => e.kind === 'end' && (e.ok || e.waiting || e.stopped)))
+  const at = events.findIndex(e => !isTurnBoundary(e))
+  const first = at > 0 ? events[at] : undefined
+  return new Set(events.filter(e => e.kind === 'end' && (e.ok || e.waiting || (e.stopped && e !== first))))
 }
 
 /**

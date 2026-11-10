@@ -925,6 +925,16 @@ describe('a run just started', () => {
     expect(screen.getByRole('status')).toBeTruthy()
   })
 
+  test('a run stopped before its first turn keeps its prompt, stops counting, and says it stopped', async () => {
+    const { rerender } = render(view({ live: true, events: [], startedWith: 'Say hi' }))
+    expect(screen.getByText('Starting session')).toBeTruthy()
+    const stopped = [{ kind: 'end', ok: false, stopped: true }] as OpenAgentEvent[]
+    rerender(view({ live: false, events: stopped, startedWith: 'Say hi', card: { status: 'stopped', intent: 'Say hi', branch: 'agent-x' } }))
+    await waitFor(() => expect(screen.getByText('Stopped')).toBeTruthy())
+    expect(screen.getAllByText('Say hi')).toHaveLength(1)
+    expect(screen.queryByRole('status')).toBeNull()
+  })
+
   test('an agent just started on a machine says nothing of a set-up before its card is listed: no checkout is made for it here', () => {
     const events = [{ kind: 'driver', event: { type: 'start', prompt: 'Say hi' } }, { kind: 'driver', event: { type: 'text', text: 'Hi.' } }] as OpenAgentEvent[]
     render(view({ live: true, events, remoteLabel: 'laptop' }))
