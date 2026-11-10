@@ -363,11 +363,13 @@ export function ProjectPicker({
                   ) : !typed.trim() && repoRows.length > REPOS_SHOWN ? (
                     <p className="px-2 py-1.5 text-xs text-muted-foreground">Search to see more of the {repoRows.length} repos.</p>
                   ) : null}
-                  {repos?.hostedLoading && (
+                  {repos?.hostedLoading ? (
                     <p role="status" className="px-2 py-1.5 text-xs text-muted-foreground">
                       Asking GitHub for repos…
                     </p>
-                  )}
+                  ) : repos?.hostedUnreached ? (
+                    <p className="px-2 py-1.5 text-xs text-muted-foreground">GitHub could not be reached: its repos are not listed.</p>
+                  ) : null}
                 </div>
               </ScrollArea>
               {repos?.canAddFolder && (

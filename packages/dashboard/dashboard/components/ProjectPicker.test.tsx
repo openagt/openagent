@@ -153,6 +153,14 @@ describe('ProjectPicker', () => {
     await waitFor(() => expect(onCloneTarget).toHaveBeenCalledWith('github.com/vikejs/bati'))
   })
 
+  test('a git host that could not be reached is said so, under the repos that are listed', async () => {
+    onRepos.mockResolvedValue({ repos: [VIKE], hosted: [], reposLoading: false, hostedLoading: false, hostedUnreached: true, canAddFolder: false })
+    renderPicker()
+    await openMenu(trigger())
+    expect(await screen.findByText('GitHub could not be reached: its repos are not listed.')).toBeTruthy()
+    expect(screen.getByRole('option', { name: /vike/ })).toBeTruthy()
+  })
+
   test("while the git hosts are being asked, the menu says so and asks again", async () => {
     onRepos.mockResolvedValue({ repos: [VIKE], hosted: [], reposLoading: false, hostedLoading: true, canAddFolder: false })
     renderPicker()
