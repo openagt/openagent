@@ -4,7 +4,7 @@ import { parseQuestion, QUESTION_TAG } from '@openagt/agent-driver/question'
 import { Fragment, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode, type RefObject } from 'react'
 import { Check, ChevronRight, Copy, PencilLine } from 'lucide-react'
 import { pendingChoices } from '../lib/live-state.js'
-import { callRow, callSubagents, runRow, endMessage, subagentEnd, subagentEvents, subagentReport, subagentSteps, subagentWait, type SubagentEnd } from '../lib/subagents.js'
+import { callRow, callSubagents, isAgentsOwn, runRow, endMessage, subagentEnd, subagentEvents, subagentReport, subagentSteps, subagentWait, type SubagentEnd } from '../lib/subagents.js'
 import { answeredQuestion } from '../lib/answered-question.js'
 import { rowWords, type RowWords } from '../lib/row-words.js'
 import { formatAge } from '../lib/format-date.js'
@@ -464,13 +464,6 @@ function Attached({ text }: { text: string }) {
       {open && <pre className="mt-1 max-h-80 w-full overflow-auto whitespace-pre-wrap break-words rounded-lg border border-border px-3 py-2 text-left font-mono text-foreground">{text}</pre>}
     </div>
   )
-}
-
-/** An event of the agent's own doing: no subagent's, no count, no turn's end. */
-function isAgentsOwn(e: OpenAgentEvent): boolean {
-  if (e.kind !== 'driver') return false
-  const event = e.event as { type: string; subagent?: string }
-  return ['action', 'output', 'text', 'thought', 'thinking', 'partial'].includes(event.type) && event.subagent === undefined
 }
 
 /** A tool call or a thought of the coding agent: a step between two of its messages. */
