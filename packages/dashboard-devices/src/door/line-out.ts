@@ -6,7 +6,7 @@ import { keyFingerprint } from './der.js'
 import { CARRIED_HEADERS, DATA, END, HEAD, LINE_PING_MS, LINE_QUIET_MS, Link, RESET, carriedHeaders, carriedPath, carriedValue, readHead, sendBody, type Frame } from './frames.js'
 import { LINE_PATH, ME_PATH } from './paths.js'
 import { COMPUTER_HEADER, MAX_PERSONS, OWNERS_NAME_HEADER, PERSON_HEADER } from './store.js'
-import { nameFromWord, nameOf, nameWord } from './names.js'
+import { nameFromWord, nameOf, nameWord, shownName } from './names.js'
 
 /**
  * This computer's end of a line: it calls its server, says who it is with the key it has there,
@@ -406,8 +406,7 @@ export async function askMe(line: { url: string; pin: string; key: string }): Pr
     const { person, persons, name } = JSON.parse(answer.body) as Record<string, unknown>
     const known = typeof person === 'string' ? nameOf(person) : undefined
     const theirs = Array.isArray(persons) ? persons.flatMap(other => (typeof other === 'string' && nameOf(other) === other ? [other] : [])) : undefined
-    // A computer's name is any words: shown as such, with nothing in it that moves a line.
-    const called = typeof name === 'string' ? name.replace(/[\x00-\x1f\x7f]/g, ' ').trim().slice(0, 60) : ''
+    const called = typeof name === 'string' ? shownName(name) : ''
     return { ...(known !== undefined ? { person: known } : {}), ...(theirs ? { persons: theirs } : {}), ...(called ? { name: called } : {}) }
   } catch {
     return undefined

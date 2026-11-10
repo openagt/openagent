@@ -17,6 +17,11 @@ export interface AddressDeps {
   lookup?: (name: string) => Promise<string[]>
 }
 
+/** This computer's own name, as its host name says it without `.local`: what a server lists it under, and what the Wi-Fi is told and asked by. */
+export function ownName(deps: AddressDeps = {}): string {
+  return (deps.hostname ?? hostname)().replace(/\.local$/i, '') || 'A computer'
+}
+
 /** How long the name may take to answer: a name nobody answers to is asked on the network, slowly. */
 const NAME_LOOKUP_MS = 1_500
 

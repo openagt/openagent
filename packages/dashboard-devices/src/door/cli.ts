@@ -1,8 +1,7 @@
-import { addressOf, nameAddress, numberAddress, ownAddresses, serverWhere, urlHost, type AddressDeps } from './address.js'
+import { addressOf, nameAddress, numberAddress, ownAddresses, ownName, serverWhere, urlHost, type AddressDeps } from './address.js'
 import { doorFingerprint } from './certificate.js'
 import { execFile } from 'node:child_process'
 import { personalFolder, readPersonRecord } from '@openagt/agent-data'
-import { hostname } from 'node:os'
 import { codeLink, readKeyWord } from './door.js'
 import { ENTER_PATH } from './paths.js'
 import { askMe, enterForLine, leaveLine, readLineLink } from './line-out.js'
@@ -470,11 +469,6 @@ function gitName(): Promise<string | undefined> {
   return new Promise(resolve => {
     execFile('git', ['config', '--global', '--get', 'user.name'], { timeout: 15_000 }, (err, out) => resolve(err ? undefined : nameOf(String(out))))
   })
-}
-
-/** This computer's name as a server lists it, and another computer on the Wi-Fi it asks. */
-function ownName(deps: AddressDeps = {}): string {
-  return (deps.hostname ?? hostname)().replace(/\.local$/i, '') || 'A computer'
 }
 
 /** The line to the server a person names, by its number or name or its whole address. */

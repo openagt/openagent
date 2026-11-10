@@ -1,8 +1,7 @@
 import { stat } from 'node:fs/promises'
 import { createServer, type Server } from 'node:http'
-import { hostname } from 'node:os'
 import { CHALLENGE_PREFIX, LETS_ENCRYPT } from './acme.js'
-import { numberAddress, onOwnNetwork, plainAddress, serverWhere, type AddressDeps } from './address.js'
+import { numberAddress, onOwnNetwork, ownName, plainAddress, serverWhere, type AddressDeps } from './address.js'
 import { keepCertificate, type KeepOptions, type Keeper, type Secured } from './certificate.js'
 import { openDoor, type Door } from './door.js'
 import { listen, shut } from './http.js'
@@ -244,7 +243,7 @@ export async function serve(opts: ServeOptions): Promise<void> {
     announcing = (async () => {
       const address = numberAddress(opts.address)
       if (!address) return undefined
-      return (opts.announce ?? announce)({ name: hostname().replace(/\.local$/i, '') || 'A computer', port, address, ...(await versionAt(opts.target).then(version => (version ? { version } : {}))) })
+      return (opts.announce ?? announce)({ name: ownName(), port, address, ...(await versionAt(opts.target).then(version => (version ? { version } : {}))) })
     })().catch((err: unknown) => {
       log(`devices: this computer could not be announced on the Wi-Fi, so other computers do not find it there: ${err instanceof Error ? err.message : String(err)}`)
       return undefined

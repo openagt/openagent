@@ -12,7 +12,7 @@ import { LINE_FOR_HEADER, LINE_PROTOCOL, namesIn } from './line-out.js'
 import { ASK_PATH, COMPUTERS_PATH, DOOR_PREFIX, ENTER_PATH, LINE_PATH, ME_CODE_PATH, ME_LINE_PATH, ME_PATH, ME_REMOVE_PATH, VIA_PREFIX } from './paths.js'
 import { enterPage, notInPage, type DoorKind } from './pages.js'
 import { COMPUTER_HEADER, COMPUTER_NAME_HEADER, OWNERS_NAME_HEADER, PERSON_HEADER, addAsk, addCode, askOf, dropAsk, shownCode, enter, isComputerId, isIn, listedDevices, nameComputer, personOf, portOf, readStore, removeComputer, removeDevice, sha256, shareLine, storePath, update, type Entry, type ListedDevice, type Store } from './store.js'
-import { nameWord } from './names.js'
+import { nameWord, shownName } from './names.js'
 
 /**
  * The door: the one thing that lets anything in from the network. A request from a device that is in is
@@ -101,7 +101,7 @@ function saidComputerName(req: IncomingMessage): string | undefined {
   if (typeof said !== 'string') return undefined
   let name: string
   try {
-    name = saidName(decodeURIComponent(said))
+    name = shownName(decodeURIComponent(said))
   } catch {
     return undefined
   }
@@ -194,14 +194,9 @@ export function readBearer(header: string | undefined): Entry | undefined {
   return word ? readKeyWord(word) : undefined
 }
 
-/** A computer's name as it said it, safe to show. */
-function saidName(said: string): string {
-  return said.replace(/[\x00-\x1f\x7f]/g, ' ').trim().slice(0, 60)
-}
-
 /** A computer's name as the list of devices shows it. */
 function computerName(said: string): string {
-  return `OpenAgent on ${saidName(said)}`
+  return `OpenAgent on ${shownName(said)}`
 }
 
 /** A `Cookie` header without the door's own cookie: OpenAgent never sees a device's key. */
@@ -369,7 +364,7 @@ export async function openDoor(opts: DoorOptions): Promise<Door> {
     // Asked before the code is looked at: an address that is waiting is not told whether its next guess was right.
     const peer = callerOf(req)
     if (triesOf(peer).length >= WRONG_TRIES) return refuse(res, 429, TOO_MANY_TRIES)
-    const name = forLine ? saidName(computer as string) : byComputer ? computerName(computer as string) : deviceName(req.headers['user-agent'])
+    const name = forLine ? shownName(computer as string) : byComputer ? computerName(computer as string) : deviceName(req.headers['user-agent'])
     const entry = typeof code === 'string' && code ? await enter(env, code, name, now(), forLine ? opts.lines!.ports : undefined, byComputer ? saidComputer(req) : undefined) : undefined
     if (!entry) {
       triedWrong(peer)
@@ -394,8 +389,8 @@ export async function openDoor(opts: DoorOptions): Promise<Door> {
     if (req.headers.origin !== undefined || req.headers.cookie !== undefined) return refuse(res, 403, 'forbidden')
     if (req.method === 'POST') {
       const { computer } = await readFields(req, MAX_ENTER_BODY)
-      if (typeof computer !== 'string' || !saidName(computer)) return refuse(res, 400, 'say which computer asks: {"computer": "its name"}')
-      const asked = await addAsk(env, saidName(computer), plainAddress(req.socket.remoteAddress ?? ''), now())
+      if (typeof computer !== 'string' || !shownName(computer)) return refuse(res, 400, 'say which computer asks: {"computer": "its name"}')
+      const asked = await addAsk(env, shownName(computer), plainAddress(req.socket.remoteAddress ?? ''), now())
       if (asked === 'denied') return refuse(res, 429, ASK_DENIED)
       if (asked === 'busy') return refuse(res, 503, ASK_BUSY)
       return sendJson(res, 200, { secret: asked.secret, number: asked.ask.number, expires: asked.ask.expires })

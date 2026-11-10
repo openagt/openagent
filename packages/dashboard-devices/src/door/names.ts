@@ -1,7 +1,7 @@
 /**
  * A person's name, which is who they are on a computer: typed at the invite, whatever git host they
  * use. As it is typed, as it is written where only plain letters go, and whether two names are one
- * person's.
+ * person's. And a computer's name, as it says it.
  */
 
 /**
@@ -36,3 +36,6 @@ export function nameFromWord(word: string): string | undefined {
 
 /** Whether two names are one person's: their letters' case is not looked at. */
 export const samePerson = (a: string, b: string): boolean => a.toLocaleLowerCase() === b.toLocaleLowerCase()
+
+/** A computer's name as it says it, safe to show: any words, with nothing in it that moves a line, and not too many of them. */
+export const shownName = (said: string): string => said.replace(/[\x00-\x1f\x7f]/g, ' ').trim().slice(0, 60)
