@@ -52,8 +52,9 @@ export function NotificationsSubmenu() {
           <>
             <DropdownMenuGroup>
               <DropdownMenuLabel>Deliver to</DropdownMenuLabel>
+              {/* Ticked once notifications reach the browser: on and not allowed yet, the click its hint invites ticks it, and asks. */}
               <DropdownMenuCheckboxItem
-                checked={browser}
+                checked={active}
                 disabled={blocked}
                 onCheckedChange={toggleBrowser}
                 className="items-start"

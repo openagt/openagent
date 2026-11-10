@@ -74,6 +74,18 @@ describe('NotificationsSubmenu (#676)', () => {
     expect((globalThis.Notification as unknown as { requestPermission: () => void }).requestPermission).toHaveBeenCalled()
   })
 
+  test('Browser on and not allowed yet reads unticked: the click its hint invites asks the browser, and leaves it on', async () => {
+    vi.stubGlobal('Notification', { permission: 'default', requestPermission: vi.fn() })
+    render(<Menu />)
+    open()
+    const browser = screen.getByRole('menuitemcheckbox', { name: /Browser/ })
+    expect(browser.getAttribute('aria-checked')).toBe('false')
+    expect(screen.getByText('Click to allow browser notifications')).toBeTruthy()
+    fireEvent.click(browser)
+    expect(updatePreferences).toHaveBeenCalledWith({ notifyBrowser: true })
+    expect((globalThis.Notification as unknown as { requestPermission: () => void }).requestPermission).toHaveBeenCalled()
+  })
+
   test('the row says On when Browser is on and granted, Off otherwise', () => {
     const { rerender } = render(<Menu />) // default: browser on + granted
     expect(row().textContent).toBe('NotificationsOn')
