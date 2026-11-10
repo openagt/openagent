@@ -81,20 +81,17 @@ test('runCli rejects the retired flags and verbs as usage errors (D4/D4b)', asyn
   }
 })
 
-test('the startup footer prints the commands and the version (#312)', async () => {
+test('the startup footer prints the version, then that it is the latest (#312)', async () => {
   const { io, out } = capture()
   await printStartupFooter(io, { fetchLatest: async () => openagentVersion() })
-  assert.ok(out.includes('Type a prompt on the dashboard to start an agent, or use:'))
-  assert.ok(out.includes('  openagent --help              All options'))
-  assert.ok(out.includes(`OpenAgent v${openagentVersion()}`))
-  assert.ok(out.includes(`✅ Up to date (v${openagentVersion()})`))
+  assert.deepEqual(out, [`◆ OpenAgent v${openagentVersion()}`, '  Up to date.'])
 })
 
 test('the footer offers no `openagent stop`: Ctrl-C is how the foreground dashboard ends (#312)', async () => {
   const { io, out } = capture()
   await printStartupFooter(io, { fetchLatest: async () => undefined })
   assert.ok(!out.some(l => l.includes('openagent stop')))
-  assert.ok(out.includes(`OpenAgent v${openagentVersion()}`))
+  assert.ok(out.includes(`◆ OpenAgent v${openagentVersion()}`))
 })
 
 test('the footer offers no positional build command: D4 removed it, and following it exited 2', async () => {
@@ -109,18 +106,18 @@ test('the version prints before npm answers, and a newer release is announced af
   const pending = printStartupFooter(io, { fetchLatest: () => new Promise<string>(resolve => (release = resolve)) })
   // The static half is out while the registry call is still in flight — bare `openagent` blocks on
   // the server forever, so anything held back until after the await would never be printed there.
-  assert.ok(out.includes(`OpenAgent v${openagentVersion()}`))
-  assert.ok(!out.some(l => l.includes('Update available')))
+  assert.ok(out.includes(`◆ OpenAgent v${openagentVersion()}`))
+  assert.ok(!out.some(l => l.includes('is out')))
   release('999.0.0')
   await pending
-  assert.ok(out.some(l => l.includes('⬆️  Update available: v999.0.0')))
+  assert.ok(out.some(l => l.includes('v999.0.0 is out')))
 })
 
 test('an unreachable npm registry costs the footer nothing (#312)', async () => {
   const { io, out } = capture()
   await printStartupFooter(io, { fetchLatest: () => Promise.reject(new Error('offline')) })
-  assert.ok(out.includes(`OpenAgent v${openagentVersion()}`))
-  assert.ok(!out.some(l => l.includes('Up to date') || l.includes('Update available')))
+  assert.ok(out.includes(`◆ OpenAgent v${openagentVersion()}`))
+  assert.deepEqual(out, [`◆ OpenAgent v${openagentVersion()}`])
 })
 
 

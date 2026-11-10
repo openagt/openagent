@@ -68,13 +68,13 @@ test('checkForUpdate: passes the package name to the fetcher (default + override
 })
 
 test('formatUpdateStatus: up-to-date line', () => {
-  assert.equal(formatUpdateStatus({ kind: 'up-to-date', current: '1.2.3' }), '✅ Up to date (v1.2.3)')
+  assert.equal(formatUpdateStatus({ kind: 'up-to-date', current: '1.2.3' }), '  Up to date.')
 })
 
 test('formatUpdateStatus: update-available line', () => {
   assert.equal(
     formatUpdateStatus({ kind: 'update-available', current: '1.2.3', latest: '1.3.0' }),
-    `⬆️  Update available: v1.3.0 (you have v1.2.3). Run: npm i -g ${PACKAGE_NAME}`,
+    `  v1.3.0 is out. Run: npm i -g ${PACKAGE_NAME}`,
   )
 })
 
