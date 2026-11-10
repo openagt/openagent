@@ -1,5 +1,5 @@
 import type { CSSProperties } from 'react'
-import { useCopy } from './copy'
+import { copyPress, useCopy } from './copy'
 import { mono } from './ui'
 
 // Trying runs the dashboard once; installing starts it at every login, at openagent.build (#1919).
@@ -28,6 +28,9 @@ const pickPm = (name: Pm) => {
     localStorage.setItem('pm', name)
   } catch {}
 }
+
+/** What a press that copies `command` is named. */
+export const COPY_LABEL: Record<Command, string> = { try: 'Copy the command that tries OpenAgent', install: 'Copy the command that installs OpenAgent' }
 
 /** `command` in the package manager the visitor picked: what a click copies. */
 export const pickedCommand = (command: Command): string => PMS[currentPm()][command]
@@ -103,7 +106,7 @@ const copyTipStyle: CSSProperties = {
 export function CommandChip({ command, style }: { command: Command; style?: CSSProperties }) {
   const { copied, copy } = useCopy()
   return (
-    <span className="install-chip" onClick={(e) => copy(pickedCommand(command), e)} style={{ ...chipStyle, ...style }}>
+    <span className="install-chip" {...copyPress(COPY_LABEL[command], (e) => copy(pickedCommand(command), e))} style={{ ...chipStyle, ...style }}>
       <CommandLine command={command} />
       <span className={'copy-tip-side' + (copied ? ' copied' : '')} style={copyTipStyle}>
         {copied ? 'copied!' : 'copy'}

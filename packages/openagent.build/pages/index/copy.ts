@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, type KeyboardEvent, type MouseEvent } from 'react'
 
 // Copy-to-clipboard with the "copied!" badge timing of the original page:
 // instant copy on single click, but ignore the extra clicks of a double/triple-
@@ -42,4 +42,22 @@ export function useCopy() {
   }
 
   return { copied, copy }
+}
+
+/**
+ * What makes an element a press that copies, from the pointer or the keyboard, named `label` as a
+ * button is. Not a `<button>`, so the command in it can still be selected by hand.
+ */
+export function copyPress(label: string, copy: (e?: { detail: number }) => void) {
+  return {
+    role: 'button',
+    tabIndex: 0,
+    'aria-label': label,
+    onClick: (e: MouseEvent) => copy(e),
+    onKeyDown: (e: KeyboardEvent) => {
+      if (e.key !== 'Enter' && e.key !== ' ') return
+      e.preventDefault()
+      copy()
+    },
+  }
 }

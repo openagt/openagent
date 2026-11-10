@@ -1,6 +1,6 @@
 import type { CSSProperties } from 'react'
-import { CommandChip, CommandLine, PmTabs, pickedCommand } from './commands'
-import { useCopy } from './copy'
+import { COPY_LABEL, CommandChip, CommandLine, PmTabs, pickedCommand } from './commands'
+import { copyPress, useCopy } from './copy'
 import { BADGES, kickerStyle, mono } from './ui'
 import { useDashboardHref } from './ViewToggle'
 
@@ -175,7 +175,7 @@ export function Hero() {
             </div>
             <div
               className="copy-box"
-              onClick={(e) => tryCopy.copy(pickedCommand('try'), e)}
+              {...copyPress(COPY_LABEL.try, (e) => tryCopy.copy(pickedCommand('try'), e))}
               style={{
                 position: 'relative',
                 cursor: 'pointer',

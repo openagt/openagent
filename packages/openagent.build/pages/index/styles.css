@@ -86,12 +86,14 @@ html[data-installed] .dashboard-cta {
 .pm-tab:hover {
   color: #d3c6aa !important;
 }
-.copy-box:hover {
+.copy-box:hover,
+.copy-box:focus-visible {
   background: rgba(167, 192, 128, 0.04) !important;
 }
 /* Same hover tint as .copy-box (#a7c080 = rgb(167, 192, 128) at 4%), pre-composited
  * over the chip's own #232a2e base since its background is opaque. */
-.install-chip:hover {
+.install-chip:hover,
+.install-chip:focus-visible {
   background: color-mix(in srgb, #a7c080 4%, #232a2e) !important;
 }
 .cta-primary:hover {
@@ -149,15 +151,17 @@ html:not([data-pm]) .pm-tab-npm {
   color: #d3c6aa;
 }
 
-/* --- Copy badges: hidden until the copy target is hovered or was just clicked --- */
+/* --- Copy badges: hidden until the copy target is hovered, focused or was just clicked --- */
 .try-badge,
 .copy-tip-side {
   opacity: 0;
 }
 /* The try box's badge sits in its tab row, outside the hoverable `.copy-box`, hence `:has()`. */
 .try-box:has(.copy-box:hover) .try-badge,
+.try-box:has(.copy-box:focus-visible) .try-badge,
 .try-badge.copied,
 .install-chip:hover .copy-tip-side,
+.install-chip:focus-visible .copy-tip-side,
 .copy-tip-side.copied {
   opacity: 1;
 }
