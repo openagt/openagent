@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { Page, Switch, Tooltip, TooltipContent, TooltipTrigger, Button, buttonVariants, cn, formatAge, formatDateTime, useCodingAgents, useModuleHost, usePolled, type ModuleCommandResult, type ModuleHost, type ModuleProject } from '@openagt/dashboard/module'
 import type { ModulePageProps } from '@openagt/dashboard/module'
 import { AutomationForm } from './AutomationForm.js'
@@ -359,6 +359,18 @@ export function AutomationsPage({ projects }: ModulePageProps) {
   )
 }
 
+/** An item of a row's line after its first, with the "·" before it: the two wrap together, so no line ends in a "·". */
+function Next({ children }: { children: ReactNode }) {
+  return (
+    <span>
+      <span aria-hidden className="mr-2 text-muted-foreground">
+        ·
+      </span>
+      {children}
+    </span>
+  )
+}
+
 /**
  * Where a row stands, in one line: on or off; when it last ran, or that its last run failed, which
  * opens that run; and what the scheduler last decided for it while it is on, or, while the
@@ -376,26 +388,22 @@ function Stands({ host, project, scheduled, stopped }: { host: ModuleHost; proje
         <span aria-hidden className={cn('h-1.5 w-1.5 rounded-full', starts ? 'bg-success' : 'bg-muted-foreground/50')} />
         {scheduled.on ? 'On' : 'Off'}
       </span>
-      <span aria-hidden className="text-muted-foreground">
-        ·
-      </span>
-      {last === undefined ? (
-        <span className="text-muted-foreground">Never ran</span>
-      ) : (
-        <Tooltip>
-          <TooltipTrigger render={<button type="button" onClick={() => host.openAgent(project.id, last.id)} className={cn('underline', last.failed ? 'text-danger' : 'text-muted-foreground hover:text-foreground')} />}>
-            {last.failed ? 'Last run failed' : 'Last ran'} <span className="tabular-nums">{formatAge(last.at)}</span>
-          </TooltipTrigger>
-          <TooltipContent>{formatDateTime(last.at)}</TooltipContent>
-        </Tooltip>
-      )}
+      <Next>
+        {last === undefined ? (
+          <span className="text-muted-foreground">Never ran</span>
+        ) : (
+          <Tooltip>
+            <TooltipTrigger render={<button type="button" onClick={() => host.openAgent(project.id, last.id)} className={cn('underline', last.failed ? 'text-danger' : 'text-muted-foreground hover:text-foreground')} />}>
+              {last.failed ? 'Last run failed' : 'Last ran'} <span className="tabular-nums">{formatAge(last.at)}</span>
+            </TooltipTrigger>
+            <TooltipContent>{formatDateTime(last.at)}</TooltipContent>
+          </Tooltip>
+        )}
+      </Next>
       {decision !== undefined && (
-        <>
-          <span aria-hidden className="text-muted-foreground">
-            ·
-          </span>
+        <Next>
           <span className={idle || cannotRun(scheduled) ? 'text-warning' : 'text-muted-foreground'}>{decision}</span>
-        </>
+        </Next>
       )}
     </p>
   )
@@ -408,33 +416,27 @@ function Picks({ scheduled, schedulerModel, agents }: { scheduled: SchedulerComm
     <p className="mt-1 flex flex-wrap gap-x-2 text-xs text-muted-foreground">
       <span>{pace(scheduled)}</span>
       {follows && ownPace(scheduled) && (
-        <>
-          <span aria-hidden>·</span>
+        <Next>
           <span className="text-info">your pick</span>
-        </>
+        </Next>
       )}
       {saysAtOnce(scheduled) && (
         <>
-          <span aria-hidden>·</span>
-          <span>{atOnceWords(atOnce(scheduled))}</span>
+          <Next>{atOnceWords(atOnce(scheduled))}</Next>
           {follows && scheduled.agents !== undefined && (
-            <>
-              <span aria-hidden>·</span>
+            <Next>
               <span className="text-info">your pick</span>
-            </>
+            </Next>
           )}
         </>
       )}
-      <span aria-hidden>·</span>
-      <span>{runsOnWords(scheduled, schedulerModel, agents)}</span>
+      <Next>{runsOnWords(scheduled, schedulerModel, agents)}</Next>
       {follows && (scheduled.runsOn !== undefined || scheduled.model !== undefined) && (
-        <>
-          <span aria-hidden>·</span>
+        <Next>
           <span className="text-info">your pick</span>
-        </>
+        </Next>
       )}
-      <span aria-hidden>·</span>
-      <span>{publishes(scheduled)}</span>
+      <Next>{publishes(scheduled)}</Next>
     </p>
   )
 }
