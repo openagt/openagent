@@ -1,5 +1,5 @@
 import { parseArgs } from 'node:util'
-import { gitReason } from './git.js'
+import { errorMessage, gitReason } from './git.js'
 
 /**
  * The contract every OpenAgent command keeps (`tickets`, `queue`, `logs`, `branches`, `github`,
@@ -129,9 +129,4 @@ export async function inRepo<T>(read: () => Promise<T>): Promise<T> {
     if (!/not a git repository/i.test(errorMessage(err))) throw err
     throw new Refused({ ok: false, reason: 'not-a-repo' }, 'not inside a git repository')
   }
-}
-
-/** The message of a caught value, which may be anything thrown. */
-export function errorMessage(err: unknown): string {
-  return err instanceof Error ? err.message : String(err)
 }

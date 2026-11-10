@@ -9,6 +9,7 @@ export {
   isGitRepo,
   checkoutRoot,
   originDefaultBranch,
+  errorMessage,
   gitReason,
   pushBranch,
 } from './git.js'
@@ -77,7 +78,7 @@ export {
   type ProjectDataDeps,
   type ProjectReader,
 } from './project-data.js'
-export { FAILED, GIT_FAILED, Refused, UsageError, errorMessage, inRepo, parseCommandArgs, runCommandLine, type Command, type CommandLine, type CommandOutput, type Failure, type Refusal } from './command-line.js'
+export { FAILED, GIT_FAILED, Refused, UsageError, inRepo, parseCommandArgs, runCommandLine, type Command, type CommandLine, type CommandOutput, type Failure, type Refusal } from './command-line.js'
 export {
   SKILLS_DIRS,
   projectPackages,

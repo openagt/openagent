@@ -182,7 +182,7 @@ export async function checkoutRoot(cwd: string, git: GitRunner = nodeGitRunner()
   return (await git(['rev-parse', '--show-toplevel'], cwd)).trim()
 }
 
-/** The message a failed git invocation carries, or the value itself as text. */
+/** The message of a caught value, which may be anything thrown: a failed git invocation's, or any other. */
 export function errorMessage(err: unknown): string {
   return err instanceof Error ? err.message : String(err)
 }
