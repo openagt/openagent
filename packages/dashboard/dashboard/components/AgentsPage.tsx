@@ -291,7 +291,7 @@ function AgentEditor({ agent, view, onAccounts, onDone }: { agent?: AgentRecord;
       <div className="space-y-5 pb-1">
         <div className="space-y-1.5">
           <Label htmlFor="agent-name">Name</Label>
-          <Input id="agent-name" value={draft.name} disabled={busy || isDefault} placeholder="Social media" onChange={event => setDraft(d => ({ ...d, name: event.target.value }))} className="max-w-sm" />
+          <Input id="agent-name" autoFocus value={draft.name} disabled={busy || isDefault} placeholder="Social media" onChange={event => setDraft(d => ({ ...d, name: event.target.value }))} className="max-w-sm" />
         </div>
         <div className="space-y-3">
           <div>

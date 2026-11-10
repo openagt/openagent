@@ -66,10 +66,12 @@ describe('the Agents page', () => {
     expect(within(cards[1]!).getByRole('button', { name: 'Remove Reviewer' })).toBeTruthy()
   })
 
-  test('a new agent: its name, the skills ticked from the list, the two every agent starts with ticked already; saved as the dashboard’s call, and the list read again', async () => {
+  test('a new agent: its name, typed at once, the skills ticked from the list, the two every agent starts with ticked already; saved as the dashboard’s call, and the list read again', async () => {
     render(<AgentsPage />)
     fireEvent.click(await screen.findByRole('button', { name: 'New agent' }))
     const editor = screen.getByRole('dialog', { name: 'New agent' })
+    // What is typed first goes to the name.
+    await waitFor(() => expect(document.activeElement).toBe(within(editor).getByLabelText('Name')))
     expect((within(editor).getByLabelText('ask') as HTMLInputElement).getAttribute('aria-checked') ?? (within(editor).getByLabelText('ask') as HTMLInputElement).checked.toString()).toMatch(/true/)
     fireEvent.change(within(editor).getByLabelText('Name'), { target: { value: 'Social Media' } })
     fireEvent.click(within(editor).getByLabelText('ux'))
