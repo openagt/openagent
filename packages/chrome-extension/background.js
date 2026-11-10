@@ -395,31 +395,8 @@ async function runCycle() {
   }
   const visited = Array.isArray(driven.visited) ? driven.visited : []
   const delivered = Array.isArray(driven.delivered) ? driven.delivered : []
-  // A session planned but not reached this beat — cut by the cap, or a visit that failed — keeps
-  // its earlier status, so the change that made it due is still a change next time.
-  const unreached = id => planned.some(v => v.id === id) && !visited.some(v => v.id === id && v.ok)
-  for (const { sessionId, status } of statuses) {
-    if (unreached(sessionId)) continue
-    const before = seen.get(sessionId)
-    seen.set(sessionId, { status, visitedAt: visited.some(v => v.id === sessionId && v.ok) ? now : (before?.visitedAt ?? 0) })
-  }
-  // Every answer handed over is accounted for. A delivery the page attempted is acknowledged as
-  // it reported it, sent or failed. One the visit never got to — the session not on the list,
-  // the page not becoming it, a Driver that did not answer — stays queued on the daemon and is
-  // released here, so the next beat tries again. The one exception is a page torn down
-  // mid-drive: its answer may already be typed, so that is acknowledged as failed with a note
-  // saying to check the session before picking again.
-  for (const visit of visits) {
-    if (!visit.answer) continue
-    const outcome = delivered.find(d => d.id === visit.answer.id)
-    if (!outcome && !driven.tornDown) {
-      deliveredAnswers.delete(visit.answer.id)
-      continue
-    }
-    const report = outcome ?? { sessionId: visit.id, id: visit.answer.id, ok: false, note: driven.note }
-    if (!report.ok) deliveredAnswers.delete(visit.answer.id)
-    await ack(to, { sessionId: report.sessionId, id: report.id, ok: Boolean(report.ok), ...(report.note ? { note: String(report.note).slice(0, 300) } : {}) })
-  }
+  remember(statuses, planned, visited, now)
+  await accountForAnswers(to, visits, driven, delivered)
   if (start) await reportStarted(to, start.id, driven.started ?? { ok: false, note: driven.note ?? 'the Driver did not create the session' })
 
   const counts = {
@@ -430,6 +407,42 @@ async function runCycle() {
   return {
     ok: driven.ok !== false,
     reason: `read ${statuses.length} of ${ids.length} (${counts.awaiting} awaiting, ${counts.unread} unread, ${counts.missing} missing), visited ${visited.length}${planned.length > visits.length ? ` of ${planned.length} due` : ''}, typed ${delivered.filter(d => d.ok).length}${start ? `, created ${driven.started?.ok ? driven.started.sessionId : 'nothing: ' + (driven.started?.note ?? driven.note ?? 'unknown')}` : ''}${driven.note ? `; ${driven.note}` : ''}`,
+  }
+}
+
+/**
+ * What the list said, kept for the next cycle's planVisits. A session planned but not reached this
+ * beat — cut by the cap, or a visit that failed — keeps its earlier status, so the change that
+ * made it due is still a change next time.
+ */
+function remember(statuses, planned, visited, now) {
+  const unreached = id => planned.some(v => v.id === id) && !visited.some(v => v.id === id && v.ok)
+  for (const { sessionId, status } of statuses) {
+    if (unreached(sessionId)) continue
+    const before = seen.get(sessionId)
+    seen.set(sessionId, { status, visitedAt: visited.some(v => v.id === sessionId && v.ok) ? now : (before?.visitedAt ?? 0) })
+  }
+}
+
+/**
+ * Every answer handed over to the Driver, accounted for. A delivery the page attempted is
+ * acknowledged as it reported it, sent or failed. One the visit never got to — the session not on
+ * the list, the page not becoming it, a Driver that did not answer — stays queued on the daemon
+ * and is released here, so the next beat tries again. The one exception is a page torn down
+ * mid-drive: its answer may already be typed, so that is acknowledged as failed with a note
+ * saying to check the session before picking again.
+ */
+async function accountForAnswers(to, visits, driven, delivered) {
+  for (const visit of visits) {
+    if (!visit.answer) continue
+    const outcome = delivered.find(d => d.id === visit.answer.id)
+    if (!outcome && !driven.tornDown) {
+      deliveredAnswers.delete(visit.answer.id)
+      continue
+    }
+    const delivery = outcome ?? { sessionId: visit.id, id: visit.answer.id, ok: false, note: driven.note }
+    if (!delivery.ok) deliveredAnswers.delete(visit.answer.id)
+    await ack(to, { sessionId: delivery.sessionId, id: delivery.id, ok: Boolean(delivery.ok), ...(delivery.note ? { note: String(delivery.note).slice(0, 300) } : {}) })
   }
 }
 
