@@ -363,11 +363,24 @@ test('a machine that is no longer saved is refused, and the run does not start h
   }
 })
 
+/**
+ * A's list of its other computers' projects, once B has said its own. A list waits only a moment for
+ * a computer it never heard from, then comes without it, and B on a loaded test runner takes longer
+ * than that moment: asked again until B's word is in.
+ */
+async function elsewhereOnceSaid(m: TwoMachines): ReturnType<TwoMachines['a']['remoteAgents']['elsewhere']> {
+  for (let i = 0; ; i++) {
+    const listed = await m.a.remoteAgents.elsewhere()
+    if (listed.length > 0 || i >= 300) return listed
+    await new Promise(r => setTimeout(r, 100))
+  }
+}
+
 test("a project only the other machine has is listed here, marked with that machine, and a run of it starts there in its own copy, from a branch of its own", async () => {
   const m = await twoMachines()
   try {
     // The shop is A's too, by its address: only B's other project is B's alone.
-    const listed = await m.a.remoteAgents.elsewhere()
+    const listed = await elsewhereOnceSaid(m)
     const otherB = otherOf(m.shopB)
     const id = elsewhereId(projectId(otherB), m.machineB)
     assert.deepEqual(listed, [{ id, path: otherB, name: 'other', activated: false, gitHost: true, machine: m.machineB, modules: ['@openagt/dashboard-changes', '@openagt/dashboard-files'] }])
@@ -402,7 +415,7 @@ test("a person the owner invited is listed none of the owner's other computers' 
   const m = await twoMachines()
   try {
     const id = elsewhereId(projectId(otherOf(m.shopB)), m.machineB)
-    assert.equal((await m.a.remoteAgents.elsewhere()).length, 1)
+    assert.equal((await elsewhereOnceSaid(m)).length, 1)
     assert.deepEqual(await asCaller('Tester', () => m.a.remoteAgents.elsewhere()), [])
     assert.deepEqual(await asCaller('Tester', () => m.a.onStart('run on the owner\'s computer', { machine: m.machineB }, id)), { ok: false, error: 'That project is no longer listed on any of your computers.' })
     await assert.rejects(asCaller('Tester', () => m.a.remoteAgents.forward(id, 'onCommands', [id])), /no longer listed/)
@@ -428,7 +441,7 @@ test("the other machine's Human Queue is named here by the projects as they are 
   try {
     ids = [projectId(otherOf(m.shopB)), projectId(m.shopB)]
     // B's projects are known first: it says them when the list is read.
-    await m.a.remoteAgents.elsewhere()
+    await elsewhereOnceSaid(m)
     const queue = await m.a.remoteAgents.machinesQueue()
     const other = elsewhereId(projectId(otherOf(m.shopB)), m.machineB)
     // B's shop is A's shop, by its address; B's other project is listed here under B's mark.
@@ -457,7 +470,7 @@ test("the other machine's Human Queue is named here by the projects as they are 
 test("what the other machine said of its projects is kept: they stay listed while it does not answer", async () => {
   const m = await twoMachines()
   try {
-    assert.equal((await m.a.remoteAgents.elsewhere()).length, 1)
+    assert.equal((await elsewhereOnceSaid(m)).length, 1)
     await m.b.close()
     assert.deepEqual(
       (await m.a.remoteAgents.elsewhere()).map(project => project.name),
