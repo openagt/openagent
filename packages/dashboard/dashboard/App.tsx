@@ -58,6 +58,29 @@ const EMPTY_INTERVENTIONS: ProjectionRead<Intervention> = { items: [], whole: []
 /** Stable initial for the activity poll (#627), so it does not churn on every render. */
 const EMPTY_ACTIVITY: ProjectionRead<Activity> = { items: [], whole: [] }
 
+/** The run this page started last: what the page says of it until the run's own record does. */
+interface StartedRun {
+  /** Bumped at each start but a continuation: the Sessions rail's "starting…" row comes up at each. */
+  tick: number
+  /** What the run was asked. */
+  intent: string
+  /** The id the project's start hook answered (#761): the URL already points there, and this is
+   *  what tells the main pane that a session missing from the list is starting, not gone. */
+  id: string | null
+  projectId: string | null
+  /** When it was started. */
+  at: number
+  /** The machine a remote run executes on (#1067), so the live view can mark where it runs and
+   *  degrade the panels that are local-only. Absent for a local run. */
+  runsOn?: string
+  /** What the launcher said about the run as it started it. */
+  picks?: StartPicks
+  /** Its name, the moment the daemon has it, before the run's record has one. */
+  title?: string
+}
+
+const NO_RUN_STARTED: StartedRun = { tick: 0, intent: '', id: null, projectId: null, at: 0 }
+
 // The dashboard shell (#405 phase 2): the sidebar | the main pane | the panes beside it. The main
 // pane is the page the address names: the Overview, a module's page, the Agents or Permissions
 // page, a project's "New agent session" page (ProjectHome), or one session's own view (AgentView),
@@ -148,13 +171,9 @@ export function App() {
     navigate({ ...page, ...(next !== null ? { scope: next } : {}) }, { keepQuery: !pagePath?.length })
   }
 
-  // A just-started run: bump the tick so the Sessions rail shows an optimistic "starting…" row
-  // with the typed prompt at once, before the run's tool writes its card. `id` is the one the
-  // project's start hook answered (#761) — the URL already points there, and this is what tells
-  // the main pane that a session missing from the list is starting, not gone.
-  // `runsOn` names the machine a just-started remote agent executes on (#1067), so the live view can
-  // mark where it runs and degrade the panels that are local-only. Undefined for a local agent.
-  const [agentStart, setAgentStart] = useState<{ tick: number; intent: string; id: string | null; projectId: string | null; at: number; runsOn?: string; picks?: StartPicks; title?: string }>({ tick: 0, intent: '', id: null, projectId: null, at: 0 })
+  // A just-started run: the Sessions rail shows an optimistic "starting…" row with the typed prompt
+  // at once, before the run's tool writes its card, and its page says what the start said.
+  const [agentStart, setAgentStart] = useState<StartedRun>(NO_RUN_STARTED)
   // The agents of the project on screen, for its pages, or of the picked project, for the sidebar:
   // the same project whenever both are set. Read once the address is: before, it names the project
   // by its address, not by its id.
