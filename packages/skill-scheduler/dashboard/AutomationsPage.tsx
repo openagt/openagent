@@ -54,6 +54,8 @@ export function AutomationsPage({ projects }: ModulePageProps) {
   /** Hold a row for one more thing of its own in flight, and let it go of one once that is over. */
   const hold = (id: string): void => setBusy(current => [...current, id])
   const letGo = (id: string): void => setBusy(current => current.filter((_, index) => index !== current.indexOf(id)))
+  /** The rows whose "Run now" has not answered yet, each as often as it was pressed. */
+  const [starting, setStarting] = useState<readonly string[]>([])
   /** What the last save or start on a row answered, said on that row. */
   const [said, setSaid] = useState<{ id: string } & Answered>()
   /** The row whose panel is open, with its own automation as its file says it when it is one a person made, or why that could not be read. */
@@ -113,6 +115,13 @@ export function AutomationsPage({ projects }: ModulePageProps) {
     if (says) setSaid({ id, ...says })
   }
 
+  /** Start one run of a row at once (`scheduler now`): its button says so until the run is started, or why none was. */
+  const startNow = async (id: string, project: ModuleProject, command: string): Promise<void> => {
+    setStarting(current => [...current, id])
+    await save(id, ask(project, ['now', command]), startedNow)
+    setStarting(current => current.filter((_, index) => index !== current.indexOf(id)))
+  }
+
   /**
    * Open a row's panel. A row a person made is read first, as its file says it now (`show`, which
    * refuses a file changed by hand): its words are then the panel's to change, and when it cannot
@@ -154,10 +163,10 @@ export function AutomationsPage({ projects }: ModulePageProps) {
               {row.model && <span className="text-xs text-muted-foreground">Model: {modelLabel(agents, DEFAULT_AGENT, row.model)}</span>}
               {row.lastTick && (
                 <span className="text-xs text-muted-foreground">
-                  last tick{' '}
+                  looked{' '}
                   <Tooltip>
                     <TooltipTrigger render={<span className="tabular-nums" />}>{formatAge(row.lastTick.at)}</TooltipTrigger>
-                    <TooltipContent>{formatDateTime(row.lastTick.at)}</TooltipContent>
+                    <TooltipContent>The scheduler last looked {formatDateTime(row.lastTick.at)}</TooltipContent>
                   </Tooltip>
                   {/* Why that tick decided nothing, when it says: a pull that failed. "off" is the status beside the name, and a project that schedules nothing says so below. */}
                   {note !== undefined && note !== 'off' && note !== NOTHING_SCHEDULED && `: ${note}`}
@@ -268,10 +277,10 @@ export function AutomationsPage({ projects }: ModulePageProps) {
                                   variant="outline"
                                   size="xs"
                                   disabled={saving || cannotRun(scheduled) !== undefined}
-                                  onClick={() => void save(id, ask(row.project, ['now', scheduled.command]), startedNow)}
+                                  onClick={() => void startNow(id, row.project, scheduled.command)}
                                   aria-label={`Run ${title} now`}
                                 >
-                                  Run now
+                                  {starting.includes(id) ? 'Starting…' : 'Run now'}
                                 </Button>
                                 <button
                                   type="button"

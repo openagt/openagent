@@ -252,7 +252,10 @@ describe('the Automations page: its rows', () => {
     const queue = row('/work-queue')
     const statusReads = runCommand.mock.calls.filter(([, args]) => args[0] === 'status').length
     fireEvent.click(within(queue).getByRole('button', { name: 'Run /work-queue now' }))
+    // Until it answers, its button says so, as the Overview card's does.
+    expect(within(queue).getByRole('button', { name: 'Run /work-queue now' }).textContent).toBe('Starting…')
     const started = await within(queue).findByRole('status')
+    expect(within(queue).getByRole('button', { name: 'Run /work-queue now' }).textContent).toBe('Run now')
     expect(runCommand).toHaveBeenCalledWith('p1', ['now', 'work-queue'])
     expect(started.textContent).toBe('Started a run. Open it')
     expect(started.className).toMatch(/text-success/)
