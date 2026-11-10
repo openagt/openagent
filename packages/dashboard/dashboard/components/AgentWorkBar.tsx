@@ -43,7 +43,7 @@ export function AgentWorkBar({
       {/* One line; in a narrow chat (a phone, a chat beside panes) it is as many as its parts need,
           the next step at the end of a line of its own. In the dark theme the hover fill is the bar's own colour, so its buttons get Everforest's
           next step up (both names: `bg-accent` reads the first, the Button's variants the second). */}
-      <div role="group" aria-label="This agent's work" className="overflow-hidden rounded-[10px] bg-muted px-2 dark:[--accent:#374145] dark:[--color-accent:#374145] text-[13px]">
+      <div role="group" aria-label="This session's work" className="overflow-hidden rounded-[10px] bg-muted px-2 dark:[--accent:#374145] dark:[--color-accent:#374145] text-[13px]">
         <div className="flex items-center @lg:h-10 @lg:gap-2 @max-lg:min-h-10 @max-lg:flex-wrap @max-lg:gap-x-2 @max-lg:gap-y-1 @max-lg:py-1.5">
           {/* The branch is the one part that gives up width: it truncates and still reads. No icon
               beside it: the name says what it is, and the row is shorter without one. */}

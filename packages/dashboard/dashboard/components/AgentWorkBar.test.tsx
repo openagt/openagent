@@ -16,7 +16,7 @@ function Bar({ run = 'r1', state }: { run?: string; state: string }) {
 describe('AgentWorkBar', () => {
   test('it says the branch, what the branch holds and the next step, in one row', () => {
     render(<AgentWorkBar checkout={{ branch: 'agent-fix-header' }} summary={<span>2 commits</span>} actions={<button type="button">Open PR</button>} show away={false} onHide={noop} />)
-    const bar = screen.getByRole('group', { name: "This agent's work" })
+    const bar = screen.getByRole('group', { name: "This session's work" })
     // The branch as it is named.
     expect(bar.textContent).toBe('agent-fix-header2 commitsOpen PR')
     expect(screen.getByRole('button', { name: 'Open PR' })).toBeTruthy()
@@ -31,7 +31,7 @@ describe('AgentWorkBar', () => {
     rerender(bar('two-commits'))
     expect(container.textContent).toBe('')
     rerender(bar('three-commits'))
-    expect(screen.getByRole('group', { name: "This agent's work" })).toBeTruthy()
+    expect(screen.getByRole('group', { name: "This session's work" })).toBeTruthy()
   })
 
   test('a bar put away stays away after a reload, for its run alone', () => {
@@ -42,7 +42,7 @@ describe('AgentWorkBar', () => {
     const { container } = render(bar('r2'))
     expect(container.textContent).toBe('')
     render(bar('r3'))
-    expect(screen.getByRole('group', { name: "This agent's work" })).toBeTruthy()
+    expect(screen.getByRole('group', { name: "This session's work" })).toBeTruthy()
   })
 
   test('a browser that keeps nothing still puts the bar away on this page, until the work moves on', () => {
@@ -58,7 +58,7 @@ describe('AgentWorkBar', () => {
       rerender(bar('two-commits'))
       expect(container.textContent).toBe('')
       rerender(bar('three-commits'))
-      expect(screen.getByRole('group', { name: "This agent's work" })).toBeTruthy()
+      expect(screen.getByRole('group', { name: "This session's work" })).toBeTruthy()
     } finally {
       for (const spy of refused) spy.mockRestore()
     }
