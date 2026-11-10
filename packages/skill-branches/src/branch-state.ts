@@ -146,7 +146,7 @@ async function measuredFrom(ask: (args: string[]) => Promise<string>, tip: strin
 }
 
 /** `git` that resolves to '' instead of rejecting, for reads where "no answer" is a fine answer. */
-function soft(git: GitRunner, cwd: string): (args: string[]) => Promise<string> {
+export function soft(git: GitRunner, cwd: string): (args: string[]) => Promise<string> {
   return args => git(args, cwd).catch(() => '')
 }
 
