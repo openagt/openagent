@@ -1,5 +1,5 @@
-import { newestFirst, parseDiary, parseRunCard, runCardFile, runDiaryFile, runIdOfFile } from './run.js'
-import { startOfId, type RecordsReader } from './people.js'
+import { startOfId } from './run.js'
+import { readCard, readRunDiary, runIdsOf, type RecordsReader } from './records.js'
 
 // Which skills a project's agents used, as their runs' records tell it: a skill an agent loaded
 // (its coding agent's Skill step, kept in the run's diary), and a skill a run was started with (its
@@ -31,14 +31,13 @@ export async function skillUseOf(reader: RecordsReader, dir: string, since: numb
     bySkill.set(skill, known)
   }
   for (const person of await reader.list(dir)) {
-    const ids = newestFirst((await reader.list(`${dir}/${person}`)).flatMap(name => runIdOfFile(name) ?? []).map(id => ({ id })))
-    for (const { id } of ids) {
+    for (const id of await runIdsOf(reader, dir, person)) {
       if (!(startOfId(id) >= since)) break
       const started = new Date(startOfId(id)).toISOString()
-      const card = parseRunCard((await reader.read(`${dir}/${person}/${runCardFile(id)}`)) ?? '')
+      const card = await readCard(reader, dir, { person, id })
       const command = card?.intent ? COMMAND.exec(card.intent.trim())?.[1] : undefined
       if (command) used(command, id, started)
-      for (const line of parseDiary((await reader.read(`${dir}/${person}/${runDiaryFile(id)}`)) ?? '')) {
+      for (const line of await readRunDiary(reader, dir, { person, id })) {
         const step = line as { kind: string; label?: unknown; detail?: unknown; at?: unknown }
         if (step.kind === 'action' && step.label === 'Skill' && typeof step.detail === 'string' && step.detail) used(step.detail, id, typeof step.at === 'string' ? step.at : started)
       }

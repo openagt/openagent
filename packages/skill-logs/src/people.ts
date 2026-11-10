@@ -1,4 +1,5 @@
-import { newestFirst, parseRunCard, runCardFile, runIdOfFile } from './run.js'
+import { startOfId } from './run.js'
+import { readCard, runIdsOf, type RecordsReader } from './records.js'
 
 // Who works in a project: whoever started runs there, as its records tell it (each run is kept
 // under the person who started it, so the people are the records' own folders), and whoever
@@ -49,17 +50,6 @@ const NO_PERSON = /noreply|no-reply|\[bot\]/i
 /** GitHub's own address for a person's account, what a server's git signs with: it says no-reply, and is theirs. A bot's has `[bot]` in it. */
 const PERSONS_OWN_ADDRESS = /^[^[\]]+@users\.noreply\.github\.com$/i
 
-/** A reader of the records: the folders under a directory, and a file's text. */
-export interface RecordsReader {
-  list(dir: string): Promise<string[]>
-  read(path: string): Promise<string | undefined>
-}
-
-/** When a run started, from its id alone: `2026-10-25T00-36-42-115Z` is that time in UTC. */
-export function startOfId(id: string): number {
-  return Date.parse(id.replace(/T(\d\d)-(\d\d)-(\d\d)-(\d{3})Z$/, 'T$1:$2:$3.$4Z'))
-}
-
 /**
  * Each person who started runs under `dir` or made commits among `commits`, the busiest first:
  * their runs and commits since `since`, when they last did either, and their name from the commits.
@@ -75,12 +65,12 @@ export async function peopleOf(reader: RecordsReader, dir: string, since: number
     return person
   }
   for (const folder of await reader.list(dir)) {
-    const ids = newestFirst((await reader.list(`${dir}/${folder}`)).flatMap(name => runIdOfFile(name) ?? []).map(id => ({ id })))
+    const ids = await runIdsOf(reader, dir, folder)
     if (ids.length === 0) continue
-    const person = entry(folder, startOfId(ids[0]!.id))
-    for (const { id } of ids) {
+    const person = entry(folder, startOfId(ids[0]!))
+    for (const id of ids) {
       if (!(startOfId(id) >= since)) break
-      const card = parseRunCard((await reader.read(`${dir}/${folder}/${runCardFile(id)}`)) ?? '')
+      const card = await readCard(reader, dir, { person: folder, id })
       if (!card) continue
       person.runs++
       if (card.status === 'running') person.running++

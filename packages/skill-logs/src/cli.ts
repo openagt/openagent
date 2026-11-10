@@ -1,7 +1,8 @@
 import { GIT_FAILED, Refused, UsageError, inRepo, nodeGitRunner, openProjectReader, parseCommandArgs, runCommandLine, runsRootOf, type Command, type ProjectReader, type GitRunner } from '@openagt/agent-data'
 import { RUNS_DIR } from './names.js'
-import { agentLines, isRunId, newestFirst, parseDiary, parseRunCard, publicCard, runCardFile, runDiaryFile, runIdOfFile, type ListedRun, type RunCard, type RunPatch } from './run.js'
+import { agentLines, isRunId, publicCard, type AnyDiaryLine, type ListedRun, type RunCard, type RunPatch } from './run.js'
 import { deleteRun, findRun, listRuns, patchRun, readDiary, resolveLogsDeps, runFiles, runsPath } from './store.js'
+import { findEntry, readCard, readRunDiary, runEntries } from './records.js'
 import { peopleOf, readCommitLines } from './people.js'
 import { skillUseOf } from './skill-use.js'
 
@@ -80,11 +81,11 @@ const list: Command<[CliIo, GitRunner]> = async (args, io, git) => {
   const reader = await open(io.cwd, git)
   const cards: ListedRun[] = []
   // Newest first, and no further than the cap: the cards past it are never read.
-  for (const { person, id } of await runEntries(reader)) {
+  for (const run of await runEntries(reader, RUNS_DIR)) {
     if (cards.length >= limit) break
-    const card = parseRunCard((await reader.read(`${RUNS_DIR}/${person}/${runCardFile(id)}`)) ?? '')
+    const card = await readCard(reader, RUNS_DIR, run)
     if (!card || !keep(card)) continue
-    cards.push({ ...card, person })
+    cards.push({ ...card, person: run.person })
   }
   return cards.map(shown)
 }
@@ -125,16 +126,16 @@ const COMMANDS: Record<string, Command<[CliIo, GitRunner]>> = {
     const { values, positionals } = parseCommandArgs(args, READ_FLAGS, 1)
     const id = runIdArg(positionals[0]!)
     let card: RunCard | undefined
-    let diary: ReturnType<typeof parseDiary> = []
+    let diary: AnyDiaryLine[] = []
     if (values.local) {
       const root = await inRepo(() => runsRootOf(io.cwd, git))
       card = await findRun(root, id, { git })
       diary = card ? ((await readDiary(root, id, { git })) ?? []) : []
     } else {
       const reader = await open(io.cwd, git)
-      const entry = (await runEntries(reader)).find(e => e.id === id)
-      card = entry ? parseRunCard((await reader.read(`${RUNS_DIR}/${entry.person}/${runCardFile(id)}`)) ?? '') : undefined
-      if (entry && card) diary = parseDiary((await reader.read(`${RUNS_DIR}/${entry.person}/${runDiaryFile(id)}`)) ?? '')
+      const run = await findEntry(reader, RUNS_DIR, id)
+      card = run && (await readCard(reader, RUNS_DIR, run))
+      if (run && card) diary = await readRunDiary(reader, RUNS_DIR, run)
     }
     if (!card) throw noRun(id)
     return values.full ? { ...card, diary } : { ...publicCard(card), diary: agentLines(diary) }
@@ -181,18 +182,6 @@ function runIdArg(id: string): string {
 
 function noRun(id: string): Refused {
   return new Refused({ ok: false, reason: 'no-run', id }, `no run is named ${id}`)
-}
-
-/** Every run of the project by person and id, newest first, from the directory listings alone. */
-async function runEntries(reader: ProjectReader): Promise<Array<{ person: string; id: string }>> {
-  const entries: Array<{ person: string; id: string }> = []
-  for (const person of await reader.list(RUNS_DIR)) {
-    for (const name of await reader.list(`${RUNS_DIR}/${person}`)) {
-      const id = runIdOfFile(name)
-      if (id !== undefined) entries.push({ person, id })
-    }
-  }
-  return newestFirst(entries)
 }
 
 /** The project's data opened for reading, from wherever the command runs, or the sessions with no project's, from the sessions home; outside both, a refusal. */
