@@ -3,7 +3,6 @@ import { Dialog as BaseDialog } from '@base-ui/react/dialog'
 import { ArrowLeft, Bell, Bot, ChevronRight, Database, FolderGit2, Globe, Palette, Puzzle, UserRound, X, FolderSearch } from 'lucide-react'
 import { ACCENTS, DEFAULT_ACCENT_LABELS, accentOf, CODE_FONTS, DOCUMENT_FONTS, DRIVERS, FONTS, PALETTES, PALETTE_LABELS, type Accent, type CodeFont, type DocumentFont, type Font, type Palette as ColourPalette } from '../../src/client.js'
 import { driverOptions, useModels } from '../lib/models.js'
-import { NO_MODEL_PINNED } from '../lib/agent-settings.js'
 import type { DriverOption } from './DriverModelMenu.js'
 import type { ProjectSummary } from '../../src/index.js'
 import { useMountedModules, type MountedSettings } from '../lib/use-modules.js'
@@ -407,12 +406,12 @@ function useOwnEntries(): Entry[] {
     },
     {
       id: 'agent',
-      title: 'Agent',
+      title: 'Coding agent',
       icon: Bot,
       body: (
         <Section>
           <SelectRow
-            label="Agent"
+            label="Coding agent"
             description="Which coding agent runs the work."
             value={driver}
             options={drivers}
@@ -421,7 +420,7 @@ function useOwnEntries(): Entry[] {
           />
           <SelectRow
             label="Model"
-            description="The models the agent lists. Its own default when none is picked."
+            description="The models the coding agent lists. Its own default when none is picked."
             value={model}
             options={modelOptions(drivers.find(d => d.value === driver), model)}
             onChange={value => updatePreferences({ model: value })}
@@ -433,8 +432,8 @@ function useOwnEntries(): Entry[] {
             onChange={next => updatePreferences({ nameRuns: next })}
           />
           <ToggleRow
-            label="Show what the agent thought"
-            description="Inside a run of steps, a row for each thought between them. Off, the panel is the steps the agent took and nothing else."
+            label="Show what the coding agent thought"
+            description="Inside a run of steps, a row for each thought between them. Off, the panel is the steps the coding agent took and nothing else."
             checked={preferences.showThinking ?? false}
             onChange={next => updatePreferences({ showThinking: next })}
           />
@@ -564,7 +563,7 @@ function ToggleRow({
 function modelOptions(driver: DriverOption | undefined, model: string): SelectOption[] {
   const listed = driver?.models ?? []
   return [
-    { value: '', label: NO_MODEL_PINNED },
+    { value: '', label: 'Default' },
     ...listed,
     ...(model && !listed.some(m => m.value === model) ? [{ value: model, label: model }] : []),
     ...(listed.length === 0 && driver?.modelsNote ? [{ value: driver.modelsNote, label: driver.modelsNote, disabled: true }] : []),

@@ -101,7 +101,7 @@ export function DriverModelMenu({
   // A level the model does not offer is still what a run would be given, so it is said rather than
   // silently read as the default.
   const level = effort?.level !== undefined ? effortLabel(effort.level) : undefined
-  const said = `Driver: ${current?.label ?? ''} · Model: ${currentModelLabel ?? NO_MODEL_PINNED}${levels.length > 0 ? ` · Effort: ${level ?? 'the agent’s default'}` : ''}`
+  const said = `Coding agent: ${current?.label ?? ''} · Model: ${currentModelLabel ?? NO_MODEL_PINNED}${levels.length > 0 ? ` · Effort: ${level ?? "the coding agent's default"}` : ''}`
   return (
     <DropdownMenu>
       <Tooltip>
@@ -161,7 +161,7 @@ export function DriverModelMenu({
               <DropdownMenuLabel>Effort</DropdownMenuLabel>
               <DropdownMenuItem onClick={() => effort!.onChange(undefined)}>
                 <Check className={cn('h-3.5 w-3.5 shrink-0', effort?.level === undefined ? 'opacity-100' : 'opacity-0')} aria-hidden />
-                The agent’s default
+                The coding agent's default
               </DropdownMenuItem>
               {levels.map(one => (
                 <DropdownMenuItem key={one} onClick={() => effort!.onChange(one)}>

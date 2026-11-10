@@ -117,7 +117,7 @@ const STUDIO_MACHINE = { id: STUDIO, label: 'Studio', url: STUDIO }
 
 // The driver/model trigger names both in its own label (#1143): with no model pinned it is a logo
 // and a chevron, so the name cannot come from the rendered text the way it used to.
-const agentTrigger = () => screen.getByRole('button', { name: /^Driver: / })
+const agentTrigger = () => screen.getByRole('button', { name: /^Coding agent: / })
 
 describe('Composer (#721)', () => {
   test('renders the commands menu, the agent/model select, "Run on", and the submit button', async () => {
@@ -126,7 +126,7 @@ describe('Composer (#721)', () => {
     // the discoverable one.
     expect(screen.getByRole('button', { name: 'Commands' })).toBeTruthy()
     expect(screen.getByRole('button', { name: /^Run on: / })).toBeTruthy()
-    expect((await hoverTooltip(agentTrigger())).textContent).toContain('Driver: Claude Code')
+    expect((await hoverTooltip(agentTrigger())).textContent).toContain('Coding agent: Claude Code')
     // The submit button appears only once the prompt has text (#721).
     fireEvent.change(screen.getByLabelText('prompt'), { target: { value: 'x' } })
     expect(screen.getByRole('button', { name: /Start session/ })).toBeTruthy()
@@ -136,7 +136,7 @@ describe('Composer (#721)', () => {
     const { onSubmit } = renderComposer({ inAgent: true })
     // An in-session composer: the session is bound to the agent it started with, so offering the
     // select there would only ever rewrite the next session's default.
-    expect(screen.queryByRole('button', { name: /^Driver: / })).toBeNull()
+    expect(screen.queryByRole('button', { name: /^Coding agent: / })).toBeNull()
     expect(screen.getByRole('button', { name: 'Commands' })).toBeTruthy()
     fireEvent.change(screen.getByLabelText('prompt'), { target: { value: 'follow-up' } })
     fireEvent.click(screen.getByRole('button', { name: 'Send' }))
@@ -304,7 +304,7 @@ describe('Composer (#721)', () => {
     machinesRpc.onMachineModels.mockResolvedValueOnce({ 'claude-code': { models: [{ id: 'opus', name: 'Opus 5.5' }] }, codex: { models: [], error: '`codex` could not start: spawn codex ENOENT', missing: true } })
     renderComposer()
     await waitFor(() => expect(machinesRpc.onMachineModels).toHaveBeenCalledWith(STUDIO))
-    fireEvent.click(await screen.findByRole('button', { name: /^Driver: / }))
+    fireEvent.click(await screen.findByRole('button', { name: /^Coding agent: / }))
     fireEvent.click(await screen.findByText('Codex'))
     expect(await screen.findByText('Codex is not installed on Studio.')).toBeTruthy()
     expect(screen.queryByText(/ENOENT/)).toBeNull()
@@ -445,7 +445,7 @@ describe('the rows around the box', () => {
     const said = screen.getByText('Opus 5.5')
     expect(row.contains(said)).toBe(true)
     expect(said.closest('button')).toBeNull()
-    expect(screen.queryByRole('button', { name: /^Driver: / })).toBeNull()
+    expect(screen.queryByRole('button', { name: /^Coding agent: / })).toBeNull()
   })
 
   test('a session whose model is not known says none', () => {
