@@ -28,7 +28,7 @@ export { FakeDriver, FakeDriverSession, type FakeTurn, type FakeDriverOptions } 
 export { makeEmit, promptSent, startEvent, type PromptExtras, combineFraming, combineSignals, readWorkspaceFile, oneLine, cutOutput, callArgument, lineCount, patchSize, hunkLines, OUTPUT_MAX } from './session-support.js'
 export { ConversationGoneError, continuingTurn } from './gone.js'
 export { readyPrompt } from './ready-prompt.js'
-export type { AgentAccount, AccountTurn, AccountRotation, RotatedTurn } from './accounts.js'
+export { accountTurn, type AgentAccount, type AccountReading, type AccountTurn, type AccountRotation, type RotatedTurn } from './accounts.js'
 export {
   runCliSession,
   AgentExitError,

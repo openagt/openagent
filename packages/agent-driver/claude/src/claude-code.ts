@@ -7,7 +7,7 @@ import { randomUUID } from 'node:crypto'
 import { readClaudeQuota } from './claude-code-quota.js'
 import { readClaudeModels } from './claude-code-models.js'
 import { accountEnv, CLAUDE_TOKEN_ENV } from './claude-accounts.js'
-import { type AccountRotation, type AgentCliParser, type CliIo, type Question, toolQuestion, type ReadyPrompt, readyPrompt, combineFraming, combineSignals, makeEmit, promptSent, readWorkspaceFile, cutOutput, callArgument, lineCount, patchSize, runCliSession, continuingTurn, checkCliReady, type CliSpec, type DriverReadiness, type DriverReadyOptions, type PersonalSetup, finishTurn, agentEnv, oneLine, attachLog, type SpawnLike, type SessionLog, type Driver, type DriverEvent, type FileChange, type DriverModel, type DriverPromptOptions, type DriverQuota, type DriverRateLimit, type DriverRateWindow, type DriverSession, type DriverStartOptions, type DriverTurn, type DriverUsage, steeredWords } from '@openagt/agent-driver'
+import { type AccountReading, type AccountRotation, accountTurn, type AgentCliParser, type CliIo, type Question, toolQuestion, type ReadyPrompt, readyPrompt, combineFraming, combineSignals, makeEmit, promptSent, readWorkspaceFile, cutOutput, callArgument, lineCount, patchSize, runCliSession, continuingTurn, checkCliReady, type CliSpec, type DriverReadiness, type DriverReadyOptions, type PersonalSetup, finishTurn, agentEnv, oneLine, attachLog, type SpawnLike, type SessionLog, type Driver, type DriverEvent, type FileChange, type DriverModel, type DriverPromptOptions, type DriverQuota, type DriverRateLimit, type DriverRateWindow, type DriverSession, type DriverStartOptions, type DriverTurn, type DriverUsage, steeredWords } from '@openagt/agent-driver'
 
 /** Claude Code permission modes we pass through to the CLI. */
 export type PermissionMode = 'default' | 'acceptEdits' | 'bypassPermissions' | 'plan'
@@ -192,23 +192,9 @@ export class ClaudeCodeSession implements DriverSession {
           continueFrom: id => {
             this.lastSessionId = id
           },
-          run: async (account, said, sent) => {
+          run: (account, said, sent) => {
             const parser = new StreamJsonParser()
-            let turn: DriverTurn | undefined
-            let failure: unknown
-            try {
-              turn = await this.turnOn(said, sent, parser, accountEnv(account, env), emit)
-            } catch (err) {
-              failure = err
-            }
-            const sessionId = turn?.sessionId ?? parser.session
-            return {
-              ...(turn !== undefined ? { turn } : { failure }),
-              limited: parser.stoppedByLimit || (failure !== undefined && parser.rejected !== undefined),
-              ...(parser.rejected?.resetsAt !== undefined ? { resetsAt: parser.rejected.resetsAt } : {}),
-              ...(parser.windows ? { windows: parser.windows } : {}),
-              ...(sessionId !== undefined ? { sessionId } : {}),
-            }
+            return accountTurn(() => this.turnOn(said, sent, parser, accountEnv(account, env), emit), failed => parser.accountReading(failed))
           },
         })
       : await this.turnOn(text, opts, new StreamJsonParser(), env, emit)
@@ -530,11 +516,11 @@ export class StreamJsonParser {
   /** The subagents whose own messages were seen: what they said is their report. */
   private readonly saidBy = new Set<string>()
   /** The agent's message is the CLI's own "You've hit your limit" (`error: "rate_limit"`): the account's limit stopped the turn. */
-  stoppedByLimit = false
+  private stoppedByLimit = false
   /** A rate-limit line said `rejected`: a turn that failed after it failed on the account's limit. When it frees, where said. */
-  rejected: { resetsAt?: number } | undefined
+  private rejected: { resetsAt?: number } | undefined
   /** The account's windows as this turn's last rate-limit line said them. */
-  windows: DriverRateWindow[] | undefined
+  private windows: DriverRateWindow[] | undefined
   /** The turn is over and answered: its `result` said so, or the turn was stopped on the agent's question. */
   answered = false
   /** The CLI's stdin, while the turn is talked to: where its permission requests are answered. */
@@ -617,9 +603,14 @@ export class StreamJsonParser {
     this.io?.write(JSON.stringify({ type: 'control_request', request_id: id, request }))
   }
 
-  /** The agent's session id, once a line said it. */
-  get session(): string | undefined {
-    return this.sessionId
+  /** What the turn said of the account it ran on, once it is over: `failed` when it failed. */
+  accountReading(failed: boolean): AccountReading {
+    return {
+      limited: this.stoppedByLimit || (failed && this.rejected !== undefined),
+      ...(this.rejected?.resetsAt !== undefined ? { resetsAt: this.rejected.resetsAt } : {}),
+      ...(this.windows ? { windows: this.windows } : {}),
+      ...(this.sessionId !== undefined ? { sessionId: this.sessionId } : {}),
+    }
   }
 
   /** Feed one line; returns the events it produced (may be empty). */

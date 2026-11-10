@@ -1,9 +1,9 @@
 import type { DriverEvent, DriverPromptOptions, DriverRateWindow, DriverTurn } from './types.js'
 
-// What a driver sees of a person's several accounts: one account, and the rotation it is handed.
-// Which account takes a turn is the rotation's (`@openagt/skill-account-rotation`); what an added
-// account's login is, and how a turn runs on it, is the driver's. A driver handed none runs on
-// whatever login its agent has.
+// What a driver sees of a person's several accounts: one account, the rotation it is handed, and
+// what it answers a turn on an account with. Which account takes a turn is the rotation's
+// (`@openagt/skill-account-rotation`); what an added account's login is, and how a turn runs on it,
+// is the driver's. A driver handed none runs on whatever login its agent has.
 
 /** One account as the list keeps it. */
 export interface AgentAccount {
@@ -37,6 +37,33 @@ export interface AccountTurn {
   windows?: DriverRateWindow[]
   /** The conversation, so far as the turn got: what the next account continues. */
   sessionId?: string
+}
+
+/** What a turn's own output said of the account it ran on, read once the turn is over. */
+export interface AccountReading {
+  /** Whether the account's limit is what stopped the turn. */
+  limited: boolean
+  /** When that limit frees, epoch ms, when the agent said. */
+  resetsAt?: number
+  /** The account's windows as the turn said them. */
+  windows?: DriverRateWindow[]
+  /** The conversation, so far as the turn got. */
+  sessionId?: string
+}
+
+/**
+ * One turn on one account, as a driver answers a rotation's {@link RotatedTurn.run}: the turn, or
+ * what it threw, beside what its output said of the account. `read` is asked once the turn is
+ * over, and told whether it failed. The conversation is the turn's own when it ended with one.
+ */
+export async function accountTurn(turn: () => Promise<DriverTurn>, read: (failed: boolean) => AccountReading): Promise<AccountTurn> {
+  let done: DriverTurn
+  try {
+    done = await turn()
+  } catch (failure) {
+    return { ...read(true), failure }
+  }
+  return { ...read(false), turn: done, ...(done.sessionId !== undefined ? { sessionId: done.sessionId } : {}) }
 }
 
 /** What a driver gives a rotation to run one turn with. */

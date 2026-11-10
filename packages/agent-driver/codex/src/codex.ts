@@ -3,7 +3,7 @@ import { copyFile, lstat, mkdir, readlink, readdir, realpath, rename, rm, stat, 
 import { homedir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { accountFolder, accountHome, codexWindows } from './codex-accounts.js'
-import { type AccountRotation, type Question, toolQuestion, type DriverRateWindow, type ReadyPrompt, readyPrompt, runCliSession, continuingTurn, finishTurn, agentEnv, attachLog, combineFraming, combineSignals, makeEmit, promptSent, readWorkspaceFile, oneLine, cutOutput, callArgument, lineCount, patchSize, hunkLines, checkCliReady, type AgentCliParser, type CliIo, type CliSpec, type DriverReadiness, type DriverReadyOptions, type PersonalSetup, type SpawnLike, type SessionLog, type Driver, type DriverEvent, type FileChange, type DriverModel, type DriverPromptOptions, type DriverSession, type DriverStartOptions, type DriverTurn, type DriverUsage, steeredWords } from '@openagt/agent-driver'
+import { type AccountReading, type AccountRotation, accountTurn, type Question, toolQuestion, type DriverRateWindow, type ReadyPrompt, readyPrompt, runCliSession, continuingTurn, finishTurn, agentEnv, attachLog, combineFraming, combineSignals, makeEmit, promptSent, readWorkspaceFile, oneLine, cutOutput, callArgument, lineCount, patchSize, hunkLines, checkCliReady, type AgentCliParser, type CliIo, type CliSpec, type DriverReadiness, type DriverReadyOptions, type PersonalSetup, type SpawnLike, type SessionLog, type Driver, type DriverEvent, type FileChange, type DriverModel, type DriverPromptOptions, type DriverSession, type DriverStartOptions, type DriverTurn, type DriverUsage, steeredWords } from '@openagt/agent-driver'
 
 /**
  * Codex's sandbox policy for the shell commands the model writes.
@@ -310,22 +310,7 @@ export class CodexSession implements DriverSession {
             // An added account's own login, with the conversations of the home the person's own runs from.
             const turnEnv = account.login === undefined ? env : { ...env, CODEX_HOME: await accountHome(accountFolder(account, env), personalCodexHome(env), this.config.personal?.skills !== false) }
             const parser = this.parser(said, sent)
-            let turn: DriverTurn | undefined
-            let failure: unknown
-            try {
-              turn = await this.turnOn(said, sent, parser, turnEnv, emit)
-            } catch (err) {
-              failure = err
-            }
-            const sessionId = turn?.sessionId ?? parser.session
-            const resetsAt = parser.limitFrees()
-            return {
-              ...(turn !== undefined ? { turn } : { failure }),
-              limited: parser.stoppedByLimit,
-              ...(resetsAt !== undefined ? { resetsAt } : {}),
-              ...(parser.windows ? { windows: parser.windows } : {}),
-              ...(sessionId !== undefined ? { sessionId } : {}),
-            }
+            return accountTurn(() => this.turnOn(said, sent, parser, turnEnv, emit), () => parser.accountReading())
           },
         })
       : await this.turnOn(text, opts, this.parser(text, opts), env, emit)
@@ -661,9 +646,9 @@ export class CodexAppServerParser implements AgentCliParser {
   private failed: string | undefined
   private ended = false
   /** The account's windows as the turn last said them (`account/rateLimits/updated`). */
-  windows: DriverRateWindow[] | undefined
+  private windows: DriverRateWindow[] | undefined
   /** Whether the account's usage limit is what ended the turn. */
-  stoppedByLimit = false
+  private stoppedByLimit = false
   /** The question the agent asked with request_user_input, which the turn was stopped on. */
   private asked: Question | undefined
   /** The person asked for the turn to end ({@link stop}): an interrupted end is that stop. */
@@ -702,15 +687,19 @@ export class CodexAppServerParser implements AgentCliParser {
     return this.turn.resumeId
   }
 
-  /** The conversation, as soon as Codex said it: what a next account continues. */
-  get session(): string | undefined {
-    return this.sessionId
-  }
-
-  /** When the limit that stopped the turn frees, epoch ms: the latest reset of a window it filled. None when no window said it is full. */
-  limitFrees(): number | undefined {
+  /**
+   * What the turn said of the account it ran on, once it is over. Its limit frees at the latest
+   * reset of a window it filled: none when no window said it is full. The conversation is there as
+   * soon as Codex said it: what a next account continues.
+   */
+  accountReading(): AccountReading {
     const full = (this.windows ?? []).filter(w => w.percentUsed >= 100).map(w => w.resetsAt)
-    return full.length > 0 ? Math.max(...full) : undefined
+    return {
+      limited: this.stoppedByLimit,
+      ...(full.length > 0 ? { resetsAt: Math.max(...full) } : {}),
+      ...(this.windows ? { windows: this.windows } : {}),
+      ...(this.sessionId !== undefined ? { sessionId: this.sessionId } : {}),
+    }
   }
 
   converse(io: CliIo): void {
