@@ -63,6 +63,7 @@ export function DashboardPage({
 }) {
   // Its ✕ hides it (#958), and a switch in Settings › Appearance shows it again.
   const onboardingDismissed = usePreferences().onboardingDismissed ?? false
+  const namesRuns = usePreferences().nameRuns !== false
   const working = active.active.filter(agent => scope === null || agent.projectId === scope)
   const shownProjects = scope === null ? projects : projects.filter(project => project.id === scope)
   // Every card the Overview can show here, each with the widths it stands at; the person's layout
@@ -134,7 +135,7 @@ export function DashboardPage({
       minWidth: '1/3',
       node: (
         <div id={WORKING_ID} className="flex scroll-mt-6 flex-col *:flex-1">
-          <Agents working={working} onSelectAgent={onSelectAgent} />
+          <Agents working={working} namesRuns={namesRuns} onSelectAgent={onSelectAgent} />
         </div>
       ),
     },

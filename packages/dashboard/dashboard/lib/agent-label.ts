@@ -39,15 +39,12 @@ export const NAMING_WAIT_MS = 60_000
  * name from the first frame because it makes one server-side; ours is a model's answer, so the row
  * holds the place instead of filling it with something it is about to throw away.
  *
- * Only while a name is actually coming: naming turned off, a run too old, a subagent (never named),
- * or a run that already has one is answered right away, and so is a run with nothing else to show.
+ * Only while a name is actually coming to a run at work: naming turned off, a run too old, a
+ * subagent (never named), a run that already has one, and a run that ended or waits on the person
+ * (which "Waiting on you" and the Human Queue already name) are answered right away.
  */
-export function awaitingName(
-  agent: Pick<AgentMeta, 'id' | 'title' | 'intent' | 'branch' | 'startedAt' | 'parent'>,
-  naming: boolean,
-  now = Date.now(),
-): boolean {
-  if (!naming || agent.title !== undefined || agent.parent !== undefined) return false
+export function awaitingName(agent: Pick<AgentMeta, 'title' | 'startedAt' | 'parent' | 'status'>, naming: boolean, now = Date.now()): boolean {
+  if (!naming || agent.status !== 'running' || agent.title !== undefined || agent.parent !== undefined) return false
   const started = Date.parse(agent.startedAt)
   return Number.isFinite(started) && now - started < NAMING_WAIT_MS
 }

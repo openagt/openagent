@@ -18,7 +18,7 @@ vi.mock('../lib/preferences.js', () => ({ usePreferences: () => prefs.value, use
 const { DashboardPage } = await import('./DashboardPage.js')
 const { FADE_AFTER_MS } = await import('./CustomizeOverview.js')
 
-const active = (agentId: string, projectId = 'p1'): ActiveAgent => ({ projectId, projectName: projectId, agentId, cwd: `/repos/${agentId}`, status: 'running', updatedAt: '2026-07-25T10:00:00.000Z', intent: `working on ${agentId}` })
+const active = (agentId: string, projectId = 'p1'): ActiveAgent => ({ projectId, projectName: projectId, agentId, cwd: `/repos/${agentId}`, status: 'running', startedAt: '2026-07-25T09:00:00.000Z', updatedAt: '2026-07-25T10:00:00.000Z', intent: `working on ${agentId}` })
 const projects = [{ id: 'p1', name: 'alpha' }, { id: 'p2', name: 'beta' }] as never[]
 /** The agents at work, as the shell read them. */
 let working: ActiveAgent[] = []
