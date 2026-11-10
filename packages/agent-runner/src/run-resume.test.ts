@@ -144,6 +144,24 @@ test('a run whose last turn asked ends waiting and keeps its checkout; the answe
   }
 })
 
+test('a resumed run whose coding agent cannot start is recorded failed, not as the end its kept checkout had before', async () => {
+  const repo = await testRepo()
+  try {
+    const first = await runCommand(repo, { prompt: '/work-queue', driver: new FakeDriver({ turns: [{ text: QUESTION }], sessionId: 's-ask' }), now: () => NOW, gitHost: noGitHost })
+    assert.equal(first.status, 'waiting')
+    const dying: Driver = { id: 'fake', start: async () => { throw new Error('codex: not installed') } }
+    const later = new Date(NOW.getTime() + 60_000)
+    const second = await resumeRun(repo, { id: first.id, answer: 'Approve', driver: dying, now: () => later, gitHost: noGitHost })
+    assert.equal(second.status, 'failed')
+    const card = await findRun(repo, first.id)
+    assert.equal(card?.status, 'failed', 'the record says how this leg ended')
+    assert.equal(card?.endedAt, later.toISOString())
+    assert.deepEqual((await readDiary(repo, first.id))?.at(-1), { kind: 'ended', status: 'failed', detail: 'codex: not installed', at: later.toISOString() })
+  } finally {
+    await removeRepo(repo)
+  }
+})
+
 test('a question asked with the agent’s own tool ends the run waiting as a written one does, and its answer resumes it', async () => {
   const repo = await testRepo()
   try {

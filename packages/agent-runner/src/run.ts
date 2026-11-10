@@ -714,9 +714,10 @@ async function sessionToEnd(repo: string, run: SessionRun, dir: string, inbox: s
   // The name lands on the card before the record is copied: a run named after that copy would be
   // named only in its checkout, which is removed with the run.
   await naming
-  // The record: the two files the session kept, copied onto the branch unchanged.
+  // The record: the two files the session kept, copied onto the branch unchanged. A session that
+  // kept none never started: a card in a checkout kept from an earlier leg says how that leg ended.
   const live = driverSession?.log
-  const card = (await readLiveCard(run.checkout.path, run.id)) ?? { ...run.card, status, endedAt: run.clock(), ...(branch !== undefined ? { branch } : {}), ...(pr ? { pr } : {}), ...(saidEarlier ? { caller: { ...run.card.caller, earlierPrs: earlier } } : {}) }
+  const card = (live ? await readLiveCard(run.checkout.path, run.id) : undefined) ?? { ...run.card, status, endedAt: run.clock(), ...(branch !== undefined ? { branch } : {}), ...(pr ? { pr } : {}), ...(saidEarlier ? { caller: { ...run.card.caller, earlierPrs: earlier } } : {}) }
   const diary = live ? await readLiveDiary(run.checkout.path, run.id) : [...(run.priorDiary ?? []), { kind: 'ended', status, ...(detail !== undefined ? { detail } : {}), at: card.endedAt ?? run.clock() }]
   await run.marking
   const recorded = await recordRun(repo, card, diary, run.logs)
