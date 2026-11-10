@@ -3,12 +3,12 @@ import type { AgentAccount } from '@openagt/agent-driver'
 import { markerCard, runnerMark, type Publish, type RunnerMark } from '@openagt/agent-runner'
 import type { FileBranchWrite } from '@openagt/agent-data'
 import type { RunCard } from '@openagt/skill-logs'
-import { AGENT_LABELS, AGENT_SKILLS_DIR, DEFAULT_AGENT, NEVER_STARTED_SINCE_MS, NOW_READY_MS, isAgent, type AgentName } from './names.js'
+import { AGENT_LABELS, AGENT_SKILLS_DIR, DEFAULT_AGENT, NOW_READY_MS, isAgent, type AgentName } from './names.js'
 import type { LastRun } from './records.js'
 import { dueFrom, localStamp, paceInForce, paceText } from './pace.js'
 import { quotaBoundaryStatus, quotaHeadroom } from './quota-boundary.js'
 import { accountWithRoom, readClaudeAccount, readCodexAccount } from './accounts.js'
-import { checkFound, eachItems, isDue, lastRunValue, ownAttached, resumeText, type CheckResult, type StartItem } from './check.js'
+import { checkFound, eachItems, isDue, lastRunValue, neverStartedSince, ownAttached, resumeText, type CheckResult, type StartItem } from './check.js'
 import { ableAgents, commandPrompt, skillFile, type Schedule, type ScheduledCommand } from './schedule.js'
 import type { StartPoint } from './start-point.js'
 import { agentInForce, capInForce, listed, modelInForce, publishInForce, switchedOnAt, type State, type TickDecision, type TickRecord } from './state.js'
@@ -190,9 +190,9 @@ async function ask(deps: TickDeps, command: ScheduledCommand, byHand?: { late: (
   // What the check printed, handed to the run it starts: a command its pace alone starts has none.
   if (command.when === undefined) return { now }
   // What is new for the check: since its command last started, or since it was switched on here when that is later.
-  const since = lastRunValue(latest(last, switchedOn) ?? new Date(now.getTime() - NEVER_STARTED_SINCE_MS).toISOString())
+  const since = lastRunValue(latest(last, switchedOn) ?? neverStartedSince(now))
   // When the command was switched on here: a check that starts runs for what is new leaves what came before.
-  const on = lastRunValue(switchedOn ?? new Date(now.getTime() - NEVER_STARTED_SINCE_MS).toISOString())
+  const on = lastRunValue(switchedOn ?? neverStartedSince(now))
   const checked = await deps.check(command.when, since, on).catch((err): CheckResult => ({ ok: false, stdout: '', stderr: String(err) }))
   if (!checked.ok) return { outcome: `check failed: ${checked.stderr.trim().split('\n').at(-1) ?? ''}` }
   if (!isDue(checked.stdout)) return { outcome: 'not due' }

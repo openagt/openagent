@@ -44,6 +44,11 @@ export function lastRunValue(iso: string): string {
   return new Date(Math.floor(Date.parse(iso) / 1000) * 1000).toISOString().replace('.000Z', 'Z')
 }
 
+/** Since when a check asks where nothing says since when, ISO: {@link NEVER_STARTED_SINCE_MS} before `now`. */
+export function neverStartedSince(now: Date): string {
+  return new Date(now.getTime() - NEVER_STARTED_SINCE_MS).toISOString()
+}
+
 /**
  * Whether a check's output says the command is due (#1774): the output parsed as JSON is
  * something other than empty — `[]`, `{}`, `null`, `false`, `""`, `0` and no output at all are not
@@ -201,7 +206,7 @@ export interface Tried {
  * the answer, and gives up before a tick would.
  */
 export async function tryCheck(repo: string, shell: string, now: Date, check: typeof runCheck = runCheck, budgetMs: number = TRY_TIMEOUT_MS): Promise<Tried> {
-  const lastRun = lastRunValue(new Date(now.getTime() - NEVER_STARTED_SINCE_MS).toISOString())
+  const lastRun = lastRunValue(neverStartedSince(now))
   const started = Date.now()
   const checked = await check(repo, shell, budgetMs, lastRun)
   const printed = foundOutput(checked.stdout, lastRun)
