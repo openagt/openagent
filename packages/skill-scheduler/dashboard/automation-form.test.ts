@@ -63,7 +63,7 @@ describe('a new automation', () => {
   })
 
   test('when it would run, as its row would say it; nothing while nothing says when', () => {
-    expect(draftSentence(draft())).toBe('Every 1 day')
+    expect(draftSentence(draft())).toBe('Every day')
     expect(draftSentence(draft({ pace: every('15', 'm'), when: CHECK }))).toBe('Every 15 minutes at most, when its shell line prints something')
     expect(draftSentence(draft({ pace: every('15', 'm'), when: CHECK, waitsFor: 'when someone commented' }))).toBe('Every 15 minutes at most, when someone commented')
     expect(draftSentence(draft({ pace: WORK, when: CHECK, waitsFor: 'when someone commented' }))).toBe('When someone commented')
@@ -72,11 +72,11 @@ describe('a new automation', () => {
     expect(draftSentence(draft({ pace: every(''), when: CHECK }))).toBeUndefined()
     // With a time of day, which this machine holds: at that time by time alone, from that time beside a shell line.
     expect(draftSentence(draft({ pace: every('2', 'd', '10:00') }))).toBe('Every 2 days at 10:00')
-    expect(draftSentence(draft({ pace: every('1', 'w', '09:30'), when: CHECK, waitsFor: 'when someone commented' }))).toBe('Every 1 week from 09:30, when someone commented')
+    expect(draftSentence(draft({ pace: every('1', 'w', '09:30'), when: CHECK, waitsFor: 'when someone commented' }))).toBe('Every week from 09:30, when someone commented')
     expect(draftRow(draft({ pace: every('2', 'd', '10:00') }))).toEqual({ command: 'answer-comments', on: false, publish: 'commit', every: '2d', pace: { every: '2d', at: '10:00', since: '' }, home: 'claude-code', able: ['claude-code', 'codex'] })
     expect(draftRow(draft({ pace: WORK }))).toBeUndefined()
     // Before a name is typed the sentence is already there: it does not name the command.
-    expect(draftSentence({ ...EMPTY_DRAFT })).toBe('Every 1 day')
+    expect(draftSentence({ ...EMPTY_DRAFT })).toBe('Every day')
   })
 
   test('what a try answered: an agent would start, nothing to do, or the line failed and why; an answer that is not what the command promises is a failed line', () => {

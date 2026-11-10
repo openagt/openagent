@@ -196,7 +196,7 @@ describe('in words', () => {
 
   test('the pace, as a sentence: an interval spelled out, what the check waits for, or both; a check with no plain line is "when its shell line prints something"', () => {
     const base = { command: 'a', on: true, publish: 'commit' as const, ...MADE }
-    expect(pace({ ...base, every: '1d' })).toBe('Every 1 day')
+    expect(pace({ ...base, every: '1d' })).toBe('Every day')
     expect(pace({ ...base, when: 'npx queue' })).toBe('When its shell line prints something')
     expect(pace({ ...base, when: 'npx queue', waitsFor: 'when the queue holds a task' })).toBe('When the queue holds a task')
     expect(pace({ ...base, every: '6h', when: 'x' })).toBe('Every 6 hours at most, when its shell line prints something')
@@ -214,9 +214,9 @@ describe('in words', () => {
     expect(pace({ ...skill, pace: { every: '2d', at: '10:00', since } })).toBe('Every 2 days from 10:00, when a ticket has no plan')
     expect(pace({ ...skill, pace: { every: '2w', since } })).toBe('Every 2 weeks at most, when a ticket has no plan')
     expect(pace({ ...skill, pace: { work: true } })).toBe('When a ticket has no plan')
-    expect(pace({ command: 'a', on: true, publish: 'commit', ...MADE, every: '1d', pace: { every: '1mo', at: '9:05', since } })).toBe('Every 1 month at 09:05')
+    expect(pace({ command: 'a', on: true, publish: 'commit', ...MADE, every: '1d', pace: { every: '1mo', at: '9:05', since } })).toBe('Every month at 09:05')
     // No check to ask: "whenever there is work" cannot be followed, the skill's interval stands.
-    expect(pace({ command: 'a', on: true, publish: 'commit', ...MADE, every: '1d', pace: { work: true } })).toBe('Every 1 day')
+    expect(pace({ command: 'a', on: true, publish: 'commit', ...MADE, every: '1d', pace: { work: true } })).toBe('Every day')
     expect(ownPace({ ...skill, pace: { every: '30m', since } })).toBe(true)
     expect(ownPace({ ...skill, pace: { work: true } })).toBe(true)
     expect(ownPace(skill)).toBe(false)
