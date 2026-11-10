@@ -193,10 +193,10 @@ export function contextEventsSource(): EventsSource {
  * The relayed-agent lookup (#1067 slice 2). A run-scoped RPC uses it to tell an ordinary local agent
  * (resolve a local checkout) from one running on a saved machine (forward the call there).
  *
- * The one accessor with a default rather than a throw, because "unwired" has a real meaning here:
- * a call arriving over `/_relay/rpc` is the *machine* side of the relay, and the agent it names is
- * local to that machine. Forwarding it onward would be a loop, so the honest answer there is that
- * nothing is relayed from here.
+ * The one accessor with a default rather than a throw: unwired, every run is this computer's own,
+ * which is what a test that calls an RPC without wiring the daemon's capabilities reads. The
+ * daemon wires it before it serves anything, the relay's calls from another computer included;
+ * those are kept from being passed on again by `asArrived` (relay-agent.ts), not by this default.
  */
 export function contextRemote(): RemoteAgents {
   return wired?.remote ?? NO_RELAYED_RUNS

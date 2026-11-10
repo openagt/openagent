@@ -23,9 +23,8 @@ import type { OwnProject } from '../dashboard/elsewhere.js'
 import type { AddProjectResult, RemoveProjectResult, StartedInResult } from '../dashboard/types.js'
 
 // The Projects sidebar behind the new dashboard (#405): the global registry (#390) the
-// daemon and CLI write — id, path, name, activated, last activity. The per-agent
-// foreground dashboard (#427) scopes this to a single project via the request context.
-// The live event stream is its own endpoint rather than a call (`GET /_rpc/events`).
+// daemon and CLI write — id, path, name, activated, last activity. The live event stream is its
+// own endpoint rather than a call (`GET /_rpc/events`).
 //
 // Each project also carries what the daemon's background jobs found wrong with it (#1500) —
 // a data branch that cannot reach origin, say (#1599) — and why its data stays on this machine, if it does.

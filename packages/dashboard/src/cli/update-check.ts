@@ -1,8 +1,8 @@
 /**
  * CLI "up-to-date?" check (#312): after the bare-`openagent` version footer,
  * tell the user whether a newer version is published on npm. Display only;
- * auto-update is a separate, deferred concern. Same seam + node-adapter +
- * forgiving-on-error convention as `project.ts` (#380).
+ * auto-update is a separate, deferred concern. The fetch is a seam, and every failure
+ * reads as "unknown", which prints nothing.
  */
 
 /** The npm package this CLI ships as; the registry key for the version check. */

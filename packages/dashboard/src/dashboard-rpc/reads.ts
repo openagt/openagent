@@ -368,7 +368,7 @@ let buildingDashboard: Promise<DashboardData> | undefined
 /**
  * The project's files for the `#` context picker (#504) and the Context's file count (#661): every
  * file git sees (tracked + untracked, honoring .gitignore), repo-relative and sorted, via
- * `git ls-files`. Localhost-only by nature — the relay has no checkout, so it resolves `[]`.
+ * `git ls-files`; `[]` for a project with no folder here.
  * Pass a live `agentId` to list that agent's worktree instead of the project root (#738). The
  * Files pane reads its own list, through its module.
  */
@@ -390,7 +390,7 @@ export async function onAgentMainBranch(projectId: string, agentId: string): Pro
   }, null)
 }
 
-/** The project's page on its git host and the git host's name (#489, #1820), or null: no git host package, no remote there, or the relay. */
+/** The project's page on its git host and the git host's name (#489, #1820), or null: no git host package, or no remote there. */
 export async function onGitHostHome(projectId: string): Promise<GitHostHome | null> {
   const cwd = await resolveProjectPath(projectId)
   if (!cwd) return null
@@ -398,7 +398,7 @@ export async function onGitHostHome(projectId: string): Promise<GitHostHome | nu
   return (await gitHost?.home()) ?? null
 }
 
-/** The repository the project's provider offers to create for it (a project with no remote), or null: no provider, a remote already there, the host out of reach, or the relay. */
+/** The repository the project's provider offers to create for it (a project with no remote), or null: no provider, a remote already there, or the host out of reach. */
 export async function onRepositoryOffer(projectId: string): Promise<RepositoryOffer | null> {
   const cwd = await resolveProjectPath(projectId)
   if (!cwd) return null
@@ -406,8 +406,8 @@ export async function onRepositoryOffer(projectId: string): Promise<RepositoryOf
 }
 
 /**
- * The project's git status (#491): active branch, dirty flag, linked PR. Null when not a repo /
- * relay. Pass a live `agentId` to read that agent's worktree, which is the branch and the dirty
+ * The project's git status (#491): active branch, dirty flag, linked PR. Null when not a repo.
+ * Pass a live `agentId` to read that agent's worktree, which is the branch and the dirty
  * state that actually belong to it (#738). A run-scoped read is since-filtered (#1255): an agent on
  * a reused pinned branch must not wear a predecessor's merged PR as its own badge.
  */

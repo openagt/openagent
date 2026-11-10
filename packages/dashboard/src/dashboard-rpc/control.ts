@@ -220,8 +220,8 @@ export async function sendStart(projectId: string, prompt: string, options: Star
 
 /**
  * Open a project in the OS file manager or an editor (#490). Localhost-only: the daemon
- * spawns a local command against the project's own registered path. A public host has no
- * local path to resolve, so it returns an error rather than spawning anything.
+ * spawns a local command against the project's own registered path. A project with no folder
+ * here returns an error rather than spawning anything.
  *
  * With a `agentId` it opens that session's own checkout instead (#798) — the whole point of
  * opening it is to look at what the agent is doing, which is not in the project's tree.
