@@ -289,7 +289,7 @@ function EntryRow({ project, placed, agent, names, starts, reload }: { project: 
         icon={<Play className="h-3.5 w-3.5" aria-hidden />}
         ariaLabel={`Start an agent on entry ${place}`}
         menuAriaLabel={`Other ways to run ${view.title}`}
-        tooltip="Spin up an agent working on this entry"
+        tooltip="Start an agent working on this entry"
         busy={starts.inFlight}
         starting={starts.starting(project.id, entry)}
         onStart={() => void starts.startEntry(project.id, entry)}

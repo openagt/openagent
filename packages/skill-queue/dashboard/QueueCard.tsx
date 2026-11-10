@@ -69,7 +69,7 @@ export function QueueCard({ projects }: ModuleCardProps) {
                         <Tooltip>
                           <TooltipTrigger
                             render={
-                              <div role="group" aria-label="How many agents to spin up" className="ml-auto flex h-7 shrink-0 items-center rounded-md border border-border text-xs tabular-nums" />
+                              <div role="group" aria-label="How many agents to start" className="ml-auto flex h-7 shrink-0 items-center rounded-md border border-border text-xs tabular-nums" />
                             }
                           >
                             <button type="button" aria-label="One agent fewer" disabled={count <= 1} onClick={() => starts.setCount(project.id, count - 1)} className="flex h-full w-6 items-center justify-center text-muted-foreground hover:text-foreground disabled:opacity-40">
@@ -80,13 +80,13 @@ export function QueueCard({ projects }: ModuleCardProps) {
                               <Plus className="h-3 w-3" aria-hidden />
                             </button>
                           </TooltipTrigger>
-                          <TooltipContent>How many agents to spin up: one per entry, from the top of the queue.</TooltipContent>
+                          <TooltipContent>How many agents to start: one per entry, from the top of the queue.</TooltipContent>
                         </Tooltip>
                         {/* The chevron sends the top entry alone: a launcher can only ever start one agent. */}
                         <StartAgentButton
                           icon={<FastForward className="h-3.5 w-3.5" aria-hidden />}
                           label={`Start ${count}`}
-                          menuAriaLabel={`Other ways to spin up agents on ${project.name}'s queue`}
+                          menuAriaLabel={`Other ways to start agents on ${project.name}'s queue`}
                           tooltip={fanOutLabel(count)}
                           busy={inFlight}
                           starting={starts.fanningOut(project.id)}
@@ -119,9 +119,9 @@ export function QueueCard({ projects }: ModuleCardProps) {
                               variant="ghost"
                               size="icon-sm"
                               icon={<Play className="h-3.5 w-3.5" aria-hidden />}
-                              ariaLabel="Spin up an agent working on this entry"
+                              ariaLabel="Start an agent working on this entry"
                               menuAriaLabel={`Other ways to run ${view.title}`}
-                              tooltip="Spin up an agent working on this entry"
+                              tooltip="Start an agent working on this entry"
                               busy={inFlight}
                               starting={starts.starting(project.id, entry)}
                               onStart={() => void starts.startEntry(project.id, entry)}

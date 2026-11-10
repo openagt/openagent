@@ -93,7 +93,7 @@ export function TicketRow({
             icon={<Play className="h-4 w-4" aria-hidden />}
             ariaLabel={`Start work on ${ticket.title}`}
             menuAriaLabel={`Other ways to work on ${ticket.title}`}
-            tooltip="Spin up an agent working on this ticket"
+            tooltip="Start an agent working on this ticket"
             busy={busy}
             onStart={() => onStart(workPrompt, 'The work agent could not be started.')}
             onConfigure={() => onConfigure(workPrompt)}
