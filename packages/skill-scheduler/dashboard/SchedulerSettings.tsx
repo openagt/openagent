@@ -78,6 +78,7 @@ export function SchedulerSettings({ projects }: ModuleSettingsProps) {
           control={
             <Input
               type="number"
+              name="spend-offset"
               // The text as typed while the field has the focus, so a number can be typed through a state that is none yet ("-").
               value={text ?? String(Math.round(offset * 10) / 10)}
               min={-MAX_SPEND_OFFSET}
