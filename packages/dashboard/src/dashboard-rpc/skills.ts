@@ -41,7 +41,7 @@ export interface ProjectSkills {
   uncommitted: string[]
   /** Whether the folder is a git repository: without one there is nothing to commit. */
   git: boolean
-  /** Where the skills are sent, for a person: the git host's name ("GitHub", "GitLab"), else the remote's host. Absent without a remote: a commit on this machine is all agents need. */
+  /** Where the skills are sent, for a person: the git host's name ("GitHub", "GitLab"), else the remote's host. Absent without a remote, or while it has no branch agents start from: a commit on this machine is all agents need. */
   remote?: string
   /** The open pull request the skills went to when the default branch took no push. */
   request?: { number: number; url: string }
@@ -66,7 +66,7 @@ export async function onProjectSkills(projectId: string): Promise<ProjectSkills 
   const open = request?.state === 'OPEN' ? { number: request.number, url: request.url } : undefined
   // With no request, the skills may still be on the remote: on the branch a send left where it could open none.
   const pushed = state.remote && !open && waiting.size > 0 ? await skillsOn(cwd, `refs/remotes/origin/${SKILLS_BRANCH}`) : undefined
-  const remote = state.remote ? await remoteName(cwd) : undefined
+  const remote = state.remote && start && start.ref !== 'HEAD' ? await remoteName(cwd) : undefined
   return {
     groups: GROUPS.map(group => ({
       title: group.title,
