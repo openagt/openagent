@@ -163,7 +163,8 @@ export function QuestionPanel({
                 <span className="flex min-w-0 flex-1 flex-col gap-2">
                   <span>
                     {o.label}
-                    {o.id === choice.recommended && <span className="ml-2 text-muted-foreground">Recommended</span>}
+                    {/* A box of its own, which a screen reader reads as a word apart from the label. */}
+                    {o.id === choice.recommended && <span className="ml-2 inline-block text-muted-foreground">Recommended</span>}
                   </span>
                   {o.detail && <span className="text-muted-foreground">{o.detail}</span>}
                 </span>
@@ -186,8 +187,9 @@ export function QuestionPanel({
                 onKeyDown={e => {
                   if (e.key === 'Enter' && !e.ctrlKey && !e.metaKey) submit()
                 }}
+                name="own-answer"
                 placeholder="Type your own answer here"
-                aria-label="Other"
+                aria-label="Your own answer"
                 className="mx-4 mb-2 ml-11 rounded-md border border-border bg-transparent px-2.5 py-1.5 outline-none placeholder:text-muted-foreground focus:border-primary"
               />
             )}

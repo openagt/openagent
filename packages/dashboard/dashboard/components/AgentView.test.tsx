@@ -625,7 +625,7 @@ describe('a question the agent stopped on', () => {
     onAgent.mockResolvedValue(asked)
     render(view({ events: asked }))
     fireEvent.click(await screen.findByRole('radio', { name: 'Other' }))
-    fireEvent.change(screen.getByLabelText('Other'), { target: { value: 'MySQL' } })
+    fireEvent.change(screen.getByLabelText('Your own answer'), { target: { value: 'MySQL' } })
     fireEvent.click(screen.getByRole('button', { name: 'Submit' }))
     await waitFor(() => expect(sendMessage).toHaveBeenCalledWith('p1', 'You paused to ask: "Which database?". The user chose: MySQL. Continue with that decision.', 'run-1'))
     await waitFor(() => expect(screen.getByRole('group', { name: 'Your answer' }).textContent).toBe('Which database?MySQL'))
