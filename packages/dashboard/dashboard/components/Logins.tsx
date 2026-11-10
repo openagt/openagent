@@ -109,10 +109,15 @@ function CommandLine({ command }: { command: string }) {
   )
 }
 
+/** Whether what is in the way of the agent is its own login. */
+export function loggedOut(state: AgentState): boolean {
+  return / logged in/.test(state.problem ?? '')
+}
+
 /** What is in the way of the agent, in words. */
 export function agentWords(state: AgentState): string {
   const name = DRIVER_LABELS[state.driver]
-  return agentLoginState(state) === 'not-installed' ? `${name} is not installed.` : / logged in/.test(state.problem ?? '') ? `${name} is not logged in.` : (state.problem ?? `${name} cannot start.`)
+  return agentLoginState(state) === 'not-installed' ? `${name} is not installed.` : loggedOut(state) ? `${name} is not logged in.` : (state.problem ?? `${name} cannot start.`)
 }
 
 /** What is missing at a host, in words. */

@@ -23,6 +23,7 @@ import {
 } from '../lib/quota-bar.js'
 import { Tooltip, TooltipTrigger, TooltipContent } from './ui/tooltip.js'
 import { AddedAccountsUsage, useAgentAccounts } from './AgentAccounts.js'
+import { loggedOut, useAgentState } from './Logins.js'
 
 // The usage bar (#960): one week-long track, so "am I ahead or behind?" is a glance rather than a
 // calculation. It replaces the pair of flat meters that came before (#519/#879), which showed the
@@ -391,13 +392,14 @@ function OtherWindowRow({ window }: { window: DriverQuotaWindow }) {
   )
 }
 
-/** Why there's no reading, in words a user can act on. */
-function unavailableNote(view: QuotaView): string | undefined {
+/** Why there's no reading, in words a user can act on; `signedOut` while Claude Code itself is not logged in. */
+function unavailableNote(view: QuotaView, signedOut: boolean): string | undefined {
   switch (view.unavailable) {
     case undefined:
       return undefined
     case 'no-subscription':
-      return 'This account has no subscription usage to report, so there is no boundary to measure against.'
+      // Claude Code logged out answers so too: it has no account at all.
+      return signedOut ? 'Claude Code is not logged in, so there is no usage to show.' : 'This account has no subscription usage to report, so there is no boundary to measure against.'
     case 'agent-not-found':
       return 'Claude Code was not found, so usage cannot be read.'
     case 'unrecognized':
@@ -484,7 +486,8 @@ export function Quota({ projects }: { projects: ProjectSummary[] }) {
   const { usageLimit } = useMountedModules()
   // Why the own login has no reading says nothing while runs use other accounts with readings of their own: a server's runs use the person's own computer's.
   const others = (useAgentAccounts('claude').view?.accounts ?? []).filter(account => !account.own)
-  const note = view && !(view.windows.length === 0 && others.length > 0) ? unavailableNote(view) : undefined
+  const { state: claude } = useAgentState('claude-code')
+  const note = view && !(view.windows.length === 0 && others.length > 0) ? unavailableNote(view, claude !== undefined && loggedOut(claude)) : undefined
   // When the newest attempt failed but earlier numbers are still on screen, say how old they are.
   // A retained reading can now outlive several failures (#960), and an undated bar claims to be now.
   const staleAt = view?.unavailable !== undefined && view.windows.length > 0 ? view.readAt : undefined
