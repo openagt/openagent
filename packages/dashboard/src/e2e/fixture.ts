@@ -1,5 +1,5 @@
 // A fixture project as the E2E stories and the demo stand it up (see README.md): a real git repo
-// with an `origin`, the tickets and queue skills, and, once it is added to a dashboard, start and
+// with an `origin`, the tickets and queue skills (and more for the demo), and, once it is added to a dashboard, start and
 // resume lines that run `fake-run-bin.js`, so a Start goes the whole production way offline.
 import { copyFile, mkdir, writeFile } from 'node:fs/promises'
 import { execFile } from 'node:child_process'
@@ -12,15 +12,18 @@ import { QUEUE_FILE } from '@openagt/skill-queue'
 import { PROJECT_HOOKS_FILE } from '../project-hooks.js'
 
 /**
- * The two skills every fixture project holds, by the name of each one's folder, with the package
- * whose text it is, read from this workspace's own install: the tickets and the queue. Holding a
- * skill's text is what gives a project that skill's package in the dashboard.
+ * The skills a fixture project can hold, by the name of each one's folder, with the package whose
+ * text it is, read from this workspace's own install. Holding a skill's text is what gives a project
+ * that skill's package in the dashboard: its pages and cards.
  */
 const packageDir = (name: string): string => resolve(dirname(fileURLToPath(import.meta.resolve(name))), '..')
-const SKILL_PACKAGES: Record<string, string> = {
+const SKILL_PACKAGES = {
   tickets: packageDir('@openagt/skill-tickets'),
   queue: packageDir('@openagt/skill-queue'),
+  logs: packageDir('@openagt/skill-logs'),
+  scheduler: packageDir('@openagt/skill-scheduler'),
 }
+export type FixtureSkill = keyof typeof SKILL_PACKAGES
 
 const exec = promisify(execFile)
 
@@ -31,10 +34,10 @@ export async function git(cwd: string, ...args: string[]): Promise<string> {
 }
 
 /**
- * Make `cwd` (an empty directory) a fixture repo holding `files`: committed on `main`, except the
- * tickets and the queue, which go on the data branch where the product reads them.
+ * Make `cwd` (an empty directory) a fixture repo holding `files` and the texts of `skills`: committed
+ * on `main`, except the tickets and the queue, which go on the data branch where the product reads them.
  */
-export async function makeFixtureRepo(cwd: string, files: Record<string, string> = {}): Promise<void> {
+export async function makeFixtureRepo(cwd: string, files: Record<string, string> = {}, skills: readonly FixtureSkill[] = ['tickets', 'queue']): Promise<void> {
   await git(cwd, 'init', '-q', '-b', 'main')
   await git(cwd, 'config', 'user.email', 'e2e@test')
   await git(cwd, 'config', 'user.name', 'e2e')
@@ -47,12 +50,12 @@ export async function makeFixtureRepo(cwd: string, files: Record<string, string>
     await mkdir(dirname(join(cwd, file)), { recursive: true })
     await writeFile(join(cwd, file), text)
   }
-  // The project keeps its tickets and queue the way a real one does: it holds the two skills'
-  // texts, so the dashboard brings their packages to it; its runs and checkouts come from the
-  // packages every project has.
-  for (const [skill, pkg] of Object.entries(SKILL_PACKAGES)) {
+  // The project keeps its tickets and queue the way a real one does: it holds the skills' texts,
+  // so the dashboard brings their packages to it; its runs and checkouts come from the packages
+  // every project has.
+  for (const skill of skills) {
     await mkdir(join(cwd, '.claude', 'skills', skill), { recursive: true })
-    await copyFile(join(pkg, 'SKILL.md'), join(cwd, '.claude', 'skills', skill, 'SKILL.md'))
+    await copyFile(join(SKILL_PACKAGES[skill], 'SKILL.md'), join(cwd, '.claude', 'skills', skill, 'SKILL.md'))
   }
   await git(cwd, 'add', '-A')
   await git(cwd, 'commit', '-q', '-m', 'seed')
