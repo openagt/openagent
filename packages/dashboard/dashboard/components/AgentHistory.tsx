@@ -173,6 +173,8 @@ export function AgentHistory({
 
   // All projects show: the rail pools every project's sessions. One project: just its own.
   const crossProject = scope === null && recentAgents !== undefined
+  // Whose `agents` are: the page's project, else the picked one.
+  const listOf = projectId ?? scope ?? null
   const listed = crossProject ? recentAgents!.map(recent => recent.agent) : agents
 
   const hasRunning = listed.some(agent => agent.status === 'running')
@@ -230,10 +232,11 @@ export function AgentHistory({
     : agents.map(agent => ({
         key: agent.id,
         agent,
-        projectId,
+        // The list is the picked project's on a page of no project too: the Overview, a module's page.
+        projectId: listOf,
         active: agent.id === selectedAgentId,
         onClick: () => onSelect(agent.id),
-        ...near(projectId, agent),
+        ...near(listOf, agent),
       })), order)
 
   // New is the active view when a project is open on its launcher (its "New" / Start-a-session
@@ -248,9 +251,8 @@ export function AgentHistory({
 
   const hasRecents = rows.length > 0 || showOptimistic
 
-  // Each row's person, in its own project: a row of the picked project's list on a page of no project says none.
-  const projectOf = (row: Row): string | null => row.projectId ?? scope
-  const accountOf = useGitHostPeople(rows.map(row => ({ projectId: projectOf(row), person: row.agent.person })), onGitHostPeople, 'sidebar:people')
+  // Each row's person, in its own project.
+  const accountOf = useGitHostPeople(rows.map(row => ({ projectId: row.projectId, person: row.agent.person })), onGitHostPeople, 'sidebar:people')
   // Your own runs with no git host to ask, a session with no project say: your own picture, as the sidebar's foot shows it.
   const { person: me } = usePerson()
   const ownPicture = (person: string | undefined): string | undefined => (person !== undefined && me?.avatar !== undefined && me.email !== undefined && person.toLowerCase() === me.email ? me.avatar : undefined)
@@ -269,7 +271,7 @@ export function AgentHistory({
       naming={!subagent && awaitingName(row.agent, preferences.nameRuns !== false)}
       driver={row.agent.driver}
       // A subagent is its main agent's, whose row says whose.
-      {...(row.agent.person && !subagent ? { person: row.agent.person, account: accountOf(projectOf(row), row.agent.person), picture: ownPicture(row.agent.person) } : {})}
+      {...(row.agent.person && !subagent ? { person: row.agent.person, account: accountOf(row.projectId, row.agent.person), picture: ownPicture(row.agent.person) } : {})}
       {...(row.agent.model ? { model: modelName(models?.[driverFromImpl(row.agent.driver) ?? 'claude-code'], row.agent.model) } : {})}
       // On the Overview the project is what tells the rows apart, so the row still names it; a
       // project's own rail already knows its project, and a subagent is in its main agent's.

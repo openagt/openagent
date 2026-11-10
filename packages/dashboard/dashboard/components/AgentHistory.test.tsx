@@ -338,6 +338,12 @@ describe('AgentHistory rows', () => {
     expect(row.getAttribute('aria-label')).toContain('Needs PR · 2 commits')
   })
 
+  test('on a page of no project, the picked project\'s rows say what its git host allows, as on its own pages', () => {
+    const shop: ProjectSummary = { id: 'p1', path: '/p1', name: 'shop', activated: true, gitHost: false }
+    renderRail(<AgentHistory projectId={null} scope="p1" projects={[shop]} agents={[agent({ id: 'one', status: 'done', unpublished: 1 })]} selectedAgentId={null} onSelect={() => {}} />)
+    expect(screen.getByLabelText('Needs push · 1 commit')).toBeTruthy()
+  })
+
   test('a run\'s pull request is a glyph before the logo, its shape and colour by how it stands, and the hover says which', async () => {
     const agents = [
       agent({ id: 'open', status: 'done', driver: 'claude-code', pr: { number: 12, url: 'u' }, prState: 'open' }),
