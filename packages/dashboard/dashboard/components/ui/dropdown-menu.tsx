@@ -71,6 +71,13 @@ export function DropdownMenuItem({ className, ...props }: ComponentProps<typeof 
   return <Menu.Item className={cn(MENU_ITEM_CLASS, className)} {...props} />
 }
 
+export const DropdownMenuRadioGroup = Menu.RadioGroup
+
+/** One pick of a group's, said to a screen reader as checked or not; it closes the menu as an item does. Its caller draws the mark. */
+export function DropdownMenuRadioItem({ className, closeOnClick = true, ...props }: ComponentProps<typeof Menu.RadioItem>) {
+  return <Menu.RadioItem className={cn(MENU_ITEM_CLASS, className)} closeOnClick={closeOnClick} {...props} />
+}
+
 export function DropdownMenuCheckboxItem({
   className,
   children,

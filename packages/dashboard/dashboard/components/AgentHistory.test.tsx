@@ -1049,7 +1049,13 @@ describe('AgentHistory on a phone', () => {
     renderRail(<AgentHistory projectId="p1" scope="p1" agents={agents} selectedAgentId={null} onSelect={() => {}} />)
     expect(names()).toEqual(['Old question', 'New work'])
     await openMenu(screen.getByRole('button', { name: 'Sort agents' }))
-    fireEvent.click(await screen.findByRole('menuitem', { name: 'Name' }))
+    // The pick is said as a radio's, checked or not, not only drawn.
+    expect((await screen.findAllByRole('menuitemradio')).map(item => [item.textContent, item.getAttribute('aria-checked')])).toEqual([
+      ['Date created', 'false'],
+      ['Last updated', 'true'],
+      ['Name', 'false'],
+    ])
+    fireEvent.click(screen.getByRole('menuitemradio', { name: 'Name' }))
     expect(updatePreferences).toHaveBeenCalledWith({ recentsSort: 'name' })
   })
 })

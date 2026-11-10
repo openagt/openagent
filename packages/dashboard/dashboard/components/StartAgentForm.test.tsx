@@ -136,7 +136,7 @@ const noop = () => {}
 /** The launcher's "Auto" menu button; its text says the publish pick. */
 const autoMenu = () => screen.getByRole('button', { name: 'Auto' })
 /** The labels of the publish options the open "Auto" menu lists. */
-const publishOptions = () => screen.getAllByRole('menuitem').map(item => item.querySelector('span > span')!.textContent)
+const publishOptions = () => screen.getAllByRole('menuitemradio').map(item => item.querySelector('span > span')!.textContent)
 /** The launcher's "start from" chip, when there is one. */
 const LOCAL = { kind: 'local' } as const
 const startFromChip = () => screen.queryByRole('combobox', { name: 'The agent starts from' })
@@ -237,7 +237,7 @@ describe('StartAgentForm (#1774)', () => {
 
     await openMenu(autoMenu())
     expect(publishOptions()).toEqual(['Off', 'Commit', 'Publish branch', 'Open PR', 'Merge on green'])
-    fireEvent.click(screen.getByRole('menuitem', { name: /^Open PR/ }))
+    fireEvent.click(screen.getByRole('menuitemradio', { name: /^Open PR/ }))
     expect(updatePreferences).toHaveBeenCalledWith({ publish: 'pr' })
 
     cleanup()
@@ -306,7 +306,7 @@ describe('StartAgentForm (#1774)', () => {
       expect((await sent()).prBase).toBe('feature-x')
       start.mockClear()
       await openMenu(autoMenu())
-      fireEvent.click(screen.getByRole('menuitem', { name: 'main' }))
+      fireEvent.click(screen.getByRole('menuitemradio', { name: 'main' }))
       await waitFor(() => expect(autoMenu().textContent).toBe('Auto: Open PR → main'))
       expect((await sent()).prBase).toBeUndefined()
     })

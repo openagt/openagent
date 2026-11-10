@@ -14,6 +14,8 @@ import {
   DropdownMenuGroup,
   DropdownMenuItem,
   DropdownMenuLabel,
+  DropdownMenuRadioGroup,
+  DropdownMenuRadioItem,
   DropdownMenuSeparator,
   DropdownMenuSub,
   DropdownMenuSubContent,
@@ -154,14 +156,19 @@ export function SkillsMenu({
                 </DropdownMenuItem>
               ) : (
                 <>
-                  <DropdownMenuItem closeOnClick={false} aria-current={picks.project === undefined} onClick={() => onChange({ on: picks.on, off: picks.off })}>
-                    <Check className={cn('h-3.5 w-3.5 shrink-0', picks.project === undefined ? 'opacity-100' : 'opacity-0')} aria-hidden />
-                    All
-                  </DropdownMenuItem>
-                  <DropdownMenuItem closeOnClick={false} aria-current={picks.project === 'none'} onClick={() => onChange({ ...picks, project: 'none' })}>
-                    <Check className={cn('h-3.5 w-3.5 shrink-0', picks.project === 'none' ? 'opacity-100' : 'opacity-0')} aria-hidden />
-                    None
-                  </DropdownMenuItem>
+                  <DropdownMenuRadioGroup
+                    value={picks.project === undefined ? 'all' : picks.project === 'none' ? 'none' : null}
+                    onValueChange={(pick: 'all' | 'none') => onChange(pick === 'all' ? { on: picks.on, off: picks.off } : { ...picks, project: 'none' })}
+                  >
+                    <DropdownMenuRadioItem value="all" closeOnClick={false}>
+                      <Check className={cn('h-3.5 w-3.5 shrink-0', picks.project === undefined ? 'opacity-100' : 'opacity-0')} aria-hidden />
+                      All
+                    </DropdownMenuRadioItem>
+                    <DropdownMenuRadioItem value="none" closeOnClick={false}>
+                      <Check className={cn('h-3.5 w-3.5 shrink-0', picks.project === 'none' ? 'opacity-100' : 'opacity-0')} aria-hidden />
+                      None
+                    </DropdownMenuRadioItem>
+                  </DropdownMenuRadioGroup>
                   {held.map(name => (
                     <DropdownMenuCheckboxItem key={name} checked={kept.includes(name)} onCheckedChange={() => toggleProject(name)}>
                       <span className="truncate">{name}</span>

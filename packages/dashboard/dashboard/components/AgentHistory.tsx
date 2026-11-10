@@ -20,7 +20,7 @@ import { modelName, useModels } from '../lib/models.js'
 import { PR_MARKS, type PrState } from '../lib/pr-marks.js'
 import { agentLabel, awaitingName } from '../lib/agent-label.js'
 import { holdsMainAgent, isOpenSubagent, nestRows, taskLabel } from '../lib/subagents.js'
-import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem, DropdownMenuGroup, DropdownMenuLabel } from './ui/dropdown-menu.js'
+import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuGroup, DropdownMenuLabel, DropdownMenuRadioGroup, DropdownMenuRadioItem } from './ui/dropdown-menu.js'
 import { SESSIONS_ID } from '../../src/project-address.js'
 import { Tooltip, TooltipTrigger, TooltipContent } from './ui/tooltip.js'
 import { ProjectPicker } from './ProjectPicker.js'
@@ -552,13 +552,14 @@ function RecentsSortMenu({ order }: { order: RecentsSort }) {
       <DropdownMenuContent align="end" className="min-w-40">
         <DropdownMenuGroup>
           <DropdownMenuLabel className="font-normal">Sort by</DropdownMenuLabel>
-          {(Object.keys(RECENTS_SORT_LABELS) as RecentsSort[]).map(pick => (
-            // aria-current: the check mark is only drawn, so a screen reader is told the pick too.
-            <DropdownMenuItem key={pick} aria-current={pick === order} onClick={() => updatePreferences({ recentsSort: pick })}>
-              <Check className={cn('h-3.5 w-3.5 shrink-0', pick === order ? 'opacity-100' : 'opacity-0')} aria-hidden />
-              {RECENTS_SORT_LABELS[pick]}
-            </DropdownMenuItem>
-          ))}
+          <DropdownMenuRadioGroup value={order} onValueChange={(pick: RecentsSort) => updatePreferences({ recentsSort: pick })}>
+            {(Object.keys(RECENTS_SORT_LABELS) as RecentsSort[]).map(pick => (
+              <DropdownMenuRadioItem key={pick} value={pick}>
+                <Check className={cn('h-3.5 w-3.5 shrink-0', pick === order ? 'opacity-100' : 'opacity-0')} aria-hidden />
+                {RECENTS_SORT_LABELS[pick]}
+              </DropdownMenuRadioItem>
+            ))}
+          </DropdownMenuRadioGroup>
         </DropdownMenuGroup>
       </DropdownMenuContent>
     </DropdownMenu>
