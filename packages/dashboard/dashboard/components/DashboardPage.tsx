@@ -11,7 +11,7 @@ import { AgentUpdates } from './AgentUpdates.js'
 import { Agents } from './Agents.js'
 import { useModuleCards, type OverviewCard } from './ModuleCards.js'
 import { SkillsCard } from './SkillsCard.js'
-import { CardGrid, EditOverview } from './CustomizeOverview.js'
+import { CardGrid, EditOverview, TakeOffMark } from './CustomizeOverview.js'
 import { ALL_PROJECTS, arrangeCards } from '../../src/client.js'
 import type { ProjectSummary } from '../../src/index.js'
 import { Page } from './Page.js'
@@ -189,7 +189,7 @@ export function DashboardPage({
         editing && (
           <p role="status" className="rounded-md bg-accent/60 px-3 py-2 text-xs text-muted-foreground">
             <span className="font-medium text-foreground">{scopeName !== undefined ? `Arranging the layout for ${scopeName}.` : 'Arranging the layout for all projects.'}</span>{' '}
-            {scopeName !== undefined ? 'Each project keeps its own; a project you never arranged uses the all-projects one.' : 'A project you never arranged on its own uses it too.'} Drag a card by its handle, pick its width, or take it off with ✕. On a phone every card is full width.
+            {scopeName !== undefined ? 'Each project keeps its own; a project you never arranged uses the all-projects one.' : 'A project you never arranged on its own uses it too.'} Drag a card by its handle, pick its width, or take it off with <TakeOffMark />. On a phone every card is full width.
           </p>
         )
       }

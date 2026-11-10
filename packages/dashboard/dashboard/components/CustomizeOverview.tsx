@@ -207,7 +207,15 @@ export function EditOverview({ arranged, layouts, layoutKey }: { arranged: Place
         }}
         className={cn('rounded-lg border border-dashed border-border px-3 py-2.5', dragging?.from === 'page' && 'border-primary bg-accent/40')}
       >
-        <p className="mb-2 text-xs text-muted-foreground">{tray.length === 0 ? 'Every card is on the page. Drag one here, or press its ✕, to take it off.' : 'Not on the page: drag one onto a card to put it there, or press + to add it at the end.'}</p>
+        <p className="mb-2 text-xs text-muted-foreground">
+          {tray.length === 0 ? (
+            <>
+              Every card is on the page. Drag one here, or press its <TakeOffMark />, to take it off.
+            </>
+          ) : (
+            'Not on the page: drag one onto a card to put it there, or press + to add it at the end.'
+          )}
+        </p>
         {tray.length > 0 && (
           <ul className="flex flex-wrap gap-2">
             {tray.map(({ card }) => (
@@ -301,6 +309,11 @@ export function EditOverview({ arranged, layouts, layoutKey }: { arranged: Place
       </Grid>
     </div>
   )
+}
+
+/** The ✕ a card's bar takes it off the page with, as a sentence names it: the bar's own icon, drawn whatever fonts the computer has, its box cut to the glyph so it sits on the line as a letter does. */
+export function TakeOffMark() {
+  return <X role="img" aria-label="X" viewBox="5 5 14 14" className="inline size-[7px] align-baseline" />
 }
 
 /** The bar above a card while the page is arranged, so it covers none of the card: its handle, its widths, and ✕. */
