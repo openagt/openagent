@@ -153,9 +153,6 @@ function fromContext<K extends keyof DashboardContext>(key: K): DashboardContext
   return value
 }
 
-/** No run is relayed from here — see {@link contextRemote}. */
-const NO_RELAYED_RUNS: RemoteAgents = { target: () => undefined, list: () => [], working: () => false, rekey: () => {}, sent: () => true, home: async () => undefined, follow: async () => {}, machineNames: async () => () => undefined, machineRuns: async () => [], followRuns: () => () => {}, elsewhere: async () => [], elsewhereRuns: async () => [], followElsewhereRuns: () => () => {}, elsewhereHome: async () => undefined, bringHere: async () => ({ state: 'missing' }), forward: async () => { throw new Error('no other computer is wired here') }, machinesQueue: async () => ({ said: [], unread: [] }) }
-
 /** The projects every RPC resolves a project id against: the global registry. */
 export function contextProjects(): ProjectsProvider {
   return defaultProjectsProvider()
@@ -191,15 +188,12 @@ export function contextEventsSource(): EventsSource {
 
 /**
  * The relayed-agent lookup (#1067 slice 2). A run-scoped RPC uses it to tell an ordinary local agent
- * (resolve a local checkout) from one running on a saved machine (forward the call there).
- *
- * The one accessor with a default rather than a throw: unwired, every run is this computer's own,
- * which is what a test that calls an RPC without wiring the daemon's capabilities reads. The
- * daemon wires it before it serves anything, the relay's calls from another computer included;
- * those are kept from being passed on again by `asArrived` (relay-agent.ts), not by this default.
+ * (resolve a local checkout) from one running on a saved machine (forward the call there). A call
+ * that came in from another computer is kept from being passed on again by `asArrived`
+ * (relay-agent.ts).
  */
 export function contextRemote(): RemoteAgents {
-  return wired?.remote ?? NO_RELAYED_RUNS
+  return fromContext('remote')
 }
 
 /** The user-preferences store (#410), over the registry file. */

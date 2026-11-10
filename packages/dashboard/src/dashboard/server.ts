@@ -95,6 +95,11 @@ export async function startDashboard(opts: DashboardOptions): Promise<Dashboard>
   const port = opts.port ?? 4200
   const clientBundleDir = opts.clientBundleDir
 
+  // What the RPCs act through is wired first: the daemon's own callers of them (its syncs) need it
+  // whether or not a page is served.
+  const { context } = opts
+  const rpcMount = makeRpcMount(context)
+
   // A broken install ships no built bundle (the published package always does), so serve
   // 503 for everything rather than stand up a half-wired mount. Returning here lets the
   // main path below treat the bundle, mount, and quota as present with no re-checks.
@@ -105,9 +110,6 @@ export async function startDashboard(opts: DashboardOptions): Promise<Dashboard>
     })
     return listenDashboard(server, port, () => closeServer(server))
   }
-
-  const { context } = opts
-  const rpcMount = makeRpcMount(context)
 
   // The machine-to-daemon relay endpoints (#1067): wired only when an events tail is supplied.
   const localScreen = opts.screen ? kept(opts.screen) : undefined
