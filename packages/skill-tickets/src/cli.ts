@@ -2,7 +2,7 @@ import { join } from 'node:path'
 import { GIT_FAILED, Refused, UsageError, checkoutRoot, inRepo, listProjectDir, nodeBranchFileFs, nodeGitRunner, openProjectReader, parseCommandArgs, readProjectFile, runCommandLine, writeProjectDataDetached, type Command, type ProjectReader, type GitRunner } from '@openagt/agent-data'
 import { isTicketFile, isTicketPath, META_FILE, TICKETS_DIR, ticketLockName, ticketPlanName, ticketStem } from './names.js'
 import { readTicket, readTickets, readTicketsMeta, type TicketsFs } from './tickets.js'
-import { applyClaims, applyRelease, claimHistory, claimMessage, lockHolder, releaseMessage } from './locks.js'
+import { applyClaims, applyRelease, claimHistory, claimMessage, lockOn, releaseMessage } from './locks.js'
 import { holderOf } from './holder.js'
 
 /**
@@ -97,10 +97,9 @@ const COMMANDS: Record<string, Command<[CliIo, GitRunner]>> = {
         return
       }
       // Someone else's claim outranks the close: closing takes their lock with the ticket.
-      const lock = await fs.read(join(dir, TICKETS_DIR, ticketLockName(file))).catch(() => undefined)
-      const other = lock === undefined ? undefined : lockHolder(lock)
-      if (lock !== undefined && other !== holder) {
-        outcome = { ok: false, reason: 'not-holder', ...(other === undefined ? {} : { holder: other }) }
+      const lock = await lockOn(dir, file, fs)
+      if (lock && lock.holder !== holder) {
+        outcome = { ok: false, reason: 'not-holder', ...(lock.holder === undefined ? {} : { holder: lock.holder }) }
         return
       }
       outcome = { ok: true }
@@ -136,7 +135,7 @@ const COMMANDS: Record<string, Command<[CliIo, GitRunner]>> = {
         return
       }
       // The holder as the lock names it; a lock that names nobody readable is still a claim.
-      const existing = lockHolder((await fs.read(join(dir, TICKETS_DIR, ticketLockName(file))).catch(() => '')) ?? '')
+      const existing = (await lockOn(dir, file, fs))?.holder
       outcome = { ok: false, reason: 'claimed', ...(existing === undefined ? {} : { holder: existing }) }
     }, git)
     if (!outcome.ok) {
@@ -157,7 +156,7 @@ const COMMANDS: Record<string, Command<[CliIo, GitRunner]>> = {
     await write(io.cwd, releaseMessage(file), async dir => {
       const fs = nodeBranchFileFs()
       outcome = await applyRelease(dir, file, holder, fs)
-      if (outcome === 'not-holder') other = lockHolder((await fs.read(join(dir, TICKETS_DIR, ticketLockName(file))).catch(() => '')) ?? '')
+      if (outcome === 'not-holder') other = (await lockOn(dir, file, fs))?.holder
     }, git)
     if (outcome === 'no-lock') throw new Refused({ ok: false, reason: 'no-lock', file }, `${TICKETS_DIR}/${file} is not claimed`)
     if (outcome === 'not-holder') throw new Refused({ ok: false, reason: 'not-holder', file, holder: other }, `${TICKETS_DIR}/${file} is claimed by ${other ?? 'someone else'}, not by you`)
