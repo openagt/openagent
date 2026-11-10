@@ -104,11 +104,6 @@ export async function remoteFacts(target: MachineAccess): Promise<{ version?: st
   }
 }
 
-/** The OpenAgent a saved machine runs, as its ping tells it; nothing for a machine that does not answer, or does not say. */
-export async function remoteVersion(target: MachineAccess): Promise<string | undefined> {
-  return (await remoteFacts(target)).version
-}
-
 /** The two headers every relay request carries: JSON, and this computer's key there. No Origin on purpose. */
 function relayHeaders(key: string): Record<string, string> {
   return { 'content-type': 'application/json', authorization: `Bearer ${key}` }
