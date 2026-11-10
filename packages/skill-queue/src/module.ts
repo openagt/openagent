@@ -1,7 +1,8 @@
 // The rules of the package's dashboard module (`../dashboard/`), kept apart from React so they
-// are unit-tested like the rest of the package: how a queue entry reads on screen, what the
-// "Add to queue" action runs for the links a dashboard page hands it, and how the Overview card
-// starts agents on entries.
+// are unit-tested like the rest of the package: how a queue entry reads on screen, how the
+// command's lists are read back, what the "Add to queue" action runs for the links a dashboard
+// page hands it, and how the Overview card starts agents on entries.
+import type { PlacedEntry } from './queue.js'
 
 /**
  * The command that works the queue by itself, as a person types it without its slash: the
@@ -91,6 +92,28 @@ export function addArgs(link: LinkToQueue): string[] {
 /** What running one command in a project answers: OpenAgent's `ModuleCommandResult`, by structure. */
 export type CommandResult = { ok: true; output: unknown } | { ok: false; error: string }
 
+/**
+ * The entries a read of the queue printed, each one `isEntry` takes, or why there are none: a
+ * command that could not run, or printed no list.
+ */
+export function readEntries<E>(result: CommandResult, isEntry: (value: unknown) => value is E): { entries: E[] } | { error: string } {
+  if (!result.ok) return { error: result.error }
+  if (!Array.isArray(result.output)) return { error: 'the queue command did not print a list' }
+  return { entries: result.output.filter(isEntry) }
+}
+
+/** Whether the bare command printed one entry: its line of text. */
+export function isEntryLine(value: unknown): value is string {
+  return typeof value === 'string'
+}
+
+/** Whether `--full` printed one entry: its line, with the priority of the section it sits in when it sits in one. */
+export function isPlacedEntry(value: unknown): value is PlacedEntry {
+  if (!value || typeof value !== 'object') return false
+  const { entry, priority } = value as Record<string, unknown>
+  return typeof entry === 'string' && (priority === undefined || typeof priority === 'number')
+}
+
 /** What the action did: every link queued, or stopped at the first that was not, with why. */
 export type AddOutcome = { ok: true } | { ok: false; error: string }
 
@@ -120,7 +143,7 @@ export async function addToQueue(run: (args: string[]) => Promise<CommandResult>
   if (links.length === 0) return { ok: true }
   const listed = await run([])
   if (!listed.ok) return { ok: false, error: listed.error }
-  const entries = Array.isArray(listed.output) ? listed.output.filter((entry): entry is string => typeof entry === 'string') : []
+  const entries = Array.isArray(listed.output) ? listed.output.filter(isEntryLine) : []
   for (const link of links) {
     if (alreadyQueued(entries, link)) continue
     const result = await run(addArgs(link))

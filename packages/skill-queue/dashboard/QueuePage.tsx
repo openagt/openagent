@@ -27,7 +27,7 @@ import {
   type Schedule,
 } from '@openagt/dashboard/module'
 import type { PlacedEntry } from '../src/queue.js'
-import { DEFAULT_PRIORITY, PRIORITIES, QUEUE_COMMAND, addTextArgs, doneArgs, fanOutLabel, isWorkingOn, priorityMeaning, workOnEntryPrompt } from '../src/module.js'
+import { DEFAULT_PRIORITY, PRIORITIES, QUEUE_COMMAND, addTextArgs, doneArgs, fanOutLabel, isPlacedEntry, isWorkingOn, priorityMeaning, readEntries, workOnEntryPrompt } from '../src/module.js'
 import { EntryTitle, entryView } from './entry.js'
 import { useQueueStarts, type QueueStarts } from './starts.js'
 
@@ -83,11 +83,9 @@ export function QueuePage({ projects }: ModulePageProps) {
     () =>
       Promise.all(
         projects.map(async (project): Promise<ProjectRead> => {
-          const [result, agents] = await Promise.all([host.runCommand(project.id, ['--local', '--full']), host.agents(project.id).catch(() => [])])
+          const [read, agents] = await Promise.all([host.runCommand(project.id, ['--local', '--full']).then(result => readEntries(result, isPlacedEntry)), host.agents(project.id).catch(() => [])])
           const working = agents.filter(agent => agent.status === 'running')
-          if (!result.ok) return { project, working, error: result.error }
-          if (!Array.isArray(result.output)) return { project, working, error: 'the queue command did not print a list' }
-          return { project, working, entries: result.output.filter(isPlacedEntry) }
+          return 'error' in read ? { project, working, error: read.error } : { project, working, entries: read.entries }
         }),
       ),
     NOTHING_READ,
@@ -377,11 +375,4 @@ function AddEntry({ project, reload }: { project: ModuleProject; reload: () => P
       )}
     </form>
   )
-}
-
-/** Whether the command printed one entry as `--full` prints it. */
-function isPlacedEntry(value: unknown): value is PlacedEntry {
-  if (!value || typeof value !== 'object') return false
-  const { entry, priority } = value as Record<string, unknown>
-  return typeof entry === 'string' && (priority === undefined || typeof priority === 'number')
 }
