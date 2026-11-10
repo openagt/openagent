@@ -25,6 +25,9 @@ export async function sessionRepos(folders: readonly string[], git: GitRunner = 
   return repos
 }
 
+/** Why a run with no project keeps where it worked, whatever its end: see {@link openSessionFolder}. */
+export const SESSION_FOLDER_STAYS = 'a session folder stays'
+
 /**
  * Where a run with no project works: a folder of its own in the sessions home, made when it is not
  * there yet, the run's skills linked in where its coding agent looks for them. The folder itself has

@@ -15,7 +15,7 @@ import { isPidAlive, withRunLock } from './run-lock.js'
 import { runEndedLine } from './ended.js'
 import { askName, isBareCommand, nameRun, type AskedName } from './title.js'
 import { childEndedLine, tellParent, type ParentDeps } from './parent.js'
-import { openSessionFolder } from './session-folder.js'
+import { openSessionFolder, SESSION_FOLDER_STAYS } from './session-folder.js'
 
 /**
  * One run (#1774): a checkout from the branches package, a session from agent-driver, the prompt
@@ -67,9 +67,6 @@ import { openSessionFolder } from './session-folder.js'
 
 /** How long naming a run from its report may hold its end up: the small model answers in a few seconds. */
 const REPORT_NAMING_TIMEOUT_MS = 15_000
-
-/** Why a run with no project keeps where it worked: see {@link openSessionFolder}. */
-export const SESSION_FOLDER_STAYS = 'a session folder stays'
 
 /** The detail a stopped run's record carries. */
 export const STOPPED_DETAIL = 'stopped by a signal to its process'

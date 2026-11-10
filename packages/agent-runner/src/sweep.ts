@@ -6,7 +6,7 @@ import { endLiveCard, readLiveCard, readLiveDiary } from './live-card.js'
 import { lockHolder, runStderrPath } from './run-lock.js'
 import { recordBranchGone, recordRun, runnerMark, startOf } from './records.js'
 import { childEndedLine, tellParent, type ParentDeps } from './parent.js'
-import { SESSION_FOLDER_STAYS } from './run.js'
+import { SESSION_FOLDER_STAYS } from './session-folder.js'
 
 /**
  * The belt (#1774): what a run's own process could not do because it died. A scheduler runs it on
