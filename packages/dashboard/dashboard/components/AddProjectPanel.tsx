@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type FormEvent, type KeyboardEvent } from 'react'
+import { useEffect, useRef, useState, type FormEvent, type KeyboardEvent, type RefObject } from 'react'
 import { onCloneTarget, sendAddProject, sendAddProjectFromAddress, sendPickProjectDirectory } from '../rpc/projects.js'
 import { useAction } from '../lib/use-action.js'
 import { Button } from './ui/button.js'
@@ -25,6 +25,7 @@ export function AddProjectPanel({
   folder,
   address,
   fromAddress = address !== undefined,
+  opener,
   onAdded,
   onClose,
 }: {
@@ -33,6 +34,8 @@ export function AddProjectPanel({
   address?: string | undefined
   /** Opened to add a project by its repository's address: no folder dialog. */
   fromAddress?: boolean
+  /** The control that opened it, given focus back when it closes: the menu it was picked in is gone by then. */
+  opener: RefObject<HTMLElement | null>
   /** The project was added: its folder, for the picker to pick it once the projects are read again. */
   onAdded: (path: string) => void
   onClose: () => void
@@ -50,12 +53,7 @@ export function AddProjectPanel({
   const { busy, error, reset, run } = useAction()
   const panelRef = useRef<HTMLDivElement>(null)
 
-  // Give focus back to the control that opened the dialog (the picker's Add item is gone by
-  // then, so its trigger is the stable target).
-  useEffect(() => {
-    const opener = document.activeElement instanceof HTMLElement ? document.activeElement : null
-    return () => opener?.focus()
-  }, [])
+  useEffect(() => () => opener.current?.focus(), [opener])
 
   // The system dialog opens with the modal: picking the folder IS the form. A dismissed dialog
   // closes the modal too — the user said "not now" once already.

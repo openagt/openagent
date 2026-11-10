@@ -265,6 +265,21 @@ describe('ProjectPicker', () => {
     expect(onPick).not.toHaveBeenCalled()
   })
 
+  test('the trust question closed, by Escape or a yes, gives focus back to the picker', async () => {
+    sendAddProject.mockResolvedValue({ ok: true, alreadyActivated: false })
+    renderPicker()
+    await openMenu(trigger())
+    fireEvent.click(await screen.findByRole('option', { name: /notes/ }))
+    fireEvent.keyDown(await screen.findByText('Do you trust this repository?'), { key: 'Escape' })
+    expect(screen.queryByText('Do you trust this repository?')).toBeNull()
+    expect(document.activeElement).toBe(trigger())
+    await openMenu(trigger())
+    fireEvent.click(await screen.findByRole('option', { name: /notes/ }))
+    fireEvent.click(await screen.findByRole('button', { name: 'I trust it, add it' }))
+    fireEvent.click(await screen.findByRole('button', { name: 'Done' }))
+    expect(document.activeElement).toBe(trigger())
+  })
+
   test('"Search another folder…" adds a folder to look in, and the repos are read again', async () => {
     sendAddRepoFolder.mockResolvedValue({ ok: true, added: true })
     renderPicker()

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { Combobox } from '@base-ui/react/combobox'
 import { Cloud, Check, ChevronDown, ChevronsUpDown, Folder, FolderGit2, FolderPlus, FolderSearch, Layers, Plus, Search } from 'lucide-react'
 import type { ProjectSummary } from '../../src/index.js'
@@ -185,6 +185,7 @@ export function ProjectPicker({
   const [open, setOpen] = useState(false)
   const [typed, setTyped] = useState('')
   const [adding, setAdding] = useState<{ folder: string } | { address: string } | null>(null)
+  const triggerRef = useRef<HTMLButtonElement>(null)
   // The folder just added, until the projects read again have it: then it is picked.
   const [added, setAdded] = useState<string | null>(null)
   const [folderError, setFolderError] = useState<string | null>(null)
@@ -274,7 +275,7 @@ export function ProjectPicker({
         <ChevronDown className="h-3 w-3 shrink-0 opacity-70" aria-hidden />
       </button>
     )
-  const trigger = <Combobox.Trigger disabled={busy || pending} aria-label={name} className={MENU_TRIGGER_OPEN_CLASS} render={button} />
+  const trigger = <Combobox.Trigger ref={triggerRef} disabled={busy || pending} aria-label={name} className={MENU_TRIGGER_OPEN_CLASS} render={button} />
 
   return (
     <>
@@ -379,6 +380,7 @@ export function ProjectPicker({
       {adding !== null && (
         <AddProjectPanel
           {...('folder' in adding ? { folder: adding.folder } : { address: adding.address })}
+          opener={triggerRef}
           onAdded={path => {
             setAdded(path)
             onProjectAdded()
