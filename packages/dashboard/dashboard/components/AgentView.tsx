@@ -79,7 +79,7 @@ export function AgentView({
   subagents = NO_SUBAGENTS,
 }: {
   projectId: string
-  /** Which run this is (#749); absent right after Start, before the poll adopts its id. */
+  /** Which run this is (#749). */
   agentId: string
   /** The live channel's events for this agent — all there is while it runs. */
   events: OpenAgentEvent[]
@@ -174,7 +174,7 @@ export function AgentView({
   const underBox = [modelLabel, effort ? effortLabel(effort) : undefined].filter(Boolean).join('\u2002') || undefined
   // How full this session's context is: the run's own last reading, against what the agent says
   // the model holds. Either missing, no circle.
-  const window = modelContextWindow(models, picked, model)
+  const contextWindow = modelContextWindow(models, picked, model)
   // Where the agent runs, for the row above the message box: a machine by the name it was given.
   // A run another computer started, which is no saved machine, is named by that computer: it did not run here.
   const runsOn = remoteLabel ?? (target === 'web' ? 'Cloud' : target === 'actions' ? 'GitHub Actions' : target === 'remote' ? 'Another machine' : card?.otherHost && card.host ? card.host : thisMachineName())
@@ -196,6 +196,9 @@ export function AgentView({
   // The agent works, or is about to: on a message just sent, or as its feed shows before the
   // agents poll does.
   const going = feedLive || shownSending !== undefined
+  // The agent's checkout (its branch, its pull request, clean or dirty, its size), read once for
+  // the top bar and for the bar above the message box, and again the moment a turn starts or ends.
+  const checkout = useCheckoutStatus(projectId, agentId, active)
   // What the branch holds (#1023), read once for the bar above the message box. Read once
   // the agent stops rather than once the process does: while it is still writing to the branch
   // there is nothing to hand off yet, but a parked session's branch is finished work. "Stops" is
@@ -204,9 +207,6 @@ export function AgentView({
   // card says saving, the checkout is being cleaned up, and an empty branch is deleted with it, so
   // a publish offered then turned into "Branch gone" moments later: the answer is only shown then
   // for a branch with commits of its own, which the clean-up keeps.
-  // The agent's checkout (its branch, its pull request, clean or dirty, its size), read once for
-  // the top bar and for the bar above the message box, and again the moment a turn starts or ends.
-  const checkout = useCheckoutStatus(projectId, agentId, active)
   const read = useAgentHandoff(projectId, agentId, live === false && !going, card?.saving === true, going)
   const kept = read.handoff !== null && read.handoff.exists && !read.handoff.empty
   const handoff = card?.saving && !kept ? { ...read, handoff: null, loaded: false } : read
@@ -242,9 +242,8 @@ export function AgentView({
   const ready = working || waitedFor === agentId || (archived !== null && branchRead)
   // Whether the feed shows this agent yet. On a first visit it would otherwise pass through what
   // each read still out has to say: "Waiting for the session to start…" while the list of agents
-  // is unread, the live channel's events (the project root's, for an agent whose checkout is
-  // gone), "Loading agent…" while the archive is out, and only then the agent's own events. It
-  // stays blank instead until the agent is known to run, its archive has answered, or the second
+  // is unread, the live channel's events, "Loading agent…" while the archive is out, and only then
+  // the archived log. It stays blank instead until the agent is known to run, its archive has answered, or the second
   // has passed, so it fills in one step. Once it has shown this agent it keeps showing it: an
   // agent that stops while watched keeps its events on screen while the archive is read.
   const [settledFor, setSettledFor] = useState<string | null>(null)
@@ -255,16 +254,6 @@ export function AgentView({
 
   // The agent has ended, its subagents too: the next step is offered from here on.
   const ended = ready && live === false && !going && subagentsRunning === 0
-  // Whether the bar above the message box has something to say: a pull request, a commit going
-  // on, uncommitted changes while the agent works, or, once it has ended and its branch is read,
-  // what the branch holds. An agent that changed nothing has no bar. A bar that is there stays
-  // while the agent works (it committed: its checkout is clean again) and while an ended agent's
-  // branch is still being read, so it never goes and comes back.
-  //
-  // Once the bar has something to say for this run it keeps it (`|| held`): a run makes its own
-  // last commit while it cleans up, after its turn ends, and the branch read taken in between
-  // answers for a branch that holds nothing — which used to hide the bar for the seconds until the
-  // next read. The read itself now comes a second later rather than fifteen (`SETTLING_MS`).
   // The bar's branch and pull request: the checkout's read, and where it has none, the branch's.
   // The checkout's read answers without them for the moment its folder is being removed, and a bar
   // with no branch went away until the next read.
@@ -282,6 +271,16 @@ export function AgentView({
     live === false &&
     (onBranch?.landed === true ||
       ((onBranch?.merged === true || pr?.state === 'MERGED' || pr?.state === 'CLOSED') && !onBranch?.pendingFiles?.length && onBranch?.movedPastPr !== true))
+  // Whether the bar above the message box has something to say: a pull request, a commit going
+  // on, uncommitted changes while the agent works, or, once it has ended and its branch is read,
+  // what the branch holds. An agent that changed nothing has no bar. A bar that is there stays
+  // while the agent works (it committed: its checkout is clean again) and while an ended agent's
+  // branch is still being read, so it never goes and comes back.
+  //
+  // Once the bar has something to say for this run it keeps it (`|| held`): a run makes its own
+  // last commit while it cleans up, after its turn ends, and the branch read taken in between
+  // answers for a branch that holds nothing — which used to hide the bar for the seconds until the
+  // next read. The read itself now comes a second later rather than fifteen (`SETTLING_MS`).
   const lastSay = useRef<{ agentId: string | null; say: boolean }>({ agentId: null, say: false })
   const held = lastSay.current.agentId === agentId && lastSay.current.say
   // Whether the run's pull request is merged is not known until the git host has answered, and
@@ -306,14 +305,14 @@ export function AgentView({
             ? pr !== undefined || checkout?.checkout?.dirty === true || held
             : held)))
   lastSay.current = { agentId, say }
-  // What the bar is about right now, so the ✕ hides this and not the next thing the agent does:
-  // the run, its branch, how much work is on it, and where that work has got to.
   // Every pull request the run opened, for the row under the message box: the ones before, then the one it is on.
   const earlierPrs = card?.earlierPrs
   const prs = useMemo(() => [...(earlierPrs ?? []), ...(pr && !earlierPrs?.some(earlier => earlier.url === pr.url) ? [pr] : [])], [earlierPrs, pr])
   // Where the session started, right above the message box, as the "New agent session" page has it. It is
   // there whatever stands in the box's place.
   const row = <SessionRow runsOn={runsOn} target={target} remoteKind={card?.remoteKind} elsewhere={elsewhere || card?.otherHost === true} projectName={projectName} startedFrom={startedFrom} worksOn={barCheckout?.branch ?? branch} repos={card?.repos ?? picks?.repos} />
+  // What the bar is about right now, so the ✕ hides this and not the next thing the agent does:
+  // the run, its branch, how much work is on it, and where that work has got to.
   const workState = [agentId, barCheckout?.branch ?? '', onBranch?.commits.length ?? 0, onBranch?.pendingFiles?.length ?? 0, onBranch?.insertions ?? 0, onBranch?.deletions ?? 0, onBranch?.pushed ?? false, pr?.number ?? '', pr?.state ?? ''].join('|')
 
   return (
@@ -397,7 +396,7 @@ export function AgentView({
             onQueued={onQueued}
             editInBox={editInBox}
             model={underBox}
-            {...(window !== undefined ? { context: <ContextCircle used={card?.contextTokens ?? 0} size={window} /> } : {})}
+            {...(contextWindow !== undefined ? { context: <ContextCircle used={card?.contextTokens ?? 0} size={contextWindow} /> } : {})}
             controls={<RunPrLabels prs={prs} />}
             contextSet={contextSet}
             // A card with no level has none: a message may have taken it away.
