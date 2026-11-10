@@ -195,9 +195,36 @@ function linkedSkills(repo: string, deps: RunDeps): Promise<readonly SkillLink[]
   return (deps.skills ?? basicSkills)(repo, deps.driver).catch((): SkillLink[] => [])
 }
 
-export interface RunOptions extends RunDeps {
+/**
+ * What a run is asked: its prompt, and how far and from where it takes its work. The same whether
+ * the run goes on in this process, in a process spawned for it (`runner.ts`), or detached.
+ */
+export interface RunRequest {
   /** What the agent is told, usually a slash command. */
   prompt: string
+  /** The model the session starts on (`run --model`); the coding agent's own default when absent. */
+  model?: string
+  /** How hard that model may think (`run --effort`); the coding agent's own default when absent. */
+  effort?: string
+  /** How far the agent publishes when it finishes (`run --publish`); absent, only what the prompt itself asks. */
+  publish?: Publish
+  /** A text handed to the agent with the prompt, after it (`run --attach`), such as what a scheduler's check found: the record keeps it apart from the prompt, which stays the run's name. */
+  attached?: string
+  /** The run this one is started for (`run --parent`): told when this one ends. */
+  parent?: string
+  /** The branch the run's fresh branch starts from (`run --base`); origin's default branch when absent. */
+  base?: string
+  /** The branch the run's pull request goes into (`run --pr-base`); the repository's default branch when absent. */
+  prBase?: string
+  /** The branch to work on (`run --branch`), one that exists, such as a person's pull request's; a fresh `agent-<id>` when absent. */
+  branch?: string
+  /** What the run is started for (`run --for`), kept on its mark: a thread on the git host, by its address. */
+  for?: string
+  /** The repos a session with no project has as context (`run --repos`), each copied into its folder; kept on its mark. */
+  repos?: SessionRepo[]
+}
+
+export interface RunOptions extends RunRequest, RunDeps {
   /**
    * The run's name, already being asked for by whoever starts the run, from before it could make
    * this run's driver ({@link namedAtStart}); asked for here as the run begins when absent.
@@ -213,28 +240,8 @@ export interface RunOptions extends RunDeps {
   startedAt?: string
   /** Whether the run's marker is already on the branch: a scheduler's tick writes it before it spawns. A person's run marks itself. */
   marked?: boolean
-  /** The model the session starts on; the tool's own default when absent. */
-  model?: string
-  /** How hard that model may think (`--effort`); the tool's own default when absent. */
-  effort?: string
-  /** The branch to work on, an existing one; a fresh `agent-<id>` when absent. */
-  branch?: string
-  /** How far the agent publishes when it finishes; absent, only what the prompt itself asks. */
-  publish?: Publish
-  /** A text handed to the agent with the prompt, after it: the record keeps it apart from the prompt, which stays the run's name. */
-  attached?: string
-  /** The run this one is started for: told when this one ends. */
-  parent?: string
-  /** The branch the run's fresh branch starts from; origin's default branch when absent. */
-  base?: string
-  /** The branch the run's pull request goes into; the repository's default branch when absent. */
-  prBase?: string
   /** The account the run works as at the git host, kept on its record; none when the git host cannot say. */
   gitAccount?: string
-  /** What the run is started for (`run --for`), kept on its mark: a thread on the git host, by its address. */
-  for?: string
-  /** The repos a session with no project has as context (`run --repos`), each copied into its folder; kept on its mark. */
-  repos?: SessionRepo[]
   /** The agent the run is on, by its id (`OPENAGENT_AGENT`), kept on its mark; the default agent when absent. */
   agent?: string
   /** The session's picks of skills, kept on its mark (`agent.ts` SkillPicks): skills on top of its agent's, skills of its agent's left out, which of the project's own stay in its checkout. */

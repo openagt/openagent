@@ -1,7 +1,8 @@
 import { Refused, UsageError, inRepo, nodeGitRunner, parseCommandArgs, runCommandLine, runPackageCommand, sessionsHomeOf, type Command, type GitRunner, PROJECT_SKILLS_ENV, SKILLS_OFF_ENV, SKILLS_ON_ENV } from '@openagt/agent-data'
 import { liftSkillRules, projectRoot } from '@openagt/skill-branches'
 import { findRun } from '@openagt/skill-logs'
-import { DRIVER_NAMES, GIT_ACCOUNT_ENV, agentLoginFor, detachResume, detachRun, isDriverName, readyToRun, resumeProject, runProject } from './runner.js'
+import { DRIVER_NAMES, GIT_ACCOUNT_ENV, agentLoginFor, detachResume, detachRun, isDriverName, readyToRun, resumeProject, runProject, type DriverName, type SpawnedResume } from './runner.js'
+import type { RunOutcome, RunRequest } from './run.js'
 import { agentNamed, anySkillPick, runAgent, skillPicksNamed, type SkillPicks } from './agent.js'
 import { AGENT_ENV } from '@openagt/agent-data'
 import { initHooks } from './init.js'
@@ -169,28 +170,9 @@ const COMMANDS: Record<string, Command<[CliIo, GitRunner]>> = {
       const ready = await readyToRun(repo, driver ?? 'claude-code', login !== undefined ? { login } : {})
       if (ready.problems.length > 0) throw new Refused({ ok: false, reason: 'not-ready', ...ready }, ready.problems.join(' '))
     }
-    const named = { ...(publish !== undefined ? { publish } : {}), ...(values.attach !== undefined ? { attached: values.attach } : {}), ...(values.parent !== undefined ? { parent: values.parent } : {}), ...(values.base !== undefined ? { base: values.base } : {}), ...(values['pr-base'] !== undefined ? { prBase: values['pr-base'].trim() } : {}), ...(values.branch !== undefined ? { branch: values.branch.trim() } : {}), ...(values.for !== undefined ? { for: values.for.trim() } : {}), ...(repos !== undefined ? { repos } : {}) }
-    const picked = anySkillPick(skills) ? { skills } : {}
-    if (values.detach && values.resume !== undefined) {
-      const resumed = await detachResume(repo, {
-        id: values.resume,
-        ...(positionals[0] !== undefined ? { text: positionals[0] } : {}),
-        ...(values.answer !== undefined ? { answer: values.answer } : {}),
-        ...(values.model !== undefined ? { model: values.model } : {}),
-        ...(values.effort !== undefined ? { effort: values.effort } : {}),
-        ...(values.by !== undefined ? { by: values.by } : {}),
-        ...(publish !== undefined ? { publish } : noLevel ? { publish: NO_PUBLISH } : {}),
-      })
-      return { ok: true, detached: true, ...resumed }
-    }
-    if (values.detach) {
-      if (positionals[0] === undefined) throw new UsageError('expected 1 argument(s), got 0')
-      if (values.id !== undefined) throw new UsageError('--detach takes no --id: the run\'s id is minted and answered')
-      const started = await detachRun(repo, { prompt: positionals[0], ...(values.model !== undefined ? { model: values.model } : {}), ...(values.effort !== undefined ? { effort: values.effort } : {}), ...(driver !== undefined ? { driver } : {}), ...named })
-      return { ok: true, detached: true, ...started }
-    }
+
     if (values.resume !== undefined) {
-      const outcome = await resumeProject(repo, {
+      const resume: SpawnedResume = {
         id: values.resume,
         ...(positionals[0] !== undefined ? { text: positionals[0] } : {}),
         ...(values.answer !== undefined ? { answer: values.answer } : {}),
@@ -198,26 +180,42 @@ const COMMANDS: Record<string, Command<[CliIo, GitRunner]>> = {
         ...(values.effort !== undefined ? { effort: values.effort } : {}),
         ...(values.by !== undefined ? { by: values.by } : {}),
         ...(publish !== undefined ? { publish } : noLevel ? { publish: NO_PUBLISH } : {}),
-        log: io.stderr,
-      })
-      return { ok: outcome.status === 'done' || outcome.status === 'waiting', ...outcome }
+      }
+      if (values.detach) return { ok: true, detached: true, ...(await detachResume(repo, resume)) }
+      return answered(await resumeProject(repo, { ...resume, log: io.stderr }))
     }
     if (positionals[0] === undefined) throw new UsageError('expected 1 argument(s), got 0')
-    const outcome = await runProject(repo, {
+    // What the run is asked, the same whether it goes on in this process or in one of its own.
+    const asked: RunRequest & { driver?: DriverName } = {
       prompt: positionals[0],
-      ...picked,
-      ...(values.id !== undefined ? { id: values.id } : {}),
-      ...(values.started !== undefined ? { startedAt: new Date(values.started).toISOString() } : {}),
-      ...(values.mark ? { mark: true } : {}),
       ...(values.model !== undefined ? { model: values.model } : {}),
       ...(values.effort !== undefined ? { effort: values.effort } : {}),
       ...(driver !== undefined ? { driver } : {}),
-      ...named,
-      ...(gitAccount !== undefined ? { gitAccount } : {}),
-      ...(agent !== undefined ? { agent } : {}),
-      log: io.stderr,
-    })
-    return { ok: outcome.status === 'done' || outcome.status === 'waiting', ...outcome }
+      ...(publish !== undefined ? { publish } : {}),
+      ...(values.attach !== undefined ? { attached: values.attach } : {}),
+      ...(values.parent !== undefined ? { parent: values.parent } : {}),
+      ...(values.base !== undefined ? { base: values.base } : {}),
+      ...(values['pr-base'] !== undefined ? { prBase: values['pr-base'].trim() } : {}),
+      ...(values.branch !== undefined ? { branch: values.branch.trim() } : {}),
+      ...(values.for !== undefined ? { for: values.for.trim() } : {}),
+      ...(repos !== undefined ? { repos } : {}),
+    }
+    if (values.detach) {
+      if (values.id !== undefined) throw new UsageError('--detach takes no --id: the run\'s id is minted and answered')
+      return { ok: true, detached: true, ...(await detachRun(repo, asked)) }
+    }
+    return answered(
+      await runProject(repo, {
+        ...asked,
+        ...(anySkillPick(skills) ? { skills } : {}),
+        ...(values.id !== undefined ? { id: values.id } : {}),
+        ...(values.started !== undefined ? { startedAt: new Date(values.started).toISOString() } : {}),
+        ...(values.mark ? { mark: true } : {}),
+        ...(gitAccount !== undefined ? { gitAccount } : {}),
+        ...(agent !== undefined ? { agent } : {}),
+        log: io.stderr,
+      }),
+    )
   },
 
   async check(args, io, git) {
@@ -259,6 +257,11 @@ const COMMANDS: Record<string, Command<[CliIo, GitRunner]>> = {
     }
     throw new Refused(outcome, `a run is still working here (${outcome.runs.join(', ')}): stop it first`)
   },
+}
+
+/** A run's outcome as `run` answers it: ok when the run ended done, or waiting on a question. */
+function answered(outcome: RunOutcome): { ok: boolean } & RunOutcome {
+  return { ok: outcome.status === 'done' || outcome.status === 'waiting', ...outcome }
 }
 
 /**
