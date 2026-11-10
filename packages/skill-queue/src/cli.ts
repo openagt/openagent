@@ -73,7 +73,7 @@ const COMMANDS: Record<string, Command<[CliIo, GitRunner]>> = {
     if (!entry) throw new UsageError('the entry is empty')
     const priority = values.priority === undefined ? undefined : priorityArg(values.priority)
     await write(io.cwd, `queue add: ${entry}`, async dir => {
-      const md = await readOr(dir, '')
+      const md = await queueIn(dir)
       await writeQueue(dir, priority === undefined ? appendQueueEntry(md, entry) : insertQueueEntry(md, entry, priority))
     }, git)
     return { ok: true, entry, ...(priority === undefined ? {} : { priority }) }
@@ -82,20 +82,20 @@ const COMMANDS: Record<string, Command<[CliIo, GitRunner]>> = {
   async done(args, io, git) {
     const { positionals } = parseCommandArgs(args, {}, 1)
     const entry = positionals[0]!.trim()
-    let found = false
-    await write(io.cwd, `queue done: ${entry}`, async dir => {
-      const md = await readOr(dir, '')
-      found = parseQueueEntries(md).includes(entry)
-      if (found) await writeQueue(dir, removeQueueEntry(md, entry))
+    const found = await write(io.cwd, `queue done: ${entry}`, async dir => {
+      const md = await queueIn(dir)
+      if (!parseQueueEntries(md).includes(entry)) return false
+      await writeQueue(dir, removeQueueEntry(md, entry))
+      return true
     }, git)
     if (!found) throw new Refused({ ok: false, reason: 'no-entry', entry }, `no open queue entry reads "${entry}"`)
     return { ok: true, entry }
   },
 }
 
-/** The queue file inside a checkout, read as `fallback` when absent. */
-async function readOr(dir: string, fallback: string): Promise<string> {
-  return nodeBranchFileFs().read(join(dir, QUEUE_FILE)).catch(() => fallback)
+/** The queue file inside a checkout; an absent one reads as an empty queue. */
+async function queueIn(dir: string): Promise<string> {
+  return nodeBranchFileFs().read(join(dir, QUEUE_FILE)).catch(() => '')
 }
 
 async function writeQueue(dir: string, md: string): Promise<void> {
@@ -108,10 +108,18 @@ async function open(cwd: string, git: GitRunner): Promise<ProjectReader> {
   return openProjectReader(cwd, { git })
 }
 
-/** One write as a one-shot writer: to origin when the project is shared, else as a local commit. */
-async function write(cwd: string, message: string, op: (dir: string) => Promise<void>, git: GitRunner): Promise<void> {
+/**
+ * One write as a one-shot writer: to origin when the project is shared, else as a local commit.
+ * Answers what `op` found the last time it ran: a write that loses a race runs it again on the
+ * new tip, and only that run's finding is what landed.
+ */
+async function write<T>(cwd: string, message: string, op: (dir: string) => Promise<T>, git: GitRunner): Promise<T> {
   await inRepo(() => checkoutRoot(cwd, git))
-  await writeProjectDataDetached(cwd, message, op, { git })
+  let found: T | undefined
+  await writeProjectDataDetached(cwd, message, async dir => {
+    found = await op(dir)
+  }, { git })
+  return found as T
 }
 
 function priorityArg(value: string): number {
