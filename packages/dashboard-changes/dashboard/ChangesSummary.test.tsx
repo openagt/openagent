@@ -8,7 +8,7 @@ const render = (ui: Parameters<typeof renderWithHost>[0]) => renderWithHost(ui, 
 const readCounts = vi.fn(async () => [] as unknown)
 vi.mock('./reads.js', () => ({ readCounts }))
 
-const { ChangesSummary } = await import('./AgentChanges.js')
+const { ChangesSummary } = await import('./ChangesSummary.js')
 
 const CHANGES = [
   { path: 'src/a.ts', status: 'modified', added: 3, removed: 1, binary: false },
