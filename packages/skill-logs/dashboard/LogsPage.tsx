@@ -143,6 +143,7 @@ export function LogsPage({ projects }: ModulePageProps) {
     [],
     10_000,
     [key],
+    { remember: `skill-logs:live:${key}`, stored: true },
   )
   const { value: recorded, loaded } = usePolled<Read>(
     async () => {
@@ -161,6 +162,8 @@ export function LogsPage({ projects }: ModulePageProps) {
     // Each read fetches origin's copy of the records branch, and a run lands only when it ends.
     60_000,
     [key],
+    // Kept for the next visit: the page opens with the last list, faded until it is read again.
+    { remember: `skill-logs:runs:${key}`, stored: true },
   )
   const read = { ...recorded, rows: withLiveRuns(recorded.rows, live) }
   const accountOf = useGitHostPeople(read.rows.map(({ project, card }) => ({ projectId: project.id, person: card.person })), host.gitHostPeople, 'skill-logs:people')

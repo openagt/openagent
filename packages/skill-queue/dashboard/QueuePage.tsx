@@ -92,6 +92,8 @@ export function QueuePage({ projects }: ModulePageProps) {
     // A local read, no fetch: cheap enough to follow the queue closely.
     10_000,
     [key],
+    // Kept for the next visit: the page opens with the last list, faded until it is read again.
+    { remember: `skill-queue:page:${key}`, stored: true },
   )
   const schedule = useSchedule(projects)
   const names = useFileNames(reads.map(read => ({ projectId: read.project.id, paths: (read.entries ?? []).flatMap(placed => pathsIn(placed.entry)) })))

@@ -60,6 +60,8 @@ export function TicketsPage({ projects }: { projects: ModuleProject[] }) {
     EMPTY_GROUPS,
     10_000,
     [key],
+    // Kept for the next visit: the page opens with the last list, faded until it is read again.
+    { remember: `skill-tickets:page:${key}`, stored: true },
   )
   const [view, setViewState] = useState<TicketsView>(initialView)
   const open = (projectId: string, path: string[]) => {
