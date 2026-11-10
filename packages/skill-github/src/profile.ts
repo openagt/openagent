@@ -13,13 +13,6 @@ export type ProfileOutcome =
 /** What fetches the profile: `fetch` by default. */
 export type ProfileFetch = (url: string, init: { headers: Record<string, string>; signal: AbortSignal }) => Promise<{ ok: boolean; status: number; json(): Promise<unknown> }>
 
-/** A GitHub login, as GitHub allows one. */
-const LOGIN = /^[A-Za-z0-9](?:[A-Za-z0-9-]{0,38})$/
-
-export function isGithubLogin(login: string): boolean {
-  return LOGIN.test(login)
-}
-
 export async function publicProfile(login: string, fetcher: ProfileFetch = fetch): Promise<ProfileOutcome> {
   let answer: { ok: boolean; status: number; json(): Promise<unknown> }
   try {

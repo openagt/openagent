@@ -36,7 +36,9 @@ export interface AccountFacts {
 }
 
 /** A GitHub login, as GitHub allows one: also what keeps a folder's name inside the accounts' folder. */
-const LOGIN = /^[A-Za-z0-9](?:[A-Za-z0-9-]{0,38})$/
+export function isGithubLogin(login: string): boolean {
+  return /^[A-Za-z0-9](?:[A-Za-z0-9-]{0,38})$/.test(login)
+}
 
 /** Where OpenAgent's accounts are: one folder each, beside OpenAgent's other files in the person's config folder. */
 export function accountsRoot(env: NodeJS.ProcessEnv = process.env): string {
@@ -46,7 +48,7 @@ export function accountsRoot(env: NodeJS.ProcessEnv = process.env): string {
 
 /** The folder of one account: what `gh` is given as `GH_CONFIG_DIR` to work as it. */
 export function accountDir(root: string, login: string): string {
-  if (!LOGIN.test(login)) throw new Error(`${login} is no GitHub login`)
+  if (!isGithubLogin(login)) throw new Error(`${login} is no GitHub login`)
   return join(root, login)
 }
 
@@ -56,7 +58,7 @@ const ADDING = '.adding'
 /** Whether `dir` is one of OpenAgent's account folders: a run is given one, and works as it. */
 export function isAccountDir(root: string, dir: string): boolean {
   const rel = relative(root, dir)
-  return rel !== '' && !rel.startsWith('..') && !isAbsolute(rel) && LOGIN.test(rel)
+  return rel !== '' && !rel.startsWith('..') && !isAbsolute(rel) && isGithubLogin(rel)
 }
 
 /** `gh` working as the account in `dir`: its folder, never the person's, and no token from the environment unless given. */
@@ -72,7 +74,7 @@ export function accountLogins(root: string): string[] {
   } catch {
     return []
   }
-  return names.filter(name => LOGIN.test(name) && existsSync(join(root, name, 'hosts.yml'))).sort((a, b) => a.localeCompare(b))
+  return names.filter(name => isGithubLogin(name) && existsSync(join(root, name, 'hosts.yml'))).sort((a, b) => a.localeCompare(b))
 }
 
 export function readFacts(dir: string): AccountFacts | undefined {
@@ -97,7 +99,7 @@ function writeFile600(path: string, text: string): void {
 export async function whoAmI(gh: GhRunner, cwd: string): Promise<AccountFacts> {
   const said = (await gh(['api', '--hostname', HOST, 'user', '--jq', '[.login, (.id | tostring), (.name // "")] | @tsv'], cwd)).trim()
   const [login = '', id = '', name = ''] = said.split('\t')
-  if (!LOGIN.test(login) || !/^\d+$/.test(id)) throw new Error(`GitHub said no account: ${said || 'nothing'}`)
+  if (!isGithubLogin(login) || !/^\d+$/.test(id)) throw new Error(`GitHub said no account: ${said || 'nothing'}`)
   return { login, id: Number(id), ...(name ? { name } : {}) }
 }
 
