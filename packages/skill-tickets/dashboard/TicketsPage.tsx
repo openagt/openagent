@@ -167,28 +167,8 @@ export function TicketsPage({ projects }: { projects: ModuleProject[] }) {
   // buttons, and stopping saying "all" the moment their count differs from the set's tally,
   // never promising a ticket they will skip. Each is the object of the module's own verb:
   // "Add to queue: all 5 tickets shown below".
-  const queueObject = hasSelection
-    ? targets.length === 1
-      ? `the ${skippedShown > 0 ? 'one ready ' : ''}selected ticket`
-      : skippedShown > 0
-        ? `the ${targets.length} ready selected tickets`
-        : `the ${targets.length} selected tickets`
-    : targets.length === 1
-      ? `the ${skippedShown > 0 ? 'one ready ' : ''}ticket shown below`
-      : skippedShown > 0
-        ? `the ${targets.length} ready tickets shown below`
-        : `all ${targets.length} tickets shown below`
-  const planObject = hasSelection
-    ? planTargets.length === 1
-      ? `a plan for the ${planSkipped > 0 ? 'one unplanned ' : ''}selected ticket`
-      : planSkipped > 0
-        ? `plans for the ${planTargets.length} unplanned selected tickets`
-        : `plans for the ${planTargets.length} selected tickets`
-    : planTargets.length === 1
-      ? `a plan for the ${planSkipped > 0 ? 'one unplanned ' : ''}ticket shown below`
-      : planSkipped > 0
-        ? `plans for the ${planTargets.length} unplanned tickets shown below`
-        : `plans for all ${planTargets.length} tickets shown below`
+  const queueObject = ticketsWord(targets.length, 'ready', skippedShown > 0, hasSelection)
+  const planObject = `${planTargets.length === 1 ? 'a plan' : 'plans'} for ${ticketsWord(planTargets.length, 'unplanned', planSkipped > 0, hasSelection)}`
   const projectsShown = [...new Set(scope.map(r => r.projectId))]
 
   return (
@@ -354,4 +334,16 @@ export function TicketsPage({ projects }: { projects: ModuleProject[] }) {
       )}
     </Page>
   )
+}
+
+/**
+ * The tickets a page-wide add acts on, as the object of its verb: "all 5 tickets shown below",
+ * "the 2 ready selected tickets", "the one unplanned ticket shown below". `kept` is the word for
+ * the ones it keeps while it skips others (`ready`, `unplanned`).
+ */
+function ticketsWord(count: number, kept: string, skipping: boolean, selection: boolean): string {
+  const [one, many] = selection ? ['selected ticket', 'selected tickets'] : ['ticket shown below', 'tickets shown below']
+  if (count === 1) return `the ${skipping ? `one ${kept} ` : ''}${one}`
+  if (skipping) return `the ${count} ${kept} ${many}`
+  return selection ? `the ${count} ${many}` : `all ${count} ${many}`
 }
