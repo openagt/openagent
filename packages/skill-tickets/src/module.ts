@@ -71,6 +71,22 @@ export function withHolder<T extends object>(ticket: T, agent: AgentLike | undef
   return agent ? { ...ticket, lockedByAgent: { id: agent.id, ...(agent.name ? { name: agent.name } : {}) } } : ticket
 }
 
+/** How a claim stands, told by the run holding it: see {@link claimState}. */
+export type ClaimState = 'working' | 'offline' | 'stale'
+
+/**
+ * How a claim stands, by the status of the run holding it (`undefined` when no run of the
+ * project's holds it): `working` while that run is at it, or stopped on a question to the
+ * person; `offline` while its computer does not answer, so how it stands is not known; `stale`
+ * when it stopped, failed or ended, or there is no such run — a claim held for nobody, which
+ * nothing lifts but a person.
+ */
+export function claimState(holderStatus: string | undefined): ClaimState {
+  if (holderStatus === 'running' || holderStatus === 'waiting') return 'working'
+  if (holderStatus === 'unknown') return 'offline'
+  return 'stale'
+}
+
 /** Where the module's URL points: the list of tickets, one ticket, or its plan. */
 export type ModuleRoute = { view: 'list' } | { view: 'ticket'; projectId: string; file: string } | { view: 'plan'; projectId: string; file: string } | { view: 'unknown' }
 
