@@ -229,8 +229,8 @@ export function OnboardingChecklist({
       <CardHeader className="flex flex-row items-center justify-between gap-3">
         <h2 className="min-w-0 text-lg font-semibold tracking-tight">{ready ? `You're all set${name}` : `${greeting(new Date().getHours())}${name}`}</h2>
         <div className="flex shrink-0 items-center gap-3">
-          {/* Where the steps stand, one dash each: the numbers below say which is which. */}
-          <ol aria-label={`${steps.filter(step => step.done).length} of ${steps.length} done`} className="flex items-center gap-1.5">
+          {/* Where the steps stand, one dash each: the numbers below say which is which. Not on a phone, where the greeting needs the room and the steps' own ticks say it. */}
+          <ol aria-label={`${steps.filter(step => step.done).length} of ${steps.length} done`} className="items-center gap-1.5 sm:flex max-sm:hidden">
             {steps.map(step => (
               <li key={step.key} aria-hidden className={cn('h-1.5 w-6 rounded-full', step.done ? 'bg-[var(--color-primary)]' : step.key === open ? 'bg-[var(--color-primary)]/40' : 'bg-muted-foreground/20')} />
             ))}
