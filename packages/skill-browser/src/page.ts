@@ -1,4 +1,4 @@
-import type { CdpSession } from './cdp.js'
+import type { CdpCall, CdpSession } from './cdp.js'
 
 /**
  * What the agent does to the page, each a few DevTools calls. The page is read as text plus a
@@ -199,8 +199,8 @@ export async function type(page: CdpSession, ref: number, text: string): Promise
   return at
 }
 
-/** The keys `press` knows, as DevTools key events. */
-export const KEYS: Record<string, { code: string; keyCode: number; text?: string }> = {
+/** The keys `press` knows, as DevTools key events: the agent's, and a person's on the screen. */
+const KEYS: Record<string, { code: string; keyCode: number; text?: string }> = {
   Enter: { code: 'Enter', keyCode: 13, text: '\r' },
   Tab: { code: 'Tab', keyCode: 9 },
   Escape: { code: 'Escape', keyCode: 27 },
@@ -212,12 +212,21 @@ export const KEYS: Record<string, { code: string; keyCode: number; text?: string
   ArrowRight: { code: 'ArrowRight', keyCode: 39 },
 }
 
-export async function press(page: CdpSession, key: string): Promise<void> {
+/** The calls that press `key` and let it go; none for a key that is not one of {@link KEYS}. */
+export function keyPress(key: string): CdpCall[] | undefined {
   const known = Object.hasOwn(KEYS, key) ? KEYS[key] : undefined
-  if (!known) throw new PageError(`unknown key ${key}; the keys are ${Object.keys(KEYS).join(', ')}`)
+  if (!known) return undefined
   const event = { key: key === 'Space' ? ' ' : key, code: known.code, windowsVirtualKeyCode: known.keyCode, ...(known.text ? { text: known.text } : {}) }
-  await page.send('Input.dispatchKeyEvent', { ...event, type: 'keyDown' })
-  await page.send('Input.dispatchKeyEvent', { ...event, type: 'keyUp' })
+  return [
+    { method: 'Input.dispatchKeyEvent', params: { ...event, type: 'keyDown' } },
+    { method: 'Input.dispatchKeyEvent', params: { ...event, type: 'keyUp' } },
+  ]
+}
+
+export async function press(page: CdpSession, key: string): Promise<void> {
+  const calls = keyPress(key)
+  if (!calls) throw new PageError(`unknown key ${key}; the keys are ${Object.keys(KEYS).join(', ')}`)
+  for (const call of calls) await page.send(call.method, call.params)
   await settle(page)
 }
 
