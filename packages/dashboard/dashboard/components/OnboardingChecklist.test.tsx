@@ -79,7 +79,7 @@ const openStep = async (label: string) => fireEvent.click(await screen.findByRol
 
 /** Open the tickets step, press its import, and wait for the start to have been attempted. */
 const clickImport = async () => {
-  await openStep('Populate tickets/')
+  await openStep('Populate the tickets')
   fireEvent.click(await screen.findByRole('button', { name: 'Update tickets' }))
   await waitFor(() => expect(startAgent.start).toHaveBeenCalled())
 }
@@ -167,8 +167,8 @@ describe('the first steps on the Overview', () => {
   test('the steps nothing breaks without are marked optional, and the essentials are not', async () => {
     onDashboard.mockResolvedValue({ ...WITH_PROJECT, queue: [{ projectId: 'p1', projectName: 'shop', entries: [] }] } as unknown as DashboardData)
     steps({ projects: [SHOP] })
-    await waitFor(() => expect(row('Populate tickets/')).toBeTruthy())
-    expect(within(row('Populate tickets/')).getByText('Optional')).toBeTruthy()
+    await waitFor(() => expect(row('Populate the tickets')).toBeTruthy())
+    expect(within(row('Populate the tickets')).getByText('Optional')).toBeTruthy()
     expect(within(row('Turn on notifications')).getByText('Optional')).toBeTruthy()
     expect(within(row('Populate the queue of AI tasks')).queryByText('Optional')).toBeNull()
   })
@@ -178,7 +178,7 @@ describe('the first steps on the Overview', () => {
     steps({ projects: [SHOP] })
     await waitFor(() => expect(row('Turn on notifications')).toBeTruthy())
     expect(screen.queryByRole('listitem', { name: 'Populate the queue of AI tasks' })).toBeNull()
-    expect(screen.queryByRole('listitem', { name: 'Populate tickets/' })).toBeNull()
+    expect(screen.queryByRole('listitem', { name: 'Populate the tickets' })).toBeNull()
   })
 
   test('every step a session needs done: it says so, and its press starts the first session, the steps put away', async () => {
@@ -239,7 +239,7 @@ describe('the tickets import lands on the session it starts (#1169)', () => {
     onDashboard.mockResolvedValue(WITH_PROJECT)
     const onSelectProject = vi.fn()
     steps({ projects: [SHOP], onSelectProject })
-    await openStep('Populate tickets/')
+    await openStep('Populate the tickets')
     await configureFirst('Other ways to update the tickets')
     // The launcher, not an agent — the model and where it runs are nowhere on these steps.
     await waitFor(() => expect(onSelectProject).toHaveBeenCalledWith('p1'))
