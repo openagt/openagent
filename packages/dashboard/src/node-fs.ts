@@ -1,7 +1,7 @@
 /**
  * The one `node:fs/promises` adapter. Every `node*Fs()` factory in the package
- * returns this under its own narrow type: the store may append, the registry may
- * not, and those interfaces stay separate because they are the consumers'
+ * returns this under its own narrow type: the store may write, the registry may
+ * also rename, and those interfaces stay separate because they are the consumers'
  * contracts. Only the implementation was worth sharing, and it was written out
  * four times before this.
  *
@@ -14,15 +14,12 @@ export interface NodeFs {
   /** Rejects when the file is absent. */
   read(path: string): Promise<string>
   write(path: string, contents: string): Promise<void>
-  append(path: string, contents: string): Promise<void>
   /** True when `path` exists AND is a file. Any stat error reads as `false`. */
   exists(path: string): Promise<boolean>
   /** True when `path` exists AND is a directory. Any stat error reads as `false`. */
   isDirectory(path: string): Promise<boolean>
   /** Recursive. */
   mkdir(path: string): Promise<void>
-  /** List a directory's entries (names only). Missing dir yields `[]`. */
-  readdir(path: string): Promise<string[]>
   /** Replace `to` with `from`. Atomic within one filesystem, which is the point of having it. */
   rename(from: string, to: string): Promise<void>
   /** Set a file's permission bits. Rejects when the path is absent, or the fs cannot express them. */
@@ -39,10 +36,6 @@ export function nodeFs(): NodeFs {
     async write(path, contents) {
       const { writeFile } = await import('node:fs/promises')
       await writeFile(path, contents, 'utf8')
-    },
-    async append(path, contents) {
-      const { appendFile } = await import('node:fs/promises')
-      await appendFile(path, contents, 'utf8')
     },
     async exists(path) {
       const { stat } = await import('node:fs/promises')
@@ -63,14 +56,6 @@ export function nodeFs(): NodeFs {
     async mkdir(path) {
       const { mkdir } = await import('node:fs/promises')
       await mkdir(path, { recursive: true })
-    },
-    async readdir(path) {
-      const { readdir } = await import('node:fs/promises')
-      try {
-        return await readdir(path)
-      } catch {
-        return []
-      }
     },
     async rename(from, to) {
       const { rename } = await import('node:fs/promises')

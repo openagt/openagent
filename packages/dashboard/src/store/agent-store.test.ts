@@ -29,27 +29,11 @@ function memFs(seed: Record<string, string> = {}): StoreFs & { files: Map<string
     async write(path, contents) {
       files.set(path, contents)
     },
-    async append(path, contents) {
-      files.set(path, (files.get(path) ?? '') + contents)
-    },
     async exists(path) {
       return files.has(path)
     },
     async mkdir() {
       // no-op: the memory fs has no directories
-    },
-    async readdir(dir) {
-      // Derive children from the flat path map: file basenames whose dirname is `dir`, plus
-      // the first segment of anything deeper.
-      const prefix = dir.endsWith('/') ? dir : dir + '/'
-      const names = new Set<string>()
-      for (const p of files.keys()) {
-        if (!p.startsWith(prefix)) continue
-        const rest = p.slice(prefix.length)
-        const head = rest.split('/')[0]
-        if (head) names.add(head)
-      }
-      return [...names]
     },
   }
 }
