@@ -123,6 +123,14 @@ export function StartAgentForm({
   const [sentTo, setSentTo] = useState<string | null>(null)
   const { busy, cloning, error, reset, start } = useStartAgent(projectId)
   const composerRef = useRef<ComposerHandle>(null)
+  // A refused start gives the prompt the focus once the box is on again, however Start was pressed:
+  // the prompt is fixed and sent again from the keyboard.
+  const [refused, setRefused] = useState(false)
+  useEffect(() => {
+    if (!refused || busy) return
+    setRefused(false)
+    composerRef.current?.focus()
+  }, [refused, busy])
   const preferences = usePreferences()
   const launcher = useProjectLauncher(projectId)
   const noProject = projectId === SESSIONS_ID
@@ -268,7 +276,7 @@ export function StartAgentForm({
       composerRef.current?.clear()
       setRepos([])
       setSkillPicks(agentPicks(onAgent))
-    }
+    } else setRefused(true)
   }
 
   const loaded = (label: string, replaced: boolean) => {

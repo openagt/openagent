@@ -73,13 +73,14 @@ vi.mock('../lib/use-start-agent.js', async () => ({
 // The Composer is exercised by its own tests; here it hands back a typed submit, shows whether
 // the form lets it submit at all, and renders the launcher's controls.
 const composerProps = vi.hoisted(() => ({ current: {} as Record<string, unknown> }))
+const composerFocus = vi.hoisted(() => vi.fn())
 vi.mock('./Composer.js', async () => {
   const { forwardRef, useImperativeHandle } = await import('react')
   const Composer = forwardRef((props: any, ref: any) => {
     composerProps.current = props
     useImperativeHandle(ref, () => ({
       clear: () => {},
-      focus: () => {},
+      focus: composerFocus,
     }))
     return (
       <>
@@ -114,6 +115,7 @@ afterEach(() => {
   cleanup()
   forgetRemembered()
   start.mockReset()
+  composerFocus.mockReset()
   startSays.cloning = false
   startSays.error = null
   onCommands.mockReset()
@@ -173,6 +175,14 @@ describe('StartAgentForm (#1774)', () => {
     await waitFor(() => expect(screen.getByRole('status').textContent).toBe('Starting session'))
     answer({ agentId: 'r1' })
     await waitFor(() => expect(screen.queryByRole('status')).toBeNull())
+  })
+
+  test('a refused start gives the prompt the focus, however Start was pressed: typing goes on in it', async () => {
+    onCommands.mockResolvedValue({ commands: [], startHook: true, gitHost: true })
+    start.mockResolvedValue(undefined)
+    render(<StartAgentForm {...props} />)
+    fireEvent.click(screen.getByText('submit-typed'))
+    await waitFor(() => expect(composerFocus).toHaveBeenCalledTimes(1))
   })
 
   test("while this computer clones another computer's project for the run, the form says so, naming this computer", async () => {
