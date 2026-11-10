@@ -114,8 +114,10 @@ export const Composer = forwardRef<ComposerHandle, {
   home?: string | undefined
   /** Which box this is, by project or session: what is typed in it is kept in this browser, across a navigation and a reload, until it is sent. */
   draftKey?: string | undefined
+  /** The box takes the caret when it opens. */
+  autoFocus?: boolean | undefined
 }>(function Composer(
-  { files, addContext, removeContext, startsAt, controls, controlsEnd, sessionModel, sessionContext, onSubmit, onPromptChange, onPreset, busy, submitLabel, submitBusyLabel, placeholder, inAgent = false, sessionRow, canSubmit = true, idleControl, home, draftKey },
+  { files, addContext, removeContext, startsAt, controls, controlsEnd, sessionModel, sessionContext, onSubmit, onPromptChange, onPreset, busy, submitLabel, submitBusyLabel, placeholder, inAgent = false, sessionRow, canSubmit = true, idleControl, home, draftKey, autoFocus = false },
   ref,
 ) {
   const [prompt, setPrompt] = useState('')
@@ -268,6 +270,7 @@ export const Composer = forwardRef<ComposerHandle, {
       disabled={busy}
       {...(placeholder ? { placeholder } : {})}
       {...(carriedDraft ? { initialText: carriedDraft } : {})}
+      autoFocus={autoFocus}
     />
   )
 

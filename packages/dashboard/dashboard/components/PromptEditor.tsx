@@ -64,6 +64,8 @@ interface PromptEditorProps {
    * lets the editor apply it when it is ready instead of the caller guessing when that is.
    */
   initialText?: string | undefined
+  /** Take the caret as soon as the editor exists. */
+  autoFocus?: boolean
 }
 
 /** Insert a token chip at the suggestion range, followed by a space. */
@@ -90,7 +92,7 @@ function applyTemplate(editor: Editor, text: string): void {
 }
 
 export const PromptEditor = forwardRef<PromptEditorHandle, PromptEditorProps>(function PromptEditor(
-  { onChange, onSubmit, onPreset, onMentionProject, onMentionFile, onMentionRemoved, projects, files = [], commands, customPresets = [], projectPresets = [], onNewPreset, disabled = false, placeholder = 'Describe what to do…', initialText },
+  { onChange, onSubmit, onPreset, onMentionProject, onMentionFile, onMentionRemoved, projects, files = [], commands, customPresets = [], projectPresets = [], onNewPreset, disabled = false, placeholder = 'Describe what to do…', initialText, autoFocus = false },
   ref,
 ) {
   const [isEmpty, setIsEmpty] = useState(true)
@@ -175,6 +177,7 @@ export const PromptEditor = forwardRef<PromptEditorHandle, PromptEditorProps>(fu
 
   const editor = useEditor({
     immediatelyRender: false,
+    autofocus: autoFocus && 'end',
     extensions: [
       StarterKit,
       // breaks:true keeps a single newline as a hard break, so a saved prompt's line-per-line

@@ -185,6 +185,17 @@ describe('StartAgentForm (#1774)', () => {
     await waitFor(() => expect(composerFocus).toHaveBeenCalledTimes(1))
   })
 
+  test('the prompt takes the caret when the launcher opens, except on a phone, where the keyboard would rise over the page', () => {
+    onCommands.mockResolvedValue({ commands: [], startHook: true, gitHost: true })
+    render(<StartAgentForm {...props} />)
+    expect(composerProps.current.autoFocus).toBe(true)
+    cleanup()
+    vi.stubGlobal('matchMedia', (query: string) => ({ matches: true, media: query, addEventListener: () => {}, removeEventListener: () => {} }))
+    render(<StartAgentForm {...props} />)
+    expect(composerProps.current.autoFocus).toBe(false)
+    vi.unstubAllGlobals()
+  })
+
   test("while this computer clones another computer's project for the run, the form says so, naming this computer", async () => {
     onCommands.mockResolvedValue({ commands: [], startHook: true, gitHost: true, address: 'github.com/acme/shop' })
     start.mockReturnValue(new Promise(() => {}))

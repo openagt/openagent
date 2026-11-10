@@ -31,6 +31,7 @@ import { AgentMenu } from './AgentMenu.js'
 import { useAgentsList } from './AgentsPage.js'
 import { SESSIONS_ID } from '../../src/project-address.js'
 import { shortcut } from '../lib/shortcut.js'
+import { useIsMobile } from '../lib/use-mobile.js'
 
 /** The note while the start is asked for: what the chat's first line says next. */
 const STARTING = 'Starting session'
@@ -123,6 +124,7 @@ export function StartAgentForm({
   const [sentTo, setSentTo] = useState<string | null>(null)
   const { busy, cloning, error, reset, start } = useStartAgent(projectId)
   const composerRef = useRef<ComposerHandle>(null)
+  const phone = useIsMobile()
   // A refused start gives the prompt the focus once the box is on again, however Start was pressed:
   // the prompt is fixed and sent again from the keyboard.
   const [refused, setRefused] = useState(false)
@@ -293,6 +295,8 @@ export function StartAgentForm({
         key={projectId}
         ref={composerRef}
         draftKey={`launcher:${projectId}`}
+        // The page is the prompt, so typing goes there at once; not on a phone, where the keyboard would rise over the page.
+        autoFocus={!phone}
         home={home}
         files={files}
         addContext={addContext}
