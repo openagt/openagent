@@ -8,7 +8,7 @@ import { openDoor, type Door } from './door.js'
 import { listen, shut } from './http.js'
 import { linePorts, openLines, tellOpenAgent, whomToTell } from './line-in.js'
 import { askMe, keepLine, type MeThere, type Route } from './line-out.js'
-import { startPersonWork } from './persons.js'
+import { cameFrom, makeUser } from './persons.js'
 import { announce, type Announcing } from './wifi.js'
 import { servedAt, serveDoor, stopServing, tailscaleRun, type TailscaleRun } from './tailscale.js'
 import { addPerson, computerWordFor, isComputerId, readStore, readStoreStrict, shareLine, storePath, update, type Line, type Store } from './store.js'
@@ -285,24 +285,11 @@ export async function serve(opts: ServeOptions): Promise<void> {
     void (async () => {
       const person = await addPerson(env, name, Date.now(), true)
       if (!person?.port) return log(`devices: ${name} could not be given a place on this computer: it has as many persons as it can, or no owner`)
+      // Which server they came from, written before their user is made: whoever reads that it is made reads where they came from too.
+      await cameFrom(env, name, from)
       // Started again only when it is not made and no making of it is at work, as the file says now: a
       // call that read the file a moment earlier may ask for one that was made since. One that failed is asked again.
-      const working = person.ready === true || (person.worker !== undefined && pidAlive(person.worker))
-      const known = (kept: Store): Store['persons'][number] | undefined => kept.persons.find(candidate => candidate.name === name && !candidate.owner)
-      // Which server they came from, written before their user is made: whoever reads that it is made reads where they came from too.
-      await update(env, kept => {
-        const them = known(kept)
-        if (!them) return
-        them.from ??= from
-        if (!working) delete them.problem
-      })
-      if (working) return
-      const worker = (opts.startWork ?? startPersonWork)(env, name)
-      if (worker === undefined) return
-      await update(env, kept => {
-        const them = known(kept)
-        if (them) them.worker = worker
-      })
+      await makeUser(env, person, opts.startWork)
     })()
       .catch(err => log(`devices: ${name}'s place on this computer could not be made: ${err instanceof Error ? err.message : String(err)}`))
       .finally(() => asked.delete(name))

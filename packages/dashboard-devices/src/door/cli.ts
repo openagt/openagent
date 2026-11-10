@@ -7,7 +7,7 @@ import { codeLink, readKeyWord } from './door.js'
 import { ENTER_PATH } from './paths.js'
 import { askMe, enterForLine, leaveLine, readLineLink } from './line-out.js'
 import { askAt, cancelAt, doorOrigin, hearAt, mayAnswerAsks, waitingAsks } from './pair.js'
-import { startPersonWork } from './persons.js'
+import { makeUser } from './persons.js'
 import { serve } from './serve.js'
 import { announce, find } from './wifi.js'
 import { tailscaleName, tailscaleRun, type TailscaleRun } from './tailscale.js'
@@ -379,17 +379,7 @@ async function forPerson(io: CliIO, store: Store, said: string): Promise<string 
   const helper = helperOf(io)
   const person = await addPerson(io.env, name, Date.now(), helper !== undefined)
   if (!person) throw new Refused('This computer has as many persons as it can: remove one first.')
-  if (helper && person.port !== undefined && !person.ready && !(person.worker !== undefined && pidAlive(person.worker))) {
-    const known = (kept: Store): Store['persons'][number] | undefined => kept.persons.find(candidate => candidate.name === person.name && !candidate.owner)
-    // Why the last try failed is forgotten before the next one starts, never after: one that fails at once has said why by then.
-    await update(io.env, kept => void delete known(kept)?.problem)
-    const worker = (io.startWork ?? startPersonWork)(io.env, person.name)
-    if (worker !== undefined)
-      await update(io.env, kept => {
-        const them = known(kept)
-        if (them) them.worker = worker
-      })
-  }
+  if (helper) await makeUser(io.env, person, io.startWork)
   return person.name
 }
 
