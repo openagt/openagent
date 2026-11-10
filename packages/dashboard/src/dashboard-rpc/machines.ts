@@ -10,7 +10,7 @@ import { sayName } from '../dashboard/machine-call.js'
 import { ownerAsks } from '../dashboard/person.js'
 import { ownName, saveComputerThrough, saveMachine, shown, throughOf } from './save-machine.js'
 import { syncComputersSoon } from '../dashboard/computers-sync.js'
-import { parseMachineLink } from '../machine-link.js'
+import { isDeviceId, parseMachineLink } from '../machine-link.js'
 import { SESSIONS_ID } from '../project-address.js'
 import { openagentVersion } from '../version.js'
 import { readinessOf, type StartReadiness } from '../project-hooks.js'
@@ -183,7 +183,7 @@ export async function onMachinePerson(machineId: string): Promise<MachinePerson>
 export async function sendRemoveMachineDevice(machineId: string, deviceId: string): Promise<MachinePerson> {
   const machine = (await listMachines()).find(saved => saved.id === machineId)
   if (!machine || machine.url.includes(THROUGH_PATH)) return { ok: false, error: 'That machine is no longer saved.' }
-  if (typeof deviceId !== 'string' || !/^[a-z0-9]{6,32}$/.test(deviceId)) return { ok: false, error: 'That is no device id.' }
+  if (!isDeviceId(deviceId)) return { ok: false, error: 'That is no device id.' }
   return remoteDoor(machine, { what: 'remove', id: deviceId })
 }
 

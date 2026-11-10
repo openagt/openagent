@@ -18,6 +18,11 @@ export interface MachineLink {
   pin?: string
 }
 
+/** Whether a value reads as what a door names a device by: the id a machine lists a computer under among the devices in there. */
+export function isDeviceId(value: unknown): value is string {
+  return typeof value === 'string' && /^[a-z0-9]{6,32}$/.test(value)
+}
+
 export function parseMachineLink(pasted: string): MachineLink | null {
   try {
     const u = new URL(pasted.trim())

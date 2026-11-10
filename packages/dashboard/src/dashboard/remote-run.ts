@@ -7,6 +7,7 @@ import { errorMessage } from '../error-message.js'
 import { machineFetch } from './machine-call.js'
 import { computerNameOf, isHostName, isPersonName } from '../registry.js'
 import { readLogins, type GivenLogins, type MachineLogins } from './machine-logins.js'
+import { isDeviceId } from '../machine-link.js'
 
 /**
  * The server-side half of "run on a saved machine" (#1067). The local daemon holds this computer's
@@ -91,7 +92,7 @@ export async function remoteFacts(target: MachineAccess): Promise<{ version?: st
   const { version, host, name, listed, server, health } = (said && typeof said === 'object' ? said : {}) as Record<string, unknown>
   const shownAs = computerNameOf(name)
   const stands = readHealth(health)
-  const ids = Array.isArray(listed) ? listed.filter((id): id is string => typeof id === 'string' && DEVICE_ID.test(id)).slice(0, MAX_LISTED) : []
+  const ids = Array.isArray(listed) ? listed.filter(isDeviceId).slice(0, MAX_LISTED) : []
   return {
     // What a machine says is shown on a page: only what reads as a version is one.
     ...(typeof version === 'string' && /^[0-9A-Za-z.+-]{1,64}$/.test(version) ? { version } : {}),
@@ -177,11 +178,9 @@ export async function enterRemote(door: string, code: string, name: string, pin?
  */
 export function deviceIdOf(key: string): string | undefined {
   const id = key.slice(0, Math.max(0, key.indexOf('.')))
-  return DEVICE_ID.test(id) ? id : undefined
+  return isDeviceId(id) ? id : undefined
 }
 
-/** What a door names a device by. */
-const DEVICE_ID = /^[a-z0-9]{6,32}$/
 /** How many of a machine's ids at other doors are read: as many machines as one saves. */
 const MAX_LISTED = 50
 
@@ -223,7 +222,7 @@ export async function remoteComputers(machine: MachineAccess): Promise<{ ok: tru
     for (const entry of Array.isArray(listed) ? listed : []) {
       const { id, name, online, owner } = (entry && typeof entry === 'object' ? entry : {}) as Record<string, unknown>
       // An id is a word a door makes: it goes into an address, so nothing else is taken.
-      if (typeof id === 'string' && /^[a-z0-9]{6,32}$/.test(id) && typeof name === 'string' && name.trim()) computers.push({ id, name: name.trim().slice(0, 80), online: online === true, ...(isPersonName(owner) ? { owner } : {}) })
+      if (isDeviceId(id) && typeof name === 'string' && name.trim()) computers.push({ id, name: name.trim().slice(0, 80), online: online === true, ...(isPersonName(owner) ? { owner } : {}) })
     }
     return { ok: true, computers }
   } catch (err) {

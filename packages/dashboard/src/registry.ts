@@ -9,6 +9,7 @@ import { isPublishPick, type PublishPick } from './publish-levels.js'
 import { nodeFs } from './node-fs.js'
 import { ownProjectsOf, type OwnProject } from './dashboard/elsewhere.js'
 import { computerName } from './computer-name.js'
+import { isDeviceId } from './machine-link.js'
 
 /**
  * The multi-project registry (#390): the list of projects the user has
@@ -517,7 +518,7 @@ function sanitizeMachines(value: unknown): MachineRecord[] {
     if (machines.length >= MACHINE_LIMITS.count) break
     if (typeof raw !== 'object' || raw === null) continue
     const { label, url, key, door, pin, host, formerHosts, server, owner, told, logins, listed, seenAt, projects, added } = raw as Record<string, unknown>
-    const ids = Array.isArray(listed) ? listed.filter((id): id is string => typeof id === 'string' && DEVICE_ID.test(id)).slice(0, MACHINE_LIMITS.count) : []
+    const ids = Array.isArray(listed) ? listed.filter(isDeviceId).slice(0, MACHINE_LIMITS.count) : []
     if (typeof label !== 'string' || typeof url !== 'string' || typeof key !== 'string' || typeof door !== 'string') continue
     if (!url || !key || !door || seen.has(url)) continue
     seen.add(url)
@@ -540,9 +541,6 @@ function sanitizeForgotten(value: unknown): ForgottenMachine[] {
   }
   return [...kept.values()].slice(-MAX_FORGOTTEN)
 }
-
-/** What a door names a device by. */
-const DEVICE_ID = /^[a-z0-9]{6,32}$/
 
 /**
  * Read the whole registry. Forgiving: a missing / unreadable / malformed file — or one in a shape
@@ -911,7 +909,7 @@ export function machineNamed(machines: readonly MachineRecord[], host: string): 
 
 /** Keep the ids a saved machine said it is listed under at the doors it saved, when they changed. */
 export async function noteListed(machine: { id: string; key: string }, listed: string[], env: NodeJS.ProcessEnv = process.env, fs: RegistryFs = nodeRegistryFs()): Promise<void> {
-  const ids = listed.filter(id => DEVICE_ID.test(id)).slice(0, MACHINE_LIMITS.count)
+  const ids = listed.filter(isDeviceId).slice(0, MACHINE_LIMITS.count)
   await changeMachine(machine, ({ listed: was, ...rest }) => ((was ?? []).join(' ') === ids.join(' ') ? undefined : ids.length ? { ...rest, listed: ids } : rest), env, fs)
 }
 
