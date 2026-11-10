@@ -340,9 +340,16 @@ export type FileBranchWrite =
 /** A writer's message: fixed, or resolved after the op ran (a batch only knows what it did then). */
 export type CommitMessage = string | (() => string)
 
-/** The message a write commits with, once its op ran. */
-export function resolveMessage(message: CommitMessage): string {
-  return typeof message === 'function' ? message() : message
+/**
+ * Run a write's op and commit whatever it changed in the checkout at `dir`, under the write's
+ * message, made once the op ran: whether the op changed anything. A change of nothing is no commit.
+ */
+export async function commitChange(dir: string, message: CommitMessage, op: () => Promise<void>, git: GitRunner): Promise<boolean> {
+  await op()
+  await git(['add', '-A'], dir)
+  if (!(await git(['status', '--porcelain'], dir)).trim()) return false
+  await git(['commit', '-m', typeof message === 'function' ? message() : message], dir)
+  return true
 }
 
 /**
@@ -412,11 +419,8 @@ async function cycle(
       // The tip before this op's commit: what a lost push winds back to before re-applying, so
       // the op's first serialization is dropped rather than rebased under its second run.
       const before = (await r.git(['rev-parse', 'HEAD'], path)).trim()
-      await op(path)
-      await r.git(['add', '-A'], path)
-      const staged = (await r.git(['status', '--porcelain'], path)).trim()
-      if (staged) await r.git(['commit', '-m', resolveMessage(message)], path)
-      if (!remote) return { ok: true, changed: Boolean(staged), pushed: false }
+      const changed = await commitChange(path, message, () => op(path), r.git)
+      if (!remote) return { ok: true, changed, pushed: false }
       // Unpushed commits — this cycle's, or an earlier cycle's that the sync just rebased. The
       // push is owed whenever any exist, even when this op itself wrote nothing new.
       const ahead = (await refExists(repo, `refs/remotes/origin/${branch}`, r.git))
@@ -425,10 +429,10 @@ async function cycle(
       if (!ahead) return { ok: true, changed: false, pushed: false }
       try {
         await r.git(['push', 'origin', `${branch}:${branch}`], path)
-        return { ok: true, changed: Boolean(staged), pushed: true }
+        return { ok: true, changed, pushed: true }
       } catch (err) {
         if (attempt >= 1) return { ok: false, committed: true, error: `the ${branch} branch could not be pushed: ${errorMessage(err)}` }
-        if (staged) await r.git(['reset', '--hard', before], path)
+        if (changed) await r.git(['reset', '--hard', before], path)
       }
     }
   } catch (err) {
@@ -631,11 +635,7 @@ export async function writeFileBranchDetached(
   try {
     await r.git(['worktree', 'add', '--detach', dir, await tip()], cwd)
     for (let attempt = 0; ; attempt++) {
-      await op(dir)
-      await r.git(['add', '-A'], dir)
-      const staged = (await r.git(['status', '--porcelain'], dir)).trim()
-      if (!staged) return { changed: false }
-      await r.git(['commit', '-m', resolveMessage(message)], dir)
+      if (!(await commitChange(dir, message, () => op(dir), r.git))) return { changed: false }
       try {
         await r.git(['push', 'origin', `HEAD:refs/heads/${branch}`], dir)
         return { changed: true }

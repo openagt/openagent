@@ -5,7 +5,7 @@ import { errorMessage, gitReason, nodeGitRunner, type GitRunner } from './git.js
 import { withLockFile, type CheckoutLockDeps } from './checkout-lock.js'
 import { originUrl } from './origin.js'
 import { NoRemoteAccountError, accountGit, clearRemoteAccount, readRemoteAccount, writeRemoteAccount, type RemoteAccount } from './remote-account.js'
-import { resolveMessage, type CommitMessage, type FileBranchWrite } from './file-branch.js'
+import { commitChange, type CommitMessage, type FileBranchWrite } from './file-branch.js'
 
 // The person's own folder on this machine, `~/.openagent`: a git repository of its own, synced
 // with a repository of the person's when they give it one, so every machine of theirs has the same
@@ -102,11 +102,8 @@ export async function withPersonalFolder(folder: string, message: CommitMessage,
       for (let attempt = 0; ; attempt++) {
         if (remote) await takeRemote(folder, git)
         const before = (await git(['rev-parse', 'HEAD'], folder)).trim()
-        await op()
-        await git(['add', '-A'], folder)
-        const staged = (await git(['status', '--porcelain'], folder)).trim()
-        if (staged) await git(['commit', '-q', '-m', resolveMessage(message)], folder)
-        if (!remote) return { ok: true, changed: Boolean(staged), pushed: false }
+        const changed = await commitChange(folder, message, op, git)
+        if (!remote) return { ok: true, changed, pushed: false }
         const ahead = await git(['rev-list', '--count', `refs/remotes/origin/${FOLDER_BRANCH}..HEAD`], folder).then(
           out => out.trim() !== '0',
           () => true,
@@ -114,12 +111,12 @@ export async function withPersonalFolder(folder: string, message: CommitMessage,
         if (!ahead) return { ok: true, changed: false, pushed: false }
         try {
           await git(['push', '-q', 'origin', `HEAD:refs/heads/${FOLDER_BRANCH}`], folder)
-          return { ok: true, changed: Boolean(staged), pushed: true }
+          return { ok: true, changed, pushed: true }
         } catch (err) {
           // No account to send it as: made all the same, it waits here until one is named.
-          if (err instanceof NoRemoteAccountError) return { ok: true, changed: Boolean(staged), pushed: false }
+          if (err instanceof NoRemoteAccountError) return { ok: true, changed, pushed: false }
           if (attempt >= 1) return { ok: false, committed: true, error: `the personal folder could not be sent to its remote: ${plainReason(err)}` }
-          if (staged) await git(['reset', '-q', '--hard', before], folder)
+          if (changed) await git(['reset', '-q', '--hard', before], folder)
         }
       }
     } catch (err) {
