@@ -114,6 +114,10 @@ export async function startDemo(options: DemoOptions = {}): Promise<Demo> {
       })
     }
     void exited.then(code => rejectPromise(new Error(`the dashboard exited (${code}) before it served:\n${said.join('\n')}`)))
+  }).catch(async (err: unknown) => {
+    process.removeListener('exit', killCli)
+    await rm(home, { recursive: true, force: true })
+    throw err
   })
 
   async function call<T = unknown>(name: string, ...args: unknown[]): Promise<T> {
