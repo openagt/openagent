@@ -7,7 +7,7 @@ import { CodeCard, Joined, NoCodeYet, PhoneCode, RanOut, Waiting, clock, useCode
 import { ConnectServer } from './ConnectServer.js'
 import { JoinDialog } from './Join.js'
 import { Connecting } from './Pairing.js'
-import { hasDoor, isComputer } from './model.js'
+import { computerName, hasDoor, isComputer } from './model.js'
 import { Problem, hostOf } from './parts.js'
 import { WARNING } from './ThisComputer.js'
 import type { Devices } from './use-devices.js'
@@ -357,9 +357,6 @@ function AddComputer({ d, onClose }: { d: Devices; onClose: () => void }) {
 
 /** How often a server is asked whether the computer got in, while its code is on the page: one call to the server's door. */
 const JOIN_POLL_MS = 3_000
-
-/** A computer's name as a door lists the OpenAgent on it. */
-const computerName = (listed: string): string => listed.replace(/^OpenAgent on /, '')
 
 /**
  * Another computer of this person's, somewhere else, gets in at their server with a code typed

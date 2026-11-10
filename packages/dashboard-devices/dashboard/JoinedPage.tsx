@@ -3,7 +3,7 @@ import { Server } from 'lucide-react'
 import { Button, ConfirmDialog, formatDateTime, formatRelative, usePolled } from '@openagt/dashboard/module'
 import { idsOf, readPersonThere, type Answer, type DeviceRow } from './devices.js'
 import { loadOther, otherLogin, sharedForget, type OtherLogin, type OtherRow } from './servers.js'
-import { hasDoor, type JoinedItem, type OtherItem } from './model.js'
+import { hasDoor, throughOf, type JoinedItem, type OtherItem } from './model.js'
 import { ComputersThrough } from './ServerPage.js'
 import { Head, LoginLine, Part, Problem, State, Tabs, hostOf } from './parts.js'
 import type { Devices } from './use-devices.js'
@@ -176,7 +176,7 @@ export function OtherPage({ d, item, onBack }: { d: Devices; item: OtherItem; on
   useEffect(() => setWorking(making.working), [making.working])
   const name = item.name
   // Shared on a server both are in at, where copies come from; or shared with this person at its own door.
-  const via = machine.url.includes('/_devices/via/')
+  const via = throughOf(machine) !== undefined
   const server = via ? hostOf(machine.url) : undefined
   const copies = via ? ` A copy from ${server} no longer takes its place.` : ''
   const here = d.shared.find(kept => kept.url === machine.url)

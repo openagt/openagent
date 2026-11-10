@@ -9,7 +9,7 @@ import type { DevicesRead, ServerRow } from './servers.js'
 // are put together, from what each part of OpenAgent says: no page reads the parts apart.
 
 /** Where a computer reached through a server is, after the server's address. */
-export const THROUGH = '/_devices/via/'
+const THROUGH = '/_devices/via/'
 
 /** The name a computer's OpenAgent is listed under at a door it got in at by itself. */
 const AGENT_NAME = /^OpenAgent on /
@@ -113,6 +113,9 @@ export const labelOf = (machines: readonly Pick<ModuleMachine, 'url' | 'label'>[
 /** Whether a device in at a door is another computer's OpenAgent, by what it holds or how it named itself. */
 export const isComputer = (device: Pick<DeviceRow, 'name' | 'line'>): boolean => device.line === true || AGENT_NAME.test(device.name)
 
+/** A computer's own name, as a door lists the OpenAgent on it that got in by itself. */
+export const computerName = (listed: string): string => listed.replace(AGENT_NAME, '')
+
 /**
  * Every device, once, in the order the list shows them: phones first, then computers, then
  * servers. A computer saved here and also in at this computer's door is one item: the machine says
@@ -136,7 +139,7 @@ export function itemsOf(sources: Sources): Item[] {
   // This person's own phones at the servers they are in at: not this computer, not a computer on a line there.
   const mineAt = (listed: readonly DeviceRow[], persons: readonly { name: string; owner?: true }[], own: string | undefined): DeviceRow[] => {
     const owner = persons.find(person => person.owner)?.name
-    return listed.filter(device => !device.line && !device.own && !(own !== undefined && idsOf(device).includes(own)) && (device.person === undefined || device.person === owner) && !AGENT_NAME.test(device.name))
+    return listed.filter(device => !isComputer(device) && !device.own && !(own !== undefined && idsOf(device).includes(own)) && (device.person === undefined || device.person === owner))
   }
   for (const server of servers) {
     const read = devices[server.address]
@@ -148,7 +151,7 @@ export function itemsOf(sources: Sources): Item[] {
   for (const machine of machines) {
     const person = people[machine.id]
     if (!person || installed(machine)) continue
-    for (const device of person.devices.filter(device => !device.line && !(machine.device !== undefined && idsOf(device).includes(machine.device)) && !AGENT_NAME.test(device.name)))
+    for (const device of person.devices.filter(device => !isComputer(device) && !(machine.device !== undefined && idsOf(device).includes(machine.device))))
       items.push({ kind: 'phone', key: `on:${machine.id}:${device.id}`, name: device.name, via: { server: machine.url, label: machine.label }, added: device.added, ...(device.seen !== undefined ? { seen: device.seen } : {}), on: { machine, device } })
   }
 
@@ -163,7 +166,7 @@ export function itemsOf(sources: Sources): Item[] {
   }
   // And each computer of this person's in at this door that is no saved machine: it starts runs here, and runs do not go there.
   // Another person's computer, in at a server's door as theirs, is theirs alone: it is listed under them, never offered here.
-  for (const device of doorDevices) if (isComputer(device) && device.person === undefined && !matched.has(device.id)) items.push({ kind: 'computer', key: `door:${device.id}`, name: device.name.replace(AGENT_NAME, ''), door: device })
+  for (const device of doorDevices) if (isComputer(device) && device.person === undefined && !matched.has(device.id)) items.push({ kind: 'computer', key: `door:${device.id}`, name: computerName(device.name), door: device })
 
   // Servers: installed here; set up elsewhere or shared by someone; another person's computer.
   for (const server of servers) {

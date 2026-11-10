@@ -1,6 +1,7 @@
 import { MonitorSmartphone } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle, GaugeFace, MachineMark, Tooltip, TooltipContent, TooltipTrigger, formatAge, machineKind, machineName, usePolled, useModuleHost, type Health, type MachineKind, type ModuleCardProps, type ModuleMachines } from '@openagt/dashboard/module'
 import { loadStatus, type Answer, type DoorStatus } from './devices.js'
+import { isComputer } from './model.js'
 import { olderThan } from './parts.js'
 
 // The Overview's Devices card: this computer and every computer and server it saved, each with
@@ -14,15 +15,12 @@ import { olderThan } from './parts.js'
 /** How often the card asks again: each time is one call to each saved machine. */
 const EVERY_MS = 30_000
 
-/** A computer that got in at this door by itself is listed under this name: it is a computer, not a phone. */
-const AGENT_NAME = /^OpenAgent on /
-
 export function DevicesCard(_props: ModuleCardProps) {
   const host = useModuleHost()
   // Kept for the next visit: the page opens with the last machines and devices, faded until they are read again.
   const { value: machines, loaded } = usePolled<ModuleMachines | undefined>(() => host.machines(), undefined, EVERY_MS, [], { remember: 'devices:machines', stored: true })
   const { value: door } = usePolled<Answer<DoorStatus> | undefined>(() => loadStatus(host), undefined, EVERY_MS, [], { remember: 'devices:door', stored: true })
-  const phones = door?.ok ? door.value.devices.filter(device => !device.line && !AGENT_NAME.test(device.name)) : []
+  const phones = door?.ok ? door.value.devices.filter(device => !isComputer(device)) : []
   const lastSeen = phones.map(phone => phone.seen ?? '').sort().at(-1)
   return (
     <Card>
