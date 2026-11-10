@@ -2,7 +2,7 @@ import { hostname } from 'node:os'
 import { mkdir, stat, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { AgentExitError, ConversationGoneError, continuationPrompt, logDiaryFile, parseQuestion, promptLines, promptOf, takeInbox, type Driver, type DriverPromptOptions, type DriverSession, type DriverTurn, type PromptLine, type LogEndStatus, type Question, type SessionLog } from '@openagt/agent-driver'
-import { nodeGitRunner, sessionsHomeOf, type GitRunner } from '@openagt/agent-data'
+import { errorMessage, nodeGitRunner, sessionsHomeOf, type GitRunner } from '@openagt/agent-data'
 import { agentBranchName, attachCheckout, createCheckout, reclaimWorktree, relinkCheckout, worktreeBranch, worktreePath, type SkillLink, type LeaveOut } from '@openagt/skill-branches'
 import { findRun, readDiary, type AnyDiaryLine, type LogsDeps, type RunCard, type RunStatus } from '@openagt/skill-logs'
 import { hideLiveDir, inboxPath, liveDir, readLiveCard, readLiveDiary } from './live-card.js'
@@ -824,8 +824,4 @@ async function afresh(session: DriverSession, run: SessionRun, prompt: string, s
 async function startCommit(checkout: string, git: GitRunner): Promise<{ baseCommit?: string }> {
   const commit = (await git(['rev-parse', '--verify', '--quiet', 'HEAD^{commit}'], checkout).catch(() => '')).trim()
   return commit ? { baseCommit: commit } : {}
-}
-
-function errorMessage(err: unknown): string {
-  return err instanceof Error ? err.message : String(err)
 }

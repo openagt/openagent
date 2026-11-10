@@ -1,5 +1,6 @@
 import { spawn } from 'node:child_process'
 import { basename } from 'node:path'
+import { errorMessage } from '@openagt/agent-data'
 import { configFile, readConfig } from './config.js'
 
 /**
@@ -65,7 +66,7 @@ export async function runEndedLine(
   try {
     await runLine(repo, end, deps)
   } catch (err) {
-    deps.log(`[agent-runner] the ended line could not run: ${err instanceof Error ? err.message : String(err)}`)
+    deps.log(`[agent-runner] the ended line could not run: ${errorMessage(err)}`)
   }
 }
 
