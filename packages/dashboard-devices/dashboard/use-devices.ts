@@ -3,6 +3,7 @@ import { useModuleHost, usePolled, type ModuleHost, type ModuleMachines } from '
 import { failed, loadStatus, readPersonThere, type Answer, type DoorStatus, type PersonThere } from './devices.js'
 import { addThrough, askLink, connect, forget, installDone, loadDevices, loadServers, loadShared, markAdded, ownGithub, reach, type DevicesRead, type OwnGithub, type ServerRow, type ServersRead, type SharedRow, type StepState } from './servers.js'
 import { hasDoor, itemsOf, onTailscale, type Item, type Sources } from './model.js'
+import { useChange } from './parts.js'
 
 // What Settings › Devices reads, read once for the list and every page of it: this computer's
 // door, the servers it installed and what each is doing, the saved machines, what each server's
@@ -184,8 +185,7 @@ export function useDevices({ everyMs, devicesEveryMs, devicesAnswerMs = DEVICES_
     'previous',
   )
 
-  const [busy, setBusy] = useState(false)
-  const [error, setError] = useState<string | undefined>()
+  const { busy, setBusy, error, setError, act } = useChange(reloadServers)
   const [notAdded, setNotAdded] = useState<Record<string, string>>({})
   const [pressed, setPressed] = useState<string | undefined>()
   const adding = useRef(new Set<string>())
@@ -195,16 +195,6 @@ export function useDevices({ everyMs, devicesEveryMs, devicesAnswerMs = DEVICES_
   // The servers that are to sync this computer's agent data once they are saved, by address.
   const wantsData = useRef(new Set<string>())
   const [data, setData] = useState<Devices['data']>({})
-
-  const act = async (change: () => Promise<Answer<unknown>>): Promise<boolean> => {
-    setBusy(true)
-    setError(undefined)
-    const answer = await change()
-    if (!answer.ok) setError(answer.error)
-    await reloadServers().catch(() => {})
-    setBusy(false)
-    return answer.ok
-  }
 
   const install = async (at: string, as: string, through?: string | 'tailscale', useLogins?: boolean, syncData?: boolean): Promise<boolean> => {
     if (!machines || machines.version === 'unknown') {

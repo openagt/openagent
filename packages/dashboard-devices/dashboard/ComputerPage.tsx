@@ -4,7 +4,7 @@ import { Button, ConfirmDialog, Input, Switch } from '@openagt/dashboard/module'
 import { addDevice, removeDevice } from './devices.js'
 import { hasDoor, reachedAt, type ComputerItem } from './model.js'
 import { ComputersThrough } from './ServerPage.js'
-import { Head, Part, Problem, State, SwitchLine } from './parts.js'
+import { Head, Part, Problem, State, SwitchLine, useChange } from './parts.js'
 import type { Devices } from './use-devices.js'
 
 // A computer's own page in Settings › Devices: whether this computer's runs go there, whether it
@@ -15,20 +15,10 @@ export function ComputerPage({ d, item, onBack, onSetUp }: { d: Devices; item: C
   const { host } = d
   const { machine, door, through } = item
   const status = d.door?.ok ? d.door.value : undefined
-  const [busy, setBusy] = useState(false)
-  const [error, setError] = useState<string | undefined>()
+  const { busy, error, act } = useChange(() => Promise.all([d.reloadMachines(), d.reloadDoor()]))
   const [pasting, setPasting] = useState(false)
   const [link, setLink] = useState('')
 
-  const act = async (change: () => Promise<{ ok: true } | { ok: false; error: string }>): Promise<boolean> => {
-    setBusy(true)
-    setError(undefined)
-    const answer = await change()
-    if (!answer.ok) setError(answer.error)
-    await Promise.all([d.reloadMachines(), d.reloadDoor()]).catch(() => {})
-    setBusy(false)
-    return answer.ok
-  }
   const removeHere = (): Promise<{ ok: true } | { ok: false; error: string }> => (door ? d.changeDoor(() => removeDevice(host, door.id)).then(answer => (answer.ok ? { ok: true as const } : answer)) : Promise.resolve({ ok: true as const }))
   const letIn = async (): Promise<{ ok: true } | { ok: false; error: string }> => {
     if (!machine) return { ok: false, error: 'Save it here first.' }

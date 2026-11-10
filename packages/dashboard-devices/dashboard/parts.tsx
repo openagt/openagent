@@ -189,6 +189,25 @@ export function Problem({ children }: { children: ReactNode }) {
   )
 }
 
+/**
+ * A change a page makes on a press: busy while it runs, then what it changed read again
+ * (`reload`); why it failed is said until the next change. `act` answers whether it went.
+ */
+export function useChange(reload: () => Promise<unknown>) {
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState<string | undefined>()
+  const act = async (change: () => Promise<{ ok: true } | { ok: false; error: string }>): Promise<boolean> => {
+    setBusy(true)
+    setError(undefined)
+    const answer = await change()
+    if (!answer.ok) setError(answer.error)
+    await reload().catch(() => {})
+    setBusy(false)
+    return answer.ok
+  }
+  return { busy, setBusy, error, setError, act }
+}
+
 /** A rename: the person's picked name, and what saving it answered. */
 export type Rename = (name: string) => Promise<{ ok: true } | { ok: false; error: string }>
 
