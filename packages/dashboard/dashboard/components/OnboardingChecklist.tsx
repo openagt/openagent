@@ -269,8 +269,9 @@ export function OnboardingChecklist({
                     {at + 1}
                   </span>
                 )}
-                <div className="flex min-w-0 flex-1 gap-3 max-sm:flex-col sm:items-start">
-                  <div className="min-w-0 flex-1 space-y-1">
+                {/* The action goes under the words until it fits beside them with the words 16rem wide or more. */}
+                <div className="flex min-w-0 flex-1 flex-wrap items-start gap-3">
+                  <div className="min-w-0 flex-[1_1_16rem] space-y-1">
                     <div className="mt-1 flex flex-wrap items-center gap-x-2">
                       <button
                         type="button"
@@ -293,7 +294,7 @@ export function OnboardingChecklist({
                     </div>
                     {isOpen && step.description && (typeof step.description === 'string' ? <p className="text-xs text-muted-foreground">{step.description}</p> : step.description)}
                   </div>
-                  {isOpen && step.action && <div className="flex shrink-0 sm:justify-end">{step.action}</div>}
+                  {isOpen && step.action && <div className="flex max-w-full shrink-0">{step.action}</div>}
                 </div>
               </li>
             )
