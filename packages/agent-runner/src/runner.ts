@@ -15,7 +15,7 @@ import { askName } from './title.js'
 import { publishChange, runnerMark, type NO_PUBLISH, type Publish } from './records.js'
 import { acquireRunLock, handOverRunLock, isPidAlive, releaseRunLock, runStderrPath } from './run-lock.js'
 import { accountRotation, accountsPath, hasAddedAccount, readAccounts } from '@openagt/skill-account-rotation'
-import type { AgentRecord } from '@openagt/agent-data'
+import { AGENT_ID_ENV, type AgentRecord } from '@openagt/agent-data'
 
 /**
  * The tool's process side: a run in this process, the same run detached in its own process and
@@ -25,9 +25,6 @@ import type { AgentRecord } from '@openagt/agent-data'
 
 /** This package's executable, for the processes it spawns: the bin beside `dist/`. */
 const BIN = fileURLToPath(new URL('../bin/agent-runner', import.meta.url))
-
-/** The environment name the tickets skill reads the claiming agent's id from. */
-export const AGENT_ID_ENV = 'AGENT_ID'
 
 /** The coding agents a run can be on, by the name the run's record carries. */
 export const DRIVER_NAMES = ['claude-code', 'codex'] as const

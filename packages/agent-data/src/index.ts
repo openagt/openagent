@@ -1,4 +1,4 @@
-export { AGENT_ENV, BRANCHES_DIR, DATA_BRANCH, OPENAGENT_DIR, PROJECT_SKILLS_ENV, SKILLS_ENV, SKILLS_OFF_ENV, SKILLS_ON_ENV, SKILL_CATALOGUE_ENV, isSkillName } from './names.js'
+export { AGENT_ENV, AGENT_ID_ENV, BRANCHES_DIR, DATA_BRANCH, OPENAGENT_DIR, PROJECT_SKILLS_ENV, SKILLS_ENV, SKILLS_OFF_ENV, SKILLS_ON_ENV, SKILL_CATALOGUE_ENV, isSkillName } from './names.js'
 export { installProject, nodeInstallFs, FIRST_COMMIT_MESSAGE, type InstallResult, type InstallDeps, type InstallFs } from './install.js'
 export { gitignorePath, openagentGitignore } from './openagent-gitignore.js'
 export {

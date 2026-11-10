@@ -37,7 +37,7 @@ export {
   type ClaimPhase,
   type ReleaseOutcome,
 } from './locks.js'
-export { holderOf, AGENT_ID_ENV, type Holder } from './holder.js'
+export { holderOf, type Holder } from './holder.js'
 export {
   ticketsDir,
   syncTickets,

@@ -1,10 +1,7 @@
-import { checkoutRoot, nodeGitRunner, type GitRunner } from '@openagt/agent-data'
+import { AGENT_ID_ENV, checkoutRoot, nodeGitRunner, type GitRunner } from '@openagt/agent-data'
 
 /** Who claims, or that nobody can: see {@link holderOf}. */
 export type Holder = { ok: true; holder: string } | { ok: false; reason: 'no-identity' }
-
-/** The environment variable the process that starts an agent sets to the agent's id. */
-export const AGENT_ID_ENV = 'AGENT_ID'
 
 /**
  * Who the command claims as, read from where it runs — nothing for the agent to type or know.

@@ -1,7 +1,7 @@
-import { Refused, type GitRunner } from '@openagt/agent-data'
+import { AGENT_ID_ENV, Refused, type GitRunner } from '@openagt/agent-data'
 import { worktreePath } from '@openagt/skill-branches'
 import { findRun, listRuns, type RunCard } from '@openagt/skill-logs'
-import { AGENT_ID_ENV, readLiveCard, runnerMark } from '@openagt/agent-runner'
+import { readLiveCard, runnerMark } from '@openagt/agent-runner'
 import { APPROVE, doneTasks, planApproved, planQuestion, readPlan } from './plan.js'
 import { parsePlan, type Plan, type PlanTask } from './tasks.js'
 
