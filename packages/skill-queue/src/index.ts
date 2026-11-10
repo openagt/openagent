@@ -1,4 +1,3 @@
 export { QUEUE_FILE } from './names.js'
-export { parseQueueEntries, parseQueueSections, readQueue, queueAdd, type PlacedEntry, type QueueEdit } from './queue.js'
-export type { QueueDeps } from './store.js'
+export { parseQueueEntries, parseQueueSections, readQueue, type PlacedEntry } from './queue.js'
 export { runCli, USAGE, type CliIo } from './cli.js'
