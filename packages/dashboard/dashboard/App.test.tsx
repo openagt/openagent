@@ -323,6 +323,29 @@ describe('module cards on the Overview (#1818)', () => {
     await waitFor(() => expect(document.querySelector('[title="Fix flaky login test"]')).toBeTruthy())
     expect(screen.queryByTestId('title-placeholder')).toBeNull()
   })
+  test('a run just started is starting until a list has had it; then a list without it says it is gone, as after a delete and Back', async () => {
+    const { useModuleHost } = await import('./module/index.js')
+    function Starter({ projects }: ModuleCardProps) {
+      const host = useModuleHost()
+      return createElement('button', { onClick: () => void host.startRun(projects[0]!.id, 'tidy up') }, 'start')
+    }
+    answerOverview([{ package: '@acme/queue', url: moduleModule('__goneStarterCard', { cards: [{ id: 'starter', label: 'starter', Card: Starter }] }), projects: [PROJECT.id] }])
+    answers.set('sendStart', () => ({ ok: true, agentId: '9-d' }))
+    const run = { id: '9-d', status: 'done', startedAt: '2026-07-19T16:05:44.756Z', updatedAt: '2026-07-19T16:06:21.000Z', intent: 'tidy up' }
+    let listed: unknown[] = []
+    answers.set('onAgents', () => listed)
+    answers.set('onRetainedWorktrees', () => [])
+    window.history.replaceState(null, '', '/')
+    render(<App />)
+    fireEvent.click(await screen.findByRole('button', { name: 'start' }))
+    await waitFor(() => expect(window.location.pathname).toBe('/app/9-d'))
+    await waitFor(() => expect(calls.filter(call => call.name === 'onAgents').length).toBeGreaterThan(1))
+    expect(screen.queryByText('This session is gone')).toBeNull()
+    listed = [run]
+    await waitFor(() => expect(document.querySelector('button[aria-label="Session actions"][title="tidy up"]')).toBeTruthy())
+    listed = []
+    expect(await screen.findByText('This session is gone', {}, { timeout: 5000 })).toBeTruthy()
+  })
 })
 
 describe('the project select (#1513)', () => {
