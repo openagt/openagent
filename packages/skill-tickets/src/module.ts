@@ -17,7 +17,7 @@ export const UPDATE_TICKETS_PROMPT = '/update-tickets'
  * wrote a plan is found by it.
  */
 export function planTicketPrompt(file: string): string {
-  return `Create ${TICKETS_DIR}/${ticketPlanName(file)}`
+  return `Create ${planPath(file)}`
 }
 
 /** The prompt the start column fires a session with: work on this one ticket, nothing else. */
