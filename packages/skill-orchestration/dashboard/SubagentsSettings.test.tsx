@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, test, vi } from 'vitest'
-import { cleanup, render, screen, waitFor } from '@testing-library/react'
-import { ModuleHostContext, type ModuleCommandResult, type ModuleHost } from '@openagt/dashboard/module'
-import { fakeHost as hostFor } from '@openagt/dashboard/module/testing'
+import { cleanup, screen, waitFor } from '@testing-library/react'
+import type { ModuleCommandResult, ModuleHost } from '@openagt/dashboard/module'
+import { fakeHost as hostFor, renderWithHost } from '@openagt/dashboard/module/testing'
 import { SubagentsSettings } from './SubagentsSettings.js'
 import { runnerChoices, runnerOf, runnerValue } from './choices.js'
 import { choices, offered, pick, showing } from '../../dashboard/dashboard/test-controls.js'
@@ -32,11 +32,7 @@ function fakeHost(saved: Record<string, unknown> = {}, refuse?: (projectId: stri
 }
 
 function show(host: ModuleHost, projects = PROJECTS) {
-  return render(
-    <ModuleHostContext.Provider value={host}>
-      <SubagentsSettings projects={projects} />
-    </ModuleHostContext.Provider>,
-  )
+  return renderWithHost(<SubagentsSettings projects={projects} />, host)
 }
 
 /** A row's menu, by its label: the button that shows its pick, in the words the list has for it, and opens the list. */
