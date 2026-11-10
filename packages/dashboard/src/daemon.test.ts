@@ -3,12 +3,7 @@ import { test } from 'node:test'
 import { mkdtemp, writeFile, rm, mkdir, readFile, readdir, realpath } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { basename, join, resolve } from 'node:path'
-import {
-  isProcessAlive,
-  runDaemon,
-  type DaemonState,
-  type RunDaemonOptions,
-} from './daemon.js'
+import { runDaemon, type DaemonState, type RunDaemonOptions } from './daemon.js'
 
 /**
  * Start a daemon and wait until it reports where it bound. The CLI is foreground-only, so there
@@ -76,11 +71,6 @@ async function configEnv(cwd: string): Promise<NodeJS.ProcessEnv> {
   await mkdir(dir, { recursive: true })
   return { XDG_CONFIG_HOME: dir }
 }
-
-test('isProcessAlive is true for this process and false for a dead pid', () => {
-  assert.equal(isProcessAlive(process.pid), true)
-  assert.equal(isProcessAlive(2 ** 31 - 1), false) // an impossibly high, unused pid
-})
 
 test('runDaemon serves the dashboard, and shuts down when the signal aborts', async () => {
   const cwd = await tmpWorkspace()
@@ -163,7 +153,7 @@ test("a project's open hooks run once the dashboard listens, its close hooks at 
   const cwd = await realpath(await tmpWorkspace())
   const env = await configEnv(cwd)
   // On the list because a person added it: the daemon runs the hooks of listed projects only.
-  await addProject(cwd, new Date().toISOString(), undefined, env)
+  await addProject(cwd, new Date().toISOString(), env)
   await writeFile(
     join(cwd, OPENAGENT_DIR, 'hooks.yml'),
     'open:\n  - echo open-1 >> hooks.log\n  - pwd -P >> hooks.log\n  - exit 3\n  - echo open-2 >> hooks.log\nclose:\n  - echo close >> hooks.log\n',
@@ -231,7 +221,7 @@ test('a Start runs the project\'s own start hook with the prompt and the picks, 
 test('a stop frees the port before the close hooks run, and ends at its deadline however long a step takes (#2141)', async () => {
   const cwd = await realpath(await tmpWorkspace())
   const env = await configEnv(cwd)
-  await addProject(cwd, new Date().toISOString(), undefined, env)
+  await addProject(cwd, new Date().toISOString(), env)
   await writeFile(join(cwd, OPENAGENT_DIR, 'hooks.yml'), 'close:\n  - sleep 6\n')
   const logged: string[] = []
   const original = console.log
@@ -257,8 +247,8 @@ test('the dashboard adds no folder by itself, not even its own start folder, so 
   const env = await configEnv(cwd)
   const ac = new AbortController()
   try {
-    const { done, state } = await startDaemon(cwd, { port: 0, signal: ac.signal, env })
-    assert.deepEqual(await listProjects(undefined, env), [])
+    const { done } = await startDaemon(cwd, { port: 0, signal: ac.signal, env })
+    assert.deepEqual(await listProjects(env), [])
     ac.abort()
     await done
   } finally {
@@ -287,7 +277,7 @@ test('the folder the caller names is added once the dashboard listens, as Add pr
     const id = projectId(folder)
     const address = id.slice(0, id.lastIndexOf('-')) // the folder's name, as the id writes it
     assert.deepEqual(told, [{ id, path: folder, added: true, address }, { id, path: folder, added: false, address }])
-    assert.deepEqual((await listProjects(undefined, env)).map(project => project.id), [id])
+    assert.deepEqual((await listProjects(env)).map(project => project.id), [id])
     assert.match(await readFile(join(folder, OPENAGENT_DIR, 'hooks.yml'), 'utf8'), /^start: agent-runner /m, 'added with the hook lines Add project writes')
   } finally {
     for (const [key, value] of Object.entries(before)) {

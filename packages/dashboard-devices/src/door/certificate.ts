@@ -1,10 +1,11 @@
 import { createPrivateKey, createPublicKey, generateKeyPairSync, X509Certificate, type KeyObject } from 'node:crypto'
-import { chmod, mkdir, readFile, rename, writeFile } from 'node:fs/promises'
+import { chmod, mkdir, readFile } from 'node:fs/promises'
 import { isIP } from 'node:net'
 import { join } from 'node:path'
 import { AcmeError, orderCertificate } from './acme.js'
 import { certificateRequest, keyFingerprint } from './der.js'
 import { storePath } from './store.js'
+import { writeWhole } from '../home-file.js'
 
 /**
  * The door's certificate on a server: asked for once the door is told its address, kept in the
@@ -24,12 +25,6 @@ const CERTIFICATE = 'door.crt'
 
 type KeyPair = { publicKey: KeyObject; privateKey: KeyObject }
 
-async function writePrivate(path: string, content: string): Promise<void> {
-  const tmp = `${path}.${process.pid}.tmp`
-  await writeFile(tmp, content, { mode: 0o600 })
-  await rename(tmp, path)
-}
-
 /** What a file holds, or `undefined` when there is no such file. A file that is there and cannot be read throws: it is never taken for none. */
 async function kept(path: string): Promise<string | undefined> {
   return readFile(path, 'utf8').catch(err => ((err as NodeJS.ErrnoException).code === 'ENOENT' ? undefined : Promise.reject(err)))
@@ -47,7 +42,7 @@ async function keptKey(dir: string, file: string): Promise<KeyPair> {
     return { privateKey, publicKey: createPublicKey(privateKey) }
   }
   const made = generateKeyPairSync('ec', { namedCurve: 'P-256' })
-  await writePrivate(path, made.privateKey.export({ type: 'pkcs8', format: 'pem' }) as string)
+  await writeWhole(path, made.privateKey.export({ type: 'pkcs8', format: 'pem' }) as string)
   return made
 }
 
@@ -157,7 +152,7 @@ export async function keepCertificate(opts: KeepOptions): Promise<Keeper> {
       const fresh = leafOf(chain)
       if (!fresh || !isFor(fresh, opts.host, doorKey)) throw new Error('the certificate office answered a certificate for another address or key')
       // A certificate that could not be kept is used all the same: the next start asks for another.
-      await writePrivate(join(dir, CERTIFICATE), chain).catch(() => {})
+      await writeWhole(join(dir, CERTIFICATE), chain).catch(() => {})
       if (stopped) return
       leaf = fresh
       failures = 0

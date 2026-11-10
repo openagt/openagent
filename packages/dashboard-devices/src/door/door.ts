@@ -4,12 +4,15 @@ import { createServer, request as httpRequest, type IncomingMessage, type Outgoi
 import { createServer as createSecureServer, type Server as SecureServer } from 'node:https'
 import type { AddressInfo, Socket } from 'node:net'
 import type { Duplex } from 'node:stream'
-import { nameAddress, onOwnNetwork, plainAddress, urlHost, type AddressDeps } from './address.js'
+import { nameAddress, onOwnNetwork, plainAddress, serverWhere, urlHost, type AddressDeps } from './address.js'
 import { doorFingerprint, type Secured } from './certificate.js'
 import { deviceName } from './device-name.js'
-import { LINE_FOR_HEADER, LINE_PATH, LINE_PROTOCOL, namesIn } from './line-out.js'
+import { listen, readFields, refuse, sendJson, shut } from './http.js'
+import { LINE_FOR_HEADER, LINE_PROTOCOL, namesIn } from './line-out.js'
+import { ASK_PATH, COMPUTERS_PATH, DOOR_PREFIX, ENTER_PATH, LINE_PATH, ME_CODE_PATH, ME_LINE_PATH, ME_PATH, ME_REMOVE_PATH, VIA_PREFIX } from './paths.js'
 import { enterPage, notInPage, type DoorKind } from './pages.js'
-import { COMPUTER_HEADER, COMPUTER_NAME_HEADER, OWNERS_NAME_HEADER, PERSON_HEADER, addAsk, addCode, askOf, dropAsk, nameWord, shownCode, enter, isComputerId, isIn, listedDevices, nameComputer, personOf, portOf, readStore, removeComputer, removeDevice, sha256, shareLine, storePath, update, type Entry, type ListedDevice, type Store } from './store.js'
+import { COMPUTER_HEADER, COMPUTER_NAME_HEADER, OWNERS_NAME_HEADER, PERSON_HEADER, addAsk, addCode, askOf, dropAsk, shownCode, enter, isComputerId, isIn, listedDevices, nameComputer, personOf, portOf, readStore, removeComputer, removeDevice, sha256, shareLine, storePath, update, type Entry, type ListedDevice, type Store } from './store.js'
+import { nameWord, shownName } from './names.js'
 
 /**
  * The door: the one thing that lets anything in from the network. A request from a device that is in is
@@ -56,26 +59,17 @@ import { COMPUTER_HEADER, COMPUTER_NAME_HEADER, OWNERS_NAME_HEADER, PERSON_HEADE
  * Allowed, it is handed a code made that moment, and gets in with it as with any code.
  */
 
-/** Every path of the door's own; never passed on. */
-export const DOOR_PREFIX = '/_devices'
-/** Where a scanned code lands, and where its page sends the code. */
-export const ENTER_PATH = `${DOOR_PREFIX}/enter`
-/** The computers that keep a line open here, for another computer's OpenAgent that is in. */
-export const COMPUTERS_PATH = `${DOOR_PREFIX}/computers`
-/** Where another computer's OpenAgent asks a computer on a line: `<VIA_PREFIX>/<its device id>/_relay/…`. */
-export const VIA_PREFIX = `${DOOR_PREFIX}/via`
-/** Who a device is here: its person, whether that is the owner, and that person's devices. */
-export const ME_PATH = `${DOOR_PREFIX}/me`
-/** Where a device takes one of its own person's devices out. */
-export const ME_REMOVE_PATH = `${ME_PATH}/remove`
-/** Where a computer that is in asks for a code its line gets in with, for its own person. */
-export const ME_LINE_PATH = `${ME_PATH}/line`
-/** Where a computer that is in asks for a code a device of its own person gets in with: a device that is in gives the code for the next one. */
-export const ME_CODE_PATH = `${ME_PATH}/code`
-/** Where a computer on this Wi-Fi asks to get in, hears the answer, and takes its ask away. */
-export const ASK_PATH = `${DOOR_PREFIX}/ask`
 /** The cookie a device that is in carries: its id, a dot, its key. */
 export const DEVICE_COOKIE = 'oa_device'
+
+/**
+ * The link a code is handed out as, at the door at `origin`: what a camera opens and a computer
+ * pastes. The code rides after the `#`, which a browser keeps to itself; after it and a dot, on a
+ * server, what the door's key is known by (`pin`), since no certificate a device trusts says so.
+ */
+export function codeLink(origin: string, code: string, pin?: string): string {
+  return `${origin}${ENTER_PATH}#${code}${pin !== undefined ? `.${pin}` : ''}`
+}
 
 /** As long as a browser keeps a cookie at most; sent again before it runs out, so a device stays in until it is removed. */
 const COOKIE_MAX_AGE_S = 400 * 24 * 60 * 60
@@ -107,7 +101,7 @@ function saidComputerName(req: IncomingMessage): string | undefined {
   if (typeof said !== 'string') return undefined
   let name: string
   try {
-    name = saidName(decodeURIComponent(said))
+    name = shownName(decodeURIComponent(said))
   } catch {
     return undefined
   }
@@ -200,14 +194,9 @@ export function readBearer(header: string | undefined): Entry | undefined {
   return word ? readKeyWord(word) : undefined
 }
 
-/** A computer's name as it said it, safe to show. */
-function saidName(said: string): string {
-  return said.replace(/[\x00-\x1f\x7f]/g, ' ').trim().slice(0, 60)
-}
-
 /** A computer's name as the list of devices shows it. */
 function computerName(said: string): string {
-  return `OpenAgent on ${saidName(said)}`
+  return `OpenAgent on ${shownName(said)}`
 }
 
 /** A `Cookie` header without the door's own cookie: OpenAgent never sees a device's key. */
@@ -229,10 +218,6 @@ function fromOwnPage(req: IncomingMessage, secure: boolean, own?: string): boole
   return !origin || origin === (own ?? `${secure ? 'https' : 'http'}://${req.headers.host ?? ''}`)
 }
 
-function refuse(res: ServerResponse, status: number, text: string): void {
-  res.writeHead(status, { 'content-type': 'text/plain; charset=utf-8', 'cache-control': 'no-store' }).end(text)
-}
-
 function sendPage(res: ServerResponse, status: number, html: string, nonce?: string): void {
   res
     .writeHead(status, {
@@ -242,17 +227,6 @@ function sendPage(res: ServerResponse, status: number, html: string, nonce?: str
       'content-security-policy': `default-src 'none'; style-src 'unsafe-inline'; connect-src 'self'${nonce ? `; script-src 'nonce-${nonce}'` : ''}`,
     })
     .end(html)
-}
-
-async function readBody(req: IncomingMessage, limit: number): Promise<string | undefined> {
-  let size = 0
-  const chunks: Buffer[] = []
-  for await (const chunk of req) {
-    size += (chunk as Buffer).length
-    if (size > limit) return undefined
-    chunks.push(chunk as Buffer)
-  }
-  return Buffer.concat(chunks).toString('utf8')
 }
 
 /** What a device is told of itself here (`ME_PATH`). */
@@ -337,6 +311,20 @@ export async function openDoor(opts: DoorOptions): Promise<Door> {
     for (const other of [...wrongTries.keys()]) triesOf(other)
     wrongTries.set(peer, [...triesOf(peer), now()])
   }
+  /**
+   * A call on `socket` from the device `id`, which is in: when it was last seen, which computer it
+   * says it is (`computer`), and what it holds open, cut once it is taken out. The first word of a
+   * computer counts: what an entry says it is, is not changed by what its key's holder says later.
+   */
+  const heardFrom = (id: string, socket: Socket, computer: string | undefined): void => {
+    seen.set(id, now())
+    if (computer !== undefined && !said.has(id)) said.set(id, computer)
+    let held = sockets.get(id)
+    if (!held) sockets.set(id, (held = new Set()))
+    if (held.has(socket)) return
+    held.add(socket)
+    socket.once('close', () => held.delete(socket))
+  }
 
   const flushSeen = async (): Promise<void> => {
     if (seen.size === 0) return
@@ -367,15 +355,7 @@ export async function openDoor(opts: DoorOptions): Promise<Door> {
     }
     if (req.method !== 'POST') return refuse(res, 405, 'method not allowed')
     if (!fromOwnPage(req, secure, opts.origin)) return refuse(res, 403, 'forbidden')
-    const body = await readBody(req, MAX_ENTER_BODY)
-    let code: unknown
-    let computer: unknown
-    let line: unknown
-    try {
-      ;({ code, computer, line } = JSON.parse(body ?? '') as { code?: unknown; computer?: unknown; line?: unknown })
-    } catch {
-      code = undefined
-    }
+    const { code, computer, line } = await readFields(req, MAX_ENTER_BODY)
     // A computer says its own name; a browser is named by what it says it is.
     const byComputer = typeof computer === 'string' && computer.trim() !== ''
     // A computer that gets in to keep a line open is listed by its own name: it is what this server starts runs on.
@@ -384,19 +364,18 @@ export async function openDoor(opts: DoorOptions): Promise<Door> {
     // Asked before the code is looked at: an address that is waiting is not told whether its next guess was right.
     const peer = callerOf(req)
     if (triesOf(peer).length >= WRONG_TRIES) return refuse(res, 429, TOO_MANY_TRIES)
-    const name = forLine ? saidName(computer as string) : byComputer ? computerName(computer as string) : deviceName(req.headers['user-agent'])
+    const name = forLine ? shownName(computer as string) : byComputer ? computerName(computer as string) : deviceName(req.headers['user-agent'])
     const entry = typeof code === 'string' && code ? await enter(env, code, name, now(), forLine ? opts.lines!.ports : undefined, byComputer ? saidComputer(req) : undefined) : undefined
     if (!entry) {
       triedWrong(peer)
       return refuse(res, 403, 'this code no longer works')
     }
-    const headers = { 'content-type': 'application/json', 'cache-control': 'no-store' }
     // A computer is answered its key; a browser gets it as a cookie its pages cannot read.
-    if (byComputer) return void res.writeHead(200, headers).end(JSON.stringify({ ok: true, key: keyWord(entry) }))
+    if (byComputer) return sendJson(res, 200, { ok: true, key: keyWord(entry) })
     cookieSent.set(entry.id, now())
     // Whose device it is, for the page to say: the owner's when no person is named.
     const person = entry.person ?? (await currentStore()).persons[0]?.name
-    res.writeHead(200, { ...headers, 'set-cookie': cookieHeader(entry, secure) }).end(JSON.stringify({ ok: true, ...(person !== undefined ? { person } : {}) }))
+    sendJson(res, 200, { ok: true, ...(person !== undefined ? { person } : {}) }, { 'set-cookie': cookieHeader(entry, secure) })
   }
 
   /**
@@ -408,26 +387,20 @@ export async function openDoor(opts: DoorOptions): Promise<Door> {
    */
   const asking = async (req: IncomingMessage, res: ServerResponse): Promise<void> => {
     if (req.headers.origin !== undefined || req.headers.cookie !== undefined) return refuse(res, 403, 'forbidden')
-    const json = (value: unknown): void => void res.writeHead(200, { 'content-type': 'application/json', 'cache-control': 'no-store' }).end(JSON.stringify(value))
     if (req.method === 'POST') {
-      let computer: unknown
-      try {
-        ;({ computer } = JSON.parse((await readBody(req, MAX_ENTER_BODY)) ?? '') as { computer?: unknown })
-      } catch {
-        computer = undefined
-      }
-      if (typeof computer !== 'string' || !saidName(computer)) return refuse(res, 400, 'say which computer asks: {"computer": "its name"}')
-      const asked = await addAsk(env, saidName(computer), plainAddress(req.socket.remoteAddress ?? ''), now())
+      const { computer } = await readFields(req, MAX_ENTER_BODY)
+      if (typeof computer !== 'string' || !shownName(computer)) return refuse(res, 400, 'say which computer asks: {"computer": "its name"}')
+      const asked = await addAsk(env, shownName(computer), plainAddress(req.socket.remoteAddress ?? ''), now())
       if (asked === 'denied') return refuse(res, 429, ASK_DENIED)
       if (asked === 'busy') return refuse(res, 503, ASK_BUSY)
-      return json({ secret: asked.secret, number: asked.ask.number, expires: asked.ask.expires })
+      return sendJson(res, 200, { secret: asked.secret, number: asked.ask.number, expires: asked.ask.expires })
     }
     const secret = BEARER.exec(req.headers.authorization ?? '')?.[1]
     if (!secret) return refuse(res, 401, 'say which ask: its secret, as Authorization: Bearer')
     req.resume()
     if (req.method === 'DELETE') {
       await dropAsk(env, secret, now())
-      return json({ ok: true })
+      return sendJson(res, 200, { ok: true })
     }
     if (req.method !== 'GET') return refuse(res, 405, 'method not allowed')
     let left = false
@@ -435,20 +408,20 @@ export async function openDoor(opts: DoorOptions): Promise<Door> {
     const until = Date.now() + (opts.askHoldMs ?? ASK_HOLD_MS)
     for (;;) {
       const ask = askOf(await currentStore(), secret, now())
-      if (!ask) return json({ state: 'gone' })
-      if (ask.answer === 'denied') return json({ state: 'denied' })
+      if (!ask) return sendJson(res, 200, { state: 'gone' })
+      if (ask.answer === 'denied') return sendJson(res, 200, { state: 'denied' })
       if (ask.answer === 'allowed') {
         // Taken away as it is heard: the code is handed once.
-        if ((await dropAsk(env, secret, now()))?.answer !== 'allowed') return json({ state: 'gone' })
+        if ((await dropAsk(env, secret, now()))?.answer !== 'allowed') return sendJson(res, 200, { state: 'gone' })
         const { code } = await addCode(env, now())
         const port = (server.address() as AddressInfo).port
         // By this computer's name on the network when it has one, as every code here is; by the number it was asked at too.
         const name = await nameAddress(opts.address)
         const asked = req.headers.host ?? `${urlHost(plainAddress(req.socket.localAddress ?? ''))}:${port}`
-        const link = (host: string): string => `http://${host}${ENTER_PATH}#${code}`
-        return json({ state: 'allowed', link: link(name ? `${urlHost(name)}:${port}` : asked), ...(name ? { numberLink: link(asked) } : {}) })
+        const link = (host: string): string => codeLink(`http://${host}`, code)
+        return sendJson(res, 200, { state: 'allowed', link: link(name ? `${urlHost(name)}:${port}` : asked), ...(name ? { numberLink: link(asked) } : {}) })
       }
-      if (left || Date.now() >= until) return json({ state: 'waiting', expires: ask.expires })
+      if (left || Date.now() >= until) return sendJson(res, 200, { state: 'waiting', expires: ask.expires })
       await new Promise(resolve => setTimeout(resolve, ASK_LOOK_MS))
     }
   }
@@ -477,7 +450,7 @@ export async function openDoor(opts: DoorOptions): Promise<Door> {
     const who = await whoIsIn(req)
     if (!who) return refuse(res, 401, 'this device is not in')
     await removeDevice(env, who.entry.id)
-    res.writeHead(200, { 'content-type': 'application/json', 'cache-control': 'no-store' }).end('{"ok":true}')
+    sendJson(res, 200, { ok: true })
   }
 
   const passOn = (req: IncomingMessage, res: ServerResponse, entry: Entry, byBearer: boolean, person: string | undefined, port: number | undefined): void => {
@@ -548,23 +521,13 @@ export async function openDoor(opts: DoorOptions): Promise<Door> {
       if (!fromOwnPage(req, secure, opts.origin)) return refuse(res, 403, 'forbidden')
 
       const { entry, byBearer, person, owner, port } = who
-      seen.set(entry.id, now())
       // Only a computer says which one it is: a page's word for it is not taken.
-      const computer = byBearer ? saidComputer(req) : undefined
-      // The first word counts: what an entry says it is, is not changed by what its key's holder says later.
-      if (computer !== undefined && !said.has(entry.id)) said.set(entry.id, computer)
+      heardFrom(entry.id, req.socket, byBearer ? saidComputer(req) : undefined)
       // A computer's name is its own, said with every call: renamed there, it is listed here by the new one.
       const heard = byBearer ? saidComputerName(req) : undefined
       if (heard !== undefined && names.get(entry.id) !== heard) {
         names.set(entry.id, heard)
         void nameComputer(env, entry.id, device => (device.line ? heard : computerName(heard))).catch(() => names.delete(entry.id))
-      }
-      let held = sockets.get(entry.id)
-      if (!held) sockets.set(entry.id, (held = new Set()))
-      if (!held.has(req.socket)) {
-        const socket = req.socket
-        held.add(socket)
-        socket.once('close', () => held.delete(socket))
       }
       // OpenAgent shows the person at the page: the owner's own device is the owner at their own page, said by nobody.
       passOn(req, res, entry, byBearer, owner ? undefined : person, port)
@@ -597,7 +560,7 @@ export async function openDoor(opts: DoorOptions): Promise<Door> {
         const whose = own(device) ? undefined : personOf(store, device)
         return { id: device.id, name: device.name, online: opts.lines!.connected(device.id), ...(whose !== undefined ? { owner: whose } : {}) }
       })
-      return void res.writeHead(200, { 'content-type': 'application/json', 'cache-control': 'no-store' }).end(JSON.stringify({ computers }))
+      return sendJson(res, 200, { computers })
     }
     const rest = path.slice(VIA_PREFIX.length + 1)
     const slash = rest.indexOf('/')
@@ -622,24 +585,17 @@ export async function openDoor(opts: DoorOptions): Promise<Door> {
     if (!who) return refuse(res, 401, 'this device is not in')
     if (who.byBearer ? req.headers.origin !== undefined || req.headers.cookie !== undefined : !fromOwnPage(req, secure, opts.origin)) return refuse(res, 403, 'forbidden')
     seen.set(who.entry.id, now())
-    const json = (status: number, value: unknown): void => void res.writeHead(status, { 'content-type': 'application/json', 'cache-control': 'no-store' }).end(JSON.stringify(value))
     const whose = { person: who.person }
     if (path === ME_PATH) {
       if (req.method !== 'GET') return refuse(res, 405, 'method not allowed')
-      return json(200, me(await currentStore(), who.person, opts.ownersName?.()))
+      return sendJson(res, 200, me(await currentStore(), who.person, opts.ownersName?.()))
     }
     if (req.method !== 'POST') return refuse(res, 405, 'method not allowed')
     if (path === ME_REMOVE_PATH) {
-      const body = await readBody(req, MAX_ENTER_BODY)
-      let id: unknown
-      try {
-        ;({ id } = JSON.parse(body ?? '') as { id?: unknown })
-      } catch {
-        id = undefined
-      }
+      const { id } = await readFields(req, MAX_ENTER_BODY)
       if (typeof id !== 'string' || !id) return refuse(res, 400, 'say which device: {"id": "…"}')
       if (!(await removeComputer(env, id, whose))) return refuse(res, 404, 'no device of yours has that id')
-      return json(200, me(await currentStore(), who.person))
+      return sendJson(res, 200, me(await currentStore(), who.person))
     }
     // A code for a line, or for a device of the computer's person: only a computer asks, and only a
     // door with an address to say where: a server's, or one behind Tailscale.
@@ -651,14 +607,14 @@ export async function openDoor(opts: DoorOptions): Promise<Door> {
     if (opts.proxied && store.tailscale) {
       const { code, expires } = await addCode(env, now(), who.person === owner ? undefined : who.person)
       // Tailscale's certificate is one every device trusts: nothing of the door's key follows the code.
-      return json(200, { url: `https://${store.tailscale.address}${ENTER_PATH}#${code}`, where: store.tailscale.address, code: shownCode(code), expires })
+      return sendJson(res, 200, { url: codeLink(`https://${store.tailscale.address}`, code), where: store.tailscale.address, code: shownCode(code), expires })
     }
     const fingerprint = await doorFingerprint(env)
     if (!store.https || !fingerprint) return refuse(res, 503, 'the door has no address or no key yet')
     const { code, expires } = await addCode(env, now(), who.person === owner ? undefined : who.person, forLine)
     const port = (server.address() as AddressInfo).port
-    const where = `${urlHost(store.https.address)}${port === 443 ? '' : `:${port}`}`
-    return json(200, { url: `https://${where}${ENTER_PATH}#${code}.${fingerprint}`, where, code: shownCode(code), expires })
+    const where = serverWhere(store.https.address, port)
+    return sendJson(res, 200, { url: codeLink(`https://${where}`, code, fingerprint), where, code: shownCode(code), expires })
   }
 
   /**
@@ -698,13 +654,7 @@ export async function openDoor(opts: DoorOptions): Promise<Door> {
       if (share(looked)) await update(env, kept => void (kept.devices.find(candidate => candidate.id === device.id)?.line && share(kept)))
       // Gone while the file was read: there is no line to give.
       if (socket.destroyed) return
-      seen.set(device.id, now())
-      const computer = saidComputer(req)
-      if (computer !== undefined && !said.has(device.id)) said.set(device.id, computer)
-      let held = sockets.get(device.id)
-      if (!held) sockets.set(device.id, (held = new Set()))
-      held.add(socket as Socket)
-      socket.once('close', () => held.delete(socket as Socket))
+      heardFrom(device.id, socket as Socket, saidComputer(req))
       socket.write(`HTTP/1.1 101 Switching Protocols\r\nConnection: Upgrade\r\nUpgrade: ${LINE_PROTOCOL}\r\n\r\n`)
       opts.lines.take(device.id, socket, head)
     })().catch(() => socket.destroy())
@@ -717,17 +667,7 @@ export async function openDoor(opts: DoorOptions): Promise<Door> {
   // Open to every network, the door takes a bounded number of callers at once.
   if (opts.secured) server.maxConnections = 1024
 
-  const listen = (host: string): Promise<void> =>
-    new Promise((resolve, reject) => {
-      server.once('error', reject)
-      server.listen(opts.port, host, () => {
-        server.removeListener('error', reject)
-        resolve()
-      })
-    })
-  if (opts.host !== undefined) await listen(opts.host)
-  // Both families at once where the computer has IPv6: a name on the network may answer with either.
-  else await listen('::').catch(err => ((err as NodeJS.ErrnoException).code === 'EAFNOSUPPORT' ? listen('0.0.0.0') : Promise.reject(err)))
+  await listen(server, opts.port, opts.host)
 
   // Started only once the door listens: a door that could not be opened leaves nothing behind.
   const flushTimer = setInterval(() => void flushSeen(), SEEN_FLUSH_MS)
@@ -748,8 +688,7 @@ export async function openDoor(opts: DoorOptions): Promise<Door> {
     },
     async close() {
       clearInterval(flushTimer)
-      server.closeAllConnections()
-      await new Promise<void>(resolve => server.close(() => resolve()))
+      await shut(server)
       await flushSeen()
     },
   }

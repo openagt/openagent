@@ -6,7 +6,7 @@ import { endLiveCard, readLiveCard, readLiveDiary } from './live-card.js'
 import { lockHolder, runStderrPath } from './run-lock.js'
 import { recordBranchGone, recordRun, runnerMark, startOf } from './records.js'
 import { childEndedLine, tellParent, type ParentDeps } from './parent.js'
-import { SESSION_FOLDER_STAYS } from './run.js'
+import { SESSION_FOLDER_STAYS } from './session-folder.js'
 
 /**
  * The belt (#1774): what a run's own process could not do because it died. A scheduler runs it on
@@ -103,11 +103,15 @@ export async function sweep(repo: string, deps: SweepDeps): Promise<SweepResult>
     if (!mark || mark.host !== deps.host) continue
     if (await lockHolder(repo, card.id, deps.isAlive)) continue
     if (await checkoutExists(sessions !== undefined ? sessionFolder(sessions, card.id) : worktreePath(repo, card.id))) continue // a checkout with no live card yet: the run is opening it
+    // `failed` with the last of the stderr its spawn left, else `stopped`: gone, saying nothing.
     const stderr = (await readFile(runStderrPath(repo, card.id), 'utf8').catch(() => '')).trim()
-    const ended = stderr ? failedStart(card, stderr, now()) : gone(card, now())
-    const written = await recordRun(repo, ended.card, ended.diary, logs)
-    if (written.ok || written.committed) result.recorded.push({ id: card.id, status: ended.card.status })
-    await tell(ended.card, ended.diary[0]!.detail, undefined)
+    const status = stderr ? 'failed' : 'stopped'
+    const detail = stderr ? `its process died before the run started: ${stderr.split('\n').slice(-5).join('\n')}` : 'its process is gone and left no checkout'
+    const at = now().toISOString()
+    const ended: RunCard = { ...card, status, endedAt: at }
+    const written = await recordRun(repo, ended, [{ kind: 'ended', status, detail, at }], logs)
+    if (written.ok || written.committed) result.recorded.push({ id: card.id, status })
+    await tell(ended, detail, undefined)
   }
   return result
 }
@@ -117,13 +121,4 @@ const DIED_DETAIL = 'its process died before the run ended'
 
 async function checkoutExists(path: string): Promise<boolean> {
   return stat(path).then(s => s.isDirectory(), () => false)
-}
-
-function failedStart(card: RunCard, stderr: string, now: Date) {
-  const detail = `its process died before the run started: ${stderr.split('\n').slice(-5).join('\n')}`
-  return { card: { ...card, status: 'failed' as const, endedAt: now.toISOString() }, diary: [{ kind: 'ended', status: 'failed', detail, at: now.toISOString() }] }
-}
-
-function gone(card: RunCard, now: Date) {
-  return { card: { ...card, status: 'stopped' as const, endedAt: now.toISOString() }, diary: [{ kind: 'ended', status: 'stopped', detail: 'its process is gone and left no checkout', at: now.toISOString() }] }
 }

@@ -1,6 +1,6 @@
 import { Children, cloneElement, createContext, Fragment, isValidElement, useContext, useRef, type ReactElement, type ReactNode } from 'react'
 import { wordShownAt } from '../lib/use-steady-text.js'
-import { languageOfFence, Pieces, useHighlightedIn } from '../lib/highlight.js'
+import { ColouredLines, languageOfFence, useHighlightedIn } from '../lib/highlight.js'
 import { cn } from '../lib/utils.js'
 import { ImageIcon } from 'lucide-react'
 import { CopyButton } from './ui/copy-button.js'
@@ -82,22 +82,17 @@ function diffLineClass(line: string): string | undefined {
   return undefined
 }
 
-// A fenced-code block, rendered both when its closing fence arrives and when the doc ends
-// mid-fence; one place so the markup and classes can't drift between the two. A block fenced as
-// `diff` has its added and removed lines coloured, as the changed-lines counts are.
-//
-// A card, as Claude Code on the web sets one: a bordered box with the copy button in its corner,
-// its lines wrapped to the box rather than cut at its edge, and no strip naming the language. Code
-// is the one thing in an answer a reader takes somewhere else, and selecting it by hand is where
-// that went wrong.
-function codeBlock(lines: string[], language: string, key: number, look: Look): ReactNode {
-  return <CodeBlock key={key} lines={lines} language={language} document={look.document} />
-}
-
 /**
- * The card itself. A block of a language the dashboard knows is coloured in the chat's own colours
+ * A fenced-code block, drawn both when its closing fence arrives and when the doc ends mid-fence.
+ * A block fenced as `diff` has its added and removed lines coloured, as the changed-lines counts
+ * are; a block of a language the dashboard knows is coloured in the chat's own colours
  * (`highlight.tsx`), as Claude Code on the web colours one; until its grammar is loaded, and for a
  * language it does not know, the text is plain.
+ *
+ * A card, as Claude Code on the web sets one: a bordered box with the copy button in its corner,
+ * its lines wrapped to the box rather than cut at its edge, and no strip naming the language. Code
+ * is the one thing in an answer a reader takes somewhere else, and selecting it by hand is where
+ * that went wrong.
  */
 function CodeBlock({ lines, language, document }: { lines: string[]; language: string; document: boolean }) {
   const text = lines.join('\n')
@@ -120,12 +115,7 @@ function CodeBlock({ lines, language, document }: { lines: string[]; language: s
                 </span>
               ))
             : coloured
-              ? coloured.map((pieces, i) => (
-                  <Fragment key={i}>
-                    <Pieces pieces={pieces} />
-                    {i < coloured.length - 1 ? '\n' : null}
-                  </Fragment>
-                ))
+              ? <ColouredLines lines={coloured} />
               : text}
         </code>
       </pre>
@@ -402,6 +392,40 @@ function PageTable({ header, body }: { header: string[]; body: string[][] }) {
   )
 }
 
+/**
+ * A reply's table: rows ruled under, as wide as the reply, scrolling sideways when it is wider. Its
+ * elements, not a component of its own: the words of a message being written fade in through
+ * the elements they are in (`wordsIn`), which a component's would hide.
+ */
+function replyTable(header: string[], body: string[][], compact: boolean, key: number): ReactNode {
+  return (
+    <div key={key} className="overflow-x-auto">
+      <table className={cn('w-full border-collapse [&_tbody_tr:last-child_td]:border-b-0', compact ? 'text-xs' : 'text-sm')}>
+        <thead>
+          <tr>
+            {header.map((cell, i) => (
+              <th key={i} className={cn('border-b border-border text-left font-medium', compact ? 'py-1 pr-3' : 'py-2.5 pr-6')}>
+                {inline(cell)}
+              </th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {body.map((cells, r) => (
+            <tr key={r}>
+              {header.map((_, c) => (
+                <td key={c} className={cn('border-b border-border/60 align-top', compact ? 'py-1 pr-3' : 'py-2.5 pr-6')}>
+                  {inline(cells[c] ?? '')}
+                </td>
+              ))}
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  )
+}
+
 /** A heading as a link to it names it (`#deploy` for "Deploy"), as GitHub names one. */
 function slug(text: string): string {
   return text
@@ -438,32 +462,7 @@ function renderBlocks(lines: string[], look: Look, depth = 0): ReactNode[] {
     if (rows.length >= 2 && isTableSeparator(rows[1]!)) {
       const header = tableCells(rows[0]!)
       const body = rows.slice(2).map(tableCells)
-      blocks.push(document ? <PageTable key={key++} header={header} body={body} /> : (
-        <div key={key++} className="overflow-x-auto">
-          <table className={cn('w-full border-collapse [&_tbody_tr:last-child_td]:border-b-0', compact ? 'text-xs' : 'text-sm')}>
-            <thead>
-              <tr>
-                {header.map((cell, i) => (
-                  <th key={i} className={cn('border-b border-border text-left font-medium', compact ? 'py-1 pr-3' : 'py-2.5 pr-6')}>
-                    {inline(cell)}
-                  </th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {body.map((cells, r) => (
-                <tr key={r}>
-                  {header.map((_, c) => (
-                    <td key={c} className={cn('border-b border-border/60 align-top', compact ? 'py-1 pr-3' : 'py-2.5 pr-6')}>
-                      {inline(cells[c] ?? '')}
-                    </td>
-                  ))}
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      ))
+      blocks.push(document ? <PageTable key={key++} header={header} body={body} /> : replyTable(header, body, compact, key++))
     } else {
       for (const row of rows) blocks.push(<p key={key++}>{inline(row)}</p>)
     }
@@ -477,7 +476,7 @@ function renderBlocks(lines: string[], look: Look, depth = 0): ReactNode[] {
         flushTable()
         code = { lines: [], language: fence[1]!.toLowerCase() }
       } else {
-        blocks.push(codeBlock(code.lines, code.language, key++, look))
+        blocks.push(<CodeBlock key={key++} lines={code.lines} language={code.language} document={document} />)
         code = null
       }
       continue
@@ -552,7 +551,7 @@ function renderBlocks(lines: string[], look: Look, depth = 0): ReactNode[] {
     blocks.push(<p key={key++}>{inlineLines(paragraph)}</p>)
   }
   flushTable()
-  if (code !== null) blocks.push(codeBlock(code.lines, code.language, key++, look))
+  if (code !== null) blocks.push(<CodeBlock key={key++} lines={code.lines} language={code.language} document={document} />)
   return blocks
 }
 

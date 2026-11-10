@@ -1,9 +1,8 @@
-import type { Intervention, OpenAgentEvent, ProjectError, ProjectSummary } from '../../src/index.js'
+import type { Intervention, ProjectError, ProjectSummary } from '../../src/index.js'
 import { StartAgentForm } from './StartAgentForm.js'
 import { ProjectActions } from './ProjectActions.js'
 import { ProjectErrorBanner } from './ProjectErrorBanner.js'
 import { ProjectSkillsLine } from './ProjectSkills.js'
-import { AgentOverview } from './AgentOverview.js'
 import { HumanQueueList } from './HumanQueueList.js'
 import { ScrollArea } from './ui/scroll-area.js'
 import type { StartPicks } from '../lib/started-from.js'
@@ -23,7 +22,6 @@ export function ProjectHome({
   projectId,
   projectName,
   waiting,
-  events,
   onAgentStarted,
   files,
   context,
@@ -50,7 +48,6 @@ export function ProjectHome({
   projectName?: string | null | undefined
   /** The Human Queue, already only the project picked in the sidebar's (#1513) when one is picked. */
   waiting: Intervention[]
-  events: OpenAgentEvent[]
   /** Carries the started agent's id through to the shell; dropping it is what #1169 was. */
   onAgentStarted?: ((intent: string, agentId: string, runsOn?: string, startedIn?: string, picks?: StartPicks) => void) | undefined
   files: string[]
@@ -82,7 +79,6 @@ export function ProjectHome({
           the place and at the width of an agent's message box. */}
       <ScrollArea className="min-h-0 flex-1">
         <div className="mx-auto w-full max-w-3xl">
-          {events.length > 0 && <AgentOverview events={events} />}
           {/* No section at all when nothing waits: an empty "Waiting on you" is noise on every launch. */}
           {waiting.length > 0 && (
             <section aria-label="Waiting on you" className="p-3">

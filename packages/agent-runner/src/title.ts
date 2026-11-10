@@ -1,7 +1,7 @@
 import { mkdtemp, readFile, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import type { Driver } from '@openagt/agent-driver'
+import type { Driver, DriverSession } from '@openagt/agent-driver'
 
 // A run's short name, the way Claude Code on the web names a session: "README.md condensing" for
 // "make readme.md shorter". The person's own words are the whole prompt — too long for a list and
@@ -113,6 +113,39 @@ export function titleOf(said: string): string | undefined {
   return named
 }
 
+/** A session that names runs, and how to end it. */
+export interface NamingSession {
+  session: DriverSession
+  /** End the session and remove its folder. Never throws. */
+  close(): Promise<void>
+}
+
+/**
+ * Start a naming session: the coding agent on its small model, with no tools, in an empty folder of
+ * its own (the top of this file says why). Never inside the run's checkout either: an untracked
+ * folder there is a dirty tree, and the branches rule never reclaims one. `undefined` for an agent
+ * with no small model named here; a session that cannot start rejects, its folder already gone.
+ */
+export async function startNaming(driver: Driver, signal?: AbortSignal): Promise<NamingSession | undefined> {
+  const model = TITLE_MODELS[driver.id]
+  if (model === undefined) return undefined
+  const dir = await mkdtemp(join(tmpdir(), 'openagent-naming-'))
+  const removeDir = () => rm(dir, { recursive: true, force: true }).catch(() => {})
+  try {
+    const session = await driver.start({ cwd: dir, model, system: TITLE_SYSTEM, noTools: true, ...(signal ? { signal } : {}) })
+    return {
+      session,
+      close: async () => {
+        await session.dispose().catch(() => {})
+        await removeDir()
+      },
+    }
+  } catch (err) {
+    await removeDir()
+    throw err
+  }
+}
+
 /**
  * Ask the coding agent for the run's short name. One session, one prompt, disposed straight after.
  * Never throws and never takes long: an agent that cannot say, is not logged in, or is slow leaves
@@ -122,31 +155,23 @@ export async function nameRun(
   driver: Driver,
   opts: { prompt: string; from?: 'ask' | 'report'; signal?: AbortSignal; timeoutMs?: number },
 ): Promise<string | undefined> {
-  const model = TITLE_MODELS[driver.id]
-  if (model === undefined) return undefined
   const stop = new AbortController()
   const onAbort = () => stop.abort()
   opts.signal?.addEventListener('abort', onAbort)
   const timer = setTimeout(() => stop.abort(), opts.timeoutMs ?? 60_000)
-  let empty: string | undefined
+  let naming: NamingSession | undefined
   try {
-    // Never inside the run's checkout: an untracked folder there is a dirty tree, and the
-    // branches rule never reclaims one.
-    empty = await mkdtemp(join(tmpdir(), 'openagent-naming-'))
-    const session = await driver.start({ cwd: empty, model, system: TITLE_SYSTEM, noTools: true, signal: stop.signal })
-    try {
-      // Through a ready prompt where the driver has one: the same fresh turn, over at its answer
-      // rather than when the agent's process is gone (`DriverSession.ready`).
-      const ready = session.ready?.()
-      const turn = ready ? await ready.prompt(titlePrompt(opts.prompt, opts.from)) : await session.prompt(titlePrompt(opts.prompt, opts.from))
-      return titleOf(turn.text)
-    } finally {
-      await session.dispose().catch(() => {})
-    }
+    naming = await startNaming(driver, stop.signal)
+    if (!naming) return undefined
+    // Through a ready prompt where the driver has one: the same fresh turn, over at its answer
+    // rather than when the agent's process is gone (`DriverSession.ready`).
+    const asked = titlePrompt(opts.prompt, opts.from)
+    const ready = naming.session.ready?.()
+    return titleOf((ready ? await ready.prompt(asked) : await naming.session.prompt(asked)).text)
   } catch {
     return undefined
   } finally {
-    if (empty !== undefined) await rm(empty, { recursive: true, force: true }).catch(() => {})
+    await naming?.close()
     clearTimeout(timer)
     opts.signal?.removeEventListener('abort', onAbort)
   }

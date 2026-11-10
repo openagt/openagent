@@ -1,8 +1,9 @@
-import { spawn } from 'node:child_process'
 import { chmodSync, existsSync, mkdirSync, readdirSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs'
-import { homedir, tmpdir } from 'node:os'
+import { homedir } from 'node:os'
 import { dirname, join, relative, isAbsolute } from 'node:path'
-import { errorMessage, type GhRunner } from './gh.js'
+import { errorMessage } from '@openagt/agent-data'
+import type { GhRunner } from './gh.js'
+import { jobFiles, jobState, lastLines, startJob, stopJob, type JobFiles } from './job.js'
 
 /**
  * The GitHub accounts OpenAgent has, and the one its runs use. They are OpenAgent's own, never the
@@ -35,7 +36,9 @@ export interface AccountFacts {
 }
 
 /** A GitHub login, as GitHub allows one: also what keeps a folder's name inside the accounts' folder. */
-const LOGIN = /^[A-Za-z0-9](?:[A-Za-z0-9-]{0,38})$/
+export function isGithubLogin(login: string): boolean {
+  return /^[A-Za-z0-9](?:[A-Za-z0-9-]{0,38})$/.test(login)
+}
 
 /** Where OpenAgent's accounts are: one folder each, beside OpenAgent's other files in the person's config folder. */
 export function accountsRoot(env: NodeJS.ProcessEnv = process.env): string {
@@ -45,7 +48,7 @@ export function accountsRoot(env: NodeJS.ProcessEnv = process.env): string {
 
 /** The folder of one account: what `gh` is given as `GH_CONFIG_DIR` to work as it. */
 export function accountDir(root: string, login: string): string {
-  if (!LOGIN.test(login)) throw new Error(`${login} is no GitHub login`)
+  if (!isGithubLogin(login)) throw new Error(`${login} is no GitHub login`)
   return join(root, login)
 }
 
@@ -55,7 +58,7 @@ const ADDING = '.adding'
 /** Whether `dir` is one of OpenAgent's account folders: a run is given one, and works as it. */
 export function isAccountDir(root: string, dir: string): boolean {
   const rel = relative(root, dir)
-  return rel !== '' && !rel.startsWith('..') && !isAbsolute(rel) && LOGIN.test(rel)
+  return rel !== '' && !rel.startsWith('..') && !isAbsolute(rel) && isGithubLogin(rel)
 }
 
 /** `gh` working as the account in `dir`: its folder, never the person's, and no token from the environment unless given. */
@@ -71,7 +74,7 @@ export function accountLogins(root: string): string[] {
   } catch {
     return []
   }
-  return names.filter(name => LOGIN.test(name) && existsSync(join(root, name, 'hosts.yml'))).sort((a, b) => a.localeCompare(b))
+  return names.filter(name => isGithubLogin(name) && existsSync(join(root, name, 'hosts.yml'))).sort((a, b) => a.localeCompare(b))
 }
 
 export function readFacts(dir: string): AccountFacts | undefined {
@@ -96,7 +99,7 @@ function writeFile600(path: string, text: string): void {
 export async function whoAmI(gh: GhRunner, cwd: string): Promise<AccountFacts> {
   const said = (await gh(['api', '--hostname', HOST, 'user', '--jq', '[.login, (.id | tostring), (.name // "")] | @tsv'], cwd)).trim()
   const [login = '', id = '', name = ''] = said.split('\t')
-  if (!LOGIN.test(login) || !/^\d+$/.test(id)) throw new Error(`GitHub said no account: ${said || 'nothing'}`)
+  if (!isGithubLogin(login) || !/^\d+$/.test(id)) throw new Error(`GitHub said no account: ${said || 'nothing'}`)
   return { login, id: Number(id), ...(name ? { name } : {}) }
 }
 
@@ -170,6 +173,12 @@ export async function ghState(root: string, cwd: string, gh: GhRunner): Promise<
   return { installed: true, accounts }
 }
 
+/** OpenAgent's accounts, as {@link ghState} reads them: none while `gh` is not on this computer. */
+export async function installedAccounts(root: string, cwd: string, gh: GhRunner): Promise<GhAccount[]> {
+  const state = await ghState(root, cwd, gh)
+  return state.installed ? state.accounts : []
+}
+
 /** The account runs use: the one picked, while OpenAgent still has it; else the first, kept as the pick from now on. */
 export function runsAccount(accounts: readonly GhAccount[], path: string = picksPath()): string | undefined {
   const picks = readPicks(path)
@@ -195,105 +204,6 @@ export function useForRuns(login: string, accounts: readonly GhAccount[], path: 
   if (!accounts.some(a => a.login === login)) throw new Error(`OpenAgent has no GitHub account ${login}: add it in Permissions first`)
   const picks = readPicks(path)
   writePicks(path, { runs: { ...picks.runs, [HOST]: login } })
-}
-
-/** GitHub's build of `gh` for each computer it makes one for, by platform and processor. */
-const BUILDS: Record<string, string> = {
-  'darwin-arm64': 'macOS_arm64.zip',
-  'darwin-x64': 'macOS_amd64.zip',
-  'linux-x64': 'linux_amd64.tar.gz',
-  'linux-arm64': 'linux_arm64.tar.gz',
-}
-
-/**
- * How `gh` is put on this computer with no admin: with Homebrew where it is, else GitHub's own
- * build for this computer, its newest, unpacked into `~/.local/bin`. One line, shown under the
- * button that runs it. None for a computer GitHub makes no build for.
- */
-export function installCommand(hasBrew: boolean, platform: string = process.platform, arch: string = process.arch): string | undefined {
-  if (hasBrew) return 'brew install gh'
-  const build = BUILDS[`${platform}-${arch}`]
-  if (build === undefined) return undefined
-  const unpack = build.endsWith('.zip') ? 'unzip -q "$d/gh" -d "$d"' : 'tar -xzf "$d/gh" -C "$d"'
-  return `v=$(curl -fsSLI -o /dev/null -w '%{url_effective}' https://github.com/cli/cli/releases/latest) && v=\${v##*/v} && d=$(mktemp -d) && curl -fsSL -o "$d/gh" "https://github.com/cli/cli/releases/download/v$v/gh_\${v}_${build}" && ${unpack} && mkdir -p ~/.local/bin && mv "$d"/gh_*/bin/gh ~/.local/bin/ && rm -rf "$d"`
-}
-
-/** Whether Homebrew is on this computer. */
-export async function hasBrew(run: (bin: string, args: string[]) => Promise<boolean> = probe): Promise<boolean> {
-  return run('brew', ['--version'])
-}
-
-function probe(bin: string, args: string[]): Promise<boolean> {
-  return new Promise(resolve => {
-    const child = spawn(bin, args, { stdio: 'ignore' })
-    child.once('error', () => resolve(false))
-    child.once('close', code => resolve(code === 0))
-  })
-}
-
-/** What this package starts that goes on after it answered: the install, and a login waiting for the browser's yes. */
-export type Job = 'install' | 'login'
-
-/** Where a job keeps what it said, which process it is, and how it ended. */
-export interface JobFiles {
-  log: string
-  pid: string
-  exit: string
-}
-
-export function jobFiles(job: Job, env: NodeJS.ProcessEnv = process.env): JobFiles {
-  const dir = join(env['TMPDIR'] ?? tmpdir(), `openagent-github-${process.getuid?.() ?? 'user'}`)
-  return { log: join(dir, `${job}.log`), pid: join(dir, `${job}.pid`), exit: join(dir, `${job}.exit`) }
-}
-
-/** How a job is: going on, or ended, with its last lines when it failed; nothing when none was started. */
-export type JobState = { running: true; said: string } | { running: false; failed?: string; said: string }
-
-export function jobState(files: JobFiles): JobState | undefined {
-  const read = (path: string): string | undefined => {
-    try {
-      return readFileSync(path, 'utf8')
-    } catch {
-      return undefined
-    }
-  }
-  const said = read(files.log)
-  if (said === undefined) return undefined
-  const exit = read(files.exit)?.trim()
-  if (exit === undefined || exit === '') {
-    const pid = Number(read(files.pid)?.trim())
-    let alive = false
-    try {
-      if (pid) alive = process.kill(pid, 0)
-    } catch {
-      alive = false
-    }
-    // A process gone with no end written was ended from outside: it failed.
-    return alive ? { running: true, said } : { running: false, failed: lastLines(said) || 'it was stopped', said }
-  }
-  return exit === '0' ? { running: false, said } : { running: false, failed: lastLines(said) || `it ended with ${exit}`, said }
-}
-
-function lastLines(said: string): string {
-  return said.trim().split('\n').slice(-3).join('\n')
-}
-
-/**
- * Start `script` in a shell of its own, which goes on after this process ends, writing what it
- * says to the job's log itself (a pipe would end with this process) and how it ended after.
- * `args` are its `$1`, `$2`….
- */
-export async function startJob(files: JobFiles, script: string, args: readonly string[] = []): Promise<void> {
-  mkdirSync(dirname(files.log), { recursive: true })
-  writeFileSync(files.log, '')
-  rmSync(files.exit, { force: true })
-  const child = spawn('sh', ['-c', `log=$1; ended=$2; shift 2; exec >>"$log" 2>&1; (${script}); echo $? >"$ended"`, 'sh', files.log, files.exit, ...args], { detached: true, stdio: 'ignore' })
-  await new Promise<void>((resolve, reject) => {
-    child.once('spawn', resolve)
-    child.once('error', reject)
-  })
-  child.unref()
-  writeFileSync(files.pid, String(child.pid))
 }
 
 /** A login in the browser, under way: the code the person types, and where. */
@@ -378,20 +288,6 @@ export function stopLogin(root: string, files = jobFiles('login')): void {
   for (const path of [files.log, files.pid, files.exit]) rmSync(path, { force: true })
 }
 
-function stopJob(files: JobFiles): void {
-  try {
-    process.kill(-Number(readFileSync(files.pid, 'utf8').trim()), 'SIGTERM')
-  } catch {
-    // Gone already.
-  }
-}
-
-/**
- * The environment to work as an account: its folder for `gh`, its token for `gh` and for git's
- * pushes and fetches to GitHub, whatever the person's own git keeps for it (the keychain, a
- * different helper, an ssh key), and its name on the commits. Set through git's environment, so
- * nothing of the person's own settings changes. The settings already in the environment are kept.
- */
 /**
  * The git settings that make git use the account in `dir` at GitHub, with no secret in them: an
  * empty helper drops every helper set before it (the person's keychain among them), then gh,
@@ -409,6 +305,12 @@ export function gitConfig(dir: string): [string, string][] {
   ]
 }
 
+/**
+ * The environment to work as an account: its folder for `gh`, its token for `gh` and for git's
+ * pushes and fetches to GitHub, whatever the person's own git keeps for it (the keychain, a
+ * different helper, an ssh key), and its name on the commits. Set through git's environment, so
+ * nothing of the person's own settings changes. The settings already in the environment are kept.
+ */
 export function runEnv(token: string, dir: string, facts: AccountFacts | undefined, env: NodeJS.ProcessEnv = process.env): Record<string, string> {
   const given = Number(env['GIT_CONFIG_COUNT'] ?? 0) || 0
   const lines: [string, string][] = [

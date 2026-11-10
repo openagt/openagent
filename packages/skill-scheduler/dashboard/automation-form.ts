@@ -1,6 +1,6 @@
 import { AGENTS, DEFAULT_AGENT, MAX_NAME, isCommandName } from '../src/names.js'
 import { parseInterval } from '../src/pace.js'
-import { draftOf, pace, paceArgs, paceProblem, type PaceDraft, type SchedulerCommand } from './schedulers.js'
+import { draftOf, pace, paceArgs, paceProblem, record, type PaceDraft, type SchedulerCommand } from './schedulers.js'
 
 // A person's own automation as data: what they have typed so far, into the "New automation" form
 // or into the Edit panel of a row they made; what still keeps it from being saved; the commands
@@ -58,7 +58,7 @@ export interface OpenedAutomation {
  * panel cannot show: it would then save something other than what is there.
  */
 export function openedAutomation(output: unknown): OpenedAutomation | undefined {
-  const answer = typeof output === 'object' && output !== null ? (output as Record<string, unknown>) : {}
+  const answer = record(output)
   const { name, prompt, every, when, waitsFor, file } = answer
   if (typeof name !== 'string' || typeof prompt !== 'string' || typeof file !== 'string') return undefined
   const read = every === undefined ? undefined : typeof every === 'string' ? parseInterval(every) : undefined
@@ -182,7 +182,7 @@ export interface TriedLine {
 
 /** Read what `scheduler try` printed. Forgiving: an answer that is not what the command promises reads as a line that could not be tried. */
 export function triedLine(output: unknown): TriedLine {
-  const answer = typeof output === 'object' && output !== null ? (output as Record<string, unknown>) : {}
+  const answer = record(output)
   const printed = typeof answer['printed'] === 'string' ? answer['printed'] : ''
   const lastRun = typeof answer['lastRun'] === 'string' ? { lastRun: answer['lastRun'] } : {}
   if (answer['ran'] !== true) return { ...lastRun, printed, verdict: `The line failed${typeof answer['error'] === 'string' && answer['error'] !== '' ? `: ${answer['error']}` : '.'}`, tone: 'failed' }
@@ -191,14 +191,14 @@ export function triedLine(output: unknown): TriedLine {
 
 /** Read what `scheduler write-line` printed: the line, or why no line can do it. Forgiving: an answer that is neither reads as a line not written. */
 export function writtenLine(output: unknown): { line: string } | { said: string } {
-  const answer = typeof output === 'object' && output !== null ? (output as Record<string, unknown>) : {}
+  const answer = record(output)
   if (typeof answer['line'] === 'string' && answer['line'] !== '') return { line: answer['line'] }
   return { said: typeof answer['none'] === 'string' ? `No line can do that: ${answer['none']}` : 'The line was not written.' }
 }
 
 /** Read what `scheduler add` or `edit` printed: the file it wrote, where a run's checkout starts, whether it is kept on this machine alone, and the tool's name for what the file says now, when it gives one. */
 export function savedFile(output: unknown): { file: string; startsFrom: string; onThisMachine: boolean; version?: string } {
-  const answer = typeof output === 'object' && output !== null ? (output as Record<string, unknown>) : {}
+  const answer = record(output)
   return { file: typeof answer['file'] === 'string' ? answer['file'] : 'a skill file', startsFrom: typeof answer['startsFrom'] === 'string' ? answer['startsFrom'] : 'HEAD', onThisMachine: answer['onThisMachine'] === true, ...(typeof answer['version'] === 'string' ? { version: answer['version'] } : {}) }
 }
 
@@ -243,7 +243,7 @@ export function removeWarning(command: { onThisMachine?: true }): string {
  * does not say sends the person to git to look.
  */
 export function removedWords(title: string, output: unknown): string {
-  const answer = typeof output === 'object' && output !== null ? (output as Record<string, unknown>) : {}
+  const answer = record(output)
   const file = typeof answer['file'] === 'string' ? answer['file'] : 'its file'
   const startsFrom = typeof answer['startsFrom'] === 'string' ? answer['startsFrom'] : 'HEAD'
   if (answer['onThisMachine'] === true) return `Removed ${title}: ${file} is deleted. Nothing is to commit.`

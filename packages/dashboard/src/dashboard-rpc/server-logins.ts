@@ -54,7 +54,7 @@ export async function sendSyncPersonalFolderOn(machineId: string): Promise<Accou
   const own = await readPersonalFolder()
   const remote = personalFolderShown(own).remote
   if (remote === undefined) return { ok: false, error: "This computer's agent data syncs with no repository: set it in Settings › Agent data first." }
-  const said = await machineCall({ url: machine.url, key: machine.key, ...(machine.pin ? { pin: machine.pin } : {}) }, 'sendSyncPersonalFolder', [remote, ...(own.account !== undefined ? [own.account] : [])])
+  const said = await machineCall(machine, 'sendSyncPersonalFolder', [remote, ...(own.account !== undefined ? [own.account] : [])])
   if (!said.ok) return { ok: false, error: `${machine.label} could not be asked: ${said.error}` }
   const { ok, error } = (said.ret && typeof said.ret === 'object' ? said.ret : {}) as { ok?: unknown; error?: unknown }
   return ok === true ? { ok: true } : { ok: false, error: `${machine.label} says: ${typeof error === 'string' ? error : 'nothing'}` }

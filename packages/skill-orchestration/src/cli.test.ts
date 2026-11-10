@@ -13,7 +13,8 @@ import { findRun, formatRunCard, type AnyDiaryLine, type RunCard, type RunStatus
 import { liveDir, markerCard, recordRun, type RunnerMark } from '@openagt/agent-runner'
 import { runCli } from './cli.js'
 import { CHECK_MAX_OUTPUT } from './check.js'
-import { landedRef, retryText, SUBAGENT_LINES, type SubagentDeps } from './subagents.js'
+import { retryText, SUBAGENT_LINES, type SubagentDeps } from './subagents.js'
+import { landedRef } from './land.js'
 import { git, removeRepo, testRepo } from './test-repo.js'
 
 const HOST = 'this-machine'

@@ -151,9 +151,6 @@ export function AgentHistory({
   startId?: string | null
   /** The project that run was started in, by its label: the stand-in row names it as the run's own row will. */
   startProjectName?: string | undefined
-  /** Just started an agent that reported no id, so there is nothing selected to highlight yet (#705):
-   *  put the highlight on the running/optimistic row rather than the New row until the shell adopts
-   *  the agent's real id. An agent that did report one is selected by URL instead (#784). */
 }) {
   // On a phone the rail is a sheet over the page, opened from the page's top left corner
   // (MenuButton): going somewhere from it closes it.
@@ -214,8 +211,7 @@ export function AgentHistory({
   const showOptimistic = optimistic !== null && !hasRunning && !landed
 
   // A session selected but not in the list is one just started, whose row lands with its card
-  // a beat later (#784): the optimistic row is standing in for it, so highlight that. Following a
-  // just-started run (#705) counts too, before its id is known.
+  // a beat later (#784): the optimistic row is standing in for it, so highlight that.
   const starting = selectedAgentId !== null && !listed.some(agent => agent.id === selectedAgentId)
 
   // In the order the person picked from the button beside "Log" (`recents-sort.ts`).
@@ -233,10 +229,8 @@ export function AgentHistory({
       }))
     : agents.map(agent => ({
         key: agent.id,
-        agent: agent,
+        agent,
         projectId,
-        // Following live highlights the newest running agent, not every one of them (#738):
-        // `agents` is newest-first, so that is the first with a running status.
         active: agent.id === selectedAgentId,
         onClick: () => onSelect(agent.id),
         ...near(projectId, agent),

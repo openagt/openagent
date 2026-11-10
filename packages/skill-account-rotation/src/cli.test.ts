@@ -6,7 +6,7 @@ import { test } from 'node:test'
 import { runAdding, type AddingNow } from './adding.js'
 import { accountsPath, addAccount, copiedPath, markLimited, nameOwnAccount, readAccounts } from './accounts.js'
 import { runCli } from './cli.js'
-import { loginWiring, type LoginWiring } from './login.js'
+import { loginWiring, type LoginWiring } from './wiring.js'
 
 interface Run {
   code: number

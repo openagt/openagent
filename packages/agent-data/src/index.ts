@@ -1,4 +1,4 @@
-export { AGENT_ENV, BRANCHES_DIR, DATA_BRANCH, OPENAGENT_DIR, PROJECT_SKILLS_ENV, SKILLS_ENV, SKILLS_OFF_ENV, SKILLS_ON_ENV, SKILL_CATALOGUE_ENV, isSkillName } from './names.js'
+export { AGENT_ENV, AGENT_ID_ENV, BRANCHES_DIR, DATA_BRANCH, OPENAGENT_DIR, PROJECT_SKILLS_ENV, SKILLS_ENV, SKILLS_OFF_ENV, SKILLS_ON_ENV, SKILL_CATALOGUE_ENV, isSkillName } from './names.js'
 export { installProject, nodeInstallFs, FIRST_COMMIT_MESSAGE, type InstallResult, type InstallDeps, type InstallFs } from './install.js'
 export { gitignorePath, openagentGitignore } from './openagent-gitignore.js'
 export {
@@ -9,10 +9,11 @@ export {
   isGitRepo,
   checkoutRoot,
   originDefaultBranch,
+  errorMessage,
   gitReason,
   pushBranch,
 } from './git.js'
-export { excludeFromGit, unexcludeFromGit, repositoryCheckouts, type ExcludeFs } from './git-exclude.js'
+export { excludeFromGit, unexcludeFromGit, unexcludeOnceGone, repositoryCheckouts, type ExcludeFs } from './git-exclude.js'
 export { removeOwnDirectory, type KeptEntry, type OwnDirectoryRemoval } from './own-directory.js'
 export {
   fileBranchPath,
@@ -46,15 +47,24 @@ export { AGENTS_DIR, DEFAULT_AGENT, DEFAULT_AGENT_SKILLS, agentIdOf, agentsDir, 
 export { REPO_OWNERS_FILE, isRepoOwner, readRepoOwners, writeRepoOwners } from './repo-owners.js'
 export { PERSON_FILE, isPersonRecordName, isPictureAddress, readPersonRecord, removePersonRecord, writePersonRecord, type PersonRecord } from './person.js'
 export { NoRemoteAccountError, accountGit, clearRemoteAccount, noAccountSentence, readRemoteAccount, remoteHostOf, writeRemoteAccount, type RemoteAccount } from './remote-account.js'
-export { addressOfRemote, spellingOfRemote, repositoryAddress, repositorySpelling, projectNameOf } from './repository-address.js'
+export { addressOfRemote, spellingOfRemote } from './repository-address.js'
+export { originUrl, repositoryAddress, repositorySpelling, projectNameOf } from './origin.js'
+export {
+  personalFolder,
+  withPersonalFolder,
+  readPersonalFolder,
+  syncPersonalFolder,
+  sendPersonalFolderAs,
+  stopSyncingPersonalFolder,
+  type PersonalFolderDeps,
+  type PersonalFolderState,
+} from './personal-folder.js'
 export {
   PROJECTS_DIR,
-  personalFolder,
   projectKey,
   projectDataPlace,
   projectDataDir,
   projectDataDirs,
-  withPersonalFolder,
   withProjectData,
   writeProjectDataDetached,
   readProjectFile,
@@ -64,15 +74,11 @@ export {
   shareProjectData,
   shareProjectDataAs,
   removePersonalData,
-  readPersonalFolder,
-  syncPersonalFolder,
-  sendPersonalFolderAs,
-  stopSyncingPersonalFolder,
-  type PersonalFolderState,
   type DataPlace,
   type ProjectDataDeps,
   type ProjectReader,
 } from './project-data.js'
+export { FAILED, GIT_FAILED, Refused, UsageError, commandReader, commandWrite, inRepo, parseCommandArgs, runCommandLine, type Command, type CommandLine, type CommandOutput, type Failure, type Refusal } from './command-line.js'
 export {
   SKILLS_DIRS,
   projectPackages,

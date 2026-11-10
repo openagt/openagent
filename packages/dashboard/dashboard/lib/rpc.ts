@@ -73,7 +73,7 @@ export interface EventChannel {
  * it reports every end as an error and retries even the ones that meant "done".
  */
 export async function openEvents(projectId: string, agentId?: string): Promise<EventChannel> {
-  const params = new URLSearchParams({ projectId, ...(agentId ? { agentId: agentId } : {}) })
+  const params = new URLSearchParams({ projectId, ...(agentId ? { agentId } : {}) })
   const controller = new AbortController()
   const res = await fetch(`${RPC_PREFIX}/events?${params.toString()}`, { signal: controller.signal })
   if (!res.ok || !res.body) throw new Error(`could not subscribe to events (${res.status})`)

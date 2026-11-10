@@ -21,7 +21,7 @@ const PATCH = [
 const fakeGit = (out: string) => async () => out
 
 test('a modified file yields the hunks, without git’s diff/index preamble', async () => {
-  const diff = await readFileDiff('/repo', 'src/a.ts', 'modified', fakeGit(PATCH))
+  const diff = await readFileDiff('/repo', 'src/a.ts', 'modified', {}, fakeGit(PATCH))
   assert.ok(diff)
   assert.equal(diff.binary, false)
   assert.equal(diff.truncated, false)
@@ -43,19 +43,19 @@ test('a removed line that looks like a file header is still counted', async () =
     '--- a note',
     ' kept',
   ].join('\n')
-  const diff = await readFileDiff('/repo', 'notes.md', 'modified', fakeGit(patch))
+  const diff = await readFileDiff('/repo', 'notes.md', 'modified', {}, fakeGit(patch))
   assert.ok(diff)
   assert.equal(diff.removed, 3)
   assert.equal(diff.added, 0)
 })
 
 test('a file with no diff to show yields null, not an empty card', async () => {
-  assert.equal(await readFileDiff('/repo', 'src/a.ts', 'modified', fakeGit('')), null)
+  assert.equal(await readFileDiff('/repo', 'src/a.ts', 'modified', {}, fakeGit('')), null)
 })
 
 test('a binary change says so rather than dumping bytes', async () => {
   const out = 'diff --git a/logo.png b/logo.png\nBinary files a/logo.png and b/logo.png differ\n'
-  const diff = await readFileDiff('/repo', 'logo.png', 'modified', fakeGit(out))
+  const diff = await readFileDiff('/repo', 'logo.png', 'modified', {}, fakeGit(out))
   assert.ok(diff)
   assert.equal(diff.binary, true)
   assert.equal(diff.patch, '')
@@ -63,7 +63,7 @@ test('a binary change says so rather than dumping bytes', async () => {
 
 test('a long patch is cut and says it was cut', async () => {
   const body = ['--- a/big.ts', '+++ b/big.ts', '@@ -1 +1,6000 @@', ...Array.from({ length: 6000 }, (_, i) => `+line ${i}`)]
-  const diff = await readFileDiff('/repo', 'big.ts', 'modified', fakeGit(body.join('\n')))
+  const diff = await readFileDiff('/repo', 'big.ts', 'modified', {}, fakeGit(body.join('\n')))
   assert.ok(diff)
   assert.equal(diff.truncated, true)
   assert.equal(diff.patch.split('\n').length, MAX_PREVIEW_LINES)
@@ -74,7 +74,7 @@ test('a long untracked file is counted whole, though its preview is cut', async 
   // file's line count — counting the cut preview reported every big new file as the cap.
   const dir = await mkdtemp(join(tmpdir(), 'openagent-diff-'))
   await writeFile(join(dir, 'big.ts'), Array.from({ length: 9000 }, (_, i) => `line ${i}`).join('\n') + '\n')
-  const diff = await readFileDiff(dir, 'big.ts', 'untracked', fakeGit(''))
+  const diff = await readFileDiff(dir, 'big.ts', 'untracked', {}, fakeGit(''))
   assert.ok(diff)
   assert.equal(diff.added, 9000)
   assert.equal(diff.truncated, true)
@@ -89,7 +89,7 @@ test('a repo with no commits falls back to the working-tree diff', async () => {
     if (args.includes('HEAD')) throw new Error("fatal: ambiguous argument 'HEAD'")
     return PATCH
   }
-  const diff = await readFileDiff('/repo', 'src/a.ts', 'modified', git)
+  const diff = await readFileDiff('/repo', 'src/a.ts', 'modified', {}, git)
   assert.ok(diff)
   assert.equal(calls, 2)
 })
@@ -100,7 +100,7 @@ test('an untracked file renders as all-added from its contents, and git is never
   const git = async () => {
     throw new Error('git should not run for an untracked file')
   }
-  const diff = await readFileDiff(dir, 'new.ts', 'untracked', git)
+  const diff = await readFileDiff(dir, 'new.ts', 'untracked', {}, git)
   assert.ok(diff)
   assert.equal(diff.patch, '+const a = 1\n+const b = 2')
   assert.equal(diff.added, 2)
@@ -132,7 +132,7 @@ test('an unsafe path is refused before any read', async () => {
   const git = async () => {
     throw new Error('git should not run for an unsafe path')
   }
-  assert.equal(await readFileDiff('/repo', '../../etc/passwd', 'modified', git), null)
+  assert.equal(await readFileDiff('/repo', '../../etc/passwd', 'modified', {}, git), null)
 })
 
 const NUMSTAT = ['3\t1\tsrc/a.ts', '0\t7\tsrc/gone.ts', '-\t-\tlogo.png'].join('\n')
@@ -195,11 +195,11 @@ test('an untracked file reached through a symlink out of the repo is refused', a
   await writeFile(join(outside, 'secret.txt'), 'token')
   await mkdir(join(dir, 'src'))
   await symlink(join(outside, 'secret.txt'), join(dir, 'src', 'link.txt'))
-  assert.equal(await readFileDiff(dir, 'src/link.txt', 'untracked', async () => ''), null)
+  assert.equal(await readFileDiff(dir, 'src/link.txt', 'untracked', {}, async () => ''), null)
 })
 
 test('a blank unchanged line at the end of a change is kept: it is a line', async () => {
-  const diff = await readFileDiff('/repo', 'a.txt', 'modified', fakeGit(['--- a/a.txt', '+++ b/a.txt', '@@ -1,3 +1,3 @@', '-a', '+A', ' b', ' ', ''].join('\n')))
+  const diff = await readFileDiff('/repo', 'a.txt', 'modified', {}, fakeGit(['--- a/a.txt', '+++ b/a.txt', '@@ -1,3 +1,3 @@', '-a', '+A', ' b', ' ', ''].join('\n')))
   assert.ok(diff)
   assert.equal(diff.patch.split('\n').at(-1), ' ')
 })

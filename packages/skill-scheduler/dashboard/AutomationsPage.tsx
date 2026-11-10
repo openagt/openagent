@@ -4,7 +4,7 @@ import type { ModulePageProps } from '@openagt/dashboard/module'
 import { AutomationForm } from './AutomationForm.js'
 import { EditPanel } from './EditPanel.js'
 import { openedAutomation, type OpenedAutomation } from './automation-form.js'
-import { atOnce, atOnceWords, cannotRun, decided, startedNow, type Answered, isOwn, outcomeWords, ownPace, pace, publishes, readSchedulers, schedulersKey, rowTitle, runsOnWords, saysAtOnce, schedulerStatus, unlistedWords, type AgentModels, type SchedulerCommand, type SchedulerRow } from './schedulers.js'
+import { atOnce, atOnceWords, cannotRun, decided, notAsked, startedNow, type Answered, isOwn, ownPace, pace, publishes, readSchedulers, schedulersKey, rowTitle, runsOnWords, saysAtOnce, schedulerStatus, unlistedWords, type AgentModels, type SchedulerCommand, type SchedulerRow } from './schedulers.js'
 
 // The Automations page: what starts by itself while nobody is at the keyboard. One part per
 // project the page is given (every project that has this package, or the one picked in the
@@ -45,6 +45,9 @@ export function AutomationsPage({ projects }: ModulePageProps) {
   })
   /** The rows with a save waiting or in flight, each as often as it has one. */
   const [busy, setBusy] = useState<readonly string[]>([])
+  /** Hold a row for one more thing of its own in flight, and let it go of one once that is over. */
+  const hold = (id: string): void => setBusy(current => [...current, id])
+  const letGo = (id: string): void => setBusy(current => current.filter((_, index) => index !== current.indexOf(id)))
   /** What the last save or start on a row answered, said on that row. */
   const [said, setSaid] = useState<{ id: string } & Answered>()
   /** The row whose panel is open, with its own automation as its file says it when it is one a person made, or why that could not be read. */
@@ -82,19 +85,19 @@ export function AutomationsPage({ projects }: ModulePageProps) {
   // back. A command that could not even be asked is a save not taken, and the next one still runs.
   const queue = useRef<Promise<unknown>>(Promise.resolve())
   const run = (project: ModuleProject, args: string[]): Promise<ModuleCommandResult> => {
-    const answered = queue.current.then(() => host.runCommand(project.id, args).catch((err: unknown) => ({ ok: false as const, error: err instanceof Error ? err.message : String(err) })))
+    const answered = queue.current.then(() => host.runCommand(project.id, args).catch(notAsked))
     queue.current = answered
     return answered
   }
   /** A command asked without waiting for the saves: one that takes seconds and writes nothing a save reads. */
-  const ask = (project: ModuleProject, args: string[]): Promise<ModuleCommandResult> => host.runCommand(project.id, args).catch((err: unknown) => ({ ok: false as const, error: err instanceof Error ? err.message : String(err) }))
+  const ask = (project: ModuleProject, args: string[]): Promise<ModuleCommandResult> => host.runCommand(project.id, args).catch(notAsked)
   /** One save or start of a row's own: the row is held until what it did has been read back, so it never shows the old value as if nothing had happened. */
-  const save = async (id: string, project: ModuleProject, pending: Promise<ModuleCommandResult>, answered: (answer: ModuleCommandResult) => Answered | undefined): Promise<void> => {
-    setBusy(current => [...current, id])
+  const save = async (id: string, pending: Promise<ModuleCommandResult>, answered: (answer: ModuleCommandResult) => Answered | undefined): Promise<void> => {
+    hold(id)
     setSaid(current => (current?.id === id ? undefined : current))
     const answer = await pending
     await reload().catch(() => {})
-    setBusy(current => current.filter((_, index) => index !== current.indexOf(id)))
+    letGo(id)
     const says = answered(answer)
     if (says) setSaid({ id, ...says })
   }
@@ -111,9 +114,9 @@ export function AutomationsPage({ projects }: ModulePageProps) {
       setCreating(undefined)
       return setPanel({ id })
     }
-    setBusy(current => [...current, id])
+    hold(id)
     const answer = await ask(project, ['show', scheduled.command])
-    setBusy(current => current.filter((_, index) => index !== current.indexOf(id)))
+    letGo(id)
     // Nothing opens over a change made, meanwhile, in what is open.
     if (asked.current !== mine || dirtyNow.current) return
     const opened = answer.ok ? openedAutomation(answer.output) : undefined
@@ -215,7 +218,7 @@ export function AutomationsPage({ projects }: ModulePageProps) {
                                   variant="outline"
                                   size="xs"
                                   disabled={saving || cannotRun(scheduled) !== undefined}
-                                  onClick={() => void save(id, row.project, ask(row.project, ['now', scheduled.command]), startedNow)}
+                                  onClick={() => void save(id, ask(row.project, ['now', scheduled.command]), startedNow)}
                                   aria-label={`Run ${title} now`}
                                 >
                                   Run now
@@ -236,7 +239,7 @@ export function AutomationsPage({ projects }: ModulePageProps) {
                                 <Switch
                                   checked={scheduled.on}
                                   disabled={saving}
-                                  onCheckedChange={next => void save(id, row.project, run(row.project, ['switch', scheduled.command, next ? 'on' : 'off']), answer => (answer.ok ? undefined : { failed: `The switch was not saved: ${answer.error}` }))}
+                                  onCheckedChange={next => void save(id, run(row.project, ['switch', scheduled.command, next ? 'on' : 'off']), answer => (answer.ok ? undefined : { failed: `The switch was not saved: ${answer.error}` }))}
                                   aria-label={`Run ${title} by itself`}
                                 />
                               </div>
@@ -296,7 +299,6 @@ export function AutomationsPage({ projects }: ModulePageProps) {
   )
 }
 
-/** What a save or a start on a row answered, for the row to say: why it was not taken, that nothing was to do, or the run it started (empty when the answer names none). */
 /**
  * Where a row stands, in one line: on or off; when it last ran, or that its last run failed, which
  * opens that run; and what the scheduler last decided for it while it is on. A command the coding

@@ -1,4 +1,5 @@
-import { newestFirst, parseRunCard, runCardFile, runIdOfFile } from './run.js'
+import { startOfId } from './run.js'
+import { readCard, runIdsOf, type RecordsReader } from './records.js'
 
 // Who works in a project: whoever started runs there, as its records tell it (each run is kept
 // under the person who started it, so the people are the records' own folders), and whoever
@@ -49,15 +50,14 @@ const NO_PERSON = /noreply|no-reply|\[bot\]/i
 /** GitHub's own address for a person's account, what a server's git signs with: it says no-reply, and is theirs. A bot's has `[bot]` in it. */
 const PERSONS_OWN_ADDRESS = /^[^[\]]+@users\.noreply\.github\.com$/i
 
-/** A reader of the records: the folders under a directory, and a file's text. */
-export interface RecordsReader {
-  list(dir: string): Promise<string[]>
-  read(path: string): Promise<string | undefined>
+/** The busiest first: the most runs and commits together, then the most lately active. */
+function busiestFirst(a: PersonActivity, b: PersonActivity): number {
+  return b.runs + b.commits - (a.runs + a.commits) || b.lastAt.localeCompare(a.lastAt)
 }
 
-/** When a run started, from its id alone: `2026-10-25T00-36-42-115Z` is that time in UTC. */
-export function startOfId(id: string): number {
-  return Date.parse(id.replace(/T(\d\d)-(\d\d)-(\d\d)-(\d{3})Z$/, 'T$1:$2:$3.$4Z'))
+/** A sum of US dollars, to the cent. */
+function toCents(usd: number): number {
+  return Math.round(usd * 100) / 100
 }
 
 /**
@@ -75,18 +75,18 @@ export async function peopleOf(reader: RecordsReader, dir: string, since: number
     return person
   }
   for (const folder of await reader.list(dir)) {
-    const ids = newestFirst((await reader.list(`${dir}/${folder}`)).flatMap(name => runIdOfFile(name) ?? []).map(id => ({ id })))
+    const ids = await runIdsOf(reader, dir, folder)
     if (ids.length === 0) continue
-    const person = entry(folder, startOfId(ids[0]!.id))
-    for (const { id } of ids) {
+    const person = entry(folder, startOfId(ids[0]!))
+    for (const id of ids) {
       if (!(startOfId(id) >= since)) break
-      const card = parseRunCard((await reader.read(`${dir}/${folder}/${runCardFile(id)}`)) ?? '')
+      const card = await readCard(reader, dir, { person: folder, id })
       if (!card) continue
       person.runs++
       if (card.status === 'running') person.running++
       person.cost += card.cost ?? 0
     }
-    person.cost = Math.round(person.cost * 100) / 100
+    person.cost = toCents(person.cost)
   }
   // The commits, newest first: a person's name is the one their newest commit carries.
   for (const commit of commits) {
@@ -100,7 +100,7 @@ export async function peopleOf(reader: RecordsReader, dir: string, since: number
       if (new Date(commit.at).toISOString() > person.lastAt) person.lastAt = new Date(commit.at).toISOString()
     }
   }
-  return [...byEmail.values()].sort((a, b) => b.runs + b.commits - (a.runs + a.commits) || b.lastAt.localeCompare(a.lastAt))
+  return [...byEmail.values()].sort(busiestFirst)
 }
 
 /** A run as the dashboard lists it: whose it is, when it started, how it stands, what it cost. */
@@ -130,8 +130,8 @@ export function peopleWithRuns(people: readonly PersonActivity[], runs: readonly
     if (run.startedAt > person.lastAt) person.lastAt = run.startedAt
   }
   return [...byEmail.values()]
-    .map(person => ({ ...person, cost: Math.round(person.cost * 100) / 100 }))
-    .sort((a, b) => b.runs + b.commits - (a.runs + a.commits) || b.lastAt.localeCompare(a.lastAt))
+    .map(person => ({ ...person, cost: toCents(person.cost) }))
+    .sort(busiestFirst)
 }
 
 /** One person, over every project shown. */
@@ -159,10 +159,10 @@ export function membersOf(reads: { project: string; people: PersonActivity[] }[]
       known.commits += activity.commits
       if (known.name === undefined && activity.name !== undefined) known.name = activity.name
       known.running += activity.running
-      known.cost = Math.round((known.cost + activity.cost) * 100) / 100
+      known.cost = toCents(known.cost + activity.cost)
       if (activity.lastAt > known.lastAt) known.lastAt = activity.lastAt
       if (activity.you) known.you = true
       if (!known.projects.includes(project)) known.projects.push(project)
     }
-  return [...byPerson.values()].sort((a, b) => Number(b.running > 0) - Number(a.running > 0) || b.runs + b.commits - (a.runs + a.commits) || b.lastAt.localeCompare(a.lastAt))
+  return [...byPerson.values()].sort((a, b) => Number(b.running > 0) - Number(a.running > 0) || busiestFirst(a, b))
 }

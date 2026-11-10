@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, test, vi } from 'vitest'
-import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
-import { ModuleHostContext, forgetRemembered, type ModuleCommandResult, type ModuleHost } from '@openagt/dashboard/module'
+import { cleanup, fireEvent, screen, waitFor, within } from '@testing-library/react'
+import { forgetRemembered, type ModuleCommandResult } from '@openagt/dashboard/module'
+import { fakeHost, renderWithHost } from '@openagt/dashboard/module/testing'
 import { AccountsCard } from './AccountsCard.js'
 
 const HOUR = 3_600_000
@@ -9,12 +10,7 @@ type Agents = { claude: unknown[]; codex: unknown[] }
 
 function renderCard(list: (args: string[]) => ModuleCommandResult, usage: Agents | Promise<Agents> = { claude: [], codex: [] }) {
   const runComputerCommand = vi.fn(async (args: string[]): Promise<ModuleCommandResult> => (args[0] === 'usage' ? { ok: true, output: await usage } : list(args)))
-  const host: Pick<ModuleHost, 'package' | 'runCommand' | 'runComputerCommand'> = { package: '@openagt/skill-account-rotation', runCommand: async () => ({ ok: false, error: 'not in a project' }), runComputerCommand }
-  render(
-    <ModuleHostContext.Provider value={host as ModuleHost}>
-      <AccountsCard projects={[]} />
-    </ModuleHostContext.Provider>,
-  )
+  renderWithHost(<AccountsCard projects={[]} />, fakeHost('@openagt/skill-account-rotation', { runComputerCommand }))
   return runComputerCommand
 }
 
@@ -28,12 +24,7 @@ function renderAdding(addingNow: () => Record<string, unknown>, more: (args: str
     if (args[0] === 'adding') return { ok: true, output: addingNow() }
     return more(args, input)
   })
-  const host: Pick<ModuleHost, 'package' | 'runCommand' | 'runComputerCommand'> = { package: '@openagt/skill-account-rotation', runCommand: async () => ({ ok: false, error: 'not in a project' }), runComputerCommand }
-  render(
-    <ModuleHostContext.Provider value={host as ModuleHost}>
-      <AccountsCard projects={[]} />
-    </ModuleHostContext.Provider>,
-  )
+  renderWithHost(<AccountsCard projects={[]} />, fakeHost('@openagt/skill-account-rotation', { runComputerCommand }))
   return calls
 }
 
@@ -62,12 +53,7 @@ describe('AccountsCard', () => {
 
   test('the page it is on may say where each account works: its line under the row, asked with the account', async () => {
     const runComputerCommand = vi.fn(async (args: string[]): Promise<ModuleCommandResult> => (args[0] === 'usage' ? { ok: true, output: { claude: [], codex: [] } } : listed([{ name: 'This computer', who: 'Ada', own: true }, { name: 'Work', own: false }], [{ name: 'This computer', who: 'Ada C', own: true }])()))
-    const host: Pick<ModuleHost, 'package' | 'runCommand' | 'runComputerCommand'> = { package: '@openagt/skill-account-rotation', runCommand: async () => ({ ok: false, error: 'not in a project' }), runComputerCommand }
-    render(
-      <ModuleHostContext.Provider value={host as ModuleHost}>
-        <AccountsCard projects={[]} accountWhere={account => <span>{`where ${account.agent} ${account.own ? 'own' : account.name}`}</span>} />
-      </ModuleHostContext.Provider>,
-    )
+    renderWithHost(<AccountsCard projects={[]} accountWhere={account => <span>{`where ${account.agent} ${account.own ? 'own' : account.name}`}</span>} />, fakeHost('@openagt/skill-account-rotation', { runComputerCommand }))
     expect(await screen.findByText('where claude own')).toBeTruthy()
     expect(screen.getByText('where claude Work')).toBeTruthy()
     expect(screen.getByText('where codex own')).toBeTruthy()

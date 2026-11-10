@@ -1,11 +1,14 @@
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest'
 import { cleanup, screen, waitFor } from '@testing-library/react'
-import { renderWithHost as render } from './test-host.js'
+import { fakeHost, renderWithHost } from '@openagt/dashboard/module/testing'
+
+/** Render `ui` as the dashboard draws the module, in a host whose every service is a spy; the module's own reads are mocked, so the host's `read` never answers. */
+const render = (ui: Parameters<typeof renderWithHost>[0]) => renderWithHost(ui, fakeHost('@openagt/dashboard-changes'))
 
 const readCounts = vi.fn(async () => [] as unknown)
 vi.mock('./reads.js', () => ({ readCounts }))
 
-const { ChangesSummary } = await import('./AgentChanges.js')
+const { ChangesSummary } = await import('./ChangesSummary.js')
 
 const CHANGES = [
   { path: 'src/a.ts', status: 'modified', added: 3, removed: 1, binary: false },

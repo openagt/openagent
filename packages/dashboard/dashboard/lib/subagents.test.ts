@@ -1,6 +1,6 @@
 import type { AgentMeta, OpenAgentEvent } from '../../src/index.js'
 import { describe, expect, test } from 'vitest'
-import { callSubagents, holdsMainAgent, subagentWait, isOpenSubagent, nestRows, runRow, subagentEnd, subagentEvents, drivesSubagents, stepWords, subagentSteps, subagentStartedAt, subagentsOf, taskLabel, type SubagentStep, type SubagentRow } from './subagents.js'
+import { callSubagents, holdsMainAgent, subagentWait, isOpenSubagent, nestRows, runRow, subagentEnd, subagentEvents, drivesSubagents, stepWords, subagentSteps, subagentStartedAt, subagentsOf, taskLabel, type SubagentStep } from './subagents.js'
 
 function agent(id: string, over: Partial<AgentMeta> = {}): AgentMeta {
   return { status: 'done', id, startedAt: '2026-10-01T10:00:00.000Z', updatedAt: '2026-10-01T10:00:00.000Z', ...over }

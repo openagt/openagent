@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, test, vi } from 'vitest'
 import { cleanup, fireEvent, screen, waitFor, within } from '@testing-library/react'
 import { HostServicesContext, INERT_HOST_SERVICES, type HostServices } from '../../dashboard/dashboard/lib/host-services.js'
-import type { MountedModules } from '../../dashboard/dashboard/lib/use-modules.js'
+import type { MountedModules } from '@openagt/dashboard/module/testing'
 import type { ModuleScheduledCommand } from '@openagt/dashboard/module'
 import { QueuePage } from './QueuePage.js'
 import { NO_MODULES, fakeHost, renderWithHost, type FakeHost } from './test-host.js'

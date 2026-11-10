@@ -19,6 +19,8 @@ export interface QueueStarts {
   /** The count beside a project's batch button. */
   countOf(projectId: string): number
   setCount(projectId: string, count: number): void
+  /** How many agents a click on the project's batch starts: its count, never more than its entries. */
+  batchOf(projectId: string, entries: readonly string[]): number
   startEntry(projectId: string, entry: string): Promise<void>
   fanOutProject(projectId: string, entries: readonly string[]): Promise<void>
 }
@@ -41,6 +43,7 @@ export function useQueueStarts(host: ModuleHost): QueueStarts {
     error,
     countOf,
     setCount: (projectId, count) => setCounts(prev => ({ ...prev, [projectId]: Math.max(count, 1) })),
+    batchOf: (projectId, entries) => Math.min(countOf(projectId), Math.max(entries.length, 1)),
     async startEntry(projectId, entry) {
       if (inFlight) return
       setStarting(`${projectId}\n${entry}`)

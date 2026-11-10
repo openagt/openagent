@@ -42,9 +42,9 @@ export function parseInterval(text: string): Interval | undefined {
   return { count, unit, ms: count * UNIT_MS[unit], text: `${count}${unit}` }
 }
 
-/** Whether a time of day may go with the interval: only with days, weeks or months. */
-export function takesTimeOfDay(interval: Interval): boolean {
-  return UNIT_DAYS[interval.unit] !== undefined
+/** Whether a time of day may go with an interval in this unit: only with days, weeks or months. */
+export function takesTimeOfDay(unit: PaceUnit): boolean {
+  return UNIT_DAYS[unit] !== undefined
 }
 
 /** A time of day out of its text, `HH:MM` on a 24-hour clock (`9:05`, `10:00`); nothing for text that is none. */
@@ -89,7 +89,7 @@ export function paceInForce(pick: PacePick | undefined, skill: { every?: Interva
   const every = 'every' in pick && typeof pick.every === 'string' ? parseInterval(pick.every) : undefined
   if (!every) return skills
   const timed = pick as { at?: unknown; since?: unknown }
-  const at = typeof timed.at === 'string' && takesTimeOfDay(every) ? parseTimeOfDay(timed.at) : undefined
+  const at = typeof timed.at === 'string' && takesTimeOfDay(every.unit) ? parseTimeOfDay(timed.at) : undefined
   return { every, ...(at ? { at, ...(typeof timed.since === 'string' ? { since: timed.since } : {}) } : {}) }
 }
 

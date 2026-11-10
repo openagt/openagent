@@ -1,6 +1,6 @@
 import { strict as assert } from 'node:assert'
 import { test } from 'node:test'
-import { heldBack, holderAgent, hotLane, isHighPriority, namesOf, planAgentFor, planLink, planPath, planTicketPrompt, readListed, readMeta, readShown, routeOf, ticketLink, workOnTicketPrompt } from './module.js'
+import { claimState, heldBack, holderAgent, hotLane, isHighPriority, namesOf, planAgentFor, planLink, planPath, planTicketPrompt, readListed, readMeta, readShown, routeOf, ticketLink, workOnTicketPrompt } from './module.js'
 
 const FILE = '2026-08-30_login-page.md'
 
@@ -87,6 +87,14 @@ test('hotLane: a claimed ticket is in the claimed lane whatever its priority, an
   assert.equal(hotLane({ priority: 'high' }), null)
   assert.equal(isHighPriority(' 8 '), true)
   assert.equal(isHighPriority(undefined), false)
+})
+
+test('claimState: a claim is worked while its run runs or waits on an answer, offline while its computer is, and held for nobody otherwise', () => {
+  assert.equal(claimState('running'), 'working')
+  assert.equal(claimState('waiting'), 'working')
+  assert.equal(claimState('unknown'), 'offline')
+  for (const ended of ['done', 'stopped', 'failed']) assert.equal(claimState(ended), 'stale', ended)
+  assert.equal(claimState(undefined), 'stale', 'no run of the project holds it')
 })
 
 test('a path under tickets/ is called what its ticket is called: a ticket by its title, a plan as the plan of its ticket, which it opens', () => {

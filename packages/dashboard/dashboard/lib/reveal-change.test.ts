@@ -37,10 +37,10 @@ describe('revealScreen', () => {
     const { result } = renderHook(() => useRevealedScreen('p1/r1'))
     expect(result.current).toBeUndefined()
     act(() => revealScreen('p1/r1'))
-    const first = result.current!
+    const first = result.current!.at
     act(() => revealScreen('p1/other'))
-    expect(result.current).toBe(first)
+    expect(result.current!.at).toBe(first)
     act(() => revealScreen('p1/r1'))
-    expect(result.current).toBeGreaterThan(first)
+    expect(result.current!.at).toBeGreaterThan(first)
   })
 })

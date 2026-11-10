@@ -50,17 +50,17 @@ ${plistValue(dict, '')}
 
 /**
  * The launch agent that runs the dashboard from login on, as the person, in their home folder.
- * It runs with the variables of the install's terminal it needs (`env`): a launch agent's own
+ * It runs with the variables of the install's terminal it needs (`vars`): a launch agent's own
  * `PATH` finds no `git`, `gh` or coding agent the person installed, and a moved config folder
  * holds the registry and the certificate. Started again only when it fails: a dashboard that
  * ends well (one ran on its port already, and it handed over) stays ended.
  */
-export function dashboardPlist(opts: { node: string; dashboard: string; home: string; env: { [name: string]: string }; log: string }): string {
+export function dashboardPlist(opts: { node: string; dashboard: string; home: string; vars: { [name: string]: string }; log: string }): string {
   return plist({
     Label: DASHBOARD_LABEL,
     ProgramArguments: [opts.node, opts.dashboard],
     WorkingDirectory: opts.home,
-    EnvironmentVariables: opts.env,
+    EnvironmentVariables: opts.vars,
     RunAtLoad: true,
     KeepAlive: { SuccessfulExit: false },
     StandardOutPath: opts.log,
@@ -69,8 +69,8 @@ export function dashboardPlist(opts: { node: string; dashboard: string; home: st
 }
 
 /** The rule that sends the address's port 443 to the dashboard's secure port. */
-export function portRule(port: number = SECURE_PORT): string {
-  return `rdr pass on lo0 inet proto tcp from any to ${LOOPBACK_ADDRESS} port 443 -> 127.0.0.1 port ${port}\n`
+export function portRule(): string {
+  return `rdr pass on lo0 inet proto tcp from any to ${LOOPBACK_ADDRESS} port 443 -> 127.0.0.1 port ${SECURE_PORT}\n`
 }
 
 /**
@@ -90,9 +90,9 @@ export function portPlist(): string {
 const FORGET_NAMES = 'dscacheutil -flushcache; killall -HUP mDNSResponder 2>/dev/null || true'
 
 /** The install's one script as the administrator: the hosts line, and the port rule with its launch daemon, started now. */
-export function adminInstallScript(name: string = ADDRESS): string {
+export function adminInstallScript(): string {
   return `set -e
-${addHostsLine('/etc/hosts', name)}
+${addHostsLine('/etc/hosts')}
 printf '%s' ${quoted(portRule())} > ${PORT_RULE_FILE}
 printf '%s' ${quoted(portPlist())} > ${PORT_PLIST}
 chown root:wheel ${PORT_RULE_FILE} ${PORT_PLIST}
@@ -128,14 +128,17 @@ function places(env: NodeJS.ProcessEnv) {
 
 const uid = () => process.getuid?.() ?? 0
 
+/** The launch agent taken out of launchd, which stops the dashboard; whether it was in. */
+const bootoutDashboard = () => succeeds('launchctl', ['bootout', `gui/${uid()}/${DASHBOARD_LABEL}`])
+
 export const mac: Platform = {
   unable: async () => undefined,
-  stopDashboard: () => succeeds('launchctl', ['bootout', `gui/${uid()}/${DASHBOARD_LABEL}`]),
+  stopDashboard: bootoutDashboard,
   appDir: env => places(env).app,
   prepare: async () => {},
   adminInstall: () => ({
     says: `your password as the administrator, once: ${ADDRESS} is pointed at this Mac (/etc/hosts), and its port 443 at the dashboard (a packet filter rule).`,
-    script: adminInstallScript(ADDRESS),
+    script: adminInstallScript(),
   }),
   async trust(certFile, io, env) {
     // Trusted already, by an install before: macOS asks nothing.
@@ -148,13 +151,13 @@ export const mac: Platform = {
     await mkdir(place.logs, { recursive: true })
     await mkdir(dirname(place.agent), { recursive: true })
     const log = join(place.logs, 'dashboard.log')
-    await writeFile(place.agent, dashboardPlist({ node, dashboard, home: place.home, env: vars, log }))
+    await writeFile(place.agent, dashboardPlist({ node, dashboard, home: place.home, vars, log }))
     await run('launchctl', ['bootstrap', `gui/${uid()}`, place.agent])
     return log
   },
   openCommand: 'open',
   async removeDashboard(env) {
-    await run('launchctl', ['bootout', `gui/${uid()}/${DASHBOARD_LABEL}`]).catch(() => {})
+    await bootoutDashboard()
     await rm(places(env).agent, { force: true })
   },
   async untrust(certFile, io, env) {

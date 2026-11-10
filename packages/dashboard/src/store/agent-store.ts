@@ -249,11 +249,8 @@ export interface AgentMeta {
 export interface StoreFs {
   read(path: string): Promise<string>
   write(path: string, contents: string): Promise<void>
-  append(path: string, contents: string): Promise<void>
   exists(path: string): Promise<boolean>
   mkdir(path: string): Promise<void>
-  /** List a directory's entries (names only). Missing dir yields `[]`. */
-  readdir(path: string): Promise<string[]>
 }
 
 /** Newest run first: an id sorts chronologically, so the id order IS the time order (no parse). */
@@ -420,8 +417,8 @@ export async function readDoing(cwd: string, ids: readonly string[], fs: StoreFs
 export function nodeStoreFs(): StoreFs {
   // Destructured rather than returned whole: the narrow interface is the contract,
   // so the object should not carry methods the store was never handed.
-  const { read, write, append, exists, mkdir, readdir } = nodeFs()
-  return { read, write, append, exists, mkdir, readdir }
+  const { read, write, exists, mkdir } = nodeFs()
+  return { read, write, exists, mkdir }
 }
 
 /** The runs each project had a checkout for at its last {@link readAllAgents}, by project path. */

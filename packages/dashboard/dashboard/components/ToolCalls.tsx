@@ -8,7 +8,7 @@ import { formatElapsed } from '../lib/format-date.js'
 import { Markdown } from './Markdown.js'
 import { CROSS_FADE_MS, CrossFade } from './CrossFade.js'
 import { CopyButton } from './ui/copy-button.js'
-import { languageOf, Pieces, useHighlightedIn, type Piece } from '../lib/highlight.js'
+import { ColouredLines, languageOf, Pieces, useHighlightedIn, type Piece } from '../lib/highlight.js'
 
 /**
  * What a file named in a step does on a click: opens the pane that shows the run's files, on it.
@@ -74,15 +74,15 @@ function firstWords(text: string): string {
 // printed, once taller than their limit.
 const CODE = 'max-h-64 overflow-auto whitespace-pre-wrap break-all font-mono text-[13px] leading-[19px]'
 
+/** The calls that start a subagent: their detail is the task the agent wrote for it. */
+const SUBAGENT_CALLS = new Set(['Agent', 'Task'])
+
 // One tool call: the verb in grey, what it was done to in dark, on one line. A command the coding
 // agent said in a few words of its own reads as those words ("List project files"), the command
 // itself one click further. With a detail or an output it opens, on a click: the detail whole in a
 // box (a command with "$" in front) and, under it, what the call printed, in a box that scrolls; a
 // call that failed says so, with its exit code when it has one. A call still going on (`live`)
 // reads in the present ("Running"), shimmers, and counts the seconds when it says since when.
-/** The calls that start a subagent: their detail is the task the agent wrote for it. */
-const SUBAGENT_CALLS = new Set(['Agent', 'Task'])
-
 function CallLine(call: Call) {
   const [open, setOpen] = useState(false)
   const openFile = useContext(OpenFile)
@@ -194,7 +194,7 @@ interface FileLines {
  * a tab and the line ("1\t<!DOCTYPE html>"), an empty line as its number alone. A text that does
  * not open with them is no file's lines.
  */
-export function fileLines(text: string): FileLines | undefined {
+function fileLines(text: string): FileLines | undefined {
   const all = text.split('\n')
   const lines: FileLines['lines'] = []
   let at = 0
@@ -259,14 +259,7 @@ function GivenDetail({ label, call, whole, output, card }: { label: string; call
         <div className="relative rounded-lg border border-border">
           <pre aria-label={command ? 'Command' : 'Detail'} className={cn(CODE, 'py-1.5 pl-3 pr-10 text-foreground')}>
             {command && <span className="select-none text-muted-foreground">$ </span>}
-            {coloured
-              ? coloured.map((pieces, i) => (
-                  <Fragment key={i}>
-                    <Pieces pieces={pieces} />
-                    {i < coloured.length - 1 ? '\n' : null}
-                  </Fragment>
-                ))
-              : given}
+            {coloured ? <ColouredLines lines={coloured} /> : given}
           </pre>
           <CopyButton text={given} label={command ? 'Copy the command' : 'Copy'} className="absolute top-[7px] right-2" />
         </div>
@@ -297,7 +290,7 @@ export function Caret({ open = false }: { open?: boolean }) {
  * small letters, a pixel and a half under the middle of the line (measured on the page's 14px
  * font), not with the line's middle, which reads as above the words.
  */
-export function LiveDots({ leaving = false }: { leaving?: boolean }) {
+function LiveDots({ leaving = false }: { leaving?: boolean }) {
   return (
     <span className={cn('relative top-[1.5px] flex w-[18px] shrink-0 items-center', leaving && 'dots-leave')}>
       <Dots />

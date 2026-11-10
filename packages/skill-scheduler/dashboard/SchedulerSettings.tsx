@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
-import { Input, SettingsRow, SettingsSection, useModuleHost, usePolled, type ModuleSettingsProps } from '@openagt/dashboard/module'
-import { MAX_SPEND_OFFSET, loosestSpendOffset, offsetsThatDiffer, readSchedulers, schedulersKey, saveSpendOffset, typedOffset, type SchedulerRow } from './schedulers.js'
+import { Input, MAX_SPEND_OFFSET, SettingsRow, SettingsSection, useModuleHost, usePolled, type ModuleSettingsProps } from '@openagt/dashboard/module'
+import { loosestSpendOffset, notAsked, offsetsThatDiffer, readSchedulers, schedulersKey, saveSpendOffset, typedOffset, type SchedulerRow } from './schedulers.js'
 
 // Settings › Scheduler: how far past the quota boundary scheduled work may still start. Each
 // project keeps its own, read with `scheduler status` and saved with `scheduler offset`
@@ -37,7 +37,7 @@ export function SchedulerSettings({ projects }: ModuleSettingsProps) {
       setError(undefined)
       queue.current = queue.current.then(async () => {
         // A command that could not even be asked is a save not taken, and the next save still runs.
-        const saved = await saveSpendOffset(host, projects, points).catch((err: unknown) => ({ ok: false as const, error: err instanceof Error ? err.message : String(err) }))
+        const saved = await saveSpendOffset(host, projects, points).catch(notAsked)
         if (!saved.ok) {
           setTyped(undefined)
           setError(`The spend offset was not saved: ${saved.error}`)

@@ -363,6 +363,11 @@ function WeekBar({
   )
 }
 
+/** How much of a window is used, and when it resets when that is known: "42% used — resets Mon 10:00". */
+function usedWords(window: DriverQuotaWindow): string {
+  return `${Math.round(window.percentUsed)}% used${window.resetsAtText ? `${SEP}resets ${window.resetsAtText}` : ''}`
+}
+
 /**
  * The windows the bar is not about (the session, and a model's own week), as one line each — for
  * the fallback that draws these directly when there is no bar to tuck them behind.
@@ -371,9 +376,7 @@ function OtherWindow({ window }: { window: DriverQuotaWindow }) {
   return (
     <div className="flex items-baseline justify-between gap-2 text-xs">
       <span className="text-muted-foreground">{window.label}</span>
-      <span className="text-muted-foreground">
-        {Math.round(window.percentUsed)}% used{window.resetsAtText ? `${SEP}resets ${window.resetsAtText}` : ''}
-      </span>
+      <span className="text-muted-foreground">{usedWords(window)}</span>
     </div>
   )
 }
@@ -383,9 +386,7 @@ function OtherWindowRow({ window }: { window: DriverQuotaWindow }) {
   return (
     <tr>
       <td className="pr-3 align-baseline text-muted-foreground">{window.label}</td>
-      <td className="whitespace-nowrap align-baseline text-muted-foreground">
-        {Math.round(window.percentUsed)}% used{window.resetsAtText ? `${SEP}resets ${window.resetsAtText}` : ''}
-      </td>
+      <td className="whitespace-nowrap align-baseline text-muted-foreground">{usedWords(window)}</td>
     </tr>
   )
 }
@@ -425,7 +426,7 @@ const OFFSET_WRITE_DELAY_MS = 500
  * module's read catches up with it, which is the point at which the two agree anyway. A save that
  * fails says why, and the handle follows the module's value again.
  */
-export function useSpendOffset(serverOffset: number | undefined, save: (offset: number) => Promise<UsageLimitSaved>): [number | undefined, (offset: number) => void, string | undefined] {
+function useSpendOffset(serverOffset: number | undefined, save: (offset: number) => Promise<UsageLimitSaved>): [number | undefined, (offset: number) => void, string | undefined] {
   const [local, setLocal] = useState(serverOffset)
   const [error, setError] = useState<string | undefined>()
   // What we last wrote, while the poll is still behind it. `null` means "follow the server".

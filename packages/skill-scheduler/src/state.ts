@@ -3,8 +3,8 @@ import { join } from 'node:path'
 import { excludeFromGit, nodeGitRunner, type GitRunner } from '@openagt/agent-data'
 import { PUBLISH_LEVELS, type Publish } from '@openagt/agent-runner'
 import { DEFAULT_AGENT, DEFAULT_MODEL, DEFAULT_PUBLISH, DEFAULT_SPEND_OFFSET, STATE_DIR, STATE_FILE, isAgent, isAgents, isTime, type AgentName } from './names.js'
-import { homeAgent, type ScheduledCommand } from './schedule.js'
-import type { PacePick } from './pace.js'
+import { ableAgents, homeAgent, type ScheduledCommand } from './schedule.js'
+import { sinceNow, type PacePick } from './pace.js'
 
 /**
  * The tool's state (#1774): one JSON file under `.scheduler/` at the repository root,
@@ -58,6 +58,11 @@ export interface ListedCommand {
   able: AgentName[]
 }
 
+/** A command as a dashboard lists it: what its skill says; not this machine's switch or picks, which the state carries, nor its runs, which the records do. */
+export function listed(command: ScheduledCommand): ListedCommand {
+  return { command: command.name, ...(command.each ? { each: true as const } : {}), ...(command.every ? { every: command.every.text } : {}), ...(command.when !== undefined ? { when: command.when } : {}), ...(command.waitsFor !== undefined ? { waitsFor: command.waitsFor } : {}), ...(command.checkEvery ? { checkEvery: command.checkEvery.text } : {}), ...(command.description !== undefined ? { description: command.description } : {}), ...(command.cap > 1 ? { agents: command.cap } : {}), ...(command.text !== undefined ? { onThisMachine: true as const } : {}), ...(command.editable ? { editable: true as const } : {}), agent: homeAgent(command), ...(command.model !== undefined ? { model: command.model, modelAgent: command.agent ?? DEFAULT_AGENT } : {}), able: ableAgents(command) }
+}
+
 /** One tick as the state remembers it. */
 export interface TickRecord {
   /** ISO timestamp. */
@@ -108,8 +113,11 @@ export interface ModelPick {
   model: string
 }
 
-/** Where the state keeps what a person set for one command on this machine. */
+/** Where the state keeps what a person set for one command on this machine, each a map by command. */
 const PICKS = ['switches', 'publishes', 'paces', 'agents', 'runsOn', 'models'] as const
+
+/** One of the maps the state keeps a person's picks for a command in. */
+export type PickKey = (typeof PICKS)[number]
 
 export const DEFAULT_STATE: State = { on: false, keepAlive: false, model: DEFAULT_MODEL, spendOffset: DEFAULT_SPEND_OFFSET }
 
@@ -155,22 +163,29 @@ export function withoutPid(state: State, pid: number): State {
 }
 
 /**
+ * The state with one command's pick in `key` set, or taken back when there is none: the command
+ * then follows its skill again, or is off. Only what a person set is kept, so a map left empty goes
+ * and a pick taken back leaves no trace. The state itself is answered when there is nothing to
+ * take back, so a caller can tell there is nothing to write.
+ */
+export function withPick<K extends PickKey>(state: State, key: K, command: string, pick: NonNullable<State[K]>[string] | undefined): State {
+  const picks: Record<string, unknown> = state[key] ?? {}
+  if (pick === undefined && !Object.hasOwn(picks, command)) return state
+  const { [command]: _previous, ...others } = picks
+  const kept = pick === undefined ? others : { ...picks, [command]: pick }
+  const next = { ...state }
+  if (Object.keys(kept).length) Object.assign(next, { [key]: kept })
+  else delete next[key]
+  return next
+}
+
+/**
  * The state with nothing of one command left: its switch, its publish pick, its pace, its number
  * of agents, its coding agent and its model. What a command saved anew under a name starts from: a switch left on for a
  * command of that name that is gone would start the new one unasked.
  */
 export function withoutCommand(state: State, command: string): State {
-  let rest = state
-  for (const key of PICKS) {
-    const picks = state[key]
-    if (!picks || !Object.hasOwn(picks, command)) continue
-    const { [command]: _gone, ...others } = picks as Record<string, unknown>
-    // The state itself is answered when it holds nothing of the command, so a caller can tell there is nothing to write.
-    rest = { ...rest }
-    if (Object.keys(others).length) Object.assign(rest, { [key]: others })
-    else delete rest[key]
-  }
-  return rest
+  return PICKS.reduce((rest, key) => withPick(rest, key, command, undefined), state)
 }
 
 /**
@@ -201,13 +216,8 @@ export function namesGivenUp(lastTick: TickRecord | undefined, schedule: { comma
 
 /** The state with nothing left under a name: the picks of the command of that name, and of every command that is that name and a word (`triage quick`). */
 export function withoutName(state: State, name: string): State {
-  let rest = state
-  for (const key of PICKS) {
-    for (const command of Object.keys(state[key] ?? {})) {
-      if (command.split(' ')[0] === name) rest = withoutCommand(rest, command)
-    }
-  }
-  return rest
+  const named = PICKS.flatMap(key => Object.keys(state[key] ?? {})).filter(command => command.split(' ')[0] === name)
+  return named.reduce(withoutCommand, state)
 }
 
 /** When a person switched a scheduled command on on this machine, ISO; nothing for a command that is off. The state is a file a person may edit: anything but a time is off. */
@@ -221,12 +231,27 @@ export function isSwitchedOn(state: State, command: string): boolean {
   return switchedOnAt(state, command) !== undefined
 }
 
-/** The state with one command switched on at a time, or off when no time is given: only a command switched on is kept, so switching it off leaves no trace. */
-export function withSwitch(state: State, command: string, at: string | undefined): State {
-  const { [command]: _previous, ...others } = state.switches ?? {}
-  const switches = at !== undefined ? { ...others, [command]: at } : others
-  const { switches: _switches, ...rest } = state
-  return Object.keys(switches).length ? { ...rest, switches } : rest
+/**
+ * The state with a command switched on at `now`. The switch keeps when: a check of a command that
+ * never started asks what is new since then. A time of day of its pace counts from now on: a row
+ * switched on after its time waits for the next one, as when the time was picked. A command
+ * already on is left as it is, so switching it on twice does not put a missed time off.
+ */
+export function withSwitchedOn(state: State, command: string, now: Date): State {
+  if (isSwitchedOn(state, command)) return state
+  return withPick(withPick(state, 'switches', command, now.toISOString()), 'paces', command, sinceNow(state.paces?.[command], now))
+}
+
+/**
+ * The state with a pace picked for a command at `now`: whenever there is work, or an interval, with
+ * a time of day when it has one. The same interval and time picked again is the same pick: when it
+ * was made stays, so a time that was missed is still due.
+ */
+export function withPacePicked(state: State, command: string, pace: { work: true } | { every: string; at?: string }, now: Date): State {
+  if ('work' in pace) return withPick(state, 'paces', command, pace)
+  const before = state.paces?.[command]
+  const same = typeof before === 'object' && before !== null && 'every' in before && before.every === pace.every && before.at === pace.at && typeof before.since === 'string'
+  return withPick(state, 'paces', command, { ...pace, since: same ? before.since : now.toISOString() })
 }
 
 /**
@@ -244,19 +269,6 @@ export function publishInForce(state: State, command: string): Publish | undefin
   return pick === 'nothing' ? undefined : pick
 }
 
-/** The state with one command's publish pick set. */
-export function withPublish(state: State, command: string, pick: PublishPick): State {
-  return { ...state, publishes: { ...state.publishes, [command]: pick } }
-}
-
-/** The state with one command's pace set, or taken back when there is none: the command then runs at its skill's pace again. */
-export function withPace(state: State, command: string, pick: PacePick | undefined): State {
-  const { [command]: _previous, ...others } = state.paces ?? {}
-  const paces = pick === undefined ? others : { ...others, [command]: pick }
-  const { paces: _paces, ...rest } = state
-  return Object.keys(paces).length ? { ...rest, paces } : rest
-}
-
 /**
  * How many runs of a command may be in flight at once, as this machine counts: the number a
  * person set here, else the skill's. The count it is held against is every machine's runs. The
@@ -265,14 +277,6 @@ export function withPace(state: State, command: string, pick: PacePick | undefin
 export function capInForce(state: State, command: { name: string; cap: number }): number {
   const own = state.agents?.[command.name]
   return isAgents(own) ? own : command.cap
-}
-
-/** The state with one command's number of agents at once set, or taken back when there is none: the command then has its skill's number again. */
-export function withAgents(state: State, command: string, count: number | undefined): State {
-  const { [command]: _previous, ...others } = state.agents ?? {}
-  const agents = count === undefined ? others : { ...others, [command]: count }
-  const { agents: _agents, ...rest } = state
-  return Object.keys(agents).length ? { ...rest, agents } : rest
 }
 
 /**
@@ -302,18 +306,7 @@ export function modelInForce(state: State, command: Pick<ScheduledCommand, 'name
 
 /** The state with the coding agent of one command picked, or the pick taken back when there is none. The model picked for the command goes with it either way: a model is one agent's. */
 export function withAgent(state: State, command: string, agent: AgentName | undefined): State {
-  const { [command]: _previous, ...others } = state.runsOn ?? {}
-  const runsOn = agent === undefined ? others : { ...others, [command]: agent }
-  const { runsOn: _runsOn, ...rest } = withModel(state, command, undefined)
-  return Object.keys(runsOn).length ? { ...rest, runsOn } : rest
-}
-
-/** The state with the model of one command picked, for the coding agent it is a model of, or the pick taken back when there is none. */
-export function withModel(state: State, command: string, pick: ModelPick | undefined): State {
-  const { [command]: _previous, ...others } = state.models ?? {}
-  const models = pick === undefined ? others : { ...others, [command]: pick }
-  const { models: _models, ...rest } = state
-  return Object.keys(models).length ? { ...rest, models } : rest
+  return withPick(withPick(state, 'models', command, undefined), 'runsOn', command, agent)
 }
 
 /** Read, change, write: one edit of the state. */

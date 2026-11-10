@@ -96,15 +96,9 @@ export const Composer = forwardRef<ComposerHandle, {
   submitLabel: string
   submitBusyLabel: string
   placeholder?: string | undefined
-  /** Compact single-row form for the navbar quick-launch (#723): editor + submit, no control row
-   *  or save panel. The `/` `@` `#` triggers still work; agent/model + options come from the
-   *  shared prefs the launcher sets. */
-  compact?: boolean | undefined
-  /** Off inside a session (#831): a session is bound to the agent it started with, so the select
-   *  would only ever rewrite the *next* session's default. Chosen at the launcher instead. */
-  showDriverModel?: boolean | undefined
   /** Inside a session: the "Run on" pick is the launcher's, since a session already runs where it
-   *  was started. */
+   *  was started, and so is the agent/model select (#831): a session is bound to the agent it
+   *  started with, so the select would only ever rewrite the *next* session's default. */
   inAgent?: boolean | undefined
   /** Inside a session: the row above the box, which says what the launcher's row picks. */
   sessionRow?: ReactNode
@@ -118,7 +112,7 @@ export const Composer = forwardRef<ComposerHandle, {
   /** The saved machine the project is on, when only another computer of the person's has it (elsewhere.ts). */
   home?: string | undefined
 }>(function Composer(
-  { files, addContext, removeContext, startsAt, controls, controlsEnd, sessionModel, sessionContext, onSubmit, onPromptChange, onPreset, busy, submitLabel, submitBusyLabel, placeholder, compact = false, showDriverModel = true, inAgent = false, sessionRow, canSubmit = true, idleControl, home },
+  { files, addContext, removeContext, startsAt, controls, controlsEnd, sessionModel, sessionContext, onSubmit, onPromptChange, onPreset, busy, submitLabel, submitBusyLabel, placeholder, inAgent = false, sessionRow, canSubmit = true, idleControl, home },
   ref,
 ) {
   const [prompt, setPrompt] = useState('')
@@ -174,9 +168,9 @@ export const Composer = forwardRef<ComposerHandle, {
   // Each agent's accounts on that computer, in its part of the agent picker: the one picked is the
   // one its runs take first there, so the run goes with it. An agent not installed there has none
   // to pick, and Codex's accounts are there once it is installed or has some added, as on Settings.
-  const accountsOn = inAgent || !showDriverModel ? undefined : selectedMachine?.id
-  const claudeAccounts = useAccountsOn('claude', accountsOn, !inAgent && showDriverModel)
-  const codexAccounts = useAccountsOn('codex', accountsOn, !inAgent && showDriverModel)
+  const accountsOn = inAgent ? undefined : selectedMachine?.id
+  const claudeAccounts = useAccountsOn('claude', accountsOn, !inAgent)
+  const codexAccounts = useAccountsOn('codex', accountsOn, !inAgent)
   const accountsOf = (name: DriverName): Pick<DriverOption, 'account' | 'accounts'> => {
     const { view, pick } = name === 'codex' ? codexAccounts : claudeAccounts
     const answer = models?.[name]
@@ -217,10 +211,10 @@ export const Composer = forwardRef<ComposerHandle, {
   // composer. `prompt` then arrives the normal way, through the editor's own onChange.
   const [carriedDraft, setCarriedDraft] = useState<string | undefined>(undefined)
   useEffect(() => {
-    if (compact || inAgent) return
+    if (inAgent) return
     const carried = takePendingDraft()
     if (carried) setCarriedDraft(carried)
-  }, [compact, inAgent])
+  }, [inAgent])
 
   // A synchronous latch alongside the async `busy` prop (#948): two fast ⌘↵ presses both read
   // `busy === false` (React state lags), fired two starts, and the second surfaced a spurious
@@ -252,7 +246,6 @@ export const Composer = forwardRef<ComposerHandle, {
   const editorEl = (
     <PromptEditor
       ref={editorRef}
-      compact={compact}
       onChange={onPromptEdit}
       onSubmit={later => submit(undefined, later)}
       {...(onPreset ? { onPreset } : {})}
@@ -263,20 +256,17 @@ export const Composer = forwardRef<ComposerHandle, {
       commands={readyCommands(commands)}
       customPresets={customPresets}
       projectPresets={projectPresets}
-      // The `/` menu offers "Save prompt…" only in the full composer, where the create panel renders;
-      // the compact navbar launch has no panel, so it gets no callback (and no item).
-      {...(compact ? {} : { onNewPreset: () => setAddingPreset(true) })}
+      // The `/` menu's "Save prompt…" opens the create panel under the box.
+      onNewPreset={() => setAddingPreset(true)}
       disabled={busy}
       {...(placeholder ? { placeholder } : {})}
       {...(carriedDraft ? { initialText: carriedDraft } : {})}
     />
   )
 
-  // The agent/model select and the "Run on" pick, shared by both forms (#755). They were compact's
-  // one real omission: an agent started from the navbar used the stored agent, model and options with
-  // nothing on screen saying which. Every value is preferences-backed and global, so the same
-  // controls in either place read and write the same state.
-  const driverModelEl = showDriverModel && (
+  // The agent/model select. Every value is preferences-backed and global: what it picks is what the
+  // next start runs on, wherever that start is made.
+  const driverModelEl = !inAgent && (
     <DriverModelMenu
       drivers={driverOptions(models, theirs && selectedMachine ? machineName(selectedMachine) : undefined).map(d => ({ ...d, ...DRIVER_UI[d.value as DriverName], ...accountsOf(d.value as DriverName) }))}
       driver={driver}
@@ -287,10 +277,9 @@ export const Composer = forwardRef<ComposerHandle, {
       busy={busy}
     />
   )
-  {/* Commands and saved prompts get a visible surface (#948): load, save and delete in one menu,
-      instead of loading only behind typing `/`. Not in the compact row, which has no room and
-      no save panel. */}
-  const commandsEl = !compact && (
+  // Commands and saved prompts get a visible surface (#948): load, save and delete in one menu,
+  // instead of loading only behind typing `/`.
+  const commandsEl = (
     <CommandsMenu
       commands={commands}
       customPresets={customPresets}
@@ -307,7 +296,6 @@ export const Composer = forwardRef<ComposerHandle, {
   const runOnEl = inAgent ? null : (
     <RunOnMenu
       busy={busy}
-      inRow={!compact}
       connection={{
         machines,
         selectedMachineId,
@@ -329,7 +317,7 @@ export const Composer = forwardRef<ComposerHandle, {
   // launcher has nothing to send, and the arrow reads as "send" in either place (Start session /
   // Send). It is always full size (never appears to grow): it fades in and slides into place, and
   // its layout footprint is animated with a negative margin (0 <- -w) rather than its width, so the
-  // control to its left (the agent/model select) is pushed over smoothly. `aria-hidden` while empty
+  // text to its left gives way smoothly. `aria-hidden` while empty
   // keeps it out of the a11y tree and role queries.
   const hasPrompt = !!prompt.trim()
   const submitButton = (
@@ -351,9 +339,8 @@ export const Composer = forwardRef<ComposerHandle, {
               hasPrompt
                 ? // Full while busy, for its spinner; faded while something else holds the start (the note's OK, a machine offline).
                   cn('ml-0 translate-x-0 opacity-100', busy ? 'disabled:opacity-100' : 'disabled:opacity-40')
-                // The hidden submit takes no room: its own w-8 (2rem) back, and in the compact row the
-                // row's gap-1.5 (0.375rem) too, so the control beside it sits flush.
-                : cn('pointer-events-none translate-x-2 opacity-0 disabled:opacity-0', compact ? '-ml-[2.375rem]' : '-ml-8'),
+                // The hidden submit takes no room: its own w-8 (2rem) back.
+                : 'pointer-events-none translate-x-2 opacity-0 disabled:opacity-0 -ml-8',
             )}
           />
         }
@@ -376,7 +363,7 @@ export const Composer = forwardRef<ComposerHandle, {
   )
   // The saved pick, let go as the page opened: where the run goes instead, and why.
   const here = thisMachineName() === 'This machine' ? 'this machine' : thisMachineName()
-  const fallbackNote = !inAgent && !compact && fallback && !selectedMachine && (
+  const fallbackNote = !inAgent && fallback && !selectedMachine && (
     <p role="status" className="mt-2 text-xs text-muted-foreground">
       {fallback.why === 'gone'
         ? `The computer you last picked to run on is no longer saved, so runs start on ${here}.`
@@ -403,19 +390,6 @@ export const Composer = forwardRef<ComposerHandle, {
     </div>
   )
 
-  // Compact (#723): a single row for the navbar — editor, then the same controls and submit. It
-  // stays one row on purpose (#755): the header must not grow taller to gain them.
-  if (compact) {
-    return (
-      <div className="flex items-start gap-1.5">
-        <div className="min-w-0 flex-1">{editorEl}</div>
-        {driverModelEl}
-        {runOnEl}
-        {slotEl}
-      </div>
-    )
-  }
-
   return (
     <>
       {/* Where the agent starts, above the box (his pick): the machine, the project and the branch,
@@ -438,7 +412,7 @@ export const Composer = forwardRef<ComposerHandle, {
       <div className="flex items-end rounded-xl border border-border bg-card focus-within:border-muted-foreground/40">
         {/* The editor's own inset sets the text off the box's edge; beside the + it pulls in, so the
             text starts close to it, as in Claude Code's. */}
-        {commandsEl && <div className="-mr-2 flex shrink-0 items-center p-1">{commandsEl}</div>}
+        <div className="-mr-2 flex shrink-0 items-center p-1">{commandsEl}</div>
         <div className="min-w-0 flex-1">{editorEl}</div>
         <div className="flex shrink-0 items-center p-1">{slotEl}</div>
       </div>

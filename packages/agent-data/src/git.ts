@@ -1,7 +1,9 @@
+import { execFile } from 'node:child_process'
+
 /**
  * Running git: one `execFile`-backed runner with a per-subcommand timeout, and the two readings
  * of a failed invocation every caller wants — was it a timeout kill, and which line is worth
- * showing.
+ * showing. Beside them, the few facts and questions about a repository more than one caller asks.
  */
 
 /** Runs `git` in `cwd`, resolving its stdout. Rejects on a non-zero exit. */
@@ -129,7 +131,6 @@ export function isGitTimeout(err: unknown): err is GitTimeoutError {
  */
 export function nodeGitRunner(env?: Record<string, string>): GitRunner {
   return async (args, cwd) => {
-    const { execFile } = await import('node:child_process')
     const timeoutMs = gitTimeoutMs(args)
     return new Promise<string>((resolvePromise, rejectPromise) => {
       execFile('git', args, { cwd, timeout: timeoutMs, maxBuffer: 16 * 1024 * 1024, ...(env ? { env: { ...process.env, ...env } } : {}) }, (err, stdout) => {
@@ -144,6 +145,9 @@ export function nodeGitRunner(env?: Record<string, string>): GitRunner {
     })
   }
 }
+
+/** git's well-known empty tree, there in every repository without being written first: a commit of it holds no file. */
+export const EMPTY_TREE = '4b825dc642cb6eb9a060e54bf8d69288fbee4904'
 
 /**
  * Whether `cwd` sits inside a git working tree (#997). Lets a caller tell "this project cannot
@@ -178,13 +182,17 @@ export async function checkoutRoot(cwd: string, git: GitRunner = nodeGitRunner()
   return (await git(['rev-parse', '--show-toplevel'], cwd)).trim()
 }
 
+/** The message of a caught value, which may be anything thrown: a failed git invocation's, or any other. */
+export function errorMessage(err: unknown): string {
+  return err instanceof Error ? err.message : String(err)
+}
+
 /**
  * The line of a failed git invocation worth showing: git's own `fatal:` / `error:` / `remote:`
  * line when there is one, else the first line, else a placeholder.
  */
 export function gitReason(err: unknown): string {
-  const message = err instanceof Error ? err.message : String(err)
-  const lines = message.split('\n').map(line => line.trim()).filter(Boolean)
+  const lines = errorMessage(err).split('\n').map(line => line.trim()).filter(Boolean)
   return lines.find(line => /^(fatal|error|remote):/i.test(line)) ?? lines[0] ?? 'git failed'
 }
 

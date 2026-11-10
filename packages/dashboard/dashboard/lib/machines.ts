@@ -1,5 +1,6 @@
 import { useEffect, useSyncExternalStore } from 'react'
-import { onMachines, sendAddComputerThrough, sendAddMachine, sendMachineTold, sendRemoveMachine, sendRenameComputer, sendRenameMachine, type AddMachineResult, type Machine, type RemoveMachineResult } from '../rpc/machines.js'
+import { onMachines, sendAddComputerThrough, sendAddMachine, sendMachineTold, sendRemoveMachine, sendRenameComputer, sendRenameMachine, type Machine, type RemoveMachineResult } from '../rpc/machines.js'
+import type { MachineAdded } from '../module/index.js'
 import { getSelectedMachineId, selectMachine } from './remote-target.js'
 
 // The saved machines: the other computers running OpenAgent that a run can be sent to. The list
@@ -48,32 +49,36 @@ function ensureLoaded(): void {
   window.addEventListener('focus', () => void refreshMachines())
 }
 
-/** Save the machine a pasted link names; the list is read again once the daemon has it. */
-export async function addMachine(pasted: string, label?: string): Promise<AddMachineResult> {
-  const result = await sendAddMachine(pasted, label)
-  if (result.ok) await refreshMachines()
-  return result
+/**
+ * A change the daemon makes to the list, read again once the daemon has it, so every place this
+ * page names a machine says it at once. Answers whether it was made, and why not: what a module is
+ * told (`MachineAdded`), never the machine the daemon answered with.
+ */
+async function changed(change: Promise<{ ok: true } | { ok: false; error: string }>): Promise<MachineAdded> {
+  const result = await change
+  if (!result.ok) return result
+  await refreshMachines()
+  return { ok: true }
 }
 
-/** Give a saved machine the name the person picked; the list is read again once the daemon has it, so "Run on" says it too. */
-export async function renameMachine(id: string, label: string): Promise<AddMachineResult> {
-  const result = await sendRenameMachine(id, label)
-  if (result.ok) await refreshMachines()
-  return result
+/** Save the machine a pasted link names. */
+export function addMachine(pasted: string, label?: string): Promise<MachineAdded> {
+  return changed(sendAddMachine(pasted, label))
 }
 
-/** Give this computer the name the person picked; the list is read again, so every place this page names it says it. */
-export async function renameComputer(name: string): Promise<{ ok: true } | { ok: false; error: string }> {
-  const result = await sendRenameComputer(name)
-  if (result.ok) await refreshMachines()
-  return result.ok ? { ok: true } : result
+/** Give a saved machine the name the person picked: "Run on" says it too. */
+export function renameMachine(id: string, label: string): Promise<MachineAdded> {
+  return changed(sendRenameMachine(id, label))
 }
 
-/** Save a computer that keeps a line open to a saved server, reached through it; the list is read again once the daemon has it. */
-export async function addComputerThrough(machineId: string, computerId: string): Promise<AddMachineResult> {
-  const result = await sendAddComputerThrough(machineId, computerId)
-  if (result.ok) await refreshMachines()
-  return result
+/** Give this computer the name the person picked. */
+export function renameComputer(name: string): Promise<MachineAdded> {
+  return changed(sendRenameComputer(name))
+}
+
+/** Save a computer that keeps a line open to a saved server, reached through it. */
+export function addComputerThrough(machineId: string, computerId: string): Promise<MachineAdded> {
+  return changed(sendAddComputerThrough(machineId, computerId))
 }
 
 /** Say the person was told their logins are copied to another person's computer; the list is read again once the daemon has it. */

@@ -27,7 +27,7 @@ import {
   type Schedule,
 } from '@openagt/dashboard/module'
 import type { PlacedEntry } from '../src/queue.js'
-import { DEFAULT_PRIORITY, PRIORITIES, QUEUE_COMMAND, addTextArgs, doneArgs, fanOutLabel, isWorkingOn, priorityMeaning, workOnEntryPrompt } from '../src/module.js'
+import { DEFAULT_PRIORITY, PRIORITIES, QUEUE_COMMAND, addTextArgs, doneArgs, fanOutLabel, isPlacedEntry, isWorkingOn, priorityMeaning, readEntries, workOnEntryPrompt } from '../src/module.js'
 import { EntryTitle, entryView } from './entry.js'
 import { useQueueStarts, type QueueStarts } from './starts.js'
 
@@ -83,11 +83,9 @@ export function QueuePage({ projects }: ModulePageProps) {
     () =>
       Promise.all(
         projects.map(async (project): Promise<ProjectRead> => {
-          const [result, agents] = await Promise.all([host.runCommand(project.id, ['--local', '--full']), host.agents(project.id).catch(() => [])])
+          const [read, agents] = await Promise.all([host.runCommand(project.id, ['--local', '--full']).then(result => readEntries(result, isPlacedEntry)), host.agents(project.id).catch(() => [])])
           const working = agents.filter(agent => agent.status === 'running')
-          if (!result.ok) return { project, working, error: result.error }
-          if (!Array.isArray(result.output)) return { project, working, error: 'the queue command did not print a list' }
-          return { project, working, entries: result.output.filter(isPlacedEntry) }
+          return 'error' in read ? { project, working, error: read.error } : { project, working, entries: read.entries }
         }),
       ),
     NOTHING_READ,
@@ -124,7 +122,7 @@ function ProjectQueue({ read, titled, schedule, names, starts, reload }: { read:
   const host = useModuleHost()
   const { project, entries, error, working } = read
   const raw = (entries ?? []).map(placed => placed.entry)
-  const count = Math.min(starts.countOf(project.id), Math.max(raw.length, 1))
+  const count = starts.batchOf(project.id, raw)
   return (
     <section aria-label={project.name}>
       <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
@@ -182,11 +180,7 @@ function ProjectQueue({ read, titled, schedule, names, starts, reload }: { read:
       ) : (
         sections(entries!).map((section, index) => (
           <div key={index} className="mt-4">
-            <h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-              {section.priority === undefined ? 'No priority' : `Priority ${section.priority}`}
-              {section.priority !== undefined && priorityMeaning(section.priority) !== undefined && ' '}
-              {section.priority !== undefined && priorityMeaning(section.priority) !== undefined && <span className="ml-1 font-normal normal-case tracking-normal">{priorityMeaning(section.priority)}</span>}
-            </h3>
+            <SectionHeading priority={section.priority} />
             {/* Counted on from the section before, so the number a screen reader says is the one shown. */}
             <ol start={section.entries[0]!.place} className="mt-1.5 list-none divide-y divide-border rounded-md border border-border">
               {section.entries.map(placed => (
@@ -198,6 +192,18 @@ function ProjectQueue({ read, titled, schedule, names, starts, reload }: { read:
       )}
       {error === undefined && <AddEntry project={project} reload={reload} />}
     </section>
+  )
+}
+
+/** A run of entries' heading: the priority section they sit in, with what its number means at either end of the scale. */
+function SectionHeading({ priority }: { priority: number | undefined }) {
+  const meaning = priority === undefined ? undefined : priorityMeaning(priority)
+  return (
+    <h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+      {priority === undefined ? 'No priority' : `Priority ${priority}`}
+      {meaning !== undefined && ' '}
+      {meaning !== undefined && <span className="ml-1 font-normal normal-case tracking-normal">{meaning}</span>}
+    </h3>
   )
 }
 
@@ -369,11 +375,4 @@ function AddEntry({ project, reload }: { project: ModuleProject; reload: () => P
       )}
     </form>
   )
-}
-
-/** Whether the command printed one entry as `--full` prints it. */
-function isPlacedEntry(value: unknown): value is PlacedEntry {
-  if (!value || typeof value !== 'object') return false
-  const { entry, priority } = value as Record<string, unknown>
-  return typeof entry === 'string' && (priority === undefined || typeof priority === 'number')
 }

@@ -2,7 +2,8 @@ import { strict as assert } from 'node:assert'
 import { test } from 'node:test'
 import { PassThrough, Readable, Writable } from 'node:stream'
 import { existsSync, readFileSync } from 'node:fs'
-import { ClaudeCodeDriver, settingsEffort, StreamJsonParser, claudeCodeReady } from './claude-code.js'
+import { ClaudeCodeDriver, settingsEffort, claudeCodeReady } from './claude-code.js'
+import { StreamJsonParser } from './claude-code-stream.js'
 import { ConversationGoneError, runCliSession, type SpawnLike, type SpawnedProcess, type DriverEvent } from '@openagt/agent-driver'
 
 test('StreamJsonParser surfaces assistant text + tool names, keeps the result', () => {

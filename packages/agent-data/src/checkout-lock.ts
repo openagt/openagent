@@ -6,7 +6,8 @@ import { BRANCHES_DIR } from './names.js'
 // The lock every process on one clone takes before it touches a branch's persistent checkout: a
 // daemon, a scheduler and each run are separate processes, and one's `reset --hard` wipes the
 // other's half-written change. A file created exclusively beside the checkout, holding the
-// holder's pid; a holder that died is taken over, a live one is waited for.
+// holder's pid; a holder that died is taken over, a live one is waited for. Within one process
+// the tasks that ask for the same lock take it in the order they asked.
 
 /** How long a process waits for another to let go of the checkout before it gives up. */
 export const CHECKOUT_LOCK_WAIT_MS = 5 * 60_000
@@ -36,15 +37,31 @@ function isPidAlive(pid: number): boolean {
 }
 
 /**
- * Run `task` holding the checkout's lock, and let go of it afterwards, whatever the task did.
+ * Run `task` holding the checkout's lock, and let go of it afterwards, whatever the task did: one
+ * task at a time per repository and branch, so a writer and the eager pull never interleave.
  * Rejects without running the task when another live process holds the lock longer than the wait.
  */
-export function withCheckoutLock<T>(repo: string, branch: string, task: () => Promise<T>, deps: CheckoutLockDeps = {}): Promise<T> {
-  return withLockFile(checkoutLockPath(repo, branch), task, deps)
+export function withCheckoutLock<T>(repo: string, branch: string, deps: CheckoutLockDeps, task: () => Promise<T>): Promise<T> {
+  return withLockFile(checkoutLockPath(repo, branch), deps, task)
 }
 
-/** The same lock at any path: what every writer of the personal folder takes. */
-export async function withLockFile<T>(path: string, task: () => Promise<T>, deps: CheckoutLockDeps = {}): Promise<T> {
+/** The tasks of this process waiting for each lock, by its path, chained in the order they asked. */
+const queues = new Map<string, Promise<unknown>>()
+
+/**
+ * The same lock at any path: what every writer of the personal folder takes. A task runs after
+ * every task this process asked the same lock for before it, and holding the lock file, so no
+ * other process runs one meanwhile.
+ */
+export function withLockFile<T>(path: string, deps: CheckoutLockDeps = {}, task: () => Promise<T>): Promise<T> {
+  const run = () => holding(path, deps, task)
+  const next = (queues.get(path) ?? Promise.resolve()).then(run, run)
+  queues.set(path, next.catch(() => {}))
+  return next
+}
+
+/** Run `task` holding the lock file: taken at once, waited for, or taken over from a dead holder. */
+async function holding<T>(path: string, deps: CheckoutLockDeps, task: () => Promise<T>): Promise<T> {
   const token = `${process.pid} ${randomUUID()}`
   await acquire(path, token, deps.waitMs ?? CHECKOUT_LOCK_WAIT_MS, deps.isAlive ?? isPidAlive)
   try {

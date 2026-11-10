@@ -1,23 +1,16 @@
 import { createServer, type Server, type IncomingMessage, type ServerResponse } from 'node:http'
 import { createServer as createSecureServer } from 'node:https'
 import type { AddressInfo } from 'node:net'
-import type { PreferencesStore } from '../registry.js'
-import type { QuotaSource } from './quota.js'
-import type { ModelsSource } from './models.js'
-import type { AgentUpdates } from './agent-updates.js'
-import type { ProjectErrorsReader } from '../project-errors.js'
-import type { BridgeBrowserOwner } from '../bridge-browser.js'
 import { serveClientBundle } from './static.js'
 import { makeRpcMount, RPC_PREFIX, isSameOriginRequest, isExpectedHost, isJsonRequest, isSecureAddressRequest } from './rpc-serve.js'
+import type { DashboardContext } from '../dashboard-rpc/context.js'
 import { handleViewRequest, keepView, serveWebsite, VIEW_PREFIX } from './website.js'
 import { requestPathname } from '../request-path.js'
 import { BROUGHT_MODULES_PREFIX, COMPUTER_MODULES_PREFIX, MODULES_PREFIX, serveBroughtModuleFile, serveComputerModuleFile, serveModuleFile } from './module-serve.js'
-import type { AddProjectResult, RemoveProjectResult, StartAgentOptions, StartAgentResult, StartedInResult } from './types.js'
-import type { EventsSource, RemoteAgents } from './rpc-serve.js'
 import { handleRelayRequest, RELAY_PREFIX, type RelayHandlers } from './relay-endpoints.js'
 import { noteOwnersName, OWNERS_NAME_HEADER } from './machine-call.js'
 import { handleScreenRequest, kept, SCREEN_PREFIX, type ScreenHandlers } from './screen.js'
-import { BRIDGE_PREFIX, EXPECTED_EXTENSION_VERSION, handleBridgeRequest, type BridgeHandlers } from './bridge-endpoints.js'
+import { BRIDGE_PREFIX, EXPECTED_EXTENSION_VERSION, handleBridgeRequest, type BridgeHandlers, type BridgeSession } from './bridge-endpoints.js'
 import { bridgeQuestions } from './bridge-store.js'
 import { bridgeStarts } from './bridge-starts.js'
 import { WEB_START_PREFIX, handleWebStartRequest, type WebStartHandlers } from './web-start-endpoints.js'
@@ -28,40 +21,10 @@ export interface DashboardOptions {
   /** Port to bind. Default `4200`; pass `0` for an ephemeral port. */
   port?: number
   /**
-   * Called when the browser starts a run (#345): the `sendStart` RPC reaches this through the
-   * wired dashboard context. Wire it to the project's start hook.
+   * What every RPC acts through (rpc-serve.ts): the daemon's own closures, a Start among them, and
+   * its long-lived sources, the quota's among them, which the dashboard stops when it closes.
    */
-  onStart: (
-    prompt: string,
-    options: StartAgentOptions,
-    projectId?: string,
-  ) => StartAgentResult | Promise<StartAgentResult>
-  /**
-   * Called when the browser adds a project (#396): the `sendAddProject` RPC reaches this through
-   * the wired dashboard context. Wire it to install the repo and register it.
-   */
-  onAddProject: (path: string, share: boolean) => Promise<AddProjectResult> | AddProjectResult
-  /** Called when a second `openagent` finds this dashboard running: the `sendStartedAgain` RPC reaches this through the wired dashboard context. */
-  onStartedIn: (folder: string) => Promise<StartedInResult> | StartedInResult
-  /** A Start is near in a project, on a coding agent (the RPC context's `prepareStart`). */
-  onPrepareStart: (projectId: string, driver?: string) => void
-  /** Called when the browser removes a project: the `sendRemoveProject` RPC reaches this through the wired dashboard context. */
-  onRemoveProject: (projectId: string, files: boolean) => Promise<RemoveProjectResult> | RemoveProjectResult
-  /**
-   * The user-preferences store (#410): the `onPreferences` / `savePreferences` RPCs read and
-   * write it through the wired dashboard context.
-   */
-  preferences: PreferencesStore
-  /** Where the usage panel reads the quota from (#533). */
-  quota: QuotaSource
-  /** Which models each coding agent offers, for the agent and model menu. */
-  models: ModelsSource
-  /** Whether a newer version of a coding agent on this computer is out, for the Overview's line. */
-  agentUpdates: AgentUpdates
-  /** What a project currently suffers from (#1500), for the project list to carry. */
-  projectErrors: ProjectErrorsReader
-  /** The daemon's own bridge browser (#1332): its status, and the show/hide/restart Settings asks for. */
-  bridgeBrowser: BridgeBrowserOwner
+  context: DashboardContext
   /**
    * Serve the new dashboard bundle (#405) from this directory — the built SPA
    * (`index.html` + `assets/**`). The daemon also mounts the dashboard's RPC surface
@@ -70,37 +33,14 @@ export interface DashboardOptions {
    */
   clientBundleDir?: string
   /**
-   * The live-events source for a run this daemon is relaying from a saved machine (#1067):
-   * a stream for such a run, else undefined so `onEvents` tails the run's diary off disk.
-   */
-  eventsSource: EventsSource
-  /**
-   * The relayed-agent lookup the read RPCs consult (#1067 slice 2). A run-scoped RPC uses it to
-   * forward a remote agent's read/steer/handoff to the machine that owns it.
-   */
-  remote: RemoteAgents
-  /**
    * Serve a relay-started run's events back to the daemon that relayed it here (#1067): the
    * `/_relay/*` endpoints (start, events, the slice-2 `rpc`, the machine-wide calls, a run's screen,
-   * and a project asked for). The daemon listens on its
-   * own computer only, so a call from another machine reaches them through whatever this
-   * computer opened to the network, which lets in only a machine that holds a key of its own.
+   * and a project asked for), a start going to the context's `startAgent` and a screen to
+   * {@link screen}. The daemon listens on its own computer only, so a call from another machine
+   * reaches them through whatever this computer opened to the network, which lets in only a
+   * machine that holds a key of its own.
    */
-  relay?: {
-    /** This machine's own id for its project cloned from an address, which is how a relayed call names one. */
-    project: (address: string) => Promise<string | undefined>
-    tailEvents: (projectId: string, agentId: string, onEvent: (event: import('../events.js').OpenAgentEvent) => void) => () => void
-    /** Run one whitelisted run-scoped RPC against this daemon's own checkout (#1067 slice 2). */
-    rpc?: (projectId: string, fn: string, args: unknown[]) => Promise<unknown>
-    /** Whether one relayed call only reads here: what a call that may only watch is answered for. */
-    reads?: RelayHandlers['reads']
-    /** Run one whitelisted machine-wide RPC here, for the person's own computer. */
-    machine?: RelayHandlers['machine']
-    /** Where this machine's copy of a project stands, and with `bring` clone it when there is none. */
-    bring?: RelayHandlers['bring']
-    /** The logins of this OpenAgent's person here, on an OpenAgent that is one person's. */
-    logins?: RelayHandlers['logins']
-  }
+  relay?: Omit<RelayHandlers, 'start' | 'screen'>
   /**
    * Where the live screen of a run on this computer answers (screen.ts): what the `/_screen/*`
    * routes, and the relay's for another machine, pass a watcher's calls on to. Absent leaves
@@ -120,7 +60,7 @@ export interface DashboardOptions {
    * The cloud sessions the browser bridge should have a tab open for (#1237). Only the daemon
    * wires one, since it is the process that can see every project's runs.
    */
-  bridgeSessions?: () => Promise<import('./bridge-endpoints.js').BridgeSession[]>
+  bridgeSessions?: () => Promise<BridgeSession[]>
   /**
    * The secure address (#1919): also answer over HTTPS on `port`, with the certificate made on
    * this computer for `name`. Absent serves plain HTTP only.
@@ -148,12 +88,17 @@ export interface Dashboard {
  * mounts its RPC surface at `/_rpc` — the calls and the live-event stream. The dashboard reads a
  * run's own diary over that stream and steers the run through the files its tool reads, so there is
  * no in-process event stream here; the server is a static-bundle + RPC host. The RPCs run in the
- * daemon's own process, so `sendStart` / `sendAddProject` call the daemon's own closures via
- * {@link DashboardOptions.onStart} / {@link DashboardOptions.onAddProject}.
+ * daemon's own process, so `sendStart` / `sendAddProject` call the daemon's own closures through
+ * {@link DashboardOptions.context}.
  */
 export async function startDashboard(opts: DashboardOptions): Promise<Dashboard> {
   const port = opts.port ?? 4200
   const clientBundleDir = opts.clientBundleDir
+
+  // What the RPCs act through is wired first: the daemon's own callers of them (its syncs) need it
+  // whether or not a page is served.
+  const { context } = opts
+  const rpcMount = makeRpcMount(context)
 
   // A broken install ships no built bundle (the published package always does), so serve
   // 503 for everything rather than stand up a half-wired mount. Returning here lets the
@@ -166,31 +111,10 @@ export async function startDashboard(opts: DashboardOptions): Promise<Dashboard>
     return listenDashboard(server, port, () => closeServer(server))
   }
 
-  // The usage panel polls for the dashboard's whole life, not just during an agent:
-  // it has to show where the account stands while nothing is running (#533).
-  const quota = opts.quota
-  const rpcMount = makeRpcMount({
-    startAgent: opts.onStart,
-    addProject: opts.onAddProject,
-    startedIn: opts.onStartedIn,
-    removeProject: opts.onRemoveProject,
-    prepareStart: opts.onPrepareStart,
-    eventsSource: opts.eventsSource,
-    remote: opts.remote,
-    preferences: opts.preferences,
-    projectErrors: opts.projectErrors,
-    bridgeBrowser: opts.bridgeBrowser,
-    quota,
-    models: opts.models,
-    agentUpdates: opts.agentUpdates,
-  })
-
   // The machine-to-daemon relay endpoints (#1067): wired only when an events tail is supplied.
   const localScreen = opts.screen ? kept(opts.screen) : undefined
-  const relayHandlers: RelayHandlers | undefined = opts.relay
-    ? { project: opts.relay.project, start: opts.onStart, tailEvents: opts.relay.tailEvents, ...(opts.relay.rpc ? { rpc: opts.relay.rpc } : {}), ...(opts.relay.reads ? { reads: opts.relay.reads } : {}), ...(opts.relay.machine ? { machine: opts.relay.machine } : {}), ...(opts.relay.bring ? { bring: opts.relay.bring } : {}), ...(opts.relay.logins ? { logins: opts.relay.logins } : {}), ...(localScreen ? { screen: localScreen } : {}) }
-    : undefined
-  const screenHandlers: ScreenHandlers | undefined = localScreen ? { local: localScreen, remote: (projectId, agentId) => opts.remote.target(agentId, projectId) } : undefined
+  const relayHandlers: RelayHandlers | undefined = opts.relay ? { ...opts.relay, start: context.startAgent, ...(localScreen ? { screen: localScreen } : {}) } : undefined
+  const screenHandlers: ScreenHandlers | undefined = localScreen ? { local: localScreen, remote: (projectId, agentId) => context.remote.target(agentId, projectId) } : undefined
 
   // The browser bridge (#1237). Off unless a token was supplied, and it carries that token itself.
   const bridgeHandlers: BridgeHandlers | undefined = opts.bridgeToken
@@ -313,9 +237,10 @@ export async function startDashboard(opts: DashboardOptions): Promise<Dashboard>
   const server = createServer(handle)
   const secureServer = opts.secure ? createSecureServer({ key: opts.secure.key, cert: opts.secure.cert }, handle) : undefined
   const close = async () => {
-    // Stop polling with the server: the poller outlives every agent by design,
-    // so nothing else would ever end it.
-    quota.stop()
+    // Stop polling with the server: the usage panel polls for the dashboard's whole life, not just
+    // during an agent, to show where the account stands while nothing runs (#533), so nothing
+    // else would ever end it.
+    context.quota.stop()
     await Promise.all([closeServer(server), secureServer ? closeServer(secureServer) : undefined])
   }
   const dashboard = await listenDashboard(server, port, close)

@@ -1,6 +1,6 @@
-import { useEffect, useId, useRef, useState, type ComponentType, type ReactNode } from 'react'
+import { useId, useRef, useState, type ComponentType, type ReactNode } from 'react'
 import { Dialog as BaseDialog } from '@base-ui/react/dialog'
-import { ArrowLeft, Bell, Bot, ChevronRight, Database, FolderGit2, Globe, KeyRound, Palette, Puzzle, UserRound, X, FolderSearch } from 'lucide-react'
+import { ArrowLeft, Bell, Bot, ChevronRight, Database, FolderGit2, Globe, Palette, Puzzle, UserRound, X, FolderSearch } from 'lucide-react'
 import { ACCENTS, DEFAULT_ACCENT_LABELS, accentOf, CODE_FONTS, DOCUMENT_FONTS, DRIVERS, FONTS, PALETTES, PALETTE_LABELS, type Accent, type CodeFont, type DocumentFont, type Font, type Palette as ColourPalette } from '../../src/client.js'
 import { driverOptions, useModels } from '../lib/models.js'
 import { NO_MODEL_PINNED } from '../lib/agent-settings.js'
@@ -104,32 +104,20 @@ export function SettingsDialog({
   }
   const yours = [...own, ...mounted.filter(section => section.computer).map(section => moduleEntry(section, []))]
   const forProject = mounted.filter(section => !section.computer && (project ? section.projects.includes(project.id) : section.projects.length > 0))
-  const ownForProject: Entry[] = [
-    ...(projects.length > 0
+  // A page of the dashboard's own for one project at a time: with every project picked, it asks for one.
+  const oneProject = (id: string, title: string, icon: Entry['icon'], Page: ComponentType<{ projectId: string }>, words: string): Entry => ({
+    id,
+    title,
+    icon,
+    body: project ? <Page projectId={project.id} /> : <PickProject words={words} projects={projects} onPick={setPicked} />,
+  })
+  const ownForProject: Entry[] =
+    projects.length > 0
       ? [
-          {
-            id: SKILLS_ENTRY,
-            title: 'Skills',
-            icon: Puzzle,
-            body: project ? (
-              <SkillsSettings projectId={project.id} />
-            ) : (
-              <PickProject words="Skills are written into a project’s own repository, one project at a time. Pick a project." projects={projects} onPick={setPicked} />
-            ),
-          },
-          {
-            id: PROJECT_AGENT_DATA_ENTRY,
-            title: 'Agent data',
-            icon: Database,
-            body: project ? (
-              <ProjectAgentDataSettings projectId={project.id} />
-            ) : (
-              <PickProject words="Each project keeps its agent data in one place, your folder or its own repository. Pick a project." projects={projects} onPick={setPicked} />
-            ),
-          },
+          oneProject(SKILLS_ENTRY, 'Skills', Puzzle, SkillsSettings, 'Skills are written into a project’s own repository, one project at a time. Pick a project.'),
+          oneProject(PROJECT_AGENT_DATA_ENTRY, 'Agent data', Database, ProjectAgentDataSettings, 'Each project keeps its agent data in one place, your folder or its own repository. Pick a project.'),
         ]
-      : []),
-  ]
+      : []
   const projectEntries = [...ownForProject, ...forProject.map(section => moduleEntry(section, project ? [project] : projects))]
   const shown = [...yours, ...projectEntries].find(e => e.id === entry)
   const current = shown ?? yours[0]!
@@ -522,13 +510,13 @@ function BridgeBrowserChoice({ daemonBrowser, onChange }: { daemonBrowser: boole
           true,
           'A browser the daemon runs — recommended',
           'Chrome for Testing, downloaded once, signed in once, kept minimized. Web runs work with your own Chrome closed.',
-          <BridgeBrowserSettings enabled />,
+          <BridgeBrowserSettings />,
         )}
         {option(
           false,
           'Your own Chrome',
           'Install the extension, open its options and paste the token. Web runs need your Chrome open.',
-          <BridgeSettings enabled onChange={() => {}} />,
+          <BridgeSettings />,
         )}
       </RadioGroup>
     </div>

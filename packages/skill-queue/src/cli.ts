@@ -1,17 +1,12 @@
-import { parseArgs } from 'node:util'
 import { join } from 'node:path'
-import { checkoutRoot, gitReason, nodeBranchFileFs, nodeGitRunner, openProjectReader, writeProjectDataDetached, type ProjectReader, type GitRunner } from '@openagt/agent-data'
+import { GIT_FAILED, Refused, UsageError, commandReader, commandWrite, nodeBranchFileFs, nodeGitRunner, parseCommandArgs, runCommandLine, type Command, type GitRunner } from '@openagt/agent-data'
 import { QUEUE_FILE } from './names.js'
-import { appendQueueEntry, insertQueueEntry, parseQueueEntries, parseQueueSections, readQueue, removeQueueEntry } from './queue.js'
+import { appendQueueEntry, insertQueueEntry, parseQueueEntries, parseQueueSections, removeQueueEntry } from './queue.js'
 
 /**
  * The command line over the package: the same operations a daemon calls, for an agent (and a
- * person) in a shell, in any clone of the repository.
- *
- * The contract: JSON on stdout, one line for a person on stderr, and the exit code says how it
- * went — 0 for a result, 1 for a refusal or a git failure, 2 for a command that could not be
- * read. A refusal is a rule saying no (there is no such entry); it is reported on stdout as
- * `{ ok: false, reason }` so a caller parsing the output learns why, and on stderr so a person does.
+ * person) in a shell, in any clone of the repository. It answers as every OpenAgent command does
+ * (`runCommandLine`); a refusal here is a rule saying no: there is no such entry.
  *
  * A project kept on this machine reads and writes its directory in the personal folder, one
  * commit per write. A shared project reads origin's copy of its branch, fetched first, so a
@@ -49,146 +44,66 @@ export interface CliIo {
   stderr: (line: string) => void
 }
 
-/** A refusal: a rule said no, and the caller learns which. */
-export type CliRefusal = { ok: false; reason: string; [key: string]: unknown }
-
-/** Thrown inside a command to end it with a refusal. */
-class Refused extends Error {
-  constructor(
-    readonly outcome: CliRefusal,
-    readonly line: string,
-  ) {
-    super(line)
-  }
-}
-
-/** Thrown inside a command for an argument that cannot be read: usage on stderr, exit 2. */
-class Usage extends Error {}
-
 /** Run the CLI: `argv` is everything after the program name. Resolves to the exit code. */
-export async function runCli(argv: string[], io: CliIo, git: GitRunner = nodeGitRunner()): Promise<number> {
-  const [command, ...rest] = argv
-  const bare = command === undefined || command.startsWith('--')
-  const run = bare ? list : Object.hasOwn(COMMANDS, command) ? COMMANDS[command] : undefined
-  if (!run) {
-    io.stderr(USAGE)
-    return 2
-  }
-  try {
-    io.stdout(JSON.stringify(await run(bare ? argv : rest, io, git)))
-    return 0
-  } catch (err) {
-    if (err instanceof Usage) {
-      io.stderr(`${err.message}\n\n${USAGE}`)
-      return 2
-    }
-    if (err instanceof Refused) {
-      io.stdout(JSON.stringify(err.outcome))
-      io.stderr(err.line)
-      return 1
-    }
-    const detail = gitReason(err)
-    io.stdout(JSON.stringify({ ok: false, reason: 'git-failed', detail }))
-    io.stderr(detail)
-    return 1
-  }
+export function runCli(argv: string[], io: CliIo, git: GitRunner = nodeGitRunner()): Promise<number> {
+  return runCommandLine(argv, io, { usage: USAGE, commands: COMMANDS, bare: list, failure: GIT_FAILED }, io, git)
 }
-
-type Command = (args: string[], io: CliIo, git: GitRunner) => Promise<unknown>
 
 /**
  * The bare command: the open entries, in order of work. `--local` reads this machine's copy, no
  * fetch; `--full` prints each entry with the priority of the section it sits in.
  */
-const list: Command = async (args, io, git) => {
-  const { values } = parse(args, { local: { type: 'boolean' }, full: { type: 'boolean' } }, 0)
-  let md: string
-  if (values.local) {
-    const root = await inRepo(() => checkoutRoot(io.cwd, git))
-    md = (await readQueue(root)) ?? ''
-  } else {
-    const reader = await open(io.cwd, git)
-    md = (await reader.read(QUEUE_FILE)) ?? ''
-  }
+const list: Command<[CliIo, GitRunner]> = async (args, io, git) => {
+  const { values } = parseCommandArgs(args, { local: { type: 'boolean' }, full: { type: 'boolean' } }, 0)
+  const md = (await queueText(io.cwd, values.local, git)) ?? ''
   return values.full ? parseQueueSections(md) : parseQueueEntries(md)
 }
 
-const COMMANDS: Record<string, Command> = {
+const COMMANDS: Record<string, Command<[CliIo, GitRunner]>> = {
   async add(args, io, git) {
-    const { positionals, values } = parse(args, { priority: { type: 'string' } }, 1)
+    const { positionals, values } = parseCommandArgs(args, { priority: { type: 'string' } }, 1)
     const entry = positionals[0]!.trim()
-    if (!entry) throw new Usage('the entry is empty')
+    if (!entry) throw new UsageError('the entry is empty')
     const priority = values.priority === undefined ? undefined : priorityArg(values.priority)
-    await write(io.cwd, `queue add: ${entry}`, async dir => {
-      const md = await readOr(dir, '')
+    await commandWrite(io.cwd, `queue add: ${entry}`, async dir => {
+      const md = await queueIn(dir)
       await writeQueue(dir, priority === undefined ? appendQueueEntry(md, entry) : insertQueueEntry(md, entry, priority))
     }, git)
     return { ok: true, entry, ...(priority === undefined ? {} : { priority }) }
   },
 
   async done(args, io, git) {
-    const { positionals } = parse(args, {}, 1)
+    const { positionals } = parseCommandArgs(args, {}, 1)
     const entry = positionals[0]!.trim()
-    let found = false
-    await write(io.cwd, `queue done: ${entry}`, async dir => {
-      const md = await readOr(dir, '')
-      found = parseQueueEntries(md).includes(entry)
-      if (found) await writeQueue(dir, removeQueueEntry(md, entry))
+    const found = await commandWrite(io.cwd, `queue done: ${entry}`, async dir => {
+      const md = await queueIn(dir)
+      if (!parseQueueEntries(md).includes(entry)) return false
+      await writeQueue(dir, removeQueueEntry(md, entry))
+      return true
     }, git)
     if (!found) throw new Refused({ ok: false, reason: 'no-entry', entry }, `no open queue entry reads "${entry}"`)
     return { ok: true, entry }
   },
 }
 
-/** The queue file inside a checkout, read as `fallback` when absent. */
-async function readOr(dir: string, fallback: string): Promise<string> {
-  return nodeBranchFileFs().read(join(dir, QUEUE_FILE)).catch(() => fallback)
+/** The queue file inside a checkout; an absent one reads as an empty queue. */
+async function queueIn(dir: string): Promise<string> {
+  return nodeBranchFileFs().read(join(dir, QUEUE_FILE)).catch(() => '')
 }
 
 async function writeQueue(dir: string, md: string): Promise<void> {
   await nodeBranchFileFs().write(join(dir, QUEUE_FILE), md)
 }
 
-/** The project's data opened for reading, from wherever the command runs; outside a repo, a refusal. */
-async function open(cwd: string, git: GitRunner): Promise<ProjectReader> {
-  await inRepo(() => checkoutRoot(cwd, git))
-  return openProjectReader(cwd, { git })
-}
-
-/** One write as a one-shot writer: to origin when the project is shared, else as a local commit. */
-async function write(cwd: string, message: string, op: (dir: string) => Promise<void>, git: GitRunner): Promise<void> {
-  await inRepo(() => checkoutRoot(cwd, git))
-  await writeProjectDataDetached(cwd, message, op, { git })
+/**
+ * The queue's markdown as a read sees it, `undefined` when the project has none: origin's copy, or
+ * with `--local` this machine's copy with no fetch, for the dashboard's polling.
+ */
+async function queueText(cwd: string, local: boolean | undefined, git: GitRunner): Promise<string | undefined> {
+  return (await commandReader(cwd, local, git)).read(QUEUE_FILE)
 }
 
 function priorityArg(value: string): number {
-  if (!/^\d+$/.test(value) || Number(value) > 10) throw new Usage(`--priority takes 0 to 10, got ${value}`)
+  if (!/^\d+$/.test(value) || Number(value) > 10) throw new UsageError(`--priority takes 0 to 10, got ${value}`)
   return Number(value)
-}
-
-/**
- * Outside a repo, the commands have nothing to act on: said as a refusal, not a git failure.
- * Only git's own "not a git repository" reads as that; a timeout, a missing git, or a corrupt
- * repo stays the failure it is.
- */
-async function inRepo<T>(read: () => Promise<T>): Promise<T> {
-  try {
-    return await read()
-  } catch (err) {
-    if (!/not a git repository/i.test(err instanceof Error ? err.message : String(err))) throw err
-    throw new Refused({ ok: false, reason: 'not-a-repo' }, 'not inside a git repository')
-  }
-}
-
-type Options = Record<string, { type: 'string' | 'boolean' }>
-
-/** `parseArgs` with the positional count checked: too few or too many is a usage error. */
-function parse<O extends Options>(args: string[], options: O, min: number, max: number = min) {
-  try {
-    const parsed = parseArgs({ args, options, allowPositionals: true, strict: true })
-    if (parsed.positionals.length < min || parsed.positionals.length > max) throw new Usage(`expected ${max === min ? min : `${min} to ${max}`} argument(s), got ${parsed.positionals.length}`)
-    return parsed
-  } catch (err) {
-    throw err instanceof Usage ? err : new Usage(err instanceof Error ? err.message : String(err))
-  }
 }

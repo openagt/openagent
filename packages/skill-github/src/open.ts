@@ -1,5 +1,5 @@
-import { nodeGitRunner, type GitRunner } from '@openagt/agent-data'
-import { errorMessage, nodeGhRunner, type GhRunner } from './gh.js'
+import { errorMessage, nodeGitRunner, type GitRunner } from '@openagt/agent-data'
+import { nodeGhRunner, type GhRunner } from './gh.js'
 import { armMerge, type MergeArming, type WatchStarter } from './merge.js'
 import { openRequestOf } from './requests.js'
 import { pushFork } from './home.js'

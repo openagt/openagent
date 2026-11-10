@@ -8,6 +8,7 @@ import {
   bucketUnionRange,
   defaultView,
   hasAnyFilter,
+  rangeClauses,
   rangeFacetCounts,
   sortByKey,
   stageFacetCounts,
@@ -81,11 +82,6 @@ function FacetTrigger({ label, active, ...props }: { label: string; active: numb
   )
 }
 
-/** How many clauses a range facet has active — what its trigger badge shows. */
-function rangeClauses(f: RangeFilter): number {
-  return f.buckets.length + (f.range ? 1 : 0) + (f.none ? 1 : 0)
-}
-
 /**
  * One numeric facet (#1144): quick bucket checkboxes, a fine-grained min-max slider, and the
  * "names no value" row. Buckets and slider drive the same selection, so the update helpers clear
@@ -122,42 +118,7 @@ function RangeFacet({
           ))}
         </div>
         <Separator className="my-2" />
-        {(() => {
-          // The slider mirrors the bucket selection whenever it can: a contiguous union (one
-          // bucket, or adjacent ones) IS a range, so the thumbs sit on it and dragging refines
-          // from there (withRange takes over and clears the buckets). Only a selection that skips
-          // a middle bucket — which no [min,max] pair can express — dims the slider; still live,
-          // not disabled, so the gray reads as "not currently applied" rather than a dead end.
-          const union = bucketUnionRange(filter, buckets)
-          const dimmed = filter.buckets.length > 0 && union === null
-          const displayed = filter.range ?? union
-          return (
-            <div
-              className={cn('px-1', dimmed && 'opacity-40')}
-              data-dimmed={dimmed || undefined}
-              title={dimmed ? 'The selected buckets skip a middle span — dragging the range replaces them' : undefined}
-            >
-              <div className="flex items-center justify-between text-xs text-muted-foreground">
-                <span>Range: {displayed ? `${displayed[0]}–${displayed[1]}` : dimmed ? 'not one span' : 'any'}</span>
-                {filter.range && (
-                  <button
-                    type="button"
-                    aria-label={`Clear the ${label.toLowerCase()} range`}
-                    onClick={() => onChange(withRange(filter, null))}
-                    className="text-muted-foreground hover:text-foreground"
-                  >
-                    <X className="h-3 w-3" aria-hidden />
-                  </button>
-                )}
-              </div>
-              <RangeSlider
-                aria-label={`${label} range`}
-                value={displayed ?? [0, 10]}
-                onValueChange={next => onChange(withRange(filter, next))}
-              />
-            </div>
-          )
-        })()}
+        <RangeRow label={label} buckets={buckets} filter={filter} onChange={onChange} />
         {(counts.none > 0 || filter.none) && (
           <>
             <Separator className="my-2" />
@@ -166,6 +127,55 @@ function RangeFacet({
         )}
       </PopoverContent>
     </Popover>
+  )
+}
+
+/**
+ * A numeric facet's slider. It mirrors the bucket selection whenever it can: a contiguous union
+ * (one bucket, or adjacent ones) IS a range, so the thumbs sit on it and dragging refines from
+ * there (withRange takes over and clears the buckets). Only a selection that skips a middle
+ * bucket — which no [min,max] pair can express — dims the slider; still live, not disabled, so
+ * the gray reads as "not currently applied" rather than a dead end.
+ */
+function RangeRow({
+  label,
+  buckets,
+  filter,
+  onChange,
+}: {
+  label: string
+  buckets: readonly RangeBucket[]
+  filter: RangeFilter
+  onChange: (next: RangeFilter) => void
+}) {
+  const union = bucketUnionRange(filter, buckets)
+  const dimmed = filter.buckets.length > 0 && union === null
+  const displayed = filter.range ?? union
+  return (
+    <div
+      className={cn('px-1', dimmed && 'opacity-40')}
+      data-dimmed={dimmed || undefined}
+      title={dimmed ? 'The selected buckets skip a middle span — dragging the range replaces them' : undefined}
+    >
+      <div className="flex items-center justify-between text-xs text-muted-foreground">
+        <span>Range: {displayed ? `${displayed[0]}–${displayed[1]}` : dimmed ? 'not one span' : 'any'}</span>
+        {filter.range && (
+          <button
+            type="button"
+            aria-label={`Clear the ${label.toLowerCase()} range`}
+            onClick={() => onChange(withRange(filter, null))}
+            className="text-muted-foreground hover:text-foreground"
+          >
+            <X className="h-3 w-3" aria-hidden />
+          </button>
+        )}
+      </div>
+      <RangeSlider
+        aria-label={`${label} range`}
+        value={displayed ?? [0, 10]}
+        onValueChange={next => onChange(withRange(filter, next))}
+      />
+    </div>
   )
 }
 
@@ -263,7 +273,7 @@ export function TicketFilterBar({
         noneLabel="No priority"
         buckets={PRIORITY_BUCKETS}
         filter={f.priority}
-        counts={rangeFacetCounts(rows, f, 'priority', PRIORITY_BUCKETS)}
+        counts={rangeFacetCounts(rows, f, 'priority')}
         onChange={priority => set({ priority })}
       />
 
@@ -305,7 +315,7 @@ export function TicketFilterBar({
           noneLabel="No effort"
           buckets={EFFORT_BUCKETS}
           filter={f.effort}
-          counts={rangeFacetCounts(rows, f, 'effort', EFFORT_BUCKETS)}
+          counts={rangeFacetCounts(rows, f, 'effort')}
           onChange={effort => set({ effort })}
         />
       )}
@@ -316,7 +326,7 @@ export function TicketFilterBar({
           noneLabel="No uncertainty"
           buckets={UNCERTAINTY_BUCKETS}
           filter={f.uncertainty}
-          counts={rangeFacetCounts(rows, f, 'uncertainty', UNCERTAINTY_BUCKETS)}
+          counts={rangeFacetCounts(rows, f, 'uncertainty')}
           onChange={uncertainty => set({ uncertainty })}
         />
       )}

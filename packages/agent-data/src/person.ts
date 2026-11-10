@@ -1,6 +1,6 @@
 import { mkdir, readFile, rm, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
-import { personalFolder, withPersonalFolder, type ProjectDataDeps } from './project-data.js'
+import { personalFolder, withPersonalFolder, type PersonalFolderDeps } from './personal-folder.js'
 import type { FileBranchWrite } from './file-branch.js'
 
 /**
@@ -53,7 +53,7 @@ export async function readPersonRecord(folder: string = personalFolder()): Promi
 }
 
 /** Write the person's file, committed in the personal folder, so it goes to every computer that syncs it. */
-export async function writePersonRecord(record: PersonRecord, deps: ProjectDataDeps = {}): Promise<FileBranchWrite> {
+export async function writePersonRecord(record: PersonRecord, deps: PersonalFolderDeps = {}): Promise<FileBranchWrite> {
   const folder = deps.folder ?? personalFolder()
   const body = JSON.stringify({ name: record.name.trim(), ...(record.picture ? { picture: record.picture } : {}), ...(record.github ? { github: record.github } : {}) }, null, 2) + '\n'
   return withPersonalFolder(
@@ -68,7 +68,7 @@ export async function writePersonRecord(record: PersonRecord, deps: ProjectDataD
 }
 
 /** Forget the person's file: their name is the computer's again, with no picture. */
-export async function removePersonRecord(deps: ProjectDataDeps = {}): Promise<FileBranchWrite> {
+export async function removePersonRecord(deps: PersonalFolderDeps = {}): Promise<FileBranchWrite> {
   const folder = deps.folder ?? personalFolder()
   return withPersonalFolder(folder, 'forget the person', () => rm(join(folder, PERSON_FILE), { force: true }), deps)
 }

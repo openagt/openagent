@@ -5,7 +5,7 @@ import { MAX_AGENTS, OWN_AUTOMATIONS_DIR, type AgentName } from '../src/names.js
 import { parseInterval, parseTimeOfDay } from '../src/pace.js'
 import { atRowsPace, draftProblem, draftRow, editArgs, editedWords, keptWhereHint, ownPaceArgs, removeWarning, removedWords, savedFile, saysTheSame, type AutomationDraft, type OpenedAutomation, type OwnPace } from './automation-form.js'
 import { AgentsFields, PaceFields, PublishField, RunsOnFields, SaidFields, SaidShown, Section, type ModelDraft } from './fields.js'
-import { EACH_KEEPS_OWN, agentOf, agentsArgs, agentsDraftOf, atOnce, atOnceWords, draftOf, isOwn, pace, runsOnWords, paceArgs, paceProblem, publishes, rowTitle, saysAtOnce, spelled, withDraft, type AgentModels, type AgentsDraft, type PaceDraft, type SchedulerCommand } from './schedulers.js'
+import { EACH_KEEPS_OWN, agentOf, agentsArgs, agentsDraftOf, atOnce, atOnceWords, draftOf, isOwn, pace, runsOnWords, paceArgs, paceProblem, publishes, rowTitle, saysAtOnce, spelled, stopped, withDraft, type AgentModels, type AgentsDraft, type PaceDraft, type SchedulerCommand } from './schedulers.js'
 
 // The Edit panel of the Automations page: one panel, with the same parts in the same order, for
 // every row. What it does; when it runs: what it waits for, and how long it waits after a start; how many agents at once; what it runs on, a coding agent
@@ -26,9 +26,6 @@ import { EACH_KEEPS_OWN, agentOf, agentsArgs, agentsDraftOf, atOnce, atOnceWords
 // taken; one that is not taken stops there and says why, with everything still as picked.
 
 const lower = (text: string): string => text.charAt(0).toLowerCase() + text.slice(1)
-
-/** A sentence with its full stop, added only when it has none. */
-const stopped = (text: string): string => (/[.!?]$/.test(text.trim()) ? text.trim() : `${text.trim()}.`)
 
 /** What a save of an automation's file answered: the file, where a run's checkout starts, and whether it is kept on this machine alone. */
 type Written = ReturnType<typeof savedFile>

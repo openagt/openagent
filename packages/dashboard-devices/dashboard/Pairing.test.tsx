@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, test, vi } from 'vitest'
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { ModuleHostContext, type ModuleCommandResult, type ModuleHost } from '@openagt/dashboard/module'
+import { fakeHost } from '@openagt/dashboard/module/testing'
 import { AskPopup } from './Pairing.js'
 
 // The popup over every page: a computer on this Wi-Fi asks to connect.
@@ -25,7 +26,7 @@ function host(first: object[]) {
   })
   return {
     // A whole host: one with no runCommand would be taken for the shell's services, and bound to the real calls.
-    host: { package: '@openagt/dashboard-devices', runCommand: vi.fn(), runComputerCommand } as unknown as ModuleHost,
+    host: fakeHost('@openagt/dashboard-devices', { runComputerCommand }),
     runComputerCommand,
     change(next: object[]) {
       asks = next
@@ -86,7 +87,7 @@ describe('A computer wants to connect', () => {
     vi.useFakeTimers({ shouldAdvanceTime: true })
     try {
       const runComputerCommand = vi.fn(async (): Promise<ModuleCommandResult> => ({ ok: false, error: 'devices has no command asks' }))
-      show({ package: '@openagt/dashboard-devices', runCommand: vi.fn(), runComputerCommand } as unknown as ModuleHost)
+      show(fakeHost('@openagt/dashboard-devices', { runComputerCommand }))
       await waitFor(() => expect(runComputerCommand).toHaveBeenCalledTimes(1))
       await vi.advanceTimersByTimeAsync(29_000)
       expect(runComputerCommand).toHaveBeenCalledTimes(1)

@@ -1,18 +1,9 @@
 import type { CSSProperties } from 'react'
+import { CommandChip, CommandLine, PmTabs, pickedCommand } from './commands'
 import { useCopy } from './copy'
-import { kickerStyle, mono } from './ui'
+import { BADGES, kickerStyle, mono } from './ui'
 import { useDashboardHref } from './ViewToggle'
 
-// Trying runs the dashboard once; installing starts it at every login, at openagent.build (#1919).
-export const PMS = {
-  npm: { try: 'npx @openagt/dashboard', install: 'npx @openagt/install' },
-  pnpm: { try: 'pnpm dlx @openagt/dashboard', install: 'pnpm dlx @openagt/install' },
-  bun: { try: 'bunx @openagt/dashboard', install: 'bunx @openagt/install' },
-  yarn: { try: 'yarn dlx @openagt/dashboard', install: 'yarn dlx @openagt/install' },
-} as const
-export type Pm = keyof typeof PMS
-
-const dollarStyle: CSSProperties = { userSelect: 'none', color: '#a7c080' }
 const commentStyle: CSSProperties = { color: '#859289' }
 const cmdLineStyle: CSSProperties = { display: 'flex', flexWrap: 'wrap', gap: '2px 16px' }
 
@@ -41,24 +32,8 @@ function Badge({ label, copied }: { label: string; copied: boolean }) {
   )
 }
 
-// The choice lives on <html data-pm>, set before first paint by the +Head
-// script (no FOUC) and mirrored to localStorage; CSS shows the matching
-// variant, so no React state is involved.
-export const currentPm = (): Pm => {
-  const p = document.documentElement.dataset.pm
-  return p && p in PMS ? (p as Pm) : 'npm'
-}
-
-export const pickPm = (name: Pm) => {
-  document.documentElement.dataset.pm = name
-  try {
-    localStorage.setItem('pm', name)
-  } catch {}
-}
-
 export function Hero() {
   const tryCopy = useCopy()
-  const installCopy = useCopy()
   const dashboardHref = useDashboardHref()
 
   return (
@@ -85,13 +60,7 @@ export function Hero() {
           fontFamily: mono,
         }}
       >
-        {(
-          [
-            ['100% Open Source', '#a7c080'],
-            ['100% Free', '#dbbc7f'],
-            ['100% Local', '#7fbbb3'],
-          ] as const
-        ).map(([label, color]) => (
+        {BADGES.map(([label, color]) => (
           <span
             key={label}
             style={{
@@ -201,21 +170,12 @@ export function Hero() {
                 borderBottom: '1px solid #3d484d',
               }}
             >
-              {(Object.keys(PMS) as Pm[]).map((name) => (
-                <button
-                  key={name}
-                  className={'pm-tab pm-tab-' + name}
-                  onClick={() => pickPm(name)}
-                  style={{ borderRadius: 7, padding: '4px 13px', fontFamily: mono, fontSize: 12, cursor: 'pointer' }}
-                >
-                  {name}
-                </button>
-              ))}
+              <PmTabs />
               <Badge label={tryCopy.copied ? 'copied!' : 'copy'} copied={tryCopy.copied} />
             </div>
             <div
               className="copy-box"
-              onClick={(e) => tryCopy.copy(PMS[currentPm()].try, e)}
+              onClick={(e) => tryCopy.copy(pickedCommand('try'), e)}
               style={{
                 position: 'relative',
                 cursor: 'pointer',
@@ -228,14 +188,7 @@ export function Hero() {
               }}
             >
               <div style={cmdLineStyle}>
-                <span>
-                  <span style={dollarStyle}>$ </span>
-                  {(Object.keys(PMS) as Pm[]).map((name) => (
-                    <span key={name} className={'pm-only pm-only-' + name}>
-                      {PMS[name].try}
-                    </span>
-                  ))}
-                </span>
+                <CommandLine command="try" />
                 <span style={commentStyle}># One-shot (no install)</span>
               </div>
             </div>
@@ -255,55 +208,7 @@ export function Hero() {
           }}
         >
           Or install:
-          <span
-            className="install-chip"
-            onClick={(e) => installCopy.copy(PMS[currentPm()].install, e)}
-            style={{
-              position: 'relative',
-              cursor: 'pointer',
-              display: 'inline-flex',
-              alignItems: 'center',
-              background: '#232a2e',
-              border: '1px solid #475258',
-              borderRadius: 7,
-              padding: '4px 10px',
-              fontFamily: mono,
-              fontSize: 12.5,
-              wordBreak: 'break-all',
-            }}
-          >
-            <span>
-              <span style={dollarStyle}>$ </span>
-              {(Object.keys(PMS) as Pm[]).map((name) => (
-                <span key={name} className={'pm-only pm-only-' + name}>
-                  {PMS[name].install}
-                </span>
-              ))}
-            </span>
-            <span
-              className={'copy-tip-side' + (installCopy.copied ? ' copied' : '')}
-              style={{
-                position: 'absolute',
-                left: 'calc(100% + 11px)',
-                top: '50%',
-                transform: 'translateY(-50%)',
-                background: '#14181b',
-                color: '#d3c6aa',
-                fontWeight: 600,
-                fontSize: 9.5,
-                letterSpacing: '0.1em',
-                textTransform: 'uppercase',
-                borderRadius: 4,
-                padding: '4px 8px',
-                whiteSpace: 'nowrap',
-                transition: 'opacity 0.15s',
-                pointerEvents: 'none',
-                userSelect: 'none',
-              }}
-            >
-              {installCopy.copied ? 'copied!' : 'copy'}
-            </span>
-          </span>
+          <CommandChip command="install" />
         </p>
       </div>
 

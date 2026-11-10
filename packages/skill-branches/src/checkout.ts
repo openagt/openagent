@@ -4,7 +4,6 @@ import { addWorktree, attachWorktree, leaveOut, type AddedWorktree, type LeaveOu
 import { linkDependencies } from './worktree-deps.js'
 import { reconcileBranchLinks } from './branch-links.js'
 import { linkSkill, type SkillLink } from './skill-links.js'
-import { linkOwnCommand } from './command-link.js'
 
 /**
  * A checkout as an agent gets it (#1725): the worktree, `.branches/` hidden from git, the parent's
@@ -48,8 +47,7 @@ export async function attachCheckout(
  */
 export async function relinkCheckout(repo: string, path: string, opts: CheckoutSkills = {}, git: GitRunner = nodeGitRunner()): Promise<void> {
   await leaveOut(path, opts.without, git)
-  await linkOwnCommand(repo, path, git)
-  await linkSkill(repo, path, undefined, git, opts.skills)
+  await linkSkill(repo, path, opts.skills, git)
 }
 
 /**
@@ -65,7 +63,6 @@ async function settle(repo: string, path: string, git: GitRunner, skills: readon
   await excludeFromGit(repo, `/${BRANCHES_DIR}`, undefined, git).catch(() => {})
   await linkDependencies(repo, path).catch(() => [])
   // After the project's own tools: a project that installed this package keeps its copy of the command.
-  await linkOwnCommand(repo, path, git)
-  await linkSkill(repo, path, undefined, git, skills)
+  await linkSkill(repo, path, skills, git)
   await reconcileBranchLinks(repo, { git }).catch(() => {})
 }

@@ -1,21 +1,21 @@
 import { hostname } from 'node:os'
 import { mkdir, stat, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
-import { AgentExitError, ConversationGoneError, continuationPrompt, logDiaryFile, parseQuestion, promptLines, promptOf, takeInbox, type Driver, type DriverPromptOptions, type DriverSession, type DriverTurn, type PromptLine, type LogEndStatus, type Question } from '@openagt/agent-driver'
-import { nodeGitRunner, sessionsHomeOf, type GitRunner } from '@openagt/agent-data'
+import { AgentExitError, ConversationGoneError, continuationPrompt, logDiaryFile, parseQuestion, promptLines, promptOf, takeInbox, type Driver, type DriverPromptOptions, type DriverSession, type DriverTurn, type PromptLine, type LogEndStatus, type Question, type SessionLog } from '@openagt/agent-driver'
+import { errorMessage, nodeGitRunner, sessionsHomeOf, type GitRunner } from '@openagt/agent-data'
 import { agentBranchName, attachCheckout, createCheckout, reclaimWorktree, relinkCheckout, worktreeBranch, worktreePath, type SkillLink, type LeaveOut } from '@openagt/skill-branches'
 import { findRun, readDiary, type AnyDiaryLine, type LogsDeps, type RunCard, type RunStatus } from '@openagt/skill-logs'
 import { hideLiveDir, inboxPath, liveDir, readLiveCard, readLiveDiary } from './live-card.js'
 import { earlierPrs, forReaders, lasting, markerCard, publishChange, recordBranchGone, recordRun, runnerMark, startOf, writeMarker, type Publish, type RunnerMark, type SessionRepo } from './records.js'
-import { projectGitHost, type GitHost } from './git-host.js'
+import { projectGitHost, type BranchRequest, type GitHost } from './git-host.js'
 import { basicSkills } from './basic-skills.js'
 import { leavingOut } from './project-skills.js'
 import type { ProjectSkillsPick } from './agent.js'
-import { acquireRunLock, isPidAlive, releaseRunLock } from './run-lock.js'
+import { isPidAlive, withRunLock } from './run-lock.js'
 import { runEndedLine } from './ended.js'
 import { askName, isBareCommand, nameRun, type AskedName } from './title.js'
 import { childEndedLine, tellParent, type ParentDeps } from './parent.js'
-import { openSessionFolder } from './session-folder.js'
+import { openSessionFolder, SESSION_FOLDER_STAYS } from './session-folder.js'
 
 /**
  * One run (#1774): a checkout from the branches package, a session from agent-driver, the prompt
@@ -67,9 +67,6 @@ import { openSessionFolder } from './session-folder.js'
 
 /** How long naming a run from its report may hold its end up: the small model answers in a few seconds. */
 const REPORT_NAMING_TIMEOUT_MS = 15_000
-
-/** Why a run with no project keeps where it worked: see {@link openSessionFolder}. */
-export const SESSION_FOLDER_STAYS = 'a session folder stays'
 
 /** The detail a stopped run's record carries. */
 export const STOPPED_DETAIL = 'stopped by a signal to its process'
@@ -136,9 +133,95 @@ function carried(marked: RunCard | undefined, card: RunCard): RunCard {
   return { ...theirs, ...card, ...(Object.keys(caller).length > 0 ? { caller: { ...caller, ...card.caller } } : {}) }
 }
 
-export interface RunOptions {
+/**
+ * What a run's process is handed beside what the run is asked, the same for a fresh run and a
+ * continued one: the coding agent, and every dependency a test may stand in for, the real one when absent.
+ */
+export interface RunDeps {
+  driver: Driver
+  /** How an ended parent is continued, in its own process; absent, only a working parent is told. */
+  resume?: ParentDeps['resume']
+  host?: string
+  pid?: number
+  /** Whether a pid is a live process here: what the run's lock asks of its holder. */
+  isAlive?: (pid: number) => boolean
+  now?: () => Date
+  git?: GitRunner
+  /** The project's git host; the one the project declares when absent. */
+  gitHost?: GitHost
+  /** The skills linked into the checkout beside the branches skill, for the run's agent; the basic ones (`basic-skills.ts`) when absent. */
+  skills?: (repo: string, agent: { ownQuestionTool?: boolean }) => Promise<readonly SkillLink[]>
+  logs?: LogsDeps
+  log?: (line: string) => void
+}
+
+/** What a run's process works with: {@link RunDeps} as given, else the real ones. */
+interface RunProcess {
+  host: string
+  pid: number
+  isAlive: (pid: number) => boolean
+  git: GitRunner
+  gitHost: GitHost
+  clock: () => string
+  logs: LogsDeps
+  log: (line: string) => void
+  /** What telling the run's parent needs, when its record names one. */
+  telling: ParentDeps
+}
+
+function runProcess(deps: RunDeps): RunProcess {
+  const now = deps.now ?? (() => new Date())
+  const host = deps.host ?? hostname()
+  const isAlive = deps.isAlive ?? isPidAlive
+  const log = deps.log ?? (() => {})
+  return {
+    host,
+    pid: deps.pid ?? process.pid,
+    isAlive,
+    git: deps.git ?? nodeGitRunner(),
+    gitHost: deps.gitHost ?? projectGitHost,
+    clock: () => now().toISOString(),
+    logs: deps.logs ?? {},
+    log,
+    telling: { host, isAlive, ...(deps.resume ? { resume: deps.resume } : {}), log },
+  }
+}
+
+/** The skills a run links into its checkout, for its coding agent; none when they cannot be read. */
+function linkedSkills(repo: string, deps: RunDeps): Promise<readonly SkillLink[]> {
+  return (deps.skills ?? basicSkills)(repo, deps.driver).catch((): SkillLink[] => [])
+}
+
+/**
+ * What a run is asked: its prompt, and how far and from where it takes its work. The same whether
+ * the run goes on in this process, in a process spawned for it (`runner.ts`), or detached.
+ */
+export interface RunRequest {
   /** What the agent is told, usually a slash command. */
   prompt: string
+  /** The model the session starts on (`run --model`); the coding agent's own default when absent. */
+  model?: string
+  /** How hard that model may think (`run --effort`); the coding agent's own default when absent. */
+  effort?: string
+  /** How far the agent publishes when it finishes (`run --publish`); absent, only what the prompt itself asks. */
+  publish?: Publish
+  /** A text handed to the agent with the prompt, after it (`run --attach`), such as what a scheduler's check found: the record keeps it apart from the prompt, which stays the run's name. */
+  attached?: string
+  /** The run this one is started for (`run --parent`): told when this one ends. */
+  parent?: string
+  /** The branch the run's fresh branch starts from (`run --base`); origin's default branch when absent. */
+  base?: string
+  /** The branch the run's pull request goes into (`run --pr-base`); the repository's default branch when absent. */
+  prBase?: string
+  /** The branch to work on (`run --branch`), one that exists, such as a person's pull request's; a fresh `agent-<id>` when absent. */
+  branch?: string
+  /** What the run is started for (`run --for`), kept on its mark: a thread on the git host, by its address. */
+  for?: string
+  /** The repos a session with no project has as context (`run --repos`), each copied into its folder; kept on its mark. */
+  repos?: SessionRepo[]
+}
+
+export interface RunOptions extends RunRequest, RunDeps {
   /**
    * The run's name, already being asked for by whoever starts the run, from before it could make
    * this run's driver ({@link namedAtStart}); asked for here as the run begins when absent.
@@ -154,49 +237,14 @@ export interface RunOptions {
   startedAt?: string
   /** Whether the run's marker is already on the branch: a scheduler's tick writes it before it spawns. A person's run marks itself. */
   marked?: boolean
-  /** The model the session starts on; the tool's own default when absent. */
-  model?: string
-  /** How hard that model may think (`--effort`); the tool's own default when absent. */
-  effort?: string
-  driver: Driver
-  /** The branch to work on, an existing one; a fresh `agent-<id>` when absent. */
-  branch?: string
-  /** How far the agent publishes when it finishes; absent, only what the prompt itself asks. */
-  publish?: Publish
-  /** A text handed to the agent with the prompt, after it: the record keeps it apart from the prompt, which stays the run's name. */
-  attached?: string
-  /** The run this one is started for: told when this one ends. */
-  parent?: string
-  /** The branch the run's fresh branch starts from; origin's default branch when absent. */
-  base?: string
-  /** The branch the run's pull request goes into; the repository's default branch when absent. */
-  prBase?: string
   /** The account the run works as at the git host, kept on its record; none when the git host cannot say. */
   gitAccount?: string
-  /** What the run is started for (`run --for`), kept on its mark: a thread on the git host, by its address. */
-  for?: string
-  /** The repos a session with no project has as context (`run --repos`), each copied into its folder; kept on its mark. */
-  repos?: SessionRepo[]
   /** The agent the run is on, by its id (`OPENAGENT_AGENT`), kept on its mark; the default agent when absent. */
   agent?: string
   /** The session's picks of skills, kept on its mark (`agent.ts` SkillPicks): skills on top of its agent's, skills of its agent's left out, which of the project's own stay in its checkout. */
   skillsOn?: string[]
   skillsOff?: string[]
   projectSkills?: ProjectSkillsPick
-  /** How an ended parent is continued, in its own process; absent, only a working parent is told. */
-  resume?: ParentDeps['resume']
-  host?: string
-  pid?: number
-  /** Whether a pid is a live process here: what the run's lock asks of its holder. */
-  isAlive?: (pid: number) => boolean
-  now?: () => Date
-  git?: GitRunner
-  /** The project's git host; the one the project declares when absent. */
-  gitHost?: GitHost
-  /** The skills linked into the checkout beside the branches skill, for the run's agent; the basic ones (`basic-skills.ts`) when absent. */
-  skills?: (repo: string, agent: { ownQuestionTool?: boolean }) => Promise<readonly SkillLink[]>
-  logs?: LogsDeps
-  log?: (line: string) => void
 }
 
 export interface RunOutcome {
@@ -220,32 +268,24 @@ export function namedAtStart(opts: { prompt: string; marked?: boolean; parent?: 
 }
 
 export async function runCommand(repo: string, opts: RunOptions): Promise<RunOutcome> {
-  const git = opts.git ?? nodeGitRunner()
-  const now = opts.now ?? (() => new Date())
-  const clock = () => now().toISOString()
-  const host = opts.host ?? hostname()
-  const pid = opts.pid ?? process.pid
-  const startedAt = opts.startedAt ?? clock()
+  const here = runProcess(opts)
+  const startedAt = opts.startedAt ?? here.clock()
   const id = opts.id ?? runIdFrom(startedAt)
-  let mark: RunnerMark = { host, pid, ...lasting(opts) }
-  const log = opts.log ?? (() => {})
-  const logs = opts.logs ?? {}
-  const isAlive = opts.isAlive ?? isPidAlive
-  const telling: ParentDeps = { host, isAlive, ...(opts.resume ? { resume: opts.resume } : {}), log }
+  let mark: RunnerMark = { host: here.host, pid: here.pid, ...lasting(opts) }
 
-  await acquireRunLock(repo, id, { pid, isAlive })
-  try {
+  return withRunLock(repo, id, here, async () => {
     // A person's run marks itself; a scheduler's run was marked before it was spawned. The marker
     // is pushed while the checkout is made and the agent starts: pushing takes seconds, and the
     // person watching the run waits on the agent. It never writes `.git/config`, so the agent's own
     // git is never locked out by it. The run's record waits on it, so it lands after.
+    const marker = markerCard({ id, startedAt, prompt: opts.prompt, driver: opts.driver.id, ...modelOf(opts.model), mark })
     const marking = opts.marked
       ? Promise.resolve()
-      : writeMarker(repo, markerCard({ id, startedAt, prompt: opts.prompt, driver: opts.driver.id, ...modelOf(opts.model), ...effortOf(opts.effort), mark }), logs).then(
+      : writeMarker(repo, marker, here.logs).then(
           marked => {
-            if (!marked.ok && !marked.committed) log(`[agent-runner] the run's record could not be written: ${marked.error}`)
+            if (!marked.ok && !marked.committed) here.log(`[agent-runner] the run's record could not be written: ${marked.error}`)
           },
-          err => log(`[agent-runner] the run's record could not be written: ${errorMessage(err)}`),
+          err => here.log(`[agent-runner] the run's record could not be written: ${errorMessage(err)}`),
         )
 
     // The run's short name is asked for first of all, beside the checkout and the agent's start
@@ -260,35 +300,34 @@ export async function runCommand(repo: string, opts: RunOptions): Promise<RunOut
     let checkout: Workspace
     const sessions = await sessionsHomeOf(repo)
     try {
-      const skills = await (opts.skills ?? basicSkills)(repo, opts.driver).catch((): SkillLink[] => [])
+      const skills = await linkedSkills(repo, opts)
       // The project's own skills the session leaves out stay out of this checkout alone.
-      const without = leavingOut(mark.projectSkills, git)
+      const without = leavingOut(mark.projectSkills, here.git)
       checkout =
         sessions !== undefined
-          ? await openSessionFolder(sessions, id, skills, mark.repos, git)
+          ? await openSessionFolder(sessions, id, skills, mark.repos, here.git)
           : opts.branch !== undefined
-            ? await attachCheckout(repo, { agentId: id, branch: opts.branch, skills, without }, git)
-            : await createCheckout(repo, { agentId: id, skills, without, ...(opts.base !== undefined ? { base: opts.base } : {}) }, git)
+            ? await attachCheckout(repo, { agentId: id, branch: opts.branch, skills, without }, here.git)
+            : await createCheckout(repo, { agentId: id, skills, without, ...(opts.base !== undefined ? { base: opts.base } : {}) }, here.git)
     } catch (err) {
       naming?.stop.abort()
       const detail = `could not create a checkout: ${errorMessage(err)}`
-      const endedAt = clock()
+      const endedAt = here.clock()
       await marking
-      await recordRun(repo, { ...markerCard({ id, startedAt, prompt: opts.prompt, driver: opts.driver.id, ...modelOf(opts.model), ...effortOf(opts.effort), mark }), status: 'failed', endedAt }, [{ kind: 'ended', status: 'failed', detail, at: endedAt }], logs)
-      if (opts.parent !== undefined) await tellParent(repo, opts.parent, childEndedLine({ id, status: 'failed', detail }), telling)
+      await recordRun(repo, { ...marker, status: 'failed', endedAt }, [{ kind: 'ended', status: 'failed', detail, at: endedAt }], here.logs)
+      if (opts.parent !== undefined) await tellParent(repo, opts.parent, childEndedLine({ id, status: 'failed', detail }), here.telling)
       return { id, status: 'failed', checkout: { reclaimed: false, reason: 'no checkout' }, detail }
     }
     // Only a branch this run made: one it was given holds another run's work, begun elsewhere.
-    if (checkout.branch !== undefined && opts.branch === undefined) mark = { ...mark, ...(await startCommit(checkout.path, git)) }
+    if (checkout.branch !== undefined && opts.branch === undefined) mark = { ...mark, ...(await startCommit(checkout.path, here.git)) }
     // A run another tool marked carries what only that tool knows: orchestration writes the task's
     // name as the run's `title` and the task's id under `caller`. This process builds its card from
     // its own arguments, which never held either, and that card seeds the live card the record is
     // written from at the end — so without reading the marker back, a run loses those fields the
     // moment it ends, which is when a person and the tool that started it read them.
     const marked = opts.marked ? await findRun(repo, id).catch(() => undefined) : undefined
-    // Awaited here, not returned: the lock is let go in `finally`, and a bare `return` of the
-    // promise would run that before the session ends, leaving the run to the sweep.
-    return await session(repo, {
+    return session(repo, {
+      ...here,
       id,
       checkout,
       card: carried(marked, {
@@ -300,7 +339,7 @@ export async function runCommand(repo: string, opts: RunOptions): Promise<RunOut
         ...modelOf(opts.model),
         ...effortOf(opts.effort),
         ...(checkout.branch !== undefined ? { branch: checkout.branch } : {}),
-        caller: { runner: mark, pid, host, ...forReaders(mark), kind: 'prompt', workspace: checkout.path },
+        caller: { runner: mark, pid: here.pid, host: here.host, ...forReaders(mark), kind: 'prompt', workspace: checkout.path },
       }),
       prompt: opts.prompt,
       ...(opts.attached !== undefined ? { attached: opts.attached } : {}),
@@ -311,19 +350,11 @@ export async function runCommand(repo: string, opts: RunOptions): Promise<RunOut
       ...(naming !== undefined ? { named: naming } : {}),
       continued: false,
       marking,
-      telling,
-      git,
-      gitHost: opts.gitHost ?? projectGitHost,
-      logs,
-      log,
-      clock,
     })
-  } finally {
-    await releaseRunLock(repo, id, pid).catch(() => {})
-  }
+  })
 }
 
-export interface ResumeOptions {
+export interface ResumeOptions extends RunDeps {
   /** The run to continue: one that ended `waiting`, or any ended run whose session the driver can resume. */
   id: string
   /** The user's words to the agent; or, with `answer`, absent. */
@@ -336,24 +367,10 @@ export interface ResumeOptions {
   gitAccount?: string
   /** Who resumes the run, kept on its mark with the time: a scheduler's row, which counts the run as its own from then on. */
   by?: string
-  driver: Driver
-  /** How an ended parent is continued, in its own process; absent, only a working parent is told. */
-  resume?: ParentDeps['resume']
+  /** The model this leg starts on; the record's own when absent. */
   model?: string
   /** How hard the model may think on this leg; the record's own when absent. */
   effort?: string
-  host?: string
-  pid?: number
-  /** Whether a pid is a live process here: what the run's lock asks of its holder. */
-  isAlive?: (pid: number) => boolean
-  now?: () => Date
-  git?: GitRunner
-  /** The project's git host; the one the project declares when absent. */
-  gitHost?: GitHost
-  /** The skills linked into the checkout beside the branches skill, for the run's agent; the basic ones (`basic-skills.ts`) when absent. */
-  skills?: (repo: string, agent: { ownQuestionTool?: boolean }) => Promise<readonly SkillLink[]>
-  logs?: LogsDeps
-  log?: (line: string) => void
 }
 
 /**
@@ -369,29 +386,19 @@ export interface ResumeOptions {
  * here is not.
  */
 export async function resumeRun(repo: string, opts: ResumeOptions): Promise<RunOutcome> {
-  const git = opts.git ?? nodeGitRunner()
-  const now = opts.now ?? (() => new Date())
-  const clock = () => now().toISOString()
-  const host = opts.host ?? hostname()
-  const pid = opts.pid ?? process.pid
-  const logs = opts.logs ?? {}
-  const log = opts.log ?? (() => {})
-
-  const id = opts.id
-  const isAlive = opts.isAlive ?? isPidAlive
+  const here = runProcess(opts)
   // Another process of this run, the one that ended it and still records and reclaims, or a
   // resume started just before this one, goes first: this one waits, then reads the run as that
   // one left it.
-  await acquireRunLock(repo, id, { pid, isAlive })
-  try {
-    const card = await findRun(repo, opts.id, logs)
+  return withRunLock(repo, opts.id, here, async () => {
+    const card = await findRun(repo, opts.id, here.logs)
     if (!card) throw new Error(`no run ${opts.id}`)
     // Every process of this run is gone by now, so a record still saying running is one whose
     // process died before it could end it: the sweep's to close first.
     if (card.status === 'running') throw new Error(`run ${opts.id} is still recorded running`)
     const previous = runnerMark(card)
     if (!previous) throw new Error(`run ${opts.id} is not this tool's`)
-    const diary = (await readDiary(repo, opts.id, logs)) ?? []
+    const diary = (await readDiary(repo, opts.id, here.logs)) ?? []
     const sessionId = typeof card.caller?.['sessionId'] === 'string' ? (card.caller['sessionId'] as string) : undefined
 
     let prompt: string
@@ -405,32 +412,31 @@ export async function resumeRun(repo: string, opts: ResumeOptions): Promise<RunO
       throw new Error('a text or an answer is needed to resume a run')
     }
 
-    const skills = await (opts.skills ?? basicSkills)(repo, opts.driver).catch((): SkillLink[] => [])
+    const skills = await linkedSkills(repo, opts)
     const sessions = await sessionsHomeOf(repo)
     // A session's folder is opened again as it is, and made again when someone removed it.
-    const checkout: Workspace & { again?: true } = sessions !== undefined ? await openSessionFolder(sessions, opts.id, skills, previous.repos, git) : await projectCheckout(repo, opts.id, card.branch, previous.base, skills, leavingOut(previous.projectSkills, git), git)
+    const checkout: Workspace & { again?: true } = sessions !== undefined ? await openSessionFolder(sessions, opts.id, skills, previous.repos, here.git) : await projectCheckout(repo, opts.id, card.branch, previous.base, skills, leavingOut(previous.projectSkills, here.git), here.git)
     // A branch that was gone everywhere was just made again, from where it starts as that is now:
     // that is where the run's own work begins. One still on origin came back with its work.
-    const restarted = checkout.again ? await startCommit(checkout.path, git) : {}
+    const restarted = checkout.again ? await startCommit(checkout.path, here.git) : {}
 
     // The record is written running again over the ended one, so every reader sees the run in flight.
     // The level its record names, or the one this resume gives it from here on.
     const { publish: recorded, ...lasts } = lasting(previous)
     const publish = opts.publish === undefined ? recorded : (opts.publish ?? undefined)
-    const mark: RunnerMark = { host, pid, ...lasts, ...(publish !== undefined ? { publish } : {}), ...(opts.gitAccount !== undefined ? { gitAccount: opts.gitAccount } : {}), ...restarted, ...(opts.by !== undefined ? { resumed: { by: opts.by, at: clock() } } : {}) }
-    const runningCard: RunCard = { ...card, status: 'running', caller: { ...card.caller, runner: mark, pid, host, ...forReaders(mark), workspace: checkout.path } }
+    const mark: RunnerMark = { host: here.host, pid: here.pid, ...lasts, ...(publish !== undefined ? { publish } : {}), ...(opts.gitAccount !== undefined ? { gitAccount: opts.gitAccount } : {}), ...restarted, ...(opts.by !== undefined ? { resumed: { by: opts.by, at: here.clock() } } : {}) }
+    const runningCard: RunCard = { ...card, status: 'running', caller: { ...card.caller, runner: mark, pid: here.pid, host: here.host, ...forReaders(mark), workspace: checkout.path } }
     delete runningCard.endedAt
     // A level taken away by this resume is no longer the run's, for its readers either.
     if (mark.publish === undefined) delete runningCard.caller?.['publish']
     // A record that says its work was landed lost its branch to that. On a branch made again the
     // work is new and not landed: left on the record, every reader would go on saying it is.
     if (checkout.again) delete runningCard.caller?.['landed']
-    const reopened = await recordRun(repo, runningCard, diary, logs)
-    if (!reopened.ok && !reopened.committed) log(`[agent-runner] the run's record could not be written: ${reopened.error}`)
+    const reopened = await recordRun(repo, runningCard, diary, here.logs)
+    if (!reopened.ok && !reopened.committed) here.log(`[agent-runner] the run's record could not be written: ${reopened.error}`)
 
-    const model = opts.model ?? card.model
-    const effort = opts.effort ?? card.effort
-    return await session(repo, {
+    return session(repo, {
+      ...here,
       id: opts.id,
       checkout,
       card: { ...runningCard },
@@ -438,20 +444,12 @@ export async function resumeRun(repo: string, opts: ResumeOptions): Promise<RunO
       prompt,
       ...addedOf(mark.publish, mark.prBase),
       driver: opts.driver,
-      ...modelOf(model),
-      ...effortOf(effort),
+      ...modelOf(opts.model ?? card.model),
+      ...effortOf(opts.effort ?? card.effort),
       continued: true,
       ...(sessionId !== undefined ? { resumeSessionId: sessionId } : {}),
-      telling: { host, isAlive, ...(opts.resume ? { resume: opts.resume } : {}), log },
-      git,
-      gitHost: opts.gitHost ?? projectGitHost,
-      logs,
-      log,
-      clock,
     })
-  } finally {
-    await releaseRunLock(repo, id, pid).catch(() => {})
-  }
+  })
 }
 
 /** Where a run works: a checkout of the project on its branch, or a session's own folder, which has no branch. */
@@ -473,7 +471,7 @@ async function projectCheckout(repo: string, id: string, branch: string | undefi
   return { path, branch: on }
 }
 
-interface SessionRun {
+interface SessionRun extends RunProcess {
   id: string
   checkout: Workspace
   card: RunCard
@@ -494,13 +492,6 @@ interface SessionRun {
   /** The run's own marker being pushed, when it writes one: the record waits on it, so it lands after. */
   marking?: Promise<void>
   resumeSessionId?: string
-  /** What telling the run's parent needs, when its record names one. */
-  telling: ParentDeps
-  git: GitRunner
-  gitHost: GitHost
-  logs: LogsDeps
-  log: (line: string) => void
-  clock: () => string
 }
 
 /** A prompt this process owes the agent, and the level a message taken from the inbox after the run's last turn gave the run with it. */
@@ -517,7 +508,6 @@ function queued(line: PromptLine): Queued {
 /** The session, its end, the record and the reclaim: the part a fresh run and a continued one share. */
 async function session(repo: string, run: SessionRun): Promise<RunOutcome> {
   const dir = liveDir(run.checkout.path)
-  const inbox = inboxPath(run.checkout.path)
   if (run.priorDiary) {
     await mkdir(dir, { recursive: true })
     await writeFile(join(dir, logDiaryFile(run.id)), run.priorDiary.map(line => JSON.stringify(line) + '\n').join(''))
@@ -535,19 +525,38 @@ async function session(repo: string, run: SessionRun): Promise<RunOutcome> {
   process.on('SIGINT', onSignal)
   process.on('SIGTERM', onSignal)
   try {
-    return await sessionToEnd(repo, run, dir, inbox, stop.signal, kill.signal)
+    return await closeRun(repo, run, await sessionToEnd(repo, run, dir, stop.signal, kill.signal))
   } finally {
     process.off('SIGINT', onSignal)
     process.off('SIGTERM', onSignal)
   }
 }
 
-async function sessionToEnd(repo: string, run: SessionRun, dir: string, inbox: string, stopped: AbortSignal, killed: AbortSignal): Promise<RunOutcome> {
+/** How a session ended: what the run's record, its parent and the reclaim of its checkout go by. */
+interface SessionEnd {
+  status: LogEndStatus
+  detail: string | undefined
+  /** The question the last turn asked, when the run ended waiting. */
+  question: string | undefined
+  /** The branch the agent left its work on, and the pull request read back off it. */
+  branch: string | undefined
+  pr: BranchRequest | undefined
+  /** The requests the run opened before the one its card names, once it has had any. */
+  earlierPrs: BranchRequest[] | undefined
+  /** The agent's answer on its last turn. */
+  lastWords: string
+  /** The live record the session kept; none when its agent never started. */
+  live: SessionLog | undefined
+}
+
+/** The agent's session, from its start to the end of the last turn this process owes it. */
+async function sessionToEnd(repo: string, run: SessionRun, dir: string, stopped: AbortSignal, killed: AbortSignal): Promise<SessionEnd> {
   const { id: _id, status: _status, endedAt: _endedAt, ...startCard } = run.card
+  const inbox = inboxPath(run.checkout.path)
   let status: LogEndStatus = 'done'
   let detail: string | undefined
   let branch = run.checkout.branch
-  let pr: RunOutcome['pr']
+  let pr: BranchRequest | undefined
   // The request the card names, and the ones the run opened before it: a turn that opens another,
   // on a branch the work moved to, puts the one before it among the earlier ones.
   let named = run.card.pr
@@ -559,8 +568,8 @@ async function sessionToEnd(repo: string, run: SessionRun, dir: string, inbox: s
   try {
     driverSession = await run.driver.start({
       cwd: run.checkout.path,
-      ...(run.model !== undefined ? { model: run.model } : {}),
-      ...(run.effort !== undefined ? { effort: run.effort } : {}),
+      ...modelOf(run.model),
+      ...effortOf(run.effort),
       signal: killed,
       stop: stopped,
       ...(run.resumeSessionId !== undefined ? { resumeSessionId: run.resumeSessionId } : {}),
@@ -570,50 +579,8 @@ async function sessionToEnd(repo: string, run: SessionRun, dir: string, inbox: s
     status = 'failed'
     detail = errorMessage(err)
   }
-  // The run's short name, asked of a small model beside the first turn (`title.ts`), or as the run
-  // began, before its checkout was made, when it was a fresh one no other tool marked (`runCommand`): a run that is
-  // being continued was named when it began, and one whose agent never started has nothing to name.
-  // A subagent is not named: its row is its task, written by the agent that started it, and an
-  // orchestration of a dozen of them would pay for a dozen namings for rows nobody looks for.
-  // `OPENAGENT_NAME_RUN=0` is the person's setting, put in this process's environment by whoever
-  // started it: naming costs money for something only a person looks at, so it can be declined.
-  // A bare command is named later, from its agent's report (`title.ts`).
-  const mayName = process.env.OPENAGENT_NAME_RUN !== '0' && driverSession !== undefined && !run.continued && run.card.title === undefined && runnerMark(run.card)?.parent === undefined
-  let nameFromReport = mayName && isBareCommand(run.prompt)
-  // A fresh run's name was asked for as the run began (`runCommand`): it is dropped when the run will
-  // not take it, and stopped with the run.
-  const asked = run.named
-  if (asked && (!mayName || stopped.aborted)) asked.stop.abort()
-  else if (asked) stopped.addEventListener('abort', () => asked.stop.abort(), { once: true })
-  const naming =
-    mayName && !nameFromReport
-      ? (run.named?.title ?? nameRun(run.driver, { prompt: run.prompt, signal: stopped })).then(
-          async title => {
-            if (title !== undefined) await driverSession?.log?.title(title)
-          },
-          () => {},
-        )
-      : undefined
-  // The sentence after every prompt, and the mark that keeps the level it says: a message can
-  // change the level from there on (`publish` on its inbox line), and the record says so then.
-  let added = run.added
-  let mark = runnerMark(run.card)
-  const takeLevel = async (word: string | undefined): Promise<void> => {
-    const level = publishChange(word)
-    if (level === undefined || !mark) return
-    const { publish: _was, ...rest } = mark
-    mark = { ...rest, ...(level !== null ? { publish: level } : {}) }
-    added = addedLine(mark.publish, mark.prBase)
-    await driverSession?.log?.patch({ caller: { runner: mark, publish: mark.publish } })
-  }
-  // A line the driver takes from the inbox is handed here first: a message may say how far the run
-  // takes its work from it on, and every line goes with the sentence in force now, which a line
-  // handed over in a later turn may have changed.
-  const onInboxLine = async (line: PromptLine, sent: DriverPromptOptions): Promise<DriverPromptOptions> => {
-    if (line.kind === 'message') await takeLevel(line.publish)
-    const { added: _was, ...rest } = sent
-    return added !== undefined ? { ...rest, added } : rest
-  }
+  const naming = nameSession(run, driverSession, stopped)
+  const level = publishLevel(run, driverSession)
   try {
     // The prompts this process owes the agent: the run's own, then the lines that reached the
     // inbox after the last turn took it but while the card still said running. Whoever wrote
@@ -635,12 +602,12 @@ async function sessionToEnd(repo: string, run: SessionRun, dir: string, inbox: s
         for (const [i, { prompt, publish }] of queue.entries()) {
           // Stopped between two prompts: the rest are not sent.
           if (stopped.aborted) break
-          await takeLevel(publish)
+          await level.take(publish)
           // Only the last one drains the inbox: a line written meanwhile comes after these.
           const last = i === queue.length - 1
           const handed = attached
           attached = undefined
-          const sent = { ...(last ? { inbox, onInboxLine } : {}), ...(resume ? { resume: true } : {}), ...(handed !== undefined ? { attached: handed } : {}), ...(added !== undefined ? { added } : {}) }
+          const sent = { ...(last ? { inbox, onInboxLine: level.onInboxLine } : {}), ...(resume ? { resume: true } : {}), ...(handed !== undefined ? { attached: handed } : {}), ...level.added() }
           const session = driverSession
           const turn = fresh
             ? await afresh(session, run, prompt, sent)
@@ -668,15 +635,7 @@ async function sessionToEnd(repo: string, run: SessionRun, dir: string, inbox: s
         question = (asked ?? parseQuestion(lastText))?.title
         if (question !== undefined) status = 'waiting'
       }
-      // Named from its first report once its status is settled, before it is said ended, so the
-      // name's line in the diary comes before the ended one; a stop meanwhile only cuts the naming
-      // short. A question is no report of the work, and a few seconds is all a name may hold the
-      // end up.
-      if (nameFromReport && status === 'done' && lastText.trim() !== '') {
-        nameFromReport = false
-        const title = await nameRun(run.driver, { prompt: lastText, from: 'report', signal: stopped, timeoutMs: REPORT_NAMING_TIMEOUT_MS })
-        if (title !== undefined) await driverSession.log?.title(title)
-      }
+      await naming.fromReport(status, lastText)
 
       // Where the work ended up: the agent renames its branch itself, and the pull request it
       // opened, if any, is read back off the branch through the project's git host.
@@ -713,10 +672,84 @@ async function sessionToEnd(repo: string, run: SessionRun, dir: string, inbox: s
 
   // The name lands on the card before the record is copied: a run named after that copy would be
   // named only in its checkout, which is removed with the run.
-  await naming
-  // The record: the two files the session kept, copied onto the branch unchanged.
-  const live = driverSession?.log
-  const card = (await readLiveCard(run.checkout.path, run.id)) ?? { ...run.card, status, endedAt: run.clock(), ...(branch !== undefined ? { branch } : {}), ...(pr ? { pr } : {}), ...(saidEarlier ? { caller: { ...run.card.caller, earlierPrs: earlier } } : {}) }
+  await naming.done
+  return { status, detail, question, branch, pr, earlierPrs: saidEarlier ? earlier : undefined, lastWords, live: driverSession?.log }
+}
+
+/**
+ * The run's short name, asked of a small model beside the first turn (`title.ts`), or as the run
+ * began, before its checkout was made, when it was a fresh one no other tool marked (`runCommand`):
+ * a run that is being continued was named when it began, and one whose agent never started has
+ * nothing to name. A subagent is not named: its row is its task, written by the agent that started
+ * it, and an orchestration of a dozen of them would pay for a dozen namings for rows nobody looks
+ * for. `OPENAGENT_NAME_RUN=0` is the person's setting, put in this process's environment by whoever
+ * started it: naming costs money for something only a person looks at, so it can be declined.
+ * A bare command is named later, from its agent's report (`fromReport`).
+ */
+function nameSession(run: SessionRun, session: DriverSession | undefined, stopped: AbortSignal): { done: Promise<void>; fromReport(status: LogEndStatus, report: string): Promise<void> } {
+  const mayName = process.env.OPENAGENT_NAME_RUN !== '0' && session !== undefined && !run.continued && run.card.title === undefined && runnerMark(run.card)?.parent === undefined
+  let fromReport = mayName && isBareCommand(run.prompt)
+  // A fresh run's name was asked for as the run began (`runCommand`): it is dropped when the run will
+  // not take it, and stopped with the run.
+  const asked = run.named
+  if (asked && (!mayName || stopped.aborted)) asked.stop.abort()
+  else if (asked) stopped.addEventListener('abort', () => asked.stop.abort(), { once: true })
+  const titled = async (title: string | undefined): Promise<void> => {
+    if (title !== undefined) await session?.log?.title(title)
+  }
+  return {
+    done: mayName && !fromReport ? (asked?.title ?? nameRun(run.driver, { prompt: run.prompt, signal: stopped })).then(titled, () => {}) : Promise.resolve(),
+    // Named from its first report once its status is settled, before it is said ended, so the
+    // name's line in the diary comes before the ended one; a stop meanwhile only cuts the naming
+    // short. A question is no report of the work, and a few seconds is all a name may hold the
+    // end up.
+    async fromReport(status, report) {
+      if (!fromReport || status !== 'done' || report.trim() === '') return
+      fromReport = false
+      await titled(await nameRun(run.driver, { prompt: report, from: 'report', signal: stopped, timeoutMs: REPORT_NAMING_TIMEOUT_MS }))
+    },
+  }
+}
+
+/**
+ * The sentence after every prompt, and the mark that keeps the level it says: a message can change
+ * the level from there on (`publish` on its inbox line, or on a line queued after the last turn),
+ * and the record says so then.
+ */
+function publishLevel(run: SessionRun, session: DriverSession | undefined): { added(): { added?: string }; take(word: string | undefined): Promise<void>; onInboxLine(line: PromptLine, sent: DriverPromptOptions): Promise<DriverPromptOptions> } {
+  let added = run.added
+  let mark = runnerMark(run.card)
+  const take = async (word: string | undefined): Promise<void> => {
+    const level = publishChange(word)
+    if (level === undefined || !mark) return
+    const { publish: _was, ...rest } = mark
+    mark = { ...rest, ...(level !== null ? { publish: level } : {}) }
+    added = addedLine(mark.publish, mark.prBase)
+    await session?.log?.patch({ caller: { runner: mark, publish: mark.publish } })
+  }
+  return {
+    added: () => (added !== undefined ? { added } : {}),
+    take,
+    // A line the driver takes from the inbox is handed here first: a message may say how far the run
+    // takes its work from it on, and every line goes with the sentence in force now, which a line
+    // handed over in a later turn may have changed.
+    onInboxLine: async (line, sent) => {
+      if (line.kind === 'message') await take(line.publish)
+      const { added: _was, ...rest } = sent
+      return added !== undefined ? { ...rest, added } : rest
+    },
+  }
+}
+
+/**
+ * What follows the session: the run's record written from what the session kept, the person's line
+ * when this end needs them, the run's parent told how it ended, and its checkout reclaimed.
+ */
+async function closeRun(repo: string, run: SessionRun, end: SessionEnd): Promise<RunOutcome> {
+  const { status, detail, question, branch, pr, live } = end
+  // The record: the two files the session kept, copied onto the branch unchanged. A session that
+  // kept none never started: a card in a checkout kept from an earlier leg says how that leg ended.
+  const card = (live ? await readLiveCard(run.checkout.path, run.id) : undefined) ?? { ...run.card, status, endedAt: run.clock(), ...(branch !== undefined ? { branch } : {}), ...(pr ? { pr } : {}), ...(end.earlierPrs ? { caller: { ...run.card.caller, earlierPrs: end.earlierPrs } } : {}) }
   const diary = live ? await readLiveDiary(run.checkout.path, run.id) : [...(run.priorDiary ?? []), { kind: 'ended', status, ...(detail !== undefined ? { detail } : {}), at: card.endedAt ?? run.clock() }]
   await run.marking
   const recorded = await recordRun(repo, card, diary, run.logs)
@@ -730,9 +763,18 @@ async function sessionToEnd(repo: string, run: SessionRun, dir: string, inbox: s
   const parent = runnerMark(run.card)?.parent
   const tell = async (branchStayed: boolean): Promise<void> => {
     if (parent === undefined) return
-    const line = childEndedLine({ id: run.id, status, ...(detail !== undefined ? { detail } : {}), ...(question !== undefined ? { question } : {}), ...(branchStayed && branch !== undefined ? { branch } : {}), ...(pr ? { pr } : {}), lastWords })
+    const line = childEndedLine({ id: run.id, status, ...(detail !== undefined ? { detail } : {}), ...(question !== undefined ? { question } : {}), ...(branchStayed && branch !== undefined ? { branch } : {}), ...(pr ? { pr } : {}), lastWords: end.lastWords })
     await tellParent(repo, parent, line, run.telling)
   }
+  const outcome = (checkout: RunOutcome['checkout']): RunOutcome => ({
+    id: run.id,
+    status,
+    ...(branch !== undefined ? { branch } : {}),
+    ...(pr ? { pr } : {}),
+    ...(card.cost !== undefined ? { cost: card.cost } : {}),
+    checkout,
+    ...(detail !== undefined ? { detail } : {}),
+  })
 
   // The checkout goes once its branch holds everything in it (the branches rule), and the branch
   // stays on this machine: nothing is pushed here, publishing is the agent's when it was asked, the person's otherwise. A dirty tree
@@ -740,12 +782,12 @@ async function sessionToEnd(repo: string, run: SessionRun, dir: string, inbox: s
   // answer resumes the run there.
   if (status === 'waiting') {
     await tell(true)
-    return outcomeOf(run.id, status, branch, pr, card.cost, { reclaimed: false, reason: 'waiting' }, detail)
+    return outcome({ reclaimed: false, reason: 'waiting' })
   }
   // A session's folder is its work, kept for the person and for the run going on later.
   if (branch === undefined) {
     await tell(false)
-    return outcomeOf(run.id, status, branch, pr, card.cost, { reclaimed: false, reason: SESSION_FOLDER_STAYS }, detail)
+    return outcome({ reclaimed: false, reason: SESSION_FOLDER_STAYS })
   }
   const reclaimed = await reclaimWorktree(repo, run.checkout.path, { birthBranch: agentBranchName(run.id), ...startOf(run.card), git: run.git })
   if (reclaimed.ok) {
@@ -753,7 +795,7 @@ async function sessionToEnd(repo: string, run: SessionRun, dir: string, inbox: s
     if (rewritten && !rewritten.ok && !rewritten.committed) run.log(`[agent-runner] the run's record could not be written: ${rewritten.error}`)
   }
   await tell(!(reclaimed.ok && reclaimed.branchesDeleted?.includes(branch)))
-  return outcomeOf(run.id, status, branch, pr, card.cost, reclaimed.ok ? { reclaimed: true } : { reclaimed: false, reason: reclaimed.reason }, detail)
+  return outcome(reclaimed.ok ? { reclaimed: true } : { reclaimed: false, reason: reclaimed.reason })
 }
 
 /** The line a continued run's record gets where its coding agent starts a fresh conversation. */
@@ -779,20 +821,4 @@ async function afresh(session: DriverSession, run: SessionRun, prompt: string, s
 async function startCommit(checkout: string, git: GitRunner): Promise<{ baseCommit?: string }> {
   const commit = (await git(['rev-parse', '--verify', '--quiet', 'HEAD^{commit}'], checkout).catch(() => '')).trim()
   return commit ? { baseCommit: commit } : {}
-}
-
-function outcomeOf(id: string, status: Exclude<RunStatus, 'running'>, branch: string | undefined, pr: RunOutcome['pr'], cost: number | undefined, checkout: RunOutcome['checkout'], detail: string | undefined): RunOutcome {
-  return {
-    id,
-    status,
-    ...(branch !== undefined ? { branch } : {}),
-    ...(pr ? { pr } : {}),
-    ...(cost !== undefined ? { cost } : {}),
-    checkout,
-    ...(detail !== undefined ? { detail } : {}),
-  }
-}
-
-function errorMessage(err: unknown): string {
-  return err instanceof Error ? err.message : String(err)
 }

@@ -1,11 +1,11 @@
 import { existsSync } from 'node:fs'
 import { mkdir, readFile, readdir, rm, writeFile } from 'node:fs/promises'
 import { homedir, release } from 'node:os'
-import { join } from 'node:path'
+import { dirname, join } from 'node:path'
 import { SECURE_PORT } from '@openagt/dashboard/secure-address'
 import { ADDRESS, LOOPBACK_ADDRESS, addHostsLine, quoted, removeHostsLine } from './address.js'
 import type { Platform } from './platform.js'
-import { installed, run, succeeds } from './run.js'
+import { asAdmin, installed, run, succeeds } from './run.js'
 
 /**
  * What the install puts on a Linux computer. Its files and its scripts as the administrator are
@@ -29,33 +29,26 @@ export const NSS_NICKNAME = `OpenAgent (${ADDRESS})`
  */
 export const NSS_TRUST = 'CP,,'
 
-/** The package managers the install knows, each with how it installs and removes packages. */
-export type PackageManager = 'apt-get' | 'dnf' | 'pacman' | 'zypper'
-
-const INSTALL_PACKAGES: Record<PackageManager, string> = {
-  'apt-get': 'DEBIAN_FRONTEND=noninteractive apt-get install -y',
-  dnf: 'dnf install -y',
-  pacman: 'pacman -S --needed --noconfirm',
-  zypper: 'zypper --non-interactive install',
+/** The package managers the install knows: how each installs packages, and how a person removes them again. */
+const PACKAGE_MANAGERS = {
+  'apt-get': { install: 'DEBIAN_FRONTEND=noninteractive apt-get install -y', remove: 'apt-get remove' },
+  dnf: { install: 'dnf install -y', remove: 'dnf remove' },
+  pacman: { install: 'pacman -S --needed --noconfirm', remove: 'pacman -R' },
+  zypper: { install: 'zypper --non-interactive install', remove: 'zypper remove' },
 }
-const REMOVE_PACKAGES: Record<PackageManager, string> = {
-  'apt-get': 'apt-get remove',
-  dnf: 'dnf remove',
-  pacman: 'pacman -R',
-  zypper: 'zypper remove',
-}
+export type PackageManager = keyof typeof PACKAGE_MANAGERS
 
-/** The commands the install runs that a Linux computer may lack, and the package that has each, by package manager. */
-export const TOOLS: Record<'openssl' | 'certutil' | 'nft', Record<PackageManager, string>> = {
-  openssl: { 'apt-get': 'openssl', dnf: 'openssl', pacman: 'openssl', zypper: 'openssl' },
-  certutil: { 'apt-get': 'libnss3-tools', dnf: 'nss-tools', pacman: 'nss', zypper: 'mozilla-nss-tools' },
-  nft: { 'apt-get': 'nftables', dnf: 'nftables', pacman: 'nftables', zypper: 'nftables' },
+/** The commands the install runs that a Linux computer may lack: what each does for the install, and the package that has it, by package manager. */
+export const TOOLS: Record<'openssl' | 'certutil' | 'nft', { does: string; package: Record<PackageManager, string> }> = {
+  openssl: { does: 'makes the certificate', package: { 'apt-get': 'openssl', dnf: 'openssl', pacman: 'openssl', zypper: 'openssl' } },
+  certutil: { does: 'puts the certificate in the browsers', package: { 'apt-get': 'libnss3-tools', dnf: 'nss-tools', pacman: 'nss', zypper: 'mozilla-nss-tools' } },
+  nft: { does: 'sends port 443 to the dashboard', package: { 'apt-get': 'nftables', dnf: 'nftables', pacman: 'nftables', zypper: 'nftables' } },
 }
 export type Tool = keyof typeof TOOLS
 
 /** The shell line that installs `packages` with `manager`. An `apt-get` that knows no package yet reads the list of packages first. */
 export function installPackagesLine(manager: PackageManager, packages: string[]): string {
-  const line = `${INSTALL_PACKAGES[manager]} ${packages.map(quoted).join(' ')}`
+  const line = `${PACKAGE_MANAGERS[manager].install} ${packages.map(quoted).join(' ')}`
   return manager === 'apt-get' ? `${line} || { apt-get update && ${line}; }` : line
 }
 
@@ -75,8 +68,9 @@ rm -f "$said"
 export const SYSTEM_STORE = { file: `/usr/local/share/ca-certificates/${ADDRESS}.crt`, refresh: 'update-ca-certificates' }
 export type SystemStore = typeof SYSTEM_STORE
 
+/** The system's store, on a computer that has its folder. */
 function systemStore(): SystemStore | undefined {
-  return existsSync(SYSTEM_STORE.file.slice(0, SYSTEM_STORE.file.lastIndexOf('/'))) ? SYSTEM_STORE : undefined
+  return existsSync(dirname(SYSTEM_STORE.file)) ? SYSTEM_STORE : undefined
 }
 
 /** `value` as one word of a systemd unit file; `exec` for a command line, which also reads `$`. */
@@ -111,12 +105,12 @@ WantedBy=default.target
 }
 
 /** The nftables commands that send the address's port 443 to the dashboard's secure port, however often they run. */
-export function portRule(port: number = SECURE_PORT): string {
+export function portRule(): string {
   return [
     `add table ${PORT_TABLE}`,
     `flush table ${PORT_TABLE}`,
     `add chain ${PORT_TABLE} output { type nat hook output priority -100 ; }`,
-    `add rule ${PORT_TABLE} output ip daddr ${LOOPBACK_ADDRESS} tcp dport 443 redirect to :${port}`,
+    `add rule ${PORT_TABLE} output ip daddr ${LOOPBACK_ADDRESS} tcp dport 443 redirect to :${SECURE_PORT}`,
   ].join('; ')
 }
 
@@ -143,9 +137,9 @@ WantedBy=multi-user.target nftables.service
 }
 
 /** The install's script as the administrator: the hosts line, the port rule's service, started now, and the certificate in the system's store. */
-export function adminInstallScript(certFile: string, store: SystemStore | undefined, name: string = ADDRESS): string {
+export function adminInstallScript(certFile: string, store: SystemStore | undefined): string {
   return `set -e
-${addHostsLine('/etc/hosts', name)}
+${addHostsLine('/etc/hosts')}
 printf '%s' ${quoted(portUnit())} > ${PORT_UNIT_FILE}
 chmod 644 ${PORT_UNIT_FILE}
 systemctl daemon-reload
@@ -198,6 +192,12 @@ function places(env: NodeJS.ProcessEnv) {
   }
 }
 
+/** What the packages file lists; nothing when the install put no package on this computer. */
+async function readPackages(file: string): Promise<{ manager?: PackageManager; packages: string[] }> {
+  const text = await readFile(file, 'utf8').catch(() => undefined)
+  return text === undefined ? { packages: [] } : (JSON.parse(text) as { manager: PackageManager; packages: string[] })
+}
+
 /** The commands the install needs that this computer lacks. */
 async function missingTools(env: NodeJS.ProcessEnv): Promise<Tool[]> {
   const missing: Tool[] = []
@@ -206,15 +206,8 @@ async function missingTools(env: NodeJS.ProcessEnv): Promise<Tool[]> {
 }
 
 async function packageManager(env: NodeJS.ProcessEnv): Promise<PackageManager | undefined> {
-  for (const manager of Object.keys(INSTALL_PACKAGES) as PackageManager[]) if (await installed(manager, env.PATH)) return manager
+  for (const manager of Object.keys(PACKAGE_MANAGERS) as PackageManager[]) if (await installed(manager, env.PATH)) return manager
   return undefined
-}
-
-/** What the install says each missing command is for. */
-const FOR: Record<Tool, string> = {
-  openssl: 'makes the certificate',
-  certutil: 'puts the certificate in the browsers',
-  nft: 'sends port 443 to the dashboard',
 }
 
 const user = (args: string[]) => ['--user', ...args]
@@ -229,7 +222,7 @@ export const linux: Platform = {
     }
     const missing = await missingTools(env)
     if (missing.length > 0 && !(await packageManager(env))) {
-      return `Install the commands ${missing.join(', ')} (${missing.map(tool => TOOLS[tool]['apt-get']).join(', ')} on Debian), then run this again.`
+      return `Install the commands ${missing.join(', ')} (${missing.map(tool => TOOLS[tool].package['apt-get']).join(', ')} on Debian), then run this again.`
     }
     return undefined
   },
@@ -243,9 +236,14 @@ export const linux: Platform = {
     const missing = await missingTools(env)
     const manager = await packageManager(env)
     if (missing.length === 0 || !manager) return
-    const packages = missing.map(tool => TOOLS[tool][manager])
-    io.out(`◆ your password as the administrator: ${packages.join(', ')} ${packages.length === 1 ? 'is' : 'are'} installed (${missing.map(tool => `${tool}, which ${FOR[tool]}`).join('; ')}).`)
-    await run('sudo', ['/bin/sh', '-c', installPackagesScript(manager, packages)], { interactive: true })
+    const packages = missing.map(tool => TOOLS[tool].package[manager])
+    await asAdmin(
+      {
+        says: `your password as the administrator: ${packages.join(', ')} ${packages.length === 1 ? 'is' : 'are'} installed (${missing.map(tool => `${tool}, which ${TOOLS[tool].does}`).join('; ')}).`,
+        script: installPackagesScript(manager, packages),
+      },
+      io,
+    )
     const place = places(env)
     const before = await readPackages(place.packages)
     await mkdir(place.app, { recursive: true })
@@ -273,7 +271,7 @@ export const linux: Platform = {
   },
   async startDashboard(opts, env) {
     const place = places(env)
-    await mkdir(join(place.unit, '..'), { recursive: true })
+    await mkdir(dirname(place.unit), { recursive: true })
     await writeFile(place.unit, dashboardUnit(opts))
     await run('systemctl', user(['daemon-reload']))
     await run('systemctl', user(['enable', DASHBOARD_UNIT]))
@@ -291,19 +289,17 @@ export const linux: Platform = {
       await run('certutil', ['-D', '-d', `sql:${store}`, '-n', NSS_NICKNAME]).catch(() => {})
     }
   },
-  adminUninstall: () => ({
-    says: `your password as the administrator, once: the hosts line for ${ADDRESS} and its port rule are taken off${systemStore() ? ', and the system trusts its certificate no more' : ''}.`,
-    script: adminUninstallScript(systemStore()),
-  }),
+  adminUninstall() {
+    const store = systemStore()
+    return {
+      says: `your password as the administrator, once: the hosts line for ${ADDRESS} and its port rule are taken off${store ? ', and the system trusts its certificate no more' : ''}.`,
+      script: adminUninstallScript(store),
+    }
+  },
   folders: env => [places(env).app],
   async leftBehind(env) {
     const { manager, packages } = await readPackages(places(env).packages)
     if (!manager || packages.length === 0) return undefined
-    return `${packages.join(', ')} ${packages.length === 1 ? 'stays' : 'stay'} installed, as other programs may use ${packages.length === 1 ? 'it' : 'them'}: \`sudo ${REMOVE_PACKAGES[manager]} ${packages.join(' ')}\` takes ${packages.length === 1 ? 'it' : 'them'} off.`
+    return `${packages.join(', ')} ${packages.length === 1 ? 'stays' : 'stay'} installed, as other programs may use ${packages.length === 1 ? 'it' : 'them'}: \`sudo ${PACKAGE_MANAGERS[manager].remove} ${packages.join(' ')}\` takes ${packages.length === 1 ? 'it' : 'them'} off.`
   },
-}
-
-async function readPackages(file: string): Promise<{ manager?: PackageManager; packages: string[] }> {
-  const text = await readFile(file, 'utf8').catch(() => undefined)
-  return text === undefined ? { packages: [] } : (JSON.parse(text) as { manager: PackageManager; packages: string[] })
 }

@@ -62,14 +62,15 @@ async function run(host: ModuleServerHost, input: ModuleReadInput): Promise<RunC
 async function diff(host: ModuleServerHost, input: ModuleReadInput): Promise<FileDiff | null> {
   const path = pathOf(input)
   if (path === undefined) return null
+  const context = contextOf(input)
   const agentId = runId(input)
   if (agentId !== undefined) {
     const at = await resolveAgentWork(host, agentId)
     const sha = commitId(input)
-    return (sha !== undefined ? readAgentCommitFileDiff(host.root, at, sha, path, undefined, contextOf(input)) : readAgentFileDiff(host.root, at, path, undefined, contextOf(input))).catch(() => null)
+    return (sha !== undefined ? readAgentCommitFileDiff(host.root, at, sha, path, context) : readAgentFileDiff(host.root, at, path, context)).catch(() => null)
   }
   const status: FileGitStatus | undefined = (await readFileStatuses(host.root))[path]
-  return status ? readFileDiff(host.root, path, status, undefined, undefined, contextOf(input)).catch(() => null) : null
+  return status ? readFileDiff(host.root, path, status, { context }).catch(() => null) : null
 }
 
 /**

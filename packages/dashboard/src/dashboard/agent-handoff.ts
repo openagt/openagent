@@ -156,15 +156,6 @@ export interface AgentHandoffDeps {
 }
 
 /**
- * The branch an agent's work is on: what was recorded while the checkout existed (#799/#1277).
- * The agent renames its branch itself (#1725), so anything but the record is a guess, and a run
- * whose record carries no branch has none to hand off.
- */
-export function agentBranchFor(agent: { id: string; branch?: string }): string | undefined {
-  return agent.branch
-}
-
-/**
  * Whether a run whose branch is gone changed nothing (#1850): it ended `done`, `failed` or
  * `stopped` on this machine, has no pull request, and was not landed by a main agent (a landed
  * run's branch went because its work moved on, not for holding nothing). Such a run's own tool recorded the branch's
@@ -254,7 +245,7 @@ export async function resolveAgentPr(
   prs: CachedBranchPrLookup = cachedPrView,
 ): Promise<Cached<LinkedPr | undefined>> {
   if (!agent.pr) return { value: undefined, pending: false }
-  const branch = agentBranchFor(agent)
+  const branch = agent.branch
   const read = await prs(cwd, branch).catch((): Cached<LinkedPr | undefined> => ({ value: undefined, pending: false }))
   // The live read is about the recorded PR's *state*; a different number on the branch is some
   // other PR and never this agent's answer.
@@ -285,7 +276,7 @@ export async function mergeAgentPr(
   if (!merged.ok) return { ok: false, error: merged.error }
   // The PR's cached state just changed, so the branch's cached read must go or the bar keeps
   // offering a merge for a PR that landed (#1028).
-  const branch = agentBranchFor(agent)
+  const branch = agent.branch
   forgetPr(cwd, branch)
   if (branch !== undefined) forgetBranchPrs(cwd, branch)
   return { ok: true, url: pr.url, number: pr.number }
@@ -353,10 +344,10 @@ export async function readRunHandoff(
   agent: Pick<AgentMeta, 'id' | 'startedAt' | 'endedAt' | 'branch' | 'baseCommit' | 'landed' | 'status' | 'host' | 'pr'>,
   deps: AgentHandoffDeps = {},
 ): Promise<AgentHandoff | undefined> {
-  const at = agentBranchFor(agent) ?? agent.landed
+  const at = agent.branch ?? agent.landed
   if (at === undefined) return undefined
   // A commit has no pull request to look up: only a branch is asked of the git host.
-  const noPr: AgentHandoffDeps = agentBranchFor(agent) === undefined ? { pr: async () => undefined } : {}
+  const noPr: AgentHandoffDeps = agent.branch === undefined ? { pr: async () => undefined } : {}
   const handoff = await readAgentHandoff(cwd, at, { since: agent.startedAt, ...(agent.endedAt !== undefined ? { endedAt: agent.endedAt } : {}), ...(agent.baseCommit !== undefined ? { from: agent.baseCommit } : {}), ...deps, ...noPr })
   if (!handoff) return undefined
   if (agent.landed !== undefined) return { ...handoff, landed: true }
@@ -422,7 +413,7 @@ async function publishBranch(cwd: string, branch: string, draft: { title: string
  * only the remote has is already there. Refuses a session that recorded no branch.
  */
 export async function pushAgentBranch(cwd: string, agent: Pick<AgentMeta, 'id' | 'branch'>, deps: { branches?: BranchesFor } = {}): Promise<HandoffResult> {
-  const branch = agentBranchFor(agent)
+  const branch = agent.branch
   if (branch === undefined) return { ok: false, error: 'this session recorded no branch to push' }
   const source = await (deps.branches ?? projectBranches)(cwd).catch(() => undefined)
   if (!source) return { ok: false, error: 'this project has no branches provider to push with' }
@@ -437,7 +428,7 @@ export async function pushAgentBranch(cwd: string, agent: Pick<AgentMeta, 'id' |
  * commit its work began at, so what it changed is still read once the branch is gone.
  */
 export async function mergeAgentBranch(cwd: string, agent: Pick<AgentMeta, 'id' | 'branch'>, deps: { branches?: BranchesFor; runs?: RunsFor } = {}): Promise<HandoffResult> {
-  const branch = agentBranchFor(agent)
+  const branch = agent.branch
   if (branch === undefined) return { ok: false, error: 'this session recorded no branch to merge' }
   const source = await (deps.branches ?? projectBranches)(cwd).catch(() => undefined)
   if (!source) return { ok: false, error: 'this project has no branches provider to merge with' }
@@ -508,7 +499,7 @@ export async function openAgentPullRequest(
 ): Promise<HandoffResult> {
   // A subagent's work goes to its main agent's branch, and that one opens the pull request.
   if (agent.parent !== undefined) return { ok: false, error: 'this run is a subagent: its main agent lands its work and opens the pull request' }
-  const branch = agentBranchFor(agent)
+  const branch = agent.branch
   if (branch === undefined) return { ok: false, error: 'this session recorded no branch to open a PR from' }
   const branches = options.branches ?? projectBranches
   const gitHost = options.gitHost ?? projectGitHost

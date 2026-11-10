@@ -1,7 +1,6 @@
 import { lstat, mkdir, readlink, realpath, stat, symlink, unlink } from 'node:fs/promises'
 import { dirname, isAbsolute, join } from 'node:path'
 import { excludeFromGit, nodeGitRunner, type GitRunner } from '@openagt/agent-data'
-import { CLI_BIN_DIR } from './bin-dir.js'
 
 /**
  * A package's command, linked into a checkout that has none: each command at
@@ -34,17 +33,12 @@ export interface PackageLink {
 /** Where a checkout holds its tools. */
 const BIN_DIR = 'node_modules/.bin'
 
-/** This package, as a {@link PackageLink}: its directory is beside `bin/`. */
-export const OWN_PACKAGE: PackageLink = { name: '@openagt/skill-branches', dir: dirname(CLI_BIN_DIR), bins: { branches: join(CLI_BIN_DIR, 'branches') } }
-
 /** The paths of a package's links, relative to a checkout: what the exclude file hides, and the rules a cleanup lifts. */
 export function packageLinkPaths(pkg: PackageLink): string[] {
   return [...Object.keys(pkg.bins).map(command => `${BIN_DIR}/${command}`), `node_modules/${pkg.name}`]
 }
 
-/** The paths of this package's own links. */
-export const COMMAND_LINKS: readonly string[] = packageLinkPaths(OWN_PACKAGE)
-
+/** Link `pkg`'s commands into `checkout`, and the package itself beside its own commands. */
 export async function linkPackage(repo: string, checkout: string, pkg: PackageLink, git: GitRunner = nodeGitRunner()): Promise<void> {
   let ours = true
   for (const [command, script] of Object.entries(pkg.bins)) {
@@ -55,11 +49,6 @@ export async function linkPackage(repo: string, checkout: string, pkg: PackageLi
   const path = `node_modules/${pkg.name}`
   // 'junction' is the only directory-link type Windows grants without elevation; it is ignored on POSIX.
   if (ours && !(await entryExists(join(checkout, path)))) await link(repo, checkout, path, pkg.dir, process.platform === 'win32' ? 'junction' : 'dir', git)
-}
-
-/** This package's own command and package, linked into `checkout`. */
-export function linkOwnCommand(repo: string, checkout: string, git: GitRunner = nodeGitRunner()): Promise<void> {
-  return linkPackage(repo, checkout, OWN_PACKAGE, git)
 }
 
 /**

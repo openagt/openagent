@@ -226,7 +226,6 @@ export function AgentComposer({
         busy={busy}
         submitLabel="Send"
         submitBusyLabel={live ? 'Sending…' : 'Continuing…'}
-        showDriverModel={false}
         inAgent
         sessionRow={row}
         sessionModel={model}

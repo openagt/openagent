@@ -1,17 +1,20 @@
-import { nameAddress, numberAddress, ownAddresses, urlHost, type AddressDeps } from './address.js'
+import { addressOf, nameAddress, numberAddress, ownAddresses, ownName, serverWhere, urlHost, type AddressDeps } from './address.js'
 import { doorFingerprint } from './certificate.js'
 import { execFile } from 'node:child_process'
 import { personalFolder, readPersonRecord } from '@openagt/agent-data'
-import { hostname } from 'node:os'
-import { ENTER_PATH, readKeyWord } from './door.js'
+import { codeLink, readKeyWord } from './door.js'
+import { ENTER_PATH } from './paths.js'
 import { askMe, enterForLine, leaveLine, readLineLink } from './line-out.js'
 import { askAt, cancelAt, doorOrigin, hearAt, mayAnswerAsks, waitingAsks } from './pair.js'
-import { startPersonWork } from './persons.js'
-import { HTTPS_PORT, serve } from './serve.js'
+import { makeUser } from './persons.js'
+import { serve } from './serve.js'
 import { announce, find } from './wifi.js'
 import { tailscaleName, tailscaleRun, type TailscaleRun } from './tailscale.js'
 import { renderUnicodeCompact } from 'uqr'
-import { MAX_LINES, Unreadable, answerAsk, readStoreStrict, nameFromWord, nameOf, nameWord, addCode, shownCode, addPerson, addressOf, computerWordFor, isComputerId, listedDevices, nameOwner, pidAlive, readStore, removeComputer, removePerson, renameComputer, samePerson, update, type Line, type ListedDevice, type Store } from './store.js'
+import { MAX_LINES, answerAsk, readStoreStrict, addCode, shownCode, addPerson, computerWordFor, isComputerId, listedDevices, nameOwner, readStore, removeComputer, removePerson, renameComputer, update, type Line, type ListedDevice, type Store } from './store.js'
+import { nameFromWord, nameOf, nameWord, notAName, samePerson } from './names.js'
+import { Unreadable } from '../home-file.js'
+import { ownStdin, pidAlive, untilStopped } from '../process.js'
 
 /**
  * The command line: JSON on stdout, one line for a person on stderr, and the exit code says how
@@ -108,6 +111,13 @@ export interface CliIO {
 }
 
 class Refused extends Error {}
+
+/** `said` as a name, or a refusal that says what a name is. */
+function toName(said: string): string {
+  const name = nameOf(said)
+  if (name === undefined) throw new Refused(notAName(said))
+  return name
+}
 
 /** What `status` answers. */
 export interface Status {
@@ -226,6 +236,26 @@ function statusOf(store: Store, env: NodeJS.ProcessEnv): Status {
   }
 }
 
+/**
+ * The status once the door's process followed a change of the file, as `settled` tells it, or as
+ * it stands after a moment: the answer says how the change went.
+ */
+async function followed(io: CliIO, settled: (store: Store) => boolean): Promise<Status> {
+  const deadline = Date.now() + (io.followMs ?? 3_000)
+  for (;;) {
+    const store = await readStore(io.env)
+    if (settled(store) || Date.now() > deadline) return statusOf(store, io.env)
+    await new Promise(resolve => setTimeout(resolve, 100))
+  }
+}
+
+/**
+ * Whether the door's process followed the door's moving to another place: once it is to be open
+ * there (`open`), it listens there or says why not; once it is not, it listens no more, unless On
+ * this Wi-Fi keeps it open.
+ */
+const moved = (open: boolean) => (store: Store): boolean => (open ? isListening(store) || store.problem !== undefined : !isListening(store) || store.on)
+
 async function setSwitch(io: CliIO, on: boolean): Promise<Status> {
   await update(io.env, store => {
     store.on = on
@@ -233,15 +263,11 @@ async function setSwitch(io: CliIO, on: boolean): Promise<Status> {
     if (!on && store.tailscale) delete store.wifiProblem
     else if (!on) delete store.problem
   })
-  const deadline = Date.now() + (io.followMs ?? 3_000)
-  for (;;) {
-    const store = await readStore(io.env)
+  return followed(io, store => {
     // Behind Tailscale the Wi-Fi's door is the one beside it, and the file says it apart.
     const said = store.tailscale ? store.wifiListening : store.listening
-    const settled = on ? wifiListening(store) !== undefined || (store.tailscale ? store.wifiProblem : store.problem) !== undefined : said === undefined || !pidAlive(said.pid)
-    if (settled || Date.now() > deadline) return statusOf(store, io.env)
-    await new Promise(resolve => setTimeout(resolve, 100))
-  }
+    return on ? wifiListening(store) !== undefined || (store.tailscale ? store.wifiProblem : store.problem) !== undefined : said === undefined || !pidAlive(said.pid)
+  })
 }
 
 /** On a server or off it: the file says which, and the answer waits a moment for the door's process to follow. */
@@ -253,14 +279,8 @@ async function setHttps(io: CliIO, address: string | undefined): Promise<Status>
     // Where the door listened until now is not where it will: its process says so anew.
     delete store.listening
   })
-  const deadline = Date.now() + (io.followMs ?? 3_000)
-  for (;;) {
-    const store = await readStore(io.env)
-    // A certificate takes longer than this waits for: the answer then says it is being asked for.
-    const settled = address === undefined ? !isListening(store) || store.on : isListening(store) || store.problem !== undefined
-    if (settled || Date.now() > deadline) return statusOf(store, io.env)
-    await new Promise(resolve => setTimeout(resolve, 100))
-  }
+  // A certificate takes longer than this waits for: the answer then says it is being asked for.
+  return followed(io, moved(address !== undefined))
 }
 
 /**
@@ -285,13 +305,7 @@ async function setTailscale(io: CliIO, on: boolean): Promise<Status> {
     // Where the door listened until now is not where it will: its process says so anew.
     delete store.listening
   })
-  const deadline = Date.now() + (io.followMs ?? 3_000)
-  for (;;) {
-    const store = await readStore(io.env)
-    const settled = address === undefined ? !isListening(store) || store.on : isListening(store) || store.problem !== undefined
-    if (settled || Date.now() > deadline) return statusOf(store, io.env)
-    await new Promise(resolve => setTimeout(resolve, 100))
-  }
+  return followed(io, moved(address !== undefined))
 }
 
 /** A code as a command answers it: the link a camera opens, and what is typed instead, where and the code. */
@@ -318,9 +332,9 @@ async function addDevice(io: CliIO, said?: string): Promise<Given> {
     // The same code at the Wi-Fi's door beside it, for a device on this Wi-Fi that is not on Tailscale.
     const wifi = wifiListening(store)
     const host = wifi ? ((await nameAddress(io.address)) ?? numberAddress(io.address)) : undefined
-    const wifiUrl = wifi && host ? `http://${urlHost(host)}:${wifi.port}${ENTER_PATH}#${code}` : undefined
+    const wifiUrl = wifi && host ? codeLink(`http://${urlHost(host)}:${wifi.port}`, code) : undefined
     // Tailscale's certificate is one every device trusts: a device that opens the link needs no key of the door's to know it by.
-    return { url: `https://${store.tailscale.address}${ENTER_PATH}#${code}`, ...(wifiUrl ? { wifiUrl } : {}), where: store.tailscale.address, code: shownCode(code), expires, ...(person !== undefined ? { person } : {}) }
+    return { url: codeLink(`https://${store.tailscale.address}`, code), ...(wifiUrl ? { wifiUrl } : {}), where: store.tailscale.address, code: shownCode(code), expires, ...(person !== undefined ? { person } : {}) }
   }
   if (store.https) {
     if (!status.listening) throw new Refused(status.problem ?? 'the door is not open')
@@ -328,10 +342,9 @@ async function addDevice(io: CliIO, said?: string): Promise<Given> {
     if (!fingerprint) throw new Refused('the door has no key yet')
     const person = await whose()
     const { code, expires } = await addCode(io.env, Date.now(), person)
-    const port = store.listening!.port
-    const where = `${urlHost(store.https.address)}${port === HTTPS_PORT ? '' : `:${port}`}`
+    const where = serverWhere(store.https.address, store.listening!.port)
     // After the code, what the door's key is known by: a device that opens the link knows the door again by it.
-    return { url: `https://${where}${ENTER_PATH}#${code}.${fingerprint}`, where, code: shownCode(code), expires, ...(person !== undefined ? { person } : {}) }
+    return { url: codeLink(`https://${where}`, code, fingerprint), where, code: shownCode(code), expires, ...(person !== undefined ? { person } : {}) }
   }
   if (!status.on) throw new Refused('On this Wi-Fi is off: turn it on first')
   if (!status.listening) throw new Refused(status.problem ?? 'the door is not open')
@@ -342,9 +355,9 @@ async function addDevice(io: CliIO, said?: string): Promise<Given> {
   if (!first) throw new Refused('this computer is on no network a device could reach it on')
   const person = await whose()
   const { code, expires } = await addCode(io.env, Date.now(), person)
-  const link = (host: string): string => `http://${urlHost(host)}:${port}${ENTER_PATH}#${code}`
+  const at = (host: string): string => `${urlHost(host)}:${port}`
   // The number beside the name, for the phone that cannot open a name on the network.
-  return { url: link(first), ...(name && number ? { numberUrl: link(number) } : {}), where: `${urlHost(first)}:${port}`, code: shownCode(code), expires, ...(person !== undefined ? { person } : {}) }
+  return { url: codeLink(`http://${at(first)}`, code), ...(name && number ? { numberUrl: codeLink(`http://${at(number)}`, code) } : {}), where: at(first), code: shownCode(code), expires, ...(person !== undefined ? { person } : {}) }
 }
 
 /**
@@ -359,23 +372,14 @@ async function addDevice(io: CliIO, said?: string): Promise<Given> {
  * person whose user could not be made, the helper is started again.
  */
 async function forPerson(io: CliIO, store: Store, said: string): Promise<string | undefined> {
-  const name = nameOf(said)
-  if (name === undefined) throw new Refused(`${said} is not a name: letters, digits, spaces, dots, apostrophes and dashes, at most 40`)
+  const name = toName(said)
   const owner = store.persons.find(person => person.owner)
   if (!owner) throw new Refused('Name the owner first: devices owner <your name>')
   if (samePerson(owner.name, name)) return undefined
   const helper = helperOf(io)
   const person = await addPerson(io.env, name, Date.now(), helper !== undefined)
   if (!person) throw new Refused('This computer has as many persons as it can: remove one first.')
-  if (helper && person.port !== undefined && !person.ready && !(person.worker !== undefined && pidAlive(person.worker))) {
-    const worker = (io.startWork ?? startPersonWork)(io.env, person.name)
-    await update(io.env, kept => {
-      const known = kept.persons.find(candidate => candidate.name === person.name && !candidate.owner)
-      if (!known) return
-      delete known.problem
-      if (worker !== undefined) known.worker = worker
-    })
-  }
+  if (helper) await makeUser(io.env, person, io.startWork)
   return person.name
 }
 
@@ -467,18 +471,6 @@ function gitName(): Promise<string | undefined> {
   })
 }
 
-/** All of the process's standard input, as text. */
-async function ownStdin(): Promise<string> {
-  let said = ''
-  for await (const chunk of process.stdin.setEncoding('utf8')) said += chunk
-  return said
-}
-
-/** This computer's name as a server lists it, and another computer on the Wi-Fi it asks. */
-function ownName(deps: AddressDeps = {}): string {
-  return (deps.hostname ?? hostname)().replace(/\.local$/i, '') || 'A computer'
-}
-
 /** The line to the server a person names, by its number or name or its whole address. */
 function lineAt(store: Store, at: string): Line | undefined {
   return store.lines.find(line => line.url === at || new URL(line.url).hostname.replace(/^\[|\]$/g, '') === at)
@@ -560,28 +552,9 @@ async function runServe(io: CliIO): Promise<void> {
   // For a try on a computer that is no real server: another port for the proof, another certificate office.
   const proofPort = portIn('OPENAGENT_REMOTE_ACCESS_PROOF_PORT')
   const directory = io.env.OPENAGENT_REMOTE_ACCESS_ACME || undefined
-  const controller = new AbortController()
-  const stop = (): void => controller.abort()
-  let watch: NodeJS.Timeout | undefined
-  if (io.signal) io.signal.addEventListener('abort', stop, { once: true })
-  else {
-    process.once('SIGINT', stop)
-    process.once('SIGTERM', stop)
-    // The door goes with the OpenAgent that started it, also when that one died without a word.
-    const parent = process.ppid
-    watch = setInterval(() => {
-      if (process.ppid !== parent) stop()
-    }, 2_000)
-  }
-  try {
-    if (io.signal?.aborted) stop()
-    await serve({ env: io.env, target, signal: controller.signal, log: io.stderr, ...(port !== undefined ? { port } : {}), ...(proofPort !== undefined ? { proofPort } : {}), ...(directory ? { directory } : {}), ...(io.host !== undefined ? { host: io.host } : {}), ...(io.address ? { address: io.address } : {}), ...(io.announce ? { announce: io.announce } : {}), ...(io.tailscale ? { tailscale: io.tailscale } : {}) })
-  } finally {
-    // Whatever ended it, nothing of it is left to keep the process alive.
-    clearInterval(watch)
-    process.off('SIGINT', stop)
-    process.off('SIGTERM', stop)
-  }
+  const options = { env: io.env, target, log: io.stderr, ...(port !== undefined ? { port } : {}), ...(proofPort !== undefined ? { proofPort } : {}), ...(directory ? { directory } : {}), ...(io.host !== undefined ? { host: io.host } : {}), ...(io.address ? { address: io.address } : {}), ...(io.announce ? { announce: io.announce } : {}), ...(io.tailscale ? { tailscale: io.tailscale } : {}) }
+  // The door goes with the OpenAgent that started it, also when that one died without a word.
+  await untilStopped(io.signal, signal => serve({ ...options, signal }), { withParent: true })
 }
 
 export async function runCli(args: string[], io: CliIO): Promise<number> {
@@ -622,8 +595,7 @@ export async function runCli(args: string[], io: CliIO): Promise<number> {
       case 'owner': {
         const [said] = rest
         if (rest.length !== 1 || !said) break
-        const name = nameOf(said)
-        if (name === undefined) throw new Refused(`${said} is not a name: letters, digits, spaces, dots, apostrophes and dashes, at most 40`)
+        const name = toName(said)
         if (!(await nameOwner(io.env, name))) throw new Refused(`This computer's owner is ${(await readStore(io.env)).persons[0]?.name}.`)
         return print(statusOf(await readStore(io.env), io.env))
       }
@@ -685,15 +657,7 @@ export async function runCli(args: string[], io: CliIO): Promise<number> {
         // A link holds a code that works once: a program hands it over on standard input, where no other program sees it.
         if (what === 'add' && at && (rest.length === 2 || (rest.length === 3 && how === 'watch'))) return print(await addLine(io, at === '-' ? await (io.stdin ?? ownStdin)() : at, how === 'watch' ? 'watch' : 'full'))
         if ((what === 'full' || what === 'watch') && at && rest.length === 2) return print(await setLineMode(io, at, what))
-        if (what === 'for' && at) {
-          const people: string[] = []
-          for (const said of rest.slice(2)) {
-            const name = nameOf(said)
-            if (name === undefined) throw new Refused(`${said} is not a name: letters, digits, spaces, dots, apostrophes and dashes, at most 40`)
-            if (!people.includes(name)) people.push(name)
-          }
-          return print(await setLineMode(io, at, 'full', people))
-        }
+        if (what === 'for' && at) return print(await setLineMode(io, at, 'full', [...new Set(rest.slice(2).map(toName))]))
         if (what === 'remove' && at && rest.length === 2) return print(await removeLine(io, at))
         break
       }

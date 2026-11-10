@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { Bot, ExternalLink, LockOpen, Play } from 'lucide-react'
 import { Badge, Button, LinkActions, Markdown, cn, formatAge, formatDateTime, useAction, usePolled, useModuleHost } from '@openagt/dashboard/module'
-import { heldBack, holderAgent, readShown, ticketLink } from '../src/module.js'
+import { claimState, heldBack, holderAgent, readShown, ticketLink, withHolder } from '../src/module.js'
 import type { WorkspaceTicketDetail } from './lib/types.js'
 import { TicketPageShell, TicketPageNote } from './TicketPageShell.js'
 import { releaseClaim } from './lib/release.js'
@@ -33,7 +33,7 @@ export function TicketDetailPage({
       if ('error' in shown) return shown
       if (!shown.shown) return { ticket: null }
       const agent = holderAgent(agents, shown.shown.ticket.lockedBy)
-      return agent ? { ticket: { ...shown.shown.ticket, lockedByAgent: { id: agent.id, ...(agent.name ? { name: agent.name } : {}) } }, holderStatus: agent.status } : { ticket: shown.shown.ticket }
+      return { ticket: withHolder(shown.shown.ticket, agent), ...(agent ? { holderStatus: agent.status } : {}) }
     },
     null,
     10_000,
@@ -50,8 +50,7 @@ export function TicketDetailPage({
   const claimed = Boolean(ticket?.locked) && !released
   const holder = ticket?.lockedByAgent?.name ?? ticket?.lockedBy
   const holderStatus = read && 'ticket' in read ? read.holderStatus : undefined
-  // Whether the run holding the claim still holds it for a reason: at work, or stopped on a question.
-  const working = holderStatus === 'running' || holderStatus === 'waiting'
+  const working = claimState(holderStatus) === 'working'
   const release = async () => {
     if (!ticket) return
     const outcome = await run(() => releaseClaim(host, projectId, ticket.file), 'The lock could not be released.')
@@ -152,7 +151,7 @@ export function TicketDetailPage({
                       <button type="button" className="hover:underline" onClick={() => onOpenAgent(ticket.lockedByAgent!.id)}>
                         {holder}
                       </button>
-                      {holderStatus !== undefined && <>&nbsp;· {working ? (holderStatus === 'waiting' ? 'waits on your answer' : 'at work') : holderStatus === 'unknown' ? 'its computer is offline' : `run ${holderStatus}`}</>}
+                      {holderStatus !== undefined && <>&nbsp;· {standing(holderStatus)}</>}
                     </>
                   ) : (
                     <>&nbsp;· {holder}</>
@@ -175,4 +174,11 @@ export function TicketDetailPage({
       )}
     </TicketPageShell>
   )
+}
+
+/** How the run holding the claim stands, as the claim's badge says it after the run's name. */
+function standing(holderStatus: string): string {
+  const state = claimState(holderStatus)
+  if (state === 'working') return holderStatus === 'waiting' ? 'waits on your answer' : 'at work'
+  return state === 'offline' ? 'its computer is offline' : `run ${holderStatus}`
 }

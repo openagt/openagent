@@ -6,13 +6,13 @@ import { tmpdir, hostname } from 'node:os'
 import { basename, join } from 'node:path'
 import { EventStream } from '../event-stream.js'
 import { startDashboard, type Dashboard } from './server.js'
-import { testDashboardOptions } from '../dashboard-rpc/test-context.js'
+import { testDashboardContext, testDashboardOptions } from '../dashboard-rpc/test-context.js'
 import { relayRpc, remoteProject } from './remote-run.js'
 import type { Cloned } from '../clone-project.js'
 import { readSharing } from '@openagt/agent-data'
 import { createProjectRuntime, type ProjectRuntime } from '../daemon-runtime.js'
 import { forwardStream } from '../dashboard-rpc/stream-forward.js'
-import { dispatchMachineRpc } from '../dashboard-rpc/relay-dispatch.js'
+import { dispatchMachineRpc, dispatchRelayRpc } from '../dashboard-rpc/relay-dispatch.js'
 import { asCaller } from './person.js'
 import { elsewhereId } from './elsewhere.js'
 import type { ProjectLauncher } from '../dashboard-rpc/projects.js'
@@ -107,8 +107,8 @@ async function twoMachines(opts: { shopOnB?: boolean; machineCalls?: (fn: string
   // B: another project first on its list, then (unless the test says not) the shop, cloned over HTTPS.
   const otherB = await repository(join(root, 'b'), 'other', 'https://github.com/acme/other.git')
   const shopB = await repository(join(root, 'b'), 'work-shop', 'https://github.com/Acme/Shop.git')
-  await addProject(otherB, at, undefined, envB)
-  if (opts.shopOnB !== false) await addProject(shopB, at, undefined, envB)
+  await addProject(otherB, at, envB)
+  if (opts.shopOnB !== false) await addProject(shopB, at, envB)
   const bClones: TwoMachines['bClones'] = []
   const runtimeB = createProjectRuntime({ cwd: otherB, env: envB, clone: from => new Promise<Cloned>(land => bClones.push({ from, land })) })
 
@@ -132,17 +132,17 @@ async function twoMachines(opts: { shopOnB?: boolean; machineCalls?: (fn: string
   const b = await startDashboard(
     testDashboardOptions({
       clientBundleDir: bundle,
-      onStart: bStart,
-      relay: { project: runtimeB.projectAt, tailEvents: bTail, rpc: runtimeB.onRelayRpc, machine: (fn, args) => opts.machineCalls?.(fn, args) ?? dispatchMachineRpc(fn, args), bring: runtimeB.bringProject },
+      context: testDashboardContext({ startAgent: bStart }),
+      relay: { project: runtimeB.projectAt, tailEvents: bTail, rpc: dispatchRelayRpc, machine: (fn, args) => opts.machineCalls?.(fn, args) ?? dispatchMachineRpc(fn, args), bring: runtimeB.bringProject },
     }),
   )
 
   // A: the shop cloned over SSH into another folder, a project with no remote, and B saved as a machine.
   const shopA = await repository(join(root, 'a'), 'shop', 'git@github.com:acme/shop.git')
   const localOnlyA = await repository(join(root, 'a'), 'notes')
-  await addProject(shopA, at, undefined, envA)
-  await addProject(localOnlyA, at, undefined, envA)
-  const machineB = (await addMachine({ url: b.url, key: KEY, door: `${b.url}/_devices/enter`, label: 'Studio' }, undefined, envA)).record.id
+  await addProject(shopA, at, envA)
+  await addProject(localOnlyA, at, envA)
+  const machineB = (await addMachine({ url: b.url, key: KEY, door: `${b.url}/_devices/enter`, label: 'Studio' }, envA)).record.id
   const a = createProjectRuntime({ cwd: shopA, env: envA })
 
   return {

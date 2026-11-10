@@ -7,8 +7,7 @@ import { lstat, mkdir, mkdtemp, readFile, realpath, rm, writeFile } from 'node:f
 import { tmpdir } from 'node:os'
 import { nodeGitRunner } from '@openagt/agent-data'
 import { CLI_BIN_DIR } from './bin-dir.js'
-import { createCheckout } from './checkout.js'
-import { linkOwnCommand } from './command-link.js'
+import { createCheckout, relinkCheckout } from './checkout.js'
 
 const git = nodeGitRunner()
 const run = promisify(execFile)
@@ -46,7 +45,7 @@ test('a checkout in a project with nothing installed holds the command, hidden f
     const viaNpx = await run('npx', ['--offline', '--yes', '@openagt/skill-branches@0.1', 'status'], { cwd: path })
     assert.equal(JSON.parse(viaNpx.stdout).path, path)
     // Linking again changes nothing.
-    await linkOwnCommand(repo, path)
+    await relinkCheckout(repo, path)
     assert.equal(await realpath(link), await realpath(join(CLI_BIN_DIR, 'branches')))
     assert.equal(await realpath(pkg), await realpath(join(CLI_BIN_DIR, '..')))
   } finally {
@@ -77,7 +76,7 @@ test("a project that installed its own copy of the package keeps it: the checkou
     const pkg = join(path, 'node_modules', '@openagt', 'skill-branches')
     assert.equal(await realpath(pkg), await realpath(own))
     // Linking again leaves the project's copy where it is.
-    await linkOwnCommand(repo, path)
+    await relinkCheckout(repo, path)
     assert.equal(await realpath(pkg), await realpath(own))
   } finally {
     await rm(repo, { recursive: true, force: true })

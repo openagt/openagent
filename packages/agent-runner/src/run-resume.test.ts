@@ -10,7 +10,7 @@ import { acquireRunLock, releaseRunLock } from './run-lock.js'
 import { AFRESH_NOTICE, earlierWorkLine, PUBLISH_LINES, resumeRun, runCommand, STOPPED_DETAIL } from './run.js'
 import { recordRun, runnerMark } from './records.js'
 import type { GitHost } from './git-host.js'
-import { git, handDownBasicSkills, readUntimedDiary, removeRepo, testRepo } from './test-repo.js'
+import { handDownBasicSkills, readUntimedDiary, removeRepo, testRepo } from './test-repo.js'
 import { NOW, noGitHost, fakeGitHost, wrap, QUESTION, committingDriver, ticking } from './run-test-support.js'
 
 // A run as OpenAgent starts it: with the basic skills handed down.
@@ -139,6 +139,24 @@ test('a run whose last turn asked ends waiting and keeps its checkout; the answe
     assert.deepEqual(after.at(-1), { kind: 'ended', status: 'done' })
     const resumePrompt = after.find((l, i) => l.kind === 'start' && i > 4)
     assert.equal(resumePrompt?.['prompt'], 'You paused to ask: "Ship it?". The user chose: Approve. Continue with that decision.')
+  } finally {
+    await removeRepo(repo)
+  }
+})
+
+test('a resumed run whose coding agent cannot start is recorded failed, not as the end its kept checkout had before', async () => {
+  const repo = await testRepo()
+  try {
+    const first = await runCommand(repo, { prompt: '/work-queue', driver: new FakeDriver({ turns: [{ text: QUESTION }], sessionId: 's-ask' }), now: () => NOW, gitHost: noGitHost })
+    assert.equal(first.status, 'waiting')
+    const dying: Driver = { id: 'fake', start: async () => { throw new Error('codex: not installed') } }
+    const later = new Date(NOW.getTime() + 60_000)
+    const second = await resumeRun(repo, { id: first.id, answer: 'Approve', driver: dying, now: () => later, gitHost: noGitHost })
+    assert.equal(second.status, 'failed')
+    const card = await findRun(repo, first.id)
+    assert.equal(card?.status, 'failed', 'the record says how this leg ended')
+    assert.equal(card?.endedAt, later.toISOString())
+    assert.deepEqual((await readDiary(repo, first.id))?.at(-1), { kind: 'ended', status: 'failed', detail: 'codex: not installed', at: later.toISOString() })
   } finally {
     await removeRepo(repo)
   }

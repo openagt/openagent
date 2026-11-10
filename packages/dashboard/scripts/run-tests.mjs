@@ -1,10 +1,9 @@
 // Run the compiled test suite against a throwaway config home (#765).
 //
-// The machine-global state lives at `$XDG_CONFIG_HOME` (the registry, the daemon state
-// file). A test that finds the developer's live daemon there wires the control watcher,
-// whose file follower keeps the event loop alive until the test times out, so a dashboard
-// user gets false failures. Nothing in the suite should ever read the real one, so the
-// isolation belongs here rather than in each test file.
+// The machine-global state lives at `$XDG_CONFIG_HOME`: the registry, with the developer's own
+// projects, preferences and saved machines. A test that read or wrote the real one would see a
+// dashboard user's projects as its own, and change them. Nothing in the suite should ever touch
+// it, so the isolation belongs here rather than in each test file.
 //
 // The same goes for the skills every run gets by default: an agent's run names them in
 // `OPENAGENT_SKILLS`, and its agent's own test run inherited it, so a test's empty project held

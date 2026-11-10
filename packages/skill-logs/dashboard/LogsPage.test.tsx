@@ -1,6 +1,7 @@
 import { afterEach, expect, test, vi } from 'vitest'
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
-import { ModuleHostContext, forgetRemembered, type ModuleHost } from '@openagt/dashboard/module'
+import { ModuleHostContext, forgetRemembered, type ModuleAgent } from '@openagt/dashboard/module'
+import { fakeHost, type FakeHost } from '@openagt/dashboard/module/testing'
 import { LogsPage, dayOf } from './LogsPage.js'
 
 // The Logs page: every run of the projects shown, newest first, in one table cut by day, each day
@@ -12,14 +13,8 @@ const now = Date.now()
 const noon = new Date(new Date().setHours(12, 0, 0, 0)).getTime()
 
 /** A host whose `logs` prints `cards`, and whose dashboard lists `runs` right now. */
-function hostWith(cards: unknown[], runs: unknown[] = []): ModuleHost {
-  return {
-    package: '@openagt/skill-logs',
-    runCommand: vi.fn(async () => ({ ok: true as const, output: cards })),
-    agents: vi.fn(async () => runs),
-    gitHostPeople: vi.fn(async () => []),
-    openAgent: vi.fn(),
-  } as unknown as ModuleHost
+function hostWith(cards: unknown[], runs: unknown[] = []): FakeHost {
+  return fakeHost('@openagt/skill-logs', { runCommand: async () => ({ ok: true as const, output: cards }), agents: async () => runs as ModuleAgent[] })
 }
 
 afterEach(() => {

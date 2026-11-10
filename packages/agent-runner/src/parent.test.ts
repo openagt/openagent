@@ -2,36 +2,20 @@ import { strict as assert } from 'node:assert'
 import { test } from 'node:test'
 import { readFile, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
-import { appendInbox, FakeDriver, takeInbox, type Driver, type DriverSession, type FakeDriverSession } from '@openagt/agent-driver'
+import { appendInbox, FakeDriver, takeInbox, type Driver } from '@openagt/agent-driver'
 import { worktreeBranch, worktreePath } from '@openagt/skill-branches'
 import { findRun } from '@openagt/skill-logs'
 import { inboxPath } from './live-card.js'
 import { childEndedLine, tellParent, type ParentDeps } from './parent.js'
 import { resumeRun, runCommand } from './run.js'
-import type { GitHost } from './git-host.js'
 import { git, readUntimedDiary, removeRepo, testRepo } from './test-repo.js'
+import { noGitHost, wrap } from './run-test-support.js'
 
 // A run started for another run: what its parent is told, how the line reaches a parent that is
 // working and one that has ended, and the whole thing on a real repository with the agents faked.
 
 const NOW = new Date('2026-10-01T09:00:00.000Z')
 const LATER = new Date('2026-10-01T09:05:00.000Z')
-
-const noGitHost: GitHost = { requestOfBranch: async () => undefined }
-
-/** A fake session with something done before each prompt. */
-function wrap(fake: FakeDriverSession, before: (text: string) => Promise<void>): DriverSession {
-  return {
-    id: fake.id,
-    cwd: fake.cwd,
-    ...(fake.log ? { log: fake.log } : {}),
-    prompt: async (text, opts) => {
-      await before(text)
-      return fake.prompt(text, opts)
-    },
-    dispose: () => fake.dispose(),
-  }
-}
 
 type Resumed = { id: string; line: { text: string } | { answer: string } }
 

@@ -1,16 +1,17 @@
 import { stat } from 'node:fs/promises'
 import { createServer, type Server } from 'node:http'
-import { hostname } from 'node:os'
 import { CHALLENGE_PREFIX, LETS_ENCRYPT } from './acme.js'
-import { numberAddress, onOwnNetwork, plainAddress, urlHost, type AddressDeps } from './address.js'
+import { numberAddress, onOwnNetwork, ownName, plainAddress, serverWhere, type AddressDeps } from './address.js'
 import { keepCertificate, type KeepOptions, type Keeper, type Secured } from './certificate.js'
 import { openDoor, type Door } from './door.js'
+import { listen, shut } from './http.js'
 import { linePorts, openLines, tellOpenAgent, whomToTell } from './line-in.js'
 import { askMe, keepLine, type MeThere, type Route } from './line-out.js'
-import { startPersonWork } from './persons.js'
+import { cameFrom, makeUser } from './persons.js'
 import { announce, type Announcing } from './wifi.js'
 import { servedAt, serveDoor, stopServing, tailscaleRun, type TailscaleRun } from './tailscale.js'
-import { addPerson, computerWordFor, isComputerId, pidAlive, readStore, readStoreStrict, shareLine, storePath, update, type Line, type Store } from './store.js'
+import { addPerson, computerWordFor, isComputerId, readStore, readStoreStrict, shareLine, storePath, update, type Line, type Store } from './store.js'
+import { pidAlive } from '../process.js'
 
 /**
  * The door's process: it runs for as long as OpenAgent runs, and follows the file. With the
@@ -83,8 +84,8 @@ export function routeFor(line: Line, store: Store, target: string, env: NodeJS.P
 }
 
 /** The door's port on a server, and the port the certificate office reads the proof on. */
-export const HTTPS_PORT = 443
-export const PROOF_PORT = 80
+const HTTPS_PORT = 443
+const PROOF_PORT = 80
 
 export interface ServeOptions {
   env: NodeJS.ProcessEnv
@@ -179,16 +180,7 @@ async function openProof(port: number, host: string | undefined, proofs: Readonl
   // Open to every network: a caller that sends nothing, or too many at once, is not waited for.
   server.headersTimeout = 10_000
   server.maxConnections = 256
-  const listen = (on: string): Promise<void> =>
-    new Promise((resolve, reject) => {
-      server.once('error', reject)
-      server.listen(port, on, () => {
-        server.removeListener('error', reject)
-        resolve()
-      })
-    })
-  if (host !== undefined) await listen(host)
-  else await listen('::').catch(err => ((err as NodeJS.ErrnoException).code === 'EAFNOSUPPORT' ? listen('0.0.0.0') : Promise.reject(err)))
+  await listen(server, port, host)
   return server
 }
 
@@ -251,7 +243,7 @@ export async function serve(opts: ServeOptions): Promise<void> {
     announcing = (async () => {
       const address = numberAddress(opts.address)
       if (!address) return undefined
-      return (opts.announce ?? announce)({ name: hostname().replace(/\.local$/i, '') || 'A computer', port, address, ...(await versionAt(opts.target).then(version => (version ? { version } : {}))) })
+      return (opts.announce ?? announce)({ name: ownName(), port, address, ...(await versionAt(opts.target).then(version => (version ? { version } : {}))) })
     })().catch((err: unknown) => {
       log(`devices: this computer could not be announced on the Wi-Fi, so other computers do not find it there: ${err instanceof Error ? err.message : String(err)}`)
       return undefined
@@ -292,24 +284,11 @@ export async function serve(opts: ServeOptions): Promise<void> {
     void (async () => {
       const person = await addPerson(env, name, Date.now(), true)
       if (!person?.port) return log(`devices: ${name} could not be given a place on this computer: it has as many persons as it can, or no owner`)
+      // Which server they came from, written before their user is made: whoever reads that it is made reads where they came from too.
+      await cameFrom(env, name, from)
       // Started again only when it is not made and no making of it is at work, as the file says now: a
       // call that read the file a moment earlier may ask for one that was made since. One that failed is asked again.
-      const working = person.ready === true || (person.worker !== undefined && pidAlive(person.worker))
-      const known = (kept: Store): Store['persons'][number] | undefined => kept.persons.find(candidate => candidate.name === name && !candidate.owner)
-      // Which server they came from, written before their user is made: whoever reads that it is made reads where they came from too.
-      await update(env, kept => {
-        const them = known(kept)
-        if (!them) return
-        them.from ??= from
-        if (!working) delete them.problem
-      })
-      if (working) return
-      const worker = (opts.startWork ?? startPersonWork)(env, name)
-      if (worker === undefined) return
-      await update(env, kept => {
-        const them = known(kept)
-        if (them) them.worker = worker
-      })
+      await makeUser(env, person, opts.startWork)
     })()
       .catch(err => log(`devices: ${name}'s place on this computer could not be made: ${err instanceof Error ? err.message : String(err)}`))
       .finally(() => asked.delete(name))
@@ -422,8 +401,7 @@ export async function serve(opts: ServeOptions): Promise<void> {
     if (!served) return
     await lines.close()
     served.keeper.stop()
-    served.proof.closeAllConnections()
-    await new Promise<void>(resolve => served!.proof.close(() => resolve()))
+    await shut(served.proof)
     served = undefined
     secured = undefined
     asking = undefined
@@ -442,10 +420,7 @@ export async function serve(opts: ServeOptions): Promise<void> {
       door = undefined
       let proof: Server | undefined
       try {
-        proof = await openProof(proofPort, opts.host, proofs, () => {
-          const at = door?.port ?? httpsPort
-          return `https://${urlHost(address)}${at === HTTPS_PORT ? '' : `:${at}`}`
-        })
+        proof = await openProof(proofPort, opts.host, proofs, () => `https://${serverWhere(address, door?.port ?? httpsPort)}`)
         const keeper = await keepCertificate({
           env,
           host: address,
@@ -467,10 +442,7 @@ export async function serve(opts: ServeOptions): Promise<void> {
       } catch (err) {
         failedAt = Date.now()
         // What was opened for a certificate that cannot be kept (a key file that cannot be read) is closed again.
-        if (proof) {
-          proof.closeAllConnections()
-          await new Promise<void>(resolve => proof!.close(() => resolve()))
-        }
+        if (proof) await shut(proof)
         // The door's process of an OpenAgent that just ended still holds the port: it goes by itself.
         problem = startingOver(err, store) ? store.problem : whyNot(err, proofPort)
       }
@@ -595,42 +567,28 @@ export async function serve(opts: ServeOptions): Promise<void> {
       delete s.wifiProblem
     })
     log('devices: the door behind Tailscale is closed')
+    stamp = undefined
   }
 
-  const reconcile = async (): Promise<void> => {
-    const now = await stat(storePath(env)).then(s => `${s.mtimeMs}:${s.size}`, () => 'none')
-    const retry = failedAt !== undefined && Date.now() - failedAt > (opts.retryMs ?? 10_000)
-    if (now === stamp && !retry && !turned) return
-    stamp = now
-    turned = false
-    const store = await readStoreStrict(env)
-    // A file that cannot be read is left as it is, and so is the door: it lets nobody in until the file reads again.
-    if (store === 'unreadable') return log(`devices: ${storePath(env)} cannot be read; nobody gets in until it is corrected`)
-    followLines(store)
-    // No longer a server, or one at another address: what was open for the old address is closed.
-    if (served && served.address !== store.https?.address) {
-      await closeServed()
-      await door?.close()
-      door = undefined
-      failedAt = undefined
-      stamp = undefined
-      await update(env, s => {
-        delete s.listening
-        delete s.problem
-      })
-      log('devices: the door is closed')
-      return
-    }
-    // No longer behind Tailscale, or at another name: Tailscale lets go of the door, and it is closed.
-    if (behind && behind.address !== store.tailscale?.address) {
-      await leaveTailscale()
-      stamp = undefined
-      return
-    }
-    if (store.https) return reconcileServed(store, store.https.address)
-    if (store.tailscale) await reconcileBehind(store, store.tailscale.address)
-    // The Wi-Fi's door, by the switch: the door, or one beside the door behind Tailscale, whose
-    // place in the file it then leaves alone.
+  /** No longer a server, or one at another address: what was open for the old address is closed. */
+  const leaveServer = async (): Promise<void> => {
+    await closeServed()
+    await door?.close()
+    door = undefined
+    failedAt = undefined
+    stamp = undefined
+    await update(env, s => {
+      delete s.listening
+      delete s.problem
+    })
+    log('devices: the door is closed')
+  }
+
+  /**
+   * The Wi-Fi's door, by the switch: the door, or one beside the door behind Tailscale, whose
+   * place in the file it then leaves alone.
+   */
+  const reconcileWifi = async (store: Store): Promise<void> => {
     const beside = store.tailscale !== undefined
     const heard = beside ? store.wifiListening : store.listening
     const said = beside ? store.wifiProblem : store.problem
@@ -682,6 +640,24 @@ export async function serve(opts: ServeOptions): Promise<void> {
     }
     startAnnouncing(door.port)
     door.dropRemoved(store)
+  }
+
+  const reconcile = async (): Promise<void> => {
+    const now = await stat(storePath(env)).then(s => `${s.mtimeMs}:${s.size}`, () => 'none')
+    const retry = failedAt !== undefined && Date.now() - failedAt > (opts.retryMs ?? 10_000)
+    if (now === stamp && !retry && !turned) return
+    stamp = now
+    turned = false
+    const store = await readStoreStrict(env)
+    // A file that cannot be read is left as it is, and so is the door: it lets nobody in until the file reads again.
+    if (store === 'unreadable') return log(`devices: ${storePath(env)} cannot be read; nobody gets in until it is corrected`)
+    followLines(store)
+    if (served && served.address !== store.https?.address) return leaveServer()
+    // No longer behind Tailscale, or at another name: Tailscale lets go of the door, and it is closed.
+    if (behind && behind.address !== store.tailscale?.address) return leaveTailscale()
+    if (store.https) return reconcileServed(store, store.https.address)
+    if (store.tailscale) await reconcileBehind(store, store.tailscale.address)
+    await reconcileWifi(store)
   }
 
   // One look at a time: a look that opens the door writes the file, which the next look reads.

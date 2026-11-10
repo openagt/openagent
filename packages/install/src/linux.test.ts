@@ -4,6 +4,7 @@ import { execFileSync, spawnSync } from 'node:child_process'
 import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
+import { SECURE_PORT } from '@openagt/dashboard/secure-address'
 import { LOOPBACK_ADDRESS } from './address.js'
 import { SYSTEM_STORE, adminInstallScript, adminUninstallScript, certificateStores, dashboardUnit, installPackagesLine, installPackagesScript, portRule, portUnit, unitWord } from './linux.js'
 
@@ -24,11 +25,11 @@ test('the dashboard service runs node on the dashboard, with the terminal’s va
 
 test('the port rule touches the address alone, in a table of its own, and loads again after the firewall’s', () => {
   assert.equal(
-    portRule(4243),
-    `add table ip openagent; flush table ip openagent; add chain ip openagent output { type nat hook output priority -100 ; }; add rule ip openagent output ip daddr ${LOOPBACK_ADDRESS} tcp dport 443 redirect to :4243`,
+    portRule(),
+    `add table ip openagent; flush table ip openagent; add chain ip openagent output { type nat hook output priority -100 ; }; add rule ip openagent output ip daddr ${LOOPBACK_ADDRESS} tcp dport 443 redirect to :${SECURE_PORT}`,
   )
   const unit = portUnit()
-  assert.match(unit, /^ExecStart=nft "add table ip openagent; .*redirect to :4243"$/m)
+  assert.match(unit, new RegExp(`^ExecStart=nft "add table ip openagent; .*redirect to :${SECURE_PORT}"$`, 'm'))
   assert.match(unit, /^ExecStop=nft "delete table ip openagent"$/m)
   assert.match(unit, /^After=nftables.service firewalld.service$/m)
   assert.match(unit, /^PartOf=nftables.service$/m)

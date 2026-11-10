@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, test, vi } from 'vitest'
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { ModuleHostContext, type ModuleCommandResult, type ModuleComputerThrough, type ModuleHost, type ModuleMachine, type ModuleMachines } from '@openagt/dashboard/module'
+import { fakeHost } from '@openagt/dashboard/module/testing'
 import { DevicesSettings } from './DevicesSettings.js'
 import { WARNING } from './ThisComputer.js'
 
@@ -21,40 +22,19 @@ function door(answer: (args: string[], input?: string) => ModuleCommandResult | 
   const serverCommand = vi.fn(async (args: string[]) => server(args))
   const inProject = vi.fn(async () => ({ ok: false as const, error: 'the door is no project\'s' }))
   const machines = vi.fn(async (): Promise<ModuleMachines> => ({ version: '0.0.0', name: 'Adas-MacBook', machines: saved }))
-  const host: ModuleHost = {
-    package: '@openagt/dashboard-devices',
+  const host = fakeHost('@openagt/dashboard-devices', {
     runCommand: inProject,
     act: inProject,
-    runComputerCommand: vi.fn(async (args: string[], _command?: string, input?: string) => (args[0] === 'server' ? serverCommand(args.slice(1)) : input === undefined ? runComputerCommand(args) : runComputerCommand(args, input))),
-    runComputerCommandOn: vi.fn(async () => ({ ok: false as const, error: 'not here' })),
-    read: vi.fn(async () => ({ ok: false as const, error: 'no server part' })),
-    openAgent: vi.fn(),
-    openPage: vi.fn(),
-    pageHref: (segment: string) => `/${segment}`,
-    openSettings: vi.fn(),
-    gitHostPeople: vi.fn(async () => []),
-    startRun: vi.fn(async () => ({ ok: false as const, error: 'not here' })),
-    configureRun: vi.fn(),
-    agents: vi.fn(async () => []),
+    runComputerCommand: async (args: string[], _command?: string, input?: string) => (args[0] === 'server' ? serverCommand(args.slice(1)) : input === undefined ? runComputerCommand(args) : runComputerCommand(args, input)),
     machines,
-    addMachine: vi.fn(async () => ({ ok: true as const })),
-    removeMachine: vi.fn(async () => ({ ok: true as const })),
-    renameMachine: vi.fn(async () => ({ ok: true as const })),
-    renameComputer: vi.fn(async () => ({ ok: true as const })),
-    letMachineIn: vi.fn(async () => ({ ok: true as const })),
-    machineCode: vi.fn(async () => ({ ok: false as const, error: 'not here' })),
-    computersThrough: vi.fn(async () => ({ ok: true as const, computers: [] })),
-    machinePerson: vi.fn(async () => ({ ok: false as const, error: 'not here', unknown: true as const })),
-    removeMachineDevice: vi.fn(async () => ({ ok: false as const, error: 'not here' })),
-    machineAccounts: vi.fn(async () => null),
-    removeMachineAccount: vi.fn(async () => ({ ok: false as const, error: 'no server here' })),
-    useLoginsOn: vi.fn(async () => ({ ok: true as const })),
-    syncDataOn: vi.fn(async () => ({ ok: true as const })),
-    agentDataRemote: vi.fn(async () => undefined),
-    addComputerThrough: vi.fn(async () => ({ ok: false as const, error: 'not here' })),
-    watchScreen: vi.fn(async () => undefined),
-    sendToScreen: vi.fn(async () => false),
-  }
+    addMachine: async () => ({ ok: true as const }),
+    removeMachine: async () => ({ ok: true as const }),
+    renameMachine: async () => ({ ok: true as const }),
+    renameComputer: async () => ({ ok: true as const }),
+    letMachineIn: async () => ({ ok: true as const }),
+    useLoginsOn: async () => ({ ok: true as const }),
+    syncDataOn: async () => ({ ok: true as const }),
+  })
   return { host, runComputerCommand, serverCommand }
 }
 

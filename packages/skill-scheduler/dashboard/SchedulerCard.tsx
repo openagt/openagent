@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { CalendarClock } from 'lucide-react'
 import { Button, Card, CardContent, CardHeader, CardTitleLink, Tooltip, TooltipContent, TooltipTrigger, cn, formatAge, formatDateTime, useModuleHost, usePolled, type ModuleCardProps, type ModuleProject } from '@openagt/dashboard/module'
-import { cannotRun, readSchedulers, schedulersKey, rowTitle, schedulerStatus, schedulerStopped, startedNow, startsNext, unlistedWords, type Answered, type SchedulerCommand, type SchedulerRow } from './schedulers.js'
+import { cannotRun, notAsked, readSchedulers, schedulersKey, rowTitle, schedulerStatus, schedulerStopped, startedNow, startsNext, unlistedWords, type Answered, type SchedulerCommand, type SchedulerRow } from './schedulers.js'
 
 // The Overview's Automations card: what starts by itself in every project that has this package,
 // read with `scheduler status` every 10 seconds. It is called what its page is called, and
@@ -121,7 +121,7 @@ function OnRow({ project, command, stopped, lookedAt, onOpenRun, reload }: { pro
   const runNow = async (): Promise<void> => {
     setBusy(true)
     setSaid(undefined)
-    const answer = await host.runCommand(project.id, ['now', command.command]).catch((err: unknown) => ({ ok: false as const, error: err instanceof Error ? err.message : String(err) }))
+    const answer = await host.runCommand(project.id, ['now', command.command]).catch(notAsked)
     await reload().catch(() => {})
     setBusy(false)
     setSaid(startedNow(answer))

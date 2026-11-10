@@ -42,7 +42,7 @@ export interface SpawnedProcess {
 /**
  * The slice of a driver's output parser {@link runCliSession} drives: fed one line
  * at a time, asked for the turn at the end. Each wrapped agent speaks its own
- * dialect ({@link StreamJsonParser} for Claude Code, `CodexJsonParser` for
+ * dialect (`StreamJsonParser` for Claude Code, `CodexAppServerParser` for
  * Codex), but the process handling around it is identical.
  */
 export interface AgentCliParser {
@@ -360,7 +360,7 @@ function readInbox(path: string, parser: AgentCliParser, steered: RunCliSessionO
       over = true
       clearInterval(timer)
       await reading
-      return taken.filter(line => line.kind === 'answer' || ((line.id === undefined || !landed.has(line.id)) && (line.id === undefined || !cancelled.has(line.id))))
+      return taken.filter(line => line.kind === 'answer' || line.id === undefined || (!landed.has(line.id) && !cancelled.has(line.id)))
     },
   }
 }

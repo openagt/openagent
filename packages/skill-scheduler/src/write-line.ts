@@ -2,7 +2,7 @@ import { access, constants, mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { delimiter, join } from 'node:path'
 import type { Driver } from '@openagt/agent-driver'
-import type { GitRunner } from '@openagt/agent-data'
+import { originUrl, type GitRunner } from '@openagt/agent-data'
 import { LAST_RUN_ENV, OWN_TEXT_MAX, WRITE_LINE_TIMEOUT_MS } from './names.js'
 
 // The shell line of an automation, written from what a person says it waits for ("when someone
@@ -90,10 +90,7 @@ export function writtenOf(said: string): WrittenLine {
 
 /** What the line may use on this machine: the project's origin without its credentials, and whether `gh` is there. */
 export async function lineContext(repo: string, git: GitRunner, path: string = process.env['PATH'] ?? ''): Promise<LineContext> {
-  const url = await git(['remote', 'get-url', 'origin'], repo).then(
-    said => said.trim() || undefined,
-    () => undefined,
-  )
+  const url = await originUrl(repo, git)
   return { remote: url?.replace(/^(\w+:\/\/)[^/@]*@/, '$1'), hasGh: await onPath('gh', path) }
 }
 

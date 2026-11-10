@@ -150,3 +150,13 @@ export async function openSession(server: { address: string; user: string }, opt
     },
   }
 }
+
+/** Run one script on the server, as the server's own user, over a line opened for it and hung up once it ended. */
+export async function runOnce(server: { address: string; user: string }, script: string, timeoutMs: number, opts: { exec?: Exec } = {}): Promise<Said> {
+  const session = await openSession(server, opts)
+  try {
+    return await session.run(SERVER_USER, script, timeoutMs)
+  } finally {
+    await session.close()
+  }
+}

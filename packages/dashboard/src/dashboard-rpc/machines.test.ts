@@ -13,8 +13,11 @@ import { elsewhereId, type OwnProject } from '../dashboard/elsewhere.js'
 import type { BringProject } from '../dashboard/remote-run.js'
 import { openagentVersion } from '../version.js'
 import { setDashboardContext } from './context.js'
-import { NO_ELSEWHERE, testDashboardContext } from './test-context.js'
+import { NO_ELSEWHERE, provideTestContext, testDashboardContext } from './test-context.js'
 import { REGISTRY_FILE, addMachine, addProject, projectId, useLoginsOn } from '../registry.js'
+
+// The host's capabilities, wired as the daemon wires them (D3); a test that needs other ones wires its own.
+provideTestContext()
 
 /** Until `check` holds: what is not waited for (a key taken out of a machine) lands a moment later. */
 async function until(check: () => boolean): Promise<void> {

@@ -260,9 +260,12 @@ function AddAccount({ agent, now, failed, from, onChanged, onClose }: { agent: (
   )
 }
 
+/** An open row, and the press that waits for a yes in it: taking an account off is a sign-in to undo. */
+type Opened = { asking?: 'remove' | 'logout' }
+
 function AgentAccounts({ agent, accounts, usage, reading, where, onPress, busy }: { agent: (typeof AGENTS)[number]; accounts: Account[]; usage: Usage[]; reading: boolean; where: ModuleCardProps['accountWhere']; onPress: (args: string[]) => void; busy: boolean }) {
-  // The row that is open, and the press that waits for a yes in it: taking an account off is a sign-in to undo.
-  const [open, setOpen] = useState<{ name: string; asking?: 'remove' | 'logout' }>()
+  // One row is open at a time.
+  const [open, setOpen] = useState<{ name: string } & Opened>()
   const now = Date.now()
   const free = freeOnes(accounts, now)
   const press = (args: string[]): void => {
@@ -273,101 +276,152 @@ function AgentAccounts({ agent, accounts, usage, reading, where, onPress, busy }
     <section aria-label={agent.name} className="space-y-1 empty:hidden">
       {accounts.length > 0 && (
         <ul className="space-y-1">
-          {accounts.map((account, index) => {
-            const reads = usage.find(each => each.name === account.name)
-            const limited = isLimited(account, now)
-            const shown = account.who ?? account.name
-            const isOpen = open?.name === account.name
-            const more = details(account, reads, accounts.length > 1 && free[1] === account)
-            return (
-              <li key={account.name}>
-                <button
-                  type="button"
-                  aria-label={`Details of ${shown}`}
-                  aria-expanded={isOpen}
-                  onClick={() => setOpen(isOpen ? undefined : { name: account.name })}
-                  className="group -mx-2 flex w-[calc(100%+1rem)] min-w-0 items-center gap-2.5 rounded-md px-2 py-1 text-left transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-primary)]"
-                >
-                  <agent.Logo className="size-4 shrink-0 text-muted-foreground" />
-                  <span className="min-w-0 flex-1">
-                    <span className="flex min-w-0 items-center gap-1.5 text-sm">
-                      <span className="min-w-0 truncate font-medium">{shown}</span>
-                      {accounts.length > 1 && free[0] === account && <span className="shrink-0 text-xs text-success">in use</span>}
-                    </span>
-                    <span className={cn('block truncate text-xs', limited ? 'text-warning' : 'text-muted-foreground')}>{limited ? `limited, free in ${inWords(account.limitedUntil!, now)}` : source(account)}</span>
-                  </span>
-                  <MoreHorizontal className={cn('size-4 shrink-0 text-muted-foreground transition-opacity', isOpen ? 'opacity-100' : 'opacity-0 group-hover:opacity-100 group-focus-visible:opacity-100')} aria-hidden />
-                  {reading ? (
-                    <Skeleton className="size-8 shrink-0 rounded-full" />
-                  ) : (reads?.windows.length ?? 0) > 0 ? (
-                    <span className="flex shrink-0 gap-1.5">
-                      {reads!.windows.map(window => {
-                        const words = WINDOWS[window.window]
-                        const share = Math.round(window.percentUsed)
-                        return (
-                          <span key={window.window} role="meter" aria-label={words?.label ?? window.window} aria-valuenow={share} aria-valuemin={0} aria-valuemax={100} title={`${share}% ${words?.said ?? ''}`} className="flex w-8 flex-col items-center">
-                            <GaugeFace label={words?.label ?? window.window} share={share} />
-                          </span>
-                        )
-                      })}
-                    </span>
-                  ) : (
-                    // Every row has its ring, so a row with nothing to say still lines up; a dash claims no number.
-                    <span title={account.own ? 'No reading of its usage yet' : 'Not used yet'} className="flex w-8 shrink-0 flex-col items-center">
-                      <GaugeFace label="usage" share={undefined} />
-                    </span>
-                  )}
-                </button>
-                {/* Where it works, as the page it is on says it (the Permissions page: the person's devices). */}
-                {where && <div className="pl-[1.625rem]">{where({ agent: agent.id, own: account.own, name: account.name })}</div>}
-                {isOpen && (
-                  <div className="space-y-1.5 pb-1.5 pl-[1.625rem] pt-1">
-                    {open.asking ? (
-                      <>
-                        <p className="text-xs text-muted-foreground">
-                          {open.asking === 'logout' ? `Logs ${agent.name} out on ${account.computer ?? 'this computer'}, your terminal too.` : agent.remove}
-                          {open.asking === 'remove' && account.from !== undefined ? ` It stays off until you press Allow on ${account.from}.` : ''}
-                        </p>
-                        <div role="group" aria-label={open.asking === 'logout' ? `Log out ${shown}` : `Remove ${shown}'s account`} className="flex items-center gap-1">
-                          <Button size="xs" variant="destructive" disabled={busy} onClick={() => press(open.asking === 'logout' ? ['logout', agent.id] : ['remove', agent.id, account.name])}>
-                            {open.asking === 'logout' ? 'Log out' : 'Remove'}
-                          </Button>
-                          <Button size="xs" variant="ghost" disabled={busy} onClick={() => setOpen({ name: account.name })}>
-                            Cancel
-                          </Button>
-                        </div>
-                      </>
-                    ) : (
-                      <>
-                        {more !== '' && <p className="text-xs text-muted-foreground">{more}</p>}
-                        <div className="-ml-2 flex items-center gap-1">
-                          {index > 0 && (
-                            <Button variant="ghost" size="xs" disabled={busy} aria-label={`Use ${shown} first`} onClick={() => press(['use-first', agent.id, account.name])}>
-                              Use first
-                            </Button>
-                          )}
-                          {account.own && (
-                            <Button variant="ghost" size="xs" className="hover:text-danger" disabled={busy} aria-label={`Log out ${shown}`} onClick={() => setOpen({ name: account.name, asking: 'logout' })}>
-                              Log out
-                            </Button>
-                          )}
-                          {/* One a computer hands over as it is would be back within a minute: it is removed there. */}
-                          {!account.own && !account.comesBack && (
-                            <Button variant="ghost" size="xs" className="hover:text-danger" disabled={busy} aria-label={`Remove ${shown}'s account`} onClick={() => setOpen({ name: account.name, asking: 'remove' })}>
-                              Remove
-                            </Button>
-                          )}
-                        </div>
-                      </>
-                    )}
-                  </div>
-                )}
-              </li>
-            )
-          })}
+          {accounts.map((account, index) => (
+            <AccountRow
+              key={account.name}
+              agent={agent}
+              account={account}
+              reads={usage.find(each => each.name === account.name)}
+              reading={reading}
+              now={now}
+              inUse={accounts.length > 1 && free[0] === account}
+              next={accounts.length > 1 && free[1] === account}
+              first={index === 0}
+              where={where}
+              open={open?.name === account.name ? open : undefined}
+              onOpen={opened => setOpen(opened && { ...opened, name: account.name })}
+              onPress={press}
+              busy={busy}
+            />
+          ))}
         </ul>
       )}
     </section>
+  )
+}
+
+/** One account's row: who it is, where it comes from, how full it is; pressed, what can be done with it. */
+function AccountRow({
+  agent,
+  account,
+  reads,
+  reading,
+  now,
+  inUse,
+  next,
+  first,
+  where,
+  open,
+  onOpen,
+  onPress,
+  busy,
+}: {
+  agent: (typeof AGENTS)[number]
+  account: Account
+  reads: Usage | undefined
+  reading: boolean
+  now: number
+  /** Runs are on it now, of two accounts or more. */
+  inUse: boolean
+  /** Runs go to it next, of two accounts or more. */
+  next: boolean
+  /** First in the order already. */
+  first: boolean
+  where: ModuleCardProps['accountWhere']
+  /** Undefined while the row is closed. */
+  open: Opened | undefined
+  onOpen: (open: Opened | undefined) => void
+  onPress: (args: string[]) => void
+  busy: boolean
+}) {
+  const limited = isLimited(account, now)
+  const shown = account.who ?? account.name
+  const isOpen = open !== undefined
+  const more = details(account, reads, next)
+  return (
+    <li>
+      <button
+        type="button"
+        aria-label={`Details of ${shown}`}
+        aria-expanded={isOpen}
+        onClick={() => onOpen(isOpen ? undefined : {})}
+        className="group -mx-2 flex w-[calc(100%+1rem)] min-w-0 items-center gap-2.5 rounded-md px-2 py-1 text-left transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-primary)]"
+      >
+        <agent.Logo className="size-4 shrink-0 text-muted-foreground" />
+        <span className="min-w-0 flex-1">
+          <span className="flex min-w-0 items-center gap-1.5 text-sm">
+            <span className="min-w-0 truncate font-medium">{shown}</span>
+            {inUse && <span className="shrink-0 text-xs text-success">in use</span>}
+          </span>
+          <span className={cn('block truncate text-xs', limited ? 'text-warning' : 'text-muted-foreground')}>{limited ? `limited, free in ${inWords(account.limitedUntil!, now)}` : source(account)}</span>
+        </span>
+        <MoreHorizontal className={cn('size-4 shrink-0 text-muted-foreground transition-opacity', isOpen ? 'opacity-100' : 'opacity-0 group-hover:opacity-100 group-focus-visible:opacity-100')} aria-hidden />
+        {reading ? (
+          <Skeleton className="size-8 shrink-0 rounded-full" />
+        ) : (reads?.windows.length ?? 0) > 0 ? (
+          <span className="flex shrink-0 gap-1.5">
+            {reads!.windows.map(window => {
+              const words = WINDOWS[window.window]
+              const share = Math.round(window.percentUsed)
+              return (
+                <span key={window.window} role="meter" aria-label={words?.label ?? window.window} aria-valuenow={share} aria-valuemin={0} aria-valuemax={100} title={`${share}% ${words?.said ?? ''}`} className="flex w-8 flex-col items-center">
+                  <GaugeFace label={words?.label ?? window.window} share={share} />
+                </span>
+              )
+            })}
+          </span>
+        ) : (
+          // Every row has its ring, so a row with nothing to say still lines up; a dash claims no number.
+          <span title={account.own ? 'No reading of its usage yet' : 'Not used yet'} className="flex w-8 shrink-0 flex-col items-center">
+            <GaugeFace label="usage" share={undefined} />
+          </span>
+        )}
+      </button>
+      {/* Where it works, as the page it is on says it (the Permissions page: the person's devices). */}
+      {where && <div className="pl-[1.625rem]">{where({ agent: agent.id, own: account.own, name: account.name })}</div>}
+      {isOpen && (
+        <div className="space-y-1.5 pb-1.5 pl-[1.625rem] pt-1">
+          {open.asking ? (
+            <>
+              <p className="text-xs text-muted-foreground">
+                {open.asking === 'logout' ? `Logs ${agent.name} out on ${account.computer ?? 'this computer'}, your terminal too.` : agent.remove}
+                {open.asking === 'remove' && account.from !== undefined ? ` It stays off until you press Allow on ${account.from}.` : ''}
+              </p>
+              <div role="group" aria-label={open.asking === 'logout' ? `Log out ${shown}` : `Remove ${shown}'s account`} className="flex items-center gap-1">
+                <Button size="xs" variant="destructive" disabled={busy} onClick={() => onPress(open.asking === 'logout' ? ['logout', agent.id] : ['remove', agent.id, account.name])}>
+                  {open.asking === 'logout' ? 'Log out' : 'Remove'}
+                </Button>
+                <Button size="xs" variant="ghost" disabled={busy} onClick={() => onOpen({})}>
+                  Cancel
+                </Button>
+              </div>
+            </>
+          ) : (
+            <>
+              {more !== '' && <p className="text-xs text-muted-foreground">{more}</p>}
+              <div className="-ml-2 flex items-center gap-1">
+                {!first && (
+                  <Button variant="ghost" size="xs" disabled={busy} aria-label={`Use ${shown} first`} onClick={() => onPress(['use-first', agent.id, account.name])}>
+                    Use first
+                  </Button>
+                )}
+                {account.own && (
+                  <Button variant="ghost" size="xs" className="hover:text-danger" disabled={busy} aria-label={`Log out ${shown}`} onClick={() => onOpen({ asking: 'logout' })}>
+                    Log out
+                  </Button>
+                )}
+                {/* One a computer hands over as it is would be back within a minute: it is removed there. */}
+                {!account.own && !account.comesBack && (
+                  <Button variant="ghost" size="xs" className="hover:text-danger" disabled={busy} aria-label={`Remove ${shown}'s account`} onClick={() => onOpen({ asking: 'remove' })}>
+                    Remove
+                  </Button>
+                )}
+              </div>
+            </>
+          )}
+        </div>
+      )}
+    </li>
   )
 }
 

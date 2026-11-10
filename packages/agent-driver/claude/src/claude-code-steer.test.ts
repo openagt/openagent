@@ -1,6 +1,6 @@
 import { strict as assert } from 'node:assert'
 import { test } from 'node:test'
-import { StreamJsonParser } from './claude-code.js'
+import { StreamJsonParser } from './claude-code-stream.js'
 import type { CliIo } from '@openagt/agent-driver'
 
 // The lines Claude Code 2.1.318 writes around a message sent mid-turn, a Send now and a Stop, as

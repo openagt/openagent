@@ -45,7 +45,7 @@ pnpm --filter @openagt/dashboard dev:dashboard
 Populate a project to watch: run `dev:daemon` instead of `dev:dashboard`, which brings a real
 daemon up in the dev server's own process, and start an agent from the UI: Start runs the
 project's `start` hook line (`.openagent/hooks.yml`), and the dashboard shows the agent from
-the files that tool writes. The CLI keeps four options and no verbs; it starts no agent.
+the files that tool writes. The CLI keeps three options and no verbs; it starts no agent.
 
 ## Tests
 

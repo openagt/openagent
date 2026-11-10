@@ -1,32 +1,26 @@
-import { parseArgs } from 'node:util'
-import { nodeGitRunner, type GitRunner } from '@openagt/agent-data'
-import { nodeGhRunner, type GhRunner } from './gh.js'
+import { Refused, UsageError, errorMessage, nodeGitRunner, parseCommandArgs, runCommandLine, type Command, type Failure, type GitRunner } from '@openagt/agent-data'
+import { hasBrew, installCommand, nodeGhRunner, type GhRunner } from './gh.js'
 import { listRequests } from './requests.js'
 import { openRequest, type OpenOutcome } from './open.js'
-import { mergeRequest } from './merge.js'
-import { watchAndMerge } from './merge-watch.js'
+import { mergeRequest, type WatchStarter } from './merge.js'
+import { spawnMergeWatch, watchAndMerge } from './merge-watch.js'
 import { GIT_HOST_NAME, homeUrlFor } from './home.js'
 import { MAX_PEOPLE, peopleByEmail } from './people.js'
 import { createRepository, offerRepository, type CreateOffer, type CreateOutcome } from './create.js'
-import { isGithubLogin, publicProfile, type ProfileFetch } from './profile.js'
+import { publicProfile, type ProfileFetch } from './profile.js'
 import { listRepos } from './repos.js'
 import { listReplies } from './replies.js'
 import { DIARY_ENV, byline, writeComment } from './comment.js'
-import { mkdtempSync, readFileSync, rmSync } from 'node:fs'
-import { tmpdir } from 'node:os'
-import { join } from 'node:path'
-import { HOST, accountDir, accountsRoot, asAccount, forgetAccount, ghState, gitConfig, hasBrew, installCommand, isAccountDir, jobFiles, jobState, loginUnderWay, picksPath, stopLogin, readFacts, runEnv, runsAccount, settleAdded, startJob, startLogin, takeToken, useForRuns, whoAmI, type AccountFacts, type JobState, type LoggingIn } from './accounts.js'
+import { readFileSync } from 'node:fs'
+import { HOST, accountDir, accountsRoot, asAccount, forgetAccount, ghState, gitConfig, installedAccounts, isGithubLogin, loginUnderWay, picksPath, stopLogin, readFacts, runEnv, runsAccount, settleAdded, startLogin, takeToken, useForRuns, type LoggingIn } from './accounts.js'
+import { jobFiles, jobState, startJob, type JobState } from './job.js'
+import { accountNamed, factsOfToken, tokenOf, workingGh } from './working-account.js'
 
 /**
  * The command line over the package (#1820): the same functions for an agent in a shell, and for
  * OpenAgent and the scheduler, which run this command as the project's git host provider,
  * declared in package.json as `"openagent": { "git-host": "github" }`. One implementation, every
- * surface a caller.
- *
- * The contract, the same as the other skills' commands: JSON on stdout, one line for a person on
- * stderr, and the exit code says how it went — 0 for a result, 1 for a refusal or a failure, 2 for
- * a command that could not be read. A refusal is reported on stdout as `{ ok: false, reason }` so
- * a caller parsing the output learns why, and on stderr so a person does.
+ * surface a caller. It answers as every OpenAgent command does (`runCommandLine`).
  *
  * Every command acts on the repository the working directory is in: `gh` finds the repository
  * and its remote from there, as it does for a person.
@@ -91,106 +85,67 @@ export interface CliIo {
   stderr: (line: string) => void
 }
 
-/** What a run of the CLI may be given instead of the real gh and git: for tests. */
-export interface CliDeps {
-  gh?: GhRunner
-  git?: GitRunner
-  /** Start the merge watcher for a request; the default starts this package's own process. */
-  watch?: (repo: string, number: number) => Promise<void>
-  /** The environment the command runs in; the default is this process's. */
-  env?: NodeJS.ProcessEnv
-  /** Whether Homebrew is here; the default asks. */
-  hasBrew?: () => Promise<boolean>
-  /** Start an install command, going on after the command answers; the default runs it in a shell of its own. */
-  shell?: (command: string) => Promise<void>
-  /** How the install started last went; the default reads it off its files. */
-  installing?: () => JobState | undefined
-  /** Start a browser login into OpenAgent's accounts' folder; the default runs gh. */
-  login?: (root: string) => Promise<LoggingIn>
-  /** The browser login under way; the default reads it off its files. */
-  underWay?: () => LoggingIn | undefined
-  /** Give up the browser login under way; the default stops its gh. */
-  stopLogin?: (root: string) => void
-  /** What the command was handed on standard input; the default reads the process's. */
-  stdin?: () => Promise<string>
-  /** What reads a public profile from GitHub; the default is `fetch`. */
-  fetch?: ProfileFetch
-}
-
-/** A refusal: a rule said no, and the caller learns which. */
-export type CliRefusal = { ok: false; reason: string; [key: string]: unknown }
-
-/** Thrown inside a command to end it with a refusal. */
-class Refused extends Error {
-  constructor(readonly outcome: CliRefusal, readonly line: string) {
-    super(line)
-  }
-}
-
-/** Thrown inside a command for an argument that cannot be read: usage on stderr, exit 2. */
-class Usage extends Error {}
-
-/** Run the CLI: `argv` is everything after the program name. Resolves to the exit code. */
-export async function runCli(argv: string[], io: CliIo, deps: CliDeps = {}): Promise<number> {
-  const [command, ...rest] = argv
-  const run = command && Object.hasOwn(COMMANDS, command) ? COMMANDS[command] : undefined
-  if (!run) {
-    io.stderr(USAGE)
-    return 2
-  }
-  const context: Context = {
-    cwd: io.cwd,
-    gh: deps.gh ?? nodeGhRunner(),
-    git: deps.git ?? nodeGitRunner(),
-    ...(deps.watch ? { watch: deps.watch } : {}),
-    env: deps.env ?? process.env,
-    stderr: io.stderr,
-    hasBrew: deps.hasBrew ?? (() => hasBrew()),
-    shell: deps.shell ?? (command => startJob(jobFiles('install'), command)),
-    installing: deps.installing ?? (() => jobState(jobFiles('install'))),
-    login: deps.login ?? (root => startLogin(root)),
-    underWay: deps.underWay ?? (() => loginUnderWay()),
-    stopLogin: deps.stopLogin ?? (root => stopLogin(root)),
-    stdin: deps.stdin ?? readStdin,
-    fetch: deps.fetch ?? fetch,
-  }
-  try {
-    if (WORK.has(command!)) context.gh = await workingGh(context)
-    io.stdout(JSON.stringify(await run(rest, context)))
-    return 0
-  } catch (err) {
-    if (err instanceof Usage) {
-      io.stderr(`${err.message}\n\n${USAGE}`)
-      return 2
-    }
-    if (err instanceof Refused) {
-      io.stdout(JSON.stringify(err.outcome))
-      io.stderr(err.line)
-      return 1
-    }
-    const detail = err instanceof Error ? err.message : String(err)
-    io.stdout(JSON.stringify({ ok: false, reason: 'git-host-failed', detail }))
-    io.stderr(detail)
-    return 1
-  }
-}
-
-interface Context {
-  cwd: string
+/** What the commands work with besides the command line: gh, git, and what reaches past this process. */
+interface Services {
   gh: GhRunner
   git: GitRunner
-  watch?: (repo: string, number: number) => Promise<void>
+  /** Start the merge watcher for a request; the default starts this package's own process. */
+  watch: WatchStarter
+  /** The environment the command runs in; the default is this process's. */
   env: NodeJS.ProcessEnv
-  stderr: (line: string) => void
+  /** Whether Homebrew is here; the default asks. */
   hasBrew: () => Promise<boolean>
+  /** Start an install command, going on after the command answers; the default runs it in a shell of its own. */
   shell: (command: string) => Promise<void>
+  /** How the install started last went; the default reads it off its files. */
   installing: () => JobState | undefined
+  /** Start a browser login into OpenAgent's accounts' folder; the default runs gh. */
   login: (root: string) => Promise<LoggingIn>
+  /** The browser login under way; the default reads it off its files. */
   underWay: () => LoggingIn | undefined
+  /** Give up the browser login under way; the default stops its gh. */
   stopLogin: (root: string) => void
+  /** What the command was handed on standard input; the default reads the process's. */
   stdin: () => Promise<string>
+  /** What reads a public profile from GitHub; the default is `fetch`. */
   fetch: ProfileFetch
 }
+
+/** What a run of the CLI may be given instead of the real services: for tests. */
+export type CliDeps = Partial<Services>
+
+/** The real services: this process's gh, git, environment, standard input and network. */
+function realServices(): Services {
+  return {
+    gh: nodeGhRunner(),
+    git: nodeGitRunner(),
+    watch: spawnMergeWatch,
+    env: process.env,
+    hasBrew,
+    shell: command => startJob(jobFiles('install'), command),
+    installing: () => jobState(jobFiles('install')),
+    login: startLogin,
+    underWay: loginUnderWay,
+    stopLogin,
+    stdin: readStdin,
+    fetch,
+  }
+}
+
+/** What every command is handed: the services, the directory it runs in, and the stream a person reads. */
+interface Context extends Services {
+  cwd: string
+  stderr: (line: string) => void
+}
+
+/** Run the CLI: `argv` is everything after the program name. Resolves to the exit code. */
+export function runCli(argv: string[], io: CliIo, deps: CliDeps = {}): Promise<number> {
+  const context: Context = { ...realServices(), ...deps, cwd: io.cwd, stderr: io.stderr }
+  return runCommandLine(argv, io, { usage: USAGE, commands: COMMANDS, failure: GIT_HOST_FAILED }, context)
+}
+
+/** A failure no command meant: the git host, or `gh` talking to it, said no in a way no rule names. */
+const GIT_HOST_FAILED: Failure = { reason: 'git-host-failed', detail: errorMessage }
 
 /** All of the process's standard input, as text. */
 async function readStdin(): Promise<string> {
@@ -199,77 +154,18 @@ async function readStdin(): Promise<string> {
   return said
 }
 
-/** The commands that talk to GitHub: they work as one of OpenAgent's accounts. */
-const WORK = new Set(['requests', 'replies', 'comment', 'open', 'merge', 'watch', 'create', 'people'])
-
-/**
- * `gh` working as one of OpenAgent's accounts: the one a run was given, when this runs inside
- * one; else the account runs use, with its token for git too, so a push `gh` makes goes as it.
- */
-async function workingGh(ctx: Context): Promise<GhRunner> {
-  const root = accountsRoot(ctx.env)
-  const given = ctx.env['GH_CONFIG_DIR']
-  if (given !== undefined && isAccountDir(root, given)) return asAccount(ctx.gh, given)
-  const state = await ghState(root, ctx.cwd, ctx.gh)
-  const login = runsAccount(state.installed ? state.accounts : [], picksPath(ctx.env))
-  if (login === undefined) throw noAccount()
-  const dir = accountDir(root, login)
-  const gh = ctx.gh
-  const env = runEnv(await tokenOf(login, dir, ctx.cwd, gh), dir, readFacts(dir), ctx.env)
-  return (args, cwd, more, input) => gh(args, cwd, { ...env, ...more }, input)
+/** A command that talks to GitHub: it works as one of OpenAgent's accounts, its `gh` made so before it runs (`working-account.ts`). */
+function asOpenAgent(command: Command<[Context]>): Command<[Context]> {
+  return async (args, ctx) => command(args, { ...ctx, gh: await workingGh(ctx) })
 }
 
-/** One of OpenAgent's accounts: `user`, when named, else the one runs use; refused when OpenAgent has no such account. */
-async function accountNamed(user: string | undefined, cwd: string, gh: GhRunner, env: NodeJS.ProcessEnv): Promise<{ login: string; dir: string }> {
-  const root = accountsRoot(env)
-  const state = await ghState(root, cwd, gh)
-  const accounts = state.installed ? state.accounts : []
-  if (user !== undefined && !accounts.some(a => a.login === user)) {
-    throw new Refused({ ok: false, reason: 'no-account', login: user }, `OpenAgent has no GitHub account ${user} on this computer: add it in OpenAgent's Permissions`)
-  }
-  const login = user ?? runsAccount(accounts, picksPath(env))
-  if (login === undefined) throw noAccount()
-  return { login, dir: accountDir(root, login) }
-}
-
-function noAccount(): Refused {
-  return new Refused({ ok: false, reason: 'no-account' }, `OpenAgent has no GitHub account: add one in OpenAgent's Permissions`)
-}
-
-/**
- * `login`'s token as OpenAgent keeps it, once GitHub said it is that account's: a login kept under
- * one name can be another account's, and nothing must go out as someone else than it says.
- */
-async function tokenOf(login: string, dir: string, cwd: string, gh: GhRunner): Promise<string> {
-  let token: string
+/** What GitHub answers `ask`; when it cannot, a `git-host-failed` refusal whose line says what could not be done, and why. */
+async function gitHostAnswer<T>(what: string, ask: () => Promise<T>): Promise<T> {
   try {
-    token = (await asAccount(gh, dir)(['auth', 'token', '--hostname', HOST], cwd)).trim()
+    return await ask()
   } catch (err) {
-    const detail = err instanceof Error ? err.message : String(err)
-    throw new Refused({ ok: false, reason: 'no-token', login, detail }, `OpenAgent has no token for ${login}: ${detail}`)
-  }
-  const whose = await whoseToken(token, cwd, gh, login)
-  if (whose.toLowerCase() !== login.toLowerCase()) {
-    throw new Refused({ ok: false, reason: 'not-that-account', login, whose }, `the login OpenAgent keeps for ${login} is ${whose}'s on GitHub: add ${login} again in OpenAgent's Permissions`)
-  }
-  return token
-}
-
-/** The account GitHub says a token is: `login`, when given, names the account it was asked for. */
-async function whoseToken(token: string, cwd: string, gh: GhRunner, login?: string): Promise<string> {
-  return (await factsOfToken(token, cwd, gh, login)).login
-}
-
-/** Who GitHub says a token is, asked with that token alone: no account's folder, and not the person's. */
-async function factsOfToken(token: string, cwd: string, gh: GhRunner, login?: string): Promise<AccountFacts> {
-  const none = mkdtempSync(join(tmpdir(), 'openagent-gh-'))
-  try {
-    return await whoAmI((args, at, env, input) => asAccount(gh, none)(args, at, { ...env, GH_TOKEN: token }, input), cwd)
-  } catch (err) {
-    const detail = err instanceof Error ? err.message : String(err)
-    throw new Refused({ ok: false, reason: 'no-token', ...(login !== undefined ? { login } : {}), detail }, `GitHub did not take ${login !== undefined ? `${login}'s login` : 'the login'}: ${detail}`)
-  } finally {
-    rmSync(none, { recursive: true, force: true })
+    const detail = errorMessage(err)
+    throw new Refused({ ok: false, reason: 'git-host-failed', detail }, `${what}: ${detail}`)
   }
 }
 
@@ -279,49 +175,34 @@ const TOKEN = /^[A-Za-z0-9_]{20,255}$/
 /** The logo OpenAgent draws the host's card with. */
 const LOGO = readFileSync(new URL('../assets/github.svg', import.meta.url), 'utf8').trim()
 
-type Command = (args: string[], ctx: Context) => Promise<unknown>
-
-const COMMANDS: Record<string, Command> = {
-  async requests(args, { cwd, gh }) {
-    const { values } = parse(args, { branch: { type: 'string' }, state: { type: 'string' }, since: { type: 'string' } }, 0)
+const COMMANDS: Record<string, Command<[Context]>> = {
+  requests: asOpenAgent(async (args, { cwd, gh }) => {
+    const { values } = parseCommandArgs(args, { branch: { type: 'string' }, state: { type: 'string' }, since: { type: 'string' } }, 0)
     const state = values.state ?? 'all'
-    if (state !== 'open' && state !== 'merged' && state !== 'all') throw new Usage(`--state is open, merged or all, not ${state}`)
-    try {
-      return await listRequests(cwd, { ...(values.branch ? { branch: values.branch } : {}), state, ...(values.since ? { since: values.since } : {}) }, gh)
-    } catch (err) {
-      const detail = err instanceof Error ? err.message : String(err)
-      throw new Refused({ ok: false, reason: 'git-host-failed', detail }, `the pull requests could not be read: ${detail}`)
-    }
-  },
+    if (state !== 'open' && state !== 'merged' && state !== 'all') throw new UsageError(`--state is open, merged or all, not ${state}`)
+    return gitHostAnswer('the pull requests could not be read', () => listRequests(cwd, { ...(values.branch ? { branch: values.branch } : {}), state, ...(values.since ? { since: values.since } : {}) }, gh))
+  }),
 
-  async replies(args, { cwd, gh }) {
-    const { values } = parse(args, { since: { type: 'string' } }, 0)
-    if (values.since !== undefined && Number.isNaN(Date.parse(values.since))) throw new Usage(`--since is a time, like 2026-10-09T10:00:00Z, not "${values.since}"`)
-    try {
-      return await listReplies(cwd, { gh, ...(values.since !== undefined ? { since: values.since } : {}) })
-    } catch (err) {
-      const detail = err instanceof Error ? err.message : String(err)
-      throw new Refused({ ok: false, reason: 'git-host-failed', detail }, `the pull requests could not be read: ${detail}`)
-    }
-  },
+  replies: asOpenAgent(async (args, { cwd, gh }) => {
+    const { values } = parseCommandArgs(args, { since: { type: 'string' } }, 0)
+    if (values.since !== undefined && Number.isNaN(Date.parse(values.since))) throw new UsageError(`--since is a time, like 2026-10-09T10:00:00Z, not "${values.since}"`)
+    return gitHostAnswer('the pull requests could not be read', () => listReplies(cwd, { gh, ...(values.since !== undefined ? { since: values.since } : {}) }))
+  }),
 
-  async comment(args, { cwd, gh, env }) {
-    const { values, positionals } = parse(args, { body: { type: 'string' } }, 1)
-    if (values.body === undefined || !values.body.trim()) throw new Usage('--body is required: the text of the comment')
+  comment: asOpenAgent(async (args, { cwd, gh, env }) => {
+    const { values, positionals } = parseCommandArgs(args, { body: { type: 'string' } }, 1)
+    const body = values.body
+    if (body === undefined || !body.trim()) throw new UsageError('--body is required: the text of the comment')
     const number = numberArg(positionals[0]!)
-    try {
-      return { ok: true, ...(await writeComment(cwd, number, values.body, await byline(env[DIARY_ENV]), gh)) }
-    } catch (err) {
-      const detail = err instanceof Error ? err.message : String(err)
-      throw new Refused({ ok: false, reason: 'git-host-failed', detail }, `the comment could not be written: ${detail}`)
-    }
-  },
+    const comment = await gitHostAnswer('the comment could not be written', async () => writeComment(cwd, number, body, await byline(env[DIARY_ENV]), gh))
+    return { ok: true, ...comment }
+  }),
 
-  async open(args, { cwd, gh, git, watch }) {
-    const { values } = parse(args, { branch: { type: 'string' }, title: { type: 'string' }, body: { type: 'string' }, base: { type: 'string' }, merge: { type: 'boolean' }, draft: { type: 'boolean' } }, 0)
-    if (!values.title?.trim()) throw new Usage('--title is required: one line naming what the change does')
-    if (values.branch !== undefined && !values.branch.trim()) throw new Usage('--branch names a branch')
-    if (values.base !== undefined && !values.base.trim()) throw new Usage('--base names a branch')
+  open: asOpenAgent(async (args, { cwd, gh, git, watch }) => {
+    const { values } = parseCommandArgs(args, { branch: { type: 'string' }, title: { type: 'string' }, body: { type: 'string' }, base: { type: 'string' }, merge: { type: 'boolean' }, draft: { type: 'boolean' } }, 0)
+    if (!values.title?.trim()) throw new UsageError('--title is required: one line naming what the change does')
+    if (values.branch !== undefined && !values.branch.trim()) throw new UsageError('--branch names a branch')
+    if (values.base !== undefined && !values.base.trim()) throw new UsageError('--base names a branch')
     const outcome = await openRequest(cwd, {
       ...(values.branch ? { branch: values.branch } : {}),
       title: values.title.trim(),
@@ -331,42 +212,42 @@ const COMMANDS: Record<string, Command> = {
       ...(values.draft ? { draft: true } : {}),
       gh,
       git,
-      ...(watch ? { watch } : {}),
+      watch,
     })
     if (!outcome.ok) throw new Refused(outcome, openRefusalLine(cwd, outcome))
     return outcome
-  },
+  }),
 
-  async merge(args, { cwd, gh, watch }) {
-    const number = numberArg(parse(args, {}, 1).positionals[0]!)
-    const outcome = await mergeRequest(cwd, number, { gh, ...(watch ? { watch } : {}) })
+  merge: asOpenAgent(async (args, { cwd, gh, watch }) => {
+    const number = numberArg(parseCommandArgs(args, {}, 1).positionals[0]!)
+    const outcome = await mergeRequest(cwd, number, { gh, watch })
     if (outcome.outcome === 'not-open') throw new Refused({ ok: false, reason: 'not-open', number, state: outcome.state }, `pull request ${number} is ${outcome.state.toLowerCase()}, not open`)
     if (outcome.outcome === 'failed') throw new Refused({ ok: false, reason: 'merge-failed', number, detail: outcome.error }, `pull request ${number} could not be landed: ${outcome.error}`)
     return { ok: true, number, outcome: outcome.outcome }
-  },
+  }),
 
-  async watch(args, { cwd, gh, stderr }) {
-    const number = numberArg(parse(args, {}, 1).positionals[0]!)
+  watch: asOpenAgent(async (args, { cwd, gh, stderr }) => {
+    const number = numberArg(parseCommandArgs(args, {}, 1).positionals[0]!)
     const outcome = await watchAndMerge(cwd, number, { gh, log: stderr })
     return { ok: outcome.outcome === 'merged', number, ...outcome }
-  },
+  }),
 
-  async create(args, { cwd, gh, git }) {
-    const { values } = parse(args, { check: { type: 'boolean' } }, 0)
+  create: asOpenAgent(async (args, { cwd, gh, git }) => {
+    const { values } = parseCommandArgs(args, { check: { type: 'boolean' } }, 0)
     const outcome = values.check ? await offerRepository(cwd, { gh, git }) : await createRepository(cwd, { gh, git })
     if (!outcome.ok) throw new Refused(outcome, createRefusalLine(outcome))
     return { ...outcome, name: GIT_HOST_NAME }
-  },
+  }),
 
   async home(args, { cwd, git }) {
-    parse(args, {}, 0)
+    parseCommandArgs(args, {}, 0)
     const url = await homeUrlFor(cwd, git)
     if (!url) throw new Refused({ ok: false, reason: 'no-remote' }, 'no origin remote on GitHub')
     return { ok: true, url, name: GIT_HOST_NAME }
   },
 
   async accounts(args, { cwd, gh, env, hasBrew, underWay, installing }) {
-    const { values } = parse(args, { host: { type: 'string' } }, 0)
+    const { values } = parseCommandArgs(args, { host: { type: 'string' } }, 0)
     if (values.host !== undefined && values.host.toLowerCase() !== HOST) throw new Refused({ ok: false, reason: 'not-mine', host: values.host }, `this package answers for ${HOST}, not ${values.host}`)
     const root = accountsRoot(env)
     await settleAdded(root, gh, cwd).catch(() => undefined)
@@ -394,57 +275,57 @@ const COMMANDS: Record<string, Command> = {
   },
 
   async use(args, { cwd, gh, env }) {
-    const login = parse(args, {}, 1).positionals[0]!
-    const state = await ghState(accountsRoot(env), cwd, gh)
+    const login = parseCommandArgs(args, {}, 1).positionals[0]!
+    const accounts = await installedAccounts(accountsRoot(env), cwd, gh)
     try {
-      useForRuns(login, state.installed ? state.accounts : [], picksPath(env))
+      useForRuns(login, accounts, picksPath(env))
     } catch (err) {
-      throw new Refused({ ok: false, reason: 'no-account', login }, err instanceof Error ? err.message : String(err))
+      throw new Refused({ ok: false, reason: 'no-account', login }, errorMessage(err))
     }
     return { ok: true, login }
   },
 
   async login(args, { cwd, gh, env, login }) {
-    parse(args, {}, 0)
+    parseCommandArgs(args, {}, 0)
     const root = accountsRoot(env)
     const state = await ghState(root, cwd, gh)
     if (!state.installed) throw new Refused({ ok: false, reason: 'not-installed' }, 'gh is not on this computer: run github install first')
     try {
       return { ok: true, ...(await login(root)) }
     } catch (err) {
-      const detail = err instanceof Error ? err.message : String(err)
+      const detail = errorMessage(err)
       throw new Refused({ ok: false, reason: 'login-failed', detail }, `gh could not start a login: ${detail}`)
     }
   },
 
   async 'stop-login'(args, { env, stopLogin }) {
-    parse(args, {}, 0)
+    parseCommandArgs(args, {}, 0)
     stopLogin(accountsRoot(env))
     return { ok: true }
   },
 
   async install(args, { hasBrew, shell }) {
-    parse(args, {}, 0)
+    parseCommandArgs(args, {}, 0)
     const command = installCommand(await hasBrew())
     if (command === undefined) throw new Refused({ ok: false, reason: 'no-build' }, `GitHub makes no gh for this computer (${process.platform} ${process.arch}): install it by hand, https://cli.github.com`)
     try {
       await shell(command)
     } catch (err) {
-      const detail = err instanceof Error ? err.message : String(err)
+      const detail = errorMessage(err)
       throw new Refused({ ok: false, reason: 'install-failed', detail, command }, `gh's install could not be started: ${detail}`)
     }
     return { ok: true, started: true, command }
   },
 
   async env(args, { cwd, gh, env }) {
-    const { values } = parse(args, { user: { type: 'string' } }, 0)
+    const { values } = parseCommandArgs(args, { user: { type: 'string' } }, 0)
     // No account: a run never falls back on the person's own gh.
     const { login, dir } = await accountNamed(values.user, cwd, gh, env)
     return { ok: true, login, env: runEnv(await tokenOf(login, dir, cwd, gh), dir, readFacts(dir), env) }
   },
 
   async repos(args, { cwd, gh, env }) {
-    const { values } = parse(args, { user: { type: 'string' }, owner: { type: 'string' } }, 0)
+    const { values } = parseCommandArgs(args, { user: { type: 'string' }, owner: { type: 'string' } }, 0)
     if (values.owner !== undefined && !isGithubLogin(values.owner)) throw new Refused({ ok: false, reason: 'no-owner', owner: values.owner }, `${values.owner} is no GitHub user or organization`)
     const { login, dir } = await accountNamed(values.user, cwd, gh, env)
     const owner = values.owner ?? login
@@ -452,53 +333,52 @@ const COMMANDS: Record<string, Command> = {
   },
 
   async 'git-config'(args, { cwd, gh, env }) {
-    const { values } = parse(args, { user: { type: 'string' } }, 0)
+    const { values } = parseCommandArgs(args, { user: { type: 'string' } }, 0)
     const { login, dir } = await accountNamed(values.user, cwd, gh, env)
     return { ok: true, login, host: HOST, config: gitConfig(dir) }
   },
 
   async token(args, { cwd, gh, env }) {
-    const { values } = parse(args, { user: { type: 'string' } }, 0)
+    const { values } = parseCommandArgs(args, { user: { type: 'string' } }, 0)
     const login = values.user
-    if (login === undefined) throw new Usage('token needs --user <login>')
+    if (login === undefined) throw new UsageError('token needs --user <login>')
     const root = accountsRoot(env)
-    const state = await ghState(root, cwd, gh)
-    if (!(state.installed ? state.accounts : []).some(a => a.login === login)) throw new Refused({ ok: false, reason: 'no-account', login }, `OpenAgent has no GitHub account ${login} on this computer`)
+    if (!(await installedAccounts(root, cwd, gh)).some(a => a.login === login)) throw new Refused({ ok: false, reason: 'no-account', login }, `OpenAgent has no GitHub account ${login} on this computer`)
     return { ok: true, login, token: await tokenOf(login, accountDir(root, login), cwd, gh) }
   },
 
   async take(args, { cwd, gh, env, stdin }) {
-    parse(args, {}, 0)
+    parseCommandArgs(args, {}, 0)
     const token = (await stdin()).trim()
     if (!TOKEN.test(token)) throw new Refused({ ok: false, reason: 'no-token' }, 'what was handed over is no GitHub token')
     const facts = await factsOfToken(token, cwd, gh)
     try {
       await takeToken(accountsRoot(env), token, facts, gh, cwd)
     } catch (err) {
-      const detail = err instanceof Error ? err.message : String(err)
+      const detail = errorMessage(err)
       throw new Refused({ ok: false, reason: 'login-failed', login: facts.login, detail }, `gh did not take ${facts.login}'s login: ${detail}`)
     }
     return { ok: true, login: facts.login }
   },
 
   async forget(args, { env }) {
-    const login = parse(args, {}, 1).positionals[0]!
+    const login = parseCommandArgs(args, {}, 1).positionals[0]!
     try {
       // Only OpenAgent's copy goes: the token itself goes on working wherever else it is.
       forgetAccount(accountsRoot(env), login, picksPath(env))
     } catch (err) {
-      throw new Usage(err instanceof Error ? err.message : String(err))
+      throw new UsageError(errorMessage(err))
     }
     return { ok: true, login }
   },
 
-  async people(args, { cwd, gh }) {
-    const { positionals } = parse(args, {}, 1, MAX_PEOPLE)
+  people: asOpenAgent(async (args, { cwd, gh }) => {
+    const { positionals } = parseCommandArgs(args, {}, 1, MAX_PEOPLE)
     return peopleByEmail(cwd, positionals.filter(email => /^[^\s@]+@[^\s@]+$/.test(email)), gh)
-  },
+  }),
 
   async profile(args, { fetch }) {
-    const { positionals } = parse(args, {}, 1)
+    const { positionals } = parseCommandArgs(args, {}, 1)
     const login = positionals[0]!
     if (!isGithubLogin(login)) throw new Refused({ ok: false, reason: 'no-user', detail: `${login} is no GitHub login` }, `${login} is no GitHub login`)
     const outcome = await publicProfile(login, fetch)
@@ -533,19 +413,6 @@ function openRefusalLine(cwd: string, outcome: OpenOutcome & { ok: false }): str
 
 function numberArg(arg: string): number {
   const number = Number(arg)
-  if (!Number.isInteger(number) || number <= 0) throw new Usage(`${arg} is not a pull request number`)
+  if (!Number.isInteger(number) || number <= 0) throw new UsageError(`${arg} is not a pull request number`)
   return number
-}
-
-type Options = Record<string, { type: 'string' | 'boolean' }>
-
-/** `parseArgs` with the positional count checked: too few or too many is a usage error. */
-function parse<O extends Options>(args: string[], options: O, min: number, max: number = min) {
-  try {
-    const parsed = parseArgs({ args, options, allowPositionals: true, strict: true })
-    if (parsed.positionals.length < min || parsed.positionals.length > max) throw new Usage(`expected ${max === min ? min : `${min} to ${max}`} argument(s), got ${parsed.positionals.length}`)
-    return parsed
-  } catch (err) {
-    throw err instanceof Usage ? err : new Usage(err instanceof Error ? err.message : String(err))
-  }
 }

@@ -1,25 +1,12 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { Check, CircleCheck, Copy, ExternalLink, Loader2, RotateCw } from 'lucide-react'
 import { Button, Dialog, Input, QrCode } from '@openagt/dashboard/module'
+import { failed, type Answer, type Given } from './devices.js'
 import { Problem } from './parts.js'
 
 // A code a new device gets in with, the ways it is shown: as a QR code a phone's camera opens, and
 // as where and a code typed on another computer. It is asked for as its dialog opens, works once,
 // and runs out: the dialog says for how long still, and waits for the device that uses it.
-
-/** A code as a door gives it: the link a camera opens, and what is typed instead, where and the code. */
-export interface Given {
-  url: string
-  /** The same link by the computer's number, when `url` goes by its name. */
-  numberUrl?: string
-  /** Behind Tailscale, the same code at the Wi-Fi's door beside it, for a device not on Tailscale. */
-  wifiUrl?: string
-  where?: string
-  code?: string
-  expires: string
-}
-
-export type GivenAnswer = { ok: true; value: Given } | { ok: false; error: string }
 
 /** Minutes and seconds, as a clock shows them. */
 export const clock = (ms: number): string => {
@@ -27,14 +14,12 @@ export const clock = (ms: number): string => {
   return `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, '0')}`
 }
 
-const failed = (err: unknown): { ok: false; error: string } => ({ ok: false, error: err instanceof Error ? err.message : String(err) })
-
 /**
  * A code on the page: asked for once `asking` says so (at once, or when the dialog knows who it
  * is for), and again on `again`. Only the answer of the last ask is shown. `onCode` is told each
  * code that comes on the page, and `undefined` as a new one is asked for and as the page goes.
  */
-export function useCode(ask: (person?: string) => Promise<GivenAnswer>, atOnce: boolean, onCode?: (code: Given | undefined) => void, stopped = false) {
+export function useCode(ask: (person?: string) => Promise<Answer<Given>>, atOnce: boolean, onCode?: (code: Given | undefined) => void, stopped = false) {
   const [code, setCode] = useState<Given | undefined>()
   const [asking, setAsking] = useState(atOnce)
   const [error, setError] = useState<string | undefined>()
@@ -204,7 +189,7 @@ export function PhoneCode({
   onClose,
 }: {
   title: string
-  ask: () => Promise<GivenAnswer>
+  ask: () => Promise<Answer<Given>>
   /** What the person does with the code, step by step. */
   steps?: readonly string[]
   /** A word under the steps about where the code opens, when it needs one. */
@@ -393,7 +378,7 @@ export function Invite({
   label: string
   /** The server is on the person's Tailscale network: the one invited reaches it only once it is shared with them there. */
   tailscale?: boolean
-  ask: (person: string) => Promise<GivenAnswer>
+  ask: (person: string) => Promise<Answer<Given>>
   persons: Persons
   /** The name of a device that got in with the code. */
   joined: string | undefined

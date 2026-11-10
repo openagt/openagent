@@ -1,9 +1,11 @@
 import { afterEach, describe, expect, test, vi } from 'vitest'
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { ModuleHostContext, type MachineAdded, type MachineRemoved, type ModuleCommandResult, type ModuleComputersThrough, type ModuleAccountsAgent, type ModuleHost, type ModuleMachineAccount, type ModuleMachinePerson, type ModuleMachines } from '@openagt/dashboard/module'
+import { fakeHost } from '@openagt/dashboard/module/testing'
 import { DevicesSettings } from './DevicesSettings.js'
 import { olderThan } from './parts.js'
-import type { DeviceRow, ServerRow, StepState } from './servers.js'
+import type { DeviceRow } from './devices.js'
+import type { ServerRow, StepState } from './servers.js'
 
 // The servers in Settings › Devices: a server this computer installed OpenAgent on, a computer at
 // home set up as one, a server set up elsewhere or shared by someone, another person's computer.
@@ -73,28 +75,17 @@ function dashboard(
   const machineAccounts = vi.fn(async (_id: string, _agent: ModuleAccountsAgent): Promise<ModuleMachineAccount[] | null> => null)
   const removeMachineAccount = vi.fn(async (_id: string, _agent: ModuleAccountsAgent, _account: string): Promise<MachineAdded> => ({ ok: true }))
   // The page asks `devices server …` of a server, and `devices …` of this computer's door.
-  const host: ModuleHost = {
-    package: '@openagt/dashboard-devices',
+  const host = fakeHost('@openagt/dashboard-devices', {
     runCommand: inProject,
     act: inProject,
-    runComputerCommand: vi.fn(async (args: string[]) => (args[0] === 'server' ? runComputerCommand(args.slice(1)) : doorCommand(args))),
-    runComputerCommandOn: vi.fn(async (machine: string, args: string[]) => runComputerCommandOn(machine, args[0] === 'server' ? args.slice(1) : ['not-asked-as-server', ...args])),
-    read: vi.fn(async () => ({ ok: false as const, error: 'no server part' })),
-    openAgent: vi.fn(),
-    openPage: vi.fn(),
-    pageHref: (segment: string) => `/${segment}`,
-    openSettings: vi.fn(),
-    gitHostPeople: vi.fn(async () => []),
-    startRun: vi.fn(async () => ({ ok: false as const, error: 'not here' })),
-    configureRun: vi.fn(),
-    agents: vi.fn(async () => []),
+    runComputerCommand: async (args: string[]) => (args[0] === 'server' ? runComputerCommand(args.slice(1)) : doorCommand(args)),
+    runComputerCommandOn: async (machine: string, args: string[]) => runComputerCommandOn(machine, args[0] === 'server' ? args.slice(1) : ['not-asked-as-server', ...args]),
     machines,
     addMachine,
     removeMachine,
-    renameMachine: vi.fn(async () => ({ ok: true as const })),
-    renameComputer: vi.fn(async () => ({ ok: true as const })),
-    letMachineIn: vi.fn(async () => ({ ok: true as const })),
-    machineCode: vi.fn(async () => ({ ok: false as const, error: 'not here' })),
+    renameMachine: async () => ({ ok: true as const }),
+    renameComputer: async () => ({ ok: true as const }),
+    letMachineIn: async () => ({ ok: true as const }),
     computersThrough,
     addComputerThrough,
     machinePerson,
@@ -104,9 +95,7 @@ function dashboard(
     agentDataRemote,
     machineAccounts,
     removeMachineAccount,
-    watchScreen: vi.fn(async () => undefined),
-    sendToScreen: vi.fn(async () => false),
-  }
+  })
   // What was asked of the `devices server` command, without the reads a page makes again and again by itself.
   const ran = (): string[] => runComputerCommand.mock.calls.map(([args]) => args.join(' ')).filter(line => !line.startsWith('devices '))
   return { host, runComputerCommand, runComputerCommandOn, doorCommand, machines, addMachine, removeMachine, computersThrough, addComputerThrough, machinePerson, removeMachineDevice, useLoginsOn, syncDataOn, agentDataRemote, machineAccounts, removeMachineAccount, ran }

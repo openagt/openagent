@@ -4,7 +4,7 @@
 // What this does NOT prove is the only thing left: whether claude.ai's real DOM puts the block
 // somewhere these strategies reach. That is what loading the extension answers.
 //
-//   node --experimental-vm-modules check.mjs      (from this directory, after a repo pnpm install)
+//   node check.mjs      (after a repo pnpm install: jsdom comes from the dashboard's dependencies)
 
 import { readFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
@@ -119,6 +119,23 @@ const cases = [
 const script = readFileSync(join(here, 'content.js'), 'utf8')
 let failed = 0
 
+/** One case's line: PASS or FAIL, what it proves, and what it saw. */
+function check(ok, title, seen) {
+  if (!ok) failed++
+  console.log(`${ok ? 'PASS' : 'FAIL'}  ${title}  (${seen})`)
+}
+
+/** A session page with `body` in its main area, the content script run on it once `setup` prepared it. */
+function sessionPage(body, setup) {
+  const dom = new JSDOM(`<!doctype html><html><body><main>${body}</main></body></html>`, {
+    url: 'https://claude.ai/code/session_01TEST',
+    runScripts: 'outside-only',
+  })
+  setup?.(dom.window)
+  dom.window.eval(script)
+  return dom
+}
+
 for (const [name, body, expectFound] of cases) {
   const shadow = typeof body === 'object' ? body.shadow : undefined
   const shadowRows = typeof body === 'object' && body.shadowRows
@@ -127,15 +144,9 @@ for (const [name, body, expectFound] of cases) {
     : shadowRows
       ? `${feed(row('human', 0, 'intro'), row('assistant', 1, '<div id="host"></div>'), row('human', 2, 'Work on the next TODO'))}<div contenteditable="true"></div>`
       : body
-  const dom = new JSDOM(`<!doctype html><html><body><main>${light}</main></body></html>`, {
-    url: 'https://claude.ai/code/session_01TEST',
-    runScripts: 'outside-only',
+  const dom = sessionPage(light, w => {
+    if (shadow || shadowRows) w.document.getElementById('host').attachShadow({ mode: 'open' }).innerHTML = `<code>${shadow ?? block}</code>`
   })
-  if (shadow || shadowRows) {
-    const host = dom.window.document.getElementById('host')
-    host.attachShadow({ mode: 'open' }).innerHTML = `<code>${shadow ?? block}</code>`
-  }
-  dom.window.eval(script)
   // The panel is appended to documentElement, so it is a direct child rather than in the body.
   const text = [...dom.window.document.documentElement.children]
     .filter(el => el.tagName === 'DIV')
@@ -145,8 +156,7 @@ for (const [name, body, expectFound] of cases) {
   const composerOk = /composer\s*(contenteditable|textarea)/.test(text)
   const titleOk = !expectFound || /What would you like me to do\?/.test(text)
   const ok = found === expectFound && composerOk && titleOk
-  if (!ok) failed++
-  console.log(`${ok ? 'PASS' : 'FAIL'}  ${name}  (found=${found}, expected=${expectFound}, composer=${composerOk}, title=${titleOk})`)
+  check(ok, name, `found=${found}, expected=${expectFound}, composer=${composerOk}, title=${titleOk}`)
   dom.window.close()
 }
 
@@ -164,11 +174,7 @@ for (const [name, body, expectFound] of cases) {
       { label: 'Abandon the plan', stop: true },
     ],
   })
-  const dom = new JSDOM(`<!doctype html><html><body><main>${feed(row('human', 0, 'intro'), row('assistant', 1, `<code>${esc(shaped)}</code>`))}<div contenteditable="true"></div></main></body></html>`, {
-    url: 'https://claude.ai/code/session_01TEST',
-    runScripts: 'outside-only',
-  })
-  dom.window.eval(script)
+  const dom = sessionPage(`${feed(row('human', 0, 'intro'), row('assistant', 1, `<code>${esc(shaped)}</code>`))}<div contenteditable="true"></div>`)
   const got = dom.window.__oaBridgeQuestion
   const want = {
     sessionId: 'session_01TEST',
@@ -177,8 +183,7 @@ for (const [name, body, expectFound] of cases) {
     multi: true,
   }
   const ok = JSON.stringify(got) === JSON.stringify(want)
-  if (!ok) failed++
-  console.log(`${ok ? 'PASS' : 'FAIL'}  multi/default/stop reach the daemon as posted  (got=${JSON.stringify(got)})`)
+  check(ok, 'multi/default/stop reach the daemon as posted', `got=${JSON.stringify(got)}`)
   dom.window.close()
 }
 
@@ -188,11 +193,7 @@ for (const [name, body, expectFound] of cases) {
 // turn long enough to be cut — from its end, never the conversation's.
 
 function mirrorOf(body) {
-  const dom = new JSDOM(`<!doctype html><html><body><main>${body}</main></body></html>`, {
-    url: 'https://claude.ai/code/session_01TEST',
-    runScripts: 'outside-only',
-  })
-  dom.window.eval(script)
+  const dom = sessionPage(body)
   const panel = [...dom.window.document.documentElement.children].filter(el => el.tagName === 'DIV').map(el => el.textContent).join(' ')
   const got = dom.window.__oaBridgeTranscript
   dom.window.close()
@@ -217,24 +218,21 @@ function mirrorOf(body) {
     { seq: 4, role: 'agent', text: 'On it' },
   ]
   const ok = JSON.stringify(got) === JSON.stringify(want)
-  if (!ok) failed++
-  console.log(`${ok ? 'PASS' : 'FAIL'}  mirror is one entry per turn, roles mapped, markers skipped, prompt head-capped  (turns=${got?.length}, seqs=${got?.map(e => e.seq).join(',')}, roles=${got?.map(e => e.role).join(',')})`)
+  check(ok, 'mirror is one entry per turn, roles mapped, markers skipped, prompt head-capped', `turns=${got?.length}, seqs=${got?.map(e => e.seq).join(',')}, roles=${got?.map(e => e.role).join(',')}`)
 }
 
 {
   // A virtual list keeps only the tail rendered: positions come from the page, not from DOM order.
   const { got } = mirrorOf(feed(row('human', 7, 'later question'), row('assistant', 8, 'later answer')) + '<div contenteditable="true"></div>')
   const ok = JSON.stringify(got?.map(e => [e.seq, e.role])) === JSON.stringify([[7, 'user'], [8, 'agent']])
-  if (!ok) failed++
-  console.log(`${ok ? 'PASS' : 'FAIL'}  mirror keeps the page's positions when only the tail is rendered  (got=${JSON.stringify(got?.map(e => e.seq))})`)
+  check(ok, "mirror keeps the page's positions when only the tail is rendered", `got=${JSON.stringify(got?.map(e => e.seq))}`)
 }
 
 {
   // A layout the mirror does not know is named, never mirrored as whatever text is on screen.
   const { got, panel } = mirrorOf('<div>Home Code Artifacts</div><p>some conversation text</p><div contenteditable="true"></div>')
   const ok = Array.isArray(got) && got.length === 0 && /no transcript rows found/.test(panel)
-  if (!ok) failed++
-  console.log(`${ok ? 'PASS' : 'FAIL'}  no turn rows means nothing mirrored and the panel says so  (entries=${got?.length}, named=${/no transcript rows found/.test(panel)})`)
+  check(ok, 'no turn rows means nothing mirrored and the panel says so', `entries=${got?.length}, named=${/no transcript rows found/.test(panel)}`)
 }
 
 // ---------------------------------------------------------------------------
@@ -244,11 +242,7 @@ function mirrorOf(body) {
 // fallback, and a page with no composer is refused rather than guessed at.
 
 async function deliver(body, prepare) {
-  const dom = new JSDOM(`<!doctype html><html><body><main>${body}</main></body></html>`, {
-    url: 'https://claude.ai/code/session_01TEST',
-    runScripts: 'outside-only',
-  })
-  dom.window.eval(script)
+  const dom = sessionPage(body)
   const observed = prepare ? prepare(dom.window) : undefined
   const result = await dom.window.__oaBridgeDeliverAnswer('Work on the next TODO')
   return { dom, result, observed }
@@ -267,8 +261,7 @@ async function deliver(body, prepare) {
   )
   const text = dom.window.document.querySelector('[contenteditable="true"]').textContent
   const ok = result.ok && observed.clicked && /clicked send button/.test(result.note) && text === 'Work on the next TODO'
-  if (!ok) failed++
-  console.log(`${ok ? 'PASS' : 'FAIL'}  answer fills the composer and clicks send  (clicked=${observed.clicked}, text="${text}")`)
+  check(ok, 'answer fills the composer and clicks send', `clicked=${observed.clicked}, text="${text}"`)
   dom.window.close()
 }
 
@@ -281,8 +274,7 @@ async function deliver(body, prepare) {
     return seen
   })
   const ok = result.ok && observed.enter && /sent Enter/.test(result.note)
-  if (!ok) failed++
-  console.log(`${ok ? 'PASS' : 'FAIL'}  answer falls back to Enter without a send button  (enter=${observed.enter})`)
+  check(ok, 'answer falls back to Enter without a send button', `enter=${observed.enter}`)
   dom.window.close()
 }
 
@@ -294,8 +286,7 @@ async function deliver(body, prepare) {
     return undefined
   })
   const ok = !result.ok && /no composer/.test(result.note)
-  if (!ok) failed++
-  console.log(`${ok ? 'PASS' : 'FAIL'}  answer refuses honestly when there is no composer  (ok=${result.ok})`)
+  check(ok, 'answer refuses honestly when there is no composer', `ok=${result.ok}`)
   dom.window.close()
 }
 
@@ -306,11 +297,7 @@ async function deliver(body, prepare) {
 // which is exactly the degradation the guard in content.js promises.
 
 {
-  const dom = new JSDOM(
-    `<!doctype html><html><body><main><pre><code>${block}</code></pre><div contenteditable="true"></div></main></body></html>`,
-    { url: 'https://claude.ai/code/session_01TEST', runScripts: 'outside-only' },
-  )
-  dom.window.eval(script)
+  const dom = sessionPage(`<pre><code>${block}</code></pre><div contenteditable="true"></div>`)
   const panel = dom.window.document.getElementById('oa-bridge-panel')
   // The toggle is the one button carrying aria-expanded; Copy report and Fill composer do not.
   const toggle = () => panel.querySelector('button[aria-expanded]')
@@ -324,8 +311,7 @@ async function deliver(body, prepare) {
   toggle().click()
   const restored = /question found\s*yes/.test(panel.textContent)
   const ok = expanded && folded && restored
-  if (!ok) failed++
-  console.log(`${ok ? 'PASS' : 'FAIL'}  panel folds to a compact OA tab and back  (expanded=${expanded}, folded=${folded}, restored=${restored})`)
+  check(ok, 'panel folds to a compact OA tab and back', `expanded=${expanded}, folded=${folded}, restored=${restored}`)
   dom.window.close()
 }
 
@@ -444,8 +430,7 @@ const START = { repo: 'openagt/openagent', branch: 'cloud-1-abcd', prompt: 'Add 
   const branch = d.getElementById('branch')?.textContent
   const text = d.querySelector('[contenteditable="true"]').textContent
   const ok = result.ok && result.sessionId === 'session_01NEW' && /repo already openagent/.test(result.note) && branch === 'cloud-1-abcd' && text === 'Add the thing' && seen.sent && seen.modelOpened === 0
-  if (!ok) failed++
-  console.log(`${ok ? 'PASS' : 'FAIL'}  create with the repo remembered picks the branch, types the prompt and sends, and leaves the model picker alone  (branch=${branch}, searched=${JSON.stringify(seen.searched)}, modelOpened=${seen.modelOpened}, result=${JSON.stringify(result)})`)
+  check(ok, 'create with the repo remembered picks the branch, types the prompt and sends, and leaves the model picker alone', `branch=${branch}, searched=${JSON.stringify(seen.searched)}, modelOpened=${seen.modelOpened}, result=${JSON.stringify(result)}`)
   dom.window.close()
 }
 
@@ -456,8 +441,7 @@ const START = { repo: 'openagt/openagent', branch: 'cloud-1-abcd', prompt: 'Add 
   const result = await w.__oaBridgeCreateSession({ ...START, model: 'sonnet' })
   const model = d.getElementById('model')?.textContent
   const ok = result.ok && model === 'Sonnet 5' && /model: clicked "Sonnet 5"/.test(result.note) && seen.sent && seen.modelOpened === 1
-  if (!ok) failed++
-  console.log(`${ok ? 'PASS' : 'FAIL'}  create picks the requested model in the model menu before sending  (model=${model}, result=${JSON.stringify(result)})`)
+  check(ok, 'create picks the requested model in the model menu before sending', `model=${model}, result=${JSON.stringify(result)}`)
   dom.window.close()
 }
 
@@ -466,8 +450,7 @@ const START = { repo: 'openagt/openagent', branch: 'cloud-1-abcd', prompt: 'Add 
   const { dom, w, d, seen } = newSessionPage({ currentModel: 'Opus 5' })
   const result = await w.__oaBridgeCreateSession({ ...START, model: 'opus' })
   const ok = result.ok && d.getElementById('model')?.textContent === 'Opus 5' && /model already Opus 5/.test(result.note) && seen.sent && seen.modelOpened === 0
-  if (!ok) failed++
-  console.log(`${ok ? 'PASS' : 'FAIL'}  create leaves a model picker that already reads the requested model alone  (result=${JSON.stringify(result)})`)
+  check(ok, 'create leaves a model picker that already reads the requested model alone', `result=${JSON.stringify(result)}`)
   dom.window.close()
 }
 
@@ -477,8 +460,7 @@ const START = { repo: 'openagt/openagent', branch: 'cloud-1-abcd', prompt: 'Add 
   const result = await w.__oaBridgeCreateSession({ ...START, model: 'Opus 4.8' })
   const model = d.getElementById('model')?.textContent
   const ok = result.ok && model === 'Opus 4.8' && /model: clicked "Opus 4.8" via More models/.test(result.note) && seen.sent
-  if (!ok) failed++
-  console.log(`${ok ? 'PASS' : 'FAIL'}  create finds an older model behind "More models"  (model=${model}, result=${JSON.stringify(result)})`)
+  check(ok, 'create finds an older model behind "More models"', `model=${model}, result=${JSON.stringify(result)}`)
   dom.window.close()
 }
 
@@ -487,8 +469,7 @@ const START = { repo: 'openagt/openagent', branch: 'cloud-1-abcd', prompt: 'Add 
   const { dom, w, d, seen } = newSessionPage()
   const result = await w.__oaBridgeCreateSession({ ...START, model: 'gpt-9' })
   const ok = !result.ok && /model: the menu offered no "gpt-9"/.test(result.note) && /Fable 5/.test(result.note) && !seen.sent && d.getElementById('model')?.textContent === 'Opus 5'
-  if (!ok) failed++
-  console.log(`${ok ? 'PASS' : 'FAIL'}  create refuses to send on a model the menu does not offer  (sent=${seen.sent}, note=${JSON.stringify(result.note)})`)
+  check(ok, 'create refuses to send on a model the menu does not offer', `sent=${seen.sent}, note=${JSON.stringify(result.note)}`)
   dom.window.close()
 }
 
@@ -497,8 +478,7 @@ const START = { repo: 'openagt/openagent', branch: 'cloud-1-abcd', prompt: 'Add 
   const { dom, w, seen } = newSessionPage({ modelPicker: false })
   const result = await w.__oaBridgeCreateSession({ ...START, model: 'sonnet' })
   const ok = !result.ok && /no model picker on the page/.test(result.note) && !seen.sent
-  if (!ok) failed++
-  console.log(`${ok ? 'PASS' : 'FAIL'}  create names a missing model picker rather than sending on the default  (sent=${seen.sent}, note=${result.note.slice(0, 80)}…)`)
+  check(ok, 'create names a missing model picker rather than sending on the default', `sent=${seen.sent}, note=${result.note.slice(0, 80)}…`)
   dom.window.close()
 }
 
@@ -510,8 +490,7 @@ const START = { repo: 'openagt/openagent', branch: 'cloud-1-abcd', prompt: 'Add 
   const repo = d.getElementById('repo')?.textContent.replace(/[\uE000-\uF8FF]/g, '')
   const branch = d.getElementById('branch')?.textContent.replace(/[\uE000-\uF8FF]/g, '')
   const ok = result.ok && repo === 'openagent' && branch === 'cloud-1-abcd' && seen.sent
-  if (!ok) failed++
-  console.log(`${ok ? 'PASS' : 'FAIL'}  create reads labels through the page's icon glyphs  (repo=${repo}, branch=${branch}, result=${JSON.stringify(result)})`)
+  check(ok, "create reads labels through the page's icon glyphs", `repo=${repo}, branch=${branch}, result=${JSON.stringify(result)}`)
   dom.window.close()
 }
 
@@ -522,8 +501,7 @@ const START = { repo: 'openagt/openagent', branch: 'cloud-1-abcd', prompt: 'Add 
   const repo = d.getElementById('repo')?.textContent
   const branch = d.getElementById('branch')?.textContent
   const ok = result.ok && repo === 'openagent' && branch === 'cloud-1-abcd' && seen.sent && /repo: clicked "openagt\/openagent"/.test(result.note)
-  if (!ok) failed++
-  console.log(`${ok ? 'PASS' : 'FAIL'}  create with another repo remembered re-picks it through its chip  (repo=${repo}, branch=${branch}, result=${JSON.stringify(result)})`)
+  check(ok, 'create with another repo remembered re-picks it through its chip', `repo=${repo}, branch=${branch}, result=${JSON.stringify(result)}`)
   dom.window.close()
 }
 
@@ -533,8 +511,7 @@ const START = { repo: 'openagt/openagent', branch: 'cloud-1-abcd', prompt: 'Add 
   const result = await w.__oaBridgeCreateSession(START)
   const repo = d.getElementById('repo')?.textContent
   const ok = result.ok && repo === 'openagent' && seen.sent
-  if (!ok) failed++
-  console.log(`${ok ? 'PASS' : 'FAIL'}  create with no repo remembered uses the select-repo trigger  (repo=${repo}, result=${JSON.stringify(result)})`)
+  check(ok, 'create with no repo remembered uses the select-repo trigger', `repo=${repo}, result=${JSON.stringify(result)}`)
   dom.window.close()
 }
 
@@ -543,8 +520,7 @@ const START = { repo: 'openagt/openagent', branch: 'cloud-1-abcd', prompt: 'Add 
   const { dom, w, seen } = newSessionPage({ branches: ['main', 'develop'] })
   const result = await w.__oaBridgeCreateSession(START)
   const ok = !result.ok && /branch/.test(result.note) && !seen.sent
-  if (!ok) failed++
-  console.log(`${ok ? 'PASS' : 'FAIL'}  create refuses to send on the wrong branch  (sent=${seen.sent}, note=${JSON.stringify(result.note)})`)
+  check(ok, 'create refuses to send on the wrong branch', `sent=${seen.sent}, note=${JSON.stringify(result.note)}`)
   dom.window.close()
 }
 
@@ -552,12 +528,10 @@ const START = { repo: 'openagt/openagent', branch: 'cloud-1-abcd', prompt: 'Add 
   const { dom, w, seen } = newSessionPage({ remembered: '', repoPicker: false })
   const result = await w.__oaBridgeCreateSession(START)
   const ok = !result.ok && /no repo picker/.test(result.note) && !seen.sent
-  if (!ok) failed++
-  console.log(`${ok ? 'PASS' : 'FAIL'}  create names the missing control  (note=${result.note.slice(0, 80)}…)`)
+  check(ok, 'create names the missing control', `note=${result.note.slice(0, 80)}…`)
   const probe = w.__oaBridgeProbeNewSession()
   const probeOk = probe.composer === 'contenteditable' && probe.sendButton === true && probe.triggers.some(t => t.text === 'Default')
-  if (!probeOk) failed++
-  console.log(`${probeOk ? 'PASS' : 'FAIL'}  probe describes the page without touching it  (${JSON.stringify(probe.triggers)})`)
+  check(probeOk, 'probe describes the page without touching it', JSON.stringify(probe.triggers))
   dom.window.close()
 }
 
@@ -673,10 +647,7 @@ function appPage({ sessions = SESSIONS, firstPage = 6, sendAppendsRow = true } =
   const odd = got.statuses.find(s => s.sessionId === 'session_01ODD')
   const ok =
     JSON.stringify(statuses) === JSON.stringify(want) && odd.label === 'Something new' && seen.moreClicked === 1 && seen.decoyClicked === 0 && got.pages === 1
-  if (!ok) failed++
-  console.log(
-    `${ok ? 'PASS' : 'FAIL'}  the list is read by label, paged through the list's own button, an unknown label is carried and an absent session is missing  (statuses=${JSON.stringify(statuses)}, label=${odd?.label}, more=${seen.moreClicked}, decoy=${seen.decoyClicked})`,
-  )
+  check(ok, "the list is read by label, paged through the list's own button, an unknown label is carried and an absent session is missing", `statuses=${JSON.stringify(statuses)}, label=${odd?.label}, more=${seen.moreClicked}, decoy=${seen.decoyClicked}`)
   dom.window.close()
 }
 
@@ -706,17 +677,13 @@ function appPage({ sessions = SESSIONS, firstPage = 6, sendAppendsRow = true } =
     /Show debug logs/.test(overlay.textContent) &&
     /visit session_01AWAIT \(awaiting\)/.test(overlay.querySelector('.oa-driver-log').textContent) &&
     d.getElementById('oa-bridge-panel').style.display === 'none'
-  if (!ok) failed++
-  console.log(
-    `${ok ? 'PASS' : 'FAIL'}  a cycle visits in-app, reports the question, types the answer and waits for the send, then returns to the list under the overlay  (visited=${JSON.stringify(visited)}, question=${w.__oaBridgeQuestion?.sessionId}, delivered=${JSON.stringify(result.delivered)}, nav=${seen.navigations.join('>')}, path=${w.location.pathname}, overlay=${Boolean(overlay)})`,
-  )
+  check(ok, 'a cycle visits in-app, reports the question, types the answer and waits for the send, then returns to the list under the overlay', `visited=${JSON.stringify(visited)}, question=${w.__oaBridgeQuestion?.sessionId}, delivered=${JSON.stringify(result.delivered)}, nav=${seen.navigations.join('>')}, path=${w.location.pathname}, overlay=${Boolean(overlay)}`)
   // Whatever removes the overlay, the next page change brings it back.
   overlay.remove()
   d.getElementById('main').insertAdjacentHTML('beforeend', '<p>something changed</p>')
   await new Promise(resolve => setTimeout(resolve, 600))
   const back = Boolean(d.getElementById('oa-driver-overlay'))
-  if (!back) failed++
-  console.log(`${back ? 'PASS' : 'FAIL'}  the overlay is re-asserted after being removed  (back=${back})`)
+  check(back, 'the overlay is re-asserted after being removed', `back=${back}`)
   // The sign-in page is where a person has to act in this tab (the daemon's bridge browser is
   // signed in there, once): the overlay stands aside on it and returns with the next page.
   w.history.pushState({}, '', '/login?from=logout')
@@ -727,8 +694,7 @@ function appPage({ sessions = SESSIONS, firstPage = 6, sendAppendsRow = true } =
   d.getElementById('main').insertAdjacentHTML('beforeend', '<p>signed in</p>')
   await new Promise(resolve => setTimeout(resolve, 600))
   const returned = Boolean(d.getElementById('oa-driver-overlay'))
-  if (!aside || !returned) failed++
-  console.log(`${aside && returned ? 'PASS' : 'FAIL'}  the overlay stands aside on the sign-in page and returns on the next page  (aside=${aside}, returned=${returned})`)
+  check(aside && returned, 'the overlay stands aside on the sign-in page and returns on the next page', `aside=${aside}, returned=${returned}`)
   dom.window.close()
 }
 
@@ -739,8 +705,7 @@ function appPage({ sessions = SESSIONS, firstPage = 6, sendAppendsRow = true } =
   const result = await w.__oaBridgeDrive({ visits: [{ id: 'session_01UNREAD', status: 'unread', answer: { id: 'ans-2', text: 'Work on the next TODO' } }] })
   const delivered = result.delivered[0]
   const ok = delivered && delivered.ok === false && /did not take the send/.test(delivered.note) && /rows 2 -> 2/.test(delivered.note)
-  if (!ok) failed++
-  console.log(`${ok ? 'PASS' : 'FAIL'}  an answer the page did not take is reported as failed, not sent  (delivered=${JSON.stringify(delivered)})`)
+  check(ok, 'an answer the page did not take is reported as failed, not sent', `delivered=${JSON.stringify(delivered)}`)
   dom.window.close()
 }
 
@@ -749,8 +714,7 @@ function appPage({ sessions = SESSIONS, firstPage = 6, sendAppendsRow = true } =
   const { dom, w } = appPage()
   const result = await w.__oaBridgeDrive({ visits: [{ id: 'session_01GONE', status: 'missing', answer: { id: 'ans-3', text: 'x' } }] })
   const ok = result.visited[0].ok === false && result.visited[0].note === 'not on the list' && result.delivered.length === 0
-  if (!ok) failed++
-  console.log(`${ok ? 'PASS' : 'FAIL'}  a session missing from the list is not visited and its answer is not claimed  (${JSON.stringify(result.visited[0])})`)
+  check(ok, 'a session missing from the list is not visited and its answer is not claimed', JSON.stringify(result.visited[0]))
   dom.window.close()
 }
 
@@ -769,8 +733,7 @@ function appPage({ sessions = SESSIONS, firstPage = 6, sendAppendsRow = true } =
     JSON.stringify(seen.sent.map(s => [s.path, s.text])) === JSON.stringify([['/code', 'Add the thing'], ['/code/session_01UNREAD', 'Work on the next TODO']]) &&
     result.delivered[0]?.ok === true &&
     w.location.pathname === '/code'
-  if (!ok) failed++
-  console.log(`${ok ? 'PASS' : 'FAIL'}  the requested session is created before the visits, and the cycle ends on the list  (started=${JSON.stringify(result.started)}, nav=${seen.navigations.join('>')}, sent=${JSON.stringify(seen.sent)})`)
+  check(ok, 'the requested session is created before the visits, and the cycle ends on the list', `started=${JSON.stringify(result.started)}, nav=${seen.navigations.join('>')}, sent=${JSON.stringify(seen.sent)}`)
   dom.window.close()
 }
 
@@ -781,8 +744,7 @@ function appPage({ sessions = SESSIONS, firstPage = 6, sendAppendsRow = true } =
   const second = await w.__oaBridgeReadSessionList(['session_01AWAIT'])
   const done = await first
   const ok = second.ok === false && second.busy === true && done.ok && done.visited[0]?.ok === true
-  if (!ok) failed++
-  console.log(`${ok ? 'PASS' : 'FAIL'}  a list read during a drive is refused as busy and the drive completes  (second=${JSON.stringify(second)}, first=${done.visited?.[0]?.ok})`)
+  check(ok, 'a list read during a drive is refused as busy and the drive completes', `second=${JSON.stringify(second)}, first=${done.visited?.[0]?.ok}`)
   dom.window.close()
 }
 
@@ -793,8 +755,7 @@ function appPage({ sessions = SESSIONS, firstPage = 6, sendAppendsRow = true } =
   d.querySelector('a[href="/code/session_01AWAIT"]').insertAdjacentHTML('afterbegin', '<span aria-label="#1700 · Open"></span>')
   const got = await w.__oaBridgeReadSessionList(['session_01AWAIT'])
   const ok = got.statuses[0].status === 'awaiting'
-  if (!ok) failed++
-  console.log(`${ok ? 'PASS' : 'FAIL'}  a status word on the row beats its pull-request label  (${JSON.stringify(got.statuses[0])})`)
+  check(ok, 'a status word on the row beats its pull-request label', JSON.stringify(got.statuses[0]))
   dom.window.close()
 }
 
@@ -818,8 +779,7 @@ function appPage({ sessions = SESSIONS, firstPage = 6, sendAppendsRow = true } =
     ['session_01PRCLOSED', 'landed'],
   ]
   const ok = JSON.stringify(statuses) === JSON.stringify(want)
-  if (!ok) failed++
-  console.log(`${ok ? 'PASS' : 'FAIL'}  an open or draft pull request alone reads as idle, a merged or closed one as landed  (${JSON.stringify(statuses)})`)
+  check(ok, 'an open or draft pull request alone reads as idle, a merged or closed one as landed', JSON.stringify(statuses))
   dom.window.close()
 }
 
@@ -830,11 +790,7 @@ function appPage({ sessions = SESSIONS, firstPage = 6, sendAppendsRow = true } =
 // a full survey about four times a second, forever, on a page where nothing changed.
 
 {
-  const dom = new JSDOM(`<!doctype html><html><body><main>${feed(row('human', 0, 'intro'), row('assistant', 1, 'Hello.'))}<div contenteditable="true"></div></main></body></html>`, {
-    url: 'https://claude.ai/code/session_01TEST',
-    runScripts: 'outside-only',
-  })
-  dom.window.eval(script)
+  const dom = sessionPage(`${feed(row('human', 0, 'intro'), row('assistant', 1, 'Hello.'))}<div contenteditable="true"></div>`)
   const w = dom.window
   const settle = ms => new Promise(resolve => setTimeout(resolve, ms))
   // Let whatever the load itself queued run out, then make exactly one page change. The re-read
@@ -845,8 +801,7 @@ function appPage({ sessions = SESSIONS, firstPage = 6, sendAppendsRow = true } =
   await settle(1500)
   const ran = w.__oaBridgeSurveys() - before
   const ok = ran === 1
-  if (!ok) failed++
-  console.log(`${ok ? 'PASS' : 'FAIL'}  one page change costs one survey: the panel's redraw does not trigger the next  (surveys after the change=${ran})`)
+  check(ok, "one page change costs one survey: the panel's redraw does not trigger the next", `surveys after the change=${ran}`)
   dom.window.close()
 }
 
@@ -892,10 +847,7 @@ function appPage({ sessions = SESSIONS, firstPage = 6, sendAppendsRow = true } =
       second.length === 0 &&
       JSON.stringify(ids(onChange)) === JSON.stringify(['s_unread', 's_idle']) &&
       JSON.stringify(forced) === JSON.stringify([{ id: 's_landed', status: 'landed', answer: { id: 'a1', text: 't' } }])
-    if (!ok) failed++
-    console.log(
-      `${ok ? 'PASS' : 'FAIL'}  awaiting, unread and idle sessions are visited when never seen or on a status change, an answer forces a visit; running, landed and missing sessions are left alone  (first=${ids(first)}, second=${second.length}, change=${ids(onChange)}, forced=${JSON.stringify(forced)})`,
-    )
+    check(ok, 'awaiting, unread and idle sessions are visited when never seen or on a status change, an answer forces a visit; running, landed and missing sessions are left alone', `first=${ids(first)}, second=${second.length}, change=${ids(onChange)}, forced=${JSON.stringify(forced)}`)
   }
   {
     // The same list six minutes later, nothing changed: only the awaiting session is due again.
@@ -905,8 +857,7 @@ function appPage({ sessions = SESSIONS, firstPage = 6, sendAppendsRow = true } =
     // And one minute later nothing is: the age revisit is five minutes, not every beat.
     const soon = planVisits(statuses, new Map(), recent, NOW + 60_000)
     const ok = JSON.stringify(ids(later)) === JSON.stringify(['s_await']) && soon.length === 0
-    if (!ok) failed++
-    console.log(`${ok ? 'PASS' : 'FAIL'}  after five minutes unchanged, only an awaiting session is visited again; unread and idle are not  (later=${ids(later)}, soon=${soon.length})`)
+    check(ok, 'after five minutes unchanged, only an awaiting session is visited again; unread and idle are not', `later=${ids(later)}, soon=${soon.length}`)
   }
   dom.window.close()
 }
@@ -940,8 +891,7 @@ function appPage({ sessions = SESSIONS, firstPage = 6, sendAppendsRow = true } =
     const missing = [...loaded].filter(f => !WATCHED_FILES.includes(f))
     const extra = WATCHED_FILES.filter(f => !loaded.has(f))
     const ok = missing.length === 0 && extra.length === 0
-    if (!ok) failed++
-    console.log(`${ok ? 'PASS' : 'FAIL'}  every file Chrome loads for the extension is watched, and nothing else  (watched=${WATCHED_FILES.join(',')}, unwatched=${missing.join(',') || 'none'}, not loaded=${extra.join(',') || 'none'})`)
+    check(ok, 'every file Chrome loads for the extension is watched, and nothing else', `watched=${WATCHED_FILES.join(',')}, unwatched=${missing.join(',') || 'none'}, not loaded=${extra.join(',') || 'none'}`)
   }
   {
     const files = new Map(WATCHED_FILES.map(f => [f, `the text of ${f}`]))
@@ -956,8 +906,7 @@ function appPage({ sessions = SESSIONS, firstPage = 6, sendAppendsRow = true } =
     files.delete('driver-plan.js')
     const unreadable = await fingerprint(read).then(() => 'taken', err => `refused: ${err.message}`)
     const ok = same.length === 0 && JSON.stringify(edited) === JSON.stringify(['content.js']) && unreadable.startsWith('refused')
-    if (!ok) failed++
-    console.log(`${ok ? 'PASS' : 'FAIL'}  unchanged files change nothing, one edited file is named, and a file that cannot be read refuses the fingerprint rather than counting as a change  (same=${same.length}, edited=${edited}, unreadable=${unreadable})`)
+    check(ok, 'unchanged files change nothing, one edited file is named, and a file that cannot be read refuses the fingerprint rather than counting as a change', `same=${same.length}, edited=${edited}, unreadable=${unreadable}`)
   }
   dom.window.close()
 }

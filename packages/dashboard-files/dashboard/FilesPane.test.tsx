@@ -1,7 +1,10 @@
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest'
 import { cleanup, fireEvent, screen, waitFor, within } from '@testing-library/react'
 import { forgetRemembered } from '@openagt/dashboard/module'
-import { renderWithHost as render } from './test-host.js'
+import { fakeHost, renderWithHost } from '@openagt/dashboard/module/testing'
+
+/** Render `ui` as the dashboard draws the module, in a host whose every service is a spy; the module's own reads are mocked, so the host's `read` never answers. */
+const render = (ui: Parameters<typeof renderWithHost>[0]) => renderWithHost(ui, fakeHost('@openagt/dashboard-files'))
 
 const readProject = vi.fn(async () => [] as unknown)
 const readTree = vi.fn(async () => ({ source: 'checkout', files: [] }) as unknown)
@@ -255,6 +258,19 @@ describe('opening files, as Claude Code on the web does', () => {
     rerender(<FilesPane projectId="p1" agentId="run-1" context={context()} show={{ path: '/home/user/project/src/index.html', at: 1 }} />)
     expect(tabs()).toEqual([])
     rerender(<FilesPane projectId="p1" agentId="run-1" context={context()} show={{ path: '/elsewhere/README.md', at: 2 }} />)
+    expect(tabs()).toEqual([])
+  })
+
+  test('an ask already taken is not taken again by a pane opened later', async () => {
+    readTree.mockResolvedValue({ source: 'checkout', files: ['index.html'] })
+    const taken = { path: '/home/user/project/index.html', at: 3 }
+    const first = render(<FilesPane projectId="p1" agentId="run-1" context={context()} show={taken} />)
+    await waitFor(() => expect(tabs()).toEqual([['index.html', 'true', 'preview']]))
+    fireEvent.click(screen.getByRole('button', { name: 'Close index.html' }))
+    first.unmount()
+    render(<FilesPane projectId="p1" agentId="run-1" context={context()} show={taken} />)
+    await waitFor(() => expect(within(treeOf()).getByTitle('index.html')).toBeTruthy())
+    await new Promise(resolve => setTimeout(resolve, 20))
     expect(tabs()).toEqual([])
   })
 

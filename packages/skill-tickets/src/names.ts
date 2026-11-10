@@ -30,6 +30,11 @@ export function ticketPlanName(file: string): string {
   return `${ticketStem(file)}.plan.md`
 }
 
+/** The ticket a plan sibling is the plan of, {@link ticketPlanName} read backwards: `a.plan.md` → `a.md`; `undefined` for a name that is no plan's. */
+export function ticketOfPlan(file: string): string | undefined {
+  return file.endsWith('.plan.md') ? `${file.slice(0, -'.plan.md'.length)}.md` : undefined
+}
+
 /** A ticket filename's lock sibling: `a.md` → `a.lock.md`. */
 export function ticketLockName(file: string): string {
   return `${ticketStem(file)}.lock.md`
@@ -49,13 +54,19 @@ export function isSibling(file: string): boolean {
   return SIBLING.test(file)
 }
 
+/** The name a `tickets/<name>` path gives inside `tickets/`; `undefined` for a path that is not under it. */
+export function nameInTickets(path: string): string | undefined {
+  return path.startsWith(`${TICKETS_DIR}/`) ? path.slice(TICKETS_DIR.length + 1) : undefined
+}
+
 /**
  * Whether a string names a ticket by path: `tickets/` followed by a name `isTicketFile` accepts, and
  * nothing else — so the two spellings of a name are refused alike. The one gate for both ends of a
  * queue link: what an entry is read as, and what a caller may record.
  */
 export function isTicketPath(path: string): boolean {
-  return path.startsWith(`${TICKETS_DIR}/`) && isTicketFile(path.slice(TICKETS_DIR.length + 1))
+  const name = nameInTickets(path)
+  return name !== undefined && isTicketFile(name)
 }
 
 /**
@@ -69,20 +80,26 @@ export function ticketFromQueueEntry(entry: string): string | undefined {
 }
 
 /**
+ * A value on the format's `0`-`10` scale — a ticket's `Priority:`, its plan's `Effort:` and
+ * `Uncertainty:` — or `undefined` for anything else. A word, an out-of-range or a fractional value
+ * is not clamped into something plausible: it is not a value on this scale, and inventing one
+ * hides the typo.
+ */
+export function onScale(written: string | undefined): number | undefined {
+  const value = written?.trim()
+  if (value === undefined || !/^\d+$/.test(value)) return undefined
+  return Number(value) <= 10 ? Number(value) : undefined
+}
+
+/**
  * Which `## Priority N` section of the queue a ticket's own `Priority:` earns it. The ticket
- * format's scale is the queue's (0–10), taken at its word; an unmarked ticket, a word, or an
- * out-of-range or fractional value lands in the middle (5) rather than being guessed at or
- * clamped — inventing a plausible number would hide the typo. The scale's ends stay reserved:
- * 10 is for critical production bugs and 0 is an only-if-capacity decision, neither of which a
- * translation should claim.
+ * format's scale is the queue's (0–10), taken at its word; an unmarked ticket, or one whose value
+ * is not {@link onScale}, lands in the middle (5) rather than being guessed at. The scale's ends
+ * stay reserved: 10 is for critical production bugs and 0 is an only-if-capacity decision,
+ * neither of which a translation should claim.
  */
 export function queuePriorityForTicket(priority?: string): number {
-  const written = priority?.trim()
-  if (written !== undefined && /^\d+$/.test(written)) {
-    const value = Number(written)
-    if (value >= 0 && value <= 10) return value
-  }
-  return 5
+  return onScale(priority) ?? 5
 }
 
 /**

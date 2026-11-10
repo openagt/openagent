@@ -3,7 +3,6 @@ import { join } from 'node:path'
 import { isMap, isScalar, isSeq, parseDocument, type YAMLSeq } from 'yaml'
 import { OPENAGENT_DIR } from '@openagt/agent-data'
 import { writeHookLines, type InitOutcome } from '@openagt/agent-runner'
-import { lineRuns } from './hook-lines.js'
 
 /**
  * `init`: this tool's lines written into a dashboard's hooks file, so the scheduler runs while the
@@ -23,7 +22,7 @@ import { lineRuns } from './hook-lines.js'
  */
 
 /** The lines, in the order a new file lists them: `open` and `close`, each a list. */
-export const HOOK_LINES: Readonly<Record<string, string | readonly string[]>> = {
+const HOOK_LINES: Readonly<Record<string, string | readonly string[]>> = {
   open: ['scheduler start'],
   close: ['scheduler stop --unless-keep-alive'],
 }
@@ -37,6 +36,18 @@ export type { InitOutcome }
 
 /** What taking the lines out answered: the keys that lost a line, or why the file could not be changed. */
 export type RemoveOutcome = { ok: true; file: string; removed: string[] } | { ok: false; reason: 'unreadable'; file: string; detail?: string }
+
+/**
+ * Whether a shell line runs this tool: one of its commands, bare or by a path, or its package's
+ * name, with or without a version, stands in the line as a word of its own. A name inside another
+ * word is not it. How the hooks file is read, to write no second line beside one that already runs
+ * the tool and to take its own lines back.
+ */
+export function runsTool(line: string): boolean {
+  return line
+    .split(/[\s"'`=;|&()<>]+/)
+    .some(word => word.replace(/@[\w.^~<>=*-]+$/, '') === TOOL.name || TOOL.commands.includes(word.slice(word.lastIndexOf('/') + 1)))
+}
 
 /** One item of a hooks list, as the line it is. */
 function lineOf(item: unknown): string {
@@ -59,7 +70,7 @@ async function lists(repo: string): Promise<Record<string, string[]>> {
 /** Write the lines into `<repo>/.openagent/hooks.yml`, each only where no line of its list runs the tool yet; nothing where the dashboard has no directory. */
 export async function initHooks(repo: string): Promise<InitOutcome> {
   const present = await lists(repo)
-  const missing = Object.fromEntries(Object.entries(HOOK_LINES).filter(([key]) => !(present[key] ?? []).some(line => lineRuns(line, TOOL))))
+  const missing = Object.fromEntries(Object.entries(HOOK_LINES).filter(([key]) => !(present[key] ?? []).some(runsTool)))
   return writeHookLines(repo, missing)
 }
 
@@ -81,7 +92,7 @@ export async function removeHooks(repo: string): Promise<RemoveOutcome> {
     const list = doc.get(key, true)
     if (!isSeq(list)) continue
     const seq = list as YAMLSeq
-    const kept = seq.items.filter(item => !lineRuns(lineOf(item), TOOL))
+    const kept = seq.items.filter(item => !runsTool(lineOf(item)))
     if (kept.length === seq.items.length) continue
     removed.push(key)
     if (kept.length === 0) doc.delete(key)

@@ -1,8 +1,8 @@
 import { useEffect, useState } from 'react'
 import { ChevronLeft, Ellipsis, House, Loader2, Monitor, Plus, Server, Smartphone, Tablet, UserPlus, UserRound } from 'lucide-react'
 import { Button, ConfirmDialog, Dialog, DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, Input, formatDateTime, formatRelative, usePolled, useSettingsCrumb } from '@openagt/dashboard/module'
-import { addDevice, keepPerson, loadMine, myName, nameOwner, removeDevice, removeMine, removePerson, renameDevice, setTailscale, type Answer, type DeviceRow, type DoorStatus, type LineRow, type Mine, type PersonRow } from './devices.js'
-import { removeDevice as removeServerDevice } from './servers.js'
+import { addDevice, keepPerson, loadMine, myName, nameOwner, removeDevice, removeMine, removePerson, renameDevice, setTailscale, type Answer, type DeviceRow, type DoorStatus, type LineRow, type PersonRow, type PersonThere } from './devices.js'
+import { installFailed, removeDevice as removeServerDevice } from './servers.js'
 import { AddDevice, useJoined, type Adding } from './AddDevice.js'
 import { Invite } from './codes.js'
 import { ComputerPage } from './ComputerPage.js'
@@ -244,7 +244,7 @@ function ItemRow({ d, item, onOpen }: { d: Devices; item: Item; onOpen: () => vo
   if (item.kind === 'server') {
     const { server, machine } = item
     const home = server.through !== undefined
-    const failed = !server.working && server.steps.some(step => step.state === 'failed')
+    const failed = installFailed(server)
     const behind = machine?.version !== undefined && d.machines !== undefined && olderThan(machine.version, d.machines.version)
     const state = server.working ? <State tone="working">{machine ? 'Updating…' : 'Installing…'}</State> : failed ? <State tone="bad">Stopped at a step</State> : machine?.version !== undefined ? <State tone="good">Online</State> : <State tone="quiet">{machine ? 'Offline' : 'Not connected yet'}</State>
     return (
@@ -455,8 +455,8 @@ function DoorPeople({ d, persons, devices, lines }: { d: Devices; persons: Perso
  * owner invites, the door is the owner's, and the other persons' devices are theirs.
  */
 function PersonDevices({ person, everyMs }: { person: string; everyMs: number }) {
-  const { value: read, reload } = usePolled<Answer<Mine> | undefined>(() => loadMine(), undefined, everyMs, [])
-  const [changed, setChanged] = useState<Mine | undefined>()
+  const { value: read, reload } = usePolled<Answer<PersonThere> | undefined>(() => loadMine(), undefined, everyMs, [])
+  const [changed, setChanged] = useState<PersonThere | undefined>()
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | undefined>()
   const mine = changed ?? (read?.ok ? read.value : undefined)

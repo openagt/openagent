@@ -4,7 +4,7 @@ import type { PublishPick } from '../src/state.js'
 import { AGENTS, AGENT_LABELS, AGENT_SKILLS_DIR, DEFAULT_AGENT, MAX_AGENTS, type AgentName } from '../src/names.js'
 import { MAX_COUNT, PACE_UNITS, takesTimeOfDay, type PaceUnit } from '../src/pace.js'
 import { triedLine, writtenLine, type TriedLine } from './automation-form.js'
-import { PRINTS_SOMETHING, UNIT_WORDS, modelLabel, publishChoices, publishLabel, type AgentModels, type AgentsDraft, type PaceDraft, type SchedulerCommand } from './schedulers.js'
+import { PRINTS_SOMETHING, UNIT_WORDS, modelLabel, notAsked, publishChoices, stopped, publishLabel, type AgentModels, type AgentsDraft, type PaceDraft, type SchedulerCommand } from './schedulers.js'
 
 // The fields of the Automations page, shared by the Edit panel of a row and the "New automation"
 // form, so a thing is picked the same way wherever it is picked: what the agent is told and the
@@ -14,9 +14,6 @@ import { PRINTS_SOMETHING, UNIT_WORDS, modelLabel, publishChoices, publishLabel,
 
 /** A small text beside or under a field: what it means, or that it is optional. */
 const hint = 'text-xs text-muted-foreground'
-
-/** A sentence with its full stop, added only when it has none. */
-const stopped = (text: string): string => (/[.!?]$/.test(text.trim()) ? text.trim() : `${text.trim()}.`)
 
 /** A part of a panel: its name, then its fields. */
 export function Section({ title, children }: { title: string; children: ReactNode }) {
@@ -63,14 +60,14 @@ export function SaidFields({ project, said, agent, autoFocus, onChange }: { proj
   const tryIt = async (): Promise<void> => {
     const mine = ++asked.current
     setTried('trying')
-    const answer = await host.runCommand(project.id, ['try', `--when=${line}`]).catch((err: unknown) => ({ ok: false as const, error: err instanceof Error ? err.message : String(err) }))
+    const answer = await host.runCommand(project.id, ['try', `--when=${line}`]).catch(notAsked)
     if (asked.current !== mine) return
     setTried(answer.ok ? triedLine(answer.output) : { printed: '', verdict: `The line could not be tried: ${answer.error}`, tone: 'failed' })
   }
   const writeIt = async (): Promise<void> => {
     const mine = ++askedLine.current
     setWritten('writing')
-    const answer = await host.runCommand(project.id, ['write-line', `--words=${words}`, `--agent=${agent}`]).catch((err: unknown) => ({ ok: false as const, error: err instanceof Error ? err.message : String(err) }))
+    const answer = await host.runCommand(project.id, ['write-line', `--words=${words}`, `--agent=${agent}`]).catch(notAsked)
     if (askedLine.current !== mine) return
     const read = answer.ok ? writtenLine(answer.output) : { said: `The line was not written: ${answer.error}` }
     if ('line' in read) lineChanged(read.line)
@@ -204,7 +201,7 @@ export function PaceFields({
   onChange: (next: PaceDraft) => void
 }) {
   const typed = draft.kind === 'every' ? draft : { kind: 'every' as const, count: String(start.count), unit: start.unit, at: '' }
-  const timed = takesTimeOfDay({ count: 1, unit: typed.unit, ms: 0, text: '' })
+  const timed = takesTimeOfDay(typed.unit)
   // A pick of "No wait" made before its shell line was taken away still shows, so the person sees what to change.
   const offersNoWait = noWait || draft.kind === 'work'
   const choice = asSaid !== undefined || offersNoWait

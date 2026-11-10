@@ -3,7 +3,8 @@ import { test } from 'node:test'
 import { mkdtempSync, rmSync, statSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { accountRotation, addAccount, accountsPath, hasAddedAccount, freesIn, markLimited, nameOwnAccount, OWN_NAME, pickAccount, readAccounts, removeAccount, shownAccounts, useFirst } from './accounts.js'
+import { addAccount, accountsPath, hasAddedAccount, freesIn, markLimited, nameOwnAccount, OWN_NAME, pickAccount, readAccounts, removeAccount, shownAccounts, useFirst } from './accounts.js'
+import { accountRotation } from './rotation.js'
 
 const HOUR = 60 * 60_000
 const NOW = Date.parse('2026-10-22T12:00:00Z')

@@ -1,7 +1,9 @@
 // The scheduler's module for the dashboard: the package's `./dashboard` export. It adds the
 // Automations page, the Scheduler entry of Settings, the Automations card of the Overview,
 // the stop line on the usage bar, and, for the pages of other packages, which commands start by themselves. Its data is the `scheduler` command's own, run in each
-// project by the dashboard: `status` to read, `offset`, `switch`, `pace`, `agents` and `publish` to save.
+// project by the dashboard: `status` to read; `offset`, `switch`, `pace`, `agents`, `agent`, `model`,
+// `publish`, `add`, `edit` and `remove` to save; `show` to open an automation, `try` and `write-line`
+// for its shell line, and `now` to start a row at once.
 import { CalendarClock } from 'lucide-react'
 import { defineModule } from '@openagt/dashboard/module'
 import { AutomationsPage } from './AutomationsPage.js'

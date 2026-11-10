@@ -6,7 +6,8 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import type { DriverEvent, SpawnLike, SpawnedProcess } from '@openagt/agent-driver'
 import { CLAUDE_ACCOUNT_ENV, CLAUDE_TOKEN_ENV, ClaudeCodeDriver } from '@openagt/agent-driver-claude'
-import { accountRotation, accountsPath, addAccount, goOn, markLimited, nameOwnAccount, OWN_NAME, readAccounts, usableAccounts, UsageLimitError, useFirst, removeAccount } from './accounts.js'
+import { accountsPath, addAccount, markLimited, nameOwnAccount, OWN_NAME, readAccounts, usableAccounts, useFirst, removeAccount } from './accounts.js'
+import { accountRotation, goOn, UsageLimitError } from './rotation.js'
 
 const HOUR = 60 * 60_000
 const NOW = Date.parse('2026-10-22T12:00:00Z')

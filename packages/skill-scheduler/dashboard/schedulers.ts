@@ -1,4 +1,4 @@
-import type { ModuleCommandResult, ModuleHost, ModuleProject } from '@openagt/dashboard/module'
+import { MAX_SPEND_OFFSET, type ModuleCommandResult, type ModuleHost, type ModuleProject } from '@openagt/dashboard/module'
 import type { PublishPick, TickDecision } from '../src/state.js'
 import { AGENTS, AGENT_LABELS, AGENT_SKILLS_DIR, DEFAULT_AGENT, DEFAULT_PUBLISH, isAgent, isAgents, isTime, type AgentName } from '../src/names.js'
 import { MAX_COUNT, dueFrom, paceInForce, parseInterval, parseTimeOfDay, takesTimeOfDay, type PacePick, type PaceUnit } from '../src/pace.js'
@@ -24,10 +24,6 @@ export function publishLabel(pick: PublishPick, own: boolean): string {
 }
 
 const PUBLISH_PICKS = Object.keys(PUBLISH_LABELS) as PublishPick[]
-
-/** How far the spend offset reaches either side of the quota boundary, in percentage points: the reach of the usage bar's handle. */
-import { MAX_SPEND_OFFSET } from '@openagt/dashboard/module'
-export { MAX_SPEND_OFFSET }
 
 /** One command the project's skills schedule, as its file says it now, with this machine's switch and publish pick. */
 export interface SchedulerCommand {
@@ -189,7 +185,8 @@ function isPace(value: unknown): boolean {
   return pick['work'] === true || (typeof pick['every'] === 'string' && parseInterval(pick['every']) !== undefined)
 }
 
-function record(value: unknown): Record<string, unknown> {
+/** A command's answer, or a value in it, read as its fields: anything but an object has none. */
+export function record(value: unknown): Record<string, unknown> {
   return value && typeof value === 'object' && !Array.isArray(value) ? (value as Record<string, unknown>) : {}
 }
 
@@ -307,6 +304,11 @@ export function typedOffset(raw: string): number | undefined {
 
 export type Saved = { ok: true } | { ok: false; error: string }
 
+/** A command, or a save, that could not even be asked, as its answer: a failure that says why, so the page says it and the next one still runs. */
+export function notAsked(err: unknown): { ok: false; error: string } {
+  return { ok: false, error: err instanceof Error ? err.message : String(err) }
+}
+
 /** Save the spend offset in every project: `scheduler offset -- <points>`, the `--` so a negative value is no flag. Each failing project is named. */
 export async function saveSpendOffset(host: ModuleHost, projects: readonly ModuleProject[], points: number): Promise<Saved> {
   const answers = await Promise.all(projects.map(async project => ({ project, answer: await host.runCommand(project.id, ['offset', '--', String(points)]) })))
@@ -330,6 +332,9 @@ export function spelled(every: string): string {
 }
 
 const sentence = (text: string): string => text.charAt(0).toUpperCase() + text.slice(1)
+
+/** A sentence with its full stop, added only when it has none. */
+export const stopped = (text: string): string => (/[.!?]$/.test(text.trim()) ? text.trim() : `${text.trim()}.`)
 
 /** What a row with a shell line waits for, when its words do not say: the line itself. */
 export const PRINTS_SOMETHING = 'when its shell line prints something'
@@ -374,7 +379,7 @@ export function draftOf(command: SchedulerCommand): PaceDraft {
   if ('work' in pick && pick.work === true) return command.when !== undefined && command.every !== undefined ? { kind: 'work' } : { kind: 'skill' }
   const every = 'every' in pick ? parseInterval(pick.every) : undefined
   if (!every || !('every' in pick)) return { kind: 'skill' }
-  const at = takesTimeOfDay(every) && pick.at !== undefined ? parseTimeOfDay(pick.at) : undefined
+  const at = takesTimeOfDay(every.unit) && pick.at !== undefined ? parseTimeOfDay(pick.at) : undefined
   return { kind: 'every', count: String(every.count), unit: every.unit, at: at?.text ?? '' }
 }
 
@@ -388,7 +393,7 @@ export function paceArgs(draft: PaceDraft): string[] | undefined {
   if (draft.kind !== 'every') return [draft.kind]
   const every = /^\d+$/.test(draft.count.trim()) ? parseInterval(`${draft.count.trim()}${draft.unit}`) : undefined
   if (!every) return undefined
-  if (!takesTimeOfDay(every)) return [every.text]
+  if (!takesTimeOfDay(every.unit)) return [every.text]
   if (draft.atHalfTyped) return undefined
   if (draft.at.trim() === '') return [every.text]
   const at = parseTimeOfDay(draft.at.trim())
@@ -439,14 +444,6 @@ export function agentsArgs(draft: AgentsDraft): string[] | undefined {
   if (draft.kind === 'skill') return ['skill']
   const typed = draft.count.trim()
   return /^\d+$/.test(typed) && isAgents(Number(typed)) ? [String(Number(typed))] : undefined
-}
-
-/** A command as it would read with a number of agents draft saved; the command as it is while the draft is no number yet. */
-export function withAgentsDraft(command: SchedulerCommand, draft: AgentsDraft): SchedulerCommand {
-  const args = agentsArgs(draft)
-  if (!args) return command
-  const { agents: _agents, ...rest } = command
-  return args[0] === 'skill' ? rest : { ...rest, agents: Number(args[0]) }
 }
 
 /**
@@ -611,7 +608,7 @@ export interface Answered {
  */
 export function startedNow(answer: ModuleCommandResult): Answered {
   if (answer.ok) {
-    const output = typeof answer.output === 'object' && answer.output !== null ? (answer.output as Record<string, unknown>) : {}
+    const output = record(answer.output)
     return { started: typeof output['run'] === 'string' ? output['run'] : '', ...(output['resumed'] === true ? { resumed: true as const } : {}) }
   }
   if (answer.error === 'not due') return { note: 'Nothing started. No work: its shell line printed nothing.' }

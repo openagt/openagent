@@ -1,4 +1,5 @@
 import type { ModuleHost } from '@openagt/dashboard/module'
+import { readDeviceRows, readPersonRows, runDevices, text, type Answer, type DeviceRow, type PersonRow } from './devices.js'
 
 // What the section shows of this computer's servers: the answer of `devices server status`, read
 // forgivingly, and the things a person does, each one of the package's own commands. The servers are this computer's, not a
@@ -49,6 +50,12 @@ export interface ServerRow {
   steps: StepRow[]
 }
 
+/** The server's install ended with every step done: it is installed. */
+export const installDone = (server: Pick<ServerRow, 'working' | 'steps'>): boolean => !server.working && server.steps.every(step => step.state === 'done')
+
+/** The server's install ended at a step that failed. */
+export const installFailed = (server: Pick<ServerRow, 'working' | 'steps'>): boolean => !server.working && server.steps.some(step => step.state === 'failed')
+
 /** Who on its server may start runs on a computer reached through it: nobody, or its own person, with the people they pick there besides. */
 export type Who = 'nobody' | 'me'
 
@@ -66,38 +73,6 @@ export interface DoorLink {
   expires: string
 }
 
-/** A phone, a browser or a computer that is in on a server, as the server's door lists it. */
-export interface DeviceRow {
-  id: string
-  name: string
-  added: string
-  seen?: string
-  /** A computer that keeps a line open to the server. */
-  line?: true
-  /** A computer is one row: the ids of what else it holds on the server. */
-  also?: string[]
-  /** That computer is this one, by the line it keeps open to the server. */
-  own?: true
-  /** Whose device it is, by their name, once the server has persons. */
-  person?: string
-}
-
-/** A person on a server, by their name; the owner first. */
-export interface PersonRow {
-  name: string
-  owner?: true
-  /** Their own user and OpenAgent on the server are being made right now. */
-  working?: true
-  /** Why their own user could not be made. */
-  problem?: string
-  /** On a computer reached through a server: the server whose line made this person's user there. */
-  from?: string
-  /** That server no longer has the person, and nobody said to keep their user. */
-  removed?: true
-  /** Their user is kept, switched off, though that server no longer has them. */
-  kept?: true
-}
-
 /** What a server's door lists, and what this computer's own door says of its line there. */
 export interface DevicesRead {
   devices: DeviceRow[]
@@ -109,12 +84,6 @@ export interface DevicesRead {
   lineRefused: boolean
 }
 
-/** Every id a row is listed under: its own, and those of what else the computer holds there. */
-export const idsOf = (device: Pick<DeviceRow, 'id' | 'also'>): string[] => [device.id, ...(device.also ?? [])]
-
-export type Answer<T> = { ok: true; value: T } | { ok: false; error: string }
-
-const text = (value: unknown): string | undefined => (typeof value === 'string' && value ? value : undefined)
 const STATES: readonly string[] = ['waiting', 'running', 'done', 'failed']
 
 function readLogin(value: unknown): LoginRow {
@@ -154,23 +123,7 @@ export function readDevices(output: unknown): DevicesRead | undefined {
   const { https, tailscale } = (door && typeof door === 'object' ? door : {}) as Record<string, unknown>
   const [atHttps, atTailscale] = [text(https), text(tailscale)]
   const where = atHttps || atTailscale ? { ...(atHttps ? { https: atHttps } : {}), ...(atTailscale ? { tailscale: atTailscale } : {}) } : undefined
-  const rows: DeviceRow[] = []
-  for (const entry of devices) {
-    if (!entry || typeof entry !== 'object') continue
-    const { id, name, added, seen, line, also, own, person } = entry as Record<string, unknown>
-    const [deviceId, deviceName, addedAt, seenAt, whose] = [text(id), text(name), text(added), text(seen), text(person)]
-    const others = Array.isArray(also) ? also.filter((other): other is string => typeof other === 'string' && other !== '') : []
-    if (deviceId && deviceName && addedAt)
-      rows.push({ id: deviceId, name: deviceName, added: addedAt, ...(seenAt ? { seen: seenAt } : {}), ...(line === true ? { line: true } : {}), ...(others.length ? { also: others } : {}), ...(own === true ? { own: true } : {}), ...(whose ? { person: whose } : {}) })
-  }
-  const people: PersonRow[] = []
-  for (const entry of Array.isArray(persons) ? persons : []) {
-    const { name, owner, working, problem, from, removed, kept } = (entry && typeof entry === 'object' ? entry : {}) as Record<string, unknown>
-    const [known, why, via] = [text(name), text(problem), text(from)]
-    if (known && !people.some(person => person.name === known))
-      people.push({ name: known, ...(owner === true ? { owner: true as const } : {}), ...(working === true ? { working: true as const } : {}), ...(why ? { problem: why } : {}), ...(via ? { from: via } : {}), ...(removed === true ? { removed: true as const } : {}), ...(kept === true ? { kept: true as const } : {}) })
-  }
-  return { devices: rows, persons: people, ...(where ? { door: where } : {}), lineRefused: lineRefused === true }
+  return { devices: readDeviceRows(devices), persons: readPersonRows(persons), ...(where ? { door: where } : {}), lineRefused: lineRefused === true }
 }
 
 function readLink(output: unknown): DoorLink | undefined {
@@ -180,12 +133,8 @@ function readLink(output: unknown): DoorLink | undefined {
   return link && at && typed && until ? { url: link, where: at, code: typed, expires: until } : undefined
 }
 
-async function run<T>(host: ModuleHost, args: string[], read: (output: unknown) => T | undefined): Promise<Answer<T>> {
-  const result = await host.runComputerCommand(['server', ...args]).catch((err: unknown) => ({ ok: false as const, error: err instanceof Error ? err.message : String(err) }))
-  if (!result.ok) return result
-  const value = read(result.output)
-  return value !== undefined ? { ok: true, value } : { ok: false, error: 'the command answered something else than expected' }
-}
+/** Run one of `devices server`'s commands on this computer, and read its answer with `read`. */
+const run = <T>(host: ModuleHost, args: string[], read: (output: unknown) => T | undefined): Promise<Answer<T>> => runDevices(host, ['server', ...args], read)
 
 /** What this computer says of its servers: the list, and whether it is itself a server OpenAgent was installed on. */
 export interface ServersRead {
@@ -200,10 +149,10 @@ export function readStatus(output: unknown): ServersRead | undefined {
 
 export const loadServers = (host: ModuleHost): Promise<Answer<ServersRead>> => run(host, ['status'], readStatus)
 /**
- * Install OpenAgent at `version` on the server, or go on where the install failed, or bring a server that fell behind to it.
- * With `through`, the computer has no door of its own on the internet: it keeps a line to that server instead.
+ * Install OpenAgent at `version` on the server, or go on where the install failed, or bring a server
+ * that fell behind to it: one on the internet, one reached through the server at `through`, which it
+ * keeps a line to in place of a door of its own, or one on the person's Tailscale network.
  */
-/** Install OpenAgent on a server: one on the internet, one reached through the server at `through`, or one on the person's Tailscale network. */
 export const connect = (host: ModuleHost, address: string, user: string, version: string, through?: string | 'tailscale'): Promise<Answer<ServerRow[]>> =>
   run(host, ['connect', address, user, version, ...(through === 'tailscale' ? ['--tailscale'] : through !== undefined ? ['--through', through] : [])], readServers)
 /** What failed at a "Test connection", by what a person does about it. */
@@ -225,7 +174,7 @@ function readTested(output: unknown): Tested | undefined {
 export const testConnection = (host: ModuleHost, address: string, user: string): Promise<Answer<Tested>> => run(host, ['test', address, user], readTested)
 /** Save a computer reached through a server among the machines, through that server, once its install is done. */
 export const addThrough = (host: ModuleHost, address: string): Promise<Answer<ServerRow[]>> => run(host, ['add-through', address], readServers)
-/** Say who on its server may start runs on a computer reached through it: nobody, or only its own person; the users of the people named before go. */
+/** Say whether its server may start its own person's runs on a computer reached through it, or only show them: the people named on it stay as they are. */
 export const setWho = (host: ModuleHost, address: string, who: Who): Promise<Answer<DevicesRead>> => run(host, ['who', address, who], readDevices)
 /** Name the people on its server who may start runs on a computer reached through it, besides its own person. */
 export const setPeople = (host: ModuleHost, address: string, people: readonly string[]): Promise<Answer<DevicesRead>> => run(host, ['people', address, ...people], readDevices)
@@ -274,25 +223,6 @@ function readShared(output: unknown): SharedRow[] | undefined {
     if (at) rows.push({ url: at, ...(reach === 'full' || reach === 'watch' ? { reach } : {}), lineRefused: lineRefused === true, ...(id ? { line: id } : {}) })
   }
   return rows
-}
-
-/** What a server's door says of this computer's person there: who they are, whether they are its owner, and their devices. */
-export interface PersonThere {
-  /** Their name there, once the server has persons. */
-  person?: string
-  owner: boolean
-  /** The owner's name, once the server has persons: whose computer it is when it is not this person's. */
-  ownerName?: string
-  devices: DeviceRow[]
-}
-
-/** The door's answer, read as another computer's data: anything that is not what it should be is left out. */
-export function readPersonThere(said: unknown): PersonThere | undefined {
-  if (!said || typeof said !== 'object') return undefined
-  const { person, owner, ownerName } = said as Record<string, unknown>
-  const listed = readDevices(said)
-  const [who, whose] = [text(person), text(ownerName)]
-  return listed && typeof owner === 'boolean' ? { ...(who ? { person: who } : {}), owner, ...(whose ? { ownerName: whose } : {}), devices: listed.devices } : undefined
 }
 
 /** What this computer keeps for servers someone invited its person to, by their addresses. */

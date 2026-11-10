@@ -5,11 +5,11 @@ import { createRequire } from 'node:module'
 import { connect } from 'node:net'
 import { dirname, join } from 'node:path'
 import { CERTIFICATE_FILE, KEY_FILE, readSecureAddress, secureAddressDir } from '@openagt/dashboard/secure-address'
-import { ADDRESS, CERTIFICATE_DAYS, LOOPBACK_ADDRESS, certificateConfig } from './address.js'
+import { ADDRESS, CERTIFICATE_CONFIG, CERTIFICATE_DAYS, LOOPBACK_ADDRESS } from './address.js'
 import { linux } from './linux.js'
 import { mac } from './mac.js'
 import type { InstallIO, Platform } from './platform.js'
-import { run } from './run.js'
+import { asAdmin, run } from './run.js'
 
 export type { InstallIO }
 
@@ -68,7 +68,7 @@ async function ensureCertificate(env: NodeJS.ProcessEnv): Promise<string> {
   const dir = secureAddressDir(env)
   await mkdir(dir, { recursive: true, mode: 0o700 })
   const config = join(dir, 'openssl.cnf')
-  await writeFile(config, certificateConfig(ADDRESS))
+  await writeFile(config, CERTIFICATE_CONFIG)
   await run('openssl', ['req', '-x509', '-newkey', 'rsa:2048', '-nodes', '-keyout', join(dir, KEY_FILE), '-out', join(dir, CERTIFICATE_FILE), '-days', String(CERTIFICATE_DAYS), '-config', config, '-extensions', 'ext'])
   await rm(config)
   return readFile(join(dir, CERTIFICATE_FILE), 'utf8')
@@ -96,10 +96,14 @@ async function waitUntilAnswers(cert: string, ms: number): Promise<boolean> {
   return false
 }
 
-/** Runs `step` as the administrator, in this terminal, which asks for the password. */
-function asAdmin(step: { says: string; script: string }, io: InstallIO): Promise<void> {
-  io.out(`◆ ${step.says}`)
-  return run('sudo', ['/bin/sh', '-c', step.script], { interactive: true })
+/** The variables of the install's terminal the dashboard needs at login: its `PATH`, and a moved config folder. */
+function dashboardVars(env: NodeJS.ProcessEnv): { [name: string]: string } {
+  return { PATH: env.PATH ?? '/usr/bin:/bin:/usr/sbin:/sbin', ...(env.XDG_CONFIG_HOME ? { XDG_CONFIG_HOME: env.XDG_CONFIG_HOME } : {}) }
+}
+
+/** `url` in the person's browser, opened by `command` and not waited for: where none opens, the address is printed. */
+function openInBrowser(command: string, url: string): void {
+  spawn(command, [url], { stdio: 'ignore', detached: true }).on('error', () => {}).unref()
 }
 
 /**
@@ -133,15 +137,14 @@ export async function install(io: InstallIO = defaultIO, env: NodeJS.ProcessEnv 
     await asAdmin(platform.adminInstall(certFile), io)
     await platform.trust(certFile, io, env)
 
-    const vars = { PATH: env.PATH ?? '/usr/bin:/bin:/usr/sbin:/sbin', ...(env.XDG_CONFIG_HOME ? { XDG_CONFIG_HOME: env.XDG_CONFIG_HOME } : {}) }
-    const output = await platform.startDashboard({ node: process.execPath, dashboard, vars }, env)
+    const output = await platform.startDashboard({ node: process.execPath, dashboard, vars: dashboardVars(env) }, env)
     if (!(await waitUntilAnswers(cert, 30_000))) {
       io.err(`The dashboard does not answer at https://${ADDRESS} yet. What it says is in ${output}.`)
       return 1
     }
     io.out(`◆ OpenAgent is installed: https://${ADDRESS}`)
     io.out('  It starts when you log in. `npx @openagt/uninstall` takes it off again.')
-    spawn(platform.openCommand, [`https://${ADDRESS}`], { stdio: 'ignore', detached: true }).on('error', () => {}).unref()
+    openInBrowser(platform.openCommand, `https://${ADDRESS}`)
     return 0
   } catch (err) {
     io.err(`OpenAgent could not be installed: ${err instanceof Error ? err.message : String(err)}`)

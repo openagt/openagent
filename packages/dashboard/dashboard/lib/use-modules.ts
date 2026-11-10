@@ -4,61 +4,39 @@ import type { LinkAction, ModuleCard, ModuleDefinition, ModulePage, ModulePanel,
 import { usePolled } from './use-async.js'
 import { isPageSegment } from '../../src/project-address.js'
 
-/** A module page as the shell mounts it: the page, plus the package it came from and the projects that have it. */
-export interface MountedPage extends ModulePage {
+/** Where a thing a module brings came from: its package, and the projects that have it. */
+interface Of {
   package: string
   projects: string[]
 }
 
-/** A link action as the shell mounts it (#1774): the action, plus the package it came from and the projects that have it. */
-export interface MountedLinkAction extends LinkAction {
-  package: string
-  projects: string[]
-}
+/** A thing a module brings, as the shell mounts it: the thing, plus where it came from. */
+type Mounted<Brought> = Brought & Of
 
-/** A card as the shell mounts it (#1818): the card, plus the package it came from, the projects that have it, and whether it is the computer's. */
-export interface MountedCard extends ModuleCard {
-  package: string
-  projects: string[]
-  /** A package of this computer's (its devices): the card is on every Overview, whichever project is picked. */
-  computer: boolean
-}
+/** Whether it is of a package of this computer's (its devices) rather than of a project's. */
+type OfComputer = { computer: boolean }
 
-/** A pane as the shell mounts it: the pane, plus the package it came from and the projects that have it. */
-export interface MountedPanel extends ModulePanel {
-  package: string
-  projects: string[]
-}
-
-/** A module's run slots as the shell mounts them: the slots, plus the package they came from and the projects that have it. */
-export interface MountedRunSlots extends ModuleRunSlots {
-  package: string
-  projects: string[]
-}
-
-/** A Settings entry as the shell mounts it: the entry, plus the package it came from, the projects that have it, and whether it is the computer's. */
-export interface MountedSettings extends ModuleSettings {
-  package: string
-  projects: string[]
-  computer: boolean
-}
-
-/** A usage bar stop line as the shell mounts it: the line's read and save, plus the package it came from and the projects that have it. */
-export interface MountedUsageLimit extends ModuleUsageLimit {
-  package: string
-  projects: string[]
-}
+/** A module page as the shell mounts it. */
+export type MountedPage = Mounted<ModulePage>
+/** A link action as the shell mounts it (#1774). */
+export type MountedLinkAction = Mounted<LinkAction>
+/** A card as the shell mounts it (#1818): a card of this computer's is on every Overview, whichever project is picked. */
+export type MountedCard = Mounted<ModuleCard> & OfComputer
+/** A pane as the shell mounts it. */
+export type MountedPanel = Mounted<ModulePanel>
+/** A module's run slots as the shell mounts them. */
+export type MountedRunSlots = Mounted<ModuleRunSlots>
+/** A Settings entry as the shell mounts it: one of this computer's is listed with no project. */
+export type MountedSettings = Mounted<ModuleSettings> & OfComputer
+/** A usage bar stop line as the shell mounts it: the line's read and save. */
+export type MountedUsageLimit = Mounted<ModuleUsageLimit>
+/** The commands a module starts by itself, as the shell mounts them: the read. */
+export type MountedSchedule = Mounted<ModuleSchedule>
 
 /** What a module of this computer's draws over every page, as the shell mounts it: the part, and the package it came from. */
 export interface MountedEveryPage {
   EveryPage: ComponentType
   package: string
-}
-
-/** The commands a module starts by itself, as the shell mounts them: the read, plus the package it came from and the projects that have it. */
-export interface MountedSchedule extends ModuleSchedule {
-  package: string
-  projects: string[]
 }
 
 /** The place of a card that names none. */
@@ -177,28 +155,22 @@ function mount(loadedModules: { module: DashboardModule; definition: ModuleDefin
   let usageLimit: MountedUsageLimit | undefined
   let schedule: MountedSchedule | undefined
   for (const { module, definition } of loadedModules) {
+    const of: Of = { package: module.package, projects: module.projects }
+    const computer = module.computer === true
     for (const page of definition?.pages ?? []) {
       if (!isPageSegment(page.segment) || pages.some(p => p.segment === page.segment)) continue
-      pages.push({ ...page, package: module.package, projects: module.projects })
+      pages.push({ ...page, ...of })
     }
-    for (const card of definition?.cards ?? []) {
-      cards.push({ ...card, package: module.package, projects: module.projects, computer: module.computer === true })
-    }
-    for (const action of definition?.linkActions ?? []) {
-      linkActions.push({ ...action, package: module.package, projects: module.projects })
-    }
-    for (const panel of definition?.panels ?? []) {
-      panels.push({ ...panel, package: module.package, projects: module.projects })
-    }
-    for (const section of definition?.settings ?? []) {
-      settings.push({ ...section, package: module.package, projects: module.projects, computer: module.computer === true })
-    }
+    for (const card of definition?.cards ?? []) cards.push({ ...card, ...of, computer })
+    for (const action of definition?.linkActions ?? []) linkActions.push({ ...action, ...of })
+    for (const panel of definition?.panels ?? []) panels.push({ ...panel, ...of })
+    for (const section of definition?.settings ?? []) settings.push({ ...section, ...of, computer })
     // Only a module of this computer's: a project's package does not put things on every page.
-    if (definition?.everyPage && module.computer === true) everyPage.push({ EveryPage: definition.everyPage, package: module.package })
-    if (definition?.usageLimit) usageLimit ??= { ...definition.usageLimit, package: module.package, projects: module.projects }
-    if (definition?.schedule) schedule ??= { ...definition.schedule, package: module.package, projects: module.projects }
+    if (definition?.everyPage && computer) everyPage.push({ EveryPage: definition.everyPage, package: module.package })
+    if (definition?.usageLimit) usageLimit ??= { ...definition.usageLimit, ...of }
+    if (definition?.schedule) schedule ??= { ...definition.schedule, ...of }
     const run = definition?.run
-    if (run?.summary) runSlots.push({ ...run, package: module.package, projects: module.projects })
+    if (run?.summary) runSlots.push({ ...run, ...of })
   }
   // Numbers, not a list the shell keeps: a third package sits between two others without the shell knowing it exists.
   cards.sort(byMountOrder)

@@ -1,6 +1,6 @@
 import { strict as assert } from 'node:assert'
 import { test } from 'node:test'
-import { devicesIn, isDeviceId, nameOwner, readDevices, removeDevice, removePerson } from './devices.js'
+import { devicesIn, isDeviceId, lineIn, nameOwner, readDevices, removeDevice, removePerson } from './devices.js'
 import { pretendServer } from './test-home.js'
 
 const SERVER = { address: '203.0.113.5', user: 'root' }
@@ -22,6 +22,15 @@ test('the server\'s door is asked which devices are in, as the server\'s own use
   // A server that says a great deal about a failure is told only by its end.
   const wordy = await readDevices(SERVER, { exec: pretendServer(() => ({ code: 1, err: `${'x'.repeat(50_000)} the end` })).exec })
   assert.ok(!wordy.ok && wordy.error.length <= 2_000 && wordy.error.endsWith('the end'))
+})
+
+test('the line a door keeps to a server is read off its status, after whatever a script said first; an id is one a door makes', () => {
+  const lines = [{ url: 'https://box.example.com', mode: 'watch', id: '0f9e8d7c6b5a', refused: true }, { url: 'https://other.example.com', mode: 'full', id: '$(reboot)' }, { url: 'https://odd.example.com', mode: 'all' }]
+  const out = `Welcome to Debian\n${JSON.stringify({ on: false, devices: [], lines })}\n`
+  assert.deepEqual(lineIn(out, 'https://box.example.com'), { mode: 'watch', refused: true, id: '0f9e8d7c6b5a' })
+  assert.deepEqual(lineIn(out, 'https://other.example.com'), { mode: 'full', refused: false })
+  // A line with no mode a door gives, one it does not list, and an answer that is no status: none.
+  for (const [said, url] of [[out, 'https://odd.example.com'], [out, 'https://nowhere.example.com'], ['null\n', 'https://box.example.com'], ['not json', 'https://box.example.com']]) assert.equal(lineIn(said!, url!), undefined, `${said} ${url}`)
 })
 
 test('what a server lists is read as data: only what a device is, as many as a door keeps, and a name as words', () => {

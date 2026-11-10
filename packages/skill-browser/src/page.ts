@@ -1,4 +1,4 @@
-import type { CdpSession } from './cdp.js'
+import type { CdpCall, CdpSession } from './cdp.js'
 
 /**
  * What the agent does to the page, each a few DevTools calls. The page is read as text plus a
@@ -157,7 +157,7 @@ export async function click(page: CdpSession, ref: number): Promise<Point> {
  * Put `text` in element `ref`, replacing what it held. A `select` takes the option whose text or
  * value is `text`; anything else is focused, its content selected, and the text typed over it.
  */
-export async function type(page: CdpSession, ref: number, text: string): Promise<Point> {
+export async function typeInto(page: CdpSession, ref: number, text: string): Promise<Point> {
   const at = await locate(page, ref)
   const outcome = await evaluate<string>(
     page,
@@ -199,8 +199,8 @@ export async function type(page: CdpSession, ref: number, text: string): Promise
   return at
 }
 
-/** The keys `press` knows, as DevTools key events. */
-export const KEYS: Record<string, { code: string; keyCode: number; text?: string }> = {
+/** The keys `press` knows, as DevTools key events: the agent's, and a person's on the screen. */
+const KEYS: Record<string, { code: string; keyCode: number; text?: string }> = {
   Enter: { code: 'Enter', keyCode: 13, text: '\r' },
   Tab: { code: 'Tab', keyCode: 9 },
   Escape: { code: 'Escape', keyCode: 27 },
@@ -212,12 +212,21 @@ export const KEYS: Record<string, { code: string; keyCode: number; text?: string
   ArrowRight: { code: 'ArrowRight', keyCode: 39 },
 }
 
-export async function press(page: CdpSession, key: string): Promise<void> {
-  const known = KEYS[key]
-  if (!known) throw new PageError(`unknown key ${key}; the keys are ${Object.keys(KEYS).join(', ')}`)
+/** The calls that press `key` and let it go; none for a key that is not one of {@link KEYS}. */
+export function keyPress(key: string): CdpCall[] | undefined {
+  const known = Object.hasOwn(KEYS, key) ? KEYS[key] : undefined
+  if (!known) return undefined
   const event = { key: key === 'Space' ? ' ' : key, code: known.code, windowsVirtualKeyCode: known.keyCode, ...(known.text ? { text: known.text } : {}) }
-  await page.send('Input.dispatchKeyEvent', { ...event, type: 'keyDown' })
-  await page.send('Input.dispatchKeyEvent', { ...event, type: 'keyUp' })
+  return [
+    { method: 'Input.dispatchKeyEvent', params: { ...event, type: 'keyDown' } },
+    { method: 'Input.dispatchKeyEvent', params: { ...event, type: 'keyUp' } },
+  ]
+}
+
+export async function press(page: CdpSession, key: string): Promise<void> {
+  const calls = keyPress(key)
+  if (!calls) throw new PageError(`unknown key ${key}; the keys are ${Object.keys(KEYS).join(', ')}`)
+  for (const call of calls) await page.send(call.method, call.params)
   await settle(page)
 }
 
@@ -257,7 +266,7 @@ export async function screenshot(page: CdpSession): Promise<Buffer> {
 }
 
 /** Run `script` in the page and print what it returns, as JSON. */
-export async function run(page: CdpSession, script: string): Promise<string> {
+export async function runScript(page: CdpSession, script: string): Promise<string> {
   const value = await evaluate<unknown>(page, script, true)
   if (value instanceof Unserializable) return value.text
   return value === undefined ? 'undefined' : JSON.stringify(value, null, 2)

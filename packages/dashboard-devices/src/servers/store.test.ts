@@ -2,19 +2,13 @@ import { strict as assert } from 'node:assert'
 import { test } from 'node:test'
 import { readFile, stat, writeFile } from 'node:fs/promises'
 import { STEP_IDS } from './steps.js'
-import { SILENT_MS, Unreadable, addressOf, doorUrl, freshSteps, heartbeat, isUser, isVersion, readStore, sanitize, storePath, update, working } from './store.js'
+import { SILENT_MS, doorUrl, freshSteps, heartbeat, isThroughUrl, isUser, isVersion, readStore, sanitize, storePath, update, working } from './store.js'
 import { testHome } from './test-home.js'
+import { Unreadable } from '../home-file.js'
 
 test('the file is beside OpenAgent\'s own home file', () => {
   assert.equal(storePath({ HOME: '/home/ada' }), '/home/ada/.openagent-servers.json')
   assert.equal(storePath({ HOME: '/home/ada', XDG_CONFIG_HOME: '/cfg' }), '/cfg/openagent-servers.json')
-})
-
-test('an address is a number or a name, in one form, and never something a command reads as an option', () => {
-  assert.equal(addressOf('203.0.113.5'), '203.0.113.5')
-  assert.equal(addressOf('2001:DB8:0:0:0:0:0:1'), '2001:db8::1')
-  assert.equal(addressOf('Box.Example.com'), 'box.example.com')
-  for (const no of ['', '-oProxyCommand=sh', 'root@203.0.113.5', '203.0.113.5 -v', 'box', 'box.example.com;id', 'fe80::1%en0', '$(id).example.com', 'a'.repeat(254)]) assert.equal(addressOf(no), undefined, no)
 })
 
 test('a user name and a version are what a server and npm take, and nothing else', () => {
@@ -43,6 +37,14 @@ test('a file is read forgivingly: what is malformed is left out, and every step 
   assert.equal(first!.adding, true)
   assert.deepEqual(second, { address: '203.0.113.7', user: 'ada', steps: freshSteps(), adding: false })
   assert.deepEqual(sanitize('nonsense'), { servers: [], shared: [] })
+})
+
+test('an address no URL reads is no computer reached through a server: a file that holds one is read all the same', () => {
+  const through = 'https://box.example.com/_devices/via/abcdef'
+  const unreadable = 'https://bo^x.example.com/_devices/via/abcdef'
+  assert.equal(isThroughUrl(through), true)
+  assert.equal(isThroughUrl(unreadable), false)
+  assert.deepEqual(sanitize({ shared: [{ url: unreadable }, { url: through }] }).shared, [{ url: through }])
 })
 
 test('an install runs while its process is there and said so a moment ago: a number alone, which another program may hold by now, is no proof', () => {

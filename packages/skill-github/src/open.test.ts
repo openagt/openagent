@@ -1,6 +1,6 @@
 import { strict as assert } from 'node:assert'
 import { test } from 'node:test'
-import { mkdir, mkdtemp, realpath, rm, writeFile } from 'node:fs/promises'
+import { mkdtemp, realpath, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { nodeGitRunner } from '@openagt/agent-data'

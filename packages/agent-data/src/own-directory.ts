@@ -1,7 +1,7 @@
 import { lstat, readdir, rm, rmdir } from 'node:fs/promises'
 import { join } from 'node:path'
 import { nodeGitRunner, type GitRunner } from './git.js'
-import { repositoryCheckouts, unexcludeFromGit } from './git-exclude.js'
+import { unexcludeOnceGone } from './git-exclude.js'
 
 /**
  * A tool's own directory at a project's root, taken away again: the files the tool names as its
@@ -54,8 +54,7 @@ export async function removeOwnDirectory(
   if (kept.length > 0) return { removed: gone, kept }
   // rmdir, never a recursive remove: whatever arrived meanwhile keeps the directory.
   if (!(await rmdir(path).then(() => true, () => false))) return { removed: gone, kept: [{ path: dir, reason: 'not empty' }] }
-  const checkouts = await repositoryCheckouts(repo, git).catch(() => undefined)
-  if (checkouts && !(await anyHolds(checkouts, dir))) await unexcludeFromGit(repo, `/${dir}`, undefined, git).catch(() => {})
+  await unexcludeOnceGone(repo, dir, git)
   return { removed: [dir], kept }
 }
 
@@ -64,9 +63,4 @@ async function kindOf(path: string): Promise<'none' | 'directory' | 'file' | 'ot
   const entry = await lstat(path).catch(() => undefined)
   if (!entry) return 'none'
   return entry.isDirectory() ? 'directory' : entry.isFile() ? 'file' : 'other'
-}
-
-async function anyHolds(checkouts: readonly string[], name: string): Promise<boolean> {
-  for (const checkout of checkouts) if ((await kindOf(join(checkout, name))) !== 'none') return true
-  return false
 }

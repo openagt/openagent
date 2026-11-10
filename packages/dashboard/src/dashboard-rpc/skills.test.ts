@@ -11,7 +11,7 @@ import { provideTestContext } from './test-context.js'
 import { onCommands } from './projects.js'
 import { commitSkills } from '../project-skills/branch.js'
 import { applyChange } from '../project-skills/change.js'
-import { hostName, onProjectSkills, sendChangeSkills, sendProjectSkills } from './skills.js'
+import { onProjectSkills, sendChangeSkills, sendProjectSkills } from './skills.js'
 
 // A project's skills through the dashboard's own calls, against a real folder and real git, with
 // the registry pointed at a temp $XDG_CONFIG_HOME so the person's own is never touched.
@@ -179,15 +179,4 @@ test('the scheduler\'s skill written switches the scheduler on for the project a
     await stopScheduler(dir).catch(() => {})
     await restore()
   }
-})
-
-test('the remote is named for a person by its host, in any of git\'s spellings of the address', () => {
-  assert.equal(hostName('https://github.com/suleimansh/test-project.git'), 'GitHub')
-  assert.equal(hostName('git@gitlab.com:team/app.git'), 'GitLab')
-  assert.equal(hostName('ssh://git@bitbucket.org:22/team/app.git'), 'Bitbucket')
-  assert.equal(hostName('https://user:token@git.example.com/team/app'), 'git.example.com')
-  assert.equal(hostName('/srv/git/app.git'), undefined)
-  assert.equal(hostName('../origin.git'), undefined)
-  assert.equal(hostName('file:///srv/git/app.git'), undefined)
-  assert.equal(hostName(''), undefined)
 })
