@@ -7,8 +7,8 @@ import { ownGithubAccount } from './logins.js'
 import { ownDoor, type OwnDoor } from './own-door.js'
 import { OwnAtWork, giveOwnClaude, giveOwnGithub, isClaudeAccountId, personHere, removeOwn, startOverSoon } from './own.js'
 import { askOpenAgent, copyGithubToOther, isOtherUrl, lineTo, mintFor, otherLogins, setSharedReach, startMint } from './shared.js'
-import { lastLines, openSession, withAdvice, type Exec } from './ssh.js'
-import { PERSON_TIMEOUT_MS, SERVER_MARK, SERVER_USER, devicesScript, peopleScript, reachedOf, stepLabel, stepsFor, whoScript, type Who } from './steps.js'
+import { lastLines, runOnce, withAdvice, type Exec } from './ssh.js'
+import { SERVER_MARK, devicesScript, peopleScript, reachedOf, stepLabel, stepsFor, whoScript, type Who } from './steps.js'
 import { LOGIN_KINDS, isServerName, atWork, changeServer, doorUrl, freshSteps, isUser, isVersion, keepDevices, keptDevices, readStore, throughUrl, update, working, type Login, type LoginKind, type Reach, type Server, type StepState, type Store } from './store.js'
 import { addressOf, isLineUrl, nameOf, notAName } from '../door/store.js'
 import { Unreadable } from '../home-file.js'
@@ -447,14 +447,9 @@ async function setPeople(io: CliIO, said: string, people: readonly string[]): Pr
 
 /** Run a script on the computer that tells its door who may start runs on it, and read its devices from the answer. */
 async function tellWho(server: Server & { through: string }, script: string, timeoutMs: number, over: { exec?: Exec }): Promise<Devices> {
-  const session = await openSession(server, over)
-  try {
-    const ran = await session.run(SERVER_USER, script, timeoutMs)
-    const listed = ran.code === 0 ? devicesIn(ran.out) : undefined
-    return ran.code !== 0 ? { ok: false, error: withAdvice(server, lastLines(ran) || 'The computer did not answer.') } : listed ? { ok: true, ...listed } : { ok: false, error: 'The computer answered something else than its devices.' }
-  } finally {
-    await session.close()
-  }
+  const ran = await runOnce(server, script, timeoutMs, over)
+  const listed = ran.code === 0 ? devicesIn(ran.out) : undefined
+  return ran.code !== 0 ? { ok: false, error: withAdvice(server, lastLines(ran) || 'The computer did not answer.') } : listed ? { ok: true, ...listed } : { ok: false, error: 'The computer answered something else than its devices.' }
 }
 
 /**
@@ -464,16 +459,9 @@ async function tellWho(server: Server & { through: string }, script: string, tim
  */
 async function addThrough(io: CliIO, said: string): Promise<Status> {
   const server = await reachedThrough(io, said)
-  const session = await openSession(server, sshOf(io))
-  let id: string | undefined
-  try {
-    const ran = await session.run(SERVER_USER, devicesScript(), WHO_TIMEOUT_MS)
-    if (ran.code !== 0) throw new Refused(withAdvice(server, lastLines(ran) || 'The computer did not answer.'))
-    // Told below, as a computer that keeps no line there, when it lists none.
-    id = lineIn(ran.out, server.through)?.id
-  } finally {
-    await session.close()
-  }
+  const ran = await runOnce(server, devicesScript(), WHO_TIMEOUT_MS, sshOf(io))
+  if (ran.code !== 0) throw new Refused(withAdvice(server, lastLines(ran) || 'The computer did not answer.'))
+  const id = lineIn(ran.out, server.through)?.id
   const host = new URL(server.through).host
   if (id === undefined) throw new Refused(`${server.address} keeps no line to ${host} yet: press Update on its row.`)
   const added = (await (io.ask ?? ((fn, args) => askOpenAgent(io.env, fn, args)))('sendAddComputerThrough', [server.through, id])) as { ok?: boolean; error?: unknown } | undefined

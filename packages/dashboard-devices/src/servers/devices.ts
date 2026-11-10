@@ -1,5 +1,5 @@
-import { lastLines, openSession, withAdvice, type Exec } from './ssh.js'
-import { PERSON_TIMEOUT_MS, SERVER_USER, devicesScript, ownerScript, removeDeviceScript, removePersonScript } from './steps.js'
+import { lastLines, runOnce, withAdvice, type Exec } from './ssh.js'
+import { PERSON_TIMEOUT_MS, devicesScript, ownerScript, removeDeviceScript, removePersonScript } from './steps.js'
 import type { Server } from './store.js'
 import { addressOf, isLineUrl, nameOf, notAName } from '../door/store.js'
 
@@ -156,15 +156,10 @@ export function devicesIn(out: string): { devices: ServerDevice[]; persons: Serv
 }
 
 async function ask(server: Pick<Server, 'address' | 'user'>, script: string, opts: { exec?: Exec }, timeoutMs = DEVICES_TIMEOUT_MS): Promise<Devices> {
-  const session = await openSession(server, opts)
-  try {
-    const said = await session.run(SERVER_USER, script, timeoutMs)
-    if (said.code !== 0) return { ok: false, error: withAdvice(server, lastLines(said).slice(-MAX_SAID) || 'The server did not answer.') }
-    const listed = devicesIn(said.out)
-    return listed ? { ok: true, ...listed } : { ok: false, error: 'The server answered something else than the devices that are in.' }
-  } finally {
-    await session.close()
-  }
+  const said = await runOnce(server, script, timeoutMs, opts)
+  if (said.code !== 0) return { ok: false, error: withAdvice(server, lastLines(said).slice(-MAX_SAID) || 'The server did not answer.') }
+  const listed = devicesIn(said.out)
+  return listed ? { ok: true, ...listed } : { ok: false, error: 'The server answered something else than the devices that are in.' }
 }
 
 /** Ask the server's door which devices are in. */

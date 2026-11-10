@@ -1,6 +1,6 @@
 import { lineIn } from './devices.js'
 import { askOpenAgent } from './shared.js'
-import { exec as realExec, lastLines, openSession, withAdvice, type Exec, type Session } from './ssh.js'
+import { exec as realExec, lastLines, openSession, runOnce, withAdvice, type Exec, type Session } from './ssh.js'
 import { PERSON_TIMEOUT_MS, SERVER_USER, devicesScript, linkScript, reachedOf, stepsFor, type Facts, type StepId } from './steps.js'
 import { BEAT_MS, changeServer, doorUrl, heartbeat, working, type Server, type StepState } from './store.js'
 import { nameOf } from '../door/store.js'
@@ -169,22 +169,17 @@ const LINK_TIMEOUT_MS = 20_000
  */
 export async function askLink(server: Pick<Server, 'address' | 'user'>, opts: { exec?: Exec } = {}, person?: string, doors: readonly string[] = []): Promise<Link> {
   const own = new Set([doorUrl(server.address), ...doors.map(doorUrl)])
-  const session = await openSession(server, opts)
+  const said = await runOnce(server, linkScript(person), person === undefined ? LINK_TIMEOUT_MS : PERSON_TIMEOUT_MS, opts)
+  if (said.code !== 0) return { ok: false, error: withAdvice(server, lastLines(said) || 'The server did not answer.') }
   try {
-    const said = await session.run(SERVER_USER, linkScript(person), person === undefined ? LINK_TIMEOUT_MS : PERSON_TIMEOUT_MS)
-    if (said.code !== 0) return { ok: false, error: withAdvice(server, lastLines(said) || 'The server did not answer.') }
-    try {
-      const { url, where, code, expires } = JSON.parse(said.out.trim().split('\n').at(-1) ?? '') as Record<string, unknown>
-      if (typeof url === 'string' && url.length <= LINK_MAX && typeof expires === 'string' && Number.isFinite(Date.parse(expires)) && own.has(new URL(url).origin)) {
-        // A server from before typed codes gives a link only: it is updated first.
-        if (typeof where !== 'string' || typeof code !== 'string' || new URL(`https://${where}`).origin !== new URL(url).origin || !/^[A-Z0-9-]{1,16}$/.test(code)) return { ok: false, error: 'The server gives no code to type yet: update it first.' }
-        return { ok: true, url, where, code, expires }
-      }
-    } catch {
-      // Told below, as any answer that is no link.
+    const { url, where, code, expires } = JSON.parse(said.out.trim().split('\n').at(-1) ?? '') as Record<string, unknown>
+    if (typeof url === 'string' && url.length <= LINK_MAX && typeof expires === 'string' && Number.isFinite(Date.parse(expires)) && own.has(new URL(url).origin)) {
+      // A server from before typed codes gives a link only: it is updated first.
+      if (typeof where !== 'string' || typeof code !== 'string' || new URL(`https://${where}`).origin !== new URL(url).origin || !/^[A-Z0-9-]{1,16}$/.test(code)) return { ok: false, error: 'The server gives no code to type yet: update it first.' }
+      return { ok: true, url, where, code, expires }
     }
-    return { ok: false, error: `The server answered something else than a link to its own door at ${doorUrl(server.address)}.` }
-  } finally {
-    await session.close()
+  } catch {
+    // Told below, as any answer that is no link.
   }
+  return { ok: false, error: `The server answered something else than a link to its own door at ${doorUrl(server.address)}.` }
 }
