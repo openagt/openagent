@@ -268,7 +268,7 @@ function ChangesHeader({ between, merged, page, paths, changes, listShown, onPic
         {between ? (
           <h2 className="min-w-0 truncate pl-2 text-[13px] text-muted-foreground" title={between}>
             {between}
-            {merged !== undefined && <span className="pl-1 text-xs text-muted-foreground">{merged ? '· merged' : '· not merged yet'}</span>}
+            {merged !== undefined && <span className="text-xs text-muted-foreground">{merged ? ' · merged' : ' · not merged yet'}</span>}
           </h2>
         ) : (
           <h2 className="truncate pl-2 text-[13px] text-muted-foreground">Changes</h2>
