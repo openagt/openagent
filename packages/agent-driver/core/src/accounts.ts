@@ -23,13 +23,9 @@ export interface AgentAccount {
   windowsAt?: number
 }
 
-/** What one turn on one account came to, as its agent read it. */
-export interface AccountTurn {
-  /** The turn, when it ended with one. */
-  turn?: DriverTurn
-  /** What it threw, when it did. */
-  failure?: unknown
-  /** Whether the account's limit is what stopped it. */
+/** What a turn's own output said of the account it ran on, read once the turn is over. */
+export interface AccountReading {
+  /** Whether the account's limit is what stopped the turn. */
   limited: boolean
   /** When that limit frees, epoch ms, when the agent said. */
   resetsAt?: number
@@ -39,16 +35,12 @@ export interface AccountTurn {
   sessionId?: string
 }
 
-/** What a turn's own output said of the account it ran on, read once the turn is over. */
-export interface AccountReading {
-  /** Whether the account's limit is what stopped the turn. */
-  limited: boolean
-  /** When that limit frees, epoch ms, when the agent said. */
-  resetsAt?: number
-  /** The account's windows as the turn said them. */
-  windows?: DriverRateWindow[]
-  /** The conversation, so far as the turn got. */
-  sessionId?: string
+/** What one turn on one account came to, as its agent read it. */
+export interface AccountTurn extends AccountReading {
+  /** The turn, when it ended with one. */
+  turn?: DriverTurn
+  /** What it threw, when it did. */
+  failure?: unknown
 }
 
 /**
