@@ -262,18 +262,18 @@ export async function readAgentChanges(root: string, at: AgentWorkAt, git: GitRu
  * the fork point to the checkout's last commit. On a branch, a merge or a landed commit it is the
  * commit's own change. Null for a path that is unsafe or not changed there.
  */
-export async function readAgentFileDiff(root: string, at: AgentWorkAt, path: string, git: GitRunner = nodeGitRunner(), context: number = CONTEXT_LINES): Promise<FileDiff | null> {
+export async function readAgentFileDiff(root: string, at: AgentWorkAt, path: string, context: number = CONTEXT_LINES, git: GitRunner = nodeGitRunner()): Promise<FileDiff | null> {
   if (at.source === 'pending' || at.source === 'gone' || at.source === 'unchanged' || at.source === 'starting' || !safeRepoPath(path)) return null
   if (at.source === 'checkout') {
     const pending = (await readFileStatuses(at.path, git))[path]
-    if (pending) return readFileDiff(at.path, path, pending, git, undefined, context)
+    if (pending) return readFileDiff(at.path, path, pending, { context }, git)
     if (!at.base) return null
     const mark = (await changedPaths(git, at.path, at.base, 'HEAD'))[path]
-    return mark ? readFileDiff(at.path, path, mark.status, git, { from: at.base, to: 'HEAD' }, context) : null
+    return mark ? readFileDiff(at.path, path, mark.status, { range: { from: at.base, to: 'HEAD' }, context }, git) : null
   }
   if (!at.base) return null
   const mark = (await changedPaths(git, root, at.base, at.ref))[path]
-  return mark ? readFileDiff(root, path, mark.status, git, { from: at.base, to: at.ref }, context) : null
+  return mark ? readFileDiff(root, path, mark.status, { range: { from: at.base, to: at.ref }, context }, git) : null
 }
 
 /** One commit of a run's work. */
@@ -340,10 +340,10 @@ export async function readAgentCommitChanges(root: string, at: AgentWorkAt, sha:
 }
 
 /** One file's diff in one commit of the run's work; null for a commit that is not the run's, or a path it did not change. */
-export async function readAgentCommitFileDiff(root: string, at: AgentWorkAt, sha: string, path: string, git: GitRunner = nodeGitRunner(), context: number = CONTEXT_LINES): Promise<FileDiff | null> {
+export async function readAgentCommitFileDiff(root: string, at: AgentWorkAt, sha: string, path: string, context: number = CONTEXT_LINES, git: GitRunner = nodeGitRunner()): Promise<FileDiff | null> {
   if (!safeRepoPath(path)) return null
   const range = await commitRange(root, at, sha, git)
   if (!range) return null
   const mark = (await changedPaths(git, range.cwd, range.from, range.to))[path]
-  return mark ? readFileDiff(range.cwd, path, mark.status, git, { from: range.from, to: range.to }, context) : null
+  return mark ? readFileDiff(range.cwd, path, mark.status, { range: { from: range.from, to: range.to }, context }, git) : null
 }
