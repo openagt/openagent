@@ -24,8 +24,8 @@ import { Skeleton } from './ui/skeleton.js'
 /** How often the agents are read again while the page is open. */
 const SELDOM_MS = 30_000
 
-/** The agents as the dashboard reads them, remembered across pages so a menu lands whole. */
-export function useAgents(): { view: AgentsView | undefined; reload: () => Promise<void> } {
+/** The agents (a name, skills and accounts each) as the dashboard reads them, remembered across pages so a menu lands whole. */
+export function useAgentsList(): { view: AgentsView | undefined; reload: () => Promise<void> } {
   const { value, reload } = usePolled<AgentsView | undefined>(onAgentsList, undefined, SELDOM_MS, [], { remember: 'agents' })
   return { view: value, reload }
 }
@@ -41,7 +41,7 @@ function useAgentLogins(): { devices: AgentLoginsOn[] | undefined; reload: () =>
 
 /** An agent's name by its id, once the agents are read; the id itself for one this computer does not have; nothing for none. */
 export function useAgentName(id: string | undefined): string | undefined {
-  const { view } = useAgents()
+  const { view } = useAgentsList()
   if (id === undefined || !view) return undefined
   return view.agents.find(agent => agent.id === id)?.name ?? id
 }
@@ -63,7 +63,7 @@ function draftOf(agent?: AgentRecord): Draft {
 
 /** The Agents page. */
 export function AgentsPage() {
-  const { view, reload } = useAgents()
+  const { view, reload } = useAgentsList()
   const { devices, reload: reloadDevices } = useAgentLogins()
   const [adding, setAdding] = useState(false)
   const changed = async () => {
