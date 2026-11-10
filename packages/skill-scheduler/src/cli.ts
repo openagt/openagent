@@ -4,8 +4,8 @@ import { driverFor } from '@openagt/agent-runner'
 import { runNow, schedulerStatus, startScheduler, stopScheduler, tickProject } from './scheduler.js'
 import { initHooks } from './init.js'
 import { cleanup } from './cleanup.js'
-import { PUBLISH_PICKS, agentInForce, isSwitchedOn, readState, updateState, withAgent, withoutCommand, withoutListed, withPick, type PublishPick, type State } from './state.js'
-import { parseInterval, parseTimeOfDay, sinceNow, takesTimeOfDay } from './pace.js'
+import { PUBLISH_PICKS, agentInForce, readState, updateState, withAgent, withoutCommand, withoutListed, withPacePicked, withPick, withSwitchedOn, type PublishPick, type State } from './state.js'
+import { parseInterval, parseTimeOfDay, takesTimeOfDay } from './pace.js'
 import { AGENTS, AGENT_LABELS, AGENT_SKILLS_DIR, DEFAULT_AGENT, MAX_AGENTS, WRITE_LINE_TIMEOUT_MS, isAgent, isAgents } from './names.js'
 import { ableAgents, homeAgent, readSchedule, type ScheduledCommand } from './schedule.js'
 import { addAutomation, editAutomation, removeAutomation, savedAutomation, type AddRefusal, type ChangedSince, type NotAnAutomation } from './automation.js'
@@ -181,12 +181,10 @@ const COMMANDS: Record<string, Command<[CliIo, GitRunner]>> = {
     if (to !== 'on' && to !== 'off') throw new UsageError(`${to} is neither on nor off`)
     const repo = await project(io.cwd, git)
     // Off needs no scheduled command: a switch left on for a skill that is gone can always be taken back.
-    if (to === 'on') await scheduled(repo, name)
-    // Switched on, a time of day counts from now: a row ticked after its time waits for the next one, as when the time was picked.
-    // A command already on is left as it is, so asking twice does not put a missed time off.
-    // The switch keeps when it was switched on: a check of a command that never started asks what is new since then.
+    if (to === 'off') return { ok: true, ...(await updateState(repo, s => withPick(s, 'switches', name, undefined), git)) }
+    await scheduled(repo, name)
     const now = new Date()
-    return { ok: true, ...(await updateState(repo, s => (to === 'off' ? withPick(s, 'switches', name, undefined) : isSwitchedOn(s, name) ? s : withPick(withPick(s, 'switches', name, now.toISOString()), 'paces', name, sinceNow(s.paces?.[name], now))), git)) }
+    return { ok: true, ...(await updateState(repo, s => withSwitchedOn(s, name, now), git)) }
   },
 
   async publish(args, io, git) {
@@ -211,21 +209,8 @@ const COMMANDS: Record<string, Command<[CliIo, GitRunner]>> = {
     if (to === 'skill') return { ok: true, ...(await updateState(repo, s => withPick(s, 'paces', name, undefined), git)) }
     const command = await scheduled(repo, name)
     if (to === 'work' && command.when === undefined) throw new Refused({ ok: false, reason: 'no-check', command: name }, `${name} has no check, so nothing would say when there is work`)
-    const every = interval?.text
-    return {
-      ok: true,
-      ...(await updateState(
-        repo,
-        s => {
-          if (every === undefined) return withPick(s, 'paces', name, { work: true })
-          // The same pace picked again is the same pick: when it was made stays, so a time that was missed is still due.
-          const before = s.paces?.[name]
-          const same = typeof before === 'object' && before !== null && 'every' in before && before.every === every && before.at === time?.text && typeof before.since === 'string'
-          return withPick(s, 'paces', name, { every, ...(time ? { at: time.text } : {}), since: same ? before.since : new Date().toISOString() })
-        },
-        git,
-      )),
-    }
+    const pace = interval ? { every: interval.text, ...(time ? { at: time.text } : {}) } : { work: true as const }
+    return { ok: true, ...(await updateState(repo, s => withPacePicked(s, name, pace, new Date()), git)) }
   },
 
   async agents(args, io, git) {

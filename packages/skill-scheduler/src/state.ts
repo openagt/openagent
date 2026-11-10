@@ -4,7 +4,7 @@ import { excludeFromGit, nodeGitRunner, type GitRunner } from '@openagt/agent-da
 import { PUBLISH_LEVELS, type Publish } from '@openagt/agent-runner'
 import { DEFAULT_AGENT, DEFAULT_MODEL, DEFAULT_PUBLISH, DEFAULT_SPEND_OFFSET, STATE_DIR, STATE_FILE, isAgent, isAgents, isTime, type AgentName } from './names.js'
 import { ableAgents, homeAgent, type ScheduledCommand } from './schedule.js'
-import type { PacePick } from './pace.js'
+import { sinceNow, type PacePick } from './pace.js'
 
 /**
  * The tool's state (#1774): one JSON file under `.scheduler/` at the repository root,
@@ -229,6 +229,29 @@ export function switchedOnAt(state: State, command: string): string | undefined 
 /** Whether a scheduled command runs on this machine: only where a person switched it on. */
 export function isSwitchedOn(state: State, command: string): boolean {
   return switchedOnAt(state, command) !== undefined
+}
+
+/**
+ * The state with a command switched on at `now`. The switch keeps when: a check of a command that
+ * never started asks what is new since then. A time of day of its pace counts from now on: a row
+ * switched on after its time waits for the next one, as when the time was picked. A command
+ * already on is left as it is, so switching it on twice does not put a missed time off.
+ */
+export function withSwitchedOn(state: State, command: string, now: Date): State {
+  if (isSwitchedOn(state, command)) return state
+  return withPick(withPick(state, 'switches', command, now.toISOString()), 'paces', command, sinceNow(state.paces?.[command], now))
+}
+
+/**
+ * The state with a pace picked for a command at `now`: whenever there is work, or an interval, with
+ * a time of day when it has one. The same interval and time picked again is the same pick: when it
+ * was made stays, so a time that was missed is still due.
+ */
+export function withPacePicked(state: State, command: string, pace: { work: true } | { every: string; at?: string }, now: Date): State {
+  if ('work' in pace) return withPick(state, 'paces', command, pace)
+  const before = state.paces?.[command]
+  const same = typeof before === 'object' && before !== null && 'every' in before && before.every === pace.every && before.at === pace.at && typeof before.since === 'string'
+  return withPick(state, 'paces', command, { ...pace, since: same ? before.since : now.toISOString() })
 }
 
 /**
