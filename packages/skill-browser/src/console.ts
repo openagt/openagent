@@ -179,6 +179,9 @@ export function flooded(now = Date.now()): Said {
   return line('warning', 'The page logs too much: the console stopped listening, until the page goes to another address.', now)
 }
 
+/** The console's lines as a browser keeps them, from {@link consoleLog}. */
+export type ConsoleLog = ReturnType<typeof consoleLog>
+
 /**
  * The console's lines as a browser keeps them: the newest {@link KEPT_LINES}, each numbered as
  * it is added, so whoever follows them knows the next one it has not got.

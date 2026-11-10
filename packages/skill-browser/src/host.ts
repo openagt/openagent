@@ -8,7 +8,8 @@ import { launchChrome, type Chrome } from './chrome.js'
 import { consoleCall, consoleLog, errorsNote, FLOOD_BYTES, FLOOD_LINES, flooded, heardOnce, logEntry, printConsole, thrown, went, type Said } from './console.js'
 import { click, cursorAt, navigate, PageError, press, readPage, run, screenshot, selectionIn, type } from './page.js'
 import { inputCalls, stepHistory, type ScreenInput } from './screen.js'
-import { ACTED, CONSOLE, CURSOR, CURSORS, FRAME, jsonPart, MAX_SELECTION, MAX_TITLE, MAX_URL, PULSE, SELECTED, STATE, streamPart, type ActedPoint, type Cursor } from './stream.js'
+import { CURSORS, MAX_SELECTION, MAX_TITLE, MAX_URL } from './stream.js'
+import { screenWatchers } from './watchers.js'
 
 /**
  * The browser's own process: started by the first `open`, it keeps Chrome, the page connection
@@ -20,8 +21,7 @@ import { ACTED, CONSOLE, CURSOR, CURSORS, FRAME, jsonPart, MAX_SELECTION, MAX_TI
  *
  * The screen is a stream of pictures and of what the address bar says (stream.ts), made only
  * while someone watches: Chrome draws no picture for nobody, and a page that stands still sends
- * none. A watcher too slow for the pictures gets the newest one when it is ready for it, never a
- * queue of old ones.
+ * none. What each watcher is told, and when, is watchers.ts's.
  *
  * The page's console (console.ts) is kept from the browser's start, watched or not: the newest
  * lines, for the agent's `console` command and for the stream, where a watcher gets the kept
@@ -104,24 +104,12 @@ export function shortAddress(url: string): string {
 /** The pictures Chrome is asked for: at most this large, and at most one every `FRAME_GAP_MS`. */
 const CAST = { format: 'jpeg', quality: 60, maxWidth: 1280, maxHeight: 800 }
 const FRAME_GAP_MS = 80
-/** How many may watch one browser at once: a person and their devices, generously. */
-const MAX_VIEWERS = 8
 /** How often a stream that says nothing else says it is still there. */
 const PULSE_EVERY_S = 20
 /** How often the page is asked what its cursor is where the person's pointer is. */
 const CURSOR_EVERY_MS = 100
 /** How long the browser stays after its run ended, unused, for the person to look at the page and click in it. */
 export const AFTER_RUN_MS = 10 * 60 * 1000
-
-/** One person watching: the answer their stream is written to, the picture kept for when it can take one, what it was last told the address bar says, the pointer looks like and the page has selected, and the number of the console line it gets next. */
-interface Viewer {
-  res: ServerResponse
-  waiting?: Buffer
-  said?: string
-  shape?: Cursor
-  selected?: string
-  next: number
-}
 
 /** The commands whose answer is the page, printed: where the agent is told of errors the page logged. */
 const PRINTS_THE_PAGE = new Set<HostCommand['name']>(['open', 'read', 'click', 'type', 'press'])
@@ -151,8 +139,6 @@ export async function runHost(opts: HostOptions): Promise<void> {
 
   let page: CdpSession | undefined
   let pageId: string | undefined
-  let latest: Buffer | undefined
-  const viewers = new Set<Viewer>()
   /** The page connection Chrome is drawing pictures on; none while nobody watches. */
   let casting: CdpSession | undefined
   let lastUse = Date.now()
@@ -174,25 +160,16 @@ export async function runHost(opts: HostOptions): Promise<void> {
   /** Per page, how many errors it said since it last went to an address. */
   const pageErrors = new Map<string, number>()
 
-  /** The console lines a watcher has not got, as far as its stream takes them; the rest at a later turn. */
-  const pour = (viewer: Viewer): void => {
-    for (let line = log.from(viewer.next); line && !viewer.res.writableNeedDrain; line = log.from(viewer.next)) {
-      viewer.res.write(jsonPart(CONSOLE, line))
-      viewer.next = line.n + 1
-    }
-  }
+  /** Whoever watches the screen, and what it shows them. */
+  const watchers = screenWatchers(log)
+  /** A line of the console: kept, and told to whoever watches. */
   const note = (said: Said): void => {
     log.add(said)
-    for (const viewer of viewers) pour(viewer)
+    watchers.pourConsole()
   }
-  /** What the pointer looks like where the person last moved it, and whether the page is being asked. */
-  let shape: Cursor = 'default'
+  /** When the page was last asked what its pointer looks like, and whether it is being asked. */
   let askedAt = 0
   let asking = false
-  /** Where the agent last clicked or typed; none until it does. */
-  let acted: ActedPoint | undefined
-  /** What the page has selected, as the watchers were last told. */
-  let selected = ''
 
   /** The last attach, so two callers never attach to a new tab at once. */
   let attaching: Promise<CdpSession> | undefined
@@ -209,13 +186,12 @@ export async function runHost(opts: HostOptions): Promise<void> {
     if (page?.open && target.id === pageId) return page
     const next = await connectCdp(target.webSocketDebuggerUrl!)
     next.on('Page.screencastFrame', params => {
-      latest = Buffer.from(String(params['data']), 'base64')
-      for (const viewer of viewers) show(viewer, latest)
+      watchers.picture(Buffer.from(String(params['data']), 'base64'))
       // Chrome draws the next picture once this one is taken: taken a moment later, so a page
       // that moves all the time costs a bounded number of pictures, and not at all once nobody
       // watches, whatever became of the call that told Chrome to stop.
       setTimeout(() => {
-        if (casting === next && viewers.size > 0) void next.send('Page.screencastFrameAck', { sessionId: params['sessionId'] }).catch(() => {})
+        if (casting === next && watchers.size > 0) void next.send('Page.screencastFrameAck', { sessionId: params['sessionId'] }).catch(() => {})
       }, FRAME_GAP_MS)
     })
     // A dialog blocks the page until answered: every one is accepted at once, and the next
@@ -282,9 +258,7 @@ export async function runHost(opts: HostOptions): Promise<void> {
       const frame = params['frame'] as { parentId?: string; url?: string } | undefined
       if (!frame || frame.parentId || typeof frame.url !== 'string') return
       pageErrors.set(id, 0)
-      // Another page: where the agent last acted is nowhere on it, so whoever joins from here
-      // on is told of no pointer at all.
-      acted = undefined
+      watchers.actedNowhere()
       note(went(frame.url))
       // Another address is another page: it is listened to, whatever the one before it said.
       if (deaf) {
@@ -305,19 +279,6 @@ export async function runHost(opts: HostOptions): Promise<void> {
     return next
   }
 
-  /** A picture for one watcher: now when its stream takes it, else kept, the newest only, for when it does. */
-  const show = (viewer: Viewer, jpeg: Buffer): void => {
-    if (viewer.res.writableNeedDrain) viewer.waiting = jpeg
-    else viewer.res.write(streamPart(FRAME, jpeg))
-  }
-
-  /** What the pointer looks like, for one watcher that has not been told this shape. */
-  const point = (viewer: Viewer): void => {
-    if (viewer.shape === shape || viewer.res.writableNeedDrain) return
-    viewer.shape = shape
-    viewer.res.write(jsonPart(CURSOR, { cursor: shape }))
-  }
-
   /**
    * What the pointer looks like where the person moved it, told to whoever watches when it is
    * not what they were told before: the pictures Chrome draws hold no pointer, so its shape is
@@ -328,22 +289,15 @@ export async function runHost(opts: HostOptions): Promise<void> {
     if (asking || Date.now() - askedAt < CURSOR_EVERY_MS) return
     asking = true
     askedAt = Date.now()
+    let said: string | undefined
     try {
       // A page may name pictures of its own before the keyword it falls back on: the keyword is
       // what a watcher is told, and anything else is the plain arrow.
-      const said = (await cursorAt(p, x, y)).split(',').at(-1)?.trim()
-      shape = CURSORS.find(known => known === said) ?? 'default'
+      said = (await cursorAt(p, x, y)).split(',').at(-1)?.trim()
     } finally {
       asking = false
     }
-    for (const viewer of viewers) point(viewer)
-  }
-
-  /** What the page has selected, for one watcher that has not been told this much. */
-  const tellSelection = (viewer: Viewer): void => {
-    if (viewer.selected === selected || viewer.res.writableNeedDrain) return
-    viewer.selected = selected
-    viewer.res.write(jsonPart(SELECTED, { text: selected }))
+    watchers.cursor(CURSORS.find(known => known === said) ?? 'default')
   }
 
   /**
@@ -353,28 +307,19 @@ export async function runHost(opts: HostOptions): Promise<void> {
    * a drag, a key, select-all — and never while the pointer is only moving.
    */
   const readSelection = async (p: CdpSession): Promise<void> => {
-    const now = await selectionIn(p, MAX_SELECTION)
-    if (now === selected) return
-    selected = now
-    for (const viewer of viewers) tellSelection(viewer)
-  }
-
-  /** Where the agent just acted, told to whoever watches, so they see the agent's own pointer move. */
-  const tellActed = (where: ActedPoint): void => {
-    acted = where
-    for (const viewer of viewers) if (!viewer.res.writableNeedDrain) viewer.res.write(jsonPart(ACTED, where))
+    watchers.selection(await selectionIn(p, MAX_SELECTION))
   }
 
   /** Chrome draws pictures of the page the agent is on while someone watches, and none otherwise. */
   let castTurn: Promise<void> = Promise.resolve()
   const cast = (): Promise<void> =>
     (castTurn = castTurn.then(async () => {
-      const wanted = viewers.size > 0 && page?.open ? page : undefined
+      const wanted = watchers.size > 0 && page?.open ? page : undefined
       if (wanted === casting) return
       const was = casting
       casting = wanted
       // A picture from before the pause is not what the page shows now.
-      latest = undefined
+      watchers.forgetPicture()
       if (was?.open) await was.send('Page.stopScreencast').catch(() => {})
       if (wanted) await wanted.send('Page.startScreencast', CAST).catch(() => {})
     }))
@@ -386,21 +331,14 @@ export async function runHost(opts: HostOptions): Promise<void> {
    */
   let pulseIn = PULSE_EVERY_S
   const tell = async (): Promise<void> => {
-    if (viewers.size === 0) return
+    if (watchers.size === 0) return
     // A browser on someone's screen is not unused, whether or not they click in it.
     lastUse = Date.now()
     const target = activePage(await listPages(chrome.endpoint).catch(() => []))
     if (target && target.id !== pageId) await current().catch(() => {})
-    const said = JSON.stringify({ url: (target?.url ?? '').slice(0, MAX_URL), title: (target?.title ?? '').slice(0, MAX_TITLE) })
     const pulse = --pulseIn <= 0
     if (pulse) pulseIn = PULSE_EVERY_S
-    for (const viewer of viewers) {
-      if (viewer.res.writableNeedDrain) continue
-      if (viewer.said !== said) {
-        viewer.said = said
-        viewer.res.write(streamPart(STATE, Buffer.from(said)))
-      } else if (pulse) viewer.res.write(streamPart(PULSE))
-    }
+    watchers.address({ url: (target?.url ?? '').slice(0, MAX_URL), title: (target?.title ?? '').slice(0, MAX_TITLE) }, pulse)
   }
   try {
     await current()
@@ -423,7 +361,7 @@ export async function runHost(opts: HostOptions): Promise<void> {
     (ending ??= (async () => {
       clearInterval(timer)
       clearInterval(telling)
-      for (const viewer of viewers) viewer.res.end()
+      watchers.end()
       page?.close()
       const closed = new Promise<void>(resolve => server.close(() => resolve()))
       server.closeAllConnections()
@@ -464,10 +402,10 @@ export async function runHost(opts: HostOptions): Promise<void> {
       case 'read':
         return { ok: true, output: await readPage(p) }
       case 'click':
-        tellActed({ ...(await click(p, ref())), act: 'click' })
+        watchers.acted({ ...(await click(p, ref())), act: 'click' })
         return { ok: true, output: await readPage(await current()) }
       case 'type':
-        tellActed({ ...(await type(p, ref(), second)), act: 'type' })
+        watchers.acted({ ...(await type(p, ref(), second)), act: 'type' })
         return { ok: true, output: await readPage(await current()) }
       case 'press':
         await press(p, first)
@@ -496,28 +434,14 @@ export async function runHost(opts: HostOptions): Promise<void> {
     if (!sameToken(said, ofScreen ? viewToken : token)) return void res.writeHead(403).end()
     if (req.method === 'GET' && url.pathname === '/alive') return void res.writeHead(204).end()
     if (req.method === 'GET' && url.pathname === '/stream') {
-      if (viewers.size >= MAX_VIEWERS) return void res.writeHead(503).end()
+      if (watchers.full) return void res.writeHead(503).end()
       res.writeHead(200, { 'content-type': 'application/octet-stream', 'x-content-type-options': 'nosniff', 'cache-control': 'no-store', connection: 'close' })
       res.flushHeaders()
-      const viewer: Viewer = { res, next: 0 }
-      viewers.add(viewer)
-      res.on('drain', () => {
-        const kept = viewer.waiting
-        delete viewer.waiting
-        if (kept) show(viewer, kept)
-        pour(viewer)
-      })
+      const leave = watchers.join(res)
       req.on('close', () => {
-        viewers.delete(viewer)
+        leave()
         void cast()
       })
-      // Someone who joins a screen others watch sees what they see; the first one waits for
-      // the picture Chrome draws as it starts.
-      if (latest) show(viewer, latest)
-      point(viewer)
-      tellSelection(viewer)
-      if (acted) viewer.res.write(jsonPart(ACTED, acted))
-      pour(viewer)
       void cast()
       void tell().catch(() => {})
       return
