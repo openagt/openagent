@@ -935,6 +935,12 @@ describe('a run just started', () => {
     expect(screen.queryByRole('status')).toBeNull()
   })
 
+  test('a run with no prompt line yet shows the prompt its card says, on a page that did not start it', () => {
+    render(view({ live: true, events: [], card: { status: 'running', intent: 'Move the cart', branch: 'agent-x', startedAt: new Date().toISOString() } }))
+    expect(screen.getByText('Move the cart')).toBeTruthy()
+    expect(screen.getByText('Starting the coding agent')).toBeTruthy()
+  })
+
   test('an agent just started on a machine says nothing of a set-up before its card is listed: no checkout is made for it here', () => {
     const events = [{ kind: 'driver', event: { type: 'start', prompt: 'Say hi' } }, { kind: 'driver', event: { type: 'text', text: 'Hi.' } }] as OpenAgentEvent[]
     render(view({ live: true, events, remoteLabel: 'laptop' }))

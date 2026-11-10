@@ -194,10 +194,10 @@ export function AgentView({
   // The messages on their way to the agent, from the box under the chat to the feed above it.
   // The prompt this page started the run with is on its way only until the run has ended.
   const { sending: shownSending, onSending, waiting, onQueued, editInBox } = useMessagesOnTheirWay(projectId, agentId, shown, feedLive, live === false ? undefined : startedWith)
-  // A run writes its prompt line once its coding agent begins: one that ended before has its prompt,
-  // off its card, as the chat's first row.
+  // A run writes its prompt line once its coding agent begins. Until then its prompt, off its card,
+  // is the chat's first row, after a reload and on a run stopped before it began too.
   const standIn = card?.intent ?? startedWith
-  const standsIn = live === false && standIn !== undefined && !shown.some(e => e.kind === 'driver' && e.event.type === 'start')
+  const standsIn = standIn !== undefined && !(live !== false && startedWith !== undefined) && !shown.some(e => e.kind === 'driver' && e.event.type === 'start')
   const startedAt = card?.startedAt
   const chat = useMemo<OpenAgentEvent[]>(
     () => (standsIn ? [{ kind: 'driver', event: { type: 'start', prompt: standIn }, ...(startedAt !== undefined ? { at: startedAt } : {}) }, ...shown] : shown),
