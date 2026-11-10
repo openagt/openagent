@@ -18,12 +18,10 @@ export interface SkillGroup {
 }
 
 export const GROUPS: readonly SkillGroup[] = [
-  { title: 'Tickets and queue', skills: ['tickets', 'queue', 'plan', 'plan-tickets', 'triage', 'update-tickets', 'work-queue', 'suggest-new-tickets', 'suggest-tickets-to-work-on'] },
+  { title: 'Tickets and queue', skills: ['tickets', 'queue', 'plan', 'plan-tickets', 'triage', 'update-tickets', 'work-queue'] },
   { title: 'Agents', skills: ['orchestration', 'logs', 'account-rotation'] },
-  { title: 'Pull requests', skills: ['reply', 'post-merge-cleanup'] },
+  { title: 'Pull requests', skills: ['reply'] },
   { title: 'Automations', skills: ['scheduler'] },
-  { title: 'Code reviews', skills: ['maintainability', 'maintenance', 'readability', 'security-audit', 'ux'] },
-  { title: 'Research', skills: ['research', 'market-research', 'suggest-new-features'] },
   { title: 'Needs its own setup', skills: ['browser', 'discord'] },
 ]
 

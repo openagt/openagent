@@ -50,9 +50,10 @@ test('the sessions with no project are followed on the saved machines too, in th
     remote: {
       ...base.remote,
       elsewhere: async () => [],
+      // The suite's files share one list of projects: one another file adds meanwhile is followed too, and is none of this test's.
       followRuns: (path, change) => {
         followed.push(path)
-        changed = change
+        if (path === home) changed = change
         return () => {}
       },
     },
@@ -60,7 +61,7 @@ test('the sessions with no project are followed on the saved machines too, in th
   const told: RunsChanged[] = []
   const stop = followRunsChanged(change => told.push(change))
   for (let i = 0; i < 50 && changed === undefined; i++) await new Promise(resolve => setTimeout(resolve, 10))
-  assert.deepEqual(followed, [home])
+  assert.ok(followed.includes(home), 'the sessions\' home is followed')
   changed!()
   await new Promise(resolve => setTimeout(resolve, 300))
   assert.deepEqual(told, [{ kind: 'runs', projectId: SESSIONS_ID }])

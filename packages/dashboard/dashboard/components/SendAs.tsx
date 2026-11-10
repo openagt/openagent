@@ -1,5 +1,6 @@
 import type { SendAsHost } from '../rpc/personal-folder.js'
 import { openPermissions } from '../lib/use-route.js'
+import { useAddGitAccount } from './AddGitAccount.js'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select.js'
 
 // The account OpenAgent sends a repository as (Rom's design: OpenAgent never uses the person's own
@@ -13,18 +14,20 @@ export function firstSendAs(host: SendAsHost | undefined, kept?: string): string
 }
 
 /**
- * "Send as": OpenAgent's accounts at `host`, by login. With none there, the line says so and opens
- * the Permissions page, where one is added: nothing is sent as the person's own login.
+ * "Send as": OpenAgent's accounts at `host`, by login. With none there, the line says so and its
+ * press adds one, in the dialog, which is then the one picked: nothing is sent as the person's own
+ * login. With no host known, the press opens the Permissions page.
  */
 export function SendAs({ host, value, onChange, disabled = false, label = 'Send as' }: { host: SendAsHost | undefined; value: string | undefined; onChange: (login: string) => void; disabled?: boolean; label?: string }) {
+  const adding = useAddGitAccount(login => onChange(login))
   if (!host || host.logins.length === 0) {
     return (
       <p className="text-xs text-warning">
         OpenAgent has no account{host ? ` at ${host.host}` : ''} to send it as, and never uses your own login.{' '}
-        <button type="button" className="underline underline-offset-2" onClick={openPermissions}>
-          Add one in Permissions
+        <button type="button" className="underline underline-offset-2" onClick={host ? () => adding.add(host.host) : openPermissions}>
+          {host ? 'Add one' : 'Add one in Permissions'}
         </button>
-        .
+        .{adding.dialog}
       </p>
     )
   }

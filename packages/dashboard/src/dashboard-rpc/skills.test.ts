@@ -63,7 +63,7 @@ test('a project\'s skills: none yet; written, they are in the folder and wait to
   try {
     const empty = (await onProjectSkills(id))!
     assert.deepEqual({ startBranch: empty.startBranch, uncommitted: empty.uncommitted, git: empty.git, remote: empty.remote, local: empty.local }, { startBranch: 'main', uncommitted: [], git: true, remote: undefined, local: false })
-    assert.deepEqual(empty.groups.map(group => [group.title, group.skills.length]), [['Tickets and queue', 9], ['Agents', 3], ['Pull requests', 2], ['Automations', 1], ['Code reviews', 5], ['Research', 3], ['Needs its own setup', 2]])
+    assert.deepEqual(empty.groups.map(group => [group.title, group.skills.length]), [['Tickets and queue', 7], ['Agents', 3], ['Pull requests', 1], ['Automations', 1], ['Needs its own setup', 2]])
     assert.ok(flat(empty).every(skill => skill.standing === 'absent' && !skill.waiting && skill.description.length > 10))
     assert.deepEqual(empty.held, [], 'nothing tracked yet: a run\'s checkout has no project skill')
 

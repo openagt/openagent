@@ -8,7 +8,8 @@ import { Input } from './ui/input.js'
 import { SettingsRow, SettingsSection } from './SettingsRows.js'
 import { SendAs, firstSendAs } from './SendAs.js'
 import { BackupNotice, accountsAt } from './BackupNotice.js'
-import { HostFix, useGitHosts } from './Logins.js'
+import { HostFix } from './AddGitAccount.js'
+import { useGitHosts } from './Logins.js'
 
 /** The Settings entry's id. */
 export const AGENT_DATA_ENTRY = 'agent-data'
@@ -157,7 +158,7 @@ export function AgentDataSettings() {
             </div>
             {typedAt &&
               (typedAt.logins.length === 0 && typedRow ? (
-                // No account of OpenAgent's there: one is added here, its code shown in place.
+                // No account of OpenAgent's there: one is added here, in its dialog.
                 <div className="space-y-1.5">
                   <p className="text-xs text-muted-foreground">{`OpenAgent backs up to ${typedRow.provider?.name ?? typedAt.host} with an account of its own, never your own login. It has none there yet.`}</p>
                   <HostFix row={typedRow} onChanged={reloadGitHosts} size="xs" />
