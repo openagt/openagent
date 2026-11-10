@@ -1107,10 +1107,10 @@ async function drive({ visits = [], start }) {
 }
 
 /**
- * The full-page overlay: this tab is not for people. Appended beside the app's root rather than
- * inside it, so an in-app navigation leaves it alone; the watcher re-appends it if anything does
- * remove it. Typing goes through the composer's own value and the send button's click, not
- * through the pointer, so covering the composer costs nothing.
+ * The full-page overlay, up and current in the Driver tab: this tab is not for people. Appended
+ * beside the app's root rather than inside it, so an in-app navigation leaves it alone; the
+ * watcher re-appends it if anything does remove it. Typing goes through the composer's own value
+ * and the send button's click, not through the pointer, so covering the composer costs nothing.
  */
 function ensureOverlay() {
   if (!isDriver) return
@@ -1118,7 +1118,12 @@ function ensureOverlay() {
   // browser is signed in exactly there, once), so the overlay stands aside on them and comes back
   // with the next page.
   if (signInPage()) return removeOverlay()
-  if (document.getElementById(OVERLAY_ID)) return
+  if (!document.getElementById(OVERLAY_ID)) ownWrites(() => document.documentElement.appendChild(overlayElement()))
+  renderOverlay()
+}
+
+/** The overlay's elements, with an empty status line and log for {@link renderOverlay} to fill. */
+function overlayElement() {
   const overlay = document.createElement('div')
   overlay.id = OVERLAY_ID
   overlay.style.cssText = [
@@ -1146,8 +1151,7 @@ function ensureOverlay() {
   log.style.cssText = 'max-height:50vh;overflow:auto;background:#1f2430;padding:12px;border-radius:8px;font:12px/1.45 ui-monospace,monospace;white-space:pre-wrap;margin:8px 0 0'
   details.append(summary, log)
   overlay.append(heading, phrase, status, details)
-  ownWrites(() => document.documentElement.appendChild(overlay))
-  renderOverlay()
+  return overlay
 }
 
 function renderOverlay() {
@@ -1321,7 +1325,6 @@ if (!IS_TOP) {
     if (isDriver) {
       panel.style.display = 'none'
       ensureOverlay()
-      renderOverlay()
       return
     }
     panel.style.display = ''
