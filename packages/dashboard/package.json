@@ -55,7 +55,7 @@
     "design:build": "tsx --tsconfig dashboard/tsconfig.json dashboard/design/build.mts",
     "typecheck": "tsc --noEmit && tsc --noEmit -p dashboard/tsconfig.json",
     "test": "pnpm test:node && pnpm test:dashboard",
-    "test:node": "tsc -p tsconfig.test.json && node scripts/run-tests.mjs",
+    "test:node": "tsc -p tsconfig.test.json && node ../../scripts/test-node.mjs",
     "test:dashboard": "cd dashboard && vitest run",
     "clean": "rm -rf dist dist-test"
   },

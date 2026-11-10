@@ -35,7 +35,7 @@
     "build": "cp ../../skills/discord/SKILL.md SKILL.md && tsc -p tsconfig.build.json",
     "prepack": "cp ../../skills/discord/SKILL.md SKILL.md",
     "typecheck": "tsc --noEmit",
-    "test": "tsc -p tsconfig.test.json && XDG_CONFIG_HOME=$(mktemp -d) node --test --test-timeout=60000 'dist-test/**/*.test.js'",
+    "test": "tsc -p tsconfig.test.json && node ../../scripts/test-node.mjs",
     "clean": "rm -rf dist dist-test SKILL.md"
   },
   "devDependencies": {

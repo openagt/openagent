@@ -38,7 +38,7 @@ const SKILL_PACKAGES: Record<string, string> = {
 }
 
 // Re-home the process-global config home FIRST: the registry, preferences, and daemon state all
-// resolve through $XDG_CONFIG_HOME at call time, and run-tests.mjs gives the whole suite ONE
+// resolve through $XDG_CONFIG_HOME at call time, and scripts/test-node.mjs gives the whole suite ONE
 // shared throwaway home — so without this, story files running as sibling processes would see
 // each other's registered projects in every cross-project rollup (onProjects, onQueue, onOverview).
 process.env.XDG_CONFIG_HOME = mkdtempSync(join(tmpdir(), 'openagent-e2e-config-'))
