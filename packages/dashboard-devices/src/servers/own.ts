@@ -4,7 +4,7 @@ import { giveGithubLogin, scrubbed, type Failed, type GithubGiven } from './logi
 import { exec as ownExec, lastLines, type Exec, type Session } from './ssh.js'
 import { LOGIN_TIMEOUT_MS, SERVER_USER, githubLogoutScript, script, type LoginScript } from './steps.js'
 import { MARK_LENGTH, atWork, update, type Login, type LoginKind, type Store } from './store.js'
-import { nameFromWord } from '../door/store.js'
+import { nameFromWord } from '../door/names.js'
 
 /**
  * The logins of one person's own OpenAgent, on a computer several people use. There, each person

@@ -1,7 +1,8 @@
 import { lastLines, runOnce, withAdvice, type Exec } from './ssh.js'
 import { PERSON_TIMEOUT_MS, devicesScript, ownerScript, removeDeviceScript, removePersonScript } from './steps.js'
 import type { Server } from './store.js'
-import { addressOf, isLineUrl, nameOf, notAName } from '../door/store.js'
+import { addressOf, isLineUrl } from '../door/store.js'
+import { nameOf, notAName } from '../door/names.js'
 
 /**
  * The devices that are in on a server, as its door lists them: asked over SSH, so a person sees

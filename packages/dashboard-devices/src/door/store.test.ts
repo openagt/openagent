@@ -1,7 +1,7 @@
 import { strict as assert } from 'node:assert'
 import { test } from 'node:test'
 import { readFile, stat, writeFile } from 'node:fs/promises'
-import { CODE_LIFETIME_MS, MAX_DEVICES, nameOf, addCode, addressOf, addPerson, computerWordFor, enter, isComputerId, isIn, nameComputer, nameOwner, personLinePorts, personOf, portOf, portsOf, readStore, readStoreStrict, removeComputer, removeDevice, removePerson, sanitize, sha256, shareLine, shownCode, storePath, update } from './store.js'
+import { CODE_LIFETIME_MS, MAX_DEVICES, addCode, addressOf, addPerson, computerWordFor, enter, isComputerId, isIn, nameComputer, nameOwner, personLinePorts, personOf, portOf, portsOf, readStore, readStoreStrict, removeComputer, removeDevice, removePerson, sanitize, sha256, shareLine, shownCode, storePath, update } from './store.js'
 import { testHome } from './test-home.js'
 import { Unreadable } from '../home-file.js'
 
@@ -335,11 +335,6 @@ test('a computer says another word to each door, made from the word it keeps and
   assert.equal(computerWordFor(word, 'http://studio.local:4201/x'), 'c72e4164c235580bb030ea4b32ffb51b')
   assert.notEqual(computerWordFor('b'.repeat(32), 'https://203.0.113.5'), computerWordFor(word, 'https://203.0.113.5'))
   assert.equal(isComputerId(computerWordFor(word, 'https://203.0.113.5')), true)
-})
-
-test('a person is a name in any language, spaces made one; a name with nothing but letters, digits, spaces, dots, apostrophes and dashes', () => {
-  assert.deepEqual(['Rom', ' Rom  Brillout ', 'רום', "Dani O'Neil", 'José', 'a'.repeat(40)].map(nameOf), ['Rom', 'Rom Brillout', 'רום', "Dani O'Neil", 'José', 'a'.repeat(40)])
-  assert.deepEqual(['-rom', 'a'.repeat(41), 'rom\nx', 'rom/x', '<rom>', ''].map(nameOf), [undefined, undefined, undefined, undefined, undefined, undefined])
 })
 
 test('the owner is named once, then persons are added; the devices in before are the owner\'s; removing a person takes their devices and codes', async () => {

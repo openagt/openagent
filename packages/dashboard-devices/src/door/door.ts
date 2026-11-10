@@ -11,7 +11,8 @@ import { listen, readFields, refuse, sendJson, shut } from './http.js'
 import { LINE_FOR_HEADER, LINE_PROTOCOL, namesIn } from './line-out.js'
 import { ASK_PATH, COMPUTERS_PATH, DOOR_PREFIX, ENTER_PATH, LINE_PATH, ME_CODE_PATH, ME_LINE_PATH, ME_PATH, ME_REMOVE_PATH, VIA_PREFIX } from './paths.js'
 import { enterPage, notInPage, type DoorKind } from './pages.js'
-import { COMPUTER_HEADER, COMPUTER_NAME_HEADER, OWNERS_NAME_HEADER, PERSON_HEADER, addAsk, addCode, askOf, dropAsk, nameWord, shownCode, enter, isComputerId, isIn, listedDevices, nameComputer, personOf, portOf, readStore, removeComputer, removeDevice, sha256, shareLine, storePath, update, type Entry, type ListedDevice, type Store } from './store.js'
+import { COMPUTER_HEADER, COMPUTER_NAME_HEADER, OWNERS_NAME_HEADER, PERSON_HEADER, addAsk, addCode, askOf, dropAsk, shownCode, enter, isComputerId, isIn, listedDevices, nameComputer, personOf, portOf, readStore, removeComputer, removeDevice, sha256, shareLine, storePath, update, type Entry, type ListedDevice, type Store } from './store.js'
+import { nameWord } from './names.js'
 
 /**
  * The door: the one thing that lets anything in from the network. A request from a device that is in is

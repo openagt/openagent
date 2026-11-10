@@ -3,7 +3,7 @@ import { askOpenAgent } from './shared.js'
 import { exec as realExec, lastLines, openSession, runOnce, withAdvice, type Exec, type Session } from './ssh.js'
 import { PERSON_TIMEOUT_MS, SERVER_USER, devicesScript, linkScript, reachedOf, stepsFor, type Facts, type StepId } from './steps.js'
 import { BEAT_MS, changeServer, doorUrl, heartbeat, working, type Server, type StepState } from './store.js'
-import { nameOf } from '../door/store.js'
+import { nameOf } from '../door/names.js'
 
 /**
  * The install itself: the steps, one after the other, on one server, each written to the file

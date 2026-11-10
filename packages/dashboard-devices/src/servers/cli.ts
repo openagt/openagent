@@ -10,7 +10,8 @@ import { askOpenAgent, copyGithubToOther, isOtherUrl, lineTo, mintFor, otherLogi
 import { lastLines, runOnce, withAdvice, type Exec } from './ssh.js'
 import { SERVER_MARK, devicesScript, peopleScript, reachedOf, stepLabel, stepsFor, whoScript, type Who } from './steps.js'
 import { LOGIN_KINDS, isServerName, atWork, changeServer, doorUrl, freshSteps, isUser, isVersion, keepDevices, keptDevices, readStore, throughUrl, update, working, type Login, type LoginKind, type Reach, type Server, type StepState, type Store } from './store.js'
-import { addressOf, isLineUrl, nameOf, notAName } from '../door/store.js'
+import { nameOf, notAName } from '../door/names.js'
+import { addressOf, isLineUrl } from '../door/store.js'
 import { Unreadable } from '../home-file.js'
 import { ownStdin, untilStopped } from '../process.js'
 

@@ -5,7 +5,8 @@ import { connect } from 'node:tls'
 import { keyFingerprint } from './der.js'
 import { CARRIED_HEADERS, DATA, END, HEAD, LINE_PING_MS, LINE_QUIET_MS, Link, RESET, carriedHeaders, carriedPath, carriedValue, readHead, sendBody, type Frame } from './frames.js'
 import { LINE_PATH, ME_PATH } from './paths.js'
-import { COMPUTER_HEADER, MAX_PERSONS, OWNERS_NAME_HEADER, PERSON_HEADER, nameFromWord, nameOf, nameWord } from './store.js'
+import { COMPUTER_HEADER, MAX_PERSONS, OWNERS_NAME_HEADER, PERSON_HEADER } from './store.js'
+import { nameFromWord, nameOf, nameWord } from './names.js'
 
 /**
  * This computer's end of a line: it calls its server, says who it is with the key it has there,

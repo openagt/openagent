@@ -3,7 +3,8 @@ import { PassThrough, Readable, type Duplex } from 'node:stream'
 import { CARRIED_HEADERS, DATA, END, HEAD, LINE_QUIET_MS, Link, RESET, carriedHeaders, carriedPath, carriedValue, readHead, sendBody, type Frame } from './frames.js'
 import { listen, refuse, sendJson, shut } from './http.js'
 import { ENTER_PATH } from './paths.js'
-import { PERSON_HEADER, nameWord, personLinePorts, personOf, type Store } from './store.js'
+import { PERSON_HEADER, personLinePorts, personOf, type Store } from './store.js'
+import { nameWord } from './names.js'
 
 /**
  * The server's end of the lines. A computer that keeps a line open here is asked through it, and
