@@ -81,9 +81,7 @@ export async function tick(deps: TickDeps): Promise<TickRecord> {
   if (record.decisions.length === 0 && deps.schedule.commands.length === 0) return { ...record, note: 'no skill of this project schedules a command' }
 
   const held: Readings = { readiness: {}, accounts: {} }
-  for (const command of deps.schedule.commands) {
-    for (const { outcome, started } of await decide(deps, command, held)) record.decisions.push({ command: command.name, outcome, ...(started ? { run: started.id } : {}) })
-  }
+  for (const command of deps.schedule.commands) record.decisions.push(...(await decisions(deps, command, held)))
   return record
 }
 
@@ -95,12 +93,11 @@ export async function tick(deps: TickDeps): Promise<TickRecord> {
 export async function glance(deps: TickDeps, due: (command: ScheduledCommand) => boolean): Promise<TickDecision[]> {
   if (!deps.state.on) return []
   const held: Readings = { readiness: {}, accounts: {} }
-  const decisions: TickDecision[] = []
+  const decided: TickDecision[] = []
   for (const command of deps.schedule.commands) {
-    if (!command.checkEvery || !due(command)) continue
-    for (const { outcome, started } of await decide(deps, command, held)) decisions.push({ command: command.name, outcome, ...(started ? { run: started.id } : {}) })
+    if (command.checkEvery && due(command)) decided.push(...(await decisions(deps, command, held)))
   }
-  return decisions
+  return decided
 }
 
 /** What starting a command by hand answered: the run it started or resumed, or the decisions that started none, in the tick's own words. */
@@ -159,6 +156,11 @@ async function decide(deps: TickDeps, command: ScheduledCommand, held: Readings,
   return command.each ? eachNamed(deps, command, asked, held, byHand) : [await start(deps, command, asked, held, byHand)]
 }
 
+/** One command decided, as the lines a tick records of it: each outcome, with the run it started or resumed. */
+async function decisions(deps: TickDeps, command: ScheduledCommand, held: Readings): Promise<TickDecision[]> {
+  return (await decide(deps, command, held)).map(({ outcome, started }) => ({ command: command.name, outcome, ...(started ? { run: started.id } : {}) }))
+}
+
 /** Whether a command is due now, and what its check found when it has one: what a start and a resume both go on from. */
 type Asked = { now: Date; found?: { stdout: string; lastRun: string } }
 
@@ -211,7 +213,7 @@ async function start(deps: TickDeps, command: ScheduledCommand, { now, found }: 
   // The cap in force: this machine's number for the command, else the skill's, held against every machine's runs.
   const cap = capInForce(deps.state, command)
   const running = [...(await deps.inFlight(command.name)).map(describe), ...(item?.resumed ?? [])]
-  if (running.length >= cap) return { outcome: `cap reached (${running.length} in flight: ${running.join(', ')})` }
+  if (running.length >= cap) return { outcome: capReached(running) }
   // A run's checkout starts from the project's published commit, not from the files here: a skill
   // that is not there is no command to the agent. Asked only now, when a run would start: it fetches.
   if (command.text === undefined) {
@@ -249,8 +251,7 @@ async function start(deps: TickDeps, command: ScheduledCommand, { now, found }: 
   }
   if (rank + (item?.resumed.length ?? 0) >= cap) {
     await deps.withdrawMarker(id)
-    const others = [...after.filter(c => c.id !== id).map(describe), ...(item?.resumed ?? [])]
-    return { outcome: `cap reached (${others.length} in flight: ${others.join(', ')})` }
+    return { outcome: capReached([...after.filter(c => c.id !== id).map(describe), ...(item?.resumed ?? [])]) }
   }
   // One run for what an item names, across every machine: the first marker in time order keeps it.
   const first = item && after.filter(card => runnerMark(card)?.for === item.start.for).map(card => card.id).sort()[0]
@@ -316,7 +317,7 @@ async function eachNamed(deps: TickDeps, command: ScheduledCommand, asked: Asked
     const agent = card.driver ?? DEFAULT_AGENT
     if (!isAgent(agent)) return `it is on ${agent}, which agent-runner cannot start`
     if (!ableAgents(command).includes(agent)) return notACommandOf(command, agent)
-    if (running.length >= cap) return `cap reached (${running.length} in flight: ${running.join(', ')})`
+    if (running.length >= cap) return capReached(running)
     const may = await mayStart(deps, agent, card.model, held, byHand)
     if ('reason' in may) return may.reason
     if (!byHand && !(await deps.stillOn(command.name))) return 'switched off on this machine'
@@ -364,6 +365,11 @@ async function mayStart(deps: TickDeps, agent: AgentName, model: string | undefi
 
 function notACommandOf(command: ScheduledCommand, agent: AgentName): string {
   return `not a command of ${AGENT_LABELS[agent]}: its skill is only under ${command.dirs.join(' and ')}, not ${AGENT_SKILLS_DIR[agent]}`
+}
+
+/** Why a command's cap holds a run back: how many of its runs are in flight, and which. */
+function capReached(running: string[]): string {
+  return `cap reached (${running.length} in flight: ${running.join(', ')})`
 }
 
 function lateOutcome(): string {
