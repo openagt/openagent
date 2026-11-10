@@ -211,7 +211,7 @@ async function tokenOf(login: string, dir: string, cwd: string, gh: GhRunner): P
   try {
     token = (await asAccount(gh, dir)(['auth', 'token', '--hostname', HOST], cwd)).trim()
   } catch (err) {
-    const detail = err instanceof Error ? err.message : String(err)
+    const detail = errorMessage(err)
     throw new Refused({ ok: false, reason: 'no-token', login, detail }, `OpenAgent has no token for ${login}: ${detail}`)
   }
   const whose = await whoseToken(token, cwd, gh, login)
@@ -232,7 +232,7 @@ async function factsOfToken(token: string, cwd: string, gh: GhRunner, login?: st
   try {
     return await whoAmI((args, at, env, input) => asAccount(gh, none)(args, at, { ...env, GH_TOKEN: token }, input), cwd)
   } catch (err) {
-    const detail = err instanceof Error ? err.message : String(err)
+    const detail = errorMessage(err)
     throw new Refused({ ok: false, reason: 'no-token', ...(login !== undefined ? { login } : {}), detail }, `GitHub did not take ${login !== undefined ? `${login}'s login` : 'the login'}: ${detail}`)
   } finally {
     rmSync(none, { recursive: true, force: true })
@@ -253,7 +253,7 @@ const COMMANDS: Record<string, Command<[Context]>> = {
     try {
       return await listRequests(cwd, { ...(values.branch ? { branch: values.branch } : {}), state, ...(values.since ? { since: values.since } : {}) }, gh)
     } catch (err) {
-      const detail = err instanceof Error ? err.message : String(err)
+      const detail = errorMessage(err)
       throw new Refused({ ok: false, reason: 'git-host-failed', detail }, `the pull requests could not be read: ${detail}`)
     }
   }),
@@ -264,7 +264,7 @@ const COMMANDS: Record<string, Command<[Context]>> = {
     try {
       return await listReplies(cwd, { gh, ...(values.since !== undefined ? { since: values.since } : {}) })
     } catch (err) {
-      const detail = err instanceof Error ? err.message : String(err)
+      const detail = errorMessage(err)
       throw new Refused({ ok: false, reason: 'git-host-failed', detail }, `the pull requests could not be read: ${detail}`)
     }
   }),
@@ -276,7 +276,7 @@ const COMMANDS: Record<string, Command<[Context]>> = {
     try {
       return { ok: true, ...(await writeComment(cwd, number, values.body, await byline(env[DIARY_ENV]), gh)) }
     } catch (err) {
-      const detail = err instanceof Error ? err.message : String(err)
+      const detail = errorMessage(err)
       throw new Refused({ ok: false, reason: 'git-host-failed', detail }, `the comment could not be written: ${detail}`)
     }
   }),
@@ -363,7 +363,7 @@ const COMMANDS: Record<string, Command<[Context]>> = {
     try {
       useForRuns(login, state.installed ? state.accounts : [], picksPath(env))
     } catch (err) {
-      throw new Refused({ ok: false, reason: 'no-account', login }, err instanceof Error ? err.message : String(err))
+      throw new Refused({ ok: false, reason: 'no-account', login }, errorMessage(err))
     }
     return { ok: true, login }
   },
@@ -376,7 +376,7 @@ const COMMANDS: Record<string, Command<[Context]>> = {
     try {
       return { ok: true, ...(await login(root)) }
     } catch (err) {
-      const detail = err instanceof Error ? err.message : String(err)
+      const detail = errorMessage(err)
       throw new Refused({ ok: false, reason: 'login-failed', detail }, `gh could not start a login: ${detail}`)
     }
   },
@@ -394,7 +394,7 @@ const COMMANDS: Record<string, Command<[Context]>> = {
     try {
       await shell(command)
     } catch (err) {
-      const detail = err instanceof Error ? err.message : String(err)
+      const detail = errorMessage(err)
       throw new Refused({ ok: false, reason: 'install-failed', detail, command }, `gh's install could not be started: ${detail}`)
     }
     return { ok: true, started: true, command }
@@ -439,7 +439,7 @@ const COMMANDS: Record<string, Command<[Context]>> = {
     try {
       await takeToken(accountsRoot(env), token, facts, gh, cwd)
     } catch (err) {
-      const detail = err instanceof Error ? err.message : String(err)
+      const detail = errorMessage(err)
       throw new Refused({ ok: false, reason: 'login-failed', login: facts.login, detail }, `gh did not take ${facts.login}'s login: ${detail}`)
     }
     return { ok: true, login: facts.login }
@@ -451,7 +451,7 @@ const COMMANDS: Record<string, Command<[Context]>> = {
       // Only OpenAgent's copy goes: the token itself goes on working wherever else it is.
       forgetAccount(accountsRoot(env), login, picksPath(env))
     } catch (err) {
-      throw new UsageError(err instanceof Error ? err.message : String(err))
+      throw new UsageError(errorMessage(err))
     }
     return { ok: true, login }
   },

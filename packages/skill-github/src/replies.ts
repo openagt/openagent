@@ -2,7 +2,7 @@ import { mkdir, readFile, stat, writeFile } from 'node:fs/promises'
 import { hostname } from 'node:os'
 import { dirname, join } from 'node:path'
 import { listRuns, type RunCard } from '@openagt/skill-logs'
-import type { GitRunner } from '@openagt/agent-data'
+import { errorMessage, type GitRunner } from '@openagt/agent-data'
 import { nodeGhRunner, type GhRunner } from './gh.js'
 import { COMMENT_MARK } from './comment.js'
 import { pushFork } from './home.js'
@@ -285,7 +285,7 @@ async function changedSince(gh: GhRunner, repo: string, path: string, etag: stri
     const now = /^etag:\s*(.+?)\s*$/im.exec(answered)?.[1]
     return { changed: true, ...(now !== undefined ? { etag: now } : {}) }
   } catch (err) {
-    if (/\bHTTP 304\b/.test(err instanceof Error ? err.message : String(err))) return { changed: false, ...(etag !== undefined ? { etag } : {}) }
+    if (/\bHTTP 304\b/.test(errorMessage(err))) return { changed: false, ...(etag !== undefined ? { etag } : {}) }
     throw err
   }
 }

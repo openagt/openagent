@@ -2,7 +2,8 @@ import { spawn } from 'node:child_process'
 import { chmodSync, existsSync, mkdirSync, readdirSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs'
 import { homedir, tmpdir } from 'node:os'
 import { dirname, join, relative, isAbsolute } from 'node:path'
-import { errorMessage, type GhRunner } from './gh.js'
+import { errorMessage } from '@openagt/agent-data'
+import type { GhRunner } from './gh.js'
 
 /**
  * The GitHub accounts OpenAgent has, and the one its runs use. They are OpenAgent's own, never the
