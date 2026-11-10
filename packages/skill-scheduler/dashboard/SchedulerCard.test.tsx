@@ -52,6 +52,9 @@ describe('the Automations card of the Overview', () => {
     expect(other.getByText('Scheduler off')).toBeTruthy()
     expect(other.getByText('keep-alive')).toBeTruthy()
     expect(other.queryByText(/switched off/)).toBeNull()
+    // Nothing scheduled: the card leads to where one is made.
+    fireEvent.click(other.getByRole('link', { name: 'New automation' }))
+    expect(host.openPage).toHaveBeenCalledWith('automations')
   })
 
   test('Run now on a row starts one run of it at once (`scheduler now`), and the row says what it started, or why nothing did', async () => {
@@ -91,7 +94,11 @@ describe('the Automations card of the Overview', () => {
     const { host } = hostAnswering(() => ({ ok: true, output: { ...RAN, running: false } }))
     show(host, [GEMSTACK])
     expect((await screen.findByText('Scheduler on, not running')).className).toMatch(/text-warning/)
-    expect(screen.getByText('The scheduler is on, but not running: nothing starts by itself.')).toBeTruthy()
+    expect(screen.getByText(/^Nothing starts by itself/)).toBeTruthy()
+    // Said once: beside the name, not again in the line under it, which leads to the page that says how to start it.
+    expect(screen.getAllByText(/not running/)).toHaveLength(1)
+    fireEvent.click(screen.getByRole('link', { name: 'How to start it' }))
+    expect(host.openPage).toHaveBeenCalledWith('automations')
     // Its dot is not the green of a row that starts.
     expect(screen.getByText('/post-merge-cleanup').previousElementSibling!.className).not.toMatch(/bg-success/)
     expect(screen.queryByText(/Next start|Starts /)).toBeNull()
@@ -150,7 +157,8 @@ describe('what the module tells the other pages starts by itself', () => {
     const { host } = hostAnswering(() => ({ ok: true, output: { ...RAN, on: false, running: false, lastTick: { at: STATUS.lastTick.at, decisions: [], note: 'off' } } }))
     show(host, [GEMSTACK])
     expect(await screen.findByText('Scheduler off')).toBeTruthy()
-    expect(screen.getByText('The scheduler is off: nothing starts by itself.')).toBeTruthy()
+    expect(screen.getByText(/^Nothing starts by itself/)).toBeTruthy()
+    expect(screen.queryByText(/scheduler is off/i)).toBeNull()
     expect(screen.queryByText(/last look/)).toBeNull()
   })
 })
