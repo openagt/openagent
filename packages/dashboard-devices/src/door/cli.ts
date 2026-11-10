@@ -14,7 +14,7 @@ import { tailscaleName, tailscaleRun, type TailscaleRun } from './tailscale.js'
 import { renderUnicodeCompact } from 'uqr'
 import { MAX_LINES, answerAsk, readStoreStrict, nameFromWord, nameOf, nameWord, notAName, addCode, shownCode, addPerson, addressOf, computerWordFor, isComputerId, listedDevices, nameOwner, readStore, removeComputer, removePerson, renameComputer, samePerson, update, type Line, type ListedDevice, type Store } from './store.js'
 import { Unreadable } from '../home-file.js'
-import { pidAlive } from '../process.js'
+import { ownStdin, pidAlive, untilStopped } from '../process.js'
 
 /**
  * The command line: JSON on stdout, one line for a person on stderr, and the exit code says how
@@ -479,13 +479,6 @@ function gitName(): Promise<string | undefined> {
   })
 }
 
-/** All of the process's standard input, as text. */
-async function ownStdin(): Promise<string> {
-  let said = ''
-  for await (const chunk of process.stdin.setEncoding('utf8')) said += chunk
-  return said
-}
-
 /** This computer's name as a server lists it, and another computer on the Wi-Fi it asks. */
 function ownName(deps: AddressDeps = {}): string {
   return (deps.hostname ?? hostname)().replace(/\.local$/i, '') || 'A computer'
@@ -572,28 +565,9 @@ async function runServe(io: CliIO): Promise<void> {
   // For a try on a computer that is no real server: another port for the proof, another certificate office.
   const proofPort = portIn('OPENAGENT_REMOTE_ACCESS_PROOF_PORT')
   const directory = io.env.OPENAGENT_REMOTE_ACCESS_ACME || undefined
-  const controller = new AbortController()
-  const stop = (): void => controller.abort()
-  let watch: NodeJS.Timeout | undefined
-  if (io.signal) io.signal.addEventListener('abort', stop, { once: true })
-  else {
-    process.once('SIGINT', stop)
-    process.once('SIGTERM', stop)
-    // The door goes with the OpenAgent that started it, also when that one died without a word.
-    const parent = process.ppid
-    watch = setInterval(() => {
-      if (process.ppid !== parent) stop()
-    }, 2_000)
-  }
-  try {
-    if (io.signal?.aborted) stop()
-    await serve({ env: io.env, target, signal: controller.signal, log: io.stderr, ...(port !== undefined ? { port } : {}), ...(proofPort !== undefined ? { proofPort } : {}), ...(directory ? { directory } : {}), ...(io.host !== undefined ? { host: io.host } : {}), ...(io.address ? { address: io.address } : {}), ...(io.announce ? { announce: io.announce } : {}), ...(io.tailscale ? { tailscale: io.tailscale } : {}) })
-  } finally {
-    // Whatever ended it, nothing of it is left to keep the process alive.
-    clearInterval(watch)
-    process.off('SIGINT', stop)
-    process.off('SIGTERM', stop)
-  }
+  const options = { env: io.env, target, log: io.stderr, ...(port !== undefined ? { port } : {}), ...(proofPort !== undefined ? { proofPort } : {}), ...(directory ? { directory } : {}), ...(io.host !== undefined ? { host: io.host } : {}), ...(io.address ? { address: io.address } : {}), ...(io.announce ? { announce: io.announce } : {}), ...(io.tailscale ? { tailscale: io.tailscale } : {}) }
+  // The door goes with the OpenAgent that started it, also when that one died without a word.
+  await untilStopped(io.signal, signal => serve({ ...options, signal }), { withParent: true })
 }
 
 export async function runCli(args: string[], io: CliIO): Promise<number> {

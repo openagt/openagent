@@ -12,6 +12,7 @@ import { PERSON_TIMEOUT_MS, SERVER_MARK, SERVER_USER, devicesScript, peopleScrip
 import { LOGIN_KINDS, isServerName, atWork, changeServer, doorUrl, freshSteps, isUser, isVersion, keepDevices, keptDevices, readStore, throughUrl, update, working, type Login, type LoginKind, type Reach, type Server, type StepState, type Store } from './store.js'
 import { addressOf, isLineUrl, nameOf, notAName } from '../door/store.js'
 import { Unreadable } from '../home-file.js'
+import { ownStdin, untilStopped } from '../process.js'
 
 /**
  * The command line: JSON on stdout, one line for a person on stderr, and the exit code says how
@@ -105,13 +106,6 @@ export interface CliIO {
 
 /** How this command logs in to a server: with the real `ssh`, unless the caller says another. */
 const sshOf = (io: CliIO): { exec?: Exec } => (io.exec ? { exec: io.exec } : {})
-
-/** All of the process's standard input, as text. */
-async function ownStdin(): Promise<string> {
-  let said = ''
-  for await (const chunk of process.stdin.setEncoding('utf8')) said += chunk
-  return said
-}
 
 /** What `own login` is told beside the login: the server it is a copy from, and for a Claude login who it is. Nothing for words it does not take. */
 function loginFlags(flags: string[], claude: boolean): { from?: string; account?: string } | undefined {
@@ -383,24 +377,6 @@ function devicesOf(answer: Devices, line: ListedLine | undefined): DevicesStatus
 }
 
 const isKind = (said: string | undefined): said is LoginKind => (LOGIN_KINDS as readonly string[]).includes(said ?? '')
-
-/** Run `work` until it ends, or until this process is told to stop. */
-async function untilStopped(io: CliIO, work: (signal: AbortSignal) => Promise<void>): Promise<void> {
-  const controller = new AbortController()
-  const stop = (): void => controller.abort()
-  if (io.signal) io.signal.addEventListener('abort', stop, { once: true })
-  else {
-    process.once('SIGINT', stop)
-    process.once('SIGTERM', stop)
-  }
-  try {
-    if (io.signal?.aborted) stop()
-    await work(controller.signal)
-  } finally {
-    process.off('SIGINT', stop)
-    process.off('SIGTERM', stop)
-  }
-}
 
 function ownStatusOf(store: Store, person: string): OwnStatus {
   return { person, logins: { github: loginOf('github', store.own?.github), claude: loginOf('claude', store.own?.claude) } }
@@ -702,7 +678,7 @@ export async function runCli(args: string[], io: CliIO): Promise<number> {
       case 'other-work': {
         const [url] = rest
         if (rest.length !== 1 || !isOtherUrl(url)) break
-        await untilStopped(io, signal => mintFor({ env: io.env, machine: url, signal, ...(io.mint ? { mint: io.mint } : {}) }))
+        await untilStopped(io.signal, signal => mintFor({ env: io.env, machine: url, signal, ...(io.mint ? { mint: io.mint } : {}) }))
         return 0
       }
       case 'work': {
@@ -710,7 +686,7 @@ export async function runCli(args: string[], io: CliIO): Promise<number> {
         if (rest.length !== 2 || !address || !version) break
         if (!isVersion(version)) throw new Refused(`${version} is not a version of OpenAgent`)
         const { address: at } = await saved(io, address)
-        await untilStopped(io, signal => install({ env: io.env, ...ssh, address: at, version, signal }))
+        await untilStopped(io.signal, signal => install({ env: io.env, ...ssh, address: at, version, signal }))
         return 0
       }
       default:
