@@ -163,6 +163,16 @@ export const PromptEditor = forwardRef<PromptEditorHandle, PromptEditorProps>(fu
     return replaced
   }
 
+  // What a `/` menu item loads, and what the form's note calls it: a command as `/<name> `, for the
+  // person to add an argument or send; a saved prompt, the user's own (#626) or the project's
+  // (#1025), verbatim.
+  const loadedBy = (id: string): { label: string; text: string } | undefined => {
+    const command = commandsRef.current.find(c => `command:${c.name}` === id)
+    if (command) return { label: `/${command.name}`, text: `/${command.name} ` }
+    const preset = customPresetsRef.current.find(p => `custom-preset:${p.id}` === id) ?? projectPresetsRef.current.find(p => `project-preset:${p.id}` === id)
+    return preset && { label: preset.label, text: preset.prompt }
+  }
+
   const editor = useEditor({
     immediatelyRender: false,
     extensions: [
@@ -199,39 +209,18 @@ export const PromptEditor = forwardRef<PromptEditorHandle, PromptEditorProps>(fu
           return [...commandItems, ...customItems, ...projectItems, ...newPresetItem]
         },
         onSelect: (item, { editor: ed, range }) => {
-          if (item.id.startsWith('command:')) {
-            const command = commandsRef.current.find(c => `command:${c.name}` === item.id)
-            if (command) {
-              // Drop the `/query` trigger first so it does not count as a replaced draft.
-              ed.chain().focus().deleteRange(range).run()
-              const replaced = loadTemplateInto(ed, `/${command.name} `)
-              onPresetRef.current?.(`/${command.name}`, replaced)
-            }
-            return
-          }
-          if (item.id.startsWith('custom-preset:')) {
-            const preset = customPresetsRef.current.find(p => `custom-preset:${p.id}` === item.id)
-            if (preset) {
-              ed.chain().focus().deleteRange(range).run()
-              const replaced = loadTemplateInto(ed, preset.prompt)
-              onPresetRef.current?.(preset.label, replaced)
-            }
-            return
-          }
-          if (item.id.startsWith('project-preset:')) {
-            const preset = projectPresetsRef.current.find(p => `project-preset:${p.id}` === item.id)
-            if (preset) {
-              ed.chain().focus().deleteRange(range).run()
-              const replaced = loadTemplateInto(ed, preset.prompt)
-              onPresetRef.current?.(preset.label, replaced)
-            }
-            return
-          }
           if (item.id === 'new-preset') {
             // Drop the `/query` trigger so the create panel captures the real prompt, not the slash.
             ed.chain().focus().deleteRange(range).run()
             onNewPresetRef.current?.()
+            return
           }
+          const loaded = loadedBy(item.id)
+          if (!loaded) return
+          // Drop the `/query` trigger first so it does not count as a replaced draft.
+          ed.chain().focus().deleteRange(range).run()
+          const replaced = loadTemplateInto(ed, loaded.text)
+          onPresetRef.current?.(loaded.label, replaced)
         },
       }),
       // `@` — references: the registered projects, by name.
