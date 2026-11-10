@@ -68,7 +68,8 @@ export function DashboardPage({
   // Every card the Overview can show here, each with the widths it stands at; the person's layout
   // for this page (the picked project's, else all projects') orders them, sizes them, and hides some.
   const moduleCards = useModuleCards(shownProjects)
-  const questions = interventions.filter(item => item.kind === 'awaiting').length
+  // What the number counts, kind by kind: "1 question, 1 to publish".
+  const waiting = KINDS.map(kind => ({ kind, count: interventions.filter(item => item.kind === kind.value).length })).filter(({ count }) => count > 0)
   const cards: OverviewCard[] = [
     // How things stand, a number each: what needs the person, and who is at work. The queue's own
     // tile (what waits its turn) is its package's card, beside them by its order.
@@ -84,7 +85,7 @@ export function DashboardPage({
           label="Needs you"
           value={interventions.length}
           tone="text-warning"
-          note={interventions.length === 0 ? 'Nothing waits on you' : questions > 0 ? (questions === 1 ? '1 question to answer' : `${questions} questions to answer`) : 'Work to review or publish'}
+          note={waiting.length === 0 ? 'Nothing waits on you' : waiting.map(({ kind, count }) => kind.counted(count)).join(', ')}
           onClick={() => scrollToPart(NEEDS_YOU_ID)}
         />
       ),
@@ -262,9 +263,9 @@ function HumanQueue({
 }
 
 /** The kinds the card groups its rows by, in the order of how much they hold a run up: a question stops one. */
-const KINDS: { value: Intervention['kind']; label: string }[] = [
-  { value: 'awaiting', label: 'Questions' },
-  { value: 'pr', label: 'Pull requests' },
-  { value: 'unpushed', label: 'To publish' },
-  { value: 'uncommitted', label: 'To commit' },
+const KINDS: { value: Intervention['kind']; label: string; counted: (count: number) => string }[] = [
+  { value: 'awaiting', label: 'Questions', counted: count => (count === 1 ? '1 question' : `${count} questions`) },
+  { value: 'pr', label: 'Pull requests', counted: count => (count === 1 ? '1 pull request' : `${count} pull requests`) },
+  { value: 'unpushed', label: 'To publish', counted: count => `${count} to publish` },
+  { value: 'uncommitted', label: 'To commit', counted: count => `${count} to commit` },
 ]

@@ -207,14 +207,14 @@ describe('the Overview', () => {
     expect(drawn()).toEqual([])
   })
 
-  test("the Needs you tile: how many things wait, and how many are questions; it takes the page to the Human Queue", async () => {
+  test("the Needs you tile: how many things wait, and how many of each kind; it takes the page to the Human Queue", async () => {
     working = []
     const item = (kind: Intervention['kind'], n: number): Intervention => ({ projectId: 'p1', projectName: 'alpha', kind, title: `t${n}`, agentId: `r${n}` })
     const scrolled = vi.fn()
     Element.prototype.scrollIntoView = scrolled
     render(<DashboardPage onProjectAdded={() => {}} onSelectProject={() => {}} onSelectAgent={() => {}} onAgentStarted={() => {}} interventions={[item('awaiting', 1), item('awaiting', 2), item('pr', 3)]} interventionsStale={false} active={{ active: [], stale: false }} projects={projects} scope={null} />)
     const tile = (await screen.findByText('Needs you')).closest('button')!
-    expect(tile.textContent).toBe('Needs you32 questions to answer')
+    expect(tile.textContent).toBe('Needs you32 questions, 1 pull request')
     fireEvent.click(tile)
     expect(scrolled).toHaveBeenCalled()
     expect(scrolled.mock.contexts[0]).toBe(document.getElementById('needs-you'))
