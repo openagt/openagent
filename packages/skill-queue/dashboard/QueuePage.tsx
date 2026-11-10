@@ -182,11 +182,7 @@ function ProjectQueue({ read, titled, schedule, names, starts, reload }: { read:
       ) : (
         sections(entries!).map((section, index) => (
           <div key={index} className="mt-4">
-            <h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-              {section.priority === undefined ? 'No priority' : `Priority ${section.priority}`}
-              {section.priority !== undefined && priorityMeaning(section.priority) !== undefined && ' '}
-              {section.priority !== undefined && priorityMeaning(section.priority) !== undefined && <span className="ml-1 font-normal normal-case tracking-normal">{priorityMeaning(section.priority)}</span>}
-            </h3>
+            <SectionHeading priority={section.priority} />
             {/* Counted on from the section before, so the number a screen reader says is the one shown. */}
             <ol start={section.entries[0]!.place} className="mt-1.5 list-none divide-y divide-border rounded-md border border-border">
               {section.entries.map(placed => (
@@ -198,6 +194,18 @@ function ProjectQueue({ read, titled, schedule, names, starts, reload }: { read:
       )}
       {error === undefined && <AddEntry project={project} reload={reload} />}
     </section>
+  )
+}
+
+/** A run of entries' heading: the priority section they sit in, with what its number means at either end of the scale. */
+function SectionHeading({ priority }: { priority: number | undefined }) {
+  const meaning = priority === undefined ? undefined : priorityMeaning(priority)
+  return (
+    <h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+      {priority === undefined ? 'No priority' : `Priority ${priority}`}
+      {meaning !== undefined && ' '}
+      {meaning !== undefined && <span className="ml-1 font-normal normal-case tracking-normal">{meaning}</span>}
+    </h3>
   )
 }
 
