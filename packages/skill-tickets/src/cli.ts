@@ -1,7 +1,7 @@
 import { join } from 'node:path'
-import { GIT_FAILED, Refused, UsageError, checkoutRoot, inRepo, listProjectDir, nodeBranchFileFs, nodeGitRunner, openProjectReader, parseCommandArgs, readProjectFile, runCommandLine, writeProjectDataDetached, type BranchFileFs, type Command, type GitRunner } from '@openagt/agent-data'
+import { GIT_FAILED, Refused, UsageError, commandReader, commandWrite, inRepo, nodeBranchFileFs, nodeGitRunner, parseCommandArgs, runCommandLine, type BranchFileFs, type Command, type GitRunner } from '@openagt/agent-data'
 import { isTicketFile, META_FILE, nameInTickets, TICKETS_DIR, ticketLockName, ticketOfPlan, ticketPlanName, ticketStem } from './names.js'
-import { readTicket, readTickets, readTicketsMeta, type TicketsFs } from './tickets.js'
+import { readTicket, readTickets, readTicketsMeta } from './tickets.js'
 import { applyClaims, applyRelease, claimHistory, claimMessage, lockOn, releaseMessage } from './locks.js'
 import { holderOf } from './holder.js'
 
@@ -52,18 +52,18 @@ export function runCli(argv: string[], io: CliIo, git: GitRunner = nodeGitRunner
 const COMMANDS: Record<string, Command<[CliIo, GitRunner]>> = {
   async list(args, io, git) {
     const { values } = parseCommandArgs(args, LOCAL, 0)
-    return readTickets(TICKETS_DIR, await ticketsFs(io.cwd, values.local, git))
+    return readTickets(TICKETS_DIR, await commandReader(io.cwd, values.local, git))
   },
 
   async meta(args, io, git) {
     const { values } = parseCommandArgs(args, LOCAL, 0)
-    return readTicketsMeta(TICKETS_DIR, await ticketsFs(io.cwd, values.local, git))
+    return readTicketsMeta(TICKETS_DIR, await commandReader(io.cwd, values.local, git))
   },
 
   async show(args, io, git) {
     const { positionals, values } = parseCommandArgs(args, LOCAL, 1)
     const file = ticketArg(positionals[0]!)
-    const fs = await ticketsFs(io.cwd, values.local, git)
+    const fs = await commandReader(io.cwd, values.local, git)
     const ticket = await readTicket(TICKETS_DIR, file, fs)
     if (!ticket) throw noTicket(file)
     const plan = await fs.read(`${TICKETS_DIR}/${ticketPlanName(file)}`)
@@ -77,7 +77,7 @@ const COMMANDS: Record<string, Command<[CliIo, GitRunner]>> = {
     if (!isPutFile(file))
       throw new Refused({ ok: false, reason: 'invalid-path', file }, `${file} is not a file under ${TICKETS_DIR}/ this command writes: a ticket, its .plan.md, or ${META_FILE}`)
     const content = await io.stdin()
-    await write(io.cwd, `put ${TICKETS_DIR}/${file}`, async dir => {
+    await commandWrite(io.cwd, `put ${TICKETS_DIR}/${file}`, async dir => {
       await nodeBranchFileFs().write(join(dir, TICKETS_DIR, file), content)
     }, git)
     return { ok: true, file: `${TICKETS_DIR}/${file}` }
@@ -88,7 +88,7 @@ const COMMANDS: Record<string, Command<[CliIo, GitRunner]>> = {
     const file = ticketArg(positionals[0]!)
     const holder = await identity(io.cwd, git)
     type CloseOutcome = { ok: true } | { ok: false; reason: 'no-ticket' } | { ok: false; reason: 'not-holder'; holder?: string }
-    const outcome = await write(io.cwd, `close ${TICKETS_DIR}/${ticketStem(file)}`, async (dir): Promise<CloseOutcome> => {
+    const outcome = await commandWrite(io.cwd, `close ${TICKETS_DIR}/${ticketStem(file)}`, async (dir): Promise<CloseOutcome> => {
       const fs = nodeBranchFileFs()
       if (!(await holdsTicket(dir, file, fs))) return { ok: false, reason: 'no-ticket' }
       // Someone else's claim outranks the close: closing takes their lock with the ticket.
@@ -109,7 +109,7 @@ const COMMANDS: Record<string, Command<[CliIo, GitRunner]>> = {
     const file = ticketArg(positionals[0]!)
     const holder = await identity(io.cwd, git)
     type ClaimOutcome = { ok: true; earlier: string[] } | { ok: false; reason: 'no-ticket' } | { ok: false; reason: 'claimed'; holder?: string }
-    const outcome = await write(io.cwd, claimMessage([{ ticket: file, holder }]), async (dir): Promise<ClaimOutcome> => {
+    const outcome = await commandWrite(io.cwd, claimMessage([{ ticket: file, holder }]), async (dir): Promise<ClaimOutcome> => {
       const fs = nodeBranchFileFs()
       if (!(await holdsTicket(dir, file, fs))) return { ok: false, reason: 'no-ticket' }
       // A claim to plan or to work: an existing plan is not in the way, only someone's lock is.
@@ -137,7 +137,7 @@ const COMMANDS: Record<string, Command<[CliIo, GitRunner]>> = {
     // `--force` lifts whoever's claim, so it needs no identity of its own: a person's act, from
     // the dashboard, on a claim nobody answers to any more.
     const holder = values.force ? undefined : await identity(io.cwd, git)
-    const { outcome, other } = await write(io.cwd, releaseMessage(file), async dir => {
+    const { outcome, other } = await commandWrite(io.cwd, releaseMessage(file), async dir => {
       const fs = nodeBranchFileFs()
       const outcome = await applyRelease(dir, file, holder, fs)
       // Whose claim stood in the way, for the refusal to name.
@@ -151,31 +151,6 @@ const COMMANDS: Record<string, Command<[CliIo, GitRunner]>> = {
 
 /** The one flag every read takes. */
 const LOCAL = { local: { type: 'boolean' } } as const
-
-/**
- * The ticket reader a read goes through, paths relative to the project's data (`tickets/<file>`),
- * from wherever the command runs; outside a repository, a refusal. The project's data opened for
- * reading, or with `--local` this machine's copy with no fetch, for the dashboard's polling.
- */
-async function ticketsFs(cwd: string, local: boolean | undefined, git: GitRunner): Promise<TicketsFs> {
-  await inRepo(() => checkoutRoot(cwd, git))
-  if (!local) return openProjectReader(cwd, { git })
-  return { list: dir => listProjectDir(cwd, dir, {}, { git }), read: path => readProjectFile(cwd, path, {}, { git }) }
-}
-
-/**
- * One write as a one-shot writer: to origin when the project is shared, else as a local commit.
- * Answers what `op` found the last time it ran: a write that loses a race runs it again on the
- * new tip, and only that run's finding is what landed.
- */
-async function write<T>(cwd: string, message: string, op: (dir: string) => Promise<T>, git: GitRunner): Promise<T> {
-  await inRepo(() => checkoutRoot(cwd, git))
-  let found: T | undefined
-  await writeProjectDataDetached(cwd, message, async dir => {
-    found = await op(dir)
-  }, { git })
-  return found as T
-}
 
 /** Whether a checkout of the project's data holds the ticket: whether its file reads. */
 function holdsTicket(dir: string, file: string, fs: BranchFileFs): Promise<boolean> {

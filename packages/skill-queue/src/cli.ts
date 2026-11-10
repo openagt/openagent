@@ -1,7 +1,7 @@
 import { join } from 'node:path'
-import { GIT_FAILED, Refused, UsageError, checkoutRoot, inRepo, nodeBranchFileFs, nodeGitRunner, openProjectReader, parseCommandArgs, runCommandLine, writeProjectDataDetached, type Command, type GitRunner } from '@openagt/agent-data'
+import { GIT_FAILED, Refused, UsageError, commandReader, commandWrite, nodeBranchFileFs, nodeGitRunner, parseCommandArgs, runCommandLine, type Command, type GitRunner } from '@openagt/agent-data'
 import { QUEUE_FILE } from './names.js'
-import { appendQueueEntry, insertQueueEntry, parseQueueEntries, parseQueueSections, readQueue, removeQueueEntry } from './queue.js'
+import { appendQueueEntry, insertQueueEntry, parseQueueEntries, parseQueueSections, removeQueueEntry } from './queue.js'
 
 /**
  * The command line over the package: the same operations a daemon calls, for an agent (and a
@@ -65,7 +65,7 @@ const COMMANDS: Record<string, Command<[CliIo, GitRunner]>> = {
     const entry = positionals[0]!.trim()
     if (!entry) throw new UsageError('the entry is empty')
     const priority = values.priority === undefined ? undefined : priorityArg(values.priority)
-    await write(io.cwd, `queue add: ${entry}`, async dir => {
+    await commandWrite(io.cwd, `queue add: ${entry}`, async dir => {
       const md = await queueIn(dir)
       await writeQueue(dir, priority === undefined ? appendQueueEntry(md, entry) : insertQueueEntry(md, entry, priority))
     }, git)
@@ -75,7 +75,7 @@ const COMMANDS: Record<string, Command<[CliIo, GitRunner]>> = {
   async done(args, io, git) {
     const { positionals } = parseCommandArgs(args, {}, 1)
     const entry = positionals[0]!.trim()
-    const found = await write(io.cwd, `queue done: ${entry}`, async dir => {
+    const found = await commandWrite(io.cwd, `queue done: ${entry}`, async dir => {
       const md = await queueIn(dir)
       if (!parseQueueEntries(md).includes(entry)) return false
       await writeQueue(dir, removeQueueEntry(md, entry))
@@ -96,28 +96,11 @@ async function writeQueue(dir: string, md: string): Promise<void> {
 }
 
 /**
- * The queue's markdown as a read sees it, `undefined` when the project has none, from wherever
- * the command runs; outside a repository, a refusal. The project's data opened for reading, or
+ * The queue's markdown as a read sees it, `undefined` when the project has none: origin's copy, or
  * with `--local` this machine's copy with no fetch, for the dashboard's polling.
  */
 async function queueText(cwd: string, local: boolean | undefined, git: GitRunner): Promise<string | undefined> {
-  const root = await inRepo(() => checkoutRoot(cwd, git))
-  if (local) return readQueue(root)
-  return (await openProjectReader(cwd, { git })).read(QUEUE_FILE)
-}
-
-/**
- * One write as a one-shot writer: to origin when the project is shared, else as a local commit.
- * Answers what `op` found the last time it ran: a write that loses a race runs it again on the
- * new tip, and only that run's finding is what landed.
- */
-async function write<T>(cwd: string, message: string, op: (dir: string) => Promise<T>, git: GitRunner): Promise<T> {
-  await inRepo(() => checkoutRoot(cwd, git))
-  let found: T | undefined
-  await writeProjectDataDetached(cwd, message, async dir => {
-    found = await op(dir)
-  }, { git })
-  return found as T
+  return (await commandReader(cwd, local, git)).read(QUEUE_FILE)
 }
 
 function priorityArg(value: string): number {
