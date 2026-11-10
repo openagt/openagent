@@ -121,6 +121,11 @@ function took(card: Row['card']): string {
   return card.endedAt ? formatDuration(Date.parse(card.endedAt) - Date.parse(card.startedAt)) : '—'
 }
 
+/** What a run is called on its row: its short name, else what it was asked while it has none, else its id. */
+function runName(card: Row['card']): string {
+  return card.title?.trim() || card.intent?.trim() || card.id
+}
+
 /** The time of day a run started, its day being the heading's. */
 function clock(iso: string): string {
   return new Date(iso).toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' })
@@ -222,7 +227,7 @@ export function LogsPage({ projects }: ModulePageProps) {
                         <RunPerson person={card.person} account={accountOf(project.id, card.person)} />
                         <div className="min-w-0 flex-1">
                           <p className="truncate font-medium" title={card.title ?? card.intent}>
-                            {card.title?.trim() || card.intent?.trim() || card.id}
+                            {runName(card)}
                           </p>
                           {card.title?.trim() && card.intent?.trim() && (
                             <p className="truncate text-xs text-muted-foreground" title={card.intent}>
@@ -268,7 +273,7 @@ export function LogsPage({ projects }: ModulePageProps) {
                   <RunPerson person={card.person} account={accountOf(project.id, card.person)} />
                   <div className="min-w-0 flex-1">
                     <p className="truncate font-medium" title={card.intent}>
-                      {card.title?.trim() || card.intent?.trim() || card.id}
+                      {runName(card)}
                     </p>
                     <p className="mt-0.5 flex flex-wrap items-center gap-x-3 text-xs text-muted-foreground">
                       <Status status={card.status} offline={card.offline} />
