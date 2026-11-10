@@ -1,6 +1,6 @@
 import type { DriverQuota, DriverQuotaWindow, DriverRateWindow } from '@openagt/agent-driver'
 import { type AgentAccount } from '@openagt/agent-driver'
-import { quotaBoundaryStatus, quotaHeadroom } from './quota-boundary.js'
+import { QUOTA_WEEK_MS, quotaBoundaryStatus, quotaHeadroom } from './quota-boundary.js'
 import { freesIn, isLimited } from '@openagt/skill-account-rotation'
 
 // Unattended work on several accounts of one agent: it starts when any account is under its line,
@@ -8,14 +8,13 @@ import { freesIn, isLimited } from '@openagt/skill-account-rotation'
 // an added one by what the last turn on it said (its login may not read `/usage`); every Codex
 // login live, from its own home.
 
-/** How long each of the windows a rate-limit line names lasts: one past its reset has begun again. */
+/** How long each of the windows a rate-limit line names lasts, a week where it says no other: one past its reset has begun again. */
 const LASTS: Record<string, number> = { five_hour: 5 * 60 * 60_000, thirty_day: 30 * 24 * 60 * 60_000 }
-const WEEK_MS = 7 * 24 * 60 * 60_000
 
 /** An account's windows as the boundary reads them; one whose reset has passed is empty again, until its next. */
 export function accountWindows(windows: readonly DriverRateWindow[], now: number): DriverQuotaWindow[] {
   return windows.map(w => {
-    const lasts = LASTS[w.window] ?? WEEK_MS
+    const lasts = LASTS[w.window] ?? QUOTA_WEEK_MS
     let resetsAt = w.resetsAt
     while (resetsAt <= now) resetsAt += lasts
     const percentUsed = resetsAt === w.resetsAt ? w.percentUsed : 0
