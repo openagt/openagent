@@ -1,5 +1,5 @@
 import { join } from 'node:path'
-import { GIT_FAILED, Refused, UsageError, checkoutRoot, inRepo, nodeBranchFileFs, nodeGitRunner, openProjectReader, parseCommandArgs, runCommandLine, writeProjectDataDetached, type Command, type ProjectReader, type GitRunner } from '@openagt/agent-data'
+import { GIT_FAILED, Refused, UsageError, checkoutRoot, inRepo, nodeBranchFileFs, nodeGitRunner, openProjectReader, parseCommandArgs, runCommandLine, writeProjectDataDetached, type Command, type GitRunner } from '@openagt/agent-data'
 import { QUEUE_FILE } from './names.js'
 import { appendQueueEntry, insertQueueEntry, parseQueueEntries, parseQueueSections, readQueue, removeQueueEntry } from './queue.js'
 
@@ -55,14 +55,7 @@ export function runCli(argv: string[], io: CliIo, git: GitRunner = nodeGitRunner
  */
 const list: Command<[CliIo, GitRunner]> = async (args, io, git) => {
   const { values } = parseCommandArgs(args, { local: { type: 'boolean' }, full: { type: 'boolean' } }, 0)
-  let md: string
-  if (values.local) {
-    const root = await inRepo(() => checkoutRoot(io.cwd, git))
-    md = (await readQueue(root)) ?? ''
-  } else {
-    const reader = await open(io.cwd, git)
-    md = (await reader.read(QUEUE_FILE)) ?? ''
-  }
+  const md = (await queueText(io.cwd, values.local, git)) ?? ''
   return values.full ? parseQueueSections(md) : parseQueueEntries(md)
 }
 
@@ -102,10 +95,15 @@ async function writeQueue(dir: string, md: string): Promise<void> {
   await nodeBranchFileFs().write(join(dir, QUEUE_FILE), md)
 }
 
-/** The project's data opened for reading, from wherever the command runs; outside a repo, a refusal. */
-async function open(cwd: string, git: GitRunner): Promise<ProjectReader> {
-  await inRepo(() => checkoutRoot(cwd, git))
-  return openProjectReader(cwd, { git })
+/**
+ * The queue's markdown as a read sees it, `undefined` when the project has none, from wherever
+ * the command runs; outside a repository, a refusal. The project's data opened for reading, or
+ * with `--local` this machine's copy with no fetch, for the dashboard's polling.
+ */
+async function queueText(cwd: string, local: boolean | undefined, git: GitRunner): Promise<string | undefined> {
+  const root = await inRepo(() => checkoutRoot(cwd, git))
+  if (local) return readQueue(root)
+  return (await openProjectReader(cwd, { git })).read(QUEUE_FILE)
 }
 
 /**
