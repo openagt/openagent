@@ -1,7 +1,6 @@
 import { readFile } from 'node:fs/promises'
-import { urlHost } from '../door/address.js'
+import { isAddress, isLineUrl, urlHost } from '../door/address.js'
 import { VIA_PREFIX } from '../door/paths.js'
-import { isAddress, isLineUrl } from '../door/store.js'
 import { nameOf } from '../door/names.js'
 import { Unreadable, homeFile, jsonFile, withLock, writeWhole } from '../home-file.js'
 import { pidAlive } from '../process.js'

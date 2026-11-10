@@ -1,6 +1,7 @@
 import { createHash, createHmac, randomBytes, randomInt, timingSafeEqual } from 'node:crypto'
 import { isIP } from 'node:net'
 import { jsonFile } from '../home-file.js'
+import { isAddress, isLineUrl, isTailscaleName } from './address.js'
 import { nameOf, samePerson } from './names.js'
 
 /**
@@ -323,47 +324,10 @@ export function sameDigest(a: string, b: string): boolean {
   return ab.length === bb.length && timingSafeEqual(ab, bb)
 }
 
-/**
- * A server's number or name as the file keeps it: what a certificate can be for, written the one
- * way a certificate office and a link both read it. A name in small letters; an IPv6 number in
- * its short form, with no zone and no IPv4 tail.
- */
-export const isAddress = (value: unknown): value is string => typeof value === 'string' && addressOf(value) === value
-
-/**
- * `said` as the file keeps an address, or `undefined` for what is no server's number or name. The
- * servers this computer sets up over SSH are kept by it too, so the two always read the same; and
- * nothing that a command could read as an option of its own passes.
- */
-export function addressOf(said: string): string | undefined {
-  if (said.length > 253) return undefined
-  if (isIP(said) === 4) return said
-  if (isIP(said) === 6) {
-    if (said.includes('%') || said.includes('.')) return undefined
-    return new URL(`http://[${said}]`).hostname.slice(1, -1)
-  }
-  return /^(?=.*[a-z])[a-z0-9]([a-z0-9-]*[a-z0-9])?(\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)+$/i.test(said) ? said.toLowerCase() : undefined
-}
-
-/** Whether a name is one Tailscale gives a computer on a person's network: a name under `ts.net`. */
-export function isTailscaleName(said: string): boolean {
-  return /\.ts\.net$/.test(said) && addressOf(said) === said
-}
-
 const isIso = (value: unknown): value is string => typeof value === 'string' && !Number.isNaN(Date.parse(value))
 const isDigest = (value: unknown): value is string => typeof value === 'string' && /^[0-9a-f]{64}$/.test(value)
 const isName = (value: unknown): value is string => typeof value === 'string' && nameOf(value) === value
 const isPort = (value: unknown): value is number => typeof value === 'number' && Number.isInteger(value) && value > 0 && value < 65536
-/** A server's door as a line is kept under: an HTTPS origin, written the one way. */
-export function isLineUrl(value: unknown): value is string {
-  if (typeof value !== 'string') return false
-  try {
-    const url = new URL(value)
-    return url.protocol === 'https:' && url.origin === value
-  } catch {
-    return false
-  }
-}
 
 /** Read what a file holds, forgivingly: anything malformed is left out, never a reason to fail. */
 export function sanitize(value: unknown): Store {

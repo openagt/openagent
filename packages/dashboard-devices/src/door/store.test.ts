@@ -1,7 +1,7 @@
 import { strict as assert } from 'node:assert'
 import { test } from 'node:test'
 import { readFile, stat, writeFile } from 'node:fs/promises'
-import { CODE_LIFETIME_MS, MAX_DEVICES, addCode, addressOf, addPerson, computerWordFor, enter, isComputerId, isIn, nameComputer, nameOwner, personLinePorts, personOf, portOf, portsOf, readStore, readStoreStrict, removeComputer, removeDevice, removePerson, sanitize, sha256, shareLine, shownCode, storePath, update } from './store.js'
+import { CODE_LIFETIME_MS, MAX_DEVICES, addCode, addPerson, computerWordFor, enter, isComputerId, isIn, nameComputer, nameOwner, personLinePorts, personOf, portOf, portsOf, readStore, readStoreStrict, removeComputer, removeDevice, removePerson, sanitize, sha256, shareLine, shownCode, storePath, update } from './store.js'
 import { testHome } from './test-home.js'
 import { Unreadable } from '../home-file.js'
 
@@ -26,13 +26,6 @@ test('the file sits beside OpenAgent\'s own home file, and only its owner reads 
   } finally {
     await home.remove()
   }
-})
-
-test('an address is a number or a name, in one form, and never something a command reads as an option', () => {
-  assert.equal(addressOf('203.0.113.5'), '203.0.113.5')
-  assert.equal(addressOf('2001:DB8:0:0:0:0:0:1'), '2001:db8::1')
-  assert.equal(addressOf('Box.Example.com'), 'box.example.com')
-  for (const no of ['', '-oProxyCommand=sh', 'root@203.0.113.5', '203.0.113.5 -v', 'box', 'box.example.com;id', 'fe80::1%en0', '$(id).example.com', 'a'.repeat(254)]) assert.equal(addressOf(no), undefined, no)
 })
 
 test('a code lets one device in, once; the file keeps neither the code nor the key', async () => {
