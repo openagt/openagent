@@ -53,13 +53,14 @@ describe('Agents (#1139)', () => {
     expect(screen.getByText('oauth-work')).toBeTruthy()
   })
 
-  test('a run goes by the name the sidebar gives it, and holds its place while that name is made', () => {
+  test('a run goes by the name the sidebar gives it, and holds its place only while its card says that name is being asked', () => {
     const now = new Date().toISOString()
-    render(<Agents working={[active('named', { title: 'Cart page' }), active('new', { startedAt: now })]} namesRuns onSelectAgent={vi.fn()} />)
+    render(<Agents working={[active('named', { title: 'Cart page' }), active('new', { startedAt: now, naming: true }), active('command', { startedAt: now })]} namesRuns onSelectAgent={vi.fn()} />)
     expect(screen.getByText('Cart page')).toBeTruthy()
     expect(screen.queryByText('working on named')).toBeNull()
     expect(screen.getByText('Naming this session')).toBeTruthy()
     expect(screen.queryByText('working on new')).toBeNull()
+    expect(screen.getByText('working on command')).toBeTruthy()
   })
 })
 

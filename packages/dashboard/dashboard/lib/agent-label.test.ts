@@ -2,7 +2,7 @@ import { describe, expect, test } from 'vitest'
 import { agentLabel, awaitingName, NAMING_WAIT_MS } from './agent-label.js'
 
 const NOW = Date.parse('2026-10-14T18:00:00.000Z')
-const run = (over: Partial<Parameters<typeof awaitingName>[0]> = {}) => ({ status: 'running' as const, startedAt: new Date(NOW - 2_000).toISOString(), ...over })
+const run = (over: Partial<Parameters<typeof awaitingName>[0]> = {}) => ({ status: 'running' as const, naming: true as const, startedAt: new Date(NOW - 2_000).toISOString(), ...over })
 
 describe('agentLabel', () => {
   test('the name a session was given comes before the words the person typed', () => {
@@ -15,6 +15,11 @@ describe('agentLabel', () => {
 describe('awaitingName', () => {
   test('a run just started with naming on waits, rather than show the prompt and swap it a second later', () => {
     expect(awaitingName(run(), true, NOW)).toBe(true)
+  })
+
+  test('a run whose card does not say its name is being asked waits for nothing: a slash command, or an ask that ended without a name', () => {
+    const { naming: _asked, ...unasked } = run()
+    expect(awaitingName(unasked, true, NOW)).toBe(false)
   })
 
   test('nothing waits once there is a name, nor for a subagent, which is never named', () => {

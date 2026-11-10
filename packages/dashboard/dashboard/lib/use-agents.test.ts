@@ -111,7 +111,7 @@ describe('useAgents', () => {
 
   test('an agent just started is read every 400ms until its name has come too, then every 2s again', async () => {
     const startedAt = new Date().toISOString()
-    onAgents.mockResolvedValue([{ id: 'new', status: 'running', branch: 'agent-new', startedAt } as AgentMeta])
+    onAgents.mockResolvedValue([{ id: 'new', status: 'running', branch: 'agent-new', startedAt, naming: true } as AgentMeta])
     renderHook(() => useAgents('a', 'new'))
     await settle()
     // Set up, but no name yet: the name is what the person waits on now.

@@ -24,12 +24,12 @@ export interface OwnRuns {
 }
 
 /**
- * What a list shows of a run, as one string to compare: what it is, how it stands, and its name.
+ * What a list shows of a run, as one string to compare: what it is, how it stands, and its name or its wait for one.
  * A run's card is written at every step it takes, with a later time and a higher cost, and none
  * of that is a change a person waits on.
  */
 export function shownOf(run: AgentMeta): string {
-  return JSON.stringify([run.id, run.status, run.title, run.branch, run.pr?.number, run.endedAt])
+  return JSON.stringify([run.id, run.status, run.title, run.naming, run.branch, run.pr?.number, run.endedAt])
 }
 
 /** What is known of one project's runs as they were answered last. */

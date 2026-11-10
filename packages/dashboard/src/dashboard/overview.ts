@@ -26,6 +26,8 @@ export interface ActiveAgent {
   intent?: string
   /** The run's short name, the branch it works on and when it started: what every list names a run by (`runName`). */
   title?: string
+  /** Whether that name is being asked for ({@link AgentMeta.naming}). */
+  naming?: true
   branch?: string
   startedAt: string
   scope?: string
@@ -152,6 +154,7 @@ export async function buildOverview(projects: ProjectSummary[], deps: OverviewDe
     status: meta.status,
     ...(meta.intent ? { intent: meta.intent } : {}),
     ...(meta.title ? { title: meta.title } : {}),
+    ...(meta.naming ? { naming: meta.naming } : {}),
     ...(meta.branch ? { branch: meta.branch } : {}),
     startedAt: meta.startedAt,
     ...(meta.updatedAt ? { updatedAt: meta.updatedAt } : {}),
