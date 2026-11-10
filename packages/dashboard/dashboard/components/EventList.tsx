@@ -393,8 +393,8 @@ function TurnFiles({ files, onOpen, footer }: { files: readonly ChangedFile[]; o
 // time it was sent sits under the box and shows while the pointer is on the message; its line is
 // always there, so nothing moves when it shows.
 // `waiting`: a message the working agent has not read yet, as Claude Code on the web shows one:
-// under it, Send now, or "Queued" for one sent for after the turn, and on hover the copy and
-// Cancel and edit, which takes it back into the box.
+// under it, when the agent reads it and Send now, or "Queued" for one sent for after the turn, and
+// on hover the copy and Cancel and edit, which takes it back into the box.
 // `attached`: what the run handed the agent with this message, folded under the box.
 // `fresh`: a message just sent, which slides in where it lands, as Claude Code on the web's does.
 function Prompt({ text, at, waiting, attached, fresh = false }: { text: string; at?: string | undefined; waiting?: Waiting | undefined; attached?: string | undefined; fresh?: boolean }) {
@@ -429,9 +429,17 @@ function Prompt({ text, at, waiting, attached, fresh = false }: { text: string; 
           (waiting.later || !waiting.onSendNow ? (
             <span className="pr-1 text-[11px] leading-6">Queued</span>
           ) : (
-            <button type="button" onClick={waiting.onSendNow} className="rounded-md px-1.5 text-[11px] leading-6 hover:bg-accent hover:text-accent-foreground">
-              Send now
-            </button>
+            <>
+              <span className="pl-1 text-[11px] leading-6">Read at the agent's next step</span>
+              <button
+                type="button"
+                onClick={waiting.onSendNow}
+                title="The agent reads it now; what it runs goes on in the background"
+                className="rounded-md px-1.5 text-[11px] leading-6 hover:bg-accent hover:text-accent-foreground"
+              >
+                Send now
+              </button>
+            </>
           ))}
       </div>
     </div>
