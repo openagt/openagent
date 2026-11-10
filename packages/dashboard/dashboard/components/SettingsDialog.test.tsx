@@ -327,9 +327,9 @@ describe('the Settings list', () => {
 
   test("two groups: yours and this computer's, the computer's packages among them; then the picked project's packages", () => {
     show('', 'p1')
-    expect(entries('You and this computer')).toEqual(['Profile', 'Appearance', 'Notifications', 'Agent', 'Agent data', 'Repos', 'Claude web', 'Devices'])
+    expect(entries('You and this computer')).toEqual(['Profile', 'Appearance', 'Notifications', 'Agent', 'Your agent data', 'Repos', 'Claude web', 'Devices'])
     // gemstack has orchestration and no scheduler; every project has its skills.
-    expect(entries('Project')).toEqual(['Skills', 'Agent data', 'Orchestration'])
+    expect(entries('Project')).toEqual(['Skills', 'Project agent data', 'Orchestration'])
     expect(showing(select('Project'))).toBe('gemstack')
     // Opened on nothing in particular: the first entry.
     expect(title()).toBe('SettingsProfile')
@@ -349,7 +349,7 @@ describe('the Settings list', () => {
   test('the project select changes the project group, and All projects gives an entry every project that has its package, saying which', async () => {
     show('orchestration', 'p1')
     await pick(select('Project'), 'All projects')
-    expect(entries('Project')).toEqual(['Skills', 'Agent data', 'Orchestration', 'Scheduler'])
+    expect(entries('Project')).toEqual(['Skills', 'Project agent data', 'Orchestration', 'Scheduler'])
     expect(title()).toBe('SettingsAll projectsOrchestration')
     expect(screen.getByText('for: gemstack, other')).toBeTruthy()
     expect(screen.getByText('Saved to 2 projects: gemstack, other.')).toBeTruthy()
@@ -358,7 +358,7 @@ describe('the Settings list', () => {
     expect(screen.getByText('The Scheduler settings failed: boom')).toBeTruthy()
     expect(screen.getByText('Saved to one project: other.')).toBeTruthy()
     await pick(select('Project'), 'plain')
-    expect(entries('Project')).toEqual(['Skills', 'Agent data'])
+    expect(entries('Project')).toEqual(['Skills', 'Project agent data'])
     // The entry it was on is not plain's: the first entry shows.
     expect(title()).toBe('SettingsProfile')
   })
@@ -366,7 +366,7 @@ describe('the Settings list', () => {
   test('with no project picked in the sidebar, the project group opens on every project', () => {
     show('')
     expect(showing(select('Project'))).toBe('All projects')
-    expect(entries('Project')).toEqual(['Skills', 'Agent data', 'Orchestration', 'Scheduler'])
+    expect(entries('Project')).toEqual(['Skills', 'Project agent data', 'Orchestration', 'Scheduler'])
   })
 
   test('Skills opened for a project is that project\'s, whatever the sidebar has picked; the select changes it', async () => {

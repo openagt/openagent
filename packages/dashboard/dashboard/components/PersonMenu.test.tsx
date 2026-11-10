@@ -112,7 +112,7 @@ describe('PersonMenu: what is missing', () => {
     expect(onSettings).not.toHaveBeenCalled()
   })
 
-  test('agent data not backed up: a dot on the picture, and an item that opens Settings › Agent data', async () => {
+  test('agent data not backed up: a dot on the picture, and an item that opens Settings › Your agent data', async () => {
     onPerson.mockResolvedValue({ name: 'Ada Lovelace' })
     backup.onBackup.mockResolvedValue({ gaps: [{ kind: 'personal', address: 'github.com/ada/agent', host: 'github.com', waiting: 2 }] })
     const onSettings = vi.fn()

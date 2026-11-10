@@ -115,7 +115,7 @@ export function SettingsDialog({
     projects.length > 0
       ? [
           oneProject(SKILLS_ENTRY, 'Skills', Puzzle, SkillsSettings, 'Skills are written into a project’s own repository, one project at a time. Pick a project.'),
-          oneProject(PROJECT_AGENT_DATA_ENTRY, 'Agent data', Database, ProjectAgentDataSettings, 'Each project keeps its agent data in one place, your folder or its own repository. Pick a project.'),
+          oneProject(PROJECT_AGENT_DATA_ENTRY, 'Project agent data', Database, ProjectAgentDataSettings, 'Each project keeps its agent data in one place, your folder or its own repository. Pick a project.'),
         ]
       : []
   const projectEntries = [...ownForProject, ...forProject.map(section => moduleEntry(section, project ? [project] : projects))]
@@ -443,7 +443,7 @@ function useOwnEntries(): Entry[] {
     },
     {
       id: AGENT_DATA_ENTRY,
-      title: 'Agent data',
+      title: 'Your agent data',
       icon: FolderGit2,
       body: <AgentDataSettings />,
     },

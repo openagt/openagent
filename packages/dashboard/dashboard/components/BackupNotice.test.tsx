@@ -40,7 +40,7 @@ afterEach(() => {
 /** A line read whole: its address is a link inside it. */
 const line = (text: string) => (_: string, element: Element | null) => (element?.tagName === 'LI' || element?.tagName === 'P') && element.textContent === text
 
-describe('what is not backed up, at the top of Settings › Agent data', () => {
+describe('what is not backed up, at the top of Settings › Your agent data', () => {
   test('everything backed up: nothing is said', async () => {
     backup.onBackup.mockResolvedValue({ gaps: [] })
     logins.onGitHosts.mockResolvedValue(hosts([]))

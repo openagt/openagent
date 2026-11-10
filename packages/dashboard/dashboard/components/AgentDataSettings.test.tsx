@@ -28,7 +28,7 @@ beforeEach(() => {
 })
 afterEach(cleanup)
 
-describe('Settings › Agent data', () => {
+describe('Settings › Your agent data', () => {
   test('says where the folder is, the projects that keep their data in it, and that it is on this computer only', async () => {
     render(<AgentDataSettings />)
     expect(await screen.findByText('~/.openagent · test-project, oa-newuser. Only on this computer.')).toBeTruthy()

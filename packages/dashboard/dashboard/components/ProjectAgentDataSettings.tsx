@@ -23,7 +23,7 @@ const KIND_WORDS: Record<KeptData['kind'], (n: number) => string> = {
 }
 
 /**
- * Settings › Project › Agent data: where one project's agent data is, the person's own folder or
+ * Settings › Project › Project agent data: where one project's agent data is, the person's own folder or
  * the project's own repository, switched here, and what the skills keep there. Kept in the
  * repository, it is sent as one of OpenAgent's own accounts at the remote's host, named here,
  * never as the person's own login.

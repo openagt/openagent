@@ -36,7 +36,7 @@ beforeEach(() => {
 })
 afterEach(cleanup)
 
-describe('Settings › Project › Agent data', () => {
+describe('Settings › Project › Project agent data', () => {
   test('says where the project’s data is, links the folder and its repository, and what each skill keeps there', async () => {
     render(<ProjectAgentDataSettings projectId="p1" />)
     await waitFor(() => expect(showing(keptIn())).toBe('Your folder'))
