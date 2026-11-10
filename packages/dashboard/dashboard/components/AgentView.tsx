@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState, type MutableRefObject } from 'react'
 import type { AgentDoing, AgentMeta, AgentWorktree, OpenAgentEvent } from '../../src/index.js'
 import { onAgentMainBranch, onAgentsDoing, onGitHostHome, onRetainedWorktrees } from '../rpc/reads.js'
 import { useLoaded, usePolled } from '../lib/use-async.js'
@@ -191,51 +191,8 @@ export function AgentView({
   const { onOpenChange, onOpenFile, onOpenScreen, onOpenSubagent } = usePaneOpeners(projectId, agentId)
   const toggle = useCallback(() => setOpen(o => !o), [])
 
-  // The message just sent to an ended run, shown at the end of the feed until its own prompt line
-  // arrives: the continuation writes that line only once its checkout is back, seconds later.
-  const [sending, setSending] = useState<{ text: string; prompts: number } | null>(null)
-  useEffect(() => setSending(null), [agentId])
-  const prompts = shown.filter(e => e.kind === 'driver' && e.event.type === 'start').length
-  useEffect(() => {
-    if (sending && prompts > sending.prompts) setSending(null)
-  }, [sending, prompts])
-  const onSending = useCallback((text: string | null) => setSending(text === null ? null : { text, prompts }), [prompts])
-  // The messages sent while the agent works that it has not read yet, each shown waiting until the
-  // agent reads it: at its next step, where its `steered` line lands, or, sent for later or not
-  // taken in time, as the prompt of its next turn. An agent that stopped working without reading
-  // them (it failed, it was stopped) shows them no longer.
-  const [queued, setQueued] = useState<(QueuedMessage & { prompts: number })[]>([])
-  useEffect(() => setQueued([]), [agentId])
-  const isRead = useMemo(() => {
-    const steered = new Set(shown.flatMap(e => (e.kind === 'driver' && e.event.type === 'steered' && e.event.id !== undefined ? [e.event.id] : [])))
-    const starts = shown.flatMap(e => (e.kind === 'driver' && e.event.type === 'start' ? [e.event.prompt] : []))
-    return (message: QueuedMessage & { prompts: number }) => steered.has(message.id) || starts.slice(message.prompts).includes(message.text)
-  }, [shown])
-  const unread = queued.filter(message => !isRead(message))
-  useEffect(() => {
-    if (unread.length !== queued.length) setQueued(unread)
-  }, [unread.length, queued.length]) // eslint-disable-line react-hooks/exhaustive-deps
-  useEffect(() => {
-    if (queued.length === 0 || feedLive) return
-    const timer = setTimeout(() => setQueued([]), QUEUED_UNREAD_MS)
-    return () => clearTimeout(timer)
-  }, [queued.length, feedLive])
-  const onQueued = useCallback((message: QueuedMessage) => setQueued(was => [...was, { ...message, prompts }]), [prompts])
-  // Cancel and edit puts the message back in the box; the composer says how.
-  const editInBox = useRef<((text: string) => void) | null>(null)
-  const waiting: WaitingMessage[] = unread.map(({ prompts: _prompts, ...message }) => ({
-    ...message,
-    onSendNow: () => void sendNow(projectId, agentId),
-    onEdit: () => {
-      setQueued(was => was.filter(other => other.id !== message.id))
-      void withdrawMessage(projectId, agentId, message.id)
-      editInBox.current?.(message.text)
-    },
-  }))
-  // A run just started writes its prompt line only once its record is saved and its checkout made.
-  // Told apart from the prompts in the same draw that brings the prompt's line, not an effect
-  // later: for that one frame the message was in the chat twice.
-  const shownSending = (sending && prompts <= sending.prompts ? sending.text : undefined) ?? (startedWith && prompts === 0 ? startedWith : undefined)
+  // The messages on their way to the agent, from the box under the chat to the feed above it.
+  const { sending: shownSending, onSending, waiting, onQueued, editInBox } = useMessagesOnTheirWay(projectId, agentId, shown, feedLive, startedWith)
   // The agent works, or is about to: on a message just sent, or as its feed shows before the
   // agents poll does.
   const going = feedLive || shownSending !== undefined
@@ -504,4 +461,77 @@ export function AgentView({
       )}
     </ChatPane>
   )
+}
+
+/**
+ * The messages on their way to an agent, shown in its feed until the agent's own line of each
+ * arrives: the one just sent to the ended agent (`sending`, which `onSending` sets), or the prompt
+ * this page just started it with; and the ones sent while it works that it has not read yet
+ * (`waiting`, which `onQueued` adds to).
+ */
+function useMessagesOnTheirWay(
+  projectId: string,
+  agentId: string,
+  shown: readonly OpenAgentEvent[],
+  feedLive: boolean,
+  startedWith: string | undefined,
+): {
+  sending: string | undefined
+  onSending: (text: string | null) => void
+  waiting: WaitingMessage[]
+  onQueued: (message: QueuedMessage) => void
+  /** Set by the composer to what puts a text back in its box: Cancel and edit on a waiting message. */
+  editInBox: MutableRefObject<((text: string) => void) | null>
+} {
+  // The message just sent to an ended run, shown at the end of the feed until its own prompt line
+  // arrives: the continuation writes that line only once its checkout is back, seconds later.
+  const [sending, setSending] = useState<{ text: string; prompts: number } | null>(null)
+  useEffect(() => setSending(null), [agentId])
+  const prompts = shown.filter(e => e.kind === 'driver' && e.event.type === 'start').length
+  useEffect(() => {
+    if (sending && prompts > sending.prompts) setSending(null)
+  }, [sending, prompts])
+  const onSending = useCallback((text: string | null) => setSending(text === null ? null : { text, prompts }), [prompts])
+  // The messages sent while the agent works that it has not read yet, each shown waiting until the
+  // agent reads it: at its next step, where its `steered` line lands, or, sent for later or not
+  // taken in time, as the prompt of its next turn. An agent that stopped working without reading
+  // them (it failed, it was stopped) shows them no longer.
+  const [queued, setQueued] = useState<(QueuedMessage & { prompts: number })[]>([])
+  useEffect(() => setQueued([]), [agentId])
+  const isRead = useMemo(() => {
+    const steered = new Set(shown.flatMap(e => (e.kind === 'driver' && e.event.type === 'steered' && e.event.id !== undefined ? [e.event.id] : [])))
+    const starts = shown.flatMap(e => (e.kind === 'driver' && e.event.type === 'start' ? [e.event.prompt] : []))
+    return (message: QueuedMessage & { prompts: number }) => steered.has(message.id) || starts.slice(message.prompts).includes(message.text)
+  }, [shown])
+  const unread = queued.filter(message => !isRead(message))
+  useEffect(() => {
+    if (unread.length !== queued.length) setQueued(unread)
+  }, [unread.length, queued.length]) // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    if (queued.length === 0 || feedLive) return
+    const timer = setTimeout(() => setQueued([]), QUEUED_UNREAD_MS)
+    return () => clearTimeout(timer)
+  }, [queued.length, feedLive])
+  const onQueued = useCallback((message: QueuedMessage) => setQueued(was => [...was, { ...message, prompts }]), [prompts])
+  // Cancel and edit puts the message back in the box; the composer says how.
+  const editInBox = useRef<((text: string) => void) | null>(null)
+  const waiting: WaitingMessage[] = unread.map(({ prompts: _prompts, ...message }) => ({
+    ...message,
+    onSendNow: () => void sendNow(projectId, agentId),
+    onEdit: () => {
+      setQueued(was => was.filter(other => other.id !== message.id))
+      void withdrawMessage(projectId, agentId, message.id)
+      editInBox.current?.(message.text)
+    },
+  }))
+  return {
+    // A run just started writes its prompt line only once its record is saved and its checkout made.
+    // Told apart from the prompts in the same draw that brings the prompt's line, not an effect
+    // later: for that one frame the message was in the chat twice.
+    sending: (sending && prompts <= sending.prompts ? sending.text : undefined) ?? (startedWith && prompts === 0 ? startedWith : undefined),
+    onSending,
+    waiting,
+    onQueued,
+    editInBox,
+  }
 }
