@@ -580,28 +580,47 @@ export function foldRelayedEvent(meta: AgentMeta, event: OpenAgentEvent, at: str
 const COMMAND_TIMEOUT_MS = 45_000
 
 /**
+ * POST a call to a machine with this computer's key there, and read its JSON answer with `read`:
+ * why not, in words, when the machine did not answer, no longer lets this computer in, or refused.
+ */
+async function postToMachine<T>(machine: MachineAccess, path: string, body: unknown, timeoutMs: number, read: (answer: unknown) => T): Promise<T | { ok: false; error: string }> {
+  try {
+    const res = await machineFetch(`${trimSlashes(machine.url)}${path}`, machine.pin, {
+      method: 'POST',
+      headers: relayHeaders(machine.key),
+      body: JSON.stringify(body),
+      signal: AbortSignal.timeout(timeoutMs),
+    })
+    if (res.status === 401) return { ok: false, error: NOT_IN }
+    if (!res.ok) return { ok: false, error: (await refusalOf(res)) ?? `the machine answered ${res.status}` }
+    return read(await res.json())
+  } catch (err) {
+    return { ok: false, error: errorMessage(err) }
+  }
+}
+
+/**
+ * Call one of the RPCs of a machine's own page, by its name, as that page calls it, and read the
+ * `{ ok, ... }` it answers: the machine's own words when it said no.
+ */
+function pageRpcOn(machine: MachineAccess, name: string, args: unknown[]): Promise<{ ok: true; said: Record<string, unknown> } | { ok: false; error: string }> {
+  return postToMachine(machine, `/_rpc/${name}`, args, COMMAND_TIMEOUT_MS, answer => {
+    const ret = (answer as { ret?: unknown }).ret
+    const said = (ret && typeof ret === 'object' ? ret : {}) as Record<string, unknown>
+    if (said.ok === true) return { ok: true as const, said }
+    return { ok: false as const, error: typeof said.error === 'string' && said.error ? said.error.slice(0, MAX_SAID) : 'the machine answered something else than expected' }
+  })
+}
+
+/**
  * Run one of a computer package's own commands on a machine, as that machine's own page runs it:
  * a module on this computer reads and changes what the same package keeps over there. `input` is
  * what the command reads on standard input there; it travels in the call's body, never in an
  * address. The machine answers as its page is answered.
  */
 export async function remoteComputerCommand(machine: MachineAccess, pkg: string, args: readonly string[], command?: string, input?: string): Promise<{ ok: true; output: unknown } | { ok: false; error: string }> {
-  try {
-    const res = await machineFetch(`${trimSlashes(machine.url)}/_rpc/runComputerCommand`, machine.pin, {
-      method: 'POST',
-      headers: relayHeaders(machine.key),
-      body: JSON.stringify([pkg, args, command ?? null, input ?? null]),
-      signal: AbortSignal.timeout(COMMAND_TIMEOUT_MS),
-    })
-    if (res.status === 401) return { ok: false, error: NOT_IN }
-    if (!res.ok) return { ok: false, error: (await refusalOf(res)) ?? `the machine answered ${res.status}` }
-    const said = ((await res.json()) as { ret?: unknown }).ret
-    const { ok, output, error } = (said && typeof said === 'object' ? said : {}) as Record<string, unknown>
-    if (ok === true) return { ok: true, output }
-    return { ok: false, error: typeof error === 'string' && error ? error.slice(0, MAX_SAID) : 'the machine answered something else than expected' }
-  } catch (err) {
-    return { ok: false, error: errorMessage(err) }
-  }
+  const ran = await pageRpcOn(machine, 'runComputerCommand', [pkg, args, command ?? null, input ?? null])
+  return ran.ok ? { ok: true, output: ran.said.output } : ran
 }
 
 /**
@@ -610,22 +629,8 @@ export async function remoteComputerCommand(machine: MachineAccess, pkg: string,
  * would add a machine; what it answers is its own words.
  */
 export async function remoteAddMachine(machine: MachineAccess, link: string, label: string): Promise<{ ok: true } | { ok: false; error: string }> {
-  try {
-    const res = await machineFetch(`${trimSlashes(machine.url)}/_rpc/sendAddMachine`, machine.pin, {
-      method: 'POST',
-      headers: relayHeaders(machine.key),
-      body: JSON.stringify([link, label]),
-      signal: AbortSignal.timeout(COMMAND_TIMEOUT_MS),
-    })
-    if (res.status === 401) return { ok: false, error: NOT_IN }
-    if (!res.ok) return { ok: false, error: (await refusalOf(res)) ?? `the machine answered ${res.status}` }
-    const said = ((await res.json()) as { ret?: unknown }).ret
-    const { ok, error } = (said && typeof said === 'object' ? said : {}) as Record<string, unknown>
-    if (ok === true) return { ok: true }
-    return { ok: false, error: typeof error === 'string' && error ? error.slice(0, MAX_SAID) : 'the machine answered something else than expected' }
-  } catch (err) {
-    return { ok: false, error: errorMessage(err) }
-  }
+  const added = await pageRpcOn(machine, 'sendAddMachine', [link, label])
+  return added.ok ? { ok: true } : added
 }
 
 /**
@@ -633,20 +638,8 @@ export async function remoteAddMachine(machine: MachineAccess, link: string, lab
  * there: through the relay, so a computer reached through a server is asked as a server is. What
  * the machine answers is its own words, to read as data. Why not, when it did not answer.
  */
-export async function machineCall(machine: MachineAccess, fn: string, args: unknown[], timeoutMs = COMMAND_TIMEOUT_MS): Promise<{ ok: true; ret: unknown } | { ok: false; error: string }> {
-  try {
-    const res = await machineFetch(`${trimSlashes(machine.url)}/_relay/machine`, machine.pin, {
-      method: 'POST',
-      headers: relayHeaders(machine.key),
-      body: JSON.stringify({ fn, args }),
-      signal: AbortSignal.timeout(timeoutMs),
-    })
-    if (res.status === 401) return { ok: false, error: NOT_IN }
-    if (!res.ok) return { ok: false, error: (await refusalOf(res)) ?? `the machine answered ${res.status}` }
-    return { ok: true, ret: ((await res.json()) as { result?: unknown }).result }
-  } catch (err) {
-    return { ok: false, error: errorMessage(err) }
-  }
+export function machineCall(machine: MachineAccess, fn: string, args: unknown[], timeoutMs = COMMAND_TIMEOUT_MS): Promise<{ ok: true; ret: unknown } | { ok: false; error: string }> {
+  return postToMachine(machine, '/_relay/machine', { fn, args }, timeoutMs, answer => ({ ok: true as const, ret: (answer as { result?: unknown }).result }))
 }
 
 /** How long a machine gets to say, or take, the logins there: handing a GitHub login over has it asked of GitHub. */
