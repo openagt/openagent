@@ -6,6 +6,8 @@ import { formatAge, formatDateTime } from '../lib/format-date.js'
 import { OnComputer } from './MachineMark.js'
 import { runName } from '../../src/client.js'
 import { awaitingName } from '../lib/agent-label.js'
+import { STATUS_DOT } from '../lib/status-tone.js'
+import { cn } from '../lib/utils.js'
 
 // The Overview's Agents card (#1139): the sessions working right now. Each row is the whole line,
 // clickable straight into that session — its label is the one-liner the sidebar shows, and its age
@@ -96,7 +98,7 @@ function AgentRow({
         onClick={onOpen}
         className="flex w-full items-baseline gap-2 rounded-md px-2 py-1.5 text-left hover:bg-accent focus-visible:bg-accent focus-visible:outline-none"
       >
-        <span aria-hidden className="shrink-0 text-muted-foreground/50">•</span>
+        <span aria-hidden className={cn('size-1.5 shrink-0 self-center rounded-full', STATUS_DOT[cloud === 'waiting' ? 'waiting' : 'running'])} />
         {naming ? (
           <span className="min-w-0 flex-1 self-center">
             <span className="block h-3.5 w-2/3 animate-pulse rounded bg-muted-foreground/20" />

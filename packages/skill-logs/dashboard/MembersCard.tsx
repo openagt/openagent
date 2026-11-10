@@ -1,5 +1,5 @@
 import { Users } from 'lucide-react'
-import { Card, CardContent, CardHeader, CardTitleLink, PersonMark, Tooltip, TooltipContent, TooltipTrigger, formatAge, formatDateTime, personName, personSaid, useModuleHost, usePolled, type ModuleCardProps, type ModuleHostPerson } from '@openagt/dashboard/module'
+import { Card, CardContent, CardHeader, CardTitleLink, PersonMark, STATUS_DOT, STATUS_TONE, Tooltip, TooltipContent, TooltipTrigger, cn, formatAge, formatDateTime, personName, personSaid, useModuleHost, usePolled, type ModuleCardProps, type ModuleHostPerson } from '@openagt/dashboard/module'
 import { membersOf, peopleWithRuns, type Member, type PersonActivity } from '../src/people.js'
 
 // The Overview's Members card: who worked in the projects shown in the last 30 days, from `logs
@@ -53,7 +53,7 @@ export function MembersCard({ projects }: ModuleCardProps) {
       })
     },
     NONE,
-    // A local read of a week of records: a glance, not a feed.
+    // A local read of 30 days of records: a glance, not a feed.
     60_000,
     [key],
     // Kept for the next visit: the page opens with the last members, faded until they are read again.
@@ -89,8 +89,8 @@ export function MembersCard({ projects }: ModuleCardProps) {
                   </p>
                 </div>
                 {member.running > 0 ? (
-                  <span className="flex shrink-0 items-center gap-1.5 text-xs text-success">
-                    <span aria-hidden className="size-1.5 rounded-full bg-success" />
+                  <span className={cn('flex shrink-0 items-center gap-1.5 text-xs', STATUS_TONE['running'])}>
+                    <span aria-hidden className={cn('size-1.5 rounded-full', STATUS_DOT['running'])} />
                     {member.running === 1 ? 'working' : `${member.running} working`}
                   </span>
                 ) : (

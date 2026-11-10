@@ -1,5 +1,6 @@
 import type { ReactNode } from 'react'
 import { cn } from '../lib/utils.js'
+import { STATUS_DOT } from '../lib/status-tone.js'
 
 // A number that says how things stand, as a small card of the Overview's: its name, the number, and
 // a line under it. The Overview's own (what needs the person, who is at work) and a package's (the
@@ -22,8 +23,8 @@ export function StatTile({ label, value, note, tone, live = false, href, onClick
       <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
         {live && (
           <span className="relative flex size-2" aria-hidden>
-            <span className="absolute inline-flex size-full animate-ping rounded-full bg-success opacity-60" />
-            <span className="relative inline-flex size-2 rounded-full bg-success" />
+            <span className={cn('absolute inline-flex size-full animate-ping rounded-full opacity-60', STATUS_DOT['running'])} />
+            <span className={cn('relative inline-flex size-2 rounded-full', STATUS_DOT['running'])} />
           </span>
         )}
         {label}

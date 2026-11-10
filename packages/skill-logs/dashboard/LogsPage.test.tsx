@@ -77,6 +77,22 @@ test("a run's name is a button: the keyboard reaches it, and it opens the run on
   ])
 })
 
+test("each status in the dashboard's colors: a waiting run's dot is the sidebar's amber, and one that ended is a ring", async () => {
+  const host = hostWith([
+    { id: 'r1', startedAt: at(now - 1000), status: 'waiting', title: 'Asks' },
+    { id: 'r2', startedAt: at(now - 2000), endedAt: at(now - 1000), status: 'done', title: 'Ended' },
+  ])
+  render(
+    <ModuleHostContext.Provider value={host}>
+      <LogsPage projects={[{ id: 'p1', name: 'alpha', gitHost: true }]} projectId={null} path={[]} />
+    </ModuleHostContext.Provider>,
+  )
+  const dot = (title: string) => within(screen.getAllByText(title)[0]!.closest('tr')!).getByText(/^(waiting|done)$/).querySelector('span')!.className
+  await screen.findAllByText('Asks')
+  expect(dot('Asks')).toContain('bg-warning')
+  expect(dot('Ended')).toContain('border-muted-foreground/60')
+})
+
 test('each run as the dashboard says it stands: a record that still says running reads unknown while its computer is offline, and a run with no record yet is listed', async () => {
   const seenAt = at(now - HOUR)
   const host = hostWith(

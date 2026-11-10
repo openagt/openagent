@@ -1,5 +1,5 @@
 // The one color vocabulary for an agent's status, shared by every list that shows one
-// (the Runs rail, the project log) so the same status can never read as two colors.
+// (the Runs rail, the project log, the pages modules add) so the same status can never read as two colors.
 export const STATUS_TONE: Record<string, string> = {
   running: 'text-primary',
   done: 'text-success',
