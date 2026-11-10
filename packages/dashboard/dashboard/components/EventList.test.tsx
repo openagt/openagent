@@ -1282,6 +1282,17 @@ describe('EventList queued messages and the wait for subagents', () => {
     expect(within(read.parentElement!).queryByText(/Send now|Queued/)).toBeNull()
   })
 
+  test('while OpenAgent is not answering, a waiting message can be neither sent now nor taken back', async () => {
+    const { DaemonDown } = await import('../lib/use-daemon-health.js')
+    render(
+      <DaemonDown.Provider value>
+        <EventList events={[prompt, said]} working queued={[{ id: 'm1', text: 'and then this', later: false, onSendNow: vi.fn(), onEdit: vi.fn() }]} stick={false} />
+      </DaemonDown.Provider>,
+    )
+    expect((screen.getByRole('button', { name: 'Send now' }) as HTMLButtonElement).disabled).toBe(true)
+    expect((screen.getByRole('button', { name: 'Cancel and edit message' }) as HTMLButtonElement).disabled).toBe(true)
+  })
+
   test('one sent for after the turn says "Queued", with no Send now', () => {
     render(<EventList events={[prompt]} working queued={[{ id: 'm1', text: 'later on', later: true, onEdit: () => {} }]} stick={false} />)
     expect(screen.getByText('Queued')).toBeTruthy()

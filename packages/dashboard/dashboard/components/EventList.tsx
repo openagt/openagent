@@ -1,9 +1,10 @@
 import type { AgentDoing, AgentMeta, ChoiceRequest, OpenAgentEvent } from '../../src/index.js'
 import { foldScreenRows, formatOpenAgentEvent } from '../../src/client.js'
 import { parseQuestion, QUESTION_TAG } from '@openagt/agent-driver/question'
-import { Fragment, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode, type RefObject } from 'react'
+import { Fragment, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode, type RefObject } from 'react'
 import { Check, ChevronRight, Copy, PencilLine } from 'lucide-react'
 import { pendingChoices } from '../lib/live-state.js'
+import { DaemonDown } from '../lib/use-daemon-health.js'
 import { callRow, callSubagents, isAgentsOwn, runRow, endMessage, subagentEnd, subagentEvents, subagentReport, subagentSteps, subagentWait, type SubagentEnd } from '../lib/subagents.js'
 import { answeredQuestion } from '../lib/answered-question.js'
 import { rowWords, type RowWords } from '../lib/row-words.js'
@@ -400,6 +401,8 @@ function TurnFiles({ files, onOpen, footer }: { files: readonly ChangedFile[]; o
 function Prompt({ text, at, waiting, attached, fresh = false }: { text: string; at?: string | undefined; waiting?: Waiting | undefined; attached?: string | undefined; fresh?: boolean }) {
   const [open, setOpen] = useState(false)
   const tall = isTall(text)
+  // OpenAgent is not answering: a waiting message can be neither sent now nor taken back.
+  const down = useContext(DaemonDown)
   return (
     <div className={`group/prompt flex min-w-0 flex-1 flex-col items-end font-sans text-foreground ${fresh ? 'bubble-in' : ''}`}>
       <div role="group" aria-label={waiting ? 'Your message, waiting' : 'Your message'} className="max-w-[85%] min-w-0 rounded-xl bg-muted px-3.5 py-2">
@@ -420,7 +423,7 @@ function Prompt({ text, at, waiting, attached, fresh = false }: { text: string; 
           {!waiting && at !== undefined && <Age at={at} />}
           <CopyMessage text={text} />
           {waiting?.onEdit && (
-            <button type="button" aria-label="Cancel and edit message" title="Cancel and edit message" onClick={waiting.onEdit} className="flex h-6 w-6 items-center justify-center rounded-md hover:bg-accent hover:text-accent-foreground">
+            <button type="button" aria-label="Cancel and edit message" title="Cancel and edit message" onClick={waiting.onEdit} disabled={down} className="flex h-6 w-6 items-center justify-center rounded-md hover:bg-accent hover:text-accent-foreground disabled:opacity-50">
               <PencilLine className="h-3.5 w-3.5" aria-hidden />
             </button>
           )}
@@ -434,8 +437,9 @@ function Prompt({ text, at, waiting, attached, fresh = false }: { text: string; 
               <button
                 type="button"
                 onClick={waiting.onSendNow}
+                disabled={down}
                 title="The agent reads it now; what it runs goes on in the background"
-                className="rounded-md px-1.5 text-[11px] leading-6 hover:bg-accent hover:text-accent-foreground"
+                className="rounded-md px-1.5 text-[11px] leading-6 hover:bg-accent hover:text-accent-foreground disabled:opacity-50"
               >
                 Send now
               </button>

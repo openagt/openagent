@@ -21,9 +21,12 @@ type RpcResponse = { ret?: unknown; error?: string }
  *
  * Arguments and return value go through JSON, which is what they always did — the wire has no
  * opinion about `Date` or `Map` here because none of these RPCs pass one.
+ *
+ * `signal` aborts its calls' requests: a caller that gives up on an answer lets its connection go.
  */
 export function rpc<F extends (...args: never[]) => unknown>(
   name: string,
+  { signal }: { signal?: AbortSignal } = {},
 ): (...args: Parameters<F>) => Promise<Awaited<ReturnType<F>>> {
   const call = async (...args: unknown[]): Promise<unknown> => {
     // An optional argument left out must arrive left out: JSON writes a trailing `undefined` as
@@ -34,6 +37,7 @@ export function rpc<F extends (...args: never[]) => unknown>(
       method: 'POST',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify(args.slice(0, sent)),
+      signal: signal ?? null,
     })
     // A non-JSON body means something other than the mount answered (a proxy, an error page), and
     // reporting "unexpected token <" from deep in a component is how that used to surface.

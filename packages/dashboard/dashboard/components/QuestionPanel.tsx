@@ -1,8 +1,9 @@
-import { useEffect, useRef, useState } from 'react'
+import { useContext, useEffect, useRef, useState } from 'react'
 import { Check } from 'lucide-react'
 import type { ChoiceRequest } from '../../src/index.js'
 import { sendChoice, sendMessage } from '../rpc/control.js'
 import { useAction } from '../lib/use-action.js'
+import { DaemonDown } from '../lib/use-daemon-health.js'
 import { cn } from '../lib/utils.js'
 import { answerPrompt, skipPrompt } from '../lib/answered-question.js'
 import { MOD_KEY } from '../lib/shortcut.js'
@@ -58,6 +59,8 @@ export function QuestionPanel({
   send?: ((pick: string | string[]) => Promise<unknown>) | undefined
 }) {
   const { busy, error, run } = useAction()
+  // OpenAgent is not answering: no answer can be sent, and what is picked and typed stays.
+  const down = useContext(DaemonDown)
   // Sent and accepted by the daemon: the card goes, and the chat shows the answer. A refusal is
   // shown in the daemon's own words, and the controls come back.
   const [sent, setSent] = useState(false)
@@ -87,7 +90,7 @@ export function QuestionPanel({
   const otherPicked = choice.multi ? otherOn : picked === OTHER
   const ready = !otherPicked || words !== ''
   const submit = () => {
-    if (busy || !ready) return
+    if (busy || down || !ready) return
     if (choice.multi) {
       // Words in "Other" go with the checked options' labels, as one message: the agent reads both.
       if (otherOn) return say(answerPrompt(choice.title, [...choice.options.filter(o => checked.has(o.id)).map(o => o.label), words].join(', ')))
@@ -197,11 +200,11 @@ export function QuestionPanel({
           {error ?? (busy ? 'Sending your answer…' : '')}
         </span>
         {!send && (
-          <button type="button" disabled={busy} onClick={() => say(skipPrompt(choice.title))} className="h-6 rounded-md bg-foreground/10 px-2 text-[13px] hover:bg-foreground/15 disabled:opacity-60">
+          <button type="button" disabled={busy || down} onClick={() => say(skipPrompt(choice.title))} className="h-6 rounded-md bg-foreground/10 px-2 text-[13px] hover:bg-foreground/15 disabled:opacity-60">
             Skip
           </button>
         )}
-        <button type="button" disabled={busy || !ready} onClick={submit} className="flex h-6 items-center gap-1.5 rounded-md bg-foreground px-2 text-[13px] font-medium text-background hover:bg-foreground/90 disabled:opacity-60">
+        <button type="button" disabled={busy || down || !ready} onClick={submit} className="flex h-6 items-center gap-1.5 rounded-md bg-foreground px-2 text-[13px] font-medium text-background hover:bg-foreground/90 disabled:opacity-60">
           Submit
           {active && (
             <span className="flex gap-0.5" aria-hidden>

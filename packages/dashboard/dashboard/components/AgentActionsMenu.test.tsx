@@ -149,6 +149,21 @@ describe('the live-session action: Stop', () => {
     await waitFor(() => expect(screen.getByText('Open in editor')).toBeTruthy())
     expect(screen.queryByText('Stop agent')).toBeNull()
   })
+
+  test('while OpenAgent is not answering, Stop is off and sends nothing', async () => {
+    const { DaemonDown } = await import('../lib/use-daemon-health.js')
+    sendStop.mockClear()
+    render(
+      <DaemonDown.Provider value>
+        <AgentActionsMenu projectId="p1" agentId="run-1" events={liveEvents} onDeleted={vi.fn()} />
+      </DaemonDown.Provider>,
+    )
+    openMenu()
+    const stop = await screen.findByRole('menuitem', { name: 'Stop agent' })
+    expect(stop.getAttribute('aria-disabled')).toBe('true')
+    fireEvent.click(stop)
+    expect(sendStop).not.toHaveBeenCalled()
+  })
 })
 
 describe('the menu with no session: the project home (#809)', () => {

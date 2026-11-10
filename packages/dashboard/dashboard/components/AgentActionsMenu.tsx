@@ -1,5 +1,5 @@
 import { SESSIONS_ID } from '../../src/project-address.js'
-import { useEffect, useRef, useState } from 'react'
+import { useContext, useEffect, useRef, useState } from 'react'
 import type { GitHostHome, OpenAgentEvent, RepositoryOffer } from '../../src/index.js'
 import { sessionInfo } from '../../src/client.js'
 import { RevealedTitle } from './RevealedTitle.js'
@@ -17,6 +17,7 @@ import {
 import { useLoaded } from '../lib/use-async.js'
 import { buttonVariants } from './ui/button.js'
 import { useAction } from '../lib/use-action.js'
+import { DaemonDown } from '../lib/use-daemon-health.js'
 import { cn } from '../lib/utils.js'
 import { isAgentActive } from '../lib/live-state.js'
 import { describeSessionLink } from '../lib/session-link.js'
@@ -132,6 +133,8 @@ export function AgentActionsMenu({
   const [stopRequested, setStopRequested] = useState(false)
   useEffect(() => setStopRequested(false), [agentId])
   const stopping = busy || (stopRequested && active)
+  // OpenAgent is not answering: Stop cannot reach the agent, here as in the composer.
+  const down = useContext(DaemonDown)
 
   const [confirmDelete, setConfirmDelete] = useState(false)
 
@@ -277,7 +280,7 @@ export function AgentActionsMenu({
           {(active || removable || deletable) && <DropdownMenuSeparator />}
 
           {active && (
-            <DropdownMenuItem disabled={stopping} onClick={() => void stopSession()}>
+            <DropdownMenuItem disabled={stopping || down} onClick={() => void stopSession()}>
               <Square className="h-3 w-3 shrink-0 fill-current" /> {stopping ? 'Stopping…' : 'Stop agent'}
             </DropdownMenuItem>
           )}

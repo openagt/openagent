@@ -143,6 +143,18 @@ describe('AgentComposer slot control (#1455)', () => {
     expect((screen.getByRole('button', { name: 'Stop agent' }) as HTMLButtonElement).disabled).toBe(false)
   })
 
+  test('while OpenAgent is not answering, Stop is off, and Esc stops nothing', async () => {
+    const { DaemonDown } = await import('../lib/use-daemon-health.js')
+    render(
+      <DaemonDown.Provider value>
+        <AgentComposer projectId="p1" agentId="run-1" live files={[]} />
+      </DaemonDown.Provider>,
+    )
+    expect((screen.getByRole('button', { name: 'Stop agent' }) as HTMLButtonElement).disabled).toBe(true)
+    fireEvent.keyDown(window, { key: 'Escape' })
+    expect(sendStop).not.toHaveBeenCalled()
+  })
+
   test('an ended session offers nothing in the slot, a stopped one too: a message continues it', () => {
     renderComposer({ live: false })
     expect(screen.queryByRole('button', { name: 'Resume' })).toBeNull()

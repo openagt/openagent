@@ -1,4 +1,4 @@
-import { forwardRef, useEffect, useImperativeHandle, useMemo, useRef, useState, type FormEvent, type ReactNode } from 'react'
+import { forwardRef, useContext, useEffect, useImperativeHandle, useMemo, useRef, useState, type FormEvent, type ReactNode } from 'react'
 import { ArrowUp, Loader2 } from 'lucide-react'
 import type { ProjectSummary } from '../../src/index.js'
 import { machineName, type DriverName } from '../../src/client.js'
@@ -27,6 +27,7 @@ import { restoreRunOn, runTarget, useRunOnFallback, useSelectedMachineId, select
 import { thisMachineName } from '../lib/this-machine.js'
 import { useMachineStatus } from '../lib/use-machine-status.js'
 import { keepDraft, keptDraft, takePendingDraft } from '../lib/draft-handoff.js'
+import { DaemonDown } from '../lib/use-daemon-health.js'
 import { driverOptions, modelEfforts, readMachineModelsAhead, useModelsOn } from '../lib/models.js'
 import { readyCommands, useProjectLauncher } from '../lib/use-project-launcher.js'
 import { AgentAccountItems, firstAccount, readMachineAccountsAhead, useAccountsOn } from './AgentAccounts.js'
@@ -191,6 +192,8 @@ export const Composer = forwardRef<ComposerHandle, {
   const [toldNow, setToldNow] = useState<string | null>(null)
   const owner = selectedMachine?.owner
   const untold = !inAgent && !!selectedMachine && owner !== undefined && !selectedMachine.told && toldNow !== selectedMachine.id
+  // OpenAgent is not answering: nothing typed can be sent, and the box keeps it.
+  const down = useContext(DaemonDown)
 
   useImperativeHandle(ref, () => ({
     clear: () => {
@@ -227,7 +230,7 @@ export const Composer = forwardRef<ComposerHandle, {
     e?.preventDefault()
     const text = prompt.trim()
     // #1073: a keyboard submit must be blocked too when the target machine is offline.
-    if (!text || busy || submittingRef.current || targetOffline || untold || !canSubmit) return
+    if (!text || busy || submittingRef.current || targetOffline || untold || down || !canSubmit) return
     submittingRef.current = true
     void Promise.resolve(onSubmit(text, { later })).finally(() => {
       submittingRef.current = false
@@ -332,7 +335,7 @@ export const Composer = forwardRef<ComposerHandle, {
             type="submit"
             size="icon-sm"
             onClick={submit}
-            disabled={busy || !hasPrompt || targetOffline || untold || !canSubmit}
+            disabled={busy || !hasPrompt || targetOffline || untold || down || !canSubmit}
             aria-hidden={!hasPrompt}
             tabIndex={hasPrompt ? undefined : -1}
             aria-label={submitLabel}
@@ -351,7 +354,7 @@ export const Composer = forwardRef<ComposerHandle, {
       >
         {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <ArrowUp className="h-4 w-4" />}
       </TooltipTrigger>
-      <TooltipContent>{busy ? submitBusyLabel : `${submitLabel}  (Enter · Shift+Enter for a new line)`}</TooltipContent>
+      <TooltipContent>{busy ? submitBusyLabel : down ? 'OpenAgent is not answering' : `${submitLabel}  (Enter · Shift+Enter for a new line)`}</TooltipContent>
     </Tooltip>
   )
 

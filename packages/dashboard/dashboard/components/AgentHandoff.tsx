@@ -1,8 +1,9 @@
-import type { ReactNode } from 'react'
+import { useContext, type ReactNode } from 'react'
 import type { AgentHandoff } from '../../src/index.js'
 import { ChevronDown, GitPullRequestDraft, Upload } from 'lucide-react'
 import { sendMerge, sendMergeBranch, sendMessage, sendOpenPullRequest, sendPush } from '../rpc/control.js'
 import type { AgentHandoffState } from '../lib/use-agent-handoff.js'
+import { DaemonDown } from '../lib/use-daemon-health.js'
 import { cn } from '../lib/utils.js'
 import { Button, buttonVariants } from './ui/button.js'
 import { DiffStat } from './DiffStat.js'
@@ -113,7 +114,10 @@ export function HandoffActions({
   /** The Commit button's ask is on its way to the agent (`null`: it did not go through), so the page shows it at once. */
   onAsked?: ((text: string | null) => void) | undefined
 }) {
-  const { handoff, busy, pending, act } = state
+  const { handoff, pending, act } = state
+  // OpenAgent is not answering: no step can be taken until it does.
+  const down = useContext(DaemonDown)
+  const busy = state.busy || down
   if (!handoff) return null
   if (subagent) {
     if (handoff.landed) return <Reason>landed</Reason>

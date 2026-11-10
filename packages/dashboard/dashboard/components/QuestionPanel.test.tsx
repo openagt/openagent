@@ -90,6 +90,22 @@ describe('QuestionPanel', () => {
     expect((screen.getByRole('button', { name: 'Submit' }) as HTMLButtonElement).disabled).toBe(false)
   })
 
+  test('while OpenAgent is not answering, no answer is sent, by Submit, Skip or the keys, and the pick stays', async () => {
+    const { DaemonDown } = await import('../lib/use-daemon-health.js')
+    render(
+      <DaemonDown.Provider value>
+        {panel({ active: true })}
+      </DaemonDown.Provider>,
+    )
+    fireEvent.click(option(/SQLite/))
+    expect((screen.getByRole('button', { name: 'Submit' }) as HTMLButtonElement).disabled).toBe(true)
+    expect((screen.getByRole('button', { name: 'Skip' }) as HTMLButtonElement).disabled).toBe(true)
+    fireEvent.keyDown(window, { key: 'Enter', ctrlKey: true })
+    expect(sendChoice).not.toHaveBeenCalled()
+    expect(sendMessage).not.toHaveBeenCalled()
+    expect(option(/SQLite/).getAttribute('aria-checked')).toBe('true')
+  })
+
   test('the number keys pick, and Ctrl+Enter submits, on the active question only', async () => {
     sendChoice.mockResolvedValue({ ok: true })
     const { rerender } = render(panel())

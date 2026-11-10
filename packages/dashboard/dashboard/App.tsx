@@ -41,7 +41,7 @@ import { useDocumentTitle } from './lib/document-title.js'
 import { projectLabels, ProjectLabelsContext } from './lib/project-labels.js'
 import { useActiveAgents } from './lib/use-working.js'
 import { useFavicon } from './lib/favicon.js'
-import { useDaemonHealth } from './lib/use-daemon-health.js'
+import { DaemonDown, useDaemonHealth } from './lib/use-daemon-health.js'
 import { useContextSet } from './lib/use-context-set.js'
 import { TriangleAlert } from 'lucide-react'
 import type { StartPicks } from './lib/started-from.js'
@@ -582,7 +582,7 @@ export function App() {
         <div role="alert" className={cn('h-(--top-banner) shrink-0 bg-background', pageScrolls && 'sticky top-0 z-30')}>
           <div className="flex h-full items-center gap-2 border-b border-border bg-warning/10 px-4 text-xs text-warning">
             <TriangleAlert className="h-3.5 w-3.5 shrink-0" aria-hidden />
-            The daemon is not answering — retrying. Everything on this page is frozen until it returns.
+            OpenAgent is not answering — retrying. Nothing can be sent, started, stopped, answered or published until it is back.
           </div>
         </div>
       )}
@@ -634,6 +634,7 @@ export function App() {
         {isMobile && !pageScrolls && <MenuButton />}
         {/* A project's page and an agent's have panes beside them (Panes). A module's page takes
             the full width itself (#1774), the way the Overview does. */}
+        <DaemonDown.Provider value={!healthy}>
         <PanesProvider
           projectId={projectId}
           agentId={agentId}
@@ -654,6 +655,7 @@ export function App() {
             </main>
           </PaneLayout>
         </PanesProvider>
+        </DaemonDown.Provider>
       </div>
       {/* What a module of this computer's draws over every page: a popup it raises itself. */}
       {modules.everyPage.map(({ EveryPage, package: pkg }) => (

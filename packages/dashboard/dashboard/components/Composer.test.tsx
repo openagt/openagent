@@ -165,6 +165,21 @@ describe('Composer (#721)', () => {
     expect(onSubmit).toHaveBeenLastCalledWith('go', { later: true })
   })
 
+  test('while OpenAgent is not answering, nothing is sent, by the button or by the keyboard, and the text stays', async () => {
+    const { DaemonDown } = await import('../lib/use-daemon-health.js')
+    const onSubmit = vi.fn()
+    render(
+      <DaemonDown.Provider value>
+        <Composer files={[]} onSubmit={onSubmit} busy={false} submitLabel="Send" submitBusyLabel="Sending…" />
+      </DaemonDown.Provider>,
+    )
+    fireEvent.change(screen.getByLabelText('prompt'), { target: { value: 'ship it' } })
+    expect(screen.getByRole('button', { name: 'Send' }).hasAttribute('disabled')).toBe(true)
+    fireEvent.click(screen.getByText('editor-submit'))
+    expect(onSubmit).not.toHaveBeenCalled()
+    expect(editorText()).toBe('ship it')
+  })
+
   test('mirrors prompt changes out via onPromptChange', () => {
     const onPromptChange = vi.fn()
     renderComposer({ onPromptChange })
