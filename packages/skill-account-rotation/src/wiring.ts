@@ -32,7 +32,7 @@ export interface LoginWiring {
   claudeQuota: () => Promise<DriverQuota>
   /** How full the Codex login in a home is, now. */
   codexUsage: (home: string) => Promise<DriverRateWindow[]>
-  /** No browser on this computer: a server's. The person signs in on another device. */
+  /** No browser on this computer: a server's, or a Linux computer with no display. The person signs in on another device. */
   headless: () => boolean
   /** Where an agent's sign-in says how it goes. */
   addingPath: (agent: AccountsAgent) => string
@@ -69,7 +69,7 @@ export function loginWiring(env: NodeJS.ProcessEnv = process.env): LoginWiring {
     claudeUsagePath: () => claudeUsagePath(env),
     claudeQuota: () => new ClaudeCodeDriver().readQuota(),
     codexUsage: home => readCodexUsage({ home }),
-    headless: () => env['OPENAGENT_SERVER'] === '1',
+    headless: () => env['OPENAGENT_SERVER'] === '1' || (process.platform === 'linux' && !env['DISPLAY'] && !env['WAYLAND_DISPLAY']),
     addingPath: agent => addingPath(agent, env),
     startAdding: startAddingProcess,
     ownPid: () => process.pid,

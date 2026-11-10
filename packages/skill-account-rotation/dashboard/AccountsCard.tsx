@@ -25,7 +25,7 @@ const AGENTS = [
     Logo: ClaudeLogo,
     logIn: 'Log in to Claude',
     help: "Opens this computer's browser, where you say yes once, signed in to that account. The login is kept on this computer alone and lasts a year.",
-    helpNoBrowser: "Gives you a page to open on your own device: press Authorize there, signed in to that account, and paste the code it shows back here. The login is kept on this server alone and lasts a year.",
+    helpNoBrowser: "Gives you a page to open on your own device: press Authorize there, signed in to that account, and paste the code it shows back here. The login is kept on this computer alone and lasts a year.",
     easiest: (computer: string) => `Easiest: add it on ${computer}, and it comes here by itself.`,
     remove: 'Runs no longer use it. Its login is not ended: take it back on claude.ai to end it.',
     adding: (name: string) => `Adding ${name}'s account: say yes in the page this computer's browser opened, signed in to ${name}'s Claude account.`,
@@ -37,7 +37,7 @@ const AGENTS = [
     Logo: CodexLogo,
     logIn: 'Log in to Codex',
     help: "Opens this computer's browser, where you sign in once to that account. If the browser is signed in to another account, copy the link into a private window. The login is kept on this computer alone.",
-    helpNoBrowser: "Gives you a code to type at ChatGPT's page on your own device, signed in to that account: in a private window if the browser is signed in to another. If it asks, first allow device code sign-in in ChatGPT's security settings. The login is kept on this server alone.",
+    helpNoBrowser: "Gives you a code to type at ChatGPT's page on your own device, signed in to that account: in a private window if the browser is signed in to another. If it asks, first allow device code sign-in in ChatGPT's security settings. The login is kept on this computer alone.",
     easiest: (computer: string) => `Easiest: add it on ${computer} and press Allow there, and it comes here.`,
     remove: 'Runs no longer use it, and its login is taken off this computer.',
     adding: (name: string) => `Adding ${name}'s account: sign in to ${name}'s ChatGPT account in the page this computer's browser opened.`,
@@ -79,7 +79,7 @@ interface Usage {
 interface AddingNow {
   adding?: { name: string; url?: string; code?: string; paste?: true; checking?: true; refused?: true }
   failed?: string
-  /** This computer has no browser, a server: the person signs in on their own device. */
+  /** This computer has no browser (a server, or Linux with no display): the person signs in on their own device. */
   noBrowser?: true
 }
 

@@ -17,7 +17,8 @@ interface Run {
 async function inDir(body: (env: NodeJS.ProcessEnv, dir: string) => Promise<void>): Promise<void> {
   const dir = await mkdtemp(join(tmpdir(), 'account-rotation-cli-'))
   try {
-    await body({ HOME: join(dir, 'home'), XDG_CONFIG_HOME: join(dir, 'config'), XDG_STATE_HOME: join(dir, 'state') }, dir)
+    // A computer with a screen: a browser opens on it.
+    await body({ HOME: join(dir, 'home'), XDG_CONFIG_HOME: join(dir, 'config'), XDG_STATE_HOME: join(dir, 'state'), DISPLAY: ':0' }, dir)
   } finally {
     await rm(dir, { recursive: true, force: true })
   }
@@ -147,10 +148,13 @@ test('list says which computer handed an account over, only the agent it is of, 
     assert.equal((await run(['list'], env)).code, 0)
   }))
 
-test('adding says a computer has no browser only on a server', () =>
+test('adding says a computer has no browser on a server, and on Linux with no display', () =>
   inDir(async env => {
     assert.deepEqual(await adding(env), {})
     assert.deepEqual(await adding({ ...env, OPENAGENT_SERVER: '1' }), { noBrowser: true })
+    const { DISPLAY: _, ...noScreen } = env
+    assert.deepEqual(await adding(noScreen), process.platform === 'linux' ? { noBrowser: true } : {})
+    assert.deepEqual(await adding({ ...noScreen, WAYLAND_DISPLAY: 'wayland-0' }), {})
   }))
 
 test('remove takes an added account off, a Codex one with its folder; the person\'s own and a name not there are refused', () =>

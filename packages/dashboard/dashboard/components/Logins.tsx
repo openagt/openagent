@@ -150,10 +150,17 @@ function agentBusyWords(state: AgentState): string {
   return state.fixing === 'install' ? `Installing ${name}…` : `Say yes in the page this computer's browser opened to log ${name} in.`
 }
 
-/** The agent's fix as one press: [Install Claude Code] or [Log this computer in to Claude Code], with the command; nothing when no press fixes it. */
+/** The agent's fix as one press: [Install Claude Code] or [Log this computer in to Claude Code], with the command; the command alone where it is typed; nothing when nothing fixes it. */
 export function AgentFix({ state, onChanged, size }: { state: AgentState; onChanged: () => void; size?: 'sm' | 'xs' | undefined }) {
   const [error, setError] = useState<string | undefined>()
   if (state.ready || !state.fix) return null
+  if (state.typed)
+    return (
+      <div className="min-w-0 space-y-1">
+        <p className="text-xs text-muted-foreground">This computer has no browser to log in with a press: type this in a terminal on it.</p>
+        <CommandLine command={state.fix.command} />
+      </div>
+    )
   const name = DRIVER_LABELS[state.driver]
   const press = async () => {
     setError(undefined)

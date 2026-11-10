@@ -224,6 +224,8 @@ export interface AgentState {
   problem?: string
   /** What a press does about it, when the agent's package declared a command for it. */
   fix?: DriverFix
+  /** The fix is no press: it is typed in a terminal on this computer, which has no browser to say yes in. */
+  typed?: true
   /** The agent's own login is out, and runs use an added account: the own login is no account to show. */
   ownLoggedOut?: true
   /** A press's fix going on. */
@@ -240,13 +242,15 @@ export async function onAgentState(driver?: string): Promise<AgentState> {
   const name = driver !== undefined && isDriverName(driver) ? driver : await loginsWiring.driver()
   const ready = await loginsWiring.ready(name)
   const press = fixes.get(name)
-  // A computer with no browser cannot log its agent in by a press: the person adds an account in its card instead.
-  const fix = ready.fix && !(ready.fix.kind === 'log-in' && accountsWiring.headless()) ? ready.fix : undefined
+  // A computer with no browser cannot log its agent in by a press: on a server the person adds an account in its card instead; elsewhere the command is typed there.
+  const noPress = ready.fix?.kind === 'log-in' && accountsWiring.headless()
+  const fix = ready.fix && !(noPress && process.env['OPENAGENT_SERVER'] === '1') ? ready.fix : undefined
   return {
     driver: name,
     ready: ready.problems.length === 0,
     ...(ready.problems[0] !== undefined ? { problem: ready.problems[0] } : {}),
     ...(fix ? { fix } : {}),
+    ...(fix && noPress ? { typed: true as const } : {}),
     ...(ready.ownLoggedOut ? { ownLoggedOut: true as const } : {}),
     ...(press?.fixing ? { fixing: press.fixing } : {}),
     ...(press?.failed !== undefined && ready.problems.length > 0 ? { failed: press.failed } : {}),

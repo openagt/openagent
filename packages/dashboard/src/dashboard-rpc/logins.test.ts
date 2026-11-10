@@ -136,6 +136,8 @@ test('Git hosts: the last answer comes at once while the hosts are read again be
 
 test('the agent: what is in the way and the fix its package declared; a press runs that fix, never a command from the page, and says why it failed', async () => {
   const before = { ...loginsWiring }
+  const headless = accountsWiring.headless
+  accountsWiring.headless = () => false
   let ready = false
   const ran: string[] = []
   let finish: (err?: Error) => void = () => {}
@@ -163,6 +165,27 @@ test('the agent: what is in the way and the fix its package declared; a press ru
     assert.equal((await sendAgentFix('rm -rf')).ok, false)
   } finally {
     Object.assign(loginsWiring, before)
+    accountsWiring.headless = headless
+  }
+})
+
+test('a computer with no browser: the log-in is typed in a terminal there, an install is still a press; on a server neither log-in is offered', async () => {
+  const before = { ...loginsWiring }
+  const headless = accountsWiring.headless
+  accountsWiring.headless = () => true
+  let fix = { kind: 'log-in', command: 'codex login' }
+  Object.assign(loginsWiring, { ready: async () => ({ problems: ['`codex` is not logged in.'], warnings: [], fix }) })
+  try {
+    assert.deepEqual(await onAgentState('codex'), { driver: 'codex', ready: false, problem: '`codex` is not logged in.', fix, typed: true })
+    process.env['OPENAGENT_SERVER'] = '1'
+    assert.deepEqual(await onAgentState('codex'), { driver: 'codex', ready: false, problem: '`codex` is not logged in.' })
+    delete process.env['OPENAGENT_SERVER']
+    fix = { kind: 'install', command: 'curl -fsSL https://chatgpt.com/codex/install.sh | sh' }
+    assert.deepEqual(await onAgentState('codex'), { driver: 'codex', ready: false, problem: '`codex` is not logged in.', fix })
+  } finally {
+    delete process.env['OPENAGENT_SERVER']
+    Object.assign(loginsWiring, before)
+    accountsWiring.headless = headless
   }
 })
 
