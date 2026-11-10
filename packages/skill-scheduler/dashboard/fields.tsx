@@ -4,7 +4,7 @@ import type { PublishPick } from '../src/state.js'
 import { AGENTS, AGENT_LABELS, AGENT_SKILLS_DIR, DEFAULT_AGENT, MAX_AGENTS, type AgentName } from '../src/names.js'
 import { MAX_COUNT, PACE_UNITS, takesTimeOfDay, type PaceUnit } from '../src/pace.js'
 import { triedLine, writtenLine, type TriedLine } from './automation-form.js'
-import { PRINTS_SOMETHING, UNIT_WORDS, modelLabel, publishChoices, publishLabel, type AgentModels, type AgentsDraft, type PaceDraft, type SchedulerCommand } from './schedulers.js'
+import { PRINTS_SOMETHING, UNIT_WORDS, modelLabel, notAsked, publishChoices, publishLabel, type AgentModels, type AgentsDraft, type PaceDraft, type SchedulerCommand } from './schedulers.js'
 
 // The fields of the Automations page, shared by the Edit panel of a row and the "New automation"
 // form, so a thing is picked the same way wherever it is picked: what the agent is told and the
@@ -63,14 +63,14 @@ export function SaidFields({ project, said, agent, autoFocus, onChange }: { proj
   const tryIt = async (): Promise<void> => {
     const mine = ++asked.current
     setTried('trying')
-    const answer = await host.runCommand(project.id, ['try', `--when=${line}`]).catch((err: unknown) => ({ ok: false as const, error: err instanceof Error ? err.message : String(err) }))
+    const answer = await host.runCommand(project.id, ['try', `--when=${line}`]).catch(notAsked)
     if (asked.current !== mine) return
     setTried(answer.ok ? triedLine(answer.output) : { printed: '', verdict: `The line could not be tried: ${answer.error}`, tone: 'failed' })
   }
   const writeIt = async (): Promise<void> => {
     const mine = ++askedLine.current
     setWritten('writing')
-    const answer = await host.runCommand(project.id, ['write-line', `--words=${words}`, `--agent=${agent}`]).catch((err: unknown) => ({ ok: false as const, error: err instanceof Error ? err.message : String(err) }))
+    const answer = await host.runCommand(project.id, ['write-line', `--words=${words}`, `--agent=${agent}`]).catch(notAsked)
     if (askedLine.current !== mine) return
     const read = answer.ok ? writtenLine(answer.output) : { said: `The line was not written: ${answer.error}` }
     if ('line' in read) lineChanged(read.line)

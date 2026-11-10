@@ -307,6 +307,11 @@ export function typedOffset(raw: string): number | undefined {
 
 export type Saved = { ok: true } | { ok: false; error: string }
 
+/** A command, or a save, that could not even be asked, as its answer: a failure that says why, so the page says it and the next one still runs. */
+export function notAsked(err: unknown): { ok: false; error: string } {
+  return { ok: false, error: err instanceof Error ? err.message : String(err) }
+}
+
 /** Save the spend offset in every project: `scheduler offset -- <points>`, the `--` so a negative value is no flag. Each failing project is named. */
 export async function saveSpendOffset(host: ModuleHost, projects: readonly ModuleProject[], points: number): Promise<Saved> {
   const answers = await Promise.all(projects.map(async project => ({ project, answer: await host.runCommand(project.id, ['offset', '--', String(points)]) })))
