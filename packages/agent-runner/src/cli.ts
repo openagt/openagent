@@ -1,10 +1,9 @@
-import { Refused, UsageError, inRepo, nodeGitRunner, parseCommandArgs, runCommandLine, runPackageCommand, sessionsHomeOf, type Command, type GitRunner, PROJECT_SKILLS_ENV, SKILLS_OFF_ENV, SKILLS_ON_ENV } from '@openagt/agent-data'
+import { AGENT_ENV, Refused, UsageError, errorMessage, inRepo, nodeGitRunner, parseCommandArgs, runCommandLine, runPackageCommand, sessionsHomeOf, type Command, type GitRunner, PROJECT_SKILLS_ENV, SKILLS_OFF_ENV, SKILLS_ON_ENV } from '@openagt/agent-data'
 import { liftSkillRules, projectRoot } from '@openagt/skill-branches'
 import { findRun } from '@openagt/skill-logs'
 import { DRIVER_NAMES, GIT_ACCOUNT_ENV, agentLoginFor, detachResume, detachRun, isDriverName, readyToRun, resumeProject, runProject, type DriverName, type SpawnedResume } from './runner.js'
 import type { RunOutcome, RunRequest } from './run.js'
-import { agentNamed, anySkillPick, runAgent, skillPicksNamed, type SkillPicks } from './agent.js'
-import { AGENT_ENV } from '@openagt/agent-data'
+import { agentNamed, anySkillPick, runAgent, skillPicksNamed } from './agent.js'
 import { initHooks } from './init.js'
 import { cleanup } from './cleanup.js'
 import { everyBasicSkill } from './basic-skills.js'
@@ -93,9 +92,31 @@ export function runCli(argv: string[], io: CliIo, git: GitRunner = nodeGitRunner
   return runCommandLine(argv, io, { usage: USAGE, commands: COMMANDS }, io, git)
 }
 
+/** The flags of `run`: what a run is asked, how its process is started, and what a resume continues it with. */
+const RUN_FLAGS = {
+  id: { type: 'string' },
+  model: { type: 'string' },
+  effort: { type: 'string' },
+  resume: { type: 'string' },
+  answer: { type: 'string' },
+  detach: { type: 'boolean' },
+  mark: { type: 'boolean' },
+  driver: { type: 'string' },
+  publish: { type: 'string' },
+  attach: { type: 'string' },
+  started: { type: 'string' },
+  parent: { type: 'string' },
+  base: { type: 'string' },
+  'pr-base': { type: 'string' },
+  branch: { type: 'string' },
+  for: { type: 'string' },
+  by: { type: 'string' },
+  repos: { type: 'string' },
+} as const
+
 const COMMANDS: Record<string, Command<[CliIo, GitRunner]>> = {
   async run(args, io, git) {
-    const { positionals, values } = parseWithTexts(args, { id: { type: 'string' }, model: { type: 'string' }, effort: { type: 'string' }, resume: { type: 'string' }, answer: { type: 'string' }, detach: { type: 'boolean' }, mark: { type: 'boolean' }, driver: { type: 'string' }, publish: { type: 'string' }, attach: { type: 'string' }, started: { type: 'string' }, parent: { type: 'string' }, base: { type: 'string' }, 'pr-base': { type: 'string' }, branch: { type: 'string' }, for: { type: 'string' }, by: { type: 'string' }, repos: { type: 'string' } }, 0, 1)
+    const { positionals, values } = parseWithTexts(args, RUN_FLAGS, 0, 1)
     const repo = await project(io.cwd, git)
     const driver = values.driver
     if (driver !== undefined && !isDriverName(driver)) throw new UsageError(`unknown driver "${driver}"; the drivers are ${DRIVER_NAMES.join(' and ')}`)
@@ -133,7 +154,7 @@ const COMMANDS: Record<string, Command<[CliIo, GitRunner]>> = {
     // The repos a session has as context, one folder per line, each copied into the session's folder.
     const folders = (values.repos ?? '').split('\n').map(line => line.trim()).filter(Boolean)
     const repos = folders.length > 0 ? await sessionRepos(folders, git).catch((err: unknown) => {
-      const line = err instanceof Error ? err.message : String(err)
+      const line = errorMessage(err)
       throw new Refused({ ok: false, reason: 'not-a-repo', detail: line }, line)
     }) : undefined
     if (values.started !== undefined && (values.id === undefined || Number.isNaN(Date.parse(values.started)))) throw new UsageError('--started is the time a run spawned with --id was asked for, like 2026-10-09T10:00:00.000Z')
@@ -142,28 +163,18 @@ const COMMANDS: Record<string, Command<[CliIo, GitRunner]>> = {
     if (values.parent !== undefined && values.id === undefined && !(await findRun(repo, values.parent))) {
       throw new Refused({ ok: false, reason: 'no-parent', parent: values.parent }, `no run ${values.parent} in this project`)
     }
-    // A person's run is refused before it spends a checkout when its coding agent cannot start;
-    // a scheduler asks the same before it marks, and a resumed run's agent already ran once here.
     // The account at the git host picked for this session, by whoever started the run: in the environment ({@link GIT_ACCOUNT_ENV}).
     const gitAccount = process.env[GIT_ACCOUNT_ENV]?.trim() || undefined
     if (gitAccount !== undefined && values.resume !== undefined) throw new UsageError(`${GIT_ACCOUNT_ENV} is for a new run: a run continues as the account its record names`)
     // The agent the run is on, by its id, in the environment too ({@link AGENT_ENV}); a resumed run goes on with the one its record names.
-    let agent: string | undefined
-    try {
-      agent = agentNamed()
-    } catch (err) {
-      throw new UsageError(err instanceof Error ? err.message : String(err))
-    }
+    const agent = fromEnvironment(agentNamed)
     if (process.env[AGENT_ENV]?.trim() && values.resume !== undefined) throw new UsageError(`${AGENT_ENV} is for a new run: a run continues on the agent its record names`)
     // The session's picks of skills, in the environment the same way; a resumed run goes on with the ones its record keeps.
-    let skills: SkillPicks
-    try {
-      skills = skillPicksNamed()
-    } catch (err) {
-      throw new UsageError(err instanceof Error ? err.message : String(err))
-    }
+    const skills = fromEnvironment(skillPicksNamed)
     if (anySkillPick(skills) && values.resume !== undefined) throw new UsageError(`${SKILLS_ON_ENV}, ${SKILLS_OFF_ENV} and ${PROJECT_SKILLS_ENV} are for a new run: a run continues with the skills its record names`)
     if (skills.project !== undefined && noProject) throw new UsageError(`${PROJECT_SKILLS_ENV} is for a run in a project: a session with no project has no project skills`)
+    // A person's run is refused before it spends a checkout when its coding agent cannot start;
+    // a scheduler asks the same before it marks, and a resumed run's agent already ran once here.
     if (values.resume === undefined && values.id === undefined) {
       // The session's account, or its agent's: an account this computer cannot use stops the run here, naming it.
       const login = gitAccount ?? (await agentLoginFor(repo, await runAgent(agent, io.stderr)))
@@ -262,6 +273,15 @@ const COMMANDS: Record<string, Command<[CliIo, GitRunner]>> = {
 /** A run's outcome as `run` answers it: ok when the run ended done, or waiting on a question. */
 function answered(outcome: RunOutcome): { ok: boolean } & RunOutcome {
   return { ok: outcome.status === 'done' || outcome.status === 'waiting', ...outcome }
+}
+
+/** What `read` reads off the environment; a value it cannot read is a command line that cannot be read. */
+function fromEnvironment<T>(read: () => T): T {
+  try {
+    return read()
+  } catch (err) {
+    throw new UsageError(errorMessage(err))
+  }
 }
 
 /**
