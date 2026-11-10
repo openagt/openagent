@@ -170,9 +170,9 @@ export async function leaveOut(path: string, without: LeaveOut | undefined, git:
  * upstream set, as in {@link addWorktree}; else, gone everywhere, a new branch where the agent's
  * first one started: the base the caller names, as this clone has it or else as origin does, and
  * with none, or one that is gone too, where a new agent branch starts ({@link freshStart}); the
- * answer then says the branch was made again. The
- * only branch the package deletes is one that held nothing past a commit the remote already had,
- * so nothing of the agent's is lost. Anything git refuses — the branch checked out elsewhere, say —
+ * answer then says the branch was made again. Every
+ * branch the package deletes held no commit of its own, so nothing of the agent's is lost.
+ * Anything git refuses — the branch checked out elsewhere, say —
  * rejects, like {@link addWorktree}: a continued agent needs its checkout.
  */
 export async function attachWorktree(
@@ -263,7 +263,7 @@ export async function removeWorktree(repo: string, path: string, git: GitRunner 
 
 /**
  * Delete a branch that holds nothing (#1650). `-D`, because "merged" in git's eyes is the wrong
- * test: the caller proved the tip is a commit the remote already has, which is the stronger fact.
+ * test: the caller proved the branch holds no commit of its own, which is the fact that counts.
  * Forgiving: the checkout is already gone by the time this runs, and a branch that would not
  * delete is a leftover name, not lost work. Says whether it went, so a caller names only the
  * branches that are actually gone (#1757).
