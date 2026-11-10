@@ -3,12 +3,7 @@ import { test } from 'node:test'
 import { mkdtemp, writeFile, rm, mkdir, readFile, readdir, realpath } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { basename, join, resolve } from 'node:path'
-import {
-  isProcessAlive,
-  runDaemon,
-  type DaemonState,
-  type RunDaemonOptions,
-} from './daemon.js'
+import { runDaemon, type DaemonState, type RunDaemonOptions } from './daemon.js'
 
 /**
  * Start a daemon and wait until it reports where it bound. The CLI is foreground-only, so there
@@ -76,11 +71,6 @@ async function configEnv(cwd: string): Promise<NodeJS.ProcessEnv> {
   await mkdir(dir, { recursive: true })
   return { XDG_CONFIG_HOME: dir }
 }
-
-test('isProcessAlive is true for this process and false for a dead pid', () => {
-  assert.equal(isProcessAlive(process.pid), true)
-  assert.equal(isProcessAlive(2 ** 31 - 1), false) // an impossibly high, unused pid
-})
 
 test('runDaemon serves the dashboard, and shuts down when the signal aborts', async () => {
   const cwd = await tmpWorkspace()

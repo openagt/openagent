@@ -58,10 +58,6 @@ export interface DaemonState {
   startedAt: string
 }
 
-/** True when a process with this id is still running (best-effort, signal 0). The store's
- * {@link isPidAlive} under the daemon's historical public name -- the two were byte-identical. */
-export { isPidAlive as isProcessAlive } from './store/index.js'
-
 /** Options for {@link runDaemon}. */
 export interface RunDaemonOptions {
   /** Port to bind. Default {@link DEFAULT_DAEMON_PORT}; pass `0` for an ephemeral port. */
