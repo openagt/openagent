@@ -645,7 +645,7 @@ export { LinkActions, type ProjectLinks, type LinkTargets } from '../components/
 export { MachineMark } from '../components/MachineMark.js'
 export { PersonMark, personName } from '../components/PersonMark.js'
 export { useGitHostPeople, personSaid } from '../lib/use-git-host-people.js'
-export { machineKind, machineName, type MachineKind } from '../../src/client.js'
+export { machineKind, machineName, runName, type MachineKind } from '../../src/client.js'
 export { SettingsSection, SettingsRow, SettingsSelectRow, type SettingsOption } from '../components/SettingsRows.js'
 export { useSettingsCrumb, type SettingsCrumb } from '../lib/settings-crumb.js'
 export { QrCode } from '../components/QrCode.js'

@@ -1,4 +1,4 @@
-import { FilterChips, Page, PersonMark, STATUS_DOT, STATUS_RING, STATUS_TONE, Table, TableBody, TableCell, TableHead, TableHeader, TableRow, cn, formatDateTime, formatDuration, personSaid, useGitHostPeople, useModuleHost, usePolled, type ModuleAgent, type ModuleHostPerson, type ModulePageProps, type ModuleProject } from '@openagt/dashboard/module'
+import { FilterChips, Page, PersonMark, STATUS_DOT, STATUS_RING, STATUS_TONE, Table, TableBody, TableCell, TableHead, TableHeader, TableRow, cn, formatDateTime, formatDuration, personSaid, runName, useGitHostPeople, useModuleHost, usePolled, type ModuleAgent, type ModuleHostPerson, type ModulePageProps, type ModuleProject } from '@openagt/dashboard/module'
 import type { RunCard } from '../src/run.js'
 
 /** How many runs each project lists: the command's own default page is 20; the page shows more. */
@@ -111,11 +111,6 @@ const ENDED = ['done', 'stopped', 'failed']
 /** How long a run took, from its start to its end; nothing for one not over. */
 function took(card: Row['card']): string {
   return card.endedAt && ENDED.includes(card.status) ? formatDuration(Date.parse(card.endedAt) - Date.parse(card.startedAt)) : '—'
-}
-
-/** What a run is called on its row: its short name, else what it was asked while it has none, else its id. */
-function runName(card: Row['card']): string {
-  return card.title?.trim() || card.intent?.trim() || card.id
 }
 
 /** The time of day a run started, its day being the heading's. */
@@ -303,7 +298,8 @@ function RunName({ card, title, onOpen }: { card: Row['card']; title: string | u
       }}
       className="-mx-1 block max-w-[calc(100%+0.5rem)] truncate rounded-sm px-1 text-left font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-primary)]"
     >
-      {runName(card)}
+      {/* As every list names a run; a run with none of those goes by its id. */}
+      {runName(card) ?? card.id}
     </button>
   )
 }

@@ -117,6 +117,16 @@ test('a run waiting on a question took nothing yet: its end so far is only its l
   expect(took('Halted')).toBe('2m')
 })
 
+test('a run goes by the name every list gives it: with no short name and no prompt, its branch; with none of these, its id', async () => {
+  render(
+    <ModuleHostContext.Provider value={hostWith([{ id: 'r1', startedAt: at(now - 1000), status: 'done', branch: 'agent-fix-header' }, { id: 'r2', startedAt: at(now - 2000), status: 'done' }])}>
+      <LogsPage projects={[{ id: 'p1', name: 'alpha', gitHost: true }]} projectId={null} path={[]} />
+    </ModuleHostContext.Provider>,
+  )
+  expect((await screen.findAllByRole('button', { name: 'agent-fix-header' })).length).toBeGreaterThan(0)
+  expect(screen.getAllByRole('button', { name: 'r2' }).length).toBeGreaterThan(0)
+})
+
 test('a second visit opens with the last list at once, while the runs are read again', async () => {
   const page = (host: FakeHost) => (
     <ModuleHostContext.Provider value={host}>
