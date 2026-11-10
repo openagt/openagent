@@ -53,6 +53,12 @@ export function automationProblem(automation: NewAutomation): AddRefusal | undef
   return undefined
 }
 
+/** Why an automation's prompt is too long to keep on this machine, or nothing: its text travels to each run as one command-line argument, so a longer one could be saved and never listed. */
+function tooLongHere(automation: NewAutomation): AddRefusal | undefined {
+  const length = automation.prompt.trim().length
+  return length > OWN_TEXT_MAX ? { ok: false, reason: 'long-prompt', detail: `the prompt is ${length} characters, and one kept on this machine has ${OWN_TEXT_MAX} at most` } : undefined
+}
+
 /** Where an automation's file was written, new or anew, and what whoever asked needs to say about it. */
 export interface Written {
   ok: true
@@ -97,9 +103,8 @@ export async function addAutomation(repo: string, automation: NewAutomation, git
   if (kept !== undefined) return { ok: false, reason: 'taken', folder: `${OWN_AUTOMATIONS_DIR}/${kept}` }
   const startsFrom = await startRef(repo, git)
   if (opts.onThisMachine) {
-    // Its text travels to each run as one command-line argument: a longer one could be saved and never listed.
-    const length = automation.prompt.trim().length
-    if (length > OWN_TEXT_MAX) return { ok: false, reason: 'long-prompt', detail: `the prompt is ${length} characters, and one kept on this machine has ${OWN_TEXT_MAX} at most` }
+    const tooLong = tooLongHere(automation)
+    if (tooLong) return tooLong
     const file = `${OWN_AUTOMATIONS_DIR}/${automation.name}.md`
     await mkdir(join(repo, OWN_AUTOMATIONS_DIR), { recursive: true })
     // The tool's folder is hidden from git before anything of a person's is in it; best-effort, as for the state.
@@ -214,8 +219,8 @@ export async function editAutomation(repo: string, name: string, change: Automat
   const automation: NewAutomation = { name, prompt: change.prompt ?? was.prompt, ...(every !== undefined ? { every } : {}), ...(when !== undefined ? { when } : {}), ...(waitsFor !== undefined ? { waitsFor } : {}) }
   const problem = automationProblem(automation)
   if (problem) return problem
-  const length = automation.prompt.trim().length
-  if (found.onThisMachine && length > OWN_TEXT_MAX) return { ok: false, reason: 'long-prompt', detail: `the prompt is ${length} characters, and one kept on this machine has ${OWN_TEXT_MAX} at most` }
+  const tooLong = found.onThisMachine ? tooLongHere(automation) : undefined
+  if (tooLong) return tooLong
   // Written beside the file and moved over it: a write that fails midway leaves the automation as it was, not a cut file.
   const path = join(repo, found.file)
   const text = automationSkill(automation)
