@@ -122,6 +122,14 @@ describe('QueuePage', () => {
       )
     })
 
+    test('the count says the agents the batch starts: never more than the entries', async () => {
+      show([{ entry: 'Only one' }])
+      await screen.findByText('Only one')
+      const box = screen.getByRole('spinbutton', { name: 'How many agents to start' }) as HTMLInputElement
+      expect([box.value, box.max]).toEqual(['1', '1'])
+      expect(screen.getByRole('button', { name: 'Start 1 agent' })).toBeTruthy()
+    })
+
     test('a start that is refused says why', async () => {
       show()
       await screen.findByText('Urgent')
