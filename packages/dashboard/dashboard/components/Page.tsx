@@ -35,7 +35,14 @@ export function Page({
             <div className="min-w-0">
               <h1 className="text-lg font-semibold">
                 <span className="max-md:sr-only">{title}</span>
-                {count !== undefined && <span className="ml-2 text-sm font-normal tabular-nums text-muted-foreground max-md:ml-0">{count}</span>}
+                {/* A space, not only a margin, so a screen reader says the name and the count apart. */}
+                {count !== undefined && (
+                  <>
+                    {' '}
+                    {/* A margin from md up only: a module page's stylesheet, loaded after the dashboard's, redefines a plain ml-1 over a max-md:ml-0. */}
+                    <span className="text-sm font-normal tabular-nums text-muted-foreground md:ml-1">{count}</span>
+                  </>
+                )}
               </h1>
               {description !== undefined && <p className="mt-1 text-sm text-muted-foreground">{description}</p>}
             </div>

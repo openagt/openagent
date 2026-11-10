@@ -79,7 +79,7 @@ describe('TicketsPage (#1144)', () => {
     render()
     await screen.findByText('Do the thing')
     const title = screen.getByRole('heading', { level: 1 })
-    expect(title.textContent).toBe('Tickets2/2')
+    expect(title.textContent).toBe('Tickets 2/2')
     expect(title.className).toBe('text-lg font-semibold')
     const line = title.nextElementSibling!
     expect(line.textContent).toBe('Every project\u2019s tickets/ backlog: what agents plan from.')

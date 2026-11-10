@@ -15,7 +15,7 @@ test('the name, its count, the line under it and the page\'s buttons in a header
     </Page>,
   )
   const heading = screen.getByRole('heading', { level: 1 })
-  expect(heading.textContent).toBe('Tickets3/5')
+  expect(heading.textContent).toBe('Tickets 3/5')
   // The name is hidden on a phone only, where its bar says it.
   expect(screen.getByText('Tickets').className).toContain('max-md:sr-only')
   const header = heading.closest('header')!
