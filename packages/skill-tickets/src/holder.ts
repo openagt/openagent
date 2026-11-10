@@ -1,5 +1,11 @@
 import { checkoutRoot, nodeGitRunner, type GitRunner } from '@openagt/agent-data'
 
+/** Who claims, or that nobody can: see {@link holderOf}. */
+export type Holder = { ok: true; holder: string } | { ok: false; reason: 'no-identity' }
+
+/** The environment variable the process that starts an agent sets to the agent's id. */
+export const AGENT_ID_ENV = 'AGENT_ID'
+
 /**
  * Who the command claims as, read from where it runs — nothing for the agent to type or know.
  *
@@ -9,11 +15,6 @@ import { checkoutRoot, nodeGitRunner, type GitRunner } from '@openagt/agent-data
  * current branch name: a cloud session on its own branch, a person on a feature branch. A detached
  * HEAD names nobody.
  */
-export type Holder = { ok: true; holder: string } | { ok: false; reason: 'no-identity' }
-
-/** The environment variable the process that starts an agent sets to the agent's id. */
-export const AGENT_ID_ENV = 'AGENT_ID'
-
 export async function holderOf(cwd: string, git: GitRunner = nodeGitRunner(), env: NodeJS.ProcessEnv = process.env): Promise<Holder> {
   const id = env[AGENT_ID_ENV]?.trim()
   if (id) return { ok: true, holder: id }
