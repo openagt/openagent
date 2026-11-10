@@ -226,9 +226,7 @@ export function LogsPage({ projects }: ModulePageProps) {
                       <div className="flex items-center gap-2.5">
                         <RunPerson person={card.person} account={accountOf(project.id, card.person)} />
                         <div className="min-w-0 flex-1">
-                          <p className="truncate font-medium" title={card.title ?? card.intent}>
-                            {runName(card)}
-                          </p>
+                          <RunName card={card} title={card.title ?? card.intent} onOpen={() => host.openAgent(project.id, card.id)} />
                           {card.title?.trim() && card.intent?.trim() && (
                             <p className="truncate text-xs text-muted-foreground" title={card.intent}>
                               {card.intent}
@@ -272,9 +270,7 @@ export function LogsPage({ projects }: ModulePageProps) {
                 <li key={`${project.id}/${card.id}`} onClick={() => host.openAgent(project.id, card.id)} className="flex cursor-pointer items-center gap-2.5 border-b border-border py-2 hover:bg-accent">
                   <RunPerson person={card.person} account={accountOf(project.id, card.person)} />
                   <div className="min-w-0 flex-1">
-                    <p className="truncate font-medium" title={card.intent}>
-                      {runName(card)}
-                    </p>
+                    <RunName card={card} title={card.intent} onOpen={() => host.openAgent(project.id, card.id)} />
                     <p className="mt-0.5 flex flex-wrap items-center gap-x-3 text-xs text-muted-foreground">
                       <Status status={card.status} offline={card.offline} />
                       {many && <span>{project.name}</span>}
@@ -294,6 +290,23 @@ export function LogsPage({ projects }: ModulePageProps) {
         ))}
       </div>
     </Page>
+  )
+}
+
+/** A run's name, a button that opens the run: what the keyboard reaches of a row the pointer opens anywhere. */
+function RunName({ card, title, onOpen }: { card: Row['card']; title: string | undefined; onOpen: () => void }) {
+  return (
+    <button
+      type="button"
+      title={title}
+      onClick={event => {
+        event.stopPropagation()
+        onOpen()
+      }}
+      className="-mx-1 block max-w-[calc(100%+0.5rem)] truncate rounded-sm px-1 text-left font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-primary)]"
+    >
+      {runName(card)}
+    </button>
   )
 }
 

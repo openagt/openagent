@@ -60,6 +60,23 @@ test('the runs cut by day, each day with its runs and their cost; a run by its n
   expect(host.openAgent).toHaveBeenCalledWith('p1', 'r1')
 })
 
+test("a run's name is a button: the keyboard reaches it, and it opens the run once, on a phone too", async () => {
+  const host = hostWith([{ id: 'r1', startedAt: at(now - 1000), endedAt: at(now), status: 'done', title: 'Login page' }])
+  render(
+    <ModuleHostContext.Provider value={host}>
+      <LogsPage projects={[{ id: 'p1', name: 'alpha', gitHost: true }]} projectId={null} path={[]} />
+    </ModuleHostContext.Provider>,
+  )
+  const [table, phone] = await screen.findAllByRole('button', { name: 'Login page' })
+  fireEvent.click(table!)
+  expect(host.openAgent.mock.calls).toEqual([['p1', 'r1']])
+  fireEvent.click(phone!)
+  expect(host.openAgent.mock.calls).toEqual([
+    ['p1', 'r1'],
+    ['p1', 'r1'],
+  ])
+})
+
 test('each run as the dashboard says it stands: a record that still says running reads unknown while its computer is offline, and a run with no record yet is listed', async () => {
   const seenAt = at(now - HOUR)
   const host = hostWith(
