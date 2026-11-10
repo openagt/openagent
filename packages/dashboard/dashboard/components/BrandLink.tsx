@@ -9,6 +9,8 @@ export function BrandLink({ working, href = '/', onNavigate }: { working: boolea
   return (
     <a
       href={href}
+      // Named by the word it shows, also where the word folds away: the mark's state is the mark's to say, on hover.
+      aria-label="OpenAgent"
       onClick={event => {
         // A modified click is the browser's to handle: a new tab, a new window, a download.
         if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey || event.button !== 0) return
