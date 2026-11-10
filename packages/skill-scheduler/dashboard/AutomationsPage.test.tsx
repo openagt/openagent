@@ -461,7 +461,7 @@ describe('the Automations page: its rows', () => {
     const { host } = hostAnswering(projectId => answers[projectId]!)
     show(host, [GEMSTACK, OTHER, { id: 'p3', name: 'third', gitHost: true }])
     const gemstack = await screen.findByRole('region', { name: 'gemstack' })
-    expect(within(gemstack).getByText('Nothing here: no skill of this project says it can be scheduled.')).toBeTruthy()
+    expect(within(gemstack).getByText("No automations yet: make one with New automation, or pick a skill that schedules one on the project's Skills page.")).toBeTruthy()
     expect(screen.queryByText(/has not looked at its skills/)).toBeNull()
     expect(within(gemstack).queryByRole('list')).toBeNull()
     expect(within(gemstack).queryByRole('group')).toBeNull()
@@ -472,11 +472,13 @@ describe('the Automations page: its rows', () => {
     // Never read once: the line alone, no row.
     expect(within(other).queryByRole('list')).toBeNull()
     const third = screen.getByRole('region', { name: 'third' })
-    expect(within(third).getByText('Nothing here: no skill of this project says it can be scheduled.')).toBeTruthy()
+    expect(within(third).getByText("No automations yet: make one with New automation, or pick a skill that schedules one on the project's Skills page.")).toBeTruthy()
     // Said once, in the page's words: the tick's own note for it is not repeated in the heading.
     expect(within(third).queryByText(/no skill of this project schedules a command/)).toBeNull()
     // A project with nothing listed can still be given an automation.
-    expect(within(third).getByRole('button', { name: 'New automation in third' })).toBeTruthy()
+    // While its form is open, the line that points at the button is gone.
+    fireEvent.click(within(third).getByRole('button', { name: 'New automation in third' }))
+    expect(within(third).queryByText(/^No automations yet/)).toBeNull()
   })
 })
 

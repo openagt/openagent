@@ -245,8 +245,8 @@ export function AutomationsPage({ projects }: ModulePageProps) {
                 {unlistedWords(unreadable)}
               </p>
             ))}
-            {row.error === undefined && row.commands.length === 0 && row.unreadable.length === 0 && (
-              <p className="py-3 text-sm text-muted-foreground">Nothing here: no skill of this project says it can be scheduled.</p>
+            {row.error === undefined && row.commands.length === 0 && row.unreadable.length === 0 && creating !== row.project.id && (
+              <p className="py-3 text-sm text-muted-foreground">No automations yet: make one with New automation, or pick a skill that schedules one on the project's Skills page.</p>
             )}
             {groups.map(
               ([group, commands]) =>
