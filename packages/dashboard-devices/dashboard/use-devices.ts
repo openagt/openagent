@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { useModuleHost, usePolled, type ModuleHost, type ModuleMachines } from '@openagt/dashboard/module'
 import { failed, loadStatus, readPersonThere, type Answer, type DoorStatus, type PersonThere } from './devices.js'
-import { addThrough, askLink, connect, forget, loadDevices, loadServers, loadShared, markAdded, ownGithub, reach, type DevicesRead, type OwnGithub, type ServerRow, type ServersRead, type SharedRow, type StepState } from './servers.js'
+import { addThrough, askLink, connect, forget, installDone, loadDevices, loadServers, loadShared, markAdded, ownGithub, reach, type DevicesRead, type OwnGithub, type ServerRow, type ServersRead, type SharedRow, type StepState } from './servers.js'
 import { hasDoor, itemsOf, onTailscale, type Item, type Sources } from './model.js'
 
 // What Settings › Devices reads, read once for the list and every page of it: this computer's
@@ -145,7 +145,7 @@ export function useDevices({ everyMs, devicesEveryMs, devicesAnswerMs = DEVICES_
 
   // Who is in at each server this computer installed, a computer at home too: asked over SSH, one read at a time each.
   const [awaited, setAwaited] = useState<string | undefined>()
-  const asked = servers.filter(server => !server.working && server.steps.every(step => step.state === 'done')).map(server => server.address)
+  const asked = servers.filter(installDone).map(server => server.address)
   const lastDevices = useRef<Record<string, DevicesRead | undefined>>({})
   const [devicesError, setDevicesError] = useState<Record<string, string | undefined>>({})
   const [, setDevicesTick] = useState(0)
@@ -283,7 +283,7 @@ export function useDevices({ everyMs, devicesEveryMs, devicesAnswerMs = DEVICES_
   // A server whose install just ended is added by itself, once: a failure is told, and tried again on a press.
   useEffect(() => {
     if (!machines) return
-    for (const server of servers) if (server.adding && !server.working && server.steps.every(step => step.state === 'done') && notAdded[server.address] === undefined) void addToMachines(server)
+    for (const server of servers) if (server.adding && installDone(server) && notAdded[server.address] === undefined) void addToMachines(server)
   })
 
   const removeMachine = async (id: string): Promise<boolean> => {

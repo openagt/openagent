@@ -2,7 +2,7 @@ import { useEffect, useRef, useState, type ComponentType } from 'react'
 import { Globe, Loader2, Monitor, Server, Smartphone, Ticket, Waypoints, Wifi } from 'lucide-react'
 import { Button, Dialog, buttonVariants, cn, type ModuleMachine } from '@openagt/dashboard/module'
 import { addDevice, findComputers, readPersonThere, setSwitch, type Answer, type FoundComputer, type Given } from './devices.js'
-import { askLink } from './servers.js'
+import { askLink, installDone } from './servers.js'
 import { CodeCard, Joined, NoCodeYet, PhoneCode, RanOut, Waiting, clock, useCode } from './codes.js'
 import { ConnectServer } from './ConnectServer.js'
 import { JoinDialog } from './Join.js'
@@ -112,7 +112,7 @@ function Choose({ kinds, onPicked, onClose }: { kinds: typeof KINDS; onPicked: (
  * installed here or set up elsewhere, done; never another person's computer.
  */
 export const serversOf = (d: Devices): ModuleMachine[] =>
-  (d.machines?.machines ?? []).filter(machine => hasDoor(machine) && machine.owner === undefined && !d.servers.some(server => server.url === machine.url && (server.working || !server.steps.every(step => step.state === 'done'))))
+  (d.machines?.machines ?? []).filter(machine => hasDoor(machine) && machine.owner === undefined && !d.servers.some(server => server.url === machine.url && !installDone(server)))
 
 /** A code from a server's door, as the dialogs show it. */
 const codeAt = async (d: Devices, server: ModuleMachine): Promise<Answer<Given>> => {
@@ -135,7 +135,7 @@ interface Place {
 function placesOf(d: Devices): Place[] {
   const servers = serversOf(d).map((server): Place => ({ id: server.id, label: server.label, address: hostOf(server.url), ask: () => codeAt(d, server) }))
   const homes = d.items.flatMap((item): Place[] => {
-    if (item.kind !== 'server' || item.server.through === undefined || item.server.working || !item.server.steps.every(step => step.state === 'done') || item.door?.tailscale === undefined) return []
+    if (item.kind !== 'server' || item.server.through === undefined || !installDone(item.server) || item.door?.tailscale === undefined) return []
     const { address } = item.server
     return [{ id: `home:${address}`, label: item.name, address, tailscale: item.door.tailscale, ask: () => askLink(d.host, address) }]
   })

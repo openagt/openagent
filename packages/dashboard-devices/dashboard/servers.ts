@@ -50,6 +50,12 @@ export interface ServerRow {
   steps: StepRow[]
 }
 
+/** The server's install ended with every step done: it is installed. */
+export const installDone = (server: Pick<ServerRow, 'working' | 'steps'>): boolean => !server.working && server.steps.every(step => step.state === 'done')
+
+/** The server's install ended at a step that failed. */
+export const installFailed = (server: Pick<ServerRow, 'working' | 'steps'>): boolean => !server.working && server.steps.some(step => step.state === 'failed')
+
 /** Who on its server may start runs on a computer reached through it: nobody, or its own person, with the people they pick there besides. */
 export type Who = 'nobody' | 'me'
 
