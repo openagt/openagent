@@ -108,32 +108,34 @@ function AgentCard({ agent, view, devices, onChanged }: { agent: AgentRecord; vi
   ]
   return (
     <Card role="region" aria-label={agent.name}>
-      <CardHeader className="flex flex-row items-center gap-2 space-y-0">
-        <Bot className="size-4 shrink-0 text-muted-foreground" aria-hidden />
-        <CardTitle className="min-w-0 flex-1 truncate text-base">{agent.name}</CardTitle>
-        {isDefault && <span className="rounded-md bg-muted px-1.5 py-0.5 text-xs text-muted-foreground">the agent a session is on unless you pick another</span>}
-        <Button size="xs" variant="ghost" aria-label={`Edit ${agent.name}`} onClick={() => setEditing(true)}>
-          <Pencil className="size-3.5" aria-hidden />
-          Edit
-        </Button>
-        {!isDefault && (
-          <ConfirmDialog
-            trigger={
-              <Button size="xs" variant="ghost" className="hover:text-danger" aria-label={`Remove ${agent.name}`}>
-                <Trash2 className="size-3.5" aria-hidden />
-                Remove
-              </Button>
-            }
-            title={`Remove ${agent.name}?`}
-            body="Sessions that ran on it keep their records. Nothing is removed from any account."
-            confirmLabel="Remove"
-            onConfirm={async () => {
-              const done = await sendRemoveAgent(agent.id)
-              if (!done.ok) throw new Error(done.error)
-            }}
-            onSuccess={() => void onChanged()}
-          />
-        )}
+      <CardHeader>
+        <div className="flex items-center gap-2">
+          <Bot className="size-4 shrink-0 text-muted-foreground" aria-hidden />
+          <CardTitle className="min-w-0 flex-1 truncate text-base">{agent.name}</CardTitle>
+          <Button size="xs" variant="ghost" aria-label={`Edit ${agent.name}`} onClick={() => setEditing(true)}>
+            <Pencil className="size-3.5" aria-hidden />
+            Edit
+          </Button>
+          {!isDefault && (
+            <ConfirmDialog
+              trigger={
+                <Button size="xs" variant="ghost" className="hover:text-danger" aria-label={`Remove ${agent.name}`}>
+                  <Trash2 className="size-3.5" aria-hidden />
+                  Remove
+                </Button>
+              }
+              title={`Remove ${agent.name}?`}
+              body="Sessions that ran on it keep their records. Nothing is removed from any account."
+              confirmLabel="Remove"
+              onConfirm={async () => {
+                const done = await sendRemoveAgent(agent.id)
+                if (!done.ok) throw new Error(done.error)
+              }}
+              onSuccess={() => void onChanged()}
+            />
+          )}
+        </div>
+        {isDefault && <p className="text-xs text-muted-foreground">The agent a session is on unless you pick another.</p>}
       </CardHeader>
       <CardContent className="space-y-2 text-sm">
         <p className="flex flex-wrap items-center gap-1.5">

@@ -54,7 +54,7 @@ describe('the Agents page', () => {
     render(<AgentsPage />)
     const cards = await screen.findAllByRole('region')
     expect(cards.map(card => card.getAttribute('aria-label'))).toEqual(['Default', 'Reviewer'])
-    expect(within(cards[0]!).getByText(/the agent a session is on unless you pick another/)).toBeTruthy()
+    expect(within(cards[0]!).getByText(/The agent a session is on unless you pick another/)).toBeTruthy()
     expect(within(cards[0]!).getByText('GitHub: whatever the computer uses')).toBeTruthy()
     expect(within(cards[1]!).getByText('@octo-agent on GitHub · Claude: Dani')).toBeTruthy()
     expect(within(cards[1]!).getByText('readability')).toBeTruthy()
