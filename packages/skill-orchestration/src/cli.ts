@@ -7,7 +7,8 @@ import { isPidAlive, readyToRun, spawnRun, withdrawMarker, writeMarker } from '@
 import { parseSettings, readSettings, writeSettings } from './settings.js'
 import { cleanup } from './cleanup.js'
 import { runCommand } from './check.js'
-import { landSubagent, listSubagents, markTaskDone, nextTasks, readSubagent, retrySubagent, savePlan, showPlan, startSubagent, stopSubagent, type Started, type SubagentDeps } from './subagents.js'
+import { listSubagents, nextTasks, readSubagent, retrySubagent, savePlan, showPlan, startSubagent, stopSubagent, type Started, type SubagentDeps } from './subagents.js'
+import { landSubagent, markTaskDone } from './land.js'
 
 /** The `orchestration` command; it answers as every OpenAgent command does (`runCommandLine`). */
 
