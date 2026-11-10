@@ -67,7 +67,7 @@ vi.mock('./PromptEditor.js', async () => {
     }, [ready, props.initialText])
     return (
       <div>
-        <input aria-label="prompt" value={held} onChange={e => put(e.target.value)} disabled={props.disabled} />
+        <input aria-label="prompt" value={held} onChange={e => put(e.target.value)} disabled={props.disabled} data-seed-focus={String(props.initialFocus ?? true)} />
         <button type="button" onClick={() => props.onSubmit()}>
           editor-submit
         </button>
@@ -245,6 +245,27 @@ describe('Composer (#721)', () => {
     cleanup()
     renderComposer({ draftKey: 'launcher:p1' })
     expect(editorText()).toBe('')
+  })
+
+  test('on a phone a kept draft comes back without the caret, and one a press handed over takes it; elsewhere a kept draft takes it', () => {
+    const seedFocus = () => screen.getByLabelText('prompt').getAttribute('data-seed-focus')
+    localStorage.setItem('oa.draft:launcher:p1', 'a long draft I care about')
+    renderComposer({ draftKey: 'launcher:p1' })
+    expect(seedFocus()).toBe('true')
+    cleanup()
+    vi.stubGlobal('matchMedia', (query: string) => ({ matches: true, media: query, addEventListener: () => {}, removeEventListener: () => {} }))
+    try {
+      renderComposer({ draftKey: 'launcher:p1' })
+      expect(editorText()).toBe('a long draft I care about')
+      expect(seedFocus()).toBe('false')
+      cleanup()
+      sessionStorage.setItem('oa.pending-draft', 'carried from a ticket')
+      renderComposer({ draftKey: 'launcher:p1' })
+      expect(editorText()).toBe('carried from a ticket')
+      expect(seedFocus()).toBe('true')
+    } finally {
+      vi.unstubAllGlobals()
+    }
   })
 
   test('a browser that keeps nothing still has the draft in the box, and it is sent', () => {

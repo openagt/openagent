@@ -32,6 +32,17 @@ test('with autoFocus the box takes the caret as soon as it exists; without, it l
   await waitFor(() => expect(document.activeElement?.getAttribute('role')).toBe('textbox'))
 })
 
+test('a text the box opens with takes the caret, unless it is told not to', async () => {
+  const editor = (initialFocus: boolean) => <PromptEditor key={String(initialFocus)} onChange={vi.fn()} onSubmit={vi.fn()} projects={[]} commands={[]} initialText="a kept draft" initialFocus={initialFocus} />
+  const { rerender } = render(editor(false))
+  await waitFor(() => expect(document.querySelector('[role="textbox"]')?.textContent).toBe('a kept draft'))
+  await act(() => new Promise(resolve => setTimeout(resolve, 100)))
+  expect(document.activeElement).toBe(document.body)
+  rerender(editor(true))
+  await waitFor(() => expect(document.activeElement?.getAttribute('role')).toBe('textbox'))
+  expect(document.activeElement?.textContent).toBe('a kept draft')
+})
+
 describe('Enter sends the prompt (#1510)', () => {
   test('switching the editor off and on again is no edit: no change is told', async () => {
     const onChange = vi.fn()

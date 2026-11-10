@@ -64,6 +64,8 @@ interface PromptEditorProps {
    * lets the editor apply it when it is ready instead of the caller guessing when that is.
    */
   initialText?: string | undefined
+  /** Whether `initialText` takes the caret as it is applied: it does unless told not to. */
+  initialFocus?: boolean
   /** Take the caret as soon as the editor exists. */
   autoFocus?: boolean
 }
@@ -83,16 +85,16 @@ function insertToken(editor: Editor, range: Range, spec: TokenSpec): void {
  * so it works from the `/` menu — whose closures are built once on first render, when the
  * useEditor result is still null.
  */
-function applyTemplate(editor: Editor, text: string): void {
+function applyTemplate(editor: Editor, text: string, focus = true): void {
   editor.commands.setContent(text)
-  editor.commands.focus('end')
+  if (focus) editor.commands.focus('end')
   // Parsing the text as markdown drops a trailing space; a command loads as `/<name> ` so the
   // cursor waits after the space, where the `/` menu no longer matches and stays closed.
   if (/\s$/.test(text)) editor.commands.insertContent({ type: 'text', text: ' ' })
 }
 
 export const PromptEditor = forwardRef<PromptEditorHandle, PromptEditorProps>(function PromptEditor(
-  { onChange, onSubmit, onPreset, onMentionProject, onMentionFile, onMentionRemoved, projects, files = [], commands, customPresets = [], projectPresets = [], onNewPreset, disabled = false, placeholder = 'Describe what to do…', initialText, autoFocus = false },
+  { onChange, onSubmit, onPreset, onMentionProject, onMentionFile, onMentionRemoved, projects, files = [], commands, customPresets = [], projectPresets = [], onNewPreset, disabled = false, placeholder = 'Describe what to do…', initialText, initialFocus = true, autoFocus = false },
   ref,
 ) {
   const [isEmpty, setIsEmpty] = useState(true)
@@ -155,9 +157,9 @@ export const PromptEditor = forwardRef<PromptEditorHandle, PromptEditorProps>(fu
   // Replacing a typed draft loads without a blocking confirm (#948): the replacement is one
   // undo step (history groups the draft separately after its ~500ms window), and the caller
   // gets `replaced` back so its note can say "undo brings it back".
-  const loadTemplateInto = (ed: Editor, text: string): boolean => {
+  const loadTemplateInto = (ed: Editor, text: string, focus = true): boolean => {
     const replaced = !ed.isEmpty
-    applyTemplate(ed, text)
+    applyTemplate(ed, text, focus)
     // setContent emits no update, so the chips are reconciled here too.
     syncMentions(ed)
     setIsEmpty(ed.isEmpty)
@@ -323,7 +325,7 @@ export const PromptEditor = forwardRef<PromptEditorHandle, PromptEditorProps>(fu
   useEffect(() => {
     if (!editor || seeded.current || !initialText) return
     seeded.current = true
-    loadTemplateInto(editor, initialText)
+    loadTemplateInto(editor, initialText, initialFocus)
   }, [editor, initialText])
 
   // The placeholder is absolutely positioned, so it must share the editor's padding (`px-3 py-2.5`)

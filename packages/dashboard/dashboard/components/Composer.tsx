@@ -28,6 +28,7 @@ import { thisMachineName } from '../lib/this-machine.js'
 import { useMachineStatus } from '../lib/use-machine-status.js'
 import { keepDraft, keptDraft, takePendingDraft } from '../lib/draft-handoff.js'
 import { DaemonDown } from '../lib/use-daemon-health.js'
+import { useIsMobile } from '../lib/use-mobile.js'
 import { driverOptions, modelEfforts, readMachineModelsAhead, useModelsOn } from '../lib/models.js'
 import { readyCommands, useProjectLauncher } from '../lib/use-project-launcher.js'
 import { AgentAccountItems, firstAccount, readMachineAccountsAhead, useAccountsOn } from './AgentAccounts.js'
@@ -217,12 +218,17 @@ export const Composer = forwardRef<ComposerHandle, {
   // once and cleared, while `loadTemplate` silently does nothing until Tiptap has resolved
   // (`immediatelyRender: false`), so pushing it at mount dropped the draft and left an empty
   // composer. `prompt` then arrives the normal way, through the editor's own onChange.
-  const [carriedDraft, setCarriedDraft] = useState<string | undefined>(() => (draftKey !== undefined ? keptDraft(draftKey) : undefined))
+  // On a phone a kept draft comes back without the caret, which would raise the keyboard; one a press handed over takes it.
+  const [carriedDraft, setCarriedDraft] = useState<{ text: string; handedOver: boolean } | undefined>(() => {
+    const kept = draftKey !== undefined ? keptDraft(draftKey) : undefined
+    return kept === undefined ? undefined : { text: kept, handedOver: false }
+  })
   useEffect(() => {
     if (inAgent) return
     const carried = takePendingDraft()
-    if (carried) setCarriedDraft(carried)
+    if (carried) setCarriedDraft({ text: carried, handedOver: true })
   }, [inAgent])
+  const phone = useIsMobile()
 
   // A synchronous latch alongside the async `busy` prop (#948): two fast ⌘↵ presses both read
   // `busy === false` (React state lags), fired two starts, and the second surfaced a spurious
@@ -269,7 +275,7 @@ export const Composer = forwardRef<ComposerHandle, {
       onNewPreset={() => setAddingPreset(true)}
       disabled={busy}
       {...(placeholder ? { placeholder } : {})}
-      {...(carriedDraft ? { initialText: carriedDraft } : {})}
+      {...(carriedDraft ? { initialText: carriedDraft.text, initialFocus: carriedDraft.handedOver || !phone } : {})}
       autoFocus={autoFocus}
     />
   )
