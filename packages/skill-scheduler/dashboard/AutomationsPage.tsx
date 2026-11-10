@@ -5,7 +5,8 @@ import { AutomationForm } from './AutomationForm.js'
 import { CodeWords, Command } from './CodeWords.js'
 import { EditPanel } from './EditPanel.js'
 import { openedAutomation, type OpenedAutomation } from './automation-form.js'
-import { atOnce, atOnceWords, cannotRun, decided, notAsked, startedNow, type Answered, isOwn, ownPace, pace, publishes, readSchedulers, schedulersKey, rowTitle, runsOnWords, saysAtOnce, schedulerStatus, schedulerStopped, unlistedWords, type AgentModels, type SchedulerCommand, type SchedulerRow } from './schedulers.js'
+import { DEFAULT_AGENT } from '../src/names.js'
+import { atOnce, atOnceWords, cannotRun, decided, notAsked, startedNow, type Answered, isOwn, modelLabel, ownPace, pace, publishes, readSchedulers, schedulersKey, rowTitle, runsOnWords, saysAtOnce, schedulerStatus, schedulerStopped, unlistedWords, type AgentModels, type SchedulerCommand, type SchedulerRow } from './schedulers.js'
 
 // The Automations page: what starts by itself while nobody is at the keyboard. One part per
 // project the page is given (every project that has this package, or the one picked in the
@@ -149,7 +150,8 @@ export function AutomationsPage({ projects }: ModulePageProps) {
             <div className="flex flex-wrap items-center gap-x-3 gap-y-1 border-b border-border pb-2">
               <h2 className="text-sm font-semibold">{row.project.name}</h2>
               <span className={cn('text-xs font-medium', status.tone)}>Scheduler {status.label}</span>
-              {row.model && <span className="text-xs text-muted-foreground">{row.model}</span>}
+              {/* The model a row's runs on Claude Code are on when nothing else names one, by its name in the rows' lines. */}
+              {row.model && <span className="text-xs text-muted-foreground">Model: {modelLabel(agents, DEFAULT_AGENT, row.model)}</span>}
               {row.lastTick && (
                 <span className="text-xs text-muted-foreground">
                   last tick{' '}

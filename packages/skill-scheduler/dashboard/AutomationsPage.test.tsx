@@ -88,7 +88,8 @@ describe('the Automations page: its rows', () => {
     const gemstack = await screen.findByRole('region', { name: 'gemstack' })
     expect(screen.getByText("What starts by itself while nobody is at the keyboard. Every row starts switched off: it runs on this machine only once you switch it on here.")).toBeTruthy()
     expect(within(gemstack).getByText('Scheduler on').className).toMatch(/text-success/)
-    expect(within(gemstack).getByText('opus')).toBeTruthy()
+    // The scheduler's model, named as the rows name it.
+    expect(await within(gemstack).findByText('Model: Opus 5.5')).toBeTruthy()
     // Nobody made a row of their own here: one group, the skills'.
     expect(within(gemstack).getAllByRole('group').map(g => g.getAttribute('aria-label'))).toEqual(["From the project's skills"])
 
