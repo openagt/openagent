@@ -1,0 +1,25 @@
+name: Nightly
+# What a pull request's CI cannot see, once a day: the whole suite where agents run it, as root in a
+# container, with the coding agents' own CLIs installed. The wire tests of `claude` and `codex` check
+# protocols neither one documents, and skip where the CLI is missing, which is every pull request's
+# runner: a release that changes what the drivers read, or a test that only passes when not root,
+# shows up here.
+on:
+  schedule:
+    - cron: '17 4 * * *'
+  workflow_dispatch:
+
+jobs:
+  as-agents-run-it:
+    runs-on: ubuntu-latest
+    # Runs as root, as agents' containers do.
+    container: node:22
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - run: pnpm install
+      - run: pnpm build
+      # The latest of each, on purpose: the point is to hear of the release that changes them.
+      - run: npm install -g @anthropic-ai/claude-code@latest @openai/codex@latest
+      - run: claude --version && codex --version
+      - run: pnpm test
