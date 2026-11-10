@@ -102,6 +102,21 @@ describe('the Agents page', () => {
     expect(screen.getByLabelText('GitHub account').textContent).toBe('None — whatever the computer uses')
   })
 
+  test('"All" is ticked while no account of a coding agent is picked; ticking one leaves it, ticking "All" again drops the picks', async () => {
+    render(<AgentsPage />)
+    fireEvent.click(await screen.findByRole('button', { name: 'Edit Reviewer' }))
+    const editor = screen.getByRole('dialog', { name: 'Editing Reviewer' })
+    const checked = (name: string) => within(editor).getByLabelText(name).getAttribute('aria-checked')
+    expect([checked('All Claude accounts'), checked('Claude account Dani')]).toEqual(['false', 'true'])
+    fireEvent.click(within(editor).getByLabelText('All Claude accounts'))
+    expect([checked('All Claude accounts'), checked('Claude account Dani')]).toEqual(['true', 'false'])
+    fireEvent.click(within(editor).getByLabelText('Claude account Claude login on Studio'))
+    expect([checked('All Claude accounts'), checked('Claude account Claude login on Studio')]).toEqual(['false', 'true'])
+    fireEvent.click(within(editor).getByLabelText('All Claude accounts'))
+    fireEvent.click(within(editor).getByRole('button', { name: 'Save' }))
+    await waitFor(() => expect(rpc.sendSaveAgent).toHaveBeenCalledWith({ id: 'reviewer', name: 'Reviewer', skills: ['ask', 'readability'], accounts: { github: 'octo-agent' }, projectSkills: false }))
+  })
+
   test('with no GitHub account of OpenAgent\u2019s yet, one is added from the editor, in its dialog, and is then the one picked; what was typed stays', async () => {
     const github = (accounts: string[]) => ({ hosts: [{ host: 'github.com', projects: [], provider: { name: 'GitHub', requestWord: 'pull request', tool: 'gh', installed: true, install: 'brew install gh', accounts: accounts.map(login => ({ login, runs: true, ok: true })) } }] })
     rpc.onAgentsList.mockResolvedValue({ ...VIEW, github: { host: 'github.com', accounts: [] } })

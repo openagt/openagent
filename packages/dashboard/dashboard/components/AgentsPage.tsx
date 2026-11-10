@@ -350,21 +350,26 @@ function AgentEditor({ agent, view, onAccounts, onDone }: { agent?: AgentRecord;
             <p className="text-xs text-muted-foreground">Runs push and open pull requests as this account. An account this computer does not have refuses the start.</p>
             {addingAccount.dialog}
           </div>
-          <AccountPicks label="Claude" accounts={view.claude} picked={draft.claude} busy={busy} onTick={(id, on) => tick('claude', id, on)} />
-          <AccountPicks label="Codex" accounts={view.codex} picked={draft.codex} busy={busy} onTick={(id, on) => tick('codex', id, on)} />
+          <AccountPicks label="Claude" accounts={view.claude} picked={draft.claude} busy={busy} onTick={(id, on) => tick('claude', id, on)} onAll={() => setDraft(d => ({ ...d, claude: new Set() }))} />
+          <AccountPicks label="Codex" accounts={view.codex} picked={draft.codex} busy={busy} onTick={(id, on) => tick('codex', id, on)} onAll={() => setDraft(d => ({ ...d, codex: new Set() }))} />
         </div>
       </div>
     </Dialog>
   )
 }
 
-/** A coding agent's accounts to pick from: none ticked means all of this computer's; one or more, those alone, where the computer has them. */
-function AccountPicks({ label, accounts, picked, busy, onTick }: { label: string; accounts: readonly { id: string; name: string }[]; picked: Set<string>; busy: boolean; onTick: (id: string, on: boolean) => void }) {
+/** A coding agent's accounts to pick from: "All", ticked while none is picked, is every one of this computer's; one or more ticked, those alone, where the computer has them. */
+function AccountPicks({ label, accounts, picked, busy, onTick, onAll }: { label: string; accounts: readonly { id: string; name: string }[]; picked: Set<string>; busy: boolean; onTick: (id: string, on: boolean) => void; onAll: () => void }) {
   if (accounts.length === 0) return null
   return (
     <fieldset className="space-y-1.5">
       <legend className="text-sm">{label}</legend>
       <div className="flex flex-wrap gap-3">
+        {/* Left by ticking an account, as a radio is left by picking another. */}
+        <label className="flex cursor-pointer items-center gap-2 text-sm">
+          <Checkbox checked={picked.size === 0} onCheckedChange={checked => checked === true && onAll()} disabled={busy} aria-label={`All ${label} accounts`} />
+          All
+        </label>
         {accounts.map(account => (
           <label key={account.id} className="flex cursor-pointer items-center gap-2 text-sm">
             <Checkbox checked={picked.has(account.id)} onCheckedChange={checked => onTick(account.id, checked === true)} disabled={busy} aria-label={`${label} account ${account.name}`} />
