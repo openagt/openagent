@@ -4,7 +4,7 @@ import { chmod, lstat, mkdir, readFile, readlink, rm, symlink } from 'node:fs/pr
 import { join } from 'node:path'
 import type { AgentAccount, DriverRateWindow } from '@openagt/agent-driver'
 import { askCodex, askOnce, type AskOptions } from './codex-ask.js'
-import { driverStateDir, prepareCodexHome } from './codex-home.js'
+import { driverStateDir, personalCodexHome, prepareCodexHome } from './codex-home.js'
 
 // The Codex accounts runs may use (`@openagt/skill-account-rotation` keeps the list): the person's
 // own login, in their own Codex home, and the ones added beside it. Codex keeps a login and the
@@ -55,6 +55,16 @@ export async function accountHome(folder: string, base: string, setup: boolean):
     })
   }
   return home
+}
+
+/**
+ * The environment a turn on `account` runs with, from a session's `env`: an added account's own
+ * login, with the conversations of the home the person's own login runs from (`env`'s), and with
+ * `setup`, their setup too; the person's own login as `env` has it.
+ */
+export async function accountEnv(account: AgentAccount, env: NodeJS.ProcessEnv, setup: boolean): Promise<NodeJS.ProcessEnv> {
+  if (account.login === undefined) return env
+  return { ...env, CODEX_HOME: await accountHome(accountFolder(account, env), personalCodexHome(env), setup) }
 }
 
 /** Who a Codex home is logged in as, as its login says: a name to show, and what tells two logins apart. */

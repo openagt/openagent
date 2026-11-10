@@ -2,7 +2,7 @@ import { execFile, spawn as nodeSpawn } from 'node:child_process'
 import { readdir } from 'node:fs/promises'
 import { homedir } from 'node:os'
 import { join, resolve } from 'node:path'
-import { accountFolder, accountHome, codexWindows } from './codex-accounts.js'
+import { accountEnv, accountFolder, accountHome, codexWindows } from './codex-accounts.js'
 import { defaultCodexHome, personalCodexHome, prepareCodexHome } from './codex-home.js'
 import { type AccountReading, type AccountRotation, accountTurn, type Question, toolQuestion, type DriverRateWindow, type ReadyPrompt, readyPrompt, runCliSession, continuingTurn, finishTurn, agentEnv, attachLog, combineFraming, combineSignals, makeEmit, promptSent, readWorkspaceFile, oneLine, cutOutput, callArgument, lineCount, patchSize, hunkLines, checkCliReady, type AgentCliParser, type CliIo, type CliSpec, type DriverReadiness, type DriverReadyOptions, type PersonalSetup, type SpawnLike, type SessionLog, type Driver, type DriverEvent, type FileChange, type DriverModel, type DriverPromptOptions, type DriverSession, type DriverStartOptions, type DriverTurn, type DriverUsage, steeredWords } from '@openagt/agent-driver'
 
@@ -241,8 +241,7 @@ export class CodexSession implements DriverSession {
             this.lastSessionId = id
           },
           run: async (account, said, sent) => {
-            // An added account's own login, with the conversations of the home the person's own runs from.
-            const turnEnv = account.login === undefined ? env : { ...env, CODEX_HOME: await accountHome(accountFolder(account, env), personalCodexHome(env), this.config.personal?.skills !== false) }
+            const turnEnv = await accountEnv(account, env, this.config.personal?.skills !== false)
             const parser = this.parser(said, sent)
             return accountTurn(() => this.turnOn(said, sent, parser, turnEnv, emit), () => parser.accountReading())
           },
@@ -262,7 +261,7 @@ export class CodexSession implements DriverSession {
     return readyPrompt(async (words, stop) => {
       const env = this.config.env ?? process.env
       const first = this.config.accounts?.first(env)
-      const turnEnv = first?.login === undefined ? env : { ...env, CODEX_HOME: await accountHome(accountFolder(first, env), personalCodexHome(env), this.config.personal?.skills !== false) }
+      const turnEnv = first === undefined ? env : await accountEnv(first, env, this.config.personal?.skills !== false)
       return this.turnOn('', { signal: stop }, this.parser(words, {}), turnEnv, makeEmit(this.startOpts.onEvent, 'codex'))
     })
   }
