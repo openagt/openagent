@@ -6,10 +6,12 @@ import { Tooltip, TooltipContent, TooltipTrigger } from './tooltip.js'
 // words with an icon, no border, every one the same height and size, a little smaller than the
 // box's own text, muted until pointed at. A class as well as a component, so a menu's button is
 // drawn the same way as a word that is only said.
-// min-w-0 and overflow-hidden: in a full row an item gives way, and its label is cut short. On a
-// phone the row is too narrow for every item cut short to say anything: there each keeps its whole
-// width, and the row scrolls sideways (Composer).
-export const rowItemClass = 'inline-flex h-7 min-w-0 max-w-full shrink items-center gap-1.5 overflow-hidden rounded-md px-2 text-[13px] font-normal text-muted-foreground max-sm:max-w-none max-sm:shrink-0'
+// min-w-0 and overflow-hidden: in a full row an item gives way, and its label is cut short. In a
+// narrow box (a phone, a chat beside panes) the row is too narrow for every item cut short to say
+// anything: there each keeps its whole width, and the row scrolls sideways (Composer). Narrow is the
+// box's own width, its callers' `@container`, not the screen's. Each width's size is said for its
+// own widths only: a module's stylesheet, loaded later, has its own copy of a plain class, which would win.
+export const rowItemClass = 'inline-flex h-7 min-w-0 @xl:max-w-full items-center gap-1.5 overflow-hidden rounded-md px-2 text-[13px] font-normal text-muted-foreground @max-xl:max-w-none @max-xl:shrink-0'
 
 /** A row item that is a button: it lights up under the pointer and shows the keyboard's focus. */
 export const rowButtonClass = cn(
@@ -19,13 +21,13 @@ export const rowButtonClass = cn(
 
 /** A row of items above or under the box: one line of a fixed height, no wrap. */
 export const rowClass = 'flex h-8 items-center gap-2'
-/** Its left side, which gives way: each item cut short, and on a phone, where cut short they would say nothing, scrolled sideways under a faded edge. */
-export const rowLeftClass = 'flex min-w-0 flex-1 items-center gap-0.5 max-sm:overflow-x-auto max-sm:[scrollbar-width:none] max-sm:[mask-image:linear-gradient(to_right,#000_85%,transparent)]'
+/** Its left side, which gives way: each item cut short, and in a narrow box, where cut short they would say nothing, scrolled sideways under a faded edge. */
+export const rowLeftClass = 'flex min-w-0 flex-1 items-center gap-0.5 @max-xl:overflow-x-auto @max-xl:[scrollbar-width:none] @max-xl:[mask-image:linear-gradient(to_right,#000_85%,transparent)]'
 
 /**
  * The row above the box, on both pages: where the agent starts, or where it started. A fixed height
  * and no wrap, so a name that lands late moves nothing; the later items give way first, each cut
- * short, and on a phone the row scrolls sideways, its right edge faded to say so.
+ * short, and in a narrow box the row scrolls sideways, its right edge faded to say so.
  */
 export function RowAboveBox({ children }: { children: ReactNode }) {
   return (
@@ -42,7 +44,7 @@ export function RowAboveBox({ children }: { children: ReactNode }) {
 export function RowOff({ tip, children }: { tip: string; children: ReactElement }) {
   return (
     <Tooltip>
-      <TooltipTrigger render={<span className="inline-flex min-w-0 max-w-full shrink max-sm:max-w-none max-sm:shrink-0" />}>{children}</TooltipTrigger>
+      <TooltipTrigger render={<span className="inline-flex min-w-0 @xl:max-w-full @max-xl:max-w-none @max-xl:shrink-0" />}>{children}</TooltipTrigger>
       <TooltipContent>{tip}</TooltipContent>
     </Tooltip>
   )

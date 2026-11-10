@@ -287,7 +287,7 @@ export function StartAgentForm({
   return (
     // The width and the padding of an agent's message box (`AgentComposer.tsx`): the box is in the
     // same place on both pages.
-    <form onSubmit={e => e.preventDefault()} className="relative mx-auto w-full max-w-3xl p-2">
+    <form onSubmit={e => e.preventDefault()} className="@container relative mx-auto w-full max-w-3xl p-2">
       <Composer
         // A box of its own per project, so the prompt carried over from the picker lands in it (below).
         key={projectId}
