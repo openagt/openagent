@@ -11,7 +11,7 @@ import { projectGitHost, type GitHost } from './git-host.js'
 import { basicSkills } from './basic-skills.js'
 import { leavingOut } from './project-skills.js'
 import type { ProjectSkillsPick } from './agent.js'
-import { acquireRunLock, isPidAlive, releaseRunLock } from './run-lock.js'
+import { isPidAlive, withRunLock } from './run-lock.js'
 import { runEndedLine } from './ended.js'
 import { askName, isBareCommand, nameRun, type AskedName } from './title.js'
 import { childEndedLine, tellParent, type ParentDeps } from './parent.js'
@@ -136,7 +136,66 @@ function carried(marked: RunCard | undefined, card: RunCard): RunCard {
   return { ...theirs, ...card, ...(Object.keys(caller).length > 0 ? { caller: { ...caller, ...card.caller } } : {}) }
 }
 
-export interface RunOptions {
+/**
+ * What a run's process is handed beside what the run is asked, the same for a fresh run and a
+ * continued one: the coding agent, and every dependency a test may stand in for, the real one when absent.
+ */
+export interface RunDeps {
+  driver: Driver
+  /** How an ended parent is continued, in its own process; absent, only a working parent is told. */
+  resume?: ParentDeps['resume']
+  host?: string
+  pid?: number
+  /** Whether a pid is a live process here: what the run's lock asks of its holder. */
+  isAlive?: (pid: number) => boolean
+  now?: () => Date
+  git?: GitRunner
+  /** The project's git host; the one the project declares when absent. */
+  gitHost?: GitHost
+  /** The skills linked into the checkout beside the branches skill, for the run's agent; the basic ones (`basic-skills.ts`) when absent. */
+  skills?: (repo: string, agent: { ownQuestionTool?: boolean }) => Promise<readonly SkillLink[]>
+  logs?: LogsDeps
+  log?: (line: string) => void
+}
+
+/** What a run's process works with: {@link RunDeps} as given, else the real ones. */
+interface RunProcess {
+  host: string
+  pid: number
+  isAlive: (pid: number) => boolean
+  git: GitRunner
+  gitHost: GitHost
+  clock: () => string
+  logs: LogsDeps
+  log: (line: string) => void
+  /** What telling the run's parent needs, when its record names one. */
+  telling: ParentDeps
+}
+
+function runProcess(deps: RunDeps): RunProcess {
+  const now = deps.now ?? (() => new Date())
+  const host = deps.host ?? hostname()
+  const isAlive = deps.isAlive ?? isPidAlive
+  const log = deps.log ?? (() => {})
+  return {
+    host,
+    pid: deps.pid ?? process.pid,
+    isAlive,
+    git: deps.git ?? nodeGitRunner(),
+    gitHost: deps.gitHost ?? projectGitHost,
+    clock: () => now().toISOString(),
+    logs: deps.logs ?? {},
+    log,
+    telling: { host, isAlive, ...(deps.resume ? { resume: deps.resume } : {}), log },
+  }
+}
+
+/** The skills a run links into its checkout, for its coding agent; none when they cannot be read. */
+function linkedSkills(repo: string, deps: RunDeps): Promise<readonly SkillLink[]> {
+  return (deps.skills ?? basicSkills)(repo, deps.driver).catch((): SkillLink[] => [])
+}
+
+export interface RunOptions extends RunDeps {
   /** What the agent is told, usually a slash command. */
   prompt: string
   /**
@@ -158,7 +217,6 @@ export interface RunOptions {
   model?: string
   /** How hard that model may think (`--effort`); the tool's own default when absent. */
   effort?: string
-  driver: Driver
   /** The branch to work on, an existing one; a fresh `agent-<id>` when absent. */
   branch?: string
   /** How far the agent publishes when it finishes; absent, only what the prompt itself asks. */
@@ -183,20 +241,6 @@ export interface RunOptions {
   skillsOn?: string[]
   skillsOff?: string[]
   projectSkills?: ProjectSkillsPick
-  /** How an ended parent is continued, in its own process; absent, only a working parent is told. */
-  resume?: ParentDeps['resume']
-  host?: string
-  pid?: number
-  /** Whether a pid is a live process here: what the run's lock asks of its holder. */
-  isAlive?: (pid: number) => boolean
-  now?: () => Date
-  git?: GitRunner
-  /** The project's git host; the one the project declares when absent. */
-  gitHost?: GitHost
-  /** The skills linked into the checkout beside the branches skill, for the run's agent; the basic ones (`basic-skills.ts`) when absent. */
-  skills?: (repo: string, agent: { ownQuestionTool?: boolean }) => Promise<readonly SkillLink[]>
-  logs?: LogsDeps
-  log?: (line: string) => void
 }
 
 export interface RunOutcome {
@@ -220,32 +264,24 @@ export function namedAtStart(opts: { prompt: string; marked?: boolean; parent?: 
 }
 
 export async function runCommand(repo: string, opts: RunOptions): Promise<RunOutcome> {
-  const git = opts.git ?? nodeGitRunner()
-  const now = opts.now ?? (() => new Date())
-  const clock = () => now().toISOString()
-  const host = opts.host ?? hostname()
-  const pid = opts.pid ?? process.pid
-  const startedAt = opts.startedAt ?? clock()
+  const here = runProcess(opts)
+  const startedAt = opts.startedAt ?? here.clock()
   const id = opts.id ?? runIdFrom(startedAt)
-  let mark: RunnerMark = { host, pid, ...lasting(opts) }
-  const log = opts.log ?? (() => {})
-  const logs = opts.logs ?? {}
-  const isAlive = opts.isAlive ?? isPidAlive
-  const telling: ParentDeps = { host, isAlive, ...(opts.resume ? { resume: opts.resume } : {}), log }
+  let mark: RunnerMark = { host: here.host, pid: here.pid, ...lasting(opts) }
 
-  await acquireRunLock(repo, id, { pid, isAlive })
-  try {
+  return withRunLock(repo, id, here, async () => {
     // A person's run marks itself; a scheduler's run was marked before it was spawned. The marker
     // is pushed while the checkout is made and the agent starts: pushing takes seconds, and the
     // person watching the run waits on the agent. It never writes `.git/config`, so the agent's own
     // git is never locked out by it. The run's record waits on it, so it lands after.
+    const marker = markerCard({ id, startedAt, prompt: opts.prompt, driver: opts.driver.id, ...modelOf(opts.model), mark })
     const marking = opts.marked
       ? Promise.resolve()
-      : writeMarker(repo, markerCard({ id, startedAt, prompt: opts.prompt, driver: opts.driver.id, ...modelOf(opts.model), ...effortOf(opts.effort), mark }), logs).then(
+      : writeMarker(repo, marker, here.logs).then(
           marked => {
-            if (!marked.ok && !marked.committed) log(`[agent-runner] the run's record could not be written: ${marked.error}`)
+            if (!marked.ok && !marked.committed) here.log(`[agent-runner] the run's record could not be written: ${marked.error}`)
           },
-          err => log(`[agent-runner] the run's record could not be written: ${errorMessage(err)}`),
+          err => here.log(`[agent-runner] the run's record could not be written: ${errorMessage(err)}`),
         )
 
     // The run's short name is asked for first of all, beside the checkout and the agent's start
@@ -260,35 +296,34 @@ export async function runCommand(repo: string, opts: RunOptions): Promise<RunOut
     let checkout: Workspace
     const sessions = await sessionsHomeOf(repo)
     try {
-      const skills = await (opts.skills ?? basicSkills)(repo, opts.driver).catch((): SkillLink[] => [])
+      const skills = await linkedSkills(repo, opts)
       // The project's own skills the session leaves out stay out of this checkout alone.
-      const without = leavingOut(mark.projectSkills, git)
+      const without = leavingOut(mark.projectSkills, here.git)
       checkout =
         sessions !== undefined
-          ? await openSessionFolder(sessions, id, skills, mark.repos, git)
+          ? await openSessionFolder(sessions, id, skills, mark.repos, here.git)
           : opts.branch !== undefined
-            ? await attachCheckout(repo, { agentId: id, branch: opts.branch, skills, without }, git)
-            : await createCheckout(repo, { agentId: id, skills, without, ...(opts.base !== undefined ? { base: opts.base } : {}) }, git)
+            ? await attachCheckout(repo, { agentId: id, branch: opts.branch, skills, without }, here.git)
+            : await createCheckout(repo, { agentId: id, skills, without, ...(opts.base !== undefined ? { base: opts.base } : {}) }, here.git)
     } catch (err) {
       naming?.stop.abort()
       const detail = `could not create a checkout: ${errorMessage(err)}`
-      const endedAt = clock()
+      const endedAt = here.clock()
       await marking
-      await recordRun(repo, { ...markerCard({ id, startedAt, prompt: opts.prompt, driver: opts.driver.id, ...modelOf(opts.model), ...effortOf(opts.effort), mark }), status: 'failed', endedAt }, [{ kind: 'ended', status: 'failed', detail, at: endedAt }], logs)
-      if (opts.parent !== undefined) await tellParent(repo, opts.parent, childEndedLine({ id, status: 'failed', detail }), telling)
+      await recordRun(repo, { ...marker, status: 'failed', endedAt }, [{ kind: 'ended', status: 'failed', detail, at: endedAt }], here.logs)
+      if (opts.parent !== undefined) await tellParent(repo, opts.parent, childEndedLine({ id, status: 'failed', detail }), here.telling)
       return { id, status: 'failed', checkout: { reclaimed: false, reason: 'no checkout' }, detail }
     }
     // Only a branch this run made: one it was given holds another run's work, begun elsewhere.
-    if (checkout.branch !== undefined && opts.branch === undefined) mark = { ...mark, ...(await startCommit(checkout.path, git)) }
+    if (checkout.branch !== undefined && opts.branch === undefined) mark = { ...mark, ...(await startCommit(checkout.path, here.git)) }
     // A run another tool marked carries what only that tool knows: orchestration writes the task's
     // name as the run's `title` and the task's id under `caller`. This process builds its card from
     // its own arguments, which never held either, and that card seeds the live card the record is
     // written from at the end — so without reading the marker back, a run loses those fields the
     // moment it ends, which is when a person and the tool that started it read them.
     const marked = opts.marked ? await findRun(repo, id).catch(() => undefined) : undefined
-    // Awaited here, not returned: the lock is let go in `finally`, and a bare `return` of the
-    // promise would run that before the session ends, leaving the run to the sweep.
-    return await session(repo, {
+    return session(repo, {
+      ...here,
       id,
       checkout,
       card: carried(marked, {
@@ -300,7 +335,7 @@ export async function runCommand(repo: string, opts: RunOptions): Promise<RunOut
         ...modelOf(opts.model),
         ...effortOf(opts.effort),
         ...(checkout.branch !== undefined ? { branch: checkout.branch } : {}),
-        caller: { runner: mark, pid, host, ...forReaders(mark), kind: 'prompt', workspace: checkout.path },
+        caller: { runner: mark, pid: here.pid, host: here.host, ...forReaders(mark), kind: 'prompt', workspace: checkout.path },
       }),
       prompt: opts.prompt,
       ...(opts.attached !== undefined ? { attached: opts.attached } : {}),
@@ -311,19 +346,11 @@ export async function runCommand(repo: string, opts: RunOptions): Promise<RunOut
       ...(naming !== undefined ? { named: naming } : {}),
       continued: false,
       marking,
-      telling,
-      git,
-      gitHost: opts.gitHost ?? projectGitHost,
-      logs,
-      log,
-      clock,
     })
-  } finally {
-    await releaseRunLock(repo, id, pid).catch(() => {})
-  }
+  })
 }
 
-export interface ResumeOptions {
+export interface ResumeOptions extends RunDeps {
   /** The run to continue: one that ended `waiting`, or any ended run whose session the driver can resume. */
   id: string
   /** The user's words to the agent; or, with `answer`, absent. */
@@ -336,24 +363,10 @@ export interface ResumeOptions {
   gitAccount?: string
   /** Who resumes the run, kept on its mark with the time: a scheduler's row, which counts the run as its own from then on. */
   by?: string
-  driver: Driver
-  /** How an ended parent is continued, in its own process; absent, only a working parent is told. */
-  resume?: ParentDeps['resume']
+  /** The model this leg starts on; the record's own when absent. */
   model?: string
   /** How hard the model may think on this leg; the record's own when absent. */
   effort?: string
-  host?: string
-  pid?: number
-  /** Whether a pid is a live process here: what the run's lock asks of its holder. */
-  isAlive?: (pid: number) => boolean
-  now?: () => Date
-  git?: GitRunner
-  /** The project's git host; the one the project declares when absent. */
-  gitHost?: GitHost
-  /** The skills linked into the checkout beside the branches skill, for the run's agent; the basic ones (`basic-skills.ts`) when absent. */
-  skills?: (repo: string, agent: { ownQuestionTool?: boolean }) => Promise<readonly SkillLink[]>
-  logs?: LogsDeps
-  log?: (line: string) => void
 }
 
 /**
@@ -369,29 +382,19 @@ export interface ResumeOptions {
  * here is not.
  */
 export async function resumeRun(repo: string, opts: ResumeOptions): Promise<RunOutcome> {
-  const git = opts.git ?? nodeGitRunner()
-  const now = opts.now ?? (() => new Date())
-  const clock = () => now().toISOString()
-  const host = opts.host ?? hostname()
-  const pid = opts.pid ?? process.pid
-  const logs = opts.logs ?? {}
-  const log = opts.log ?? (() => {})
-
-  const id = opts.id
-  const isAlive = opts.isAlive ?? isPidAlive
+  const here = runProcess(opts)
   // Another process of this run, the one that ended it and still records and reclaims, or a
   // resume started just before this one, goes first: this one waits, then reads the run as that
   // one left it.
-  await acquireRunLock(repo, id, { pid, isAlive })
-  try {
-    const card = await findRun(repo, opts.id, logs)
+  return withRunLock(repo, opts.id, here, async () => {
+    const card = await findRun(repo, opts.id, here.logs)
     if (!card) throw new Error(`no run ${opts.id}`)
     // Every process of this run is gone by now, so a record still saying running is one whose
     // process died before it could end it: the sweep's to close first.
     if (card.status === 'running') throw new Error(`run ${opts.id} is still recorded running`)
     const previous = runnerMark(card)
     if (!previous) throw new Error(`run ${opts.id} is not this tool's`)
-    const diary = (await readDiary(repo, opts.id, logs)) ?? []
+    const diary = (await readDiary(repo, opts.id, here.logs)) ?? []
     const sessionId = typeof card.caller?.['sessionId'] === 'string' ? (card.caller['sessionId'] as string) : undefined
 
     let prompt: string
@@ -405,32 +408,31 @@ export async function resumeRun(repo: string, opts: ResumeOptions): Promise<RunO
       throw new Error('a text or an answer is needed to resume a run')
     }
 
-    const skills = await (opts.skills ?? basicSkills)(repo, opts.driver).catch((): SkillLink[] => [])
+    const skills = await linkedSkills(repo, opts)
     const sessions = await sessionsHomeOf(repo)
     // A session's folder is opened again as it is, and made again when someone removed it.
-    const checkout: Workspace & { again?: true } = sessions !== undefined ? await openSessionFolder(sessions, opts.id, skills, previous.repos, git) : await projectCheckout(repo, opts.id, card.branch, previous.base, skills, leavingOut(previous.projectSkills, git), git)
+    const checkout: Workspace & { again?: true } = sessions !== undefined ? await openSessionFolder(sessions, opts.id, skills, previous.repos, here.git) : await projectCheckout(repo, opts.id, card.branch, previous.base, skills, leavingOut(previous.projectSkills, here.git), here.git)
     // A branch that was gone everywhere was just made again, from where it starts as that is now:
     // that is where the run's own work begins. One still on origin came back with its work.
-    const restarted = checkout.again ? await startCommit(checkout.path, git) : {}
+    const restarted = checkout.again ? await startCommit(checkout.path, here.git) : {}
 
     // The record is written running again over the ended one, so every reader sees the run in flight.
     // The level its record names, or the one this resume gives it from here on.
     const { publish: recorded, ...lasts } = lasting(previous)
     const publish = opts.publish === undefined ? recorded : (opts.publish ?? undefined)
-    const mark: RunnerMark = { host, pid, ...lasts, ...(publish !== undefined ? { publish } : {}), ...(opts.gitAccount !== undefined ? { gitAccount: opts.gitAccount } : {}), ...restarted, ...(opts.by !== undefined ? { resumed: { by: opts.by, at: clock() } } : {}) }
-    const runningCard: RunCard = { ...card, status: 'running', caller: { ...card.caller, runner: mark, pid, host, ...forReaders(mark), workspace: checkout.path } }
+    const mark: RunnerMark = { host: here.host, pid: here.pid, ...lasts, ...(publish !== undefined ? { publish } : {}), ...(opts.gitAccount !== undefined ? { gitAccount: opts.gitAccount } : {}), ...restarted, ...(opts.by !== undefined ? { resumed: { by: opts.by, at: here.clock() } } : {}) }
+    const runningCard: RunCard = { ...card, status: 'running', caller: { ...card.caller, runner: mark, pid: here.pid, host: here.host, ...forReaders(mark), workspace: checkout.path } }
     delete runningCard.endedAt
     // A level taken away by this resume is no longer the run's, for its readers either.
     if (mark.publish === undefined) delete runningCard.caller?.['publish']
     // A record that says its work was landed lost its branch to that. On a branch made again the
     // work is new and not landed: left on the record, every reader would go on saying it is.
     if (checkout.again) delete runningCard.caller?.['landed']
-    const reopened = await recordRun(repo, runningCard, diary, logs)
-    if (!reopened.ok && !reopened.committed) log(`[agent-runner] the run's record could not be written: ${reopened.error}`)
+    const reopened = await recordRun(repo, runningCard, diary, here.logs)
+    if (!reopened.ok && !reopened.committed) here.log(`[agent-runner] the run's record could not be written: ${reopened.error}`)
 
-    const model = opts.model ?? card.model
-    const effort = opts.effort ?? card.effort
-    return await session(repo, {
+    return session(repo, {
+      ...here,
       id: opts.id,
       checkout,
       card: { ...runningCard },
@@ -438,20 +440,12 @@ export async function resumeRun(repo: string, opts: ResumeOptions): Promise<RunO
       prompt,
       ...addedOf(mark.publish, mark.prBase),
       driver: opts.driver,
-      ...modelOf(model),
-      ...effortOf(effort),
+      ...modelOf(opts.model ?? card.model),
+      ...effortOf(opts.effort ?? card.effort),
       continued: true,
       ...(sessionId !== undefined ? { resumeSessionId: sessionId } : {}),
-      telling: { host, isAlive, ...(opts.resume ? { resume: opts.resume } : {}), log },
-      git,
-      gitHost: opts.gitHost ?? projectGitHost,
-      logs,
-      log,
-      clock,
     })
-  } finally {
-    await releaseRunLock(repo, id, pid).catch(() => {})
-  }
+  })
 }
 
 /** Where a run works: a checkout of the project on its branch, or a session's own folder, which has no branch. */
@@ -473,7 +467,7 @@ async function projectCheckout(repo: string, id: string, branch: string | undefi
   return { path, branch: on }
 }
 
-interface SessionRun {
+interface SessionRun extends RunProcess {
   id: string
   checkout: Workspace
   card: RunCard
@@ -494,13 +488,6 @@ interface SessionRun {
   /** The run's own marker being pushed, when it writes one: the record waits on it, so it lands after. */
   marking?: Promise<void>
   resumeSessionId?: string
-  /** What telling the run's parent needs, when its record names one. */
-  telling: ParentDeps
-  git: GitRunner
-  gitHost: GitHost
-  logs: LogsDeps
-  log: (line: string) => void
-  clock: () => string
 }
 
 /** A prompt this process owes the agent, and the level a message taken from the inbox after the run's last turn gave the run with it. */

@@ -76,6 +76,20 @@ export async function acquireRunLock(
   }
 }
 
+/**
+ * Do `work` holding the run's lock for `holder.pid`, waiting first while another live process
+ * holds it, and let the lock go once `work` has settled, however it settled. Let go any earlier,
+ * a process of the run would still be at work with no lock, and the sweep would take the run.
+ */
+export async function withRunLock<T>(repo: string, id: string, holder: { pid: number; isAlive: (pid: number) => boolean }, work: () => Promise<T>): Promise<T> {
+  await acquireRunLock(repo, id, holder)
+  try {
+    return await work()
+  } finally {
+    await releaseRunLock(repo, id, holder.pid).catch(() => {})
+  }
+}
+
 /** Hand the lock `from` holds to the process `to`: a detached run's parent to the run's own process. */
 export async function handOverRunLock(repo: string, id: string, from: number, to: number): Promise<void> {
   if ((await readHolder(repo, id)) === from) await writeFile(runLockPath(repo, id), `${to}\n`)
