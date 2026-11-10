@@ -72,8 +72,8 @@ export interface Person {
   /** The process that makes their user right now. */
   worker?: number
   /**
-   * The server whose line made them here, by its door: a person there who started a run on this
-   * computer, which that server's line lets everyone there do. Absent for one invited here.
+   * The server whose line made them here, by its door: a person there whom that line names, who
+   * started a run on this computer. Absent for one invited here.
    */
   from?: string
   /** The owner keeps them, though the server they came from no longer has them: nobody is asked about them again. */
@@ -447,8 +447,7 @@ export function sanitize(value: unknown): Store {
     const { url, pin, key, mode, refused, for: who, person, persons: theirs, name } = entry as Record<string, unknown>
     if (!isLineUrl(url) || typeof pin !== 'string' || !pin || typeof key !== 'string' || !key) continue
     if (lines.some(line => line.url === url)) continue
-    // A line that was for everyone there, from before people were named: for those it made here.
-    const named = who === 'everyone' ? persons.filter(candidate => candidate.from === url).map(candidate => candidate.name) : Array.isArray(who) ? [...new Set(who.filter(isName))].slice(0, MAX_PERSONS) : []
+    const named = Array.isArray(who) ? [...new Set(who.filter(isName))].slice(0, MAX_PERSONS) : []
     const heard = Array.isArray(theirs) ? [...new Set(theirs.filter(isName))].slice(0, MAX_PERSONS) : undefined
     const called = typeof name === 'string' ? name.trim().slice(0, 60) : ''
     lines.push({ url, pin, key, mode: mode === 'watch' ? 'watch' : 'full', ...(named.length ? { for: named } : {}), ...(isName(person) ? { person } : {}), ...(heard ? { persons: heard } : {}), ...(called ? { name: called } : {}), ...(refused === true ? { refused: true } : {}) })

@@ -443,7 +443,7 @@ test('a person takes out only devices of their own, and a computer\'s other entr
   }
 })
 
-test('a line that names people, whom it is for and the persons a server last said are kept only when they read as such; one that was for everyone is for those it made here', () => {
+test('a line that names people, whom it is for and the persons a server last said are kept only when they read as such', () => {
   const added = new Date().toISOString()
   const key = sha256('k')
   const store = sanitize({
@@ -484,9 +484,6 @@ test('a line that names people, whom it is for and the persons a server last sai
     { url: 'https://203.0.113.8', pin: 'p', key: 'id.k', mode: 'full', persons: ['ada'] },
     { url: 'https://203.0.113.9', pin: 'p', key: 'id.k', mode: 'full', person: 'rom' },
   ])
-  // A line that was for everyone at its server, from before people were named: for the persons it made here.
-  const was = sanitize({ persons: [{ name: 'ada', owner: true, added }, { name: 'rom', added, port: 4300, from: 'https://203.0.113.7' }, { name: 'kim', added, port: 4400 }], lines: [{ url: 'https://203.0.113.7', pin: 'p', key: 'id.k', mode: 'full', for: 'everyone' }] })
-  assert.deepEqual(was.lines[0]!.for, ['rom'])
 })
 
 test('a computer whose line names people gets an address in the block of each of them who has an OpenAgent of their own, and the owner\'s; given ports are kept, a person gone or no longer named loses theirs', () => {
