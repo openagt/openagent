@@ -4,7 +4,7 @@ import { driverFor } from '@openagt/agent-runner'
 import { runNow, schedulerStatus, startScheduler, stopScheduler, tickProject } from './scheduler.js'
 import { initHooks } from './init.js'
 import { cleanup } from './cleanup.js'
-import { PUBLISH_PICKS, agentInForce, isSwitchedOn, readState, updateState, withAgent, withAgents, withModel, withoutCommand, withoutListed, withPace, withPublish, withSwitch, type PublishPick, type State } from './state.js'
+import { PUBLISH_PICKS, agentInForce, isSwitchedOn, readState, updateState, withAgent, withoutCommand, withoutListed, withPick, type PublishPick, type State } from './state.js'
 import { parseInterval, parseTimeOfDay, sinceNow, takesTimeOfDay } from './pace.js'
 import { AGENTS, AGENT_LABELS, AGENT_SKILLS_DIR, DEFAULT_AGENT, MAX_AGENTS, WRITE_LINE_TIMEOUT_MS, isAgent, isAgents } from './names.js'
 import { ableAgents, homeAgent, readSchedule, type ScheduledCommand } from './schedule.js'
@@ -147,11 +147,11 @@ const COMMANDS: Record<string, Command<[CliIo, GitRunner]>> = {
     }
     const [name, to] = positionals as [string, string]
     // Taking a model back needs no scheduled command: one left for a skill that is gone can always be taken back.
-    if (to === 'skill') return { ok: true, ...(await updateState(repo, s => withModel(s, name, undefined), git)) }
+    if (to === 'skill') return { ok: true, ...(await updateState(repo, s => withPick(s, 'models', name, undefined), git)) }
     if (!to.trim()) throw new UsageError('a model is the id its coding agent knows it by')
     const command = await scheduled(repo, name)
     // A model is one agent's: the pick is kept with the agent the command runs on here, and holds only while it does.
-    return { ok: true, ...(await updateState(repo, s => withModel(s, name, { agent: agentInForce(s, command), model: to }), git)) }
+    return { ok: true, ...(await updateState(repo, s => withPick(s, 'models', name, { agent: agentInForce(s, command), model: to }), git)) }
   },
 
   async agent(args, io, git) {
@@ -186,7 +186,7 @@ const COMMANDS: Record<string, Command<[CliIo, GitRunner]>> = {
     // A command already on is left as it is, so asking twice does not put a missed time off.
     // The switch keeps when it was switched on: a check of a command that never started asks what is new since then.
     const now = new Date()
-    return { ok: true, ...(await updateState(repo, s => (to === 'off' ? withSwitch(s, name, undefined) : isSwitchedOn(s, name) ? s : withPace(withSwitch(s, name, now.toISOString()), name, sinceNow(s.paces?.[name], now))), git)) }
+    return { ok: true, ...(await updateState(repo, s => (to === 'off' ? withPick(s, 'switches', name, undefined) : isSwitchedOn(s, name) ? s : withPick(withPick(s, 'switches', name, now.toISOString()), 'paces', name, sinceNow(s.paces?.[name], now))), git)) }
   },
 
   async publish(args, io, git) {
@@ -195,7 +195,7 @@ const COMMANDS: Record<string, Command<[CliIo, GitRunner]>> = {
     if (!(PUBLISH_PICKS as readonly string[]).includes(to)) throw new UsageError(`${to} is none of ${PUBLISH_PICKS.join(', ')}`)
     const repo = await project(io.cwd, git)
     await scheduled(repo, name)
-    return { ok: true, ...(await updateState(repo, s => withPublish(s, name, to as PublishPick), git)) }
+    return { ok: true, ...(await updateState(repo, s => withPick(s, 'publishes', name, to as PublishPick), git)) }
   },
 
   async pace(args, io, git) {
@@ -208,7 +208,7 @@ const COMMANDS: Record<string, Command<[CliIo, GitRunner]>> = {
     if (time && !(interval && takesTimeOfDay(interval))) throw new UsageError('a time of day goes with days, weeks or months')
     const repo = await project(io.cwd, git)
     // Taking a pace back needs no scheduled command: one left for a skill that is gone can always be taken back.
-    if (to === 'skill') return { ok: true, ...(await updateState(repo, s => withPace(s, name, undefined), git)) }
+    if (to === 'skill') return { ok: true, ...(await updateState(repo, s => withPick(s, 'paces', name, undefined), git)) }
     const command = await scheduled(repo, name)
     if (to === 'work' && command.when === undefined) throw new Refused({ ok: false, reason: 'no-check', command: name }, `${name} has no check, so nothing would say when there is work`)
     const every = interval?.text
@@ -217,11 +217,11 @@ const COMMANDS: Record<string, Command<[CliIo, GitRunner]>> = {
       ...(await updateState(
         repo,
         s => {
-          if (every === undefined) return withPace(s, name, { work: true })
+          if (every === undefined) return withPick(s, 'paces', name, { work: true })
           // The same pace picked again is the same pick: when it was made stays, so a time that was missed is still due.
           const before = s.paces?.[name]
           const same = typeof before === 'object' && before !== null && 'every' in before && before.every === every && before.at === time?.text && typeof before.since === 'string'
-          return withPace(s, name, { every, ...(time ? { at: time.text } : {}), since: same ? before.since : new Date().toISOString() })
+          return withPick(s, 'paces', name, { every, ...(time ? { at: time.text } : {}), since: same ? before.since : new Date().toISOString() })
         },
         git,
       )),
@@ -236,7 +236,7 @@ const COMMANDS: Record<string, Command<[CliIo, GitRunner]>> = {
     const repo = await project(io.cwd, git)
     // Taking a number back needs no scheduled command: one left for a skill that is gone can always be taken back.
     if (to !== 'skill') await scheduled(repo, name)
-    return { ok: true, ...(await updateState(repo, s => withAgents(s, name, count), git)) }
+    return { ok: true, ...(await updateState(repo, s => withPick(s, 'agents', name, count), git)) }
   },
 
   async add(args, io, git) {
