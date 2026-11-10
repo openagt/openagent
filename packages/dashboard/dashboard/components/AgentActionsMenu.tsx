@@ -334,7 +334,7 @@ export function AgentActionsMenu({
         <ConfirmDialog
           open={confirmDelete}
           onOpenChange={setConfirmDelete}
-          title="Delete this agent?"
+          title="Delete this session?"
           body={
             <>
               Deleting <span className="font-medium text-foreground">{name}</span> removes it from the dashboard for good — its

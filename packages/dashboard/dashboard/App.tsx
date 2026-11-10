@@ -506,8 +506,8 @@ export function App() {
         return <AgentView {...agentPage} live={justStarted ? true : null} label={namesRuns ? startedTitle : (justStarted && agentStart.intent) || undefined} naming={justStarted && namesRuns && startedTitle === undefined} remoteLabel={justStarted ? agentStart.runsOn : undefined} />
       return (
         <NotFound
-          title="This agent is gone"
-          detail="There is no record of this agent. Once its checkout is removed, a finished agent is kept only when the project has a logs skill installed."
+          title="This session is gone"
+          detail="There is no record of this session. Once its checkout is removed, a finished session is kept only when the project has a logs skill installed."
           actionLabel="Back to the project"
           onAction={() => selectAgent(null)}
         />

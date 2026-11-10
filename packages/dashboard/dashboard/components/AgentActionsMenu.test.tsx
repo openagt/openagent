@@ -125,7 +125,7 @@ describe('AgentActionsMenu (#toolbar-menu)', () => {
     openMenu()
     fireEvent.click(await screen.findByText('Delete session'))
     // The confirm dialog, not a bare delete: the session and its history go for good.
-    await waitFor(() => expect(screen.getByText('Delete this agent?')).toBeTruthy())
+    await waitFor(() => expect(screen.getByText('Delete this session?')).toBeTruthy())
     expect(sendDeleteAgent).not.toHaveBeenCalled()
     fireEvent.click(screen.getByRole('button', { name: 'Delete' }))
     await waitFor(() => expect(sendDeleteAgent).toHaveBeenCalledWith('p1', 'run-1'))
