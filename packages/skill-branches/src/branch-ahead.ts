@@ -1,7 +1,7 @@
 import { nodeGitRunner, type GitRunner } from '@openagt/agent-data'
 import { isAgentBranch } from './branch-names.js'
-import { checkoutsByBranch, commitOf, detectBase, parsePorcelain } from './branch-state.js'
-import { repoHasRemote } from './worktree.js'
+import { commitOf, detectBase, parsePorcelain } from './branch-state.js'
+import { checkoutsByBranch, repoHasRemote } from './worktree.js'
 
 /**
  * How far each branch is past the base, and whether origin has it: the quick read beside
@@ -43,7 +43,7 @@ export async function readBranchesAhead(repo: string, branches: readonly string[
   const ask = (args: string[]): Promise<string> => git(args, repo).catch(() => '')
   const [hasRemote, base, start] = await Promise.all([repoHasRemote(repo, git), detectBase(ask), from !== undefined ? commitOf(ask, from) : undefined])
   const bases = [base, start].flatMap(rev => (rev === undefined ? [] : [rev]))
-  const [refs, checkouts] = await Promise.all([readRefs(ask, bases), checkoutsByBranch(ask)])
+  const [refs, checkouts] = await Promise.all([readRefs(ask, bases), checkoutsByBranch(repo, git)])
   // A git older than the `ahead-behind` atom (2.41) refuses it: the branches asked, and only those,
   // are then counted by a `rev-list` each, side by side.
   await Promise.all(

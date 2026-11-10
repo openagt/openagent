@@ -234,6 +234,19 @@ export function parseWorktreeList(porcelain: string): WorktreeInfo[] {
 }
 
 /**
+ * The checkouts under `.branches/`, by the branch each is on: one `git worktree list`. The
+ * project's own folder is not one of them, whatever it has out. Forgiving, like
+ * {@link listWorktrees}: a git that cannot answer reads as no checkout.
+ */
+export async function checkoutsByBranch(repo: string, git: GitRunner = nodeGitRunner()): Promise<Map<string, string>> {
+  const checkouts = new Map<string, string>()
+  for (const { path, branch } of await listWorktrees(repo, git)) {
+    if (branch && basename(dirname(path)) === BRANCHES_DIR && !checkouts.has(branch)) checkouts.set(branch, path)
+  }
+  return checkouts
+}
+
+/**
  * Remove an agent's worktree. Tolerant of an already-gone / never-registered path so
  * teardown stays idempotent (a caller may run it twice).
  *
