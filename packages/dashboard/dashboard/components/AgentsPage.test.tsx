@@ -4,6 +4,8 @@ import { forgetRemembered } from '../lib/use-async.js'
 
 const rpc = vi.hoisted(() => ({ onAgentsList: vi.fn(), sendSaveAgent: vi.fn(), sendRemoveAgent: vi.fn(), onAgentLogins: vi.fn(), sendCopyAgentLogins: vi.fn() }))
 vi.mock('../rpc/agents.js', () => rpc)
+const logins = vi.hoisted(() => ({ onGitHosts: vi.fn(), sendGitHostLogin: vi.fn(), sendStopGitHostLogin: vi.fn(), sendGitHostInstall: vi.fn(), onAgentState: vi.fn(), sendAgentFix: vi.fn() }))
+vi.mock('../rpc/logins.js', () => logins)
 const route = vi.hoisted(() => ({ openAgents: vi.fn() }))
 vi.mock('../lib/use-route.js', () => route)
 // The tooltip's words are on the page.
@@ -27,7 +29,7 @@ const VIEW = {
     { title: 'Every agent starts with', skills: [{ name: 'ask', description: 'Ask the person.' }, { name: 'github', description: 'Pull requests on GitHub.' }] },
     { title: 'Code reviews', skills: [{ name: 'readability', description: 'Read the code.' }, { name: 'ux', description: 'Judge the UX.' }] },
   ],
-  github: { accounts: ['octo', 'octo-agent'] },
+  github: { host: 'github.com', accounts: ['octo', 'octo-agent'] },
   claude: [{ id: 'This computer', name: 'Claude login on Studio' }, { id: 'Dani', name: 'Dani' }],
   codex: [],
 }
@@ -43,7 +45,7 @@ beforeEach(() => {
 afterEach(() => {
   cleanup()
   forgetRemembered()
-  for (const fn of Object.values(rpc)) fn.mockReset()
+  for (const fn of [...Object.values(rpc), ...Object.values(logins)]) fn.mockReset()
   route.openAgents.mockReset()
 })
 
@@ -97,6 +99,31 @@ describe('the Agents page', () => {
     // An agent that names no account: one plain item, not the computer's account repeated.
     expect(screen.getByLabelText('GitHub account').textContent).toBe('None — whatever the computer uses')
   })
+
+  test('with no GitHub account of OpenAgent\u2019s yet, one is added from the editor, in its dialog, and is then the one picked; what was typed stays', async () => {
+    const github = (accounts: string[]) => ({ hosts: [{ host: 'github.com', projects: [], provider: { name: 'GitHub', requestWord: 'pull request', tool: 'gh', installed: true, install: 'brew install gh', accounts: accounts.map(login => ({ login, runs: true, ok: true })) } }] })
+    rpc.onAgentsList.mockResolvedValue({ ...VIEW, github: { host: 'github.com', accounts: [] } })
+    logins.onGitHosts.mockResolvedValue(github([]))
+    logins.sendGitHostLogin.mockResolvedValue({ ok: true, code: 'ABCD-1234', url: 'https://github.com/login/device' })
+    logins.sendStopGitHostLogin.mockResolvedValue({ ok: true })
+    render(<AgentsPage />)
+    fireEvent.click(await screen.findByRole('button', { name: 'New agent' }))
+    const editor = screen.getByRole('region', { name: 'New agent' })
+    fireEvent.change(within(editor).getByLabelText('Name'), { target: { value: 'Social media' } })
+    expect(within(editor).getByRole('combobox', { name: 'GitHub account' }).textContent).toContain('None')
+    fireEvent.click(within(editor).getByRole('button', { name: 'Add account' }))
+    const dialog = await screen.findByRole('dialog', { name: 'Add a GitHub account' })
+    expect(await within(dialog).findByText('ABCD-1234')).toBeTruthy()
+    // Signed in at GitHub: the account is there, and the agents are read again with it.
+    rpc.onAgentsList.mockResolvedValue({ ...VIEW, github: { host: 'github.com', accounts: ['me-agent'] } })
+    logins.onGitHosts.mockResolvedValue(github(['me-agent']))
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull(), { timeout: 6000 })
+    const after = screen.getByRole('region', { name: 'New agent' })
+    expect(within(after).getByRole('combobox', { name: 'GitHub account' }).textContent).toContain('@me-agent')
+    expect((within(after).getByLabelText('Name') as HTMLInputElement).value).toBe('Social media')
+    fireEvent.click(within(after).getByRole('button', { name: 'Save' }))
+    await waitFor(() => expect(rpc.sendSaveAgent).toHaveBeenCalledWith(expect.objectContaining({ name: 'Social media', accounts: { github: 'me-agent' } })))
+  }, 15_000)
 
   test('where an agent\u2019s GitHub account is: one line per device, on it or not, with why; "Copy again" for one that failed copies now and reads again; nothing for an agent that names none', async () => {
     rpc.onAgentLogins.mockResolvedValue([

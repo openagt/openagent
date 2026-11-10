@@ -315,7 +315,7 @@ export function StartAgentForm({
         controlsEnd={
           !noProject && (
             <>
-              {remote && <GitAccountMenu address={address} machineId={machine?.id} on={name} busy={busy} picked={pickedAccount} onPick={setPickedAccount} onAdd={() => (machine ? openSettings('devices', machine.id) : openPermissions())} />}
+              {remote && <GitAccountMenu address={address} machineId={machine?.id} on={name} busy={busy} picked={pickedAccount} onPick={setPickedAccount} onAddThere={() => machine && openSettings('devices', machine.id)} />}
               <AutoMenu publish={publishPick} picks={offeredPublishPicks(gitHost, remote)} onPublish={pick => updatePreferences({ publish: pick })} target={prTarget} busy={busy} />
             </>
           )

@@ -184,11 +184,11 @@ already made, and lists it in its pull request; for anything else it proposes an
   Share switch each name one of OpenAgent's accounts at the repository's host, picked where they
   are turned on (the one runs use first), and so do the Skills page's Send and the clean-up of
   Claude Code web's branches (the Share switch's account, else the one runs use). With no
-  account there, nothing is sent, and the page says where one is added. Picked over pushing with
+  account there, nothing is sent, and the page says so with the press that adds one. Picked over pushing with
   whatever login the computer has (Rom: "scary").
 - What is not backed up (the personal folder, or a shared project's data, at a git host with no
   account named) is said once: an item in the person's menu, and a notice at the top of
-  Settings › Agent data with the fix in it, adding an account there (its code shown in place),
+  Settings › Agent data with the fix in it, adding an account there (in the dialog every place uses),
   then "Back up as" and one press that sends what waited. The person picks the account even
   when there is only one. Picked over each save failing with the reason, a trip to the
   Permissions page, and the only account being used without asking (an agent's own account
@@ -322,6 +322,13 @@ already made, and lists it in its pull request; for anything else it proposes an
   can reach what its accounts can; a repository is no permission. Where an account at a git
   host is not named like an agent's own (`-agent`), the page says to make one with limited
   access. Picked over the accounts being one entry among the Settings.
+- An account at a git host is added in one dialog, the same wherever one is added: "Add" at the
+  title of the git hosts' card, the Overview's first step, an agent's accounts on the Agents
+  page, the account under the message box, "Back up as". It installs the host's tool where it
+  is missing, shows the code to type at the host, says the advice of an account of the agents'
+  own, and closes on the account once it is there, which is then the one picked where it was
+  asked for; closing it gives the login up. Picked over the code shown in each place's own
+  layout, and over a trip to the Permissions page from a place that had no account to pick.
 - The Skills page ticks nothing in a project that has no skills yet: the person picks what
   the project needs. Picked over ticking every group but the ones that need a setup of
   their own, a long list picked for them.
