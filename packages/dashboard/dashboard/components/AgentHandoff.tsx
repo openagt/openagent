@@ -230,7 +230,7 @@ export function HandoffActions({
   // No git host package (#1820): nothing opens a pull request for this project, so the last step is
   // the push, and a pushed branch is where the handoff ends.
   if (!handoff.gitHost) {
-    if (handoff.pushed) return <Reason>Pushed — no git host package to open a pull request with.</Reason>
+    if (handoff.pushed) return <Reason title="Another git host needs a skill of its own, on the project's Skills page">Pushed. Pull requests need a remote on GitHub.</Reason>
     return (
       <>
         <Button size="xs" variant="ghost" className={NEXT_STEP} disabled={busy} onClick={push}>
