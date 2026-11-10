@@ -24,7 +24,7 @@ import { contextBridgeBrowser, contextProjects, contextRemote, resolveProjectPat
 import { relayOr } from './relay-agent.js'
 import type { OpenAgentEvent } from '../events.js'
 import { bridgeQuestions } from '../dashboard/bridge-store.js'
-import type { BridgeEvent, BridgeHello, BridgeQuestion } from '../dashboard/bridge-endpoints.js'
+import { isCloudSessionId, type BridgeEvent, type BridgeHello, type BridgeQuestion } from '../dashboard/bridge-endpoints.js'
 import type { BridgeAnswer, BridgeContact, BridgeVersion } from '../dashboard/bridge-store.js'
 import { readBridgeToken, readPreferences } from '../registry.js'
 import { hostname } from 'node:os'
@@ -454,7 +454,7 @@ export async function onAgentHandoff(projectId: string, agentId: string): Promis
  * is not `web` renders exactly as it did before.
  */
 export async function onBridgeQuestion(sessionId: string): Promise<BridgeQuestion | null> {
-  if (typeof sessionId !== 'string' || !/^session_[A-Za-z0-9]{1,128}$/.test(sessionId)) return null
+  if (!isCloudSessionId(sessionId)) return null
   return bridgeQuestions().get(sessionId) ?? null
 }
 
@@ -499,13 +499,13 @@ export async function onBridgeToken(): Promise<string | null> {
  * extension, delivered, or failed with the extension's reason. Null when nothing was picked.
  */
 export async function onBridgeAnswer(sessionId: string): Promise<BridgeAnswer | null> {
-  if (typeof sessionId !== 'string' || !/^session_[A-Za-z0-9]{1,128}$/.test(sessionId)) return null
+  if (!isCloudSessionId(sessionId)) return null
   return bridgeQuestions().answer(sessionId) ?? null
 }
 
 /** What a Claude web session has said so far, as scraped by the browser bridge (#1237). */
 export async function onBridgeEvents(sessionId: string): Promise<BridgeEvent[]> {
-  if (typeof sessionId !== 'string' || !/^session_[A-Za-z0-9]{1,128}$/.test(sessionId)) return []
+  if (!isCloudSessionId(sessionId)) return []
   return bridgeQuestions().events(sessionId)
 }
 

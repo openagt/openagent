@@ -1,6 +1,7 @@
 import { sayToRun, type SteerResult } from '../dashboard/run-inbox.js'
 export type { SteerResult }
 import { bridgeQuestions } from '../dashboard/bridge-store.js'
+import { isCloudSessionId } from '../dashboard/bridge-endpoints.js'
 import { openInApp, type OpenTarget, type OpenResult } from '../dashboard/open-in-app.js'
 import { contextBridgeBrowser, contextPreferences, contextStartAgent, resolveProjectPath, resolveAgentPath } from './context.js'
 import type { BridgeBrowserAction } from '../bridge-browser.js'
@@ -104,7 +105,7 @@ export async function sendChoice(projectId: string, id: string, pick: string | s
  * relay: the bridge lives on the daemon the extension talks to.
  */
 export async function sendBridgeAnswer(sessionId: string, labels: string[]): Promise<{ ok: boolean; error?: string }> {
-  if (typeof sessionId !== 'string' || !/^session_[A-Za-z0-9]{1,128}$/.test(sessionId)) return { ok: false, error: 'unknown session' }
+  if (!isCloudSessionId(sessionId)) return { ok: false, error: 'unknown session' }
   if (!Array.isArray(labels) || !labels.every(label => typeof label === 'string' && label.trim())) return { ok: false, error: 'answer labels are required' }
   const queued = bridgeQuestions().queueAnswer(sessionId, labels)
   return typeof queued === 'string' ? { ok: false, error: queued } : { ok: true }
@@ -112,7 +113,7 @@ export async function sendBridgeAnswer(sessionId: string, labels: string[]): Pro
 
 /** Withdraw a queued bridge answer (#1237). A no-op once the extension has delivered it. */
 export async function sendBridgeAnswerCancel(sessionId: string): Promise<void> {
-  if (typeof sessionId !== 'string' || !/^session_[A-Za-z0-9]{1,128}$/.test(sessionId)) return
+  if (!isCloudSessionId(sessionId)) return
   bridgeQuestions().cancelAnswer(sessionId)
 }
 
