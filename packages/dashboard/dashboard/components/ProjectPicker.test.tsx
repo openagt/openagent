@@ -13,7 +13,7 @@ vi.mock('../rpc/projects.js', () => ({ onRepos, sendAddRepoFolder, sendAddProjec
 const MACBOOK = { id: 'http://127.0.0.1:4210', url: 'http://127.0.0.1:4210', label: 'Suleimans-MacBook-Pro' }
 vi.mock('../lib/machines.js', () => ({ useMachines: () => [MACBOOK] }))
 
-const { ProjectPicker, REPOS_SHOWN, shownAddress } = await import('./ProjectPicker.js')
+const { ProjectPicker, REPOS_SHOWN, repoDetail, shownAddress } = await import('./ProjectPicker.js')
 
 const ALPHA: ProjectSummary = { id: 'alpha-1', path: '/home/me/alpha', name: 'alpha', activated: true, gitHost: true }
 const VIKE = { path: '/home/me/oss/vike', name: 'vike', url: 'https://github.com/vikejs/vike.git' }
@@ -55,6 +55,13 @@ describe('ProjectPicker', () => {
     expect(shownAddress('git@github.com:vikejs/vike.git')).toBe('github.com/vikejs/vike')
     expect(shownAddress('ssh://git@gitlab.com/team/app')).toBe('gitlab.com/team/app')
     expect(shownAddress('https://me:ghp_secret@github.com/me/private.git')).toBe('github.com/me/private')
+  })
+
+  test("a repo is said by its address at its host, or by its folder when its remote is a folder too", () => {
+    expect(repoDetail({ path: '/home/me/oss/vike', url: 'git@github.com:vikejs/vike.git' })).toBe('github.com/vikejs/vike')
+    expect(repoDetail({ path: '/home/me/blog', url: '/srv/git/blog.git' })).toBe('/home/me/blog')
+    expect(repoDetail({ path: '/home/me/blog', url: 'file:///srv/git/blog.git' })).toBe('/home/me/blog')
+    expect(repoDetail({ path: '/home/me/notes' })).toBe('/home/me/notes')
   })
 
   test('the button reads where the session works: no project, or the project by its name', () => {

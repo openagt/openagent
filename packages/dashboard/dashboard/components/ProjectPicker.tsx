@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { Combobox } from '@base-ui/react/combobox'
+import { addressOfRemote } from '@openagt/agent-data/repository-address'
 import { Cloud, Check, ChevronDown, ChevronsUpDown, Folder, FolderGit2, FolderPlus, FolderSearch, Layers, Plus, Search } from 'lucide-react'
 import type { ProjectSummary } from '../../src/index.js'
 import { machineKind, machineName, typedRepository } from '../../src/client.js'
@@ -56,6 +57,11 @@ export function shownAddress(url: string): string {
     .replace(/^([^/:]+):(?!\d+\/)/, '$1/')
     .replace(/\.git$/, '')
     .replace(/\/$/, '')
+}
+
+/** Under a repo's name: its address at its host, or its folder when it has no remote or its remote is a folder too. */
+export function repoDetail(repo: { path: string; url?: string | undefined }): string {
+  return repo.url && addressOfRemote(repo.url) ? shownAddress(repo.url) : repo.path
 }
 
 const sameRow = (a: Row, b: Row): boolean => a.value === b.value
@@ -215,7 +221,7 @@ export function ProjectPicker({
   )
   const repoRows = useMemo<Row[]>(
     () => [
-      ...(repos?.repos ?? []).map((repo): Row => ({ value: `repo:${repo.path}`, label: repo.name, detail: repo.url ? shownAddress(repo.url) : repo.path, pick: { kind: 'repo', path: repo.path }, search: `${repo.path}\n${repo.url ?? ''}` })),
+      ...(repos?.repos ?? []).map((repo): Row => ({ value: `repo:${repo.path}`, label: repo.name, detail: repoDetail(repo), pick: { kind: 'repo', path: repo.path }, search: `${repo.path}\n${repo.url ?? ''}` })),
       // Not on this computer: picked, it is cloned, as an address typed is.
       ...(repos?.hosted ?? []).map((repo): Row => ({
         value: `hosted:${repo.address}`,

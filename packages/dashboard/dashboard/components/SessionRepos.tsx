@@ -10,7 +10,7 @@ import { ScrollArea } from './ui/scroll-area.js'
 import { Tooltip, TooltipTrigger, TooltipContent } from './ui/tooltip.js'
 import { MENU_ITEM_CLASS, MENU_POPUP_CLASS, MENU_TRIGGER_OPEN_CLASS } from './ui/dropdown-menu.js'
 import { usePopupPlacement } from './ui/popup-placement.js'
-import { ASK_AGAIN_MS, REPOS_SHOWN, shownAddress } from './ProjectPicker.js'
+import { ASK_AGAIN_MS, REPOS_SHOWN, repoDetail } from './ProjectPicker.js'
 
 /** The most rows a search lists. */
 const SEARCH_SHOWN = 200
@@ -92,7 +92,7 @@ export function SessionRepoPicks({
     [projects],
   )
   const repoRows = useMemo<Row[]>(
-    () => (repos?.repos ?? []).map(repo => ({ value: `repo:${repo.path}`, label: repo.name, detail: repo.url ? shownAddress(repo.url) : repo.path, path: repo.path, search: `${repo.path}\n${repo.url ?? ''}` })),
+    () => (repos?.repos ?? []).map(repo => ({ value: `repo:${repo.path}`, label: repo.name, detail: repoDetail(repo), path: repo.path, search: `${repo.path}\n${repo.url ?? ''}` })),
     [repos],
   )
   const groups = addRepoGroups(projectRows, repoRows, picked, typed)
