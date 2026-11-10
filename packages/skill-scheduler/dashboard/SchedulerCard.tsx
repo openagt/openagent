@@ -130,7 +130,7 @@ function OnRow({ project, command, stopped, lookedAt, onOpenRun, reload }: { pro
     // One line, whatever the card's width: the name whole, when it starts next cut short (and said
     // whole on hover), never a second line that leaves the rows at uneven gaps.
     <li className="group/row relative -mx-2 flex h-8 items-center gap-3 rounded-md px-2 text-sm hover:bg-accent/60">
-      <span aria-hidden className="size-1.5 shrink-0 rounded-full bg-success" />
+      <span aria-hidden className={cn('size-1.5 shrink-0 rounded-full', stopped ? 'bg-muted-foreground/50' : 'bg-success')} />
       <span className="shrink-0 font-mono text-[13px]">{rowTitle(command)}</span>
       {/* While the scheduler is stopped a row has no next start: the line above says why. */}
       {!stopped && (

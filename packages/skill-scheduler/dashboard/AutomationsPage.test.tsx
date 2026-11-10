@@ -415,6 +415,18 @@ describe('the Automations page: its rows', () => {
     expect(await screen.findByText('The scheduler is on but its process is not running, so nothing here starts by itself. `npx @openagt/skill-scheduler@0.1 start`, run in the project, starts it.')).toBeTruthy()
   })
 
+  test('a row switched on while the scheduler is off, or not running, is not green: it says it does not start', async () => {
+    const { host } = hostAnswering(projectId => ({ ok: true, output: projectId === 'p1' ? { ...STATUS, on: false, running: false } : { ...STATUS, running: false } }))
+    show(host, [GEMSTACK, OTHER])
+    const off = within(await screen.findByRole('region', { name: 'gemstack' })).getByRole('listitem', { name: '/post-merge-cleanup' })
+    expect(within(off).getByText('On').className).not.toMatch(/text-success/)
+    expect(within(off).getByText('Does not start: the scheduler is off').className).toMatch(/text-warning/)
+    const notRunning = within(screen.getByRole('region', { name: 'other' })).getByRole('listitem', { name: '/post-merge-cleanup' })
+    expect(within(notRunning).getByText('Does not start: the scheduler is on, but not running')).toBeTruthy()
+    // A row switched off says nothing of it.
+    expect(within(within(screen.getByRole('region', { name: 'gemstack' })).getByRole('listitem', { name: '/work-queue' })).queryByText(/Does not start/)).toBeNull()
+  })
+
   test('a skill whose schedule cannot be read is named with the reason, and an automation kept on this machine that the scheduler does not list is said so in its own words', async () => {
     const status = { ...STATUS, unreadable: [{ skill: 'triage', reason: 'row 2: unknown key evry' }, { skill: 'tidy', reason: 'it has no schedule', own: true }] }
     const { host } = hostAnswering((_, args) => (args[0] === 'status' ? { ok: true, output: status } : { ok: true, output: { ok: true } }))

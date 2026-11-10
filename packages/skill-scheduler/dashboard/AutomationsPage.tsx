@@ -4,7 +4,7 @@ import type { ModulePageProps } from '@openagt/dashboard/module'
 import { AutomationForm } from './AutomationForm.js'
 import { EditPanel } from './EditPanel.js'
 import { openedAutomation, type OpenedAutomation } from './automation-form.js'
-import { atOnce, atOnceWords, cannotRun, decided, notAsked, startedNow, type Answered, isOwn, ownPace, pace, publishes, readSchedulers, schedulersKey, rowTitle, runsOnWords, saysAtOnce, schedulerStatus, unlistedWords, type AgentModels, type SchedulerCommand, type SchedulerRow } from './schedulers.js'
+import { atOnce, atOnceWords, cannotRun, decided, notAsked, startedNow, type Answered, isOwn, ownPace, pace, publishes, readSchedulers, schedulersKey, rowTitle, runsOnWords, saysAtOnce, schedulerStatus, schedulerStopped, unlistedWords, type AgentModels, type SchedulerCommand, type SchedulerRow } from './schedulers.js'
 
 // The Automations page: what starts by itself while nobody is at the keyboard. One part per
 // project the page is given (every project that has this package, or the one picked in the
@@ -210,7 +210,7 @@ export function AutomationsPage({ projects }: ModulePageProps) {
                                   {isOwn(scheduled) && <span className="text-xs text-info">{scheduled.onThisMachine ? 'only on this machine' : 'shared with the project'}</span>}
                                 </p>
                                 {scheduled.description && <p className="line-clamp-2 text-sm text-muted-foreground">{scheduled.description}</p>}
-                                <Stands host={host} project={row.project} scheduled={scheduled} />
+                                <Stands host={host} project={row.project} scheduled={scheduled} stopped={schedulerStopped(row)} />
                                 {!shown && <Picks scheduled={scheduled} schedulerModel={row.model} agents={agents} />}
                               </div>
                               <div className="flex shrink-0 items-center gap-2">
@@ -301,16 +301,19 @@ export function AutomationsPage({ projects }: ModulePageProps) {
 
 /**
  * Where a row stands, in one line: on or off; when it last ran, or that its last run failed, which
- * opens that run; and what the scheduler last decided for it while it is on. A command the coding
- * agent cannot run says so whatever its switch.
+ * opens that run; and what the scheduler last decided for it while it is on, or, while the
+ * scheduler is stopped, that it does not start. A command the coding agent cannot run says so
+ * whatever its switch.
  */
-function Stands({ host, project, scheduled }: { host: ModuleHost; project: ModuleProject; scheduled: SchedulerCommand }) {
+function Stands({ host, project, scheduled, stopped }: { host: ModuleHost; project: ModuleProject; scheduled: SchedulerCommand; /** Why nothing starts by itself in its project, while that is so ({@link schedulerStopped}). */ stopped: string | undefined }) {
   const last = scheduled.lastRun
-  const decision = decided(scheduled)
+  const idle = scheduled.on && stopped !== undefined && cannotRun(scheduled) === undefined
+  const decision = idle ? `Does not start: ${stopped.charAt(0).toLowerCase()}${stopped.slice(1)}` : decided(scheduled)
+  const starts = scheduled.on && !idle
   return (
     <p className="mt-1 flex flex-wrap items-center gap-x-2 text-xs">
-      <span className={cn('inline-flex items-center gap-1.5 font-medium', scheduled.on ? 'text-success' : 'text-muted-foreground')}>
-        <span aria-hidden className={cn('h-1.5 w-1.5 rounded-full', scheduled.on ? 'bg-success' : 'bg-muted-foreground/50')} />
+      <span className={cn('inline-flex items-center gap-1.5 font-medium', starts ? 'text-success' : 'text-muted-foreground')}>
+        <span aria-hidden className={cn('h-1.5 w-1.5 rounded-full', starts ? 'bg-success' : 'bg-muted-foreground/50')} />
         {scheduled.on ? 'On' : 'Off'}
       </span>
       <span aria-hidden className="text-muted-foreground">
@@ -331,7 +334,7 @@ function Stands({ host, project, scheduled }: { host: ModuleHost; project: Modul
           <span aria-hidden className="text-muted-foreground">
             ·
           </span>
-          <span className={cannotRun(scheduled) ? 'text-warning' : 'text-muted-foreground'}>{decision}</span>
+          <span className={idle || cannotRun(scheduled) ? 'text-warning' : 'text-muted-foreground'}>{decision}</span>
         </>
       )}
     </p>

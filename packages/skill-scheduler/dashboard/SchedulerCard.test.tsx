@@ -87,12 +87,13 @@ describe('the Automations card of the Overview', () => {
     expect(host.openPage).toHaveBeenCalledWith('automations')
   })
 
-  test('a scheduler whose process is gone: its rows are on and nothing starts, said once, with no next start on a row', async () => {
+  test('a scheduler whose process is gone: its rows are on and nothing starts, said once, with no next start on a row and no green dot', async () => {
     const { host } = hostAnswering(() => ({ ok: true, output: { ...RAN, running: false } }))
     show(host, [GEMSTACK])
     expect((await screen.findByText('Scheduler on, not running')).className).toMatch(/text-warning/)
     expect(screen.getByText('The scheduler is on, but not running: nothing starts by itself.')).toBeTruthy()
-    expect(screen.getByText('/post-merge-cleanup')).toBeTruthy()
+    // Its dot is not the green of a row that starts.
+    expect(screen.getByText('/post-merge-cleanup').previousElementSibling!.className).not.toMatch(/bg-success/)
     expect(screen.queryByText(/Next start|Starts /)).toBeNull()
   })
 
