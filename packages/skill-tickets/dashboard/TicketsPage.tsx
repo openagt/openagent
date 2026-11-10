@@ -106,25 +106,6 @@ export function TicketsPage({ projects }: { projects: ModuleProject[] }) {
   // leave alone: this page knows nothing of a queue. No agent starts here. Each stops at the
   // first failure, whose reason lands under the buttons.
 
-  /** The links grouped by project, in the shown order, one group per project in order of first appearance. */
-  const grouped = (rows: { projectId: string; link: ModuleLink }[]): ProjectLinks[] => {
-    const groups: ProjectLinks[] = []
-    for (const { projectId, link } of rows) {
-      const group = groups.find(g => g.projectId === projectId)
-      if (group) group.links.push(link)
-      else groups.push({ projectId, links: [link] })
-    }
-    return groups
-  }
-
-  // The tickets themselves, exactly as the detail page hands its one ticket over: the title as
-  // the link, pointing back at the ticket, its priority picking the section.
-  const ticketTargets = (targets: { projectId: string; ticket: WorkspaceTicket }[]) => grouped(targets.map(({ projectId, ticket }) => ({ projectId, link: ticketLink(ticket) })))
-
-  // The tickets' PLANS: one `Create tickets/<stem>.plan.md` ask each, recognized by its exact text,
-  // so the agent that works the entry writes the plan.
-  const planAsks = (targets: { projectId: string; ticket: WorkspaceTicket }[]) => grouped(targets.map(({ projectId, ticket }) => ({ projectId, link: planLink(ticket) })))
-
   const flatRows = sortRows(visible, view.sort)
 
   // The row selection (the list idiom of issue trackers): tick some rows and the queue buttons narrow to just
@@ -205,7 +186,7 @@ export function TicketsPage({ projects }: { projects: ModuleProject[] }) {
           {loaded && planTargets.length > 0 && (
             <LinkActions
               projects={projectsShown}
-              targets={planAsks(planTargets)}
+              targets={linksByProject(planTargets, planLink)}
               resetKey={`plans\n${planKey}`}
               label={action => `${action.label}: ${planObject}`}
               disabled={busy}
@@ -222,7 +203,7 @@ export function TicketsPage({ projects }: { projects: ModuleProject[] }) {
           {loaded && targets.length > 0 && (
             <LinkActions
               projects={projectsShown}
-              targets={ticketTargets(targets)}
+              targets={linksByProject(targets, ticketLink)}
               resetKey={`tickets\n${queueKey}`}
               label={action => `${action.label}: ${queueObject}`}
               disabled={busy}
@@ -334,6 +315,21 @@ export function TicketsPage({ projects }: { projects: ModuleProject[] }) {
       )}
     </Page>
   )
+}
+
+/**
+ * What a page-wide add hands the link actions: each ticket as a link — the ticket itself
+ * (`ticketLink`), or the ask for its plan (`planLink`) — grouped by project in the shown order,
+ * one group per project in order of first appearance.
+ */
+function linksByProject(rows: readonly { projectId: string; ticket: WorkspaceTicket }[], asLink: (ticket: WorkspaceTicket) => ModuleLink): ProjectLinks[] {
+  const groups: ProjectLinks[] = []
+  for (const { projectId, ticket } of rows) {
+    const group = groups.find(g => g.projectId === projectId)
+    if (group) group.links.push(asLink(ticket))
+    else groups.push({ projectId, links: [asLink(ticket)] })
+  }
+  return groups
 }
 
 /**
