@@ -51,7 +51,7 @@ export const kickerStyle: CSSProperties = {
 // Centered chapter break: the one centered element on a left-anchored page, so
 // the eye finds section boundaries instantly. The accent bar is straight — at
 // this size a tilt reads as misalignment, not as a hero-strike echo.
-export function SectionHead({ title, sub }: { title: ReactNode; sub?: string | React.ReactNode }) {
+export function SectionHead({ title, sub }: { title: ReactNode; sub?: string }) {
   return (
     <div
       style={{
@@ -94,10 +94,10 @@ export const noteLabelStyle: CSSProperties = {
   marginRight: 10,
 }
 
-export function Note({ children, style, label }: { children: ReactNode; style?: CSSProperties; label?: ReactNode }) {
+export function Note({ children, style }: { children: ReactNode; style?: CSSProperties }) {
   return (
     <p style={{ ...noteContainerStyle, ...style }}>
-      {label ?? <span style={noteLabelStyle}>Note</span>}{' '}
+      <span style={noteLabelStyle}>Note</span>{' '}
       <span
         style={{
           fontStyle: 'italic',
@@ -109,32 +109,25 @@ export function Note({ children, style, label }: { children: ReactNode; style?: 
   )
 }
 
-export function WipBadge({ style, icon = true }: { style?: CSSProperties; icon?: boolean }) {
+/** "Coming soon", beside a feature that is not there yet. */
+export function WipBadge() {
   return (
-    <>
-      {icon && (
-        <>
-          <Emoji e="🚧" />{' '}
-        </>
-      )}
-      <span
-        style={{
-          fontStyle: 'normal',
-          fontFamily: mono,
-          fontSize: 10.5,
-          fontWeight: 600,
-          letterSpacing: '0.08em',
-          color: '#dbbc7f',
-          border: '1px solid rgba(219, 188, 127, 0.4)',
-          borderRadius: 4,
-          padding: '1px 6px',
-          whiteSpace: 'nowrap',
-          ...style,
-        }}
-      >
-         Coming soon
-      </span>
-    </>
+    <span
+      style={{
+        fontStyle: 'normal',
+        fontFamily: mono,
+        fontSize: 10.5,
+        fontWeight: 600,
+        letterSpacing: '0.08em',
+        color: '#dbbc7f',
+        border: '1px solid rgba(219, 188, 127, 0.4)',
+        borderRadius: 4,
+        padding: '1px 6px',
+        whiteSpace: 'nowrap',
+      }}
+    >
+      Coming soon
+    </span>
   )
 }
 
@@ -152,14 +145,8 @@ const EMOJIS = {
 } as const
 export type EmojiChar = keyof typeof EMOJIS
 
-export function Emoji({ e, style }: { e: EmojiChar; style?: CSSProperties }) {
-  return (
-    <img
-      src={`/assets/emoji-${EMOJIS[e]}.svg`}
-      alt={e}
-      style={{ height: '1em', verticalAlign: '-0.12em', ...style }}
-    />
-  )
+export function Emoji({ e }: { e: EmojiChar }) {
+  return <img src={`/assets/emoji-${EMOJIS[e]}.svg`} alt={e} style={{ height: '1em', verticalAlign: '-0.12em' }} />
 }
 
 export function CodeChip({ children, fontSize }: { children: string; fontSize: number }) {
