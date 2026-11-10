@@ -213,7 +213,7 @@ export const KEYS: Record<string, { code: string; keyCode: number; text?: string
 }
 
 export async function press(page: CdpSession, key: string): Promise<void> {
-  const known = KEYS[key]
+  const known = Object.hasOwn(KEYS, key) ? KEYS[key] : undefined
   if (!known) throw new PageError(`unknown key ${key}; the keys are ${Object.keys(KEYS).join(', ')}`)
   const event = { key: key === 'Space' ? ' ' : key, code: known.code, windowsVirtualKeyCode: known.keyCode, ...(known.text ? { text: known.text } : {}) }
   await page.send('Input.dispatchKeyEvent', { ...event, type: 'keyDown' })
