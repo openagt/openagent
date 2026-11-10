@@ -228,7 +228,7 @@ describe('QuestionPanel', () => {
     test('the key that submits is on the button, not written out under the options', () => {
       const { unmount } = render(panel({ active: true }))
       expect(screen.queryByText(/Number keys pick/)).toBeNull()
-      expect(screen.getByRole('button', { name: /Submit/ }).textContent).toMatch(/^Submit(⌘|Ctrl)↵$/)
+      expect(screen.getByRole('button', { name: /Submit/ }).textContent).toMatch(/^Submit(⌘|Ctrl)Enter$/)
       unmount()
       // Not the question the keys answer: no key is promised on it.
       render(panel())

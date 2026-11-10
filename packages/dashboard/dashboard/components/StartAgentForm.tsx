@@ -30,6 +30,7 @@ import { GitAccountMenu, useSessionAccount } from './GitHosts.js'
 import { AgentMenu } from './AgentMenu.js'
 import { useAgentsList } from './AgentsPage.js'
 import { SESSIONS_ID } from '../../src/project-address.js'
+import { shortcut } from '../lib/shortcut.js'
 
 /** The note while the start is asked for: what the chat's first line says next. */
 const STARTING = 'Starting session'
@@ -272,7 +273,7 @@ export function StartAgentForm({
 
   const loaded = (label: string, replaced: boolean) => {
     reset()
-    setNote(replaced ? `${label} loaded over your draft — undo (⌘Z) brings the draft back` : `${label} loaded — review or edit, then Start`)
+    setNote(replaced ? `${label} loaded over your draft — undo (${shortcut('Z')}) brings the draft back` : `${label} loaded — review or edit, then Start`)
   }
 
   return (

@@ -389,7 +389,7 @@ describe('EventList question and answer', () => {
     expect(within(card).getByRole('radio', { name: 'Blue' })).toBeTruthy()
     expect(within(card).getByRole('button', { name: /Submit/ })).toBeTruthy()
     // The keys are the newest question's: the button promises one.
-    expect(within(card).getByRole('button', { name: /Submit/ }).textContent).toMatch(/^Submit(⌘|Ctrl)↵$/)
+    expect(within(card).getByRole('button', { name: /Submit/ }).textContent).toMatch(/^Submit(⌘|Ctrl)Enter$/)
   })
 
   test('under a question the run waits on, the live line says nothing: the card is what waits', () => {

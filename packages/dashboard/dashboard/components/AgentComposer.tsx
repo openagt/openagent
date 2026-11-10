@@ -15,6 +15,7 @@ import { SkillsOff } from './SkillsMenu.js'
 import { isPublishPick, offeredPublishPicks, type PublishPick } from '../../src/client.js'
 import { useProjectLauncher } from '../lib/use-project-launcher.js'
 import { promptWithContext, type ContextSet } from '../lib/use-context-set.js'
+import { shortcut } from '../lib/shortcut.js'
 
 /** A message sent to a working agent that it has not read yet: shown waiting until it lands. */
 export interface QueuedMessage {
@@ -261,7 +262,7 @@ export function AgentComposer({
         idleControl={idleControl}
         // What the box can do, not what it is for: the keys for a working agent, as Claude Code's box
         // says them in the same place.
-        placeholder={live ? '⏎ to send, ⌘⏎ to queue for later' : 'Message the agent to continue it…'}
+        placeholder={live ? `Enter to send, ${shortcut('Enter')} to queue for later` : 'Message the agent to continue it…'}
       />
     </div>
   )

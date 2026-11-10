@@ -5,12 +5,11 @@ import { sendChoice, sendMessage } from '../rpc/control.js'
 import { useAction } from '../lib/use-action.js'
 import { cn } from '../lib/utils.js'
 import { answerPrompt, skipPrompt } from '../lib/answered-question.js'
+import { MOD_KEY } from '../lib/shortcut.js'
 
 /** The pick that is no option: the person's own words, typed in the "Other" row. */
 const OTHER = Symbol('other')
 
-/** The key that submits, as the keyboard in front of the person names it. */
-const SUBMIT_KEY = typeof navigator !== 'undefined' && /Mac|iPhone|iPad/.test(navigator.platform) ? '⌘' : 'Ctrl'
 
 // A pick's mark, as Claude Code on the web draws one: a ring, filled with a dot when picked; a
 // box with a tick where several may be picked.
@@ -206,8 +205,8 @@ export function QuestionPanel({
           Submit
           {active && (
             <span className="flex gap-0.5" aria-hidden>
-              <kbd className="flex h-[17px] min-w-[17px] items-center justify-center rounded border border-background/20 px-0.5 font-sans text-[11px]">{SUBMIT_KEY}</kbd>
-              <kbd className="flex h-[17px] min-w-[17px] items-center justify-center rounded border border-background/20 px-0.5 font-sans text-[11px]">↵</kbd>
+              <kbd className="flex h-[17px] min-w-[17px] items-center justify-center rounded border border-background/20 px-0.5 font-sans text-[11px]">{MOD_KEY}</kbd>
+              <kbd className="flex h-[17px] min-w-[17px] items-center justify-center rounded border border-background/20 px-0.5 font-sans text-[11px]">Enter</kbd>
             </span>
           )}
         </button>

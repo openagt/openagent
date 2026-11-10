@@ -111,7 +111,7 @@ describe('AgentComposer box', () => {
   test('the box says what sending does, live or ended, in one short line', () => {
     renderComposer()
     // A working agent: the keys, as Claude Code's box says them.
-    expect(props().placeholder).toBe('⏎ to send, ⌘⏎ to queue for later')
+    expect(props().placeholder).toMatch(/^Enter to send, (⌘Enter|Ctrl\+Enter) to queue for later$/)
     cleanup()
     renderComposer({ live: false })
     expect(props().placeholder).toBe('Message the agent to continue it…')

@@ -2,13 +2,14 @@ import { PanelLeft } from 'lucide-react'
 import { Button } from './ui/button.js'
 import { Tooltip, TooltipContent, TooltipTrigger } from './ui/tooltip.js'
 import { useOptionalSidebar, useSidebar } from './ui/sidebar.js'
+import { shortcut } from '../lib/shortcut.js'
 
 // The sidebar hidden and shown again, as Claude Code's is: its button in the sidebar's own top row
 // hides it, and while it is hidden the same button stands at the start of the page's top row (an
 // agent's bar, the "New agent session" page's, a page's header) to show it. Cmd/Ctrl+B does both. A phone's
 // sidebar is a sheet, opened by its own button (MenuButton): there neither is drawn.
 
-const SHORTCUT = navigator.platform.startsWith('Mac') ? '⌘B' : 'Ctrl+B'
+const SHORTCUT = shortcut('B')
 
 /** In the sidebar's top row: hides it. */
 export function HideSidebarButton() {
