@@ -7,6 +7,7 @@ import { DaemonDown } from '../lib/use-daemon-health.js'
 import { cn } from '../lib/utils.js'
 import { answerPrompt, skipPrompt } from '../lib/answered-question.js'
 import { MOD_KEY } from '../lib/shortcut.js'
+import { isMobileScreen } from '../lib/use-mobile.js'
 
 /** The pick that is no option: the person's own words, typed in the "Other" row. */
 const OTHER = Symbol('other')
@@ -42,6 +43,7 @@ export function QuestionPanel({
   choice,
   active = false,
   onSaid,
+  focusNext,
   send,
 }: {
   projectId: string
@@ -51,6 +53,8 @@ export function QuestionPanel({
   active?: boolean
   /** Told what the answer said to the agent, so the chat can show it at once. */
   onSaid?: ((text: string) => void) | undefined
+  /** Given the focus once the answer is taken, when it was in the card and the screen is no phone's: the message box. */
+  focusNext?: (() => void) | undefined
   /**
    * Where the pick goes instead of the usual call: the picked option, or the checked ones. With
    * it the card has no "Other" row and no Skip: the bridge types only a parked question's own
@@ -70,15 +74,20 @@ export function QuestionPanel({
   // "Other" ticked beside options where several may be picked: its words go with them.
   const [otherOn, setOtherOn] = useState(false)
   const otherInput = useRef<HTMLInputElement>(null)
+  const card = useRef<HTMLElement>(null)
   const words = other.trim()
 
-  // Taken, the card goes and the chat is told what the agent was sent, to show it at once.
-  const deliver = (fn: () => Promise<unknown>, said?: string) =>
+  // Taken, the card goes and the chat is told what the agent was sent, to show it at once. The
+  // focus in the card goes on, read as it is pressed: the card's buttons are off while it sends.
+  const deliver = (fn: () => Promise<unknown>, said?: string) => {
+    const handOn = card.current?.contains(document.activeElement) === true && !isMobileScreen()
     void run(fn, 'Could not send your answer — try again.').then(outcome => {
       if (!outcome.ok) return
       setSent(true)
       if (said !== undefined) onSaid?.(said)
+      if (handOn) focusNext?.()
     })
+  }
   const answer = (pick: string | string[]) => {
     if (send) return deliver(() => send(pick))
     const labels = choice.options.filter(o => [pick].flat().includes(o.id)).map(o => o.label)
@@ -151,7 +160,7 @@ export function QuestionPanel({
   const row = 'flex w-full items-start gap-3 p-4 text-left disabled:opacity-60'
   if (sent) return null
   return (
-    <section role="region" aria-label={choice.title} className="flex w-full max-w-[480px] flex-col overflow-clip rounded-xl font-sans text-sm ring-1 ring-border">
+    <section ref={card} role="region" aria-label={choice.title} className="flex w-full max-w-[480px] flex-col overflow-clip rounded-xl font-sans text-sm ring-1 ring-border">
       <h2 className="bg-foreground/5 px-4 py-3 font-normal">{choice.title}</h2>
       <ul className="flex flex-col">
         {choice.options.map(o => {

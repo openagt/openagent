@@ -676,6 +676,7 @@ export function EventList({
   projectId,
   agentId,
   onSaid,
+  focusNext,
   subagents = NO_SUBAGENTS,
   doing = NOTHING_DOING,
   setup,
@@ -715,6 +716,8 @@ export function EventList({
   agentId?: string | undefined
   /** Told what an answer said to the agent, so the chat can show it at once. */
   onSaid?: ((text: string) => void) | undefined
+  /** Given the focus once a question is answered from its card: the message box. */
+  focusNext?: (() => void) | undefined
   /** The runs started for this run, oldest first: each gets a row where it was started. */
   subagents?: readonly AgentMeta[]
   /** What each working subagent is doing now, by id. */
@@ -996,7 +999,7 @@ export function EventList({
                   ) : choiceRow && choiceRow.pick === undefined && projectId !== undefined && agentId !== undefined ? (
                     // The question the agent waits on, answered here, under what it said.
                     typing ? null : <div className="mt-1 flex min-w-0 flex-1 flex-col gap-1.5">
-                      <QuestionPanel key={`${agentId}:${choiceRow.choice.id}`} projectId={projectId} agentId={agentId} choice={choiceRow.choice} active={e === asking} onSaid={onSaid} />
+                      <QuestionPanel key={`${agentId}:${choiceRow.choice.id}`} projectId={projectId} agentId={agentId} choice={choiceRow.choice} active={e === asking} onSaid={onSaid} focusNext={focusNext} />
                       {footer}
                     </div>
                   ) : choiceRow?.pick !== undefined ? (

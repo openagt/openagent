@@ -196,6 +196,8 @@ export function AgentView({
   // The messages on their way to the agent, from the box under the chat to the feed above it.
   // The prompt this page started the run with is on its way only until the run has ended.
   const { sending: shownSending, onSending, waiting, onQueued, editInBox } = useMessagesOnTheirWay(projectId, agentId, shown, feedLive, live === false ? undefined : startedWith)
+  // A question answered from its card hands the focus on to the box, for what the person says next.
+  const focusBox = useRef<(() => void) | null>(null)
   // A run writes its prompt line once its coding agent begins. Until then its prompt, off its card,
   // is the chat's first row, after a reload and on a run stopped before it began too.
   const standIn = card?.intent ?? startedWith
@@ -411,6 +413,7 @@ export function AgentView({
             onSending={onSending}
             onQueued={onQueued}
             editInBox={editInBox}
+            focusBox={focusBox}
             model={underBox}
             {...(contextWindow !== undefined ? { context: <ContextCircle used={card?.contextTokens ?? 0} size={contextWindow} /> } : {})}
             controls={<RunPrLabels prs={prs} />}
@@ -452,6 +455,7 @@ export function AgentView({
           projectId={projectId}
           agentId={agentId}
           onSaid={onSending}
+          focusNext={() => focusBox.current?.()}
           writing={feedLive ? writing : ''}
           {...(shownSending !== undefined ? { sending: shownSending } : {})}
           working={feedLive || shownSending !== undefined}

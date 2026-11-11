@@ -49,6 +49,7 @@ export function AgentComposer({
   onSending,
   onQueued,
   editInBox,
+  focusBox,
   model,
   context,
   controls,
@@ -78,6 +79,8 @@ export function AgentComposer({
   onQueued?: ((message: QueuedMessage) => void) | undefined
   /** Set here to what puts a text in the box to edit: Cancel and edit on a waiting message. */
   editInBox?: MutableRefObject<((text: string) => void) | null> | undefined
+  /** Set here to what gives the box the focus: a question answered from its card. */
+  focusBox?: MutableRefObject<(() => void) | null> | undefined
   /** The model the session runs on, by its name: said under the box. */
   model?: string | undefined
   /** How full the session's context is, as a circle beside the model. */
@@ -111,6 +114,13 @@ export function AgentComposer({
       editInBox.current = null
     }
   }, [editInBox])
+  useEffect(() => {
+    if (!focusBox) return
+    focusBox.current = () => composerRef.current?.focus()
+    return () => {
+      focusBox.current = null
+    }
+  }, [focusBox])
   const { busy, error, run } = useAction()
   // The slot's Stop (#1455), its own action so a message send's busy beat cannot read as
   // "stopping". A landed Stop stays "Stopping…" until the end event flips `live`, so it cannot

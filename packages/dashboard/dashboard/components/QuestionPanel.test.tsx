@@ -81,6 +81,37 @@ describe('QuestionPanel', () => {
     expect(sendChoice).toHaveBeenCalledTimes(1)
   })
 
+  test('answered from the card by the keyboard, the message box has the focus once the answer is taken', async () => {
+    sendChoice.mockResolvedValue({ ok: true })
+    const Box = () => <textarea aria-label="Message the agent" />
+    render(
+      <>
+        {panel({ active: true, focusNext: () => screen.getByLabelText('Message the agent').focus() })}
+        <Box />
+      </>,
+    )
+    option(/SQLite/).focus()
+    fireEvent.keyDown(option(/SQLite/), { key: 'Enter', ctrlKey: true })
+    await waitFor(() => expect(screen.queryByRole('region', { name: 'Which database?' })).toBeNull())
+    expect(document.activeElement).toBe(screen.getByLabelText('Message the agent'))
+  })
+
+  test('answered while the focus is elsewhere, the focus stays where it is', async () => {
+    sendChoice.mockResolvedValue({ ok: true })
+    const focusNext = vi.fn()
+    render(
+      <>
+        {panel({ active: true, focusNext })}
+        <button type="button">Elsewhere</button>
+      </>,
+    )
+    screen.getByRole('button', { name: 'Elsewhere' }).focus()
+    fireEvent.keyDown(window, { key: 'Enter', ctrlKey: true })
+    await waitFor(() => expect(screen.queryByRole('region', { name: 'Which database?' })).toBeNull())
+    expect(focusNext).not.toHaveBeenCalled()
+    expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Elsewhere' }))
+  })
+
   test("a refused answer says why in the daemon's words, and the question stays answerable", async () => {
     sendChoice.mockResolvedValue({ ok: false, error: 'this project has no resume hook' })
     render(panel())
