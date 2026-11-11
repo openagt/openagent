@@ -159,7 +159,7 @@ function HostAccounts({ row, onChanged }: { row: GitHostRow; onChanged: () => Pr
                   </div>
                   {removing === account.login && (
                     <div role="group" aria-label={`Remove @${account.login}`} className="flex flex-wrap items-center gap-2 rounded-md bg-muted px-2.5 py-2 text-xs">
-                      <p className="min-w-0 flex-1 basis-60">
+                      <p className="min-w-0 grow basis-60">
                         {account.runs
                           ? `Runs use @${account.login}. Without it they have no ${p.name} account until you add one.`
                           : `OpenAgent forgets @${account.login}. The login goes on working wherever else it is.`}

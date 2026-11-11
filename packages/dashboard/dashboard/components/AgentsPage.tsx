@@ -329,7 +329,7 @@ function AgentEditor({ agent, view, onAccounts, onDone }: { agent?: AgentRecord;
             <Label htmlFor="agent-github">GitHub</Label>
             <div className="flex flex-wrap items-center gap-2">
               <Select items={githubItems} value={draft.github ?? COMPUTERS} onValueChange={next => setDraft(d => ({ ...d, ...(next ? { github: String(next) } : {}), ...(next ? {} : { github: undefined }) }))} disabled={busy}>
-                <SelectTrigger id="agent-github" size="sm" aria-label="GitHub account" className="min-w-0 max-w-sm flex-1 basis-48">
+                <SelectTrigger id="agent-github" size="sm" aria-label="GitHub account" className="min-w-0 max-w-sm grow basis-48">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
