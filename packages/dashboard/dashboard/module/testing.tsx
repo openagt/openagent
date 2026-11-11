@@ -2,6 +2,7 @@ import { render, type RenderResult } from '@testing-library/react'
 import { useState, type ReactElement, type ReactNode } from 'react'
 import { vi, type Mock } from 'vitest'
 import { PaneHeaderContext } from '../components/PaneHeader.js'
+import { SidebarProvider, useSidebar } from '../components/ui/sidebar.js'
 import { DaemonDown } from '../lib/use-daemon-health.js'
 import { ModulesContext, type MountedModules } from '../lib/use-modules.js'
 import { ModuleHostContext, type ModuleCommandResult, type ModuleHost } from './index.js'
@@ -93,6 +94,20 @@ export function renderWithHost(ui: ReactElement, host: ModuleHost, modules: Moun
 /** Render `children` as the dashboard does while OpenAgent is not answering: `useOpenAgentDown()` is true inside. */
 export function OpenAgentDown({ children }: { children: ReactNode }) {
   return <DaemonDown.Provider value>{children}</DaemonDown.Provider>
+}
+
+/** Render `children` as the dashboard does once the person hid the sidebar: an empty "Sidebar" navigation stands for it while it shows. */
+export function SidebarHidden({ children }: { children: ReactNode }) {
+  return (
+    <SidebarProvider defaultOpen={false}>
+      <SidebarShown />
+      {children}
+    </SidebarProvider>
+  )
+}
+
+function SidebarShown() {
+  return useSidebar().open ? <nav aria-label="Sidebar" /> : null
 }
 
 /** A pane's card as the dashboard draws it: a header with the two places a pane fills, over the pane. */
