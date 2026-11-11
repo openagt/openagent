@@ -157,7 +157,7 @@ export function FileTree({ files, caption, shown, context, filter, onOpen }: {
       {/* A filled box a step above the pane, as Claude Code's is, with room around it. */}
       <div className="relative mt-2 mb-2">
         <Search aria-hidden className="pointer-events-none absolute top-1/2 left-2.5 size-3.5 -translate-y-1/2 text-muted-foreground" />
-        <Input ref={filter} type="search" value={query} onChange={e => setQuery(e.target.value)} placeholder="Filter files…" aria-label="Filter files" className="h-8 rounded-lg border-border/60 bg-card pr-2! pl-8! text-[13px] shadow-none" />
+        <Input ref={filter} type="search" value={query} onChange={e => setQuery(e.target.value)} name="filter-files" placeholder="Filter files…" aria-label="Filter files" className="h-8 rounded-lg border-border/60 bg-card pr-2! pl-8! text-[13px] shadow-none" />
       </div>
       {caption && <p className="px-1 pb-1 text-[10px] text-muted-foreground">{caption}</p>}
       {/* A query with zero hits used to render an empty pane, which reads as broken (#948). */}
