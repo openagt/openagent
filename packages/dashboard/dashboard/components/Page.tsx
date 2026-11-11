@@ -26,7 +26,7 @@ export function Page({
   children: ReactNode
 }) {
   return (
-    <div className="mx-auto w-full max-w-6xl p-6 max-md:p-4">
+    <div className="mx-auto w-full max-w-6xl md:p-6 max-md:p-4">
       <header className="mb-4 space-y-3">
         <div className="flex flex-wrap items-start justify-between gap-x-4 gap-y-2">
           <div className="flex min-w-0 items-start gap-2">
