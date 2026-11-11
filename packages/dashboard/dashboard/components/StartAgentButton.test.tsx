@@ -66,6 +66,31 @@ describe('StartAgentButton (#1507)', () => {
     expect(onConfigure).toHaveBeenCalledTimes(1)
   })
 
+  test('while OpenAgent is not answering, the primary half is off and starts nothing, and the chevron still opens the launcher', async () => {
+    const { DaemonDown } = await import('../lib/use-daemon-health.js')
+    render(
+      <DaemonDown.Provider value>
+        <StartAgentButton
+          icon={<Play className="h-3 w-3" aria-hidden />}
+          label="Run now"
+          menuAriaLabel={MENU}
+          tooltip="Starts one agent."
+          prompt={PROMPT}
+          configureDescription="…"
+          onStart={onStart}
+          onConfigure={onConfigure}
+        />
+      </DaemonDown.Provider>,
+    )
+    const press = screen.getByRole('button', { name: 'Run now' }) as HTMLButtonElement
+    expect(press.disabled).toBe(true)
+    fireEvent.click(press)
+    expect(onStart).not.toHaveBeenCalled()
+    expect((screen.getByRole('button', { name: MENU }) as HTMLButtonElement).disabled).toBe(false)
+    await configureFirst(MENU)
+    expect(onConfigure).toHaveBeenCalledTimes(1)
+  })
+
   test('nothing to act on shuts both halves: there is no launcher to open either', () => {
     renderButton({ disabled: true })
     expect((screen.getByRole('button', { name: 'Run now' }) as HTMLButtonElement).disabled).toBe(true)

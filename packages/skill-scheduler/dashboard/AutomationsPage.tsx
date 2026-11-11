@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react'
-import { Page, Switch, Tooltip, TooltipContent, TooltipTrigger, Button, buttonVariants, cn, formatAge, formatDateTime, useCodingAgents, useModuleHost, usePolled, type ModuleCommandResult, type ModuleHost, type ModuleProject } from '@openagt/dashboard/module'
+import { Page, Switch, Tooltip, TooltipContent, TooltipTrigger, Button, buttonVariants, cn, formatAge, formatDateTime, useCodingAgents, useModuleHost, useOpenAgentDown, usePolled, type ModuleCommandResult, type ModuleHost, type ModuleProject } from '@openagt/dashboard/module'
 import type { ModulePageProps } from '@openagt/dashboard/module'
 import { AutomationForm } from './AutomationForm.js'
 import { CodeWords, Command } from './CodeWords.js'
@@ -37,6 +37,7 @@ const NOTHING_SCHEDULED = 'no skill of this project schedules a command'
 
 export function AutomationsPage({ projects }: ModulePageProps) {
   const host = useModuleHost()
+  const down = useOpenAgentDown()
   /** Every coding agent with the models it lists: what a row's agent and model are picked from, and named by. */
   const agents = useCodingAgents()
   const key = projects.map(p => p.id).join(',')
@@ -277,7 +278,7 @@ export function AutomationsPage({ projects }: ModulePageProps) {
                                 <Button
                                   variant="outline"
                                   size="xs"
-                                  disabled={saving || cannotRun(scheduled) !== undefined}
+                                  disabled={saving || down || cannotRun(scheduled) !== undefined}
                                   onClick={() => void startNow(id, row.project, scheduled.command)}
                                   aria-label={`Run ${title} now`}
                                 >

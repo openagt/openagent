@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, test, vi } from 'vitest'
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { ModuleHostContext, type ModuleCommandResult, type ModuleHost, type ModuleProject } from '@openagt/dashboard/module'
+import { OpenAgentDown } from '@openagt/dashboard/module/testing'
 import { AutomationsPage } from './AutomationsPage.js'
 import { ANY_AGENT, ON_CLAUDE, STATUS, hostAnswering } from './fixtures.js'
 import { checked, choices, offered, openList, pick, queryRadio, radio, radioNames, showing } from '../../dashboard/dashboard/test-controls.js'
@@ -271,6 +272,22 @@ describe('the Automations page: its rows', () => {
     expect(unnamed.textContent?.trim()).toBe('Started a run.')
     expect(within(unnamed).queryByRole('button')).toBeNull()
     expect(saves(runCommand)).toEqual([['now', 'work-queue'], ['now', 'post-merge-cleanup']])
+  })
+
+  test('while OpenAgent is not answering, "Run now" is off and asks for no run', async () => {
+    const { host, runCommand } = scheduler()
+    render(
+      <OpenAgentDown>
+        <ModuleHostContext.Provider value={host}>
+          <AutomationsPage projects={[GEMSTACK]} projectId={null} path={[]} />
+        </ModuleHostContext.Provider>
+      </OpenAgentDown>,
+    )
+    await screen.findByRole('region', { name: 'gemstack' })
+    const now = within(row('/work-queue')).getByRole('button', { name: 'Run /work-queue now' })
+    expect(disabled(now)).toBe(true)
+    fireEvent.click(now)
+    expect(saves(runCommand)).toEqual([])
   })
 
   test('a "Run now" that starts nothing says why on its row: nothing to do, or one already running, is a plain note; anything else is said as a failure, in the page\'s words for the scheduler\'s decision; the next one takes the line away', async () => {

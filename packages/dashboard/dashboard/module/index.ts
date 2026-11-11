@@ -16,6 +16,7 @@ import type { AgentStatus } from '../../src/index.js'
 import type { ModuleAgent, ModuleAgentsWanted } from '../../src/dashboard/module-agents.js'
 import { readModule, runComputerCommand, runComputerCommandOn, runModuleCommand } from '../rpc/modules.js'
 import type { ModuleCommandResult, ModuleReadResult } from '../rpc/modules.js'
+import { DaemonDown } from '../lib/use-daemon-health.js'
 
 export type { ModuleCommandResult, ModuleReadResult, AgentStatus, CardWidth, Health, ModuleAgent, ModuleAgentsWanted }
 
@@ -605,6 +606,11 @@ export function useModuleHost(): ModuleHost {
   const host = useContext(ModuleHostContext)
   if (!host) throw new Error('useModuleHost is only available inside a module page')
   return host
+}
+
+/** Whether OpenAgent is not answering right now, as the page's banner says: a press that starts a run is off while it is true. */
+export function useOpenAgentDown(): boolean {
+  return useContext(DaemonDown)
 }
 
 // The dashboard's own building blocks, so a module looks like the rest of the page.

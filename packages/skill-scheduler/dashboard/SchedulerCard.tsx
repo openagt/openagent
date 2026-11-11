@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { CalendarClock } from 'lucide-react'
-import { Button, Card, CardContent, CardHeader, CardTitleLink, Tooltip, TooltipContent, TooltipTrigger, cn, formatAge, formatDateTime, useModuleHost, usePolled, type ModuleCardProps, type ModuleProject } from '@openagt/dashboard/module'
+import { Button, Card, CardContent, CardHeader, CardTitleLink, Tooltip, TooltipContent, TooltipTrigger, cn, formatAge, formatDateTime, useModuleHost, useOpenAgentDown, usePolled, type ModuleCardProps, type ModuleProject } from '@openagt/dashboard/module'
 import { CodeWords } from './CodeWords.js'
 import { cannotRun, notAsked, readSchedulers, schedulersKey, rowTitle, schedulerStatus, schedulerStopped, startedNow, startsNext, unlistedWords, type Answered, type SchedulerCommand, type SchedulerRow } from './schedulers.js'
 
@@ -119,6 +119,7 @@ export function SchedulerCard({ projects }: ModuleCardProps) {
  */
 function OnRow({ project, command, stopped, lookedAt, onOpenRun, reload }: { project: ModuleProject; command: SchedulerCommand; stopped: boolean; /** When the scheduler last looked: the start its look made was then. */ lookedAt: string | undefined; onOpenRun: (run: string) => void; reload: () => Promise<void> }) {
   const host = useModuleHost()
+  const down = useOpenAgentDown()
   const [busy, setBusy] = useState(false)
   const [said, setSaid] = useState<Answered>()
   const started = said?.started || command.decision?.run
@@ -162,7 +163,7 @@ function OnRow({ project, command, stopped, lookedAt, onOpenRun, reload }: { pro
         <Button
           variant="ghost"
           size="xs"
-          disabled={busy}
+          disabled={busy || down}
           onClick={() => void runNow()}
           aria-label={`Run ${rowTitle(command)} now`}
           className="absolute inset-y-0 right-1 my-auto bg-[inherit] opacity-0 transition-opacity group-hover/row:opacity-100 focus-visible:opacity-100 disabled:opacity-100 max-md:static max-md:ml-auto max-md:opacity-100"

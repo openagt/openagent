@@ -1,6 +1,7 @@
-import type { ReactNode } from 'react'
+import { useContext, type ReactNode } from 'react'
 import { ChevronDown, Loader2 } from 'lucide-react'
 import { stashPendingDraft } from '../lib/draft-handoff.js'
+import { DaemonDown } from '../lib/use-daemon-health.js'
 import { cn } from '../lib/utils.js'
 import { Button, buttonVariants } from './ui/button.js'
 import { OptionLabel } from './ui/option-label.js'
@@ -97,6 +98,8 @@ export function StartAgentButton({
     stashPendingDraft(prompt)
     onConfigure()
   }
+  // OpenAgent is not answering: a start cannot reach it.
+  const down = useContext(DaemonDown)
 
   return (
     <div className="inline-flex shrink-0 items-center">
@@ -107,7 +110,7 @@ export function StartAgentButton({
               type="button"
               variant={variant}
               size={size}
-              disabled={disabled || busy}
+              disabled={disabled || busy || down}
               onClick={onStart}
               {...(ariaLabel ? { 'aria-label': ariaLabel } : {})}
               className={cn('rounded-r-none', variant === 'outline' && 'border-r-0', className)}
@@ -119,8 +122,8 @@ export function StartAgentButton({
         </TooltipTrigger>
         <TooltipContent {...(tooltipClassName ? { className: tooltipClassName } : {})}>{tooltip}</TooltipContent>
       </Tooltip>
-      {/* Never gated on `busy`, only on `disabled`: this starts nothing, and being unable to go
-          and look at the settings because a start is in flight would be the opposite of the point. */}
+      {/* Never gated on `busy` or on OpenAgent not answering, only on `disabled`: this starts nothing, and
+          being unable to go and look at the settings because a start is in flight would be the opposite of the point. */}
       <DropdownMenu>
         <DropdownMenuTrigger
           type="button"
