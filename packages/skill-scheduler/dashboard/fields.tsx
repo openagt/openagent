@@ -212,14 +212,18 @@ export function PaceFields({
   useEffect(() => {
     if (autoFocus) group.current?.querySelector<HTMLElement>('[role="radio"][aria-checked="true"]')?.focus()
   }, [])
-  const pick = (kind: unknown): void => onChange(kind === 'every' ? typed : kind === 'work' ? { kind: 'work' } : { kind: 'skill' })
-  // A time left half typed has no text; the browser says so on the field itself.
-  const at = (field: HTMLInputElement): PaceDraft => ({ kind: 'every', count: typed.count, unit: typed.unit, at: field.value, ...(field.validity.badInput ? { atHalfTyped: true as const } : {}) })
+  const time = useRef<HTMLInputElement>(null)
+  // A time left half typed has no text; the browser says so on the field, which shows only beside a unit that takes a time of day.
+  const wait = (change: { count?: string; unit?: PaceUnit; at?: string } = {}): PaceDraft => {
+    const next = { kind: 'every' as const, count: typed.count, unit: typed.unit, at: typed.at, ...change }
+    return takesTimeOfDay(next.unit) && time.current?.validity.badInput ? { ...next, atHalfTyped: true } : next
+  }
+  const pick = (kind: unknown): void => onChange(kind === 'every' ? wait() : kind === 'work' ? { kind: 'work' } : { kind: 'skill' })
   const interval = (
     // A field typed into is the pick: nobody types a wait and means another choice.
     <div className={cn('flex flex-wrap items-center gap-2 text-sm', !own && 'opacity-60')}>
-      <Input type="number" name="every" min={1} max={MAX_COUNT} value={typed.count} disabled={disabled} onChange={e => onChange({ ...typed, count: e.target.value })} aria-label="How long" className="h-8 w-20 bg-background px-2" />
-      <Select items={PACE_UNITS.map(unit => ({ value: unit, label: unitWord(unit, typed.count) }))} value={typed.unit} disabled={disabled} onValueChange={unit => onChange({ ...typed, unit: unit as PaceUnit })}>
+      <Input type="number" name="every" min={1} max={MAX_COUNT} value={typed.count} disabled={disabled} onChange={e => onChange(wait({ count: e.target.value }))} aria-label="How long" className="h-8 w-20 bg-background px-2" />
+      <Select items={PACE_UNITS.map(unit => ({ value: unit, label: unitWord(unit, typed.count) }))} value={typed.unit} disabled={disabled} onValueChange={unit => onChange(wait({ unit: unit as PaceUnit }))}>
         <SelectTrigger size="sm" aria-label="Unit" className="w-28">
           <SelectValue />
         </SelectTrigger>
@@ -235,13 +239,14 @@ export function PaceFields({
         <>
           <span>{work ? 'not before' : 'at'}</span>
           <Input
+            ref={time}
             type="time"
             name="at"
             value={typed.at}
             disabled={disabled}
-            onChange={e => onChange(at(e.target))}
+            onChange={e => onChange(wait({ at: e.target.value }))}
             // Chrome sends no change while a blank time is typed part-way, so leaving the field tells it; left as it was, it picks nothing.
-            onBlur={e => e.target.validity.badInput !== (own && draft.atHalfTyped === true) && onChange(at(e.target))}
+            onBlur={e => e.target.validity.badInput !== (own && draft.atHalfTyped === true) && onChange(wait({ at: e.target.value }))}
             aria-label={work ? 'Not before this time of day' : 'Time of day'}
             className="h-8 w-auto bg-background px-2"
           />
