@@ -211,6 +211,7 @@ function WeekBar({
             in the change handler instead, on the offset it produces. Dragging it is what changes
             where the dimmed segment ends. */}
         {limited && <input
+          name="spend-offset"
           type="range"
           aria-label="Unattended work stops at"
           className={cn(

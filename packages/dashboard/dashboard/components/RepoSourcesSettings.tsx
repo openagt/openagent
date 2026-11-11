@@ -59,6 +59,7 @@ export function RepoSourcesSettings() {
           }}
         >
           <Input
+            name="github-owner"
             aria-label="GitHub user or organization"
             placeholder="user or organization"
             value={owner}

@@ -205,6 +205,7 @@ function ChangeSearch({ paths, changes, onPick }: { paths: string[]; changes: Re
       </Tooltip>
       <PopoverContent align="end" className="w-72 p-1">
         <Input
+          name="search-changes"
           autoFocus
           type="search"
           value={query}

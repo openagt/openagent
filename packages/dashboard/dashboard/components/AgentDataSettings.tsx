@@ -128,6 +128,7 @@ export function AgentDataSettings() {
             </p>
             <div className="flex items-center gap-2">
               <Input
+                name="repository-address"
                 aria-label="Repository address"
                 placeholder="github.com/you/agent"
                 value={address}

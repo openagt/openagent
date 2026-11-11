@@ -327,7 +327,7 @@ function PhoneRow({ d, item }: { d: Devices; item: PhoneItem }) {
               void act(() => d.changeDoor(() => renameDevice(host, item.door!.id, name.trim()))).then(done => done && setRenaming(false))
             }}
           >
-            <Input autoFocus aria-label="Name" value={name} maxLength={80} onChange={event => setName(event.target.value)} />
+            <Input name="device-name" autoFocus aria-label="Name" value={name} maxLength={80} onChange={event => setName(event.target.value)} />
             <div className="flex justify-end gap-2">
               <Button size="sm" type="button" variant="ghost" onClick={() => setRenaming(false)}>
                 Cancel

@@ -74,6 +74,7 @@ export function BrowserPanel({ projectId, agentId, activity }: ModulePanelProps)
           <RotateCw className="h-4 w-4" />
         </Button>
         <Input
+          name="page-address"
           aria-label="Address"
           className="h-7 min-w-0 flex-1 text-xs"
           spellCheck={false}
@@ -551,6 +552,7 @@ function TypeHere({ send }: { send: (input: ScreenInput) => void }) {
   return (
     <div className="border-b border-border p-2">
       <Input
+        name="page-text"
         aria-label="Type into the page"
         placeholder="Type into the page"
         className="h-7 text-xs"

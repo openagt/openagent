@@ -88,11 +88,11 @@ export function ConnectServer({ d, onClose, onInvite }: { d: Devices; onClose: (
             <div className="grid grid-cols-[1fr_8rem] gap-2">
               <label className="space-y-1 text-xs text-muted-foreground">
                 <span>{kind === 'tailscale' ? 'Its name on Tailscale' : kind === 'home' ? 'Its address on its network' : 'Its address'}</span>
-                <Input autoFocus aria-label="The server's address" placeholder={kind === 'tailscale' ? 'homepc.tail1234.ts.net' : kind === 'home' ? '192.168.1.40' : '203.0.113.5'} value={address} onChange={event => setAddress(event.target.value)} />
+                <Input name="server-address" autoFocus aria-label="The server's address" placeholder={kind === 'tailscale' ? 'homepc.tail1234.ts.net' : kind === 'home' ? '192.168.1.40' : '203.0.113.5'} value={address} onChange={event => setAddress(event.target.value)} />
               </label>
               <label className="space-y-1 text-xs text-muted-foreground">
                 <span>User</span>
-                <Input aria-label="User name" placeholder={pc ? 'yours on it' : 'root'} value={user} onChange={event => setUser(event.target.value)} />
+                <Input name="server-user" aria-label="User name" placeholder={pc ? 'yours on it' : 'root'} value={user} onChange={event => setUser(event.target.value)} />
               </label>
             </div>
             <p className="text-xs text-muted-foreground">

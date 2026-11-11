@@ -58,6 +58,7 @@ export function PresetCreatePanel({
     <Dialog open onOpenChange={next => { if (!next) onCancel() }} title="Save prompt" initialFocus={labelField}>
       <div className="flex w-full flex-col gap-2" onKeyDown={onKeyDown}>
       <Input
+        name="prompt-name"
         ref={labelField}
         type="text"
         value={label}
@@ -68,6 +69,7 @@ export function PresetCreatePanel({
         className="h-8 bg-background px-2"
       />
       <Textarea
+        name="prompt"
         value={prompt}
         placeholder="The prompt to save…"
         disabled={busy}

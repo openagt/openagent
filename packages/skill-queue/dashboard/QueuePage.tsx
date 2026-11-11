@@ -139,6 +139,7 @@ function ProjectQueue({ read, titled, schedule, names, starts, reload }: { read:
               <TooltipTrigger
                 render={
                   <Input
+                    name="agent-count"
                     type="number"
                     min={1}
                     max={raw.length}
@@ -353,7 +354,7 @@ function AddEntry({ project, reload }: { project: ModuleProject; reload: () => P
       className="mt-4"
     >
       <div className="flex flex-wrap items-center gap-2">
-        <Input value={text} onChange={event => (setText(event.target.value), setFailed(undefined))} disabled={adding} placeholder="Add a task: what an agent should do" aria-label="A task to add to the queue" className="h-8 min-w-48 flex-1 px-2" />
+        <Input name="task" value={text} onChange={event => (setText(event.target.value), setFailed(undefined))} disabled={adding} placeholder="Add a task: what an agent should do" aria-label="A task to add to the queue" className="h-8 min-w-48 flex-1 px-2" />
         <Select items={items} value={String(priority)} disabled={adding} onValueChange={next => setPriority(Number(next))}>
           <SelectTrigger size="sm" aria-label="Priority of the new task" className="w-32">
             <SelectValue />

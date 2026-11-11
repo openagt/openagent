@@ -112,13 +112,13 @@ export function JoinDialog({ d, onClose, onJoined }: { d: Devices; onClose: () =
         <p className="text-xs text-muted-foreground">Type what the other device shows.</p>
         <label className="block space-y-1">
           <span className="text-xs text-muted-foreground">Where</span>
-          <Input autoFocus aria-label="Where" placeholder="203.0.113.10" value={where} onPaste={paste} onChange={event => setWhere(event.target.value)} className="bg-background font-mono" />
+          <Input name="pairing-address" autoFocus aria-label="Where" placeholder="203.0.113.10" value={where} onPaste={paste} onChange={event => setWhere(event.target.value)} className="bg-background font-mono" />
           <span className="block text-xs text-muted-foreground">An address, or the whole link the other device gave.</span>
         </label>
         {!isLink(where) && (
           <label className="block space-y-1">
             <span className="text-xs text-muted-foreground">Code</span>
-            <Input aria-label="Code" placeholder="K7P4-QX9M" autoCapitalize="characters" autoComplete="off" spellCheck={false} value={code} onPaste={paste} onChange={event => setCode(event.target.value)} className="bg-background font-mono uppercase" />
+            <Input name="pairing-code" aria-label="Code" placeholder="K7P4-QX9M" autoCapitalize="characters" autoComplete="off" spellCheck={false} value={code} onPaste={paste} onChange={event => setCode(event.target.value)} className="bg-background font-mono uppercase" />
           </label>
         )}
         {server && (

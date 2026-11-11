@@ -175,7 +175,7 @@ function SigningIn({ agent, adding, noBrowser, onChanged }: { agent: (typeof AGE
             void send()
           }}
         >
-          <Input aria-label="Code from Claude" placeholder="2. Paste the code it shows" value={code} onChange={event => setCode(event.target.value)} className="h-9 min-w-0 grow basis-40 text-sm" />
+          <Input name="login-code" aria-label="Code from Claude" placeholder="2. Paste the code it shows" value={code} onChange={event => setCode(event.target.value)} className="h-9 min-w-0 grow basis-40 text-sm" />
           <Button size="sm" type="submit" disabled={code.trim() === '' || adding.checking === true}>
             {adding.checking ? 'Checking…' : 'Done'}
           </Button>
