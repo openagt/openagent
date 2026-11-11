@@ -32,7 +32,7 @@ import { stashPendingDraft } from './lib/draft-handoff.js'
 import { useLiveEvents } from './lib/use-live-events.js'
 import { useAgents, useRecentAgents } from './lib/use-agents.js'
 import { runsAgain } from './lib/runs-changed.js'
-import { AGENTS_PAGE, PERMISSIONS_PAGE, useRoute } from './lib/use-route.js'
+import { AGENTS_PAGE, PERMISSIONS_PAGE, settingsOverPage, useRoute } from './lib/use-route.js'
 import { formatRoute, type Route } from './lib/route.js'
 import { projectAddresses, SESSIONS_ID } from '../src/project-address.js'
 import { useActivityNotifications, useInterventionNotifications } from './lib/use-notifications.js'
@@ -328,14 +328,16 @@ export function App() {
 
   // Settings (#958): a dialog over the page you are on, which stays under it, its own query too.
   // Moving between its entries replaces the address, so Back closes it rather than stepping through them.
+  // Opened over the page here, it closes by Back too: the page's own entry is there again, as the page left it.
   const showSettings = (entry = '') => {
-    navigate({ ...route, settings: entry }, { keepQuery: true })
+    navigate({ ...route, settings: entry }, { keepQuery: true, overPage: route.settings === undefined })
   }
   const showSettingsEntry = (entry: string) => {
     const { settingsItem: _item, ...rest } = route
     navigate({ ...rest, settings: entry }, { keepQuery: true, replace: true })
   }
   const closeSettings = () => {
+    if (settingsOverPage()) return window.history.back()
     const { settings: _settings, settingsItem: _item, ...under } = route
     navigate(under, { keepQuery: true })
   }

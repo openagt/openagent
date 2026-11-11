@@ -1,9 +1,10 @@
 import { afterEach, describe, expect, test, vi } from 'vitest'
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { createElement } from 'react'
 import { openMenu, phoneScreen } from './test-utils.js'
 import { useModuleHost, type ModuleCardProps, type ModuleDefinition, type ModulePageProps } from './module/index.js'
 import { forgetRemembered } from './lib/use-async.js'
+import { openSettings } from './lib/use-route.js'
 import { skillsSaved } from './lib/skills-saved.js'
 
 // The whole transport, stubbed at its one seam: every RPC stub is `rpc(name)`, so a map by name
@@ -464,10 +465,32 @@ describe('the project select (#1513)', () => {
     expect(window.history.length).toBe(steps)
     // Closed, the page under it is as it was.
     fireEvent.click(screen.getByRole('button', { name: 'shut the dialog' }))
-    expect(url()).toBe('/site/logs')
+    await waitFor(() => expect(url()).toBe('/site/logs'))
     expect(screen.queryByText(/the settings dialog/)).toBeNull()
     fireEvent.click(await screen.findByText('site ran'))
     expect(url()).toBe('/site/3-s')
+  })
+
+  test.each([
+    ["the dialog's own list", async () => fireEvent.click(await screen.findByRole('button', { name: 'to Agent' }))],
+    ['a link inside an entry', async () => act(() => openSettings('agent'))],
+  ])('Settings opened over a page, moved to another entry by %s, and closed leaves that page as its history entry was: Back goes on to the page before, not into Settings again', async (_by, moveToAgent) => {
+    answerTwo()
+    window.history.replaceState(null, '', '/site/overview')
+    render(<App />)
+    fireEvent.click(await screen.findByRole('button', { name: 'Logs' }))
+    window.history.replaceState({ written: 'by the page' }, '')
+    fireEvent.click(screen.getByRole('button', { name: /settings$/i }))
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Settings' }))
+    await screen.findByText("the settings dialog on ''")
+    await moveToAgent()
+    expect(url()).toBe('/site/logs?settings=agent')
+    fireEvent.click(screen.getByRole('button', { name: 'shut the dialog' }))
+    await waitFor(() => expect(url()).toBe('/site/logs'))
+    expect(window.history.state).toEqual({ written: 'by the page' })
+    window.history.back()
+    await waitFor(() => expect(url()).toBe('/site/overview'))
+    expect(screen.queryByText(/the settings dialog/)).toBeNull()
   })
 
   test("Settings opened by its address, on a first visit, waits for the projects: it opens on the address's project", async () => {
