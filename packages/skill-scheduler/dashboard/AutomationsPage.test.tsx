@@ -619,6 +619,14 @@ describe("the Edit panel of a skill's row", () => {
     expect(within(editor).getByText('Every 2 days at 09:30. Claude Code, Opus 5.5. May commit, pushes nothing.')).toBeTruthy()
     fireEvent.change(time, { target: { value: '' } })
     expect(within(editor).getByText("optional, this machine's time")).toBeTruthy()
+    // A blank time typed part-way sends no change: the field is read again when it is left.
+    Object.defineProperty(time, 'validity', { configurable: true, value: { badInput: true } })
+    fireEvent.blur(time)
+    expect(disabled(save)).toBe(true)
+    expect(within(editor).getByText('Finish the time, like 10:00, or clear it.')).toBeTruthy()
+    Object.defineProperty(time, 'validity', { configurable: true, value: { badInput: false } })
+    fireEvent.blur(time)
+    expect(disabled(save)).toBe(false)
     await pick(within(editor).getByLabelText('Unit'), 'months')
     expect(within(editor).getByText("optional, this machine's time; a month counts as 30 days")).toBeTruthy()
     fireEvent.change(within(editor).getByLabelText('How long'), { target: { value: '30' } })
@@ -771,6 +779,9 @@ describe("the Edit panel of a skill's row", () => {
     const count = within(when).getByLabelText('How long') as HTMLInputElement
     expect([count.value, showing(within(when).getByLabelText('Unit'))]).toEqual(['1', 'day'])
     expect([count, within(when).getByLabelText('Unit'), within(when).getByLabelText('Time of day')].map(disabled)).toEqual([false, false, false])
+    // Passing through the time of day types nothing.
+    fireEvent.blur(within(when).getByLabelText('Time of day'))
+    expect(picks(when)).toEqual([['As the skill says', true], ['A wait you set', false]])
     expect(within(editor).getByText('Every day. Claude Code, Opus 5.5. May commit, pushes nothing. Nothing is changed yet.')).toBeTruthy()
     fireEvent.change(count, { target: { value: '3' } })
     expect(picks(when)).toEqual([['As the skill says', false], ['A wait you set', true]])

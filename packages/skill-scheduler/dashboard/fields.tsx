@@ -213,6 +213,8 @@ export function PaceFields({
     if (autoFocus) group.current?.querySelector<HTMLElement>('[role="radio"][aria-checked="true"]')?.focus()
   }, [])
   const pick = (kind: unknown): void => onChange(kind === 'every' ? typed : kind === 'work' ? { kind: 'work' } : { kind: 'skill' })
+  // A time left half typed has no text; the browser says so on the field itself.
+  const at = (field: HTMLInputElement): PaceDraft => ({ kind: 'every', count: typed.count, unit: typed.unit, at: field.value, ...(field.validity.badInput ? { atHalfTyped: true as const } : {}) })
   const interval = (
     // A field typed into is the pick: nobody types a wait and means another choice.
     <div className={cn('flex flex-wrap items-center gap-2 text-sm', !own && 'opacity-60')}>
@@ -237,8 +239,9 @@ export function PaceFields({
             name="at"
             value={typed.at}
             disabled={disabled}
-            // A time left half typed has no text; the browser says so on the field itself.
-            onChange={e => onChange({ kind: 'every', count: typed.count, unit: typed.unit, at: e.target.value, ...(e.target.validity.badInput ? { atHalfTyped: true as const } : {}) })}
+            onChange={e => onChange(at(e.target))}
+            // Chrome sends no change while a blank time is typed part-way, so leaving the field tells it; left as it was, it picks nothing.
+            onBlur={e => e.target.validity.badInput !== (own && draft.atHalfTyped === true) && onChange(at(e.target))}
             aria-label={work ? 'Not before this time of day' : 'Time of day'}
             className="h-8 w-auto bg-background px-2"
           />
