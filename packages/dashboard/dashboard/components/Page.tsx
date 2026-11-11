@@ -47,8 +47,8 @@ export function Page({
               {description !== undefined && <p className="mt-1 text-sm text-muted-foreground">{description}</p>}
             </div>
           </div>
-          {/* On a phone a button's words are longer than the screen: the buttons give up width, and their words are cut. */}
-          {actions !== undefined && <div className="flex flex-wrap items-center justify-end gap-2 md:shrink-0 max-md:min-w-0">{actions}</div>}
+          {/* The buttons give up width: they go under each other when the column is narrower than them, and on a phone a button's words longer than the screen are cut. */}
+          {actions !== undefined && <div className="flex min-w-0 flex-wrap items-center gap-2">{actions}</div>}
         </div>
         {bar}
       </header>

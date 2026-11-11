@@ -29,3 +29,14 @@ test('the name, its count, the line under it and the page\'s buttons in a header
   // Drawn alone, with no sidebar around it, it offers none to show.
   expect(screen.queryByRole('button', { name: 'Show the sidebar' })).toBeNull()
 })
+
+test("the buttons' row gives up width at every width, so its buttons go under each other when the column is narrower than them", () => {
+  render(
+    <Page title="Tickets" actions={<button type="button">Add to queue</button>}>
+      <p>the list</p>
+    </Page>,
+  )
+  const row = screen.getByRole('button', { name: 'Add to queue' }).parentElement!
+  expect(row.className.split(' ')).toEqual(expect.arrayContaining(['min-w-0', 'flex-wrap']))
+  expect(row.className).not.toMatch(/shrink-0/)
+})
