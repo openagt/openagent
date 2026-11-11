@@ -68,14 +68,14 @@ export function NotificationsSubmenu() {
             onCheckedChange={next => updatePreferences({ notifyHumanIntervention: next })}
             className="items-start"
           >
-            <OptionLabel label="Human Queue" description="An agent awaiting you, or a PR to review" />
+            <OptionLabel label="Human Queue" description="An agent awaiting your answer, or a PR ready to review" />
           </DropdownMenuCheckboxItem>
           <DropdownMenuCheckboxItem
             checked={activity}
             onCheckedChange={next => updatePreferences({ notifyNewActivity: next })}
             className="items-start"
           >
-            <OptionLabel label="New activity" description="An agent started or finished" />
+            <OptionLabel label="New activity" description="An agent starts or finishes" />
           </DropdownMenuCheckboxItem>
         </DropdownMenuGroup>
       </DropdownMenuSubContent>

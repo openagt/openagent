@@ -399,7 +399,7 @@ function useOwnEntries(): Entry[] {
           />
           <ToggleRow
             label="New activity"
-            description="Also ping when an agent starts or finishes."
+            description="An agent starts or finishes."
             checked={preferences.notifyNewActivity ?? false}
             onChange={next => updatePreferences({ notifyNewActivity: next })}
           />
