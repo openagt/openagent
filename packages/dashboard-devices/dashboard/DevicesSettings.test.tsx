@@ -705,6 +705,23 @@ describe('Settings › Devices: a computer several people use', () => {
     expect(runComputerCommand.mock.calls.some(([args]) => args[0] === 'owner' || args[0] === 'add')).toBe(false)
   })
 
+  test('the owner names themselves from the keyboard: their field has the focus once the name git knows is read, and again when the name is refused', async () => {
+    const SERVER = { on: false, listening: true, https: { address: '203.0.113.5' }, devices: [], persons: [] }
+    const { host } = door(args => (args[0] === 'me' ? ok({ name: 'Ada Lovelace' }) : args[0] === 'owner' ? { ok: false, error: 'that name is taken here' } : ok(SERVER)), [], () => ok({ server: true, servers: [] }))
+    show(host)
+    fireEvent.click(await screen.findByRole('button', { name: 'Add person' }))
+    fireEvent.change(await screen.findByRole('textbox', { name: 'Their name' }), { target: { value: 'Rom' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Make the code' }))
+    const own = (await screen.findByRole('textbox', { name: 'First, your name?' })) as HTMLInputElement
+    await waitFor(() => expect(own.value).toBe('Ada Lovelace'))
+    await waitFor(() => expect(document.activeElement).toBe(own))
+    const go = screen.getByRole('button', { name: 'Continue' })
+    go.focus()
+    fireEvent.click(go)
+    expect(await screen.findByText(/that name is taken here/)).toBeTruthy()
+    await waitFor(() => expect(document.activeElement).toBe(own))
+  })
+
   test('once named, the owner is not asked again, and the devices are listed by person; a person is removed with their devices', async () => {
     const persons = [{ name: 'Ada', owner: true }, { name: 'Rom' }, { name: 'Eve' }]
     const devices = [{ ...PHONE, person: 'Ada' }, { ...PHONE, id: 'fed654cba321', name: 'Pixel, Chrome', person: 'Rom' }]

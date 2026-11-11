@@ -328,6 +328,10 @@ export function useNaming(persons: Persons) {
 export function WhoAreYou({ title, naming, onType, onConfirm, onClose }: { title: string; naming: { typed: string; error?: string; busy: boolean }; onType: (typed: string) => void; onConfirm: (owner: string) => void; onClose: () => void }) {
   const name = nameOf(naming.typed)
   const field = useRef<HTMLInputElement>(null)
+  // The field is disabled while the name is read and while it is tried; once either ends, it takes the focus.
+  useEffect(() => {
+    if (!naming.busy) field.current?.focus()
+  }, [naming.busy])
   return (
     <Dialog open onOpenChange={open => !open && onClose()} title={title} initialFocus={field}>
       <form
