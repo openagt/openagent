@@ -244,7 +244,7 @@ function AddAccount({ agent, now, failed, from, field, onChanged, onClose }: { a
               void start()
             }}
           >
-            <Input ref={field} autoFocus={opened} aria-label="Whose account" placeholder="Whose account, e.g. Dani" value={name} onChange={event => setName(event.target.value)} className="h-8 min-w-0 grow basis-32" />
+            <Input ref={field} autoFocus={opened} name="account-name" aria-label="Whose account" placeholder="Whose account, e.g. Dani" value={name} onChange={event => setName(event.target.value)} className="h-8 min-w-0 grow basis-32" />
             <Button size="sm" type="submit" disabled={busy || name.trim() === ''}>
               {agent.logIn}
             </Button>
