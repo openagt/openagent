@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useRef, useState, type RefObject } from 'react'
 import { Check, ChevronDown, Copy, Info, KeyRound, MoreHorizontal, Plus } from 'lucide-react'
 import { Button, Card, CardContent, CardHeader, CardTitle, ClaudeLogo, CodexLogo, Dialog, DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, GaugeFace, Input, Skeleton, Tooltip, TooltipContent, TooltipTrigger, cn, useModuleHost, usePolled, type ModuleCardProps, type ModuleHost } from '@openagt/dashboard/module'
 
@@ -206,9 +206,12 @@ function SigningIn({ agent, adding, noBrowser, onChanged }: { agent: (typeof AGE
  * adding it there is said first: signing in here is the longer way. `onClose` closes the dialog,
  * which gives up a sign-in under way.
  */
-function AddAccount({ agent, now, failed, from, onChanged, onClose }: { agent: (typeof AGENTS)[number]; now: AddingNow; failed: string | undefined; from: string | undefined; onChanged: () => void; onClose: () => void }) {
+function AddAccount({ agent, now, failed, from, field, onChanged, onClose }: { agent: (typeof AGENTS)[number]; now: AddingNow; failed: string | undefined; from: string | undefined; /** The dialog's `initialFocus`. */ field: RefObject<HTMLInputElement | null>; onChanged: () => void; onClose: () => void }) {
   const host = useModuleHost()
   const [name, setName] = useState('')
+  // The dialog focuses the field it opens on; one shown later, after "Sign in here instead" or a sign-in that did not go through, takes the focus itself.
+  const [opened, setOpened] = useState(false)
+  useEffect(() => setOpened(true), [])
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string>()
   const [here, setHere] = useState(false)
@@ -241,7 +244,7 @@ function AddAccount({ agent, now, failed, from, onChanged, onClose }: { agent: (
               void start()
             }}
           >
-            <Input autoFocus aria-label="Whose account" placeholder="Whose account, e.g. Dani" value={name} onChange={event => setName(event.target.value)} className="h-8 min-w-0 grow basis-32" />
+            <Input ref={field} autoFocus={opened} aria-label="Whose account" placeholder="Whose account, e.g. Dani" value={name} onChange={event => setName(event.target.value)} className="h-8 min-w-0 grow basis-32" />
             <Button size="sm" type="submit" disabled={busy || name.trim() === ''}>
               {agent.logIn}
             </Button>
@@ -446,6 +449,7 @@ export function AccountsCard({ accountWhere }: ModuleCardProps) {
   )
   // The agent an account is being added for: the dialog is open on it, from the press until the account is there or the dialog is closed.
   const [naming, setNaming] = useState<AgentId>()
+  const nameField = useRef<HTMLInputElement>(null)
   // Why the last sign-in did not go through, once the person closed the dialog on it: not said again when it opens next.
   const [dismissed, setDismissed] = useState<string>()
   const signingIn = AGENTS.find(agent => adding?.[agent.id]?.adding !== undefined)?.id
@@ -584,7 +588,7 @@ export function AccountsCard({ accountWhere }: ModuleCardProps) {
           </div>
         )}
       </CardContent>
-      <Dialog open={namingAgent !== undefined} onOpenChange={open => !open && close()} title={namingAgent ? `Add a ${namingAgent.account} account` : ''}>
+      <Dialog open={namingAgent !== undefined} onOpenChange={open => !open && close()} title={namingAgent ? `Add a ${namingAgent.account} account` : ''} initialFocus={nameField}>
         {namingAgent && (
           <AddAccount
             key={namingAgent.id}
@@ -592,6 +596,7 @@ export function AccountsCard({ accountWhere }: ModuleCardProps) {
             now={namingNow}
             failed={namingNow.failed !== dismissed ? namingNow.failed : undefined}
             from={list?.ok ? AGENTS.flatMap(each => list.accounts[each.id] ?? []).find(account => account.from !== undefined)?.from : undefined}
+            field={nameField}
             onChanged={changed}
             onClose={close}
           />

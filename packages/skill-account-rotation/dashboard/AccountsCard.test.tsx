@@ -150,6 +150,18 @@ describe('AccountsCard', () => {
     expect(within(dialog).getByRole('textbox', { name: 'Whose account' })).toBeTruthy()
   })
 
+  test('closing the dialog gives the focus back to the press that opened it', async () => {
+    renderCard(listed([{ name: 'This computer', signedOut: true, own: true }], []))
+    const press = await screen.findByRole('button', { name: 'Add a Claude account' })
+    press.focus()
+    fireEvent.click(press)
+    const dialog = await screen.findByRole('dialog', { name: 'Add a Claude account' })
+    await waitFor(() => expect(document.activeElement).toBe(within(dialog).getByRole('textbox', { name: 'Whose account' })))
+    fireEvent.keyDown(document.activeElement!, { key: 'Escape' })
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
+    await waitFor(() => expect(document.activeElement).toBe(press))
+  })
+
   test("calls the person's own login who it is, and the press still names it as the command knows it", async () => {
     const run = renderCard(listed([{ name: 'Work', own: false }, { name: 'This computer', who: 'Ada', own: true }]))
     await openRow('Ada')

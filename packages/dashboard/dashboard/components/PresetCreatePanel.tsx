@@ -1,4 +1,4 @@
-import { useState, type KeyboardEvent } from 'react'
+import { useRef, useState, type KeyboardEvent } from 'react'
 import type { CustomPreset } from '../../src/index.js'
 import { Button } from './ui/button.js'
 import { Input } from './ui/input.js'
@@ -35,6 +35,7 @@ export function PresetCreatePanel({
   onCancel: () => void
 }) {
   const [label, setLabel] = useState('')
+  const labelField = useRef<HTMLInputElement>(null)
   const [prompt, setPrompt] = useState(currentPrompt)
   const [scope, setScope] = useState<PresetScope>('user')
 
@@ -54,15 +55,15 @@ export function PresetCreatePanel({
   }
 
   return (
-    <Dialog open onOpenChange={next => { if (!next) onCancel() }} title="Save prompt">
+    <Dialog open onOpenChange={next => { if (!next) onCancel() }} title="Save prompt" initialFocus={labelField}>
       <div className="flex w-full flex-col gap-2" onKeyDown={onKeyDown}>
       <Input
+        ref={labelField}
         type="text"
         value={label}
         maxLength={LABEL_MAX}
         placeholder="Name"
         disabled={busy}
-        autoFocus
         onChange={e => setLabel(e.target.value)}
         className="h-8 bg-background px-2"
       />

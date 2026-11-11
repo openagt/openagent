@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import { Bot, Check, Loader2, Pencil, Plus, RefreshCw, Trash2 } from 'lucide-react'
 import { onAgentLogins, onAgentsList, sendCopyAgentLogins, sendRemoveAgent, sendSaveAgent, type AgentLoginsOn, type AgentRecord, type AgentsView } from '../rpc/agents.js'
 import { DEFAULT_AGENT } from '../../src/client.js'
@@ -230,6 +230,7 @@ const COMPUTERS = ''
 function AgentEditor({ agent, view, onAccounts, onDone }: { agent?: AgentRecord; view: AgentsView; onAccounts: () => Promise<void>; onDone: (saved: boolean) => Promise<void> | void }) {
   // What is being typed is the editor's own from its first frame: the page reading the agents again changes nothing in it.
   const [draft, setDraft] = useState<Draft>(() => draftOf(agent))
+  const nameField = useRef<HTMLInputElement>(null)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | undefined>()
   const addingAccount = useAddGitAccount(async login => {
@@ -267,6 +268,7 @@ function AgentEditor({ agent, view, onAccounts, onDone }: { agent?: AgentRecord;
       open
       wide
       keepOnOutsidePress
+      initialFocus={nameField}
       onOpenChange={open => !open && !busy && void onDone(false)}
       title={agent ? `Editing ${agent.name}` : 'New agent'}
       footer={
@@ -291,7 +293,7 @@ function AgentEditor({ agent, view, onAccounts, onDone }: { agent?: AgentRecord;
       <div className="space-y-5 pb-1">
         <div className="space-y-1.5">
           <Label htmlFor="agent-name">Name</Label>
-          <Input id="agent-name" autoFocus value={draft.name} disabled={busy || isDefault} placeholder="Social media" onChange={event => setDraft(d => ({ ...d, name: event.target.value }))} className="max-w-sm" />
+          <Input id="agent-name" ref={nameField} value={draft.name} disabled={busy || isDefault} placeholder="Social media" onChange={event => setDraft(d => ({ ...d, name: event.target.value }))} className="max-w-sm" />
         </div>
         <div className="space-y-3">
           <div>
