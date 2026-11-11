@@ -167,6 +167,40 @@ describe('QuestionPanel', () => {
     expect(sendChoice).not.toHaveBeenCalled()
   })
 
+  test('one pick is a radio group: ArrowDown picks the next choice and takes the focus there, "Other" included', async () => {
+    render(panel())
+    expect(screen.getByRole('radiogroup', { name: 'Which database?' })).toBeTruthy()
+    option(/Postgres/).focus()
+    fireEvent.keyDown(option(/Postgres/), { key: 'ArrowDown' })
+    await waitFor(() => expect(document.activeElement).toBe(option(/SQLite/)))
+    expect(option(/SQLite/).getAttribute('aria-checked')).toBe('true')
+    expect(option(/Postgres/).getAttribute('aria-checked')).toBe('false')
+    fireEvent.keyDown(option(/SQLite/), { key: 'ArrowDown' })
+    await waitFor(() => expect(option(/Other/).getAttribute('aria-checked')).toBe('true'))
+  })
+
+  test('ArrowUp picks the previous choice and takes the focus there', async () => {
+    render(panel({ choice: { ...choice, recommended: 'lite' } }))
+    option(/SQLite/).focus()
+    fireEvent.keyDown(option(/SQLite/), { key: 'ArrowUp' })
+    await waitFor(() => expect(document.activeElement).toBe(option(/Postgres/)))
+    expect(option(/Postgres/).getAttribute('aria-checked')).toBe('true')
+    expect(option(/SQLite/).getAttribute('aria-checked')).toBe('false')
+  })
+
+  test('the choices are one Tab stop, the picked one: Tab leaves the group; several picks are a stop each', () => {
+    // Where Tab goes from an element: the next one the keyboard can reach, in the page's order.
+    const afterTab = (from: Element) => {
+      const stops = [...document.querySelectorAll<HTMLElement>('button, input, [tabindex]')].filter(e => e.tabIndex >= 0 && !(e as HTMLButtonElement).disabled && e.getAttribute('aria-hidden') !== 'true')
+      return stops[stops.indexOf(from as HTMLElement) + 1]
+    }
+    const { unmount } = render(panel())
+    expect(afterTab(option(/Postgres/))).toBe(screen.getByRole('button', { name: 'Skip' }))
+    unmount()
+    render(panel({ choice: several }))
+    expect(afterTab(screen.getByRole('checkbox', { name: 'Lint' }))).toBe(screen.getByRole('checkbox', { name: 'Tests' }))
+  })
+
   test('"Other" picked opens its field with the keys in it, cannot be sent empty, and goes as the person\'s own message', async () => {
     sendMessage.mockResolvedValue({ ok: true })
     const onSaid = vi.fn()

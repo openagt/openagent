@@ -1,10 +1,12 @@
-import { useContext, useEffect, useRef, useState } from 'react'
+import { useContext, useEffect, useId, useRef, useState, type ReactNode } from 'react'
+import { Radio } from '@base-ui/react/radio'
 import { Check } from 'lucide-react'
 import type { ChoiceRequest } from '../../src/index.js'
 import { sendChoice, sendMessage } from '../rpc/control.js'
 import { useAction } from '../lib/use-action.js'
 import { DaemonDown } from '../lib/use-daemon-health.js'
 import { cn } from '../lib/utils.js'
+import { RadioGroup } from './ui/radio-group.js'
 import { answerPrompt, skipPrompt } from '../lib/answered-question.js'
 import { MOD_KEY } from '../lib/shortcut.js'
 import { isMobileScreen } from '../lib/use-mobile.js'
@@ -24,6 +26,33 @@ function Mark({ on, multi }: { on: boolean; multi: boolean | undefined }) {
     <span className={cn('mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded-full', on ? 'bg-primary' : 'border border-foreground/20')} aria-hidden>
       {on && <span className="h-1.5 w-1.5 rounded-full bg-primary-foreground" />}
     </span>
+  )
+}
+
+// A question's rows. One pick is a radio group, as WAI-ARIA's: one Tab stop, the arrow keys move
+// the pick. Where several may be picked, each row is a box of its own.
+function Choices({ multi, labelledBy, picked, onPick, disabled, children }: { multi: boolean | undefined; labelledBy: string; picked: string | typeof OTHER | undefined; onPick: (value: string | typeof OTHER) => void; disabled: boolean; children: ReactNode }) {
+  return multi ? (
+    <ul className="flex flex-col">{children}</ul>
+  ) : (
+    <RadioGroup render={<ul />} aria-labelledby={labelledBy} value={picked} onValueChange={value => onPick(value as string | typeof OTHER)} disabled={disabled} className="flex flex-col gap-0">
+      {children}
+    </RadioGroup>
+  )
+}
+
+// A choice's row: the radio group's radio, or a box the row toggles. Rows are parted by a line, as
+// Claude Code on the web parts them; none is filled.
+function Choice({ multi, value, on, disabled, onPick, children }: { multi: boolean | undefined; value: string | typeof OTHER; on: boolean; disabled: boolean; onPick: () => void; children: ReactNode }) {
+  const row = 'flex w-full items-start gap-3 p-4 text-left disabled:opacity-60'
+  return multi ? (
+    <button type="button" role="checkbox" aria-checked={on} disabled={disabled} onClick={onPick} className={row}>
+      {children}
+    </button>
+  ) : (
+    <Radio.Root value={value} nativeButton render={<button type="button" className={row} />}>
+      {children}
+    </Radio.Root>
   )
 }
 
@@ -75,6 +104,7 @@ export function QuestionPanel({
   const [otherOn, setOtherOn] = useState(false)
   const otherInput = useRef<HTMLInputElement>(null)
   const card = useRef<HTMLElement>(null)
+  const titleId = useId()
   const words = other.trim()
 
   // Taken, the card goes and the chat is told what the agent was sent, to show it at once. The
@@ -156,18 +186,16 @@ export function QuestionPanel({
     if (otherPicked) otherInput.current?.focus()
   }, [otherPicked])
 
-  // Rows are parted by a line, as Claude Code on the web parts them; none is filled.
-  const row = 'flex w-full items-start gap-3 p-4 text-left disabled:opacity-60'
   if (sent) return null
   return (
     <section ref={card} role="region" aria-label={choice.title} className="flex w-full max-w-[480px] flex-col overflow-clip rounded-xl font-sans text-sm ring-1 ring-border">
-      <h2 className="bg-foreground/5 px-4 py-3 font-normal">{choice.title}</h2>
-      <ul className="flex flex-col">
+      <h2 id={titleId} className="bg-foreground/5 px-4 py-3 font-normal">{choice.title}</h2>
+      <Choices multi={choice.multi} labelledBy={titleId} picked={picked} onPick={setPicked} disabled={busy}>
         {choice.options.map(o => {
           const on = choice.multi ? checked.has(o.id) : picked === o.id
           return (
             <li key={o.id} className="border-t border-border first:border-t-0">
-              <button type="button" role={choice.multi ? 'checkbox' : 'radio'} aria-checked={on} disabled={busy} onClick={() => pick(o.id)} className={row}>
+              <Choice multi={choice.multi} value={o.id} on={on} disabled={busy} onPick={() => pick(o.id)}>
                 <Mark on={on} multi={choice.multi} />
                 <span className="flex min-w-0 flex-1 flex-col gap-2">
                   <span>
@@ -177,16 +205,16 @@ export function QuestionPanel({
                   </span>
                   {o.detail && <span className="text-muted-foreground">{o.detail}</span>}
                 </span>
-              </button>
+              </Choice>
             </li>
           )
         })}
         {!send && (
           <li className="flex flex-col border-t border-border">
-            <button type="button" role={choice.multi ? 'checkbox' : 'radio'} aria-checked={otherPicked} disabled={busy} onClick={pickOther} className={row}>
+            <Choice multi={choice.multi} value={OTHER} on={otherPicked} disabled={busy} onPick={pickOther}>
               <Mark on={otherPicked} multi={choice.multi} />
               <span className="min-w-0 flex-1">Other</span>
-            </button>
+            </Choice>
             {otherPicked && (
               <input
                 ref={otherInput}
@@ -204,7 +232,7 @@ export function QuestionPanel({
             )}
           </li>
         )}
-      </ul>
+      </Choices>
       <div className="flex items-center gap-2 px-4 pt-2 pb-4">
         {/* One line in every state, so the buttons never move: what went wrong, or that it is on its way. */}
         <span role={error ? 'alert' : busy ? 'status' : undefined} className={cn('min-w-0 flex-1 truncate text-xs', error ? 'text-danger' : 'text-muted-foreground')}>
