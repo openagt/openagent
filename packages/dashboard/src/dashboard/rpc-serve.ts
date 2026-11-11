@@ -120,8 +120,21 @@ async function serveEventStream(req: IncomingMessage, res: ServerResponse, url: 
     // What passes a device's request on to the daemon must not hold the lines back.
     'x-accel-buffering': 'no',
   })
+  // The first line may be a while away: the headers go now.
+  res.flushHeaders()
+  // Heard from the start: the page can go while the source is set up (a saved machine's lookup can take seconds).
+  let gone = false
+  let stop: (() => void) | undefined
+  const finish = (): void => {
+    if (gone) return // an aborted request says both error and close
+    gone = true
+    stop?.()
+    res.end()
+  }
+  req.on('close', finish)
+  req.on('error', finish)
   let finished = false
-  const stop = await RPC_EVENT_STREAM(
+  stop = await RPC_EVENT_STREAM(
     projectId,
     agentId,
     value => {
@@ -138,13 +151,8 @@ async function serveEventStream(req: IncomingMessage, res: ServerResponse, url: 
     res.end()
     return
   }
-  if (finished) return // the source was exhausted before it was even wired
-  const finish = (): void => {
-    stop()
-    res.end()
-  }
-  req.on('close', finish)
-  req.on('error', finish)
+  // A source that came up after the page left is stopped at once; one exhausted before it was wired has nothing to stop.
+  if (gone && !finished) stop()
 }
 
 /**

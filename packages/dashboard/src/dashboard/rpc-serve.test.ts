@@ -1,6 +1,6 @@
 import { strict as assert } from 'node:assert'
 import { test } from 'node:test'
-import { createServer, type Server } from 'node:http'
+import { createServer, type IncomingMessage, type Server } from 'node:http'
 import { connect } from 'node:net'
 import { makeRpcMount } from './rpc-serve.js'
 import type { DashboardContext } from '../dashboard-rpc/context.js'
@@ -16,10 +16,11 @@ import { addProject, projectId } from '../registry.js'
 // Telefunc. The CSRF and rebound-Host guards are covered in server.test.ts, which exercises them
 // through the whole dashboard; these pin the dispatch itself.
 
-/** A server carrying just the mount, so a test can call it over real HTTP. */
-async function mounted(over: Partial<DashboardContext> = {}): Promise<{ url: string; close: () => Promise<void> }> {
+/** A server carrying just the mount, so a test can call it over real HTTP; `seen` is shown each request as it comes. */
+async function mounted(over: Partial<DashboardContext> = {}, seen: (req: IncomingMessage) => void = () => {}): Promise<{ url: string; close: () => Promise<void> }> {
   const mount = makeRpcMount(testDashboardContext(over))
   const server: Server = createServer((req, res) => {
+    seen(req)
     void mount(req, res).then(handled => {
       if (!handled) {
         res.writeHead(404)
@@ -238,6 +239,90 @@ test('the event stream sends one SSE frame per event', async () => {
       .map(frame => JSON.parse(frame.replace(/^data: /, '')) as { sessionId?: string })
     assert.deepEqual(events.map(e => e.sessionId), ['one', 'two'])
   } finally {
+    await server.close()
+  }
+})
+
+/** A run's live source that says nothing until it is stopped, counting how often it was started and stopped. */
+function quietSource() {
+  const counts = { started: 0, stopped: 0 }
+  const source = (): AsyncIterable<never> => ({
+    [Symbol.asyncIterator]() {
+      counts.started++
+      let said: ((result: IteratorResult<never>) => void) | undefined
+      return {
+        next: () => new Promise(resolve => (said = resolve)),
+        return: async () => {
+          counts.stopped++
+          said?.({ done: true, value: undefined })
+          return { done: true, value: undefined }
+        },
+      }
+    },
+  })
+  return { counts, source }
+}
+
+/** Until `done` holds, or a second has gone. */
+async function until(done: () => boolean): Promise<void> {
+  for (let i = 0; i < 100 && !done(); i++) await new Promise(resolve => setTimeout(resolve, 10))
+}
+
+test('the event stream of a run that has said nothing yet answers its headers at once, and the page leaving stops its source', async () => {
+  const { counts, source } = quietSource()
+  const server = await mounted({ eventsSource: source })
+  const page = new AbortController()
+  try {
+    const answered = fetch(`${server.url}/_rpc/events?projectId=p1&agentId=r1`, { signal: page.signal })
+    const res = await Promise.race([answered, new Promise<'no headers'>(resolve => setTimeout(() => resolve('no headers'), 1000))])
+    assert.notEqual(res, 'no headers')
+    assert.match((res as Response).headers.get('content-type') ?? '', /text\/event-stream/)
+    await until(() => counts.started === 1)
+    page.abort()
+    await until(() => counts.stopped === 1)
+    assert.deepEqual(counts, { started: 1, stopped: 1 })
+  } finally {
+    page.abort()
+    await server.close()
+  }
+})
+
+test('a page that leaves while its feed is still being set up stops the source that comes up after', async () => {
+  // The run is on a saved machine whose lookup is slow: the headers have gone, the source is not there yet.
+  let looking = (): void => {}
+  const looked = new Promise<void>(resolve => (looking = resolve))
+  let answerLookup = (): void => {}
+  const lookup = new Promise<void>(resolve => (answerLookup = resolve))
+  let left = (): void => {}
+  const gone = new Promise<void>(resolve => (left = resolve))
+  const { counts, source } = quietSource()
+  const base = testDashboardContext()
+  const server = await mounted(
+    {
+      eventsSource: source,
+      remote: {
+        ...base.remote,
+        follow: async () => {
+          looking()
+          await lookup
+        },
+      },
+    },
+    req => req.on('close', left),
+  )
+  const page = new AbortController()
+  try {
+    const res = await fetch(`${server.url}/_rpc/events?projectId=p1&agentId=r1`, { signal: page.signal })
+    assert.match(res.headers.get('content-type') ?? '', /text\/event-stream/)
+    await looked
+    page.abort()
+    await gone
+    answerLookup()
+    await until(() => counts.stopped === 1)
+    assert.deepEqual(counts, { started: 1, stopped: 1 })
+  } finally {
+    page.abort()
+    answerLookup()
     await server.close()
   }
 })
