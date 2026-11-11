@@ -75,7 +75,7 @@ export function ComputerPage({ d, item, onBack, onSetUp }: { d: Devices; item: C
           >
             <label className="min-w-60 flex-1 space-y-1 text-xs text-muted-foreground">
               <span>{`On ${item.name}, open Settings › Devices › Add device › Computer › Give it this computer's link, and paste that link here:`}</span>
-              <Input autoFocus aria-label={`${item.name}'s link`} value={link} onChange={event => setLink(event.target.value)} />
+              <Input name="computer-link" autoFocus aria-label={`${item.name}'s link`} value={link} onChange={event => setLink(event.target.value)} />
             </label>
             <Button size="sm" type="submit" disabled={busy || !link.trim()}>
               Save

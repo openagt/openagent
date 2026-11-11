@@ -1,4 +1,4 @@
-import { useState, type ReactNode } from 'react'
+import type { ReactNode } from 'react'
 import type { AgentWorktree } from '../../src/index.js'
 import { X } from 'lucide-react'
 import { Tooltip, TooltipTrigger, TooltipContent } from './ui/tooltip.js'
@@ -18,7 +18,8 @@ export function AgentWorkBar({
   actions,
   error,
   show,
-  state,
+  away,
+  onHide,
 }: {
   /** The agent's checkout as the page read it: its branch and its pull request. */
   checkout: AgentWorktree | null
@@ -30,24 +31,20 @@ export function AgentWorkBar({
   error?: string | null | undefined
   /** Whether there is something to say: changes, a pull request or a next step. Nothing to say, no bar. */
   show: boolean
-  /**
-   * What the bar is about, as one string: the ✕ hides the bar for this state only, so it comes
-   * back on its own once the work moves on (another commit, a pull request opened, a merge).
-   * Absent, the ✕ hides it for as long as the branch and its pull request stay as they are.
-   */
-  state?: string | undefined
+  /** Put away by its ✕ at what it is about now (`useWorkBarAway`): it comes back on its own once the work moves on. */
+  away: boolean
+  /** The ✕. */
+  onHide: () => void
 }) {
   const branch = checkout?.branch
-  const signature = state ?? `${branch ?? ''}|${checkout?.pr?.number ?? ''}|${checkout?.pr?.state ?? ''}`
-  const [hiddenAt, setHiddenAt] = useState<string | null>(null)
-  if (branch === undefined || !show || hiddenAt === signature) return null
+  if (branch === undefined || !show || away) return null
   return (
     <div className="mx-auto w-full max-w-3xl px-2 pt-2">
-      {/* One line; on a phone it is as many as its parts need, the next step on a line of its own.
-          In the dark theme the hover fill is the bar's own colour, so its buttons get Everforest's
+      {/* One line; in a narrow chat (a phone, a chat beside panes) it is as many as its parts need,
+          the next step at the end of a line of its own. In the dark theme the hover fill is the bar's own colour, so its buttons get Everforest's
           next step up (both names: `bg-accent` reads the first, the Button's variants the second). */}
-      <div role="group" aria-label="This agent's work" className="overflow-hidden rounded-[10px] bg-muted px-2 dark:[--accent:#374145] dark:[--color-accent:#374145] text-[13px]">
-        <div className="flex items-center md:h-10 md:gap-2 max-md:min-h-10 max-md:flex-wrap max-md:gap-x-2 max-md:gap-y-1 max-md:py-1.5">
+      <div role="group" aria-label="This session's work" className="overflow-hidden rounded-[10px] bg-muted px-2 dark:[--accent:#374145] dark:[--color-accent:#374145] text-[13px]">
+        <div className="flex items-center @lg:h-10 @lg:gap-2 @max-lg:min-h-10 @max-lg:flex-wrap @max-lg:gap-x-2 @max-lg:gap-y-1 @max-lg:py-1.5">
           {/* The branch is the one part that gives up width: it truncates and still reads. No icon
               beside it: the name says what it is, and the row is shorter without one. */}
           <span className="flex min-w-0 items-center text-muted-foreground">
@@ -57,26 +54,29 @@ export function AgentWorkBar({
             </Tooltip>
           </span>
           {/* Everything after this sits at the end, in Claude Code's order: what the branch holds,
-              its pull request, the next step, the ✕. */}
+              its pull request, the next step, the ✕. The first three wrap as one, so a narrow bar
+              moves them down together. */}
           <div className="grow" />
-          <span className="shrink-0">{summary}</span>
-          {checkout?.pr && (
-            <Tooltip>
-              <TooltipTrigger render={<a href={checkout.pr.url} target="_blank" rel="noreferrer" className="flex shrink-0 items-center gap-1.5 text-primary hover:underline" />}>
-                <span>PR #{checkout.pr.number}</span>
-                <span className="rounded-full border border-border px-1.5 text-[10px] uppercase text-muted-foreground">{checkout.pr.state.toLowerCase()}</span>
-              </TooltipTrigger>
-              <TooltipContent>{checkout.pr.title}</TooltipContent>
-            </Tooltip>
-          )}
-          <div className="flex items-center gap-2 md:shrink-0 max-md:min-w-0 max-md:flex-wrap">{actions}</div>
+          <div className="flex items-center gap-2 @lg:shrink-0 @max-lg:ml-auto @max-lg:min-w-0 @max-lg:flex-wrap">
+            <span className="shrink-0">{summary}</span>
+            {checkout?.pr && (
+              <Tooltip>
+                <TooltipTrigger render={<a href={checkout.pr.url} target="_blank" rel="noreferrer" className="flex shrink-0 items-center gap-1.5 text-primary hover:underline" />}>
+                  <span>PR #{checkout.pr.number}</span>
+                  <span className="rounded-full border border-border px-1.5 text-[10px] uppercase text-muted-foreground">{checkout.pr.state.toLowerCase()}</span>
+                </TooltipTrigger>
+                <TooltipContent>{checkout.pr.title}</TooltipContent>
+              </Tooltip>
+            )}
+            {actions}
+          </div>
           {/* Put away by hand, as Claude Code's is. Nothing is undone by it: the work is where it
               was, and the bar says so again as soon as the work moves on. */}
           <button
             type="button"
             aria-label="Hide this bar"
             title="Hide this bar"
-            onClick={() => setHiddenAt(signature)}
+            onClick={onHide}
             className="flex h-6 w-6 shrink-0 items-center justify-center rounded text-muted-foreground hover:bg-accent hover:text-accent-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-primary)]"
           >
             <X className="h-3.5 w-3.5" />

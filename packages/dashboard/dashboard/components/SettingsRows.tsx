@@ -11,7 +11,7 @@ import { cn } from '../lib/utils.js'
  * a whole (`action`, a button) over its rows, a line between each. No card around them: the dialog
  * is their frame. The entry's title is Settings' own, over it.
  */
-export function SettingsSection({ description, action, children }: { description?: string; action?: ReactNode; children: ReactNode }) {
+export function SettingsSection({ description, action, children }: { description?: ReactNode; action?: ReactNode; children: ReactNode }) {
   return (
     <div className="space-y-4">
       {(description !== undefined || action !== undefined) && (

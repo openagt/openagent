@@ -205,6 +205,7 @@ function ChangeSearch({ paths, changes, onPick }: { paths: string[]; changes: Re
       </Tooltip>
       <PopoverContent align="end" className="w-72 p-1">
         <Input
+          name="search-changes"
           autoFocus
           type="search"
           value={query}
@@ -268,7 +269,7 @@ function ChangesHeader({ between, merged, page, paths, changes, listShown, onPic
         {between ? (
           <h2 className="min-w-0 truncate pl-2 text-[13px] text-muted-foreground" title={between}>
             {between}
-            {merged !== undefined && <span className="pl-1 text-xs text-muted-foreground">{merged ? '· merged' : '· not merged yet'}</span>}
+            {merged !== undefined && <span className="text-xs text-muted-foreground">{merged ? ' · merged' : ' · not merged yet'}</span>}
           </h2>
         ) : (
           <h2 className="truncate pl-2 text-[13px] text-muted-foreground">Changes</h2>
@@ -490,10 +491,10 @@ export function ChangesPanel({ projectId, agentId, activity, reveal }: ModulePan
     </>
   )
   if (agentId) {
-    if (!runLoaded || !commitsLoaded || !run || run.source === 'pending') return waiting('Looking for this run’s changes…')
-    if (run.source === 'gone') return line('This run’s changes are gone from this machine: its checkout was reclaimed and it left no branch or merged pull request here.')
+    if (!runLoaded || !commitsLoaded || !run || run.source === 'pending') return waiting('Looking for this session’s changes…')
+    if (run.source === 'gone') return line('This session’s changes are gone from this machine: its checkout was reclaimed and it left no branch or merged pull request here.')
   } else if (!projectLoaded) return waiting('Reading the project’s files…')
-  if (Object.keys(all).length === 0 && commits.length === 0) return line(agentId ? 'This run changed no files.' : 'Nothing is changed in the project’s folder.')
+  if (Object.keys(all).length === 0 && commits.length === 0) return line(agentId ? 'This session changed no files.' : 'Nothing is changed in the project’s folder.')
 
   const caption = commit ? `${commit.short} ${commit.subject}` : agentId ? undefined : 'Changed in the project’s folder, not committed.'
   // What stands where the diffs would be, when the list is empty.

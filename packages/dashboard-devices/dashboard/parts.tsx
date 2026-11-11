@@ -228,7 +228,7 @@ export function RenameForm({ name, rename, onClose }: { name: string; rename: Re
   return (
     <div className="space-y-1">
       <form className="flex flex-wrap items-center gap-2" onSubmit={event => void save(event)}>
-        <Input autoFocus aria-label="Name" value={picked} maxLength={60} onChange={event => setPicked(event.target.value)} className="h-8 w-56" />
+        <Input name="device-name" autoFocus aria-label="Name" value={picked} maxLength={60} onChange={event => setPicked(event.target.value)} className="h-8 w-56" />
         <Button size="sm" type="submit" disabled={busy || !picked.trim()}>
           {busy && <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden />}
           Save

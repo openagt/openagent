@@ -24,7 +24,8 @@ calls them: what each flow leaves on disk, and what the reads then say. No brows
 ## The demo: `pnpm demo`
 
 The real dashboard, started by its built CLI on a throwaway home (`demo.ts`): a project "shop" with
-two tickets and a run in each state, and a project "blog" to add from the picker. Walk any flow by
+two tickets, a working, a waiting and a done run, and the Logs and Automations pages, and a project "blog" to add
+from the picker. Walk any flow by
 hand. Ctrl+C stops the runs and the dashboard, and removes the home.
 
 ## The browser smoke stories: `smoke-*.test.ts`

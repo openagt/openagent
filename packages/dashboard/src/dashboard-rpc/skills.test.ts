@@ -107,6 +107,20 @@ test('a project\'s skills: none yet; written, they are in the folder and wait to
   }
 })
 
+test('a remote with no branch yet is not where the skills go: agents start from this folder\'s commits, as with no remote', async () => {
+  const { dir, id, git, restore } = await project()
+  try {
+    git('init', '-q', '--bare', join(dir, '..', 'origin.git'))
+    git('remote', 'add', 'origin', join(dir, '..', 'origin.git'))
+    const view = (await onProjectSkills(id))!
+    assert.deepEqual({ startBranch: view.startBranch, remote: view.remote }, { startBranch: 'main', remote: undefined })
+    git('push', '-q', '-u', 'origin', 'main')
+    assert.equal((await onProjectSkills(id))!.remote, 'the remote')
+  } finally {
+    await restore()
+  }
+})
+
 test('with a remote the branch agents start from is the remote\'s: a skill committed here still waits until it is there', async () => {
   const { dir, id, git, restore } = await project()
   try {

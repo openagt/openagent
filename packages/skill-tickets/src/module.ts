@@ -25,6 +25,13 @@ export function workOnTicketPrompt(file: string): string {
   return `Work on ${TICKETS_DIR}/${file}. Do not start any other ticket.`
 }
 
+/** A ticket's text below its `# ` title, which its page shows apart, as it shows the keys above the title; all of it when it has no title. */
+export function ticketBody(content: string): string {
+  const lines = content.split('\n')
+  const titleAt = lines.findIndex(line => line.startsWith('# '))
+  return titleAt === -1 ? content : lines.slice(titleAt + 1).join('\n')
+}
+
 /** A ticket's plan, repo-relative: `tickets/<stem>.plan.md`, shown beside the way back on the plan page. */
 export function planPath(file: string): string {
   return `${TICKETS_DIR}/${ticketPlanName(file)}`

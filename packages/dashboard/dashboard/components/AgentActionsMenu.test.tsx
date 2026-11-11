@@ -125,7 +125,7 @@ describe('AgentActionsMenu (#toolbar-menu)', () => {
     openMenu()
     fireEvent.click(await screen.findByText('Delete session'))
     // The confirm dialog, not a bare delete: the session and its history go for good.
-    await waitFor(() => expect(screen.getByText('Delete this agent?')).toBeTruthy())
+    await waitFor(() => expect(screen.getByText('Delete this session?')).toBeTruthy())
     expect(sendDeleteAgent).not.toHaveBeenCalled()
     fireEvent.click(screen.getByRole('button', { name: 'Delete' }))
     await waitFor(() => expect(sendDeleteAgent).toHaveBeenCalledWith('p1', 'run-1'))
@@ -148,6 +148,21 @@ describe('the live-session action: Stop', () => {
     openMenu()
     await waitFor(() => expect(screen.getByText('Open in editor')).toBeTruthy())
     expect(screen.queryByText('Stop agent')).toBeNull()
+  })
+
+  test('while OpenAgent is not answering, Stop is off and sends nothing', async () => {
+    const { DaemonDown } = await import('../lib/use-daemon-health.js')
+    sendStop.mockClear()
+    render(
+      <DaemonDown.Provider value>
+        <AgentActionsMenu projectId="p1" agentId="run-1" events={liveEvents} onDeleted={vi.fn()} />
+      </DaemonDown.Provider>,
+    )
+    openMenu()
+    const stop = await screen.findByRole('menuitem', { name: 'Stop agent' })
+    expect(stop.getAttribute('aria-disabled')).toBe('true')
+    fireEvent.click(stop)
+    expect(sendStop).not.toHaveBeenCalled()
   })
 })
 
@@ -351,7 +366,7 @@ describe('the menu of an agent\'s page', () => {
 describe('Remove project, in the project’s menu', () => {
   const openProjectMenu = () => fireEvent.click(screen.getByRole('button', { name: 'Project actions' }))
 
-  test('it asks first, says nothing in the folder is deleted and what stays, then removes the project and tells the page', async () => {
+  test('it asks first, says nothing in the folder is deleted and what stays, then removes the project, says so, and tells the page', async () => {
     sendRemoveProject.mockClear()
     sendRemoveProject.mockResolvedValue({ ok: true })
     const onProjectRemoved = vi.fn()
@@ -370,6 +385,10 @@ describe('Remove project, in the project’s menu', () => {
     expect(sendRemoveProject).not.toHaveBeenCalled()
     fireEvent.click(screen.getByRole('button', { name: 'Remove' }))
     await waitFor(() => expect(sendRemoveProject).toHaveBeenCalledWith('p1', false))
+    await waitFor(() => expect(screen.getByText('Project removed')).toBeTruthy())
+    expect(screen.getByRole('alertdialog').textContent).toMatch(/nothing in the folder was deleted\. Add the folder again to bring the project back/)
+    expect(onProjectRemoved).not.toHaveBeenCalled()
+    fireEvent.click(screen.getByRole('button', { name: 'Done' }))
     await waitFor(() => expect(onProjectRemoved).toHaveBeenCalledTimes(1))
   })
 
@@ -412,6 +431,18 @@ describe('Remove project, in the project’s menu', () => {
     expect(onProjectRemoved).not.toHaveBeenCalled()
     fireEvent.click(screen.getByRole('button', { name: 'Done' }))
     await waitFor(() => expect(onProjectRemoved).toHaveBeenCalledTimes(1))
+  })
+
+  test('once removed, the focus is on "Done", the dialog’s one way on', async () => {
+    sendRemoveProject.mockClear()
+    sendRemoveProject.mockResolvedValue({ ok: true })
+    render(<AgentActionsMenu projectId="p1" events={[]} onProjectRemoved={vi.fn()} />)
+    openProjectMenu()
+    fireEvent.click(await screen.findByText('Remove project…'))
+    fireEvent.click(await screen.findByRole('button', { name: 'Remove' }))
+    await waitFor(() => expect(screen.getByText('Project removed')).toBeTruthy())
+    await waitFor(() => expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Done' })))
+    cleanup()
   })
 
   test('a box ticked and then cancelled is unticked the next time the dialog opens', async () => {

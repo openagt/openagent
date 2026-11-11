@@ -86,7 +86,7 @@ export function RunOnMenu({ connection, busy }: { connection: ConnectionControl;
       <Tooltip>
         <TooltipTrigger
           render={
-            <DropdownMenuTrigger type="button" disabled={busy} aria-label="Run on" className={rowButtonClass} />
+            <DropdownMenuTrigger type="button" disabled={busy} aria-label={`Run on: ${summary}`} className={rowButtonClass} />
           }
         >
           <RunOnWords icon={Icon} elsewhere={!onThisMachine} label={summary} />

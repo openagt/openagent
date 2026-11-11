@@ -256,9 +256,11 @@ export async function makeWorld(): Promise<StoryWorld> {
       // A run is its own process and outlives the story: one still working is stopped the way
       // the Stop button stops it, and waited out, so no git of its own runs under the `rm` below.
       for (const { project, agentId } of started) {
+        const working = async () => (await rpc(onAgents)(project.id)).find(agent => agent.id === agentId)?.status === 'running'
+        if (!(await working())) continue
         await rpc(sendStop)(project.id, agentId)
         await waitFor(
-          async () => ((await rpc(onAgents)(project.id)).find(agent => agent.id === agentId)?.status === 'running' ? undefined : true),
+          async () => ((await working()) ? undefined : true),
           `run ${agentId} to end`,
           10_000,
         ).catch(() => {})

@@ -169,6 +169,8 @@ export interface ReposRead {
   reposLoading: boolean
   /** The hosts are being asked: the picker asks again shortly. */
   hostedLoading: boolean
+  /** A host did not answer the last time it was asked: the picker says its repos are missing. */
+  hostedUnreached?: true
   /** This computer can show a folder dialog, so the picker offers "Search another folder…". */
   canAddFolder: boolean
 }
@@ -194,6 +196,7 @@ export async function onRepos(): Promise<ReposRead> {
     hosted: hosted.repos.filter(repo => !here.has(repo.address.toLowerCase())),
     reposLoading: found.looking,
     hostedLoading: hosted.loading,
+    ...(hosted.unreached ? { hostedUnreached: hosted.unreached } : {}),
     canAddFolder: canPickDirectory(),
   }
 }

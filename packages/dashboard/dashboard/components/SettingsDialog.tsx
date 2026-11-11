@@ -3,7 +3,6 @@ import { Dialog as BaseDialog } from '@base-ui/react/dialog'
 import { ArrowLeft, Bell, Bot, ChevronRight, Database, FolderGit2, Globe, Palette, Puzzle, UserRound, X, FolderSearch } from 'lucide-react'
 import { ACCENTS, DEFAULT_ACCENT_LABELS, accentOf, CODE_FONTS, DOCUMENT_FONTS, DRIVERS, FONTS, PALETTES, PALETTE_LABELS, type Accent, type CodeFont, type DocumentFont, type Font, type Palette as ColourPalette } from '../../src/client.js'
 import { driverOptions, useModels } from '../lib/models.js'
-import { NO_MODEL_PINNED } from '../lib/agent-settings.js'
 import type { DriverOption } from './DriverModelMenu.js'
 import type { ProjectSummary } from '../../src/index.js'
 import { useMountedModules, type MountedSettings } from '../lib/use-modules.js'
@@ -11,7 +10,7 @@ import { SettingsCrumbContext, type SettingsCrumb } from '../lib/settings-crumb.
 import { useIsMobile } from '../lib/use-mobile.js'
 import { useDetectedEditors } from '../lib/editors.js'
 import { usePreferences, updatePreferences, themePreference, type ThemePreference } from '../lib/preferences.js'
-import { useNotificationPermission } from '../lib/notification-permission.js'
+import { setBrowserNotifications, useNotificationPermission } from '../lib/notification-permission.js'
 import { BridgeSettings } from './BridgeSettings.js'
 import { AGENT_DATA_ENTRY, AgentDataSettings } from './AgentDataSettings.js'
 import { PROFILE_ENTRY, ProfileSettings } from './ProfileSettings.js'
@@ -115,7 +114,7 @@ export function SettingsDialog({
     projects.length > 0
       ? [
           oneProject(SKILLS_ENTRY, 'Skills', Puzzle, SkillsSettings, 'Skills are written into a project’s own repository, one project at a time. Pick a project.'),
-          oneProject(PROJECT_AGENT_DATA_ENTRY, 'Agent data', Database, ProjectAgentDataSettings, 'Each project keeps its agent data in one place, your folder or its own repository. Pick a project.'),
+          oneProject(PROJECT_AGENT_DATA_ENTRY, 'Project agent data', Database, ProjectAgentDataSettings, 'Each project keeps its agent data in one place, your folder or its own repository. Pick a project.'),
         ]
       : []
   const projectEntries = [...ownForProject, ...forProject.map(section => moduleEntry(section, project ? [project] : projects))]
@@ -384,11 +383,13 @@ function useOwnEntries(): Entry[] {
             description={
               browserBlocked
                 ? 'Blocked in your browser settings'
-                : 'Desktop notifications while the dashboard is open.'
+                : permission === 'default'
+                  ? 'Desktop notifications while the dashboard is open. Switched on, the browser asks to allow them.'
+                  : 'Desktop notifications while the dashboard is open.'
             }
-            checked={(preferences.notifyBrowser ?? true) && !browserBlocked}
+            checked={(preferences.notifyBrowser ?? true) && permission !== 'default' && !browserBlocked}
             disabled={browserBlocked}
-            onChange={next => updatePreferences({ notifyBrowser: next })}
+            onChange={setBrowserNotifications}
           />
           <ToggleRow
             label="Human Queue"
@@ -398,7 +399,7 @@ function useOwnEntries(): Entry[] {
           />
           <ToggleRow
             label="New activity"
-            description="Also ping when an agent starts or finishes."
+            description="An agent starts or finishes."
             checked={preferences.notifyNewActivity ?? false}
             onChange={next => updatePreferences({ notifyNewActivity: next })}
           />
@@ -407,12 +408,12 @@ function useOwnEntries(): Entry[] {
     },
     {
       id: 'agent',
-      title: 'Agent',
+      title: 'Coding agent',
       icon: Bot,
       body: (
         <Section>
           <SelectRow
-            label="Agent"
+            label="Coding agent"
             description="Which coding agent runs the work."
             value={driver}
             options={drivers}
@@ -421,7 +422,7 @@ function useOwnEntries(): Entry[] {
           />
           <SelectRow
             label="Model"
-            description="The models the agent lists. Its own default when none is picked."
+            description="The models the coding agent lists. Its own default when none is picked."
             value={model}
             options={modelOptions(drivers.find(d => d.value === driver), model)}
             onChange={value => updatePreferences({ model: value })}
@@ -433,8 +434,8 @@ function useOwnEntries(): Entry[] {
             onChange={next => updatePreferences({ nameRuns: next })}
           />
           <ToggleRow
-            label="Show what the agent thought"
-            description="Inside a run of steps, a row for each thought between them. Off, the panel is the steps the agent took and nothing else."
+            label="Show what the coding agent thought"
+            description="Inside a run of steps, a row for each thought between them. Off, the panel is the steps the coding agent took and nothing else."
             checked={preferences.showThinking ?? false}
             onChange={next => updatePreferences({ showThinking: next })}
           />
@@ -443,7 +444,7 @@ function useOwnEntries(): Entry[] {
     },
     {
       id: AGENT_DATA_ENTRY,
-      title: 'Agent data',
+      title: 'Your agent data',
       icon: FolderGit2,
       body: <AgentDataSettings />,
     },
@@ -564,7 +565,7 @@ function ToggleRow({
 function modelOptions(driver: DriverOption | undefined, model: string): SelectOption[] {
   const listed = driver?.models ?? []
   return [
-    { value: '', label: NO_MODEL_PINNED },
+    { value: '', label: 'Default' },
     ...listed,
     ...(model && !listed.some(m => m.value === model) ? [{ value: model, label: model }] : []),
     ...(listed.length === 0 && driver?.modelsNote ? [{ value: driver.modelsNote, label: driver.modelsNote, disabled: true }] : []),

@@ -1,4 +1,4 @@
-import { Card, CardContent } from './ui/card.js'
+import { Card, CardContent, CardHeader, CardTitle } from './ui/card.js'
 import { ClaudeLogo, CodexLogo } from './driver-logos.js'
 import { Skeleton } from './ui/skeleton.js'
 import type { DriverName } from '../../src/client.js'
@@ -65,20 +65,24 @@ function RotationCard() {
   )
 }
 
-/** An agent that needs its press before it can run: its state, and the press that installs it or logs it in. Nothing once it can run. */
+/** An agent that needs its press before it can run, as a card of the page: its state, and the press that installs it or logs it in. Nothing once it can run. */
 function AgentSetup({ driver, title, Logo }: { driver: DriverName; title: string; Logo: typeof ClaudeLogo }) {
   const { state, reload } = useAgentState(driver)
   if (!state || state.ready || (state.fix === undefined && agentLoginState(state) !== 'not-installed')) return null
   return (
-    <section aria-label={title} className="space-y-2 rounded-lg border border-border px-3 py-2.5">
-      <div className="flex items-center gap-2">
-        <Logo className="size-4 shrink-0" />
-        <h3 className="flex-1 text-sm font-medium">{title}</h3>
-        <StatePill state={agentLoginState(state)!} />
-      </div>
-      <p className="text-xs text-muted-foreground">{agentWords(state)}</p>
-      <AgentFix state={state} onChanged={() => void reload()} />
-    </section>
+    <Card role="region" aria-label={title}>
+      <CardHeader>
+        <div className="flex items-center gap-2">
+          <Logo className="size-4 shrink-0" />
+          <CardTitle className="min-w-0 flex-1 text-base">{title}</CardTitle>
+          <StatePill state={agentLoginState(state)!} />
+        </div>
+      </CardHeader>
+      <CardContent className="space-y-2">
+        <p className="text-sm text-muted-foreground">{agentWords(state)}</p>
+        <AgentFix state={state} variant="outline" onChanged={() => void reload()} />
+      </CardContent>
+    </Card>
   )
 }
 

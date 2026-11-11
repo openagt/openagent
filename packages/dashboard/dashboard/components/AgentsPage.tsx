@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import { Bot, Check, Loader2, Pencil, Plus, RefreshCw, Trash2 } from 'lucide-react'
 import { onAgentLogins, onAgentsList, sendCopyAgentLogins, sendRemoveAgent, sendSaveAgent, type AgentLoginsOn, type AgentRecord, type AgentsView } from '../rpc/agents.js'
 import { DEFAULT_AGENT } from '../../src/client.js'
@@ -108,32 +108,34 @@ function AgentCard({ agent, view, devices, onChanged }: { agent: AgentRecord; vi
   ]
   return (
     <Card role="region" aria-label={agent.name}>
-      <CardHeader className="flex flex-row items-center gap-2 space-y-0">
-        <Bot className="size-4 shrink-0 text-muted-foreground" aria-hidden />
-        <CardTitle className="min-w-0 flex-1 truncate text-base">{agent.name}</CardTitle>
-        {isDefault && <span className="rounded-md bg-muted px-1.5 py-0.5 text-xs text-muted-foreground">the agent a session is on unless you pick another</span>}
-        <Button size="xs" variant="ghost" aria-label={`Edit ${agent.name}`} onClick={() => setEditing(true)}>
-          <Pencil className="size-3.5" aria-hidden />
-          Edit
-        </Button>
-        {!isDefault && (
-          <ConfirmDialog
-            trigger={
-              <Button size="xs" variant="ghost" className="hover:text-danger" aria-label={`Remove ${agent.name}`}>
-                <Trash2 className="size-3.5" aria-hidden />
-                Remove
-              </Button>
-            }
-            title={`Remove ${agent.name}?`}
-            body="Sessions that ran on it keep their records. Nothing is removed from any account."
-            confirmLabel="Remove"
-            onConfirm={async () => {
-              const done = await sendRemoveAgent(agent.id)
-              if (!done.ok) throw new Error(done.error)
-            }}
-            onSuccess={() => void onChanged()}
-          />
-        )}
+      <CardHeader>
+        <div className="flex items-center gap-2">
+          <Bot className="size-4 shrink-0 text-muted-foreground" aria-hidden />
+          <CardTitle className="min-w-0 flex-1 truncate text-base">{agent.name}</CardTitle>
+          <Button size="xs" variant="ghost" aria-label={`Edit ${agent.name}`} onClick={() => setEditing(true)}>
+            <Pencil className="size-3.5" aria-hidden />
+            Edit
+          </Button>
+          {!isDefault && (
+            <ConfirmDialog
+              trigger={
+                <Button size="xs" variant="ghost" className="hover:text-danger" aria-label={`Remove ${agent.name}`}>
+                  <Trash2 className="size-3.5" aria-hidden />
+                  Remove
+                </Button>
+              }
+              title={`Remove ${agent.name}?`}
+              body="Sessions that ran on it keep their records. Nothing is removed from any account."
+              confirmLabel="Remove"
+              onConfirm={async () => {
+                const done = await sendRemoveAgent(agent.id)
+                if (!done.ok) throw new Error(done.error)
+              }}
+              onSuccess={() => void onChanged()}
+            />
+          )}
+        </div>
+        {isDefault && <p className="text-xs text-muted-foreground">The agent a session is on unless you pick another.</p>}
       </CardHeader>
       <CardContent className="space-y-2 text-sm">
         <p className="flex flex-wrap items-center gap-1.5">
@@ -228,6 +230,7 @@ const COMPUTERS = ''
 function AgentEditor({ agent, view, onAccounts, onDone }: { agent?: AgentRecord; view: AgentsView; onAccounts: () => Promise<void>; onDone: (saved: boolean) => Promise<void> | void }) {
   // What is being typed is the editor's own from its first frame: the page reading the agents again changes nothing in it.
   const [draft, setDraft] = useState<Draft>(() => draftOf(agent))
+  const nameField = useRef<HTMLInputElement>(null)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | undefined>()
   const addingAccount = useAddGitAccount(async login => {
@@ -265,6 +268,7 @@ function AgentEditor({ agent, view, onAccounts, onDone }: { agent?: AgentRecord;
       open
       wide
       keepOnOutsidePress
+      initialFocus={nameField}
       onOpenChange={open => !open && !busy && void onDone(false)}
       title={agent ? `Editing ${agent.name}` : 'New agent'}
       footer={
@@ -289,7 +293,7 @@ function AgentEditor({ agent, view, onAccounts, onDone }: { agent?: AgentRecord;
       <div className="space-y-5 pb-1">
         <div className="space-y-1.5">
           <Label htmlFor="agent-name">Name</Label>
-          <Input id="agent-name" value={draft.name} disabled={busy || isDefault} placeholder="Social media" onChange={event => setDraft(d => ({ ...d, name: event.target.value }))} className="max-w-sm" />
+          <Input id="agent-name" ref={nameField} value={draft.name} disabled={busy || isDefault} placeholder="Social media" onChange={event => setDraft(d => ({ ...d, name: event.target.value }))} className="max-w-sm" />
         </div>
         <div className="space-y-3">
           <div>
@@ -327,7 +331,7 @@ function AgentEditor({ agent, view, onAccounts, onDone }: { agent?: AgentRecord;
             <Label htmlFor="agent-github">GitHub</Label>
             <div className="flex flex-wrap items-center gap-2">
               <Select items={githubItems} value={draft.github ?? COMPUTERS} onValueChange={next => setDraft(d => ({ ...d, ...(next ? { github: String(next) } : {}), ...(next ? {} : { github: undefined }) }))} disabled={busy}>
-                <SelectTrigger id="agent-github" size="sm" aria-label="GitHub account" className="min-w-0 max-w-sm flex-1 basis-48">
+                <SelectTrigger id="agent-github" size="sm" aria-label="GitHub account" className="min-w-0 max-w-sm grow basis-48">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -348,21 +352,26 @@ function AgentEditor({ agent, view, onAccounts, onDone }: { agent?: AgentRecord;
             <p className="text-xs text-muted-foreground">Runs push and open pull requests as this account. An account this computer does not have refuses the start.</p>
             {addingAccount.dialog}
           </div>
-          <AccountPicks label="Claude" accounts={view.claude} picked={draft.claude} busy={busy} onTick={(id, on) => tick('claude', id, on)} />
-          <AccountPicks label="Codex" accounts={view.codex} picked={draft.codex} busy={busy} onTick={(id, on) => tick('codex', id, on)} />
+          <AccountPicks label="Claude" accounts={view.claude} picked={draft.claude} busy={busy} onTick={(id, on) => tick('claude', id, on)} onAll={() => setDraft(d => ({ ...d, claude: new Set() }))} />
+          <AccountPicks label="Codex" accounts={view.codex} picked={draft.codex} busy={busy} onTick={(id, on) => tick('codex', id, on)} onAll={() => setDraft(d => ({ ...d, codex: new Set() }))} />
         </div>
       </div>
     </Dialog>
   )
 }
 
-/** A coding agent's accounts to pick from: none ticked means all of this computer's; one or more, those alone, where the computer has them. */
-function AccountPicks({ label, accounts, picked, busy, onTick }: { label: string; accounts: readonly { id: string; name: string }[]; picked: Set<string>; busy: boolean; onTick: (id: string, on: boolean) => void }) {
+/** A coding agent's accounts to pick from: "All", ticked while none is picked, is every one of this computer's; one or more ticked, those alone, where the computer has them. */
+function AccountPicks({ label, accounts, picked, busy, onTick, onAll }: { label: string; accounts: readonly { id: string; name: string }[]; picked: Set<string>; busy: boolean; onTick: (id: string, on: boolean) => void; onAll: () => void }) {
   if (accounts.length === 0) return null
   return (
     <fieldset className="space-y-1.5">
       <legend className="text-sm">{label}</legend>
       <div className="flex flex-wrap gap-3">
+        {/* Left by ticking an account, as a radio is left by picking another. */}
+        <label className="flex cursor-pointer items-center gap-2 text-sm">
+          <Checkbox checked={picked.size === 0} onCheckedChange={checked => checked === true && onAll()} disabled={busy} aria-label={`All ${label} accounts`} />
+          All
+        </label>
         {accounts.map(account => (
           <label key={account.id} className="flex cursor-pointer items-center gap-2 text-sm">
             <Checkbox checked={picked.has(account.id)} onCheckedChange={checked => onTick(account.id, checked === true)} disabled={busy} aria-label={`${label} account ${account.name}`} />

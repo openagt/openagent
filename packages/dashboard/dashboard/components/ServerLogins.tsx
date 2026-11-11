@@ -315,7 +315,7 @@ function Bar({ tone, children }: { tone: 'ask' | 'quiet'; children: ReactNode })
 
 function BarWords({ title, words }: { title: string; words: string }) {
   return (
-    <div className="min-w-0 flex-1 basis-60">
+    <div className="min-w-0 grow basis-60">
       <p className="text-sm font-medium">{title}</p>
       <p className="text-xs text-muted-foreground">{words}</p>
     </div>
@@ -343,7 +343,7 @@ function LoginLine({ row, name, on, words, tone = 'text-muted-foreground', child
   return (
     <li aria-label={`${name} on ${on}`} className="flex min-w-0 flex-wrap items-center gap-x-2.5 gap-y-1 py-1">
       <Logo className="size-4 shrink-0 text-muted-foreground" />
-      <div className="min-w-0 flex-1 basis-40">
+      <div className="min-w-0 grow basis-40">
         <p className="truncate text-sm font-medium">{name}</p>
         <p className={cn('text-xs', tone)}>{words}</p>
       </div>

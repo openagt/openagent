@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest'
-import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { forgetRemembered } from '../lib/use-async.js'
 import type { DashboardData, ProjectSummary } from '../../src/index.js'
 import { configureFirst } from '../test-utils.js'
@@ -79,7 +79,7 @@ const openStep = async (label: string) => fireEvent.click(await screen.findByRol
 
 /** Open the tickets step, press its import, and wait for the start to have been attempted. */
 const clickImport = async () => {
-  await openStep('Populate tickets/')
+  await openStep('Populate the tickets')
   fireEvent.click(await screen.findByRole('button', { name: 'Update tickets' }))
   await waitFor(() => expect(startAgent.start).toHaveBeenCalled())
 }
@@ -100,6 +100,26 @@ describe('the first steps on the Overview', () => {
     steps()
     expect(await screen.findByRole('heading', { name: /^Good (morning|afternoon|evening), Ada$/ })).toBeTruthy()
     expect(await screen.findByRole('list', { name: '0 of 3 done' })).toBeTruthy()
+  })
+
+  test.each(['dashboard', 'agent', 'hosts'])('says "Loading…" and no step until the projects, the coding agent and the git hosts are read: %s answers last', async last => {
+    const answers: Record<string, (value: unknown) => void> = {}
+    const held = (name: string) => () => new Promise(resolve => (answers[name] = resolve))
+    onDashboard.mockImplementation(held('dashboard'))
+    logins.onAgentState.mockImplementation(held('agent'))
+    logins.onGitHosts.mockImplementation(held('hosts'))
+    const values: Record<string, unknown> = { dashboard: WITH_PROJECT, agent: { driver: 'claude-code', ready: true }, hosts: CONNECTED }
+    steps()
+    expect(await screen.findByText('Loading…')).toBeTruthy()
+    expect(screen.queryAllByRole('listitem')).toEqual([])
+    await act(async () => {
+      for (const name of Object.keys(values)) if (name !== last) answers[name]!(values[name])
+    })
+    expect(screen.getByText('Loading…')).toBeTruthy()
+    expect(screen.queryAllByRole('listitem')).toEqual([])
+    await act(async () => answers[last]!(values[last]))
+    expect(within(row('Add your first project')).getByLabelText('Done')).toBeTruthy()
+    expect(screen.queryByText('Loading…')).toBeNull()
   })
 
   test('what adding a project does is behind an ⓘ beside the open step, not in its way', async () => {
@@ -167,8 +187,8 @@ describe('the first steps on the Overview', () => {
   test('the steps nothing breaks without are marked optional, and the essentials are not', async () => {
     onDashboard.mockResolvedValue({ ...WITH_PROJECT, queue: [{ projectId: 'p1', projectName: 'shop', entries: [] }] } as unknown as DashboardData)
     steps({ projects: [SHOP] })
-    await waitFor(() => expect(row('Populate tickets/')).toBeTruthy())
-    expect(within(row('Populate tickets/')).getByText('Optional')).toBeTruthy()
+    await waitFor(() => expect(row('Populate the tickets')).toBeTruthy())
+    expect(within(row('Populate the tickets')).getByText('Optional')).toBeTruthy()
     expect(within(row('Turn on notifications')).getByText('Optional')).toBeTruthy()
     expect(within(row('Populate the queue of AI tasks')).queryByText('Optional')).toBeNull()
   })
@@ -178,7 +198,7 @@ describe('the first steps on the Overview', () => {
     steps({ projects: [SHOP] })
     await waitFor(() => expect(row('Turn on notifications')).toBeTruthy())
     expect(screen.queryByRole('listitem', { name: 'Populate the queue of AI tasks' })).toBeNull()
-    expect(screen.queryByRole('listitem', { name: 'Populate tickets/' })).toBeNull()
+    expect(screen.queryByRole('listitem', { name: 'Populate the tickets' })).toBeNull()
   })
 
   test('every step a session needs done: it says so, and its press starts the first session, the steps put away', async () => {
@@ -239,7 +259,7 @@ describe('the tickets import lands on the session it starts (#1169)', () => {
     onDashboard.mockResolvedValue(WITH_PROJECT)
     const onSelectProject = vi.fn()
     steps({ projects: [SHOP], onSelectProject })
-    await openStep('Populate tickets/')
+    await openStep('Populate the tickets')
     await configureFirst('Other ways to update the tickets')
     // The launcher, not an agent — the model and where it runs are nowhere on these steps.
     await waitFor(() => expect(onSelectProject).toHaveBeenCalledWith('p1'))

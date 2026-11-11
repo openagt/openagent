@@ -46,7 +46,7 @@ describe('the Skills menu under the launcher\'s box', () => {
     expect(checked('tickets')).toBe('true')
     expect(checked('plan')).toBe('true')
     expect(screen.queryByRole('menuitemcheckbox', { name: 'queue' })).toBeNull()
-    expect(screen.getByRole('menuitem', { name: 'All' }).getAttribute('aria-current')).toBe('true')
+    expect(screen.getByRole('menuitemradio', { name: 'All' }).getAttribute('aria-checked')).toBe('true')
     fireEvent.click(screen.getByRole('menuitem', { name: 'Manage project skills…' }))
     expect(openSettings).toHaveBeenCalledWith('skills', 'p1')
   })
@@ -75,7 +75,7 @@ describe('the Skills menu under the launcher\'s box', () => {
     onProjectSkills.mockResolvedValue(PROJECT)
     const onChange = renderMenu()
     await openMenu(await screen.findByRole('button', { name: 'Skills: 4' }))
-    fireEvent.click(screen.getByRole('menuitem', { name: 'None' }))
+    fireEvent.click(screen.getByRole('menuitemradio', { name: 'None' }))
     expect(onChange).toHaveBeenLastCalledWith({ on: [], off: [], project: 'none' })
     fireEvent.click(screen.getByRole('menuitemcheckbox', { name: 'plan' }))
     expect(onChange).toHaveBeenLastCalledWith({ on: [], off: [], project: ['tickets'] })
@@ -87,7 +87,7 @@ describe('the Skills menu under the launcher\'s box', () => {
     expect(fromOne).toHaveBeenLastCalledWith({ on: [], off: [], project: 'none' })
     fireEvent.click(screen.getByRole('menuitemcheckbox', { name: 'plan' }))
     expect(fromOne).toHaveBeenLastCalledWith({ on: [], off: [] })
-    fireEvent.click(screen.getByRole('menuitem', { name: 'All' }))
+    fireEvent.click(screen.getByRole('menuitemradio', { name: 'All' }))
     expect(fromOne).toHaveBeenLastCalledWith({ on: [], off: [] })
   })
 
@@ -102,7 +102,7 @@ describe('the Skills menu under the launcher\'s box', () => {
     renderMenu()
     await openMenu(await screen.findByRole('button', { name: 'Skills: 2' }))
     await waitFor(() => expect(screen.getByText('None yet')).toBeTruthy())
-    expect(screen.queryByRole('menuitem', { name: 'All' })).toBeNull()
+    expect(screen.queryByRole('menuitemradio', { name: 'All' })).toBeNull()
   })
 
   test('nothing until the agents are read', () => {

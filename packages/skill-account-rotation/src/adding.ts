@@ -48,7 +48,7 @@ export interface Adding {
 export interface AddingNow {
   adding?: Adding
   failed?: string
-  /** This computer has no browser, a server: the person signs in on their own device. */
+  /** This computer has no browser (a server, or Linux with no display): the person signs in on their own device. */
   noBrowser?: true
 }
 

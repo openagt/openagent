@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest'
-import { cleanup, fireEvent, render, screen, within } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, screen, within } from '@testing-library/react'
 import type { ActiveAgent, Intervention } from '../../src/index.js'
 
 // The Overview's own layout: its cards on a grid, ordered, sized and hidden by the person's layout
@@ -16,13 +16,14 @@ const prefs = vi.hoisted(() => ({ value: { onboardingDismissed: true } as Record
 vi.mock('../lib/preferences.js', () => ({ usePreferences: () => prefs.value, usePreferencesLoaded: () => prefs.loaded, updatePreferences: prefs.updatePreferences }))
 
 const { DashboardPage } = await import('./DashboardPage.js')
+const { FADE_AFTER_MS } = await import('./FadeWhileStale.js')
 
-const active = (agentId: string, projectId = 'p1'): ActiveAgent => ({ projectId, projectName: projectId, agentId, cwd: `/repos/${agentId}`, status: 'running', updatedAt: '2026-07-25T10:00:00.000Z', intent: `working on ${agentId}` })
+const active = (agentId: string, projectId = 'p1'): ActiveAgent => ({ projectId, projectName: projectId, agentId, cwd: `/repos/${agentId}`, status: 'running', startedAt: '2026-07-25T09:00:00.000Z', updatedAt: '2026-07-25T10:00:00.000Z', intent: `working on ${agentId}` })
 const projects = [{ id: 'p1', name: 'alpha' }, { id: 'p2', name: 'beta' }] as never[]
 /** The agents at work, as the shell read them. */
 let working: ActiveAgent[] = []
-const show = (scope: string | null = null, stale = { interventions: false, active: false }) =>
-  render(<DashboardPage onProjectAdded={() => {}} onSelectProject={() => {}} onSelectAgent={() => {}} onAgentStarted={() => {}} interventions={[]} interventionsStale={stale.interventions} active={{ active: working, stale: stale.active }} projects={projects} scope={scope} />)
+const show = (scope: string | null = null, stale = { interventions: false, active: false }, loaded = true) =>
+  render(<DashboardPage onProjectAdded={() => {}} onSelectProject={() => {}} onSelectAgent={() => {}} onAgentStarted={() => {}} interventions={[]} interventionsStale={stale.interventions} interventionsLoaded={loaded} active={{ active: working, stale: stale.active, loaded }} projects={projects} scope={scope} />)
 /** The cards drawn, in order, each with its grid classes. */
 const drawn = () => [...document.querySelectorAll<HTMLElement>('[data-card]')].map(el => ({ id: el.dataset['card'], spans: el.className }))
 
@@ -123,6 +124,14 @@ describe('the Overview', () => {
     expect(screen.queryByRole('toolbar')).toBeNull()
   })
 
+  test("while the page is arranged, a card's own buttons are asleep: no focus, no press", async () => {
+    show()
+    fireEvent.click(await screen.findByRole('button', { name: 'Customize' }))
+    expect(screen.getByText("a package's card").closest('[inert]')).not.toBeNull()
+    fireEvent.click(screen.getByRole('button', { name: 'Done' }))
+    expect(screen.getByText("a package's card").closest('[inert]')).toBeNull()
+  })
+
   test('a card dragged from the tray shows where it lands, a bar beside the card under the pointer or at the end, and lands there', async () => {
     working = []
     prefs.value = { onboardingDismissed: true, overviewLayouts: { '*': [{ id: 'needs-you', hidden: true }] } }
@@ -183,21 +192,31 @@ describe('the Overview', () => {
     expect(saved.find(place => place.id === 'usage')).toEqual({ id: 'usage' })
   })
 
-  test('a card showing only what an earlier visit read is faded, until it is read again', async () => {
-    working = [active('r1', 'p1')]
-    show(null, { interventions: true, active: false })
-    await screen.findByText('working on r1')
-    const faded = () => [...document.querySelectorAll<HTMLElement>('[data-stale]')].map(el => el.dataset['card'])
-    expect(faded()).toEqual(['needs-you', 'human-queue'])
-    expect(document.querySelector('[data-card="needs-you"]')!.className).toContain('opacity-60')
-    cleanup()
-    show(null, { interventions: false, active: true })
-    await screen.findByText('working on r1')
-    expect(faded()).toEqual(['working-now', 'working'])
-    cleanup()
-    show()
-    await screen.findByText('working on r1')
-    expect(faded()).toEqual([])
+  test('a card showing only what an earlier visit read is faded once its fresh read has been out for a second, until it is read again', async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true })
+    try {
+      working = [active('r1', 'p1')]
+      show(null, { interventions: true, active: false })
+      await screen.findByText('working on r1')
+      const faded = () => [...document.querySelectorAll<HTMLElement>('[data-stale]')].map(el => el.dataset['card'])
+      // A read that answers within the second never fades its card: no flicker on every load.
+      expect(faded()).toEqual([])
+      act(() => vi.advanceTimersByTime(FADE_AFTER_MS))
+      expect(faded()).toEqual(['needs-you', 'human-queue'])
+      expect(document.querySelector('[data-card="needs-you"]')!.className).toContain('opacity-60')
+      cleanup()
+      show(null, { interventions: false, active: true })
+      await screen.findByText('working on r1')
+      act(() => vi.advanceTimersByTime(FADE_AFTER_MS))
+      expect(faded()).toEqual(['working-now', 'working'])
+      cleanup()
+      show()
+      await screen.findByText('working on r1')
+      act(() => vi.advanceTimersByTime(FADE_AFTER_MS))
+      expect(faded()).toEqual([])
+    } finally {
+      vi.useRealTimers()
+    }
   })
 
   test('no card is drawn before the layout is read: a card taken off never reads anything', async () => {
@@ -207,14 +226,26 @@ describe('the Overview', () => {
     expect(drawn()).toEqual([])
   })
 
-  test("the Needs you tile: how many things wait, and how many are questions; it takes the page to the Human Queue", async () => {
+  test('the Needs you and Working now tiles show no count before their reads', async () => {
+    show(null, { interventions: false, active: false }, false)
+    for (const label of ['Needs you', 'Working now']) expect((await screen.findByText(label)).parentElement!.textContent).toBe(`${label}\u00a0Loading…`)
+  })
+
+  test('the Human Queue says it is loading before its read, not that nothing waits', async () => {
+    show(null, { interventions: false, active: false }, false)
+    const card = (await screen.findByText('Human Queue')).closest('[data-card]')!
+    expect(card.textContent).toContain('Loading…')
+    expect(card.textContent).not.toContain('AI doesn’t need you.')
+  })
+
+  test("the Needs you tile: how many things wait, and how many of each kind; it takes the page to the Human Queue", async () => {
     working = []
     const item = (kind: Intervention['kind'], n: number): Intervention => ({ projectId: 'p1', projectName: 'alpha', kind, title: `t${n}`, agentId: `r${n}` })
     const scrolled = vi.fn()
     Element.prototype.scrollIntoView = scrolled
-    render(<DashboardPage onProjectAdded={() => {}} onSelectProject={() => {}} onSelectAgent={() => {}} onAgentStarted={() => {}} interventions={[item('awaiting', 1), item('awaiting', 2), item('pr', 3)]} interventionsStale={false} active={{ active: [], stale: false }} projects={projects} scope={null} />)
+    render(<DashboardPage onProjectAdded={() => {}} onSelectProject={() => {}} onSelectAgent={() => {}} onAgentStarted={() => {}} interventions={[item('awaiting', 1), item('awaiting', 2), item('pr', 3)]} interventionsStale={false} interventionsLoaded active={{ active: [], stale: false, loaded: true }} projects={projects} scope={null} />)
     const tile = (await screen.findByText('Needs you')).closest('button')!
-    expect(tile.textContent).toBe('Needs you32 questions to answer')
+    expect(tile.textContent).toBe('Needs you32 questions, 1 pull request')
     fireEvent.click(tile)
     expect(scrolled).toHaveBeenCalled()
     expect(scrolled.mock.contexts[0]).toBe(document.getElementById('needs-you'))
@@ -229,7 +260,7 @@ describe('the Overview', () => {
       item({ number: 6, title: 'Add DESCRIPTION.md', url: 'https://x/pull/6', agentId: 'r6' }),
       item({ number: 8, title: 'Condense README', url: 'https://x/pull/8' }),
     ]
-    render(<DashboardPage onProjectAdded={() => {}} onSelectProject={() => {}} onSelectAgent={onSelectAgent} onAgentStarted={() => {}} interventions={interventions} interventionsStale={false} active={{ active: [], stale: false }} projects={[]} scope={null} />)
+    render(<DashboardPage onProjectAdded={() => {}} onSelectProject={() => {}} onSelectAgent={onSelectAgent} onAgentStarted={() => {}} interventions={interventions} interventionsStale={false} interventionsLoaded active={{ active: [], stale: false, loaded: true }} projects={[]} scope={null} />)
     // Grouped by kind, each under its heading, in the order that holds a run up most; a row says its kind on its icon's hover.
     expect(screen.getAllByRole('region').map(group => group.getAttribute('aria-label'))).toEqual(['Pull requests', 'To commit'])
     expect(screen.getByTitle('Needs commit')).toBeTruthy()

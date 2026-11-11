@@ -8,7 +8,7 @@ import { projectRuns } from '../store/runs.js'
 import { projectTickets } from '../store/tickets.js'
 import { personalFolderShown, type PersonalFolderShown } from '../personal-folder-shown.js'
 
-// Settings › Project › Agent data: where one project's agent data is, and what is kept there.
+// Settings › Project › Project agent data: where one project's agent data is, and what is kept there.
 // OpenAgent knows nothing of the files themselves: what is kept is what each skill that provides
 // a kind of the data answers, the same reads the project's pages make.
 

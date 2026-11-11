@@ -1,14 +1,16 @@
 import { PanelLeft } from 'lucide-react'
+import { flushSync } from 'react-dom'
 import { Button } from './ui/button.js'
 import { Tooltip, TooltipContent, TooltipTrigger } from './ui/tooltip.js'
 import { useOptionalSidebar, useSidebar } from './ui/sidebar.js'
+import { shortcut } from '../lib/shortcut.js'
 
 // The sidebar hidden and shown again, as Claude Code's is: its button in the sidebar's own top row
 // hides it, and while it is hidden the same button stands at the start of the page's top row (an
 // agent's bar, the "New agent session" page's, a page's header) to show it. Cmd/Ctrl+B does both. A phone's
 // sidebar is a sheet, opened by its own button (MenuButton): there neither is drawn.
 
-const SHORTCUT = navigator.platform.startsWith('Mac') ? '⌘B' : 'Ctrl+B'
+const SHORTCUT = shortcut('B')
 
 /** In the sidebar's top row: hides it. */
 export function HideSidebarButton() {
@@ -27,9 +29,14 @@ export function ShowSidebarButton() {
 }
 
 function ToggleButton({ label, onClick }: { label: string; onClick: () => void }) {
+  // The pressed button goes with its press: the one drawn in its place takes the focus.
+  const press = (): void => {
+    flushSync(onClick)
+    document.querySelector<HTMLElement>('[data-sidebar-toggle]')?.focus()
+  }
   return (
     <Tooltip>
-      <TooltipTrigger render={<Button variant="ghost" size="icon-sm" className="shrink-0 text-muted-foreground" aria-label={label} onClick={onClick} />}>
+      <TooltipTrigger render={<Button data-sidebar-toggle variant="ghost" size="icon-sm" className="shrink-0 text-muted-foreground" aria-label={label} onClick={press} />}>
         <PanelLeft className="h-4 w-4" aria-hidden />
       </TooltipTrigger>
       <TooltipContent>

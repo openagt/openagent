@@ -1,5 +1,6 @@
 import type { ReactNode } from 'react'
 import { cn } from '../lib/utils.js'
+import { STATUS_DOT } from '../lib/status-tone.js'
 
 // A number that says how things stand, as a small card of the Overview's: its name, the number, and
 // a line under it. The Overview's own (what needs the person, who is at work) and a package's (the
@@ -16,19 +17,20 @@ export function scrollToPart(id: string): void {
   document.getElementById(id)?.scrollIntoView({ behavior: 'smooth', block: 'start' })
 }
 
-export function StatTile({ label, value, note, tone, live = false, href, onClick }: { label: string; value: number; note: ReactNode; /** The number's colour while it is not nothing. */ tone?: string | undefined; /** Something is going on: a pulsing dot before the name. */ live?: boolean; href?: string; onClick?: () => void }) {
+export function StatTile({ label, value, note, tone, live = false, href, onClick }: { label: string; /** Undefined until it is read: no number then. */ value: number | undefined; note: ReactNode; /** The number's colour while it is not nothing. */ tone?: string | undefined; /** Something is going on: a pulsing dot before the name. */ live?: boolean; href?: string; onClick?: () => void }) {
   const body = (
     <>
       <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
         {live && (
           <span className="relative flex size-2" aria-hidden>
-            <span className="absolute inline-flex size-full animate-ping rounded-full bg-success opacity-60" />
-            <span className="relative inline-flex size-2 rounded-full bg-success" />
+            <span className={cn('absolute inline-flex size-full animate-ping rounded-full opacity-60', STATUS_DOT['running'])} />
+            <span className={cn('relative inline-flex size-2 rounded-full', STATUS_DOT['running'])} />
           </span>
         )}
         {label}
       </span>
-      <span className={cn('text-2xl font-semibold tabular-nums', value === 0 ? 'text-muted-foreground' : (tone ?? 'text-foreground'))}>{value}</span>
+      {/* A no-break space while there is no number keeps the tile as tall as with one. */}
+      <span className={cn('text-2xl font-semibold tabular-nums', !value ? 'text-muted-foreground' : (tone ?? 'text-foreground'))}>{value ?? '\u00a0'}</span>
       <span className="truncate text-xs text-muted-foreground">{note}</span>
     </>
   )

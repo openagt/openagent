@@ -23,7 +23,7 @@ export type Adding = 'choose' | 'phone' | 'computer' | 'server' | 'code'
 
 const KINDS: readonly { id: Exclude<Adding, 'choose'>; icon: ComponentType<{ className?: string; 'aria-hidden'?: boolean }>; title: string; words: string }[] = [
   { id: 'phone', icon: Smartphone, title: 'Phone or tablet', words: 'Scan a code with its camera.' },
-  { id: 'computer', icon: Monitor, title: 'Computer', words: 'Another Mac or PC that runs OpenAgent.' },
+  { id: 'computer', icon: Monitor, title: 'Computer', words: 'Another computer that runs OpenAgent.' },
   { id: 'server', icon: Server, title: 'Server', words: 'Install OpenAgent on a VPS, or on a PC that stays on.' },
   { id: 'code', icon: Ticket, title: 'I have a code', words: 'Join a server of yours, or a computer someone shared with you.' },
 ]
@@ -339,7 +339,7 @@ function AddComputer({ d, onClose }: { d: Devices; onClose: () => void }) {
             ))}
           </ul>
         )}
-        <p className="text-xs text-muted-foreground">Not in the list? Open OpenAgent on it, on the same Wi-Fi, with "On this Wi-Fi" on there.</p>
+        <p className="text-xs text-muted-foreground">Don't see it? Open OpenAgent on it, on the same Wi-Fi, with "On this Wi-Fi" on there.</p>
         <div className="flex flex-wrap items-center justify-between gap-3 border-t border-border pt-3">
           <span className="text-sm">
             Somewhere else?

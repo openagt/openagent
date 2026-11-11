@@ -179,8 +179,8 @@ async function joinRunning(port: number, project: string | undefined, io: CliIO)
 }
 
 /**
- * The startup footer every dashboard path prints (#312): where prompts come from, the version,
- * and then — once npm answers — whether that version is the latest.
+ * The startup footer every dashboard path prints (#312): the version, and then — once npm
+ * answers — whether that version is the latest.
  *
  * The update line is deliberately not awaited before the static lines. #312 asks for the static
  * info first, and the foreground path (bare `openagent`) blocks on the server forever, so a line
@@ -189,11 +189,7 @@ async function joinRunning(port: number, project: string | undefined, io: CliIO)
  */
 export function printStartupFooter(io: CliIO, opts: { fetchLatest?: VersionFetcher } = {}): Promise<void> {
   const version = openagentVersion()
-  io.out('')
-  io.out('Type a prompt on the dashboard to start an agent, or use:')
-  io.out('  openagent --help              All options')
-  io.out('')
-  io.out(`OpenAgent v${version}`)
+  io.out(`◆ OpenAgent v${version}`)
   return checkForUpdate(version, opts.fetchLatest ?? nodeVersionFetcher())
     .then(status => {
       const line = formatUpdateStatus(status)

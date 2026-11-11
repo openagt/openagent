@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'vitest'
-import { EMPTY_DRAFT, TEXT_MAX, addArgs, atRowsPace, draftProblem, draftRow, draftSentence, editArgs, editedWords, isUntouched, keptWhereHint, openedAutomation, ownPaceArgs, removeWarning, removedWords, savedFile, savedWords, saysTheSame, startsWhen, triedLine, whereHint, type AutomationDraft, type OwnPace } from './automation-form.js'
+import { EMPTY_DRAFT, TEXT_MAX, addArgs, atRowsPace, draftProblem, draftRow, draftSentence, editArgs, editedWords, isUntouched, keptWhereHint, openedAutomation, ownPaceArgs, removeWarning, removedWords, whatAndWhenProblem, savedFile, savedWords, saysTheSame, startsWhen, triedLine, whereHint, type AutomationDraft, type OwnPace } from './automation-form.js'
 
 // The automation form as data: what keeps a draft from being saved, the command that saves it, the sentence its row would say, what a try answered, an automation opened from its row to be saved again, and what is said of one removed.
 
@@ -38,6 +38,15 @@ describe('a new automation', () => {
     expect(addArgs(draft({ prompt: 'p'.repeat(TEXT_MAX) }))!.every(arg => arg.length <= 4096)).toBe(true)
   })
 
+  test("what else keeps a draft from being saved, its name aside: said while the name typed cannot be one, which is said under its own field", () => {
+    const badName = (over: Partial<AutomationDraft> = {}): AutomationDraft => draft({ name: 'Answer comments', ...over })
+    expect(whatAndWhenProblem(badName({ pace: every('') }))).toBe('Type a whole number, from 1 to 9999.')
+    expect(whatAndWhenProblem(badName({ pace: { ...every('2'), atHalfTyped: true } }))).toBe('Finish the time, like 10:00, or clear it.')
+    expect(whatAndWhenProblem(badName({ pace: WORK }))).toBe('Say when it runs: on a pace, by a shell line, or both.')
+    expect(whatAndWhenProblem(badName({ prompt: '' }))).toBe('Write what the agent is told.')
+    expect(whatAndWhenProblem(badName())).toBeUndefined()
+  })
+
   test('a form nothing was typed into, which Escape may close', () => {
     expect(isUntouched(EMPTY_DRAFT)).toBe(true)
     expect(isUntouched({ ...EMPTY_DRAFT, pace: every('15', 'm') })).toBe(true)
@@ -63,7 +72,7 @@ describe('a new automation', () => {
   })
 
   test('when it would run, as its row would say it; nothing while nothing says when', () => {
-    expect(draftSentence(draft())).toBe('Every 1 day')
+    expect(draftSentence(draft())).toBe('Every day')
     expect(draftSentence(draft({ pace: every('15', 'm'), when: CHECK }))).toBe('Every 15 minutes at most, when its shell line prints something')
     expect(draftSentence(draft({ pace: every('15', 'm'), when: CHECK, waitsFor: 'when someone commented' }))).toBe('Every 15 minutes at most, when someone commented')
     expect(draftSentence(draft({ pace: WORK, when: CHECK, waitsFor: 'when someone commented' }))).toBe('When someone commented')
@@ -72,11 +81,11 @@ describe('a new automation', () => {
     expect(draftSentence(draft({ pace: every(''), when: CHECK }))).toBeUndefined()
     // With a time of day, which this machine holds: at that time by time alone, from that time beside a shell line.
     expect(draftSentence(draft({ pace: every('2', 'd', '10:00') }))).toBe('Every 2 days at 10:00')
-    expect(draftSentence(draft({ pace: every('1', 'w', '09:30'), when: CHECK, waitsFor: 'when someone commented' }))).toBe('Every 1 week from 09:30, when someone commented')
+    expect(draftSentence(draft({ pace: every('1', 'w', '09:30'), when: CHECK, waitsFor: 'when someone commented' }))).toBe('Every week from 09:30, when someone commented')
     expect(draftRow(draft({ pace: every('2', 'd', '10:00') }))).toEqual({ command: 'answer-comments', on: false, publish: 'commit', every: '2d', pace: { every: '2d', at: '10:00', since: '' }, home: 'claude-code', able: ['claude-code', 'codex'] })
     expect(draftRow(draft({ pace: WORK }))).toBeUndefined()
     // Before a name is typed the sentence is already there: it does not name the command.
-    expect(draftSentence({ ...EMPTY_DRAFT })).toBe('Every 1 day')
+    expect(draftSentence({ ...EMPTY_DRAFT })).toBe('Every day')
   })
 
   test('what a try answered: an agent would start, nothing to do, or the line failed and why; an answer that is not what the command promises is a failed line', () => {
@@ -96,10 +105,13 @@ describe('a new automation', () => {
     expect(savedFile({ ok: true, file: 'f', startsFrom: 'HEAD', version: 7 })).toEqual({ file: 'f', startsFrom: 'HEAD', onThisMachine: false })
     expect(savedFile({ ok: true, file: '.scheduler/automations/x.md', startsFrom: 'origin/main', onThisMachine: true })).toEqual({ file: '.scheduler/automations/x.md', startsFrom: 'origin/main', onThisMachine: true })
     // What the person has to do with it: a shared one is theirs to commit and bring where a checkout starts; one kept here needs nothing.
-    expect(savedWords({ startsFrom: 'origin/main', onThisMachine: false })).toBe('It is a file of yours, in this project, and nothing was committed for you. Its row cannot start before the file is on origin/main: commit it and bring it there.')
-    expect(savedWords({ startsFrom: 'origin/main', onThisMachine: true })).toBe('It is kept on this machine alone: nothing to commit, and nobody else gets the row. Its row can start as soon as you switch it on. Its prompt is in the record of each run, which is shared where this project shares its records.')
-    expect(whereHint(draft())).toBe('Saved as a skill file in this project, which you commit. The row starts switched off.')
-    expect(whereHint(draft({ onThisMachine: true }))).toBe('Kept on this machine alone, outside git. The row starts switched off, and can start as soon as you switch it on.')
+    expect(savedWords({ startsFrom: 'origin/main', onThisMachine: false }, true)).toBe('It is a file of yours, in this project, and nothing was committed for you. Its row cannot start before the file is on origin/main: commit it and bring it there.')
+    expect(savedWords({ startsFrom: 'origin/main', onThisMachine: true }, true)).toBe('It is kept on this machine alone: nothing to commit, and nobody else gets the row. Its row can start as soon as you switch it on. Its prompt is in the record of each run, which is shared where this project shares its records.')
+    expect(whereHint(draft(), true)).toBe('Saved as a skill file in this project, which you commit. The row starts switched off.')
+    expect(whereHint(draft({ onThisMachine: true }), true)).toBe('Kept on this machine alone, outside git. The row starts switched off, and can start as soon as you switch it on.')
+    // While the scheduler does not run, switching it on is not enough.
+    expect(savedWords({ startsFrom: 'origin/main', onThisMachine: true }, false)).toContain('Its row can start once you switch it on and the scheduler runs.')
+    expect(whereHint(draft({ onThisMachine: true }), false)).toBe('Kept on this machine alone, outside git. The row starts switched off, and can start once you switch it on and the scheduler runs.')
     expect(startsWhen('origin/main')).toBe('Its row cannot start before the file is on origin/main: commit it and bring it there.')
     expect(startsWhen('HEAD')).toBe('Its row cannot start before you commit the file.')
   })

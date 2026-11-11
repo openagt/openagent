@@ -18,7 +18,7 @@ export const AGENT_DATA_ENTRY = 'agent-data'
 const EVERY_MS = 10_000
 
 /**
- * Settings › Agent data: the person's own folder, where the agents keep everything of the projects
+ * Settings › Your agent data: the person's own folder, where the agents keep everything of the projects
  * not shared on their own repository, which may sync with a repository of theirs so each of their
  * computers has the same data. Where one project's data is, is that project's page. The folder
  * is sent as one of OpenAgent's own accounts at the repository's host, named here, never as the
@@ -128,6 +128,7 @@ export function AgentDataSettings() {
             </p>
             <div className="flex items-center gap-2">
               <Input
+                name="repository-address"
                 aria-label="Repository address"
                 placeholder="github.com/you/agent"
                 value={address}

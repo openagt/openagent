@@ -123,6 +123,20 @@ test('stop a run; its checkout is reclaimed, then the run is deleted (#737/#1032
   }
 })
 
+test('a Stop pressed while the run is still starting stops it once its card names its process', async () => {
+  const world = await makeWorld()
+  const rpc = world.rpc
+  try {
+    const project = await world.addProject()
+    // The start line answered the run's id; the run is still making its checkout, so no card names its pid yet.
+    const agentId = await world.startAgent(project, 'hold: long experiment')
+    await rpc(sendStop)(project.id, agentId)
+    await world.waitAgent(project, agentId, 'stopped')
+  } finally {
+    await world.close()
+  }
+})
+
 test('a waiting run’s kept checkout can be removed by hand (#737)', async () => {
   const world = await makeWorld()
   const rpc = world.rpc

@@ -77,11 +77,12 @@ export async function startDemo(options: DemoOptions = {}): Promise<Demo> {
   await mkdir(toAdd, { recursive: true })
   // The person the dashboard names is the home's git user: "Demo", not whoever runs the demo.
   await writeFile(join(home, '.gitconfig'), `[user]\n\tname = ${DEMO_USER.name}\n\temail = ${DEMO_USER.email}\n`)
-  for (const [cwd, files] of [
-    [shop, SHOP_FILES],
-    [toAdd, { 'README.md': '# blog\n\nThe project to add from the dashboard.\n' }],
+  // The project the dashboard has holds every skill with a page of its own, so each page can be walked.
+  for (const [cwd, files, skills] of [
+    [shop, SHOP_FILES, ['tickets', 'queue', 'logs', 'scheduler']],
+    [toAdd, { 'README.md': '# blog\n\nThe project to add from the dashboard.\n' }, ['tickets', 'queue']],
   ] as const) {
-    await makeFixtureRepo(cwd, files)
+    await makeFixtureRepo(cwd, files, skills)
     await git(cwd, 'config', 'user.name', DEMO_USER.name)
     await git(cwd, 'config', 'user.email', DEMO_USER.email)
   }

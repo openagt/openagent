@@ -1,10 +1,11 @@
 import { SESSIONS_ID } from '../../src/project-address.js'
 import type { GitHostHome } from '../../src/index.js'
-import { useEffect, useRef, useState, type MutableRefObject, type ReactNode } from 'react'
+import { useContext, useEffect, useRef, useState, type MutableRefObject, type ReactNode } from 'react'
 import { Loader2, Square } from 'lucide-react'
 import { Composer, type ComposerHandle } from './Composer.js'
 import { sendMessage, sendStop } from '../rpc/control.js'
 import { useAction } from '../lib/use-action.js'
+import { DaemonDown } from '../lib/use-daemon-health.js'
 import { Button } from './ui/button.js'
 import { Tooltip, TooltipTrigger, TooltipContent } from './ui/tooltip.js'
 import { ProjectContextMenu } from './ContextMenu.js'
@@ -15,6 +16,7 @@ import { SkillsOff } from './SkillsMenu.js'
 import { isPublishPick, offeredPublishPicks, type PublishPick } from '../../src/client.js'
 import { useProjectLauncher } from '../lib/use-project-launcher.js'
 import { promptWithContext, type ContextSet } from '../lib/use-context-set.js'
+import { shortcut } from '../lib/shortcut.js'
 
 /** A message sent to a working agent that it has not read yet: shown waiting until it lands. */
 export interface QueuedMessage {
@@ -47,6 +49,7 @@ export function AgentComposer({
   onSending,
   onQueued,
   editInBox,
+  focusBox,
   model,
   context,
   controls,
@@ -76,6 +79,8 @@ export function AgentComposer({
   onQueued?: ((message: QueuedMessage) => void) | undefined
   /** Set here to what puts a text in the box to edit: Cancel and edit on a waiting message. */
   editInBox?: MutableRefObject<((text: string) => void) | null> | undefined
+  /** Set here to what gives the box the focus: a question answered from its card. */
+  focusBox?: MutableRefObject<(() => void) | null> | undefined
   /** The model the session runs on, by its name: said under the box. */
   model?: string | undefined
   /** How full the session's context is, as a circle beside the model. */
@@ -109,6 +114,13 @@ export function AgentComposer({
       editInBox.current = null
     }
   }, [editInBox])
+  useEffect(() => {
+    if (!focusBox) return
+    focusBox.current = () => composerRef.current?.focus()
+    return () => {
+      focusBox.current = null
+    }
+  }, [focusBox])
   const { busy, error, run } = useAction()
   // The slot's Stop (#1455), its own action so a message send's busy beat cannot read as
   // "stopping". A landed Stop stays "Stopping…" until the end event flips `live`, so it cannot
@@ -122,6 +134,8 @@ export function AgentComposer({
     if (!live) setStopRequested(false)
   }, [live])
   const stopping = stopBusy || (stopRequested && live)
+  // OpenAgent is not answering: Stop cannot reach the agent, by the button or by Esc.
+  const down = useContext(DaemonDown)
   // The "Auto" menu, as the launcher's (his pick): how far the run takes its work. A pick goes with
   // the next message and holds from it on. Sent to a working run, it shows until the run's record
   // says it, which is when its turn ends and it takes the message. Sent to an ended run, the menu
@@ -176,7 +190,7 @@ export function AgentComposer({
   useEffect(() => {
     if (!live) return
     const onKey = (event: KeyboardEvent) => {
-      if (event.key !== 'Escape' || stopping || document.querySelector('[role="dialog"], [role="menu"], [role="listbox"], .ProseMirror[aria-expanded="true"]')) return
+      if (event.key !== 'Escape' || stopping || down || document.querySelector('[role="dialog"], [role="menu"], [role="listbox"], .ProseMirror[aria-expanded="true"]')) return
       stopSession()
     }
     window.addEventListener('keydown', onKey, true)
@@ -193,9 +207,10 @@ export function AgentComposer({
             variant="ghost"
             size="icon-sm"
             onClick={stopSession}
-            disabled={stopping}
+            disabled={stopping || down}
             aria-label="Stop agent"
-            className="h-8 w-8 shrink-0 disabled:opacity-100"
+            // Stopping draws its spinner in full; off while OpenAgent is not answering, Stop is dimmed as any button off.
+            className={stopping ? 'h-8 w-8 shrink-0 disabled:opacity-100' : 'h-8 w-8 shrink-0'}
           />
         }
       >
@@ -217,10 +232,13 @@ export function AgentComposer({
   const surfacedError = error ?? stopError
 
   return (
-    <div className="mx-auto w-full max-w-3xl p-2">
+    <div className="@container mx-auto w-full max-w-3xl p-2">
       {surfacedError && <p role="alert" className="mb-1 px-2 text-xs text-danger">{surfacedError}</p>}
       <Composer
+        // A box of its own per session, with the draft it was left with.
+        key={agentId}
         ref={composerRef}
+        draftKey={`${projectId}:${agentId}`}
         files={files}
         onSubmit={send}
         busy={busy}
@@ -261,7 +279,7 @@ export function AgentComposer({
         idleControl={idleControl}
         // What the box can do, not what it is for: the keys for a working agent, as Claude Code's box
         // says them in the same place.
-        placeholder={live ? '⏎ to send, ⌘⏎ to queue for later' : 'Message the agent to continue it…'}
+        placeholder={down ? 'OpenAgent is not answering' : live ? `Enter to send, ${shortcut('Enter')} to queue for later` : 'Message the agent to continue it…'}
       />
     </div>
   )

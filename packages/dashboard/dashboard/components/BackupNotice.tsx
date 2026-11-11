@@ -9,7 +9,7 @@ import { useGitHosts } from './Logins.js'
 import { SendAs, firstSendAs } from './SendAs.js'
 import { Button } from './ui/button.js'
 
-// Settings › Agent data, at its top: the agents' data that is not backed up, and the fix, here
+// Settings › Your agent data, at its top: the agents' data that is not backed up, and the fix, here
 // (his pick over a trip to the Permissions page): with no account of OpenAgent's at the host, the
 // press that adds one, in its dialog; with one, "Back up as" and the press that sends
 // what waited. The person picks the account, even when there is only one: nothing is sent as an

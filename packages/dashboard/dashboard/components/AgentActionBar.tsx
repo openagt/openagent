@@ -29,6 +29,7 @@ export function AgentActionBar({
   onToggle,
   ready = true,
   checkout,
+  onShowWorkBar,
 }: {
   projectId: string
   /** Which run Stop addresses (#749). */
@@ -59,6 +60,8 @@ export function AgentActionBar({
   ready?: boolean
   /** The agent's checkout as the page read it (`null`: not answered yet), read once for this bar and the one above the message box. */
   checkout: AgentWorktree | null
+  /** Given while the bar above the message box is put away: the session's menu brings it back. */
+  onShowWorkBar?: (() => void) | undefined
 }) {
   // Only once nothing is writing to the worktree is there a size to say (#798).
   const size = ready ? formatBytes(checkout?.checkout?.sizeBytes, '') : ''
@@ -84,6 +87,7 @@ export function AgentActionBar({
         onDeleted={onDeleted}
         {...(onToggle ? { details: { open: expanded, onToggle } } : {})}
         size={size}
+        showWorkBar={onShowWorkBar}
       />
       {/* The spacer grows but never shrinks (#1030), so a tight row takes its width from the name. */}
       <div className="grow shrink-0" />

@@ -4,6 +4,7 @@ import {
   Button,
   ConfirmDialog,
   Input,
+  FadeWhileStale,
   Page,
   Select,
   SelectContent,
@@ -78,6 +79,7 @@ export function QueuePage({ projects }: ModulePageProps) {
   const {
     value: reads,
     loaded,
+    stale,
     reload,
   } = usePolled<ProjectRead[]>(
     () =>
@@ -92,6 +94,8 @@ export function QueuePage({ projects }: ModulePageProps) {
     // A local read, no fetch: cheap enough to follow the queue closely.
     10_000,
     [key],
+    // Kept for the next visit: the page opens with the last list, faded until it is read again.
+    { remember: `skill-queue:page:${key}`, stored: true },
   )
   const schedule = useSchedule(projects)
   const names = useFileNames(reads.map(read => ({ projectId: read.project.id, paths: (read.entries ?? []).flatMap(placed => pathsIn(placed.entry)) })))
@@ -108,11 +112,11 @@ export function QueuePage({ projects }: ModulePageProps) {
           {starts.error}
         </p>
       )}
-      <div className="space-y-6">
+      <FadeWhileStale stale={stale} className="space-y-6">
         {reads.map(read => (
           <ProjectQueue key={read.project.id} read={read} titled={projects.length > 1} schedule={schedule} names={names} starts={starts} reload={reload} />
         ))}
-      </div>
+      </FadeWhileStale>
     </Page>
   )
 }
@@ -135,10 +139,12 @@ function ProjectQueue({ read, titled, schedule, names, starts, reload }: { read:
               <TooltipTrigger
                 render={
                   <Input
+                    name="agent-count"
                     type="number"
                     min={1}
+                    max={raw.length}
                     step={1}
-                    value={starts.countOf(project.id)}
+                    value={count}
                     aria-label="How many agents to start"
                     onChange={event => {
                       // An emptied box is mid-edit rather than a count: `Number('')` is 0.
@@ -288,7 +294,7 @@ function EntryRow({ project, placed, agent, names, starts, reload }: { project: 
         icon={<Play className="h-3.5 w-3.5" aria-hidden />}
         ariaLabel={`Start an agent on entry ${place}`}
         menuAriaLabel={`Other ways to run ${view.title}`}
-        tooltip="Spin up an agent working on this entry"
+        tooltip="Start an agent working on this entry"
         busy={starts.inFlight}
         starting={starts.starting(project.id, entry)}
         onStart={() => void starts.startEntry(project.id, entry)}
@@ -348,7 +354,7 @@ function AddEntry({ project, reload }: { project: ModuleProject; reload: () => P
       className="mt-4"
     >
       <div className="flex flex-wrap items-center gap-2">
-        <Input value={text} onChange={event => (setText(event.target.value), setFailed(undefined))} disabled={adding} placeholder="Add a task: what an agent should do" aria-label="A task to add to the queue" className="h-8 min-w-48 flex-1 px-2" />
+        <Input name="task" value={text} onChange={event => (setText(event.target.value), setFailed(undefined))} disabled={adding} placeholder="Add a task: what an agent should do" aria-label="A task to add to the queue" className="h-8 min-w-48 flex-1 px-2" />
         <Select items={items} value={String(priority)} disabled={adding} onValueChange={next => setPriority(Number(next))}>
           <SelectTrigger size="sm" aria-label="Priority of the new task" className="w-32">
             <SelectValue />

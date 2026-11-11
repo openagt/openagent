@@ -1,5 +1,5 @@
 import { Bell, BellOff } from 'lucide-react'
-import { useNotificationPermission } from '../lib/notification-permission.js'
+import { setBrowserNotifications, useNotificationPermission } from '../lib/notification-permission.js'
 import { usePreferences, updatePreferences, notificationsEnabled, newActivityEnabled, humanInterventionEnabled } from '../lib/preferences.js'
 import { OptionLabel } from './ui/option-label.js'
 import {
@@ -28,12 +28,6 @@ export function NotificationsSubmenu() {
   // Browser delivery only actually fires once the browser has granted permission: only then are they "On".
   const active = browser && permission === 'granted'
 
-  const toggleBrowser = (next: boolean) => {
-    updatePreferences({ notifyBrowser: next })
-    // Asking for permission must ride this user gesture (turning it on).
-    if (next && permission === 'default') void Notification.requestPermission()
-  }
-
   const browserHint = blocked
     ? 'Blocked in your browser settings'
     : browser && permission === 'default'
@@ -52,10 +46,11 @@ export function NotificationsSubmenu() {
           <>
             <DropdownMenuGroup>
               <DropdownMenuLabel>Deliver to</DropdownMenuLabel>
+              {/* Ticked once notifications reach the browser: on and not allowed yet, the click its hint invites ticks it, and asks. */}
               <DropdownMenuCheckboxItem
-                checked={browser}
+                checked={active}
                 disabled={blocked}
-                onCheckedChange={toggleBrowser}
+                onCheckedChange={setBrowserNotifications}
                 className="items-start"
               >
                 <OptionLabel label="Browser" description={browserHint} />
@@ -73,14 +68,14 @@ export function NotificationsSubmenu() {
             onCheckedChange={next => updatePreferences({ notifyHumanIntervention: next })}
             className="items-start"
           >
-            <OptionLabel label="Human Queue" description="An agent awaiting you, or a PR to review" />
+            <OptionLabel label="Human Queue" description="An agent awaiting your answer, or a PR ready to review" />
           </DropdownMenuCheckboxItem>
           <DropdownMenuCheckboxItem
             checked={activity}
             onCheckedChange={next => updatePreferences({ notifyNewActivity: next })}
             className="items-start"
           >
-            <OptionLabel label="New activity" description="An agent started or finished" />
+            <OptionLabel label="New activity" description="An agent starts or finishes" />
           </DropdownMenuCheckboxItem>
         </DropdownMenuGroup>
       </DropdownMenuSubContent>

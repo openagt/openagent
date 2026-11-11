@@ -1,5 +1,6 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { Combobox } from '@base-ui/react/combobox'
+import { addressOfRemote } from '@openagt/agent-data/repository-address'
 import { Cloud, Check, ChevronDown, ChevronsUpDown, Folder, FolderGit2, FolderPlus, FolderSearch, Layers, Plus, Search } from 'lucide-react'
 import type { ProjectSummary } from '../../src/index.js'
 import { machineKind, machineName, typedRepository } from '../../src/client.js'
@@ -56,6 +57,11 @@ export function shownAddress(url: string): string {
     .replace(/^([^/:]+):(?!\d+\/)/, '$1/')
     .replace(/\.git$/, '')
     .replace(/\/$/, '')
+}
+
+/** Under a repo's name: its address at its host, or its folder when it has no remote or its remote is a folder too. */
+export function repoDetail(repo: { path: string; url?: string | undefined }): string {
+  return repo.url && addressOfRemote(repo.url) ? shownAddress(repo.url) : repo.path
 }
 
 const sameRow = (a: Row, b: Row): boolean => a.value === b.value
@@ -185,6 +191,7 @@ export function ProjectPicker({
   const [open, setOpen] = useState(false)
   const [typed, setTyped] = useState('')
   const [adding, setAdding] = useState<{ folder: string } | { address: string } | null>(null)
+  const triggerRef = useRef<HTMLButtonElement>(null)
   // The folder just added, until the projects read again have it: then it is picked.
   const [added, setAdded] = useState<string | null>(null)
   const [folderError, setFolderError] = useState<string | null>(null)
@@ -214,7 +221,7 @@ export function ProjectPicker({
   )
   const repoRows = useMemo<Row[]>(
     () => [
-      ...(repos?.repos ?? []).map((repo): Row => ({ value: `repo:${repo.path}`, label: repo.name, detail: repo.url ? shownAddress(repo.url) : repo.path, pick: { kind: 'repo', path: repo.path }, search: `${repo.path}\n${repo.url ?? ''}` })),
+      ...(repos?.repos ?? []).map((repo): Row => ({ value: `repo:${repo.path}`, label: repo.name, detail: repoDetail(repo), pick: { kind: 'repo', path: repo.path }, search: `${repo.path}\n${repo.url ?? ''}` })),
       // Not on this computer: picked, it is cloned, as an address typed is.
       ...(repos?.hosted ?? []).map((repo): Row => ({
         value: `hosted:${repo.address}`,
@@ -274,7 +281,7 @@ export function ProjectPicker({
         <ChevronDown className="h-3 w-3 shrink-0 opacity-70" aria-hidden />
       </button>
     )
-  const trigger = <Combobox.Trigger disabled={busy || pending} aria-label={name} className={MENU_TRIGGER_OPEN_CLASS} render={button} />
+  const trigger = <Combobox.Trigger ref={triggerRef} disabled={busy || pending} aria-label={name} className={MENU_TRIGGER_OPEN_CLASS} render={button} />
 
   return (
     <>
@@ -285,6 +292,7 @@ export function ProjectPicker({
         isItemEqualToValue={sameRow}
         itemToStringLabel={row => row.label}
         inputValue={typed}
+        autoHighlight
         onInputValueChange={setTyped}
         open={open}
         onOpenChange={next => {
@@ -310,12 +318,13 @@ export function ProjectPicker({
         )}
         <Combobox.Portal>
           <Combobox.Positioner positionMethod={positionMethod} sideOffset={6} align="start" className="z-50 outline-none">
-            <Combobox.Popup aria-label={name} className={cn(MENU_POPUP_CLASS, 'w-[22rem] max-w-[var(--available-width)]')}>
+            <Combobox.Popup aria-label={name} className={cn(MENU_POPUP_CLASS, 'group/picker w-[22rem] max-w-[var(--available-width)]')}>
               <div className="flex items-center gap-2 border-b border-border px-3">
                 <Search className="h-3.5 w-3.5 shrink-0 text-muted-foreground" aria-hidden />
                 <Combobox.Input aria-label="Search projects and repos" placeholder="Search, or paste a GitHub address" className="h-9 w-full min-w-0 bg-transparent text-sm outline-none placeholder:text-muted-foreground" />
               </div>
-              <ScrollArea viewportClassName="h-[min(20rem,calc(var(--available-height)-5rem))]">
+              {/* As tall as its rows; opened upward, from the message box's row, of a set height, so the search stays where it is as the list narrows. */}
+              <ScrollArea viewportClassName="max-h-[min(20rem,calc(var(--available-height)-5rem))] group-data-[side=top]/picker:h-[min(20rem,calc(var(--available-height)-5rem))]">
                 <div className="p-1">
                   <Combobox.Empty className="px-2 py-1.5 text-xs text-muted-foreground empty:hidden">No project or repo by that name.</Combobox.Empty>
                   <Combobox.List>
@@ -355,11 +364,13 @@ export function ProjectPicker({
                   ) : !typed.trim() && repoRows.length > REPOS_SHOWN ? (
                     <p className="px-2 py-1.5 text-xs text-muted-foreground">Search to see more of the {repoRows.length} repos.</p>
                   ) : null}
-                  {repos?.hostedLoading && (
+                  {repos?.hostedLoading ? (
                     <p role="status" className="px-2 py-1.5 text-xs text-muted-foreground">
                       Asking GitHub for repos…
                     </p>
-                  )}
+                  ) : repos?.hostedUnreached ? (
+                    <p className="px-2 py-1.5 text-xs text-muted-foreground">GitHub could not be reached: its repos are not listed.</p>
+                  ) : null}
                 </div>
               </ScrollArea>
               {repos?.canAddFolder && (
@@ -378,6 +389,7 @@ export function ProjectPicker({
       {adding !== null && (
         <AddProjectPanel
           {...('folder' in adding ? { folder: adding.folder } : { address: adding.address })}
+          opener={triggerRef}
           onAdded={path => {
             setAdded(path)
             onProjectAdded()

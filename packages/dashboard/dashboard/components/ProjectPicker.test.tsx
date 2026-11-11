@@ -13,7 +13,7 @@ vi.mock('../rpc/projects.js', () => ({ onRepos, sendAddRepoFolder, sendAddProjec
 const MACBOOK = { id: 'http://127.0.0.1:4210', url: 'http://127.0.0.1:4210', label: 'Suleimans-MacBook-Pro' }
 vi.mock('../lib/machines.js', () => ({ useMachines: () => [MACBOOK] }))
 
-const { ProjectPicker, REPOS_SHOWN, shownAddress } = await import('./ProjectPicker.js')
+const { ProjectPicker, REPOS_SHOWN, repoDetail, shownAddress } = await import('./ProjectPicker.js')
 
 const ALPHA: ProjectSummary = { id: 'alpha-1', path: '/home/me/alpha', name: 'alpha', activated: true, gitHost: true }
 const VIKE = { path: '/home/me/oss/vike', name: 'vike', url: 'https://github.com/vikejs/vike.git' }
@@ -55,6 +55,13 @@ describe('ProjectPicker', () => {
     expect(shownAddress('git@github.com:vikejs/vike.git')).toBe('github.com/vikejs/vike')
     expect(shownAddress('ssh://git@gitlab.com/team/app')).toBe('gitlab.com/team/app')
     expect(shownAddress('https://me:ghp_secret@github.com/me/private.git')).toBe('github.com/me/private')
+  })
+
+  test("a repo is said by its address at its host, or by its folder when its remote is a folder too", () => {
+    expect(repoDetail({ path: '/home/me/oss/vike', url: 'git@github.com:vikejs/vike.git' })).toBe('github.com/vikejs/vike')
+    expect(repoDetail({ path: '/home/me/blog', url: '/srv/git/blog.git' })).toBe('/home/me/blog')
+    expect(repoDetail({ path: '/home/me/blog', url: 'file:///srv/git/blog.git' })).toBe('/home/me/blog')
+    expect(repoDetail({ path: '/home/me/notes' })).toBe('/home/me/notes')
   })
 
   test('the button reads where the session works: no project, or the project by its name', () => {
@@ -146,6 +153,14 @@ describe('ProjectPicker', () => {
     await waitFor(() => expect(onCloneTarget).toHaveBeenCalledWith('github.com/vikejs/bati'))
   })
 
+  test('a git host that could not be reached is said so, under the repos that are listed', async () => {
+    onRepos.mockResolvedValue({ repos: [VIKE], hosted: [], reposLoading: false, hostedLoading: false, hostedUnreached: true, canAddFolder: false })
+    renderPicker()
+    await openMenu(trigger())
+    expect(await screen.findByText('GitHub could not be reached: its repos are not listed.')).toBeTruthy()
+    expect(screen.getByRole('option', { name: /vike/ })).toBeTruthy()
+  })
+
   test("while the git hosts are being asked, the menu says so and asks again", async () => {
     onRepos.mockResolvedValue({ repos: [VIKE], hosted: [], reposLoading: false, hostedLoading: true, canAddFolder: false })
     renderPicker()
@@ -197,6 +212,16 @@ describe('ProjectPicker', () => {
     fireEvent.change(search(), { target: { value: 'no-such-repo' } })
     expect(screen.queryAllByRole('option')).toEqual([])
     expect(screen.getByText('No project or repo by that name.')).toBeTruthy()
+  })
+
+  test('the first match of a search is highlighted, so Enter picks it', async () => {
+    const { onPick } = renderPicker()
+    await openMenu(trigger())
+    await screen.findByRole('option', { name: /vike/ })
+    // Typed, as a person types: the combobox highlights on an input that carries its input type.
+    fireEvent.input(search(), { target: { value: 'alp' }, inputType: 'insertText' })
+    fireEvent.keyDown(search(), { key: 'Enter' })
+    expect(onPick).toHaveBeenLastCalledWith('alpha-1')
   })
 
   test('with nothing typed only the first repos are listed, and the search reaches the rest', async () => {
@@ -253,6 +278,21 @@ describe('ProjectPicker', () => {
     expect(screen.queryByText('Do you trust this repository?')).toBeNull()
     expect(sendAddProject).not.toHaveBeenCalled()
     expect(onPick).not.toHaveBeenCalled()
+  })
+
+  test('the trust question closed, by Escape or a yes, gives focus back to the picker', async () => {
+    sendAddProject.mockResolvedValue({ ok: true, alreadyActivated: false })
+    renderPicker()
+    await openMenu(trigger())
+    fireEvent.click(await screen.findByRole('option', { name: /notes/ }))
+    fireEvent.keyDown(await screen.findByText('Do you trust this repository?'), { key: 'Escape' })
+    expect(screen.queryByText('Do you trust this repository?')).toBeNull()
+    expect(document.activeElement).toBe(trigger())
+    await openMenu(trigger())
+    fireEvent.click(await screen.findByRole('option', { name: /notes/ }))
+    fireEvent.click(await screen.findByRole('button', { name: 'I trust it, add it' }))
+    fireEvent.click(await screen.findByRole('button', { name: 'Done' }))
+    expect(document.activeElement).toBe(trigger())
   })
 
   test('"Search another folder…" adds a folder to look in, and the repos are read again', async () => {

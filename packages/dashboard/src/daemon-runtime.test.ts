@@ -65,7 +65,7 @@ test('onStart refuses in words: an unknown project, a project with no start line
     assert.deepEqual(await runtime.onStart('x', {}, 'no-such-project'), { ok: false, error: 'unknown project: no-such-project' })
     assert.deepEqual(await runtime.onStart('x'), { ok: false, error: 'this project has no start hook' })
     await writeFile(join(home, PROJECT_HOOKS_FILE), 'start: echo "codex is not installed" >&2; exit 1\n')
-    assert.deepEqual(await runtime.onStart('x'), { ok: false, error: 'the start hook: codex is not installed' })
+    assert.deepEqual(await runtime.onStart('x'), { ok: false, error: "This project's start line, in .openagent/hooks.yml, failed. It said: “codex is not installed”" })
   } finally {
     await runtime.dispose()
     await rm(home, { recursive: true, force: true })

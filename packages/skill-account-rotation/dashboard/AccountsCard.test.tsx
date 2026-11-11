@@ -28,15 +28,15 @@ function renderAdding(addingNow: () => Record<string, unknown>, more: (args: str
   return calls
 }
 
-/** Press "Add" at the card's title and pick the agent the account is for: its dialog opens. */
-const add = async (agent: string): Promise<HTMLElement> => {
+/** Press "Add" at the card's title and pick the agent the account is for: its dialog opens, named for the account. */
+const add = async (agent: 'Claude Code' | 'Codex'): Promise<HTMLElement> => {
   const trigger = await screen.findByRole('button', { name: 'Add an account' })
   await waitFor(() => {
     if (trigger.getAttribute('aria-expanded') !== 'true') fireEvent.click(trigger)
     if (trigger.getAttribute('aria-expanded') !== 'true') throw new Error('the menu did not open')
   })
   fireEvent.click(await screen.findByRole('menuitem', { name: `Add ${agent} account` }))
-  return await screen.findByRole('dialog', { name: `Add a ${agent} account` })
+  return await screen.findByRole('dialog', { name: agent === 'Claude Code' ? 'Add a Claude account' : 'Add a Codex account' })
 }
 
 /** Open an account's row, where what can be done with it is. */
@@ -145,9 +145,21 @@ describe('AccountsCard', () => {
     expect(await screen.findByText('No account yet. Runs need one to start.')).toBeTruthy()
     // One press an agent, in the card: not a second one at its title.
     expect(screen.queryByRole('button', { name: 'Add an account' })).toBeNull()
-    fireEvent.click(screen.getByRole('button', { name: 'Log in to Codex' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Add a Codex account' }))
     const dialog = await screen.findByRole('dialog', { name: 'Add a Codex account' })
     expect(within(dialog).getByRole('textbox', { name: 'Whose account' })).toBeTruthy()
+  })
+
+  test('closing the dialog gives the focus back to the press that opened it', async () => {
+    renderCard(listed([{ name: 'This computer', signedOut: true, own: true }], []))
+    const press = await screen.findByRole('button', { name: 'Add a Claude account' })
+    press.focus()
+    fireEvent.click(press)
+    const dialog = await screen.findByRole('dialog', { name: 'Add a Claude account' })
+    await waitFor(() => expect(document.activeElement).toBe(within(dialog).getByRole('textbox', { name: 'Whose account' })))
+    fireEvent.keyDown(document.activeElement!, { key: 'Escape' })
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
+    await waitFor(() => expect(document.activeElement).toBe(press))
   })
 
   test("calls the person's own login who it is, and the press still names it as the command knows it", async () => {
@@ -336,7 +348,7 @@ describe('AccountsCard', () => {
 
   test('a sign-in found under way opens its dialog; Cancel stops it; why one did not go through while nobody watched is said in the card', async () => {
     const calls = renderAdding(() => ({ claude: { adding: { name: 'Dani' } }, codex: {} }))
-    fireEvent.click(within(await screen.findByRole('dialog', { name: 'Add a Claude Code account' })).getByRole('button', { name: 'Cancel' }))
+    fireEvent.click(within(await screen.findByRole('dialog', { name: 'Add a Claude account' })).getByRole('button', { name: 'Cancel' }))
     await waitFor(() => expect(calls.some(call => call.args.join(' ') === 'add-cancel claude')).toBe(true))
     cleanup()
     forgetRemembered()

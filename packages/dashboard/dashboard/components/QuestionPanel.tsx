@@ -1,16 +1,19 @@
-import { useEffect, useRef, useState } from 'react'
+import { useContext, useEffect, useId, useRef, useState, type ReactNode } from 'react'
+import { Radio } from '@base-ui/react/radio'
 import { Check } from 'lucide-react'
 import type { ChoiceRequest } from '../../src/index.js'
 import { sendChoice, sendMessage } from '../rpc/control.js'
 import { useAction } from '../lib/use-action.js'
+import { DaemonDown } from '../lib/use-daemon-health.js'
 import { cn } from '../lib/utils.js'
+import { RadioGroup } from './ui/radio-group.js'
 import { answerPrompt, skipPrompt } from '../lib/answered-question.js'
+import { MOD_KEY } from '../lib/shortcut.js'
+import { isMobileScreen } from '../lib/use-mobile.js'
 
 /** The pick that is no option: the person's own words, typed in the "Other" row. */
 const OTHER = Symbol('other')
 
-/** The key that submits, as the keyboard in front of the person names it. */
-const SUBMIT_KEY = typeof navigator !== 'undefined' && /Mac|iPhone|iPad/.test(navigator.platform) ? '⌘' : 'Ctrl'
 
 // A pick's mark, as Claude Code on the web draws one: a ring, filled with a dot when picked; a
 // box with a tick where several may be picked.
@@ -23,6 +26,33 @@ function Mark({ on, multi }: { on: boolean; multi: boolean | undefined }) {
     <span className={cn('mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded-full', on ? 'bg-primary' : 'border border-foreground/20')} aria-hidden>
       {on && <span className="h-1.5 w-1.5 rounded-full bg-primary-foreground" />}
     </span>
+  )
+}
+
+// A question's rows. One pick is a radio group, as WAI-ARIA's: one Tab stop, the arrow keys move
+// the pick. Where several may be picked, each row is a box of its own.
+function Choices({ multi, labelledBy, picked, onPick, disabled, children }: { multi: boolean | undefined; labelledBy: string; picked: string | typeof OTHER | undefined; onPick: (value: string | typeof OTHER) => void; disabled: boolean; children: ReactNode }) {
+  return multi ? (
+    <ul className="flex flex-col">{children}</ul>
+  ) : (
+    <RadioGroup render={<ul />} aria-labelledby={labelledBy} value={picked} onValueChange={value => onPick(value as string | typeof OTHER)} disabled={disabled} className="flex flex-col gap-0">
+      {children}
+    </RadioGroup>
+  )
+}
+
+// A choice's row: the radio group's radio, or a box the row toggles. Rows are parted by a line, as
+// Claude Code on the web parts them; none is filled.
+function Choice({ multi, value, on, disabled, onPick, children }: { multi: boolean | undefined; value: string | typeof OTHER; on: boolean; disabled: boolean; onPick: () => void; children: ReactNode }) {
+  const row = 'flex w-full items-start gap-3 p-4 text-left disabled:opacity-60'
+  return multi ? (
+    <button type="button" role="checkbox" aria-checked={on} disabled={disabled} onClick={onPick} className={row}>
+      {children}
+    </button>
+  ) : (
+    <Radio.Root value={value} nativeButton render={<button type="button" className={row} />}>
+      {children}
+    </Radio.Root>
   )
 }
 
@@ -42,6 +72,7 @@ export function QuestionPanel({
   choice,
   active = false,
   onSaid,
+  focusNext,
   send,
 }: {
   projectId: string
@@ -51,6 +82,8 @@ export function QuestionPanel({
   active?: boolean
   /** Told what the answer said to the agent, so the chat can show it at once. */
   onSaid?: ((text: string) => void) | undefined
+  /** Given the focus once the answer is taken, when it was in the card and the screen is no phone's: the message box. */
+  focusNext?: (() => void) | undefined
   /**
    * Where the pick goes instead of the usual call: the picked option, or the checked ones. With
    * it the card has no "Other" row and no Skip: the bridge types only a parked question's own
@@ -59,6 +92,8 @@ export function QuestionPanel({
   send?: ((pick: string | string[]) => Promise<unknown>) | undefined
 }) {
   const { busy, error, run } = useAction()
+  // OpenAgent is not answering: no answer can be sent, and what is picked and typed stays.
+  const down = useContext(DaemonDown)
   // Sent and accepted by the daemon: the card goes, and the chat shows the answer. A refusal is
   // shown in the daemon's own words, and the controls come back.
   const [sent, setSent] = useState(false)
@@ -68,15 +103,21 @@ export function QuestionPanel({
   // "Other" ticked beside options where several may be picked: its words go with them.
   const [otherOn, setOtherOn] = useState(false)
   const otherInput = useRef<HTMLInputElement>(null)
+  const card = useRef<HTMLElement>(null)
+  const titleId = useId()
   const words = other.trim()
 
-  // Taken, the card goes and the chat is told what the agent was sent, to show it at once.
-  const deliver = (fn: () => Promise<unknown>, said?: string) =>
+  // Taken, the card goes and the chat is told what the agent was sent, to show it at once. The
+  // focus in the card goes on, read as it is pressed: the card's buttons are off while it sends.
+  const deliver = (fn: () => Promise<unknown>, said?: string) => {
+    const handOn = card.current?.contains(document.activeElement) === true && !isMobileScreen()
     void run(fn, 'Could not send your answer — try again.').then(outcome => {
       if (!outcome.ok) return
       setSent(true)
       if (said !== undefined) onSaid?.(said)
+      if (handOn) focusNext?.()
     })
+  }
   const answer = (pick: string | string[]) => {
     if (send) return deliver(() => send(pick))
     const labels = choice.options.filter(o => [pick].flat().includes(o.id)).map(o => o.label)
@@ -88,7 +129,7 @@ export function QuestionPanel({
   const otherPicked = choice.multi ? otherOn : picked === OTHER
   const ready = !otherPicked || words !== ''
   const submit = () => {
-    if (busy || !ready) return
+    if (busy || down || !ready) return
     if (choice.multi) {
       // Words in "Other" go with the checked options' labels, as one message: the agent reads both.
       if (otherOn) return say(answerPrompt(choice.title, [...choice.options.filter(o => checked.has(o.id)).map(o => o.label), words].join(', ')))
@@ -145,36 +186,35 @@ export function QuestionPanel({
     if (otherPicked) otherInput.current?.focus()
   }, [otherPicked])
 
-  // Rows are parted by a line, as Claude Code on the web parts them; none is filled.
-  const row = 'flex w-full items-start gap-3 p-4 text-left disabled:opacity-60'
   if (sent) return null
   return (
-    <section role="region" aria-label={choice.title} className="flex w-full max-w-[480px] flex-col overflow-clip rounded-xl font-sans text-sm ring-1 ring-border">
-      <h2 className="bg-foreground/5 px-4 py-3 font-normal">{choice.title}</h2>
-      <ul className="flex flex-col">
+    <section ref={card} role="region" aria-label={choice.title} className="flex w-full max-w-[480px] flex-col overflow-clip rounded-xl font-sans text-sm ring-1 ring-border">
+      <h2 id={titleId} className="bg-foreground/5 px-4 py-3 font-normal">{choice.title}</h2>
+      <Choices multi={choice.multi} labelledBy={titleId} picked={picked} onPick={setPicked} disabled={busy}>
         {choice.options.map(o => {
           const on = choice.multi ? checked.has(o.id) : picked === o.id
           return (
             <li key={o.id} className="border-t border-border first:border-t-0">
-              <button type="button" role={choice.multi ? 'checkbox' : 'radio'} aria-checked={on} disabled={busy} onClick={() => pick(o.id)} className={row}>
+              <Choice multi={choice.multi} value={o.id} on={on} disabled={busy} onPick={() => pick(o.id)}>
                 <Mark on={on} multi={choice.multi} />
                 <span className="flex min-w-0 flex-1 flex-col gap-2">
                   <span>
                     {o.label}
-                    {o.id === choice.recommended && <span className="ml-2 text-muted-foreground">Recommended</span>}
+                    {/* A box of its own, which a screen reader reads as a word apart from the label. */}
+                    {o.id === choice.recommended && <span className="ml-2 inline-block text-muted-foreground">Recommended</span>}
                   </span>
                   {o.detail && <span className="text-muted-foreground">{o.detail}</span>}
                 </span>
-              </button>
+              </Choice>
             </li>
           )
         })}
         {!send && (
           <li className="flex flex-col border-t border-border">
-            <button type="button" role={choice.multi ? 'checkbox' : 'radio'} aria-checked={otherPicked} disabled={busy} onClick={pickOther} className={row}>
+            <Choice multi={choice.multi} value={OTHER} on={otherPicked} disabled={busy} onPick={pickOther}>
               <Mark on={otherPicked} multi={choice.multi} />
               <span className="min-w-0 flex-1">Other</span>
-            </button>
+            </Choice>
             {otherPicked && (
               <input
                 ref={otherInput}
@@ -184,30 +224,31 @@ export function QuestionPanel({
                 onKeyDown={e => {
                   if (e.key === 'Enter' && !e.ctrlKey && !e.metaKey) submit()
                 }}
+                name="own-answer"
                 placeholder="Type your own answer here"
-                aria-label="Other"
+                aria-label="Your own answer"
                 className="mx-4 mb-2 ml-11 rounded-md border border-border bg-transparent px-2.5 py-1.5 outline-none placeholder:text-muted-foreground focus:border-primary"
               />
             )}
           </li>
         )}
-      </ul>
+      </Choices>
       <div className="flex items-center gap-2 px-4 pt-2 pb-4">
         {/* One line in every state, so the buttons never move: what went wrong, or that it is on its way. */}
         <span role={error ? 'alert' : busy ? 'status' : undefined} className={cn('min-w-0 flex-1 truncate text-xs', error ? 'text-danger' : 'text-muted-foreground')}>
           {error ?? (busy ? 'Sending your answer…' : '')}
         </span>
         {!send && (
-          <button type="button" disabled={busy} onClick={() => say(skipPrompt(choice.title))} className="h-6 rounded-md bg-foreground/10 px-2 text-[13px] hover:bg-foreground/15 disabled:opacity-60">
+          <button type="button" disabled={busy || down} onClick={() => say(skipPrompt(choice.title))} className="h-6 rounded-md bg-foreground/10 px-2 text-[13px] hover:bg-foreground/15 disabled:opacity-60">
             Skip
           </button>
         )}
-        <button type="button" disabled={busy || !ready} onClick={submit} className="flex h-6 items-center gap-1.5 rounded-md bg-foreground px-2 text-[13px] font-medium text-background hover:bg-foreground/90 disabled:opacity-60">
+        <button type="button" disabled={busy || down || !ready} onClick={submit} className="flex h-6 items-center gap-1.5 rounded-md bg-foreground px-2 text-[13px] font-medium text-background hover:bg-foreground/90 disabled:opacity-60">
           Submit
           {active && (
             <span className="flex gap-0.5" aria-hidden>
-              <kbd className="flex h-[17px] min-w-[17px] items-center justify-center rounded border border-background/20 px-0.5 font-sans text-[11px]">{SUBMIT_KEY}</kbd>
-              <kbd className="flex h-[17px] min-w-[17px] items-center justify-center rounded border border-background/20 px-0.5 font-sans text-[11px]">↵</kbd>
+              <kbd className="flex h-[17px] min-w-[17px] items-center justify-center rounded border border-background/20 px-0.5 font-sans text-[11px]">{MOD_KEY}</kbd>
+              <kbd className="flex h-[17px] min-w-[17px] items-center justify-center rounded border border-background/20 px-0.5 font-sans text-[11px]">Enter</kbd>
             </span>
           )}
         </button>

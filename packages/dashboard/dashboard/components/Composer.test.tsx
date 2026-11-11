@@ -67,7 +67,7 @@ vi.mock('./PromptEditor.js', async () => {
     }, [ready, props.initialText])
     return (
       <div>
-        <input aria-label="prompt" value={held} onChange={e => put(e.target.value)} disabled={props.disabled} />
+        <input aria-label="prompt" value={held} onChange={e => put(e.target.value)} disabled={props.disabled} data-seed-focus={String(props.initialFocus ?? true)} />
         <button type="button" onClick={() => props.onSubmit()}>
           editor-submit
         </button>
@@ -117,7 +117,7 @@ const STUDIO_MACHINE = { id: STUDIO, label: 'Studio', url: STUDIO }
 
 // The driver/model trigger names both in its own label (#1143): with no model pinned it is a logo
 // and a chevron, so the name cannot come from the rendered text the way it used to.
-const agentTrigger = () => screen.getByRole('button', { name: /^Driver: / })
+const agentTrigger = () => screen.getByRole('button', { name: /^Coding agent: / })
 
 describe('Composer (#721)', () => {
   test('renders the commands menu, the agent/model select, "Run on", and the submit button', async () => {
@@ -125,8 +125,8 @@ describe('Composer (#721)', () => {
     // Commands have a visible surface (#948): the `/` menu stays the fast path, the button is
     // the discoverable one.
     expect(screen.getByRole('button', { name: 'Commands' })).toBeTruthy()
-    expect(screen.getByRole('button', { name: 'Run on' })).toBeTruthy()
-    expect((await hoverTooltip(agentTrigger())).textContent).toContain('Driver: Claude Code')
+    expect(screen.getByRole('button', { name: /^Run on: / })).toBeTruthy()
+    expect((await hoverTooltip(agentTrigger())).textContent).toContain('Coding agent: Claude Code')
     // The submit button appears only once the prompt has text (#721).
     fireEvent.change(screen.getByLabelText('prompt'), { target: { value: 'x' } })
     expect(screen.getByRole('button', { name: /Start session/ })).toBeTruthy()
@@ -136,7 +136,7 @@ describe('Composer (#721)', () => {
     const { onSubmit } = renderComposer({ inAgent: true })
     // An in-session composer: the session is bound to the agent it started with, so offering the
     // select there would only ever rewrite the next session's default.
-    expect(screen.queryByRole('button', { name: /^Driver: / })).toBeNull()
+    expect(screen.queryByRole('button', { name: /^Coding agent: / })).toBeNull()
     expect(screen.getByRole('button', { name: 'Commands' })).toBeTruthy()
     fireEvent.change(screen.getByLabelText('prompt'), { target: { value: 'follow-up' } })
     fireEvent.click(screen.getByRole('button', { name: 'Send' }))
@@ -163,6 +163,21 @@ describe('Composer (#721)', () => {
     await new Promise(resolve => setTimeout(resolve, 0))
     fireEvent.click(screen.getByText('editor-submit-later'))
     expect(onSubmit).toHaveBeenLastCalledWith('go', { later: true })
+  })
+
+  test('while OpenAgent is not answering, nothing is sent, by the button or by the keyboard, and the text stays', async () => {
+    const { DaemonDown } = await import('../lib/use-daemon-health.js')
+    const onSubmit = vi.fn()
+    render(
+      <DaemonDown.Provider value>
+        <Composer files={[]} onSubmit={onSubmit} busy={false} submitLabel="Send" submitBusyLabel="Sending…" />
+      </DaemonDown.Provider>,
+    )
+    fireEvent.change(screen.getByLabelText('prompt'), { target: { value: 'ship it' } })
+    expect(screen.getByRole('button', { name: 'Send' }).hasAttribute('disabled')).toBe(true)
+    fireEvent.click(screen.getByText('editor-submit'))
+    expect(onSubmit).not.toHaveBeenCalled()
+    expect(editorText()).toBe('ship it')
   })
 
   test('mirrors prompt changes out via onPromptChange', () => {
@@ -216,6 +231,61 @@ describe('Composer (#721)', () => {
     expect(editorText()).toBe(draft)
   })
 
+  test('what is typed is back when the box is drawn again, after a navigation or a reload, for that box alone, until it is sent', () => {
+    renderComposer({ draftKey: 'launcher:p1' })
+    fireEvent.change(screen.getByLabelText('prompt'), { target: { value: 'a long draft I care about' } })
+    cleanup()
+    renderComposer({ draftKey: 'p1:run-2' })
+    expect(editorText()).toBe('')
+    cleanup()
+    renderComposer({ draftKey: 'launcher:p1' })
+    expect(editorText()).toBe('a long draft I care about')
+    // Sent: the caller empties the box, and nothing is kept.
+    fireEvent.change(screen.getByLabelText('prompt'), { target: { value: '' } })
+    cleanup()
+    renderComposer({ draftKey: 'launcher:p1' })
+    expect(editorText()).toBe('')
+  })
+
+  test('on a phone a kept draft comes back without the caret, and one a press handed over takes it; elsewhere a kept draft takes it', () => {
+    const seedFocus = () => screen.getByLabelText('prompt').getAttribute('data-seed-focus')
+    localStorage.setItem('oa.draft:launcher:p1', 'a long draft I care about')
+    renderComposer({ draftKey: 'launcher:p1' })
+    expect(seedFocus()).toBe('true')
+    cleanup()
+    vi.stubGlobal('matchMedia', (query: string) => ({ matches: true, media: query, addEventListener: () => {}, removeEventListener: () => {} }))
+    try {
+      renderComposer({ draftKey: 'launcher:p1' })
+      expect(editorText()).toBe('a long draft I care about')
+      expect(seedFocus()).toBe('false')
+      cleanup()
+      sessionStorage.setItem('oa.pending-draft', 'carried from a ticket')
+      renderComposer({ draftKey: 'launcher:p1' })
+      expect(editorText()).toBe('carried from a ticket')
+      expect(seedFocus()).toBe('true')
+    } finally {
+      vi.unstubAllGlobals()
+    }
+  })
+
+  test('a browser that keeps nothing still has the draft in the box, and it is sent', () => {
+    const refuse = () => {
+      throw new DOMException('The storage is off', 'SecurityError')
+    }
+    const refused = (['getItem', 'setItem', 'removeItem'] as const).map(method => vi.spyOn(Storage.prototype, method).mockImplementation(refuse))
+    try {
+      const onPromptChange = vi.fn()
+      const { onSubmit } = renderComposer({ inAgent: true, draftKey: 'p1:run-2', onPromptChange })
+      fireEvent.change(screen.getByLabelText('prompt'), { target: { value: 'a draft with nowhere to go' } })
+      expect(editorText()).toBe('a draft with nowhere to go')
+      expect(onPromptChange).toHaveBeenLastCalledWith('a draft with nowhere to go')
+      fireEvent.click(screen.getByText('editor-submit'))
+      expect(onSubmit).toHaveBeenCalledWith('a draft with nowhere to go', { later: false })
+    } finally {
+      for (const spy of refused) spy.mockRestore()
+    }
+  })
+
   test('an in-session composer does not rehydrate a carried draft (#1066)', () => {
     sessionStorage.setItem('oa.pending-draft', 'not for here')
     renderComposer({ inAgent: true })
@@ -228,11 +298,11 @@ describe('Composer (#721)', () => {
     const box = () => screen.getByRole('button', { name: 'Commands' }).closest('.rounded-xl')!
     const followedByBox = (el: Element) => el.closest('.h-8')!.nextElementSibling === box()
     expect(followedByBox(screen.getByText("the launcher's place"))).toBe(true)
-    expect(followedByBox(screen.getByRole('button', { name: 'Run on' }))).toBe(true)
+    expect(followedByBox(screen.getByRole('button', { name: /^Run on: / }))).toBe(true)
     cleanup()
     renderComposer({ inAgent: true, sessionRow: <div className="h-8"><span>where it started</span></div> })
     expect(followedByBox(screen.getByText('where it started'))).toBe(true)
-    expect(screen.queryByRole('button', { name: 'Run on' })).toBeNull()
+    expect(screen.queryByRole('button', { name: /^Run on: / })).toBeNull()
   })
 
   // #1073: pressing Start on an offline "Run on" machine would silently attempt the ~15s relay, so
@@ -255,7 +325,7 @@ describe('Composer (#721)', () => {
     machinesRpc.onMachineModels.mockResolvedValueOnce({ 'claude-code': { models: [{ id: 'opus', name: 'Opus 5.5' }] }, codex: { models: [], error: '`codex` could not start: spawn codex ENOENT', missing: true } })
     renderComposer()
     await waitFor(() => expect(machinesRpc.onMachineModels).toHaveBeenCalledWith(STUDIO))
-    fireEvent.click(await screen.findByRole('button', { name: /^Driver: / }))
+    fireEvent.click(await screen.findByRole('button', { name: /^Coding agent: / }))
     fireEvent.click(await screen.findByText('Codex'))
     expect(await screen.findByText('Codex is not installed on Studio.')).toBeTruthy()
     expect(screen.queryByText(/ENOENT/)).toBeNull()
@@ -333,7 +403,7 @@ describe('the box', () => {
     expect(box().contains(screen.getByRole('button', { name: 'Send' }))).toBe(true)
     expect(box().contains(commands())).toBe(true)
     expect(box().contains(agentTrigger())).toBe(false)
-    expect(box().contains(screen.getByRole('button', { name: 'Run on' }))).toBe(false)
+    expect(box().contains(screen.getByRole('button', { name: /^Run on: / }))).toBe(false)
   })
 
   test('the commands menu is at the left of the text, the submit at its right, both kept at its last line', () => {
@@ -351,7 +421,7 @@ describe('the box', () => {
   })
 })
 
-const runOn = () => screen.getByRole('button', { name: 'Run on' })
+const runOn = () => screen.getByRole('button', { name: /^Run on: / })
 
 describe('the rows around the box', () => {
   test('where the agent starts is a row above the box: "Run on", then the caller\'s words; under it, the caller\'s controls, then the caller\'s end controls and the model at the right', () => {
@@ -371,7 +441,7 @@ describe('the rows around the box', () => {
     expect(under.contains(control)).toBe(true)
     expect(under.contains(select)).toBe(true)
     expect(control.compareDocumentPosition(select) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
-    expect(screen.getAllByRole('button', { name: 'Run on' })).toHaveLength(1)
+    expect(screen.getAllByRole('button', { name: /^Run on: / })).toHaveLength(1)
     // Said in words, drawn as every item of the rows is: no border of its own.
     expect(runOn().textContent).toBe('This machine')
     expect(runOn().className).not.toContain('border')
@@ -396,7 +466,7 @@ describe('the rows around the box', () => {
     const said = screen.getByText('Opus 5.5')
     expect(row.contains(said)).toBe(true)
     expect(said.closest('button')).toBeNull()
-    expect(screen.queryByRole('button', { name: /^Driver: / })).toBeNull()
+    expect(screen.queryByRole('button', { name: /^Coding agent: / })).toBeNull()
   })
 
   test('a session whose model is not known says none', () => {
@@ -443,7 +513,7 @@ describe('the rows around the box', () => {
 describe('in a session', () => {
   test('there is no "Run on" pick: a session already runs where it was started', () => {
     renderComposer({ inAgent: true })
-    expect(screen.queryByRole('button', { name: 'Run on' })).toBeNull()
+    expect(screen.queryByRole('button', { name: /^Run on: / })).toBeNull()
     expect(screen.getByRole('button', { name: 'Commands' })).toBeTruthy()
   })
 

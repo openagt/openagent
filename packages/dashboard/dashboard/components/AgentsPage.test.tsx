@@ -54,7 +54,7 @@ describe('the Agents page', () => {
     render(<AgentsPage />)
     const cards = await screen.findAllByRole('region')
     expect(cards.map(card => card.getAttribute('aria-label'))).toEqual(['Default', 'Reviewer'])
-    expect(within(cards[0]!).getByText(/the agent a session is on unless you pick another/)).toBeTruthy()
+    expect(within(cards[0]!).getByText(/The agent a session is on unless you pick another/)).toBeTruthy()
     expect(within(cards[0]!).getByText('GitHub: whatever the computer uses')).toBeTruthy()
     expect(within(cards[1]!).getByText('@octo-agent on GitHub · Claude: Dani')).toBeTruthy()
     expect(within(cards[1]!).getByText('readability')).toBeTruthy()
@@ -66,10 +66,12 @@ describe('the Agents page', () => {
     expect(within(cards[1]!).getByRole('button', { name: 'Remove Reviewer' })).toBeTruthy()
   })
 
-  test('a new agent: its name, the skills ticked from the list, the two every agent starts with ticked already; saved as the dashboard’s call, and the list read again', async () => {
+  test('a new agent: its name, typed at once, the skills ticked from the list, the two every agent starts with ticked already; saved as the dashboard’s call, and the list read again', async () => {
     render(<AgentsPage />)
     fireEvent.click(await screen.findByRole('button', { name: 'New agent' }))
     const editor = screen.getByRole('dialog', { name: 'New agent' })
+    // What is typed first goes to the name.
+    await waitFor(() => expect(document.activeElement).toBe(within(editor).getByLabelText('Name')))
     expect((within(editor).getByLabelText('ask') as HTMLInputElement).getAttribute('aria-checked') ?? (within(editor).getByLabelText('ask') as HTMLInputElement).checked.toString()).toMatch(/true/)
     fireEvent.change(within(editor).getByLabelText('Name'), { target: { value: 'Social Media' } })
     fireEvent.click(within(editor).getByLabelText('ux'))
@@ -98,6 +100,21 @@ describe('the Agents page', () => {
     expect((screen.getByLabelText('Name') as HTMLInputElement).disabled).toBe(true)
     // An agent that names no account: one plain item, not the computer's account repeated.
     expect(screen.getByLabelText('GitHub account').textContent).toBe('None — whatever the computer uses')
+  })
+
+  test('"All" is ticked while no account of a coding agent is picked; ticking one leaves it, ticking "All" again drops the picks', async () => {
+    render(<AgentsPage />)
+    fireEvent.click(await screen.findByRole('button', { name: 'Edit Reviewer' }))
+    const editor = screen.getByRole('dialog', { name: 'Editing Reviewer' })
+    const checked = (name: string) => within(editor).getByLabelText(name).getAttribute('aria-checked')
+    expect([checked('All Claude accounts'), checked('Claude account Dani')]).toEqual(['false', 'true'])
+    fireEvent.click(within(editor).getByLabelText('All Claude accounts'))
+    expect([checked('All Claude accounts'), checked('Claude account Dani')]).toEqual(['true', 'false'])
+    fireEvent.click(within(editor).getByLabelText('Claude account Claude login on Studio'))
+    expect([checked('All Claude accounts'), checked('Claude account Claude login on Studio')]).toEqual(['false', 'true'])
+    fireEvent.click(within(editor).getByLabelText('All Claude accounts'))
+    fireEvent.click(within(editor).getByRole('button', { name: 'Save' }))
+    await waitFor(() => expect(rpc.sendSaveAgent).toHaveBeenCalledWith({ id: 'reviewer', name: 'Reviewer', skills: ['ask', 'readability'], accounts: { github: 'octo-agent' }, projectSkills: false }))
   })
 
   test('with no GitHub account of OpenAgent\u2019s yet, one is added from the editor, in its dialog, and is then the one picked; what was typed stays', async () => {

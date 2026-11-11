@@ -62,7 +62,7 @@ export function hostLoginState(row: GitHostRow): LoginState | undefined {
 }
 
 const PILL: Record<Exclude<LoginState, 'connected'>, { words: string; tone: string; dot: string }> = {
-  step: { words: 'Log in', tone: 'bg-warning/10 text-warning', dot: 'bg-warning' },
+  step: { words: 'Not logged in', tone: 'bg-warning/10 text-warning', dot: 'bg-warning' },
   'not-installed': { words: 'Not installed', tone: 'bg-muted text-muted-foreground', dot: 'bg-muted-foreground' },
 }
 
@@ -98,7 +98,7 @@ function CommandLine({ command }: { command: string }) {
   const long = command.length > LONG
   return (
     <div className="flex min-w-0 items-start gap-1">
-      <code className={cn('min-w-0 flex-1 font-mono text-[11px] text-muted-foreground', long && !whole ? 'truncate' : 'break-all')}>{command}</code>
+      <code className={cn('min-w-0 font-mono text-[11px] text-muted-foreground', long && !whole ? 'truncate' : 'break-all')}>{command}</code>
       {long && (
         <button type="button" className="shrink-0 text-[11px] text-muted-foreground underline-offset-2 hover:text-foreground hover:underline" onClick={() => setWhole(!whole)}>
           {whole ? 'Less' : 'Show all'}
@@ -109,10 +109,15 @@ function CommandLine({ command }: { command: string }) {
   )
 }
 
+/** Whether what is in the way of the agent is its own login. */
+export function loggedOut(state: AgentState): boolean {
+  return / logged in/.test(state.problem ?? '')
+}
+
 /** What is in the way of the agent, in words. */
 export function agentWords(state: AgentState): string {
   const name = DRIVER_LABELS[state.driver]
-  return agentLoginState(state) === 'not-installed' ? `${name} is not installed.` : / logged in/.test(state.problem ?? '') ? `${name} is not logged in.` : (state.problem ?? `${name} cannot start.`)
+  return agentLoginState(state) === 'not-installed' ? `${name} is not installed.` : loggedOut(state) ? `${name} is not logged in.` : (state.problem ?? `${name} cannot start.`)
 }
 
 /** What is missing at a host, in words. */
@@ -122,7 +127,7 @@ export function hostWords(row: GitHostRow): string {
 }
 
 /** A press that fixes one thing: its button, what it is doing while it does, the command it runs, why it failed. */
-export function FixAction({ label, busy, busyWords, command, failed, onPress, size = 'sm' }: { label: string; busy: boolean; busyWords: string; command?: string; failed?: string; onPress: () => void; size?: 'sm' | 'xs' | undefined }) {
+export function FixAction({ label, busy, busyWords, command, failed, onPress, size = 'sm', variant }: { label: string; busy: boolean; busyWords: string; command?: string; failed?: string; onPress: () => void; size?: 'sm' | 'xs' | undefined; variant?: 'outline' | undefined }) {
   return (
     <div className="min-w-0 space-y-1">
       {busy ? (
@@ -130,7 +135,7 @@ export function FixAction({ label, busy, busyWords, command, failed, onPress, si
           {busyWords}
         </p>
       ) : (
-        <Button size={size} onClick={onPress}>
+        <Button size={size} variant={variant} onClick={onPress}>
           {label}
         </Button>
       )}
@@ -150,10 +155,17 @@ function agentBusyWords(state: AgentState): string {
   return state.fixing === 'install' ? `Installing ${name}…` : `Say yes in the page this computer's browser opened to log ${name} in.`
 }
 
-/** The agent's fix as one press: [Install Claude Code] or [Log in to Claude Code], with the command; nothing when no press fixes it. */
-export function AgentFix({ state, onChanged, size }: { state: AgentState; onChanged: () => void; size?: 'sm' | 'xs' | undefined }) {
+/** The agent's fix as one press: [Install Claude Code] or [Log this computer in to Claude Code], with the command; the command alone where it is typed; nothing when nothing fixes it. */
+export function AgentFix({ state, onChanged, size, variant }: { state: AgentState; onChanged: () => void; size?: 'sm' | 'xs' | undefined; variant?: 'outline' | undefined }) {
   const [error, setError] = useState<string | undefined>()
   if (state.ready || !state.fix) return null
+  if (state.typed)
+    return (
+      <div className="min-w-0 space-y-1">
+        <p className="text-xs text-muted-foreground">This computer has no browser to log in with a press: type this in a terminal on it.</p>
+        <CommandLine command={state.fix.command} />
+      </div>
+    )
   const name = DRIVER_LABELS[state.driver]
   const press = async () => {
     setError(undefined)
@@ -164,7 +176,8 @@ export function AgentFix({ state, onChanged, size }: { state: AgentState; onChan
   return (
     <FixAction
       size={size}
-      label={state.fix.kind === 'install' ? `Install ${name}` : `Log in to ${name}`}
+      variant={variant}
+      label={state.fix.kind === 'install' ? `Install ${name}` : `Log this computer in to ${name}`}
       busy={state.fixing !== undefined}
       busyWords={agentBusyWords(state)}
       command={state.fix.command}
@@ -185,8 +198,8 @@ export interface Missing {
   fix?: ReactNode
 }
 
-/** What is missing, in the order a person sets things up: the coding agent first, then the git hosts. Nothing while it is not read yet. With it, the git hosts as read, for a place that shows them too. */
-export function useMissing(): { missing: Missing[]; reload: () => Promise<void>; hosts: GitHostsView | undefined } {
+/** What is missing, in the order a person sets things up: the coding agent first, then the git hosts. Nothing while it is not read yet, and `loaded` once both are read. With it, the git hosts as read, for a place that shows them too. */
+export function useMissing(): { missing: Missing[]; loaded: boolean; reload: () => Promise<void>; hosts: GitHostsView | undefined } {
   const { state, reload: reloadAgent } = useAgentState()
   const { view, reload: reloadHosts } = useGitHosts()
   const reload = async () => {
@@ -211,5 +224,5 @@ export function useMissing(): { missing: Missing[]; reload: () => Promise<void>;
       words: hostWords(row),
     })
   }
-  return { missing, reload, hosts: view }
+  return { missing, loaded: state !== undefined && view !== undefined, reload, hosts: view }
 }

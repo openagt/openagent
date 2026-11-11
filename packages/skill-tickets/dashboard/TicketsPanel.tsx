@@ -93,7 +93,7 @@ export function TicketRow({
             icon={<Play className="h-4 w-4" aria-hidden />}
             ariaLabel={`Start work on ${ticket.title}`}
             menuAriaLabel={`Other ways to work on ${ticket.title}`}
-            tooltip="Spin up an agent working on this ticket"
+            tooltip="Start an agent working on this ticket"
             busy={busy}
             onStart={() => onStart(workPrompt, 'The work agent could not be started.')}
             onConfigure={() => onConfigure(workPrompt)}
@@ -197,7 +197,7 @@ export function TicketRow({
       {/* Priority and date: snug fixed widths — barely wider than their content, kept fixed (and
           rendered even when empty) so the columns still line up down the table row to row. */}
       <span className={cn('flex shrink-0 items-center justify-end text-[10px] md:w-16 max-md:px-1', priorityTone(ticket.priority))}>
-        {ticket.priority ? `Priority: ${ticket.priority}` : ''}
+        {ticket.priority ? `Priority ${ticket.priority}` : ''}
       </span>
       <span
         className="flex w-14 shrink-0 items-center justify-end text-[10px] text-muted-foreground/70 max-md:ml-auto"

@@ -697,8 +697,13 @@ function nameSession(run: SessionRun, session: DriverSession | undefined, stoppe
   const titled = async (title: string | undefined): Promise<void> => {
     if (title !== undefined) await session?.log?.title(title)
   }
+  // The card says while the name is being asked, and only then: a list holds the run's place for it.
+  const asking = mayName && !fromReport
+  if (asking) void session?.log?.patch({ caller: { naming: true } })
   return {
-    done: mayName && !fromReport ? (asked?.title ?? nameRun(run.driver, { prompt: run.prompt, signal: stopped })).then(titled, () => {}) : Promise.resolve(),
+    done: asking
+      ? (asked?.title ?? nameRun(run.driver, { prompt: run.prompt, signal: stopped })).then(titled, () => {}).then(() => session?.log?.patch({ caller: { naming: undefined } }))
+      : Promise.resolve(),
     // Named from its first report once its status is settled, before it is said ended, so the
     // name's line in the diary comes before the ended one; a stop meanwhile only cuts the naming
     // short. A question is no report of the work, and a few seconds is all a name may hold the

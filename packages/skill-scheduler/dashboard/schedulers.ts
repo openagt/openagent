@@ -331,6 +331,12 @@ export function spelled(every: string): string {
   return read ? `${read.count} ${UNIT_WORDS[read.unit]}${read.count === 1 ? '' : 's'}` : every
 }
 
+/** An interval as "Every" says it: one of a unit is the unit alone ("day"), any other as {@link spelled} spells it ("2 days"). */
+function everyWords(every: string): string {
+  const read = parseInterval(every)
+  return read?.count === 1 ? UNIT_WORDS[read.unit] : spelled(every)
+}
+
 const sentence = (text: string): string => text.charAt(0).toUpperCase() + text.slice(1)
 
 /** A sentence with its full stop, added only when it has none. */
@@ -352,7 +358,7 @@ export function pace(command: SchedulerCommand): string {
   const skills = command.every === undefined ? undefined : parseInterval(command.every)
   const inForce = paceInForce(command.pace, { ...(skills ? { every: skills } : {}), ...(command.when !== undefined ? { when: command.when } : {}) })
   // An interval of the skill's the tool would not have read is shown as written.
-  const every = inForce ? spelled(inForce.every.text) : command.pace === undefined && command.every !== undefined ? command.every : undefined
+  const every = inForce ? everyWords(inForce.every.text) : command.pace === undefined && command.every !== undefined ? command.every : undefined
   if (every === undefined) return sentence(waits)
   if (command.when === undefined) return inForce?.at ? `Every ${every} at ${inForce.at.text}` : `Every ${every}`
   return inForce?.at ? `Every ${every} from ${inForce.at.text}, ${waits}` : `Every ${every} at most, ${waits}`

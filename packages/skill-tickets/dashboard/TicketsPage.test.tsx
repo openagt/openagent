@@ -1,10 +1,12 @@
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest'
 import { cleanup, fireEvent, screen, waitFor } from '@testing-library/react'
 import { configureFirst } from '../../dashboard/dashboard/test-utils.js'
+import { forgetRemembered } from '@openagt/dashboard/module'
 import type { MountedModules } from '@openagt/dashboard/module/testing'
 import { workOnTicketPrompt } from '../src/module.js'
 import { fakeHost, renderWithHost, type Answers, type FakeHost } from './test-host.js'
 import { TicketsPage } from './TicketsPage.js'
+import { TicketDetailPage } from './TicketDetailPage.js'
 
 // The page reads every project's tickets with `tickets list --local` through the host, and its
 // sections read the last-import stamp with `tickets meta --local`. `onAllTickets` is what those
@@ -78,7 +80,7 @@ describe('TicketsPage (#1144)', () => {
     render()
     await screen.findByText('Do the thing')
     const title = screen.getByRole('heading', { level: 1 })
-    expect(title.textContent).toBe('Tickets2/2')
+    expect(title.textContent).toBe('Tickets 2/2')
     expect(title.className).toBe('text-lg font-semibold')
     const line = title.nextElementSibling!
     expect(line.textContent).toBe('Every project\u2019s tickets/ backlog: what agents plan from.')
@@ -111,6 +113,51 @@ describe('TicketsPage (#1144)', () => {
     fireEvent.click(await screen.findByText('Do the thing'))
     // The module's own page for that ticket: where the dashboard's link convention sends a link to it.
     expect(host.openPage).toHaveBeenCalledWith('tickets', ['t.md'], 'p1')
+  })
+
+  test("a ticket's page opened from the list goes back to the list as it was, every project's or one's: the browser's Back, after Forward or a reload too", async () => {
+    onAllTickets.mockResolvedValue([{ projectId: 'p1', projectName: 'Alpha', tickets: [ticket()] }])
+    render()
+    // The dashboard's address for a module page: the page's segment and path, under its project.
+    const openPage = (segment: string, path?: string[], inProject?: string) => window.history.pushState(null, '', `/${[inProject ?? 'p1', segment, ...(path ?? [])].join('/')}`)
+    host.openPage.mockImplementation(openPage)
+    fireEvent.click(await screen.findByText('Do the thing'))
+    expect(window.location.pathname).toBe('/p1/tickets/t.md')
+    const page = fakeHost({ p1: { 'show t.md --local': { ok: true, ticket: { ...ticket(), content: '# Do the thing' } } } })
+    page.openPage.mockImplementation(openPage)
+    // The ticket's page drawn on its history entry: opened from the list, then again after Forward. A reload is the browser story's (smoke-pages).
+    for (const reached of ['opened', 'forward']) {
+      cleanup()
+      renderWithHost(<TicketDetailPage projectId="p1" slug="t.md" />, page, modules())
+      fireEvent.click(await screen.findByRole('button', { name: /tickets/i }))
+      await waitFor(() => expect([reached, window.location.pathname]).toEqual([reached, '/tickets']))
+      window.history.forward()
+      await waitFor(() => expect(window.location.pathname).toBe('/p1/tickets/t.md'))
+    }
+    window.history.replaceState(null, '')
+  })
+
+  test('a second visit opens with the last list at once, faded once its fresh read has been out a second', async () => {
+    onAllTickets.mockResolvedValue([{ projectId: 'p1', projectName: 'Alpha', tickets: [ticket()] }])
+    render()
+    await screen.findByText('Do the thing')
+    cleanup()
+    forgetRemembered()
+    const slow = fakeHost()
+    // Answered only once the test has looked, so no read is left out for the next test.
+    const reads: (() => void)[] = []
+    slow.runCommand.mockImplementation(() => new Promise(resolve => reads.push(() => resolve({ ok: false, error: 'read too late' }))))
+    try {
+      renderWithHost(<TicketsPage projects={[{ id: 'p1', name: 'Alpha', gitHost: true }]} />, slow, modules())
+      const row = screen.getByText('Do the thing')
+      expect(row.closest('[data-stale]')).toBeNull()
+      await waitFor(() => expect(row.closest('[data-stale]')).not.toBeNull(), { timeout: 2000 })
+    } finally {
+      for (const answer of reads) answer()
+      await waitFor(() => expect(document.querySelector('[data-stale]')).toBeNull())
+      cleanup()
+      forgetRemembered()
+    }
   })
 
   test('a project with no tickets still offers its own update, not a dead end', async () => {

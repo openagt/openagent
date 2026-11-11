@@ -42,11 +42,11 @@ const EMPTY_FILES: string[] = []
 
 /** Where a run's tree was read from, in the words the caption says it. */
 function sourceCaption(tree: AgentTree): string | undefined {
-  if (tree.source === 'checkout') return 'From the run’s checkout'
+  if (tree.source === 'checkout') return 'From the session’s checkout'
   if (tree.source === 'branch') return `From branch ${tree.branch}`
   if (tree.source === 'merge') return `From the merge of #${tree.number}`
   if (tree.source === 'landed') return 'From its last commit: its work was merged, and its branch is gone'
-  if (tree.source === 'unchanged') return 'This run changed no files'
+  if (tree.source === 'unchanged') return 'This session changed no files'
   if (tree.source === 'starting') return 'Starting from the project’s files'
   return undefined
 }
@@ -256,10 +256,10 @@ export function FilesPane({ projectId, agentId, activity, show, context }: Modul
       <Waiting className="p-3">{text}</Waiting>
     </>
   )
-  if (agentId && (!treeLoaded || runTree?.source === 'pending')) return waiting('Looking for this run’s files…')
+  if (agentId && (!treeLoaded || runTree?.source === 'pending')) return waiting('Looking for this session’s files…')
   // No checkout, no branch and no merge commit on this machine: say so rather than show the
   // project's own files, which reads as "these are the run's".
-  if (agentId && runTree?.source === 'gone') return line('This run’s files are gone from this machine: its checkout was reclaimed and it left no branch or merged pull request here.')
+  if (agentId && runTree?.source === 'gone') return line('This session’s files are gone from this machine: its checkout was reclaimed and it left no branch or merged pull request here.')
   if (!agentId && !projectLoaded) return waiting('Reading the project’s files…')
   if (files.length === 0) return line('No files here.')
 

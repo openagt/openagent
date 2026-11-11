@@ -251,7 +251,7 @@ function SkillCards({ projectId, skills, onDone }: { projectId: string; skills: 
         ))}
         {saved.schedulerError && <p className="text-danger">The scheduler was not switched: {saved.schedulerError}</p>}
         {saved.written.length + saved.removed.length > 0 && !skills.git && <p>This folder is not a git repository, so there is nothing to commit.</p>}
-        {sent?.ok && sent.sent === 'committed' && <p>Committed. Your agents get this change from their next start.</p>}
+        {sent?.ok && sent.sent === 'committed' && <p>Committed.{sent.unsent !== undefined && ` Nothing was sent: ${sent.unsent}.`} Your agents get this change from their next start.</p>}
         {sent?.ok && sent.sent === 'pushed' && (
           <p>
             Sent to {skills.remote}, on {sent.branch}. Your agents get this change from their next start.

@@ -4,6 +4,7 @@ import type { PublishPick } from '../src/state.js'
 import { AGENTS, AGENT_LABELS, AGENT_SKILLS_DIR, DEFAULT_AGENT, MAX_AGENTS, type AgentName } from '../src/names.js'
 import { MAX_COUNT, PACE_UNITS, takesTimeOfDay, type PaceUnit } from '../src/pace.js'
 import { triedLine, writtenLine, type TriedLine } from './automation-form.js'
+import { CodeWords } from './CodeWords.js'
 import { PRINTS_SOMETHING, UNIT_WORDS, modelLabel, notAsked, publishChoices, stopped, publishLabel, type AgentModels, type AgentsDraft, type PaceDraft, type SchedulerCommand } from './schedulers.js'
 
 // The fields of the Automations page, shared by the Edit panel of a row and the "New automation"
@@ -211,12 +212,18 @@ export function PaceFields({
   useEffect(() => {
     if (autoFocus) group.current?.querySelector<HTMLElement>('[role="radio"][aria-checked="true"]')?.focus()
   }, [])
-  const pick = (kind: unknown): void => onChange(kind === 'every' ? typed : kind === 'work' ? { kind: 'work' } : { kind: 'skill' })
+  const time = useRef<HTMLInputElement>(null)
+  // A time left half typed has no text; the browser says so on the field, which shows only beside a unit that takes a time of day.
+  const wait = (change: { count?: string; unit?: PaceUnit; at?: string } = {}): PaceDraft => {
+    const next = { kind: 'every' as const, count: typed.count, unit: typed.unit, at: typed.at, ...change }
+    return takesTimeOfDay(next.unit) && time.current?.validity.badInput ? { ...next, atHalfTyped: true } : next
+  }
+  const pick = (kind: unknown): void => onChange(kind === 'every' ? wait() : kind === 'work' ? { kind: 'work' } : { kind: 'skill' })
   const interval = (
     // A field typed into is the pick: nobody types a wait and means another choice.
     <div className={cn('flex flex-wrap items-center gap-2 text-sm', !own && 'opacity-60')}>
-      <Input type="number" min={1} max={MAX_COUNT} value={typed.count} disabled={disabled} onChange={e => onChange({ ...typed, count: e.target.value })} aria-label="How long" className="h-8 w-20 bg-background px-2" />
-      <Select items={PACE_UNITS.map(unit => ({ value: unit, label: unitWord(unit, typed.count) }))} value={typed.unit} disabled={disabled} onValueChange={unit => onChange({ ...typed, unit: unit as PaceUnit })}>
+      <Input type="number" name="every" min={1} max={MAX_COUNT} value={typed.count} disabled={disabled} onChange={e => onChange(wait({ count: e.target.value }))} aria-label="How long" className="h-8 w-20 bg-background px-2" />
+      <Select items={PACE_UNITS.map(unit => ({ value: unit, label: unitWord(unit, typed.count) }))} value={typed.unit} disabled={disabled} onValueChange={unit => onChange(wait({ unit: unit as PaceUnit }))}>
         <SelectTrigger size="sm" aria-label="Unit" className="w-28">
           <SelectValue />
         </SelectTrigger>
@@ -232,11 +239,14 @@ export function PaceFields({
         <>
           <span>{work ? 'not before' : 'at'}</span>
           <Input
+            ref={time}
             type="time"
+            name="at"
             value={typed.at}
             disabled={disabled}
-            // A time left half typed has no text; the browser says so on the field itself.
-            onChange={e => onChange({ kind: 'every', count: typed.count, unit: typed.unit, at: e.target.value, ...(e.target.validity.badInput ? { atHalfTyped: true as const } : {}) })}
+            onChange={e => onChange(wait({ at: e.target.value }))}
+            // Chrome sends no change while a blank time is typed part-way, so leaving the field tells it; left as it was, it picks nothing.
+            onBlur={e => e.target.validity.badInput !== (own && draft.atHalfTyped === true) && onChange(wait({ at: e.target.value }))}
             aria-label={work ? 'Not before this time of day' : 'Time of day'}
             className="h-8 w-auto bg-background px-2"
           />
@@ -308,7 +318,7 @@ export function AgentsFields({ name, draft, asSaid, start, where, disabled, onCh
   const count = (
     <div className={cn('flex flex-wrap items-center gap-2 text-sm', draft.kind !== 'own' && 'opacity-60')}>
       <span>Up to</span>
-      <Input type="number" min={1} max={MAX_AGENTS} value={typed.count} disabled={disabled} onChange={e => onChange({ kind: 'own', count: e.target.value })} aria-label="How many agents" className="h-8 w-20 bg-background px-2" />
+      <Input type="number" name="agents" min={1} max={MAX_AGENTS} value={typed.count} disabled={disabled} onChange={e => onChange({ kind: 'own', count: e.target.value })} aria-label="How many agents" className="h-8 w-20 bg-background px-2" />
       <span>{Number(typed.count) === 1 ? 'agent' : 'agents'} at once</span>
     </div>
   )
@@ -424,7 +434,7 @@ export function RunsOnFields({
         </Select>
       </div>
       {/* Why the agent's own models are not offered: it is still being asked, or could not say. A model can still be picked by its id from the command line. */}
-      {listed.length === 0 && lists?.modelsNote !== undefined && <p className="text-xs text-muted-foreground">{lists.modelsNote}</p>}
+      {listed.length === 0 && lists?.modelsNote !== undefined && <p className="text-xs text-muted-foreground"><CodeWords text={lists.modelsNote} /></p>}
       {unable.map(a => (
         <p key={a} className="text-xs text-muted-foreground">
           {AGENT_LABELS[a]} cannot run this row: it reads the project's skills from <span className="font-mono">{AGENT_SKILLS_DIR[a]}</span>, and this row's skill is not there.

@@ -35,7 +35,7 @@ export function Avatar({ person, dot = false, size = 'h-6 w-6 text-[10px]' }: { 
   const picture = person?.avatar && !broken ? person.avatar : undefined
   return (
     <span aria-hidden className="relative shrink-0">
-      <span className={`flex ${size} items-center justify-center overflow-hidden rounded-full bg-muted font-medium text-muted-foreground`}>
+      <span className={`flex ${size} items-center justify-center overflow-hidden rounded-full bg-muted-foreground/15 font-medium text-muted-foreground`}>
         {picture ? <img src={picture} alt="" referrerPolicy="no-referrer" className="h-full w-full object-cover" onError={() => setBroken(true)} /> : person ? initials(person.name) : null}
       </span>
       {dot && <span data-testid="missing-dot" className="absolute -top-0.5 -right-0.5 size-2 rounded-full bg-warning ring-2 ring-sidebar" />}

@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useRef, useState, type RefObject } from 'react'
 import { Check, ChevronDown, Copy, Info, KeyRound, MoreHorizontal, Plus } from 'lucide-react'
 import { Button, Card, CardContent, CardHeader, CardTitle, ClaudeLogo, CodexLogo, Dialog, DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, GaugeFace, Input, Skeleton, Tooltip, TooltipContent, TooltipTrigger, cn, useModuleHost, usePolled, type ModuleCardProps, type ModuleHost } from '@openagt/dashboard/module'
 
@@ -20,10 +20,12 @@ const AGENTS = [
   {
     id: 'claude',
     name: 'Claude Code',
+    /** What the account is, by its service: an account at claude.ai. */
+    account: 'Claude',
     Logo: ClaudeLogo,
     logIn: 'Log in to Claude',
     help: "Opens this computer's browser, where you say yes once, signed in to that account. The login is kept on this computer alone and lasts a year.",
-    helpNoBrowser: "Gives you a page to open on your own device: press Authorize there, signed in to that account, and paste the code it shows back here. The login is kept on this server alone and lasts a year.",
+    helpNoBrowser: "Gives you a page to open on your own device: press Authorize there, signed in to that account, and paste the code it shows back here. The login is kept on this computer alone and lasts a year.",
     easiest: (computer: string) => `Easiest: add it on ${computer}, and it comes here by itself.`,
     remove: 'Runs no longer use it. Its login is not ended: take it back on claude.ai to end it.',
     adding: (name: string) => `Adding ${name}'s account: say yes in the page this computer's browser opened, signed in to ${name}'s Claude account.`,
@@ -31,10 +33,11 @@ const AGENTS = [
   {
     id: 'codex',
     name: 'Codex',
+    account: 'Codex',
     Logo: CodexLogo,
     logIn: 'Log in to Codex',
     help: "Opens this computer's browser, where you sign in once to that account. If the browser is signed in to another account, copy the link into a private window. The login is kept on this computer alone.",
-    helpNoBrowser: "Gives you a code to type at ChatGPT's page on your own device, signed in to that account: in a private window if the browser is signed in to another. If it asks, first allow device code sign-in in ChatGPT's security settings. The login is kept on this server alone.",
+    helpNoBrowser: "Gives you a code to type at ChatGPT's page on your own device, signed in to that account: in a private window if the browser is signed in to another. If it asks, first allow device code sign-in in ChatGPT's security settings. The login is kept on this computer alone.",
     easiest: (computer: string) => `Easiest: add it on ${computer} and press Allow there, and it comes here.`,
     remove: 'Runs no longer use it, and its login is taken off this computer.',
     adding: (name: string) => `Adding ${name}'s account: sign in to ${name}'s ChatGPT account in the page this computer's browser opened.`,
@@ -76,7 +79,7 @@ interface Usage {
 interface AddingNow {
   adding?: { name: string; url?: string; code?: string; paste?: true; checking?: true; refused?: true }
   failed?: string
-  /** This computer has no browser, a server: the person signs in on their own device. */
+  /** This computer has no browser (a server, or Linux with no display): the person signs in on their own device. */
   noBrowser?: true
 }
 
@@ -172,7 +175,7 @@ function SigningIn({ agent, adding, noBrowser, onChanged }: { agent: (typeof AGE
             void send()
           }}
         >
-          <Input aria-label="Code from Claude" placeholder="2. Paste the code it shows" value={code} onChange={event => setCode(event.target.value)} className="h-9 min-w-0 flex-1 basis-40 text-sm" />
+          <Input name="login-code" aria-label="Code from Claude" placeholder="2. Paste the code it shows" value={code} onChange={event => setCode(event.target.value)} className="h-9 min-w-0 grow basis-40 text-sm" />
           <Button size="sm" type="submit" disabled={code.trim() === '' || adding.checking === true}>
             {adding.checking ? 'Checking…' : 'Done'}
           </Button>
@@ -203,9 +206,12 @@ function SigningIn({ agent, adding, noBrowser, onChanged }: { agent: (typeof AGE
  * adding it there is said first: signing in here is the longer way. `onClose` closes the dialog,
  * which gives up a sign-in under way.
  */
-function AddAccount({ agent, now, failed, from, onChanged, onClose }: { agent: (typeof AGENTS)[number]; now: AddingNow; failed: string | undefined; from: string | undefined; onChanged: () => void; onClose: () => void }) {
+function AddAccount({ agent, now, failed, from, field, onChanged, onClose }: { agent: (typeof AGENTS)[number]; now: AddingNow; failed: string | undefined; from: string | undefined; /** The dialog's `initialFocus`. */ field: RefObject<HTMLInputElement | null>; onChanged: () => void; onClose: () => void }) {
   const host = useModuleHost()
   const [name, setName] = useState('')
+  // The dialog focuses the field it opens on; one shown later, after "Sign in here instead" or a sign-in that did not go through, takes the focus itself.
+  const [opened, setOpened] = useState(false)
+  useEffect(() => setOpened(true), [])
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string>()
   const [here, setHere] = useState(false)
@@ -238,7 +244,7 @@ function AddAccount({ agent, now, failed, from, onChanged, onClose }: { agent: (
               void start()
             }}
           >
-            <Input autoFocus aria-label="Whose account" placeholder="Whose account, e.g. Dani" value={name} onChange={event => setName(event.target.value)} className="h-8 min-w-0 flex-1 basis-32" />
+            <Input ref={field} autoFocus={opened} name="account-name" aria-label="Whose account" placeholder="Whose account, e.g. Dani" value={name} onChange={event => setName(event.target.value)} className="h-8 min-w-0 grow basis-32" />
             <Button size="sm" type="submit" disabled={busy || name.trim() === ''}>
               {agent.logIn}
             </Button>
@@ -443,6 +449,7 @@ export function AccountsCard({ accountWhere }: ModuleCardProps) {
   )
   // The agent an account is being added for: the dialog is open on it, from the press until the account is there or the dialog is closed.
   const [naming, setNaming] = useState<AgentId>()
+  const nameField = useRef<HTMLInputElement>(null)
   // Why the last sign-in did not go through, once the person closed the dialog on it: not said again when it opens next.
   const [dismissed, setDismissed] = useState<string>()
   const signingIn = AGENTS.find(agent => adding?.[agent.id]?.adding !== undefined)?.id
@@ -567,18 +574,21 @@ export function AccountsCard({ accountWhere }: ModuleCardProps) {
         })}
         {/* No account at all: the press is said in the card too, where a newcomer looks, not only at its corner. */}
         {none && (
+          // The presses go beside the sentence together, else under it. `grow`, not `flex-1`: another module's stylesheet loaded later has a `.flex-1` that undoes `basis-48`.
           <div className="flex flex-wrap items-center gap-2">
-            <p className="min-w-0 flex-1 basis-48 text-sm text-muted-foreground">No account yet. Runs need one to start.</p>
-            {AGENTS.map(agent => (
-              <Button key={agent.id} size="sm" variant="outline" onClick={() => setNaming(agent.id)}>
-                <agent.Logo className="size-3.5" />
-                {agent.logIn}
-              </Button>
-            ))}
+            <p className="min-w-0 grow basis-48 text-sm text-muted-foreground">No account yet. Runs need one to start.</p>
+            <div className="flex flex-wrap gap-2">
+              {AGENTS.map(agent => (
+                <Button key={agent.id} size="sm" variant="outline" onClick={() => setNaming(agent.id)}>
+                  <agent.Logo className="size-3.5" />
+                  Add a {agent.account} account
+                </Button>
+              ))}
+            </div>
           </div>
         )}
       </CardContent>
-      <Dialog open={namingAgent !== undefined} onOpenChange={open => !open && close()} title={namingAgent ? `Add a ${namingAgent.name} account` : ''}>
+      <Dialog open={namingAgent !== undefined} onOpenChange={open => !open && close()} title={namingAgent ? `Add a ${namingAgent.account} account` : ''} initialFocus={nameField}>
         {namingAgent && (
           <AddAccount
             key={namingAgent.id}
@@ -586,6 +596,7 @@ export function AccountsCard({ accountWhere }: ModuleCardProps) {
             now={namingNow}
             failed={namingNow.failed !== dismissed ? namingNow.failed : undefined}
             from={list?.ok ? AGENTS.flatMap(each => list.accounts[each.id] ?? []).find(account => account.from !== undefined)?.from : undefined}
+            field={nameField}
             onChanged={changed}
             onClose={close}
           />

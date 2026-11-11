@@ -224,6 +224,8 @@ export interface AgentState {
   problem?: string
   /** What a press does about it, when the agent's package declared a command for it. */
   fix?: DriverFix
+  /** The fix is no press: it is typed in a terminal on this computer, which has no browser to say yes in. */
+  typed?: true
   /** The agent's own login is out, and runs use an added account: the own login is no account to show. */
   ownLoggedOut?: true
   /** A press's fix going on. */
@@ -240,13 +242,15 @@ export async function onAgentState(driver?: string): Promise<AgentState> {
   const name = driver !== undefined && isDriverName(driver) ? driver : await loginsWiring.driver()
   const ready = await loginsWiring.ready(name)
   const press = fixes.get(name)
-  // A computer with no browser cannot log its agent in by a press: the person adds an account in its card instead.
-  const fix = ready.fix && !(ready.fix.kind === 'log-in' && accountsWiring.headless()) ? ready.fix : undefined
+  // A computer with no browser cannot log its agent in by a press: on a server the person adds an account in its card instead; elsewhere the command is typed there.
+  const noPress = ready.fix?.kind === 'log-in' && accountsWiring.headless()
+  const fix = ready.fix && !(noPress && process.env['OPENAGENT_SERVER'] === '1') ? ready.fix : undefined
   return {
     driver: name,
     ready: ready.problems.length === 0,
     ...(ready.problems[0] !== undefined ? { problem: ready.problems[0] } : {}),
     ...(fix ? { fix } : {}),
+    ...(fix && noPress ? { typed: true as const } : {}),
     ...(ready.ownLoggedOut ? { ownLoggedOut: true as const } : {}),
     ...(press?.fixing ? { fixing: press.fixing } : {}),
     ...(press?.failed !== undefined && ready.problems.length > 0 ? { failed: press.failed } : {}),
@@ -276,26 +280,41 @@ export async function sendAgentFix(driver: string): Promise<AccountResult> {
 /** How long a fix may take: an install's download, or the person's yes in the browser. */
 const FIX_MS = 10 * 60_000
 
+/** The process groups of the fixes running now. */
+const fixGroups = new Set<number>()
+
+/** The fixes running now, which the dashboard ends as it stops: nothing else would, once it is gone. */
+export const runningFixes = {
+  end(): void {
+    for (const group of fixGroups) endGroup(group, 'SIGTERM')
+  },
+}
+
+function endGroup(group: number, signal: NodeJS.Signals): void {
+  try {
+    process.kill(-group, signal)
+  } catch {
+    // Gone already.
+  }
+}
+
 /** A fix's command in a shell, to its end, its own group ended with it on a timeout. */
 function runFix(command: string): Promise<void> {
   return new Promise((resolve, reject) => {
     const child = spawn('sh', ['-c', command], { stdio: ['ignore', 'pipe', 'pipe'], detached: true })
+    const group = child.pid
+    if (group !== undefined) fixGroups.add(group)
     let said = ''
     const keep = (chunk: Buffer): void => {
       said = (said + chunk.toString('utf8')).slice(-4096)
     }
     child.stdout.on('data', keep)
     child.stderr.on('data', keep)
-    const timer = setTimeout(() => {
-      try {
-        process.kill(-child.pid!, 'SIGKILL')
-      } catch {
-        // Gone already.
-      }
-    }, FIX_MS)
+    const timer = setTimeout(() => endGroup(group!, 'SIGKILL'), FIX_MS)
     child.once('error', err => (clearTimeout(timer), reject(err)))
     child.once('close', code => {
       clearTimeout(timer)
+      if (group !== undefined) fixGroups.delete(group)
       if (code === 0) resolve()
       else reject(new Error(said.trim().split('\n').slice(-3).join('\n') || (code === null ? 'It took too long, and was stopped.' : `It ended with ${code}.`)))
     })

@@ -4,6 +4,10 @@ import { Card, CardContent, CardHeader, CardTitle } from './ui/card.js'
 import { Tooltip, TooltipTrigger, TooltipContent } from './ui/tooltip.js'
 import { formatAge, formatDateTime } from '../lib/format-date.js'
 import { OnComputer } from './MachineMark.js'
+import { runName } from '../../src/client.js'
+import { awaitingName } from '../lib/agent-label.js'
+import { STATUS_DOT } from '../lib/status-tone.js'
+import { cn } from '../lib/utils.js'
 
 // The Overview's Agents card (#1139): the sessions working right now. Each row is the whole line,
 // clickable straight into that session — its label is the one-liner the sidebar shows, and its age
@@ -17,10 +21,16 @@ import { OnComputer } from './MachineMark.js'
 
 export function Agents({
   working,
+  loaded,
+  namesRuns,
   onSelectAgent,
 }: {
   /** The agents at work; none says so in one line. */
   working: ActiveAgent[]
+  /** The agents were read: until then the card says it is loading, not that none is at work. */
+  loaded: boolean
+  /** Whether runs are given a short name, which a row waits for as the sidebar's does. */
+  namesRuns: boolean
   onSelectAgent: (projectId: string, agentId: string) => void
 }) {
   return (
@@ -36,7 +46,9 @@ export function Agents({
         </CardTitle>
       </CardHeader>
       <CardContent>
-        {working.length === 0 ? (
+        {!loaded ? (
+          <p className="text-sm text-muted-foreground">Loading…</p>
+        ) : working.length === 0 ? (
           <p className="text-sm text-muted-foreground">No agent is at work.</p>
         ) : (
           <ul className="space-y-0.5">
@@ -44,6 +56,7 @@ export function Agents({
               <AgentRow
                 key={`${a.projectId}:${a.agentId}`}
                 label={activeLabel(a)}
+                naming={awaitingName(a, namesRuns)}
                 cloud={a.cloud}
                 computer={a.computer}
                 at={a.updatedAt}
@@ -60,6 +73,7 @@ export function Agents({
 
 function AgentRow({
   label,
+  naming,
   cloud,
   computer,
   at,
@@ -68,6 +82,8 @@ function AgentRow({
 }: {
   /** The session's one-liner, the same the sidebar shows. */
   label: string
+  /** The name is still being made: the row holds its place, as the sidebar's does. */
+  naming: boolean
   /** A web run's cloud side at work (#1668): say where it is, since no local process backs the row. */
   cloud?: 'in-cloud' | 'waiting' | undefined
   /** The computer it runs on, when that is not this one (#1648). */
@@ -87,8 +103,15 @@ function AgentRow({
         onClick={onOpen}
         className="flex w-full items-baseline gap-2 rounded-md px-2 py-1.5 text-left hover:bg-accent focus-visible:bg-accent focus-visible:outline-none"
       >
-        <span aria-hidden className="shrink-0 text-muted-foreground/50">•</span>
-        <span className="min-w-0 flex-1 truncate text-sm">{label}</span>
+        <span aria-hidden className={cn('size-1.5 shrink-0 self-center rounded-full', STATUS_DOT[cloud === 'waiting' ? 'waiting' : 'running'])} />
+        {naming ? (
+          <span className="min-w-0 flex-1 self-center">
+            <span className="block h-3.5 w-2/3 animate-pulse rounded bg-muted-foreground/20" />
+            <span className="sr-only">Naming this session</span>
+          </span>
+        ) : (
+          <span className="min-w-0 flex-1 truncate text-sm">{label}</span>
+        )}
         {cloud && <span className="shrink-0 text-[10px] uppercase text-muted-foreground">{cloud === 'waiting' ? 'waiting' : 'in cloud'}</span>}
         <span className="shrink-0 text-xs text-muted-foreground">{projectName}</span>
         {computer && <OnComputer computer={computer} />}
@@ -108,9 +131,7 @@ function AgentRow({
   )
 }
 
-// A working session's one-liner: what the sidebar would show for it. ActiveAgent carries no branch or
-// start time to fall back to, but a live session almost always has an intent or a chosen name; its
-// project is the last resort.
+// A working session's one-liner: what the sidebar shows for it (`runName`); its project is the last resort.
 function activeLabel(a: ActiveAgent): string {
-  return a.intent?.trim() || a.scope?.trim() || a.projectName
+  return runName(a) ?? (a.scope?.trim() || a.projectName)
 }

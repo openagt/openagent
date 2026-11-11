@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react'
 import { ArrowLeft } from 'lucide-react'
-import { Button, ScrollArea } from '@openagt/dashboard/module'
+import { Button, ScrollArea, ShowSidebarButton } from '@openagt/dashboard/module'
 
 // The frame both ticket pages sit in (#1144, #685): the way back to the list, then the ticket's
 // own content in one scrolling column. A page under a list needs the same way out and the same
@@ -25,14 +25,18 @@ export function TicketPageShell({
 }) {
   return (
     <div className="flex min-h-0 flex-1 flex-col">
-      <div className="flex items-center gap-2 border-b border-border px-4 py-2">
-        <Button variant="ghost" size="sm" className="gap-1.5" onClick={onBack}>
-          <ArrowLeft className="h-4 w-4" /> Tickets
-        </Button>
-        {path && <span className="min-w-0 truncate text-xs text-muted-foreground">{path}</span>}
+      {/* The bar holds the content's column, and the way back, first in it, gives back its own padding: the arrow stands above the ticket's title. While the sidebar is hidden, the button that shows it again stands before it. */}
+      <div className="border-b border-border py-2">
+        <div className="mx-auto flex max-w-3xl items-center gap-2 md:px-6 max-md:px-4">
+          <ShowSidebarButton />
+          <Button variant="ghost" size="sm" className="gap-1.5 first:-ml-3" onClick={onBack}>
+            <ArrowLeft className="h-4 w-4" /> Tickets
+          </Button>
+          {path && <span className="min-w-0 truncate text-xs text-muted-foreground">{path}</span>}
+        </div>
       </div>
       <ScrollArea className="min-h-0 flex-1">
-        <div className="mx-auto max-w-3xl p-6">{children}</div>
+        <div className="mx-auto max-w-3xl md:p-6 max-md:p-4">{children}</div>
       </ScrollArea>
     </div>
   )

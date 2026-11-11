@@ -24,6 +24,12 @@ export interface ActiveAgent {
   status: AgentStatus
   /** What the user asked to build (the agent's `scope` event). */
   intent?: string
+  /** The run's short name, the branch it works on and when it started: what every list names a run by (`runName`). */
+  title?: string
+  /** Whether that name is being asked for ({@link AgentMeta.naming}). */
+  naming?: true
+  branch?: string
+  startedAt: string
   scope?: string
   /** ISO timestamp of the agent's last event. */
   updatedAt?: string
@@ -147,6 +153,10 @@ export async function buildOverview(projects: ProjectSummary[], deps: OverviewDe
     cwd,
     status: meta.status,
     ...(meta.intent ? { intent: meta.intent } : {}),
+    ...(meta.title ? { title: meta.title } : {}),
+    ...(meta.naming ? { naming: meta.naming } : {}),
+    ...(meta.branch ? { branch: meta.branch } : {}),
+    startedAt: meta.startedAt,
     ...(meta.updatedAt ? { updatedAt: meta.updatedAt } : {}),
     // A saved machine's run by the machine's name; another computer's daemon started it otherwise
     // (#1648): the shared data branch shows its runs here too.

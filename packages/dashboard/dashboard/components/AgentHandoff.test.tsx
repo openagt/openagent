@@ -377,7 +377,7 @@ describe('run handoff (#799)', () => {
     cleanup()
     onAgentHandoff.mockResolvedValue({ ...worked, gitHost: false, pushed: true })
     render(<Harness />)
-    await waitFor(() => expect(screen.getByText(/Pushed — no git host package/)).toBeTruthy())
+    await waitFor(() => expect(screen.getByText('Pushed. Pull requests need a remote on GitHub.')).toBeTruthy())
     expect(screen.queryByText('Publish branch')).toBeNull()
   })
 

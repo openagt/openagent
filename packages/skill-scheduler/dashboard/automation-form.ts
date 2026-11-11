@@ -87,16 +87,30 @@ export function atRowsPace(opened: AutomationDraft, row: SchedulerCommand): Auto
  * for the form is then changed in that file.
  */
 export function draftProblem(draft: AutomationDraft, file?: string): string | undefined {
-  const name = draft.name.trim()
-  if (name === '') return draft.onThisMachine ? 'Give it a name, like answer-comments.' : 'Give it a name. It becomes the command, like /answer-comments.'
-  if (!isCommandName(name)) return 'A name is lower-case letters, digits and dashes, never three dashes in a row, like answer-comments.'
-  if (name.length > MAX_NAME) return `A name is ${MAX_NAME} characters at most.`
+  if (draft.name.trim() === '') return draft.onThisMachine ? 'Give it a name, like answer-comments.' : 'Give it a name. It becomes the command, like /answer-comments.'
+  return nameProblem(draft.name) ?? whatAndWhenProblem(draft, file)
+}
+
+/**
+ * What keeps what a draft does and when it runs from being saved yet, the first thing first; nothing
+ * when both can be. Its name is not looked at. `file` is as for `draftProblem`.
+ */
+export function whatAndWhenProblem(draft: AutomationDraft, file?: string): string | undefined {
   if (draft.prompt.trim() === '') return 'Write what the agent is told.'
   if (draft.prompt.trim().length > TEXT_MAX) return `What the agent is told is ${draft.prompt.trim().length} characters, and this form takes ${TEXT_MAX} at most. ${file === undefined ? 'Save a shorter one, then write the rest into the file.' : `Change it in its file, ${file}.`}`
   if (draft.when.trim().length > TEXT_MAX) return `The shell line is ${draft.when.trim().length} characters, and this form takes ${TEXT_MAX} at most.`
   if (draft.when.trim() !== '' && draft.waitsFor.trim().length > TEXT_MAX) return `What the line waits for is ${draft.waitsFor.trim().length} characters, and this form takes ${TEXT_MAX} at most.`
   if (draft.pace.kind === 'work' && draft.when.trim() === '') return 'Say when it runs: on a pace, by a shell line, or both.'
   return paceProblem(draft.pace)
+}
+
+/** Why a name typed cannot be an automation's, said under its field; nothing for one that can, or for none typed yet. */
+export function nameProblem(typed: string): string | undefined {
+  const name = typed.trim()
+  if (name === '') return undefined
+  if (!isCommandName(name)) return 'A name is lower-case letters, digits and dashes, never three dashes in a row, like answer-comments.'
+  if (name.length > MAX_NAME) return `A name is ${MAX_NAME} characters at most.`
+  return undefined
 }
 
 /**
@@ -202,9 +216,12 @@ export function savedFile(output: unknown): { file: string; startsFrom: string; 
   return { file: typeof answer['file'] === 'string' ? answer['file'] : 'a skill file', startsFrom: typeof answer['startsFrom'] === 'string' ? answer['startsFrom'] : 'HEAD', onThisMachine: answer['onThisMachine'] === true, ...(typeof answer['version'] === 'string' ? { version: answer['version'] } : {}) }
 }
 
+/** When a row kept on this machine can start: at once once switched on while the scheduler runs, else once it runs too. */
+const canStart = (schedulerRuns: boolean): string => (schedulerRuns ? 'can start as soon as you switch it on' : 'can start once you switch it on and the scheduler runs')
+
 /** What a saved automation is and what the person has to do with it, in a sentence: a shared one is a file to commit that must reach where a run's checkout starts; one kept on this machine needs nothing. */
-export function savedWords(saved: { startsFrom: string; onThisMachine: boolean }): string {
-  if (saved.onThisMachine) return 'It is kept on this machine alone: nothing to commit, and nobody else gets the row. Its row can start as soon as you switch it on. Its prompt is in the record of each run, which is shared where this project shares its records.'
+export function savedWords(saved: { startsFrom: string; onThisMachine: boolean }, schedulerRuns: boolean): string {
+  if (saved.onThisMachine) return `It is kept on this machine alone: nothing to commit, and nobody else gets the row. Its row ${canStart(schedulerRuns)}. Its prompt is in the record of each run, which is shared where this project shares its records.`
   return `It is a file of yours, in this project, and nothing was committed for you. ${startsWhen(saved.startsFrom)}`
 }
 
@@ -254,8 +271,8 @@ export function removedWords(title: string, output: unknown): string {
 }
 
 /** What the form says of where a draft will be saved, under its two choices. */
-export function whereHint(draft: AutomationDraft): string {
-  return draft.onThisMachine ? 'Kept on this machine alone, outside git. The row starts switched off, and can start as soon as you switch it on.' : 'Saved as a skill file in this project, which you commit. The row starts switched off.'
+export function whereHint(draft: AutomationDraft, schedulerRuns: boolean): string {
+  return draft.onThisMachine ? `Kept on this machine alone, outside git. The row starts switched off, and ${canStart(schedulerRuns)}.` : 'Saved as a skill file in this project, which you commit. The row starts switched off.'
 }
 
 /** Where a saved automation's file has to get to before its row can start, in a sentence. */

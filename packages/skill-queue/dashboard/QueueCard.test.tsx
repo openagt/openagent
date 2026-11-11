@@ -59,7 +59,7 @@ describe('QueueCard', () => {
   test('the play button starts one agent on that entry alone, landing on it', async () => {
     render({ p1: [LOGIN, 'Tidy the loader'] })
     await screen.findByText('Login page')
-    fireEvent.click(screen.getAllByRole('button', { name: 'Spin up an agent working on this entry' })[1]!)
+    fireEvent.click(screen.getAllByRole('button', { name: 'Start an agent working on this entry' })[1]!)
     await waitFor(() => expect(started()).toEqual([['p1', workOnEntryPrompt('Tidy the loader'), undefined]]))
   })
 

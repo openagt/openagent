@@ -1,9 +1,10 @@
 import type { AgentDoing, AgentMeta, ChoiceRequest, OpenAgentEvent } from '../../src/index.js'
 import { foldScreenRows, formatOpenAgentEvent } from '../../src/client.js'
 import { parseQuestion, QUESTION_TAG } from '@openagt/agent-driver/question'
-import { Fragment, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode, type RefObject } from 'react'
+import { Fragment, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode, type RefObject } from 'react'
 import { Check, ChevronRight, Copy, PencilLine } from 'lucide-react'
 import { pendingChoices } from '../lib/live-state.js'
+import { DaemonDown } from '../lib/use-daemon-health.js'
 import { callRow, callSubagents, isAgentsOwn, runRow, endMessage, subagentEnd, subagentEvents, subagentReport, subagentSteps, subagentWait, type SubagentEnd } from '../lib/subagents.js'
 import { answeredQuestion } from '../lib/answered-question.js'
 import { rowWords, type RowWords } from '../lib/row-words.js'
@@ -242,11 +243,14 @@ export function withEarlyQuestion(events: OpenAgentEvent[]): OpenAgentEvent[] {
  * The ends that are no row: a clean one, one waiting on an answer, and one the person stopped. The
  * agent's last message is how a clean turn ends, and the question's card is how a waiting one does;
  * a line under them said it twice. A stopped one just ends where the person stopped it, as Claude
- * Code's chat shows it, with nothing after. A failed end is a row where it happened: it says why
- * the agent is not going on, and why the next prompt was needed.
+ * Code's chat shows it, with nothing after; unless it is the first thing after the prompt: its
+ * coding agent never began, and nothing else in the chat says it ended. A failed end is a row where
+ * it happened: it says why the agent is not going on, and why the next prompt was needed.
  */
 export function quietEnds(events: readonly OpenAgentEvent[]): Set<OpenAgentEvent> {
-  return new Set(events.filter(e => e.kind === 'end' && (e.ok || e.waiting || e.stopped)))
+  const at = events.findIndex(e => !isTurnBoundary(e))
+  const first = at > 0 ? events[at] : undefined
+  return new Set(events.filter(e => e.kind === 'end' && (e.ok || e.waiting || (e.stopped && e !== first))))
 }
 
 /**
@@ -390,13 +394,15 @@ function TurnFiles({ files, onOpen, footer }: { files: readonly ChangedFile[]; o
 // time it was sent sits under the box and shows while the pointer is on the message; its line is
 // always there, so nothing moves when it shows.
 // `waiting`: a message the working agent has not read yet, as Claude Code on the web shows one:
-// under it, Send now, or "Queued" for one sent for after the turn, and on hover the copy and
-// Cancel and edit, which takes it back into the box.
+// under it, when the agent reads it and Send now, or "Queued" for one sent for after the turn, and
+// on hover the copy and Cancel and edit, which takes it back into the box.
 // `attached`: what the run handed the agent with this message, folded under the box.
 // `fresh`: a message just sent, which slides in where it lands, as Claude Code on the web's does.
 function Prompt({ text, at, waiting, attached, fresh = false }: { text: string; at?: string | undefined; waiting?: Waiting | undefined; attached?: string | undefined; fresh?: boolean }) {
   const [open, setOpen] = useState(false)
   const tall = isTall(text)
+  // OpenAgent is not answering: a waiting message can be neither sent now nor taken back.
+  const down = useContext(DaemonDown)
   return (
     <div className={`group/prompt flex min-w-0 flex-1 flex-col items-end font-sans text-foreground ${fresh ? 'bubble-in' : ''}`}>
       <div role="group" aria-label={waiting ? 'Your message, waiting' : 'Your message'} className="max-w-[85%] min-w-0 rounded-xl bg-muted px-3.5 py-2">
@@ -417,7 +423,7 @@ function Prompt({ text, at, waiting, attached, fresh = false }: { text: string; 
           {!waiting && at !== undefined && <Age at={at} />}
           <CopyMessage text={text} />
           {waiting?.onEdit && (
-            <button type="button" aria-label="Cancel and edit message" title="Cancel and edit message" onClick={waiting.onEdit} className="flex h-6 w-6 items-center justify-center rounded-md hover:bg-accent hover:text-accent-foreground">
+            <button type="button" aria-label="Cancel and edit message" title="Cancel and edit message" onClick={waiting.onEdit} disabled={down} className="flex h-6 w-6 items-center justify-center rounded-md hover:bg-accent hover:text-accent-foreground disabled:opacity-50">
               <PencilLine className="h-3.5 w-3.5" aria-hidden />
             </button>
           )}
@@ -426,9 +432,18 @@ function Prompt({ text, at, waiting, attached, fresh = false }: { text: string; 
           (waiting.later || !waiting.onSendNow ? (
             <span className="pr-1 text-[11px] leading-6">Queued</span>
           ) : (
-            <button type="button" onClick={waiting.onSendNow} className="rounded-md px-1.5 text-[11px] leading-6 hover:bg-accent hover:text-accent-foreground">
-              Send now
-            </button>
+            <>
+              <span className="pl-1 text-[11px] leading-6">Read at the agent's next step</span>
+              <button
+                type="button"
+                onClick={waiting.onSendNow}
+                disabled={down}
+                title="The agent reads it now; what it runs goes on in the background"
+                className="rounded-md px-1.5 text-[11px] leading-6 hover:bg-accent hover:text-accent-foreground disabled:opacity-50"
+              >
+                Send now
+              </button>
+            </>
           ))}
       </div>
     </div>
@@ -661,6 +676,7 @@ export function EventList({
   projectId,
   agentId,
   onSaid,
+  focusNext,
   subagents = NO_SUBAGENTS,
   doing = NOTHING_DOING,
   setup,
@@ -700,6 +716,8 @@ export function EventList({
   agentId?: string | undefined
   /** Told what an answer said to the agent, so the chat can show it at once. */
   onSaid?: ((text: string) => void) | undefined
+  /** Given the focus once a question is answered from its card: the message box. */
+  focusNext?: (() => void) | undefined
   /** The runs started for this run, oldest first: each gets a row where it was started. */
   subagents?: readonly AgentMeta[]
   /** What each working subagent is doing now, by id. */
@@ -981,7 +999,7 @@ export function EventList({
                   ) : choiceRow && choiceRow.pick === undefined && projectId !== undefined && agentId !== undefined ? (
                     // The question the agent waits on, answered here, under what it said.
                     typing ? null : <div className="mt-1 flex min-w-0 flex-1 flex-col gap-1.5">
-                      <QuestionPanel key={`${agentId}:${choiceRow.choice.id}`} projectId={projectId} agentId={agentId} choice={choiceRow.choice} active={e === asking} onSaid={onSaid} />
+                      <QuestionPanel key={`${agentId}:${choiceRow.choice.id}`} projectId={projectId} agentId={agentId} choice={choiceRow.choice} active={e === asking} onSaid={onSaid} focusNext={focusNext} />
                       {footer}
                     </div>
                   ) : choiceRow?.pick !== undefined ? (

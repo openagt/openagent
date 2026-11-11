@@ -1,7 +1,7 @@
 'use client'
 import { Dialog as BaseDialog } from '@base-ui/react/dialog'
 import { X } from 'lucide-react'
-import type { ReactNode } from 'react'
+import type { ReactNode, RefObject } from 'react'
 import { cn } from '../../lib/utils.js'
 
 // The shadcn "base" dialog (Base UI, not Radix) — a centered modal shell for a small form (#1025).
@@ -13,6 +13,9 @@ import { cn } from '../../lib/utils.js'
 // A long form is `wide`, scrolls inside the dialog under its title, and keeps its presses in
 // `footer`, always in view; with much typed into it, `keepOnOutsidePress` leaves a click beside it
 // without effect, so only its own presses and Esc close it.
+//
+// A field the dialog opens on is `initialFocus`, never `autoFocus`: React focuses an `autoFocus`
+// field before Base UI notes the press that opened the dialog, which it gives the focus back to.
 
 export function Dialog({
   open,
@@ -22,6 +25,7 @@ export function Dialog({
   footer,
   wide = false,
   keepOnOutsidePress = false,
+  initialFocus,
 }: {
   open: boolean
   onOpenChange: (open: boolean) => void
@@ -33,12 +37,15 @@ export function Dialog({
   wide?: boolean
   /** A click outside closes nothing. */
   keepOnOutsidePress?: boolean
+  /** The field that has the focus once it opens; else, or while that field is disabled, the first thing in it that takes the focus. */
+  initialFocus?: RefObject<HTMLElement | null>
 }) {
   return (
     <BaseDialog.Root open={open} onOpenChange={onOpenChange} disablePointerDismissal={keepOnOutsidePress}>
       <BaseDialog.Portal>
         <BaseDialog.Backdrop className="fixed inset-0 z-50 bg-black/40 backdrop-blur-[1px]" />
         <BaseDialog.Popup
+          initialFocus={initialFocus && (() => (initialFocus.current?.matches(':enabled') ? initialFocus.current : true))}
           className={cn(
             'fixed left-1/2 top-1/2 z-50 flex max-h-[calc(100dvh-2rem)] -translate-x-1/2 -translate-y-1/2 flex-col rounded-lg border border-border bg-card p-4 text-card-foreground shadow-lg outline-none',
             wide ? 'w-[min(46rem,calc(100vw-2rem))]' : 'w-[min(34rem,calc(100vw-2rem))]',

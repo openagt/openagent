@@ -31,24 +31,34 @@ function subscribe(listener: () => void): () => void {
 
 const currentUrl = (): string => window.location.pathname + window.location.search
 
+/** Marks a history entry as Settings this tab opened over the page under it. */
+const OVER_PAGE = 'openagent:settings-over-page'
+const OVER_PAGE_STATE = { [OVER_PAGE]: true }
+
+/** Settings is open over the page this tab showed before it: Back closes it onto that page's own entry, with what the page wrote to it. */
+export function settingsOverPage(): boolean {
+  return window.history.state?.[OVER_PAGE] === true
+}
+
 /** The route, with its projects named by `projects`: what the address names changes when they do. */
 export function useRoute(projects: ProjectAddresses): {
   route: Route
-  /** Navigate to `next`. Replaces the current history entry when `replace` is set — for a
-   *  correction, not a step you should be able to go Back to. Keeps what the page mirrored into
-   *  the query when `keepQuery` is set — for a change of the picked project alone (#1513), or
-   *  Settings opening or closing over the page. */
-  go: (next: Route, options?: { replace?: boolean; keepQuery?: boolean }) => void
+  /** Navigate to `next`. Replaces the current history entry, keeping what the page wrote to it,
+   *  when `replace` is set — for a correction, not a step you should be able to go Back to. Keeps
+   *  what the page mirrored into the query when `keepQuery` is set — for a change of the picked
+   *  project alone (#1513), or Settings opening or closing over the page. Marks the entry as
+   *  Settings opened over the page when `overPage` is set ({@link settingsOverPage}). */
+  go: (next: Route, options?: { replace?: boolean; keepQuery?: boolean; overPage?: boolean }) => void
 } {
   const current = useSyncExternalStore(subscribe, currentUrl, () => '/')
   const route = parseRoute(current, projects)
 
-  const go = (next: Route, options?: { replace?: boolean; keepQuery?: boolean }) => {
+  const go = (next: Route, options?: { replace?: boolean; keepQuery?: boolean; overPage?: boolean }) => {
     const url = options?.keepQuery ? keepPageQuery(formatRoute(next, projects), window.location.search) : formatRoute(next, projects)
     // Going where you already are is not a history entry.
     if (url === current) return
-    if (options?.replace) window.history.replaceState(null, '', url)
-    else window.history.pushState(null, '', url)
+    if (options?.replace) window.history.replaceState(window.history.state, '', url)
+    else window.history.pushState(options?.overPage ? OVER_PAGE_STATE : null, '', url)
     notify()
   }
 
@@ -73,12 +83,15 @@ export function openPermissions(): void {
   notify()
 }
 
-/** Open Settings at `entry` over the page you are on, from a part of the page that has no route to hand; with `item`, at that page inside it. */
+/** Open Settings at `entry` over the page you are on, from a part of the page that has no route to hand; with `item`, at that page inside it.
+ *  From inside Settings, it moves to that entry in place, as the dialog's own list does: Back and closing still go to the page under it. */
 export function openSettings(entry: string, item?: string): void {
   const url = new URL(window.location.href)
+  const open = url.searchParams.has(SETTINGS_PARAM)
   url.searchParams.set(SETTINGS_PARAM, entry)
   if (item) url.searchParams.set(SETTINGS_ITEM_PARAM, item)
   else url.searchParams.delete(SETTINGS_ITEM_PARAM)
-  window.history.pushState(null, '', url.pathname + url.search)
+  if (open) window.history.replaceState(window.history.state, '', url.pathname + url.search)
+  else window.history.pushState(OVER_PAGE_STATE, '', url.pathname + url.search)
   notify()
 }

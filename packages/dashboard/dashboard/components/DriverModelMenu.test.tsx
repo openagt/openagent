@@ -59,7 +59,7 @@ describe('DriverModelMenu tree (#658)', () => {
     renderMenu({ model: '' })
     const trigger = screen.getByRole('button')
     expect(trigger.textContent).not.toContain('Opus')
-    expect((await hoverTooltip(trigger)).textContent).toContain("Model: the CLI's own default")
+    expect((await hoverTooltip(trigger)).textContent).toContain("Model: the coding agent's default")
   })
 
   test('a model the driver does not list is named by its id, since the run is still given it', async () => {
@@ -79,7 +79,7 @@ describe('DriverModelMenu tree (#658)', () => {
   test('the trigger is named for assistive tech even with nothing but a logo on it (#1143)', () => {
     renderMenu({ model: '' })
     // The rendered text is a logo and a chevron; without an explicit name this button says nothing.
-    expect(screen.getByRole('button', { name: "Driver: Claude Code · Model: the CLI's own default" })).toBeTruthy()
+    expect(screen.getByRole('button', { name: "Coding agent: Claude Code · Model: the coding agent's default" })).toBeTruthy()
   })
 })
 
@@ -97,15 +97,15 @@ describe('the effort, in the model menu', () => {
     expect(screen.queryByText('Effort')).toBeNull()
   })
 
-  test("the trigger says the level after the model, and the menu lists the model's own levels under the agent's default, the one in force checked", () => {
+  test("the trigger says the level after the model, and the menu lists the model's own levels under the coding agent's default, the one in force checked", () => {
     const picked = effort({ level: 'high' })
     renderMenu({ effort: picked })
     const trigger = screen.getByRole('button')
     expect(trigger.textContent).toBe('OpusHigh')
-    expect(trigger.getAttribute('aria-label')).toBe('Driver: Claude Code · Model: Opus · Effort: High')
+    expect(trigger.getAttribute('aria-label')).toBe('Coding agent: Claude Code · Model: Opus · Effort: High')
     fireEvent.click(trigger)
     expect(screen.getByText('Effort')).toBeTruthy()
-    const items = ['The agent’s default', 'Low', 'Medium', 'High'].map(name => screen.getByRole('menuitem', { name }))
+    const items = ["The coding agent's default", 'Low', 'Medium', 'High'].map(name => screen.getByRole('menuitem', { name }))
     // The tick leads the picked row; the other rows carry it unseen, so the words line up.
     expect(items.map(item => item.firstElementChild!.classList.contains('opacity-100'))).toEqual([false, false, false, true])
     fireEvent.click(screen.getByRole('menuitem', { name: 'Medium' }))
@@ -117,9 +117,9 @@ describe('the effort, in the model menu', () => {
     renderMenu({ effort: picked })
     const trigger = screen.getByRole('button')
     expect(trigger.textContent).toBe('Opus')
-    expect(trigger.getAttribute('aria-label')).toContain('Effort: the agent’s default')
+    expect(trigger.getAttribute('aria-label')).toContain("Effort: the coding agent's default")
     fireEvent.click(trigger)
-    fireEvent.click(screen.getByRole('menuitem', { name: 'The agent’s default' }))
+    fireEvent.click(screen.getByRole('menuitem', { name: "The coding agent's default" }))
     expect(picked.onChange).toHaveBeenCalledWith(undefined)
   })
 

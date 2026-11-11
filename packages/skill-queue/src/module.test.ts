@@ -94,8 +94,8 @@ test('a fan-out takes the top of the queue, at least one and never more than the
   assert.deepEqual(topEntries(['a', 'b'], 5), ['a', 'b'])
   assert.deepEqual(topEntries(['a', 'b'], 0), ['a'])
   assert.equal(DEFAULT_FAN_OUT_COUNT, 3)
-  assert.equal(fanOutLabel(1), 'Spin up an agent working on the top entry')
-  assert.equal(fanOutLabel(3), 'Spin up 3 agents working on the top 3 entries')
+  assert.equal(fanOutLabel(1), 'Start an agent working on the top entry')
+  assert.equal(fanOutLabel(3), 'Start 3 agents working on the top 3 entries')
 })
 
 test('fanOut starts one run per entry in order, each on its own entry, and stops at the first refusal with its reason', async () => {

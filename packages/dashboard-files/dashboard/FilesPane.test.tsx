@@ -75,7 +75,7 @@ describe('the Files pane’s reads (#815)', () => {
     first.unmount()
     readTree.mockReturnValue(new Promise(() => {}) as never)
     render(<FilesPane projectId="p1" agentId="run-1" context={context()} />)
-    expect(screen.queryByText('Looking for this run’s files…')).toBeNull()
+    expect(screen.queryByText('Looking for this session’s files…')).toBeNull()
     expect(screen.getByText('notes.md')).toBeTruthy()
   })
 
@@ -88,7 +88,7 @@ describe('the Files pane’s reads (#815)', () => {
 
   test('no file is marked changed, and a run’s tree says where it was read from', async () => {
     render(<FilesPane projectId="p1" agentId="run-1" context={context()} />)
-    await waitFor(() => expect(screen.getByText('From the run’s checkout')).toBeTruthy())
+    await waitFor(() => expect(screen.getByText('From the session’s checkout')).toBeTruthy())
     expect(fileRow('README.md').textContent).toBe('README.md')
   })
 
@@ -104,7 +104,7 @@ describe('the Files pane’s reads (#815)', () => {
   test('a run that changed nothing shows the project’s files, and says so in the caption', async () => {
     readTree.mockResolvedValue({ source: 'unchanged', files })
     render(<FilesPane projectId="p1" agentId="run-1" context={context()} />)
-    await waitFor(() => expect(screen.getByText('This run changed no files')).toBeTruthy())
+    await waitFor(() => expect(screen.getByText('This session changed no files')).toBeTruthy())
     expect(screen.getByText('README.md')).toBeTruthy()
     expect(screen.queryByText(/gone from this machine/)).toBeNull()
   })
@@ -112,7 +112,7 @@ describe('the Files pane’s reads (#815)', () => {
   test('a run that is starting says so, and is read again within seconds until its checkout is there', async () => {
     readTree.mockResolvedValue({ source: 'pending' })
     render(<FilesPane projectId="p1" agentId="run-1" context={context()} />)
-    await waitFor(() => expect(screen.getByText('Looking for this run’s files…')).toBeTruthy())
+    await waitFor(() => expect(screen.getByText('Looking for this session’s files…')).toBeTruthy())
     readTree.mockResolvedValue({ source: 'checkout', files: ['made-by-run.ts'] })
     // Well before the 8s poll: the starting run's own, sooner read.
     await waitFor(() => expect(screen.getByText('made-by-run.ts')).toBeTruthy(), { timeout: 3_000 })
@@ -144,13 +144,13 @@ describe('the Files pane’s reads (#815)', () => {
     await waitFor(() => expect(readTree.mock.calls.length).toBeGreaterThan(1))
     await new Promise(resolve => setTimeout(resolve, 400))
     expect(screen.getByText('hello.txt')).toBeTruthy()
-    expect(screen.queryByText('Looking for this run’s files…')).toBeNull()
+    expect(screen.queryByText('Looking for this session’s files…')).toBeNull()
   })
 
   test('a run whose files are gone says so, instead of showing the project’s own', async () => {
     readTree.mockResolvedValue({ source: 'gone' })
     render(<FilesPane projectId="p1" agentId="run-1" context={context()} />)
-    await waitFor(() => expect(screen.getByText(/This run’s files are gone from this machine/)).toBeTruthy())
+    await waitFor(() => expect(screen.getByText(/This session’s files are gone from this machine/)).toBeTruthy())
     expect(screen.queryByText('README.md')).toBeNull()
   })
 

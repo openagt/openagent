@@ -32,7 +32,7 @@ import { stashPendingDraft } from './lib/draft-handoff.js'
 import { useLiveEvents } from './lib/use-live-events.js'
 import { useAgents, useRecentAgents } from './lib/use-agents.js'
 import { runsAgain } from './lib/runs-changed.js'
-import { AGENTS_PAGE, PERMISSIONS_PAGE, useRoute } from './lib/use-route.js'
+import { AGENTS_PAGE, PERMISSIONS_PAGE, settingsOverPage, useRoute } from './lib/use-route.js'
 import { formatRoute, type Route } from './lib/route.js'
 import { projectAddresses, SESSIONS_ID } from '../src/project-address.js'
 import { useActivityNotifications, useInterventionNotifications } from './lib/use-notifications.js'
@@ -41,7 +41,7 @@ import { useDocumentTitle } from './lib/document-title.js'
 import { projectLabels, ProjectLabelsContext } from './lib/project-labels.js'
 import { useActiveAgents } from './lib/use-working.js'
 import { useFavicon } from './lib/favicon.js'
-import { useDaemonHealth } from './lib/use-daemon-health.js'
+import { DaemonDown, useDaemonHealth } from './lib/use-daemon-health.js'
 import { useContextSet } from './lib/use-context-set.js'
 import { TriangleAlert } from 'lucide-react'
 import type { StartPicks } from './lib/started-from.js'
@@ -57,6 +57,12 @@ const EMPTY_INTERVENTIONS: ProjectionRead<Intervention> = { items: [], whole: []
 
 /** Stable initial for the activity poll (#627), so it does not churn on every render. */
 const EMPTY_ACTIVITY: ProjectionRead<Activity> = { items: [], whole: [] }
+
+/** The dashboard's own pages, by the name a phone's bar gives each, as it gives a module's page its label. */
+const OWN_PAGES = new Map([
+  [AGENTS_PAGE, 'Agents'],
+  [PERMISSIONS_PAGE, 'Permissions'],
+])
 
 /** The run this page started last: what the page says of it until the run's own record does. */
 interface StartedRun {
@@ -77,6 +83,8 @@ interface StartedRun {
   picks?: StartPicks
   /** Its name, the moment the daemon has it, before the run's record has one. */
   title?: string
+  /** A read list has had it: from then on, a list without it says it is gone. */
+  listed?: true
 }
 
 const NO_RUN_STARTED: StartedRun = { tick: 0, intent: '', id: null, projectId: null, at: 0 }
@@ -181,6 +189,11 @@ export function App() {
   // the Overview or a module's page, whose rail only lists them (as every project's rail does).
   const agentsOf = addressesRead ? (projectId ?? scope) : null
   const { agents, reload, loaded: agentsLoaded } = useAgents(agentsOf, agentStart.id !== null && agentStart.projectId === agentsOf ? agentStart.id : null, projectId !== null ? 2000 : 10_000)
+  useEffect(() => {
+    const startedId = agentStart.id
+    if (startedId === null || agentStart.listed || !agents.some(agent => agent.id === startedId)) return
+    setAgentStart(prev => (prev.id === startedId ? { ...prev, listed: true } : prev))
+  }, [agents, agentStart.id, agentStart.listed])
 
   // The Context set lives in the shell (#492/#504) so the two surfaces that feed it share one
   // source of truth: the launcher's `@`/`#` chips and Context picker, and the Files pane's tree.
@@ -214,7 +227,7 @@ export function App() {
   // The read as a whole goes to the notifier, which tells of every project's items whichever one
   // is picked, and also needs to know which projects the poll actually reached before it calls
   // anything "new" (#1625).
-  const { value: interventionsRead, stale: interventionsStale } = usePolled<ProjectionRead<Intervention>>(onInterventions, EMPTY_INTERVENTIONS, 5000, [], {
+  const { value: interventionsRead, stale: interventionsStale, loaded: interventionsLoaded } = usePolled<ProjectionRead<Intervention>>(onInterventions, EMPTY_INTERVENTIONS, 5000, [], {
     remember: 'interventions',
     stored: true,
   })
@@ -315,14 +328,16 @@ export function App() {
 
   // Settings (#958): a dialog over the page you are on, which stays under it, its own query too.
   // Moving between its entries replaces the address, so Back closes it rather than stepping through them.
+  // Opened over the page here, it closes by Back too: the page's own entry is there again, as the page left it.
   const showSettings = (entry = '') => {
-    navigate({ ...route, settings: entry }, { keepQuery: true })
+    navigate({ ...route, settings: entry }, { keepQuery: true, overPage: route.settings === undefined })
   }
   const showSettingsEntry = (entry: string) => {
     const { settingsItem: _item, ...rest } = route
     navigate({ ...rest, settings: entry }, { keepQuery: true, replace: true })
   }
   const closeSettings = () => {
+    if (settingsOverPage()) return window.history.back()
     const { settings: _settings, settingsItem: _item, ...under } = route
     navigate(under, { keepQuery: true })
   }
@@ -393,6 +408,9 @@ export function App() {
     ? (agents.find(agent => agent.id === agentId) ??
       (agentsLoaded ? undefined : recentAgents.find(recent => recent.projectId === projectId && recent.agent.id === agentId)?.agent))
     : undefined
+  // A session with no record in a list that was read: it was deleted, or never was here. The run
+  // just started is exempt only until a list has had it, the beat before its card lands.
+  const sessionGone = agentId !== null && !selectedAgent && agentsLoaded && (agentId !== agentStart.id || agentStart.listed === true)
   // The runs started for the selected one: rows in its chat.
   const subagents = useMemo(() => (agentId ? subagentsOf(agents, agentId) : []), [agents, agentId])
   // The project is off the list: read the list again and leave its page for the Overview of every
@@ -439,6 +457,7 @@ export function App() {
           onAgentStarted={agentStarted}
           interventions={interventions}
           interventionsStale={interventionsStale}
+          interventionsLoaded={interventionsLoaded}
           active={activeAgents}
           projects={projects}
           scope={scope}
@@ -502,12 +521,12 @@ export function App() {
       // Not in the list: either the run we just started (its card lands a beat later) or a
       // list we have not read yet, where whether the agent runs is not known. Only a session that
       // is genuinely absent from a list we did read is gone.
-      if (justStarted || !agentsLoaded)
+      if (!sessionGone)
         return <AgentView {...agentPage} live={justStarted ? true : null} label={namesRuns ? startedTitle : (justStarted && agentStart.intent) || undefined} naming={justStarted && namesRuns && startedTitle === undefined} remoteLabel={justStarted ? agentStart.runsOn : undefined} />
       return (
         <NotFound
-          title="This agent is gone"
-          detail="There is no record of this agent. Once its checkout is removed, a finished agent is kept only when the project has a logs skill installed."
+          title="This session is gone"
+          detail="There is no record of this session."
           actionLabel="Back to the project"
           onAction={() => selectAgent(null)}
         />
@@ -542,7 +561,7 @@ export function App() {
   // Hidden by its button or Cmd/Ctrl+B, and remembered; a phone's sheet is opened apart from it.
   const sidebarHidden = useSidebarHidden()
   // The name a phone's top bar gives the page; null on a project's own pages, which have a top row.
-  const phoneTitle = pageSegment ? (modulePage?.label ?? '') : projectId === null ? 'Overview' : null
+  const phoneTitle = pageSegment ? (OWN_PAGES.get(pageSegment) ?? modulePage?.label ?? '') : projectId === null ? 'Overview' : null
   // A page with no chat (the Overview, a module's page) scrolls as a page: the browser's own
   // scrolling, which bounces at either end, and its header goes up with the rest. On a phone its bar
   // stays at the top; on a wider screen the sidebar stays beside it. A chat keeps its box at the
@@ -572,7 +591,7 @@ export function App() {
         <div role="alert" className={cn('h-(--top-banner) shrink-0 bg-background', pageScrolls && 'sticky top-0 z-30')}>
           <div className="flex h-full items-center gap-2 border-b border-border bg-warning/10 px-4 text-xs text-warning">
             <TriangleAlert className="h-3.5 w-3.5 shrink-0" aria-hidden />
-            The daemon is not answering — retrying. Everything on this page is frozen until it returns.
+            OpenAgent is not answering — retrying. Nothing can be sent, started, stopped, answered or published until it is back.
           </div>
         </div>
       )}
@@ -624,11 +643,13 @@ export function App() {
         {isMobile && !pageScrolls && <MenuButton />}
         {/* A project's page and an agent's have panes beside them (Panes). A module's page takes
             the full width itself (#1774), the way the Overview does. */}
+        <DaemonDown.Provider value={!healthy}>
         <PanesProvider
           projectId={projectId}
           agentId={agentId}
-          // A session with no project has no files or changes of a project's to show beside it.
-          enabled={!pageSegment && !noProject}
+          // A session with no project has no files or changes of a project's to show beside it, and
+          // one that is gone has none at all.
+          enabled={!pageSegment && !noProject && !sessionGone}
           files={files}
           context={context}
           toggleContext={toggleContext}
@@ -643,6 +664,7 @@ export function App() {
             </main>
           </PaneLayout>
         </PanesProvider>
+        </DaemonDown.Provider>
       </div>
       {/* What a module of this computer's draws over every page: a popup it raises itself. */}
       {modules.everyPage.map(({ EveryPage, package: pkg }) => (
@@ -650,7 +672,8 @@ export function App() {
           <EveryPage />
         </ModuleSlot>
       ))}
-      {route.settings !== undefined && <SettingsDialog entry={route.settings} openItem={route.settingsItem} onEntry={showSettingsEntry} onClose={closeSettings} scope={scope} projects={projects} />}
+      {/* Once what the address names is read: the project its "Project" group opens on, and the entries the projects and their packages add. */}
+      {route.settings !== undefined && addressesRead && <SettingsDialog entry={route.settings} openItem={route.settingsItem} onEntry={showSettingsEntry} onClose={closeSettings} scope={scope} projects={projects} />}
     </SidebarProvider>
     </ProjectLabelsContext.Provider>
     </OpenProjectContext.Provider>

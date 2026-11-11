@@ -43,7 +43,7 @@ export function AgentDetails({ events, card, pr }: { events: OpenAgentEvent[]; c
 
   return (
     <div className="flex flex-wrap items-center gap-x-4 gap-y-1 border-b border-border px-4 py-2 text-xs">
-      {agent && <Fact label="Agent" value={agent} />}
+      {agent && <Fact label="Coding agent" value={agent} />}
       {model && <Fact label="Model" value={model} />}
       {costUsd !== undefined && <Fact label="Spent" value={`$${costUsd.toFixed(2)}`} />}
       {turns > 0 && <Fact label="Turns" value={String(turns)} />}

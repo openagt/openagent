@@ -33,7 +33,7 @@ describe('AgentDetails', () => {
 
   test('the agent and model come off the run\'s card, each by the name a person knows it by', async () => {
     render(<AgentDetails events={[]} card={{ driver: 'claude-code', model: 'opus' }} />)
-    expect(shown('Agent')).toBe('Claude Code')
+    expect(shown('Coding agent')).toBe('Claude Code')
     await waitFor(() => expect(shown('Model')).toBe('Opus 5.5'))
     cleanup()
     // What a run's card holds once Claude Code named the model it ran.
@@ -41,13 +41,13 @@ describe('AgentDetails', () => {
     await waitFor(() => expect(shown('Model')).toBe('Opus 5.5'))
     cleanup()
     render(<AgentDetails events={[]} card={{ driver: 'codex' }} />)
-    expect(shown('Agent')).toBe('Codex')
+    expect(shown('Coding agent')).toBe('Codex')
     expect(screen.queryByText('Model')).toBeNull()
   })
 
   test('before the card is listed, no agent or model is named', () => {
     render(<AgentDetails events={[]} />)
-    expect(screen.queryByText('Agent')).toBeNull()
+    expect(screen.queryByText('Coding agent')).toBeNull()
     expect(screen.queryByText('Model')).toBeNull()
   })
 

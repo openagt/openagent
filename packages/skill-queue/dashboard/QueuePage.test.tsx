@@ -2,7 +2,7 @@ import { afterEach, describe, expect, test, vi } from 'vitest'
 import { cleanup, fireEvent, screen, waitFor, within } from '@testing-library/react'
 import { HostServicesContext, INERT_HOST_SERVICES, type HostServices } from '../../dashboard/dashboard/lib/host-services.js'
 import type { MountedModules } from '@openagt/dashboard/module/testing'
-import type { ModuleScheduledCommand } from '@openagt/dashboard/module'
+import { forgetRemembered, type ModuleScheduledCommand } from '@openagt/dashboard/module'
 import { QueuePage } from './QueuePage.js'
 import { NO_MODULES, fakeHost, renderWithHost, type FakeHost } from './test-host.js'
 import { workOnEntryPrompt } from '../src/module.js'
@@ -120,6 +120,14 @@ describe('QueuePage', () => {
           ['p1', workOnEntryPrompt('Urgent'), { land: false }],
         ]),
       )
+    })
+
+    test('the count says the agents the batch starts: never more than the entries', async () => {
+      show([{ entry: 'Only one' }])
+      await screen.findByText('Only one')
+      const box = screen.getByRole('spinbutton', { name: 'How many agents to start' }) as HTMLInputElement
+      expect([box.value, box.max]).toEqual(['1', '1'])
+      expect(screen.getByRole('button', { name: 'Start 1 agent' })).toBeTruthy()
     })
 
     test('a start that is refused says why', async () => {
@@ -265,6 +273,28 @@ describe('QueuePage', () => {
       fireEvent.click(await screen.findByRole('button', { name: 'Login page' }))
       expect(openPage).toHaveBeenCalledWith('tickets', ['2026-08-01_login-page.md'], 'p1')
     })
+  })
+
+  test('a second visit opens with the last list at once, faded once its fresh read has been out a second', async () => {
+    show()
+    await screen.findByText('Urgent')
+    cleanup()
+    forgetRemembered()
+    const slow = fakeHost()
+    // Answered only once the test has looked, so no read is left out for the next test.
+    const reads: (() => void)[] = []
+    slow.runCommand.mockImplementation(() => new Promise(resolve => reads.push(() => resolve({ ok: false, error: 'read too late' }))))
+    try {
+      renderWithHost(<QueuePage projects={[alpha]} projectId={null} path={[]} />, slow, NO_MODULES)
+      const entry = screen.getByText('Urgent')
+      expect(entry.closest('[data-stale]')).toBeNull()
+      await waitFor(() => expect(entry.closest('[data-stale]')).not.toBeNull(), { timeout: 2000 })
+    } finally {
+      for (const answer of reads) answer()
+      await waitFor(() => expect(document.querySelector('[data-stale]')).toBeNull())
+      cleanup()
+      forgetRemembered()
+    }
   })
 
   test('a project whose command fails is named with the reason, and has no field to add to', async () => {

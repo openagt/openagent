@@ -16,6 +16,7 @@ import type { AgentStatus } from '../../src/index.js'
 import type { ModuleAgent, ModuleAgentsWanted } from '../../src/dashboard/module-agents.js'
 import { readModule, runComputerCommand, runComputerCommandOn, runModuleCommand } from '../rpc/modules.js'
 import type { ModuleCommandResult, ModuleReadResult } from '../rpc/modules.js'
+import { DaemonDown } from '../lib/use-daemon-health.js'
 
 export type { ModuleCommandResult, ModuleReadResult, AgentStatus, CardWidth, Health, ModuleAgent, ModuleAgentsWanted }
 
@@ -607,15 +608,23 @@ export function useModuleHost(): ModuleHost {
   return host
 }
 
+/** Whether OpenAgent is not answering right now, as the page's banner says: a press that starts a run is off while it is true. */
+export function useOpenAgentDown(): boolean {
+  return useContext(DaemonDown)
+}
+
 // The dashboard's own building blocks, so a module looks like the rest of the page.
 export { Button, buttonVariants, type ButtonProps } from '../components/ui/button.js'
+export { CopyButton } from '../components/ui/copy-button.js'
 export { Card, CardHeader, CardTitle, CardTitleLink, CardContent } from '../components/ui/card.js'
 export { Skeleton } from '../components/ui/skeleton.js'
 export { Input } from '../components/ui/input.js'
 export { GaugeFace } from '../components/ui/gauge.js'
 export { ClaudeLogo, CodexLogo } from '../components/driver-logos.js'
 export { cn } from '../lib/utils.js'
+export { STATUS_TONE, STATUS_DOT, STATUS_RING } from '../lib/status-tone.js'
 export { usePolled, useLoaded, forgetRemembered } from '../lib/use-async.js'
+export { FadeWhileStale } from '../components/FadeWhileStale.js'
 export { Badge } from '../components/ui/badge.js'
 export { Checkbox } from '../components/ui/checkbox.js'
 export { Switch } from '../components/ui/switch.js'
@@ -634,6 +643,7 @@ export { DropdownMenu, DropdownMenuContent, DropdownMenuCheckboxItem, DropdownMe
 export { ContextMenu, ContextMenuTrigger } from '../components/ui/context-menu.js'
 export { PaneTitle, PaneActions } from '../components/PaneHeader.js'
 export { Page } from '../components/Page.js'
+export { ShowSidebarButton } from '../components/SidebarToggle.js'
 export { StatTile } from '../components/StatTile.js'
 export { FilterChips, type FilterChip } from '../components/FilterChips.js'
 export { FileIcon } from '../components/FileIcon.js'
@@ -643,7 +653,7 @@ export { LinkActions, type ProjectLinks, type LinkTargets } from '../components/
 export { MachineMark } from '../components/MachineMark.js'
 export { PersonMark, personName } from '../components/PersonMark.js'
 export { useGitHostPeople, personSaid } from '../lib/use-git-host-people.js'
-export { machineKind, machineName, type MachineKind } from '../../src/client.js'
+export { machineKind, machineName, runName, type MachineKind } from '../../src/client.js'
 export { SettingsSection, SettingsRow, SettingsSelectRow, type SettingsOption } from '../components/SettingsRows.js'
 export { useSettingsCrumb, type SettingsCrumb } from '../lib/settings-crumb.js'
 export { QrCode } from '../components/QrCode.js'

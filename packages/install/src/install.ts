@@ -3,7 +3,7 @@ import { mkdir, readFile, realpath, rm, writeFile } from 'node:fs/promises'
 import { request } from 'node:https'
 import { createRequire } from 'node:module'
 import { connect } from 'node:net'
-import { dirname, join } from 'node:path'
+import { dirname, join, sep } from 'node:path'
 import { CERTIFICATE_FILE, KEY_FILE, readSecureAddress, secureAddressDir } from '@openagt/dashboard/secure-address'
 import { ADDRESS, CERTIFICATE_CONFIG, CERTIFICATE_DAYS, LOOPBACK_ADDRESS } from './address.js'
 import { linux } from './linux.js'
@@ -46,14 +46,20 @@ export async function freed(port: number, ms: number): Promise<boolean> {
   return true
 }
 
+/** Whether the file at the real `path` is a checkout's own, not in a package a package manager installed: no folder of it is a `node_modules`. */
+export function inCheckout(path: string): boolean {
+  return !path.split(sep).includes('node_modules')
+}
+
 /**
- * The dashboard the computer starts at login. Run from a checkout, or from a folder of its own,
- * it is the one this command came with. Run by `npx`, that one is in npm's cache, which npm
- * empties when it likes: the same version is installed to a folder of OpenAgent's own.
+ * The dashboard the computer starts at login. Run from a checkout, it is the one this command
+ * came with. Installed by a package manager (`npx`, `pnpm dlx`, `bunx`, `yarn dlx`, a global
+ * install), it is in that manager's folder, which it empties or updates when it likes: the same
+ * version is installed to a folder of OpenAgent's own.
  */
 async function lastingDashboard(app: string, io: InstallIO): Promise<string> {
   const manifest = await realpath(createRequire(import.meta.url).resolve('@openagt/dashboard/package.json'))
-  if (!manifest.includes('/_npx/')) return join(dirname(manifest), 'dist', 'cli', 'bin.js')
+  if (inCheckout(manifest)) return join(dirname(manifest), 'dist', 'cli', 'bin.js')
   const { version } = JSON.parse(await readFile(manifest, 'utf8')) as { version: string }
   io.out(`◆ installing OpenAgent v${version} in ${app}`)
   await mkdir(app, { recursive: true })

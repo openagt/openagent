@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { CalendarClock } from 'lucide-react'
-import { Button, Card, CardContent, CardHeader, CardTitleLink, Tooltip, TooltipContent, TooltipTrigger, cn, formatAge, formatDateTime, useModuleHost, usePolled, type ModuleCardProps, type ModuleProject } from '@openagt/dashboard/module'
+import { Button, Card, CardContent, CardHeader, CardTitleLink, Tooltip, TooltipContent, TooltipTrigger, cn, formatAge, formatDateTime, useModuleHost, useOpenAgentDown, usePolled, type ModuleCardProps, type ModuleProject } from '@openagt/dashboard/module'
+import { CodeWords } from './CodeWords.js'
 import { cannotRun, notAsked, readSchedulers, schedulersKey, rowTitle, schedulerStatus, schedulerStopped, startedNow, startsNext, unlistedWords, type Answered, type SchedulerCommand, type SchedulerRow } from './schedulers.js'
 
 // The Overview's Automations card: what starts by itself in every project that has this package,
@@ -8,7 +9,8 @@ import { cannotRun, notAsked, readSchedulers, schedulersKey, rowTitle, scheduler
 // its title opens that page. Per project: the rows that are switched on, each with when it starts
 // next, in the words its Edit panel uses ("Next start in 3h, if there is work"); then one line for
 // the rows that are switched off, however many they are. A row whose last look started a run opens
-// that agent. A project whose scheduler is not running says so first: nothing starts there.
+// that agent. A project whose scheduler is not running says, under its status, that nothing starts
+// there, and leads to the page, which says how to start it; one that schedules nothing leads there too.
 //
 // One button, on the row under the pointer: "Run now", as the page's (`scheduler now`), for a
 // row the person wants once, now, without going to the page. A row is switched on its own page;
@@ -30,6 +32,20 @@ export function SchedulerCard({ projects }: ModuleCardProps) {
   // One read with the Automations page and Settings under the same key, kept for the next visit.
   const { value: rows, loaded, reload } = usePolled(() => readSchedulers(host, projects), EMPTY, 10_000, [key], { remember: schedulersKey(key), stored: true })
   const open = (): void => host.openPage('automations')
+  /** A link to the Automations page, which also opens in a new tab. */
+  const toPage = (words: string) => (
+    <a
+      href={host.pageHref('automations')}
+      onClick={event => {
+        if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return
+        event.preventDefault()
+        open()
+      }}
+      className="underline hover:text-foreground"
+    >
+      {words}
+    </a>
+  )
   return (
     <Card>
       <CardHeader>
@@ -67,7 +83,8 @@ export function SchedulerCard({ projects }: ModuleCardProps) {
                   {row.error !== undefined && <p className="mt-1 text-xs text-muted-foreground">{row.error}</p>}
                   {/* Why the last look decided nothing; a scheduler that is stopped says that itself, above. */}
                   {row.lastTick?.note && stopped === undefined && <p className="mt-1 text-xs text-muted-foreground">Its last look: {row.lastTick.note}</p>}
-                  {stopped !== undefined && row.error === undefined && on.length > 0 && <p className="mt-1 text-xs text-warning">{stopped}: nothing starts by itself.</p>}
+                  {stopped !== undefined && row.error === undefined && on.length > 0 && <p className="mt-1 text-xs text-warning">Nothing starts by itself. {toPage('How to start it')}</p>}
+                  {row.error === undefined && row.commands.length === 0 && row.unreadable.length === 0 && <p className="mt-1 text-xs text-muted-foreground">Nothing is scheduled here. {toPage('New automation')}</p>}
                   {on.length > 0 && (
                     <ul className="mt-2 space-y-0.5">
                       {on.map(command => (
@@ -82,20 +99,7 @@ export function SchedulerCard({ projects }: ModuleCardProps) {
                   ))}
                   {off !== undefined && (
                     <p className="mt-2 text-xs text-muted-foreground">
-                      {off}.{' '}
-                      {on.length === 0 && (
-                        <a
-                          href={host.pageHref('automations')}
-                          onClick={event => {
-                            if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return
-                            event.preventDefault()
-                            open()
-                          }}
-                          className="underline hover:text-foreground"
-                        >
-                          Switch one on
-                        </a>
-                      )}
+                      {off}. {on.length === 0 && toPage('Switch one on')}
                     </p>
                   )}
                 </li>
@@ -115,6 +119,7 @@ export function SchedulerCard({ projects }: ModuleCardProps) {
  */
 function OnRow({ project, command, stopped, lookedAt, onOpenRun, reload }: { project: ModuleProject; command: SchedulerCommand; stopped: boolean; /** When the scheduler last looked: the start its look made was then. */ lookedAt: string | undefined; onOpenRun: (run: string) => void; reload: () => Promise<void> }) {
   const host = useModuleHost()
+  const down = useOpenAgentDown()
   const [busy, setBusy] = useState(false)
   const [said, setSaid] = useState<Answered>()
   const started = said?.started || command.decision?.run
@@ -130,7 +135,7 @@ function OnRow({ project, command, stopped, lookedAt, onOpenRun, reload }: { pro
     // One line, whatever the card's width: the name whole, when it starts next cut short (and said
     // whole on hover), never a second line that leaves the rows at uneven gaps.
     <li className="group/row relative -mx-2 flex h-8 items-center gap-3 rounded-md px-2 text-sm hover:bg-accent/60">
-      <span aria-hidden className="size-1.5 shrink-0 rounded-full bg-success" />
+      <span aria-hidden className={cn('size-1.5 shrink-0 rounded-full', stopped ? 'bg-muted-foreground/50' : 'bg-success')} />
       <span className="shrink-0 font-mono text-[13px]">{rowTitle(command)}</span>
       {/* While the scheduler is stopped a row has no next start: the line above says why. */}
       {!stopped && (
@@ -143,14 +148,22 @@ function OnRow({ project, command, stopped, lookedAt, onOpenRun, reload }: { pro
           {said?.started ? 'Started: open it' : `Started an agent${lookedAt !== undefined ? ` ${formatAge(lookedAt)}` : ''}: open it`}
         </button>
       )}
-      {said?.note && <span title={said.note} className="min-w-0 truncate text-xs text-muted-foreground">{said.note}</span>}
-      {said?.failed && <span title={said.failed} className="min-w-0 truncate text-xs text-danger">{said.failed}</span>}
+      {said?.note && (
+        <span title={said.note} className="min-w-0 truncate text-xs text-muted-foreground">
+          <CodeWords text={said.note} />
+        </span>
+      )}
+      {said?.failed && (
+        <span title={said.failed} className="min-w-0 truncate text-xs text-danger">
+          <CodeWords text={said.failed} />
+        </span>
+      )}
       {/* Under the pointer, or with the keyboard on it; a phone has no hover, and there it always shows. */}
       {cannotRun(command) === undefined && (
         <Button
           variant="ghost"
           size="xs"
-          disabled={busy}
+          disabled={busy || down}
           onClick={() => void runNow()}
           aria-label={`Run ${rowTitle(command)} now`}
           className="absolute inset-y-0 right-1 my-auto bg-[inherit] opacity-0 transition-opacity group-hover/row:opacity-100 focus-visible:opacity-100 disabled:opacity-100 max-md:static max-md:ml-auto max-md:opacity-100"

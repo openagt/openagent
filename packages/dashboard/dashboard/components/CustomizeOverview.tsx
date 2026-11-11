@@ -1,11 +1,11 @@
-import { useCallback, useState, type DragEvent, type ReactNode } from 'react'
+import { useEffect, useState, type DragEvent, type ReactNode } from 'react'
 import { flushSync } from 'react-dom'
 import { ChevronLeft, ChevronRight, GripVertical, Plus, X } from 'lucide-react'
 import { widthsFor, type CardWidth, type OverviewLayouts } from '../../src/client.js'
 import { updatePreferences } from '../lib/preferences.js'
-import { StaleReads } from '../lib/use-async.js'
 import { cn } from '../lib/utils.js'
 import type { OverviewCard } from './ModuleCards.js'
+import { FadeWhileStale } from './FadeWhileStale.js'
 
 /** A card as the layout placed it: its width, and whether it is hidden. */
 export interface Placed {
@@ -49,28 +49,12 @@ export function CardGrid({ cards }: { cards: Placed[] }) {
   )
 }
 
-const NONE_STALE: ReadonlySet<object> = new Set()
-
-/**
- * One card in its cell, faded while what it shows is only what an earlier visit read: the page
- * opens with the last numbers at once, and each card turns full as its fresh answer lands.
- */
+/** One card in its cell, faded while it shows only what an earlier visit read ({@link FadeWhileStale}). */
 function CardCell({ card, className }: { card: OverviewCard; className: string }) {
-  const [staleReads, setStaleReads] = useState(NONE_STALE)
-  const told = useCallback((reader: object, stale: boolean) => {
-    setStaleReads(readers => {
-      if (readers.has(reader) === stale) return readers
-      const next = new Set(readers)
-      if (stale) next.add(reader)
-      else next.delete(reader)
-      return next
-    })
-  }, [])
-  const stale = card.stale === true || staleReads.size > 0
   return (
-    <div data-card={card.id} data-stale={stale || undefined} className={cn(className, 'transition-opacity duration-300', stale && 'opacity-60')}>
-      <StaleReads.Provider value={told}>{card.node}</StaleReads.Provider>
-    </div>
+    <FadeWhileStale data-card={card.id} stale={card.stale === true} className={className}>
+      {card.node}
+    </FadeWhileStale>
   )
 }
 
@@ -193,7 +177,15 @@ export function EditOverview({ arranged, layouts, layoutKey }: { arranged: Place
         }}
         className={cn('rounded-lg border border-dashed border-border px-3 py-2.5', dragging?.from === 'page' && 'border-primary bg-accent/40')}
       >
-        <p className="mb-2 text-xs text-muted-foreground">{tray.length === 0 ? 'Every card is on the page. Drag one here, or press its ✕, to take it off.' : 'Not on the page: drag one onto a card to put it there, or press + to add it at the end.'}</p>
+        <p className="mb-2 text-xs text-muted-foreground">
+          {tray.length === 0 ? (
+            <>
+              Every card is on the page. Drag one here, or press its <TakeOffMark />, to take it off.
+            </>
+          ) : (
+            'Not on the page: drag one onto a card to put it there, or press + to add it at the end.'
+          )}
+        </p>
         {tray.length > 0 && (
           <ul className="flex flex-wrap gap-2">
             {tray.map(({ card }) => (
@@ -268,10 +260,6 @@ export function EditOverview({ arranged, layouts, layoutKey }: { arranged: Place
           >
             {/* Where the dragged card lands: a bar in the gap at this card's edge, laid over the page. */}
             {dragging && aimed !== undefined && (aimed === 'end' ? card.id === last && <DropBar side="after" /> : aimed.id === card.id && <DropBar side={aimed.side} />)}
-            {/* The card as it stands, its own buttons asleep while it is being arranged. */}
-            <div aria-hidden className="pointer-events-none flex flex-1 select-none flex-col *:flex-1">
-              {card.node}
-            </div>
             <CardBar
               label={card.label}
               widths={widthsFor(card)}
@@ -282,6 +270,10 @@ export function EditOverview({ arranged, layouts, layoutKey }: { arranged: Place
               onWidth={picked => change(card.id, { width: picked })}
               onHide={() => change(card.id, { hidden: true })}
             />
+            {/* The card as it stands, its own buttons asleep while it is being arranged. */}
+            <div inert className="flex flex-1 select-none flex-col *:flex-1">
+              {card.node}
+            </div>
           </div>
         ))}
       </Grid>
@@ -289,10 +281,15 @@ export function EditOverview({ arranged, layouts, layoutKey }: { arranged: Place
   )
 }
 
-/** The bar on a card's top edge while the page is arranged: its handle, its widths, and ✕. */
+/** The ✕ a card's bar takes it off the page with, as a sentence names it: the bar's own icon, drawn whatever fonts the computer has, its box cut to the glyph so it sits on the line as a letter does. */
+export function TakeOffMark() {
+  return <X role="img" aria-label="X" viewBox="5 5 14 14" className="inline size-[7px] align-baseline" />
+}
+
+/** The bar above a card while the page is arranged, so it covers none of the card: its handle, its widths, and ✕. */
 function CardBar({ label, widths, width, first, last, onStep, onWidth, onHide }: { label: string; widths: CardWidth[]; width: CardWidth; first: boolean; last: boolean; onStep: (by: -1 | 1) => void; onWidth: (width: CardWidth) => void; onHide: () => void }) {
   return (
-    <div role="toolbar" aria-label={label} className="absolute top-2 right-2 z-10 flex items-center gap-1 rounded-md border border-border bg-popover p-0.5 text-popover-foreground shadow-sm">
+    <div role="toolbar" aria-label={label} className="mb-1.5 flex items-center gap-1 self-end rounded-md border border-border bg-popover p-0.5 text-popover-foreground shadow-sm">
       <button
         type="button"
         aria-label={`Move ${label}: arrow keys`}

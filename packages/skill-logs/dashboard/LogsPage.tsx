@@ -1,5 +1,4 @@
-import { useState } from 'react'
-import { FilterChips, Page, PersonMark, Table, TableBody, TableCell, TableHead, TableHeader, TableRow, cn, formatDateTime, formatDuration, personSaid, useGitHostPeople, useModuleHost, usePolled, type ModuleAgent, type ModuleHostPerson, type ModulePageProps, type ModuleProject } from '@openagt/dashboard/module'
+import { FadeWhileStale, FilterChips, Page, PersonMark, STATUS_DOT, STATUS_RING, Table, TableBody, TableCell, TableHead, TableHeader, TableRow, cn, formatDateTime, formatDuration, personSaid, runName, useGitHostPeople, useModuleHost, usePolled, type ModuleAgent, type ModuleHostPerson, type ModulePageProps, type ModuleProject } from '@openagt/dashboard/module'
 import type { RunCard } from '../src/run.js'
 
 /** How many runs each project lists: the command's own default page is 20; the page shows more. */
@@ -70,24 +69,14 @@ interface Read {
 
 const NOTHING_READ: Read = { rows: [], failed: [] }
 
-/** Each status's tone: its word, and the dot before it. */
-const STATUS_TONE: Record<string, { text: string; dot: string }> = {
-  running: { text: 'text-primary', dot: 'bg-primary' },
-  done: { text: 'text-success', dot: 'bg-success' },
-  waiting: { text: 'text-info', dot: 'bg-info' },
-  stopped: { text: 'text-warning', dot: 'bg-warning' },
-  failed: { text: 'text-danger', dot: 'bg-danger' },
-}
-
 /** The statuses a chip picks, in this order: what is going, then how runs ended, then the runs whose computer does not answer. */
 const STATUSES = ['running', 'waiting', 'done', 'stopped', 'failed', 'unknown']
 
-/** A run's status as a dot and its word; one whose computer does not answer says which, pointed at. */
+/** A run's status as a dot in the dashboard's colors and its word: the dot filled while something is going on, a ring once nothing is. One whose computer does not answer says which, pointed at. */
 function Status({ status, offline }: { status: string; offline?: string | undefined }) {
-  const tone = STATUS_TONE[status]
   return (
-    <span className={cn('inline-flex items-center gap-1.5', tone?.text ?? 'text-muted-foreground')} {...(offline ? { title: offline } : {})}>
-      <span aria-hidden className={cn('size-1.5 shrink-0 rounded-full', tone?.dot ?? 'bg-muted-foreground')} />
+    <span className="inline-flex items-center gap-1.5" {...(offline ? { title: offline } : {})}>
+      <span aria-hidden className={cn('size-1.5 shrink-0 rounded-full', STATUS_DOT[status] ?? cn('border', STATUS_RING[status] ?? STATUS_RING['done']))} />
       {status === 'unknown' ? 'status unknown' : status}
     </span>
   )
@@ -116,14 +105,12 @@ export function byDay(rows: Row[], now: Date = new Date()): { day: string; rows:
   return days
 }
 
-/** How long a run took, from its start to its end; nothing for one still going. */
-function took(card: Row['card']): string {
-  return card.endedAt ? formatDuration(Date.parse(card.endedAt) - Date.parse(card.startedAt)) : '—'
-}
+/** The statuses of a run that is over: a waiting run's end is only its last turn's. */
+const ENDED = ['done', 'stopped', 'failed']
 
-/** What a run is called on its row: its short name, else what it was asked while it has none, else its id. */
-function runName(card: Row['card']): string {
-  return card.title?.trim() || card.intent?.trim() || card.id
+/** How long a run took, from its start to its end; nothing for one not over. */
+function took(card: Row['card']): string {
+  return card.endedAt && ENDED.includes(card.status) ? formatDuration(Date.parse(card.endedAt) - Date.parse(card.startedAt)) : '—'
 }
 
 /** The time of day a run started, its day being the heading's. */
@@ -138,20 +125,21 @@ function dollars(cost: number): string {
 
 /**
  * The Logs page: every project's recorded runs, newest first, from `logs --limit 50` in each
- * project, each as the dashboard says it stands right now ({@link withLiveRuns}). A row opens the
- * run's own page in the dashboard. A project whose command fails is named with the command's own
- * reason, and the other projects still show.
+ * project, each as the dashboard says it stands right now ({@link withLiveRuns}). A chip shows one
+ * status, at `/logs/<status>`. A row opens the run's own page in the dashboard. A project whose
+ * command fails is named with the command's own reason, and the other projects still show.
  */
-export function LogsPage({ projects }: ModulePageProps) {
+export function LogsPage({ projects, path }: ModulePageProps) {
   const host = useModuleHost()
   const key = projects.map(p => p.id).join(',')
-  const { value: live } = usePolled<LiveRuns[]>(
+  const { value: live, stale: liveStale } = usePolled<LiveRuns[]>(
     () => Promise.all(projects.map(async project => ({ project, runs: await host.agents(project.id).catch((): ModuleAgent[] => []) }))),
     [],
     10_000,
     [key],
+    { remember: `skill-logs:live:${key}`, stored: true },
   )
-  const { value: recorded, loaded } = usePolled<Read>(
+  const { value: recorded, loaded, stale: recordedStale } = usePolled<Read>(
     async () => {
       const results = await Promise.all(projects.map(async project => ({ project, result: await host.runCommand(project.id, ['--limit', String(LIMIT)]) })))
       const rows: Row[] = []
@@ -168,23 +156,29 @@ export function LogsPage({ projects }: ModulePageProps) {
     // Each read fetches origin's copy of the records branch, and a run lands only when it ends.
     60_000,
     [key],
+    // Kept for the next visit: the page opens with the last list, faded until it is read again.
+    { remember: `skill-logs:runs:${key}`, stored: true },
   )
   const read = { ...recorded, rows: withLiveRuns(recorded.rows, live) }
+  const stale = liveStale || recordedStale
   const accountOf = useGitHostPeople(read.rows.map(({ project, card }) => ({ projectId: project.id, person: card.person })), host.gitHostPeople, 'skill-logs:people')
 
-  // Which status the list shows: every one, until a chip picks one. One no run has any more goes back to all.
-  const [picked, setPicked] = useState<string | null>(null)
+  // Which status the list shows: every one, until a chip picks one, kept in the address (`/logs/waiting`) so a
+  // reload or Back from a run shows the list the person left. One no run has any more goes back to all.
+  const picked = path[0] ?? null
   const counts = STATUSES.map(value => ({ value, label: value[0]!.toUpperCase() + value.slice(1), count: read.rows.filter(row => row.card.status === value).length })).filter(c => c.count > 0)
   const status = counts.some(c => c.value === picked) ? picked : null
   const shown = status === null ? read.rows : read.rows.filter(row => row.card.status === status)
   const days = byDay(shown)
   const many = projects.length > 1
+  // A project that gave a whole page may have older runs the page does not list.
+  const capped = projects.some(project => recorded.rows.filter(row => row.project.id === project.id).length >= LIMIT)
 
   return (
     <Page
       title="Logs"
-      description={`Every run recorded in ${projects.length === 1 ? 'this project' : 'these projects'}, newest first.`}
-      bar={<FilterChips chips={counts} total={read.rows.length} picked={status} onPick={setPicked} />}
+      description={capped ? `The last ${LIMIT} runs recorded in ${many ? 'each of these projects' : 'this project'}, newest first.` : `Every run recorded in ${many ? 'these projects' : 'this project'}, newest first.`}
+      bar={<FilterChips chips={counts} total={read.rows.length} picked={status} onPick={value => host.openPage('logs', value === null ? [] : [value])} />}
     >
       {read.failed.map(({ project, error }) => (
         <p key={project.id} role="alert" className="mb-3 text-sm text-danger">
@@ -196,7 +190,7 @@ export function LogsPage({ projects }: ModulePageProps) {
       {days.length > 0 && (
         // One table for every day, so the columns stand in one place down the page; each day opens
         // with a row of its own: the day, how many runs it had and what they cost together.
-        <div className="max-md:hidden">
+        <FadeWhileStale stale={stale} className="max-md:hidden">
           <Table>
             <TableHeader>
               <TableRow>
@@ -226,9 +220,7 @@ export function LogsPage({ projects }: ModulePageProps) {
                       <div className="flex items-center gap-2.5">
                         <RunPerson person={card.person} account={accountOf(project.id, card.person)} />
                         <div className="min-w-0 flex-1">
-                          <p className="truncate font-medium" title={card.title ?? card.intent}>
-                            {runName(card)}
-                          </p>
+                          <RunName card={card} title={card.title ?? card.intent} onOpen={() => host.openAgent(project.id, card.id)} />
                           {card.title?.trim() && card.intent?.trim() && (
                             <p className="truncate text-xs text-muted-foreground" title={card.intent}>
                               {card.intent}
@@ -259,11 +251,11 @@ export function LogsPage({ projects }: ModulePageProps) {
               ])}
             </TableBody>
           </Table>
-        </div>
+        </FadeWhileStale>
       )}
       {/* A phone has no width for the table's columns: there a run is two lines, its name and then
           the rest, and its branch is left to its own page. */}
-      <div className="space-y-5 md:hidden">
+      <FadeWhileStale stale={stale} className="space-y-5 md:hidden">
         {days.map(({ day, rows, cost }) => (
           <section key={day} aria-label={day}>
             <DayHeading day={day} runs={rows.length} cost={cost} />
@@ -272,9 +264,7 @@ export function LogsPage({ projects }: ModulePageProps) {
                 <li key={`${project.id}/${card.id}`} onClick={() => host.openAgent(project.id, card.id)} className="flex cursor-pointer items-center gap-2.5 border-b border-border py-2 hover:bg-accent">
                   <RunPerson person={card.person} account={accountOf(project.id, card.person)} />
                   <div className="min-w-0 flex-1">
-                    <p className="truncate font-medium" title={card.intent}>
-                      {runName(card)}
-                    </p>
+                    <RunName card={card} title={card.intent} onOpen={() => host.openAgent(project.id, card.id)} />
                     <p className="mt-0.5 flex flex-wrap items-center gap-x-3 text-xs text-muted-foreground">
                       <Status status={card.status} offline={card.offline} />
                       {many && <span>{project.name}</span>}
@@ -292,8 +282,26 @@ export function LogsPage({ projects }: ModulePageProps) {
             </ul>
           </section>
         ))}
-      </div>
+      </FadeWhileStale>
     </Page>
+  )
+}
+
+/** A run's name, a button that opens the run: what the keyboard reaches of a row the pointer opens anywhere. */
+function RunName({ card, title, onOpen }: { card: Row['card']; title: string | undefined; onOpen: () => void }) {
+  return (
+    <button
+      type="button"
+      title={title}
+      onClick={event => {
+        event.stopPropagation()
+        onOpen()
+      }}
+      className="-mx-1 block max-w-[calc(100%+0.5rem)] truncate rounded-sm px-1 text-left font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-primary)]"
+    >
+      {/* As every list names a run; a run with none of those goes by its id. */}
+      {runName(card) ?? card.id}
+    </button>
   )
 }
 

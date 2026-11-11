@@ -47,9 +47,10 @@ vi.mock('../lib/preferences.js', () => ({
 // The `actions` and `summary` slots of the bar above the message box ARE rendered, so the handoff
 // cluster and the modules' summaries stay reachable.
 vi.mock('./AgentActionBar.js', () => ({
-  AgentActionBar: ({ ready, checkout, onToggle, onProjectRemoved }: { ready?: boolean; checkout: unknown; onToggle?: () => void; onProjectRemoved?: () => void }) => (
+  AgentActionBar: ({ ready, checkout, onToggle, onProjectRemoved, onShowWorkBar }: { ready?: boolean; checkout: unknown; onToggle?: () => void; onProjectRemoved?: () => void; onShowWorkBar?: () => void }) => (
     <>
       <span data-testid="bar-frame" />
+      {onShowWorkBar && <button type="button" onClick={onShowWorkBar}>Show the work bar</button>}
       <button type="button" onClick={onProjectRemoved}>project removed</button>
       <button type="button" onClick={onToggle}>details</button>
       <span data-testid="bar-ready">{String(ready)}</span>
@@ -58,8 +59,9 @@ vi.mock('./AgentActionBar.js', () => ({
   ),
 }))
 vi.mock('./AgentWorkBar.js', () => ({
-  AgentWorkBar: ({ actions, summary, checkout, show }: { actions?: ReactNode; summary?: ReactNode; checkout: unknown; show: boolean }) => (
-    <div data-testid="work-bar" data-show={String(show)}>
+  AgentWorkBar: ({ actions, summary, checkout, show, away, onHide }: { actions?: ReactNode; summary?: ReactNode; checkout: unknown; show: boolean; away: boolean; onHide: () => void }) => (
+    <div data-testid="work-bar" data-show={String(show)} data-away={String(away)}>
+      <button type="button" onClick={onHide}>Hide this bar</button>
       <span data-testid="work-checkout">{JSON.stringify(checkout)}</span>
       {summary}
       {actions}
@@ -297,6 +299,27 @@ describe('AgentView: when the bar above the message box is there', () => {
     onAgentWorktree.mockResolvedValue({ branch: 'agent-z', pr: { number: 3, url: 'https://x/pull/3', state: 'OPEN', title: 'T' } })
     render(view({ agentId: 'run-3' }))
     await waitFor(() => expect(shown()).toBe('true'))
+  })
+
+  test('a bar put away is offered back in Session actions, which brings it back, after a reload too', async () => {
+    onAgent.mockResolvedValue(ARCHIVED)
+    onAgentWorktree.mockResolvedValue({ branch: 'agent-w', pr: { number: 4, url: 'https://x/pull/4', state: 'OPEN', title: 'T' } })
+    render(view({ agentId: 'run-4' }))
+    await waitFor(() => expect(shown()).toBe('true'))
+    expect(screen.queryByRole('button', { name: 'Show the work bar' })).toBeNull()
+    fireEvent.click(screen.getByRole('button', { name: 'Hide this bar' }))
+    expect(screen.getByTestId('work-bar').dataset.away).toBe('true')
+    cleanup()
+    render(view({ agentId: 'run-4' }))
+    await waitFor(() => expect(shown()).toBe('true'))
+    expect(screen.getByTestId('work-bar').dataset.away).toBe('true')
+    fireEvent.click(screen.getByRole('button', { name: 'Show the work bar' }))
+    expect(screen.getByTestId('work-bar').dataset.away).toBe('false')
+    expect(screen.queryByRole('button', { name: 'Show the work bar' })).toBeNull()
+    cleanup()
+    render(view({ agentId: 'run-4' }))
+    await waitFor(() => expect(shown()).toBe('true'))
+    expect(screen.getByTestId('work-bar').dataset.away).toBe('false')
   })
 
   test('on a first visit, a run whose pull request turns out merged never shows the bar while the request is read', async () => {
@@ -602,7 +625,7 @@ describe('a question the agent stopped on', () => {
     onAgent.mockResolvedValue(asked)
     render(view({ events: asked }))
     fireEvent.click(await screen.findByRole('radio', { name: 'Other' }))
-    fireEvent.change(screen.getByLabelText('Other'), { target: { value: 'MySQL' } })
+    fireEvent.change(screen.getByLabelText('Your own answer'), { target: { value: 'MySQL' } })
     fireEvent.click(screen.getByRole('button', { name: 'Submit' }))
     await waitFor(() => expect(sendMessage).toHaveBeenCalledWith('p1', 'You paused to ask: "Which database?". The user chose: MySQL. Continue with that decision.', 'run-1'))
     await waitFor(() => expect(screen.getByRole('group', { name: 'Your answer' }).textContent).toBe('Which database?MySQL'))
@@ -665,6 +688,45 @@ describe('a message sent while the agent works', () => {
     expect(withdrawMessage).toHaveBeenCalledWith('p1', 'run-1', id)
     expect(edited).toEqual(['and then this'])
     expect(queuedBoxes()).toHaveLength(0)
+  })
+
+  test('it is still waiting after the page is left or reloaded, with Send now and Cancel and edit, until the agent reads it', () => {
+    const before = [start('go'), text]
+    render(view({ live: true, events: before }))
+    fireEvent.click(screen.getByText('queue-one'))
+    const first = `m${queuedIds}`
+    fireEvent.click(screen.getByText('queue-one'))
+    const second = `m${queuedIds}`
+    cleanup()
+    const { rerender } = render(view({ live: true, events: before }))
+    expect(queuedBoxes().map(n => n.textContent)).toEqual(['and then this', 'and then this'])
+    fireEvent.click(screen.getAllByRole('button', { name: 'Send now' })[1]!)
+    expect(sendNow).toHaveBeenCalledWith('p1', 'run-1')
+    fireEvent.click(screen.getAllByRole('button', { name: 'Cancel and edit message' })[0]!)
+    expect(withdrawMessage).toHaveBeenCalledWith('p1', 'run-1', first)
+    const read = [...before, { kind: 'driver', event: { type: 'steered', text: 'and then this', id: second } } as OpenAgentEvent]
+    rerender(view({ live: true, events: read }))
+    expect(queuedBoxes()).toHaveLength(0)
+    cleanup()
+    render(view({ live: true, events: before }))
+    expect(queuedBoxes()).toHaveLength(0)
+  })
+
+  test('two tabs open on the run each keep the message the other sent: both show both, and both are still waiting after a reload', () => {
+    const before = [start('go'), text]
+    const one = render(view({ live: true, events: before }))
+    const two = render(view({ live: true, events: before }))
+    // The browser tells every other tab of a write, never the one that wrote.
+    const sendIn = (tab: typeof one) => {
+      fireEvent.click(within(tab.container).getByText('queue-one'))
+      act(() => void window.dispatchEvent(new StorageEvent('storage', { key: 'oa.waiting:run-1' })))
+    }
+    sendIn(one)
+    sendIn(two)
+    for (const tab of [one, two]) expect(within(tab.container).queryAllByLabelText('Your message, waiting')).toHaveLength(2)
+    cleanup()
+    render(view({ live: true, events: before }))
+    expect(queuedBoxes()).toHaveLength(2)
   })
 
   test('queued before the agent\'s first event, it is the chat\'s only row, not hidden behind the waiting words', () => {
@@ -923,6 +985,22 @@ describe('a run just started', () => {
     // its words are only the ones fading out.
     expect(screen.queryByText('Starting session')?.closest('.cross-fade-out') ?? null).not.toBeNull()
     expect(screen.getByRole('status')).toBeTruthy()
+  })
+
+  test('a run stopped before its first turn keeps its prompt, stops counting, and says it stopped', async () => {
+    const { rerender } = render(view({ live: true, events: [], startedWith: 'Say hi' }))
+    expect(screen.getByText('Starting session')).toBeTruthy()
+    const stopped = [{ kind: 'end', ok: false, stopped: true }] as OpenAgentEvent[]
+    rerender(view({ live: false, events: stopped, startedWith: 'Say hi', card: { status: 'stopped', intent: 'Say hi', branch: 'agent-x' } }))
+    await waitFor(() => expect(screen.getByText('Stopped')).toBeTruthy())
+    expect(screen.getAllByText('Say hi')).toHaveLength(1)
+    expect(screen.queryByRole('status')).toBeNull()
+  })
+
+  test('a run with no prompt line yet shows the prompt its card says, on a page that did not start it', () => {
+    render(view({ live: true, events: [], card: { status: 'running', intent: 'Move the cart', branch: 'agent-x', startedAt: new Date().toISOString() } }))
+    expect(screen.getByText('Move the cart')).toBeTruthy()
+    expect(screen.getByText('Starting the coding agent')).toBeTruthy()
   })
 
   test('an agent just started on a machine says nothing of a set-up before its card is listed: no checkout is made for it here', () => {

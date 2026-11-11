@@ -327,8 +327,13 @@ export function useNaming(persons: Persons) {
 /** The first time someone else is let in: the person at the page names themselves, the owner. */
 export function WhoAreYou({ title, naming, onType, onConfirm, onClose }: { title: string; naming: { typed: string; error?: string; busy: boolean }; onType: (typed: string) => void; onConfirm: (owner: string) => void; onClose: () => void }) {
   const name = nameOf(naming.typed)
+  const field = useRef<HTMLInputElement>(null)
+  // The field is disabled while the name is read and while it is tried; once either ends, it takes the focus.
+  useEffect(() => {
+    if (!naming.busy) field.current?.focus()
+  }, [naming.busy])
   return (
-    <Dialog open onOpenChange={open => !open && onClose()} title={title}>
+    <Dialog open onOpenChange={open => !open && onClose()} title={title} initialFocus={field}>
       <form
         className="space-y-4"
         onSubmit={event => {
@@ -340,7 +345,7 @@ export function WhoAreYou({ title, naming, onType, onConfirm, onClose }: { title
           <label htmlFor="owner-name" className="text-sm">
             First, your name?
           </label>
-          <Input id="owner-name" autoFocus disabled={naming.busy} value={naming.typed} onChange={event => onType(event.target.value)} className="h-8 bg-background px-2 text-sm" />
+          <Input id="owner-name" ref={field} disabled={naming.busy} value={naming.typed} onChange={event => onType(event.target.value)} className="h-8 bg-background px-2 text-sm" />
           <p className="text-xs text-muted-foreground">You are the owner, the one who invites. The devices already in are yours.</p>
           {naming.typed.trim() !== '' && name === undefined && <p className="text-xs text-danger">{NOT_A_NAME}</p>}
         </div>
@@ -387,6 +392,7 @@ export function Invite({
 }) {
   const title = `Add person to ${label}`
   const [typed, setTyped] = useState('')
+  const field = useRef<HTMLInputElement>(null)
   const [person, setPerson] = useState<string | undefined>()
   const [qr, setQr] = useState(false)
   const { naming, ask: askOwner, type, confirm } = useNaming(persons)
@@ -405,7 +411,7 @@ export function Invite({
   if (naming !== undefined) return <WhoAreYou title={title} naming={naming} onType={type} onConfirm={owner => void confirm(owner).then(named => named && make(owner))} onClose={onClose} />
 
   return (
-    <Dialog open onOpenChange={open => !open && onClose()} title={title}>
+    <Dialog open onOpenChange={open => !open && onClose()} title={title} initialFocus={field}>
       <div className="space-y-4">
         <form
           className="space-y-1"
@@ -418,7 +424,7 @@ export function Invite({
             Their name
           </label>
           <div className="flex gap-2">
-            <Input id="invite-name" autoFocus placeholder="Their name" value={typed} onChange={event => setTyped(event.target.value)} className="h-8 min-w-0 flex-1 bg-background px-2 text-sm" />
+            <Input id="invite-name" ref={field} placeholder="Their name" value={typed} onChange={event => setTyped(event.target.value)} className="h-8 min-w-0 flex-1 bg-background px-2 text-sm" />
             {(person === undefined || name !== person) && (
               <Button size="sm" type="submit" disabled={name === undefined || own || asking}>
                 Make the code

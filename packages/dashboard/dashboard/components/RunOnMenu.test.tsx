@@ -27,7 +27,7 @@ function renderMenu(over: Partial<ConnectionControl> = {}) {
   return connection
 }
 
-const trigger = () => screen.getByRole('button', { name: 'Run on' })
+const trigger = () => screen.getByRole('button', { name: /^Run on: / })
 
 describe('the "Run on" pick in the row under the box', () => {
   test('it reads "This machine" while no machine is picked, drawn as the row under the box draws its items: no border', () => {

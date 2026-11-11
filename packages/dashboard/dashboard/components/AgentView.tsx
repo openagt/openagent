@@ -15,6 +15,8 @@ import { AgentComposer, type QueuedMessage } from './AgentComposer.js'
 import { sendNow, withdrawMessage } from '../rpc/control.js'
 import type { WaitingMessage } from './EventList.js'
 import { AgentWorkBar } from './AgentWorkBar.js'
+import { useWorkBarAway } from '../lib/work-bar-away.js'
+import { keepWaiting, keptWaiting, onKeptWaiting } from '../lib/draft-handoff.js'
 import { AgentFeed } from './AgentFeed.js'
 import { IssueLinks } from './Markdown.js'
 import { OpenFile } from './ToolCalls.js'
@@ -86,7 +88,7 @@ export function AgentView({
   /** Whether the agent is still running; `null` while the daemon's list of agents has not been read, so it is not known yet. */
   live: boolean | null
   /** What the run's card says, off the runs poll: what the feed cannot carry (the details strip's facts, how the agent was set up, whether it is a subagent, whether its record is being saved). Absent until the card is listed. */
-  card?: (AgentDetailsCard & Pick<AgentMeta, 'status' | 'saving' | 'parent' | 'workspace' | 'branch' | 'base' | 'baseCommit' | 'host' | 'otherHost' | 'publish' | 'prBase' | 'gitAccount' | 'earlierPrs' | 'remoteKind' | 'repos' | 'agent' | 'skillsOn' | 'skillsOff' | 'projectSkills'>) | undefined
+  card?: (AgentDetailsCard & Pick<AgentMeta, 'status' | 'intent' | 'saving' | 'parent' | 'workspace' | 'branch' | 'base' | 'baseCommit' | 'host' | 'otherHost' | 'publish' | 'prBase' | 'gitAccount' | 'earlierPrs' | 'remoteKind' | 'repos' | 'agent' | 'skillsOn' | 'skillsOff' | 'projectSkills'> & Partial<Pick<AgentMeta, 'startedAt'>>) | undefined
   /** What the launcher said about this run as it started it: shown until the run's record says it. */
   picks?: StartPicks | undefined
   /** The session's own name — the same label the rail shows (#1030). It leads the action bar as
@@ -192,7 +194,19 @@ export function AgentView({
   const toggle = useCallback(() => setOpen(o => !o), [])
 
   // The messages on their way to the agent, from the box under the chat to the feed above it.
-  const { sending: shownSending, onSending, waiting, onQueued, editInBox } = useMessagesOnTheirWay(projectId, agentId, shown, feedLive, startedWith)
+  // The prompt this page started the run with is on its way only until the run has ended.
+  const { sending: shownSending, onSending, waiting, onQueued, editInBox } = useMessagesOnTheirWay(projectId, agentId, shown, feedLive, live === false ? undefined : startedWith)
+  // A question answered from its card hands the focus on to the box, for what the person says next.
+  const focusBox = useRef<(() => void) | null>(null)
+  // A run writes its prompt line once its coding agent begins. Until then its prompt, off its card,
+  // is the chat's first row, after a reload and on a run stopped before it began too.
+  const standIn = card?.intent ?? startedWith
+  const standsIn = standIn !== undefined && !(live !== false && startedWith !== undefined) && !shown.some(e => e.kind === 'driver' && e.event.type === 'start')
+  const startedAt = card?.startedAt
+  const chat = useMemo<OpenAgentEvent[]>(
+    () => (standsIn ? [{ kind: 'driver', event: { type: 'start', prompt: standIn }, ...(startedAt !== undefined ? { at: startedAt } : {}) }, ...shown] : shown),
+    [standsIn, standIn, startedAt, shown],
+  )
   // The agent works, or is about to: on a message just sent, or as its feed shows before the
   // agents poll does.
   const going = feedLive || shownSending !== undefined
@@ -314,6 +328,8 @@ export function AgentView({
   // What the bar is about right now, so the ✕ hides this and not the next thing the agent does:
   // the run, its branch, how much work is on it, and where that work has got to.
   const workState = [agentId, barCheckout?.branch ?? '', onBranch?.commits.length ?? 0, onBranch?.pendingFiles?.length ?? 0, onBranch?.insertions ?? 0, onBranch?.deletions ?? 0, onBranch?.pushed ?? false, pr?.number ?? '', pr?.state ?? ''].join('|')
+  // Put away, Session actions brings it back: the run may still wait on the person for its next step.
+  const workBar = useWorkBarAway(agentId, workState)
 
   return (
     <ChatPane
@@ -333,6 +349,7 @@ export function AgentView({
             onToggle={toggle}
             ready={ready}
             checkout={checkout}
+            {...(workBar.away && say ? { onShowWorkBar: workBar.show } : {})}
           />
           {/* The always-available session-details strip: agent + spend (#322). What the run changed is
               in the Changes pane, not here. */}
@@ -373,13 +390,14 @@ export function AgentView({
             }
             error={ready && showHandoff ? handoff.error : undefined}
             show={say}
-            state={workState}
+            away={workBar.away}
+            onHide={workBar.hide}
           />
           {card?.otherHost && card.host ? (
             // A run another computer started, which is no saved machine, is only read here: a
             // message would continue it on this computer, under its id, with this computer's
             // logins and none of its conversation.
-            <div className="mx-auto w-full max-w-3xl p-2">
+            <div className="@container mx-auto w-full max-w-3xl p-2">
               {row}
               <p role="note" className="rounded-xl border border-border bg-muted/40 px-3 py-2.5 text-sm text-muted-foreground">
                 {`This run is on ${card.host}. Continue it there.`}
@@ -395,6 +413,7 @@ export function AgentView({
             onSending={onSending}
             onQueued={onQueued}
             editInBox={editInBox}
+            focusBox={focusBox}
             model={underBox}
             {...(contextWindow !== undefined ? { context: <ContextCircle used={card?.contextTokens ?? 0} size={contextWindow} /> } : {})}
             controls={<RunPrLabels prs={prs} />}
@@ -432,10 +451,11 @@ export function AgentView({
         <OpenFile.Provider value={onOpenFile}>
         <AgentFeed
           key={agentId}
-          events={shown}
+          events={chat}
           projectId={projectId}
           agentId={agentId}
           onSaid={onSending}
+          focusNext={() => focusBox.current?.()}
           writing={feedLive ? writing : ''}
           {...(shownSending !== undefined ? { sending: shownSending } : {})}
           working={feedLive || shownSending !== undefined}
@@ -461,6 +481,9 @@ export function AgentView({
     </ChatPane>
   )
 }
+
+/** A message sent to a working agent, with how many prompts its log held then: a later prompt of its text is it, read. */
+type Queued = QueuedMessage & { prompts: number }
 
 /**
  * The messages on their way to an agent, shown in its feed until the agent's own line of each
@@ -494,24 +517,34 @@ function useMessagesOnTheirWay(
   // The messages sent while the agent works that it has not read yet, each shown waiting until the
   // agent reads it: at its next step, where its `steered` line lands, or, sent for later or not
   // taken in time, as the prompt of its next turn. An agent that stopped working without reading
-  // them (it failed, it was stopped) shows them no longer.
-  const [queued, setQueued] = useState<(QueuedMessage & { prompts: number })[]>([])
-  useEffect(() => setQueued([]), [agentId])
+  // them (it failed, it was stopped) shows them no longer. Kept per run in this browser, so a
+  // visit or a reload shows them too, until the run's events say they are read, and each tab open
+  // on the run takes the list another tab keeps, so a send there adds to it.
+  const [kept, setKept] = useState(() => ({ run: agentId, messages: keptWaiting<Queued>(agentId) }))
+  const queued = kept.run === agentId ? kept.messages : keptWaiting<Queued>(agentId)
+  const setQueued = useCallback(
+    (next: (was: Queued[]) => Queued[]) => setKept(was => ({ run: agentId, messages: next(was.run === agentId ? was.messages : keptWaiting<Queued>(agentId)) })),
+    [agentId],
+  )
+  useEffect(() => {
+    if (kept.run === agentId) keepWaiting(agentId, kept.messages)
+  }, [kept, agentId])
+  useEffect(() => onKeptWaiting<Queued>(agentId, messages => setKept({ run: agentId, messages })), [agentId])
   const isRead = useMemo(() => {
     const steered = new Set(shown.flatMap(e => (e.kind === 'driver' && e.event.type === 'steered' && e.event.id !== undefined ? [e.event.id] : [])))
     const starts = shown.flatMap(e => (e.kind === 'driver' && e.event.type === 'start' ? [e.event.prompt] : []))
-    return (message: QueuedMessage & { prompts: number }) => steered.has(message.id) || starts.slice(message.prompts).includes(message.text)
+    return (message: Queued) => steered.has(message.id) || starts.slice(message.prompts).includes(message.text)
   }, [shown])
   const unread = queued.filter(message => !isRead(message))
   useEffect(() => {
-    if (unread.length !== queued.length) setQueued(unread)
+    if (unread.length !== queued.length) setQueued(() => unread)
   }, [unread.length, queued.length]) // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => {
     if (queued.length === 0 || feedLive) return
-    const timer = setTimeout(() => setQueued([]), QUEUED_UNREAD_MS)
+    const timer = setTimeout(() => setQueued(() => []), QUEUED_UNREAD_MS)
     return () => clearTimeout(timer)
-  }, [queued.length, feedLive])
-  const onQueued = useCallback((message: QueuedMessage) => setQueued(was => [...was, { ...message, prompts }]), [prompts])
+  }, [queued.length, feedLive, setQueued])
+  const onQueued = useCallback((message: QueuedMessage) => setQueued(was => [...was, { ...message, prompts }]), [setQueued, prompts])
   // Cancel and edit puts the message back in the box; the composer says how.
   const editInBox = useRef<((text: string) => void) | null>(null)
   const waiting: WaitingMessage[] = unread.map(({ prompts: _prompts, ...message }) => ({

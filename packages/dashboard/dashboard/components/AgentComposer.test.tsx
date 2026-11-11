@@ -111,7 +111,7 @@ describe('AgentComposer box', () => {
   test('the box says what sending does, live or ended, in one short line', () => {
     renderComposer()
     // A working agent: the keys, as Claude Code's box says them.
-    expect(props().placeholder).toBe('⏎ to send, ⌘⏎ to queue for later')
+    expect(props().placeholder).toMatch(/^Enter to send, (⌘Enter|Ctrl\+Enter) to queue for later$/)
     cleanup()
     renderComposer({ live: false })
     expect(props().placeholder).toBe('Message the agent to continue it…')
@@ -141,6 +141,18 @@ describe('AgentComposer slot control (#1455)', () => {
     rerender(ui(false)) // the end lands: the run is no longer live
     rerender(ui(true)) // the resume brings the same run back
     expect((screen.getByRole('button', { name: 'Stop agent' }) as HTMLButtonElement).disabled).toBe(false)
+  })
+
+  test('while OpenAgent is not answering, Stop is off, and Esc stops nothing', async () => {
+    const { DaemonDown } = await import('../lib/use-daemon-health.js')
+    render(
+      <DaemonDown.Provider value>
+        <AgentComposer projectId="p1" agentId="run-1" live files={[]} />
+      </DaemonDown.Provider>,
+    )
+    expect((screen.getByRole('button', { name: 'Stop agent' }) as HTMLButtonElement).disabled).toBe(true)
+    fireEvent.keyDown(window, { key: 'Escape' })
+    expect(sendStop).not.toHaveBeenCalled()
   })
 
   test('an ended session offers nothing in the slot, a stopped one too: a message continues it', () => {

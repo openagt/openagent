@@ -76,9 +76,9 @@ export async function checkForUpdate(
 export function formatUpdateStatus(status: UpdateStatus): string | undefined {
   switch (status.kind) {
     case 'up-to-date':
-      return `✅ Up to date (v${status.current})`
+      return '  Up to date.'
     case 'update-available':
-      return `⬆️  Update available: v${status.latest} (you have v${status.current}). Run: npm i -g ${PACKAGE_NAME}`
+      return `  v${status.latest} is out. Run: npm i -g ${PACKAGE_NAME}`
     case 'unknown':
       return undefined
   }

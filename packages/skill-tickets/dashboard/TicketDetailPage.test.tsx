@@ -60,26 +60,24 @@ afterEach(() => {
 // One ticket's own page (#1144): the entire file, read by the same slug the list row and the
 // route carry, plus the actions on it the one-liner list no longer has room for.
 describe('TicketDetailPage (#1144)', () => {
-  test('reads the ticket by slug and renders its full content', async () => {
-    onTicket.mockResolvedValue(ticket({ priority: '8', planned: true }))
+  test('reads the ticket by slug and renders its text below the title, the title, the keys above it and its summary said once', async () => {
+    onTicket.mockResolvedValue(ticket({ priority: '8', planned: true, content: 'Priority: 8\n\n# Do the thing\n\n## TLDR\n\nThe thing is not done.\n\nMore detail below the fold.' }))
     render(<TicketDetailPage projectId="p1" slug="2026-07-20_do-the-thing.md" />)
-    // The title heads the page, and the markdown body repeats it as its own `# ` heading — two
-    // matches for the bare text, so assert the page's own heading specifically.
-    expect(await screen.findByRole('heading', { name: 'Do the thing' })).toBeTruthy()
-    expect(screen.getByText('More detail below the fold.')).toBeTruthy()
+    expect(await screen.findByText('More detail below the fold.')).toBeTruthy()
+    expect(screen.getByRole('heading', { name: 'Do the thing' })).toBeTruthy()
+    expect(screen.getAllByText('Do the thing')).toHaveLength(1)
+    expect(screen.getAllByText('The thing is not done.')).toHaveLength(1)
+    expect(screen.queryByText('Priority: 8', { selector: 'p' })).toBeNull()
     // A bare "8" would be cryptic on its own (#1265); the badge spells out what it rates.
-    expect(screen.getByText('Priority: 8')).toBeTruthy()
+    expect(screen.getByText('Priority 8')).toBeTruthy()
     expect(screen.getByText('planned')).toBeTruthy()
     expect(host.runCommand).toHaveBeenCalledWith('p1', ['show', '2026-07-20_do-the-thing.md', '--local'])
   })
 
-  test('shows the issue link, date, and priority in that order below the description (#1144/#1265)', async () => {
-    onTicket.mockResolvedValue(
-      ticket({ priority: '3', issue: { label: '#42', url: 'https://example.com/org/repo/issues/42' }, summary: 'A short description.' }),
-    )
+  test('shows the issue link, date, and priority in that order under the title (#1144/#1265)', async () => {
+    onTicket.mockResolvedValue(ticket({ priority: '3', issue: { label: '#42', url: 'https://example.com/org/repo/issues/42' } }))
     render(<TicketDetailPage projectId="p1" slug="2026-07-20_do-the-thing.md" />)
-    const description = await screen.findByText('A short description.')
-    const meta = description.nextElementSibling as HTMLElement
+    const meta = (await screen.findByText(/ ago$/)).parentElement!
     const order = [meta.textContent?.indexOf('ago'), meta.textContent?.indexOf('Priority'), meta.textContent?.indexOf('#42')]
     expect(order.every(i => i !== undefined && i !== -1)).toBe(true)
     expect(order[0]).toBeLessThan(order[1] as number)
@@ -88,13 +86,11 @@ describe('TicketDetailPage (#1144)', () => {
     expect(link.getAttribute('href')).toBe('https://example.com/org/repo/issues/42')
   })
 
-  test('shows the date in the meta below the description (#1144/#1265)', async () => {
+  test('shows the date first in the meta under the title (#1144/#1265)', async () => {
     const twoDaysAgo = new Date(Date.now() - 2 * 24 * 60 * 60_000).toISOString()
-    onTicket.mockResolvedValue(ticket({ date: twoDaysAgo, summary: 'A short description.' }))
+    onTicket.mockResolvedValue(ticket({ date: twoDaysAgo }))
     render(<TicketDetailPage projectId="p1" slug="2026-07-20_do-the-thing.md" />)
-    const description = await screen.findByText('A short description.')
-    // All meta, date included, moved below the description (#1265) — no longer beside it.
-    const meta = description.nextElementSibling as HTMLElement
+    const meta = (await screen.findByText('2d ago')).parentElement!
     expect(meta.textContent?.startsWith('2d ago')).toBe(true)
   })
 

@@ -95,8 +95,8 @@ describe('Settings dropdowns (#1172)', () => {
       }
     }
     await usable(['Project', 'Theme', 'Colours', 'Primary colour', 'Font', 'Code font', 'File preview font', 'Editor'])
-    fireEvent.click(screen.getByRole('button', { name: 'Agent' }))
-    await usable(['Project', 'Agent', 'Model'])
+    fireEvent.click(screen.getByRole('button', { name: 'Coding agent' }))
+    await usable(['Project', 'Coding agent', 'Model'])
   })
 
   test('an editor list the daemon could not fill still leaves a usable Editor row', async () => {
@@ -120,25 +120,25 @@ describe('Settings dropdowns (#1172)', () => {
   })
 })
 
-describe('Settings › Agent', () => {
+describe('Settings › Coding agent', () => {
   test("the Model row offers the agent's own list, the start menu's, after the agent's own default", async () => {
     prefsRead.mockResolvedValueOnce({})
     refreshPreferences()
     open('agent')
     await waitFor(async () =>
       expect(await offered(select('Model'))).toEqual([
-        ["the CLI's own default", false],
+        ['Default', false],
         ['Opus 5.5', false],
         ['Fable 5.1', false],
       ]),
     )
-    expect(showing(select('Model'))).toBe("the CLI's own default")
+    expect(showing(select('Model'))).toBe('Default')
     // Each is saved by the id the agent gave it, and the agent's own default as no model at all.
     await pick(select('Model'), 'Opus 5.5')
     await pick(select('Model'), 'Fable 5.1')
-    await pick(select('Model'), "the CLI's own default")
+    await pick(select('Model'), 'Default')
     expect(saves()).toEqual([{ model: 'opus' }, { model: 'claude-fable-5-1' }, { model: '' }])
-    expect(showing(select('Model'))).toBe("the CLI's own default")
+    expect(showing(select('Model'))).toBe('Default')
   })
 
   test('a saved model the agent does not list is kept, by its id, since a start is still given it', async () => {
@@ -146,7 +146,7 @@ describe('Settings › Agent', () => {
     refreshPreferences()
     open('agent')
     await waitFor(() => expect(showing(select('Model'))).toBe('fable'))
-    await waitFor(async () => expect((await choices(select('Model'))).slice(0, -1)).toEqual(["the CLI's own default", 'Opus 5.5', 'Fable 5.1']))
+    await waitFor(async () => expect((await choices(select('Model'))).slice(0, -1)).toEqual(['Default', 'Opus 5.5', 'Fable 5.1']))
     expect((await offered(select('Model'))).at(-1)).toEqual(['fable', false])
     // The line is the saved id itself, not only its words: it is the one the list marks as the pick.
     const lines = within(await openList(select('Model'))).getAllByRole('option')
@@ -158,10 +158,10 @@ describe('Settings › Agent', () => {
     prefsRead.mockResolvedValueOnce({ driver: 'codex' })
     refreshPreferences()
     open('agent')
-    await waitFor(() => expect(showing(select('Agent'))).toBe('Codex'))
+    await waitFor(() => expect(showing(select('Coding agent'))).toBe('Codex'))
     await waitFor(async () =>
       expect(await offered(select('Model'))).toEqual([
-        ["the CLI's own default", false],
+        ['Default', false],
         ['not logged in', true],
       ]),
     )
@@ -172,11 +172,11 @@ describe('Settings › Agent', () => {
     refreshPreferences()
     open('agent')
     await waitFor(() => expect(showing(select('Model'))).toBe('Opus 5.5'))
-    expect(await choices(select('Agent'))).toEqual(['Claude Code', 'Codex'])
-    await pick(select('Agent'), 'Codex')
+    expect(await choices(select('Coding agent'))).toEqual(['Claude Code', 'Codex'])
+    await pick(select('Coding agent'), 'Codex')
     expect(saves()).toEqual([{ driver: 'codex', model: '' }])
-    expect(showing(select('Agent'))).toBe('Codex')
-    expect(showing(select('Model'))).toBe("the CLI's own default")
+    expect(showing(select('Coding agent'))).toBe('Codex')
+    expect(showing(select('Model'))).toBe('Default')
   })
 })
 
@@ -187,19 +187,19 @@ describe('Settings on and off rows', () => {
     prefsRead.mockResolvedValueOnce({ showThinking: true, notifyNewActivity: false })
     refreshPreferences()
     open('agent')
-    await waitFor(() => expect(checked(row('Show what the agent thought'))).toBe(true))
+    await waitFor(() => expect(checked(row('Show what the coding agent thought'))).toBe(true))
     // No box to tick anywhere among Settings' own rows: on and off is a switch.
     const switches = () => screen.getAllByRole('switch').map(each => [each.getAttribute('aria-label'), checked(each)])
     expect(switches()).toEqual([
       // Naming a run costs money for something only a person looks at, so it is a switch — on
       // until it is turned off, since a list of first lines is what it was put there to fix.
       ['Name each run', true],
-      ['Show what the agent thought', true],
+      ['Show what the coding agent thought', true],
     ])
     fireEvent.click(row('Name each run'))
     expect(checked(row('Name each run'))).toBe(false)
-    fireEvent.click(row('Show what the agent thought'))
-    expect(checked(row('Show what the agent thought'))).toBe(false)
+    fireEvent.click(row('Show what the coding agent thought'))
+    expect(checked(row('Show what the coding agent thought'))).toBe(false)
     fireEvent.click(screen.getByRole('button', { name: 'Notifications' }))
     expect(switches()).toEqual([
       ['Browser', true],
@@ -215,6 +215,35 @@ describe('Settings on and off rows', () => {
     fireEvent.click(row('Browser'))
     expect(saves()).toEqual([{ nameRuns: false }, { showThinking: false }, { notifyNewActivity: true }, { notifyHumanIntervention: false }, { notifyBrowser: false }])
     expect([checked(row('Human Queue')), checked(row('Browser'))]).toEqual([false, false])
+  })
+
+  test('notifications the browser was not asked for yet: the Browser row reads off, and switching it on asks the browser', async () => {
+    const requestPermission = vi.fn(async () => 'default')
+    vi.stubGlobal('Notification', { permission: 'default', requestPermission })
+    prefsRead.mockResolvedValueOnce({ notifyBrowser: true })
+    refreshPreferences()
+    open('notifications')
+    const browser = row('Browser')
+    await waitFor(() => expect(checked(browser)).toBe(false))
+    fireEvent.click(browser)
+    expect(saves()).toEqual([{ notifyBrowser: true }])
+    expect(requestPermission).toHaveBeenCalled()
+  })
+
+  test('the browser refuses when asked: the Browser row says it is blocked as soon as the browser answers', async () => {
+    // The person answers the browser's question after the switch has saved and drawn.
+    let refuse = () => {}
+    const stub = { permission: 'default', requestPermission: vi.fn(() => new Promise<string>(resolve => (refuse = () => resolve((stub.permission = 'denied'))))) }
+    vi.stubGlobal('Notification', stub)
+    prefsRead.mockResolvedValueOnce({ notifyBrowser: false })
+    refreshPreferences()
+    open('notifications')
+    const browser = row('Browser')
+    fireEvent.click(browser)
+    await waitFor(() => expect(within(browser.parentElement!.parentElement!).getByText(/Switched on, the browser asks/)).toBeTruthy())
+    expect(saves()).toEqual([{ notifyBrowser: true }])
+    refuse()
+    await waitFor(() => expect(browser.getAttribute('aria-disabled')).toBe('true'), { timeout: 1000 })
   })
 
   test('notifications the browser blocked: the Browser row says so, reads off, and cannot be switched', async () => {
@@ -327,9 +356,9 @@ describe('the Settings list', () => {
 
   test("two groups: yours and this computer's, the computer's packages among them; then the picked project's packages", () => {
     show('', 'p1')
-    expect(entries('You and this computer')).toEqual(['Profile', 'Appearance', 'Notifications', 'Agent', 'Agent data', 'Repos', 'Claude web', 'Devices'])
+    expect(entries('You and this computer')).toEqual(['Profile', 'Appearance', 'Notifications', 'Coding agent', 'Your agent data', 'Repos', 'Claude web', 'Devices'])
     // gemstack has orchestration and no scheduler; every project has its skills.
-    expect(entries('Project')).toEqual(['Skills', 'Agent data', 'Orchestration'])
+    expect(entries('Project')).toEqual(['Skills', 'Project agent data', 'Orchestration'])
     expect(showing(select('Project'))).toBe('gemstack')
     // Opened on nothing in particular: the first entry.
     expect(title()).toBe('SettingsProfile')
@@ -349,7 +378,7 @@ describe('the Settings list', () => {
   test('the project select changes the project group, and All projects gives an entry every project that has its package, saying which', async () => {
     show('orchestration', 'p1')
     await pick(select('Project'), 'All projects')
-    expect(entries('Project')).toEqual(['Skills', 'Agent data', 'Orchestration', 'Scheduler'])
+    expect(entries('Project')).toEqual(['Skills', 'Project agent data', 'Orchestration', 'Scheduler'])
     expect(title()).toBe('SettingsAll projectsOrchestration')
     expect(screen.getByText('for: gemstack, other')).toBeTruthy()
     expect(screen.getByText('Saved to 2 projects: gemstack, other.')).toBeTruthy()
@@ -358,7 +387,7 @@ describe('the Settings list', () => {
     expect(screen.getByText('The Scheduler settings failed: boom')).toBeTruthy()
     expect(screen.getByText('Saved to one project: other.')).toBeTruthy()
     await pick(select('Project'), 'plain')
-    expect(entries('Project')).toEqual(['Skills', 'Agent data'])
+    expect(entries('Project')).toEqual(['Skills', 'Project agent data'])
     // The entry it was on is not plain's: the first entry shows.
     expect(title()).toBe('SettingsProfile')
   })
@@ -366,7 +395,7 @@ describe('the Settings list', () => {
   test('with no project picked in the sidebar, the project group opens on every project', () => {
     show('')
     expect(showing(select('Project'))).toBe('All projects')
-    expect(entries('Project')).toEqual(['Skills', 'Agent data', 'Orchestration', 'Scheduler'])
+    expect(entries('Project')).toEqual(['Skills', 'Project agent data', 'Orchestration', 'Scheduler'])
   })
 
   test('Skills opened for a project is that project\'s, whatever the sidebar has picked; the select changes it', async () => {

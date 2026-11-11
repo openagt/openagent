@@ -8,7 +8,7 @@ import { cn } from '../lib/utils.js'
 import { Button } from './ui/button.js'
 import { Card, CardContent, CardHeader } from './ui/card.js'
 import { usePreferences, updatePreferences, notificationsEnabled } from '../lib/preferences.js'
-import { useNotificationPermission } from '../lib/notification-permission.js'
+import { setBrowserNotifications, useNotificationPermission } from '../lib/notification-permission.js'
 import { startPicks, useStartAgent } from '../lib/use-start-agent.js'
 import { AddProjectEffects } from './AddProjectEffects.js'
 import { ProjectPicker } from './ProjectPicker.js'
@@ -83,13 +83,13 @@ export function OnboardingChecklist({
 }) {
   // Slower than the Overview's own 5s poll: these change at human speed, and this read fans out
   // over every project to answer the tickets question.
-  const { value: data, reload } = usePolled<DashboardData | null>(onDashboard, null, 10_000, [])
+  const { value: data, reload, loaded } = usePolled<DashboardData | null>(onDashboard, null, 10_000, [])
   const preferences = usePreferences()
   const permission = useNotificationPermission()
   const { start, busy: starting, error: startError } = useStartAgent()
   const { person } = usePerson()
   // What runs need on this computer: the coding agent's login, and an account at each git host.
-  const { missing, hosts, reload: reloadMissing } = useMissing()
+  const { missing, hosts, loaded: missingLoaded, reload: reloadMissing } = useMissing()
   // The steps shown once stay, done or not: the coding agent's is there only once it was missing.
   const seen = useRef(new Set<string>())
   // The step the person opened; by default, the first one not done.
@@ -102,11 +102,7 @@ export function OnboardingChecklist({
   const hasTickets = data?.projects.some(p => p.hasTickets) ?? false
   const browserGranted = permission === 'granted' && notificationsEnabled(preferences)
 
-  const enableBrowserNotifications = () => {
-    updatePreferences({ notifyBrowser: true })
-    // Asking for permission must ride this user gesture.
-    if (permission === 'default') void Notification.requestPermission()
-  }
+  const enableBrowserNotifications = () => setBrowserNotifications(true)
 
   const populateTickets = async () => {
     if (!targetProjectId) return
@@ -181,8 +177,12 @@ export function OnboardingChecklist({
       ? [
           {
             key: 'tickets',
-            label: 'Populate tickets/',
-            description: 'tickets/ holds the bigger things to work on, in the repo. The agent researches and plans them, and they are the input the queue is filled from.',
+            label: 'Populate the tickets',
+            description: (
+              <p className="text-xs text-muted-foreground">
+                <code className="rounded bg-muted px-1">tickets/</code> holds the bigger things to work on, in the repo. The agent researches and plans them, and they are the input the queue is filled from.
+              </p>
+            ),
             done: hasTickets,
             optional: true,
             action: (
@@ -220,8 +220,10 @@ export function OnboardingChecklist({
     },
   ]
 
+  // No step before its reads have said where it stands: an unread project count is not "no project".
+  const reading = !loaded || !missingLoaded
   const open = picked !== undefined && steps.some(step => step.key === picked && !step.done) ? picked : steps.find(step => !step.done)?.key
-  const ready = data !== null && steps.every(step => step.done || step.optional)
+  const ready = !reading && steps.every(step => step.done || step.optional)
   const name = person ? `, ${firstName(person.name)}` : ''
 
   return (
@@ -229,12 +231,14 @@ export function OnboardingChecklist({
       <CardHeader className="flex flex-row items-center justify-between gap-3">
         <h2 className="min-w-0 text-lg font-semibold tracking-tight">{ready ? `You're all set${name}` : `${greeting(new Date().getHours())}${name}`}</h2>
         <div className="flex shrink-0 items-center gap-3">
-          {/* Where the steps stand, one dash each: the numbers below say which is which. */}
-          <ol aria-label={`${steps.filter(step => step.done).length} of ${steps.length} done`} className="flex items-center gap-1.5">
-            {steps.map(step => (
-              <li key={step.key} aria-hidden className={cn('h-1.5 w-6 rounded-full', step.done ? 'bg-[var(--color-primary)]' : step.key === open ? 'bg-[var(--color-primary)]/40' : 'bg-muted-foreground/20')} />
-            ))}
-          </ol>
+          {/* Where the steps stand, one dash each: the numbers below say which is which. Not on a phone, where the greeting needs the room and the steps' own ticks say it. */}
+          {!reading && (
+            <ol aria-label={`${steps.filter(step => step.done).length} of ${steps.length} done`} className="items-center gap-1.5 sm:flex max-sm:hidden">
+              {steps.map(step => (
+                <li key={step.key} aria-hidden className={cn('h-1.5 w-6 rounded-full', step.done ? 'bg-[var(--color-primary)]' : step.key === open ? 'bg-[var(--color-primary)]/40' : 'bg-muted-foreground/20')} />
+              ))}
+            </ol>
+          )}
           {ready && targetProjectId && (
             <Button
               size="sm"
@@ -255,50 +259,55 @@ export function OnboardingChecklist({
         </div>
       </CardHeader>
       <CardContent>
-        <ol className="divide-y divide-border">
-          {steps.map((step, at) => {
-            const isOpen = step.key === open
-            return (
-              <li key={step.key} aria-label={step.label} aria-current={isOpen ? 'step' : undefined} className="flex items-start gap-3 py-3 first:pt-0 last:pb-0">
-                {step.done ? (
-                  <span aria-label="Done" className="mt-0.5 flex size-6 shrink-0 items-center justify-center rounded-full bg-[var(--color-primary)] text-[var(--color-primary-foreground)]">
-                    <Check className="h-3.5 w-3.5" aria-hidden />
-                  </span>
-                ) : (
-                  <span aria-hidden className={cn('mt-0.5 flex size-6 shrink-0 items-center justify-center rounded-full border text-xs font-medium tabular-nums', isOpen ? 'border-[var(--color-primary)] text-[var(--color-primary)]' : 'border-border text-muted-foreground')}>
-                    {at + 1}
-                  </span>
-                )}
-                <div className="flex min-w-0 flex-1 gap-3 max-sm:flex-col sm:items-start">
-                  <div className="min-w-0 flex-1 space-y-1">
-                    <div className="mt-1 flex flex-wrap items-center gap-x-2">
-                      <button
-                        type="button"
-                        disabled={step.done || isOpen}
-                        onClick={() => setPicked(step.key)}
-                        className={cn('flex flex-wrap items-center gap-x-2 text-left text-sm', step.done ? 'text-muted-foreground' : isOpen ? 'font-medium' : 'text-muted-foreground hover:text-foreground')}
-                      >
-                        <span>{step.label}</span>
-                        {step.done && step.doneNote && <span className="truncate text-xs text-muted-foreground">· {step.doneNote}</span>}
-                        {step.optional && !step.done && <span className="rounded-full border border-border px-1.5 py-0.5 text-[10px] font-normal uppercase tracking-wide text-muted-foreground">Optional</span>}
-                      </button>
-                      {isOpen && step.info && (
-                        <Tooltip>
-                          <TooltipTrigger render={<button type="button" aria-label={`More on ${step.label}`} className="text-muted-foreground hover:text-foreground" />}>
-                            <Info className="h-3.5 w-3.5" aria-hidden />
-                          </TooltipTrigger>
-                          <TooltipContent className="max-w-sm">{step.info}</TooltipContent>
-                        </Tooltip>
-                      )}
+        {reading ? (
+          <p className="text-sm text-muted-foreground">Loading…</p>
+        ) : (
+          <ol className="divide-y divide-border">
+            {steps.map((step, at) => {
+              const isOpen = step.key === open
+              return (
+                <li key={step.key} aria-label={step.label} aria-current={isOpen ? 'step' : undefined} className="flex items-start gap-3 py-3 first:pt-0 last:pb-0">
+                  {step.done ? (
+                    <span aria-label="Done" className="mt-0.5 flex size-6 shrink-0 items-center justify-center rounded-full bg-[var(--color-primary)] text-[var(--color-primary-foreground)]">
+                      <Check className="h-3.5 w-3.5" aria-hidden />
+                    </span>
+                  ) : (
+                    <span aria-hidden className={cn('mt-0.5 flex size-6 shrink-0 items-center justify-center rounded-full border text-xs font-medium tabular-nums', isOpen ? 'border-[var(--color-primary)] text-[var(--color-primary)]' : 'border-border text-muted-foreground')}>
+                      {at + 1}
+                    </span>
+                  )}
+                  {/* The action goes under the words until it fits beside them with the words 16rem wide or more. */}
+                  <div className="flex min-w-0 flex-1 flex-wrap items-start gap-3">
+                    <div className="min-w-0 flex-[1_1_16rem] space-y-1">
+                      <div className="mt-1 flex flex-wrap items-center gap-x-2">
+                        <button
+                          type="button"
+                          disabled={step.done || isOpen}
+                          onClick={() => setPicked(step.key)}
+                          className={cn('flex flex-wrap items-center gap-x-2 text-left text-sm', step.done ? 'text-muted-foreground' : isOpen ? 'font-medium' : 'text-muted-foreground hover:text-foreground')}
+                        >
+                          <span>{step.label}</span>
+                          {step.done && step.doneNote && <span className="truncate text-xs text-muted-foreground">· {step.doneNote}</span>}
+                          {step.optional && !step.done && <span className="rounded-full border border-border px-1.5 py-0.5 text-[10px] font-normal uppercase tracking-wide text-muted-foreground">Optional</span>}
+                        </button>
+                        {isOpen && step.info && (
+                          <Tooltip>
+                            <TooltipTrigger render={<button type="button" aria-label={`More on ${step.label}`} className="text-muted-foreground hover:text-foreground" />}>
+                              <Info className="h-3.5 w-3.5" aria-hidden />
+                            </TooltipTrigger>
+                            <TooltipContent className="max-w-sm">{step.info}</TooltipContent>
+                          </Tooltip>
+                        )}
+                      </div>
+                      {isOpen && step.description && (typeof step.description === 'string' ? <p className="text-xs text-muted-foreground">{step.description}</p> : step.description)}
                     </div>
-                    {isOpen && step.description && (typeof step.description === 'string' ? <p className="text-xs text-muted-foreground">{step.description}</p> : step.description)}
+                    {isOpen && step.action && <div className="flex max-w-full shrink-0">{step.action}</div>}
                   </div>
-                  {isOpen && step.action && <div className="flex shrink-0 sm:justify-end">{step.action}</div>}
-                </div>
-              </li>
-            )
-          })}
-        </ol>
+                </li>
+              )
+            })}
+          </ol>
+        )}
       </CardContent>
     </Card>
   )

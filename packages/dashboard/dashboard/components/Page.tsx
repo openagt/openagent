@@ -26,7 +26,7 @@ export function Page({
   children: ReactNode
 }) {
   return (
-    <div className="mx-auto w-full max-w-6xl p-6 max-md:p-4">
+    <div className="mx-auto w-full max-w-6xl md:p-6 max-md:p-4">
       <header className="mb-4 space-y-3">
         <div className="flex flex-wrap items-start justify-between gap-x-4 gap-y-2">
           <div className="flex min-w-0 items-start gap-2">
@@ -35,13 +35,20 @@ export function Page({
             <div className="min-w-0">
               <h1 className="text-lg font-semibold">
                 <span className="max-md:sr-only">{title}</span>
-                {count !== undefined && <span className="ml-2 text-sm font-normal tabular-nums text-muted-foreground max-md:ml-0">{count}</span>}
+                {/* A space, not only a margin, so a screen reader says the name and the count apart. */}
+                {count !== undefined && (
+                  <>
+                    {' '}
+                    {/* A margin from md up only: a module page's stylesheet, loaded after the dashboard's, redefines a plain ml-1 over a max-md:ml-0. */}
+                    <span className="text-sm font-normal tabular-nums text-muted-foreground md:ml-1">{count}</span>
+                  </>
+                )}
               </h1>
               {description !== undefined && <p className="mt-1 text-sm text-muted-foreground">{description}</p>}
             </div>
           </div>
-          {/* On a phone a button's words are longer than the screen: the buttons give up width, and their words are cut. */}
-          {actions !== undefined && <div className="flex flex-wrap items-center justify-end gap-2 md:shrink-0 max-md:min-w-0">{actions}</div>}
+          {/* The buttons give up width: they go under each other when the column is narrower than them, and on a phone a button's words longer than the screen are cut. */}
+          {actions !== undefined && <div className="flex min-w-0 flex-wrap items-center gap-2">{actions}</div>}
         </div>
         {bar}
       </header>

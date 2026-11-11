@@ -112,7 +112,7 @@ export function SkillsCard({ projects, onSelectProject }: { projects: ProjectSum
             </Button>
           )}
         </CardTitle>
-        <p className="text-xs text-muted-foreground">What your agents know, and what is new</p>
+        <p className="text-xs text-muted-foreground">What each project adds to its agents, and what is new</p>
       </CardHeader>
       <CardContent>
         {!loaded ? (
@@ -153,7 +153,7 @@ function Row({ read, reload, onOpen }: { read: Read; reload: () => Promise<void>
         <button type="button" onClick={onOpen} className="min-w-0 truncate font-medium hover:underline">
           {project.name}
         </button>
-        {says && says.held > 0 && <span className="shrink-0 text-xs text-muted-foreground tabular-nums">{says.held === 1 ? '1 skill' : `${says.held} skills`}</span>}
+        {says && says.held > 0 && <span className="shrink-0 text-xs text-muted-foreground tabular-nums">{says.held === 1 ? '1 project skill' : `${says.held} project skills`}</span>}
         <span className="ml-auto flex shrink-0 items-center gap-1.5">
           {!skills || !says ? (
             <span className="text-xs text-danger">could not be read</span>

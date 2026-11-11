@@ -10,7 +10,8 @@ import {
   DropdownMenuContent,
   DropdownMenuGroup,
   DropdownMenuLabel,
-  DropdownMenuItem,
+  DropdownMenuRadioGroup,
+  DropdownMenuRadioItem,
   DropdownMenuSeparator,
 } from './ui/dropdown-menu.js'
 
@@ -60,7 +61,6 @@ export function AutoMenu({
             <DropdownMenuTrigger
               type="button"
               disabled={busy}
-              aria-label="Auto"
               // A branch's name can run long: of a set width at most, as the branch button is, phone too.
               className={cn(rowButtonClass, 'max-w-[20rem]!')}
             />
@@ -74,25 +74,28 @@ export function AutoMenu({
       <DropdownMenuContent className="min-w-[19rem] max-w-[22rem]">
         <DropdownMenuGroup>
           <DropdownMenuLabel className="font-normal">When the agent finishes</DropdownMenuLabel>
-          {picks.map(pick => (
-            // aria-current: the check mark is only drawn, so a screen reader is told the pick too.
-            <DropdownMenuItem key={pick} className="items-start" aria-current={pick === publish} onClick={() => onPublish(pick)}>
-              <OptionLabel label={PUBLISH_LABELS[pick]} description={PUBLISH_DESCRIPTIONS[pick]} />
-              {pick === publish && <Check className="ml-auto mt-0.5 h-3.5 w-3.5 shrink-0" aria-hidden />}
-            </DropdownMenuItem>
-          ))}
+          <DropdownMenuRadioGroup value={publish} onValueChange={(pick: PublishPick) => onPublish(pick)}>
+            {picks.map(pick => (
+              <DropdownMenuRadioItem key={pick} value={pick} className="items-start">
+                <OptionLabel label={PUBLISH_LABELS[pick]} description={PUBLISH_DESCRIPTIONS[pick]} />
+                {pick === publish && <Check className="ml-auto mt-0.5 h-3.5 w-3.5 shrink-0" aria-hidden />}
+              </DropdownMenuRadioItem>
+            ))}
+          </DropdownMenuRadioGroup>
         </DropdownMenuGroup>
         {into?.picks && (
           <>
             <DropdownMenuSeparator />
             <DropdownMenuGroup>
               <DropdownMenuLabel className="font-normal">The pull request goes into</DropdownMenuLabel>
-              {into.picks.map(branch => (
-                <DropdownMenuItem key={branch} aria-current={branch === into.into} onClick={() => into.onPick?.(branch)}>
-                  <span className="flex-1 truncate">{branch}</span>
-                  {branch === into.into && <Check className="h-3.5 w-3.5 shrink-0" aria-hidden />}
-                </DropdownMenuItem>
-              ))}
+              <DropdownMenuRadioGroup value={into.into} onValueChange={(branch: string) => into.onPick?.(branch)}>
+                {into.picks.map(branch => (
+                  <DropdownMenuRadioItem key={branch} value={branch}>
+                    <span className="flex-1 truncate">{branch}</span>
+                    {branch === into.into && <Check className="h-3.5 w-3.5 shrink-0" aria-hidden />}
+                  </DropdownMenuRadioItem>
+                ))}
+              </DropdownMenuRadioGroup>
             </DropdownMenuGroup>
           </>
         )}

@@ -1,9 +1,9 @@
 import { SESSIONS_ID } from '../../src/project-address.js'
-import { useEffect, useRef, useState } from 'react'
+import { useContext, useEffect, useRef, useState } from 'react'
 import type { GitHostHome, OpenAgentEvent, RepositoryOffer } from '../../src/index.js'
 import { sessionInfo } from '../../src/client.js'
 import { RevealedTitle } from './RevealedTitle.js'
-import { MoreVertical, ChevronDown, FolderOpen, Code, Check, ExternalLink, Square, FolderX, Trash2, Copy, CloudUpload, Database, Info } from 'lucide-react'
+import { MoreVertical, ChevronDown, FolderOpen, Code, Check, ExternalLink, Square, FolderX, Trash2, Copy, CloudUpload, Database, Info, PanelBottomOpen } from 'lucide-react'
 import { onGitHostHome, onRepositoryOffer } from '../rpc/reads.js'
 import { openSettings } from '../lib/use-route.js'
 import { PROJECT_AGENT_DATA_ENTRY } from './ProjectAgentDataSettings.js'
@@ -17,6 +17,7 @@ import {
 import { useLoaded } from '../lib/use-async.js'
 import { buttonVariants } from './ui/button.js'
 import { useAction } from '../lib/use-action.js'
+import { DaemonDown } from '../lib/use-daemon-health.js'
 import { cn } from '../lib/utils.js'
 import { isAgentActive } from '../lib/live-state.js'
 import { describeSessionLink } from '../lib/session-link.js'
@@ -61,6 +62,7 @@ export function AgentActionsMenu({
   onProjectRemoved,
   details,
   size,
+  showWorkBar,
 }: {
   projectId: string
   agentId?: string | null | undefined
@@ -78,6 +80,8 @@ export function AgentActionsMenu({
   details?: { open: boolean; onToggle: () => void } | undefined
   /** The size on disk of the session's worktree, said beside "Remove worktree". */
   size?: string | undefined
+  /** Given while the session's work bar is put away: brings it back. */
+  showWorkBar?: (() => void) | undefined
 }) {
   // Given an agent, this is its page's menu, under the session's name; with none, the ⋮ of a page with no session.
   const session = !!agentId
@@ -129,6 +133,8 @@ export function AgentActionsMenu({
   const [stopRequested, setStopRequested] = useState(false)
   useEffect(() => setStopRequested(false), [agentId])
   const stopping = busy || (stopRequested && active)
+  // OpenAgent is not answering: Stop cannot reach the agent, here as in the composer.
+  const down = useContext(DaemonDown)
 
   const [confirmDelete, setConfirmDelete] = useState(false)
 
@@ -205,6 +211,11 @@ export function AgentActionsMenu({
               <Info className="h-3.5 w-3.5 shrink-0" /> {details.open ? 'Hide details' : 'Show details'}
             </DropdownMenuItem>
           )}
+          {showWorkBar && (
+            <DropdownMenuItem onClick={showWorkBar}>
+              <PanelBottomOpen className="h-3.5 w-3.5 shrink-0" /> Show the work bar
+            </DropdownMenuItem>
+          )}
           {!session && homeItem}
           {offer && (
             <DropdownMenuItem onClick={() => setConfirmCreate(true)}>
@@ -269,7 +280,7 @@ export function AgentActionsMenu({
           {(active || removable || deletable) && <DropdownMenuSeparator />}
 
           {active && (
-            <DropdownMenuItem disabled={stopping} onClick={() => void stopSession()}>
+            <DropdownMenuItem disabled={stopping || down} onClick={() => void stopSession()}>
               <Square className="h-3 w-3 shrink-0 fill-current" /> {stopping ? 'Stopping…' : 'Stop agent'}
             </DropdownMenuItem>
           )}
@@ -326,7 +337,7 @@ export function AgentActionsMenu({
         <ConfirmDialog
           open={confirmDelete}
           onOpenChange={setConfirmDelete}
-          title="Delete this agent?"
+          title="Delete this session?"
           body={
             <>
               Deleting <span className="font-medium text-foreground">{name}</span> removes it from the dashboard for good — its

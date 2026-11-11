@@ -159,7 +159,7 @@ function HostAccounts({ row, onChanged }: { row: GitHostRow; onChanged: () => Pr
                   </div>
                   {removing === account.login && (
                     <div role="group" aria-label={`Remove @${account.login}`} className="flex flex-wrap items-center gap-2 rounded-md bg-muted px-2.5 py-2 text-xs">
-                      <p className="min-w-0 flex-1 basis-60">
+                      <p className="min-w-0 grow basis-60">
                         {account.runs
                           ? `Runs use @${account.login}. Without it they have no ${p.name} account until you add one.`
                           : `OpenAgent forgets @${account.login}. The login goes on working wherever else it is.`}
@@ -181,11 +181,11 @@ function HostAccounts({ row, onChanged }: { row: GitHostRow; onChanged: () => Pr
         </ul>
       )}
       {empty && (
-        // What is missing on the left, its press at the row's end, as the Overview's first steps have them (a phone stacks them).
-        <div className="flex items-center gap-3 pt-1 max-sm:flex-col max-sm:items-start">
-          <p className="min-w-0 flex-1 text-xs text-muted-foreground">{hostWords(row)}</p>
+        // The press beside what is missing, else under it. A wrap and `grow`: a module's stylesheet loaded later has its own `.flex-1` and `.items-center`.
+        <div className="flex flex-wrap items-center gap-3 pt-1">
+          <p className="min-w-0 grow basis-60 text-xs text-muted-foreground">{hostWords(row)}</p>
           <div className="shrink-0">
-            <HostFix row={row} onChanged={onChanged} />
+            <HostFix row={row} variant="outline" onChanged={onChanged} />
           </div>
         </div>
       )}

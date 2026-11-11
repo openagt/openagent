@@ -40,7 +40,7 @@ export function ChatPane({ top, bottom, children }: { top: ReactNode; bottom: Re
     return () => observer.disconnect()
   }, [])
   return (
-    <div ref={pane} data-testid="chat-pane" className="flex min-h-0 flex-1 flex-col">
+    <div ref={pane} data-testid="chat-pane" className="@container flex min-h-0 flex-1 flex-col">
       <div data-testid="chat-top" className="shrink-0">
         {top}
       </div>

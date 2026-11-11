@@ -220,7 +220,7 @@ export function useAddGitAccount(onAdded?: (login: string, host: string) => void
 }
 
 /** The press for a host with no account, or no tool: it opens the dialog that adds one. Nothing for a host that has one. */
-export function HostFix({ row, onChanged, size = 'sm' }: { row: GitHostRow; onChanged: () => Promise<void>; size?: 'sm' | 'xs' | undefined }) {
+export function HostFix({ row, onChanged, size = 'sm', variant }: { row: GitHostRow; onChanged: () => Promise<void>; size?: 'sm' | 'xs' | undefined; variant?: 'outline' | undefined }) {
   const adding = useAddGitAccount(onChanged)
   const p = row.provider
   if (!p) return null
@@ -228,7 +228,7 @@ export function HostFix({ row, onChanged, size = 'sm' }: { row: GitHostRow; onCh
   if (p.installed && p.accounts.length > 0 && !p.loggingIn) return adding.dialog
   return (
     <>
-      <Button size={size} onClick={() => adding.add(row.host)}>
+      <Button size={size} variant={variant} onClick={() => adding.add(row.host)}>
         {`Add a ${p.name} account`}
       </Button>
       {adding.dialog}

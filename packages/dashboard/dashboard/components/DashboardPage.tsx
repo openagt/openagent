@@ -11,7 +11,7 @@ import { AgentUpdates } from './AgentUpdates.js'
 import { Agents } from './Agents.js'
 import { useModuleCards, type OverviewCard } from './ModuleCards.js'
 import { SkillsCard } from './SkillsCard.js'
-import { CardGrid, EditOverview } from './CustomizeOverview.js'
+import { CardGrid, EditOverview, TakeOffMark } from './CustomizeOverview.js'
 import { ALL_PROJECTS, arrangeCards } from '../../src/client.js'
 import type { ProjectSummary } from '../../src/index.js'
 import { Page } from './Page.js'
@@ -21,7 +21,7 @@ import { YourAgentsTile } from './YourAgentsTile.js'
 // The Overview landing page (#1139): a focused at-a-glance board — usage first, then what needs a
 // human (Human Queue) beside the agents working now, then the cards the installed packages
 // declare, in two columns (#1818: the queue package's AI Queue, the tickets package's hot tickets,
-// the scheduler package's Automations). What is empty is not drawn: no card for no agent at work. OpenAgent's own cards are projections of the same .openagent files
+// the scheduler package's Automations). A card with nothing to show says so in a sentence ("No agent is at work."). OpenAgent's own cards are projections of the same .openagent files
 // over the shell's own polls (the agents at work, the Human Queue), so they stay live; selecting a row jumps into its project or
 // straight into a session. With one project picked in the sidebar's project select (#1513), every
 // part but the usage bar shows that project's only, and the cards of packages it does not have are
@@ -38,6 +38,7 @@ export function DashboardPage({
   onAgentStarted,
   interventions,
   interventionsStale,
+  interventionsLoaded,
   active,
   projects,
   scope,
@@ -52,8 +53,10 @@ export function DashboardPage({
   interventions: Intervention[]
   /** The Human Queue's items are only what an earlier visit read, not yet read again: its cards are faded. */
   interventionsStale: boolean
-  /** Every agent going right now, across the projects, and whether that is only what an earlier visit read. */
-  active: { active: ActiveAgent[]; stale: boolean }
+  /** The Human Queue's items were read, by this visit or an earlier one: until then its tile has no count. */
+  interventionsLoaded: boolean
+  /** Every agent going right now, across the projects, whether that is only what an earlier visit read, and whether anything was read yet. */
+  active: { active: ActiveAgent[]; stale: boolean; loaded: boolean }
   /** Every registered project. The usage bar is given all of them: usage is the account's, not a project's. */
   projects: ProjectSummary[]
   /** The one project the page shows (#1513), or null for all: the agents at work and the packages' cards show only its, and a card of a package it does not have is not drawn. */
@@ -63,12 +66,14 @@ export function DashboardPage({
 }) {
   // Its ✕ hides it (#958), and a switch in Settings › Appearance shows it again.
   const onboardingDismissed = usePreferences().onboardingDismissed ?? false
+  const namesRuns = usePreferences().nameRuns !== false
   const working = active.active.filter(agent => scope === null || agent.projectId === scope)
   const shownProjects = scope === null ? projects : projects.filter(project => project.id === scope)
   // Every card the Overview can show here, each with the widths it stands at; the person's layout
   // for this page (the picked project's, else all projects') orders them, sizes them, and hides some.
   const moduleCards = useModuleCards(shownProjects)
-  const questions = interventions.filter(item => item.kind === 'awaiting').length
+  // What the number counts, kind by kind: "1 question, 1 to publish".
+  const waiting = KINDS.map(kind => ({ kind, count: interventions.filter(item => item.kind === kind.value).length })).filter(({ count }) => count > 0)
   const cards: OverviewCard[] = [
     // How things stand, a number each: what needs the person, and who is at work. The queue's own
     // tile (what waits its turn) is its package's card, beside them by its order.
@@ -82,9 +87,9 @@ export function DashboardPage({
       node: (
         <StatTile
           label="Needs you"
-          value={interventions.length}
+          value={interventionsLoaded ? interventions.length : undefined}
           tone="text-warning"
-          note={interventions.length === 0 ? 'Nothing waits on you' : questions > 0 ? (questions === 1 ? '1 question to answer' : `${questions} questions to answer`) : 'Work to review or publish'}
+          note={!interventionsLoaded ? 'Loading…' : waiting.length === 0 ? 'Nothing waits on you' : waiting.map(({ kind, count }) => kind.counted(count)).join(', ')}
           onClick={() => scrollToPart(NEEDS_YOU_ID)}
         />
       ),
@@ -99,9 +104,9 @@ export function DashboardPage({
       node: (
         <StatTile
           label="Working now"
-          value={working.length}
+          value={active.loaded ? working.length : undefined}
           live={working.length > 0}
-          note={working.length === 0 ? 'No agent is at work' : working.length === 1 ? '1 agent at work' : `${working.length} agents at work`}
+          note={!active.loaded ? 'Loading…' : working.length === 0 ? 'No agent is at work' : working.length === 1 ? '1 agent at work' : `${working.length} agents at work`}
           {...(working.length > 0 ? { onClick: () => scrollToPart(WORKING_ID) } : {})}
         />
       ),
@@ -120,7 +125,7 @@ export function DashboardPage({
       minWidth: '1/2',
       node: (
         <div id={NEEDS_YOU_ID} className="flex scroll-mt-6 flex-col *:flex-1">
-          <HumanQueue items={interventions} onSelectProject={onSelectProject} onSelectAgent={onSelectAgent} />
+          <HumanQueue items={interventions} loaded={interventionsLoaded} onSelectProject={onSelectProject} onSelectAgent={onSelectAgent} />
         </div>
       ),
     },
@@ -133,7 +138,7 @@ export function DashboardPage({
       minWidth: '1/3',
       node: (
         <div id={WORKING_ID} className="flex scroll-mt-6 flex-col *:flex-1">
-          <Agents working={working} onSelectAgent={onSelectAgent} />
+          <Agents working={working} loaded={active.loaded} namesRuns={namesRuns} onSelectAgent={onSelectAgent} />
         </div>
       ),
     },
@@ -188,7 +193,7 @@ export function DashboardPage({
         editing && (
           <p role="status" className="rounded-md bg-accent/60 px-3 py-2 text-xs text-muted-foreground">
             <span className="font-medium text-foreground">{scopeName !== undefined ? `Arranging the layout for ${scopeName}.` : 'Arranging the layout for all projects.'}</span>{' '}
-            {scopeName !== undefined ? 'Each project keeps its own; a project you never arranged uses the all-projects one.' : 'A project you never arranged on its own uses it too.'} Drag a card by its handle, pick its width, or take it off with ✕. On a phone every card is full width.
+            {scopeName !== undefined ? 'Each project keeps its own; a project you never arranged uses the all-projects one.' : 'A project you never arranged on its own uses it too.'} Drag a card by its handle, pick its width, or take it off with <TakeOffMark />. On a phone every card is full width.
           </p>
         )
       }
@@ -215,10 +220,13 @@ export function DashboardPage({
 // work a finished session left uncommitted or unpushed. #627 notifications fire off the same set.
 function HumanQueue({
   items,
+  loaded,
   onSelectProject,
   onSelectAgent,
 }: {
   items: Intervention[]
+  /** The items were read, by this visit or an earlier one: until then the card says it is loading, not that nothing waits. */
+  loaded: boolean
   onSelectProject: (id: string) => void
   onSelectAgent: (projectId: string, agentId: string) => void
 }) {
@@ -238,7 +246,9 @@ function HumanQueue({
         <p className="text-xs text-muted-foreground">Agents awaiting your approval, review, or input</p>
       </CardHeader>
       <CardContent>
-        {items.length === 0 ? (
+        {!loaded ? (
+          <p className="py-2 text-sm text-muted-foreground">Loading…</p>
+        ) : items.length === 0 ? (
           <p className="py-2 text-sm text-muted-foreground">AI doesn&apos;t need you.</p>
         ) : (
           // One group per kind, under a quiet heading with how many: a few questions are not lost
@@ -262,9 +272,9 @@ function HumanQueue({
 }
 
 /** The kinds the card groups its rows by, in the order of how much they hold a run up: a question stops one. */
-const KINDS: { value: Intervention['kind']; label: string }[] = [
-  { value: 'awaiting', label: 'Questions' },
-  { value: 'pr', label: 'Pull requests' },
-  { value: 'unpushed', label: 'To publish' },
-  { value: 'uncommitted', label: 'To commit' },
+const KINDS: { value: Intervention['kind']; label: string; counted: (count: number) => string }[] = [
+  { value: 'awaiting', label: 'Questions', counted: count => (count === 1 ? '1 question' : `${count} questions`) },
+  { value: 'pr', label: 'Pull requests', counted: count => (count === 1 ? '1 pull request' : `${count} pull requests`) },
+  { value: 'unpushed', label: 'To publish', counted: count => `${count} to publish` },
+  { value: 'uncommitted', label: 'To commit', counted: count => `${count} to commit` },
 ]

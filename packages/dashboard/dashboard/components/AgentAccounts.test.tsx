@@ -67,8 +67,18 @@ describe('Agent accounts', () => {
     states({ driver: 'claude-code', ready: false, problem: '`claude` is not logged in.', fix: { kind: 'log-in', command: 'claude auth login' }, fixing: 'log-in' })
     render(<AccountsList />)
     const out = await screen.findByRole('region', { name: 'Claude Code' })
-    expect(await within(out).findByText('Log in')).toBeTruthy()
+    expect(await within(out).findByText('Not logged in')).toBeTruthy()
     expect(within(out).getByRole('status').textContent).toMatch(/Say yes in the page this computer's browser opened/)
+  })
+
+  test('on a computer with no browser the log-in is no press: the card gives the command to type there', async () => {
+    views({ now: NOW, accounts: [{ id: 'This computer', name: 'This computer', own: true, windows: [] }] })
+    states({ driver: 'claude-code', ready: false, problem: '`claude` is not logged in.', fix: { kind: 'log-in', command: 'claude auth login' }, typed: true })
+    render(<AccountsList />)
+    const card = await screen.findByRole('region', { name: 'Claude Code' })
+    expect(await within(card).findByText('claude auth login')).toBeTruthy()
+    expect(within(card).getByText(/type this in a terminal on it/)).toBeTruthy()
+    expect(within(card).queryByRole('button', { name: /Log this computer in/ })).toBeNull()
   })
 
   test('the usage card shows the added accounts under the person\'s own bar, and nothing with one account', async () => {

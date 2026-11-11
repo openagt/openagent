@@ -73,13 +73,14 @@ vi.mock('../lib/use-start-agent.js', async () => ({
 // The Composer is exercised by its own tests; here it hands back a typed submit, shows whether
 // the form lets it submit at all, and renders the launcher's controls.
 const composerProps = vi.hoisted(() => ({ current: {} as Record<string, unknown> }))
+const composerFocus = vi.hoisted(() => vi.fn())
 vi.mock('./Composer.js', async () => {
   const { forwardRef, useImperativeHandle } = await import('react')
   const Composer = forwardRef((props: any, ref: any) => {
     composerProps.current = props
     useImperativeHandle(ref, () => ({
       clear: () => {},
-      focus: () => {},
+      focus: composerFocus,
     }))
     return (
       <>
@@ -114,6 +115,7 @@ afterEach(() => {
   cleanup()
   forgetRemembered()
   start.mockReset()
+  composerFocus.mockReset()
   startSays.cloning = false
   startSays.error = null
   onCommands.mockReset()
@@ -134,9 +136,9 @@ const COMMANDS = [{ name: 'work-queue', description: 'Work the agent queue' }]
 const noop = () => {}
 
 /** The launcher's "Auto" menu button; its text says the publish pick. */
-const autoMenu = () => screen.getByRole('button', { name: 'Auto' })
+const autoMenu = () => screen.getByRole('button', { name: /^Auto: / })
 /** The labels of the publish options the open "Auto" menu lists. */
-const publishOptions = () => screen.getAllByRole('menuitem').map(item => item.querySelector('span > span')!.textContent)
+const publishOptions = () => screen.getAllByRole('menuitemradio').map(item => item.querySelector('span > span')!.textContent)
 /** The launcher's "start from" chip, when there is one. */
 const LOCAL = { kind: 'local' } as const
 const startFromChip = () => screen.queryByRole('combobox', { name: 'The agent starts from' })
@@ -173,6 +175,25 @@ describe('StartAgentForm (#1774)', () => {
     await waitFor(() => expect(screen.getByRole('status').textContent).toBe('Starting session'))
     answer({ agentId: 'r1' })
     await waitFor(() => expect(screen.queryByRole('status')).toBeNull())
+  })
+
+  test('a refused start gives the prompt the focus, however Start was pressed: typing goes on in it', async () => {
+    onCommands.mockResolvedValue({ commands: [], startHook: true, gitHost: true })
+    start.mockResolvedValue(undefined)
+    render(<StartAgentForm {...props} />)
+    fireEvent.click(screen.getByText('submit-typed'))
+    await waitFor(() => expect(composerFocus).toHaveBeenCalledTimes(1))
+  })
+
+  test('the prompt takes the caret when the launcher opens, except on a phone, where the keyboard would rise over the page', () => {
+    onCommands.mockResolvedValue({ commands: [], startHook: true, gitHost: true })
+    render(<StartAgentForm {...props} />)
+    expect(composerProps.current.autoFocus).toBe(true)
+    cleanup()
+    vi.stubGlobal('matchMedia', (query: string) => ({ matches: true, media: query, addEventListener: () => {}, removeEventListener: () => {} }))
+    render(<StartAgentForm {...props} />)
+    expect(composerProps.current.autoFocus).toBe(false)
+    vi.unstubAllGlobals()
   })
 
   test("while this computer clones another computer's project for the run, the form says so, naming this computer", async () => {
@@ -237,7 +258,7 @@ describe('StartAgentForm (#1774)', () => {
 
     await openMenu(autoMenu())
     expect(publishOptions()).toEqual(['Off', 'Commit', 'Publish branch', 'Open PR', 'Merge on green'])
-    fireEvent.click(screen.getByRole('menuitem', { name: /^Open PR/ }))
+    fireEvent.click(screen.getByRole('menuitemradio', { name: /^Open PR/ }))
     expect(updatePreferences).toHaveBeenCalledWith({ publish: 'pr' })
 
     cleanup()
@@ -306,7 +327,7 @@ describe('StartAgentForm (#1774)', () => {
       expect((await sent()).prBase).toBe('feature-x')
       start.mockClear()
       await openMenu(autoMenu())
-      fireEvent.click(screen.getByRole('menuitem', { name: 'main' }))
+      fireEvent.click(screen.getByRole('menuitemradio', { name: 'main' }))
       await waitFor(() => expect(autoMenu().textContent).toBe('Auto: Open PR → main'))
       expect((await sent()).prBase).toBeUndefined()
     })
@@ -492,7 +513,7 @@ describe('StartAgentForm (#1774)', () => {
     expect(refusal!.contains(press)).toBe(true)
     expect(other!.textContent).toBe('something else')
     // This computer's own login press is no fix for the machine.
-    expect(screen.queryByRole('button', { name: 'Log in to Claude Code' })).toBeNull()
+    expect(screen.queryByRole('button', { name: 'Log this computer in to Claude Code' })).toBeNull()
     fireEvent.click(press)
     await waitFor(() => expect(serverLogins.sendUseLoginsOn).toHaveBeenCalledWith('d1'))
   })
@@ -596,7 +617,7 @@ describe('StartAgentForm (#1774)', () => {
       return { ok: true }
     })
     render(<StartAgentForm {...props} />)
-    const press = await screen.findByRole('button', { name: 'Log in to Claude Code' })
+    const press = await screen.findByRole('button', { name: 'Log this computer in to Claude Code' })
     // The press is inside the red line, which says it in the agent's own words.
     const refusal = screen.getByRole('alert')
     expect(refusal.contains(press)).toBe(true)

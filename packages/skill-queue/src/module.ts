@@ -175,7 +175,7 @@ export function topEntries(entries: readonly string[], count: number): string[] 
 
 /** What the fan-out button promises, sized to what a click would actually start. */
 export function fanOutLabel(count: number): string {
-  return count === 1 ? 'Spin up an agent working on the top entry' : `Spin up ${count} agents working on the top ${count} entries`
+  return count === 1 ? 'Start an agent working on the top entry' : `Start ${count} agents working on the top ${count} entries`
 }
 
 /** What starting one run answered: OpenAgent's `StartRunResult`, by structure. */

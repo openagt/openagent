@@ -15,7 +15,7 @@ const OFFSET_SAVE_DELAY_MS = 500
 export function SchedulerSettings({ projects }: ModuleSettingsProps) {
   const host = useModuleHost()
   const key = projects.map(p => p.id).join(',')
-  const { value: rows, reload } = usePolled(() => readSchedulers(host, projects), EMPTY, 10_000, [key], { remember: schedulersKey(key) })
+  const { value: rows, loaded, reload } = usePolled(() => readSchedulers(host, projects), EMPTY, 10_000, [key], { remember: schedulersKey(key) })
   const [error, setError] = useState<string | undefined>()
 
   // The offset as typed, kept until a read made after the save brings it back.
@@ -51,7 +51,26 @@ export function SchedulerSettings({ projects }: ModuleSettingsProps) {
   const unread = rows.filter(row => row.error !== undefined)
   if (projects.length === 0) return null
   return (
-    <SettingsSection description="How far past the quota scheduled work may go, on this machine. What a project starts by itself is on the Automations page.">
+    <SettingsSection
+      description={
+        <>
+          How far past the quota scheduled work may go, on this machine. What a project starts by itself is on the{' '}
+          <a
+            href={host.pageHref('automations')}
+            onClick={event => {
+              if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return
+              event.preventDefault()
+              host.openPage('automations')
+            }}
+            className="underline hover:text-foreground"
+          >
+            Automations page
+          </a>
+          .
+        </>
+      }
+    >
+      {!loaded && <p className="py-2 text-sm text-muted-foreground">Loading…</p>}
       {offset !== undefined && (
         <SettingsRow
           label="Spend offset"
@@ -59,6 +78,7 @@ export function SchedulerSettings({ projects }: ModuleSettingsProps) {
           control={
             <Input
               type="number"
+              name="spend-offset"
               // The text as typed while the field has the focus, so a number can be typed through a state that is none yet ("-").
               value={text ?? String(Math.round(offset * 10) / 10)}
               min={-MAX_SPEND_OFFSET}
