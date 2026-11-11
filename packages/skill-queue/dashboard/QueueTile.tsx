@@ -8,14 +8,14 @@ import { useQueueReads } from './reads.js'
  */
 export function QueueTile({ projects }: ModuleCardProps) {
   const host = useModuleHost()
-  const { reads } = useQueueReads(projects)
+  const { reads, loaded } = useQueueReads(projects)
   const queued = reads.reduce((sum, read) => sum + read.entries.length, 0)
   const over = reads.filter(read => read.entries.length > 0).length
   return (
     <StatTile
       label="In the queue"
-      value={queued}
-      note={queued === 0 ? 'Nothing waits its turn' : over > 1 ? `Across ${over} projects` : 'Waits for an agent'}
+      value={loaded ? queued : undefined}
+      note={!loaded ? 'Loading…' : queued === 0 ? 'Nothing waits its turn' : over > 1 ? `Across ${over} projects` : 'Waits for an agent'}
       href={host.pageHref('queue')}
       onClick={() => host.openPage('queue')}
     />

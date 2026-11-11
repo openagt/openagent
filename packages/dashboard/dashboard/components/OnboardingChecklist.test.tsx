@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest'
-import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { forgetRemembered } from '../lib/use-async.js'
 import type { DashboardData, ProjectSummary } from '../../src/index.js'
 import { configureFirst } from '../test-utils.js'
@@ -100,6 +100,26 @@ describe('the first steps on the Overview', () => {
     steps()
     expect(await screen.findByRole('heading', { name: /^Good (morning|afternoon|evening), Ada$/ })).toBeTruthy()
     expect(await screen.findByRole('list', { name: '0 of 3 done' })).toBeTruthy()
+  })
+
+  test.each(['dashboard', 'agent', 'hosts'])('says "Loading…" and no step until the projects, the coding agent and the git hosts are read: %s answers last', async last => {
+    const answers: Record<string, (value: unknown) => void> = {}
+    const held = (name: string) => () => new Promise(resolve => (answers[name] = resolve))
+    onDashboard.mockImplementation(held('dashboard'))
+    logins.onAgentState.mockImplementation(held('agent'))
+    logins.onGitHosts.mockImplementation(held('hosts'))
+    const values: Record<string, unknown> = { dashboard: WITH_PROJECT, agent: { driver: 'claude-code', ready: true }, hosts: CONNECTED }
+    steps()
+    expect(await screen.findByText('Loading…')).toBeTruthy()
+    expect(screen.queryAllByRole('listitem')).toEqual([])
+    await act(async () => {
+      for (const name of Object.keys(values)) if (name !== last) answers[name]!(values[name])
+    })
+    expect(screen.getByText('Loading…')).toBeTruthy()
+    expect(screen.queryAllByRole('listitem')).toEqual([])
+    await act(async () => answers[last]!(values[last]))
+    expect(within(row('Add your first project')).getByLabelText('Done')).toBeTruthy()
+    expect(screen.queryByText('Loading…')).toBeNull()
   })
 
   test('what adding a project does is behind an ⓘ beside the open step, not in its way', async () => {

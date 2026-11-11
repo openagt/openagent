@@ -21,11 +21,14 @@ import { cn } from '../lib/utils.js'
 
 export function Agents({
   working,
+  loaded,
   namesRuns,
   onSelectAgent,
 }: {
   /** The agents at work; none says so in one line. */
   working: ActiveAgent[]
+  /** The agents were read: until then the card says it is loading, not that none is at work. */
+  loaded: boolean
   /** Whether runs are given a short name, which a row waits for as the sidebar's does. */
   namesRuns: boolean
   onSelectAgent: (projectId: string, agentId: string) => void
@@ -43,7 +46,9 @@ export function Agents({
         </CardTitle>
       </CardHeader>
       <CardContent>
-        {working.length === 0 ? (
+        {!loaded ? (
+          <p className="text-sm text-muted-foreground">Loading…</p>
+        ) : working.length === 0 ? (
           <p className="text-sm text-muted-foreground">No agent is at work.</p>
         ) : (
           <ul className="space-y-0.5">

@@ -1,6 +1,7 @@
 import { afterEach, expect, test } from 'vitest'
 import { cleanup, fireEvent, screen } from '@testing-library/react'
 import { QueueTile } from './QueueTile.js'
+import { fakeHost as hostFor } from '@openagt/dashboard/module/testing'
 import { fakeHost, renderWithHost } from './test-host.js'
 
 // The Overview's tile for the queue: how many entries wait, over how many projects; it opens the Queue page.
@@ -16,4 +17,9 @@ test('how many entries wait over the projects shown, and over how many; it opens
   expect(tile.getAttribute('href')).toBe('/queue')
   fireEvent.click(tile)
   expect(host.openPage).toHaveBeenCalledWith('queue')
+})
+
+test('no count before the queue is read', () => {
+  renderWithHost(<QueueTile projects={[{ id: 'p1', name: 'alpha', gitHost: true }]} />, hostFor('@openagt/skill-queue', { runCommand: () => new Promise(() => {}) }))
+  expect(screen.getByRole('link').textContent).toBe('In the queue\u00a0Loading…')
 })

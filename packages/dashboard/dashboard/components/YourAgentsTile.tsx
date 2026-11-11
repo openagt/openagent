@@ -11,7 +11,5 @@ const EVERY_MS = 60_000
 
 export function YourAgentsTile() {
   const { value } = usePolled<AgentsView | undefined>(onAgentsList, undefined, EVERY_MS, [], { remember: 'agents' })
-  const agents = value?.agents ?? []
-  const names = agents.map(agent => agent.name)
-  return <StatTile label="Your agents" value={agents.length} note={value === undefined ? 'Loading…' : names.join(', ')} onClick={openAgents} />
+  return <StatTile label="Your agents" value={value?.agents.length} note={value === undefined ? 'Loading…' : value.agents.map(agent => agent.name).join(', ')} onClick={openAgents} />
 }

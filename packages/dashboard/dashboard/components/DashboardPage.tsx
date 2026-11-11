@@ -38,6 +38,7 @@ export function DashboardPage({
   onAgentStarted,
   interventions,
   interventionsStale,
+  interventionsLoaded,
   active,
   projects,
   scope,
@@ -52,8 +53,10 @@ export function DashboardPage({
   interventions: Intervention[]
   /** The Human Queue's items are only what an earlier visit read, not yet read again: its cards are faded. */
   interventionsStale: boolean
-  /** Every agent going right now, across the projects, and whether that is only what an earlier visit read. */
-  active: { active: ActiveAgent[]; stale: boolean }
+  /** The Human Queue's items were read, by this visit or an earlier one: until then its tile has no count. */
+  interventionsLoaded: boolean
+  /** Every agent going right now, across the projects, whether that is only what an earlier visit read, and whether anything was read yet. */
+  active: { active: ActiveAgent[]; stale: boolean; loaded: boolean }
   /** Every registered project. The usage bar is given all of them: usage is the account's, not a project's. */
   projects: ProjectSummary[]
   /** The one project the page shows (#1513), or null for all: the agents at work and the packages' cards show only its, and a card of a package it does not have is not drawn. */
@@ -84,9 +87,9 @@ export function DashboardPage({
       node: (
         <StatTile
           label="Needs you"
-          value={interventions.length}
+          value={interventionsLoaded ? interventions.length : undefined}
           tone="text-warning"
-          note={waiting.length === 0 ? 'Nothing waits on you' : waiting.map(({ kind, count }) => kind.counted(count)).join(', ')}
+          note={!interventionsLoaded ? 'Loading…' : waiting.length === 0 ? 'Nothing waits on you' : waiting.map(({ kind, count }) => kind.counted(count)).join(', ')}
           onClick={() => scrollToPart(NEEDS_YOU_ID)}
         />
       ),
@@ -101,9 +104,9 @@ export function DashboardPage({
       node: (
         <StatTile
           label="Working now"
-          value={working.length}
+          value={active.loaded ? working.length : undefined}
           live={working.length > 0}
-          note={working.length === 0 ? 'No agent is at work' : working.length === 1 ? '1 agent at work' : `${working.length} agents at work`}
+          note={!active.loaded ? 'Loading…' : working.length === 0 ? 'No agent is at work' : working.length === 1 ? '1 agent at work' : `${working.length} agents at work`}
           {...(working.length > 0 ? { onClick: () => scrollToPart(WORKING_ID) } : {})}
         />
       ),
@@ -122,7 +125,7 @@ export function DashboardPage({
       minWidth: '1/2',
       node: (
         <div id={NEEDS_YOU_ID} className="flex scroll-mt-6 flex-col *:flex-1">
-          <HumanQueue items={interventions} onSelectProject={onSelectProject} onSelectAgent={onSelectAgent} />
+          <HumanQueue items={interventions} loaded={interventionsLoaded} onSelectProject={onSelectProject} onSelectAgent={onSelectAgent} />
         </div>
       ),
     },
@@ -135,7 +138,7 @@ export function DashboardPage({
       minWidth: '1/3',
       node: (
         <div id={WORKING_ID} className="flex scroll-mt-6 flex-col *:flex-1">
-          <Agents working={working} namesRuns={namesRuns} onSelectAgent={onSelectAgent} />
+          <Agents working={working} loaded={active.loaded} namesRuns={namesRuns} onSelectAgent={onSelectAgent} />
         </div>
       ),
     },
@@ -217,10 +220,13 @@ export function DashboardPage({
 // work a finished session left uncommitted or unpushed. #627 notifications fire off the same set.
 function HumanQueue({
   items,
+  loaded,
   onSelectProject,
   onSelectAgent,
 }: {
   items: Intervention[]
+  /** The items were read, by this visit or an earlier one: until then the card says it is loading, not that nothing waits. */
+  loaded: boolean
   onSelectProject: (id: string) => void
   onSelectAgent: (projectId: string, agentId: string) => void
 }) {
@@ -240,7 +246,9 @@ function HumanQueue({
         <p className="text-xs text-muted-foreground">Agents awaiting your approval, review, or input</p>
       </CardHeader>
       <CardContent>
-        {items.length === 0 ? (
+        {!loaded ? (
+          <p className="py-2 text-sm text-muted-foreground">Loading…</p>
+        ) : items.length === 0 ? (
           <p className="py-2 text-sm text-muted-foreground">AI doesn&apos;t need you.</p>
         ) : (
           // One group per kind, under a quiet heading with how many: a few questions are not lost

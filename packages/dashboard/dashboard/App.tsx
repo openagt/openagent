@@ -227,7 +227,7 @@ export function App() {
   // The read as a whole goes to the notifier, which tells of every project's items whichever one
   // is picked, and also needs to know which projects the poll actually reached before it calls
   // anything "new" (#1625).
-  const { value: interventionsRead, stale: interventionsStale } = usePolled<ProjectionRead<Intervention>>(onInterventions, EMPTY_INTERVENTIONS, 5000, [], {
+  const { value: interventionsRead, stale: interventionsStale, loaded: interventionsLoaded } = usePolled<ProjectionRead<Intervention>>(onInterventions, EMPTY_INTERVENTIONS, 5000, [], {
     remember: 'interventions',
     stored: true,
   })
@@ -457,6 +457,7 @@ export function App() {
           onAgentStarted={agentStarted}
           interventions={interventions}
           interventionsStale={interventionsStale}
+          interventionsLoaded={interventionsLoaded}
           active={activeAgents}
           projects={projects}
           scope={scope}

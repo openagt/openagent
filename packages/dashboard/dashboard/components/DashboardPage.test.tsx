@@ -22,8 +22,8 @@ const active = (agentId: string, projectId = 'p1'): ActiveAgent => ({ projectId,
 const projects = [{ id: 'p1', name: 'alpha' }, { id: 'p2', name: 'beta' }] as never[]
 /** The agents at work, as the shell read them. */
 let working: ActiveAgent[] = []
-const show = (scope: string | null = null, stale = { interventions: false, active: false }) =>
-  render(<DashboardPage onProjectAdded={() => {}} onSelectProject={() => {}} onSelectAgent={() => {}} onAgentStarted={() => {}} interventions={[]} interventionsStale={stale.interventions} active={{ active: working, stale: stale.active }} projects={projects} scope={scope} />)
+const show = (scope: string | null = null, stale = { interventions: false, active: false }, loaded = true) =>
+  render(<DashboardPage onProjectAdded={() => {}} onSelectProject={() => {}} onSelectAgent={() => {}} onAgentStarted={() => {}} interventions={[]} interventionsStale={stale.interventions} interventionsLoaded={loaded} active={{ active: working, stale: stale.active, loaded }} projects={projects} scope={scope} />)
 /** The cards drawn, in order, each with its grid classes. */
 const drawn = () => [...document.querySelectorAll<HTMLElement>('[data-card]')].map(el => ({ id: el.dataset['card'], spans: el.className }))
 
@@ -226,12 +226,24 @@ describe('the Overview', () => {
     expect(drawn()).toEqual([])
   })
 
+  test('the Needs you and Working now tiles show no count before their reads', async () => {
+    show(null, { interventions: false, active: false }, false)
+    for (const label of ['Needs you', 'Working now']) expect((await screen.findByText(label)).parentElement!.textContent).toBe(`${label}\u00a0Loading…`)
+  })
+
+  test('the Human Queue says it is loading before its read, not that nothing waits', async () => {
+    show(null, { interventions: false, active: false }, false)
+    const card = (await screen.findByText('Human Queue')).closest('[data-card]')!
+    expect(card.textContent).toContain('Loading…')
+    expect(card.textContent).not.toContain('AI doesn’t need you.')
+  })
+
   test("the Needs you tile: how many things wait, and how many of each kind; it takes the page to the Human Queue", async () => {
     working = []
     const item = (kind: Intervention['kind'], n: number): Intervention => ({ projectId: 'p1', projectName: 'alpha', kind, title: `t${n}`, agentId: `r${n}` })
     const scrolled = vi.fn()
     Element.prototype.scrollIntoView = scrolled
-    render(<DashboardPage onProjectAdded={() => {}} onSelectProject={() => {}} onSelectAgent={() => {}} onAgentStarted={() => {}} interventions={[item('awaiting', 1), item('awaiting', 2), item('pr', 3)]} interventionsStale={false} active={{ active: [], stale: false }} projects={projects} scope={null} />)
+    render(<DashboardPage onProjectAdded={() => {}} onSelectProject={() => {}} onSelectAgent={() => {}} onAgentStarted={() => {}} interventions={[item('awaiting', 1), item('awaiting', 2), item('pr', 3)]} interventionsStale={false} interventionsLoaded active={{ active: [], stale: false, loaded: true }} projects={projects} scope={null} />)
     const tile = (await screen.findByText('Needs you')).closest('button')!
     expect(tile.textContent).toBe('Needs you32 questions, 1 pull request')
     fireEvent.click(tile)
@@ -248,7 +260,7 @@ describe('the Overview', () => {
       item({ number: 6, title: 'Add DESCRIPTION.md', url: 'https://x/pull/6', agentId: 'r6' }),
       item({ number: 8, title: 'Condense README', url: 'https://x/pull/8' }),
     ]
-    render(<DashboardPage onProjectAdded={() => {}} onSelectProject={() => {}} onSelectAgent={onSelectAgent} onAgentStarted={() => {}} interventions={interventions} interventionsStale={false} active={{ active: [], stale: false }} projects={[]} scope={null} />)
+    render(<DashboardPage onProjectAdded={() => {}} onSelectProject={() => {}} onSelectAgent={onSelectAgent} onAgentStarted={() => {}} interventions={interventions} interventionsStale={false} interventionsLoaded active={{ active: [], stale: false, loaded: true }} projects={[]} scope={null} />)
     // Grouped by kind, each under its heading, in the order that holds a run up most; a row says its kind on its icon's hover.
     expect(screen.getAllByRole('region').map(group => group.getAttribute('aria-label'))).toEqual(['Pull requests', 'To commit'])
     expect(screen.getByTitle('Needs commit')).toBeTruthy()
