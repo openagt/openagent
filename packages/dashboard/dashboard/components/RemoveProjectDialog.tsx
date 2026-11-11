@@ -1,5 +1,5 @@
 'use client'
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { AlertDialog } from '@base-ui/react/alert-dialog'
 import type { CleanupReport } from '../../src/index.js'
 import { sendRemoveProject } from '../rpc/projects.js'
@@ -30,6 +30,8 @@ export function RemoveProjectDialog({
   // Removed: what happened to OpenAgent's files in the folder, when the person asked for them to go.
   const [removed, setRemoved] = useState<{ report?: CleanupReport } | null>(null)
   const { busy, error, run, reset } = useAction()
+  // It opens on Cancel, as the other confirmations do, never on the box that widens the deletion.
+  const cancel = useRef<HTMLButtonElement>(null)
 
   // Each time it opens the box is unticked and an old error is gone: the menu opens it from
   // outside, so the dialog is not told through its own open-change.
@@ -64,7 +66,7 @@ export function RemoveProjectDialog({
     >
       <AlertDialog.Portal>
         <AlertDialog.Backdrop className="fixed inset-0 z-50 bg-black/40 backdrop-blur-[1px]" />
-        <AlertDialog.Popup className="fixed left-1/2 top-1/2 z-50 max-h-[calc(100vh-2rem)] w-[min(28rem,calc(100vw-2rem))] -translate-x-1/2 -translate-y-1/2 overflow-y-auto rounded-lg border border-border bg-card p-5 text-card-foreground shadow-lg">
+        <AlertDialog.Popup initialFocus={cancel} className="fixed left-1/2 top-1/2 z-50 max-h-[calc(100vh-2rem)] w-[min(28rem,calc(100vw-2rem))] -translate-x-1/2 -translate-y-1/2 overflow-y-auto rounded-lg border border-border bg-card p-5 text-card-foreground shadow-lg">
           {removed ? (
             <>
               <AlertDialog.Title className="text-sm font-semibold">Project removed</AlertDialog.Title>
@@ -134,6 +136,7 @@ export function RemoveProjectDialog({
               {error && <p className="mt-2 text-xs text-danger">{error}</p>}
               <div className="mt-4 flex justify-end gap-2">
                 <AlertDialog.Close
+                  ref={cancel}
                   render={
                     <Button variant="outline" size="sm" disabled={busy}>
                       Cancel
