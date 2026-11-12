@@ -1,3 +1,4 @@
+import type { MouseEvent } from 'react'
 import { cn } from '../lib/utils.js'
 
 /**
@@ -26,7 +27,7 @@ export function ViewToggle() {
       {/* The labels after the thumb, and named apart from it: the switch draws them above the thumb as it slides. */}
       <span className="relative inline-flex gap-0.5 [view-transition-name:oa-toggle-labels]">
         {/* A plain link: the landing page is the website's, not a page of this app. */}
-        <a href="/_view/landing" className={cn(pill, 'w-[96px] text-muted-foreground transition-colors hover:text-foreground')}>
+        <a href="/_view/landing" onClick={switchInPlace} className={cn(pill, 'w-[96px] text-muted-foreground transition-colors hover:text-foreground')}>
           Landing page
         </a>
         <span aria-current="page" className={cn(pill, 'w-[84px] text-primary-foreground')}>
@@ -35,4 +36,14 @@ export function ViewToggle() {
       </span>
     </div>
   )
+}
+
+/**
+ * The switch takes the place of the page it leaves in the history: both views are at `/`, so Back
+ * could only show the view just left. A click with a modifier, or another button, is the browser's.
+ */
+function switchInPlace(event: MouseEvent<HTMLAnchorElement>): void {
+  if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return
+  event.preventDefault()
+  location.replace(event.currentTarget.href)
 }

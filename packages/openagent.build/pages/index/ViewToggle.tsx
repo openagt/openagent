@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import type { CSSProperties } from 'react'
+import type { CSSProperties, MouseEvent } from 'react'
 
 /**
  * Where "Dashboard" goes (#1919). On a computer with OpenAgent installed, this page is the
@@ -88,10 +88,21 @@ export function ViewToggle({ style }: { style?: CSSProperties }) {
         <span aria-current="page" style={{ ...pillStyle, width: 96, color: '#232a2e' }}>
           Landing page
         </span>
-        <a href={dashboardHref} className="view-toggle-off" style={{ ...pillStyle, width: 84, color: '#d3c6aa' }}>
+        <a href={dashboardHref} onClick={switchInPlace} className="view-toggle-off" style={{ ...pillStyle, width: 84, color: '#d3c6aa' }}>
           Dashboard
         </a>
       </span>
     </div>
   )
+}
+
+/**
+ * The switch to the dashboard takes the place of this page in the history: both views are at `/`,
+ * so Back could only show the view just left. A click with a modifier, or another button, is the browser's.
+ */
+export function switchInPlace(event: MouseEvent<HTMLAnchorElement>): void {
+  if (!event.currentTarget.pathname.startsWith('/_view/')) return
+  if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return
+  event.preventDefault()
+  location.replace(event.currentTarget.href)
 }

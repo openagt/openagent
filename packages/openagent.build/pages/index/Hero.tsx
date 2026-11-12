@@ -2,7 +2,7 @@ import type { CSSProperties } from 'react'
 import { CommandChip, CommandLine, PmTabs, usePickedCommand } from './commands'
 import { CopiedStatus, copyPress, useCopy } from './copy'
 import { BADGES, kickerStyle, mono } from './ui'
-import { useDashboardHref } from './ViewToggle'
+import { switchInPlace, useDashboardHref } from './ViewToggle'
 
 const commentStyle: CSSProperties = { color: '#859289' }
 const cmdLineStyle: CSSProperties = { display: 'flex', flexWrap: 'wrap', gap: '2px 16px' }
@@ -120,6 +120,7 @@ export function Hero() {
       </p>
       <a
         href={dashboardHref}
+        onClick={switchInPlace}
         className="dashboard-cta"
         style={{
           display: 'inline-flex',
