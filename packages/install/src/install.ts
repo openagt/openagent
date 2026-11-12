@@ -13,7 +13,7 @@ import { asAdmin, run } from './run.js'
 
 export type { InstallIO }
 
-const defaultIO: InstallIO = {
+export const defaultIO: InstallIO = {
   out: line => process.stdout.write(line + '\n'),
   err: line => process.stderr.write(line + '\n'),
 }
