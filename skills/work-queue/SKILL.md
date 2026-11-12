@@ -10,7 +10,7 @@ schedule:
 
 Work one task off the project's agent queue. Nobody will answer you: never ask, decide yourself.
 
-Take the first open entry of the queue, and one task only. An entry `Create tickets/<name>.plan.md` names the ticket `tickets/<name>.md`. When the entry names a ticket, claim the ticket before you work it; when someone else holds the claim, leave that entry and take the next one; when every entry is claimed, say so and stop. When the entry's ticket no longer exists, mark the entry done and stop.
+Take the first open entry of the queue, and one task only. An entry `Create tickets/<name>.plan.md` names the ticket `tickets/<name>.md`. When the entry names a ticket, claim the ticket before you work it; when someone else holds the claim, leave that entry and take the next one; when every entry is claimed, say so and stop. When the entry's ticket no longer exists, mark the entry done and stop. An entry asking for a plan the ticket already has, one its listing does not show outdated, is done already: mark it done and stop, claiming nothing.
 
 If the ticket is waiting or in review, do nothing on it, not even a plan: mark the queue entry done, release your claim and stop. If you find the ticket has nothing you can do until something outside the work happens, write what it waits on as its `Waiting:` line above the title, mark the entry done and release your claim. Never close a waiting ticket.
 

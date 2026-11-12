@@ -1,10 +1,11 @@
-import { Button, Markdown, Tooltip, TooltipTrigger, TooltipContent, usePolled, useModuleHost, type ModuleAgent } from '@openagt/dashboard/module'
-import { planAgentFor, planPath, readShown } from '../src/module.js'
+import { Button, Markdown, Tooltip, TooltipTrigger, TooltipContent, useAction, usePolled, useModuleHost, type ModuleAgent } from '@openagt/dashboard/module'
+import { heldBack, planAgentFor, planPath, readShown, type TicketDetail } from '../src/module.js'
 import { TicketPageShell, TicketPageNote } from './TicketPageShell.js'
+import { TicketStartActions } from './TicketStartActions.js'
 import { useBackToList } from './lib/back-to-list.js'
 
-/** The page's read: the plan's text (none when the ticket has no plan, or no ticket), or why the command failed. */
-type Read = { plan: string | null; agent: ModuleAgent | undefined } | { error: string }
+/** The page's read: the plan's text (none when the ticket has no plan, or no ticket), its ticket, or why the command failed. */
+type Read = { plan: string | null; ticket: TicketDetail | undefined; agent: ModuleAgent | undefined } | { error: string }
 
 // One ticket's plan: its `<stem>.plan.md` rendered as markdown, the destination of the tickets
 // list's plan-column link. The plan comes with the ticket from `tickets show <file> --local`, and
@@ -26,12 +27,17 @@ export function TicketPlanPage({
     async () => {
       const [shown, agents] = await Promise.all([host.runCommand(projectId, ['show', slug, '--local']).then(readShown), host.agents(projectId).catch(() => [])])
       if ('error' in shown) return shown
-      return { plan: shown.shown?.plan ?? null, agent: planAgentFor(agents, slug) }
+      return { plan: shown.shown?.plan ?? null, ticket: shown.shown?.ticket, agent: planAgentFor(agents, slug) }
     },
     null,
     10_000,
     [projectId, slug],
   )
+  const { busy, error, run } = useAction()
+  const ticket = read && 'plan' in read ? read.ticket : undefined
+  // The work starts from where its plan is read, as from the ticket's row: not on a ticket in review
+  // or waiting, which no agent is handed, nor on one an agent holds.
+  const startable = ticket !== undefined && !heldBack(ticket) && !ticket.locked
 
   return (
     <TicketPageShell onBack={onBack} path={path}>
@@ -46,6 +52,19 @@ export function TicketPlanPage({
         <TicketPageNote>This ticket has no plan yet.</TicketPageNote>
       ) : (
         <>
+          {startable && (
+            <div className="mb-4 flex flex-wrap items-center justify-end gap-1.5">
+              <TicketStartActions
+                file={ticket.file}
+                title={ticket.title}
+                planned
+                busy={busy}
+                onStart={(prompt, failure) => void run(() => host.startRun(projectId, prompt), failure)}
+                onConfigure={prompt => host.configureRun(projectId, prompt)}
+              />
+            </div>
+          )}
+          {error && <p className="mb-4 text-xs text-danger">{error}</p>}
           {read.agent && <PlanAgentRow agent={read.agent} onOpen={() => host.openAgent(projectId, read.agent!.id)} />}
           <Markdown text={read.plan} />
         </>

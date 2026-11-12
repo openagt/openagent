@@ -122,23 +122,27 @@ export interface NamedPath {
 /**
  * What each of `paths` is called, by the tickets as listed: a ticket's file is its title; a
  * ticket's plan file (`tickets/<stem>.plan.md`) is "Plan: " and the ticket's title, and opens the
- * ticket, since an entry that names a plan is often the ask to write it. A path that is no
+ * ticket, since an entry that names a plan is often the ask to write it. A plan the ticket already
+ * has, and not outdated, says so: an ask to write it again is left over. A path that is no
  * ticket's, or whose ticket is not listed (closed, deleted), has no name.
  */
-export function namesOf(paths: readonly string[], tickets: readonly { file: string; title: string }[]): Record<string, NamedPath> {
-  const titles = new Map(tickets.map(ticket => [ticket.file, ticket.title]))
+export function namesOf(paths: readonly string[], tickets: readonly { file: string; title: string; planned?: boolean; outdated?: true }[]): Record<string, NamedPath> {
+  const byFile = new Map(tickets.map(ticket => [ticket.file, ticket]))
   const named: Record<string, NamedPath> = {}
   for (const path of paths) {
     const file = nameInTickets(path)
     if (file === undefined) continue
-    const title = titles.get(file)
-    if (title !== undefined) {
-      named[path] = { title }
+    const listed = byFile.get(file)
+    if (listed !== undefined) {
+      named[path] = { title: listed.title }
       continue
     }
     const ticket = ticketOfPlan(file)
-    const planned = ticket === undefined ? undefined : titles.get(ticket)
-    if (ticket !== undefined && planned !== undefined) named[path] = { title: `Plan: ${planned}`, href: `${TICKETS_DIR}/${ticket}` }
+    const planned = ticket === undefined ? undefined : byFile.get(ticket)
+    if (ticket !== undefined && planned !== undefined) {
+      const written = planned.planned === true && planned.outdated !== true
+      named[path] = { title: `Plan: ${planned.title}${written ? ' · already written' : ''}`, href: `${TICKETS_DIR}/${ticket}` }
+    }
   }
   return named
 }

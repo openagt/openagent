@@ -6,6 +6,7 @@ import type { WorkspaceTicketDetail } from './lib/types.js'
 import { TicketPageShell, TicketPageNote } from './TicketPageShell.js'
 import { releaseClaim } from './lib/release.js'
 import { useBackToList } from './lib/back-to-list.js'
+import { TicketStartActions } from './TicketStartActions.js'
 import { priorityTone } from './lib/ticket-priority.js'
 
 /** The page's read: the ticket, or nothing (no such ticket), or why the command failed. */
@@ -97,7 +98,21 @@ export function TicketDetailPage({
               {/* The ticket as a link, for whatever the installed modules offer on one (#1774);
                   none for a ticket in review or waiting, which is never queued, nor for a claimed
                   one: an agent the queue hands it to finds it taken. Released, it is offered. */}
-              {!heldBack(ticket) && !claimed && <LinkActions projects={[projectId]} targets={[{ projectId, links: [ticketLink(ticket)] }]} resetKey={ticket.file} disabled={busy} />}
+              {/* The ticket's starts beside it, as on its list row: write or open its plan, start the work. */}
+              {!heldBack(ticket) && !claimed && (
+                <>
+                  <TicketStartActions
+                    file={ticket.file}
+                    title={ticket.title}
+                    planned={ticket.planned}
+                    busy={busy}
+                    onStart={(prompt, failure) => void run(() => host.startRun(projectId, prompt), failure)}
+                    onConfigure={prompt => host.configureRun(projectId, prompt)}
+                    onOpenPlan={() => host.openPage('tickets', [ticket.file, 'plan'], projectId)}
+                  />
+                  <LinkActions projects={[projectId]} targets={[{ projectId, links: [ticketLink(ticket)] }]} resetKey={ticket.file} disabled={busy} />
+                </>
+              )}
             </div>
           </div>
           {/* All meta under the title, above the text that holds its one-line summary (#1144/#1265): date, priority,
