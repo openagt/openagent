@@ -2,7 +2,7 @@ import type { AgentWorktree, OpenAgentEvent } from '../../src/index.js'
 import { formatBytes } from '../../src/client.js'
 import { AgentActionsMenu } from './AgentActionsMenu.js'
 import { AgentErrorCount } from './AgentErrorCount.js'
-import { PaneMenu, PaneToggles } from './Panes.js'
+import { PaneMenu, PaneToggles, TopBar } from './Panes.js'
 import { ShowSidebarButton } from './SidebarToggle.js'
 import { ProjectMenu } from './ProjectActions.js'
 import { SESSIONS_ID } from '../../src/project-address.js'
@@ -71,33 +71,35 @@ export function AgentActionBar({
     // phone's over it: a module's stylesheet carries its own copy of the plain class, which comes
     // later and would win. The row is as tall as the "New agent session" page's (ProjectActions) and as an
     // open pane's header, so the three stand level; unlike a pane's, it has no line under it.
-    <div className="flex h-11 shrink-0 items-center gap-2 overflow-hidden pr-2 md:pl-4 max-md:pl-11">
-      <ShowSidebarButton />
-      <PaneMenu />
-      {/* Which session this is: its name, which is the button of its menu and the one part that
-          gives up width. */}
-      <AgentActionsMenu
-        projectId={projectId}
-        agentId={agentId}
-        events={events}
-        label={label}
-        {...(naming ? { naming } : {})}
-        retainedWorktree={retainedWorktree}
-        onWorktreeRemoved={onWorktreeRemoved}
-        onDeleted={onDeleted}
-        {...(onToggle ? { details: { open: expanded, onToggle } } : {})}
-        size={size}
-        showWorkBar={onShowWorkBar}
-      />
-      {/* The spacer grows but never shrinks (#1030), so a tight row takes its width from the name. */}
-      <div className="grow shrink-0" />
-      {/* What the agent could not get past (#1500): the log scrolls, this row does not. It sits
-          at the end rather than beside the name, which gives up width as the row fills: a
-          count is only useful if it is whole. */}
-      {ready && <AgentErrorCount events={events} />}
-      {/* A session with no project has no project's menu. */}
-      {projectId !== SESSIONS_ID && <ProjectMenu projectId={projectId} onProjectRemoved={onProjectRemoved} />}
-      <PaneToggles />
-    </div>
+    <TopBar>
+      <div className="flex h-11 shrink-0 items-center gap-2 overflow-hidden pr-2 md:pl-4 max-md:pl-11">
+        <ShowSidebarButton />
+        <PaneMenu />
+        {/* Which session this is: its name, which is the button of its menu and the one part that
+            gives up width. */}
+        <AgentActionsMenu
+          projectId={projectId}
+          agentId={agentId}
+          events={events}
+          label={label}
+          {...(naming ? { naming } : {})}
+          retainedWorktree={retainedWorktree}
+          onWorktreeRemoved={onWorktreeRemoved}
+          onDeleted={onDeleted}
+          {...(onToggle ? { details: { open: expanded, onToggle } } : {})}
+          size={size}
+          showWorkBar={onShowWorkBar}
+        />
+        {/* The spacer grows but never shrinks (#1030), so a tight row takes its width from the name. */}
+        <div className="grow shrink-0" />
+        {/* What the agent could not get past (#1500): the log scrolls, this row does not. It sits
+            at the end rather than beside the name, which gives up width as the row fills: a
+            count is only useful if it is whole. */}
+        {ready && <AgentErrorCount events={events} />}
+        {/* A session with no project has no project's menu. */}
+        {projectId !== SESSIONS_ID && <ProjectMenu projectId={projectId} onProjectRemoved={onProjectRemoved} />}
+        <PaneToggles />
+      </div>
+    </TopBar>
   )
 }

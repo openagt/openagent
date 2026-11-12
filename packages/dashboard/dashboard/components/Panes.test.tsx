@@ -13,7 +13,7 @@ vi.mock('../rpc/reads.js', () => ({ onDocs }))
 // The Docs pane itself is tested elsewhere; here it names the documents it was handed.
 vi.mock('./DocsPanel.js', () => ({ DocsPanel: ({ docs }: { docs: { name: string }[] }) => <div>docs: {docs.map(d => d.name).join(', ')}</div> }))
 
-const { PaneLayout, PaneMenu, PanesProvider, PaneToggles } = await import('./Panes.js')
+const { PaneLayout, PaneMenu, PanesProvider, PaneToggles, TopBar } = await import('./Panes.js')
 const { forgetRemembered } = await import('../lib/use-async.js')
 const { forgetPanes, setPaneOpen } = await import('../lib/panes.js')
 const { forgetRevealedChanges, revealChange, revealFile, revealScreen, revealSubagent } = await import('../lib/reveal-change.js')
@@ -38,6 +38,25 @@ function Page(props: Partial<ComponentProps<typeof PanesProvider>>) {
       </header>
       <PaneLayout>
         <main>the chat</main>
+      </PaneLayout>
+    </PanesProvider>
+  )
+}
+
+/** A page as an agent's draws its own top bar, inside the page. */
+function PageWithItsBar() {
+  return (
+    <PanesProvider {...base}>
+      <PaneLayout>
+        <main>
+          <TopBar>
+            <header>
+              <PaneMenu />
+              <PaneToggles />
+            </header>
+          </TopBar>
+          the chat
+        </main>
       </PaneLayout>
     </PanesProvider>
   )
@@ -132,6 +151,20 @@ describe('opening and closing a pane', () => {
     fireEvent.click(icon('Files'))
     fireEvent.click(icon('Files'))
     expect(cards()).toEqual(['Docs', 'Changes', 'Files'])
+  })
+
+  test('the page\'s top bar is a row over the page and its panes: an icon that opened a pane stays where it was pressed, and the same press closes it', () => {
+    render(<PageWithItsBar />)
+    const files = icon('Files')
+    const chat = document.getElementById('chat')!
+    expect(chat.contains(files)).toBe(false)
+    expect(files.closest('header')!.compareDocumentPosition(chat) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+    fireEvent.click(files)
+    expect(cards()).toEqual(['Files'])
+    expect(icon('Files')).toBe(files)
+    expect(card('Files').contains(files)).toBe(false)
+    fireEvent.click(files)
+    expect(cards()).toEqual([])
   })
 
   test('a pane\'s card names it and closes it', () => {
@@ -458,6 +491,11 @@ describe('on a phone', () => {
     wide = phoneScreen()
   })
   afterEach(() => wide())
+
+  test('the page\'s top bar stays in the page, under the column of panes', () => {
+    render(<PageWithItsBar />)
+    expect(document.getElementById('chat')!.contains(icon('Files'))).toBe(true)
+  })
 
   test('with no pane open the icons are in the top bar, as on a wide screen', () => {
     render(<Page />)
