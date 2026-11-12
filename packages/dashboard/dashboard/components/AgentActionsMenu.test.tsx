@@ -82,12 +82,17 @@ describe('AgentActionsMenu (#toolbar-menu)', () => {
     openMenu()
     expect(await screen.findByText('Open project folder')).toBeTruthy()
     expect(screen.queryByText("Open session's folder")).toBeNull()
+    // The editor opens the same project root, and says so.
+    fireEvent.click(screen.getByText('Open in editor'))
+    expect((await screen.findByRole('menuitem', { name: 'Open the project' })).title).toBe('This session no longer has its own checkout')
     cleanup()
 
     // A retained worktree still exists, so the session wording is honest again.
     render(<AgentActionsMenu projectId="p1" agentId="run-1" events={[]} retainedWorktree onDeleted={vi.fn()} />)
     openMenu()
     expect(await screen.findByText("Open session's folder")).toBeTruthy()
+    fireEvent.click(screen.getByText('Open in editor'))
+    expect(await screen.findByRole('menuitem', { name: "Open this session's checkout" })).toBeTruthy()
   })
 
   test('copies the command that reopens the session in a terminal (#1195)', async () => {

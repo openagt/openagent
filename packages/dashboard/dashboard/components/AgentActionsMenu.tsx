@@ -243,8 +243,12 @@ export function AgentActionsMenu({
               <Code className="h-3.5 w-3.5 shrink-0" /> Open in editor
             </DropdownMenuSubTrigger>
             <DropdownMenuSubContent className="min-w-[15rem]">
-              <DropdownMenuItem disabled={busy} onClick={() => void openApp('editor')}>
-                <Code className="h-3.5 w-3.5 shrink-0" /> {agentId ? "Open this session's checkout" : 'Open in your editor'}
+              <DropdownMenuItem
+                disabled={busy}
+                onClick={() => void openApp('editor')}
+                title={agentId && !hasOwnFolder ? 'This session no longer has its own checkout' : undefined}
+              >
+                <Code className="h-3.5 w-3.5 shrink-0" /> {agentId ? (hasOwnFolder ? "Open this session's checkout" : 'Open the project') : 'Open in your editor'}
               </DropdownMenuItem>
               <DropdownMenuSeparator />
               <PreferredEditorItems busy={busy} />
