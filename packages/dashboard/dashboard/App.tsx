@@ -41,7 +41,7 @@ import { useDocumentTitle } from './lib/document-title.js'
 import { projectLabels, ProjectLabelsContext } from './lib/project-labels.js'
 import { useActiveAgents } from './lib/use-working.js'
 import { useFavicon } from './lib/favicon.js'
-import { DaemonDown, useDaemonHealth } from './lib/use-daemon-health.js'
+import { DaemonDown, INSTALLED_RESTARTS, useDaemonHealth } from './lib/use-daemon-health.js'
 import { useContextSet } from './lib/use-context-set.js'
 import { TriangleAlert } from 'lucide-react'
 import type { StartPicks } from './lib/started-from.js'
@@ -396,7 +396,8 @@ export function App() {
   // last value, so "the agent went quiet" and "nothing on this page is live" looked identical.
   // While the daemon is not answering, its banner says all of it: a run's "live stream lost" notice
   // under it would only repeat one part, so a run's view is told the stream is lost only then.
-  const healthy = useDaemonHealth()
+  const daemon = useDaemonHealth()
+  const healthy = daemon === 'answering'
 
   // Route the main pane: the Overview dashboard when no project is selected (#471); else the
   // project home/launcher, a running agent's live output, or a finished agent's replay. Each live
@@ -591,7 +592,11 @@ export function App() {
         <div role="alert" className={cn('h-(--top-banner) shrink-0 bg-background', pageScrolls && 'sticky top-0 z-30')}>
           <div className="flex h-full items-center gap-2 border-b border-border bg-warning/10 px-4 text-xs text-warning">
             <TriangleAlert className="h-3.5 w-3.5 shrink-0" aria-hidden />
-            OpenAgent is not answering — retrying. Nothing can be sent, started, stopped, answered or published until it is back.
+            {daemon === 'stopped' ? (
+              <span>OpenAgent has stopped. Start it again with <code className="font-mono">openagent</code> in a terminal; {INSTALLED_RESTARTS}.</span>
+            ) : (
+              'OpenAgent is not answering — retrying. Nothing can be sent, started, stopped, answered or published until it is back.'
+            )}
           </div>
         </div>
       )}

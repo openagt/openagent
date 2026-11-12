@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { onBridgeStatus, onBridgeToken } from '../rpc/reads.js'
+import { INSTALLED_RESTARTS } from '../lib/use-daemon-health.js'
 import { Button } from './ui/button.js'
 import { CopyButton } from './ui/copy-button.js'
 
@@ -79,7 +80,9 @@ export function BridgeSettings() {
       )}
       {token === null ? (
         // A restart is genuinely required: the token is read when the daemon starts.
-        <p className="text-muted-foreground">Restart the dashboard to generate the token.</p>
+        <p className="text-muted-foreground">
+          Restart the dashboard to generate the token: in its terminal, Ctrl+C and run <code className="font-mono">openagent</code> again; {INSTALLED_RESTARTS}.
+        </p>
       ) : (
         <div className="flex flex-wrap items-center gap-2">
           <code className="min-w-0 flex-1 truncate rounded bg-muted px-2 py-1 font-mono">

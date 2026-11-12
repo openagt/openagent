@@ -44,55 +44,59 @@ beforeEach(() => {
 })
 afterEach(() => {
   cleanup()
+  vi.restoreAllMocks()
   vi.unstubAllGlobals()
   vi.useRealTimers()
 })
 
 function Probe() {
-  return <span>{useDaemonHealth() ? 'healthy' : 'down'}</span>
+  return <span>{useDaemonHealth()}</span>
 }
 
 // #948: a dead daemon froze every surface silently — the probe is what lets the shell say so.
 describe('useDaemonHealth', () => {
-  test('an answering daemon reads healthy', async () => {
+  test('an answering daemon reads answering', async () => {
     render(<Probe />)
     await after(5000)
     expect(asked).toHaveLength(1)
-    expect(screen.getByText('healthy')).toBeTruthy()
+    expect(screen.getByText('answering')).toBeTruthy()
   })
 
-  test('a failing probe flips to down', async () => {
+  test('a probe refused at once reads stopped; offline, it reads only silent', async () => {
     way = 'fail'
     render(<Probe />)
     await after(5000)
-    expect(screen.getByText('down')).toBeTruthy()
+    expect(screen.getByText('stopped')).toBeTruthy()
+    vi.spyOn(navigator, 'onLine', 'get').mockReturnValue(false)
+    await after(5000)
+    expect(screen.getByText('silent')).toBeTruthy()
   })
 
   test('a probe the daemon takes but does not answer counts as not answered after its time limit, which lets its request go; the next answer brings it back', async () => {
     ways = ['hang']
     render(<Probe />)
     await after(5000 + 29_999)
-    expect(screen.getByText('healthy')).toBeTruthy()
+    expect(screen.getByText('answering')).toBeTruthy()
     await after(1)
-    expect(screen.getByText('down')).toBeTruthy()
+    expect(screen.getByText('silent')).toBeTruthy()
     expect(asked[0]!.signal?.aborted).toBe(true)
     await after(5000)
-    expect(screen.getByText('healthy')).toBeTruthy()
+    expect(screen.getByText('answering')).toBeTruthy()
     expect(asked).toHaveLength(2)
     await after(5000)
     expect(asked).toHaveLength(3)
   })
 
-  test('a probe given up on that fails after a newer one answered changes nothing: the page stays healthy', async () => {
+  test('a probe given up on that fails after a newer one answered changes nothing: the page stays answering', async () => {
     ways = ['deaf']
     render(<Probe />)
     await after(5000 + 30_000)
-    expect(screen.getByText('down')).toBeTruthy()
+    expect(screen.getByText('silent')).toBeTruthy()
     await after(5000)
-    expect(screen.getByText('healthy')).toBeTruthy()
+    expect(screen.getByText('answering')).toBeTruthy()
     asked[0]!.fail()
     await after(0)
-    expect(screen.getByText('healthy')).toBeTruthy()
+    expect(screen.getByText('answering')).toBeTruthy()
   })
 
   test('a probe given up on that fails while a newer one waits changes nothing: no probe starts early, and the newer one keeps its own time limit', async () => {
@@ -115,7 +119,7 @@ describe('useDaemonHealth', () => {
     way = 'hang'
     render(<Probe />)
     await after(215_000)
-    expect(screen.getByText('down')).toBeTruthy()
+    expect(screen.getByText('silent')).toBeTruthy()
     expect(asked.length).toBeGreaterThanOrEqual(6)
     expect(pending()).toBe(1)
     expect(asked.slice(0, -1).every(one => one.signal?.aborted)).toBe(true)

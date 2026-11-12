@@ -279,6 +279,21 @@ describe('module cards on the Overview (#1818)', () => {
     }
   })
 
+  test('an OpenAgent that refuses the page says it has stopped and how it starts again, from a terminal or installed', async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true })
+    try {
+      answerShell([])
+      render(<App />)
+      expect(await screen.findByRole('heading', { name: 'Overview' })).toBeTruthy()
+      answers.set('onProjects', () => { throw new TypeError('Failed to fetch') })
+      await act(async () => void (await vi.advanceTimersByTimeAsync(5000)))
+      const banner = (await screen.findByRole('alert')).textContent
+      expect(banner).toBe('OpenAgent has stopped. Start it again with openagent in a terminal; an installed one restarts with the computer or with its installer\u2019s command.')
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
   test("a card of this computer's package is on the Overview though no project has the package", async () => {
     answerOverview([{ package: '@acme/devices', url: moduleModule('__devicesCard', { cards: [{ id: 'devices', label: 'Devices', Card: () => createElement('p', null, 'devices card') }] }), projects: [], computer: true }])
     window.history.replaceState(null, '', '/')
