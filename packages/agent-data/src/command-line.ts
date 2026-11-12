@@ -111,7 +111,10 @@ export function parseCommandArgs<O extends Options>(args: string[], options: O, 
     if (parsed.positionals.length < min || parsed.positionals.length > max) throw new UsageError(`expected ${countWords(min, max)} argument(s), got ${parsed.positionals.length}`)
     return parsed
   } catch (err) {
-    throw err instanceof UsageError ? err : new UsageError(errorMessage(err))
+    if (err instanceof UsageError) throw err
+    // Node's own sentence for it says how to pass the option as text, in its parser's terms.
+    const unknown = (err as NodeJS.ErrnoException).code === 'ERR_PARSE_ARGS_UNKNOWN_OPTION' ? parseArgs({ args, options, allowPositionals: true, strict: false, tokens: true }).tokens.find(token => token.kind === 'option' && !Object.hasOwn(options, token.name)) : undefined
+    throw new UsageError(unknown?.kind === 'option' ? `unknown option: ${unknown.rawName}` : errorMessage(err))
   }
 }
 

@@ -69,6 +69,8 @@ test('the arguments are read strictly: an unknown flag, or too few or too many p
   assert.equal(parseCommandArgs(['a', '--local'], { local: { type: 'boolean' } }, 1).values.local, true)
   assert.deepEqual(parseCommandArgs(['a'], {}, 0, 1).positionals, ['a'])
   assert.throws(() => parseCommandArgs(['--nope'], {}, 0), UsageError)
+  assert.throws(() => parseCommandArgs(['a', '--help'], { local: { type: 'boolean' } }, 1), { name: 'Error', message: 'unknown option: --help' })
+  assert.throws(() => parseCommandArgs(['--local', '-x', 'a'], { local: { type: 'boolean' } }, 1), { message: 'unknown option: -x' })
   assert.throws(() => parseCommandArgs([], {}, 1), { name: 'Error', message: 'expected 1 argument(s), got 0' })
   assert.throws(() => parseCommandArgs(['a', 'b', 'c'], {}, 0, 2), { message: 'expected at most 2 argument(s), got 3' })
   assert.throws(() => parseCommandArgs(['a'], {}, 2, 3), { message: 'expected 2 to 3 argument(s), got 1' })
