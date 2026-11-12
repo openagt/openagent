@@ -202,7 +202,7 @@ export function TicketDetailPage({
             </div>
           )}
           <div className="mt-6 border-t border-border pt-6">
-            <Markdown text={ticketBody(ticket.content)} document />
+            <Markdown text={ticketBody(ticket.content)} page />
           </div>
         </>
       )}

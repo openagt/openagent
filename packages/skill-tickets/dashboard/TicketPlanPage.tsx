@@ -83,7 +83,7 @@ export function TicketPlanPage({
             </div>
           )}
           <div className="mt-6 border-t border-border pt-6">
-            <Markdown text={planBody(read.plan)} document />
+            <Markdown text={planBody(read.plan)} page />
           </div>
         </>
       )}
