@@ -3,6 +3,7 @@
 // removes it.
 import { openInBrowser } from '../cli/browser.js'
 import { portOf } from '../cli/cli.js'
+import { projectAddresses } from '../project-address.js'
 import { startDemo } from './demo.js'
 
 const USAGE = `usage: pnpm demo [--port <n>]
@@ -32,9 +33,10 @@ const demo = await startDemo({
     if (said.length > 20) said.shift()
   },
 })
-const page = `${demo.url}/${demo.project.id}`
+// Printed at the address the page shows, opened by its id, as `openagent` does with a project.
+const address = projectAddresses([demo.project.id], []).addressOf(demo.project.id)
 console.log(`
-◆ OpenAgent demo: ${page}
+◆ OpenAgent demo: ${demo.url}/${address}
 
   A dashboard of its own, on a throwaway home: none of your projects, agents or logins are in it.
   Its coding agent is scripted and offline. A word in the prompt picks what a run does:
@@ -49,7 +51,7 @@ console.log(`
 
   Ctrl+C stops the demo and removes all of it.
 `)
-openInBrowser(page)
+openInBrowser(`${demo.url}/${demo.project.id}`)
 
 // Kept for every signal, not only the first: a second Ctrl+C must not cut the clean-up short and
 // leave the dashboard, which runs in a process group of its own, behind.
