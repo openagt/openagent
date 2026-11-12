@@ -146,12 +146,14 @@ export async function install(io: InstallIO = defaultIO, env: NodeJS.ProcessEnv 
     )
     return 1
   }
+  let administered = false
   try {
     const dashboard = await lastingDashboard(manifest, platform.appDir(env), io)
     await platform.prepare(io, env)
     const cert = await ensureCertificate(env)
     const certFile = join(secureAddressDir(env), CERTIFICATE_FILE)
     await asAdmin(platform.adminInstall(certFile), io)
+    administered = true
     await platform.trust(certFile, io, env)
 
     const output = await platform.startDashboard({ node: process.execPath, dashboard, vars: dashboardVars(env) }, env)
@@ -165,6 +167,7 @@ export async function install(io: InstallIO = defaultIO, env: NodeJS.ProcessEnv 
     return 0
   } catch (err) {
     io.err(`OpenAgent could not be installed: ${err instanceof Error ? err.message : String(err)}`)
+    if (administered) io.err('  `npx @openagt/uninstall` takes off what was put on this computer so far.')
     return 1
   }
 }
