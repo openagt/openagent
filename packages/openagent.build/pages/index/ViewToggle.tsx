@@ -4,8 +4,8 @@ import type { CSSProperties } from 'react'
 /**
  * Where "Dashboard" goes (#1919). On a computer with OpenAgent installed, this page is the
  * dashboard's own copy of the website, which answers `/_view` with 204: there it switches `/` to
- * the dashboard. Everywhere else it is the public website (404 there), and it goes to the page
- * that says how to get the dashboard.
+ * the dashboard. Everywhere else it is the public website (200 there, its `public/_view` file), and
+ * it goes to the page that says how to get the dashboard.
  */
 export function useDashboardHref(): string {
   const [href, setHref] = useState('/go-to-dashboard')

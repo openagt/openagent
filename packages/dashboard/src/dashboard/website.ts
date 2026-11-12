@@ -53,7 +53,7 @@ export function keepView(req: IncomingMessage, res: ServerResponse): void {
 
 /**
  * The toggle's own route. `/_view` answers 204, which is how a page tells this copy from the
- * public website (404 there). `/_view/landing` and `/_view/dashboard` keep the pick and go to `/`.
+ * public website (200 there, from its own `_view` file). `/_view/landing` and `/_view/dashboard` keep the pick and go to `/`.
  */
 export function handleViewRequest(res: ServerResponse, pathname: string): void {
   if (pathname === VIEW_PREFIX) {
