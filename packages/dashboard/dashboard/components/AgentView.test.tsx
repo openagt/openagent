@@ -761,6 +761,17 @@ describe('a message sent while the agent works', () => {
     }
   })
 
+  test('a session whose run is not known yet has no message box, which would say an ended run\'s words; it comes once the record or the feed says', () => {
+    const { rerender } = render(view({ live: null, events: [] }))
+    expect(screen.queryByTestId('composer-live')).toBeNull()
+    // The feed says it works before any list has the run.
+    rerender(view({ live: null, events: [start('go'), text] }))
+    expect(screen.getByTestId('composer-live').textContent).toBe('true')
+    cleanup()
+    render(view({ live: false, events: [] }))
+    expect(screen.getByTestId('composer-live').textContent).toBe('false')
+  })
+
   test('a page slow to learn that the run still works keeps showing it waiting', () => {
     vi.useFakeTimers()
     try {

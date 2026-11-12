@@ -393,7 +393,8 @@ export function AgentView({
             away={workBar.away}
             onHide={workBar.hide}
           />
-          {card?.otherHost && card.host ? (
+          {/* Until the run's record or its feed says whether it works, no box: it would say an ended run's words. */}
+          {live === null && !feedLive ? null : card?.otherHost && card.host ? (
             // A run another computer started, which is no saved machine, is only read here: a
             // message would continue it on this computer, under its id, with this computer's
             // logins and none of its conversation.
