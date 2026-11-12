@@ -4,6 +4,7 @@ import { request } from 'node:https'
 import { createRequire } from 'node:module'
 import { connect } from 'node:net'
 import { dirname, join, sep } from 'node:path'
+import { joinRunningDashboard } from '@openagt/dashboard/join-dashboard'
 import { CERTIFICATE_FILE, KEY_FILE, readSecureAddress, secureAddressDir } from '@openagt/dashboard/secure-address'
 import { ADDRESS, CERTIFICATE_CONFIG, CERTIFICATE_DAYS, LOOPBACK_ADDRESS } from './address.js'
 import { linux } from './linux.js'
@@ -137,7 +138,12 @@ export async function install(io: InstallIO = defaultIO, env: NodeJS.ProcessEnv 
   // One installed already stops first, and is waited for, so what holds the port below is someone else's.
   const stopped = await platform.stopDashboard(env)
   if (!(await freed(DASHBOARD_PORT, stopped ? 15_000 : 0))) {
-    io.err(`A dashboard runs on port ${DASHBOARD_PORT} already. Stop it (Ctrl+C in its terminal), then run this again.`)
+    const running = await joinRunningDashboard(DASHBOARD_PORT, undefined, env)
+    io.err(
+      running.joined
+        ? `A dashboard runs on port ${DASHBOARD_PORT} already. Stop it (Ctrl+C in its terminal), then run this again.`
+        : `Port ${DASHBOARD_PORT} is taken by another program. Stop it, then run this again.`,
+    )
     return 1
   }
   try {
