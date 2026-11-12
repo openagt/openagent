@@ -62,8 +62,8 @@ export function BridgeSettings() {
   return (
     <div className="mt-2 space-y-2 rounded-md border border-border bg-muted/30 p-3 text-xs">
       <p className="text-muted-foreground">
-        Install the browser extension, open its options, and paste this token. It reports the question a Claude web
-        session is parked on, so it shows up here instead of only on claude.ai.
+        The extension reports the question a Claude web session is parked on, so it shows up here instead of only on
+        claude.ai.
       </p>
       {blocked && (
         <p className="text-danger">
