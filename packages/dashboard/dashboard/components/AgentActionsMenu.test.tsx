@@ -233,6 +233,11 @@ describe('the editor picker in the menu (#727)', () => {
     await openEditorMenu()
     // "Default" names the setting a person sets to choose it.
     expect(await screen.findByText('$OPENAGENT_EDITOR, or code')).toBeTruthy()
+    // The pick is said as a radio's, checked or not, not only drawn.
+    expect(screen.getAllByRole('menuitemradio').map(item => [item.textContent, item.getAttribute('aria-checked')])).toEqual([
+      ['Default$OPENAGENT_EDITOR, or code', 'false'],
+      ['Cursorcursor', 'true'],
+    ])
     fireEvent.click(await screen.findByText('Default'))
     expect(updatePreferences).toHaveBeenCalledWith({ editor: '' })
   })
