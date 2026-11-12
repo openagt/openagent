@@ -117,7 +117,7 @@ function CodeBlock({ lines, language, document, wrap = false }: { lines: string[
   const coloured = useHighlightedIn(text, known)
   // In a page, as Claude Code on the web's file preview sets one: as wide as the text, the language
   // it was fenced as beside the copy button, and its lines kept whole, the box scrolling sideways.
-  return (
+  const box = (
     <div className={cn('relative max-w-full rounded-lg border border-border', document ? 'w-full' : 'w-fit min-w-40')}>
       <div className="absolute top-2.5 right-2.5 flex items-center gap-2">
         {document && language !== '' && <span className="text-xs text-muted-foreground">{language}</span>}
@@ -138,6 +138,8 @@ function CodeBlock({ lines, language, document, wrap = false }: { lines: string[
       </pre>
     </div>
   )
+  // In a page, room above and below: a block set between a list's lines does not run into them.
+  return wrap ? <div className="py-2">{box}</div> : box
 }
 
 /** A pipe-table row's cells, outer empties dropped (`| a | b |` -> ['a', 'b']). */
