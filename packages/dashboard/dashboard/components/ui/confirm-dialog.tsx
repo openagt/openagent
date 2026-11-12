@@ -55,6 +55,7 @@ export function ConfirmDialog({
   const { busy, error, run, reset } = useAction()
 
   const confirm = (): void => {
+    if (busy) return
     void run(onConfirm, fallbackError).then(outcome => {
       if (!outcome.ok) return
       setOpen(false)
@@ -92,12 +93,14 @@ export function ConfirmDialog({
                 </Button>
               }
             />
+            {/* Busy, it stays focusable: a disabled button drops the focus to the page behind the dialog. */}
             <Button
               variant={destructive ? 'destructive' : 'default'}
               size="sm"
-              disabled={busy || confirmDisabled}
+              disabled={confirmDisabled}
+              aria-disabled={busy || undefined}
               onClick={confirm}
-              className={cn(busy && 'cursor-progress')}
+              className={cn(busy && 'cursor-progress opacity-50')}
             >
               {busy ? confirmBusyLabel : confirmLabel}
             </Button>

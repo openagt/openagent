@@ -135,6 +135,25 @@ describe('AgentActionsMenu (#toolbar-menu)', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Delete' }))
     await waitFor(() => expect(sendDeleteAgent).toHaveBeenCalledWith('p1', 'run-1'))
   })
+
+  test('while the delete is on its way, the focus stays on its button in the dialog', async () => {
+    let done = (_: { ok: true }) => {}
+    sendDeleteAgent.mockImplementationOnce(() => new Promise(resolve => (done = resolve)))
+    const onDeleted = vi.fn()
+    render(<AgentActionsMenu projectId="p1" agentId="run-1" events={[]} label="my session" onDeleted={onDeleted} />)
+    openMenu()
+    fireEvent.click(await screen.findByText('Delete session'))
+    const confirm = await screen.findByRole('button', { name: 'Delete' })
+    confirm.focus()
+    fireEvent.click(confirm)
+    const busy = await screen.findByRole('button', { name: 'Deleting…' })
+    expect(document.activeElement).toBe(busy)
+    expect(busy.getAttribute('aria-disabled')).toBe('true')
+    fireEvent.click(busy)
+    expect(sendDeleteAgent).toHaveBeenCalledTimes(1)
+    done({ ok: true })
+    await waitFor(() => expect(onDeleted).toHaveBeenCalledTimes(1))
+  })
 })
 
 describe('the live-session action: Stop', () => {
