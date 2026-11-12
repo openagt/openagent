@@ -761,6 +761,13 @@ describe('a message sent while the agent works', () => {
     }
   })
 
+  test('a run whose feed shows its end is ended at once, its Stop gone with the end line, before the list of runs says so', () => {
+    const { rerender } = render(view({ live: true, events: [start('go'), text] }))
+    expect(screen.getByTestId('composer-live').textContent).toBe('true')
+    rerender(view({ live: true, events: [start('go'), text, { kind: 'end', ok: false, stopped: true }] as OpenAgentEvent[] }))
+    expect(screen.getByTestId('composer-live').textContent).toBe('false')
+  })
+
   test('a session whose run is not known yet has no message box, which would say an ended run\'s words; it comes once the record or the feed says', () => {
     const { rerender } = render(view({ live: null, events: [] }))
     expect(screen.queryByTestId('composer-live')).toBeNull()
