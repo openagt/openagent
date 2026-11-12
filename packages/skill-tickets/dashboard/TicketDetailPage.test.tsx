@@ -98,12 +98,12 @@ describe('TicketDetailPage (#1144)', () => {
     onTicket.mockResolvedValue(ticket({ pr: { label: '#12', url: 'https://example.com/pull/12' } }))
     render(<TicketDetailPage projectId="p1" slug="2026-07-20_do-the-thing.md" />)
     expect(await screen.findByText('in review')).toBeTruthy()
-    expect(screen.queryByRole('button', { name: 'Add to queue' })).toBeNull()
+    expect(screen.queryByRole('button', { name: /^Queue / })).toBeNull()
     cleanup()
     onTicket.mockResolvedValue(ticket({ waiting: 'the vendor answer' }))
     render(<TicketDetailPage projectId="p1" slug="2026-07-20_do-the-thing.md" />)
     expect(await screen.findByText(/the vendor answer/)).toBeTruthy()
-    expect(screen.queryByRole('button', { name: 'Add to queue' })).toBeNull()
+    expect(screen.queryByRole('button', { name: /^Queue / })).toBeNull()
   })
 
   test('shows the effort and uncertainty the plan recorded, with the rest of the meta (#1144/#1265)', async () => {
@@ -113,29 +113,39 @@ describe('TicketDetailPage (#1144)', () => {
     expect(screen.getByText('Uncertainty: 0')).toBeTruthy()
   })
 
-  test('the ticket is handed as a link to the module\'s action, at the priority its own says (#1164/#1774)', async () => {
-    onTicket.mockResolvedValue(ticket({ priority: '8' }))
+  test('a planned ticket is handed as a link to the module\'s action, at the priority its own says (#1164/#1774)', async () => {
+    onTicket.mockResolvedValue(ticket({ planned: true, priority: '8' }))
     addToQueue.mockResolvedValue({ ok: true })
     render(<TicketDetailPage projectId="p1" slug="2026-07-20_do-the-thing.md" />)
-    fireEvent.click(await screen.findByRole('button', { name: 'Add to queue' }))
+    fireEvent.click(await screen.findByRole('button', { name: 'Queue work' }))
     // The title as the link, pointing back at the ticket's file, its priority as a number on the
     // queue's own 0–10 scale.
     await waitFor(() => expect(addToQueue).toHaveBeenCalledWith(expect.anything(), 'p1', [{ text: 'Do the thing', href: 'tickets/2026-07-20_do-the-thing.md', priority: 8 }]))
   })
 
   test('a ticket with no priority is handed over at 5, the middle of the scale', async () => {
-    onTicket.mockResolvedValue(ticket())
+    onTicket.mockResolvedValue(ticket({ planned: true }))
     addToQueue.mockResolvedValue({ ok: true })
     render(<TicketDetailPage projectId="p1" slug="2026-07-20_do-the-thing.md" />)
-    fireEvent.click(await screen.findByRole('button', { name: 'Add to queue' }))
+    fireEvent.click(await screen.findByRole('button', { name: 'Queue work' }))
     await waitFor(() => expect(addToQueue).toHaveBeenCalledWith(expect.anything(), 'p1', [{ text: 'Do the thing', href: 'tickets/2026-07-20_do-the-thing.md', priority: 5 }]))
+  })
+
+  test('a ticket with no plan queues the ask for its plan, not the work', async () => {
+    onTicket.mockResolvedValue(ticket({ priority: '8' }))
+    addToQueue.mockResolvedValue({ ok: true })
+    render(<TicketDetailPage projectId="p1" slug="2026-07-20_do-the-thing.md" />)
+    expect(await screen.findByRole('button', { name: 'Plan now' })).toBeTruthy()
+    expect(screen.queryByRole('button', { name: 'Start work' })).toBeNull()
+    fireEvent.click(screen.getByRole('button', { name: 'Queue plan' }))
+    await waitFor(() => expect(addToQueue).toHaveBeenCalledWith(expect.anything(), 'p1', [{ text: 'Create tickets/2026-07-20_do-the-thing.plan.md', priority: 8 }]))
   })
 
   test('a queued ticket says so and cannot be queued twice', async () => {
     onTicket.mockResolvedValue(ticket())
     addToQueue.mockResolvedValue({ ok: true })
     render(<TicketDetailPage projectId="p1" slug="2026-07-20_do-the-thing.md" />)
-    fireEvent.click(await screen.findByRole('button', { name: 'Add to queue' }))
+    fireEvent.click(await screen.findByRole('button', { name: 'Queue plan' }))
     const queued = await screen.findByRole('button', { name: 'Queued' })
     expect((queued as HTMLButtonElement).disabled).toBe(true)
   })
@@ -144,7 +154,7 @@ describe('TicketDetailPage (#1144)', () => {
     onTicket.mockResolvedValue(ticket())
     addToQueue.mockResolvedValue({ ok: false, error: 'the queue could not be written' })
     render(<TicketDetailPage projectId="p1" slug="2026-07-20_do-the-thing.md" />)
-    fireEvent.click(await screen.findByRole('button', { name: 'Add to queue' }))
+    fireEvent.click(await screen.findByRole('button', { name: 'Queue plan' }))
     expect(await screen.findByText(/could not be written/i)).toBeTruthy()
     expect(screen.queryByRole('button', { name: 'Queued' })).toBeNull()
   })
@@ -171,7 +181,7 @@ describe('TicketDetailPage (#1144)', () => {
     expect(screen.getByText(/· plan-1-0/)).toBeTruthy()
     expect(screen.getByRole('button', { name: /release lock/i })).toBeTruthy()
     // Not queued while claimed: the agent the queue hands it to would find it taken.
-    expect(screen.queryByRole('button', { name: 'Add to queue' })).toBeNull()
+    expect(screen.queryByRole('button', { name: /^Queue / })).toBeNull()
   })
 
   test('an unclaimed ticket offers no release (#1420)', async () => {
@@ -193,7 +203,7 @@ describe('TicketDetailPage (#1144)', () => {
     await waitFor(() => expect(screen.queryByText('claimed')).toBeNull())
     expect(screen.queryByRole('button', { name: /release lock/i })).toBeNull()
     // Released, it is a ticket like any other: it may be queued.
-    expect(screen.getByRole('button', { name: 'Add to queue' })).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'Queue plan' })).toBeTruthy()
   })
 
   test('a failed release surfaces and keeps the claim visible (#1420)', async () => {

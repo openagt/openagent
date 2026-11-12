@@ -270,6 +270,7 @@ export function TicketsPage({ projects }: { projects: ModuleProject[] }) {
                 {flatRows.map(r => (
                   <TicketRow
                     key={`${r.projectId}/${r.ticket.file}`}
+                    projectId={r.projectId}
                     ticket={r.ticket}
                     projectName={r.projectName}
                     busy={busy}

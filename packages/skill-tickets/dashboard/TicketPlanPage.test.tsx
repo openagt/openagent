@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, test } from 'vitest'
 import { cleanup, fireEvent, screen, waitFor } from '@testing-library/react'
 import type { ModuleAgent } from '@openagt/dashboard/module'
-import { planTicketPrompt } from '../src/module.js'
+import { planTicketPrompt, workOnTicketPrompt } from '../src/module.js'
 import { fakeHost, renderWithHost, type FakeHost } from './test-host.js'
 import { TicketPlanPage } from './TicketPlanPage.js'
 
@@ -49,6 +49,19 @@ describe('TicketPlanPage (#685)', () => {
     render(PLAN, [{ id: 'run-9', ask: 'Work on tickets/other.md', status: 'done', startedAt: '2026-07-21T00:00:00.000Z' }])
     expect(await screen.findByText('The plan')).toBeTruthy()
     expect(screen.queryByRole('button', { name: /agent/ })).toBeNull()
+  })
+
+  test('the work starts from where its plan is read, now or queued; never on a ticket an agent holds', async () => {
+    const host = render(PLAN)
+    expect(await screen.findByText('The plan')).toBeTruthy()
+    expect(screen.queryByRole('button', { name: 'Plan now' })).toBeNull()
+    fireEvent.click(screen.getByRole('button', { name: 'Start work' }))
+    await waitFor(() => expect(host.startRun).toHaveBeenCalledWith('p1', workOnTicketPrompt(SLUG)))
+    cleanup()
+    const held = fakeHost({ p1: { [`show ${SLUG} --local`]: { ok: true, ticket: { ...TICKET, locked: true }, plan: PLAN } } }, { p1: [] })
+    renderWithHost(<TicketPlanPage projectId="p1" slug={SLUG} />, held)
+    expect(await screen.findByText('The plan')).toBeTruthy()
+    expect(screen.queryByRole('button', { name: 'Start work' })).toBeNull()
   })
 
   test('Back returns to the list, the module\'s own page', async () => {

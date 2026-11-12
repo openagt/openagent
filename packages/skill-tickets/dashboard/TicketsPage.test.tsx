@@ -364,19 +364,19 @@ describe('TicketsPage grouping (#1144)', () => {
 
   test("a flat row's start button spins up an agent in that row's own project (#1144)", async () => {
     onAllTickets.mockResolvedValue([
-      { projectId: 'p2', projectName: 'Beta', tickets: [ticket({ file: 'b.md', title: 'Beta ticket' })] },
+      { projectId: 'p2', projectName: 'Beta', tickets: [ticket({ file: 'b.md', title: 'Beta ticket', planned: true })] },
     ])
     window.history.replaceState(null, '', '/tickets?group=none')
     render()
-    fireEvent.click(await screen.findByRole('button', { name: /start work on beta ticket/i }))
+    fireEvent.click(await screen.findByRole('button', { name: 'Start work' }))
     // The row's own project, not a panel-bound one — the flat list carries one per row.
     await waitFor(() => expect(started()).toEqual([['p2', workOnTicketPrompt('b.md')]]))
   })
 
   test("a flat row's Configure first opens that row's own project's launcher (#1507)", async () => {
     onAllTickets.mockResolvedValue([
-      { projectId: 'p1', projectName: 'Alpha', tickets: [ticket({ file: 'a.md', title: 'Alpha ticket' })] },
-      { projectId: 'p2', projectName: 'Beta', tickets: [ticket({ file: 'b.md', title: 'Beta ticket' })] },
+      { projectId: 'p1', projectName: 'Alpha', tickets: [ticket({ file: 'a.md', title: 'Alpha ticket', planned: true })] },
+      { projectId: 'p2', projectName: 'Beta', tickets: [ticket({ file: 'b.md', title: 'Beta ticket', planned: true })] },
     ])
     window.history.replaceState(null, '', '/tickets?group=none')
     render()

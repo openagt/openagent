@@ -1,7 +1,7 @@
 import { useState } from 'react'
-import { Bot, ExternalLink, LockOpen, Play } from 'lucide-react'
-import { Badge, Button, LinkActions, Markdown, cn, formatAge, formatDateTime, useAction, usePolled, useModuleHost } from '@openagt/dashboard/module'
-import { claimState, heldBack, holderAgent, readShown, ticketBody, ticketLink, withHolder } from '../src/module.js'
+import { Bot, ClipboardList, ExternalLink, LockOpen, Play } from 'lucide-react'
+import { Badge, Button, Markdown, cn, formatAge, formatDateTime, useAction, usePolled, useModuleHost } from '@openagt/dashboard/module'
+import { claimState, heldBack, holderAgent, readShown, ticketBody, withHolder } from '../src/module.js'
 import type { WorkspaceTicketDetail } from './lib/types.js'
 import { TicketPageShell, TicketPageNote } from './TicketPageShell.js'
 import { releaseClaim } from './lib/release.js'
@@ -95,23 +95,22 @@ export function TicketDetailPage({
                   <LockOpen className="h-3.5 w-3.5" /> Release lock
                 </Button>
               )}
-              {/* The ticket as a link, for whatever the installed modules offer on one (#1774);
-                  none for a ticket in review or waiting, which is never queued, nor for a claimed
-                  one: an agent the queue hands it to finds it taken. Released, it is offered. */}
-              {/* The ticket's starts beside it, as on its list row: write or open its plan, start the work. */}
+              {ticket.planned && (
+                <Button size="sm" variant="outline" className="gap-1.5" onClick={() => host.openPage('tickets', [ticket.file, 'plan'], projectId)}>
+                  <ClipboardList className="h-3.5 w-3.5" aria-hidden /> View plan
+                </Button>
+              )}
+              {/* The ticket's next step, now or queued, as on its list row: none for a ticket in
+                  review or waiting, which is never handed to an agent, nor for a claimed one, which
+                  an agent holds. Released, it is offered. */}
               {!heldBack(ticket) && !claimed && (
-                <>
-                  <TicketStartActions
-                    file={ticket.file}
-                    title={ticket.title}
-                    planned={ticket.planned}
-                    busy={busy}
-                    onStart={(prompt, failure) => void run(() => host.startRun(projectId, prompt), failure)}
-                    onConfigure={prompt => host.configureRun(projectId, prompt)}
-                    onOpenPlan={() => host.openPage('tickets', [ticket.file, 'plan'], projectId)}
-                  />
-                  <LinkActions projects={[projectId]} targets={[{ projectId, links: [ticketLink(ticket)] }]} resetKey={ticket.file} disabled={busy} />
-                </>
+                <TicketStartActions
+                  projectId={projectId}
+                  ticket={ticket}
+                  busy={busy}
+                  onStart={(prompt, failure) => void run(() => host.startRun(projectId, prompt), failure)}
+                  onConfigure={prompt => host.configureRun(projectId, prompt)}
+                />
               )}
             </div>
           </div>

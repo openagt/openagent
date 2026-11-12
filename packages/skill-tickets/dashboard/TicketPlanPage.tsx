@@ -55,9 +55,8 @@ export function TicketPlanPage({
           {startable && (
             <div className="mb-4 flex flex-wrap items-center justify-end gap-1.5">
               <TicketStartActions
-                file={ticket.file}
-                title={ticket.title}
-                planned
+                projectId={projectId}
+                ticket={{ ...ticket, planned: true }}
                 busy={busy}
                 onStart={(prompt, failure) => void run(() => host.startRun(projectId, prompt), failure)}
                 onConfigure={prompt => host.configureRun(projectId, prompt)}

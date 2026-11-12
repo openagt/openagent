@@ -54,19 +54,21 @@ describe('TicketsPanel (#697/#1144)', () => {
     expect(onOpenPlan).toHaveBeenCalledWith('2026-07-20_do-the-thing.md')
   })
 
-  test('the plan column starts a session to write the plan when the ticket has none (#685)', async () => {
+  test('a ticket with no plan offers Plan now, which starts a session to write it (#685), and no Start work', async () => {
     render(<TicketsPanel projectId="p1" tickets={[ticket({ planned: false })]} loaded onOpen={() => {}} />)
-    fireEvent.click(await screen.findByRole('button', { name: /create a plan for do the thing/i }))
+    expect(screen.queryByRole('button', { name: 'Start work' })).toBeNull()
+    fireEvent.click(await screen.findByRole('button', { name: 'Plan now' }))
     // Exactly the exported ask — no second, hidden copy to drift from the button (#1187). The
     // dashboard starts it with the person's picks and lands on the run: nothing else to do here.
     await waitFor(() => expect(started()).toEqual([['p1', planTicketPrompt('2026-07-20_do-the-thing.md')]]))
     expect(started()[0]?.[1]).toBe('Create tickets/2026-07-20_do-the-thing.plan.md')
   })
 
-  test('the start column spins up an agent working on the ticket', async () => {
+  test('a planned ticket offers Start work, which spins up an agent working on it, and no Plan now', async () => {
     const onOpen = vi.fn()
-    render(<TicketsPanel projectId="p1" tickets={[ticket()]} loaded onOpen={onOpen} />)
-    fireEvent.click(await screen.findByRole('button', { name: /start work on do the thing/i }))
+    render(<TicketsPanel projectId="p1" tickets={[ticket({ planned: true })]} loaded onOpen={onOpen} />)
+    expect(screen.queryByRole('button', { name: 'Plan now' })).toBeNull()
+    fireEvent.click(await screen.findByRole('button', { name: 'Start work' }))
     // Exactly the exported ask — no second, hidden copy to drift from the button (#1187).
     await waitFor(() => expect(started()).toEqual([['p1', workOnTicketPrompt('2026-07-20_do-the-thing.md')]]))
     expect(started()[0]?.[1]).toBe('Work on tickets/2026-07-20_do-the-thing.md. Do not start any other ticket.')
@@ -303,15 +305,15 @@ describe('TicketsPanel (#697/#1144)', () => {
 
   // #1507: every start on this panel spends an agent on a model and a run target that live in
   // the Global options, a page away — so each carries the chevron that opens the launcher instead.
-  test("the start column's Configure first opens the launcher with the ticket's own prompt", async () => {
-    render(<TicketsPanel projectId="p1" tickets={[ticket()]} loaded onOpen={() => {}} />)
+  test("Start work's Configure first opens the launcher with the ticket's own prompt", async () => {
+    render(<TicketsPanel projectId="p1" tickets={[ticket({ planned: true })]} loaded onOpen={() => {}} />)
     await configureFirst('Other ways to work on Do the thing')
     await waitFor(() => expect(host.configureRun).toHaveBeenCalledWith('p1', workOnTicketPrompt('2026-07-20_do-the-thing.md')))
     // The launcher, not an agent — that is the whole reason this half exists.
     expect(host.startRun).not.toHaveBeenCalled()
   })
 
-  test("the plan column's Configure first carries the plan ask, not the work ask", async () => {
+  test("Plan now's Configure first carries the plan ask, not the work ask", async () => {
     render(<TicketsPanel projectId="p1" tickets={[ticket({ planned: false })]} loaded onOpen={() => {}} />)
     await configureFirst('Other ways to plan Do the thing')
     // The shared plan sentence, so the launcher opens with the very ask the button would have sent.
@@ -319,7 +321,7 @@ describe('TicketsPanel (#697/#1144)', () => {
     expect(host.startRun).not.toHaveBeenCalled()
   })
 
-  test('a plan that already exists is a link, so it has no chevron to configure', async () => {
+  test('a plan that already exists is a link to read it, and the plan is not offered again', async () => {
     render(<TicketsPanel projectId="p1" tickets={[ticket({ planned: true })]} loaded onOpen={() => {}} onOpenPlan={() => {}} />)
     expect(await screen.findByRole('button', { name: 'View the plan for Do the thing' })).toBeTruthy()
     // Reading a file starts nothing, so there is nothing to set up first.

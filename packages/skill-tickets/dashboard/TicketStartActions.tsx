@@ -1,67 +1,82 @@
-import { ClipboardList, ClipboardPlus, Play } from 'lucide-react'
-import { Button, StartAgentButton } from '@openagt/dashboard/module'
-import { planTicketPrompt, workOnTicketPrompt } from '../src/module.js'
+import { ClipboardPlus, Play } from 'lucide-react'
+import { LinkActions, StartAgentButton } from '@openagt/dashboard/module'
+import { planLink, planTicketPrompt, ticketLink, workOnTicketPrompt } from '../src/module.js'
 
 /**
- * A ticket page's starts, in words: the list row's start and plan columns, where the ticket or its
- * plan is being read. The plan one writes the plan, or opens it once it is written; the plan's own
- * page leaves it out. Each start's chevron opens the launcher with the same ask, as on the row.
+ * A ticket's next step, now or later, wherever the ticket is shown: with no plan yet, its plan is
+ * written now or queued; with one, the work is started now or queued. "Now" starts an agent, and
+ * its chevron opens the launcher with the same ask; "later" hands the same ask to the installed
+ * modules' link actions — "Add to queue" when the project has a queue package — and shows nothing
+ * without one. The caller leaves it out for a ticket no agent is handed: in review, waiting, claimed.
  */
 export function TicketStartActions({
-  file,
-  title,
-  planned,
+  projectId,
+  ticket,
   busy,
   onStart,
   onConfigure,
-  onOpenPlan,
+  size = 'sm',
 }: {
-  file: string
-  title: string
-  planned?: boolean | undefined
-  /** A start is in flight on this page. */
+  projectId: string
+  ticket: { file: string; title: string; planned?: boolean | undefined; priority?: string | undefined }
+  /** A start is in flight on this surface. */
   busy: boolean
-  /** Start an agent with one of the asks; `failure` is what to say when it cannot start. */
+  /** Start an agent with the ask; `failure` is what to say when it cannot start. */
   onStart: (prompt: string, failure: string) => void
-  /** The launcher, prefilled with that button's ask. */
+  /** The launcher, prefilled with the ask. */
   onConfigure: (prompt: string) => void
-  /** Open the ticket's plan. Without it, no plan action shows. */
-  onOpenPlan?: (() => void) | undefined
+  /** `xs` on the list's dense rows. */
+  size?: 'xs' | 'sm' | undefined
 }) {
-  const work = workOnTicketPrompt(file)
-  const plan = planTicketPrompt(file)
+  const icon = size === 'xs' ? 'h-3 w-3' : 'h-3.5 w-3.5'
+  const step = ticket.planned
+    ? {
+        prompt: workOnTicketPrompt(ticket.file),
+        now: 'Start work',
+        later: 'Queue work',
+        icon: <Play className={icon} aria-hidden />,
+        tooltip: 'Starts an agent working on this ticket, from its plan',
+        laterTooltip: 'Adds the ticket to the queue: an agent works on it when the queue reaches it',
+        menu: `Other ways to work on ${ticket.title}`,
+        configure: "Opens the launcher with this ticket's prompt, so you can set the model and where it runs.",
+        failure: 'The work agent could not be started.',
+        link: ticketLink(ticket),
+      }
+    : {
+        prompt: planTicketPrompt(ticket.file),
+        now: 'Plan now',
+        later: 'Queue plan',
+        icon: <ClipboardPlus className={icon} aria-hidden />,
+        tooltip: "Starts an agent writing this ticket's plan",
+        laterTooltip: "Adds the ticket's plan to the queue: an agent writes it when the queue reaches it",
+        menu: `Other ways to plan ${ticket.title}`,
+        configure: 'Opens the launcher with the plan prompt, so you can set the model and where it runs.',
+        failure: 'The planning agent could not be started.',
+        link: planLink(ticket),
+      }
   return (
     <>
-      {onOpenPlan &&
-        (planned ? (
-          <Button size="sm" variant="outline" className="gap-1.5" onClick={onOpenPlan}>
-            <ClipboardList className="h-3.5 w-3.5" aria-hidden /> View plan
-          </Button>
-        ) : (
-          <StartAgentButton
-            size="sm"
-            icon={<ClipboardPlus className="h-3.5 w-3.5" aria-hidden />}
-            label="Write a plan"
-            menuAriaLabel={`Other ways to plan ${title}`}
-            tooltip="Starts an agent to write this ticket's plan"
-            busy={busy}
-            prompt={plan}
-            configureDescription="Opens the launcher with the plan prompt, so you can set the model and where it runs."
-            onStart={() => onStart(plan, 'The planning agent could not be started.')}
-            onConfigure={() => onConfigure(plan)}
-          />
-        ))}
       <StartAgentButton
-        size="sm"
-        icon={<Play className="h-3.5 w-3.5" aria-hidden />}
-        label="Start work"
-        menuAriaLabel={`Other ways to work on ${title}`}
-        tooltip="Starts an agent working on this ticket"
+        size={size}
+        icon={step.icon}
+        label={step.now}
+        menuAriaLabel={step.menu}
+        tooltip={step.tooltip}
         busy={busy}
-        prompt={work}
-        configureDescription="Opens the launcher with this ticket's prompt, so you can set the model and where it runs."
-        onStart={() => onStart(work, 'The work agent could not be started.')}
-        onConfigure={() => onConfigure(work)}
+        prompt={step.prompt}
+        configureDescription={step.configure}
+        onStart={() => onStart(step.prompt, step.failure)}
+        onConfigure={() => onConfigure(step.prompt)}
+      />
+      <LinkActions
+        projects={[projectId]}
+        targets={[{ projectId, links: [step.link] }]}
+        // A plan queued, then written, arms the work's button: a new ask.
+        resetKey={`${ticket.file}\n${step.prompt}`}
+        label={() => step.later}
+        tooltip={step.laterTooltip}
+        size={size}
+        disabled={busy}
       />
     </>
   )
