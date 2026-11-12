@@ -58,6 +58,41 @@ export function planAgentFor<A extends AgentLike>(agents: readonly A[], file: st
 }
 
 /**
+ * The agent that worked a ticket, as far as its runs say: the newest whose ask names the ticket's
+ * file — the start column's ask, or a queued entry linking it, started from the queue's page. A
+ * run the scheduler took off the queue was asked `/work-queue`, and is found only while it holds
+ * the ticket's claim ({@link holderAgent}).
+ */
+export function workAgentFor<A extends AgentLike>(agents: readonly A[], file: string): A | undefined {
+  const named = `${TICKETS_DIR}/${file}`
+  return agents.filter(agent => agent.ask !== undefined && mentions(agent.ask, named)).sort((a, b) => b.startedAt.localeCompare(a.startedAt))[0]
+}
+
+/** Whether `text` names `path` itself, not a longer path it begins (`tickets/a.md` in `tickets/a.md.bak`). */
+function mentions(text: string, path: string): boolean {
+  for (let at = text.indexOf(path); at >= 0; at = text.indexOf(path, at + 1)) {
+    // A full stop ends a sentence, unless a name goes on after it (`.bak`).
+    const after = text.slice(at + path.length, at + path.length + 2)
+    if (!/^[\w-]/.test(after) && !/^\.\w/.test(after)) return true
+  }
+  return false
+}
+
+/**
+ * A plan's text as a page shows it, under its own heading: without the lines above its title
+ * (`Effort:`, `Uncertainty:`, `Outdated:`, which the page shows as facts) and without the
+ * `# [Plan] …` title itself, which only repeats the ticket's.
+ */
+export function planBody(plan: string): string {
+  const lines = plan.replace(/\r\n/g, '\n').split('\n')
+  const at = lines.findIndex(line => line.startsWith('# '))
+  const head = at < 0 ? [] : lines.slice(0, at)
+  // Only a head of `key: value` lines is a preamble; anything else above the title is kept.
+  if (at < 0 || head.some(line => line.trim() !== '' && !/^[A-Za-z]+:\s/.test(line))) return plan.trim()
+  return lines.slice(at + 1).join('\n').trim()
+}
+
+/**
  * The agent a claim names, when the lock's holder is one of the project's runs: a lock names an
  * agent id — the same id the run's checkout is named with — so a claim a run made resolves to the
  * run's page and its session name; any other holder (another machine's, a branch name) is shown

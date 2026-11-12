@@ -109,8 +109,8 @@ describe('TicketDetailPage (#1144)', () => {
   test('shows the effort and uncertainty the plan recorded, with the rest of the meta (#1144/#1265)', async () => {
     onTicket.mockResolvedValue(ticket({ planned: true, effort: 2, uncertainty: 0 }))
     render(<TicketDetailPage projectId="p1" slug="2026-07-20_do-the-thing.md" />)
-    expect(await screen.findByText('Effort: 2')).toBeTruthy()
-    expect(screen.getByText('Uncertainty: 0')).toBeTruthy()
+    expect(await screen.findByText('Effort 2/10')).toBeTruthy()
+    expect(screen.getByText('Uncertainty 0/10')).toBeTruthy()
   })
 
   test('a planned ticket is handed as a link to the module\'s action, at the priority its own says (#1164/#1774)', async () => {
@@ -230,23 +230,31 @@ describe('TicketDetailPage (#1144)', () => {
     expect(host.openAgent).toHaveBeenCalledWith('p1', '2026-08-30T10-00-00-000Z')
   })
 
-  test('the run holding the claim is one press away at the top: looked at while it works, gone on with once it stopped', async () => {
-    agents = [{ id: 'run-1', name: 'login-page', status: 'running', startedAt: '2026-08-30T10:00:00.000Z' }]
-    onTicket.mockResolvedValue(ticket({ locked: true, lockedBy: 'run-1' }))
+  test('the sessions behind the ticket are one press away: the one that planned it, and the one holding its claim', async () => {
+    agents = [
+      { id: 'plan-run', ask: 'Create tickets/2026-07-20_do-the-thing.plan.md', title: 'Plan the thing', status: 'done', startedAt: '2026-08-29T10:00:00.000Z' },
+      { id: 'run-1', name: 'login-page', title: 'Do the thing', status: 'running', startedAt: '2026-08-30T10:00:00.000Z' },
+    ]
+    onTicket.mockResolvedValue(ticket({ planned: true, locked: true, lockedBy: 'run-1' }))
     render(<TicketDetailPage projectId="p1" slug="2026-07-20_do-the-thing.md" />)
-    fireEvent.click(await screen.findByRole('button', { name: 'Open the run' }))
+    expect(await screen.findByText('Plan the thing')).toBeTruthy()
+    expect(screen.getByText(/Being worked in/)).toBeTruthy()
+    const [plan, work] = screen.getAllByRole('button', { name: 'Open session' })
+    fireEvent.click(plan!)
+    expect(host.openAgent).toHaveBeenCalledWith('p1', 'plan-run')
+    fireEvent.click(work!)
     expect(host.openAgent).toHaveBeenCalledWith('p1', 'run-1')
-    expect(screen.getByText(/at work/)).toBeTruthy()
-    expect(screen.queryByRole('button', { name: 'Continue' })).toBeNull()
-    cleanup()
-
-    agents = [{ id: 'run-1', name: 'login-page', status: 'stopped', startedAt: '2026-08-30T10:00:00.000Z' }]
-    render(<TicketDetailPage projectId="p1" slug="2026-07-20_do-the-thing.md" />)
-    fireEvent.click(await screen.findByRole('button', { name: 'Continue' }))
-    expect(host.openAgent).toHaveBeenCalledWith('p1', 'run-1')
-    expect(screen.getByText(/run stopped/)).toBeTruthy()
     // The claim can still be lifted beside it.
     expect(screen.getByRole('button', { name: /release lock/i })).toBeTruthy()
+    cleanup()
+
+    // Its claim released once the work was done, the work's session is still found by what it was asked.
+    agents = [{ id: 'run-2', ask: 'Work on tickets/2026-07-20_do-the-thing.md. Do not start any other ticket.', title: 'Do the thing', status: 'done', startedAt: '2026-08-30T10:00:00.000Z' }]
+    onTicket.mockResolvedValue(ticket())
+    render(<TicketDetailPage projectId="p1" slug="2026-07-20_do-the-thing.md" />)
+    expect(await screen.findByText(/Worked in/)).toBeTruthy()
+    fireEvent.click(screen.getByRole('button', { name: 'Open session' }))
+    expect(host.openAgent).toHaveBeenCalledWith('p1', 'run-2')
   })
 
   test('a command that cannot run is named, not shown as a missing ticket', async () => {

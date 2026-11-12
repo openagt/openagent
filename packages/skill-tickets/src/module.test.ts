@@ -1,6 +1,6 @@
 import { strict as assert } from 'node:assert'
 import { test } from 'node:test'
-import { claimState, heldBack, holderAgent, hotLane, isHighPriority, namesOf, planAgentFor, planLink, planPath, planTicketPrompt, readListed, readMeta, readShown, routeOf, ticketLink, workOnTicketPrompt } from './module.js'
+import { claimState, heldBack, holderAgent, hotLane, isHighPriority, namesOf, planAgentFor, planBody, planLink, planPath, planTicketPrompt, readListed, readMeta, readShown, routeOf, ticketLink, workAgentFor, workOnTicketPrompt } from './module.js'
 
 const FILE = '2026-08-30_login-page.md'
 
@@ -114,4 +114,25 @@ test('a plan its ticket already has is called written already, unless it is outd
   const plan = 'tickets/2026-08-30_login-page.plan.md'
   assert.deepEqual(namesOf([plan], [{ file: FILE, title: 'Login page', planned: true }]), { [plan]: { title: 'Plan: Login page · already written', href: `tickets/${FILE}` } })
   assert.deepEqual(namesOf([plan], [{ file: FILE, title: 'Login page', planned: true, outdated: true }]), { [plan]: { title: 'Plan: Login page', href: `tickets/${FILE}` } })
+})
+
+test('the work on a ticket is the newest run asked about its file, never one asked for its plan', () => {
+  const runs = [
+    { id: 'plan', ask: planTicketPrompt(FILE), startedAt: '2026-08-31T00:00:00.000Z', status: 'done' },
+    { id: 'old', ask: workOnTicketPrompt(FILE), startedAt: '2026-09-01T00:00:00.000Z', status: 'done' },
+    { id: 'queued', ask: `[Login page](tickets/${FILE})`, startedAt: '2026-09-02T00:00:00.000Z', status: 'done' },
+    { id: 'other', ask: 'Work on tickets/2026-08-30_login-page.md.bak', startedAt: '2026-09-03T00:00:00.000Z', status: 'done' },
+    { id: 'drain', ask: '/work-queue', startedAt: '2026-09-04T00:00:00.000Z', status: 'done' },
+  ]
+  assert.equal(workAgentFor(runs, FILE)?.id, 'queued')
+  assert.equal(workAgentFor(runs.slice(0, 2), FILE)?.id, 'old', 'the start column\'s ask ends its sentence right after the file')
+  assert.equal(workAgentFor(runs.slice(0, 1), FILE), undefined, 'the plan\'s run did no work')
+})
+
+test('a plan shows under its page\'s heading without its preamble and its title', () => {
+  assert.equal(planBody('Effort: 2\nUncertainty: 1\nOutdated: yes\n\n# [Plan] Login page\n\nWhat this holds.\n\n## Problems\n'), 'What this holds.\n\n## Problems')
+  assert.equal(planBody('# [Plan] Login page\n\nText.'), 'Text.')
+  // Prose above the title is not a preamble: the plan is shown as written.
+  assert.equal(planBody('A note first.\n\n# [Plan] Login page\n\nText.'), 'A note first.\n\n# [Plan] Login page\n\nText.')
+  assert.equal(planBody('No title at all.'), 'No title at all.')
 })

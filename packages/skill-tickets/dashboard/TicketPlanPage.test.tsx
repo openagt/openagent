@@ -9,7 +9,7 @@ afterEach(cleanup)
 
 const SLUG = '2026-07-20_do-the-thing.md'
 const TICKET = { file: SLUG, title: 'Do the thing', summary: '', date: '2026-01-01T00:00:00.000Z', planned: true, content: '# Do the thing\n' }
-const PLAN = '# The plan\n\nDo it in two steps.'
+const PLAN = 'Effort: 2\n\n# [Plan] Do the thing\n\n## The plan\n\nDo it in two steps.'
 
 /** The page over a `show` answer carrying `plan` (or not), and the project's runs. */
 const render = (plan: string | undefined, agents: ModuleAgent[] = []): FakeHost => {
@@ -33,22 +33,24 @@ describe('TicketPlanPage (#685)', () => {
     expect(await screen.findByText(/no plan yet/i)).toBeTruthy()
   })
 
-  test('a plan with a known author offers to resume that agent, and opens its session (#1511)', async () => {
-    const host = render(PLAN, [{ id: 'run-7', ask: planTicketPrompt(SLUG), status: 'done', startedAt: '2026-07-21T00:00:00.000Z' }])
-    fireEvent.click(await screen.findByRole('button', { name: 'Resume agent' }))
+  test('a plan with a known author names its session and opens it (#1511)', async () => {
+    const host = render(PLAN, [{ id: 'run-7', ask: planTicketPrompt(SLUG), status: 'done', startedAt: '2026-07-21T00:00:00.000Z', title: 'Plan the thing' }])
+    expect(await screen.findByText('Plan the thing')).toBeTruthy()
+    fireEvent.click(await screen.findByRole('button', { name: 'Open session' }))
     expect(host.openAgent).toHaveBeenCalledWith('p1', 'run-7')
   })
 
-  test('an author still running is opened, not resumed (#1511)', async () => {
-    render(PLAN, [{ id: 'run-8', ask: planTicketPrompt(SLUG), status: 'running', startedAt: '2026-07-21T00:00:00.000Z' }])
-    expect(await screen.findByRole('button', { name: 'Open agent' })).toBeTruthy()
-    expect(screen.queryByRole('button', { name: 'Resume agent' })).toBeNull()
+  test('an author still running is said to be writing it, and opened the same way (#1511)', async () => {
+    const host = render(PLAN, [{ id: 'run-8', ask: planTicketPrompt(SLUG), status: 'running', startedAt: '2026-07-21T00:00:00.000Z' }])
+    expect(await screen.findByText(/Being written in/)).toBeTruthy()
+    fireEvent.click(screen.getByRole('button', { name: 'Open session' }))
+    expect(host.openAgent).toHaveBeenCalledWith('p1', 'run-8')
   })
 
   test('a plan nobody on record wrote shows no resume control (#1511)', async () => {
     render(PLAN, [{ id: 'run-9', ask: 'Work on tickets/other.md', status: 'done', startedAt: '2026-07-21T00:00:00.000Z' }])
     expect(await screen.findByText('The plan')).toBeTruthy()
-    expect(screen.queryByRole('button', { name: /agent/ })).toBeNull()
+    expect(screen.queryByRole('button', { name: 'Open session' })).toBeNull()
   })
 
   test('the work starts from where its plan is read, now or queued; never on a ticket an agent holds', async () => {

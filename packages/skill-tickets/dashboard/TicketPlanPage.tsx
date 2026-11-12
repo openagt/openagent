@@ -1,17 +1,18 @@
-import { Button, Markdown, Tooltip, TooltipTrigger, TooltipContent, useAction, usePolled, useModuleHost, type ModuleAgent } from '@openagt/dashboard/module'
-import { heldBack, planAgentFor, planPath, readShown, type TicketDetail } from '../src/module.js'
+import { Badge, Markdown, useAction, usePolled, useModuleHost } from '@openagt/dashboard/module'
+import { heldBack, planBody, planPath, readShown, type TicketDetail } from '../src/module.js'
 import { TicketPageShell, TicketPageNote } from './TicketPageShell.js'
 import { TicketStartActions } from './TicketStartActions.js'
+import { TicketSessions, sessionsOf, type TicketSession } from './TicketSessions.js'
 import { useBackToList } from './lib/back-to-list.js'
 
-/** The page's read: the plan's text (none when the ticket has no plan, or no ticket), its ticket, or why the command failed. */
-type Read = { plan: string | null; ticket: TicketDetail | undefined; agent: ModuleAgent | undefined } | { error: string }
+/** The page's read: the plan's text (none when the ticket has no plan, or no ticket), its ticket, the sessions behind them, or why the command failed. */
+type Read = { plan: string | null; ticket: TicketDetail | undefined; sessions: TicketSession[] } | { error: string }
 
-// One ticket's plan: its `<stem>.plan.md` rendered as markdown, the destination of the tickets
-// list's plan-column link. The plan comes with the ticket from `tickets show <file> --local`, and
-// the agent that wrote it from the dashboard's runs — the plan file carries no marker, so the run
-// whose ask named this plan is the author. `slug` is the ticket's filename, the same the list row
-// and the URL carry, so the plan is addressed by the ticket it belongs to.
+// One ticket's plan, the destination of the plan column's link: the ticket's title as the page's
+// heading with the plan's facts under it, the sessions that wrote and worked it, the next step, and
+// the plan itself set as a document. The plan comes with the ticket from `tickets show <file>
+// --local`; `slug` is the ticket's filename, the same the list row and the URL carry, so the plan is
+// addressed by the ticket it belongs to.
 export function TicketPlanPage({
   projectId,
   slug,
@@ -27,7 +28,8 @@ export function TicketPlanPage({
     async () => {
       const [shown, agents] = await Promise.all([host.runCommand(projectId, ['show', slug, '--local']).then(readShown), host.agents(projectId).catch(() => [])])
       if ('error' in shown) return shown
-      return { plan: shown.shown?.plan ?? null, ticket: shown.shown?.ticket, agent: planAgentFor(agents, slug) }
+      const ticket = shown.shown?.ticket
+      return { plan: shown.shown?.plan ?? null, ticket, sessions: ticket ? sessionsOf(agents, ticket) : [] }
     },
     null,
     10_000,
@@ -52,46 +54,56 @@ export function TicketPlanPage({
         <TicketPageNote>This ticket has no plan yet.</TicketPageNote>
       ) : (
         <>
-          {startable && (
-            <div className="mb-4 flex flex-wrap items-center justify-end gap-1.5">
-              <TicketStartActions
-                projectId={projectId}
-                ticket={{ ...ticket, planned: true }}
-                busy={busy}
-                onStart={(prompt, failure) => void run(() => host.startRun(projectId, prompt), failure)}
-                onConfigure={prompt => host.configureRun(projectId, prompt)}
-              />
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div className="min-w-0">
+              <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Plan</p>
+              {ticket && (
+                <button type="button" className="text-left text-lg font-semibold hover:underline" onClick={() => host.openPage('tickets', [ticket.file], projectId)}>
+                  {ticket.title}
+                </button>
+              )}
+            </div>
+            {startable && (
+              <div className="flex shrink-0 flex-wrap items-center gap-1.5">
+                <TicketStartActions
+                  projectId={projectId}
+                  ticket={{ ...ticket, planned: true }}
+                  busy={busy}
+                  onStart={(prompt, failure) => void run(() => host.startRun(projectId, prompt), failure)}
+                  onConfigure={prompt => host.configureRun(projectId, prompt)}
+                />
+              </div>
+            )}
+          </div>
+          {ticket && <PlanFacts ticket={ticket} />}
+          {error && <p className="mt-2 text-xs text-danger">{error}</p>}
+          {read.sessions.length > 0 && (
+            <div className="mt-4">
+              <TicketSessions sessions={read.sessions} onOpen={agentId => host.openAgent(projectId, agentId)} />
             </div>
           )}
-          {error && <p className="mb-4 text-xs text-danger">{error}</p>}
-          {read.agent && <PlanAgentRow agent={read.agent} onOpen={() => host.openAgent(projectId, read.agent!.id)} />}
-          <Markdown text={read.plan} />
+          <div className="mt-6 border-t border-border pt-6">
+            <Markdown text={planBody(read.plan)} document />
+          </div>
         </>
       )}
     </TicketPageShell>
   )
 }
 
-/**
- * Who wrote the plan and the way back to them. A finished agent is resumed — same session, same
- * branch, same conversation — so the plan can be discussed with the agent that has it in context;
- * one still running is simply opened.
- */
-function PlanAgentRow({ agent, onOpen }: { agent: ModuleAgent; onOpen: () => void }) {
-  const running = agent.status === 'running'
+/** What the plan says of the work, and where the ticket stands: under the title, as the ticket's page sets its facts. */
+function PlanFacts({ ticket }: { ticket: TicketDetail }) {
   return (
-    <div className="mb-4 flex items-center justify-between gap-3 rounded-md border border-border px-3 py-2 text-xs text-muted-foreground">
-      <span>{running ? 'An agent is writing this plan right now.' : 'Written by an agent whose session can be picked up where it left off.'}</span>
-      <Tooltip>
-        <TooltipTrigger render={<Button variant="outline" size="sm" className="h-7 shrink-0 text-xs" onClick={onOpen} />}>
-          {running ? 'Open agent' : 'Resume agent'}
-        </TooltipTrigger>
-        <TooltipContent className="max-w-72">
-          {running
-            ? 'Opens the session writing this plan, so you can watch it or step in.'
-            : 'Opens the session of the agent that wrote this plan. Anything you send there continues that same conversation — the plan, the ticket and the reasoning behind it are already in its context.'}
-        </TooltipContent>
-      </Tooltip>
+    <div className="mt-2 flex flex-wrap items-center gap-1.5 text-[10px] text-muted-foreground">
+      {ticket.effort !== undefined && <Badge className="border-border px-1.5 text-[10px] text-muted-foreground">Effort {ticket.effort}/10</Badge>}
+      {ticket.uncertainty !== undefined && <Badge className="border-border px-1.5 text-[10px] text-muted-foreground">Uncertainty {ticket.uncertainty}/10</Badge>}
+      {ticket.outdated && <Badge className="border-warning/40 px-1.5 text-[10px] text-warning">Outdated: the ticket changed since</Badge>}
+      {ticket.pr && (
+        <a href={ticket.pr.url} target="_blank" rel="noreferrer" className="text-info hover:underline">
+          In review · {ticket.pr.label}
+        </a>
+      )}
+      {ticket.waiting && <span className="text-warning">Waiting · {ticket.waiting}</span>}
     </div>
   )
 }
