@@ -265,7 +265,67 @@ describe('run handoff (#799)', () => {
     render(<Harness />)
     await waitFor(() => expect(screen.getByText('Open PR')).toBeTruthy())
     fireEvent.click(screen.getByText('Open PR'))
-    await waitFor(() => expect(screen.getByText('gh: not logged in')).toBeTruthy())
+    // What failed in the bar's words, then the program's own line.
+    await waitFor(() => expect(screen.getByText('Could not open the pull request. gh: not logged in')).toBeTruthy())
+  })
+
+  test('an opened PR is the bar\'s at once, from the press\'s own answer: its Merge is offered before the branch is read again', async () => {
+    onAgentHandoff.mockResolvedValue(worked)
+    sendOpenPullRequest.mockResolvedValue({ ok: true, number: 3, url: 'https://example.test/3' })
+    render(<Harness />)
+    const open = await screen.findByText('Open PR')
+    // The read after the press is still looking up the PR, as it does once the cached one was dropped.
+    onAgentHandoff.mockResolvedValue({ ...worked, pushed: true, prPending: true })
+    const reads = onAgentHandoff.mock.calls.length
+    fireEvent.click(open)
+    await waitFor(() => expect(onAgentHandoff.mock.calls.length).toBeGreaterThan(reads))
+    await new Promise(resolve => setTimeout(resolve, 20))
+    expect(screen.getByRole('button', { name: 'Merge PR' })).toBeTruthy()
+    expect(document.querySelector('[aria-live="polite"]')!.textContent).toBe('Opened PR #3.')
+  })
+
+  test('a merge left to wait for the checks says so, and is not offered again', async () => {
+    onAgentHandoff.mockResolvedValue({ ...worked, pushed: true, pr: { number: 42, url: 'https://example.test/42', state: 'OPEN', title: 'Add dark mode' } })
+    sendMerge.mockResolvedValue({ ok: true, number: 42, url: 'https://example.test/42', merge: 'auto-armed' })
+    render(<Harness />)
+    fireEvent.click(await screen.findByRole('button', { name: 'Merge PR' }))
+    await waitFor(() => expect(document.querySelector('[aria-live="polite"]')!.textContent).toBe('PR #42 merges when its checks pass.'))
+    expect(screen.queryByRole('button', { name: 'Merge PR' })).toBeNull()
+  })
+
+  test('a failed merge says so in the bar\'s words, then the program\'s line', async () => {
+    onAgentHandoff.mockResolvedValue({ ...worked, pushed: true, pr: { number: 42, url: 'https://example.test/42', state: 'OPEN', title: 'Add dark mode' } })
+    sendMerge.mockResolvedValue({ ok: false, error: 'pull request 42 could not be landed: X Pull request o/r#42 is not mergeable' })
+    render(<Harness />)
+    fireEvent.click(await screen.findByRole('button', { name: 'Merge PR' }))
+    await waitFor(() => expect(screen.getByText('Could not merge the pull request. pull request 42 could not be landed: X Pull request o/r#42 is not mergeable')).toBeTruthy())
+  })
+
+  test('after a press the focus stays in the bar: on its next press, else on the bar, never on the page', async () => {
+    onAgentHandoff.mockResolvedValue({ ...worked, gitHost: false })
+    render(
+      <div role="group" aria-label="This session's work" tabIndex={-1}>
+        <Harness />
+      </div>,
+    )
+    const publish = await screen.findByRole('button', { name: 'Publish branch' })
+    publish.focus()
+    fireEvent.click(publish)
+    await waitFor(() => expect(screen.queryByRole('button', { name: 'Publish branch' })).toBeNull())
+    await waitFor(() => expect(document.activeElement).toBe(screen.getByRole('group', { name: "This session's work" })))
+    cleanup()
+    // With a next press, the focus is on it.
+    onAgentHandoff.mockResolvedValue(worked)
+    sendOpenPullRequest.mockResolvedValue({ ok: true, number: 3, url: 'https://example.test/3' })
+    render(
+      <div role="group" aria-label="This session's work" tabIndex={-1}>
+        <Harness />
+      </div>,
+    )
+    const open = await screen.findByRole('button', { name: 'Open PR' })
+    open.focus()
+    fireEvent.click(open)
+    await waitFor(() => expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Merge PR' })))
   })
 
   test('an existing open PR withdraws the offer and becomes the Merge (#632/#1391)', async () => {
@@ -374,11 +434,16 @@ describe('run handoff (#799)', () => {
     expect(screen.queryByRole('button', { name: 'Other choices' })).toBeNull()
     fireEvent.click(screen.getByText('Publish branch'))
     await waitFor(() => expect(sendPush).toHaveBeenCalledWith('p1', 'run-1'))
+    // The push's answer is the bar's at once, and what it did is said, to a screen reader too.
+    await waitFor(() => expect(screen.queryByText('Publish branch')).toBeNull())
+    expect(document.querySelector('[aria-live="polite"]')!.textContent).toBe('Pushed. Pull requests need a remote on GitHub.')
     cleanup()
+    // Read again later, a pushed branch has nothing left to press or to say.
     onAgentHandoff.mockResolvedValue({ ...worked, gitHost: false, pushed: true })
     render(<Harness />)
-    await waitFor(() => expect(screen.getByText('Pushed. Pull requests need a remote on GitHub.')).toBeTruthy())
+    await waitFor(() => expect(screen.getByTitle('1 commit · 1 file · pushed')).toBeTruthy())
     expect(screen.queryByText('Publish branch')).toBeNull()
+    expect(screen.queryByText(/^Pushed/)).toBeNull()
   })
 
   test('a repo with no remote offers the one step it has: merge the work into the main branch, on this machine', async () => {

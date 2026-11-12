@@ -279,7 +279,7 @@ export async function mergeAgentPr(
   const branch = agent.branch
   forgetPr(cwd, branch)
   if (branch !== undefined) forgetBranchPrs(cwd, branch)
-  return { ok: true, url: pr.url, number: pr.number }
+  return { ok: true, url: pr.url, number: pr.number, merge: merged.outcome }
 }
 
 /**
@@ -384,7 +384,10 @@ async function carriedToDefault(cwd: string, own: AgentHandoff, deps: AgentHando
  * is the fact worth *recording* — every surface that wants an agent's PR then reads it off the agent
  * rather than re-deriving it later.
  */
-export type HandoffResult = { ok: true; url?: string; number?: number } | { ok: false; error: string }
+export type HandoffResult = { ok: true; url?: string; number?: number; merge?: GitHostMergeOutcome } | { ok: false; error: string }
+
+/** How a merge pressed here went: merged at once, armed on the git host to merge once its checks pass, or watched by its provider to merge then. */
+type GitHostMergeOutcome = 'merged' | 'auto-armed' | 'watching'
 
 /**
  * Open a PR for a branch: the two providers composed (#1820). The branches provider pushes the
