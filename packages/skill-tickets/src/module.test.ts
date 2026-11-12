@@ -24,7 +24,7 @@ test('planAgentFor picks the newest run whose ask names the plan; holderAgent th
   assert.equal(holderAgent(agents, undefined), undefined)
 })
 
-test('routeOf reads the list, a ticket, its plan, and nothing else', () => {
+test('routeOf reads the list, a new ticket, a ticket, its plan, and nothing else', () => {
   assert.deepEqual(routeOf(null, []), { view: 'list' })
   assert.deepEqual(routeOf('p1', []), { view: 'list' })
   assert.deepEqual(routeOf('p1', [FILE]), { view: 'ticket', projectId: 'p1', file: FILE })
@@ -34,6 +34,9 @@ test('routeOf reads the list, a ticket, its plan, and nothing else', () => {
   assert.deepEqual(routeOf('p1', ['2026-08-30_login-page.plan.md']), { view: 'unknown' })
   assert.deepEqual(routeOf('p1', [FILE, 'diff']), { view: 'unknown' })
   assert.deepEqual(routeOf('p1', [FILE, 'plan', 'x']), { view: 'unknown' })
+  assert.deepEqual(routeOf('p1', ['new']), { view: 'new', projectId: 'p1' })
+  assert.deepEqual(routeOf(null, ['new']), { view: 'unknown' }, 'a new ticket is always some project\'s')
+  assert.deepEqual(routeOf('p1', ['new', 'plan']), { view: 'unknown' })
 })
 
 test('a ticket as a link points at its file at its own priority; a plan ask points nowhere', () => {

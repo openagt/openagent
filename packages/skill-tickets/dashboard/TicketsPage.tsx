@@ -143,9 +143,7 @@ export function TicketsPage({ projects }: { projects: ModuleProject[] }) {
   const heldShown = scope.length - ready.length
   const targets = ready.filter(r => !r.ticket.locked)
   const claimedShown = ready.length - targets.length
-  const skippedShown = scope.length - targets.length
   const planTargets = targets.filter(r => !r.ticket.planned)
-  const planSkipped = scope.length - planTargets.length
   // One flip per acted-on set and per button: once this exact set is added the button says so and
   // rests, and any change to the set — a filter, a poll bringing new tickets, a selection — arms
   // it again (the button's own rule, keyed by these).
@@ -155,8 +153,8 @@ export function TicketsPage({ projects }: { projects: ModuleProject[] }) {
   // buttons, and stopping saying "all" the moment their count differs from the set's tally,
   // never promising a ticket they will skip. Each is the object of the module's own verb:
   // "Add to queue: all 5 tickets shown below".
-  const queueObject = ticketsWord(targets.length, 'ready', skippedShown > 0, hasSelection)
-  const planObject = `${planTargets.length === 1 ? 'a plan' : 'plans'} for ${ticketsWord(planTargets.length, 'unplanned', planSkipped > 0, hasSelection)}`
+  const queueObject = counted(targets.length, 'ticket')
+  const planObject = counted(planTargets.length, 'plan')
   const projectsShown = [...new Set(scope.map(r => r.projectId))]
 
   return (
@@ -341,13 +339,10 @@ function linksByProject(rows: readonly { projectId: string; ticket: WorkspaceTic
 }
 
 /**
- * The tickets a page-wide add acts on, as the object of its verb: "all 5 tickets shown below",
- * "the 2 ready selected tickets", "the one unplanned ticket shown below". `kept` is the word for
- * the ones it keeps while it skips others (`ready`, `unplanned`).
+ * What a page-wide add acts on, as the object of its verb: "5 tickets", "one plan". Short, so the
+ * heading stays one line: which tickets it takes — the shown or the selected ones, less the ones
+ * it skips — is the tooltip's to say.
  */
-function ticketsWord(count: number, kept: string, skipping: boolean, selection: boolean): string {
-  const [one, many] = selection ? ['selected ticket', 'selected tickets'] : ['ticket shown below', 'tickets shown below']
-  if (count === 1) return `the ${skipping ? `one ${kept} ` : ''}${one}`
-  if (skipping) return `the ${count} ${kept} ${many}`
-  return selection ? `the ${count} ${many}` : `all ${count} ${many}`
+function counted(count: number, noun: string): string {
+  return count === 1 ? `one ${noun}` : `${count} ${noun}s`
 }

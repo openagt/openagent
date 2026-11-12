@@ -1,7 +1,8 @@
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest'
 import { cleanup, fireEvent, screen, waitFor } from '@testing-library/react'
 import type { ReactElement } from 'react'
-import { configureFirst } from '../../dashboard/dashboard/test-utils.js'
+import { configureFirst, openMenu } from '../../dashboard/dashboard/test-utils.js'
+import type { MountedModules } from '../../dashboard/dashboard/lib/use-modules.js'
 import { planTicketPrompt, workOnTicketPrompt } from '../src/module.js'
 import type { WorkspaceTicket } from './lib/types.js'
 import { fakeHost, renderWithHost, type FakeHost } from './test-host.js'
@@ -54,21 +55,21 @@ describe('TicketsPanel (#697/#1144)', () => {
     expect(onOpenPlan).toHaveBeenCalledWith('2026-07-20_do-the-thing.md')
   })
 
-  test('a ticket with no plan offers Plan now, which starts a session to write it (#685), and no Start work', async () => {
+  test('a ticket with no plan offers Plan, which starts a session to write it (#685), and no Start', async () => {
     render(<TicketsPanel projectId="p1" tickets={[ticket({ planned: false })]} loaded onOpen={() => {}} />)
-    expect(screen.queryByRole('button', { name: 'Start work' })).toBeNull()
-    fireEvent.click(await screen.findByRole('button', { name: 'Plan now' }))
+    expect(screen.queryByRole('button', { name: 'Start' })).toBeNull()
+    fireEvent.click(await screen.findByRole('button', { name: 'Plan' }))
     // Exactly the exported ask — no second, hidden copy to drift from the button (#1187). The
     // dashboard starts it with the person's picks and lands on the run: nothing else to do here.
     await waitFor(() => expect(started()).toEqual([['p1', planTicketPrompt('2026-07-20_do-the-thing.md')]]))
     expect(started()[0]?.[1]).toBe('Create tickets/2026-07-20_do-the-thing.plan.md')
   })
 
-  test('a planned ticket offers Start work, which spins up an agent working on it, and no Plan now', async () => {
+  test('a planned ticket offers Start, which spins up an agent working on it, and no Plan', async () => {
     const onOpen = vi.fn()
     render(<TicketsPanel projectId="p1" tickets={[ticket({ planned: true })]} loaded onOpen={onOpen} />)
-    expect(screen.queryByRole('button', { name: 'Plan now' })).toBeNull()
-    fireEvent.click(await screen.findByRole('button', { name: 'Start work' }))
+    expect(screen.queryByRole('button', { name: 'Plan' })).toBeNull()
+    fireEvent.click(await screen.findByRole('button', { name: 'Start' }))
     // Exactly the exported ask — no second, hidden copy to drift from the button (#1187).
     await waitFor(() => expect(started()).toEqual([['p1', workOnTicketPrompt('2026-07-20_do-the-thing.md')]]))
     expect(started()[0]?.[1]).toBe('Work on tickets/2026-07-20_do-the-thing.md. Do not start any other ticket.')
@@ -305,6 +306,26 @@ describe('TicketsPanel (#697/#1144)', () => {
 
   // #1507: every start on this panel spends an agent on a model and a run target that live in
   // the Global options, a page away — so each carries the chevron that opens the launcher instead.
+  test("a row queues its next step from the start button's menu: the plan's ask with no plan, the ticket with one", async () => {
+    const addToQueue = vi.fn(async () => ({ ok: true as const }))
+    const mounted: MountedModules = { pages: [], cards: [], linkActions: [{ label: 'Add to queue', doneLabel: 'Queued', run: addToQueue, package: '@x/queue', projects: ['p1'] }], panels: [], runSlots: [], settings: [], everyPage: [], loaded: true }
+    host = fakeHost({ p1: { 'meta --local': meta } })
+    renderWithHost(<TicketsPanel projectId="p1" tickets={[ticket({ planned: false, priority: '8' })]} loaded onOpen={() => {}} />, host, mounted)
+    await openMenu(await screen.findByRole('button', { name: 'Other ways to plan Do the thing' }))
+    fireEvent.click(await screen.findByText('Queue plan'))
+    await waitFor(() => expect(addToQueue).toHaveBeenCalledWith(expect.anything(), 'p1', [{ text: planTicketPrompt('2026-07-20_do-the-thing.md'), priority: 8 }]))
+    // The row says it is queued, and starts nothing.
+    expect(await screen.findByText('Queued')).toBeTruthy()
+    expect(host.startRun).not.toHaveBeenCalled()
+    cleanup()
+    addToQueue.mockClear()
+    host = fakeHost({ p1: { 'meta --local': meta } })
+    renderWithHost(<TicketsPanel projectId="p1" tickets={[ticket({ planned: true })]} loaded onOpen={() => {}} />, host, mounted)
+    await openMenu(await screen.findByRole('button', { name: 'Other ways to work on Do the thing' }))
+    fireEvent.click(await screen.findByText('Queue work'))
+    await waitFor(() => expect(addToQueue).toHaveBeenCalledWith(expect.anything(), 'p1', [{ text: 'Do the thing', href: 'tickets/2026-07-20_do-the-thing.md', priority: 5 }]))
+  })
+
   test("Start work's Configure first opens the launcher with the ticket's own prompt", async () => {
     render(<TicketsPanel projectId="p1" tickets={[ticket({ planned: true })]} loaded onOpen={() => {}} />)
     await configureFirst('Other ways to work on Do the thing')

@@ -94,19 +94,28 @@ export function claimState(holderStatus: string | undefined): ClaimState {
   return 'stale'
 }
 
-/** Where the module's URL points: the list of tickets, one ticket, or its plan. */
-export type ModuleRoute = { view: 'list' } | { view: 'ticket'; projectId: string; file: string } | { view: 'plan'; projectId: string; file: string } | { view: 'unknown' }
+/** Where the module's URL points: the list of tickets, a new ticket, one ticket, or its plan. */
+export type ModuleRoute =
+  | { view: 'list' }
+  | { view: 'new'; projectId: string }
+  | { view: 'ticket'; projectId: string; file: string }
+  | { view: 'plan'; projectId: string; file: string }
+  | { view: 'unknown' }
+
+/** The segment of a new ticket's page: never a ticket's filename, which ends in `.md`. */
+export const NEW_TICKET = 'new'
 
 /**
  * The module's page from the project the address starts with, if any, and the URL segments after
  * its own: none is the list; a ticket filename in a project is that ticket's page (the dashboard's
  * link convention: `tickets/<file>` in a project opens `/<project>/tickets/<file>`); `plan` after it
- * is the ticket's plan. A ticket with no project, a filename that is not a ticket's, or anything
- * longer, names nothing.
+ * is the ticket's plan; `new` in a project is a new ticket's page. A ticket with no project, a
+ * filename that is not a ticket's, or anything longer, names nothing.
  */
 export function routeOf(projectId: string | null, path: readonly string[]): ModuleRoute {
   const [file, plan, ...rest] = path
   if (file === undefined) return { view: 'list' }
+  if (file === NEW_TICKET && plan === undefined) return projectId === null ? { view: 'unknown' } : { view: 'new', projectId }
   if (projectId === null || !isTicketFile(file) || rest.length > 0) return { view: 'unknown' }
   if (plan === undefined) return { view: 'ticket', projectId, file }
   return plan === 'plan' ? { view: 'plan', projectId, file } : { view: 'unknown' }

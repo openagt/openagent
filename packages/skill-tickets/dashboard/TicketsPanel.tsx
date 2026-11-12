@@ -1,6 +1,6 @@
-import { ExternalLink, ClipboardList, Hammer } from 'lucide-react'
+import { ExternalLink, ClipboardList, Hammer, Plus } from 'lucide-react'
 import { Badge, Button, Checkbox, Tooltip, TooltipTrigger, TooltipContent, cn, formatRelative, formatAge, formatDateTime, useAction, useLoaded, useModuleHost } from '@openagt/dashboard/module'
-import { UPDATE_TICKETS_PROMPT, heldBack, readMeta, type TicketsMeta } from '../src/module.js'
+import { NEW_TICKET, UPDATE_TICKETS_PROMPT, heldBack, readMeta, type TicketsMeta } from '../src/module.js'
 import { TicketStartActions } from './TicketStartActions.js'
 import type { WorkspaceTicket } from './lib/types.js'
 import { UpdateTicketsButton } from './UpdateTicketsButton.js'
@@ -207,12 +207,12 @@ export function TicketRow({
           </Tooltip>
         )}
       </div>
-      {/* The next step, now or queued (TicketStartActions): with no plan, Plan now and Queue plan;
-          with one, Start work and Queue work. A fixed width keeps the columns lined up row to row. */}
-      <div className="flex shrink-0 items-center justify-end gap-1 md:w-56 max-md:px-1">
+      {/* The next step (TicketStartActions): Plan with no plan, Start with one; queueing it and
+          setting it up first are in its menu. A fixed width keeps the columns lined up row to row. */}
+      <div className="flex shrink-0 items-center justify-end gap-1.5 md:w-36 max-md:px-1">
         {offered && (
           <TicketStartActions
-            size="xs"
+            compact
             projectId={projectId}
             ticket={ticket}
             busy={busy}
@@ -309,6 +309,7 @@ export function TicketsPanel({
   }
 
   const updateTickets = () => startSession(UPDATE_TICKETS_PROMPT, 'The update could not be started.')
+  const newTicket = () => host.openPage('tickets', [NEW_TICKET], projectId)
 
   if (tickets.length === 0 && hiddenByFilter > 0) {
     // Filtered to nothing, not genuinely empty (#1144/#1230): offering an import here would ask
@@ -335,7 +336,10 @@ export function TicketsPanel({
           plans from.
         </p>
         {error && <p className="text-xs text-danger">{error}</p>}
-        <UpdateTicketsButton busy={busy} onStart={() => void updateTickets()} onConfigure={() => configure(UPDATE_TICKETS_PROMPT)} />
+        <div className="flex flex-wrap items-center gap-2">
+          <UpdateTicketsButton busy={busy} onStart={() => void updateTickets()} onConfigure={() => configure(UPDATE_TICKETS_PROMPT)} />
+          <NewTicketButton onClick={newTicket} />
+        </div>
       </div>
     )
   }
@@ -360,6 +364,7 @@ export function TicketsPanel({
           lastImportedAt={meta.lastImportedAt}
           className="h-6 gap-1 px-2 text-xs"
         />
+        <NewTicketButton onClick={newTicket} className="ml-auto h-6 gap-1 px-2 text-xs" />
       </div>
       <ul className="divide-y divide-border">
         {tickets.map(ticket => (
@@ -381,5 +386,14 @@ export function TicketsPanel({
         ))}
       </ul>
     </div>
+  )
+}
+
+/** A ticket written by hand, beside the ones imported from the tracker. */
+function NewTicketButton({ onClick, className }: { onClick: () => void; className?: string | undefined }) {
+  return (
+    <Button variant="outline" size="sm" onClick={onClick} className={className ?? 'gap-1.5'}>
+      <Plus className="h-3.5 w-3.5" aria-hidden /> New ticket
+    </Button>
   )
 }

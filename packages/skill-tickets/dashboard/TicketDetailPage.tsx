@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Bot, ClipboardList, ExternalLink, LockOpen, Play } from 'lucide-react'
+import { Bot, ClipboardList, ExternalLink, LockOpen, Pencil, Play } from 'lucide-react'
 import { Badge, Button, Markdown, cn, formatAge, formatDateTime, useAction, usePolled, useModuleHost } from '@openagt/dashboard/module'
 import { claimState, heldBack, holderAgent, readShown, ticketBody, withHolder } from '../src/module.js'
 import type { WorkspaceTicketDetail } from './lib/types.js'
@@ -7,6 +7,8 @@ import { TicketPageShell, TicketPageNote } from './TicketPageShell.js'
 import { releaseClaim } from './lib/release.js'
 import { useBackToList } from './lib/back-to-list.js'
 import { TicketStartActions } from './TicketStartActions.js'
+import { TicketEditor } from './TicketEditor.js'
+import { readTicketFile } from '../src/ticket-file.js'
 import { priorityTone } from './lib/ticket-priority.js'
 
 /** The page's read: the ticket, or nothing (no such ticket), or why the command failed. */
@@ -29,7 +31,7 @@ export function TicketDetailPage({
   const host = useModuleHost()
   // The claim's holder resolved against the project's runs: a lock names a run's id, so a claim a
   // run made links to its page and reads as its session name; anyone else is shown as written.
-  const { value: read, loaded } = usePolled<Read | null>(
+  const { value: read, loaded, reload } = usePolled<Read | null>(
     async () => {
       const [shown, agents] = await Promise.all([host.runCommand(projectId, ['show', slug, '--local']).then(readShown), host.agents(projectId).catch(() => [])])
       if ('error' in shown) return shown
@@ -49,6 +51,8 @@ export function TicketDetailPage({
   // The manual lock release (`releaseClaim`): a dead agent's claim stands until a person lifts it
   // here. `released` bridges the gap until the next poll.
   const [released, setReleased] = useState(false)
+  // The ticket written by hand in place of its text, until saved or left.
+  const [editing, setEditing] = useState(false)
   const claimed = Boolean(ticket?.locked) && !released
   const holder = ticket?.lockedByAgent?.name ?? ticket?.lockedBy
   const holderStatus = read && 'ticket' in read ? read.holderStatus : undefined
@@ -70,6 +74,21 @@ export function TicketDetailPage({
       ) : !ticket ? (
         // Deleted between the list read and this one, or a stale/hand-typed link.
         <TicketPageNote>This ticket does not exist.</TicketPageNote>
+      ) : editing ? (
+        <>
+          <h1 className="mb-4 text-lg font-semibold">Edit ticket</h1>
+          <TicketEditor
+            projectId={projectId}
+            file={ticket.file}
+            initial={readTicketFile(ticket.content)}
+            issueLabel={ticket.issue?.label}
+            onSaved={() => {
+              setEditing(false)
+              void reload()
+            }}
+            onCancel={() => setEditing(false)}
+          />
+        </>
       ) : (
         <>
           <div className="flex flex-wrap items-start justify-between gap-3">
@@ -95,6 +114,9 @@ export function TicketDetailPage({
                   <LockOpen className="h-3.5 w-3.5" /> Release lock
                 </Button>
               )}
+              <Button size="sm" variant="ghost" className="gap-1.5" onClick={() => setEditing(true)}>
+                <Pencil className="h-3.5 w-3.5" aria-hidden /> Edit
+              </Button>
               {ticket.planned && (
                 <Button size="sm" variant="outline" className="gap-1.5" onClick={() => host.openPage('tickets', [ticket.file, 'plan'], projectId)}>
                   <ClipboardList className="h-3.5 w-3.5" aria-hidden /> View plan

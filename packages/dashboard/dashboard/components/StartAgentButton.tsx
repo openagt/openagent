@@ -32,6 +32,15 @@ import {
 // A split button, not a control revealed on hover: what a hover reveals is reachable by neither
 // keyboard nor touch, and the row the pointer is on is not always the row that is meant.
 
+/** One more choice in a start button's menu. */
+export interface StartMenuItem {
+  label: string
+  /** The item's second line: what it does. */
+  description?: string | undefined
+  onSelect: () => void
+  disabled?: boolean | undefined
+}
+
 export function StartAgentButton({
   icon,
   label,
@@ -44,6 +53,7 @@ export function StartAgentButton({
   configureDescription,
   onStart,
   onConfigure,
+  moreItems = [],
   busy = false,
   starting = false,
   disabled = false,
@@ -77,6 +87,12 @@ export function StartAgentButton({
    * rehydrated by the launcher of the project the reader lands on.
    */
   onConfigure: () => void
+  /**
+   * The menu's other choices, above "Configure first, then run": what else the surface offers on
+   * the same thing (queue it for later, say), so a dense row carries one control. Each is the
+   * caller's; an item that starts nothing stays live while a start is in flight, like the configure one.
+   */
+  moreItems?: readonly StartMenuItem[] | undefined
   /** A start is in flight somewhere on this surface: the primary half is out until it settles. */
   busy?: boolean | undefined
   /** *This* button's start is the one in flight, so only it reads as busy. */
@@ -143,6 +159,11 @@ export function StartAgentButton({
           <ChevronDown className="h-3 w-3" aria-hidden />
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end" className="max-w-[20rem]">
+          {moreItems.map(item => (
+            <DropdownMenuItem key={item.label} onClick={item.onSelect} disabled={item.disabled} className="items-start">
+              <OptionLabel label={item.label} description={item.description} />
+            </DropdownMenuItem>
+          ))}
           <DropdownMenuItem onClick={configure} className="items-start">
             <OptionLabel label="Configure first, then run" description={configureDescription} />
           </DropdownMenuItem>

@@ -1,13 +1,15 @@
-import { ClipboardPlus, Play } from 'lucide-react'
-import { LinkActions, StartAgentButton } from '@openagt/dashboard/module'
+import { useEffect, useState } from 'react'
+import { Check, ClipboardPlus, Play } from 'lucide-react'
+import { LinkActions, StartAgentButton, useLinkActions, type StartMenuItem } from '@openagt/dashboard/module'
 import { planLink, planTicketPrompt, ticketLink, workOnTicketPrompt } from '../src/module.js'
 
 /**
  * A ticket's next step, now or later, wherever the ticket is shown: with no plan yet, its plan is
- * written now or queued; with one, the work is started now or queued. "Now" starts an agent, and
- * its chevron opens the launcher with the same ask; "later" hands the same ask to the installed
- * modules' link actions — "Add to queue" when the project has a queue package — and shows nothing
- * without one. The caller leaves it out for a ticket no agent is handed: in review, waiting, claimed.
+ * written now or queued; with one, the work is started now or queued. "Now" starts an agent;
+ * "later" hands the same ask to the installed modules' link actions — "Add to queue" when the
+ * project has a queue package — and offers nothing without one. On the list's dense rows
+ * (`compact`) the step is one button and the rest are in its menu; a page has the room to show the
+ * queue beside it. The caller leaves it out for a ticket no agent is handed: in review, waiting, claimed.
  */
 export function TicketStartActions({
   projectId,
@@ -15,7 +17,7 @@ export function TicketStartActions({
   busy,
   onStart,
   onConfigure,
-  size = 'sm',
+  compact = false,
 }: {
   projectId: string
   ticket: { file: string; title: string; planned?: boolean | undefined; priority?: string | undefined }
@@ -25,18 +27,17 @@ export function TicketStartActions({
   onStart: (prompt: string, failure: string) => void
   /** The launcher, prefilled with the ask. */
   onConfigure: (prompt: string) => void
-  /** `xs` on the list's dense rows. */
-  size?: 'xs' | 'sm' | undefined
+  /** One button with a menu, for the list's rows. */
+  compact?: boolean | undefined
 }) {
-  const icon = size === 'xs' ? 'h-3 w-3' : 'h-3.5 w-3.5'
   const step = ticket.planned
     ? {
         prompt: workOnTicketPrompt(ticket.file),
-        now: 'Start work',
+        now: compact ? 'Start' : 'Start work',
         later: 'Queue work',
-        icon: <Play className={icon} aria-hidden />,
+        Icon: Play,
         tooltip: 'Starts an agent working on this ticket, from its plan',
-        laterTooltip: 'Adds the ticket to the queue: an agent works on it when the queue reaches it',
+        laterSays: 'An agent works on it when the queue reaches it.',
         menu: `Other ways to work on ${ticket.title}`,
         configure: "Opens the launcher with this ticket's prompt, so you can set the model and where it runs.",
         failure: 'The work agent could not be started.',
@@ -44,21 +45,51 @@ export function TicketStartActions({
       }
     : {
         prompt: planTicketPrompt(ticket.file),
-        now: 'Plan now',
+        now: compact ? 'Plan' : 'Plan now',
         later: 'Queue plan',
-        icon: <ClipboardPlus className={icon} aria-hidden />,
+        Icon: ClipboardPlus,
         tooltip: "Starts an agent writing this ticket's plan",
-        laterTooltip: "Adds the ticket's plan to the queue: an agent writes it when the queue reaches it",
+        laterSays: 'An agent writes the plan when the queue reaches it.',
         menu: `Other ways to plan ${ticket.title}`,
         configure: 'Opens the launcher with the plan prompt, so you can set the model and where it runs.',
         failure: 'The planning agent could not be started.',
         link: planLink(ticket),
       }
+  const targets = [{ projectId, links: [step.link] }]
+  const { actions, run } = useLinkActions([projectId])
+  // What the menu's queue item did, until the ask changes (a plan queued, then written, is a new ask).
+  const [queued, setQueued] = useState<'running' | 'done' | { error: string } | null>(null)
+  useEffect(() => setQueued(null), [step.prompt])
+  const queue = async (key: string) => {
+    setQueued('running')
+    const result = await run(key, targets)
+    setQueued(result.ok ? 'done' : { error: result.error })
+  }
+  const moreItems: StartMenuItem[] = compact
+    ? actions.map(action => ({
+        label: queued === 'done' ? `${action.doneLabel ?? action.label}` : step.later,
+        description: step.laterSays,
+        disabled: queued === 'running' || queued === 'done',
+        onSelect: () => void queue(action.key),
+      }))
+    : []
+  const size = compact ? 'xs' : 'sm'
+  const iconClass = compact ? 'h-3 w-3' : 'h-3.5 w-3.5'
   return (
     <>
+      {compact && queued === 'done' && (
+        <span className="flex items-center gap-1 text-[10px] text-muted-foreground">
+          <Check className="h-3 w-3" aria-hidden /> Queued
+        </span>
+      )}
+      {compact && queued !== null && typeof queued === 'object' && (
+        <span role="alert" title={queued.error} className="text-[10px] text-danger">
+          Not queued
+        </span>
+      )}
       <StartAgentButton
         size={size}
-        icon={step.icon}
+        icon={<step.Icon className={iconClass} aria-hidden />}
         label={step.now}
         menuAriaLabel={step.menu}
         tooltip={step.tooltip}
@@ -67,17 +98,19 @@ export function TicketStartActions({
         configureDescription={step.configure}
         onStart={() => onStart(step.prompt, step.failure)}
         onConfigure={() => onConfigure(step.prompt)}
+        moreItems={moreItems}
       />
-      <LinkActions
-        projects={[projectId]}
-        targets={[{ projectId, links: [step.link] }]}
-        // A plan queued, then written, arms the work's button: a new ask.
-        resetKey={`${ticket.file}\n${step.prompt}`}
-        label={() => step.later}
-        tooltip={step.laterTooltip}
-        size={size}
-        disabled={busy}
-      />
+      {!compact && (
+        <LinkActions
+          projects={[projectId]}
+          targets={targets}
+          resetKey={`${ticket.file}\n${step.prompt}`}
+          label={() => step.later}
+          tooltip={`Adds it to the queue. ${step.laterSays}`}
+          size={size}
+          disabled={busy}
+        />
+      )}
     </>
   )
 }
