@@ -49,6 +49,7 @@ export function AgentComposer({
   onSending,
   onQueued,
   editInBox,
+  giveBack,
   focusBox,
   model,
   context,
@@ -79,6 +80,8 @@ export function AgentComposer({
   onQueued?: ((message: QueuedMessage) => void) | undefined
   /** Set here to what puts a text in the box to edit: Cancel and edit on a waiting message. */
   editInBox?: MutableRefObject<((text: string) => void) | null> | undefined
+  /** Set here to what hands the box back what the run ended without reading, after any draft, and says it was not sent. */
+  giveBack?: MutableRefObject<((text: string) => void) | null> | undefined
   /** Set here to what gives the box the focus: a question answered from its card. */
   focusBox?: MutableRefObject<(() => void) | null> | undefined
   /** The model the session runs on, by its name: said under the box. */
@@ -114,6 +117,19 @@ export function AgentComposer({
       editInBox.current = null
     }
   }, [editInBox])
+  // Messages handed back unsent: said above the box until the next send, or another session.
+  const [notSent, setNotSent] = useState(false)
+  useEffect(() => setNotSent(false), [agentId])
+  useEffect(() => {
+    if (!giveBack) return
+    giveBack.current = text => {
+      composerRef.current?.append(text)
+      setNotSent(true)
+    }
+    return () => {
+      giveBack.current = null
+    }
+  }, [giveBack])
   useEffect(() => {
     if (!focusBox) return
     focusBox.current = () => composerRef.current?.focus()
@@ -175,6 +191,7 @@ export function AgentComposer({
     if (await say(contextSet ? promptWithContext(text, contextSet.context) : text, later)) {
       composerRef.current?.clear()
       contextSet?.reset()
+      setNotSent(false)
     }
     composerRef.current?.focus()
   }
@@ -234,6 +251,7 @@ export function AgentComposer({
   return (
     <div className="@container mx-auto w-full max-w-3xl p-2">
       {surfacedError && <p role="alert" className="mb-1 px-2 text-xs text-danger">{surfacedError}</p>}
+      {notSent && <p role="status" className="mb-1 px-2 text-xs text-muted-foreground">Not sent: the session stopped first.</p>}
       <Composer
         // A box of its own per session, with the draft it was left with.
         key={agentId}

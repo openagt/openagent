@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest'
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 
 // The two writes this component makes: what the person says to the run, and the slot's Stop (#1455).
 const sendMessage = vi.hoisted(() => vi.fn())
@@ -234,6 +234,19 @@ describe('AgentComposer, live (#714)', () => {
     fireEvent.click(screen.getByText('submit'))
     await waitFor(() => expect(screen.getByRole('alert').textContent).toBe('unknown session'))
     expect(onQueued).not.toHaveBeenCalled()
+  })
+})
+
+describe('AgentComposer, given back what the run never read', () => {
+  test('says the words were not sent, until the next message goes', async () => {
+    const giveBack: { current: ((text: string) => void) | null } = { current: null }
+    sendMessage.mockResolvedValue({ ok: true })
+    renderComposer({ live: false, giveBack })
+    expect(screen.queryByText('Not sent: the session stopped first.')).toBeNull()
+    act(() => giveBack.current!('and add a test'))
+    expect(screen.getByRole('status').textContent).toBe('Not sent: the session stopped first.')
+    fireEvent.click(screen.getByText('submit'))
+    await waitFor(() => expect(screen.queryByText('Not sent: the session stopped first.')).toBeNull())
   })
 })
 

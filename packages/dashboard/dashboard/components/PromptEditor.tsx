@@ -23,8 +23,8 @@ import type { CommandEntry } from './CommandsMenu.js'
 export interface PromptEditorHandle {
   clear: () => void
   focus: () => void
-  /** Load a text (a command, a saved prompt) into the editor. Returns whether it replaced a draft. */
-  loadTemplate: (text: string) => boolean
+  /** Load a text (a command, a saved prompt) into the editor, with the caret unless `focus` is false. Returns whether it replaced a draft. */
+  loadTemplate: (text: string, focus?: boolean) => boolean
 }
 
 interface PromptEditorProps {
@@ -309,7 +309,7 @@ export const PromptEditor = forwardRef<PromptEditorHandle, PromptEditorProps>(fu
       onChangeRef.current('')
     },
     focus: () => editor?.commands.focus('end'),
-    loadTemplate: (text: string) => (editor ? loadTemplateInto(editor, text) : false),
+    loadTemplate: (text: string, focus?: boolean) => (editor ? loadTemplateInto(editor, text, focus) : false),
   }))
 
   // Switched off while a start is asked for, and on again after. That is no edit, so no change is

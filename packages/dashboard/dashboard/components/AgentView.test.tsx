@@ -83,9 +83,11 @@ vi.mock('./SessionRow.js', () => ({
 // The composer shows only what the view tells it about the run going: the one fact of it under test here.
 let queuedIds = 0
 const edited: string[] = []
+const givenBack: string[] = []
 vi.mock('./AgentComposer.js', () => ({
-  AgentComposer: ({ live, model, context, controls, onQueued, editInBox, row, publish, prBase, agent, gitAccount, projectSkills }: { publish?: string; prBase?: string; live: boolean; model?: string; context?: ReactNode; controls?: ReactNode; onQueued?: (message: { id: string; text: string; later: boolean }) => void; editInBox?: { current: ((text: string) => void) | null }; row?: ReactNode; agent?: string; gitAccount?: string; projectSkills?: 'none' | string[] }) => {
+  AgentComposer: ({ live, model, context, controls, onQueued, editInBox, giveBack, row, publish, prBase, agent, gitAccount, projectSkills }: { publish?: string; prBase?: string; live: boolean; model?: string; context?: ReactNode; controls?: ReactNode; onQueued?: (message: { id: string; text: string; later: boolean }) => void; editInBox?: { current: ((text: string) => void) | null }; giveBack?: { current: ((text: string) => void) | null }; row?: ReactNode; agent?: string; gitAccount?: string; projectSkills?: 'none' | string[] }) => {
     if (editInBox) editInBox.current = text => void edited.push(text)
+    if (giveBack) giveBack.current = text => void givenBack.push(text)
     return (
       <>
         {row}
@@ -759,19 +761,23 @@ describe('a message sent while the agent works', () => {
     }
   })
 
-  test('an agent that stopped working without reading it shows it for five seconds more, not for good', async () => {
+  test('an agent that stopped working without reading it shows it for five seconds more, then its words go back to the box', async () => {
     vi.useFakeTimers()
     try {
+      givenBack.length = 0
       const { rerender } = render(view({ live: true, events: [start('go'), text] }))
+      fireEvent.click(screen.getByText('queue-one'))
       fireEvent.click(screen.getByText('queue-one'))
       const ended = [start('go'), text, { kind: 'end', ok: false, stopped: true }] as OpenAgentEvent[]
       rerender(view({ live: false, events: ended }))
       // The ended run's feed is read.
       await act(async () => {})
       act(() => void vi.advanceTimersByTime(4_000))
-      expect(queuedBoxes()).toHaveLength(1)
+      expect(queuedBoxes()).toHaveLength(2)
+      expect(givenBack).toEqual([])
       act(() => void vi.advanceTimersByTime(1_500))
       expect(queuedBoxes()).toHaveLength(0)
+      expect(givenBack).toEqual(['and then this\n\nand then this'])
     } finally {
       vi.useRealTimers()
     }

@@ -56,6 +56,8 @@ export interface ComposerHandle {
   focus: () => void
   /** Put `text` in the box to edit, in place of what is there, and focus it. */
   edit: (text: string) => void
+  /** Put `text` in the box after what is typed there, the caret left where it is. */
+  append: (text: string) => void
 }
 
 // The shared agent composer (#721), laid out as Claude Code's: a box one line tall when empty that
@@ -209,6 +211,7 @@ export const Composer = forwardRef<ComposerHandle, {
       setPrompt(text)
       editorRef.current?.focus()
     },
+    append: text => void editorRef.current?.loadTemplate(prompt.trim() ? `${prompt}\n\n${text}` : text, false),
   }))
 
   // Rehydrate a draft carried in from the click that navigated here (#1139), launcher-only, else the

@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest'
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { createRef } from 'react'
 import type { Preferences } from '../../src/index.js'
 import { selectMachine } from '../lib/remote-target.js'
 import { hoverTooltip, openMenu } from '../test-utils.js'
@@ -84,6 +85,7 @@ vi.mock('./PromptEditor.js', async () => {
 const editorText = (): string => (screen.getByLabelText('prompt') as HTMLInputElement).value
 
 const { Composer } = await import('./Composer.js')
+type ComposerHandle = import('./Composer.js').ComposerHandle
 
 function renderComposer(over: Partial<Parameters<typeof Composer>[0]> = {}) {
   const onSubmit = vi.fn()
@@ -266,6 +268,17 @@ describe('Composer (#721)', () => {
     } finally {
       vi.unstubAllGlobals()
     }
+  })
+
+  test('words handed back go after what is typed in the box, and are kept with it', () => {
+    const box = createRef<ComposerHandle>()
+    const onSubmit = vi.fn()
+    render(<Composer ref={box} files={[]} onSubmit={onSubmit} busy={false} submitLabel="Send" submitBusyLabel="Sending…" inAgent draftKey="p1:run-2" />)
+    fireEvent.change(screen.getByLabelText('prompt'), { target: { value: 'a new thought' } })
+    act(() => box.current!.append('the words it never read'))
+    expect(localStorage.getItem('oa.draft:p1:run-2')).toBe('a new thought\n\nthe words it never read')
+    fireEvent.click(screen.getByText('editor-submit'))
+    expect(onSubmit).toHaveBeenCalledWith('a new thought\n\nthe words it never read', { later: false })
   })
 
   test('a browser that keeps nothing still has the draft in the box, and it is sent', () => {
