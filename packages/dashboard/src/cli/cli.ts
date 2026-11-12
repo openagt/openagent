@@ -68,9 +68,9 @@ export function parseArgs(argv: string[]): CliArgs {
         opts.version = true
         break
       case '--port': {
-        const n = Number(argv[++i])
-        if (Number.isInteger(n) && n >= 0) opts.port = n
-        else opts.error ??= 'invalid --port: must be a non-negative integer'
+        const port = portOf(argv[++i])
+        if (port !== undefined) opts.port = port
+        else opts.error ??= 'invalid --port: must be a port number from 0 to 65535'
         break
       }
       default:
@@ -79,6 +79,12 @@ export function parseArgs(argv: string[]): CliArgs {
     }
   }
   return opts
+}
+
+/** `value` read as a port to bind, `0` for a free one; undefined when it names no port. */
+export function portOf(value: string | undefined): number | undefined {
+  const port = value?.trim() ? Number(value) : NaN
+  return Number.isInteger(port) && port >= 0 && port <= 65535 ? port : undefined
 }
 
 export async function runCli(argv: string[], io: CliIO = defaultIO): Promise<number> {

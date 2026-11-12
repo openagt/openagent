@@ -2,11 +2,12 @@
 // project whose runs are scripted and offline, opened in the browser. Ctrl+C stops it all and
 // removes it.
 import { openInBrowser } from '../cli/browser.js'
+import { portOf } from '../cli/cli.js'
 import { startDemo } from './demo.js'
 
 const at = process.argv.indexOf('--port')
-const port = at === -1 ? 0 : Number(process.argv[at + 1])
-if (!Number.isInteger(port) || port < 0) {
+const port = at === -1 ? 0 : portOf(process.argv[at + 1])
+if (port === undefined) {
   console.error('usage: pnpm demo [--port <n>]')
   process.exit(2)
 }
