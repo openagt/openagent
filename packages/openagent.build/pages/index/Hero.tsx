@@ -1,6 +1,6 @@
 import type { CSSProperties } from 'react'
-import { COPY_LABEL, CommandChip, CommandLine, PmTabs, pickedCommand } from './commands'
-import { copyPress, useCopy } from './copy'
+import { CommandChip, CommandLine, PmTabs, usePickedCommand } from './commands'
+import { CopiedStatus, copyPress, useCopy } from './copy'
 import { BADGES, kickerStyle, mono } from './ui'
 import { useDashboardHref } from './ViewToggle'
 
@@ -34,6 +34,7 @@ function Badge({ label, copied }: { label: string; copied: boolean }) {
 
 export function Hero() {
   const tryCopy = useCopy()
+  const tryCommand = usePickedCommand('try')
   const dashboardHref = useDashboardHref()
 
   return (
@@ -175,7 +176,7 @@ export function Hero() {
             </div>
             <div
               className="copy-box"
-              {...copyPress(COPY_LABEL.try, (e) => tryCopy.copy(pickedCommand('try'), e))}
+              {...copyPress(`Copy ${tryCommand}`, (e) => tryCopy.copy(tryCommand, e))}
               style={{
                 position: 'relative',
                 cursor: 'pointer',
@@ -192,6 +193,7 @@ export function Hero() {
                 <span style={commentStyle}># One-shot (no install)</span>
               </div>
             </div>
+            <CopiedStatus copied={tryCopy.copied} />
           </div>
         </div>
         <p

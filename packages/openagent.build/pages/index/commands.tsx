@@ -1,5 +1,5 @@
-import type { CSSProperties } from 'react'
-import { copyPress, useCopy } from './copy'
+import { useSyncExternalStore, type CSSProperties } from 'react'
+import { CopiedStatus, copyPress, useCopy } from './copy'
 import { mono } from './ui'
 
 // Trying runs the dashboard once; installing starts it at every login, at openagent.build (#1919).
@@ -22,27 +22,38 @@ const currentPm = (): Pm => {
   return p && p in PMS ? (p as Pm) : 'npm'
 }
 
+const picked = new Set<() => void>()
+
 const pickPm = (name: Pm) => {
   document.documentElement.dataset.pm = name
   try {
     localStorage.setItem('pm', name)
   } catch {}
+  for (const listener of picked) listener()
 }
 
-/** What a press that copies `command` is named. */
-export const COPY_LABEL: Record<Command, string> = { try: 'Copy the command that tries OpenAgent', install: 'Copy the command that installs OpenAgent' }
+/** The package manager the visitor picked, for what the page says rather than shows (prerendered as npm). */
+function usePm(): Pm {
+  return useSyncExternalStore(
+    (listener) => (picked.add(listener), () => picked.delete(listener)),
+    currentPm,
+    () => 'npm',
+  )
+}
 
-/** `command` in the package manager the visitor picked: what a click copies. */
-export const pickedCommand = (command: Command): string => PMS[currentPm()][command]
+/** `command` in the package manager the visitor picked: what a click copies, and what its press is named by. */
+export const usePickedCommand = (command: Command): string => PMS[usePm()][command]
 
 /** One tab per package manager; picking one switches every command on the page. */
 export function PmTabs() {
+  const pm = usePm()
   return (
     <>
       {PM_NAMES.map((name) => (
         <button
           key={name}
           className={'pm-tab pm-tab-' + name}
+          aria-pressed={name === pm}
           onClick={() => pickPm(name)}
           style={{ borderRadius: 7, padding: '4px 13px', fontFamily: mono, fontSize: 12, cursor: 'pointer' }}
         >
@@ -110,12 +121,16 @@ const copyTipStyle: CSSProperties = {
 /** A click-to-copy chip holding `command`, with its "copy" tip beside it; `style` sizes and places it where the hero's would not do. */
 export function CommandChip({ command, style }: { command: Command; style?: CSSProperties }) {
   const { copied, copy } = useCopy()
+  const text = usePickedCommand(command)
   return (
-    <span className="install-chip" {...copyPress(COPY_LABEL[command], (e) => copy(pickedCommand(command), e))} style={{ ...chipStyle, ...style }}>
-      <CommandLine command={command} />
-      <span className={'copy-tip-side' + (copied ? ' copied' : '')} style={copyTipStyle}>
-        {copied ? 'copied!' : 'copy'}
+    <>
+      <span className="install-chip" {...copyPress(`Copy ${text}`, (e) => copy(text, e))} style={{ ...chipStyle, ...style }}>
+        <CommandLine command={command} />
+        <span className={'copy-tip-side' + (copied ? ' copied' : '')} style={copyTipStyle}>
+          {copied ? 'copied!' : 'copy'}
+        </span>
       </span>
-    </span>
+      <CopiedStatus copied={copied} />
+    </>
   )
 }
