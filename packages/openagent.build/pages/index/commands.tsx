@@ -55,16 +55,21 @@ export function PmTabs() {
 
 const dollarStyle: CSSProperties = { userSelect: 'none', color: '#a7c080' }
 
-/** `$ command`, in every package manager, the picked one shown (all are pre-rendered, styles.css shows one). */
+/**
+ * `$ command`, in every package manager, the picked one shown (all are pre-rendered, styles.css
+ * shows one). They share one place, so the line is as wide as the longest and a pick moves nothing.
+ */
 export function CommandLine({ command }: { command: Command }) {
   return (
     <span>
       <span style={dollarStyle}>$ </span>
-      {PM_NAMES.map((name) => (
-        <span key={name} className={'pm-only pm-only-' + name}>
-          {PMS[name][command]}
-        </span>
-      ))}
+      <span className="pm-commands">
+        {PM_NAMES.map((name) => (
+          <span key={name} className={'pm-only pm-only-' + name}>
+            {PMS[name][command]}
+          </span>
+        ))}
+      </span>
     </span>
   )
 }
