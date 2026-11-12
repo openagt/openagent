@@ -13,7 +13,16 @@ if (port === undefined) {
 }
 
 console.log('Starting the demo…')
-const demo = await startDemo({ port, seed: true })
+// The dashboard's last lines, said if it stops on its own.
+const said: string[] = []
+const demo = await startDemo({
+  port,
+  seed: true,
+  log: line => {
+    said.push(line)
+    if (said.length > 20) said.shift()
+  },
+})
 const page = `${demo.url}/${demo.project.id}`
 console.log(`
 ◆ OpenAgent demo: ${page}
@@ -35,9 +44,12 @@ openInBrowser(page)
 
 // Kept for every signal, not only the first: a second Ctrl+C must not cut the clean-up short and
 // leave the dashboard, which runs in a process group of its own, behind.
-await new Promise<void>(resolve => {
+const signalled = new Promise<void>(resolve => {
   process.on('SIGINT', () => resolve())
   process.on('SIGTERM', () => resolve())
 })
+const died = await Promise.race([signalled.then(() => undefined), demo.exited.then(end => ({ end }))])
+if (died) console.error(`\nThe dashboard stopped on its own (${typeof died.end === 'number' ? `exit ${died.end}` : died.end}). Its last lines:\n${said.join('\n')}\n`)
 console.log('Stopping the demo…')
 await demo.stop()
+if (died) process.exit(1)

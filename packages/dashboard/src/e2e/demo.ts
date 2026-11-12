@@ -36,6 +36,8 @@ export interface Demo {
   call<T = unknown>(name: string, ...args: unknown[]): Promise<T>
   /** Poll the project's runs until one is in one of `states`. */
   waitAgent(agentId: string, states: AgentStatus[], timeoutMs?: number): Promise<AgentMeta>
+  /** Settles when the dashboard's process ends, by `stop()` or on its own: its exit code, or the signal that ended it. */
+  exited: Promise<number | NodeJS.Signals | null>
   /** Stop every run still working, then the dashboard, then remove the home. */
   stop(): Promise<void>
 }
@@ -88,7 +90,9 @@ export async function startDemo(options: DemoOptions = {}): Promise<Demo> {
   }
 
   const env: NodeJS.ProcessEnv = Object.fromEntries(Object.entries(process.env).filter(([name]) => !handedToAgents(name)))
-  Object.assign(env, { HOME: home, XDG_CONFIG_HOME: join(home, '.config') })
+  // Its temporary folder in the home too, so what the dashboard leaves there goes with it.
+  await mkdir(join(home, 'tmp'))
+  Object.assign(env, { HOME: home, XDG_CONFIG_HOME: join(home, '.config'), TMPDIR: join(home, 'tmp') })
   // Started in the home, which is no repository, so the CLI adds no project of its own. A process
   // group of its own: a Ctrl+C at the terminal reaches only the demo, which stops the runs first.
   const cli = spawn(process.execPath, [CLI, '--port', String(options.port ?? 0)], { cwd: home, env, stdio: ['ignore', 'pipe', 'pipe'], detached: true })
@@ -103,7 +107,7 @@ export async function startDemo(options: DemoOptions = {}): Promise<Demo> {
   const killCli = (): void => signalGroup('SIGKILL')
   process.once('exit', killCli)
   const said: string[] = []
-  const exited = new Promise<number | null>(resolvePromise => cli.once('exit', code => resolvePromise(code)))
+  const exited = new Promise<number | NodeJS.Signals | null>(resolvePromise => cli.once('exit', (code, signal) => resolvePromise(code ?? signal)))
 
   const url = await new Promise<string>((resolvePromise, rejectPromise) => {
     for (const stream of [cli.stdout, cli.stderr]) {
@@ -192,5 +196,5 @@ export async function startDemo(options: DemoOptions = {}): Promise<Demo> {
     throw err
   }
 
-  return { url, home, project, toAdd, call, waitAgent, stop }
+  return { url, home, project, toAdd, call, waitAgent, exited, stop }
 }

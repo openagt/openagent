@@ -73,7 +73,11 @@ async function session(id: string, checkout: string, prompt: string, card: Omit<
   let lastText = ''
   try {
     if (prompt.includes('hold')) {
-      while (!stop.signal.aborted && !(await exists(join(dir, 'go')))) await new Promise(r => setTimeout(r, 50))
+      while (!stop.signal.aborted && !(await exists(join(dir, 'go')))) {
+        // Its checkout removed under it (the demo's home gone): nothing is left to release it or to write to.
+        if (!(await exists(checkout))) return
+        await new Promise(r => setTimeout(r, 50))
+      }
     }
     if (prompt.includes('commit') && !continued) {
       await writeFile(join(checkout, 'work.txt'), `${prompt}\n`)
