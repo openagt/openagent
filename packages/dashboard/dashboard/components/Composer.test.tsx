@@ -68,7 +68,7 @@ vi.mock('./PromptEditor.js', async () => {
     }, [ready, props.initialText])
     return (
       <div>
-        <input aria-label="prompt" value={held} onChange={e => put(e.target.value)} disabled={props.disabled} data-seed-focus={String(props.initialFocus ?? true)} />
+        <input aria-label="prompt" value={held} onChange={e => put(e.target.value)} disabled={props.disabled} data-seed-focus={String(props.initialFocus ?? true)} data-label={props.label} />
         <button type="button" onClick={() => props.onSubmit()}>
           editor-submit
         </button>
@@ -143,6 +143,14 @@ describe('Composer (#721)', () => {
     fireEvent.change(screen.getByLabelText('prompt'), { target: { value: 'follow-up' } })
     fireEvent.click(screen.getByRole('button', { name: 'Send' }))
     expect(onSubmit).toHaveBeenCalledWith('follow-up', { later: false })
+  })
+
+  test("a session's box is called a message's, the launcher's a prompt's", () => {
+    renderComposer({ inAgent: true })
+    expect(screen.getByLabelText('prompt').dataset['label']).toBe('Message')
+    cleanup()
+    renderComposer()
+    expect(screen.getByLabelText('prompt').dataset['label']).toBe('Prompt')
   })
 
   test('the submit button is hidden until the editor has text, then appears and fires onSubmit', () => {

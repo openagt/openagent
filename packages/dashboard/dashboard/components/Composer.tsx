@@ -278,6 +278,7 @@ export const Composer = forwardRef<ComposerHandle, {
       onNewPreset={() => setAddingPreset(true)}
       disabled={busy}
       {...(placeholder ? { placeholder } : {})}
+      label={inAgent ? 'Message' : 'Prompt'}
       {...(carriedDraft ? { initialText: carriedDraft.text, initialFocus: carriedDraft.handedOver || !phone } : {})}
       autoFocus={autoFocus}
     />

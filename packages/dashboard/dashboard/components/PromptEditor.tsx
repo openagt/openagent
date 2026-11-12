@@ -55,6 +55,8 @@ interface PromptEditorProps {
   onNewPreset?: () => void
   disabled?: boolean
   placeholder?: string
+  /** What a screen reader calls the box: the launcher's takes a prompt, a session's a message. */
+  label?: string
   /**
    * Text to open with, applied once as soon as the editor exists (#1066/#1139).
    *
@@ -94,7 +96,7 @@ function applyTemplate(editor: Editor, text: string, focus = true): void {
 }
 
 export const PromptEditor = forwardRef<PromptEditorHandle, PromptEditorProps>(function PromptEditor(
-  { onChange, onSubmit, onPreset, onMentionProject, onMentionFile, onMentionRemoved, projects, files = [], commands, customPresets = [], projectPresets = [], onNewPreset, disabled = false, placeholder = 'Describe what to do…', initialText, initialFocus = true, autoFocus = false },
+  { onChange, onSubmit, onPreset, onMentionProject, onMentionFile, onMentionRemoved, projects, files = [], commands, customPresets = [], projectPresets = [], onNewPreset, disabled = false, placeholder = 'Describe what to do…', label = 'Prompt', initialText, initialFocus = true, autoFocus = false },
   ref,
 ) {
   const [isEmpty, setIsEmpty] = useState(true)
@@ -271,7 +273,7 @@ export const PromptEditor = forwardRef<PromptEditorHandle, PromptEditorProps>(fu
         class: 'pe-prose focus:outline-none',
         role: 'textbox',
         'aria-multiline': 'true',
-        'aria-label': 'Prompt',
+        'aria-label': label,
         'aria-placeholder': placeholder,
       },
       handleKeyDown: (view, event) => {

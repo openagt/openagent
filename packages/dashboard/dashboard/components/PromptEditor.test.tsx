@@ -43,6 +43,13 @@ test('a text the box opens with takes the caret, unless it is told not to', asyn
   expect(document.activeElement?.textContent).toBe('a kept draft')
 })
 
+test('the box is called what it takes: a prompt unless told otherwise', async () => {
+  const { rerender } = render(<PromptEditor key="a" onChange={vi.fn()} onSubmit={vi.fn()} projects={[]} commands={[]} />)
+  await waitFor(() => expect(document.querySelector('[role="textbox"]')?.getAttribute('aria-label')).toBe('Prompt'))
+  rerender(<PromptEditor key="b" onChange={vi.fn()} onSubmit={vi.fn()} projects={[]} commands={[]} label="Message" />)
+  await waitFor(() => expect(document.querySelector('[role="textbox"]')?.getAttribute('aria-label')).toBe('Message'))
+})
+
 describe('Enter sends the prompt (#1510)', () => {
   test('switching the editor off and on again is no edit: no change is told', async () => {
     const onChange = vi.fn()
