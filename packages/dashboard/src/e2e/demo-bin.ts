@@ -5,10 +5,19 @@ import { openInBrowser } from '../cli/browser.js'
 import { portOf } from '../cli/cli.js'
 import { startDemo } from './demo.js'
 
-const at = process.argv.indexOf('--port')
-const port = at === -1 ? 0 : portOf(process.argv[at + 1])
+const USAGE = `usage: pnpm demo [--port <n>]
+
+  The real dashboard on a throwaway home, with a project whose runs are scripted and offline.
+  --port <n>  the port it listens on; a free one otherwise.`
+
+const args = process.argv.slice(2)
+if (args.length === 1 && (args[0] === '--help' || args[0] === '-h')) {
+  console.log(USAGE)
+  process.exit(0)
+}
+const port = args.length === 0 ? 0 : args.length === 2 && args[0] === '--port' ? portOf(args[1]) : undefined
 if (port === undefined) {
-  console.error('usage: pnpm demo [--port <n>]')
+  console.error(USAGE)
   process.exit(2)
 }
 
