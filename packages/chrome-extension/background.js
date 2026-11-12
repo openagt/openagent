@@ -339,6 +339,9 @@ async function runCycle() {
   let sessions
   try {
     const res = await to.get('/_bridge/sessions')
+    // The options page's own words for the two answers a person can do something about.
+    if (res.status === 404) return { ok: false, reason: 'the bridge is off. Turn it on in OpenAgent' }
+    if (res.status === 401) return { ok: false, reason: 'the dashboard rejected the token' }
     if (!res.ok) return { ok: false, reason: `daemon answered ${res.status} listing sessions` }
     sessions = (await res.json())?.sessions
   } catch (err) {
