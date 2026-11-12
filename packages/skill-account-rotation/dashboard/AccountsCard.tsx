@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type RefObject } from 'react'
 import { Check, ChevronDown, Copy, Info, KeyRound, MoreHorizontal, Plus } from 'lucide-react'
-import { Button, Card, CardContent, CardHeader, CardTitle, ClaudeLogo, CodexLogo, Dialog, DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, GaugeFace, Input, Skeleton, Tooltip, TooltipContent, TooltipTrigger, cn, useModuleHost, usePolled, type ModuleCardProps, type ModuleHost } from '@openagt/dashboard/module'
+import { Button, Card, CardContent, CardHeader, CardTitle, ClaudeLogo, CodexLogo, Dialog, DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, GaugeFace, Input, Skeleton, Tooltip, TooltipContent, TooltipTrigger, cn, useModuleHost, useOpenAgentDown, usePolled, type ModuleCardProps, type ModuleHost } from '@openagt/dashboard/module'
 
 // The accounts each coding agent's runs try, in order: how full each one is, whether it is at a
 // limit, adding one: the command's own sign-in, which goes on by itself while the card follows it,
@@ -135,6 +135,7 @@ function SigningIn({ agent, adding, noBrowser, onChanged }: { agent: (typeof AGE
   const [code, setCode] = useState('')
   const [error, setError] = useState<string>()
   const [copied, setCopied] = useState(false)
+  const down = useOpenAgentDown()
   const send = async (): Promise<void> => {
     setError(undefined)
     const done = await host.runComputerCommand(['add-code', agent.id], undefined, code)
@@ -176,7 +177,7 @@ function SigningIn({ agent, adding, noBrowser, onChanged }: { agent: (typeof AGE
           }}
         >
           <Input name="login-code" aria-label="Code from Claude" placeholder="2. Paste the code it shows" value={code} onChange={event => setCode(event.target.value)} className="h-9 min-w-0 grow basis-40 text-sm" />
-          <Button size="sm" type="submit" disabled={code.trim() === '' || adding.checking === true}>
+          <Button size="sm" type="submit" disabled={code.trim() === '' || adding.checking === true || down}>
             {adding.checking ? 'Checking…' : 'Done'}
           </Button>
         </form>
@@ -215,6 +216,7 @@ function AddAccount({ agent, now, failed, from, field, onChanged, onClose }: { a
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string>()
   const [here, setHere] = useState(false)
+  const down = useOpenAgentDown()
   const start = async (): Promise<void> => {
     setBusy(true)
     setError(undefined)
@@ -245,7 +247,7 @@ function AddAccount({ agent, now, failed, from, field, onChanged, onClose }: { a
             }}
           >
             <Input ref={field} autoFocus={opened} name="account-name" aria-label="Whose account" placeholder="Whose account, e.g. Dani" value={name} onChange={event => setName(event.target.value)} className="h-8 min-w-0 grow basis-32" />
-            <Button size="sm" type="submit" disabled={busy || name.trim() === ''}>
+            <Button size="sm" type="submit" disabled={busy || down || name.trim() === ''}>
               {agent.logIn}
             </Button>
           </form>
@@ -477,6 +479,7 @@ export function AccountsCard({ accountWhere }: ModuleCardProps) {
   }
   const [busy, setBusy] = useState(false)
   const [failed, setFailed] = useState<string>()
+  const down = useOpenAgentDown()
 
   const press = (args: string[]): void => {
     setBusy(true)
@@ -558,7 +561,7 @@ export function AccountsCard({ accountWhere }: ModuleCardProps) {
               usage={usage?.ok ? (usage.accounts[agent.id] ?? []) : []}
               reading={usage === undefined}
               where={accountWhere}
-              busy={busy}
+              busy={busy || down}
               onPress={press}
             />
           ))}

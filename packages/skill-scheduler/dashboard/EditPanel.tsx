@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Button, type ModuleCommandResult, type ModuleProject } from '@openagt/dashboard/module'
+import { Button, useOpenAgentDown, type ModuleCommandResult, type ModuleProject } from '@openagt/dashboard/module'
 import type { PublishPick } from '../src/state.js'
 import { MAX_AGENTS, OWN_AUTOMATIONS_DIR, type AgentName } from '../src/names.js'
 import { parseInterval, parseTimeOfDay } from '../src/pace.js'
@@ -83,6 +83,7 @@ export function EditPanel({
   const [runsOn, setRunsOn] = useState<{ agent: AgentName; model: ModelDraft }>(() => ({ agent: agentOf(scheduled), model: scheduled.model ?? 'skill' }))
   const [publish, setPublish] = useState<PublishPick>(scheduled.publish)
   const [saving, setSaving] = useState(false)
+  const down = useOpenAgentDown()
   const [failed, setFailed] = useState<string | undefined>()
   const [asking, setAsking] = useState(false)
   /** What the file said when the panel last read or wrote it, by the name the tool gives it: a save is held against it, so it writes over no change made to the file by hand since. */
@@ -227,7 +228,7 @@ export function EditPanel({
           <Button variant="outline" size="sm" autoFocus disabled={saving} onClick={back}>
             Cancel
           </Button>
-          <Button variant="destructive" size="sm" disabled={saving} onClick={() => void remove()}>
+          <Button variant="destructive" size="sm" disabled={saving || down} onClick={() => void remove()}>
             Remove
           </Button>
         </div>
@@ -332,7 +333,7 @@ export function EditPanel({
           <Button variant="outline" size="sm" disabled={saving} onClick={onClose}>
             Cancel
           </Button>
-          <Button size="sm" disabled={saving || problem !== undefined || !dirty} onClick={() => void save()}>
+          <Button size="sm" disabled={saving || down || problem !== undefined || !dirty} onClick={() => void save()}>
             Save
           </Button>
         </div>

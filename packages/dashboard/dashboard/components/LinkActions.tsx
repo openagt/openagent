@@ -3,6 +3,7 @@ import { Check } from 'lucide-react'
 import { moduleHost, type LinkActionResult, type ModuleLink } from '../module/index.js'
 import { useMountedModules, type MountedLinkAction } from '../lib/use-modules.js'
 import { HostServicesContext, INERT_HOST_SERVICES } from '../lib/host-services.js'
+import { DaemonDown } from '../lib/use-daemon-health.js'
 import { Button, type ButtonProps } from './ui/button.js'
 import { Tooltip, TooltipTrigger, TooltipContent } from './ui/tooltip.js'
 
@@ -47,6 +48,7 @@ export function LinkActions({
 }) {
   const { linkActions } = useMountedModules()
   const services = useContext(HostServicesContext)
+  const down = useContext(DaemonDown)
   const actions = linkActions.filter(action => projects.some(id => action.projects.includes(id)))
   const [running, setRunning] = useState<string | null>(null)
   const [done, setDone] = useState<Set<string>>(new Set())
@@ -105,7 +107,7 @@ export function LinkActions({
           size,
           // On a phone the button gives up width, and its words are cut with an ellipsis.
           className: 'gap-1.5 md:shrink-0 max-md:min-w-0',
-          disabled: disabled || running !== null || rested,
+          disabled: disabled || down || running !== null || rested,
           onClick: () => void run(action),
         }
         return tooltip ? (

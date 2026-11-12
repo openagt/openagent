@@ -290,6 +290,27 @@ describe('the Automations page: its rows', () => {
     expect(saves(runCommand)).toEqual([])
   })
 
+  test('while OpenAgent is not answering, a new automation is not saved and a row is not switched: both presses are off', async () => {
+    const { host, runCommand } = scheduler()
+    render(
+      <OpenAgentDown>
+        <ModuleHostContext.Provider value={host}>
+          <AutomationsPage projects={[GEMSTACK]} projectId={null} path={[]} />
+        </ModuleHostContext.Provider>
+      </OpenAgentDown>,
+    )
+    const gemstack = await screen.findByRole('region', { name: 'gemstack' })
+    expect(disabled(within(row('/work-queue')).getByRole('switch', { name: 'Run /work-queue by itself' }))).toBe(true)
+    fireEvent.click(within(gemstack).getByRole('button', { name: 'New automation in gemstack' }))
+    const form = within(gemstack).getByRole('group', { name: 'New automation' })
+    fireEvent.change(within(form).getByRole('textbox', { name: 'Name' }), { target: { value: 'answer-comments' } })
+    fireEvent.change(within(form).getByLabelText('What the agent is told'), { target: { value: 'Answer each new comment below.' } })
+    const save = within(form).getByRole('button', { name: 'Save' })
+    expect(disabled(save)).toBe(true)
+    fireEvent.click(save)
+    expect(runCommand.mock.calls.every(([, args]) => args[0] === 'status')).toBe(true)
+  })
+
   test('a "Run now" that starts nothing says why on its row: nothing to do, or one already running, is a plain note; anything else is said as a failure, in the page\'s words for the scheduler\'s decision; the next one takes the line away', async () => {
     const answers: ModuleCommandResult[] = [
       { ok: false, error: 'not due' },

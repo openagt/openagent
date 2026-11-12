@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { Bot, ExternalLink, LockOpen, Play } from 'lucide-react'
-import { Badge, Button, LinkActions, Markdown, cn, formatAge, formatDateTime, useAction, usePolled, useModuleHost } from '@openagt/dashboard/module'
+import { Badge, Button, LinkActions, Markdown, cn, formatAge, formatDateTime, useAction, usePolled, useModuleHost, useOpenAgentDown } from '@openagt/dashboard/module'
 import { claimState, heldBack, holderAgent, readShown, ticketBody, ticketLink, withHolder } from '../src/module.js'
 import type { WorkspaceTicketDetail } from './lib/types.js'
 import { TicketPageShell, TicketPageNote } from './TicketPageShell.js'
@@ -42,6 +42,7 @@ export function TicketDetailPage({
   )
   const ticket = read && 'ticket' in read ? read.ticket : null
   const { busy, error, run } = useAction()
+  const down = useOpenAgentDown()
   const onBack = useBackToList(host, [slug])
   const onOpenAgent = (agentId: string) => host.openAgent(projectId, agentId)
 
@@ -86,7 +87,7 @@ export function TicketDetailPage({
                 <Button
                   size="sm"
                   variant="outline"
-                  disabled={busy}
+                  disabled={busy || down}
                   onClick={() => void release()}
                   title={holder ? `Claimed by ${holder}` : undefined}
                   className="gap-1.5"

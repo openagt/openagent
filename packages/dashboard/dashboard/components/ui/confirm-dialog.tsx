@@ -1,7 +1,8 @@
 'use client'
-import { useState, type ReactNode } from 'react'
+import { useContext, useState, type ReactNode } from 'react'
 import { AlertDialog } from '@base-ui/react/alert-dialog'
 import { useAction } from '../../lib/use-action.js'
+import { DaemonDown } from '../../lib/use-daemon-health.js'
 import { Button } from './button.js'
 import { cn } from '../../lib/utils.js'
 
@@ -53,6 +54,7 @@ export function ConfirmDialog({
   const open = controlledOpen ?? uncontrolledOpen
   const setOpen = onOpenChange ?? setUncontrolledOpen
   const { busy, error, run, reset } = useAction()
+  const down = useContext(DaemonDown)
 
   const confirm = (): void => {
     if (busy) return
@@ -97,7 +99,7 @@ export function ConfirmDialog({
             <Button
               variant={destructive ? 'destructive' : 'default'}
               size="sm"
-              disabled={confirmDisabled}
+              disabled={down || confirmDisabled}
               aria-disabled={busy || undefined}
               onClick={confirm}
               className={cn(busy && 'cursor-progress opacity-50')}

@@ -299,7 +299,7 @@ export function AutomationsPage({ projects }: ModulePageProps) {
                                 </button>
                                 <Switch
                                   checked={scheduled.on}
-                                  disabled={saving}
+                                  disabled={saving || down}
                                   onCheckedChange={next => void save(id, run(row.project, ['switch', scheduled.command, next ? 'on' : 'off']), answer => (answer.ok ? undefined : { failed: `The switch was not saved: ${answer.error}` }))}
                                   aria-label={`Run ${title} by itself`}
                                 />

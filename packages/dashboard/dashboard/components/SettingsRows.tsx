@@ -1,6 +1,7 @@
-import type { ReactNode } from 'react'
+import { useContext, type ReactNode } from 'react'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select.js'
 import { cn } from '../lib/utils.js'
+import { DaemonDown } from '../lib/use-daemon-health.js'
 
 // Settings' building blocks (#958): an entry's settings, a row, a row picked from a list. The
 // dashboard's own entries are made of them, and so is an entry a module brings (`@openagt/dashboard/module`
@@ -82,6 +83,7 @@ export function SettingsSelectRow({
   options: SettingsOption[]
   onChange: (next: string) => void
 }) {
+  const down = useContext(DaemonDown)
   if (options.length === 0) return null
   // A saved value the list does not hold (an editor that is no longer found, a list not read yet) is still what is saved: it gets a line of its own, by its text.
   const listed = options.some(o => o.value === value) ? options : [...options, { value, label: value }]
@@ -97,7 +99,7 @@ export function SettingsSelectRow({
       label={label}
       description={description}
       control={
-        <Select items={items} value={value === '' ? NO_VALUE : value} onValueChange={picked}>
+        <Select items={items} value={value === '' ? NO_VALUE : value} onValueChange={picked} disabled={down}>
           <SelectTrigger size="sm" aria-label={label} className="max-w-[min(16rem,45vw)]">
             <SelectValue />
           </SelectTrigger>

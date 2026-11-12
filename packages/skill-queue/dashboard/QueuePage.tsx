@@ -19,6 +19,7 @@ import {
   pathsIn,
   useFileNames,
   useModuleHost,
+  useOpenAgentDown,
   usePolled,
   useSchedule,
   type FileNames,
@@ -332,6 +333,7 @@ function AddEntry({ project, reload }: { project: ModuleProject; reload: () => P
   const [priority, setPriority] = useState(DEFAULT_PRIORITY)
   const [adding, setAdding] = useState(false)
   const [failed, setFailed] = useState<string | undefined>()
+  const down = useOpenAgentDown()
   const items = PRIORITIES.map(p => ({ value: String(p), label: `Priority ${p}` }))
   const add = async (): Promise<void> => {
     if (text.trim() === '' || adding) return
@@ -368,7 +370,7 @@ function AddEntry({ project, reload }: { project: ModuleProject; reload: () => P
             ))}
           </SelectContent>
         </Select>
-        <Button type="submit" variant="outline" size="sm" disabled={text.trim() === '' || adding}>
+        <Button type="submit" variant="outline" size="sm" disabled={text.trim() === '' || adding || down}>
           <Plus className="h-3.5 w-3.5" aria-hidden />
           {adding ? 'Adding…' : 'Add to queue'}
         </Button>

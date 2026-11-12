@@ -1,6 +1,6 @@
 import { useState, type ReactNode } from 'react'
 import { ArrowUp, Bot, CirclePause, Clock, Flame, WifiOff, type LucideIcon } from 'lucide-react'
-import { Button, Card, CardContent, CardHeader, CardTitleLink, LinkActions, cn, formatDateTime, usePolled, useModuleHost, type ModuleCardProps, type ModuleProject } from '@openagt/dashboard/module'
+import { Button, Card, CardContent, CardHeader, CardTitleLink, LinkActions, cn, formatDateTime, usePolled, useModuleHost, useOpenAgentDown, type ModuleCardProps, type ModuleProject } from '@openagt/dashboard/module'
 import { claimState, heldBack, holderAgent, hotLane, ticketLink, withHolder, type ClaimState, type HotLane } from '../src/module.js'
 import { listTickets } from './lib/list.js'
 import type { WorkspaceTicket } from './lib/types.js'
@@ -176,6 +176,7 @@ function Row({ hot, showProject, reload }: { hot: HotTicket; showProject: boolea
   const host = useModuleHost()
   const { project, ticket, lane, holder } = hot
   const [releasing, setReleasing] = useState(false)
+  const down = useOpenAgentDown()
   const [failed, setFailed] = useState<string>()
   const release = async (): Promise<void> => {
     setReleasing(true)
@@ -192,7 +193,7 @@ function Row({ hot, showProject, reload }: { hot: HotTicket; showProject: boolea
           Continue
         </Button>
       )}
-      <Button variant="ghost" size="xs" disabled={releasing} onClick={() => void release()} title="Lift the claim: any agent may take the ticket again">
+      <Button variant="ghost" size="xs" disabled={releasing || down} onClick={() => void release()} title="Lift the claim: any agent may take the ticket again">
         {releasing ? 'Releasing…' : 'Release'}
       </Button>
     </>
