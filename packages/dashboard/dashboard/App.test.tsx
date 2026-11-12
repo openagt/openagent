@@ -367,7 +367,7 @@ describe('module cards on the Overview (#1818)', () => {
     await waitFor(() => expect(calls.filter(call => call.name === 'onAgents').length).toBeGreaterThan(1))
     expect(screen.queryByText('This session is gone')).toBeNull()
     listed = [run]
-    await waitFor(() => expect(document.querySelector('button[aria-label="Session actions"][title="tidy up"]')).toBeTruthy())
+    await waitFor(() => expect(document.querySelector('button[aria-label="tidy up, session actions"]')).toBeTruthy())
     listed = []
     expect(await screen.findByText('This session is gone', {}, { timeout: 5000 })).toBeTruthy()
   })
@@ -517,7 +517,7 @@ describe('the project select (#1513)', () => {
     fireEvent.click(await screen.findByText('site ran'))
     // All projects stay shown there.
     expect(url()).toBe('/site/3-s?all')
-    await waitFor(() => expect(document.querySelector('button[aria-label="Session actions"][title="site ran"]')).toBeTruthy())
+    await waitFor(() => expect(document.querySelector('button[aria-label="site ran, session actions"]')).toBeTruthy())
   })
 
   test('New agent session starts in the picked project; picking another on the launcher moves to its launcher, and all keeps the page', async () => {
@@ -682,7 +682,7 @@ describe('the project select (#1513)', () => {
     answers.set('onProjects', () => [{ ...OTHER, machine: 'studio' }])
     window.history.replaceState(null, '', '/site/3-s')
     render(<App />)
-    await screen.findByRole('button', { name: 'Session actions' })
+    await screen.findByRole('button', { name: /session actions/i })
     expect(screen.queryByRole('button', { name: 'remove the project from its menu' })).toBeNull()
   })
 
