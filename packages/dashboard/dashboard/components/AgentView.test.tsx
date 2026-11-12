@@ -745,6 +745,22 @@ describe('a message sent while the agent works', () => {
     expect(queuedBoxes()).toHaveLength(0)
   })
 
+  test('a run whose record says it was stopped gives its words back to the box at once', async () => {
+    vi.useFakeTimers()
+    try {
+      givenBack.length = 0
+      const { rerender } = render(view({ live: true, events: [start('go'), text] }))
+      fireEvent.click(screen.getByText('queue-one'))
+      rerender(view({ live: false, card: { status: 'stopped' }, events: [start('go'), text, { kind: 'end', ok: false, stopped: true }] as OpenAgentEvent[] }))
+      await act(async () => {})
+      act(() => void vi.advanceTimersByTime(0))
+      expect(queuedBoxes()).toHaveLength(0)
+      expect(givenBack).toEqual(['and then this'])
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
   test('a page slow to learn that the run still works keeps showing it waiting', () => {
     vi.useFakeTimers()
     try {

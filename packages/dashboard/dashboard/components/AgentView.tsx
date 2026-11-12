@@ -50,7 +50,7 @@ import { driverFromImpl } from '../../src/client.js'
 // events already on screen.
 /** How long the bar waits for the run's own reads before it shows the facts that are in. */
 const READY_WAIT_MS = 1_000
-/** How long a queued message stays shown once the agent no longer works: its next turn, which reads it, starts well within this. Unread then, it goes back to the box. */
+/** How long a queued message stays shown once the agent no longer works and was not stopped: its next turn, which reads it, starts well within this. Unread then, it goes back to the box. */
 const QUEUED_UNREAD_MS = 5_000
 
 /** How often what the working subagents are doing is read: the runs poll's own pace. */
@@ -195,7 +195,7 @@ export function AgentView({
 
   // The messages on their way to the agent, from the box under the chat to the feed above it.
   // The prompt this page started the run with is on its way only until the run has ended.
-  const { sending: shownSending, onSending, waiting, onQueued, editInBox, giveBack } = useMessagesOnTheirWay(projectId, agentId, shown, live === false && archived !== null && !feedLive, live === false ? undefined : startedWith)
+  const { sending: shownSending, onSending, waiting, onQueued, editInBox, giveBack } = useMessagesOnTheirWay(projectId, agentId, shown, live === false && archived !== null && !feedLive, card?.status === 'stopped', live === false ? undefined : startedWith)
   // A question answered from its card hands the focus on to the box, for what the person says next.
   const focusBox = useRef<(() => void) | null>(null)
   // A run writes its prompt line once its coding agent begins. Until then its prompt, off its card,
@@ -498,6 +498,8 @@ function useMessagesOnTheirWay(
   shown: readonly OpenAgentEvent[],
   /** The run is known to have ended: the list of runs says so and its feed is in. */
   ended: boolean,
+  /** Its record says it was stopped: what it had not read, it never will. A failed leg's process still sends its inbox as the next turn. */
+  stopped: boolean,
   startedWith: string | undefined,
 ): {
   sending: string | undefined
@@ -548,12 +550,15 @@ function useMessagesOnTheirWay(
   unreadNow.current = queued
   useEffect(() => {
     if (queued.length === 0 || !ended) return
-    const timer = setTimeout(() => {
-      giveBack.current?.(unreadNow.current.map(message => message.text).join('\n\n'))
-      setQueued(() => [])
-    }, QUEUED_UNREAD_MS)
+    const timer = setTimeout(
+      () => {
+        giveBack.current?.(unreadNow.current.map(message => message.text).join('\n\n'))
+        setQueued(() => [])
+      },
+      stopped ? 0 : QUEUED_UNREAD_MS,
+    )
     return () => clearTimeout(timer)
-  }, [queued.length, ended, setQueued])
+  }, [queued.length, ended, stopped, setQueued])
   const onQueued = useCallback((message: QueuedMessage) => setQueued(was => [...was, { ...message, prompts }]), [setQueued, prompts])
   // Cancel and edit puts the message back in the box; the composer says how.
   const editInBox = useRef<((text: string) => void) | null>(null)
