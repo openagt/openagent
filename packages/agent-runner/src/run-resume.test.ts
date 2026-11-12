@@ -91,6 +91,52 @@ test('a second signal ends an agent that does not stop: the session killed, the 
   }
 })
 
+/** Ends when the run asks its agent to stop. A bound wait: nothing else holds the event loop open while the signal is in flight. */
+function askedToStop(opts: DriverStartOptions): Promise<void> {
+  return new Promise((resolve, reject) => {
+    const timer = setTimeout(() => reject(new Error('no signal within 5s')), 5000)
+    opts.stop!.addEventListener('abort', () => (clearTimeout(timer), resolve()), { once: true })
+  })
+}
+
+test('a run stopped before its agent took its prompt, continued with a message, hands the agent its prompt first and the message after it, as one prompt', async () => {
+  const repo = await testRepo()
+  try {
+    // Stopped while its coding agent starts: no prompt was ever sent.
+    let starting!: () => void
+    const started = new Promise<void>(resolve => (starting = resolve))
+    const slow: Driver = {
+      id: 'fake',
+      start: async opts => {
+        starting()
+        await askedToStop(opts)
+        return new FakeDriver({ turns: [] }).start(opts)
+      },
+    }
+    const running = runCommand(repo, { prompt: 'Redesign the checkout page', driver: slow, now: () => NOW, gitHost: noGitHost })
+    await started
+    process.kill(process.pid, 'SIGINT')
+    const first = await running
+    assert.equal(first.status, 'stopped')
+    assert.deepEqual((await readUntimedDiary(repo, first.id)).map(l => l.kind), ['ended'], 'the agent never had a turn')
+
+    let sent: string[] = []
+    const going: Driver = {
+      id: 'fake',
+      start: async opts => {
+        const fake = await new FakeDriver({ turns: [{ text: 'Redesigned.' }] }).start(opts)
+        sent = fake.prompts
+        return fake
+      },
+    }
+    const second = await resumeRun(repo, { id: first.id, text: 'Use the new colours', driver: going, now: () => NOW, gitHost: noGitHost })
+    assert.equal(second.status, 'done')
+    assert.deepEqual(sent, [promptSent('Redesign the checkout page\n\nUse the new colours', { attached: earlierWorkLine(first.id, undefined) })])
+  } finally {
+    await removeRepo(repo)
+  }
+})
+
 test('a run whose last turn asked ends waiting and keeps its checkout; the answer resumes the same run, which then ends done and reclaimed', async () => {
   const repo = await testRepo()
   try {

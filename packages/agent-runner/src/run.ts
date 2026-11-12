@@ -407,7 +407,8 @@ export async function resumeRun(repo: string, opts: ResumeOptions): Promise<RunO
       const title = typeof question?.['title'] === 'string' ? (question['title'] as string) : 'your question'
       prompt = continuationPrompt(title, opts.answer)
     } else if (opts.text) {
-      prompt = opts.text
+      // A run stopped before its agent took its own prompt never had it: it goes first, the words after it.
+      prompt = card.intent !== undefined && !diary.some(line => line.kind === 'start') ? `${card.intent}\n\n${opts.text}` : opts.text
     } else {
       throw new Error('a text or an answer is needed to resume a run')
     }
