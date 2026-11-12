@@ -917,6 +917,9 @@ export function EventList({
   }
   // The open question the keys answer: the newest.
   const asking = [...shown].reverse().find(e => choiceRows?.rows.has(e) && choiceRows.rows.get(e)?.pick === undefined && !choiceRows.rows.get(e)?.passed)
+  // The question the chat opened on, which takes the focus from the message box; one asked later does not.
+  const openedOn = useRef<OpenAgentEvent | undefined | null>(null)
+  if (openedOn.current === null && shown.length > 0) openedOn.current = asking
 
   return (
     <MessageScrollerProvider autoScroll={stick} defaultScrollPosition={openAt ?? (stick ? 'end' : 'start')}>
@@ -999,7 +1002,7 @@ export function EventList({
                   ) : choiceRow && choiceRow.pick === undefined && projectId !== undefined && agentId !== undefined ? (
                     // The question the agent waits on, answered here, under what it said.
                     typing ? null : <div className="mt-1 flex min-w-0 flex-1 flex-col gap-1.5">
-                      <QuestionPanel key={`${agentId}:${choiceRow.choice.id}`} projectId={projectId} agentId={agentId} choice={choiceRow.choice} active={e === asking} onSaid={onSaid} focusNext={focusNext} />
+                      <QuestionPanel key={`${agentId}:${choiceRow.choice.id}`} projectId={projectId} agentId={agentId} choice={choiceRow.choice} active={e === asking} focused={e === openedOn.current} onSaid={onSaid} focusNext={focusNext} />
                       {footer}
                     </div>
                   ) : choiceRow?.pick !== undefined ? (

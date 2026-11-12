@@ -17,6 +17,7 @@ import { isPublishPick, offeredPublishPicks, type PublishPick } from '../../src/
 import { useProjectLauncher } from '../lib/use-project-launcher.js'
 import { promptWithContext, type ContextSet } from '../lib/use-context-set.js'
 import { shortcut } from '../lib/shortcut.js'
+import { useIsMobile } from '../lib/use-mobile.js'
 
 /** A message sent to a working agent that it has not read yet: shown waiting until it lands. */
 export interface QueuedMessage {
@@ -137,6 +138,7 @@ export function AgentComposer({
       focusBox.current = null
     }
   }, [focusBox])
+  const phone = useIsMobile()
   const { busy, error, run } = useAction()
   // The slot's Stop (#1455), its own action so a message send's busy beat cannot read as
   // "stopping". A landed Stop stays "Stopping…" until the end event flips `live`, so it cannot
@@ -257,6 +259,8 @@ export function AgentComposer({
         key={agentId}
         ref={composerRef}
         draftKey={`${projectId}:${agentId}`}
+        // A session opened takes what is typed next, as the launcher does; not on a phone, where the keyboard would rise over the chat.
+        autoFocus={!phone}
         files={files}
         onSubmit={send}
         busy={busy}

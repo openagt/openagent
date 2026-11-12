@@ -71,6 +71,7 @@ export function QuestionPanel({
   agentId,
   choice,
   active = false,
+  focused = false,
   onSaid,
   focusNext,
   send,
@@ -80,6 +81,8 @@ export function QuestionPanel({
   choice: ChoiceRequest
   /** The one question the keys answer: the number keys pick, ⌘ or Ctrl + Enter submits. */
   active?: boolean
+  /** The question the page opened on: its pick takes the focus as it shows, where the screen is no phone's. */
+  focused?: boolean
   /** Told what the answer said to the agent, so the chat can show it at once. */
   onSaid?: ((text: string) => void) | undefined
   /** Given the focus once the answer is taken, when it was in the card and the screen is no phone's: the message box. */
@@ -180,6 +183,10 @@ export function QuestionPanel({
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
   }, [active, sent, choice.options, send])
+
+  useEffect(() => {
+    if (focused && !isMobileScreen()) card.current?.querySelector<HTMLElement>('[role="radio"][aria-checked="true"], [role="checkbox"]')?.focus({ preventScroll: true })
+  }, [focused])
 
   // "Other" picked: its field takes the keys at once, as Claude Code's does.
   useEffect(() => {

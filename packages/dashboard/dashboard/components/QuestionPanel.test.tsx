@@ -52,6 +52,14 @@ describe('QuestionPanel', () => {
     await waitFor(() => expect(sendChoice).toHaveBeenCalledWith('p1', 'await-choices', 'lite', 'r1'))
   })
 
+  test('the question a session opens on has the focus on its picked option; one asked later leaves the focus where it is', () => {
+    render(panel({ choice: { ...choice, recommended: 'lite' }, focused: true }))
+    expect(document.activeElement).toBe(option(/SQLite/))
+    cleanup()
+    render(panel())
+    expect(document.activeElement).toBe(document.body)
+  })
+
   test('the recommended option starts picked wherever it stands in the list', () => {
     render(panel({ choice: { ...choice, recommended: 'lite' } }))
     expect(option(/SQLite/).getAttribute('aria-checked')).toBe('true')

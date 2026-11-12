@@ -36,7 +36,7 @@ vi.mock('./Composer.js', async () => {
         submit later
       </button>
       <span data-testid="composer-props">
-        {JSON.stringify({ inAgent: props.inAgent, busyLabel: props.submitBusyLabel, placeholder: props.placeholder, sessionModel: props.sessionModel })}
+        {JSON.stringify({ inAgent: props.inAgent, busyLabel: props.submitBusyLabel, placeholder: props.placeholder, sessionModel: props.sessionModel, autoFocus: props.autoFocus })}
       </span>
       {/* The empty-box slot control (#1455), rendered so the Stop/Resume tests can press it. */}
       {props.idleControl}
@@ -56,7 +56,7 @@ function renderComposer(over: Partial<Parameters<typeof AgentComposer>[0]> = {})
   return { onAgentStarted }
 }
 
-const props = (): { inAgent: boolean; busyLabel: string; placeholder: string; sessionModel?: string } =>
+const props = (): { inAgent: boolean; busyLabel: string; placeholder: string; sessionModel?: string; autoFocus?: boolean } =>
   JSON.parse(screen.getByTestId('composer-props').textContent ?? '{}')
 
 beforeEach(() => {
@@ -100,6 +100,20 @@ describe('AgentComposer row under the box', () => {
 })
 
 describe('AgentComposer box', () => {
+  test('a session opened takes what is typed next in its box; on a phone it waits for a tap', () => {
+    renderComposer()
+    expect(props().autoFocus).toBe(true)
+    cleanup()
+    vi.stubGlobal('matchMedia', (query: string) => ({ matches: true, media: query, addEventListener: () => {}, removeEventListener: () => {} }))
+    try {
+      renderComposer()
+      expect(props().autoFocus).toBe(false)
+    } finally {
+      vi.unstubAllGlobals()
+    }
+  })
+
+
   test('the model the session runs on is handed to the box, to be said under it; none when not known', () => {
     renderComposer({ model: 'Opus 5.5' })
     expect(props().sessionModel).toBe('Opus 5.5')
