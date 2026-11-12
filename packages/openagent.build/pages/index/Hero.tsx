@@ -89,10 +89,11 @@ export function Hero() {
           letterSpacing: '-0.02em',
         }}
       >
-        <span
+        <del
           className="strike"
           style={{
             display: 'table',
+            textDecoration: 'none',
             position: 'relative',
             margin: '0 auto 0px',
             fontSize: 'clamp(26px, 6vw, 42px)',
@@ -101,7 +102,7 @@ export function Hero() {
           }}
         >
           Babysit AI
-        </span>
+        </del>
         Autonomous AI
       </h1>
       <p
