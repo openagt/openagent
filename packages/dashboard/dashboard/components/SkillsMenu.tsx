@@ -5,7 +5,9 @@ import { useLoaded } from '../lib/use-async.js'
 import { openSettings } from '../lib/use-route.js'
 import { cn } from '../lib/utils.js'
 import { SKILLS_ENTRY } from './ProjectSkills.js'
-import { RowOff, rowButtonClass } from './ui/row-item.js'
+import { RowSaid, rowButtonClass } from './ui/row-item.js'
+import { useAgentsList } from './AgentsPage.js'
+import { DEFAULT_AGENT } from '../../src/client.js'
 import { Tooltip, TooltipContent, TooltipTrigger } from './ui/tooltip.js'
 import {
   DropdownMenu,
@@ -190,17 +192,20 @@ export function SkillsMenu({
 }
 
 /**
- * The session page's "Skills", in the launcher's place and look, off: a session keeps the skills
- * it started with, which its hover says as its record keeps them.
+ * The session page's "Skills", in the launcher's place, as words, not a press: a session keeps the
+ * skills it started with, counted as the launcher counts them, which their hover says as its record keeps them.
+ * Drawn once the agents and the project's skills are read, so the count lands whole.
  */
-export function SkillsOff({ skillsOn, skillsOff, projectSkills, noProject = false }: { skillsOn?: string[] | undefined; skillsOff?: string[] | undefined; projectSkills?: 'none' | string[] | undefined; noProject?: boolean }) {
+export function SkillsOff({ projectId, agent, skillsOn, skillsOff, projectSkills }: { projectId: string | undefined; agent: string | undefined; skillsOn?: string[] | undefined; skillsOff?: string[] | undefined; projectSkills?: 'none' | string[] | undefined }) {
+  const { view } = useAgentsList()
+  const project = useLoaded(projectId !== undefined ? () => onProjectSkills(projectId) : null, null, [projectId])
+  if (!view || (projectId !== undefined && project === null)) return null
+  const record = view.agents.find(one => one.id === (agent ?? DEFAULT_AGENT))
+  const count = sessionSkills(record, { on: skillsOn ?? [], off: skillsOff ?? [] }).length + (projectId !== undefined ? projectKept(project?.held ?? [], projectSkills).length : 0)
   return (
-    <RowOff tip={`This session got ${skillPicksSaid({ skillsOn, skillsOff, projectSkills: noProject ? 'none' : projectSkills })}`}>
-      <button type="button" disabled className={rowButtonClass}>
-        <Puzzle className="h-3.5 w-3.5 shrink-0" aria-hidden />
-        <span className="truncate">Skills</span>
-        <ChevronDown className="h-3 w-3 shrink-0 opacity-70" aria-hidden />
-      </button>
-    </RowOff>
+    <RowSaid tip={`This session got ${skillPicksSaid({ skillsOn, skillsOff, projectSkills: projectId === undefined ? 'none' : projectSkills })}`}>
+      <Puzzle className="h-3.5 w-3.5 shrink-0" aria-hidden />
+      <span className="truncate">{`Skills: ${count}`}</span>
+    </RowSaid>
   )
 }

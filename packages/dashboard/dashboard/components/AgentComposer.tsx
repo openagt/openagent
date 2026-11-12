@@ -279,7 +279,7 @@ export function AgentComposer({
         controls={
           <>
             <AgentOff agent={agent} />
-            <SkillsOff skillsOn={skillsOn} skillsOff={skillsOff} projectSkills={projectSkills} noProject={projectId === SESSIONS_ID} />
+            <SkillsOff projectId={projectId === SESSIONS_ID ? undefined : projectId} agent={agent} skillsOn={skillsOn} skillsOff={skillsOff} projectSkills={projectSkills} />
             {projectId !== SESSIONS_ID && contextSet && <ProjectContextMenu projectId={projectId} context={contextSet.context} busy={busy} onToggle={contextSet.toggle} />}
             {controls}
           </>

@@ -20,7 +20,7 @@ vi.mock('../lib/use-project-launcher.js', () => ({ useProjectLauncher: () => ({ 
 vi.mock('./ContextMenu.js', () => ({ ProjectContextMenu: ({ context }: { context: Set<string> }) => <span>Context · {[...context].join(', ')}</span> }))
 // The launcher's other items, each tested on its own: stand-ins that say what they were given.
 vi.mock('./AgentMenu.js', () => ({ AgentOff: ({ agent }: { agent?: string }) => <span>Agent · {agent ?? 'default'}</span> }))
-vi.mock('./SkillsMenu.js', () => ({ SkillsOff: ({ skillsOff, projectSkills, noProject }: { skillsOff?: string[]; projectSkills?: 'none' | string[]; noProject?: boolean }) => <span>Skills · {noProject ? 'no project' : `${(skillsOff ?? []).join('+') || 'all'}/${projectSkills === undefined ? 'all' : projectSkills === 'none' ? 'none' : projectSkills.join('+')}`}</span> }))
+vi.mock('./SkillsMenu.js', () => ({ SkillsOff: ({ projectId, skillsOff, projectSkills }: { projectId?: string; skillsOff?: string[]; projectSkills?: 'none' | string[] }) => <span>Skills · {projectId === undefined ? 'no project' : `${(skillsOff ?? []).join('+') || 'all'}/${projectSkills === undefined ? 'all' : projectSkills === 'none' ? 'none' : projectSkills.join('+')}`}</span> }))
 vi.mock('./GitHosts.js', () => ({ GitHostOff: ({ home, account }: { home: { name: string } | null; account?: string }) => (home ? <span>Account · {account ?? home.name}</span> : null) }))
 
 // The Composer is exercised by its own tests; here it only has to hand back a submit and report
