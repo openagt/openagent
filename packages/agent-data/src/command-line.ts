@@ -8,9 +8,9 @@ import { listProjectDir, openProjectReader, readProjectFile, writeProjectDataDet
  * `scheduler`, `orchestration`, `agent-runner`), so an agent, a person and OpenAgent read any of
  * them the same way: JSON on stdout, one line for a person on stderr, and the exit code says how
  * it went — 0 for a result, 1 for a refusal or a failure, 2 for a command line that could not be
- * read. A refusal is a rule saying no (there is no such ticket, the branch is someone else's); it
- * is reported on stdout as `{ ok: false, reason }` so a caller parsing the output learns why, and
- * on stderr so a person does. A failure is reported the same way, its `reason` naming what failed
+ * read; `--help` is the usage, for a person, on stdout with exit 0. A refusal is a rule saying no
+ * (there is no such ticket, the branch is someone else's); it is reported on stdout as
+ * `{ ok: false, reason }` so a caller parsing the output learns why, and on stderr so a person does. A failure is reported the same way, its `reason` naming what failed
  * and its `detail` saying how.
  */
 
@@ -66,10 +66,14 @@ export interface CommandLine<Context extends unknown[]> {
  */
 export async function runCommandLine<Context extends unknown[]>(argv: string[], output: CommandOutput, line: CommandLine<Context>, ...context: Context): Promise<number> {
   const [name, ...rest] = argv
+  if (name === '--help' || name === '-h') {
+    output.stdout(line.usage)
+    return 0
+  }
   const bare = name === undefined || name.startsWith('--')
   const command = bare ? line.bare : Object.hasOwn(line.commands, name) ? line.commands[name] : undefined
   if (!command) {
-    output.stderr(line.usage)
+    output.stderr(name === undefined ? line.usage : `${name.startsWith('-') ? 'unknown option' : 'unknown command'}: ${name}\n\n${line.usage}`)
     return 2
   }
   try {
