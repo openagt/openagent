@@ -9,7 +9,8 @@
       p { color: #5b6472; margin: 0 0 16px; }
       label { display: block; font-weight: 600; margin: 14px 0 4px; }
       input { width: 100%; padding: 7px 9px; border: 1px solid #c9cfd8; border-radius: 6px; font: inherit; box-sizing: border-box; }
-      button { margin-top: 16px; padding: 7px 14px; border: 0; border-radius: 6px; background: #2d3441; color: #fff; font: inherit; cursor: pointer; }
+      button { margin-top: 16px; padding: 7px 14px; border: 1px solid #2d3441; border-radius: 6px; background: #2d3441; color: #fff; font: inherit; cursor: pointer; }
+      button.secondary { background: transparent; border-color: #c9cfd8; color: #1f2430; }
       code { background: #eef1f5; padding: 1px 5px; border-radius: 4px; }
       #status { margin-top: 12px; min-height: 20px; color: #2f7a3f; }
       #status.error { color: #b3261e; }
@@ -39,7 +40,7 @@
     </p>
 
     <button id="save">Save and test</button>
-    <button id="openNow" style="background:#4a5566;margin-left:8px">Open the Driver tab now</button>
+    <button id="openNow" class="secondary" style="margin-left:8px">Open the Driver tab now</button>
     <div id="status" role="status"></div>
     <p id="lastCycle" style="margin:10px 0 0;font-size:12px"></p>
 
