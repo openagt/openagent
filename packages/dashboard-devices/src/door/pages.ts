@@ -8,7 +8,7 @@ const STYLE = `
   body { margin: 0; min-height: 100vh; display: grid; place-items: center; font: 16px/1.5 system-ui, sans-serif; background: Canvas; color: CanvasText; }
   main { max-width: 22rem; padding: 1.5rem; text-align: center; }
   h1 { font-size: 1.25rem; margin: 0 0 0.75rem; }
-  p { margin: 0; opacity: 0.8; }
+  p { margin: 0; opacity: 0.8; white-space: pre-line; }
 `
 
 function page(title: string, body: string, script = '', nonce = ''): string {
@@ -45,8 +45,8 @@ export function howToGetIn(kind: DoorKind): string {
   if (kind === 'tailscale-server')
     return 'This computer is a server on your Tailscale network. Log in to it, run openagent-devices add --for <your name> --qr, and scan the code with this device. A device that is already in can also make a code: its Settings › Devices › Add device.'
   if (kind === 'tailscale')
-    return 'This computer is on your Tailscale network. On it, open OpenAgent\'s Settings › Devices › Add device › Phone or tablet, and scan the code with this device; on a computer with no screen, run npx @openagt/dashboard-devices add --qr. A device that is already in can also make a code: its Settings › Devices › Add device.'
-  return 'On the computer that runs OpenAgent, open Settings › Devices › Add device › Phone or tablet, and scan the code with this device.'
+    return 'This computer is on your Tailscale network. On it, open OpenAgent\'s Settings › Devices, press Add phone (or Add device › Phone or tablet), and scan the code with this device. On a computer with no screen, run\n\nnpx @openagt/dashboard-devices add --qr\n\nA device that is already in can also make a code: its Settings › Devices › Add device.'
+  return 'On the computer that runs OpenAgent, open Settings › Devices, press Add phone (or Add device › Phone or tablet), and scan the code with this device.'
 }
 
 /** What a device that is not in sees when it opens the door's address. */
