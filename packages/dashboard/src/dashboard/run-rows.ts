@@ -1,7 +1,8 @@
 import { hostname } from 'node:os'
 import { nodeGitRunner } from '@openagt/agent-data'
 import { isPidAlive, readAllAgents, type AgentMeta, type BranchesFor } from '../store/index.js'
-import { cachedPrStates, type PrState } from './pull-requests.js'
+import { cachedOpenPrs, cachedPrStates, type PrState } from './pull-requests.js'
+import { projectGitHost } from '../store/git-host.js'
 import { unpublishedRuns, type Unpublished } from './unpublished.js'
 import { bridgeQuestions } from './bridge-store.js'
 import type { SavedMachine } from '../dashboard-rpc/context.js'
@@ -72,7 +73,8 @@ export async function withPrStates(cwd: string, agents: AgentMeta[], states: (cw
  * rule, {@link unpublishedRuns}. A provider that cannot be read marks nothing.
  */
 export async function withUnpublished(cwd: string, agents: AgentMeta[], branches?: BranchesFor): Promise<AgentMeta[]> {
-  const found = await unpublishedRuns(cwd, agents, branches).catch(() => new Map<string, Unpublished>())
+  const requested = async () => ((await projectGitHost(cwd)) ? new Set((await cachedOpenPrs(cwd)).map(pr => pr.headRefName)) : undefined)
+  const found = await unpublishedRuns(cwd, agents, branches, requested).catch(() => new Map<string, Unpublished>())
   if (found.size === 0) return agents
   return agents.map(agent => {
     const work = found.get(agent.id)

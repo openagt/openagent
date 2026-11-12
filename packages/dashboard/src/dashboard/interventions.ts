@@ -130,14 +130,15 @@ async function projectInterventions(project: ProjectSummary, deps: Interventions
   }
   // The project's runs, recorded and live, read once for every source that asks.
   const [open, recorded, live] = await Promise.all([
-    prs(project.path).catch(unread),
+    prs(project.path).catch(() => undefined),
     (deps.agents ?? listAgents)(project.path).catch(() => undefined),
     liveAgents(project.path).catch(() => undefined),
   ])
   // Newest first: a branch name reused by a later run, or a run continued on it, is that run's now.
   const runs = [...(live ?? []), ...(recorded ?? [])].sort((a, b) => b.startedAt.localeCompare(a.startedAt))
+  if (open === undefined) unread()
   const items: Intervention[] = []
-  for (const pr of open) {
+  for (const pr of open ?? []) {
     // The run that opened it, by the request its record names, else by the branch a run's record or
     // checkout names (#1774): what tells a run's draft from one opened by hand, and where a click on
     // the row goes, the conversation rather than the git host.
@@ -189,7 +190,8 @@ async function projectInterventions(project: ProjectSummary, deps: Interventions
   // nothing by itself, so every finished run with work of its own reaches here until a person
   // publishes it, or the agent does on their ask.
   if (recorded === undefined) unread()
-  items.push(...(await unpushedFor(project, recorded ?? [], deps.branches ?? projectBranches, unread)))
+  const requested = project.gitHost && open ? new Set(open.map(pr => pr.headRefName)) : undefined
+  items.push(...(await unpushedFor(project, recorded ?? [], deps.branches ?? projectBranches, unread, requested)))
   return { id: project.id, items, whole: sawEverything }
 }
 
@@ -212,12 +214,13 @@ function askedBy(project: ProjectSummary, run: AgentMeta, choice: ChoiceRequest,
  * {@link unpublishedRuns} finds them for the list of runs too: files left uncommitted first, since
  * committing them is the run's next step, else commits never pushed. The provider answers git
  * facts only, so the git host PR lookup the handoff summary makes per branch is never paid here: an
- * open PR means the branch was pushed, and the `pr` kind above is what surfaces it.
+ * open PR means the branch was pushed, and the `pr` kind above is what surfaces it. `requested`
+ * is the branches of those open PRs, from the same cached read, where the project has a git host.
  */
-async function unpushedFor(project: ProjectSummary, agents: AgentMeta[], branches: BranchesFor, unread: () => void): Promise<Intervention[]> {
+async function unpushedFor(project: ProjectSummary, agents: AgentMeta[], branches: BranchesFor, unread: () => void, requested: ReadonlySet<string | undefined> | undefined): Promise<Intervention[]> {
   let found: Map<string, Unpublished>
   try {
-    found = await unpublishedRuns(project.path, agents, branches)
+    found = await unpublishedRuns(project.path, agents, branches, requested && (async () => requested))
   } catch {
     unread()
     return []

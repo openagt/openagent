@@ -420,6 +420,20 @@ test('unpushed work says whether the project can open a pull request, so the row
   assert.deepEqual(without.items.map(i => [i.kind, i.gitHost]), [['unpushed', false]])
 })
 
+test('a pushed branch with no pull request still needs one where the project opens pull requests', async () => {
+  const pushed = counting(branch => waiting({ branch, ahead: 2, pushed: true }))
+  const host = { ...project('p', '/p'), gitHost: true }
+  const read = (over: { gitHost?: boolean; prs?: () => Promise<OpenPr[]>; meta?: Partial<AgentMeta> }) =>
+    buildInterventions([over.gitHost === false ? project('p', '/p') : host], { ...onlyUnpushed([doneMeta(over.meta)], pushed), ...(over.prs ? { prs: over.prs } : {}) })
+  assert.deepEqual((await read({})).items.map(i => [i.kind, i.commits, i.gitHost]), [['unpushed', 2, true]], 'Open PR pushed it, then the request failed')
+  const open = async (): Promise<OpenPr[]> => [{ number: 4, title: 'Add the cart', url: 'u4', isDraft: false, headRefName: 'agent-add-cart' }]
+  assert.deepEqual((await read({ prs: open })).items.map(i => i.kind), ['pr'], 'its open request is what waits')
+  assert.deepEqual((await read({ meta: { publish: 'branch' } })).items, [], 'started to go no further than its branch')
+  assert.deepEqual((await read({ gitHost: false })).items, [], 'no git host: the push was the last step')
+  const unreadable = await read({ prs: () => Promise.reject(new Error('gh: not logged in')) })
+  assert.deepEqual([unreadable.items, unreadable.whole], [[], []], 'the requests could not be read: nothing is said of the branch')
+})
+
 // A Claude Code web session's question (#1554): the browser bridge holds it, not the run's diary.
 
 /** Only the bridged source: the given records, no requests, no checkouts, no branches. */
