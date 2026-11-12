@@ -14,6 +14,17 @@
       code { background: #eef1f5; padding: 1px 5px; border-radius: 4px; }
       #status { margin-top: 12px; min-height: 20px; color: #2f7a3f; }
       #status.error { color: #b3261e; }
+      :root { color-scheme: light dark; }
+      @media (prefers-color-scheme: dark) {
+        body { background: #1c2026; color: #e3e6eb; }
+        p { color: #9aa3b0; }
+        input { background: #14171c; border-color: #3a414c; color: inherit; }
+        button { background: #e3e6eb; border-color: #e3e6eb; color: #1c2026; }
+        button.secondary { background: transparent; border-color: #3a414c; color: #e3e6eb; }
+        code { background: #2a2f37; }
+        #status { color: #6cc785; }
+        #status.error { color: #f2877e; }
+      }
     </style>
   </head>
   <body>
