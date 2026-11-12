@@ -156,6 +156,10 @@ html:not([data-pm]) .pm-tab-npm {
 .section-link:hover {
   color: #d3c6aa;
 }
+/* The links fill the bar, which scrolls sideways and so clips anything outside it: the ring goes inside. */
+.section-link:focus-visible {
+  outline-offset: -2px;
+}
 
 /* --- Copy badges: hidden until the copy target is hovered, focused or was just clicked --- */
 .try-badge,
