@@ -195,7 +195,7 @@ export function AgentView({
 
   // The messages on their way to the agent, from the box under the chat to the feed above it.
   // The prompt this page started the run with is on its way only until the run has ended.
-  const { sending: shownSending, onSending, waiting, onQueued, editInBox } = useMessagesOnTheirWay(projectId, agentId, shown, feedLive, live === false ? undefined : startedWith)
+  const { sending: shownSending, onSending, waiting, onQueued, editInBox } = useMessagesOnTheirWay(projectId, agentId, shown, live === false && archived !== null && !feedLive, live === false ? undefined : startedWith)
   // A question answered from its card hands the focus on to the box, for what the person says next.
   const focusBox = useRef<(() => void) | null>(null)
   // A run writes its prompt line once its coding agent begins. Until then its prompt, off its card,
@@ -495,7 +495,8 @@ function useMessagesOnTheirWay(
   projectId: string,
   agentId: string,
   shown: readonly OpenAgentEvent[],
-  feedLive: boolean,
+  /** The run is known to have ended: the list of runs says so and its feed is in. */
+  ended: boolean,
   startedWith: string | undefined,
 ): {
   sending: string | undefined
@@ -540,10 +541,10 @@ function useMessagesOnTheirWay(
     if (unread.length !== queued.length) setQueued(() => unread)
   }, [unread.length, queued.length]) // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => {
-    if (queued.length === 0 || feedLive) return
+    if (queued.length === 0 || !ended) return
     const timer = setTimeout(() => setQueued(() => []), QUEUED_UNREAD_MS)
     return () => clearTimeout(timer)
-  }, [queued.length, feedLive, setQueued])
+  }, [queued.length, ended, setQueued])
   const onQueued = useCallback((message: QueuedMessage) => setQueued(was => [...was, { ...message, prompts }]), [setQueued, prompts])
   // Cancel and edit puts the message back in the box; the composer says how.
   const editInBox = useRef<((text: string) => void) | null>(null)

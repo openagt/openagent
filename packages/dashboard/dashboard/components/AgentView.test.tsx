@@ -743,13 +743,31 @@ describe('a message sent while the agent works', () => {
     expect(queuedBoxes()).toHaveLength(0)
   })
 
-  test('an agent that stopped working without reading it shows it for five seconds more, not for good', () => {
+  test('a page slow to learn that the run still works keeps showing it waiting', () => {
+    vi.useFakeTimers()
+    try {
+      render(view({ live: true, events: [start('go'), text] }))
+      fireEvent.click(screen.getByText('queue-one'))
+      cleanup()
+      // Reloaded: the list of runs is not read yet, and the run's feed has not come.
+      const { rerender } = render(view({ live: null, events: [] }))
+      act(() => void vi.advanceTimersByTime(10_000))
+      rerender(view({ live: true, events: [start('go'), text] }))
+      expect(queuedBoxes().map(n => n.textContent)).toEqual(['and then this'])
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  test('an agent that stopped working without reading it shows it for five seconds more, not for good', async () => {
     vi.useFakeTimers()
     try {
       const { rerender } = render(view({ live: true, events: [start('go'), text] }))
       fireEvent.click(screen.getByText('queue-one'))
       const ended = [start('go'), text, { kind: 'end', ok: false, stopped: true }] as OpenAgentEvent[]
       rerender(view({ live: false, events: ended }))
+      // The ended run's feed is read.
+      await act(async () => {})
       act(() => void vi.advanceTimersByTime(4_000))
       expect(queuedBoxes()).toHaveLength(1)
       act(() => void vi.advanceTimersByTime(1_500))
