@@ -63,4 +63,5 @@ const died = await Promise.race([signalled.then(() => undefined), demo.exited.th
 if (died) console.error(`\nThe dashboard stopped on its own (${typeof died.end === 'number' ? `exit ${died.end}` : died.end}). Its last lines:\n${said.join('\n')}\n`)
 console.log('Stopping the demo…')
 await demo.stop()
+console.log('The demo is stopped.')
 if (died) process.exit(1)
