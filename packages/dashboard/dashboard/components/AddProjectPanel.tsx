@@ -223,10 +223,12 @@ export function AddProjectPanel({
             </p>
             {error && <p className="mb-2 text-xs text-danger">{error}</p>}
             <div className="flex justify-end gap-2">
+              {/* A question about trust opens on the press that adds nothing: a second Enter, meant for the picker, trusts no repository unread. */}
               <Button
                 type="button"
                 variant="ghost"
                 size="sm"
+                autoFocus
                 disabled={busy}
                 onClick={() => {
                   reset()
@@ -237,7 +239,7 @@ export function AddProjectPanel({
               >
                 {target ? 'Change the address' : folder ? 'Cancel' : 'Choose again'}
               </Button>
-              <Button type="button" size="sm" autoFocus disabled={busy} onClick={() => void confirmAdd()}>
+              <Button type="button" size="sm" disabled={busy} onClick={() => void confirmAdd()}>
                 {busy ? (target ? 'Cloning…' : 'Adding…') : target ? 'I trust it, clone and add it' : 'I trust it, add it'}
               </Button>
             </div>

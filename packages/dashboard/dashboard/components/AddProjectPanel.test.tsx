@@ -56,6 +56,16 @@ describe('AddProjectPanel (#1150)', () => {
     expect(sendAddProject).toHaveBeenCalledWith('/Users/dev/here')
   })
 
+  test('the trust question opens on the press that adds nothing: a second Enter trusts no repository unread', async () => {
+    sendPickProjectDirectory.mockResolvedValue({ ok: true, path: '/Users/dev/my-repo' })
+    render(<AddProjectPanel opener={NO_OPENER} onAdded={() => {}} onClose={() => {}} />)
+    await screen.findByText('/Users/dev/my-repo')
+    expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Choose again' }))
+    cleanup()
+    render(<AddProjectPanel opener={NO_OPENER} folder="/Users/dev/here" onAdded={() => {}} onClose={() => {}} />)
+    expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Cancel' }))
+  })
+
   test('a repo that was already a project reads "Already added"', async () => {
     sendPickProjectDirectory.mockResolvedValue({ ok: true, path: '/Users/dev/my-repo' })
     sendAddProject.mockResolvedValue({ ok: true, alreadyActivated: true })
