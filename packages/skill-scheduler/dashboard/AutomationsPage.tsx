@@ -227,11 +227,7 @@ export function AutomationsPage({ projects }: ModulePageProps) {
               <p className="py-3 text-sm text-muted-foreground">
                 The scheduler is off in this project, so nothing here starts by itself. To start it now, run in the project:
                 <Command text={START} />
-                It starts with the dashboard once it is ticked on the project's{' '}
-                <button type="button" onClick={() => host.openSettings('skills')} className="underline hover:text-foreground">
-                  Skills page
-                </button>
-                , or once the project has run:
+                It starts with the dashboard once it is ticked in <SkillsLink />, or once the project has run:
                 <Command text={INIT} />
               </p>
             )}
@@ -247,7 +243,9 @@ export function AutomationsPage({ projects }: ModulePageProps) {
               </p>
             ))}
             {row.error === undefined && row.commands.length === 0 && row.unreadable.length === 0 && creating !== row.project.id && (
-              <p className="py-3 text-sm text-muted-foreground">No automations yet: make one with New automation, or pick a skill that schedules one on the project's Skills page.</p>
+              <p className="py-3 text-sm text-muted-foreground">
+                No automations yet: make one with New automation, or pick a skill that schedules one in <SkillsLink />.
+              </p>
             )}
             {groups.map(
               ([group, commands]) =>
@@ -357,6 +355,16 @@ export function AutomationsPage({ projects }: ModulePageProps) {
         )
       })}
     </Page>
+  )
+}
+
+/** Settings › Skills, where a project's skills are ticked: the scheduler's among them. */
+function SkillsLink() {
+  const host = useModuleHost()
+  return (
+    <button type="button" onClick={() => host.openSettings('skills')} className="underline hover:text-foreground">
+      Settings › Skills
+    </button>
   )
 }
 

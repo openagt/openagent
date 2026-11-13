@@ -453,8 +453,8 @@ describe('the Automations page: its rows', () => {
     expect(within(other).getByText('Scheduler off')).toBeTruthy()
     expect(within(other).queryByText(/: off/)).toBeNull()
     expect(within(other).getByText(/^The scheduler is off in this project, so nothing here starts by itself/)).toBeTruthy()
-    // How it starts with the dashboard: the project's Skills page, whose tick does it, or `init`.
-    fireEvent.click(within(other).getByRole('button', { name: 'Skills page' }))
+    // How it starts with the dashboard: Settings › Skills, whose tick does it, or `init`.
+    fireEvent.click(within(other).getByRole('button', { name: 'Settings › Skills' }))
     expect(host.openSettings).toHaveBeenCalledWith('skills')
     // The two commands, `start` (now) and `init`, each set as code with a button that copies it.
     expect(within(other).getByText('npx @openagt/skill-scheduler@0.1 init').tagName).toBe('CODE')
@@ -500,7 +500,7 @@ describe('the Automations page: its rows', () => {
     const { host } = hostAnswering(projectId => answers[projectId]!)
     show(host, [GEMSTACK, OTHER, { id: 'p3', name: 'third', gitHost: true }])
     const gemstack = await screen.findByRole('region', { name: 'gemstack' })
-    expect(within(gemstack).getByText("No automations yet: make one with New automation, or pick a skill that schedules one on the project's Skills page.")).toBeTruthy()
+    expect(within(gemstack).getByText((_, element) => element?.tagName === 'P' && element.textContent === 'No automations yet: make one with New automation, or pick a skill that schedules one in Settings › Skills.')).toBeTruthy()
     expect(screen.queryByText(/has not looked at its skills/)).toBeNull()
     expect(within(gemstack).queryByRole('list')).toBeNull()
     expect(within(gemstack).queryByRole('group')).toBeNull()
@@ -511,7 +511,7 @@ describe('the Automations page: its rows', () => {
     // Never read once: the line alone, no row.
     expect(within(other).queryByRole('list')).toBeNull()
     const third = screen.getByRole('region', { name: 'third' })
-    expect(within(third).getByText("No automations yet: make one with New automation, or pick a skill that schedules one on the project's Skills page.")).toBeTruthy()
+    expect(within(third).getByText((_, element) => element?.tagName === 'P' && element.textContent === 'No automations yet: make one with New automation, or pick a skill that schedules one in Settings › Skills.')).toBeTruthy()
     // Said once, in the page's words: the tick's own note for it is not repeated in the heading.
     expect(within(third).queryByText(/no skill of this project schedules a command/)).toBeNull()
     // A project with nothing listed can still be given an automation.
