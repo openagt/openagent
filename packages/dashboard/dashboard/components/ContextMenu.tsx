@@ -2,7 +2,8 @@ import type { ProjectSummary } from '../../src/index.js'
 import { Layers } from 'lucide-react'
 import { onProjects } from '../rpc/projects.js'
 import { useLoaded } from '../lib/use-async.js'
-import { rowButtonClass } from './ui/row-item.js'
+import { cn } from '../lib/utils.js'
+import { rowButtonClass, rowWideClass } from './ui/row-item.js'
 import { ContextFiles } from './ContextFiles.js'
 import { Tooltip, TooltipTrigger, TooltipContent } from './ui/tooltip.js'
 import {
@@ -74,8 +75,10 @@ export function ContextMenu({
             />
           }
         >
-          <Layers className="size-4 shrink-0" aria-hidden />
-          Context{summary && <span className="text-primary"> · {summary}</span>}
+          <Layers className={cn('size-4 shrink-0', summary && '@max-xl:text-primary')} aria-hidden />
+          <span className={cn('truncate', rowWideClass)}>
+            Context{summary && <span className="text-primary"> · {summary}</span>}
+          </span>
         </TooltipTrigger>
         <TooltipContent>Narrow the run to specific repos and files</TooltipContent>
       </Tooltip>

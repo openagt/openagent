@@ -12,7 +12,7 @@ import { PackageLogo, hostWords, useGitHosts } from './Logins.js'
 import { AccountWhere, useServers } from './ServerLogins.js'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuGroup, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from './ui/dropdown-menu.js'
 import { Tooltip, TooltipContent, TooltipTrigger } from './ui/tooltip.js'
-import { RowOff, rowButtonClass } from './ui/row-item.js'
+import { RowOff, rowButtonClass, RowChevron } from './ui/row-item.js'
 
 // The git hosts of the Permissions page: one card, "Git host accounts", with a section for each
 // host the projects' remotes are on and the host of the git host package OpenAgent brings, drawn
@@ -270,7 +270,7 @@ export function GitAccountMenu({ address, machineId, on, busy, picked, onPick, o
         <TooltipTrigger render={<DropdownMenuTrigger type="button" disabled={busy} aria-label={`${p.name} account: @${account}`} className={rowButtonClass} />}>
           <PackageLogo svg={p.logo} className="size-4" />
           <span className="max-w-32 truncate">@{account}</span>
-          <ChevronDown className="size-3 shrink-0 text-faint-foreground" aria-hidden />
+          <RowChevron />
         </TooltipTrigger>
         <TooltipContent>{said}</TooltipContent>
       </Tooltip>
@@ -312,7 +312,7 @@ export function GitHostOff({ home, account }: { home: GitHostHome | null; accoun
       <button type="button" disabled className={rowButtonClass}>
         <PackageLogo svg={logo} className="size-4" />
         <span className="max-w-32 truncate">{account !== undefined ? `@${account}` : home.name}</span>
-        <ChevronDown className="size-3 shrink-0 text-faint-foreground" aria-hidden />
+        <RowChevron />
       </button>
     </RowOff>
   )

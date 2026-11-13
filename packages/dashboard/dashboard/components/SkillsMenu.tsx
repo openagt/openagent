@@ -1,4 +1,4 @@
-import { Check, ChevronDown, Puzzle, Settings2 } from 'lucide-react'
+import { Check, Puzzle, Settings2 } from 'lucide-react'
 import type { AgentRecord, AgentsView } from '../rpc/agents.js'
 import { onProjectSkills } from '../rpc/skills.js'
 import { skillsAgain } from '../lib/skills-saved.js'
@@ -6,7 +6,7 @@ import { useLoaded } from '../lib/use-async.js'
 import { openSettings } from '../lib/use-route.js'
 import { cn } from '../lib/utils.js'
 import { SKILLS_ENTRY } from './ProjectSkills.js'
-import { RowSaid, rowButtonClass } from './ui/row-item.js'
+import { RowChevron, RowSaid, rowButtonClass, rowWideClass } from './ui/row-item.js'
 import { useAgentsList } from './AgentsPage.js'
 import { DEFAULT_AGENT } from '../../src/client.js'
 import { Tooltip, TooltipContent, TooltipTrigger } from './ui/tooltip.js'
@@ -118,8 +118,11 @@ export function SkillsMenu({
       <Tooltip>
         <TooltipTrigger render={<DropdownMenuTrigger type="button" disabled={busy} aria-label={`Skills: ${count}`} className={rowButtonClass} />}>
           <Puzzle className="size-4 shrink-0" aria-hidden />
-          <span className="truncate">{`Skills: ${count}`}</span>
-          <ChevronDown className="size-3 shrink-0 text-faint-foreground" aria-hidden />
+          <span className="truncate">
+            <span className={rowWideClass}>Skills: </span>
+            {count}
+          </span>
+          <RowChevron />
         </TooltipTrigger>
         <TooltipContent>{said}</TooltipContent>
       </Tooltip>
@@ -211,7 +214,10 @@ export function SkillsOff({ projectId, agent, skillsOn, skillsOff, projectSkills
   return (
     <RowSaid tip={`This session got ${skillPicksSaid({ skillsOn, skillsOff, projectSkills: projectId === undefined ? 'none' : projectSkills })}`}>
       <Puzzle className="size-4 shrink-0" aria-hidden />
-      <span className="truncate">{`Skills: ${count}`}</span>
+      <span className="truncate">
+        <span className={rowWideClass}>Skills: </span>
+        {count}
+      </span>
     </RowSaid>
   )
 }

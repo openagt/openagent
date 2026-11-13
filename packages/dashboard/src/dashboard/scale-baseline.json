@@ -165,9 +165,6 @@
   "dashboard/dashboard/components/ui/resizable.tsx": {
     "group-aria-[orientation=horizontal]/handle:h-[3px]": 1
   },
-  "dashboard/dashboard/components/ui/row-item.tsx": {
-    "text-[13px]": 1
-  },
   "dashboard/dashboard/components/ui/sidebar.tsx": {
     "duration-200": 3,
     "mx-3.5": 1,

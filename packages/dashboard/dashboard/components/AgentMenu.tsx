@@ -1,9 +1,9 @@
-import { Bot, Check, ChevronDown, Settings2 } from 'lucide-react'
+import { Bot, Check, Settings2 } from 'lucide-react'
 import type { AgentRecord } from '../rpc/agents.js'
 import { DEFAULT_AGENT } from '../../src/client.js'
 import { openAgents } from '../lib/use-route.js'
 import { cn } from '../lib/utils.js'
-import { RowSaid, rowButtonClass } from './ui/row-item.js'
+import { RowSaid, rowButtonClass, RowChevron } from './ui/row-item.js'
 import { useAgentName } from './AgentsPage.js'
 import { Tooltip, TooltipContent, TooltipTrigger } from './ui/tooltip.js'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuGroup, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from './ui/dropdown-menu.js'
@@ -25,7 +25,7 @@ export function AgentMenu({ agents, picked, busy, onPick }: { agents: readonly A
         <TooltipTrigger render={<DropdownMenuTrigger type="button" disabled={busy} aria-label={`Agent: ${on.name}`} className={rowButtonClass} />}>
           <Bot className="size-4 shrink-0" aria-hidden />
           <span className="max-w-32 truncate">{on.name}</span>
-          <ChevronDown className="size-3 shrink-0 text-faint-foreground" aria-hidden />
+          <RowChevron />
         </TooltipTrigger>
         <TooltipContent>{said}</TooltipContent>
       </Tooltip>

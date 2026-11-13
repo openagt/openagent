@@ -155,33 +155,36 @@ vi.mock('./ui/tooltip.js', async () => {
   return { ...actual, __esModule: true }
 })
 
+/** The session's Skills words, found as the keyboard and a screen reader meet them: "Skills: ", the count, then why they stay. */
+const skillsSaid = (count: number) => screen.findByText((_, el) => el?.tabIndex === 0 && el.textContent!.startsWith(`Skills: ${count}.`))
+
 describe("the session page's Skills, as words", () => {
   test('words the keyboard stops on, counted as the launcher counts, their hover saying what the session got', async () => {
     onProjectSkills.mockResolvedValue({ held: ['tickets', 'queue'] })
     render(<SkillsOff projectId="p1" agent={undefined} skillsOff={['github']} projectSkills={['tickets']} />)
     // The default agent's three less github, and one of the project's two.
-    const said = (await screen.findByText('Skills: 3')).parentElement!
+    const said = await skillsSaid(3)
     expect(said.tabIndex).toBe(0)
     expect(screen.queryByRole('button')).toBeNull()
     expect((await hoverTooltip(said)).textContent).toBe("This session got its agent's skills without github, and the project skills tickets")
     cleanup()
     render(<SkillsOff projectId={undefined} agent="default" skillsOn={['plan']} />)
-    const alone = (await screen.findByText('Skills: 4')).parentElement!
+    const alone = await skillsSaid(4)
     expect((await hoverTooltip(alone)).textContent).toBe("This session got its agent's skills with plan, and no project skill")
   })
 
   test('a skill its agent has and the project holds too is counted once, as the launcher counts it', async () => {
     onProjectSkills.mockResolvedValue({ held: ['ask', 'tickets'] })
     render(<SkillsOff projectId="p1" agent="default" />)
-    expect(await screen.findByText('Skills: 4')).toBeTruthy()
+    expect(await skillsSaid(4)).toBeTruthy()
   })
 
   test('a save on the Skills page is counted at once', async () => {
     onProjectSkills.mockResolvedValue({ held: ['tickets'] })
     render(<SkillsOff projectId="p1" agent="default" />)
-    await screen.findByText('Skills: 4')
+    await skillsSaid(4)
     onProjectSkills.mockResolvedValue({ held: ['tickets', 'queue'] })
     skillsSaved()
-    expect(await screen.findByText('Skills: 5')).toBeTruthy()
+    expect(await skillsSaid(5)).toBeTruthy()
   })
 })
