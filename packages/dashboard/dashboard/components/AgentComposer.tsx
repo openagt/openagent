@@ -139,6 +139,8 @@ export function AgentComposer({
     }
   }, [focusBox])
   const phone = useIsMobile()
+  // A touch screen has no keys to name: its pointer is a finger.
+  const touch = typeof matchMedia === 'function' && matchMedia('(pointer: coarse)').matches
   const { busy, error, run } = useAction()
   // The slot's Stop (#1455), its own action so a message send's busy beat cannot read as
   // "stopping". A landed Stop stays "Stopping…" until the end event flips `live`, so it cannot
@@ -300,8 +302,8 @@ export function AgentComposer({
         }
         idleControl={idleControl}
         // What the box can do, not what it is for: the keys for a working agent, as Claude Code's box
-        // says them in the same place.
-        placeholder={down ? 'OpenAgent is not answering' : live ? `Enter to send, ${shortcut('Enter')} to queue for later` : 'Message the agent to continue it…'}
+        // says them in the same place; a touch screen has none to name.
+        placeholder={down ? 'OpenAgent is not answering' : live ? (touch ? 'Message the agent…' : `Enter to send, ${shortcut('Enter')} to queue for later`) : 'Message the agent to continue it…'}
       />
     </div>
   )

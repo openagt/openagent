@@ -253,7 +253,7 @@ export function QuestionPanel({
         <button type="button" disabled={busy || down || !ready} onClick={submit} className="flex h-6 items-center gap-1.5 rounded-md bg-foreground px-2 text-[13px] font-medium text-background hover:bg-foreground/90 disabled:opacity-60">
           Submit
           {active && (
-            <span className="flex gap-0.5" aria-hidden>
+            <span className="flex gap-0.5 pointer-coarse:hidden" aria-hidden>
               <kbd className="flex h-[17px] min-w-[17px] items-center justify-center rounded border border-background/20 px-0.5 font-sans text-[11px]">{MOD_KEY}</kbd>
               <kbd className="flex h-[17px] min-w-[17px] items-center justify-center rounded border border-background/20 px-0.5 font-sans text-[11px]">Enter</kbd>
             </span>

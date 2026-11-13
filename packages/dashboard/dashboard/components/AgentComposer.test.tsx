@@ -130,6 +130,17 @@ describe('AgentComposer box', () => {
     renderComposer({ live: false })
     expect(props().placeholder).toBe('Message the agent to continue it…')
   })
+
+  test('on a touch screen the box names no keys', () => {
+    const matchMedia = window.matchMedia
+    window.matchMedia = (query: string) => ({ ...matchMedia(query), matches: query === '(pointer: coarse)' || matchMedia(query).matches })
+    try {
+      renderComposer()
+      expect(props().placeholder).toBe('Message the agent…')
+    } finally {
+      window.matchMedia = matchMedia
+    }
+  })
 })
 
 describe('AgentComposer slot control (#1455)', () => {

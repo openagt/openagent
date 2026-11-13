@@ -40,6 +40,12 @@ describe('QuestionPanel', () => {
     expect(screen.getByRole('button', { name: 'Submit' })).toBeTruthy()
   })
 
+  test('Submit names its keys where there is a keyboard, never on a touch screen', () => {
+    render(panel({ active: true }))
+    const keys = screen.getByRole('button', { name: 'Submit' }).querySelector('kbd')!.parentElement!
+    expect(keys.className.split(' ')).toContain('pointer-coarse:hidden')
+  })
+
   test('the recommended option starts picked; picking a row sends nothing until Submit', async () => {
     sendChoice.mockResolvedValue({ ok: true })
     render(panel())
