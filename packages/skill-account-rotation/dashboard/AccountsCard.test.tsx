@@ -35,7 +35,7 @@ const add = async (agent: 'Claude Code' | 'Codex'): Promise<HTMLElement> => {
     if (trigger.getAttribute('aria-expanded') !== 'true') fireEvent.click(trigger)
     if (trigger.getAttribute('aria-expanded') !== 'true') throw new Error('the menu did not open')
   })
-  fireEvent.click(await screen.findByRole('menuitem', { name: `Add ${agent} account` }))
+  fireEvent.click(await screen.findByRole('menuitem', { name: agent === 'Claude Code' ? 'Add a Claude account' : 'Add a Codex account' }))
   return await screen.findByRole('dialog', { name: agent === 'Claude Code' ? 'Add a Claude account' : 'Add a Codex account' })
 }
 

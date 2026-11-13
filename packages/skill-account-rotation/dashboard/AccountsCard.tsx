@@ -548,9 +548,9 @@ export function AccountsCard({ accountWhere }: ModuleCardProps) {
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end" className="min-w-[10rem]">
                 {AGENTS.map(agent => (
-                  <DropdownMenuItem key={agent.id} aria-label={`Add ${agent.name} account`} onClick={() => setNaming(agent.id)}>
+                  <DropdownMenuItem key={agent.id} aria-label={`Add a ${agent.account} account`} onClick={() => setNaming(agent.id)}>
                     <agent.Logo className="size-3.5" />
-                    {agent.name}
+                    {`${agent.account} account`}
                   </DropdownMenuItem>
                 ))}
               </DropdownMenuContent>
