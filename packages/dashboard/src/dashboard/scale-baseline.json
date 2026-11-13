@@ -165,12 +165,6 @@
   "dashboard/dashboard/components/ui/resizable.tsx": {
     "group-aria-[orientation=horizontal]/handle:h-[3px]": 1
   },
-  "dashboard/dashboard/components/ui/sidebar.tsx": {
-    "duration-200": 3,
-    "mx-3.5": 1,
-    "px-2.5": 1,
-    "text-sidebar-foreground/70": 1
-  },
   "skill-account-rotation/dashboard/AccountsCard.tsx": {
     "gap-2.5": 1,
     "rounded": 1
