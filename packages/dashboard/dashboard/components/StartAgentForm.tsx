@@ -37,6 +37,8 @@ import { useIsMobile } from '../lib/use-mobile.js'
 
 /** The note while the start is asked for: what the chat's first line says next. */
 const STARTING = 'Starting session'
+/** How long a start is asked for before the note says so: a refusal in less is not preceded by a flash of it. */
+const STARTING_SAID_AFTER_MS = 300
 
 /** How often a picked machine is asked again while it says a run would not start there: its logins come by themselves, or by a press. */
 const MACHINE_MISSING_MS = 8_000
@@ -122,6 +124,13 @@ export function StartAgentForm({
   toggleContext: (path: string) => void
 }) {
   const [note, setNote] = useState<string | null>(null)
+  const [startingSaid, setStartingSaid] = useState(false)
+  useEffect(() => {
+    setStartingSaid(false)
+    if (note !== STARTING) return
+    const timer = setTimeout(() => setStartingSaid(true), STARTING_SAID_AFTER_MS)
+    return () => clearTimeout(timer)
+  }, [note])
   // The machine the last start was sent to, by its name: what the form says it is cloning on.
   const [sentTo, setSentTo] = useState<string | null>(null)
   const { busy, cloning, error, reset, start } = useStartAgent(projectId)
@@ -409,7 +418,7 @@ export function StartAgentForm({
             }
           />
         )}
-        {note === STARTING && !error && (
+        {note === STARTING && startingSaid && !error && (
           // The chat's own first line (`SessionLine.tsx`), in its words and its look: the page that
           // opens a moment later goes on saying it. A machine that does not have the project yet
           // clones it first, which can take minutes: the line says so for as long as it does.

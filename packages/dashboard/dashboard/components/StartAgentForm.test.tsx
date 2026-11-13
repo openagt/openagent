@@ -187,6 +187,18 @@ describe('StartAgentForm (#1774)', () => {
     expect(screen.getByRole('status').parentElement!.className).toContain('bottom-full')
   })
 
+  test('a start refused in a moment is not preceded by a flash of "Starting session"', async () => {
+    onCommands.mockResolvedValue({ commands: [], startHook: true, gitHost: true })
+    let answer!: (result: undefined) => void
+    start.mockReturnValue(new Promise(resolve => (answer = resolve)))
+    render(<StartAgentForm {...props} />)
+    fireEvent.click(screen.getByText('submit-typed'))
+    await act(async () => {})
+    expect(screen.queryByText('Starting session')).toBeNull()
+    await act(async () => answer(undefined))
+    expect(screen.queryByText('Starting session')).toBeNull()
+  })
+
   test('a refused start gives the prompt the focus, however Start was pressed: typing goes on in it', async () => {
     onCommands.mockResolvedValue({ commands: [], startHook: true, gitHost: true })
     start.mockResolvedValue(undefined)
