@@ -25,7 +25,7 @@ export function SelectTrigger({ className, children, ...props }: ComponentProps<
     <SelectPrimitive.Trigger
       data-slot="select-trigger"
       className={cn(
-        'focus-ring inline-flex h-8 min-w-0 max-w-full cursor-pointer items-center justify-between gap-2 rounded-md border border-input bg-background px-3 text-left text-sm transition-colors hover:border-input-hover',
+        'focus-ring-field inline-flex h-8 min-w-0 max-w-full cursor-pointer items-center justify-between gap-2 rounded-md border border-input bg-background px-3 text-left text-sm transition-colors hover:border-input-hover',
         'hover:bg-accent hover:text-accent-foreground active:bg-foreground/10',
         'data-[popup-open]:bg-accent data-[popup-open]:text-accent-foreground',
         'data-[disabled]:pointer-events-none data-[disabled]:opacity-50',

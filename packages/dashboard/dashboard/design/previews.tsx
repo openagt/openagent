@@ -301,6 +301,11 @@ const UNITS = [
 function FormControls() {
   return (
     <div className="space-y-5">
+      <Labelled label="Focus: a field's ring is its edge; a press's ring stands 2px off it">
+        <Input aria-label="A focused field" defaultValue="A field" className="w-48 outline-2 -outline-offset-1 outline-primary" />
+        <Button variant="secondary" className="outline-2 outline-offset-2 outline-primary">A press</Button>
+        <Checkbox aria-label="A focused checkbox" className="outline-2 outline-offset-2 outline-primary" />
+      </Labelled>
       <p className="text-xs text-muted-foreground">
         Every field, select and mark has the one edge, <code>--input</code>, at 3:1 or more on each surface it sits on (the page, a card, the sidebar, a hovered row): OpenAgent light 3.08–3.65:1, dark 3.18–3.94:1; Neutral light 3.52–3.84:1, dark 3.32–4.34:1. Under the pointer it goes a step further; ticked or on, it is the primary colour.
       </p>
