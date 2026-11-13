@@ -334,7 +334,7 @@ describe('Composer (#721)', () => {
 
   test('the row above the box: the launcher\'s, led by "Run on"; inside a session, the one it is given, in the same place, and no "Run on" of its own', () => {
     renderComposer({ startsAt: <span>the launcher's place</span> })
-    const box = () => screen.getByRole('button', { name: 'Commands' }).closest('.rounded-xl')!
+    const box = () => screen.getByRole('button', { name: 'Commands' }).closest('.rounded-lg')!
     const followedByBox = (el: Element) => el.closest('.h-8')!.nextElementSibling === box()
     expect(followedByBox(screen.getByText("the launcher's place"))).toBe(true)
     expect(followedByBox(screen.getByRole('button', { name: /^Run on: / }))).toBe(true)

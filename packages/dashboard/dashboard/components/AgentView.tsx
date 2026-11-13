@@ -401,7 +401,7 @@ export function AgentView({
             // logins and none of its conversation.
             <div className="@container mx-auto w-full max-w-3xl p-2">
               {row}
-              <p role="note" className="rounded-xl border border-border bg-muted/40 px-3 py-2.5 text-sm text-muted-foreground">
+              <p role="note" className="rounded-lg border border-border bg-muted/40 px-3 py-2.5 text-sm text-muted-foreground">
                 {`This run is on ${card.host}. Continue it there.`}
               </p>
             </div>

@@ -9,9 +9,47 @@
    `dark:text-*-400` unapplied, and picking Light on a dark OS applied them when it should not. */
 @custom-variant dark (&:where(.dark, .dark *));
 
-/* The page is squarer than the old UI, so the radius tightens to ~2px to match. */
+/* The scale every page and module draws with, in Tailwind's own names, so `cn` (tailwind-merge) and
+   the usual classes keep working; a size, a corner or a shadow that is not here is not drawn. */
 @theme {
+  /* Type: `text-xs` for meta (with tabular figures, below), `text-sm` for body and controls,
+     `text-base` for prose and a section's heading, `text-xl` for a page's title, `text-2xl` and
+     `text-3xl` for the website and the first-steps greeting. */
+  --text-*: initial;
+  --text-xs: 0.75rem;
+  --text-xs--line-height: 1rem;
+  --text-sm: 0.875rem;
+  --text-sm--line-height: 1.25rem;
+  --text-base: 1rem;
+  --text-base--line-height: 1.5rem;
+  --text-xl: 1.25rem;
+  --text-xl--line-height: 1.75rem;
+  --text-xl--letter-spacing: -0.01em;
+  --text-2xl: 1.5rem;
+  --text-2xl--line-height: 2rem;
+  --text-3xl: 1.875rem;
+  --text-3xl--line-height: 2.25rem;
+
+  /* Corners by role: `rounded-sm` inside a control, `rounded-md` a control or a menu's item,
+     `rounded-lg` a surface, `rounded-full` a dot, an avatar or a count. The bare `rounded` is the
+     old ~2px corner, kept until the last call site moves off it. */
+  --radius-*: initial;
+  --radius-sm: 0.25rem;
+  --radius-md: 0.375rem;
+  --radius-lg: 0.5rem;
   --radius: 0.125rem;
+
+  /* What is raised (a popover, a menu, a dialog, the composer): two layers in the page's own tint
+     (tailwind.css), which a dark theme keeps faint, showing height by a lighter surface instead. */
+  --shadow-lg: 0 1px 2px color-mix(in oklab, var(--shadow-tint) 8%, transparent), 0 8px 24px -4px color-mix(in oklab, var(--shadow-tint) 12%, transparent);
+
+  /* Motion: 100ms for colour and opacity on hover, the default; 140ms for a popover, a menu or a
+     tooltip entering, 180ms for a dialog or a sheet; an exit at two thirds of its entrance (90ms,
+     120ms). Reduced motion makes each a cut (tailwind.css). */
+  --ease-out: cubic-bezier(0.2, 0, 0, 1);
+  --default-transition-duration: 100ms;
+  --default-transition-timing-function: var(--ease-out);
+
   /* The person's three fonts (Settings › Appearance), as the page sets them (`--font-app`,
      `--font-code`, `--font-document`, tailwind.css and AppFrame): Tailwind's body font and every
      `font-sans`, every `font-mono`, and `font-serif`, a Markdown file read as a page. */
@@ -27,6 +65,10 @@
   --color-card-foreground: var(--card-foreground);
   --color-muted: var(--muted);
   --color-muted-foreground: var(--muted-foreground);
+  /* The third text colour, for a placeholder and what is disabled. */
+  --color-faint-foreground: var(--faint-foreground);
+  /* One line that sits right on every surface: the text's colour, mostly transparent. */
+  --color-hairline: color-mix(in oklab, var(--foreground) 12%, transparent);
   --color-border: var(--border);
   --color-primary: var(--primary);
   --color-primary-foreground: var(--primary-foreground);
@@ -50,4 +92,17 @@
   --color-sidebar-accent-foreground: var(--accent-foreground);
   --color-sidebar-border: var(--border);
   --color-sidebar-ring: var(--primary);
+}
+
+/* Numbers in meta line up: an age, a count, a time. */
+@utility text-xs {
+  font-variant-numeric: tabular-nums;
+}
+
+/* Where the keyboard is: 2px of the primary colour, 2px out, following the corner. */
+@utility focus-ring {
+  &:focus-visible {
+    outline: 2px solid var(--primary);
+    outline-offset: 2px;
+  }
 }

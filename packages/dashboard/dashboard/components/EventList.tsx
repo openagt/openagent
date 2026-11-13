@@ -405,7 +405,7 @@ function Prompt({ text, at, waiting, attached, fresh = false }: { text: string; 
   const down = useContext(DaemonDown)
   return (
     <div className={`group/prompt flex min-w-0 flex-1 flex-col items-end font-sans text-foreground ${fresh ? 'bubble-in' : ''}`}>
-      <div role="group" aria-label={waiting ? 'Your message, waiting' : 'Your message'} className="max-w-[85%] min-w-0 rounded-xl bg-muted px-3.5 py-2">
+      <div role="group" aria-label={waiting ? 'Your message, waiting' : 'Your message'} className="max-w-[85%] min-w-0 rounded-lg bg-muted px-3.5 py-2">
         <div className={tall && !open ? 'max-h-40 overflow-hidden' : ''}>
           <Markdown text={text} />
         </div>

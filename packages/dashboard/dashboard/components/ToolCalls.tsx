@@ -253,7 +253,7 @@ function GivenDetail({ label, call, whole, output, card }: { label: string; call
   const command = call.kind === 'command' && given !== undefined
   const coloured = useHighlightedIn(command ? given : '', command ? 'shellscript' : undefined)
   return (
-    <div className={cn('mt-1.5 flex flex-col gap-1.5', card && 'rounded-xl border border-border px-3 py-3')}>
+    <div className={cn('mt-1.5 flex flex-col gap-1.5', card && 'rounded-lg border border-border px-3 py-3')}>
       {card && <div className="text-sm text-muted-foreground">{label}</div>}
       {given !== undefined && (
         <div className="relative rounded-lg border border-border">

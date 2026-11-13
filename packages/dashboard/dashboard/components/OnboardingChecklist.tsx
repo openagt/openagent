@@ -236,7 +236,7 @@ export function OnboardingChecklist({
   return (
     <Card>
       <CardHeader className="flex flex-row items-center justify-between gap-3">
-        <h2 className="min-w-0 text-lg font-semibold tracking-tight">{ready ? `You're all set${name}` : `${greeting(new Date().getHours())}${name}`}</h2>
+        <h2 className="min-w-0 text-xl font-semibold">{ready ? `You're all set${name}` : `${greeting(new Date().getHours())}${name}`}</h2>
         <div className="flex shrink-0 items-center gap-3">
           {/* Where the steps stand, one dash each: the numbers below say which is which. Not on a phone, where the greeting needs the room and the steps' own ticks say it. */}
           {!reading && (

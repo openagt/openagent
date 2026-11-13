@@ -104,7 +104,7 @@ function PaneHead({ row }: { row: SubagentRow }) {
   return (
     <div className="flex flex-col gap-4 pb-3 font-sans text-sm">
       {row.prompt && (
-        <section aria-label="Its prompt" className="max-h-64 overflow-auto rounded-xl bg-muted px-3.5 py-2.5 break-words whitespace-pre-wrap text-foreground">
+        <section aria-label="Its prompt" className="max-h-64 overflow-auto rounded-lg bg-muted px-3.5 py-2.5 break-words whitespace-pre-wrap text-foreground">
           {row.prompt}
         </section>
       )}

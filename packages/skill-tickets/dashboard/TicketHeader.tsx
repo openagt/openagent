@@ -90,7 +90,7 @@ export function TicketHeader({
   return (
     <div>
       <div className="flex flex-wrap items-start justify-between gap-x-3 gap-y-2">
-        <h1 ref={title} tabIndex={-1} className="min-w-0 text-lg font-semibold outline-none" title={ticket.file}>
+        <h1 ref={title} tabIndex={-1} className="min-w-0 text-xl font-semibold outline-none" title={ticket.file}>
           {ticket.title}
         </h1>
         <div className="flex shrink-0 items-center gap-1.5">

@@ -140,7 +140,7 @@ function Adding({ host, onClose }: { host: string; onClose: (added?: string) => 
             {' and enter this code:'}
           </p>
           <div className="flex items-center gap-2">
-            <code className="rounded-md bg-muted px-3 py-1.5 font-mono text-lg font-medium tracking-widest">{underWay.code}</code>
+            <code className="rounded-md bg-muted px-3 py-1.5 font-mono text-xl font-medium tracking-widest">{underWay.code}</code>
             <CopyButton text={underWay.code} label="Copy the code" />
           </div>
           <Waiting words={`Waiting for you at ${p.name}…`} />

@@ -16,7 +16,7 @@ import { usePopupPlacement } from './popup-placement.js'
 // a second layer beside the border. #710 stands: no native scrollbar comes back.
 // The surface is shadcn create's menu in the theme's colours (`.menu-surface`, tailwind.css):
 // rounded, see-through over a blur, a faint ring for an edge.
-export const MENU_SURFACE_CLASS = 'menu-surface rounded-xl shadow-lg ring-1 ring-foreground/10 backdrop-blur-xl outline-none'
+export const MENU_SURFACE_CLASS = 'menu-surface rounded-lg shadow-lg ring-1 ring-foreground/10 backdrop-blur-xl outline-none'
 export const MENU_POPUP_CLASS = cn('min-w-[13rem]', MENU_SURFACE_CLASS)
 
 /** The scrolled body every popup shares: caps at the space the positioner allows, pads the items. */

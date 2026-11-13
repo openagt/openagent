@@ -112,45 +112,74 @@ function StatusPalette() {
   )
 }
 
+// The theme's closed scale (module/theme.css): these steps and no others.
 const TYPE = [
-  ['text-2xl font-semibold tabular-nums', 'KPI value', '24px / 600'],
-  ['text-xl font-semibold', 'Page title', '20px / 600'],
-  ['text-sm font-semibold', 'Card title', '14px / 600'],
-  ['text-sm', 'Body', '14px / 400'],
-  ['text-xs text-muted-foreground', 'Meta, captions', '12px / 400'],
-  ['text-xs font-medium uppercase tracking-wide text-muted-foreground', 'Tile label', '12px / 500 caps'],
+  ['text-xl font-semibold', 'Title', '20 / 28, 600: a page, a dialog'],
+  ['text-base font-semibold', 'Heading', '16 / 24, 600: a section, a card'],
+  ['text-base', 'Prose', '16 / 24, 400: the chat, a ticket, a document'],
+  ['text-sm font-medium', 'Body, a label', '14 / 20, 500: a row’s title, a control'],
+  ['text-sm', 'Body', '14 / 20, 400'],
+  ['text-xs text-muted-foreground', 'Meta 12:04 · 3 runs', '12 / 16, tabular figures'],
+  ['text-2xl font-semibold', 'Website', '24 / 32 and 30 / 36'],
+] as const
+
+const TEXT_COLOURS = [
+  ['text-foreground', 'Foreground: what is read'],
+  ['text-muted-foreground', 'Muted: what explains it'],
+  ['text-faint-foreground', 'Faint: a placeholder, what is disabled'],
 ] as const
 
 function TypeScale() {
   return (
-    <div className="space-y-3">
-      {TYPE.map(([cls, label, spec]) => (
-        <div key={label} className="flex items-baseline justify-between gap-4 border-b border-border pb-2 last:border-0">
-          <span className={cls}>{label}</span>
-          <span className="shrink-0 font-mono text-xs text-muted-foreground">{spec}</span>
-        </div>
-      ))}
+    <div className="space-y-4">
+      <div className="space-y-3">
+        {TYPE.map(([cls, label, spec]) => (
+          <div key={label} className="flex items-baseline justify-between gap-4 border-b border-hairline pb-2 last:border-0">
+            <span className={cls}>{label}</span>
+            <span className="shrink-0 font-mono text-xs text-muted-foreground">{spec}</span>
+          </div>
+        ))}
+      </div>
+      <div className="flex flex-wrap gap-6 text-sm">
+        {TEXT_COLOURS.map(([cls, label]) => (
+          <span key={cls} className={cls}>
+            {label}
+          </span>
+        ))}
+      </div>
     </div>
   )
 }
 
 function RadiusScale() {
   const radii = [
-    ['rounded-sm', 'Chart bars'],
-    ['rounded', 'Icon buttons'],
-    ['rounded-md', 'Buttons, inputs'],
-    ['rounded-lg', 'Cards'],
-    ['rounded-full', 'Pills, dots'],
+    ['rounded-sm', '4: inside a control'],
+    ['rounded-md', '6: a control, a menu item'],
+    ['rounded-lg', '8: a surface'],
+    ['rounded-full', 'A dot, an avatar, a count'],
   ] as const
   return (
-    <div className="flex flex-wrap gap-4">
+    <div className="flex flex-wrap gap-6">
       {radii.map(([cls, use]) => (
         <div key={cls} className="flex flex-col items-center gap-1.5">
-          <div className={`h-12 w-12 border border-border bg-muted ${cls}`} />
+          <div className={`h-12 w-12 border border-hairline bg-muted ${cls}`} />
           <span className="font-mono text-xs">{cls}</span>
           <span className="text-xs text-muted-foreground">{use}</span>
         </div>
       ))}
+    </div>
+  )
+}
+
+/** The page, a raised surface, the line and where the keyboard is. */
+function Depth() {
+  return (
+    <div className="flex flex-wrap items-start gap-8 bg-background p-6">
+      <div className="flex h-24 w-40 items-center justify-center rounded-lg border border-hairline bg-card text-sm">A card</div>
+      <div className="flex h-24 w-40 items-center justify-center rounded-lg border border-hairline bg-card text-sm shadow-lg">Raised</div>
+      <button type="button" className="focus-ring h-8 rounded-md bg-accent px-3 text-sm font-medium" autoFocus>
+        Focused
+      </button>
     </div>
   )
 }
@@ -455,7 +484,7 @@ export const PREVIEWS: Preview[] = [
     path: 'foundations/typography.html',
     group: 'Foundations',
     name: 'Type scale',
-    subtitle: '6 roles from KPI value to caption',
+    subtitle: 'Five roles on six steps, three text colours',
     width: 900,
     node: <TypeScale />,
   },
@@ -463,9 +492,17 @@ export const PREVIEWS: Preview[] = [
     path: 'foundations/radius.html',
     group: 'Foundations',
     name: 'Radius scale',
-    subtitle: '5 steps, sm through full',
+    subtitle: 'Four steps, by role',
     width: 900,
     node: <RadiusScale />,
+  },
+  {
+    path: 'foundations/depth.html',
+    group: 'Foundations',
+    name: 'Depth, lines and focus',
+    subtitle: 'The hairline, the raised shadow, the focus ring',
+    width: 900,
+    node: <Depth />,
   },
   {
     path: 'components/button.html',

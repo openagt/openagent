@@ -460,7 +460,7 @@ function Heading({ level, text, page = false }: { level: number; text: string; p
   // Inside a dashboard page, under the page's own title: a step below it, and closer together.
   const size = page
     ? ['text-base font-semibold', 'text-[15px] font-semibold', 'text-sm font-semibold', 'text-sm font-medium', 'text-sm font-medium', 'text-sm font-medium'][level - 1]
-    : ['text-[26px] leading-[30px] font-medium', 'text-xl leading-[25px] font-medium', 'text-lg font-semibold', 'font-semibold', 'font-semibold', 'font-semibold'][level - 1]
+    : ['text-[26px] leading-[30px] font-medium', 'text-xl leading-[25px] font-medium', 'text-base font-semibold', 'font-semibold', 'font-semibold', 'font-semibold'][level - 1]
   return (
     <Tag data-heading={slug(text)} className={cn(size, level > 1 && (page ? 'pt-5 first:pt-0' : 'pt-7 first:pt-0'))}>
       {inline(text)}

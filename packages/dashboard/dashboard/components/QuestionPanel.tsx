@@ -195,7 +195,7 @@ export function QuestionPanel({
 
   if (sent) return null
   return (
-    <section ref={card} role="region" aria-label={choice.title} className="flex w-full max-w-[480px] flex-col overflow-clip rounded-xl font-sans text-sm ring-1 ring-border">
+    <section ref={card} role="region" aria-label={choice.title} className="flex w-full max-w-[480px] flex-col overflow-clip rounded-lg font-sans text-sm ring-1 ring-border">
       <h2 id={titleId} className="bg-foreground/5 px-4 py-3 font-normal">{choice.title}</h2>
       <Choices multi={choice.multi} labelledBy={titleId} picked={picked} onPick={setPicked} disabled={busy}>
         {choice.options.map(o => {

@@ -35,7 +35,9 @@
   --card-foreground: #3a4248;
   --muted: #f3f5f2;
   --muted-foreground: #66756c;
+  --faint-foreground: #86928a;
   --border: #e3e7e1;
+  --shadow-tint: #3a4248;
   /* The primary colour is Everforest's blue (his pick), darkened like the status colours below;
      what is done stays Everforest's green (`--success`). */
   --primary: #2b7ba5;
@@ -50,7 +52,8 @@
      Light tones run 2.3-3.4:1 there, which is why they are not used verbatim). */
   --success: #6f7f00;
   --warning: #9a6b00;
-  --danger: #d1403d;
+  /* A step darker than Everforest's red, so white text on it (Remove) reads at 4.5:1. */
+  --danger: #cc3d3a;
   --info: #2b7ba5;
   /* A merged pull request: Everforest's purple, darkened like the four above. */
   --merged: #a24f8c;
@@ -94,7 +97,9 @@
   --card-foreground: #d3c6aa;
   --muted: #262d31;
   --muted-foreground: #9da9a0;
+  --faint-foreground: #737e77;
   --border: #30383c;
+  --shadow-tint: #000000;
   /* Everforest's blue; what is done stays its green (`--success`). */
   --primary: #7fbbb3;
   --primary-foreground: #171b1d;
@@ -144,7 +149,9 @@
   --card-foreground: oklch(0.145 0 0);
   --muted: oklch(0.97 0 0);
   --muted-foreground: oklch(0.556 0 0);
+  --faint-foreground: oklch(0.62 0 0);
   --border: oklch(0.922 0 0);
+  --shadow-tint: oklch(0.145 0 0);
   --primary: oklch(0.205 0 0);
   --primary-foreground: oklch(0.985 0 0);
   --accent: oklch(0.97 0 0);
@@ -177,7 +184,9 @@
   --card-foreground: oklch(0.985 0 0);
   --muted: oklch(0.269 0 0);
   --muted-foreground: oklch(0.708 0 0);
+  --faint-foreground: oklch(0.58 0 0);
   --border: oklch(1 0 0 / 10%);
+  --shadow-tint: #000000;
   --primary: oklch(0.922 0 0);
   --primary-foreground: oklch(0.205 0 0);
   --accent: oklch(0.269 0 0);
@@ -627,6 +636,12 @@ html[data-pinned] body {
   }
 }
 @media (prefers-reduced-motion: reduce) {
+  /* Every transition is a cut (module/theme.css's motion), in a module's page too. */
+  *,
+  ::before,
+  ::after {
+    transition-duration: 0s !important;
+  }
   .cross-fade-out,
   .dots-leave {
     display: none;

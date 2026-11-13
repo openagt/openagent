@@ -170,7 +170,7 @@ export function SettingsDialog({
           initialFocus={popup}
           className={cn(
             'fixed z-50 flex overflow-hidden bg-background text-foreground outline-none',
-            phone ? 'inset-0' : 'top-1/2 left-1/2 h-[min(40rem,calc(100dvh-2rem))] w-[min(56rem,calc(100vw-2rem))] -translate-x-1/2 -translate-y-1/2 rounded-xl border border-border shadow-lg',
+            phone ? 'inset-0' : 'top-1/2 left-1/2 h-[min(40rem,calc(100dvh-2rem))] w-[min(56rem,calc(100vw-2rem))] -translate-x-1/2 -translate-y-1/2 rounded-lg border border-border shadow-lg',
           )}
         >
           {/* On a phone the list is the whole dialog until an entry is picked, and an entry the whole dialog after. */}

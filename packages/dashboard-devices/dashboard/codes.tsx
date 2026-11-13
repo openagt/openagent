@@ -89,7 +89,7 @@ export function CodeCard({ where, code }: { where: string; code: string }) {
       <div className="flex items-end justify-between gap-3">
         <div className="min-w-0">
           <p className="text-xs text-muted-foreground">Where</p>
-          <p className="truncate font-mono text-lg">{where}</p>
+          <p className="truncate font-mono text-xl">{where}</p>
         </div>
         <CopyButton text={where} label="Copy where">
           Copy

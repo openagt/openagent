@@ -433,7 +433,7 @@ export const Composer = forwardRef<ComposerHandle, {
           of the app, the commands menu (+) at its left, the text, and the submit at its right,
           the two kept at the last line. One line tall when empty, growing with what is typed. The
           editor is borderless: the border is the box's. */}
-      <div className="flex items-end rounded-xl border border-border bg-card focus-within:border-muted-foreground">
+      <div className="flex items-end rounded-lg border border-border bg-card focus-within:border-muted-foreground">
         {/* The editor's own inset sets the text off the box's edge; beside the + it pulls in, so the
             text starts close to it, as in Claude Code's. */}
         <div className="-mr-2 flex shrink-0 items-center p-1">{commandsEl}</div>
