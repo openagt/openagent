@@ -74,6 +74,27 @@ test('once the focused press worked, the focus is on the line that says the vers
   expect(await screen.findByRole('status')).toBe(document.activeElement)
 })
 
+test('a focus put elsewhere while the update runs stays there once it worked', async () => {
+  models.onAgentUpdates.mockResolvedValueOnce([{ agent: 'codex', installed: '0.144.4', latest: '0.166.0' }]).mockResolvedValue([])
+  let done: (value: unknown) => void = () => {}
+  models.sendAgentUpdate.mockReturnValue(new Promise(resolve => (done = resolve)))
+  models.onModels.mockResolvedValue({ 'claude-code': { models: [] }, codex: { models: [] } })
+  render(
+    <>
+      <AgentUpdates />
+      <button type="button">Elsewhere</button>
+    </>,
+  )
+  const press = await screen.findByRole('button', { name: 'Update Codex' })
+  press.focus()
+  fireEvent.click(press)
+  const elsewhere = screen.getByRole('button', { name: 'Elsewhere' })
+  elsewhere.focus()
+  done({ ok: true, version: '0.166.0' })
+  expect((await screen.findByRole('status')).textContent).toBe('Codex is now 0.166.0.')
+  expect(document.activeElement).toBe(elsewhere)
+})
+
 test('nothing when every agent is up to date', async () => {
   models.onAgentUpdates.mockResolvedValue([])
   const { container } = render(<AgentUpdates />)

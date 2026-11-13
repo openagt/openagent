@@ -514,6 +514,27 @@ describe('the Settings list', () => {
     expect(window.location.pathname + window.location.search).toBe('/page')
   })
 
+  test('Forward with a tick on Skills not saved asks as Back does, and the address stays on Settings: Leave goes on to the later page', async () => {
+    window.history.replaceState(null, '', '/page?settings=skills')
+    window.history.pushState(null, '', '/later')
+    const Routed = () => (useRoute(NO_PROJECTS), null)
+    render(<Routed />)
+    const step = async (go: () => void) => {
+      const popped = new Promise(resolve => window.addEventListener('popstate', resolve, { once: true }))
+      go()
+      await act(async () => void (await popped))
+    }
+    await step(() => window.history.back())
+    expect(window.location.search).toBe('?settings=skills')
+    show('skills', 'p1')
+    fireEvent.click(await screen.findByRole('checkbox', { name: 'skill-of-p1' }))
+    await step(() => window.history.forward())
+    const asked = await screen.findByRole('alertdialog', { name: 'Leave without saving?' })
+    expect(window.location.pathname + window.location.search).toBe('/page?settings=skills')
+    await step(() => fireEvent.click(within(asked).getByRole('button', { name: 'Leave' })))
+    expect(window.location.pathname).toBe('/later')
+  })
+
   test('Skills with no project given follows the sidebar\'s pick', async () => {
     show('skills', 'p3')
     expect(showing(select('Project'))).toBe('plain')
