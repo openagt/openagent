@@ -1,6 +1,7 @@
 import { usePolled, useModuleHost } from '@openagt/dashboard/module'
 import { holderAgent, readShown, withHolder } from '../../src/module.js'
 import { sessionsOf, type TicketSession } from '../TicketSessions.js'
+import { holdingRun } from './holding-run.js'
 import type { WorkspaceTicketDetail } from './types.js'
 
 /**
@@ -23,7 +24,7 @@ export function useTicket(projectId: string, slug: string): { read: TicketRead |
       if (!shown.shown) return { ticket: null, plan: null, sessions: [] }
       const holder = holderAgent(agents, shown.shown.ticket.lockedBy)
       return {
-        ticket: withHolder(shown.shown.ticket, holder),
+        ticket: withHolder(shown.shown.ticket, holdingRun(holder)),
         plan: shown.shown.plan ?? null,
         ...(holder ? { holderStatus: holder.status } : {}),
         sessions: sessionsOf(agents, shown.shown.ticket),

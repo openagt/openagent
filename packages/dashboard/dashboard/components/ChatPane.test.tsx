@@ -186,6 +186,41 @@ describe('the chat\'s rows and the message box over their end', () => {
     expect(spacer().hidden).toBe(true)
   })
 
+  describe('a chat opened on a plan that waits for a yes', () => {
+    const plan = (text: string) => [
+      { kind: 'driver', event: { type: 'start', prompt: 'Plan it' } },
+      said(text),
+      { kind: 'choice', id: 'await-choices', title: 'Go ahead?', options: [{ id: 'opt:0', label: 'Yes' }, { id: 'opt:1', label: 'No' }] },
+      { kind: 'end', ok: false, waiting: true },
+    ] as OpenAgentEvent[]
+    const reply = (text: string) => screen.getByText(text).closest<HTMLElement>('[data-message-id]')!
+    // As the layout above, but the plan's row is as tall as `tall` says.
+    const layOutTall = (tall: string, height: number) => {
+      layOut()
+      const heightOf = (el: HTMLElement) => el.contains(screen.queryByText(tall)) && el.dataset['messageId'] ? height : 100
+      HTMLElement.prototype.getBoundingClientRect = function (this: HTMLElement) {
+        if (this === viewport()) return rect(0, 500)
+        if (this.parentElement !== content()) return rect(0, 0)
+        const rows = drawn()
+        const at = rows.indexOf(this)
+        return at < 0 ? rect(0, 0) : rect(rows.slice(0, at).reduce((top, row) => top + heightOf(row), 0) - viewport().scrollTop, heightOf(this))
+      }
+      Object.defineProperty(HTMLElement.prototype, 'scrollHeight', { configurable: true, get(this: HTMLElement) { return this === viewport() ? drawn().reduce((all, row) => all + (row === spacer() ? Number.parseFloat(spacer().style.height || '0') : heightOf(row)), 0) : 0 } })
+    }
+
+    test('a plan taller than the view opens at its top, its first line read before the card', () => {
+      layOutTall('A long plan', 900)
+      render(<EventList events={plan('A long plan')} projectId="p1" agentId="r1" />)
+      expect(reply('A long plan').getBoundingClientRect().top).toBe(0)
+    })
+
+    test('a plan that fits opens at the end, the card in view', () => {
+      layOutTall('A short plan', 100)
+      render(<EventList events={plan('A short plan')} projectId="p1" agentId="r1" />)
+      expect(screen.getByTestId('log-end-room').getBoundingClientRect().bottom).toBe(500)
+    })
+  })
+
   describe('a chat at its end when its rows get less room', () => {
     // The view is 500 tall from its first layout on: the list reads it as it comes to the page.
     beforeEach(() => Object.defineProperty(HTMLElement.prototype, 'clientHeight', { configurable: true, get(this: HTMLElement) { return this.matches('[data-slot="message-scroller-viewport"]') ? 500 : 0 } }))

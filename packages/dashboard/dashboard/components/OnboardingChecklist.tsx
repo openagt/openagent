@@ -1,4 +1,4 @@
-import { useRef, useState, type ReactNode } from 'react'
+import { useContext, useRef, useState, type ReactNode } from 'react'
 import type { DashboardData, ProjectSummary } from '../../src/index.js'
 import { Check, Info, X } from 'lucide-react'
 import { onDashboard } from '../rpc/reads.js'
@@ -17,6 +17,7 @@ import { HostFix } from './AddGitAccount.js'
 import { hostLoginState, hostWords, useMissing } from './Logins.js'
 import { firstName } from './PersonMenu.js'
 import { Tooltip, TooltipTrigger, TooltipContent } from './ui/tooltip.js'
+import { HostServicesContext, INERT_HOST_SERVICES } from '../lib/host-services.js'
 
 // The Overview's first steps (#958): what a new install needs, each with the state it is actually
 // in rather than a static list to read past.
@@ -88,6 +89,7 @@ export function OnboardingChecklist({
   const permission = useNotificationPermission()
   const { start, busy: starting, error: startError } = useStartAgent()
   const { person } = usePerson()
+  const services = useContext(HostServicesContext) ?? INERT_HOST_SERVICES
   // What runs need on this computer: the coding agent's login, and an account at each git host.
   const { missing, hosts, loaded: missingLoaded, reload: reloadMissing } = useMissing()
   // The steps shown once stay, done or not: the coding agent's is there only once it was missing.
@@ -168,6 +170,11 @@ export function OnboardingChecklist({
             label: 'Populate the queue of AI tasks',
             description: 'The agent queue: each entry is work the agent picks up on its own, so a filled queue is what lets it keep going without you.',
             done: (data?.totals.openTodos ?? 0) > 0,
+            action: (
+              <Button size="sm" variant="outline" onClick={() => services.openPage('queue')}>
+                Open the Queue
+              </Button>
+            ),
           },
         ]
       : []),
@@ -260,7 +267,18 @@ export function OnboardingChecklist({
       </CardHeader>
       <CardContent>
         {reading ? (
-          <p className="text-sm text-muted-foreground">Loading…</p>
+          <>
+            <p className="sr-only">Loading…</p>
+            {/* The steps' rows, with no state yet, so the card is about its size from the first frame. */}
+            <ol aria-hidden="true" className="divide-y divide-border">
+              {steps.map((step, at) => (
+                <li key={step.key} className="flex items-start gap-3 py-3 first:pt-0 last:pb-0">
+                  <span className="mt-0.5 flex size-6 shrink-0 items-center justify-center rounded-full border border-border text-xs font-medium text-muted-foreground tabular-nums">{at + 1}</span>
+                  <span className="mt-1 text-sm text-muted-foreground">{step.label}</span>
+                </li>
+              ))}
+            </ol>
+          </>
         ) : (
           <ol className="divide-y divide-border">
             {steps.map((step, at) => {
@@ -284,7 +302,7 @@ export function OnboardingChecklist({
                           type="button"
                           disabled={step.done || isOpen}
                           onClick={() => setPicked(step.key)}
-                          className={cn('flex flex-wrap items-center gap-x-2 text-left text-sm', step.done ? 'text-muted-foreground' : isOpen ? 'font-medium' : 'text-muted-foreground hover:text-foreground')}
+                          className={cn('relative flex flex-wrap items-center gap-x-2 text-left text-sm after:absolute after:-inset-y-0.5 after:inset-x-0', step.done ? 'text-muted-foreground' : isOpen ? 'font-medium' : 'text-muted-foreground hover:text-foreground')}
                         >
                           <span>{step.label}</span>
                           {step.done && step.doneNote && <span className="truncate text-xs text-muted-foreground">· {step.doneNote}</span>}
@@ -292,7 +310,7 @@ export function OnboardingChecklist({
                         </button>
                         {isOpen && step.info && (
                           <Tooltip>
-                            <TooltipTrigger render={<button type="button" aria-label={`More on ${step.label}`} className="text-muted-foreground hover:text-foreground" />}>
+                            <TooltipTrigger render={<button type="button" aria-label={`More on ${step.label}`} className="relative text-muted-foreground after:absolute after:-inset-1.5 hover:text-foreground" />}>
                               <Info className="h-3.5 w-3.5" aria-hidden />
                             </TooltipTrigger>
                             <TooltipContent className="max-w-sm">{step.info}</TooltipContent>

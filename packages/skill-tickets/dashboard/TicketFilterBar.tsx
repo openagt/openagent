@@ -260,7 +260,8 @@ export function TicketFilterBar({
           onBlur={() => setSearchFocused(false)}
           placeholder="Search tickets…"
           aria-label="Search tickets"
-          className="h-7 w-56 pl-7 pr-6 text-xs"
+          // The `!` because another module's stylesheet, loaded after this one, has the field's own `px-3`, which would otherwise win.
+          className="h-7 w-56 pl-7! pr-6! text-xs"
         />
         {!searchFocused && f.q === '' && (
           <kbd className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 rounded border border-border bg-muted/60 px-1 font-mono text-[10px] text-muted-foreground">

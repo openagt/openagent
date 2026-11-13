@@ -98,7 +98,7 @@ function CommandLine({ command }: { command: string }) {
   const long = command.length > LONG
   return (
     <div className="flex min-w-0 items-start gap-1">
-      <code className={cn('min-w-0 font-mono text-[11px] text-muted-foreground', long && !whole ? 'truncate' : 'break-all')}>{command}</code>
+      <code className={cn('min-w-0 font-mono text-[11px] text-muted-foreground', long && !whole ? 'truncate' : 'wrap-anywhere')}>{command}</code>
       {long && (
         <button type="button" className="shrink-0 text-[11px] text-muted-foreground underline-offset-2 hover:text-foreground hover:underline" onClick={() => setWhole(!whole)}>
           {whole ? 'Less' : 'Show all'}
@@ -130,22 +130,35 @@ export function hostWords(row: GitHostRow): string {
 export function FixAction({ label, busy, busyWords, command, failed, onPress, size = 'sm', variant }: { label: string; busy: boolean; busyWords: string; command?: string; failed?: string; onPress: () => void; size?: 'sm' | 'xs' | undefined; variant?: 'outline' | undefined }) {
   return (
     <div className="min-w-0 space-y-1">
-      {busy ? (
+      {/* Busy, the press stays with the focus it was pressed with, and says it is waiting beside it. */}
+      <Button size={size} variant={variant} aria-disabled={busy || undefined} className={cn(busy && 'opacity-50')} onClick={() => void (busy || onPress())}>
+        {label}
+      </Button>
+      {busy && (
         <p role="status" className="text-xs text-muted-foreground">
           {busyWords}
         </p>
-      ) : (
-        <Button size={size} variant={variant} onClick={onPress}>
-          {label}
-        </Button>
       )}
       {command && <CommandLine command={command} />}
       {failed && (
         <p role="alert" className="whitespace-pre-line text-xs text-danger">
-          {failed}
+          <Linked text={failed} />
         </p>
       )}
     </div>
+  )
+}
+
+/** A program's words, each address in them a link: a sign-in page it names is opened from here. */
+function Linked({ text }: { text: string }) {
+  return text.split(/(https?:\/\/[^\s<>"]+)/).map((part, at) =>
+    at % 2 === 1 ? (
+      <a key={at} href={part} target="_blank" rel="noreferrer" className="underline underline-offset-2">
+        {part}
+      </a>
+    ) : (
+      part
+    ),
   )
 }
 

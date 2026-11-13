@@ -12,9 +12,17 @@ export type AgentHandoffState = {
   busy: boolean
   error: string | null
   /** Which button is in flight, so it can say "Opening PR…" rather than silently greying (#948). */
-  pending: 'pr' | 'merge' | 'push' | 'merge-branch' | 'commit' | null
-  act: (which: 'pr' | 'merge' | 'push' | 'merge-branch' | 'commit', fn: () => Promise<unknown>, fallback: string) => void
+  pending: Press | null
+  /**
+   * Runs a press. A failure is said as `failed`, the bar's own sentence, then the program's line
+   * under it. What `answered` makes of the press's answer is the bar's at once, until the branch is
+   * read again. Resolves to the answer, or undefined when the press failed.
+   */
+  act: <T>(which: Press, fn: () => Promise<T>, failed: string, answered?: (value: Exclude<T, { ok: false }>) => Partial<AgentHandoff> | undefined) => Promise<Exclude<T, { ok: false }> | undefined>
 }
+
+/** The bar's presses. */
+type Press = 'pr' | 'merge' | 'push' | 'merge-branch' | 'commit'
 
 // The handoff read lifted out of its panel: the same answer feeds two places in the bar above the
 // message box, the summary and the actions. Reading it once keeps them from disagreeing and halves
@@ -102,16 +110,39 @@ export function useAgentHandoff(projectId: string, agentId: string | null | unde
     if (settling && handoffSays(handoff)) setSettling(false)
   }, [settling, handoff])
   const { busy, error, run } = useAction()
-  const [pending, setPending] = useState<'pr' | 'merge' | 'push' | 'merge-branch' | 'commit' | null>(null)
+  const [pending, setPending] = useState<Press | null>(null)
+  const [failed, setFailed] = useState<string | null>(null)
+  // The press's answer over the read it was pressed on, and over a newer one still looking up its
+  // pull request (#1028): the first read that knows is the branch's own word. It is its run's alone.
+  const [answer, setAnswer] = useState<{ over: AgentHandoff; with: Partial<AgentHandoff>; of: string | undefined } | null>(null)
+  const latest = useRef(handoff)
+  latest.current = handoff
 
-  const act = (which: 'pr' | 'merge' | 'push' | 'merge-branch' | 'commit', fn: () => Promise<unknown>, fallback: string): void => {
+  const act = async <T,>(which: Press, fn: () => Promise<T>, said: string, answered?: (value: Exclude<T, { ok: false }>) => Partial<AgentHandoff> | undefined) => {
+    const of = key
     setPending(which)
-    // The button says what it is doing until the branch is read again: let go before, it read
-    // as not pressed for the beat the read takes.
-    void run(fn, fallback)
-      .then(outcome => (outcome.ok ? reload() : undefined))
-      .then(() => setPending(null))
+    const outcome = await run(fn, said)
+    setFailed(outcome.ok ? null : said)
+    const over = latest.current
+    const known = outcome.ok && over ? answered?.(outcome.value) : undefined
+    if (known && over) {
+      setAnswer({ over, with: known, of })
+      setPending(null)
+      void reload()
+    } else {
+      // The button says what it is doing until the branch is read again: let go before, it read
+      // as not pressed for the beat the read takes.
+      if (outcome.ok) await reload()
+      setPending(null)
+    }
+    return outcome.ok ? outcome.value : undefined
   }
 
-  return { handoff, loaded, busy, error, pending, act }
+  const stands = handoff !== null && answer !== null && answer.of === key && (answer.over === handoff || handoff.prPending === true)
+  useEffect(() => {
+    if (answer && handoff && !stands) setAnswer(null)
+  }, [answer, handoff, stands])
+  const shown = stands ? { ...handoff, ...answer.with, ...(answer.with.pr ? { prPending: false } : {}) } : handoff
+  const said = error === null || failed === null || error === failed ? error : `${failed}\n${error}`
+  return { handoff: shown, loaded, busy, error: said, pending, act }
 }

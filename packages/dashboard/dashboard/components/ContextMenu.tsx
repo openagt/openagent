@@ -105,7 +105,7 @@ export function ContextMenu({
               </Tooltip>
             ))
           ) : (
-            <p className="px-2 py-1 text-xs text-muted-foreground/60">No other repos to add.</p>
+            <p className="px-2 py-1 text-xs text-muted-foreground">No other projects to add.</p>
           )}
         </DropdownMenuGroup>
         <DropdownMenuSeparator />
@@ -116,7 +116,7 @@ export function ContextMenu({
               <ContextFiles files={contextFiles} onRemove={onToggle} busy={busy} />
             </div>
           ) : (
-            <p className="px-2 py-1 text-xs text-muted-foreground/60">None yet — add with # or the Files pane.</p>
+            <p className="px-2 py-1 text-xs text-muted-foreground">None yet — add with # or the Files pane.</p>
           )}
         </DropdownMenuGroup>
       </DropdownMenuContent>

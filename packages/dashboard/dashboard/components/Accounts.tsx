@@ -1,7 +1,9 @@
+import { useEffect, useState } from 'react'
 import { Card, CardContent, CardHeader, CardTitle } from './ui/card.js'
 import { ClaudeLogo, CodexLogo } from './driver-logos.js'
 import { Skeleton } from './ui/skeleton.js'
 import type { DriverName } from '../../src/client.js'
+import { takeLostFocus } from '../lib/lost-focus.js'
 import { useMountedModules } from '../lib/use-modules.js'
 import { useAgentAccounts } from './AgentAccounts.js'
 import { GitHostsCard } from './GitHosts.js'
@@ -65,10 +67,15 @@ function RotationCard() {
   )
 }
 
-/** An agent that needs its press before it can run, as a card of the page: its state, and the press that installs it or logs it in. Nothing once it can run. */
+/** An agent that needs its press before it can run, as a card of the page: its state, and the press that installs it or logs it in. Once it can run, it says so while the page is open, then nothing. */
 function AgentSetup({ driver, title, Logo }: { driver: DriverName; title: string; Logo: typeof ClaudeLogo }) {
   const { state, reload } = useAgentState(driver)
-  if (!state || state.ready || (state.fix === undefined && agentLoginState(state) !== 'not-installed')) return null
+  const missing = !!state && !state.ready && (state.fix !== undefined || agentLoginState(state) === 'not-installed')
+  const [wasMissing, setWasMissing] = useState(false)
+  useEffect(() => {
+    if (missing) setWasMissing(true)
+  }, [missing])
+  if (!state || (!missing && !(wasMissing && state.ready))) return null
   return (
     <Card role="region" aria-label={title}>
       <CardHeader>
@@ -79,8 +86,16 @@ function AgentSetup({ driver, title, Logo }: { driver: DriverName; title: string
         </div>
       </CardHeader>
       <CardContent className="space-y-2">
-        <p className="text-sm text-muted-foreground">{agentWords(state)}</p>
-        <AgentFix state={state} variant="outline" onChanged={() => void reload()} />
+        {state.ready ? (
+          <p ref={takeLostFocus} role="status" tabIndex={-1} className="text-sm text-muted-foreground outline-none">
+            {`${title} is ready: runs can start with it.`}
+          </p>
+        ) : (
+          <>
+            <p className="text-sm text-muted-foreground">{agentWords(state)}</p>
+            <AgentFix state={state} variant="outline" onChanged={() => void reload()} />
+          </>
+        )}
       </CardContent>
     </Card>
   )

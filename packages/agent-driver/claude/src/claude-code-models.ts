@@ -55,14 +55,14 @@ export function readClaudeModels(opts: ReadClaudeModelsOptions = {}): Promise<Dr
     }
 
     let settled = false
-    const settle = (answer: { models: DriverModel[] } | { error: string }) => {
+    const settle = (answer: { models: DriverModel[] } | { error: string; code?: string }) => {
       if (settled) return
       settled = true
       clearTimeout(timer)
       opts.signal?.removeEventListener('abort', onAbort)
       child.kill('SIGTERM')
       if ('models' in answer) resolvePromise(answer.models)
-      else rejectPromise(new Error(answer.error))
+      else rejectPromise(Object.assign(new Error(answer.error), answer.code !== undefined ? { code: answer.code } : {}))
     }
     const onAbort = () => settle({ error: 'Claude Code was not asked for its models: the read was stopped' })
     opts.signal?.addEventListener('abort', onAbort)
@@ -81,9 +81,11 @@ export function readClaudeModels(opts: ReadClaudeModelsOptions = {}): Promise<Dr
         if (answer) settle(answer)
       }
     })
+    // A CLI that is not on this computer, or cannot be run, says so by the code: the reader says it in its own words.
     child.on('error', err => {
       removeFolder()
-      settle({ error: `\`${opts.bin ?? 'claude'}\` could not start: ${err.message}` })
+      const { code } = err as NodeJS.ErrnoException
+      settle({ error: `\`${opts.bin ?? 'claude'}\` could not start: ${err.message}`, ...(code !== undefined ? { code } : {}) })
     })
     // Removed once the CLI is gone, not when it answered: until then it may still write there.
     child.on('close', code => {

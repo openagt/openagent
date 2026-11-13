@@ -8,7 +8,10 @@ import type { ComponentType } from 'react'
 import type { AgentMeta, AgentStatus, RecentAgent, ProjectSummary } from '../../src/index.js'
 import type { ModuleHostPerson } from '../module/index.js'
 import { DRIVER_LABELS, driverFromImpl, cloudRunState, type CloudRunState, type MachineKind } from '../../src/client.js'
-import { Button } from './ui/button.js'
+import { buttonVariants } from './ui/button.js'
+import { inPlace } from '../lib/in-place.js'
+import { formatRoute, type Route } from '../lib/route.js'
+import { NO_PROJECTS } from '../../src/project-address.js'
 import { cn } from '../lib/utils.js'
 import { formatRelative } from '../lib/format-date.js'
 import { updatePreferences, usePreferences } from '../lib/preferences.js'
@@ -54,7 +57,7 @@ import { usePerson } from '../lib/use-person.js'
 // One rendered row of the rail, from either source (a project's own run, or a pooled cross-project
 // recent): the AgentMeta to show, an optional project label (only on the Overview, where the rail
 // pools every project), whether it is the selected row, and what selecting it does.
-type Row = { key: string; agent: AgentMeta; project?: string; projectId: string | null; active: boolean; onClick: () => void; onNear?: () => void }
+type Row = { key: string; agent: AgentMeta; project?: string; projectId: string | null; active: boolean; href: string; onClick: () => void; onNear?: () => void }
 
 /** What a row does as the pointer or the keyboard reaches it: an ended agent's log is read before the click, so its page opens drawn. A working agent's page reads no saved log. */
 function near(projectId: string | null, agent: AgentMeta): { onNear?: () => void } {
@@ -99,6 +102,7 @@ export function AgentHistory({
   activePage = null,
   onPage = () => {},
   interventionCount = 0,
+  hrefOf = route => formatRoute(route, NO_PROJECTS),
 }: {
   /** The page beside it scrolls as a page (App): the sidebar then stays where it is, as tall as the screen. */
   pageScrolls?: boolean
@@ -133,6 +137,8 @@ export function AgentHistory({
   onPage?: (segment: string) => void
   /** Human Queue count, shown on the Overview item and the picker (#632). */
   interventionCount?: number
+  /** The address a row or a nav item goes to, as the shell writes it: each is a link, which also opens in a new tab. */
+  hrefOf?: (route: Route) => string
   /** Cross-project recents, for when all projects show: every project's sessions pooled. */
   recentAgents?: RecentAgent[]
   /** Select a pooled recent: jump into its project's session (project + run both change). */
@@ -226,6 +232,7 @@ export function AgentHistory({
         ...(rr.projectId !== SESSIONS_ID ? { project: label(rr.projectId, rr.projectName) } : {}),
         projectId: rr.projectId,
         active: rr.projectId === projectId && rr.agent.id === selectedAgentId,
+        href: hrefOf({ projectId: rr.projectId, agentId: rr.agent.id }),
         onClick: () => onSelectRecent?.(rr.projectId, rr.agent.id),
         ...near(rr.projectId, rr.agent),
       }))
@@ -235,6 +242,7 @@ export function AgentHistory({
         // The list is the picked project's on a page of no project too: the Overview, a module's page.
         projectId: listOf,
         active: agent.id === selectedAgentId,
+        href: hrefOf({ projectId: listOf, agentId: agent.id }),
         onClick: () => onSelect(agent.id),
         ...near(listOf, agent),
       })), order)
@@ -258,6 +266,7 @@ export function AgentHistory({
   const ownPicture = (person: string | undefined): string | undefined => (person !== undefined && me?.avatar !== undefined && me.email !== undefined && person.toLowerCase() === me.email ? me.avatar : undefined)
 
   const models = useModels()
+  const pageHref = (segment: string) => hrefOf({ projectId: null, agentId: null, page: segment, ...(scope ? { scope } : {}) })
   const renderRow = (row: Row, subagent: boolean, status: AgentStatus = row.agent.status, fold?: SubagentsFold) => (
     <AgentHistoryRow
       status={status}
@@ -289,6 +298,7 @@ export function AgentHistory({
       {...(row.agent.unpublished ? { unpublished: row.agent.unpublished } : {})}
       {...(row.agent.uncommitted ? { uncommitted: row.agent.uncommitted } : {})}
       gitHost={projects.find(p => p.id === row.projectId)?.gitHost !== false}
+      href={row.href}
       onClick={leave(row.onClick)}
       onNear={row.onNear}
     />
@@ -334,29 +344,31 @@ export function AgentHistory({
               one project picked at the top, it starts there. */}
           <NewButton
             scope={scope}
+            href={hrefOf({ projectId: scope ?? SESSIONS_ID, agentId: null })}
             active={atProjectLauncher}
             onNewAgentInProject={onNewAgentInProject && leave(onNewAgentInProject)}
             onSelect={leave(onSelect)}
           />
           {/* Overview: the way home, its own nav item directly under New and above the session list,
               more prominent than a menu row. Only this — the current view — carries the active fill. */}
-          <OverviewButton active={projectId === null && activePage === null} count={interventionCount} onClick={leave(onDashboard)} />
+          <OverviewButton active={projectId === null && activePage === null} count={interventionCount} href={homeHref} onClick={leave(onDashboard)} />
           {/* The modules' pages the shell hands over (#1774), the picked project's only when one is
               picked: destinations with no project selected, like the Overview, named by the module,
               never by the dashboard — the tickets' page among them, when a package brings one. */}
           {pages.map(page => (
-            <NavRow key={page.segment} icon={page.icon ?? Blocks} label={page.label} active={activePage === page.segment} onClick={leave(() => onPage(page.segment))} />
+            <NavRow key={page.segment} icon={page.icon ?? Blocks} label={page.label} active={activePage === page.segment} href={pageHref(page.segment)} onClick={leave(() => onPage(page.segment))} />
           ))}
           {/* The agents (Rom): each a name, skills and accounts, on a page of the dashboard's own; then the accounts they work with. */}
-          <NavRow icon={Bot} label="Agents" active={activePage === AGENTS_PAGE} onClick={leave(() => onPage(AGENTS_PAGE))} />
-          <NavRow icon={KeyRound} label="Permissions" active={activePage === PERMISSIONS_PAGE} onClick={leave(() => onPage(PERMISSIONS_PAGE))} />
+          <NavRow icon={Bot} label="Agents" active={activePage === AGENTS_PAGE} href={pageHref(AGENTS_PAGE)} onClick={leave(() => onPage(AGENTS_PAGE))} />
+          <NavRow icon={KeyRound} label="Permissions" active={activePage === PERMISSIONS_PAGE} href={pageHref(PERMISSIONS_PAGE)} onClick={leave(() => onPage(PERMISSIONS_PAGE))} />
         </SidebarHeader>
         {/* The themed ScrollArea (#913) instead of the sidebar's native overflow bar, matching the
             Overview: suppress SidebarContent's own `overflow-auto` and let the ScrollArea own it. */}
         <SidebarContent className="overflow-hidden">
           <ScrollArea className="min-h-0 flex-1">
-            {/* pr-3 keeps the rows (and the active card) clear of the overlaid scrollbar (w-2.5). */}
-            <SidebarGroup className="pt-3 pr-3">
+            {/* pr-3 keeps the rows (and the active card) clear of the overlaid scrollbar (w-2.5). The `!`, as on the
+                nav above: a module's stylesheet has the group's own `p-2`, which would otherwise win on its page. */}
+            <SidebarGroup className="pt-3! pr-3!">
               {/* The label sticks to the top of the scroll; the gradient strip under it (also sticky)
                   fades the rows into the background as they scroll up beneath the label. Shown even
                   when the list is empty (#1147): the heading is what makes "No sessions yet." read as
@@ -446,39 +458,41 @@ function NavRow({
   icon: Icon,
   label,
   active,
+  href,
   onClick,
   children,
 }: {
   icon: ComponentType<{ className?: string; 'aria-hidden'?: boolean }>
   label: string
   active: boolean
+  href: string
   onClick: () => void
   /** What sits after the label, e.g. the Overview row's Human Queue badge. */
   children?: ReactNode
 }) {
   return (
-    <button
-      type="button"
-      onClick={onClick}
+    <a
+      href={href}
+      onClick={inPlace(onClick)}
       aria-current={active ? 'page' : undefined}
       className={cn(
-        'flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-sm transition-colors',
+        'flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-primary)]',
         active ? 'bg-sidebar-accent text-sidebar-accent-foreground' : 'text-foreground hover:bg-sidebar-accent/60',
       )}
     >
       <Icon className="h-4 w-4 shrink-0" aria-hidden />
       <span className="flex-1 text-left">{label}</span>
       {children}
-    </button>
+    </a>
   )
 }
 
 // The Overview entry (Rom): the way home, pinned above the session list and more prominent than a
 // menu row. Carries the Human Queue count (#632) so the one cross-project signal stays visible, and
 // highlights while it is the current view.
-function OverviewButton({ active, count, onClick }: { active: boolean; count: number; onClick: () => void }) {
+function OverviewButton({ active, count, href, onClick }: { active: boolean; count: number; href: string; onClick: () => void }) {
   return (
-    <NavRow icon={LayoutDashboard} label="Overview" active={active} onClick={onClick}>
+    <NavRow icon={LayoutDashboard} label="Overview" active={active} href={href} onClick={onClick}>
       {count > 0 && (
         <Tooltip>
           <TooltipTrigger
@@ -502,11 +516,14 @@ function OverviewButton({ active, count, onClick }: { active: boolean; count: nu
 // page, in the row above the box (ProjectPicker), not here.
 function NewButton({
   scope,
+  href,
   active = false,
   onNewAgentInProject,
   onSelect,
 }: {
   scope: string | null
+  /** The "New agent session" page it opens. */
+  href: string
   /** On a project's launcher (its "New" screen), so New reads as the current view. Off on the
    *  Overview, where the Overview item is the active one instead — the two are never both active. */
   active?: boolean
@@ -522,10 +539,10 @@ function NewButton({
   )
   const target = scope ?? SESSIONS_ID
   return (
-    <Button variant="ghost" className={cls} onClick={() => (onNewAgentInProject ? onNewAgentInProject(target) : onSelect(null))}>
+    <a href={href} className={cn(buttonVariants({ variant: 'ghost' }), cls)} onClick={inPlace(() => (onNewAgentInProject ? onNewAgentInProject(target) : onSelect(null)))}>
       <Plus className="h-4 w-4 shrink-0" />
       <span className="whitespace-nowrap">New agent session</span>
-    </Button>
+    </a>
   )
 }
 
@@ -543,7 +560,7 @@ function RecentsSortMenu({ order }: { order: RecentsSort }) {
             <DropdownMenuTrigger
               type="button"
               aria-label="Sort agents"
-              className="ml-auto flex h-5 w-5 items-center justify-center rounded-sm text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground"
+              className="relative ml-auto flex h-5 w-5 items-center justify-center rounded-sm text-muted-foreground transition-colors after:absolute after:-inset-0.5 hover:bg-accent hover:text-accent-foreground"
             />
           }
         >
@@ -586,6 +603,7 @@ function AgentHistoryRow({
   project,
   subtitle,
   active,
+  href,
   onClick,
   onNear,
   driver,
@@ -622,6 +640,8 @@ function AgentHistoryRow({
   /** The model it ran on, by the name its coding agent gives it: said when the agent's logo is pointed at. */
   model?: string | undefined
   active: boolean
+  /** The run's page; the stand-in for a run not listed yet has none, and is a button. */
+  href?: string | undefined
   onClick: () => void
   /** The pointer or the keyboard reached the row, before any click. */
   onNear?: (() => void) | undefined
@@ -741,19 +761,8 @@ function AgentHistoryRow({
   // beside it, as Claude Code on the web shows one, and each mark says what it is; the sentence the
   // two-line row used to print is the row's name for a reader that cannot see the marks.
   const agentSaid = picked ? [DRIVER_LABELS[picked], ...(model ? [model] : [])].join(' · ') : undefined
-  return (
-    <Button
-      variant="ghost"
-      aria-label={`${naming ? 'Naming this session' : titleText} · ${said}`}
-      className={cn(
-        'rail-row h-8 w-full items-center gap-2 px-2 text-left',
-        active && 'bg-accent text-accent-foreground',
-      )}
-      {...(standIn ? { 'data-stand-in': '' } : {})}
-      onClick={onClick}
-      onPointerEnter={onNear}
-      onFocus={onNear}
-    >
+  const marks = (
+    <>
       {/* The circle stands where the status word stood, and carries that word for a reader who
           cannot see a colour. */}
       <span
@@ -799,7 +808,7 @@ function AgentHistoryRow({
           and shows none. */}
       {project && <span className="max-w-[35%] min-w-0 shrink truncate text-xs text-muted-foreground">{project}</span>}
       {/* The row's subagents: how many, and the fold of their list. A control, so it stays on the
-          row rather than moving into the hover. Inside the row's own button, so it is a span that
+          row rather than moving into the hover. Inside the row's own link, so it is a span that
           takes the click for itself. */}
       {fold && (
         <span
@@ -809,6 +818,7 @@ function AgentHistoryRow({
           aria-label={`${fold.count} agent${fold.count === 1 ? '' : 's'}${fold.working > 0 ? ` · ${fold.working} running` : ''}`}
           title={`${fold.count} subagent${fold.count === 1 ? '' : 's'}${fold.working > 0 ? `, ${fold.working} running` : ''}`}
           onClick={e => {
+            e.preventDefault()
             e.stopPropagation()
             fold.onToggle()
           }}
@@ -855,7 +865,24 @@ function AgentHistoryRow({
           <DriverLogo driver={picked} className="h-3 w-3 text-muted-foreground" />
         </RowMark>
       )}
-    </Button>
+    </>
+  )
+  const row = {
+    'aria-label': `${naming ? 'Naming this session' : titleText} · ${said}`,
+    'aria-current': active ? ('page' as const) : undefined,
+    className: cn(buttonVariants({ variant: 'ghost' }), 'rail-row h-8 w-full items-center gap-2 px-2 text-left', active && 'bg-accent text-accent-foreground'),
+    ...(standIn ? { 'data-stand-in': '' } : {}),
+    onPointerEnter: onNear,
+    onFocus: onNear,
+  }
+  return href !== undefined ? (
+    <a href={href} {...row} onClick={inPlace(onClick)}>
+      {marks}
+    </a>
+  ) : (
+    <button type="button" {...row} onClick={onClick}>
+      {marks}
+    </button>
   )
 }
 

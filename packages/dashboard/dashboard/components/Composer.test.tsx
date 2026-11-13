@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest'
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { createRef } from 'react'
 import type { Preferences } from '../../src/index.js'
 import { selectMachine } from '../lib/remote-target.js'
 import { hoverTooltip, openMenu } from '../test-utils.js'
@@ -58,6 +59,7 @@ vi.mock('./PromptEditor.js', async () => {
         put(text)
         return false
       },
+      append: (text: string) => put(held.trim() ? `${held}\n\n${text}` : text),
     }))
     const seeded = useRef(false)
     useEffect(() => {
@@ -67,7 +69,7 @@ vi.mock('./PromptEditor.js', async () => {
     }, [ready, props.initialText])
     return (
       <div>
-        <input aria-label="prompt" value={held} onChange={e => put(e.target.value)} disabled={props.disabled} data-seed-focus={String(props.initialFocus ?? true)} />
+        <input aria-label="prompt" value={held} onChange={e => put(e.target.value)} disabled={props.disabled} data-seed-focus={String(props.initialFocus ?? true)} data-replaced={props.replacedText} data-label={props.label} />
         <button type="button" onClick={() => props.onSubmit()}>
           editor-submit
         </button>
@@ -84,6 +86,7 @@ vi.mock('./PromptEditor.js', async () => {
 const editorText = (): string => (screen.getByLabelText('prompt') as HTMLInputElement).value
 
 const { Composer } = await import('./Composer.js')
+type ComposerHandle = import('./Composer.js').ComposerHandle
 
 function renderComposer(over: Partial<Parameters<typeof Composer>[0]> = {}) {
   const onSubmit = vi.fn()
@@ -141,6 +144,14 @@ describe('Composer (#721)', () => {
     fireEvent.change(screen.getByLabelText('prompt'), { target: { value: 'follow-up' } })
     fireEvent.click(screen.getByRole('button', { name: 'Send' }))
     expect(onSubmit).toHaveBeenCalledWith('follow-up', { later: false })
+  })
+
+  test("a session's box is called a message's, the launcher's a prompt's", () => {
+    renderComposer({ inAgent: true })
+    expect(screen.getByLabelText('prompt').dataset['label']).toBe('Message')
+    cleanup()
+    renderComposer()
+    expect(screen.getByLabelText('prompt').dataset['label']).toBe('Prompt')
   })
 
   test('the submit button is hidden until the editor has text, then appears and fires onSubmit', () => {
@@ -247,6 +258,23 @@ describe('Composer (#721)', () => {
     expect(editorText()).toBe('')
   })
 
+  test('a draft handed over to a box that kept one is loaded over it, said as a load over a draft, and the kept one is under it for an undo', () => {
+    const onPreset = vi.fn()
+    localStorage.setItem('oa.draft:launcher:p1', 'my own long draft')
+    sessionStorage.setItem('oa.pending-draft', 'carried from a ticket')
+    renderComposer({ draftKey: 'launcher:p1', onPreset })
+    expect(editorText()).toBe('carried from a ticket')
+    expect(screen.getByLabelText('prompt').getAttribute('data-replaced')).toBe('my own long draft')
+    expect(onPreset).toHaveBeenCalledWith('The prompt', true)
+    cleanup()
+    onPreset.mockReset()
+    // The same words handed over again replace nothing.
+    sessionStorage.setItem('oa.pending-draft', 'carried from a ticket')
+    renderComposer({ draftKey: 'launcher:p1', onPreset })
+    expect(screen.getByLabelText('prompt').getAttribute('data-replaced')).toBeNull()
+    expect(onPreset).not.toHaveBeenCalled()
+  })
+
   test('on a phone a kept draft comes back without the caret, and one a press handed over takes it; elsewhere a kept draft takes it', () => {
     const seedFocus = () => screen.getByLabelText('prompt').getAttribute('data-seed-focus')
     localStorage.setItem('oa.draft:launcher:p1', 'a long draft I care about')
@@ -266,6 +294,17 @@ describe('Composer (#721)', () => {
     } finally {
       vi.unstubAllGlobals()
     }
+  })
+
+  test('words handed back go after what is typed in the box, and are kept with it', () => {
+    const box = createRef<ComposerHandle>()
+    const onSubmit = vi.fn()
+    render(<Composer ref={box} files={[]} onSubmit={onSubmit} busy={false} submitLabel="Send" submitBusyLabel="Sending…" inAgent draftKey="p1:run-2" />)
+    fireEvent.change(screen.getByLabelText('prompt'), { target: { value: 'a new thought' } })
+    act(() => box.current!.append('the words it never read'))
+    expect(localStorage.getItem('oa.draft:p1:run-2')).toBe('a new thought\n\nthe words it never read')
+    fireEvent.click(screen.getByText('editor-submit'))
+    expect(onSubmit).toHaveBeenCalledWith('a new thought\n\nthe words it never read', { later: false })
   })
 
   test('a browser that keeps nothing still has the draft in the box, and it is sent', () => {

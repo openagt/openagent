@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, test, vi } from 'vitest'
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
-import { ModuleHostContext, type ModuleCommandResult, type ModuleHost, type ModuleProject } from '@openagt/dashboard/module'
-import { OpenAgentDown } from '@openagt/dashboard/module/testing'
+import { ModuleHostContext, forgetRemembered, type ModuleCommandResult, type ModuleHost, type ModuleProject } from '@openagt/dashboard/module'
+import { OpenAgentDown, fakeHost } from '@openagt/dashboard/module/testing'
 import { AutomationsPage } from './AutomationsPage.js'
 import { ANY_AGENT, ON_CLAUDE, STATUS, hostAnswering } from './fixtures.js'
 import { checked, choices, offered, openList, pick, queryRadio, radio, radioNames, showing } from '../../dashboard/dashboard/test-controls.js'
@@ -186,8 +186,9 @@ describe('the Automations page: its rows', () => {
     const { host } = hostAnswering((_, args) => (args[0] === 'status' ? { ok: true, output: status } : { ok: true, output: { ok: true } }))
     show(host)
     await screen.findByRole('region', { name: 'gemstack' })
-    // When it last ran is said with its age, and opens that run.
-    const ran = within(row('/post-merge-cleanup')).getByRole('button', { name: /^Last ran \d+\w+ ago$/ })
+    // When it last ran is said with its age, and is a link to that run.
+    const ran = within(row('/post-merge-cleanup')).getByRole('link', { name: /^Last ran \d+\w+ ago$/ })
+    expect(ran.getAttribute('href')).toBe('/p1/r1')
     expect(ran.className).not.toMatch(/text-danger/)
     fireEvent.click(ran)
     expect(host.openAgent).toHaveBeenLastCalledWith('p1', 'r1')
@@ -201,7 +202,7 @@ describe('the Automations page: its rows', () => {
     expect(within(row('/check-links')).getByText('Check failed: gh: not found')).toBeTruthy()
     // Switched off here, and its failure is still said: nothing tries the work again by itself. An off row says no decision.
     const off = row('/work-queue')
-    const failed = within(off).getByRole('button', { name: /^Last run failed \d+\w+ ago$/ })
+    const failed = within(off).getByRole('link', { name: /^Last run failed \d+\w+ ago$/ })
     expect(failed.className).toMatch(/text-danger/)
     fireEvent.click(failed)
     expect(host.openAgent).toHaveBeenLastCalledWith('p1', '2026-10-03T09-00-00-000Z')
@@ -209,6 +210,19 @@ describe('the Automations page: its rows', () => {
     expect(within(off).queryByText(/switched off/i)).toBeNull()
     expect(within(off).queryByText('No work')).toBeNull()
     expect(within(row('/update-tickets')).queryByRole('button', { name: /^Last r/ })).toBeNull()
+  })
+
+  test('a row whose run is still going says so, switched on or off, and opens that run', async () => {
+    const going = { id: 'r9', at: new Date(Date.now() - 9000).toISOString(), running: true }
+    const status = { ...STATUS, schedule: STATUS.schedule.map(c => ({ ...c, lastRun: going })) }
+    const { host } = hostAnswering((_, args) => (args[0] === 'status' ? { ok: true, output: status } : { ok: true, output: { ok: true } }))
+    show(host)
+    await screen.findByRole('region', { name: 'gemstack' })
+    for (const name of ['/post-merge-cleanup', '/work-queue']) {
+      const link = within(row(name)).getByRole('link', { name: /^Running, started \d+s ago$/ })
+      expect(link.getAttribute('href')).toBe('/p1/r9')
+    }
+    expect(within(row('/work-queue')).getByText('Off')).toBeTruthy()
   })
 
   test('a row set to a coding agent that cannot read its skill says so whatever its switch, read off the files and not off the last look, and its "Run now" is held: it would start nothing', async () => {
@@ -231,6 +245,20 @@ describe('the Automations page: its rows', () => {
     }
   })
 
+  test('a second visit opens with the last rows at once, while they are read again', async () => {
+    show(scheduler().host)
+    await screen.findByRole('listitem', { name: '/work-queue' })
+    cleanup()
+    forgetRemembered()
+    // The next visit, after a reload: the read does not answer yet.
+    let answer: (result: ModuleCommandResult) => void = () => {}
+    const runCommand = vi.fn(() => new Promise<ModuleCommandResult>(resolve => (answer = resolve)))
+    show(fakeHost('@openagt/skill-scheduler', { runCommand, act: runCommand }))
+    expect(screen.getByRole('listitem', { name: '/work-queue' })).toBeTruthy()
+    expect(screen.queryByText('Loading…')).toBeNull()
+    answer({ ok: true, output: STATUS })
+  })
+
   test("flipping a row's switch runs `switch` in its project", async () => {
     const { host, runCommand } = scheduler()
     show(host)
@@ -239,6 +267,20 @@ describe('the Automations page: its rows', () => {
     await waitFor(() => expect(runCommand).toHaveBeenCalledWith('p1', ['switch', 'work-queue', 'on']))
     fireEvent.click(screen.getByRole('switch', { name: 'Run /post-merge-cleanup by itself' }))
     await waitFor(() => expect(runCommand).toHaveBeenCalledWith('p1', ['switch', 'post-merge-cleanup', 'off']))
+  })
+
+  test("a row's switch moves at the press and is held while it saves; one the command refused goes back, with why", async () => {
+    let answer: (result: ModuleCommandResult) => void = () => {}
+    const runCommand = vi.fn(async (_projectId: string, args: string[]): Promise<ModuleCommandResult> => (args[0] === 'status' ? { ok: true, output: STATUS } : new Promise(resolve => (answer = resolve))))
+    show(fakeHost('@openagt/skill-scheduler', { runCommand, act: runCommand }))
+    await screen.findByRole('region', { name: 'gemstack' })
+    const toggle = screen.getByRole('switch', { name: 'Run /work-queue by itself' })
+    fireEvent.click(toggle)
+    expect(toggle.getAttribute('aria-checked')).toBe('true')
+    await waitFor(() => expect(disabled(toggle)).toBe(true))
+    answer({ ok: false, error: 'the schedule of work-queue cannot be read' })
+    expect((await within(row('/work-queue')).findByRole('alert')).textContent).toBe('The switch was not saved: the schedule of work-queue cannot be read')
+    await waitFor(() => expect(toggle.getAttribute('aria-checked')).toBe('false'))
   })
 
   test('"Run now" runs `now` for its row, switched on or off, and the row says it started a run, which "Open it" opens; an answer that names no run still says it started', async () => {
@@ -288,6 +330,27 @@ describe('the Automations page: its rows', () => {
     expect(disabled(now)).toBe(true)
     fireEvent.click(now)
     expect(saves(runCommand)).toEqual([])
+  })
+
+  test('while OpenAgent is not answering, a new automation is not saved and a row is not switched: both presses are off', async () => {
+    const { host, runCommand } = scheduler()
+    render(
+      <OpenAgentDown>
+        <ModuleHostContext.Provider value={host}>
+          <AutomationsPage projects={[GEMSTACK]} projectId={null} path={[]} />
+        </ModuleHostContext.Provider>
+      </OpenAgentDown>,
+    )
+    const gemstack = await screen.findByRole('region', { name: 'gemstack' })
+    expect(disabled(within(row('/work-queue')).getByRole('switch', { name: 'Run /work-queue by itself' }))).toBe(true)
+    fireEvent.click(within(gemstack).getByRole('button', { name: 'New automation in gemstack' }))
+    const form = within(gemstack).getByRole('group', { name: 'New automation' })
+    fireEvent.change(within(form).getByRole('textbox', { name: 'Name' }), { target: { value: 'answer-comments' } })
+    fireEvent.change(within(form).getByLabelText('What the agent is told'), { target: { value: 'Answer each new comment below.' } })
+    const save = within(form).getByRole('button', { name: 'Save' })
+    expect(disabled(save)).toBe(true)
+    fireEvent.click(save)
+    expect(runCommand.mock.calls.every(([, args]) => args[0] === 'status')).toBe(true)
   })
 
   test('a "Run now" that starts nothing says why on its row: nothing to do, or one already running, is a plain note; anything else is said as a failure, in the page\'s words for the scheduler\'s decision; the next one takes the line away', async () => {
@@ -431,20 +494,21 @@ describe('the Automations page: its rows', () => {
     expect(within(other).getByText('Scheduler off')).toBeTruthy()
     expect(within(other).queryByText(/: off/)).toBeNull()
     expect(within(other).getByText(/^The scheduler is off in this project, so nothing here starts by itself/)).toBeTruthy()
-    // How it starts with the dashboard: the project's Skills page, whose tick does it, or `init`.
-    fireEvent.click(within(other).getByRole('button', { name: 'Skills page' }))
+    // How it starts with the dashboard: Settings › Skills, whose tick does it, or `init`.
+    fireEvent.click(within(other).getByRole('button', { name: 'Settings › Skills' }))
     expect(host.openSettings).toHaveBeenCalledWith('skills')
-    // The two commands, `start` (now) and `init`, each set as code with a button that copies it.
+    // The two commands, `start` (now) and `init`, each set as code with a button that copies it, named by the command.
     expect(within(other).getByText('npx @openagt/skill-scheduler@0.1 init').tagName).toBe('CODE')
     expect(within(other).getByText('npx @openagt/skill-scheduler@0.1 start').tagName).toBe('CODE')
-    expect(within(other).getAllByRole('button', { name: 'Copy the command' })).toHaveLength(2)
+    expect(within(other).getByRole('button', { name: 'Copy the start command' })).toBeTruthy()
+    expect(within(other).getByRole('button', { name: 'Copy the init command' })).toBeTruthy()
     expect(within(gemstack).queryByText(/so nothing here starts/)).toBeNull()
     cleanup()
     const { host: stopped } = hostAnswering(() => ({ ok: true, output: { ...STATUS, running: false } }))
     show(stopped)
     expect(await screen.findByText(/^The scheduler is on but its process is not running, so nothing here starts by itself/)).toBeTruthy()
     expect(screen.getByText('npx @openagt/skill-scheduler@0.1 start').tagName).toBe('CODE')
-    expect(screen.getAllByRole('button', { name: 'Copy the command' })).toHaveLength(1)
+    expect(screen.getAllByRole('button', { name: 'Copy the start command' })).toHaveLength(1)
   })
 
   test('a row switched on while the scheduler is off, or not running, is not green: it says it does not start', async () => {
@@ -478,7 +542,7 @@ describe('the Automations page: its rows', () => {
     const { host } = hostAnswering(projectId => answers[projectId]!)
     show(host, [GEMSTACK, OTHER, { id: 'p3', name: 'third', gitHost: true }])
     const gemstack = await screen.findByRole('region', { name: 'gemstack' })
-    expect(within(gemstack).getByText("No automations yet: make one with New automation, or pick a skill that schedules one on the project's Skills page.")).toBeTruthy()
+    expect(within(gemstack).getByText((_, element) => element?.tagName === 'P' && element.textContent === 'No automations yet: make one with New automation, or pick a skill that schedules one in Settings › Skills.')).toBeTruthy()
     expect(screen.queryByText(/has not looked at its skills/)).toBeNull()
     expect(within(gemstack).queryByRole('list')).toBeNull()
     expect(within(gemstack).queryByRole('group')).toBeNull()
@@ -489,7 +553,7 @@ describe('the Automations page: its rows', () => {
     // Never read once: the line alone, no row.
     expect(within(other).queryByRole('list')).toBeNull()
     const third = screen.getByRole('region', { name: 'third' })
-    expect(within(third).getByText("No automations yet: make one with New automation, or pick a skill that schedules one on the project's Skills page.")).toBeTruthy()
+    expect(within(third).getByText((_, element) => element?.tagName === 'P' && element.textContent === 'No automations yet: make one with New automation, or pick a skill that schedules one in Settings › Skills.')).toBeTruthy()
     // Said once, in the page's words: the tick's own note for it is not repeated in the heading.
     expect(within(third).queryByText(/no skill of this project schedules a command/)).toBeNull()
     // A project with nothing listed can still be given an automation.

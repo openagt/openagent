@@ -52,6 +52,7 @@ test('the agents, the skills to pick from and the accounts this computer knows; 
     assert.ok(view.skills.some(group => group.skills.some(skill => skill.name === 'reply')), 'the catalogue is there')
     assert.deepEqual(view.github, { host: 'github.com', accounts: ['octo', 'octo-agent'] }, 'a login GitHub no longer takes is not offered, and one more is added at the host')
     assert.ok(view.claude.some(account => account.id === 'Dani'))
+    assert.deepEqual(view.claude.filter(account => account.loggedOut).length, 1, "this computer's own login, not logged in here, says so")
 
     // Saved under the id its name gives; a second one of that name is refused.
     const saved = await sendSaveAgent({ name: 'Social Media', skills: ['ask', 'reply'], accounts: { github: 'octo-agent', claude: ['Dani'] }, projectSkills: false })

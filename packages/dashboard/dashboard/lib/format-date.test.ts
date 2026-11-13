@@ -7,6 +7,7 @@ import {
   formatResetTooltip,
   formatDuration,
   formatDurationLong,
+  formatRelative,
 } from './format-date.js'
 
 describe('format-date (#759)', () => {
@@ -64,6 +65,19 @@ describe('formatAge (#1139)', () => {
     expect(formatAge(undefined)).toBe('—')
     expect(formatAge('not a date')).toBe('—')
     expect(formatAge(undefined, 'never')).toBe('never')
+  })
+})
+
+describe('formatRelative (#948)', () => {
+  test('gives one moment the age formatAge gives it, floored: 9m 50s is 9m ago in both', () => {
+    vi.useFakeTimers()
+    vi.setSystemTime(new Date('2026-07-25T12:00:00.000Z'))
+    try {
+      for (const at of ['2026-07-25T11:50:10.000Z', '2026-07-25T10:20:00.000Z', '2026-07-23T01:00:00.000Z']) expect(formatRelative(at)).toBe(formatAge(at))
+      expect(formatRelative('2026-07-25T11:50:10.000Z')).toBe('9m ago')
+    } finally {
+      vi.useRealTimers()
+    }
   })
 })
 

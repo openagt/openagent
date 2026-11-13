@@ -662,6 +662,19 @@ function FollowSent({ sent }: { sent: number }) {
   return null
 }
 
+// Opens the chat at the top of a reply when the reply and what follows it are taller than the view.
+function OpenAtReply({ messageId, viewport }: { messageId: string; viewport: RefObject<HTMLDivElement | null> }) {
+  const { scrollToMessage } = useMessageScroller()
+  useLayoutEffect(() => {
+    const view = viewport.current
+    const row = [...(view?.querySelectorAll<HTMLElement>('[data-message-id]') ?? [])].find(el => el.dataset['messageId'] === messageId)
+    if (!view || !row) return
+    const top = row.getBoundingClientRect().top - view.getBoundingClientRect().top + view.scrollTop
+    if (view.scrollHeight - top > view.clientHeight) scrollToMessage(messageId, { align: 'start' })
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
+  return null
+}
+
 export function EventList({
   events: given,
   writing = '',
@@ -917,6 +930,11 @@ export function EventList({
   }
   // The open question the keys answer: the newest.
   const asking = [...shown].reverse().find(e => choiceRows?.rows.has(e) && choiceRows.rows.get(e)?.pick === undefined && !choiceRows.rows.get(e)?.passed)
+  // The question the chat opened on, which takes the focus from the message box; one asked later does not.
+  const openedOn = useRef<OpenAgentEvent | undefined | null>(null)
+  if (openedOn.current === null && shown.length > 0) openedOn.current = asking
+  // The reply that question is about: a chat opened on a plan for a yes shows the plan's top first.
+  const openedAt = openedOn.current ? shown.slice(0, shown.indexOf(openedOn.current)).reverse().find(e => asked.has(e)) : undefined
 
   return (
     <MessageScrollerProvider autoScroll={stick} defaultScrollPosition={openAt ?? (stick ? 'end' : 'start')}>
@@ -999,7 +1017,7 @@ export function EventList({
                   ) : choiceRow && choiceRow.pick === undefined && projectId !== undefined && agentId !== undefined ? (
                     // The question the agent waits on, answered here, under what it said.
                     typing ? null : <div className="mt-1 flex min-w-0 flex-1 flex-col gap-1.5">
-                      <QuestionPanel key={`${agentId}:${choiceRow.choice.id}`} projectId={projectId} agentId={agentId} choice={choiceRow.choice} active={e === asking} onSaid={onSaid} focusNext={focusNext} />
+                      <QuestionPanel key={`${agentId}:${choiceRow.choice.id}`} projectId={projectId} agentId={agentId} choice={choiceRow.choice} active={e === asking} focused={e === openedOn.current} onSaid={onSaid} focusNext={focusNext} />
                       {footer}
                     </div>
                   ) : choiceRow?.pick !== undefined ? (
@@ -1070,6 +1088,8 @@ export function EventList({
         </MessageScrollerViewport>
         <MessageScrollerButton className="data-[direction=end]:bottom-[calc(var(--chat-bottom,0px)+1.25rem)]" />
       </MessageScroller>
+      {/* After the scroller, so the rows are measured and its own opening place is already applied. */}
+      {openedAt && <OpenAtReply messageId={idOf(openedAt)} viewport={viewport} />}
     </MessageScrollerProvider>
   )
 }

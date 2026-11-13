@@ -145,6 +145,8 @@ export type LinkActionResult = { ok: true } | { ok: false; error: string }
 export interface LinkAction {
   /** The button's label, a short verb phrase: "Add to queue". */
   label: string
+  /** What the button says while the action runs: "Adding…". The label with a spinner otherwise. */
+  busyLabel?: string
   /** What the button says once the action is done: "Queued". The label with a check mark otherwise. */
   doneLabel?: string
   /** The button's icon; none otherwise. */
@@ -154,6 +156,8 @@ export interface LinkAction {
    * own commands in that project. A batch stops at its first failure and says why.
    */
   run(host: ModuleHost, projectId: string, links: ModuleLink[]): Promise<LinkActionResult>
+  /** Which links of one project the action is done on already: a button whose links all are rests on its done label. */
+  done?(host: ModuleHost, projectId: string): Promise<(link: ModuleLink) => boolean>
 }
 
 /** What a Settings section is rendered with: the projects whose settings it shows and saves. */
@@ -391,12 +395,15 @@ export interface ModuleHost {
   read(projectId: string, name: string, input?: Record<string, unknown>): Promise<ModuleReadResult>
   /** Open one agent's page in the dashboard: its live feed while it runs, its record after. */
   openAgent(projectId: string, agentId: string): void
+  /** The address of one agent's page: a link's `href`, for a link that also opens in a new tab. */
+  agentHref(projectId: string, agentId: string): string
   /**
    * Open a page a module adds (this one's or another's), at a sub-path, in the project picked in
    * the dashboard, or in `projectId`, which is then the one picked: `openPage('tickets', [file], projectId)`.
-   * A page the picked project's packages do not add shows "No such page".
+   * A page the picked project's packages do not add shows "No such page". With `replace`, the address
+   * takes the place of the current one, so Back steps over it: a pick the page keeps in its address.
    */
-  openPage(segment: string, path?: string[], projectId?: string): void
+  openPage(segment: string, path?: string[], projectId?: string, options?: { replace?: boolean }): void
   /** The address of a page a module adds, with the project picked in the dashboard: a link's `href`, for a link that also opens in a new tab. */
   pageHref(segment: string): string
   /** Open an entry of Settings over the page, by its id: `openSettings('devices')`. */
@@ -623,6 +630,7 @@ export { Input } from '../components/ui/input.js'
 export { GaugeFace } from '../components/ui/gauge.js'
 export { ClaudeLogo, CodexLogo } from '../components/driver-logos.js'
 export { cn } from '../lib/utils.js'
+export { inPlace } from '../lib/in-place.js'
 export { STATUS_TONE, STATUS_DOT, STATUS_RING } from '../lib/status-tone.js'
 export { usePolled, useLoaded, forgetRemembered } from '../lib/use-async.js'
 export { FadeWhileStale } from '../components/FadeWhileStale.js'

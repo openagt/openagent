@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type MutableRefObject } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore, type MutableRefObject } from 'react'
 import type { AgentDoing, AgentMeta, AgentWorktree, OpenAgentEvent } from '../../src/index.js'
 import { onAgentMainBranch, onAgentsDoing, onGitHostHome, onRetainedWorktrees } from '../rpc/reads.js'
 import { useLoaded, usePolled } from '../lib/use-async.js'
@@ -50,7 +50,7 @@ import { driverFromImpl } from '../../src/client.js'
 // events already on screen.
 /** How long the bar waits for the run's own reads before it shows the facts that are in. */
 const READY_WAIT_MS = 1_000
-/** How long a queued message stays shown once the agent no longer works: its next turn, which reads it, starts well within this. */
+/** How long a queued message stays shown once the agent no longer works and was not stopped: its next turn, which reads it, starts well within this. Unread then, it goes back to the box. */
 const QUEUED_UNREAD_MS = 5_000
 
 /** How often what the working subagents are doing is read: the runs poll's own pace. */
@@ -195,7 +195,7 @@ export function AgentView({
 
   // The messages on their way to the agent, from the box under the chat to the feed above it.
   // The prompt this page started the run with is on its way only until the run has ended.
-  const { sending: shownSending, onSending, waiting, onQueued, editInBox } = useMessagesOnTheirWay(projectId, agentId, shown, feedLive, live === false ? undefined : startedWith)
+  const { sending: shownSending, onSending, waiting, onQueued, editInBox, giveBack } = useMessagesOnTheirWay(projectId, agentId, shown, live === false && archived !== null && !feedLive, card?.status === 'stopped', live === false ? undefined : startedWith)
   // A question answered from its card hands the focus on to the box, for what the person says next.
   const focusBox = useRef<(() => void) | null>(null)
   // A run writes its prompt line once its coding agent begins. Until then its prompt, off its card,
@@ -386,14 +386,16 @@ export function AgentView({
             actions={
               // A run that is working is still writing its branch; the next step is offered once it has ended,
               // and a run whose subagents still work has not: it goes on as each of them ends.
-              committing ? <Committing /> : ended ? <HandoffActions projectId={projectId} agentId={agentId} state={handoff} subagent={subagent} onAsked={onSending} /> : undefined
+              // Keyed: what a press said, and a merge it armed, are that session's alone.
+              committing ? <Committing /> : ended ? <HandoffActions key={`${projectId}/${agentId}`} projectId={projectId} agentId={agentId} state={handoff} subagent={subagent} onAsked={onSending} /> : undefined
             }
             error={ready && showHandoff ? handoff.error : undefined}
             show={say}
             away={workBar.away}
             onHide={workBar.hide}
           />
-          {card?.otherHost && card.host ? (
+          {/* Until the run's record or its feed says whether it works, no box: it would say an ended run's words. */}
+          {live === null && !feedLive ? null : card?.otherHost && card.host ? (
             // A run another computer started, which is no saved machine, is only read here: a
             // message would continue it on this computer, under its id, with this computer's
             // logins and none of its conversation.
@@ -413,6 +415,7 @@ export function AgentView({
             onSending={onSending}
             onQueued={onQueued}
             editInBox={editInBox}
+            giveBack={giveBack}
             focusBox={focusBox}
             model={underBox}
             {...(contextWindow !== undefined ? { context: <ContextCircle used={card?.contextTokens ?? 0} size={contextWindow} /> } : {})}
@@ -485,6 +488,11 @@ export function AgentView({
 /** A message sent to a working agent, with how many prompts its log held then: a later prompt of its text is it, read. */
 type Queued = QueuedMessage & { prompts: number }
 
+function onVisibilityChange(changed: () => void): () => void {
+  document.addEventListener('visibilitychange', changed)
+  return () => document.removeEventListener('visibilitychange', changed)
+}
+
 /**
  * The messages on their way to an agent, shown in its feed until the agent's own line of each
  * arrives: the one just sent to the ended agent (`sending`, which `onSending` sets), or the prompt
@@ -495,7 +503,10 @@ function useMessagesOnTheirWay(
   projectId: string,
   agentId: string,
   shown: readonly OpenAgentEvent[],
-  feedLive: boolean,
+  /** The run is known to have ended: the list of runs says so and its feed is in. */
+  ended: boolean,
+  /** Its record says it was stopped: what it had not read, it never will. A failed leg's process still sends its inbox as the next turn. */
+  stopped: boolean,
   startedWith: string | undefined,
 ): {
   sending: string | undefined
@@ -504,6 +515,8 @@ function useMessagesOnTheirWay(
   onQueued: (message: QueuedMessage) => void
   /** Set by the composer to what puts a text back in its box: Cancel and edit on a waiting message. */
   editInBox: MutableRefObject<((text: string) => void) | null>
+  /** Set by the composer to what hands its box the messages the run ended without reading. */
+  giveBack: MutableRefObject<((text: string) => void) | null>
 } {
   // The message just sent to an ended run, shown at the end of the feed until its own prompt line
   // arrives: the continuation writes that line only once its checkout is back, seconds later.
@@ -517,9 +530,9 @@ function useMessagesOnTheirWay(
   // The messages sent while the agent works that it has not read yet, each shown waiting until the
   // agent reads it: at its next step, where its `steered` line lands, or, sent for later or not
   // taken in time, as the prompt of its next turn. An agent that stopped working without reading
-  // them (it failed, it was stopped) shows them no longer. Kept per run in this browser, so a
-  // visit or a reload shows them too, until the run's events say they are read, and each tab open
-  // on the run takes the list another tab keeps, so a send there adds to it.
+  // them (it failed, it was stopped) never will: their words go back to the box. Kept per run in
+  // this browser, so a visit or a reload shows them too, until the run's events say they are read,
+  // and each tab open on the run takes the list another tab keeps, so a send there adds to it.
   const [kept, setKept] = useState(() => ({ run: agentId, messages: keptWaiting<Queued>(agentId) }))
   const queued = kept.run === agentId ? kept.messages : keptWaiting<Queued>(agentId)
   const setQueued = useCallback(
@@ -539,11 +552,22 @@ function useMessagesOnTheirWay(
   useEffect(() => {
     if (unread.length !== queued.length) setQueued(() => unread)
   }, [unread.length, queued.length]) // eslint-disable-line react-hooks/exhaustive-deps
+  const giveBack = useRef<((text: string) => void) | null>(null)
+  const unreadNow = useRef(queued)
+  unreadNow.current = queued
+  // With the session open in two tabs, the words go to the one the person looks at.
+  const onScreen = useSyncExternalStore(onVisibilityChange, () => document.visibilityState !== 'hidden', () => true)
   useEffect(() => {
-    if (queued.length === 0 || feedLive) return
-    const timer = setTimeout(() => setQueued(() => []), QUEUED_UNREAD_MS)
+    if (queued.length === 0 || !ended || !onScreen) return
+    const timer = setTimeout(
+      () => {
+        giveBack.current?.(unreadNow.current.map(message => message.text).join('\n\n'))
+        setQueued(() => [])
+      },
+      stopped ? 0 : QUEUED_UNREAD_MS,
+    )
     return () => clearTimeout(timer)
-  }, [queued.length, feedLive, setQueued])
+  }, [queued.length, ended, stopped, onScreen, setQueued])
   const onQueued = useCallback((message: QueuedMessage) => setQueued(was => [...was, { ...message, prompts }]), [setQueued, prompts])
   // Cancel and edit puts the message back in the box; the composer says how.
   const editInBox = useRef<((text: string) => void) | null>(null)
@@ -565,5 +589,6 @@ function useMessagesOnTheirWay(
     waiting,
     onQueued,
     editInBox,
+    giveBack,
   }
 }

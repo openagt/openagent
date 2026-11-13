@@ -45,7 +45,7 @@ describe('BridgeSettings version gate (#1519)', () => {
     })
     render(<BridgeSettings />)
     // The token row proves the panel rendered before asserting the absence.
-    await screen.findByText(/paste this token/)
+    await screen.findByText(/reports the question/)
     expect(screen.queryByText(/blocked/)).toBeNull()
   })
 })
@@ -73,7 +73,7 @@ describe('BridgeSettings refused contact (#1225)', () => {
       version: { got: '0.8.0', expected: '0.8.0', blocked: false, at: '2026-08-17T12:00:00.000Z' },
     })
     render(<BridgeSettings />)
-    await screen.findByText(/paste this token/)
+    await screen.findByText(/reports the question/)
     expect(screen.queryByText(/rejects/)).toBeNull()
   })
 

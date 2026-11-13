@@ -29,6 +29,7 @@ vi.mock('../rpc/control.js', () => ({
   withdrawMessage,
   sendNow,
   sendOpenPullRequest: vi.fn(async () => null),
+  sendMerge: vi.fn(async () => ({ ok: true, merge: 'auto' })),
   sendSetHandoff: vi.fn(async () => null),
   sendBridgeAnswer: vi.fn(async () => null),
   sendBridgeAnswerCancel: vi.fn(async () => null),
@@ -83,9 +84,11 @@ vi.mock('./SessionRow.js', () => ({
 // The composer shows only what the view tells it about the run going: the one fact of it under test here.
 let queuedIds = 0
 const edited: string[] = []
+const givenBack: string[] = []
 vi.mock('./AgentComposer.js', () => ({
-  AgentComposer: ({ live, model, context, controls, onQueued, editInBox, row, publish, prBase, agent, gitAccount, projectSkills }: { publish?: string; prBase?: string; live: boolean; model?: string; context?: ReactNode; controls?: ReactNode; onQueued?: (message: { id: string; text: string; later: boolean }) => void; editInBox?: { current: ((text: string) => void) | null }; row?: ReactNode; agent?: string; gitAccount?: string; projectSkills?: 'none' | string[] }) => {
+  AgentComposer: ({ live, model, context, controls, onQueued, editInBox, giveBack, row, publish, prBase, agent, gitAccount, projectSkills }: { publish?: string; prBase?: string; live: boolean; model?: string; context?: ReactNode; controls?: ReactNode; onQueued?: (message: { id: string; text: string; later: boolean }) => void; editInBox?: { current: ((text: string) => void) | null }; giveBack?: { current: ((text: string) => void) | null }; row?: ReactNode; agent?: string; gitAccount?: string; projectSkills?: 'none' | string[] }) => {
     if (editInBox) editInBox.current = text => void edited.push(text)
+    if (giveBack) giveBack.current = text => void givenBack.push(text)
     return (
       <>
         {row}
@@ -266,6 +269,37 @@ describe('AgentView: the bar above the message box', () => {
     const order = (a: Element, b: Element) => Boolean(a.compareDocumentPosition(b) & Node.DOCUMENT_POSITION_FOLLOWING)
     expect(order(screen.getByTestId('bar-ready'), screen.getByTestId('work-bar'))).toBe(true)
     expect(order(screen.getByTestId('work-bar'), screen.getByTestId('composer-live'))).toBe(true)
+  })
+})
+
+describe("the bar's own state is one session's", () => {
+  const pr = (number: number) => ({ ...PUSHED, pr: { number, url: `https://example.test/${number}`, state: 'OPEN', title: 'T' } })
+  // Repo B's session seen first; then repo A's #42 set to merge once its checks pass, and B's session again, its PR numbered `other`.
+  const armA = async (other: number) => {
+    onAgent.mockResolvedValue(ARCHIVED)
+    onAgentHandoff.mockImplementation((async (project: string) => (project === 'p1' ? pr(42) : pr(other))) as never)
+    const page = render(view({ projectId: 'p2', agentId: 'run-2' }))
+    await screen.findByRole('button', { name: 'Merge PR' })
+    page.rerender(view())
+    await waitFor(() => expect(onAgentHandoff).toHaveBeenCalledWith('p1', 'run-1'))
+    await new Promise(resolve => setTimeout(resolve, 20))
+    fireEvent.click(await screen.findByRole('button', { name: 'Merge PR' }))
+    await waitFor(() => expect(document.querySelector('[aria-live="polite"]')!.textContent).toBe('PR #42 merges when its checks pass.'))
+    expect(screen.queryByRole('button', { name: 'Merge PR' })).toBeNull()
+    page.rerender(view({ projectId: 'p2', agentId: 'run-2' }))
+    await waitFor(() => expect(onAgentHandoff).toHaveBeenCalledWith('p2', 'run-2'))
+    await new Promise(resolve => setTimeout(resolve, 20))
+  }
+
+  test("another repository's session with a PR of the same number still offers its Merge", async () => {
+    await armA(42)
+    expect(await screen.findByRole('button', { name: 'Merge PR' })).toBeTruthy()
+  })
+
+  test("another repository's session is not told the first one's PR merges when its checks pass", async () => {
+    await armA(43)
+    expect(screen.getByRole('button', { name: 'Merge PR' })).toBeTruthy()
+    expect(document.querySelector('[aria-live="polite"]')!.textContent).toBe('')
   })
 })
 
@@ -743,17 +777,99 @@ describe('a message sent while the agent works', () => {
     expect(queuedBoxes()).toHaveLength(0)
   })
 
-  test('an agent that stopped working without reading it shows it for five seconds more, not for good', () => {
+  test('a run whose record says it was stopped gives its words back to the box at once', async () => {
     vi.useFakeTimers()
     try {
+      givenBack.length = 0
       const { rerender } = render(view({ live: true, events: [start('go'), text] }))
+      fireEvent.click(screen.getByText('queue-one'))
+      rerender(view({ live: false, card: { status: 'stopped' }, events: [start('go'), text, { kind: 'end', ok: false, stopped: true }] as OpenAgentEvent[] }))
+      await act(async () => {})
+      act(() => void vi.advanceTimersByTime(0))
+      expect(queuedBoxes()).toHaveLength(0)
+      expect(givenBack).toEqual(['and then this'])
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  test('a tab in the background leaves the words for the tab that is shown, and takes them once it is shown and they still wait', async () => {
+    vi.useFakeTimers()
+    const setShown = (shown: boolean) => {
+      Object.defineProperty(document, 'visibilityState', { configurable: true, get: () => (shown ? 'visible' : 'hidden') })
+      act(() => void document.dispatchEvent(new Event('visibilitychange')))
+    }
+    try {
+      givenBack.length = 0
+      const { rerender } = render(view({ live: true, events: [start('go'), text] }))
+      fireEvent.click(screen.getByText('queue-one'))
+      setShown(false)
+      rerender(view({ live: false, card: { status: 'stopped' }, events: [start('go'), text, { kind: 'end', ok: false, stopped: true }] as OpenAgentEvent[] }))
+      await act(async () => {})
+      act(() => void vi.advanceTimersByTime(10_000))
+      expect(queuedBoxes()).toHaveLength(1)
+      expect(givenBack).toEqual([])
+      setShown(true)
+      act(() => void vi.advanceTimersByTime(0))
+      expect(queuedBoxes()).toHaveLength(0)
+      expect(givenBack).toEqual(['and then this'])
+    } finally {
+      delete (document as { visibilityState?: unknown }).visibilityState
+      vi.useRealTimers()
+    }
+  })
+
+  test('a run whose feed shows its end is ended at once, its Stop gone with the end line, before the list of runs says so', () => {
+    const { rerender } = render(view({ live: true, events: [start('go'), text] }))
+    expect(screen.getByTestId('composer-live').textContent).toBe('true')
+    rerender(view({ live: true, events: [start('go'), text, { kind: 'end', ok: false, stopped: true }] as OpenAgentEvent[] }))
+    expect(screen.getByTestId('composer-live').textContent).toBe('false')
+  })
+
+  test('a session whose run is not known yet has no message box, which would say an ended run\'s words; it comes once the record or the feed says', () => {
+    const { rerender } = render(view({ live: null, events: [] }))
+    expect(screen.queryByTestId('composer-live')).toBeNull()
+    // The feed says it works before any list has the run.
+    rerender(view({ live: null, events: [start('go'), text] }))
+    expect(screen.getByTestId('composer-live').textContent).toBe('true')
+    cleanup()
+    render(view({ live: false, events: [] }))
+    expect(screen.getByTestId('composer-live').textContent).toBe('false')
+  })
+
+  test('a page slow to learn that the run still works keeps showing it waiting', () => {
+    vi.useFakeTimers()
+    try {
+      render(view({ live: true, events: [start('go'), text] }))
+      fireEvent.click(screen.getByText('queue-one'))
+      cleanup()
+      // Reloaded: the list of runs is not read yet, and the run's feed has not come.
+      const { rerender } = render(view({ live: null, events: [] }))
+      act(() => void vi.advanceTimersByTime(10_000))
+      rerender(view({ live: true, events: [start('go'), text] }))
+      expect(queuedBoxes().map(n => n.textContent)).toEqual(['and then this'])
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  test('an agent that stopped working without reading it shows it for five seconds more, then its words go back to the box', async () => {
+    vi.useFakeTimers()
+    try {
+      givenBack.length = 0
+      const { rerender } = render(view({ live: true, events: [start('go'), text] }))
+      fireEvent.click(screen.getByText('queue-one'))
       fireEvent.click(screen.getByText('queue-one'))
       const ended = [start('go'), text, { kind: 'end', ok: false, stopped: true }] as OpenAgentEvent[]
       rerender(view({ live: false, events: ended }))
+      // The ended run's feed is read.
+      await act(async () => {})
       act(() => void vi.advanceTimersByTime(4_000))
-      expect(queuedBoxes()).toHaveLength(1)
+      expect(queuedBoxes()).toHaveLength(2)
+      expect(givenBack).toEqual([])
       act(() => void vi.advanceTimersByTime(1_500))
       expect(queuedBoxes()).toHaveLength(0)
+      expect(givenBack).toEqual(['and then this\n\nand then this'])
     } finally {
       vi.useRealTimers()
     }

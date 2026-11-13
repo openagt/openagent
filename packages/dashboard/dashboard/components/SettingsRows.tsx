@@ -1,6 +1,7 @@
-import type { ReactNode } from 'react'
+import { useContext, type ReactNode } from 'react'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select.js'
 import { cn } from '../lib/utils.js'
+import { DaemonDown } from '../lib/use-daemon-health.js'
 
 // Settings' building blocks (#958): an entry's settings, a row, a row picked from a list. The
 // dashboard's own entries are made of them, and so is an entry a module brings (`@openagt/dashboard/module`
@@ -32,17 +33,27 @@ export function SettingsRow({
   description,
   control,
   dimmed = false,
+  labelFor,
 }: {
   label: string
   description: ReactNode
   control: ReactNode
   /** A row the rules turned off: greyed, but still shown with its reason. */
   dimmed?: boolean
+  /** The control's `id`: a click on the label works the control. */
+  labelFor?: string
 }) {
+  const named = cn('text-sm', dimmed && 'text-muted-foreground')
   return (
     <div className="flex items-start justify-between gap-4 py-3 first:pt-0 last:pb-0">
       <div className="min-w-0">
-        <p className={cn('text-sm', dimmed && 'text-muted-foreground')}>{label}</p>
+        {labelFor === undefined ? (
+          <p className={named}>{label}</p>
+        ) : (
+          <label htmlFor={labelFor} className={cn('block', !dimmed && 'cursor-pointer', named)}>
+            {label}
+          </label>
+        )}
         <p className="text-xs text-muted-foreground">{description}</p>
       </div>
       <div className="shrink-0">{control}</div>
@@ -82,6 +93,7 @@ export function SettingsSelectRow({
   options: SettingsOption[]
   onChange: (next: string) => void
 }) {
+  const down = useContext(DaemonDown)
   if (options.length === 0) return null
   // A saved value the list does not hold (an editor that is no longer found, a list not read yet) is still what is saved: it gets a line of its own, by its text.
   const listed = options.some(o => o.value === value) ? options : [...options, { value, label: value }]
@@ -97,7 +109,7 @@ export function SettingsSelectRow({
       label={label}
       description={description}
       control={
-        <Select items={items} value={value === '' ? NO_VALUE : value} onValueChange={picked}>
+        <Select items={items} value={value === '' ? NO_VALUE : value} onValueChange={picked} disabled={down}>
           <SelectTrigger size="sm" aria-label={label} className="max-w-[min(16rem,45vw)]">
             <SelectValue />
           </SelectTrigger>

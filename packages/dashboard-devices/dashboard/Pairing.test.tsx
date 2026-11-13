@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, test, vi } from 'vitest'
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { ModuleHostContext, type ModuleCommandResult, type ModuleHost } from '@openagt/dashboard/module'
-import { fakeHost } from '@openagt/dashboard/module/testing'
+import { OpenAgentDown, fakeHost } from '@openagt/dashboard/module/testing'
 import { AskPopup } from './Pairing.js'
 
 // The popup over every page: a computer on this Wi-Fi asks to connect.
@@ -81,6 +81,26 @@ describe('A computer wants to connect', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Close' }))
     expect(await screen.findByText('Studio Mac')).toBeTruthy()
     expect(h.runComputerCommand).not.toHaveBeenCalledWith(['deny', ASK.id])
+  })
+
+  test('while OpenAgent is not answering, Allow and Deny are off and send nothing; the popup still closes', async () => {
+    const h = host([ASK])
+    render(
+      <OpenAgentDown>
+        <ModuleHostContext.Provider value={h.host}>
+          <AskPopup />
+        </ModuleHostContext.Provider>
+      </OpenAgentDown>,
+    )
+    const deny = (await screen.findByRole('button', { name: 'Deny' })) as HTMLButtonElement
+    const allow = screen.getByRole('button', { name: 'Allow' }) as HTMLButtonElement
+    expect([deny.disabled, allow.disabled]).toEqual([true, true])
+    fireEvent.click(deny)
+    fireEvent.click(allow)
+    expect(h.runComputerCommand.mock.calls.map(([args]) => args[0])).not.toContain('deny')
+    expect(h.runComputerCommand.mock.calls.map(([args]) => args[0])).not.toContain('allow')
+    fireEvent.click(screen.getByRole('button', { name: 'Close' }))
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
   })
 
   test('a read that failed is tried again later, and draws nothing', async () => {

@@ -331,7 +331,9 @@ describe('ChangesPanel, as Claude Code on the web draws it', () => {
   test('each file shows its lines added and removed, a count of none too, in the list and over its diff', async () => {
     readRun.mockResolvedValue({ source: 'checkout', changes: { 'src/app.ts': { status: 'modified', committed: true, added: 3, removed: 0 } }, merged: false, from: 'main', to: 'agent-x' })
     render(<ChangesPanel projectId="p1" agentId="run-1" context={context} />)
-    await waitFor(() => expect(row(/app\.ts/).textContent).toBe('app.ts+3 −0'))
+    await waitFor(() => expect(row(/app\.ts/).textContent).toContain('app.ts+3 −0'))
+    // Said in words, not as the signs a screen reader would spell out.
+    expect(row(/app\.ts.*3 lines added, none removed/)).toBe(row(/app\.ts/))
     expect(within(screen.getByRole('region', { name: 'src/app.ts' })).getAllByText('+3')).toHaveLength(1)
   })
 

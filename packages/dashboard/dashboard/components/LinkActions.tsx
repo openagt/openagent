@@ -1,8 +1,10 @@
 import { useContext, useEffect, useState, type ReactNode } from 'react'
-import { Check } from 'lucide-react'
+import { Check, Loader2 } from 'lucide-react'
 import { moduleHost, type LinkActionResult, type ModuleLink } from '../module/index.js'
 import { useMountedModules, type MountedLinkAction } from '../lib/use-modules.js'
 import { HostServicesContext, INERT_HOST_SERVICES } from '../lib/host-services.js'
+import { DaemonDown } from '../lib/use-daemon-health.js'
+import { usePolled } from '../lib/use-async.js'
 import { Button, type ButtonProps } from './ui/button.js'
 import { Tooltip, TooltipTrigger, TooltipContent } from './ui/tooltip.js'
 
@@ -11,6 +13,9 @@ import { Tooltip, TooltipTrigger, TooltipContent } from './ui/tooltip.js'
 // package the link's project has puts its verb here: the queue module's "Add to queue", say. The
 // page names no module, the module names no ticket; the dashboard, which installed both, puts the
 // two together. A project without such a package shows nothing here at all.
+
+/** No action read as done on anything yet. */
+const NOTHING_DONE: Record<string, (link: ModuleLink) => boolean> = {}
 
 /** The links one project's worth of a click acts on. */
 export interface ProjectLinks {
@@ -27,23 +32,63 @@ export interface LinkActionOffer {
   key: string
   /** The module's verb: "Add to queue". */
   label: string
+  /** What the action says while it runs: "Adding…". */
+  busyLabel?: string | undefined
   /** What the action says once done: "Queued". */
   doneLabel?: string | undefined
   icon?: MountedLinkAction['icon']
+  /** The module reads it done on every link of the targets already: a ticket already on the queue. */
+  done: boolean
 }
 
 /**
  * The actions the installed modules offer on links in `projects`, and a way to run one on a set
  * of links: for a surface that offers them as items of its own menu, not as {@link LinkActions}'
  * buttons. Each project in `targets` that has the action's package is handed its links, in order,
- * until one fails.
+ * until one fails. With `known` links, an action whose module reads it done on all of them already
+ * says so (`done`), read again every ten seconds.
  */
-export function useLinkActions(projects: readonly string[]): { actions: LinkActionOffer[]; run: (key: string, targets: LinkTargets) => Promise<LinkActionResult> } {
+export function useLinkActions(
+  projects: readonly string[],
+  known?: LinkTargets,
+): { actions: LinkActionOffer[]; run: (key: string, targets: LinkTargets) => Promise<LinkActionResult> } {
   const { linkActions } = useMountedModules()
   const services = useContext(HostServicesContext)
   const mounted = linkActions.filter(action => projects.some(id => action.projects.includes(id)))
   const keyOf = (action: MountedLinkAction) => `${action.package}\n${action.label}`
-  const actions = mounted.map(action => ({ key: keyOf(action), label: action.label, doneLabel: action.doneLabel, icon: action.icon }))
+
+  // What the actions are done on already: one read per action and project, shared by its buttons.
+  const groups = known === undefined || typeof known === 'function' ? [] : known.filter(group => group.links.length > 0)
+  const asked = mounted.filter(action => action.done)
+  const readKey = [...asked.map(keyOf), ...groups.map(group => group.projectId)].join('\n')
+  const { value: doneOn } = usePolled<Record<string, (link: ModuleLink) => boolean>>(
+    asked.length === 0 || groups.length === 0
+      ? null
+      : async () => {
+          const read = await Promise.all(
+            asked.flatMap(action =>
+              groups
+                .filter(group => action.projects.includes(group.projectId))
+                .map(async ({ projectId }) => {
+                  const host = moduleHost({ ...(services ?? INERT_HOST_SERVICES), package: action.package })
+                  const isDone = await action.done!(host, projectId).catch(() => undefined)
+                  return isDone ? [[`${keyOf(action)}\n${projectId}`, isDone] as const] : []
+                }),
+            ),
+          )
+          return Object.fromEntries(read.flat())
+        },
+    NOTHING_DONE,
+    10_000,
+    [readKey],
+    { remember: `link-done:${readKey}` },
+  )
+  const doneBefore = (action: MountedLinkAction): boolean => {
+    const mine = groups.filter(group => action.projects.includes(group.projectId))
+    return mine.length > 0 && mine.every(({ projectId, links }) => links.every(link => doneOn[`${keyOf(action)}\n${projectId}`]?.(link) ?? false))
+  }
+
+  const actions = mounted.map(action => ({ key: keyOf(action), label: action.label, busyLabel: action.busyLabel, doneLabel: action.doneLabel, icon: action.icon, done: doneBefore(action) }))
   const run = async (key: string, targets: LinkTargets): Promise<LinkActionResult> => {
     const action = mounted.find(candidate => keyOf(candidate) === key)
     if (!action) return { ok: false, error: 'That action is no longer offered here.' }
@@ -91,7 +136,8 @@ export function LinkActions({
   size?: ButtonProps['size']
   variant?: ButtonProps['variant']
 }) {
-  const { actions, run: runAction } = useLinkActions(projects)
+  const { actions, run: runAction } = useLinkActions(projects, targets)
+  const down = useContext(DaemonDown)
   const [running, setRunning] = useState<string | null>(null)
   const [done, setDone] = useState<Set<string>>(new Set())
   const [error, setError] = useState<string | null>(null)
@@ -117,10 +163,15 @@ export function LinkActions({
     <>
       {actions.map(action => {
         const Icon = action.icon
-        const rested = done.has(action.key)
+        const rested = done.has(action.key) || action.done
+        const busy = running === action.key
         const content = rested ? (
           <>
             <Check className="h-3.5 w-3.5" aria-hidden /> <span className="max-md:min-w-0 max-md:truncate">{action.doneLabel ?? action.label}</span>
+          </>
+        ) : busy ? (
+          <>
+            <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden /> <span className="max-md:min-w-0 max-md:truncate">{action.busyLabel ?? action.label}</span>
           </>
         ) : (
           <>
@@ -133,7 +184,7 @@ export function LinkActions({
           size,
           // On a phone the button gives up width, and its words are cut with an ellipsis.
           className: 'gap-1.5 md:shrink-0 max-md:min-w-0',
-          disabled: disabled || running !== null || rested,
+          disabled: disabled || down || running !== null || rested,
           onClick: () => void run(action),
         }
         return tooltip ? (

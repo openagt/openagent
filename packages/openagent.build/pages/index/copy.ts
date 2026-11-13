@@ -1,4 +1,4 @@
-import { useState, type KeyboardEvent, type MouseEvent } from 'react'
+import { createElement, useState, type KeyboardEvent, type MouseEvent } from 'react'
 
 // Copy-to-clipboard with the "copied!" badge timing of the original page:
 // instant copy on single click, but ignore the extra clicks of a double/triple-
@@ -60,4 +60,11 @@ export function copyPress(label: string, copy: (e?: { detail: number }) => void)
       copy()
     },
   }
+}
+
+const visuallyHidden = { position: 'absolute', width: 1, height: 1, overflow: 'hidden', clipPath: 'inset(50%)', whiteSpace: 'nowrap' } as const
+
+/** "Copied", said to a screen reader once a copy worked; the badge beside the press shows it. */
+export function CopiedStatus({ copied }: { copied: boolean }) {
+  return createElement('span', { role: 'status', style: visuallyHidden }, copied ? 'Copied' : '')
 }

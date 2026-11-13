@@ -1,3 +1,4 @@
+import { useContext } from 'react'
 import type { ActiveAgent } from '../../src/index.js'
 import { Bot } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle } from './ui/card.js'
@@ -8,6 +9,8 @@ import { runName } from '../../src/client.js'
 import { awaitingName } from '../lib/agent-label.js'
 import { STATUS_DOT } from '../lib/status-tone.js'
 import { cn } from '../lib/utils.js'
+import { HostServicesContext, INERT_HOST_SERVICES } from '../lib/host-services.js'
+import { inPlace } from '../lib/in-place.js'
 
 // The Overview's Agents card (#1139): the sessions working right now. Each row is the whole line,
 // clickable straight into that session — its label is the one-liner the sidebar shows, and its age
@@ -33,6 +36,7 @@ export function Agents({
   namesRuns: boolean
   onSelectAgent: (projectId: string, agentId: string) => void
 }) {
+  const services = useContext(HostServicesContext) ?? INERT_HOST_SERVICES
   return (
     <Card>
       <CardHeader>
@@ -41,7 +45,7 @@ export function Agents({
             apart. */}
         <CardTitle className="flex items-center gap-2 text-base">
           <Bot className="h-4 w-4 shrink-0 text-muted-foreground" />
-          Agents
+          Agents at work
           <span className="truncate text-xs font-normal text-muted-foreground">Agents currently working</span>
         </CardTitle>
       </CardHeader>
@@ -61,6 +65,7 @@ export function Agents({
                 computer={a.computer}
                 at={a.updatedAt}
                 projectName={a.projectName}
+                href={services.agentHref(a.projectId, a.agentId)}
                 onOpen={() => onSelectAgent(a.projectId, a.agentId)}
               />
             ))}
@@ -78,6 +83,7 @@ function AgentRow({
   computer,
   at,
   projectName,
+  href,
   onOpen,
 }: {
   /** The session's one-liner, the same the sidebar shows. */
@@ -91,6 +97,8 @@ function AgentRow({
   /** ISO: the session's last activity. */
   at: string | undefined
   projectName: string
+  /** The session's address, for a click the browser takes (a new tab, a middle click). */
+  href: string
   /** Open the session — project and run both, never just the launcher (#1189). */
   onOpen: () => void
 }) {
@@ -98,9 +106,9 @@ function AgentRow({
     <li>
       {/* No hint on the row itself: that a session row opens the session is the one thing this card
           says already, and a tooltip on the row would sit over the one on the age (#1149). */}
-      <button
-        type="button"
-        onClick={onOpen}
+      <a
+        href={href}
+        onClick={inPlace(onOpen)}
         className="flex w-full items-baseline gap-2 rounded-md px-2 py-1.5 text-left hover:bg-accent focus-visible:bg-accent focus-visible:outline-none"
       >
         <span aria-hidden className={cn('size-1.5 shrink-0 self-center rounded-full', STATUS_DOT[cloud === 'waiting' ? 'waiting' : 'running'])} />
@@ -126,7 +134,7 @@ function AgentRow({
             <TooltipContent>{formatDateTime(at)}</TooltipContent>
           </Tooltip>
         )}
-      </button>
+      </a>
     </li>
   )
 }

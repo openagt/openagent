@@ -108,17 +108,23 @@ html[data-installed] .dashboard-cta {
 
 /* --- Package-manager choice ---
  * Driven by <html data-pm>, set before first paint by the +Head script (no
- * FOUC) and flipped on tab click; all four command variants are pre-rendered.
+ * FOUC) and flipped on tab click; all four command variants are pre-rendered,
+ * stacked in one grid cell so the line keeps the longest one's width.
  * The :not([data-pm]) rules keep npm visible without JS. */
+.pm-commands {
+  display: inline-grid;
+  text-align: left;
+}
 .pm-only {
-  display: none;
+  grid-area: 1 / 1;
+  visibility: hidden;
 }
 html[data-pm='npm'] .pm-only-npm,
 html[data-pm='pnpm'] .pm-only-pnpm,
 html[data-pm='bun'] .pm-only-bun,
 html[data-pm='yarn'] .pm-only-yarn,
 html:not([data-pm]) .pm-only-npm {
-  display: inline;
+  visibility: visible;
 }
 .pm-tab {
   background: transparent;
@@ -149,6 +155,10 @@ html:not([data-pm]) .pm-tab-npm {
 }
 .section-link:hover {
   color: #d3c6aa;
+}
+/* The links fill the bar, which scrolls sideways and so clips anything outside it: the ring goes inside. */
+.section-link:focus-visible {
+  outline-offset: -2px;
 }
 
 /* --- Copy badges: hidden until the copy target is hovered, focused or was just clicked --- */

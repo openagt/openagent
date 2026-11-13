@@ -12,6 +12,8 @@ import type { StartPicks } from '../lib/started-from.js'
 import { startPicks, useStartAgent } from '../lib/use-start-agent.js'
 import { useProjectLauncher } from '../lib/use-project-launcher.js'
 import { useLoaded, usePolled } from '../lib/use-async.js'
+import { useAction } from '../lib/use-action.js'
+import { sendOpenInApp } from '../rpc/control.js'
 import { Button } from './ui/button.js'
 import { openPermissions, openSettings } from '../lib/use-route.js'
 import { promptWithContext } from '../lib/use-context-set.js'
@@ -35,6 +37,8 @@ import { useIsMobile } from '../lib/use-mobile.js'
 
 /** The note while the start is asked for: what the chat's first line says next. */
 const STARTING = 'Starting session'
+/** How long a start is asked for before the note says so: a refusal in less is not preceded by a flash of it. */
+const STARTING_SAID_AFTER_MS = 300
 
 /** How often a picked machine is asked again while it says a run would not start there: its logins come by themselves, or by a press. */
 const MACHINE_MISSING_MS = 8_000
@@ -120,6 +124,13 @@ export function StartAgentForm({
   toggleContext: (path: string) => void
 }) {
   const [note, setNote] = useState<string | null>(null)
+  const [startingSaid, setStartingSaid] = useState(false)
+  useEffect(() => {
+    setStartingSaid(false)
+    if (note !== STARTING) return
+    const timer = setTimeout(() => setStartingSaid(true), STARTING_SAID_AFTER_MS)
+    return () => clearTimeout(timer)
+  }, [note])
   // The machine the last start was sent to, by its name: what the form says it is cloning on.
   const [sentTo, setSentTo] = useState<string | null>(null)
   const { busy, cloning, error, reset, start } = useStartAgent(projectId)
@@ -351,7 +362,8 @@ export function StartAgentForm({
       {/* Feedback right where the action is (#948): above the box, over the page, so the box never moves. */}
       <div className="absolute inset-x-2 bottom-full flex flex-col gap-1.5 pb-1">
         {/* A start that hit what the check says, or the missing logins, says nothing the boxes below do not. */}
-        {error && missingThere.length === 0 && !readiness?.problems.length && <Refusal {...said(error)} />}
+        {/* A refusal of this computer's hooks.yml: the project opens in the editor from here as from its menu. */}
+        {error && missingThere.length === 0 && !readiness?.problems.length && <Refusal {...said(error)} {...(!machine && !clonedHere && error.includes('.openagent/hooks.yml') ? { actions: <OpenInEditor projectId={projectId} /> } : {})} />}
         {machine && missingThere.length > 0 && (
           <Refusal
             title={`Your ${missingThere.join(' and ')} ${missingThere.length === 1 ? 'login is' : 'logins are'} not on ${name} yet.`}
@@ -406,7 +418,7 @@ export function StartAgentForm({
             }
           />
         )}
-        {note === STARTING && !error && (
+        {note === STARTING && startingSaid && !error && (
           // The chat's own first line (`SessionLine.tsx`), in its words and its look: the page that
           // opens a moment later goes on saying it. A machine that does not have the project yet
           // clones it first, which can take minutes: the line says so for as long as it does.
@@ -415,8 +427,8 @@ export function StartAgentForm({
             <span className="text-shimmer">{cloning && sentTo ? `Cloning ${projectName ?? 'this project'} on ${sentTo}, the first time only` : note}</span>
           </p>
         )}
+        {note !== STARTING && note && !error && <p role="status" className="px-1.5 text-xs text-muted-foreground">{note}</p>}
       </div>
-      {note !== STARTING && note && !error && <p role="status" className="mt-2 text-xs text-muted-foreground">{note}</p>}
     </form>
   )
 }
@@ -425,6 +437,24 @@ export function StartAgentForm({
 function hereName(): string {
   const name = thisMachineName()
   return name === 'This machine' ? 'this computer' : name
+}
+
+/** The project in the person's editor, the project menu's own press: said when it opened, and why when it did not. */
+function OpenInEditor({ projectId }: { projectId: string }) {
+  const { busy, error, run } = useAction()
+  const [opened, setOpened] = useState(false)
+  return (
+    <>
+      <Button type="button" size="xs" disabled={busy} onClick={() => void run(() => sendOpenInApp(projectId, 'editor'), 'Failed to open.').then(outcome => setOpened(outcome.ok))}>
+        Open in your editor
+      </Button>
+      {error ? (
+        <span role="status" className="text-xs text-danger">{`Your editor did not open: ${error}`}</span>
+      ) : (
+        opened && <span role="status" className="text-xs text-muted-foreground">Opened in your editor.</span>
+      )}
+    </>
+  )
 }
 
 /**

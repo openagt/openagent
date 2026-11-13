@@ -1,9 +1,10 @@
-import { afterEach, describe, expect, test } from 'vitest'
-import { cleanup, render, screen } from '@testing-library/react'
+import { afterEach, describe, expect, test, vi } from 'vitest'
+import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { ViewToggle } from './ViewToggle.js'
 
 afterEach(() => {
   cleanup()
+  vi.unstubAllGlobals()
   document.cookie = 'openagent-view=; Max-Age=0; path=/'
 })
 
@@ -20,5 +21,17 @@ describe('ViewToggle', () => {
     render(<ViewToggle />)
     expect(screen.getByRole('link', { name: 'Landing page' }).getAttribute('href')).toBe('/_view/landing')
     expect(screen.getByText('Dashboard').getAttribute('aria-current')).toBe('page')
+  })
+
+  test('the switch takes the place of the page in the history, so Back leaves the dashboard; a Ctrl+click is the browser\'s', () => {
+    document.cookie = 'openagent-view=dashboard; path=/'
+    const replace = vi.fn()
+    vi.stubGlobal('location', { replace })
+    render(<ViewToggle />)
+    const landing = screen.getByRole('link', { name: 'Landing page' })
+    expect(fireEvent.click(landing, { ctrlKey: true })).toBe(true)
+    expect(replace).not.toHaveBeenCalled()
+    expect(fireEvent.click(landing)).toBe(false)
+    expect(replace).toHaveBeenCalledWith(expect.stringMatching(/\/_view\/landing$/))
   })
 })

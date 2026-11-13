@@ -156,7 +156,7 @@ test('usage: an unknown command, a stray argument, a bad limit and an unsafe id'
     const unknown = await run(a!, ['dance'])
     assert.equal(unknown.code, 2)
     assert.equal(unknown.json, undefined)
-    assert.equal(unknown.stderr, USAGE)
+    assert.equal(unknown.stderr, `unknown command: dance\n\n${USAGE}`)
     assert.equal((await run(a!, ['--limit', '0'])).code, 2)
     assert.equal((await run(a!, ['--limit', 'many'])).code, 2)
     assert.equal((await run(a!, ['--nope'])).code, 2)

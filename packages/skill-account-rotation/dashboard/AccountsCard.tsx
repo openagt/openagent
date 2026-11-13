@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type RefObject } from 'react'
 import { Check, ChevronDown, Copy, Info, KeyRound, MoreHorizontal, Plus } from 'lucide-react'
-import { Button, Card, CardContent, CardHeader, CardTitle, ClaudeLogo, CodexLogo, Dialog, DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, GaugeFace, Input, Skeleton, Tooltip, TooltipContent, TooltipTrigger, cn, useModuleHost, usePolled, type ModuleCardProps, type ModuleHost } from '@openagt/dashboard/module'
+import { Button, Card, CardContent, CardHeader, CardTitle, ClaudeLogo, CodexLogo, Dialog, DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, GaugeFace, Input, Skeleton, Tooltip, TooltipContent, TooltipTrigger, cn, useModuleHost, useOpenAgentDown, usePolled, type ModuleCardProps, type ModuleHost } from '@openagt/dashboard/module'
 
 // The accounts each coding agent's runs try, in order: how full each one is, whether it is at a
 // limit, adding one: the command's own sign-in, which goes on by itself while the card follows it,
@@ -135,6 +135,7 @@ function SigningIn({ agent, adding, noBrowser, onChanged }: { agent: (typeof AGE
   const [code, setCode] = useState('')
   const [error, setError] = useState<string>()
   const [copied, setCopied] = useState(false)
+  const down = useOpenAgentDown()
   const send = async (): Promise<void> => {
     setError(undefined)
     const done = await host.runComputerCommand(['add-code', agent.id], undefined, code)
@@ -176,7 +177,7 @@ function SigningIn({ agent, adding, noBrowser, onChanged }: { agent: (typeof AGE
           }}
         >
           <Input name="login-code" aria-label="Code from Claude" placeholder="2. Paste the code it shows" value={code} onChange={event => setCode(event.target.value)} className="h-9 min-w-0 grow basis-40 text-sm" />
-          <Button size="sm" type="submit" disabled={code.trim() === '' || adding.checking === true}>
+          <Button size="sm" type="submit" disabled={code.trim() === '' || adding.checking === true || down}>
             {adding.checking ? 'Checking…' : 'Done'}
           </Button>
         </form>
@@ -215,14 +216,27 @@ function AddAccount({ agent, now, failed, from, field, onChanged, onClose }: { a
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string>()
   const [here, setHere] = useState(false)
+  const down = useOpenAgentDown()
+  // The read shown when `add` answered that the sign-in began: any read after it is that sign-in's, the same words as the last one's included.
+  const shown = useRef(now)
+  shown.current = now
+  const begunOver = useRef<AddingNow>(undefined)
   const start = async (): Promise<void> => {
+    begunOver.current = undefined
     setBusy(true)
     setError(undefined)
     const done = await host.runComputerCommand(['add', agent.id, name])
-    setBusy(false)
-    if (!done.ok) setError(done.error)
+    if (done.ok) begunOver.current = shown.current
+    else {
+      setBusy(false)
+      setError(done.error)
+    }
     onChanged()
   }
+  // A started sign-in keeps the press busy until a read shows it under way, or a read after it began says why it did not go through.
+  useEffect(() => {
+    if (now.adding || (now.failed !== undefined && begunOver.current !== undefined && now !== begunOver.current)) setBusy(false)
+  }, [now])
   const shownError = error ?? failed
   return (
     <div className="space-y-3">
@@ -245,7 +259,7 @@ function AddAccount({ agent, now, failed, from, field, onChanged, onClose }: { a
             }}
           >
             <Input ref={field} autoFocus={opened} name="account-name" aria-label="Whose account" placeholder="Whose account, e.g. Dani" value={name} onChange={event => setName(event.target.value)} className="h-8 min-w-0 grow basis-32" />
-            <Button size="sm" type="submit" disabled={busy || name.trim() === ''}>
+            <Button size="sm" type="submit" disabled={busy || down || name.trim() === ''}>
               {agent.logIn}
             </Button>
           </form>
@@ -450,24 +464,27 @@ export function AccountsCard({ accountWhere }: ModuleCardProps) {
   // The agent an account is being added for: the dialog is open on it, from the press until the account is there or the dialog is closed.
   const [naming, setNaming] = useState<AgentId>()
   const nameField = useRef<HTMLInputElement>(null)
+  const addPress = useRef<HTMLButtonElement>(null)
   // Why the last sign-in did not go through, once the person closed the dialog on it: not said again when it opens next.
   const [dismissed, setDismissed] = useState<string>()
   const signingIn = AGENTS.find(agent => adding?.[agent.id]?.adding !== undefined)?.id
   const underWay = signingIn !== undefined
-  const wasUnderWay = useRef(false)
+  // Said in the render that sees a sign-in start or end, so the dialog never draws its form again over an account that is there.
+  const [wasUnderWay, setWasUnderWay] = useState(false)
+  if (underWay !== wasUnderWay) {
+    setWasUnderWay(underWay)
+    // A sign-in found under way, started before this page was opened, is shown as it is.
+    if (underWay) setNaming(now => now ?? signingIn)
+    // The account is there: the dialog closes on it. One that did not go through stays, with why.
+    else setNaming(now => (now !== undefined && adding?.[now]?.failed === undefined ? undefined : now))
+  }
   useEffect(() => {
-    if (underWay) {
-      setFollowing(true)
-      // A sign-in found under way, started before this page was opened, is shown as it is.
-      setNaming(now => now ?? signingIn)
-    } else if (wasUnderWay.current) {
+    if (underWay) setFollowing(true)
+    else if (following) {
       setFollowing(false)
-      // The account is there: the dialog closes on it. One that did not go through stays, with why.
-      setNaming(now => (now !== undefined && adding?.[now]?.failed === undefined ? undefined : now))
       void reload()
       void reloadUsage()
     }
-    wasUnderWay.current = underWay
     // Only when a sign-in starts or ends: the reads are the same from render to render in what they do.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [underWay])
@@ -477,6 +494,7 @@ export function AccountsCard({ accountWhere }: ModuleCardProps) {
   }
   const [busy, setBusy] = useState(false)
   const [failed, setFailed] = useState<string>()
+  const down = useOpenAgentDown()
 
   const press = (args: string[]): void => {
     setBusy(true)
@@ -490,13 +508,13 @@ export function AccountsCard({ accountWhere }: ModuleCardProps) {
       .finally(() => setBusy(false))
   }
 
-  /** Closing the dialog gives up the sign-in under way, as its Cancel does. */
+  /** Closing the dialog gives up the sign-in under way, as its Cancel does, and forgets why the last one did not go through: the dialog said it. */
   const close = (): void => {
     const agent = naming
     setNaming(undefined)
     if (agent === undefined) return
     setDismissed(adding?.[agent]?.failed)
-    if (adding?.[agent]?.adding) void host.runComputerCommand(['add-cancel', agent]).then(changed)
+    if (adding?.[agent]?.adding || adding?.[agent]?.failed !== undefined) void host.runComputerCommand(['add-cancel', agent]).then(changed)
   }
 
   // Rotation does something only for an agent with two accounts or more.
@@ -528,16 +546,16 @@ export function AccountsCard({ accountWhere }: ModuleCardProps) {
           {/* Another account, at the card's title: whose agent it is for, then its sign-in in a dialog. With none yet, the presses are in the card. */}
           {list?.ok && !none && (
             <DropdownMenu>
-              <DropdownMenuTrigger render={<Button size="sm" variant="outline" aria-label="Add an account" />}>
+              <DropdownMenuTrigger ref={addPress} render={<Button size="sm" variant="outline" aria-label="Add an account" />}>
                 <Plus className="size-3.5" aria-hidden />
                 Add
                 <ChevronDown className="size-3 opacity-70" aria-hidden />
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end" className="min-w-[10rem]">
                 {AGENTS.map(agent => (
-                  <DropdownMenuItem key={agent.id} aria-label={`Add ${agent.name} account`} onClick={() => setNaming(agent.id)}>
+                  <DropdownMenuItem key={agent.id} aria-label={`Add a ${agent.account} account`} onClick={() => setNaming(agent.id)}>
                     <agent.Logo className="size-3.5" />
-                    {agent.name}
+                    {`${agent.account} account`}
                   </DropdownMenuItem>
                 ))}
               </DropdownMenuContent>
@@ -558,7 +576,7 @@ export function AccountsCard({ accountWhere }: ModuleCardProps) {
               usage={usage?.ok ? (usage.accounts[agent.id] ?? []) : []}
               reading={usage === undefined}
               where={accountWhere}
-              busy={busy}
+              busy={busy || down}
               onPress={press}
             />
           ))}
@@ -588,7 +606,7 @@ export function AccountsCard({ accountWhere }: ModuleCardProps) {
           </div>
         )}
       </CardContent>
-      <Dialog open={namingAgent !== undefined} onOpenChange={open => !open && close()} title={namingAgent ? `Add a ${namingAgent.account} account` : ''} initialFocus={nameField}>
+      <Dialog open={namingAgent !== undefined} onOpenChange={open => !open && close()} title={namingAgent ? `Add a ${namingAgent.account} account` : ''} initialFocus={nameField} finalFocus={addPress}>
         {namingAgent && (
           <AddAccount
             key={namingAgent.id}

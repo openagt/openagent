@@ -82,12 +82,17 @@ describe('AgentActionsMenu (#toolbar-menu)', () => {
     openMenu()
     expect(await screen.findByText('Open project folder')).toBeTruthy()
     expect(screen.queryByText("Open session's folder")).toBeNull()
+    // The editor opens the same project root, and says so.
+    fireEvent.click(screen.getByText('Open in editor'))
+    expect((await screen.findByRole('menuitem', { name: 'Open the project' })).title).toBe('This session no longer has its own checkout')
     cleanup()
 
     // A retained worktree still exists, so the session wording is honest again.
     render(<AgentActionsMenu projectId="p1" agentId="run-1" events={[]} retainedWorktree onDeleted={vi.fn()} />)
     openMenu()
     expect(await screen.findByText("Open session's folder")).toBeTruthy()
+    fireEvent.click(screen.getByText('Open in editor'))
+    expect(await screen.findByRole('menuitem', { name: "Open this session's checkout" })).toBeTruthy()
   })
 
   test('copies the command that reopens the session in a terminal (#1195)', async () => {
@@ -129,6 +134,25 @@ describe('AgentActionsMenu (#toolbar-menu)', () => {
     expect(sendDeleteAgent).not.toHaveBeenCalled()
     fireEvent.click(screen.getByRole('button', { name: 'Delete' }))
     await waitFor(() => expect(sendDeleteAgent).toHaveBeenCalledWith('p1', 'run-1'))
+  })
+
+  test('while the delete is on its way, the focus stays on its button in the dialog', async () => {
+    let done = (_: { ok: true }) => {}
+    sendDeleteAgent.mockImplementationOnce(() => new Promise(resolve => (done = resolve)))
+    const onDeleted = vi.fn()
+    render(<AgentActionsMenu projectId="p1" agentId="run-1" events={[]} label="my session" onDeleted={onDeleted} />)
+    openMenu()
+    fireEvent.click(await screen.findByText('Delete session'))
+    const confirm = await screen.findByRole('button', { name: 'Delete' })
+    confirm.focus()
+    fireEvent.click(confirm)
+    const busy = await screen.findByRole('button', { name: 'Deleting…' })
+    expect(document.activeElement).toBe(busy)
+    expect(busy.getAttribute('aria-disabled')).toBe('true')
+    fireEvent.click(busy)
+    expect(sendDeleteAgent).toHaveBeenCalledTimes(1)
+    done({ ok: true })
+    await waitFor(() => expect(onDeleted).toHaveBeenCalledTimes(1))
   })
 })
 
@@ -228,6 +252,11 @@ describe('the editor picker in the menu (#727)', () => {
     await openEditorMenu()
     // "Default" names the setting a person sets to choose it.
     expect(await screen.findByText('$OPENAGENT_EDITOR, or code')).toBeTruthy()
+    // The pick is said as a radio's, checked or not, not only drawn.
+    expect(screen.getAllByRole('menuitemradio').map(item => [item.textContent, item.getAttribute('aria-checked')])).toEqual([
+      ['Default$OPENAGENT_EDITOR, or code', 'false'],
+      ['Cursorcursor', 'true'],
+    ])
     fireEvent.click(await screen.findByText('Default'))
     expect(updatePreferences).toHaveBeenCalledWith({ editor: '' })
   })
@@ -304,7 +333,8 @@ describe('Create a repository, for a project that lives on this machine only', (
 describe('the menu of an agent\'s page', () => {
   test('the session\'s menu button is the session\'s name with a small arrow; the whole name on hover', () => {
     render(<AgentActionsMenu projectId="p1" agentId="run-1" events={[]} label="Fix the login page" />)
-    const button = screen.getByRole('button', { name: 'Session actions' })
+    // Named by the name it shows, so a person who says or reads the name finds it.
+    const button = screen.getByRole('button', { name: 'Fix the login page, session actions' })
     expect(button.textContent).toBe('Fix the login page')
     expect(button.getAttribute('title')).toBe('Fix the login page')
     expect(button.querySelector('svg')).toBeTruthy()
@@ -321,23 +351,23 @@ describe('the menu of an agent\'s page', () => {
   test('a name the run was being given comes in letter by letter, as the session\'s row in the list does; one that was only slow to load, or was there from the start, is plain', () => {
     const { rerender } = render(<AgentActionsMenu projectId="p1" agentId="run-1" events={[]} naming />)
     rerender(<AgentActionsMenu projectId="p1" agentId="run-1" events={[]} label="Header comes in" />)
-    const button = screen.getByRole('button', { name: 'Session actions' })
+    const button = screen.getByRole('button', { name: /session actions/i })
     expect(button.textContent).toBe('Header comes in')
     expect(button.querySelectorAll('.letter-in').length).toBe('Header comes in'.length)
     cleanup()
     render(<AgentActionsMenu projectId="p1" agentId="run-2" events={[]} label="Plain from the start" />)
-    expect(screen.getByRole('button', { name: 'Session actions' }).querySelectorAll('.letter-in').length).toBe(0)
+    expect(screen.getByRole('button', { name: /session actions/i }).querySelectorAll('.letter-in').length).toBe(0)
     cleanup()
     // The bar stays up when the next session is opened: its name was not waited for.
     const next = render(<AgentActionsMenu projectId="p1" agentId="run-4" events={[]} naming />)
     next.rerender(<AgentActionsMenu projectId="p1" agentId="run-4" events={[]} label="First name" />)
     next.rerender(<AgentActionsMenu projectId="p1" agentId="run-5" events={[]} label="Another session" />)
-    expect(screen.getByRole('button', { name: 'Session actions' }).querySelectorAll('.letter-in').length).toBe(0)
+    expect(screen.getByRole('button', { name: /session actions/i }).querySelectorAll('.letter-in').length).toBe(0)
     cleanup()
     // An old session opened: the bar waits for the page's reads, with no name coming.
     const slow = render(<AgentActionsMenu projectId="p1" agentId="run-3" events={[]} />)
     slow.rerender(<AgentActionsMenu projectId="p1" agentId="run-3" events={[]} label="Opened later" />)
-    expect(screen.getByRole('button', { name: 'Session actions' }).querySelectorAll('.letter-in').length).toBe(0)
+    expect(screen.getByRole('button', { name: /session actions/i }).querySelectorAll('.letter-in').length).toBe(0)
   })
 
   test('the session\'s menu shows and hides the details strip, when the page has one', async () => {

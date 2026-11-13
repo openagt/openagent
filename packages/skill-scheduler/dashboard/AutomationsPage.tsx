@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react'
-import { Page, Switch, Tooltip, TooltipContent, TooltipTrigger, Button, buttonVariants, cn, formatAge, formatDateTime, useCodingAgents, useModuleHost, useOpenAgentDown, usePolled, type ModuleCommandResult, type ModuleHost, type ModuleProject } from '@openagt/dashboard/module'
+import { FadeWhileStale, Page, Switch, Tooltip, TooltipContent, TooltipTrigger, Button, buttonVariants, cn, formatAge, formatDateTime, inPlace, useCodingAgents, useModuleHost, useOpenAgentDown, usePolled, type ModuleCommandResult, type ModuleHost, type ModuleProject } from '@openagt/dashboard/module'
 import type { ModulePageProps } from '@openagt/dashboard/module'
 import { AutomationForm } from './AutomationForm.js'
 import { CodeWords, Command } from './CodeWords.js'
@@ -41,7 +41,8 @@ export function AutomationsPage({ projects }: ModulePageProps) {
   /** Every coding agent with the models it lists: what a row's agent and model are picked from, and named by. */
   const agents = useCodingAgents()
   const key = projects.map(p => p.id).join(',')
-  const { value: read, loaded, reload } = usePolled(() => readSchedulers(host, projects), EMPTY, 10_000, [key], { remember: schedulersKey(key) })
+  // Kept for the next visit, as the Overview's card keeps it: the page opens with the last rows, faded until they are read again.
+  const { value: read, loaded, stale, reload } = usePolled(() => readSchedulers(host, projects), EMPTY, 10_000, [key], { remember: schedulersKey(key), stored: true })
   // A read that fails for a moment keeps the project's rows as they were last read, under the line
   // that says why: a panel open in one of them, and what was typed there, stays.
   const lastRead = useRef(new Map<string, SchedulerRow>())
@@ -55,6 +56,8 @@ export function AutomationsPage({ projects }: ModulePageProps) {
   /** Hold a row for one more thing of its own in flight, and let it go of one once that is over. */
   const hold = (id: string): void => setBusy(current => [...current, id])
   const letGo = (id: string): void => setBusy(current => current.filter((_, index) => index !== current.indexOf(id)))
+  /** Where a row's switch was pressed to, while that is saved and read back: it moves at the press. */
+  const [switched, setSwitched] = useState<Readonly<Record<string, boolean>>>({})
   /** The rows whose "Run now" has not answered yet, each as often as it was pressed. */
   const [starting, setStarting] = useState<readonly string[]>([])
   /** What the last save or start on a row answered, said on that row. */
@@ -148,223 +151,236 @@ export function AutomationsPage({ projects }: ModulePageProps) {
   return (
     <Page title="Automations" description="What starts by itself while nobody is at the keyboard. Every row starts switched off: it runs on this machine only once you switch it on here.">
       {!loaded && <p className="text-sm text-muted-foreground">Loading…</p>}
-      {rows.map(row => {
-        const status = schedulerStatus(row)
-        const note = row.lastTick?.note
-        const groups: [title: string, commands: SchedulerCommand[]][] = [
-          ['Your automations', row.commands.filter(isOwn)],
-          ["From the project's skills", row.commands.filter(c => !isOwn(c))],
-        ]
-        return (
-          <section key={row.project.id} aria-label={row.project.name} className="not-first:mt-6">
-            <div className="flex flex-wrap items-center gap-x-3 gap-y-1 border-b border-border pb-2">
-              <h2 className="text-sm font-semibold">{row.project.name}</h2>
-              <span className={cn('text-xs font-medium', status.tone)}>Scheduler {status.label}</span>
-              {/* The model a row's runs on Claude Code are on when nothing else names one, by its name in the rows' lines. */}
-              {row.model && <span className="text-xs text-muted-foreground">Model: {modelLabel(agents, DEFAULT_AGENT, row.model)}</span>}
-              {row.lastTick && (
-                <span className="text-xs text-muted-foreground">
-                  looked{' '}
-                  <Tooltip>
-                    <TooltipTrigger render={<span className="tabular-nums" />}>{formatAge(row.lastTick.at)}</TooltipTrigger>
-                    <TooltipContent>The scheduler last looked {formatDateTime(row.lastTick.at)}</TooltipContent>
-                  </Tooltip>
-                  {/* Why that tick decided nothing, when it says: a pull that failed. "off" is the status beside the name, and a project that schedules nothing says so below. */}
-                  {note !== undefined && note !== 'off' && note !== NOTHING_SCHEDULED && `: ${note}`}
-                </span>
-              )}
-              {row.error === undefined && creating !== row.project.id && (
-                <button
-                  type="button"
-                  ref={button => {
-                    if (button) newButtons.current.set(row.project.id, button)
-                    else newButtons.current.delete(row.project.id)
-                  }}
-                  disabled={held}
-                  onClick={() => {
-                    asked.current++
-                    setPanel(undefined)
-                    setCreating(row.project.id)
-                  }}
-                  aria-label={`New automation in ${row.project.name}`}
-                  className={cn(buttonVariants({ variant: 'outline', size: 'xs' }), 'ml-auto')}
-                >
-                  New automation
-                </button>
-              )}
-            </div>
-            {creating === row.project.id && (
-              <AutomationForm
-                project={row.project}
-                schedulerRuns={schedulerStopped(row) === undefined}
-                run={args => run(row.project, args)}
-                onDirty={setDirty}
-                onClose={() => {
-                  setCreating(undefined)
-                  backToNew(row.project.id)
-                }}
-                onSaved={() => void reload().catch(() => {})}
-              />
-            )}
-            {removed?.project === row.project.id && (
-              <div role="status" aria-label="Removed" className="mt-3 flex items-start justify-between gap-3 rounded-md border border-border bg-muted/40 p-3 text-sm">
-                <p>{removed.text}</p>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  autoFocus
-                  onClick={() => {
-                    setRemoved(undefined)
+      <FadeWhileStale stale={stale}>
+        {rows.map(row => {
+          const status = schedulerStatus(row)
+          const note = row.lastTick?.note
+          const groups: [title: string, commands: SchedulerCommand[]][] = [
+            ['Your automations', row.commands.filter(isOwn)],
+            ["From the project's skills", row.commands.filter(c => !isOwn(c))],
+          ]
+          return (
+            <section key={row.project.id} aria-label={row.project.name} className="not-first:mt-6">
+              <div className="flex flex-wrap items-center gap-x-3 gap-y-1 border-b border-border pb-2">
+                <h2 className="text-sm font-semibold">{row.project.name}</h2>
+                <span className={cn('text-xs font-medium', status.tone)}>Scheduler {status.label}</span>
+                {/* The model a row's runs on Claude Code are on when nothing else names one, by its name in the rows' lines. */}
+                {row.model && <span className="text-xs text-muted-foreground">Model: {modelLabel(agents, DEFAULT_AGENT, row.model)}</span>}
+                {row.lastTick && (
+                  <span className="text-xs text-muted-foreground">
+                    looked{' '}
+                    <Tooltip>
+                      <TooltipTrigger render={<span className="tabular-nums" />}>{formatAge(row.lastTick.at)}</TooltipTrigger>
+                      <TooltipContent>The scheduler last looked {formatDateTime(row.lastTick.at)}</TooltipContent>
+                    </Tooltip>
+                    {/* Why that tick decided nothing, when it says: a pull that failed. "off" is the status beside the name, and a project that schedules nothing says so below. */}
+                    {note !== undefined && note !== 'off' && note !== NOTHING_SCHEDULED && `: ${note}`}
+                  </span>
+                )}
+                {row.error === undefined && creating !== row.project.id && (
+                  <button
+                    type="button"
+                    ref={button => {
+                      if (button) newButtons.current.set(row.project.id, button)
+                      else newButtons.current.delete(row.project.id)
+                    }}
+                    disabled={held}
+                    onClick={() => {
+                      asked.current++
+                      setPanel(undefined)
+                      setCreating(row.project.id)
+                    }}
+                    aria-label={`New automation in ${row.project.name}`}
+                    className={cn(buttonVariants({ variant: 'outline', size: 'xs' }), 'ml-auto')}
+                  >
+                    New automation
+                  </button>
+                )}
+              </div>
+              {creating === row.project.id && (
+                <AutomationForm
+                  project={row.project}
+                  schedulerRuns={schedulerStopped(row) === undefined}
+                  run={args => run(row.project, args)}
+                  onDirty={setDirty}
+                  onClose={() => {
+                    setCreating(undefined)
                     backToNew(row.project.id)
                   }}
-                >
-                  Done
-                </Button>
-              </div>
-            )}
-            {row.error !== undefined && <p role="alert" className="py-3 text-sm text-danger">{`The scheduler could not be read: ${row.error}`}</p>}
-            {row.error === undefined && !row.on && (
-              <p className="py-3 text-sm text-muted-foreground">
-                The scheduler is off in this project, so nothing here starts by itself. To start it now, run in the project:
-                <Command text={START} />
-                It starts with the dashboard once it is ticked on the project's{' '}
-                <button type="button" onClick={() => host.openSettings('skills')} className="underline hover:text-foreground">
-                  Skills page
-                </button>
-                , or once the project has run:
-                <Command text={INIT} />
-              </p>
-            )}
-            {row.error === undefined && row.on && !row.running && (
-              <p className="py-3 text-sm text-warning">
-                The scheduler is on but its process is not running, so nothing here starts by itself. To start it, run in the project:
-                <Command text={START} />
-              </p>
-            )}
-            {row.unreadable.map((unreadable, index) => (
-              <p key={`${index}/${unreadable.skill}`} role="alert" className="py-3 text-sm text-danger">
-                {unlistedWords(unreadable)}
-              </p>
-            ))}
-            {row.error === undefined && row.commands.length === 0 && row.unreadable.length === 0 && creating !== row.project.id && (
-              <p className="py-3 text-sm text-muted-foreground">No automations yet: make one with New automation, or pick a skill that schedules one on the project's Skills page.</p>
-            )}
-            {groups.map(
-              ([group, commands]) =>
-                commands.length > 0 && (
-                  <div key={group} role="group" aria-label={group} className="mt-4">
-                    <h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">{group}</h3>
-                    <ul className="mt-2 divide-y divide-border rounded-lg border border-border">
-                      {commands.map(scheduled => {
-                        const id = `${row.project.id}/${scheduled.command}`
-                        const title = rowTitle(scheduled)
-                        const saving = busy.includes(id)
-                        const shown = panel?.id === id ? panel : undefined
-                        const says = said?.id === id ? said : undefined
-                        return (
-                          <li key={id} aria-label={title} className={cn('p-4', saving && 'opacity-60')}>
-                            {/* On a phone the buttons go under the words, which need the whole width. */}
-                            <div className="flex items-start justify-between gap-4 max-md:flex-col">
-                              <div className="min-w-0">
-                                <p className="flex flex-wrap items-baseline gap-x-2 text-sm">
-                                  <span className="font-mono font-medium">{title}</span>
-                                  {isOwn(scheduled) && <span className="text-xs text-info">{scheduled.onThisMachine ? 'only on this machine' : 'shared with the project'}</span>}
-                                </p>
-                                {scheduled.description && <p className="line-clamp-2 text-sm text-muted-foreground">{scheduled.description}</p>}
-                                <Stands host={host} project={row.project} scheduled={scheduled} stopped={schedulerStopped(row)} />
-                                {!shown && <Picks scheduled={scheduled} schedulerModel={row.model} agents={agents} />}
-                              </div>
-                              <div className="flex shrink-0 items-center gap-2">
-                                <Button
-                                  variant="outline"
-                                  size="xs"
-                                  disabled={saving || down || cannotRun(scheduled) !== undefined}
-                                  onClick={() => void startNow(id, row.project, scheduled.command)}
-                                  aria-label={`Run ${title} now`}
-                                >
-                                  {starting.includes(id) ? 'Starting…' : 'Run now'}
-                                </Button>
-                                <button
-                                  type="button"
-                                  ref={button => {
-                                    if (button) editButtons.current.set(id, button)
-                                    else editButtons.current.delete(id)
-                                  }}
-                                  disabled={saving || shown !== undefined || held}
-                                  onClick={() => void open(id, row.project, scheduled)}
-                                  aria-label={`Edit ${title}`}
-                                  className={buttonVariants({ variant: 'outline', size: 'xs' })}
-                                >
-                                  Edit
-                                </button>
-                                <Switch
-                                  checked={scheduled.on}
-                                  disabled={saving}
-                                  onCheckedChange={next => void save(id, run(row.project, ['switch', scheduled.command, next ? 'on' : 'off']), answer => (answer.ok ? undefined : { failed: `The switch was not saved: ${answer.error}` }))}
-                                  aria-label={`Run ${title} by itself`}
-                                />
-                              </div>
-                            </div>
-                            {shown && (
-                              <EditPanel
-                                project={row.project}
-                                scheduled={scheduled}
-                                opened={shown.opened}
-                                refused={shown.refused}
-                                schedulerModel={row.model}
-                                agents={agents}
-                                run={args => run(row.project, args)}
-                                reload={reload}
-                                onDirty={setDirty}
-                                onClose={() => close(id)}
-                                onRemoved={text => {
-                                  setPanel(undefined)
-                                  setRemoved({ project: row.project.id, text })
-                                  // Gone from what is kept of the last read too: a read that fails right now does not bring the row back.
-                                  const before = lastRead.current.get(row.project.id)
-                                  if (before) lastRead.current.set(row.project.id, { ...before, commands: before.commands.filter(c => c.command !== scheduled.command) })
-                                }}
-                              />
-                            )}
-                            {says?.started !== undefined && (
-                              <p role="status" className="mt-2 text-xs text-success">
-                                {says.resumed ? 'Resumed a run.' : 'Started a run.'}{' '}
-                                {says.started !== '' && (
-                                  <button type="button" onClick={() => host.openAgent(row.project.id, says.started!)} className="underline">
-                                    Open it
+                  onSaved={() => void reload().catch(() => {})}
+                />
+              )}
+              {removed?.project === row.project.id && (
+                <div role="status" aria-label="Removed" className="mt-3 flex items-start justify-between gap-3 rounded-md border border-border bg-muted/40 p-3 text-sm">
+                  <p>{removed.text}</p>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    autoFocus
+                    onClick={() => {
+                      setRemoved(undefined)
+                      backToNew(row.project.id)
+                    }}
+                  >
+                    Done
+                  </Button>
+                </div>
+              )}
+              {row.error !== undefined && <p role="alert" className="py-3 text-sm text-danger">{`The scheduler could not be read: ${row.error}`}</p>}
+              {row.error === undefined && !row.on && (
+                <p className="py-3 text-sm text-muted-foreground">
+                  The scheduler is off in this project, so nothing here starts by itself. To start it now, run in the project:
+                  <Command text={START} />
+                  It starts with the dashboard once it is ticked in <SkillsLink />, or once the project has run:
+                  <Command text={INIT} />
+                </p>
+              )}
+              {row.error === undefined && row.on && !row.running && (
+                <p className="py-3 text-sm text-warning">
+                  The scheduler is on but its process is not running, so nothing here starts by itself. To start it, run in the project:
+                  <Command text={START} />
+                </p>
+              )}
+              {row.unreadable.map((unreadable, index) => (
+                <p key={`${index}/${unreadable.skill}`} role="alert" className="py-3 text-sm text-danger">
+                  {unlistedWords(unreadable)}
+                </p>
+              ))}
+              {row.error === undefined && row.commands.length === 0 && row.unreadable.length === 0 && creating !== row.project.id && (
+                <p className="py-3 text-sm text-muted-foreground">
+                  No automations yet: make one with New automation, or pick a skill that schedules one in <SkillsLink />.
+                </p>
+              )}
+              {groups.map(
+                ([group, commands]) =>
+                  commands.length > 0 && (
+                    <div key={group} role="group" aria-label={group} className="mt-4">
+                      <h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">{group}</h3>
+                      <ul className="mt-2 divide-y divide-border rounded-lg border border-border">
+                        {commands.map(scheduled => {
+                          const id = `${row.project.id}/${scheduled.command}`
+                          const title = rowTitle(scheduled)
+                          const saving = busy.includes(id)
+                          const shown = panel?.id === id ? panel : undefined
+                          const says = said?.id === id ? said : undefined
+                          return (
+                            <li key={id} aria-label={title} className={cn('p-4', saving && 'opacity-60')}>
+                              {/* On a phone the buttons go under the words, which need the whole width. */}
+                              <div className="flex items-start justify-between gap-4 max-md:flex-col">
+                                <div className="min-w-0">
+                                  <p className="flex flex-wrap items-baseline gap-x-2 text-sm">
+                                    <span className="font-mono font-medium">{title}</span>
+                                    {isOwn(scheduled) && <span className="text-xs text-info">{scheduled.onThisMachine ? 'only on this machine' : 'shared with the project'}</span>}
+                                  </p>
+                                  {scheduled.description && <p className="line-clamp-2 text-sm text-muted-foreground">{scheduled.description}</p>}
+                                  <Stands host={host} project={row.project} scheduled={scheduled} stopped={schedulerStopped(row)} />
+                                  {!shown && <Picks scheduled={scheduled} schedulerModel={row.model} agents={agents} />}
+                                </div>
+                                <div className="flex shrink-0 items-center gap-2">
+                                  <Button
+                                    variant="outline"
+                                    size="xs"
+                                    disabled={saving || down || cannotRun(scheduled) !== undefined}
+                                    onClick={() => void startNow(id, row.project, scheduled.command)}
+                                    aria-label={`Run ${title} now`}
+                                  >
+                                    {starting.includes(id) ? 'Starting…' : 'Run now'}
+                                  </Button>
+                                  <button
+                                    type="button"
+                                    ref={button => {
+                                      if (button) editButtons.current.set(id, button)
+                                      else editButtons.current.delete(id)
+                                    }}
+                                    disabled={saving || shown !== undefined || held}
+                                    onClick={() => void open(id, row.project, scheduled)}
+                                    aria-label={`Edit ${title}`}
+                                    className={buttonVariants({ variant: 'outline', size: 'xs' })}
+                                  >
+                                    Edit
                                   </button>
-                                )}
-                              </p>
-                            )}
-                            {says?.note !== undefined && (
-                              <p role="status" className="mt-2 text-xs text-muted-foreground">
-                                <CodeWords text={says.note} />
-                              </p>
-                            )}
-                            {says?.failed !== undefined && (
-                              <p role="alert" className="mt-2 text-xs text-danger">
-                                <CodeWords text={says.failed} />
-                              </p>
-                            )}
-                          </li>
-                        )
-                      })}
-                    </ul>
-                  </div>
-                ),
-            )}
-          </section>
-        )
-      })}
+                                  <Switch
+                                    checked={switched[id] ?? scheduled.on}
+                                    disabled={saving || down}
+                                    onCheckedChange={next => {
+                                      setSwitched(current => ({ ...current, [id]: next }))
+                                      void save(id, run(row.project, ['switch', scheduled.command, next ? 'on' : 'off']), answer => (answer.ok ? undefined : { failed: `The switch was not saved: ${answer.error}` })).then(() => setSwitched(({ [id]: _pressed, ...rest }) => rest))
+                                    }}
+                                    aria-label={`Run ${title} by itself`}
+                                  />
+                                </div>
+                              </div>
+                              {shown && (
+                                <EditPanel
+                                  project={row.project}
+                                  scheduled={scheduled}
+                                  opened={shown.opened}
+                                  refused={shown.refused}
+                                  schedulerModel={row.model}
+                                  agents={agents}
+                                  run={args => run(row.project, args)}
+                                  reload={reload}
+                                  onDirty={setDirty}
+                                  onClose={() => close(id)}
+                                  onRemoved={text => {
+                                    setPanel(undefined)
+                                    setRemoved({ project: row.project.id, text })
+                                    // Gone from what is kept of the last read too: a read that fails right now does not bring the row back.
+                                    const before = lastRead.current.get(row.project.id)
+                                    if (before) lastRead.current.set(row.project.id, { ...before, commands: before.commands.filter(c => c.command !== scheduled.command) })
+                                  }}
+                                />
+                              )}
+                              {says?.started !== undefined && (
+                                <p role="status" className="mt-2 text-xs text-success">
+                                  {says.resumed ? 'Resumed a run.' : 'Started a run.'}{' '}
+                                  {says.started !== '' && (
+                                    <button type="button" onClick={() => host.openAgent(row.project.id, says.started!)} className="underline">
+                                      Open it
+                                    </button>
+                                  )}
+                                </p>
+                              )}
+                              {says?.note !== undefined && (
+                                <p role="status" className="mt-2 text-xs text-muted-foreground">
+                                  <CodeWords text={says.note} />
+                                </p>
+                              )}
+                              {says?.failed !== undefined && (
+                                <p role="alert" className="mt-2 text-xs text-danger">
+                                  <CodeWords text={says.failed} />
+                                </p>
+                              )}
+                            </li>
+                          )
+                        })}
+                      </ul>
+                    </div>
+                  ),
+              )}
+            </section>
+          )
+        })}
+      </FadeWhileStale>
     </Page>
   )
 }
 
-/** An item of a row's line after its first, with the "·" before it: the two wrap together, so no line ends in a "·". */
+/** Settings › Skills, where a project's skills are ticked: the scheduler's among them. */
+function SkillsLink() {
+  const host = useModuleHost()
+  return (
+    <button type="button" onClick={() => host.openSettings('skills')} className="underline hover:text-foreground">
+      Settings › Skills
+    </button>
+  )
+}
+
+/** An item of a row's line, with the "·" before it: the two wrap together, so no line ends in a "·", and {@link LINE} hides the one each line starts with. Its own later lines start where its words do, past that cut. */
 function Next({ children }: { children: ReactNode }) {
   return (
-    <span>
-      <span aria-hidden className="mr-2 text-muted-foreground">
+    <span className="relative pl-3">
+      <span aria-hidden className="absolute left-0 w-1 text-center text-muted-foreground">
         ·
       </span>
       {children}
@@ -372,11 +388,14 @@ function Next({ children }: { children: ReactNode }) {
   )
 }
 
+/** A row's line of {@link Next} items: moved left by one "·" and its space, and cut there, so no line starts with a "·". */
+const LINE = 'flex flex-wrap gap-x-2 -ml-3 [clip-path:inset(-0.5rem_-0.25rem_-0.5rem_0.25rem)]'
+
 /**
- * Where a row stands, in one line: on or off; when it last ran, or that its last run failed, which
- * opens that run; and what the scheduler last decided for it while it is on, or, while the
- * scheduler is stopped, that it does not start. A command the coding agent cannot run says so
- * whatever its switch.
+ * Where a row stands, in one line: on or off; when it last ran, that its last run failed, or that
+ * it is still going, on or off, which opens that run; and what the scheduler last decided for it
+ * while it is on, or, while the scheduler is stopped, that it does not start. A command the coding
+ * agent cannot run says so whatever its switch.
  */
 function Stands({ host, project, scheduled, stopped }: { host: ModuleHost; project: ModuleProject; scheduled: SchedulerCommand; /** Why nothing starts by itself in its project, while that is so ({@link schedulerStopped}). */ stopped: string | undefined }) {
   const last = scheduled.lastRun
@@ -384,18 +403,20 @@ function Stands({ host, project, scheduled, stopped }: { host: ModuleHost; proje
   const decision = idle ? `Does not start: ${stopped.charAt(0).toLowerCase()}${stopped.slice(1)}` : decided(scheduled)
   const starts = scheduled.on && !idle
   return (
-    <p className="mt-1 flex flex-wrap items-center gap-x-2 text-xs">
-      <span className={cn('inline-flex items-center gap-1.5 font-medium', starts ? 'text-success' : 'text-muted-foreground')}>
-        <span aria-hidden className={cn('h-1.5 w-1.5 rounded-full', starts ? 'bg-success' : 'bg-muted-foreground/50')} />
-        {scheduled.on ? 'On' : 'Off'}
-      </span>
+    <p className={cn(LINE, 'mt-1 items-center text-xs')}>
+      <Next>
+        <span className={cn('inline-flex items-center gap-1.5 font-medium', starts ? 'text-success' : 'text-muted-foreground')}>
+          <span aria-hidden className={cn('h-1.5 w-1.5 rounded-full', starts ? 'bg-success' : 'bg-muted-foreground/50')} />
+          {scheduled.on ? 'On' : 'Off'}
+        </span>
+      </Next>
       <Next>
         {last === undefined ? (
           <span className="text-muted-foreground">Never ran</span>
         ) : (
           <Tooltip>
-            <TooltipTrigger render={<button type="button" onClick={() => host.openAgent(project.id, last.id)} className={cn('underline', last.failed ? 'text-danger' : 'text-muted-foreground hover:text-foreground')} />}>
-              {last.failed ? 'Last run failed' : 'Last ran'} <span className="tabular-nums">{formatAge(last.at)}</span>
+            <TooltipTrigger render={<a href={host.agentHref(project.id, last.id)} onClick={inPlace(() => host.openAgent(project.id, last.id))} className={cn('relative underline after:absolute after:-inset-y-1.5 after:inset-x-0', last.failed ? 'text-danger' : 'text-muted-foreground hover:text-foreground')} />}>
+              {last.failed ? 'Last run failed' : last.running ? 'Running, started' : 'Last ran'} <span className="tabular-nums">{formatAge(last.at)}</span>
             </TooltipTrigger>
             <TooltipContent>{formatDateTime(last.at)}</TooltipContent>
           </Tooltip>
@@ -414,8 +435,8 @@ function Stands({ host, project, scheduled, stopped }: { host: ModuleHost; proje
 function Picks({ scheduled, schedulerModel, agents }: { scheduled: SchedulerCommand; schedulerModel: string | undefined; agents: readonly AgentModels[] }) {
   const follows = !isOwn(scheduled)
   return (
-    <p className="mt-1 flex flex-wrap gap-x-2 text-xs text-muted-foreground">
-      <span>{pace(scheduled)}</span>
+    <p className={cn(LINE, 'mt-1 text-xs text-muted-foreground')}>
+      <Next>{pace(scheduled)}</Next>
       {follows && ownPace(scheduled) && (
         <Next>
           <span className="text-info">your pick</span>

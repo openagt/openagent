@@ -19,13 +19,14 @@ describe('the Your agents tile', () => {
     render(<YourAgentsTile />)
     expect(await screen.findByText('Default, Reviewer')).toBeTruthy()
     expect(screen.getByText('2')).toBeTruthy()
-    fireEvent.click(screen.getByRole('button', { name: /Your agents/ }))
+    expect(screen.getByRole('link', { name: /Your agents/ }).getAttribute('href')).toBe('/agents')
+    fireEvent.click(screen.getByRole('link', { name: /Your agents/ }))
     expect(window.location.pathname).toBe('/agents')
   })
 
   test('no count before the list is read', async () => {
     onAgentsList.mockReturnValue(new Promise(() => {}))
     render(<YourAgentsTile />)
-    expect(screen.getByRole('button', { name: /Your agents/ }).textContent).toBe('Your agents\u00a0Loading…')
+    expect(screen.getByRole('link', { name: /Your agents/ }).textContent).toBe('Your agents\u00a0Loading…')
   })
 })

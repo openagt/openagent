@@ -130,7 +130,7 @@ function FilesHeader({ page, tabs, active, tree, onOpen, onSearch, onShowTree }:
                 variant="ghost"
                 size="icon-sm"
                 className={cn('shrink-0 text-muted-foreground', tree && 'bg-accent text-accent-foreground')}
-                aria-label={tree ? 'Hide the file tree' : 'Show the file tree'}
+                aria-label="File tree"
                 aria-pressed={tree}
                 onClick={() => onShowTree(!tree)}
               />

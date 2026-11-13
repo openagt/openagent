@@ -281,7 +281,7 @@ export function ProjectPicker({
         <ChevronDown className="h-3 w-3 shrink-0 opacity-70" aria-hidden />
       </button>
     )
-  const trigger = <Combobox.Trigger ref={triggerRef} disabled={busy || pending} aria-label={name} className={MENU_TRIGGER_OPEN_CLASS} render={button} />
+  const trigger = <Combobox.Trigger ref={triggerRef} disabled={busy || pending} aria-label={name} className={MENU_TRIGGER_OPEN_CLASS} render={button} {...(look === 'sidebar' ? { 'data-project-picker': '' } : {})} />
 
   return (
     <>

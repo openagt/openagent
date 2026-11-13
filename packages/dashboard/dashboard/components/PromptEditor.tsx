@@ -3,7 +3,7 @@ import type { ProjectSummary, CustomPreset } from '../../src/index.js'
 import { EditorContent, useEditor } from '@tiptap/react'
 import StarterKit from '@tiptap/starter-kit'
 import { Markdown } from 'tiptap-markdown'
-import type { Editor, Range } from '@tiptap/core'
+import { createDocument, type Editor, type Range } from '@tiptap/core'
 import { Token, type TokenSpec } from './prompt-editor/tokens.js'
 import { makeTrigger } from './prompt-editor/suggestion.js'
 import { ScrollArea } from './ui/scroll-area.js'
@@ -18,13 +18,15 @@ import type { CommandEntry } from './CommandsMenu.js'
 // prompt over the wire is what it reads as, and it also adds the project's path or the file to
 // the Context (#439/#504); deleting the chip takes it out again. Markdown is live (StarterKit shortcuts) and
 // round-trips via tiptap-markdown. Text flows out via onChange, and the handle only clears,
-// focuses and loads.
+// focuses, loads and appends.
 
 export interface PromptEditorHandle {
   clear: () => void
   focus: () => void
-  /** Load a text (a command, a saved prompt) into the editor. Returns whether it replaced a draft. */
-  loadTemplate: (text: string) => boolean
+  /** Load a text (a command, a saved prompt) into the editor, with the caret unless `focus` is false. Returns whether it replaced a draft. */
+  loadTemplate: (text: string, focus?: boolean) => boolean
+  /** Add a text after the draft's last line, as lines of its own: the caret, the chips and the scroll stay as they are, and one undo takes it out. */
+  append: (text: string) => void
 }
 
 interface PromptEditorProps {
@@ -55,6 +57,8 @@ interface PromptEditorProps {
   onNewPreset?: () => void
   disabled?: boolean
   placeholder?: string
+  /** What a screen reader calls the box: the launcher's takes a prompt, a session's a message. */
+  label?: string
   /**
    * Text to open with, applied once as soon as the editor exists (#1066/#1139).
    *
@@ -66,6 +70,8 @@ interface PromptEditorProps {
   initialText?: string | undefined
   /** Whether `initialText` takes the caret as it is applied: it does unless told not to. */
   initialFocus?: boolean
+  /** A draft `initialText` is loaded over: one undo brings it back. */
+  replacedText?: string | undefined
   /** Take the caret as soon as the editor exists. */
   autoFocus?: boolean
 }
@@ -94,7 +100,7 @@ function applyTemplate(editor: Editor, text: string, focus = true): void {
 }
 
 export const PromptEditor = forwardRef<PromptEditorHandle, PromptEditorProps>(function PromptEditor(
-  { onChange, onSubmit, onPreset, onMentionProject, onMentionFile, onMentionRemoved, projects, files = [], commands, customPresets = [], projectPresets = [], onNewPreset, disabled = false, placeholder = 'Describe what to do…', initialText, initialFocus = true, autoFocus = false },
+  { onChange, onSubmit, onPreset, onMentionProject, onMentionFile, onMentionRemoved, projects, files = [], commands, customPresets = [], projectPresets = [], onNewPreset, disabled = false, placeholder = 'Describe what to do…', label = 'Prompt', initialText, initialFocus = true, replacedText, autoFocus = false },
   ref,
 ) {
   const [isEmpty, setIsEmpty] = useState(true)
@@ -271,7 +277,7 @@ export const PromptEditor = forwardRef<PromptEditorHandle, PromptEditorProps>(fu
         class: 'pe-prose focus:outline-none',
         role: 'textbox',
         'aria-multiline': 'true',
-        'aria-label': 'Prompt',
+        'aria-label': label,
         'aria-placeholder': placeholder,
       },
       handleKeyDown: (view, event) => {
@@ -309,7 +315,14 @@ export const PromptEditor = forwardRef<PromptEditorHandle, PromptEditorProps>(fu
       onChangeRef.current('')
     },
     focus: () => editor?.commands.focus('end'),
-    loadTemplate: (text: string) => (editor ? loadTemplateInto(editor, text) : false),
+    loadTemplate: (text: string, focus?: boolean) => (editor ? loadTemplateInto(editor, text, focus) : false),
+    append: (text: string) => {
+      if (!editor) return
+      if (editor.isEmpty) return void loadTemplateInto(editor, text, false)
+      // Parsed as blocks, as a loaded text is: the insert command's own inline parse leaves `<` as `&lt;` in plain words.
+      const blocks = createDocument(editor.storage.markdown.parser.parse(text), editor.schema).content
+      editor.commands.insertContentAt(editor.state.doc.content.size, blocks, { updateSelection: false })
+    },
   }))
 
   // Switched off while a start is asked for, and on again after. That is no edit, so no change is
@@ -325,6 +338,8 @@ export const PromptEditor = forwardRef<PromptEditorHandle, PromptEditorProps>(fu
   useEffect(() => {
     if (!editor || seeded.current || !initialText) return
     seeded.current = true
+    // The draft beneath is no step of its own, so the undo of the load ends on it, not on an empty box.
+    if (replacedText) editor.chain().setMeta('addToHistory', false).setContent(replacedText).run()
     loadTemplateInto(editor, initialText, initialFocus)
   }, [editor, initialText])
 

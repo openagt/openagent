@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import type { OpenAgentEvent } from '../../src/index.js'
 import { onAgent } from '../rpc/reads.js'
 import { agentLogKey } from './agent-log.js'
-import { isAgentActive } from './live-state.js'
+import { agentOutcome, isAgentActive } from './live-state.js'
 import { useLoaded } from './use-async.js'
 
 // The log an agent's page shows (#1026), whether the agent is running or finished: while it is live
@@ -85,7 +85,8 @@ export function useAgentFeed(
   // archive that was read counts: before the first read the channel is ahead of nothing.
   const [resumedFor, setResumedFor] = useState<string | null>(null)
   const active = isAgentActive(shown)
-  const feedLive = working || (active && (feedAhead || resumedFor === agentId))
+  // The feed's own end line ends it at once, with the "Stopped" it draws: the list of runs says so up to a poll later.
+  const feedLive = (working && agentOutcome(shown) === undefined) || (active && (feedAhead || resumedFor === agentId))
   useEffect(() => {
     if (active && feedAhead && archived !== null) setResumedFor(agentId)
     else if (!active) setResumedFor(null)

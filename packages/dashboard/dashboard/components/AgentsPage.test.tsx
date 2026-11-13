@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest'
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { forgetRemembered } from '../lib/use-async.js'
+import { DaemonDown } from '../lib/use-daemon-health.js'
 
 const rpc = vi.hoisted(() => ({ onAgentsList: vi.fn(), sendSaveAgent: vi.fn(), sendRemoveAgent: vi.fn(), onAgentLogins: vi.fn(), sendCopyAgentLogins: vi.fn() }))
 vi.mock('../rpc/agents.js', () => rpc)
@@ -82,6 +83,54 @@ describe('the Agents page', () => {
     expect(screen.queryByRole('dialog', { name: 'New agent' })).toBeNull()
   })
 
+  test('the editor is a form: Enter in the name saves; with no name, Save says what it needs under the field and saves nothing', async () => {
+    render(<AgentsPage />)
+    fireEvent.click(await screen.findByRole('button', { name: 'New agent' }))
+    const editor = screen.getByRole('dialog', { name: 'New agent' })
+    const name = within(editor).getByLabelText('Name') as HTMLInputElement
+    fireEvent.click(within(editor).getByRole('button', { name: 'Save' }))
+    expect(name.getAttribute('aria-invalid')).toBe('true')
+    expect(document.getElementById(name.getAttribute('aria-describedby')!)!.textContent).toBe('Give the agent a name.')
+    expect(rpc.sendSaveAgent).not.toHaveBeenCalled()
+    fireEvent.change(name, { target: { value: 'Social media' } })
+    expect(name.getAttribute('aria-invalid')).toBe('false')
+    fireEvent.submit(name.form!)
+    await waitFor(() => expect(rpc.sendSaveAgent).toHaveBeenCalledWith(expect.objectContaining({ name: 'Social media' })))
+  })
+
+  test('Esc on an editor with something changed asks first: Cancel there keeps what was typed, Discard closes it; with nothing changed it closes at once', async () => {
+    render(<AgentsPage />)
+    fireEvent.click(await screen.findByRole('button', { name: 'New agent' }))
+    const editor = screen.getByRole('dialog', { name: 'New agent' })
+    fireEvent.change(within(editor).getByLabelText('Name'), { target: { value: 'Reviewer two' } })
+    fireEvent.keyDown(within(editor).getByLabelText('Name'), { key: 'Escape' })
+    const asked = await screen.findByRole('alertdialog', { name: 'Discard the new agent?' })
+    fireEvent.click(within(asked).getByRole('button', { name: 'Cancel' }))
+    await waitFor(() => expect(screen.queryByRole('alertdialog')).toBeNull())
+    expect((within(screen.getByRole('dialog', { name: 'New agent' })).getByLabelText('Name') as HTMLInputElement).value).toBe('Reviewer two')
+    fireEvent.click(within(screen.getByRole('dialog', { name: 'New agent' })).getByRole('button', { name: 'Close' }))
+    fireEvent.click(within(await screen.findByRole('alertdialog')).getByRole('button', { name: 'Discard' }))
+    await waitFor(() => expect(screen.queryByRole('dialog', { name: 'New agent' })).toBeNull())
+    fireEvent.click(screen.getByRole('button', { name: 'Edit Reviewer' }))
+    fireEvent.keyDown(within(screen.getByRole('dialog', { name: 'Editing Reviewer' })).getByLabelText('Name'), { key: 'Escape' })
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
+    expect(screen.queryByRole('alertdialog')).toBeNull()
+    expect(rpc.sendSaveAgent).not.toHaveBeenCalled()
+  })
+
+  test('with OpenAgent not answering after a name is typed, Discard still closes the editor: it sends nothing', async () => {
+    const page = render(<DaemonDown.Provider value={false}><AgentsPage /></DaemonDown.Provider>)
+    fireEvent.click(await screen.findByRole('button', { name: 'New agent' }))
+    fireEvent.change(within(screen.getByRole('dialog', { name: 'New agent' })).getByLabelText('Name'), { target: { value: 'Offline draft' } })
+    page.rerender(<DaemonDown.Provider value={true}><AgentsPage /></DaemonDown.Provider>)
+    fireEvent.click(within(screen.getByRole('dialog', { name: 'New agent' })).getByRole('button', { name: 'Close' }))
+    const discard = within(await screen.findByRole('alertdialog', { name: 'Discard the new agent?' })).getByRole('button', { name: 'Discard' }) as HTMLButtonElement
+    expect(discard.disabled).toBe(false)
+    fireEvent.click(discard)
+    await waitFor(() => expect(screen.queryByRole('dialog', { name: 'New agent' })).toBeNull())
+    expect(rpc.sendSaveAgent).not.toHaveBeenCalled()
+  })
+
   test('an agent edited in place keeps its id; a refusal is said under the editor and nothing closes', async () => {
     rpc.sendSaveAgent.mockResolvedValue({ ok: false, error: 'OpenAgent has no GitHub account stranger on this computer.' })
     render(<AgentsPage />)
@@ -115,6 +164,20 @@ describe('the Agents page', () => {
     fireEvent.click(within(editor).getByLabelText('All Claude accounts'))
     fireEvent.click(within(editor).getByRole('button', { name: 'Save' }))
     await waitFor(() => expect(rpc.sendSaveAgent).toHaveBeenCalledWith({ id: 'reviewer', name: 'Reviewer', skills: ['ask', 'readability'], accounts: { github: 'octo-agent' }, projectSkills: false }))
+  })
+
+  test('this computer\u2019s own login, logged out, is not offered; an agent that has it picked still shows it, saying it is not logged in', async () => {
+    const claude = [{ id: 'This computer', name: 'Claude login on Studio', loggedOut: true }, { id: 'Dani', name: 'Dani' }]
+    rpc.onAgentsList.mockResolvedValue({ ...VIEW, agents: [DEFAULT, { ...REVIEWER, accounts: { claude: ['This computer'] } }], claude })
+    render(<AgentsPage />)
+    fireEvent.click(await screen.findByRole('button', { name: 'New agent' }))
+    const editor = screen.getByRole('dialog', { name: 'New agent' })
+    expect(within(editor).queryByLabelText(/Claude login on Studio/)).toBeNull()
+    expect(within(editor).getByLabelText('Claude account Dani')).toBeTruthy()
+    fireEvent.click(within(editor).getByRole('button', { name: 'Cancel' }))
+    fireEvent.click(await screen.findByRole('button', { name: 'Edit Reviewer' }))
+    const edited = screen.getByRole('dialog', { name: 'Editing Reviewer' })
+    expect(within(edited).getByLabelText('Claude account Claude login on Studio, not logged in').getAttribute('aria-checked')).toBe('true')
   })
 
   test('with no GitHub account of OpenAgent\u2019s yet, one is added from the editor, in its dialog, and is then the one picked; what was typed stays', async () => {
@@ -185,6 +248,15 @@ describe('the Agents page', () => {
     fireEvent.click(within(dialog).getByRole('button', { name: 'Remove' }))
     await waitFor(() => expect(rpc.sendRemoveAgent).toHaveBeenCalledWith('reviewer'))
     await waitFor(() => expect(rpc.onAgentsList).toHaveBeenCalledTimes(2))
+  })
+
+  test('the focus a removed agent\u2019s press leaves goes to "New agent"', async () => {
+    render(<AgentsPage />)
+    fireEvent.click(await screen.findByRole('button', { name: 'Remove Reviewer' }))
+    rpc.onAgentsList.mockResolvedValue({ ...VIEW, agents: [DEFAULT] })
+    fireEvent.click(within(await screen.findByRole('alertdialog')).getByRole('button', { name: 'Remove' }))
+    await waitFor(() => expect(screen.queryByRole('region', { name: 'Reviewer' })).toBeNull())
+    await waitFor(() => expect(document.activeElement).toBe(screen.getByRole('button', { name: 'New agent' })))
   })
 })
 

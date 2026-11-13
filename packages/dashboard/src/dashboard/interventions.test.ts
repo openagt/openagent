@@ -1,6 +1,7 @@
 import { strict as assert } from 'node:assert'
 import { test } from 'node:test'
 import { buildInterventions, interventionKey } from './interventions.js'
+import { forgetStartedNames, nameStarted } from '../started-names.js'
 import type { OpenPr } from './pull-requests.js'
 import type { BranchAhead, BranchesFor } from '../store/branches.js'
 import type { ProjectSummary } from './projects.js'
@@ -108,6 +109,18 @@ test('buildInterventions adds an awaiting item for a run waiting on the question
     { kind: 'awaiting', project: 'a', title: 'Auth store caching', question: 'Cache the auth store?', awaitId: 'gate-1', agentId: 'r1' },
   )
   assert.deepEqual(read, ['/a r1'], "only the waiting run's diary is read")
+})
+
+test('a run just started goes by the name asked for it, as the sidebar names it, until its record has one', async () => {
+  nameStarted('r1', Promise.resolve('Auth store caching'))
+  await new Promise(resolve => setImmediate(resolve))
+  try {
+    const liveAgents = async (): Promise<LiveAgent[]> => [live(runningAgentMeta({ status: 'waiting', intent: 'please look at how the auth store caches its reads and decide' }))]
+    const { items } = await buildInterventions([project('a', '/a')], { prs: noPrs, liveAgents, events: async () => waitingOn('gate-1', 'q?') })
+    assert.equal(items[0]?.title, 'Auth store caching')
+  } finally {
+    forgetStartedNames()
+  }
 })
 
 test('buildInterventions adds no awaiting item for a run that is not waiting, or whose diary shows no open question', async () => {
@@ -418,6 +431,20 @@ test('unpushed work says whether the project can open a pull request, so the row
   assert.deepEqual(withHost.items.map(i => [i.kind, i.gitHost]), [['unpushed', true]])
   const without = await buildInterventions([project('p', '/p')], onlyUnpushed([doneMeta()], counting(branch => waiting({ branch }))))
   assert.deepEqual(without.items.map(i => [i.kind, i.gitHost]), [['unpushed', false]])
+})
+
+test('a pushed branch with no pull request still needs one where the project opens pull requests', async () => {
+  const pushed = counting(branch => waiting({ branch, ahead: 2, pushed: true }))
+  const host = { ...project('p', '/p'), gitHost: true }
+  const read = (over: { gitHost?: boolean; prs?: () => Promise<OpenPr[]>; meta?: Partial<AgentMeta> }) =>
+    buildInterventions([over.gitHost === false ? project('p', '/p') : host], { ...onlyUnpushed([doneMeta(over.meta)], pushed), ...(over.prs ? { prs: over.prs } : {}) })
+  assert.deepEqual((await read({})).items.map(i => [i.kind, i.commits, i.gitHost]), [['unpushed', 2, true]], 'Open PR pushed it, then the request failed')
+  const open = async (): Promise<OpenPr[]> => [{ number: 4, title: 'Add the cart', url: 'u4', isDraft: false, headRefName: 'agent-add-cart' }]
+  assert.deepEqual((await read({ prs: open })).items.map(i => i.kind), ['pr'], 'its open request is what waits')
+  assert.deepEqual((await read({ meta: { publish: 'branch' } })).items, [], 'started to go no further than its branch')
+  assert.deepEqual((await read({ gitHost: false })).items, [], 'no git host: the push was the last step')
+  const unreadable = await read({ prs: () => Promise.reject(new Error('gh: not logged in')) })
+  assert.deepEqual([unreadable.items, unreadable.whole], [[], []], 'the requests could not be read: nothing is said of the branch')
 })
 
 // A Claude Code web session's question (#1554): the browser bridge holds it, not the run's diary.

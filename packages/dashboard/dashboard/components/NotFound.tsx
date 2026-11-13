@@ -17,7 +17,7 @@ export function NotFound({
 }) {
   return (
     <div className="flex flex-1 flex-col items-center justify-center gap-3 p-8 text-center">
-      <p className="font-medium">{title}</p>
+      <h1 className="font-medium">{title}</h1>
       <p className="max-w-md text-sm text-muted-foreground">{detail}</p>
       <Button variant="outline" onClick={onAction}>
         {actionLabel}

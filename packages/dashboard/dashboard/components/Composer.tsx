@@ -56,6 +56,8 @@ export interface ComposerHandle {
   focus: () => void
   /** Put `text` in the box to edit, in place of what is there, and focus it. */
   edit: (text: string) => void
+  /** Put `text` in the box after what is typed there, the caret left where it is. */
+  append: (text: string) => void
 }
 
 // The shared agent composer (#721), laid out as Claude Code's: a box one line tall when empty that
@@ -209,6 +211,7 @@ export const Composer = forwardRef<ComposerHandle, {
       setPrompt(text)
       editorRef.current?.focus()
     },
+    append: text => editorRef.current?.append(text),
   }))
 
   // Rehydrate a draft carried in from the click that navigated here (#1139), launcher-only, else the
@@ -219,14 +222,18 @@ export const Composer = forwardRef<ComposerHandle, {
   // (`immediatelyRender: false`), so pushing it at mount dropped the draft and left an empty
   // composer. `prompt` then arrives the normal way, through the editor's own onChange.
   // On a phone a kept draft comes back without the caret, which would raise the keyboard; one a press handed over takes it.
-  const [carriedDraft, setCarriedDraft] = useState<{ text: string; handedOver: boolean } | undefined>(() => {
+  // A draft handed over to a box that kept one is loaded over it, as a saved prompt is: said, and one undo away.
+  const [carriedDraft, setCarriedDraft] = useState<{ text: string; handedOver: boolean; over?: string } | undefined>(() => {
     const kept = draftKey !== undefined ? keptDraft(draftKey) : undefined
     return kept === undefined ? undefined : { text: kept, handedOver: false }
   })
   useEffect(() => {
     if (inAgent) return
     const carried = takePendingDraft()
-    if (carried) setCarriedDraft({ text: carried, handedOver: true })
+    if (!carried) return
+    const over = carriedDraft?.text !== carried ? carriedDraft?.text : undefined
+    setCarriedDraft({ text: carried, handedOver: true, ...(over !== undefined ? { over } : {}) })
+    if (over !== undefined) onPreset?.('The prompt', true)
   }, [inAgent])
   const phone = useIsMobile()
 
@@ -275,7 +282,8 @@ export const Composer = forwardRef<ComposerHandle, {
       onNewPreset={() => setAddingPreset(true)}
       disabled={busy}
       {...(placeholder ? { placeholder } : {})}
-      {...(carriedDraft ? { initialText: carriedDraft.text, initialFocus: carriedDraft.handedOver || !phone } : {})}
+      label={inAgent ? 'Message' : 'Prompt'}
+      {...(carriedDraft ? { initialText: carriedDraft.text, initialFocus: carriedDraft.handedOver || !phone, replacedText: carriedDraft.over } : {})}
       autoFocus={autoFocus}
     />
   )
@@ -425,7 +433,7 @@ export const Composer = forwardRef<ComposerHandle, {
           of the app, the commands menu (+) at its left, the text, and the submit at its right,
           the two kept at the last line. One line tall when empty, growing with what is typed. The
           editor is borderless: the border is the box's. */}
-      <div className="flex items-end rounded-xl border border-border bg-card focus-within:border-muted-foreground/40">
+      <div className="flex items-end rounded-xl border border-border bg-card focus-within:border-muted-foreground">
         {/* The editor's own inset sets the text off the box's edge; beside the + it pulls in, so the
             text starts close to it, as in Claude Code's. */}
         <div className="-mr-2 flex shrink-0 items-center p-1">{commandsEl}</div>

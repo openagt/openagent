@@ -77,6 +77,17 @@ describe('TicketsPanel (#697/#1144)', () => {
     expect(onOpen).not.toHaveBeenCalled()
   })
 
+  test('while a ticket\'s start is out, its own button spins, not the update beside it', async () => {
+    render(<TicketsPanel projectId="p1" tickets={[ticket()]} loaded onOpen={() => {}} />)
+    host.startRun.mockImplementation(() => new Promise(() => {}))
+    const start = await screen.findByRole('button', { name: 'Plan' })
+    fireEvent.click(start)
+    await waitFor(() => expect(start.querySelector('.animate-spin')).not.toBeNull())
+    // The words say it on the ticket's own button; the update beside it keeps its name.
+    expect(screen.getByText('Starting…').closest('button')).toBe(start)
+    expect(screen.getByRole('button', { name: 'Update tickets' })).toBeTruthy()
+  })
+
   test('a ticket in review or waiting offers no start and no plan, and says why on the row', async () => {
     render(
       <TicketsPanel
@@ -100,6 +111,13 @@ describe('TicketsPanel (#697/#1144)', () => {
     // A plan that exists is still there to read.
     expect(screen.getByRole('button', { name: /view the plan for planned/i })).toBeTruthy()
     expect(screen.queryByRole('button', { name: /start work on planned/i })).toBeNull()
+  })
+
+  test('a claimed ticket offers no start and no plan: an agent is on it', async () => {
+    render(<TicketsPanel projectId="p1" tickets={[ticket({ locked: true, lockedBy: 'agent-1' })]} loaded onOpen={() => {}} />)
+    expect(await screen.findByText('agent-1')).toBeTruthy()
+    expect(screen.queryByRole('button', { name: /start work on do the thing/i })).toBeNull()
+    expect(screen.queryByRole('button', { name: /create a plan for do the thing/i })).toBeNull()
   })
 
   test('a claimed ticket shows the hammer marker with its holder inline (#1420/#1144)', async () => {

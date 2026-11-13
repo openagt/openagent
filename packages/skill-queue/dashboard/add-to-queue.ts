@@ -1,6 +1,6 @@
 import { ListPlus } from 'lucide-react'
 import type { LinkAction } from '@openagt/dashboard/module'
-import { addToQueue } from '../src/module.js'
+import { addToQueue, alreadyQueued, isEntryLine, readEntries } from '../src/module.js'
 
 /**
  * The module's one link action: "Add to queue" on any link a dashboard page shows, in a project
@@ -10,7 +10,14 @@ import { addToQueue } from '../src/module.js'
  */
 export const ADD_TO_QUEUE: LinkAction = {
   label: 'Add to queue',
+  busyLabel: 'Adding…',
   doneLabel: 'Queued',
   icon: ListPlus,
   run: (host, projectId, links) => addToQueue(args => host.runCommand(projectId, args), links),
+  // A link an open entry already points at is queued: the button says so in place of offering it again.
+  done: async (host, projectId) => {
+    const read = readEntries(await host.runCommand(projectId, ['--local']), isEntryLine)
+    if ('error' in read) throw new Error(read.error)
+    return link => alreadyQueued(read.entries, link)
+  },
 }

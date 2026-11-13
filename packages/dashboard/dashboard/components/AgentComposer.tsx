@@ -17,6 +17,7 @@ import { isPublishPick, offeredPublishPicks, type PublishPick } from '../../src/
 import { useProjectLauncher } from '../lib/use-project-launcher.js'
 import { promptWithContext, type ContextSet } from '../lib/use-context-set.js'
 import { shortcut } from '../lib/shortcut.js'
+import { useIsMobile } from '../lib/use-mobile.js'
 
 /** A message sent to a working agent that it has not read yet: shown waiting until it lands. */
 export interface QueuedMessage {
@@ -49,6 +50,7 @@ export function AgentComposer({
   onSending,
   onQueued,
   editInBox,
+  giveBack,
   focusBox,
   model,
   context,
@@ -79,6 +81,8 @@ export function AgentComposer({
   onQueued?: ((message: QueuedMessage) => void) | undefined
   /** Set here to what puts a text in the box to edit: Cancel and edit on a waiting message. */
   editInBox?: MutableRefObject<((text: string) => void) | null> | undefined
+  /** Set here to what hands the box back what the run ended without reading, after any draft, and says it was not sent. */
+  giveBack?: MutableRefObject<((text: string) => void) | null> | undefined
   /** Set here to what gives the box the focus: a question answered from its card. */
   focusBox?: MutableRefObject<(() => void) | null> | undefined
   /** The model the session runs on, by its name: said under the box. */
@@ -114,6 +118,19 @@ export function AgentComposer({
       editInBox.current = null
     }
   }, [editInBox])
+  // Messages handed back unsent: said above the box until the next send, or another session.
+  const [notSent, setNotSent] = useState(false)
+  useEffect(() => setNotSent(false), [agentId])
+  useEffect(() => {
+    if (!giveBack) return
+    giveBack.current = text => {
+      composerRef.current?.append(text)
+      setNotSent(true)
+    }
+    return () => {
+      giveBack.current = null
+    }
+  }, [giveBack])
   useEffect(() => {
     if (!focusBox) return
     focusBox.current = () => composerRef.current?.focus()
@@ -121,6 +138,9 @@ export function AgentComposer({
       focusBox.current = null
     }
   }, [focusBox])
+  const phone = useIsMobile()
+  // A touch screen has no keys to name: its pointer is a finger.
+  const touch = typeof matchMedia === 'function' && matchMedia('(pointer: coarse)').matches
   const { busy, error, run } = useAction()
   // The slot's Stop (#1455), its own action so a message send's busy beat cannot read as
   // "stopping". A landed Stop stays "Stopping…" until the end event flips `live`, so it cannot
@@ -175,6 +195,7 @@ export function AgentComposer({
     if (await say(contextSet ? promptWithContext(text, contextSet.context) : text, later)) {
       composerRef.current?.clear()
       contextSet?.reset()
+      setNotSent(false)
     }
     composerRef.current?.focus()
   }
@@ -234,11 +255,14 @@ export function AgentComposer({
   return (
     <div className="@container mx-auto w-full max-w-3xl p-2">
       {surfacedError && <p role="alert" className="mb-1 px-2 text-xs text-danger">{surfacedError}</p>}
+      {notSent && <p role="status" className="mb-1 px-2 text-xs text-muted-foreground">Not sent: the session stopped first.</p>}
       <Composer
         // A box of its own per session, with the draft it was left with.
         key={agentId}
         ref={composerRef}
         draftKey={`${projectId}:${agentId}`}
+        // A session opened takes what is typed next, as the launcher does; not on a phone, where the keyboard would rise over the chat.
+        autoFocus={!phone}
         files={files}
         onSubmit={send}
         busy={busy}
@@ -257,7 +281,7 @@ export function AgentComposer({
         controls={
           <>
             <AgentOff agent={agent} />
-            <SkillsOff skillsOn={skillsOn} skillsOff={skillsOff} projectSkills={projectSkills} noProject={projectId === SESSIONS_ID} />
+            <SkillsOff projectId={projectId === SESSIONS_ID ? undefined : projectId} agent={agent} skillsOn={skillsOn} skillsOff={skillsOff} projectSkills={projectSkills} />
             {projectId !== SESSIONS_ID && contextSet && <ProjectContextMenu projectId={projectId} context={contextSet.context} busy={busy} onToggle={contextSet.toggle} />}
             {controls}
           </>
@@ -278,8 +302,8 @@ export function AgentComposer({
         }
         idleControl={idleControl}
         // What the box can do, not what it is for: the keys for a working agent, as Claude Code's box
-        // says them in the same place.
-        placeholder={down ? 'OpenAgent is not answering' : live ? `Enter to send, ${shortcut('Enter')} to queue for later` : 'Message the agent to continue it…'}
+        // says them in the same place; a touch screen has none to name.
+        placeholder={down ? 'OpenAgent is not answering' : live ? (touch ? 'Message the agent…' : `Enter to send, ${shortcut('Enter')} to queue for later`) : 'Message the agent to continue it…'}
       />
     </div>
   )

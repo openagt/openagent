@@ -9,7 +9,7 @@ const { demo, flow } = smoke()
 
 test("the Tickets page lists the project's tickets", needsChrome, async () => {
   await flow('tickets', async page => {
-    await page.getByRole('button', { name: 'Tickets', exact: true }).click()
+    await page.getByRole('link', { name: 'Tickets', exact: true }).click()
     await page.getByText('Login page').waitFor()
     await page.getByText('Dark mode').waitFor()
   })

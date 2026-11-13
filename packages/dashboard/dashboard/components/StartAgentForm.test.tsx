@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest'
-import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { forgetRemembered } from '../lib/use-async.js'
 import { openMenu } from '../test-utils.js'
 import { takePendingDraft } from '../lib/draft-handoff.js'
@@ -57,6 +57,8 @@ vi.mock('./GitHosts.js', () => ({
 }))
 const serverLogins = vi.hoisted(() => ({ onServerLogins: vi.fn(), sendUseLoginsOn: vi.fn(), sendAllowLogins: vi.fn(), sendSettleLogin: vi.fn() }))
 vi.mock('../rpc/server-logins.js', () => serverLogins)
+const sendOpenInApp = vi.hoisted(() => vi.fn())
+vi.mock('../rpc/control.js', () => ({ sendOpenInApp }))
 const openSettings = vi.hoisted(() => vi.fn())
 const openPermissions = vi.hoisted(() => vi.fn())
 vi.mock('../lib/use-route.js', async () => ({ ...(await vi.importActual<typeof import('../lib/use-route.js')>('../lib/use-route.js')), openSettings, openPermissions }))
@@ -177,12 +179,51 @@ describe('StartAgentForm (#1774)', () => {
     await waitFor(() => expect(screen.queryByRole('status')).toBeNull())
   })
 
+  test('a loaded prompt is said above the box, over the page, so the box does not move', async () => {
+    onCommands.mockResolvedValue({ commands: [], startHook: true, gitHost: true })
+    render(<StartAgentForm {...props} />)
+    act(() => (composerProps.current.onPreset as (label: string, replaced: boolean) => void)('footer', false))
+    expect(screen.getByRole('status').textContent).toBe('footer loaded — review or edit, then Start')
+    expect(screen.getByRole('status').parentElement!.className).toContain('bottom-full')
+  })
+
+  test('a start refused in a moment is not preceded by a flash of "Starting session"', async () => {
+    onCommands.mockResolvedValue({ commands: [], startHook: true, gitHost: true })
+    let answer!: (result: undefined) => void
+    start.mockReturnValue(new Promise(resolve => (answer = resolve)))
+    render(<StartAgentForm {...props} />)
+    fireEvent.click(screen.getByText('submit-typed'))
+    await act(async () => {})
+    expect(screen.queryByText('Starting session')).toBeNull()
+    await act(async () => answer(undefined))
+    expect(screen.queryByText('Starting session')).toBeNull()
+  })
+
   test('a refused start gives the prompt the focus, however Start was pressed: typing goes on in it', async () => {
     onCommands.mockResolvedValue({ commands: [], startHook: true, gitHost: true })
     start.mockResolvedValue(undefined)
     render(<StartAgentForm {...props} />)
     fireEvent.click(screen.getByText('submit-typed'))
     await waitFor(() => expect(composerFocus).toHaveBeenCalledTimes(1))
+  })
+
+  test("a start this computer's start line refused offers to open the project in the editor, and says whether it opened", async () => {
+    onCommands.mockResolvedValue({ commands: [], startHook: true, gitHost: true })
+    startSays.error = "This project's start line, in .openagent/hooks.yml, failed. It said: “the project has no such command”"
+    sendOpenInApp.mockResolvedValueOnce({ ok: false, error: '"code" was not found on PATH' }).mockResolvedValueOnce({ ok: true })
+    render(<StartAgentForm {...props} />)
+    const refusal = screen.getByRole('alert')
+    fireEvent.click(within(refusal).getByRole('button', { name: 'Open in your editor' }))
+    await waitFor(() => expect(within(refusal).getByRole('status').textContent).toBe('Your editor did not open: "code" was not found on PATH'))
+    expect(sendOpenInApp).toHaveBeenCalledWith('p1', 'editor')
+    fireEvent.click(within(refusal).getByRole('button', { name: 'Open in your editor' }))
+    await waitFor(() => expect(within(refusal).getByRole('status').textContent).toBe('Opened in your editor.'))
+    cleanup()
+    // A refusal that is not about the project's hooks.yml offers no editor.
+    startSays.error = 'shop could not be cloned on Studio. Studio says: This computer has no login that can read github.com/acme/shop.'
+    render(<StartAgentForm {...props} />)
+    await screen.findByRole('alert')
+    expect(screen.queryByRole('button', { name: 'Open in your editor' })).toBeNull()
   })
 
   test('the prompt takes the caret when the launcher opens, except on a phone, where the keyboard would rise over the page', () => {

@@ -1,8 +1,9 @@
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { ExternalLink, LockOpen, MoreHorizontal, Pencil } from 'lucide-react'
 import {
   Badge,
   Button,
+  ConfirmDialog,
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
@@ -12,6 +13,7 @@ import {
   formatDateTime,
   useAction,
   useModuleHost,
+  useOpenAgentDown,
 } from '@openagt/dashboard/module'
 import { claimState, heldBack } from '../src/module.js'
 import type { WorkspaceTicketDetail } from './lib/types.js'
@@ -50,28 +52,45 @@ export function TicketHeader({
 }) {
   const host = useModuleHost()
   const { busy, error, run } = useAction()
+  const down = useOpenAgentDown()
   // A lifted claim bridges the gap until the next read says so.
   const [released, setReleased] = useState(false)
   const claimed = Boolean(ticket.locked) && !released
   const holder = ticket.lockedByAgent?.name ?? ticket.lockedBy
   const offered = !heldBack(ticket) && !claimed
+  const working = claimState(holderStatus) === 'working'
+  const lifted = () => {
+    setReleased(true)
+    onChanged()
+  }
   const release = async () => {
     const outcome = await run(() => releaseClaim(host, projectId, ticket.file), 'The claim could not be lifted.')
-    if (outcome.ok) {
-      setReleased(true)
-      onChanged()
-    }
+    if (outcome.ok) lifted()
+  }
+  // A run at work on it keeps working, and the ticket is then free for another agent: the release asks first.
+  const [asking, setAsking] = useState(false)
+  // Released, its menu item is gone: the focus goes to the ticket's title, not to the page's body.
+  const title = useRef<HTMLHeadingElement>(null)
+  useEffect(() => {
+    if (released) title.current?.focus()
+  }, [released])
+  // Which start is in flight, by its prompt: only that one spins.
+  const [starting, setStarting] = useState<string | null>(null)
+  const start = async (prompt: string, failure: string) => {
+    setStarting(prompt)
+    await run(() => host.startRun(projectId, prompt), failure)
+    setStarting(null)
   }
   const open = (path: string[]) => host.openPage('tickets', path, projectId)
   const more = [
     ...(onEdit ? [{ label: 'Edit ticket', Icon: Pencil, onSelect: onEdit }] : []),
-    ...(claimed ? [{ label: 'Release the claim', Icon: LockOpen, onSelect: () => void release() }] : []),
+    ...(claimed ? [{ label: 'Release the claim', Icon: LockOpen, onSelect: () => (working ? setAsking(true) : void release()) }] : []),
   ]
 
   return (
     <div>
       <div className="flex flex-wrap items-start justify-between gap-x-3 gap-y-2">
-        <h1 className="min-w-0 text-lg font-semibold" title={ticket.file}>
+        <h1 ref={title} tabIndex={-1} className="min-w-0 text-lg font-semibold outline-none" title={ticket.file}>
           {ticket.title}
         </h1>
         <div className="flex shrink-0 items-center gap-1.5">
@@ -82,7 +101,8 @@ export function TicketHeader({
               projectId={projectId}
               ticket={ticket}
               busy={busy}
-              onStart={(prompt, failure) => void run(() => host.startRun(projectId, prompt), failure)}
+              starting={starting}
+              onStart={(prompt, failure) => void start(prompt, failure)}
               onConfigure={prompt => host.configureRun(projectId, prompt)}
             />
           )}
@@ -93,7 +113,7 @@ export function TicketHeader({
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end">
                 {more.map(item => (
-                  <DropdownMenuItem key={item.label} onClick={item.onSelect} disabled={busy} className="gap-2">
+                  <DropdownMenuItem key={item.label} onClick={item.onSelect} disabled={busy || down} className="gap-2">
                     <item.Icon className="h-3.5 w-3.5" aria-hidden /> {item.label}
                   </DropdownMenuItem>
                 ))}
@@ -102,6 +122,20 @@ export function TicketHeader({
           )}
         </div>
       </div>
+      <ConfirmDialog
+        open={asking}
+        onOpenChange={setAsking}
+        title="An agent is working on this ticket. Release it anyway?"
+        body={`${holder ?? 'The agent'} goes on working, and the ticket can be started or queued again.`}
+        confirmLabel="Release"
+        confirmBusyLabel="Releasing…"
+        onConfirm={async () => {
+          const outcome = await releaseClaim(host, projectId, ticket.file)
+          if (!outcome.ok) throw new Error(outcome.error)
+        }}
+        onSuccess={lifted}
+        fallbackError="The claim could not be lifted."
+      />
       <TicketFacts ticket={ticket} claimed={claimed} holder={holder} holderStatus={holderStatus} onOpenAgent={agentId => host.openAgent(projectId, agentId)} />
       {error && <p className="mt-2 text-xs text-danger">{error}</p>}
       {/* The ticket's two pages, as tabs: what it asks, and how it will be done. */}

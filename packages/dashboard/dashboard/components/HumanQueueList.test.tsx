@@ -79,6 +79,13 @@ describe('the Human Queue\'s rows', () => {
     expect(screen.getAllByRole('listitem')).toHaveLength(5)
   })
 
+  test('six: the sixth shows too, since a line offering one more is as tall as the row it hides', () => {
+    const items = Array.from({ length: 6 }, (_, i) => item({ kind: 'uncommitted', title: `run ${i}`, agentId: `r${i}` }))
+    render(<HumanQueueList items={items} onOpenAgent={() => {}} />)
+    expect(screen.getAllByRole('listitem')).toHaveLength(6)
+    expect(screen.queryByRole('button', { name: /more|fewer/ })).toBeNull()
+  })
+
   test('five or fewer: no line offers more', () => {
     render(<HumanQueueList items={[item({ kind: 'uncommitted', agentId: 'r1' })]} onOpenAgent={() => {}} />)
     expect(screen.queryByRole('button', { name: /more|fewer/ })).toBeNull()
@@ -100,5 +107,15 @@ describe('the Human Queue\'s rows', () => {
     fireEvent.click(screen.getByText('Opened by a run'))
     expect(onOpenAgent.mock.calls).toEqual([['p1', 'r1'], ['p1', 'r6']])
     expect(screen.getByText('Opened by hand').closest('a')?.getAttribute('href')).toBe('https://x/pull/8')
+  })
+
+  test('a row is a link to its session: a Ctrl+click or a middle click is the browser\'s, for a new tab', () => {
+    const onOpenAgent = vi.fn()
+    render(<HumanQueueList items={[item({ kind: 'awaiting', title: 'Asks', question: 'q?', agentId: 'r1', awaitId: 'q' })]} onOpenAgent={onOpenAgent} />)
+    const row = screen.getByText('Asks').closest('a')!
+    expect(row.getAttribute('href')).toBe('/p1/r1')
+    expect(fireEvent.click(row, { ctrlKey: true })).toBe(true)
+    expect(fireEvent.click(row, { button: 1 })).toBe(true)
+    expect(onOpenAgent).not.toHaveBeenCalled()
   })
 })

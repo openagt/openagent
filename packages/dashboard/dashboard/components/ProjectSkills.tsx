@@ -3,6 +3,7 @@ import { onProjectSkills, sendChangeSkills, sendProjectSkills, type ProjectSkill
 import { useAction } from '../lib/use-action.js'
 import { useLoaded, usePolled } from '../lib/use-async.js'
 import { onSkillsSaved, skillsSaved } from '../lib/skills-saved.js'
+import { useSettingsHold } from '../lib/settings-hold.js'
 import { cn } from '../lib/utils.js'
 import { Button, buttonVariants } from './ui/button.js'
 import { Checkbox } from './ui/checkbox.js'
@@ -205,6 +206,7 @@ function SkillCards({ projectId, skills, onDone }: { projectId: string; skills: 
   const write = all(skills).filter(skill => ticked.has(skill.name) && !held(skill)).map(skill => skill.name)
   const remove = all(skills).filter(skill => !ticked.has(skill.name) && held(skill)).map(skill => skill.name)
   const nothing = write.length === 0 && remove.length === 0
+  useSettingsHold(!nothing && !saved)
 
   // A change of skills goes on to where agents start from in the same press.
   const send = async (names: string[]): Promise<void> => {

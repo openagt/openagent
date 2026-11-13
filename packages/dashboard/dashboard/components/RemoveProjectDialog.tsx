@@ -1,8 +1,9 @@
 'use client'
-import { useEffect, useRef, useState } from 'react'
+import { useContext, useEffect, useRef, useState } from 'react'
 import { AlertDialog } from '@base-ui/react/alert-dialog'
 import type { CleanupReport } from '../../src/index.js'
 import { sendRemoveProject } from '../rpc/projects.js'
+import { ProjectLabelsContext } from '../lib/project-labels.js'
 import { useAction } from '../lib/use-action.js'
 import { cn } from '../lib/utils.js'
 import { Button } from './ui/button.js'
@@ -32,6 +33,7 @@ export function RemoveProjectDialog({
   const { busy, error, run, reset } = useAction()
   // It opens on Cancel, as the other confirmations do, never on the box that widens the deletion.
   const cancel = useRef<HTMLButtonElement>(null)
+  const label = useContext(ProjectLabelsContext).get(projectId)
 
   // Each time it opens the box is unticked and an old error is gone: the menu opens it from
   // outside, so the dialog is not told through its own open-change.
@@ -66,7 +68,8 @@ export function RemoveProjectDialog({
     >
       <AlertDialog.Portal>
         <AlertDialog.Backdrop className="fixed inset-0 z-50 bg-black/40 backdrop-blur-[1px]" />
-        <AlertDialog.Popup initialFocus={cancel} className="fixed left-1/2 top-1/2 z-50 max-h-[calc(100vh-2rem)] w-[min(28rem,calc(100vw-2rem))] -translate-x-1/2 -translate-y-1/2 overflow-y-auto rounded-lg border border-border bg-card p-5 text-card-foreground shadow-lg">
+        {/* Gone with the project, the menu that opened it takes no focus back: the project picker, where the next project is picked, does. */}
+        <AlertDialog.Popup initialFocus={cancel} finalFocus={() => (removed ? document.querySelector<HTMLElement>('[data-project-picker]') : true)} className="fixed left-1/2 top-1/2 z-50 max-h-[calc(100vh-2rem)] w-[min(28rem,calc(100vw-2rem))] -translate-x-1/2 -translate-y-1/2 overflow-y-auto rounded-lg border border-border bg-card p-5 text-card-foreground shadow-lg">
           {removed ? (
             <>
               <AlertDialog.Title className="text-sm font-semibold">Project removed</AlertDialog.Title>
@@ -92,7 +95,7 @@ export function RemoveProjectDialog({
             </>
           ) : (
             <>
-              <AlertDialog.Title className="text-sm font-semibold">Remove this project?</AlertDialog.Title>
+              <AlertDialog.Title className="text-sm font-semibold">{label ? `Remove the project ${label}?` : 'Remove this project?'}</AlertDialog.Title>
               <AlertDialog.Description className="mt-2 text-xs leading-relaxed text-muted-foreground">
                 It leaves the dashboard&rsquo;s list, and its scheduler stops unless you set it to keep running.{' '}
                 {files ? (

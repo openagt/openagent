@@ -167,6 +167,18 @@ describe('HotTicketsCard', () => {
     expect(await screen.findByRole('button', { name: 'Queued' })).toBeTruthy()
   })
 
+  test('a row\'s press shows beside its priority, never over it: the press sits just before the row\'s end', async () => {
+    const run = vi.fn<LinkAction['run']>(async () => ({ ok: true as const }))
+    render({ p1: { 'list --local': [ticket('urgent.md', { priority: '8' })] }, p2: { 'list --local': [] } }, {}, { ...NO_MODULES, linkActions: [{ label: 'Add to queue', doneLabel: 'Queued', run, package: '@x/queue', projects: ['p1'] }] })
+    const press = await screen.findByRole('button', { name: 'Add to queue' })
+    const fact = screen.getByText(/^P8/)
+    expect(press.compareDocumentPosition(fact) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+    // Laid over the title's end, from where the priority begins, at a wide width only.
+    const over = press.closest('div')!
+    expect(over.className).toContain('md:right-full')
+    expect(over.className.split(' ').filter(name => /^(absolute|opacity-0|right-0)$/.test(name))).toEqual([])
+  })
+
   test('says what the empty state means, and names a project whose command failed while the others show', async () => {
     render({ p1: { 'list --local': [] }, p2: { 'list --local': [] } })
     expect(await screen.findByText('Nothing claimed, high priority or waiting.')).toBeTruthy()

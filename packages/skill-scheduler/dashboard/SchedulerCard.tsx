@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { CalendarClock } from 'lucide-react'
-import { Button, Card, CardContent, CardHeader, CardTitleLink, Tooltip, TooltipContent, TooltipTrigger, cn, formatAge, formatDateTime, useModuleHost, useOpenAgentDown, usePolled, type ModuleCardProps, type ModuleProject } from '@openagt/dashboard/module'
+import { Button, Card, CardContent, CardHeader, CardTitleLink, Tooltip, TooltipContent, TooltipTrigger, cn, formatAge, inPlace, formatDateTime, useModuleHost, useOpenAgentDown, usePolled, type ModuleCardProps, type ModuleProject } from '@openagt/dashboard/module'
 import { CodeWords } from './CodeWords.js'
 import { cannotRun, notAsked, readSchedulers, schedulersKey, rowTitle, schedulerStatus, schedulerStopped, startedNow, startsNext, unlistedWords, type Answered, type SchedulerCommand, type SchedulerRow } from './schedulers.js'
 
@@ -36,11 +36,7 @@ export function SchedulerCard({ projects }: ModuleCardProps) {
   const toPage = (words: string) => (
     <a
       href={host.pageHref('automations')}
-      onClick={event => {
-        if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return
-        event.preventDefault()
-        open()
-      }}
+      onClick={inPlace(open)}
       className="underline hover:text-foreground"
     >
       {words}

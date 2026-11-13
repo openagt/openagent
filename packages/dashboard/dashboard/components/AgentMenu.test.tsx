@@ -18,19 +18,22 @@ afterEach(() => {
   forgetRemembered()
 })
 
-describe("a session's agent under the box, off", () => {
-  test('the agent by its name once the agents are read, off, with what its hover says; nothing before', async () => {
+describe("a session's agent under the box, as words", () => {
+  test('the agent by its name once the agents are read, as words the keyboard stops on, with what its hover says; nothing before', async () => {
     const { container } = render(<AgentOff agent="reviewer" />)
-    expect(container.querySelector('button')).toBeNull()
-    const item = (await screen.findByRole('button', { name: 'Reviewer' })) as HTMLButtonElement
-    expect(item.disabled).toBe(true)
+    expect(container.textContent).toBe('')
+    const said = (await screen.findByText('Reviewer')).closest<HTMLElement>('[data-hover]')!
+    expect(said.tabIndex).toBe(0)
+    expect(screen.queryByRole('button')).toBeNull()
+    // A screen reader hears what it is and why it stays, as the launcher's says "Agent: Default".
+    expect(said.textContent).toBe('Agent: Reviewer. This session is on the agent Reviewer: its skills and accounts')
     expect(screen.getByRole('tooltip').textContent).toBe('This session is on the agent Reviewer: its skills and accounts')
   })
 
   test('a record that names no agent is on the default, said as the launcher says it; one this computer lacks, by its id', async () => {
     const { rerender } = render(<AgentOff agent={undefined} />)
-    await screen.findByRole('button', { name: 'Default' })
+    await screen.findByText('Default')
     rerender(<AgentOff agent="elsewhere-made" />)
-    expect(screen.getByRole('button', { name: 'elsewhere-made' })).toBeTruthy()
+    expect(screen.getByText('elsewhere-made')).toBeTruthy()
   })
 })

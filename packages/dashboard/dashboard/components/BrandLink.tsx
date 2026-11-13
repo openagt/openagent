@@ -1,4 +1,5 @@
 import { Logo } from './Logo.js'
+import { inPlace } from '../lib/in-place.js'
 
 // The mark and the wordmark are the way home (#909): clicking them goes to the Overview, at `href`: `/`, plus the picked project when there is one (#1513).
 //
@@ -11,12 +12,7 @@ export function BrandLink({ working, href = '/', onNavigate }: { working: boolea
       href={href}
       // Named by the word it shows, also where the word folds away: the mark's state is the mark's to say, on hover.
       aria-label="OpenAgent"
-      onClick={event => {
-        // A modified click is the browser's to handle: a new tab, a new window, a download.
-        if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey || event.button !== 0) return
-        event.preventDefault()
-        onNavigate()
-      }}
+      onClick={inPlace(onNavigate)}
       // Named for the switch to the website's landing page (#1919), which has the same logo at the same place: it stays still.
       className="flex shrink-0 items-center gap-3 rounded-md [view-transition-name:oa-brand] transition-opacity hover:opacity-80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-primary)]"
     >

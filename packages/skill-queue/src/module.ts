@@ -46,6 +46,11 @@ export function isWorkingOn(ask: string | undefined, entry: string): boolean {
   return ask !== undefined && entry.trim() !== '' && ask.trim() === workOnEntryPrompt(entry.trim()).trim()
 }
 
+/** The entries none of `working` is on, in their order: the ones a start may put an agent on. */
+export function unclaimedEntries(entries: readonly string[], working: readonly { ask?: string | undefined }[]): string[] {
+  return entries.filter(entry => !working.some(agent => isWorkingOn(agent.ask, entry)))
+}
+
 /** How one queue entry reads on a dashboard: what to show, and where it points, if anywhere. */
 export interface EntryLabel {
   /** The text to show: a leading markdown link's text, else the whole entry. */

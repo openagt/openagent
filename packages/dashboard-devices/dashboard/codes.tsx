@@ -232,12 +232,12 @@ export function PhoneCode({
               </ol>
               {hint !== undefined && <p className="text-xs text-muted-foreground">{hint}</p>}
               {code.wifiUrl !== undefined && !byWifi && (
-                <button type="button" className="mr-3 text-xs underline" onClick={() => setByWifi(true)}>
+                <button type="button" className="relative mr-3 text-xs underline after:absolute after:-inset-y-1 after:inset-x-0" onClick={() => setByWifi(true)}>
                   Not on Tailscale? Use this Wi-Fi.
                 </button>
               )}
               {code.numberUrl !== undefined && !byNumber && (
-                <button type="button" className="text-xs underline" onClick={() => setByNumber(true)}>
+                <button type="button" className="relative text-xs underline after:absolute after:-inset-y-1 after:inset-x-0" onClick={() => setByNumber(true)}>
                   Phone does not open it? Use the number.
                 </button>
               )}

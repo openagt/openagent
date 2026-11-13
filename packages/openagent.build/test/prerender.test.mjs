@@ -31,11 +31,17 @@ const SAYS = {
 
 test('every page of pages/ is prerendered, and says what it is for', () => {
   const pages = readdirSync(new URL('../pages/', import.meta.url), { withFileTypes: true })
-    .filter(entry => entry.isDirectory())
+    .filter(entry => entry.isDirectory() && entry.name !== '_error')
     .map(entry => entry.name)
   assert.deepEqual(pages.sort(), Object.keys(SAYS).sort(), 'a new page gets its words here')
   for (const page of pages) {
     const text = words(page)
     for (const said of SAYS[page]) assert.ok(text.includes(said), `the page ${page} says "${said}"`)
   }
+})
+
+test("an address with no page gets the site's own not-found page", () => {
+  const file = new URL('404.html', client)
+  assert.ok(existsSync(file), 'the error page was not built: run `pnpm build` first')
+  assert.match(readFileSync(file, 'utf8'), /Page not found/)
 })

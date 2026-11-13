@@ -1,4 +1,4 @@
-import { useState, type ComponentType } from 'react'
+import { useContext, useState, type ComponentType } from 'react'
 import { ArrowRight, CircleHelp, FilePen, GitBranch, GitPullRequest } from 'lucide-react'
 import type { Intervention } from '../../src/index.js'
 import { interventionKey } from '../../src/client.js'
@@ -6,6 +6,8 @@ import { Tooltip, TooltipTrigger, TooltipContent } from './ui/tooltip.js'
 import { cn } from '../lib/utils.js'
 import { formatRelative } from '../lib/format-date.js'
 import { OnComputer } from './MachineMark.js'
+import { HostServicesContext, INERT_HOST_SERVICES } from '../lib/host-services.js'
+import { inPlace } from '../lib/in-place.js'
 
 /**
  * What a person does next for one kind of row, said the same wherever the row is: the Human Queue,
@@ -41,7 +43,7 @@ function detailOf(item: Intervention): string | undefined {
 
 /** Where a click on the row takes the person, said on its hover. */
 function hoverOf(item: Intervention): string {
-  if (item.kind === 'awaiting') return 'Open the agent to answer'
+  if (item.kind === 'awaiting') return 'Open the session to answer'
   if (item.kind === 'uncommitted') return 'Open the session: it left files uncommitted'
   if (item.kind === 'unpushed') return `Open the session: work on ${item.branch ?? ''} is not published`
   return item.agentId ? `Open the session of PR #${item.number}` : `Open PR #${item.number}`
@@ -71,9 +73,11 @@ export function HumanQueueList({
   /** For a row that somehow names no run: its project, rather than nothing. */
   onOpenProject?: ((projectId: string) => void) | undefined
 }) {
+  const services = useContext(HostServicesContext) ?? INERT_HOST_SERVICES
   const [all, setAll] = useState(false)
-  const shown = all ? items : items.slice(0, SHOWN_AT_FIRST)
-  const hidden = items.length - SHOWN_AT_FIRST
+  // A line that would offer one more row costs as much room as that row: the list shows whole then.
+  const hidden = items.length - SHOWN_AT_FIRST > 1 ? items.length - SHOWN_AT_FIRST : 0
+  const shown = all || hidden === 0 ? items : items.slice(0, SHOWN_AT_FIRST)
   const projects = new Set(items.map(item => item.projectId)).size > 1
   return (
     <>
@@ -98,7 +102,8 @@ export function HumanQueueList({
                   narrow column the row still fits, and nothing scrolls sideways. On a phone each
                   has a line of its own under what is needed, where, and since when. */}
               <span className={cn('min-w-0 shrink truncate text-foreground md:max-w-[50%]', grouped ? 'max-md:flex-1' : 'max-md:order-1 max-md:basis-full')}>{item.title}</span>
-              <span className="min-w-0 truncate text-muted-foreground md:flex-auto max-md:order-2 max-md:basis-full">{detail}</span>
+              {/* A count is never cut; a question keeps room for its first words. */}
+              <span className={cn('truncate text-muted-foreground md:grow max-md:order-2 max-md:basis-full', item.kind === 'awaiting' ? 'max-md:min-w-0 md:min-w-24' : 'min-w-0 shrink-0')}>{detail}</span>
               {/* A run on another of the person's computers is marked by its kind's icon before the
                   project, as the list of runs marks it: a row has no room for its name too. */}
               {item.computer && <OnComputer computer={item.computer} named={false} />}
@@ -114,14 +119,12 @@ export function HumanQueueList({
               <Tooltip>
                 <TooltipTrigger
                   render={
-                    item.kind === 'pr' && !item.agentId ? (
+                    item.agentId ? (
+                      <a href={services.agentHref(item.projectId, item.agentId)} onClick={inPlace(() => onOpenAgent(item.projectId, item.agentId!))} className={rowClass} />
+                    ) : item.kind === 'pr' ? (
                       <a href={item.url} target="_blank" rel="noreferrer" className={rowClass} />
                     ) : (
-                      <button
-                        type="button"
-                        onClick={() => (item.agentId ? onOpenAgent(item.projectId, item.agentId) : onOpenProject?.(item.projectId))}
-                        className={rowClass}
-                      />
+                      <button type="button" onClick={() => onOpenProject?.(item.projectId)} className={rowClass} />
                     )
                   }
                 >

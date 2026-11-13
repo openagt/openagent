@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { onBridgeStatus, onBridgeToken } from '../rpc/reads.js'
+import { INSTALLED_RESTARTS } from '../lib/use-daemon-health.js'
 import { Button } from './ui/button.js'
 import { CopyButton } from './ui/copy-button.js'
 
@@ -62,8 +63,8 @@ export function BridgeSettings() {
   return (
     <div className="mt-2 space-y-2 rounded-md border border-border bg-muted/30 p-3 text-xs">
       <p className="text-muted-foreground">
-        Install the browser extension, open its options, and paste this token. It reports the question a Claude web
-        session is parked on, so it shows up here instead of only on claude.ai.
+        The extension reports the question a Claude web session is parked on, so it shows up here instead of only on
+        claude.ai.
       </p>
       {blocked && (
         <p className="text-danger">
@@ -79,7 +80,9 @@ export function BridgeSettings() {
       )}
       {token === null ? (
         // A restart is genuinely required: the token is read when the daemon starts.
-        <p className="text-muted-foreground">Restart the dashboard to generate the token.</p>
+        <p className="text-muted-foreground">
+          Restart the dashboard to generate the token: in its terminal, Ctrl+C and run <code className="font-mono">openagent</code> again; {INSTALLED_RESTARTS}.
+        </p>
       ) : (
         <div className="flex flex-wrap items-center gap-2">
           <code className="min-w-0 flex-1 truncate rounded bg-muted px-2 py-1 font-mono">

@@ -15,6 +15,7 @@ export function TicketStartActions({
   projectId,
   ticket,
   busy,
+  starting = null,
   onStart,
   onConfigure,
   compact = false,
@@ -23,6 +24,8 @@ export function TicketStartActions({
   ticket: { file: string; title: string; planned?: boolean | undefined; priority?: string | undefined }
   /** A start is in flight on this surface. */
   busy: boolean
+  /** The prompt whose start is in flight, if any: only that ask's button spins. */
+  starting?: string | null | undefined
   /** Start an agent with the ask; `failure` is what to say when it cannot start. */
   onStart: (prompt: string, failure: string) => void
   /** The launcher, prefilled with the ask. */
@@ -56,7 +59,7 @@ export function TicketStartActions({
         link: planLink(ticket),
       }
   const targets = [{ projectId, links: [step.link] }]
-  const { actions, run } = useLinkActions([projectId])
+  const { actions, run } = useLinkActions([projectId], targets)
   // What the menu's queue item did, until the ask changes (a plan queued, then written, is a new ask).
   const [queued, setQueued] = useState<'running' | 'done' | { error: string } | null>(null)
   useEffect(() => setQueued(null), [step.prompt])
@@ -65,17 +68,19 @@ export function TicketStartActions({
     const result = await run(key, targets)
     setQueued(result.ok ? 'done' : { error: result.error })
   }
+  // Queued here, or read as queued already (an entry on the queue for this ask).
+  const isQueued = queued === 'done' || actions.some(action => action.done)
   const moreItems: StartMenuItem[] = actions.map(action => ({
-    label: queued === 'done' ? `${action.doneLabel ?? action.label}` : step.later,
+    label: queued === 'done' || action.done ? (action.doneLabel ?? action.label) : step.later,
     description: step.laterSays,
-    disabled: queued === 'running' || queued === 'done',
+    disabled: queued === 'running' || queued === 'done' || action.done,
     onSelect: () => void queue(action.key),
   }))
   const size = compact ? 'xs' : 'sm'
   const iconClass = compact ? 'h-3 w-3' : 'h-3.5 w-3.5'
   return (
     <>
-      {queued === 'done' && (
+      {isQueued && (
         <span className="flex items-center gap-1 text-[10px] text-muted-foreground">
           <Check className="h-3 w-3" aria-hidden /> Queued
         </span>
@@ -92,6 +97,7 @@ export function TicketStartActions({
         menuAriaLabel={step.menu}
         tooltip={step.tooltip}
         busy={busy}
+        starting={starting === step.prompt}
         prompt={step.prompt}
         configureDescription={step.configure}
         onStart={() => onStart(step.prompt, step.failure)}

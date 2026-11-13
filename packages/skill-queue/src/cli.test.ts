@@ -154,7 +154,7 @@ test('usage: an unknown command, a wrong argument count, an empty entry and a pr
     const unknown = await run(a!, ['dance'])
     assert.equal(unknown.code, 2)
     assert.equal(unknown.json, undefined)
-    assert.equal(unknown.stderr, USAGE)
+    assert.equal(unknown.stderr, `unknown command: dance\n\n${USAGE}`)
     assert.equal((await run(a!, ['extra'])).code, 2)
     assert.equal((await run(a!, ['add'])).code, 2)
     assert.equal((await run(a!, ['add', '   '])).code, 2)

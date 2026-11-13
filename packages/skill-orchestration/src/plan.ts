@@ -6,6 +6,7 @@ import { worktreePath } from '@openagt/skill-branches'
 import { personDir, runCardFile, RUNS_DIR } from '@openagt/skill-logs'
 import { continuationPrompt, logDiaryFile } from '@openagt/agent-driver'
 import { liveDir, readLiveDiary } from '@openagt/agent-runner'
+import { parsePlan } from './tasks.js'
 
 /**
  * A main agent's plan: one markdown file beside its run record in the project's data, and the
@@ -30,9 +31,10 @@ export function planMark(text: string): string {
   return createHash('sha256').update(text).digest('hex').slice(0, 8)
 }
 
-/** The question whose answer `Approve` approves this plan, and no other text. */
+/** The question whose answer `Approve` approves this plan, and no other text; it says how long the plan it follows is. */
 export function planQuestion(text: string): string {
-  return `Start the subagents on plan ${planMark(text)}?`
+  const tasks = parsePlan(text).tasks.length
+  return `Start the subagents on the plan above, ${tasks} ${tasks === 1 ? 'task' : 'tasks'} (plan ${planMark(text)})?`
 }
 
 /** Where a run's plan sits in the project's data directory: beside its card, else where a plan already is, else under the person the repository commits as. */

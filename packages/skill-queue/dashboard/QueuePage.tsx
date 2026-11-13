@@ -1,5 +1,5 @@
-import { useState } from 'react'
-import { Bot, FastForward, Play, Plus, Trash2 } from 'lucide-react'
+import { useRef, useState } from 'react'
+import { FastForward, Play, Plus, Trash2 } from 'lucide-react'
 import {
   Button,
   ConfirmDialog,
@@ -12,13 +12,12 @@ import {
   SelectTrigger,
   SelectValue,
   StartAgentButton,
-  Tooltip,
-  TooltipContent,
-  TooltipTrigger,
   cn,
+  inPlace,
   pathsIn,
   useFileNames,
   useModuleHost,
+  useOpenAgentDown,
   usePolled,
   useSchedule,
   type FileNames,
@@ -28,15 +27,16 @@ import {
   type Schedule,
 } from '@openagt/dashboard/module'
 import type { PlacedEntry } from '../src/queue.js'
-import { DEFAULT_PRIORITY, PRIORITIES, QUEUE_COMMAND, addTextArgs, doneArgs, fanOutLabel, isPlacedEntry, isWorkingOn, priorityMeaning, readEntries, workOnEntryPrompt } from '../src/module.js'
-import { EntryTitle, entryView } from './entry.js'
+import { DEFAULT_PRIORITY, PRIORITIES, QUEUE_COMMAND, addTextArgs, doneArgs, fanOutLabel, isPlacedEntry, isWorkingOn, priorityMeaning, readEntries, unclaimedEntries, workOnEntryPrompt } from '../src/module.js'
+import { AgentOnEntry, EntryTitle, entryView } from './entry.js'
 import { useQueueStarts, type QueueStarts } from './starts.js'
+import { BatchCount } from './batch-count.js'
 
 /** One project's queue as read: its entries with their sections and the project's agents at work, or why the command failed. */
 interface ProjectRead {
   project: ModuleProject
   entries?: PlacedEntry[]
-  /** The project's agents that are working now: an entry one of them was asked is being worked on. */
+  /** The project's agents that are working now or waiting on the person: an entry one of them was asked is being worked on. */
   working: ModuleAgent[]
   error?: string
 }
@@ -86,7 +86,7 @@ export function QueuePage({ projects }: ModulePageProps) {
       Promise.all(
         projects.map(async (project): Promise<ProjectRead> => {
           const [read, agents] = await Promise.all([host.runCommand(project.id, ['--local', '--full']).then(result => readEntries(result, isPlacedEntry)), host.agents(project.id).catch(() => [])])
-          const working = agents.filter(agent => agent.status === 'running')
+          const working = agents.filter(agent => agent.status === 'running' || agent.status === 'waiting')
           return 'error' in read ? { project, working, error: read.error } : { project, working, entries: read.entries }
         }),
       ),
@@ -126,53 +126,30 @@ function ProjectQueue({ read, titled, schedule, names, starts, reload }: { read:
   const host = useModuleHost()
   const { project, entries, error, working } = read
   const raw = (entries ?? []).map(placed => placed.entry)
-  const count = starts.batchOf(project.id, raw)
+  // An entry an agent is on gets no second one: the batch starts from the top of the others.
+  const free = unclaimedEntries(raw, working)
+  const count = starts.batchOf(project.id, free)
   return (
     <section aria-label={project.name}>
       <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
         {titled && <h2 className="text-sm font-semibold">{project.name}</h2>}
         {raw.length > 0 && <span className="rounded-full bg-muted px-2 py-0.5 text-xs tabular-nums text-muted-foreground">{raw.length === 1 ? '1 entry' : `${raw.length} entries`}</span>}
-        {raw.length > 0 && (
+        {free.length > 0 && (
           <div className="ml-auto flex items-center gap-2">
             {/* The project's batch act, as one control: how many, then the button the count qualifies.
                 The chevron sends the top entry alone: a launcher can only ever start one agent. */}
             <StartAgentButton
               size="xs"
-              leading={
-                <Tooltip>
-                  <TooltipTrigger
-                    render={
-                      <Input
-                        name="agent-count"
-                        type="number"
-                        min={1}
-                        max={raw.length}
-                        step={1}
-                        value={count}
-                        aria-label="How many agents to start"
-                        onChange={event => {
-                          // An emptied box is mid-edit rather than a count: `Number('')` is 0.
-                          const typed = event.target.value.trim()
-                          if (!typed) return
-                          const next = Math.round(Number(typed))
-                          if (Number.isFinite(next)) starts.setCount(project.id, next)
-                        }}
-                        className="h-7 w-14 px-1 text-center text-xs tabular-nums"
-                      />
-                    }
-                  />
-                  <TooltipContent>How many agents to start: one per entry, from the top of the queue.</TooltipContent>
-                </Tooltip>
-              }
+              leading={<BatchCount count={count} max={free.length} onChange={next => starts.setCount(project.id, next)} />}
               icon={<FastForward className="h-3.5 w-3.5" aria-hidden />}
               label={count === 1 ? 'Start 1 agent' : `Start ${count} agents`}
               menuAriaLabel={`Other ways to start agents on ${project.name}'s queue`}
               tooltip={fanOutLabel(count)}
               busy={starts.inFlight}
               starting={starts.fanningOut(project.id)}
-              onStart={() => void starts.fanOutProject(project.id, raw)}
-              onConfigure={() => host.configureRun(project.id, workOnEntryPrompt(raw[0]!))}
-              prompt={workOnEntryPrompt(raw[0]!)}
+              onStart={() => void starts.fanOutProject(project.id, free)}
+              onConfigure={() => host.configureRun(project.id, workOnEntryPrompt(free[0]!))}
+              prompt={workOnEntryPrompt(free[0]!)}
               configureDescription="Opens the launcher with the top entry's prompt: one agent, not the batch."
             />
           </div>
@@ -243,11 +220,7 @@ function TakerLine({ schedule, projectId }: { schedule: Schedule; projectId: str
             Change it in{' '}
             <a
               href={page.href}
-              onClick={event => {
-                if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return
-                event.preventDefault()
-                schedule.open()
-              }}
+              onClick={inPlace(schedule.open)}
               className="underline hover:text-foreground"
             >
               {page.label}
@@ -279,32 +252,24 @@ function EntryRow({ project, placed, agent, names, starts, reload }: { project: 
         {/* The line as written, under a name that stands in for it: it is what an agent is handed. */}
         {view.renamed && <span className="block truncate font-mono text-xs text-muted-foreground">{entry}</span>}
       </div>
-      {agent && (
-        <Tooltip>
-          <TooltipTrigger
-            render={<button type="button" onClick={() => host.openAgent(project.id, agent.id)} className="inline-flex shrink-0 items-center gap-1 rounded-full bg-success/15 px-2 py-0.5 text-xs font-medium text-success hover:underline" />}
-          >
-            <Bot className="h-3 w-3" aria-hidden />
-            <span className="max-md:sr-only">An agent is on it</span>
-          </TooltipTrigger>
-          <TooltipContent>An agent is working on this entry: open it</TooltipContent>
-        </Tooltip>
+      {agent && <AgentOnEntry projectId={project.id} agent={agent} />}
+      {!agent && (
+        <StartAgentButton
+          variant="ghost"
+          size="icon-sm"
+          icon={<Play className="h-3.5 w-3.5" aria-hidden />}
+          ariaLabel={`Start an agent on entry ${place}`}
+          menuAriaLabel={`Other ways to run ${view.title}`}
+          tooltip="Start an agent working on this entry"
+          busy={starts.inFlight}
+          starting={starts.starting(project.id, entry)}
+          onStart={() => void starts.startEntry(project.id, entry)}
+          onConfigure={() => host.configureRun(project.id, workOnEntryPrompt(entry))}
+          prompt={workOnEntryPrompt(entry)}
+          configureDescription="Opens the launcher with this entry's prompt, so you can set the model and where it runs."
+          className="text-muted-foreground hover:text-foreground"
+        />
       )}
-      <StartAgentButton
-        variant="ghost"
-        size="icon-sm"
-        icon={<Play className="h-3.5 w-3.5" aria-hidden />}
-        ariaLabel={`Start an agent on entry ${place}`}
-        menuAriaLabel={`Other ways to run ${view.title}`}
-        tooltip="Start an agent working on this entry"
-        busy={starts.inFlight}
-        starting={starts.starting(project.id, entry)}
-        onStart={() => void starts.startEntry(project.id, entry)}
-        onConfigure={() => host.configureRun(project.id, workOnEntryPrompt(entry))}
-        prompt={workOnEntryPrompt(entry)}
-        configureDescription="Opens the launcher with this entry's prompt, so you can set the model and where it runs."
-        className="text-muted-foreground hover:text-foreground"
-      />
       <ConfirmDialog
         trigger={
           <Button variant="ghost" size="icon-sm" aria-label={`Remove entry ${place} from the queue`} title="Remove from the queue" className="shrink-0 text-muted-foreground hover:text-danger">
@@ -334,6 +299,9 @@ function AddEntry({ project, reload }: { project: ModuleProject; reload: () => P
   const [priority, setPriority] = useState(DEFAULT_PRIORITY)
   const [adding, setAdding] = useState(false)
   const [failed, setFailed] = useState<string | undefined>()
+  // The next task goes in where this one went: the caret is back in the field once it is added.
+  const field = useRef<HTMLInputElement>(null)
+  const down = useOpenAgentDown()
   const items = PRIORITIES.map(p => ({ value: String(p), label: `Priority ${p}` }))
   const add = async (): Promise<void> => {
     if (text.trim() === '' || adding) return
@@ -345,6 +313,7 @@ function AddEntry({ project, reload }: { project: ModuleProject; reload: () => P
       await reload()
     } else setFailed(answer.error)
     setAdding(false)
+    field.current?.focus()
   }
   return (
     <form
@@ -356,7 +325,7 @@ function AddEntry({ project, reload }: { project: ModuleProject; reload: () => P
       className="mt-4"
     >
       <div className="flex flex-wrap items-center gap-2">
-        <Input name="task" value={text} onChange={event => (setText(event.target.value), setFailed(undefined))} disabled={adding} placeholder="Add a task: what an agent should do" aria-label="A task to add to the queue" className="h-8 min-w-48 flex-1 px-2" />
+        <Input ref={field} name="task" value={text} onChange={event => (setText(event.target.value), setFailed(undefined))} readOnly={adding} placeholder="Add a task: what an agent should do" aria-label="A task to add to the queue" className="h-8 min-w-48 flex-1 px-2" />
         <Select items={items} value={String(priority)} disabled={adding} onValueChange={next => setPriority(Number(next))}>
           <SelectTrigger size="sm" aria-label="Priority of the new task" className="w-32">
             <SelectValue />
@@ -370,7 +339,7 @@ function AddEntry({ project, reload }: { project: ModuleProject; reload: () => P
             ))}
           </SelectContent>
         </Select>
-        <Button type="submit" variant="outline" size="sm" disabled={text.trim() === '' || adding}>
+        <Button type="submit" variant="outline" size="sm" disabled={text.trim() === '' || adding || down}>
           <Plus className="h-3.5 w-3.5" aria-hidden />
           {adding ? 'Adding…' : 'Add to queue'}
         </Button>

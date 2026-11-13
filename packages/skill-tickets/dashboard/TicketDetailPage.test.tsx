@@ -6,6 +6,7 @@ import type { ModuleAgent } from '@openagt/dashboard/module'
 import type { MountedModules } from '@openagt/dashboard/module/testing'
 import { fakeHost, renderWithHost, type FakeHost } from './test-host.js'
 import { TicketDetailPage } from './TicketDetailPage.js'
+import { planTicketPrompt, workOnTicketPrompt } from '../src/module.js'
 
 // The page reads one ticket with `tickets show <file> --local` through the host, and lifts a
 // claim with `tickets release <file> --force` as an act. `onTicket` is what the command answers:
@@ -166,6 +167,17 @@ describe('TicketDetailPage (#1144)', () => {
     expect(item?.closest('[role="menuitem"]')?.getAttribute('aria-disabled')).toBe('true')
   })
 
+  test('a ticket already on the queue opens as Queued, its menu item off: the module reads it so', async () => {
+    onTicket.mockResolvedValue(ticket())
+    const onQueue = { ...modules().linkActions[0]!, done: async () => (link: { text: string }) => link.text === 'Create tickets/2026-07-20_do-the-thing.plan.md' }
+    render(<TicketDetailPage projectId="p1" slug="2026-07-20_do-the-thing.md" />, { ...modules(), linkActions: [onQueue] })
+    expect(await screen.findByText('Queued')).toBeTruthy()
+    await openMenu(screen.getByRole('button', { name: 'Other ways to plan Do the thing' }))
+    const item = (await screen.findAllByText('Queued')).find(el => el.closest('[role="menuitem"]'))
+    expect(item?.closest('[role="menuitem"]')?.getAttribute('aria-disabled')).toBe('true')
+    expect(addToQueue).not.toHaveBeenCalled()
+  })
+
   test('a failed action surfaces its reason and leaves the button addable', async () => {
     onTicket.mockResolvedValue(ticket())
     addToQueue.mockResolvedValue({ ok: false, error: 'the queue could not be written' })
@@ -225,6 +237,19 @@ describe('TicketDetailPage (#1144)', () => {
     expect(screen.getByRole('button', { name: 'Plan now' })).toBeTruthy()
   })
 
+  test('releasing a claim whose run is at work asks first; released, the focus is on the ticket\'s title', async () => {
+    agents = [{ id: 'run-1', name: 'login-page', status: 'running', startedAt: '2026-08-30T10:00:00.000Z' }]
+    onTicket.mockResolvedValue(ticket({ locked: true, lockedBy: 'run-1' }))
+    render(<TicketDetailPage projectId="p1" slug="2026-07-20_do-the-thing.md" />)
+    await screen.findAllByText(/at work/)
+    await releaseFromMenu()
+    expect(host.act).not.toHaveBeenCalled()
+    fireEvent.click(await screen.findByRole('button', { name: 'Release' }))
+    await waitFor(() => expect(host.act).toHaveBeenCalledWith('p1', ['release', '2026-07-20_do-the-thing.md', '--force']))
+    await waitFor(() => expect(screen.queryByText(/Claimed/)).toBeNull())
+    await waitFor(() => expect(document.activeElement).toBe(screen.getByRole('heading', { name: 'Do the thing' })))
+  })
+
   test('a failed release surfaces and keeps the claim visible (#1420)', async () => {
     onTicket.mockResolvedValue(ticket({ locked: true }))
     sendReleaseTicketLock.mockResolvedValue({ ok: false, error: 'the release could not be committed' })
@@ -247,6 +272,13 @@ describe('TicketDetailPage (#1144)', () => {
     render(<TicketDetailPage projectId="p1" slug="2026-07-20_do-the-thing.md" />)
     fireEvent.click(await screen.findByRole('button', { name: 'login-page' }))
     expect(host.openAgent).toHaveBeenCalledWith('p1', '2026-08-30T10-00-00-000Z')
+  })
+
+  test('a claim reads as its run\'s short name once the run has one, as the sidebar names it', async () => {
+    agents = [{ id: 'run-1', name: 'login-page', title: 'Fix the login page', status: 'running', startedAt: '2026-08-30T10:00:00.000Z' }]
+    onTicket.mockResolvedValue(ticket({ locked: true, lockedBy: 'run-1' }))
+    render(<TicketDetailPage projectId="p1" slug="2026-07-20_do-the-thing.md" />)
+    expect(await screen.findByRole('button', { name: 'Fix the login page' })).toBeTruthy()
   })
 
   test('the sessions behind the ticket are one press away: the one that planned it, and the one holding its claim', async () => {

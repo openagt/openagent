@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import { ExternalLink, ClipboardList, Hammer, Plus } from 'lucide-react'
 import { Badge, Button, Checkbox, Tooltip, TooltipTrigger, TooltipContent, cn, formatRelative, formatAge, formatDateTime, useAction, useLoaded, useModuleHost } from '@openagt/dashboard/module'
 import { NEW_TICKET, UPDATE_TICKETS_PROMPT, heldBack, readMeta, type TicketsMeta } from '../src/module.js'
@@ -24,6 +25,7 @@ export function TicketRow({
   ticket,
   projectName,
   busy,
+  starting,
   selected,
   onToggleSelect,
   onOpen,
@@ -41,6 +43,8 @@ export function TicketRow({
   projectName?: string | undefined
   /** Disables the session-starting buttons while a session start is in flight. */
   busy: boolean
+  /** The prompt of the start in flight, if any: the button that asks it spins. */
+  starting: string | null
   /** Whether the row is picked for the surrounding page's bulk actions — the page owns the
    *  selection, the row only shows and toggles it. Without a toggle handler no checkbox
    *  renders, like the click-to-filter handlers: selection is a page feature, not the row's. */
@@ -79,7 +83,7 @@ export function TicketRow({
           like every control on the row. */}
       {onToggleSelect && (
         <div className="flex w-8 shrink-0 items-center justify-center">
-          <Checkbox checked={selected ?? false} onCheckedChange={() => onToggleSelect()} aria-label={`Select ${ticket.title}`} />
+          <Checkbox checked={selected ?? false} onCheckedChange={() => onToggleSelect()} aria-label={`Select ${ticket.title}`} className="relative after:absolute after:-inset-[5px]" />
         </div>
       )}
       <button type="button" onClick={onOpen} className="flex min-w-0 items-center gap-2 py-2 pr-3 text-left text-sm md:flex-1 md:pl-0 max-md:order-first max-md:basis-full max-md:pl-3">
@@ -216,6 +220,7 @@ export function TicketRow({
             projectId={projectId}
             ticket={ticket}
             busy={busy}
+            starting={starting}
             onStart={onStart}
             onConfigure={onConfigure}
           />
@@ -288,6 +293,8 @@ export function TicketsPanel({
   onClearFilters?: (() => void) | undefined
 }) {
   const { busy, error, run } = useAction()
+  // Which start is in flight, by its prompt: one `busy` holds every start back, and only this one spins.
+  const [starting, setStarting] = useState<string | null>(null)
   const host = useModuleHost()
   // When `tickets/` last caught up with the issue tracker, from `tickets meta --local`. Read here rather than
   // passed down: the cross-project page reads one ticket list per project, and this is the one
@@ -305,7 +312,9 @@ export function TicketsPanel({
   // The dashboard starts the run with the person's own picks and lands on it, so its progress
   // is watchable instead of the panel sitting on stale rows until files land.
   const startSession = async (prompt: string, failure: string) => {
+    setStarting(prompt)
     await run(() => host.startRun(projectId, prompt), failure)
+    setStarting(null)
   }
 
   const updateTickets = () => startSession(UPDATE_TICKETS_PROMPT, 'The update could not be started.')
@@ -337,7 +346,7 @@ export function TicketsPanel({
         </p>
         {error && <p className="text-xs text-danger">{error}</p>}
         <div className="flex flex-wrap items-center gap-2">
-          <UpdateTicketsButton busy={busy} onStart={() => void updateTickets()} onConfigure={() => configure(UPDATE_TICKETS_PROMPT)} />
+          <UpdateTicketsButton busy={busy} starting={starting === UPDATE_TICKETS_PROMPT} onStart={() => void updateTickets()} onConfigure={() => configure(UPDATE_TICKETS_PROMPT)} />
           <NewTicketButton onClick={newTicket} />
         </div>
       </div>
@@ -359,6 +368,7 @@ export function TicketsPanel({
         </span>
         <UpdateTicketsButton
           busy={busy}
+          starting={starting === UPDATE_TICKETS_PROMPT}
           onStart={() => void updateTickets()}
           onConfigure={() => configure(UPDATE_TICKETS_PROMPT)}
           lastImportedAt={meta.lastImportedAt}
@@ -373,6 +383,7 @@ export function TicketsPanel({
             projectId={projectId}
             ticket={ticket}
             busy={busy}
+            starting={starting}
             selected={isSelected?.(ticket.file) ?? false}
             onToggleSelect={onToggleSelect ? () => onToggleSelect(ticket.file) : undefined}
             onOpen={() => onOpen(ticket.file)}

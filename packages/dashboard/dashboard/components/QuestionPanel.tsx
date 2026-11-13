@@ -42,9 +42,9 @@ function Choices({ multi, labelledBy, picked, onPick, disabled, children }: { mu
 }
 
 // A choice's row: the radio group's radio, or a box the row toggles. Rows are parted by a line, as
-// Claude Code on the web parts them; none is filled.
+// Claude Code on the web parts them; none is filled but the one under the pointer.
 function Choice({ multi, value, on, disabled, onPick, children }: { multi: boolean | undefined; value: string | typeof OTHER; on: boolean; disabled: boolean; onPick: () => void; children: ReactNode }) {
-  const row = 'flex w-full items-start gap-3 p-4 text-left disabled:opacity-60'
+  const row = 'flex w-full items-start gap-3 p-4 text-left enabled:hover:bg-foreground/[0.03] dark:enabled:hover:bg-foreground/[0.07] disabled:opacity-60'
   return multi ? (
     <button type="button" role="checkbox" aria-checked={on} disabled={disabled} onClick={onPick} className={row}>
       {children}
@@ -71,6 +71,7 @@ export function QuestionPanel({
   agentId,
   choice,
   active = false,
+  focused = false,
   onSaid,
   focusNext,
   send,
@@ -80,6 +81,8 @@ export function QuestionPanel({
   choice: ChoiceRequest
   /** The one question the keys answer: the number keys pick, ⌘ or Ctrl + Enter submits. */
   active?: boolean
+  /** The question the page opened on: its pick takes the focus as it shows, where the screen is no phone's. */
+  focused?: boolean
   /** Told what the answer said to the agent, so the chat can show it at once. */
   onSaid?: ((text: string) => void) | undefined
   /** Given the focus once the answer is taken, when it was in the card and the screen is no phone's: the message box. */
@@ -181,6 +184,10 @@ export function QuestionPanel({
     return () => window.removeEventListener('keydown', onKey)
   }, [active, sent, choice.options, send])
 
+  useEffect(() => {
+    if (focused && !isMobileScreen()) card.current?.querySelector<HTMLElement>('[role="radio"][aria-checked="true"], [role="checkbox"]')?.focus({ preventScroll: true })
+  }, [focused])
+
   // "Other" picked: its field takes the keys at once, as Claude Code's does.
   useEffect(() => {
     if (otherPicked) otherInput.current?.focus()
@@ -246,7 +253,7 @@ export function QuestionPanel({
         <button type="button" disabled={busy || down || !ready} onClick={submit} className="flex h-6 items-center gap-1.5 rounded-md bg-foreground px-2 text-[13px] font-medium text-background hover:bg-foreground/90 disabled:opacity-60">
           Submit
           {active && (
-            <span className="flex gap-0.5" aria-hidden>
+            <span className="flex gap-0.5 pointer-coarse:hidden" aria-hidden>
               <kbd className="flex h-[17px] min-w-[17px] items-center justify-center rounded border border-background/20 px-0.5 font-sans text-[11px]">{MOD_KEY}</kbd>
               <kbd className="flex h-[17px] min-w-[17px] items-center justify-center rounded border border-background/20 px-0.5 font-sans text-[11px]">Enter</kbd>
             </span>

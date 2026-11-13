@@ -4,16 +4,17 @@ import { request } from 'node:https'
 import { createRequire } from 'node:module'
 import { connect } from 'node:net'
 import { dirname, join, sep } from 'node:path'
+import { joinRunningDashboard } from '@openagt/dashboard/join-dashboard'
 import { CERTIFICATE_FILE, KEY_FILE, readSecureAddress, secureAddressDir } from '@openagt/dashboard/secure-address'
 import { ADDRESS, CERTIFICATE_CONFIG, CERTIFICATE_DAYS, LOOPBACK_ADDRESS } from './address.js'
 import { linux } from './linux.js'
 import { mac } from './mac.js'
 import type { InstallIO, Platform } from './platform.js'
-import { asAdmin, run } from './run.js'
+import { asAdmin, installed, run } from './run.js'
 
 export type { InstallIO }
 
-const defaultIO: InstallIO = {
+export const defaultIO: InstallIO = {
   out: line => process.stdout.write(line + '\n'),
   err: line => process.stderr.write(line + '\n'),
 }
@@ -52,13 +53,13 @@ export function inCheckout(path: string): boolean {
 }
 
 /**
- * The dashboard the computer starts at login. Run from a checkout, it is the one this command
+ * The dashboard the computer starts at login, of the package whose real `package.json` is
+ * `manifest`. Run from a checkout, it is the one this command
  * came with. Installed by a package manager (`npx`, `pnpm dlx`, `bunx`, `yarn dlx`, a global
  * install), it is in that manager's folder, which it empties or updates when it likes: the same
  * version is installed to a folder of OpenAgent's own.
  */
-async function lastingDashboard(app: string, io: InstallIO): Promise<string> {
-  const manifest = await realpath(createRequire(import.meta.url).resolve('@openagt/dashboard/package.json'))
+async function lastingDashboard(manifest: string, app: string, io: InstallIO): Promise<string> {
   if (inCheckout(manifest)) return join(dirname(manifest), 'dist', 'cli', 'bin.js')
   const { version } = JSON.parse(await readFile(manifest, 'utf8')) as { version: string }
   io.out(`◆ installing OpenAgent v${version} in ${app}`)
@@ -129,18 +130,30 @@ export async function install(io: InstallIO = defaultIO, env: NodeJS.ProcessEnv 
     io.err(unable)
     return 1
   }
+  const manifest = await realpath(createRequire(import.meta.url).resolve('@openagt/dashboard/package.json'))
+  if (!inCheckout(manifest) && !(await installed('npm', env.PATH))) {
+    io.err('OpenAgent installs its dashboard with npm, and this computer has no `npm`. Install npm (it comes with Node.js), then run this again.')
+    return 1
+  }
   // One installed already stops first, and is waited for, so what holds the port below is someone else's.
   const stopped = await platform.stopDashboard(env)
   if (!(await freed(DASHBOARD_PORT, stopped ? 15_000 : 0))) {
-    io.err(`A dashboard runs on port ${DASHBOARD_PORT} already. Stop it (Ctrl+C in its terminal), then run this again.`)
+    const running = await joinRunningDashboard(DASHBOARD_PORT, undefined, env)
+    io.err(
+      running.joined
+        ? `A dashboard runs on port ${DASHBOARD_PORT} already. Stop it (Ctrl+C in its terminal), then run this again.`
+        : `Port ${DASHBOARD_PORT} is taken by another program. Stop it, then run this again.`,
+    )
     return 1
   }
+  let administered = false
   try {
-    const dashboard = await lastingDashboard(platform.appDir(env), io)
+    const dashboard = await lastingDashboard(manifest, platform.appDir(env), io)
     await platform.prepare(io, env)
     const cert = await ensureCertificate(env)
     const certFile = join(secureAddressDir(env), CERTIFICATE_FILE)
     await asAdmin(platform.adminInstall(certFile), io)
+    administered = true
     await platform.trust(certFile, io, env)
 
     const output = await platform.startDashboard({ node: process.execPath, dashboard, vars: dashboardVars(env) }, env)
@@ -154,6 +167,7 @@ export async function install(io: InstallIO = defaultIO, env: NodeJS.ProcessEnv 
     return 0
   } catch (err) {
     io.err(`OpenAgent could not be installed: ${err instanceof Error ? err.message : String(err)}`)
+    if (administered) io.err('  `npx @openagt/uninstall` takes off what was put on this computer so far.')
     return 1
   }
 }

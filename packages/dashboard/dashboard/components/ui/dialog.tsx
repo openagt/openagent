@@ -26,6 +26,7 @@ export function Dialog({
   wide = false,
   keepOnOutsidePress = false,
   initialFocus,
+  finalFocus,
 }: {
   open: boolean
   onOpenChange: (open: boolean) => void
@@ -39,13 +40,17 @@ export function Dialog({
   keepOnOutsidePress?: boolean
   /** The field that has the focus once it opens; else, or while that field is disabled, the first thing in it that takes the focus. */
   initialFocus?: RefObject<HTMLElement | null>
+  /** Where the focus goes once it closes, for a dialog whose press is gone by then (a menu's item); else the press that opened it. */
+  finalFocus?: RefObject<HTMLElement | null>
 }) {
   return (
     <BaseDialog.Root open={open} onOpenChange={onOpenChange} disablePointerDismissal={keepOnOutsidePress}>
       <BaseDialog.Portal>
-        <BaseDialog.Backdrop className="fixed inset-0 z-50 bg-black/40 backdrop-blur-[1px]" />
+        {/* Drawn over another dialog too (Settings), which Base UI leaves undimmed unless told. */}
+        <BaseDialog.Backdrop forceRender className="fixed inset-0 z-50 bg-black/40 backdrop-blur-[1px]" />
         <BaseDialog.Popup
           initialFocus={initialFocus && (() => (initialFocus.current?.matches(':enabled') ? initialFocus.current : true))}
+          {...(finalFocus ? { finalFocus } : {})}
           className={cn(
             'fixed left-1/2 top-1/2 z-50 flex max-h-[calc(100dvh-2rem)] -translate-x-1/2 -translate-y-1/2 flex-col rounded-lg border border-border bg-card p-4 text-card-foreground shadow-lg outline-none',
             wide ? 'w-[min(46rem,calc(100vw-2rem))]' : 'w-[min(34rem,calc(100vw-2rem))]',
@@ -55,7 +60,7 @@ export function Dialog({
             <BaseDialog.Title className="text-sm font-semibold">{title}</BaseDialog.Title>
             <BaseDialog.Close
               aria-label="Close"
-              className="rounded p-0.5 text-muted-foreground outline-none hover:text-foreground"
+              className="-m-0.5 rounded p-1 text-muted-foreground outline-none hover:text-foreground focus-visible:ring-2 focus-visible:ring-[var(--color-primary)]"
             >
               <X className="h-4 w-4" aria-hidden />
             </BaseDialog.Close>
