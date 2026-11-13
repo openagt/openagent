@@ -12,6 +12,8 @@ import type { StartPicks } from '../lib/started-from.js'
 import { startPicks, useStartAgent } from '../lib/use-start-agent.js'
 import { useProjectLauncher } from '../lib/use-project-launcher.js'
 import { useLoaded, usePolled } from '../lib/use-async.js'
+import { useAction } from '../lib/use-action.js'
+import { sendOpenInApp } from '../rpc/control.js'
 import { Button } from './ui/button.js'
 import { openPermissions, openSettings } from '../lib/use-route.js'
 import { promptWithContext } from '../lib/use-context-set.js'
@@ -351,7 +353,8 @@ export function StartAgentForm({
       {/* Feedback right where the action is (#948): above the box, over the page, so the box never moves. */}
       <div className="absolute inset-x-2 bottom-full flex flex-col gap-1.5 pb-1">
         {/* A start that hit what the check says, or the missing logins, says nothing the boxes below do not. */}
-        {error && missingThere.length === 0 && !readiness?.problems.length && <Refusal {...said(error)} />}
+        {/* A refusal of this computer's hooks.yml: the project opens in the editor from here as from its menu. */}
+        {error && missingThere.length === 0 && !readiness?.problems.length && <Refusal {...said(error)} {...(!machine && !clonedHere && error.includes('.openagent/hooks.yml') ? { actions: <OpenInEditor projectId={projectId} /> } : {})} />}
         {machine && missingThere.length > 0 && (
           <Refusal
             title={`Your ${missingThere.join(' and ')} ${missingThere.length === 1 ? 'login is' : 'logins are'} not on ${name} yet.`}
@@ -425,6 +428,24 @@ export function StartAgentForm({
 function hereName(): string {
   const name = thisMachineName()
   return name === 'This machine' ? 'this computer' : name
+}
+
+/** The project in the person's editor, the project menu's own press: said when it opened, and why when it did not. */
+function OpenInEditor({ projectId }: { projectId: string }) {
+  const { busy, error, run } = useAction()
+  const [opened, setOpened] = useState(false)
+  return (
+    <>
+      <Button type="button" size="xs" disabled={busy} onClick={() => void run(() => sendOpenInApp(projectId, 'editor'), 'Failed to open.').then(outcome => setOpened(outcome.ok))}>
+        Open in your editor
+      </Button>
+      {error ? (
+        <span role="status" className="text-xs text-danger">{`Your editor did not open: ${error}`}</span>
+      ) : (
+        opened && <span role="status" className="text-xs text-muted-foreground">Opened in your editor.</span>
+      )}
+    </>
+  )
 }
 
 /**

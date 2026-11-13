@@ -57,6 +57,8 @@ vi.mock('./GitHosts.js', () => ({
 }))
 const serverLogins = vi.hoisted(() => ({ onServerLogins: vi.fn(), sendUseLoginsOn: vi.fn(), sendAllowLogins: vi.fn(), sendSettleLogin: vi.fn() }))
 vi.mock('../rpc/server-logins.js', () => serverLogins)
+const sendOpenInApp = vi.hoisted(() => vi.fn())
+vi.mock('../rpc/control.js', () => ({ sendOpenInApp }))
 const openSettings = vi.hoisted(() => vi.fn())
 const openPermissions = vi.hoisted(() => vi.fn())
 vi.mock('../lib/use-route.js', async () => ({ ...(await vi.importActual<typeof import('../lib/use-route.js')>('../lib/use-route.js')), openSettings, openPermissions }))
@@ -183,6 +185,25 @@ describe('StartAgentForm (#1774)', () => {
     render(<StartAgentForm {...props} />)
     fireEvent.click(screen.getByText('submit-typed'))
     await waitFor(() => expect(composerFocus).toHaveBeenCalledTimes(1))
+  })
+
+  test("a start this computer's start line refused offers to open the project in the editor, and says whether it opened", async () => {
+    onCommands.mockResolvedValue({ commands: [], startHook: true, gitHost: true })
+    startSays.error = "This project's start line, in .openagent/hooks.yml, failed. It said: “the project has no such command”"
+    sendOpenInApp.mockResolvedValueOnce({ ok: false, error: '"code" was not found on PATH' }).mockResolvedValueOnce({ ok: true })
+    render(<StartAgentForm {...props} />)
+    const refusal = screen.getByRole('alert')
+    fireEvent.click(within(refusal).getByRole('button', { name: 'Open in your editor' }))
+    await waitFor(() => expect(within(refusal).getByRole('status').textContent).toBe('Your editor did not open: "code" was not found on PATH'))
+    expect(sendOpenInApp).toHaveBeenCalledWith('p1', 'editor')
+    fireEvent.click(within(refusal).getByRole('button', { name: 'Open in your editor' }))
+    await waitFor(() => expect(within(refusal).getByRole('status').textContent).toBe('Opened in your editor.'))
+    cleanup()
+    // A refusal that is not about the project's hooks.yml offers no editor.
+    startSays.error = 'shop could not be cloned on Studio. Studio says: This computer has no login that can read github.com/acme/shop.'
+    render(<StartAgentForm {...props} />)
+    await screen.findByRole('alert')
+    expect(screen.queryByRole('button', { name: 'Open in your editor' })).toBeNull()
   })
 
   test('the prompt takes the caret when the launcher opens, except on a phone, where the keyboard would rise over the page', () => {
