@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest'
 import { act, renderHook } from '@testing-library/react'
-import { openSettings, useRoute } from './use-route.js'
+import { openAgents, openPermissions, openSettings, useRoute } from './use-route.js'
 import { projectAddresses } from '../../src/project-address.js'
 
 // F1: this used to mock Vike's `usePageContext` and `navigate`. There is nothing to mock now —
@@ -133,5 +133,23 @@ describe('openSettings', () => {
     expect(window.location.pathname + window.location.search).toBe('/my-repo/1-run?all=&settings=devices')
     expect(window.history.length).toBe(entries + 1)
     expect(result.current.route.settings).toBe('devices')
+  })
+})
+
+describe('openPermissions and openAgents', () => {
+  it('keep the project the address picks, as the sidebar does, and every project where none is picked', () => {
+    at('/my-repo/overview')
+    const { result } = renderHook(() => useRoute(projects))
+    act(() => openPermissions())
+    expect(window.location.pathname).toBe('/my-repo/permissions')
+    expect(result.current.route).toEqual({ projectId: null, agentId: null, page: 'permissions', pagePath: [], scope: 'my-repo-a1' })
+    act(() => openAgents())
+    expect(window.location.pathname).toBe('/my-repo/agents')
+    at('/logs')
+    act(() => openPermissions())
+    expect(window.location.pathname).toBe('/permissions')
+    at('/my-repo/1-run?all')
+    act(() => openAgents())
+    expect(window.location.pathname).toBe('/agents')
   })
 })

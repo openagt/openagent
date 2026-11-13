@@ -1,6 +1,6 @@
 import { useSyncExternalStore } from 'react'
 import { SETTINGS_ITEM_PARAM, SETTINGS_PARAM, parseRoute, formatRoute, keepPageQuery, type Route } from './route.js'
-import type { ProjectAddresses } from '../../src/project-address.js'
+import { NO_PROJECTS, type ProjectAddresses } from '../../src/project-address.js'
 
 // The route as state (#784): read the current one, go to another. Back/Forward are free, and a
 // session is a link you can paste, reload, and open twice.
@@ -76,6 +76,9 @@ function restoreScroll(): void {
 
 const currentUrl = (): string => window.location.pathname + window.location.search
 
+/** The projects the route was last read with, which name them for a part of the page that has no route to hand. */
+let addresses: ProjectAddresses = NO_PROJECTS
+
 /** Marks a history entry as Settings this tab opened over the page under it. */
 const OVER_PAGE = 'openagent:settings-over-page'
 const OVER_PAGE_STATE = { [OVER_PAGE]: true }
@@ -95,6 +98,7 @@ export function useRoute(projects: ProjectAddresses): {
    *  Settings opened over the page when `overPage` is set ({@link settingsOverPage}). */
   go: (next: Route, options?: { replace?: boolean; keepQuery?: boolean; overPage?: boolean }) => void
 } {
+  addresses = projects
   const current = useSyncExternalStore(subscribe, currentUrl, () => '/')
   const route = parseRoute(current, projects)
 
@@ -122,15 +126,19 @@ export const AGENTS_PAGE = 'agents'
 
 /** Go to the Agents page, from a part of the page that has no route to hand. */
 export function openAgents(): void {
-  keepScroll()
-  window.history.pushState(null, '', `/${AGENTS_PAGE}`)
-  notify()
+  openOwnPage(AGENTS_PAGE)
 }
 
 /** Go to the Permissions page, from a part of the page that has no route to hand. */
 export function openPermissions(): void {
+  openOwnPage(PERMISSIONS_PAGE)
+}
+
+/** Go to one of the dashboard's own pages with the project the address picks, as the sidebar's press does. */
+function openOwnPage(page: string): void {
+  const { scope } = parseRoute(currentUrl(), addresses)
   keepScroll()
-  window.history.pushState(null, '', `/${PERMISSIONS_PAGE}`)
+  window.history.pushState(null, '', formatRoute({ projectId: null, agentId: null, page, ...(scope ? { scope } : {}) }, addresses))
   notify()
 }
 
