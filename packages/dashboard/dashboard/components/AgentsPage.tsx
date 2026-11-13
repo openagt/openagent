@@ -1,4 +1,4 @@
-import { useId, useRef, useState, type FormEvent } from 'react'
+import { useEffect, useId, useRef, useState, type FormEvent } from 'react'
 import { Bot, Check, Loader2, Pencil, Plus, RefreshCw, Trash2 } from 'lucide-react'
 import { onAgentLogins, onAgentsList, sendCopyAgentLogins, sendRemoveAgent, sendSaveAgent, type AgentLoginsOn, type AgentRecord, type AgentsView } from '../rpc/agents.js'
 import { DEFAULT_AGENT } from '../../src/client.js'
@@ -74,6 +74,14 @@ export function AgentsPage() {
   const { view, reload } = useAgentsList()
   const { devices, reload: reloadDevices } = useAgentLogins()
   const [adding, setAdding] = useState(false)
+  const newAgent = useRef<HTMLButtonElement>(null)
+  // The agent just removed: once the list is read without it, its Remove press is gone with its card, and the focus goes to "New agent".
+  const removed = useRef<string | undefined>(undefined)
+  useEffect(() => {
+    if (removed.current === undefined || view?.agents.some(agent => agent.id === removed.current)) return
+    removed.current = undefined
+    newAgent.current?.focus()
+  }, [view])
   const changed = async () => {
     await reload()
     await reloadDevices()
@@ -83,7 +91,7 @@ export function AgentsPage() {
       title="Agents"
       description="An agent is a name, a set of skills and a set of accounts. Pick one under the message box; it works in any project, or in none."
       actions={
-        <Button size="sm" disabled={!view || adding} onClick={() => setAdding(true)}>
+        <Button ref={newAgent} size="sm" disabled={!view || adding} onClick={() => setAdding(true)}>
           <Plus className="size-3.5" aria-hidden />
           New agent
         </Button>
@@ -95,7 +103,7 @@ export function AgentsPage() {
         <div className="space-y-4">
           {adding && <AgentEditor view={view} onAccounts={reload} onDone={async saved => (setAdding(false), saved ? changed() : undefined)} />}
           {view.agents.map(agent => (
-            <AgentCard key={agent.id} agent={agent} view={view} devices={devices} onChanged={changed} />
+            <AgentCard key={agent.id} agent={agent} view={view} devices={devices} onChanged={changed} onRemoved={() => void (removed.current = agent.id)} />
           ))}
         </div>
       )}
@@ -103,8 +111,8 @@ export function AgentsPage() {
   )
 }
 
-/** One agent: its name, skills and accounts, and the presses that edit or remove it. */
-function AgentCard({ agent, view, devices, onChanged }: { agent: AgentRecord; view: AgentsView; devices: AgentLoginsOn[] | undefined; onChanged: () => Promise<void> }) {
+/** One agent: its name, skills and accounts, and the presses that edit or remove it; `onRemoved` is told before the list is read again without it. */
+function AgentCard({ agent, view, devices, onChanged, onRemoved }: { agent: AgentRecord; view: AgentsView; devices: AgentLoginsOn[] | undefined; onChanged: () => Promise<void>; onRemoved: () => void }) {
   const [editing, setEditing] = useState(false)
   const isDefault = agent.id === DEFAULT_AGENT
   const accounts = [
@@ -137,7 +145,10 @@ function AgentCard({ agent, view, devices, onChanged }: { agent: AgentRecord; vi
                 const done = await sendRemoveAgent(agent.id)
                 if (!done.ok) throw new Error(done.error)
               }}
-              onSuccess={() => void onChanged()}
+              onSuccess={() => {
+                onRemoved()
+                void onChanged()
+              }}
             />
           )}
         </div>

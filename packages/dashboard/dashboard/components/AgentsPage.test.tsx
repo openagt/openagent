@@ -221,6 +221,15 @@ describe('the Agents page', () => {
     await waitFor(() => expect(rpc.sendRemoveAgent).toHaveBeenCalledWith('reviewer'))
     await waitFor(() => expect(rpc.onAgentsList).toHaveBeenCalledTimes(2))
   })
+
+  test('the focus a removed agent\u2019s press leaves goes to "New agent"', async () => {
+    render(<AgentsPage />)
+    fireEvent.click(await screen.findByRole('button', { name: 'Remove Reviewer' }))
+    rpc.onAgentsList.mockResolvedValue({ ...VIEW, agents: [DEFAULT] })
+    fireEvent.click(within(await screen.findByRole('alertdialog')).getByRole('button', { name: 'Remove' }))
+    await waitFor(() => expect(screen.queryByRole('region', { name: 'Reviewer' })).toBeNull())
+    await waitFor(() => expect(document.activeElement).toBe(screen.getByRole('button', { name: 'New agent' })))
+  })
 })
 
 describe('the Agent menu under the box', () => {
