@@ -254,14 +254,14 @@ export function App() {
   const preferences = usePreferences()
   // Only a fresh read: one stored by an earlier visit taken as what was already there would announce
   // everything that came while the page was closed.
-  useInterventionNotifications(interventionsStale ? EMPTY_INTERVENTIONS : interventionsRead, humanInterventionEnabled(preferences) && notificationsEnabled(preferences))
+  useInterventionNotifications(interventionsStale ? EMPTY_INTERVENTIONS : interventionsRead, humanInterventionEnabled(preferences) && notificationsEnabled(preferences), (inProject, id) => selectAgentInProject(inProject, id))
 
   // The "New activity" category (#627): the default-off feed of agents starting/finishing. Its only
   // client consumer is the browser notification below, so it is polled exactly when that will fire —
   // both the category (`notifyNewActivity`) and the browser method (`notifyBrowser`) on.
   const browserActivity = newActivityEnabled(preferences) && notificationsEnabled(preferences)
   const { value: activity } = usePolled<ProjectionRead<Activity>>(browserActivity ? onActivity : null, EMPTY_ACTIVITY, 15000, [browserActivity], undefined, runsAgain(undefined))
-  useActivityNotifications(activity, browserActivity)
+  useActivityNotifications(activity, browserActivity, (inProject, id) => selectAgentInProject(inProject, id))
 
   // The shared sidebar's recents when all projects show (#shared-shell): the rail pools every
   // project's sessions here.

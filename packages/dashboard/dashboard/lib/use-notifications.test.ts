@@ -4,14 +4,21 @@ import type { Activity, Intervention, ProjectionRead } from '../../src/index.js'
 import { useActivityNotifications, useInterventionNotifications } from './use-notifications.js'
 
 const ctor = vi.fn()
+/** Each notification made, to click. */
+let made: { onclick: (() => void) | null }[] = []
+/** What a click opened in this tab. */
+const openAgent = vi.fn()
 
 beforeEach(() => {
   ctor.mockReset()
+  openAgent.mockReset()
+  made = []
   class FakeNotification {
     static permission = 'granted'
     onclick: (() => void) | null = null
     constructor(title: string, opts?: NotificationOptions) {
       ctor(title, opts)
+      made.push(this)
     }
     close(): void {}
   }
@@ -30,7 +37,7 @@ describe('useInterventionNotifications (#627)', () => {
   const awaiting = (awaitId: string, title: string): Intervention => ({ projectId: 'p', projectName: 'p', kind: 'awaiting', title, url: '', awaitId })
 
   const render = (enabled: boolean) =>
-    renderHook(({ items }) => useInterventionNotifications(items, enabled), {
+    renderHook(({ items }) => useInterventionNotifications(items, enabled, openAgent), {
       initialProps: { items: unread<Intervention>() },
     })
 
@@ -61,6 +68,19 @@ describe('useInterventionNotifications (#627)', () => {
     tab()
     expect(ctor).toHaveBeenCalledTimes(2)
     expect(ctor.mock.calls.map(call => call[1]?.tag)).toEqual(['awaiting:p::g1', 'awaiting:p::g1'])
+  })
+
+  test('a click on a question opens the run that asks it, in this tab; one on a pull request opens it on the git host', () => {
+    const opened = vi.spyOn(window, 'open').mockImplementation(() => null)
+    const { rerender } = render(true)
+    rerender({ items: read([] as Intervention[]) })
+    rerender({ items: read([{ ...awaiting('g1', 'Cache the auth store?'), agentId: 'r1' }]) })
+    made[0]!.onclick!()
+    expect(openAgent.mock.calls).toEqual([['p', 'r1']])
+    rerender({ items: read([{ ...awaiting('g1', 'Cache the auth store?'), agentId: 'r1' }, item(2, 'https://github.com/o/r/pull/2')]) })
+    made[1]!.onclick!()
+    expect(opened).toHaveBeenCalledWith('https://github.com/o/r/pull/2', '_blank', 'noopener')
+    expect(openAgent).toHaveBeenCalledTimes(1)
   })
 
   test('never fires when notifications are disabled', () => {
@@ -97,7 +117,7 @@ describe('useInterventionNotifications (#627)', () => {
   })
 
   test('turning notifications on does not replay what arrived while they were off', () => {
-    const { rerender } = renderHook(({ items, enabled }) => useInterventionNotifications(items, enabled), {
+    const { rerender } = renderHook(({ items, enabled }) => useInterventionNotifications(items, enabled, openAgent), {
       initialProps: { items: unread<Intervention>(), enabled: false },
     })
     rerender({ items: read([item(1, 'u1')]), enabled: false })
@@ -112,7 +132,7 @@ describe('useActivityNotifications (#627)', () => {
   const finishedAgent = (agentId: string, title?: string): Activity => ({ projectId: 'p', projectName: 'p', agentId: agentId, kind: 'finished', ...(title ? { title } : {}) })
 
   const render = (enabled: boolean) =>
-    renderHook(({ items }) => useActivityNotifications(items, enabled), { initialProps: { items: unread<Activity>() } })
+    renderHook(({ items }) => useActivityNotifications(items, enabled, openAgent), { initialProps: { items: unread<Activity>() } })
 
   test('stays quiet for runs already present at load, then fires when a run starts', () => {
     const { rerender } = render(true)
