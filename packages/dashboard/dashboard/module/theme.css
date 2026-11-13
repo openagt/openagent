@@ -10,7 +10,8 @@
 @custom-variant dark (&:where(.dark, .dark *));
 
 /* The scale every page and module draws with, in Tailwind's own names, so `cn` (tailwind-merge) and
-   the usual classes keep working; a size, a corner or a shadow that is not here is not drawn. */
+   the usual classes keep working; a size, a corner or a shadow that is not here is not drawn, and
+   src/dashboard/scale.test.ts finds a class written off it. */
 @theme {
   /* Type: `text-xs` for meta (with tabular figures, below), `text-sm` for body and controls,
      `text-base` for prose and a section's heading, `text-xl` for a page's title, `text-2xl` and

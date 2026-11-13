@@ -1,0 +1,325 @@
+{
+  "dashboard-changes/dashboard/ChangesPanel.tsx": {
+    "leading-[19px]": 2,
+    "ml-2.5": 1,
+    "text-[13px]": 7
+  },
+  "dashboard-changes/dashboard/DiffView.tsx": {
+    "leading-[17px]": 1,
+    "text-[10px]": 1
+  },
+  "dashboard-devices/dashboard/AddDevice.tsx": {
+    "py-2.5": 1,
+    "text-[10px]": 1
+  },
+  "dashboard-devices/dashboard/ConnectServer.tsx": {
+    "rounded": 1,
+    "text-[11px]": 1
+  },
+  "dashboard-devices/dashboard/DevicesCard.tsx": {
+    "rounded": 1,
+    "space-y-2.5": 2
+  },
+  "dashboard-devices/dashboard/DevicesSettings.tsx": {
+    "text-[10px]": 1
+  },
+  "dashboard-devices/dashboard/ServerPage.tsx": {
+    "text-[11px]": 1
+  },
+  "dashboard-devices/dashboard/codes.tsx": {
+    "text-[11px]": 1
+  },
+  "dashboard-devices/dashboard/parts.tsx": {
+    "rounded": 1,
+    "text-[11px]": 1,
+    "text-muted-foreground/50": 1
+  },
+  "dashboard-files/dashboard/ContentView.tsx": {
+    "leading-[17px]": 1,
+    "text-[10px]": 1,
+    "text-muted-foreground/60": 1
+  },
+  "dashboard-files/dashboard/FileTree.tsx": {
+    "leading-[19px]": 1,
+    "text-[10px]": 2,
+    "text-[13px]": 2
+  },
+  "dashboard-files/dashboard/FileView.tsx": {
+    "text-[13px]": 1
+  },
+  "dashboard-files/dashboard/FilesPane.tsx": {
+    "text-[13px]": 2
+  },
+  "dashboard/dashboard/components/Accounts.tsx": {
+    "py-2.5": 1
+  },
+  "dashboard/dashboard/components/AddProjectEffects.tsx": {
+    "rounded": 1
+  },
+  "dashboard/dashboard/components/AddProjectPanel.tsx": {
+    "rounded": 3
+  },
+  "dashboard/dashboard/components/AgentActionsMenu.tsx": {
+    "rounded": 2,
+    "text-[10px]": 2
+  },
+  "dashboard/dashboard/components/AgentComposer.tsx": {
+    "h-[17px]": 1,
+    "rounded": 1,
+    "text-[11px]": 1
+  },
+  "dashboard/dashboard/components/AgentDetails.tsx": {
+    "text-muted-foreground/70": 4
+  },
+  "dashboard/dashboard/components/AgentHandoff.tsx": {
+    "text-[11px]": 1
+  },
+  "dashboard/dashboard/components/AgentHistory.tsx": {
+    "rounded": 1,
+    "text-[11px]": 1,
+    "text-[7px]": 1
+  },
+  "dashboard/dashboard/components/AgentView.tsx": {
+    "py-2.5": 1
+  },
+  "dashboard/dashboard/components/AgentWorkBar.tsx": {
+    "rounded": 1,
+    "text-[10px]": 1,
+    "text-[13px]": 1
+  },
+  "dashboard/dashboard/components/Agents.tsx": {
+    "rounded": 1,
+    "text-[10px]": 1,
+    "text-muted-foreground/80": 1
+  },
+  "dashboard/dashboard/components/AgentsPage.tsx": {
+    "gap-2.5": 2
+  },
+  "dashboard/dashboard/components/BrandLink.tsx": {
+    "text-[17px]": 1
+  },
+  "dashboard/dashboard/components/BridgeSettings.tsx": {
+    "rounded": 1
+  },
+  "dashboard/dashboard/components/ChangedFiles.tsx": {
+    "rounded": 1,
+    "text-[10px]": 1,
+    "text-[13px]": 3
+  },
+  "dashboard/dashboard/components/CloudAgentNotice.tsx": {
+    "pt-2.5": 1,
+    "py-2.5": 2,
+    "rounded": 2,
+    "text-[10px]": 1,
+    "text-muted-foreground/70": 1
+  },
+  "dashboard/dashboard/components/CommandsMenu.tsx": {
+    "rounded": 1
+  },
+  "dashboard/dashboard/components/Composer.tsx": {
+    "duration-150": 1,
+    "text-[13px]": 1
+  },
+  "dashboard/dashboard/components/ContextCircle.tsx": {
+    "duration-500": 1
+  },
+  "dashboard/dashboard/components/ContextFiles.tsx": {
+    "rounded": 1
+  },
+  "dashboard/dashboard/components/CustomizeOverview.tsx": {
+    "py-2.5": 1,
+    "rounded": 4
+  },
+  "dashboard/dashboard/components/DiffStat.tsx": {
+    "text-[10px]": 1
+  },
+  "dashboard/dashboard/components/EventList.tsx": {
+    "px-3.5": 1,
+    "text-[10px]": 1,
+    "text-[11px]": 4
+  },
+  "dashboard/dashboard/components/FadeWhileStale.tsx": {
+    "duration-300": 1
+  },
+  "dashboard/dashboard/components/FilterChips.tsx": {
+    "px-2.5": 1
+  },
+  "dashboard/dashboard/components/GitHosts.tsx": {
+    "gap-2.5": 1,
+    "px-2.5": 1,
+    "py-2.5": 1
+  },
+  "dashboard/dashboard/components/Logins.tsx": {
+    "text-[11px]": 2
+  },
+  "dashboard/dashboard/components/Markdown.tsx": {
+    "leading-[19px]": 1,
+    "leading-[21px]": 1,
+    "leading-[22px]": 1,
+    "leading-[25px]": 1,
+    "leading-[30px]": 1,
+    "py-2.5": 2,
+    "rounded": 1,
+    "space-y-2.5": 2,
+    "text-[0.9em]": 2,
+    "text-[13px]": 1,
+    "text-[15px]": 3,
+    "text-[26px]": 1
+  },
+  "dashboard/dashboard/components/OnboardingChecklist.tsx": {
+    "rounded": 1,
+    "text-[10px]": 1
+  },
+  "dashboard/dashboard/components/Panes.tsx": {
+    "text-[13px]": 1
+  },
+  "dashboard/dashboard/components/PersonMark.tsx": {
+    "text-[10px]": 1
+  },
+  "dashboard/dashboard/components/PersonMenu.tsx": {
+    "text-[10px]": 1
+  },
+  "dashboard/dashboard/components/PickProject.tsx": {
+    "rounded": 1
+  },
+  "dashboard/dashboard/components/ProjectPicker.tsx": {
+    "rounded": 1
+  },
+  "dashboard/dashboard/components/ProjectSkills.tsx": {
+    "gap-2.5": 1,
+    "rounded": 4
+  },
+  "dashboard/dashboard/components/PromptEditor.tsx": {
+    "py-2.5": 2
+  },
+  "dashboard/dashboard/components/QuestionPanel.tsx": {
+    "h-[17px]": 2,
+    "px-2.5": 1,
+    "rounded": 3,
+    "text-[11px]": 2,
+    "text-[13px]": 2
+  },
+  "dashboard/dashboard/components/Quota.tsx": {
+    "sm:text-[11px]": 1,
+    "text-[10px]": 1
+  },
+  "dashboard/dashboard/components/ServerLogins.tsx": {
+    "gap-x-2.5": 1,
+    "py-2.5": 1
+  },
+  "dashboard/dashboard/components/SettingsDialog.tsx": {
+    "rounded": 5
+  },
+  "dashboard/dashboard/components/SkillsCard.tsx": {
+    "text-foreground/80": 1
+  },
+  "dashboard/dashboard/components/StartAgentForm.tsx": {
+    "gap-2.5": 1,
+    "py-2.5": 1
+  },
+  "dashboard/dashboard/components/SubagentLine.tsx": {
+    "group-has-focus-visible/status:text-foreground/80": 1,
+    "group-hover/status:text-foreground/80": 1
+  },
+  "dashboard/dashboard/components/SubagentPanel.tsx": {
+    "px-3.5": 1,
+    "py-2.5": 1
+  },
+  "dashboard/dashboard/components/ToolCalls.tsx": {
+    "gap-2.5": 1,
+    "group-has-focus-visible/status:text-foreground/80": 1,
+    "group-hover/status:text-foreground/80": 1,
+    "leading-[19px]": 2,
+    "max-h-[400px]": 1,
+    "text-[13px]": 4,
+    "text-foreground/80": 1,
+    "text-muted-foreground/60": 1
+  },
+  "dashboard/dashboard/components/prompt-editor/SuggestionList.tsx": {
+    "rounded": 1,
+    "text-[10px]": 1,
+    "text-muted-foreground/70": 1
+  },
+  "dashboard/dashboard/components/ui/card.tsx": {
+    "rounded": 1
+  },
+  "dashboard/dashboard/components/ui/copy-button.tsx": {
+    "rounded": 1
+  },
+  "dashboard/dashboard/components/ui/dialog.tsx": {
+    "rounded": 1
+  },
+  "dashboard/dashboard/components/ui/gauge.tsx": {
+    "duration-500": 1,
+    "text-[9px]": 2
+  },
+  "dashboard/dashboard/components/ui/message-scroller.tsx": {
+    "duration-200": 1
+  },
+  "dashboard/dashboard/components/ui/resizable.tsx": {
+    "group-aria-[orientation=horizontal]/handle:h-[3px]": 1
+  },
+  "dashboard/dashboard/components/ui/row-item.tsx": {
+    "text-[13px]": 1
+  },
+  "dashboard/dashboard/components/ui/sidebar.tsx": {
+    "duration-200": 3,
+    "mx-3.5": 1,
+    "px-2.5": 1,
+    "text-sidebar-foreground/70": 1
+  },
+  "dashboard/dashboard/design/previews.tsx": {
+    "gap-2.5": 1,
+    "text-[10px]": 1
+  },
+  "skill-account-rotation/dashboard/AccountsCard.tsx": {
+    "gap-2.5": 1,
+    "rounded": 1
+  },
+  "skill-browser/dashboard/BrowserPanel.tsx": {
+    "text-[10px]": 1,
+    "text-[11px]": 1
+  },
+  "skill-logs/dashboard/LogsPage.tsx": {
+    "gap-2.5": 2,
+    "text-[9px]": 1
+  },
+  "skill-logs/dashboard/MembersCard.tsx": {
+    "gap-2.5": 1,
+    "space-y-2.5": 1
+  },
+  "skill-queue/dashboard/QueueCard.tsx": {
+    "text-muted-foreground/70": 1
+  },
+  "skill-scheduler/dashboard/CodeWords.tsx": {
+    "rounded": 2
+  },
+  "skill-scheduler/dashboard/SchedulerCard.tsx": {
+    "text-[13px]": 1
+  },
+  "skill-tickets/dashboard/HotTicketsCard.tsx": {
+    "gap-2.5": 2
+  },
+  "skill-tickets/dashboard/TicketFilterBar.tsx": {
+    "rounded": 2,
+    "text-[10px]": 3
+  },
+  "skill-tickets/dashboard/TicketHeader.tsx": {
+    "text-[10px]": 1
+  },
+  "skill-tickets/dashboard/TicketPageShell.tsx": {
+    "rounded": 1
+  },
+  "skill-tickets/dashboard/TicketStartActions.tsx": {
+    "text-[10px]": 2
+  },
+  "skill-tickets/dashboard/TicketsPage.tsx": {
+    "rounded": 1
+  },
+  "skill-tickets/dashboard/TicketsPanel.tsx": {
+    "hover:text-info/80": 1,
+    "rounded": 1,
+    "text-[10px]": 11,
+    "text-muted-foreground/70": 1
+  }
+}
