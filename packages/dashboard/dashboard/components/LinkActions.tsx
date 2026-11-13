@@ -4,6 +4,7 @@ import { moduleHost, type LinkActionResult, type ModuleLink } from '../module/in
 import { useMountedModules, type MountedLinkAction } from '../lib/use-modules.js'
 import { HostServicesContext, INERT_HOST_SERVICES } from '../lib/host-services.js'
 import { DaemonDown } from '../lib/use-daemon-health.js'
+import { usePolled } from '../lib/use-async.js'
 import { Button, type ButtonProps } from './ui/button.js'
 import { Tooltip, TooltipTrigger, TooltipContent } from './ui/tooltip.js'
 
@@ -12,6 +13,9 @@ import { Tooltip, TooltipTrigger, TooltipContent } from './ui/tooltip.js'
 // package the link's project has puts its verb here: the queue module's "Add to queue", say. The
 // page names no module, the module names no ticket; the dashboard, which installed both, puts the
 // two together. A project without such a package shows nothing here at all.
+
+/** No action read as done on anything yet. */
+const NOTHING_DONE: Record<string, (link: ModuleLink) => boolean> = {}
 
 /** The links one project's worth of a click acts on. */
 export interface ProjectLinks {
@@ -62,6 +66,37 @@ export function LinkActions({
 
   const actionKey = (action: MountedLinkAction) => `${action.package}\n${action.label}`
 
+  // What the actions are done on already: one read per action and project, shared by its buttons.
+  const groups = typeof targets === 'function' ? [] : targets.filter(group => group.links.length > 0)
+  const asked = actions.filter(action => action.done)
+  const readKey = [...asked.map(actionKey), ...groups.map(group => group.projectId)].join('\n')
+  const { value: doneOn } = usePolled<Record<string, (link: ModuleLink) => boolean>>(
+    asked.length === 0 || groups.length === 0
+      ? null
+      : async () => {
+          const read = await Promise.all(
+            asked.flatMap(action =>
+              groups
+                .filter(group => action.projects.includes(group.projectId))
+                .map(async ({ projectId }) => {
+                  const host = moduleHost({ ...(services ?? INERT_HOST_SERVICES), package: action.package })
+                  const isDone = await action.done!(host, projectId).catch(() => undefined)
+                  return isDone ? [[`${actionKey(action)}\n${projectId}`, isDone] as const] : []
+                }),
+            ),
+          )
+          return Object.fromEntries(read.flat())
+        },
+    NOTHING_DONE,
+    10_000,
+    [readKey],
+    { remember: `link-done:${readKey}` },
+  )
+  const doneBefore = (action: MountedLinkAction): boolean => {
+    const mine = groups.filter(group => action.projects.includes(group.projectId))
+    return mine.length > 0 && mine.every(({ projectId, links }) => links.every(link => doneOn[`${actionKey(action)}\n${projectId}`]?.(link) ?? false))
+  }
+
   const run = async (action: MountedLinkAction) => {
     if (running !== null) return
     setRunning(actionKey(action))
@@ -91,7 +126,7 @@ export function LinkActions({
     <>
       {actions.map(action => {
         const Icon = action.icon
-        const rested = done.has(actionKey(action))
+        const rested = done.has(actionKey(action)) || doneBefore(action)
         const busy = running === actionKey(action)
         const content = rested ? (
           <>

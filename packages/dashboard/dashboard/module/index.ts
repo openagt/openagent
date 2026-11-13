@@ -156,6 +156,8 @@ export interface LinkAction {
    * own commands in that project. A batch stops at its first failure and says why.
    */
   run(host: ModuleHost, projectId: string, links: ModuleLink[]): Promise<LinkActionResult>
+  /** Which links of one project the action is done on already: a button whose links all are rests on its done label. */
+  done?(host: ModuleHost, projectId: string): Promise<(link: ModuleLink) => boolean>
 }
 
 /** What a Settings section is rendered with: the projects whose settings it shows and saves. */

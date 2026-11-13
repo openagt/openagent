@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, test, vi } from 'vitest'
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { ModulesContext, type MountedLinkAction, type MountedModules } from '../lib/use-modules.js'
+import { forgetRemembered } from '../lib/use-async.js'
 
 const runModuleCommand = vi.hoisted(() => vi.fn())
 vi.mock('../rpc/modules.js', () => ({ runModuleCommand }))
@@ -24,6 +25,7 @@ const LINK = { text: 'Do the thing', href: 'tickets/t.md', priority: 7 }
 afterEach(() => {
   cleanup()
   runModuleCommand.mockReset()
+  forgetRemembered()
 })
 
 // The slot for the modules' link actions (#1774 Q3): a page shows links, a module acts on them, and
@@ -43,6 +45,23 @@ describe('LinkActions', () => {
       </ModulesContext.Provider>,
     )
     expect(screen.queryByRole('button')).toBeNull()
+  })
+
+  test('an action that reads its links as done already rests on its done label from the start; a link it has not done is offered', async () => {
+    const done = vi.fn(async () => (link: { href?: string }) => link.href === 'tickets/t.md')
+    const shown = (links: { text: string; href?: string }[]) =>
+      render(
+        <ModulesContext.Provider value={modules([mounted(vi.fn(), { done })])}>
+          <LinkActions projects={['p1']} targets={[{ projectId: 'p1', links }]} />
+        </ModulesContext.Provider>,
+      )
+    shown([LINK])
+    const queued = await screen.findByRole('button', { name: 'Queued' })
+    expect(queued.hasAttribute('disabled')).toBe(true)
+    cleanup()
+    shown([LINK, { text: 'Other', href: 'tickets/other.md' }])
+    await waitFor(() => expect(done).toHaveBeenCalledTimes(2))
+    expect(screen.getByRole('button', { name: 'Add to queue' })).toBeTruthy()
   })
 
   test('a click runs the action with the links, in order, per project, through a host bound to the module\'s package', async () => {
