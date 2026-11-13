@@ -389,7 +389,7 @@ function Next({ children }: { children: ReactNode }) {
 }
 
 /** A row's line of {@link Next} items: moved left by one "·" and its space, and cut there, so no line starts with a "·". */
-const LINE = 'flex flex-wrap gap-x-2 -ml-3 [clip-path:inset(-0.5rem_-0.25rem_-0.5rem_0.75rem)]'
+const LINE = 'flex flex-wrap gap-x-2 -ml-3 [clip-path:inset(-0.5rem_-0.25rem_-0.5rem_0.25rem)]'
 
 /**
  * Where a row stands, in one line: on or off; when it last ran, that its last run failed, or that
