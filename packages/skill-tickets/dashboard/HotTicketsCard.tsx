@@ -1,6 +1,6 @@
 import { useState, type ReactNode } from 'react'
 import { ArrowUp, Bot, CirclePause, Clock, Flame, WifiOff, type LucideIcon } from 'lucide-react'
-import { Button, Card, CardContent, CardHeader, CardTitleLink, LinkActions, cn, formatDateTime, usePolled, useModuleHost, useOpenAgentDown, type ModuleCardProps, type ModuleProject } from '@openagt/dashboard/module'
+import { Button, Card, CardContent, CardHeader, CardTitleLink, LinkActions, cn, formatDateTime, inPlace, usePolled, useModuleHost, useOpenAgentDown, type ModuleCardProps, type ModuleProject } from '@openagt/dashboard/module'
 import { claimState, heldBack, holderAgent, hotLane, ticketLink, withHolder, type ClaimState, type HotLane } from '../src/module.js'
 import { holdingRun } from './lib/holding-run.js'
 import { listTickets } from './lib/list.js'
@@ -216,9 +216,9 @@ function Row({ hot, showProject, reload }: { hot: HotTicket; showProject: boolea
           {mark}
         </span>
       )}
-      <button type="button" onClick={() => host.openPage('tickets', [ticket.file], project.id)} className="min-w-0 flex-1 truncate text-left text-foreground hover:underline">
+      <a href={host.pageHref('tickets', [ticket.file], project.id)} onClick={inPlace(() => host.openPage('tickets', [ticket.file], project.id))} className="min-w-0 flex-1 truncate text-left text-foreground hover:underline">
         {ticket.title}
-      </button>
+      </a>
       {failed && <span className="shrink-0 text-xs text-danger">{failed}</span>}
       <span className="relative flex shrink-0 items-center gap-2.5 self-stretch md:bg-[inherit]">
         {/* Laid over the title's end, on the row's own colour, so the row never moves under the pointer and its fact stays in view. */}

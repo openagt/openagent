@@ -4,6 +4,7 @@ import type { ProjectSummary } from '../../src/index.js'
 import { onProjectSkills, sendProjectSkills, type ProjectSkills } from '../rpc/skills.js'
 import { runModuleCommand } from '../rpc/modules.js'
 import { onSkillsSaved } from '../lib/skills-saved.js'
+import { inPlace } from '../lib/in-place.js'
 import { usePolled } from '../lib/use-async.js'
 import { openSettings } from '../lib/use-route.js'
 import { cn } from '../lib/utils.js'
@@ -58,7 +59,7 @@ function usedOver(reads: readonly Pick<Read, 'used'>[]): SkillUse[] {
 
 const NONE: Read[] = []
 
-export function SkillsCard({ projects, onSelectProject }: { projects: ProjectSummary[]; onSelectProject: (id: string) => void }) {
+export function SkillsCard({ projects, onSelectProject, projectHref }: { projects: ProjectSummary[]; onSelectProject: (id: string) => void; projectHref: (id: string) => string }) {
   const key = projects.map(project => project.id).join(',')
   const { value: reads, loaded, reload } = usePolled<Read[]>(
     () =>
@@ -121,7 +122,7 @@ export function SkillsCard({ projects, onSelectProject }: { projects: ProjectSum
           <>
             <ul className="space-y-2">
               {reads.map(read => (
-                <Row key={read.project.id} read={read} reload={reload} onOpen={() => onSelectProject(read.project.id)} />
+                <Row key={read.project.id} read={read} reload={reload} href={projectHref(read.project.id)} onOpen={() => onSelectProject(read.project.id)} />
               ))}
             </ul>
             {all.error && <p className="mt-2 text-xs text-danger">{all.error}</p>}
@@ -134,7 +135,7 @@ export function SkillsCard({ projects, onSelectProject }: { projects: ProjectSum
 }
 
 /** One project: its name and how many skills it holds, then what is to be done, with its press, or that all is well. */
-function Row({ read, reload, onOpen }: { read: Read; reload: () => Promise<void>; onOpen: () => void }) {
+function Row({ read, reload, href, onOpen }: { read: Read; reload: () => Promise<void>; href: string; onOpen: () => void }) {
   const { project, skills } = read
   const [pending, setPending] = useState(false)
   const { error, run } = useAction()
@@ -150,9 +151,9 @@ function Row({ read, reload, onOpen }: { read: Read; reload: () => Promise<void>
   return (
     <li aria-label={project.name} className="min-w-0">
       <div className="flex min-w-0 items-center gap-2 text-sm">
-        <button type="button" onClick={onOpen} className="min-w-0 truncate font-medium hover:underline">
+        <a href={href} onClick={inPlace(onOpen)} className="min-w-0 truncate font-medium hover:underline">
           {project.name}
-        </button>
+        </a>
         {says && says.held > 0 && <span className="shrink-0 text-xs text-muted-foreground tabular-nums">{says.held === 1 ? '1 project skill' : `${says.held} project skills`}</span>}
         <span className="ml-auto flex shrink-0 items-center gap-1.5">
           {!skills || !says ? (

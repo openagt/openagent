@@ -113,6 +113,7 @@ describe('TicketsPage (#1144)', () => {
     fireEvent.click(await screen.findByText('Do the thing'))
     // The module's own page for that ticket: where the dashboard's link convention sends a link to it.
     expect(host.openPage).toHaveBeenCalledWith('tickets', ['t.md'], 'p1')
+    expect(screen.getByRole('link', { name: 'Do the thing' }).getAttribute('href')).toBe('/p1/tickets/t.md')
   })
 
   test("a ticket's page opened from the list goes back to the list as it was, every project's or one's: the browser's Back, after Forward or a reload too", async () => {
@@ -219,7 +220,7 @@ describe('TicketsPage sort (#1144/#1265)', () => {
     twoByPriority()
     render()
     await screen.findByText('Low priority')
-    const titles = screen.getAllByRole('button').map(b => b.textContent)
+    const titles = screen.getAllByRole('link').map(b => b.textContent)
     // 'low.md' is first in the fixture, standing in for "whatever order the server sent" — the
     // default sort must not have reordered it.
     expect(titles.findIndex(t => t?.includes('Low priority'))).toBeLessThan(titles.findIndex(t => t?.includes('High priority')))
@@ -231,7 +232,7 @@ describe('TicketsPage sort (#1144/#1265)', () => {
     await screen.findByText('Low priority')
     fireEvent.click(screen.getByRole('button', { name: /sort: date/i }))
     fireEvent.click(await screen.findByRole('menuitem', { name: 'Priority' }))
-    const titles = (await screen.findAllByRole('button')).map(b => b.textContent)
+    const titles = (await screen.findAllByRole('link')).map(b => b.textContent)
     expect(titles.findIndex(t => t?.includes('High priority'))).toBeLessThan(titles.findIndex(t => t?.includes('Low priority')))
     expect(window.location.search).toBe('?sort=priority')
   })
@@ -252,7 +253,7 @@ describe('TicketsPage sort (#1144/#1265)', () => {
     await screen.findByText('Newer')
     fireEvent.click(screen.getByRole('button', { name: /sort: date/i }))
     fireEvent.click(await screen.findByRole('menuitem', { name: 'Priority' }))
-    const titles = (await screen.findAllByRole('button')).map(b => b.textContent)
+    const titles = (await screen.findAllByRole('link')).map(b => b.textContent)
     expect(titles.findIndex(t => t?.includes('Newer'))).toBeLessThan(titles.findIndex(t => t?.includes('Older')))
   })
 })
@@ -346,7 +347,7 @@ describe('TicketsPage grouping (#1144)', () => {
     expect(screen.getByText('Alpha')).toBeTruthy()
     expect(screen.getByText('Beta')).toBeTruthy()
     // Cross-project priority order: Beta's 9 above Alpha's 2.
-    const titles = (await screen.findAllByRole('button')).map(b => b.textContent)
+    const titles = (await screen.findAllByRole('link')).map(b => b.textContent)
     expect(titles.findIndex(t => t?.includes('Beta ticket'))).toBeLessThan(titles.findIndex(t => t?.includes('Alpha ticket')))
     // No per-project Update bars in the flat list.
     expect(screen.queryByRole('button', { name: 'Update tickets' })).toBeNull()

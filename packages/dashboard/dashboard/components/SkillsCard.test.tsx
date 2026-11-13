@@ -40,7 +40,7 @@ test('each project: how many skills it holds, and a newer version to take, skill
   skills.sendChangeSkills.mockResolvedValue({ ok: true, written: ['queue', 'logs'], removed: [], left: [] })
   skills.sendProjectSkills.mockResolvedValue({ ok: true })
   const onSelectProject = vi.fn()
-  render(<SkillsCard projects={['alpha', 'beta', 'gamma', 'delta', 'empty', 'gone'].map(project)} onSelectProject={onSelectProject} />)
+  render(<SkillsCard projects={['alpha', 'beta', 'gamma', 'delta', 'empty', 'gone'].map(project)} onSelectProject={onSelectProject} projectHref={id => `/${id}`} />)
   const alpha = within(await screen.findByRole('listitem', { name: 'alpha' }))
   expect(alpha.getByText('3 project skills')).toBeTruthy()
   expect(alpha.getByText('2 have newer versions: queue, logs')).toBeTruthy()
@@ -60,8 +60,10 @@ test('each project: how many skills it holds, and a newer version to take, skill
   // Send sends what is on its way.
   fireEvent.click(within(screen.getByRole('listitem', { name: 'beta' })).getByRole('button', { name: 'Send to GitHub' }))
   await waitFor(() => expect(skills.sendProjectSkills).toHaveBeenCalledWith('beta'))
-  // A project's name opens its page.
-  fireEvent.click(screen.getByRole('button', { name: 'gamma' }))
+  // A project's name is a link to its page, followed in place on a plain click.
+  const gamma = screen.getByRole('link', { name: 'gamma' })
+  expect(gamma.getAttribute('href')).toBe('/gamma')
+  fireEvent.click(gamma)
   expect(onSelectProject).toHaveBeenCalledWith('gamma')
 })
 
@@ -78,7 +80,7 @@ test('which skills the agents used in the last 30 days over the projects shown, 
   modules.runModuleCommand.mockImplementation(async (id: string, pkg: string, args: string[]) => (pkg === '@openagt/skill-logs' && args[0] === 'skills' ? { ok: true, output: used[id] } : { ok: false, error: 'no' }))
   skills.sendChangeSkills.mockResolvedValue({ ok: true, written: ['tickets'], removed: [], left: [] })
   skills.sendProjectSkills.mockResolvedValue({ ok: true })
-  render(<SkillsCard projects={['alpha', 'beta'].map(project)} onSelectProject={() => {}} />)
+  render(<SkillsCard projects={['alpha', 'beta'].map(project)} onSelectProject={() => {}} projectHref={id => `/${id}`} />)
   const usage = within(await screen.findByRole('region', { name: 'Most used' }))
   expect(usage.getAllByRole('listitem').map(item => [item.getAttribute('aria-label'), item.textContent?.match(/\d+$/)?.[0]])).toEqual([
     ['tickets', '12'],
@@ -96,7 +98,7 @@ test('which skills the agents used in the last 30 days over the projects shown, 
 test('a save on the Skills page, over the card, is read at once: the card says it before the next read', async () => {
   skills.onProjectSkills.mockResolvedValueOnce(state([])).mockResolvedValue(state([skill('tickets')]))
   modules.runModuleCommand.mockResolvedValue({ ok: false, error: 'no' })
-  render(<SkillsCard projects={['alpha'].map(project)} onSelectProject={() => {}} />)
+  render(<SkillsCard projects={['alpha'].map(project)} onSelectProject={() => {}} projectHref={id => `/${id}`} />)
   await screen.findByText('no skills yet')
   skillsSaved()
   await screen.findByText('1 project skill')

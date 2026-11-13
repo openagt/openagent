@@ -167,6 +167,8 @@ export function App() {
   const go = (next: Route, options?: { replace?: boolean }) => navigate(scoped(next), options)
   /** Where `go` would take the page: a link's address. */
   const hrefOf = (next: Route) => formatRoute(scoped(next), addresses)
+  /** A module's page, at a sub-path, in `inProject` or the picked project. */
+  const pageRoute = (segment: string, path?: string[], inProject?: string): Route => ({ projectId: null, agentId: null, page: segment, ...(path && path.length ? { pagePath: path } : {}), ...(inProject ? { scope: inProject } : {}) })
 
   // Pick the one project every page shows, or all of them. The page stays, with what it mirrored
   // into the query (a list's filters), unless it is another project's: its launcher becomes the
@@ -361,8 +363,8 @@ export function App() {
     ...DAEMON_SERVICES,
     openAgent: selectAgentInProject,
     agentHref: (inProject, id) => hrefOf({ projectId: inProject, agentId: id }),
-    openPage: (segment, path, inProject, options) => go({ projectId: null, agentId: null, page: segment, ...(path && path.length ? { pagePath: path } : {}), ...(inProject ? { scope: inProject } : {}) }, options),
-    pageHref: segment => formatRoute({ projectId: null, agentId: null, page: segment, ...(scope ? { scope } : {}) }, addresses),
+    openPage: (segment, path, inProject, options) => go(pageRoute(segment, path, inProject), options),
+    pageHref: (segment, path, inProject) => hrefOf(pageRoute(segment, path, inProject)),
     openSettings: entry => showSettings(entry),
     startRun: async (inProject, prompt, opts) => {
       const result = await sendStart(inProject, prompt, startPicks(preferences))
@@ -461,6 +463,7 @@ export function App() {
       return (
         <DashboardPage
           onSelectProject={selectProject}
+          projectHref={id => hrefOf({ projectId: id, agentId: null })}
           onSelectAgent={selectAgentInProject}
           onAgentStarted={agentStarted}
           interventions={interventions}

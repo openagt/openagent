@@ -214,7 +214,7 @@ describe('TicketsPanel (#697/#1144)', () => {
        
       />,
     )
-    const titles = (await screen.findAllByRole('button')).map(b => b.textContent)
+    const titles = (await screen.findAllByRole('link')).map(b => b.textContent)
     expect(titles.findIndex(t => t?.includes('Older'))).toBeLessThan(titles.findIndex(t => t?.includes('Newer')))
   })
 

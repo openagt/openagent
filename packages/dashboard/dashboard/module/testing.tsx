@@ -31,7 +31,7 @@ export function fakeHost(pkg: string, services: Partial<Omit<ModuleHost, 'packag
     openAgent: () => {},
     agentHref: (projectId, agentId) => `/${projectId}/${agentId}`,
     openPage: () => {},
-    pageHref: segment => `/${segment}`,
+    pageHref: (segment, path = [], projectId) => `/${[projectId, segment, ...path].filter(Boolean).join('/')}`,
     openSettings: () => {},
     gitHostPeople: async () => [],
     startRun: nothing,

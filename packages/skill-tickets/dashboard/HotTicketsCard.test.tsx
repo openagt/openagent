@@ -74,6 +74,7 @@ describe('HotTicketsCard', () => {
     )
     fireEvent.click(await screen.findByText('held'))
     expect(host.openPage).toHaveBeenCalledWith('tickets', ['held.md'], 'p1')
+    expect(screen.getByRole('link', { name: 'held' }).getAttribute('href')).toBe('/p1/tickets/held.md')
     // The run at work opens from the mark that says so.
     fireEvent.click(screen.getByRole('button', { name: 'Its run is at work, claimed by login-page: open the run' }))
     expect(host.openAgent).toHaveBeenCalledWith('p1', 'run-1')

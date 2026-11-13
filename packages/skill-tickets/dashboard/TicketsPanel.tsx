@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { ExternalLink, ClipboardList, Hammer, Plus } from 'lucide-react'
-import { Badge, Button, Checkbox, Tooltip, TooltipTrigger, TooltipContent, cn, formatRelative, formatAge, formatDateTime, useAction, useLoaded, useModuleHost } from '@openagt/dashboard/module'
+import { Badge, Button, Checkbox, Tooltip, TooltipTrigger, TooltipContent, cn, formatRelative, formatAge, formatDateTime, inPlace, useAction, useLoaded, useModuleHost } from '@openagt/dashboard/module'
 import { NEW_TICKET, UPDATE_TICKETS_PROMPT, heldBack, readMeta, type TicketsMeta } from '../src/module.js'
 import { TicketStartActions } from './TicketStartActions.js'
 import type { WorkspaceTicket } from './lib/types.js'
@@ -68,6 +68,7 @@ export function TicketRow({
   // The holder as a person reads it: the agent's session name once it has one, else the id the
   // lock names as written (#1748).
   const holder = ticket.lockedByAgent?.name ?? ticket.lockedBy
+  const host = useModuleHost()
   // In review or waiting: no agent is started on it nor on its plan, the tickets skill's own rule;
   // claimed: an agent holds it. Either way the row offers no next step.
   const held = heldBack(ticket)
@@ -86,12 +87,12 @@ export function TicketRow({
           <Checkbox checked={selected ?? false} onCheckedChange={() => onToggleSelect()} aria-label={`Select ${ticket.title}`} className="relative after:absolute after:-inset-[5px]" />
         </div>
       )}
-      <button type="button" onClick={onOpen} className="flex min-w-0 items-center gap-2 py-2 pr-3 text-left text-sm md:flex-1 md:pl-0 max-md:order-first max-md:basis-full max-md:pl-3">
+      <a href={host.pageHref('tickets', [ticket.file], projectId)} onClick={inPlace(onOpen)} className="flex min-w-0 items-center gap-2 py-2 pr-3 text-left text-sm md:flex-1 md:pl-0 max-md:order-first max-md:basis-full max-md:pl-3">
         {/* The title is the row's one flexible column: it truncates when long and stretches
             when short, so the whole of a row's slack lands here — the way a table's wide
             first column carries the blank — instead of pooling mid-row between columns. */}
         <span className="min-w-0 flex-1 truncate font-medium">{ticket.title}</span>
-      </button>
+      </a>
       {projectName && <span className="flex shrink-0 items-center pr-2 text-xs text-muted-foreground">{projectName}</span>}
       {/* The tags, content-sized and packed against the priority column (#1265): their right edge
           is the aligned one, so rows with one tag and rows with four read as the same

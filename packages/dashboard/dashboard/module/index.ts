@@ -404,8 +404,8 @@ export interface ModuleHost {
    * takes the place of the current one, so Back steps over it: a pick the page keeps in its address.
    */
   openPage(segment: string, path?: string[], projectId?: string, options?: { replace?: boolean }): void
-  /** The address of a page a module adds, with the project picked in the dashboard: a link's `href`, for a link that also opens in a new tab. */
-  pageHref(segment: string): string
+  /** The address `openPage` with the same arguments goes to: a link's `href`, for a link that also opens in a new tab. */
+  pageHref(segment: string, path?: string[], projectId?: string): string
   /** Open an entry of Settings over the page, by its id: `openSettings('devices')`. */
   openSettings(entry: string): void
   /**
