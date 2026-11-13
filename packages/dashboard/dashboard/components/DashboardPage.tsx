@@ -178,7 +178,8 @@ export function DashboardPage({
                 {layoutKey === ALL_PROJECTS ? 'Reset to the default layout' : 'Use the all-projects layout'}
               </Button>
             )}
-            <Button size="sm" onClick={() => setEditing(false)}>
+            {/* Focused as it takes Customize's place, which the press took away from the keyboard. */}
+            <Button size="sm" autoFocus onClick={() => setEditing(false)}>
               Done
             </Button>
           </>
