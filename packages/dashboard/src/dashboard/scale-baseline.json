@@ -114,8 +114,6 @@
     "text-[11px]": 2
   },
   "dashboard/dashboard/components/Markdown.tsx": {
-    "leading-[19px]": 1,
-    "leading-[21px]": 1,
     "leading-[22px]": 1,
     "leading-[25px]": 1,
     "leading-[30px]": 1,
@@ -123,8 +121,7 @@
     "rounded": 1,
     "space-y-2.5": 2,
     "text-[0.9em]": 2,
-    "text-[13px]": 1,
-    "text-[15px]": 3,
+    "text-[15px]": 2,
     "text-[26px]": 1
   },
   "dashboard/dashboard/components/OnboardingChecklist.tsx": {
@@ -166,9 +163,7 @@
     "py-2.5": 1
   },
   "dashboard/dashboard/components/ToolCalls.tsx": {
-    "leading-[19px]": 2,
-    "max-h-[400px]": 1,
-    "text-[13px]": 4
+    "max-h-[400px]": 1
   },
   "dashboard/dashboard/components/prompt-editor/SuggestionList.tsx": {
     "rounded": 1,

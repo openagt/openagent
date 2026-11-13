@@ -766,6 +766,17 @@ html[data-pinned] body {
   scrollbar-gutter: stable;
 }
 
+/* The chat's type, set here and nowhere else (DECISIONS.md, "The chat is set at Claude Code's
+   sizes"): the text of the chat and of a reply, and its code, in a reply and in what a tool shows. */
+@utility text-chat {
+  font-size: 0.9375rem;
+  line-height: 1.3125rem;
+}
+@utility text-chat-code {
+  font-size: 0.8125rem;
+  line-height: 1.1875rem;
+}
+
 /* A page's top bar draws its line only while the chat is scrolled under it: the chat's scroller
    names its scroll (`chat-scroll`), the room around the bar and the chat shares the name
    (`chat-scope`), and the line comes in over the first pixels scrolled. A browser with no scroll

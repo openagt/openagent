@@ -79,7 +79,7 @@ describe('Markdown compact', () => {
     expect(screen.getByText('Section').className).toContain('text-sm')
     unmount()
     render(<Markdown text={'# Section'} />)
-    expect(screen.getByText('Section').className).toContain('text-[17px]')
+    expect(screen.getByText('Section').className).toContain('text-base')
   })
 
   test("in a reply, headings are medium, not bold, and a nested bullet list is circles; a done task is struck through", () => {
