@@ -302,7 +302,7 @@ export function OnboardingChecklist({
                           type="button"
                           disabled={step.done || isOpen}
                           onClick={() => setPicked(step.key)}
-                          className={cn('flex flex-wrap items-center gap-x-2 text-left text-sm', step.done ? 'text-muted-foreground' : isOpen ? 'font-medium' : 'text-muted-foreground hover:text-foreground')}
+                          className={cn('relative flex flex-wrap items-center gap-x-2 text-left text-sm after:absolute after:-inset-y-0.5 after:inset-x-0', step.done ? 'text-muted-foreground' : isOpen ? 'font-medium' : 'text-muted-foreground hover:text-foreground')}
                         >
                           <span>{step.label}</span>
                           {step.done && step.doneNote && <span className="truncate text-xs text-muted-foreground">· {step.doneNote}</span>}
@@ -310,7 +310,7 @@ export function OnboardingChecklist({
                         </button>
                         {isOpen && step.info && (
                           <Tooltip>
-                            <TooltipTrigger render={<button type="button" aria-label={`More on ${step.label}`} className="text-muted-foreground hover:text-foreground" />}>
+                            <TooltipTrigger render={<button type="button" aria-label={`More on ${step.label}`} className="relative text-muted-foreground after:absolute after:-inset-1.5 hover:text-foreground" />}>
                               <Info className="h-3.5 w-3.5" aria-hidden />
                             </TooltipTrigger>
                             <TooltipContent className="max-w-sm">{step.info}</TooltipContent>
