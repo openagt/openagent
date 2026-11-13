@@ -4,7 +4,7 @@ import { mkdir, mkdtemp, realpath, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { nodeGitRunner, personalFolder, sessionsHome, writeSharing, DATA_BRANCH, SESSIONS_DIR } from '@openagt/agent-data'
-import { runCli, USAGE, DEFAULT_LIMIT } from './cli.js'
+import { runCli, DEFAULT_LIMIT } from './cli.js'
 import { RUNS_DIR } from './names.js'
 
 const git = nodeGitRunner()
@@ -156,7 +156,7 @@ test('usage: an unknown command, a stray argument, a bad limit and an unsafe id'
     const unknown = await run(a!, ['dance'])
     assert.equal(unknown.code, 2)
     assert.equal(unknown.json, undefined)
-    assert.equal(unknown.stderr, `unknown command: dance\n\n${USAGE}`)
+    assert.equal(unknown.stderr, 'unknown command: dance\nRun `logs --help` for usage.')
     assert.equal((await run(a!, ['--limit', '0'])).code, 2)
     assert.equal((await run(a!, ['--limit', 'many'])).code, 2)
     assert.equal((await run(a!, ['--nope'])).code, 2)

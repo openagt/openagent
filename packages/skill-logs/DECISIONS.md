@@ -73,7 +73,8 @@ already made, and lists it in its pull request; for anything else it proposes an
 - Every command that runs prints one JSON document. A refusal also puts one line on
   stderr and exits 1. A malformed command line (an unknown flag, the wrong argument
   count, a `--limit` that is not a whole number above 0, an id that is not one) is
-  rejected first: the usage on stderr, nothing on stdout, exit 2. Anything a command
+  rejected first: what was wrong and a pointer to `--help` on stderr, nothing on stdout,
+  exit 2. Anything a command
   throws refuses with `git-failed`.
 
 ## Flow: what the writer records

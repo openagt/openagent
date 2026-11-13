@@ -161,8 +161,8 @@ ending.
   on npm where the install was missing, and which a project without Node could not have.
 - Every command that runs prints one JSON document on stdout: the result or the refusal. A
   refusal (a rule saying no) adds one line for a person on stderr and exits 1. A malformed
-  command line (an unknown flag, the wrong argument count) never gets that far: the usage
-  on stderr, nothing on stdout, exit 2. An id the charset rejects is a refusal,
+  command line (an unknown flag, the wrong argument count) never gets that far: what was
+  wrong and a pointer to `--help` on stderr, nothing on stdout, exit 2. An id the charset rejects is a refusal,
   `invalid-id`, not a usage error. A command that throws is reported like a refusal,
   reason `git-failed`, the error's own line as `detail` on stdout and on stderr.
 - `create`, `attach`, `show`, `list`, `remove`, `prune` and `push --branch` act on the

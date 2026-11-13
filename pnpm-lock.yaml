@@ -523,6 +523,9 @@ importers:
 
   packages/install:
     dependencies:
+      '@openagt/agent-data':
+        specifier: workspace:*
+        version: link:../agent-data
       '@openagt/dashboard':
         specifier: workspace:*
         version: link:../dashboard
@@ -573,6 +576,9 @@ importers:
 
   packages/skill-account-rotation:
     dependencies:
+      '@openagt/agent-data':
+        specifier: workspace:*
+        version: link:../agent-data
       '@openagt/agent-driver':
         specifier: workspace:*
         version: link:../agent-driver/core
@@ -642,6 +648,10 @@ importers:
         version: 7.0.2
 
   packages/skill-browser:
+    dependencies:
+      '@openagt/agent-data':
+        specifier: workspace:*
+        version: link:../agent-data
     devDependencies:
       '@tailwindcss/vite':
         specifier: ^4.0.0
@@ -687,6 +697,10 @@ importers:
         version: 4.1.10(@types/node@20.19.43)(jsdom@29.1.1)(vite@8.1.4(@types/node@20.19.43)(esbuild@0.28.1)(jiti@2.7.0)(tsx@4.22.4)(yaml@2.9.0))
 
   packages/skill-discord:
+    dependencies:
+      '@openagt/agent-data':
+        specifier: workspace:*
+        version: link:../agent-data
     devDependencies:
       '@types/node':
         specifier: ^20.0.0

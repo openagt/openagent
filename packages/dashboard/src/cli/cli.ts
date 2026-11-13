@@ -6,6 +6,7 @@ import { handDownSkills } from './skills.js'
 import { repositoryOf } from './project.js'
 import { openInBrowser } from './browser.js'
 import { openagentVersion } from '../version.js'
+import { unknownWord, usageError } from '@openagt/agent-data'
 
 /** Where the CLI writes. Injectable so tests capture output. */
 export interface CliIO {
@@ -75,7 +76,7 @@ export function parseArgs(argv: string[]): CliArgs {
       }
       default:
         // The first thing that could not be read is the one told: what follows an unknown option is its value, not a command.
-        opts.error ??= arg.startsWith('-') ? `unknown option: ${arg}` : `unknown command: ${arg}`
+        opts.error ??= unknownWord(arg)
     }
   }
   return opts
@@ -90,8 +91,7 @@ export function portOf(value: string | undefined): number | undefined {
 export async function runCli(argv: string[], io: CliIO = defaultIO): Promise<number> {
   const args = parseArgs(argv)
   if (args.error) {
-    io.err(args.error)
-    io.err('Run `openagent --help` for usage.')
+    io.err(usageError('openagent', args.error))
     return 2
   }
   if (args.help) {

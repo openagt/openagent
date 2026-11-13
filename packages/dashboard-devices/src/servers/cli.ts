@@ -1,4 +1,5 @@
 import { spawn } from 'node:child_process'
+import { unknownWord, usageError, wrongArguments } from '@openagt/agent-data'
 import { devicesIn, idsOf, isDeviceId, lineIn, nameOwner, readDevices, removeDevice, removePerson, type Devices, type DoorAddresses, type ListedLine, type ServerDevice, type ServerPerson } from './devices.js'
 import { AlreadyWorking, askLink, install } from './install.js'
 import { testConnection } from './connection.js'
@@ -683,12 +684,14 @@ export async function runCli(args: string[], io: CliIO): Promise<number> {
         return 0
       }
       default:
+        io.stderr(command === undefined ? USAGE : usageError('devices server', unknownWord(command)))
+        return 2
     }
   } catch (err) {
     if (!(err instanceof Refused || err instanceof Unreadable || err instanceof AlreadyWorking || err instanceof OwnAtWork)) throw err
     io.stderr(err.message)
     return 1
   }
-  io.stderr(USAGE)
+  io.stderr(usageError('devices server', wrongArguments(command!, rest)))
   return 2
 }

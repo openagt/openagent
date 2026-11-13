@@ -53,7 +53,7 @@ export interface CliIo {
 
 export function runCli(argv: string[], io: CliIo, given: Partial<SubagentDeps> = {}): Promise<number> {
   const deps: SubagentDeps = { git: nodeGitRunner(), host: hostname(), isAlive: isPidAlive, stop: pid => void process.kill(pid, 'SIGTERM'), ready: readyToRun, now: () => new Date(), mark: writeMarker, unmark: withdrawMarker, spawn: spawnRun, run: runCommand, ...given }
-  return runCommandLine(argv, io, { usage: USAGE, commands: COMMANDS }, io, deps)
+  return runCommandLine(argv, io, { program: 'orchestration', usage: USAGE, commands: COMMANDS }, io, deps)
 }
 
 const COMMANDS: Record<string, Command<[CliIo, SubagentDeps]>> = {

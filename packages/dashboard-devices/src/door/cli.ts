@@ -1,7 +1,7 @@
 import { addressOf, nameAddress, numberAddress, ownAddresses, ownName, serverWhere, urlHost, type AddressDeps } from './address.js'
 import { doorFingerprint } from './certificate.js'
 import { execFile } from 'node:child_process'
-import { personalFolder, readPersonRecord } from '@openagt/agent-data'
+import { personalFolder, readPersonRecord, unknownWord, usageError, wrongArguments } from '@openagt/agent-data'
 import { codeLink, readKeyWord } from './door.js'
 import { ENTER_PATH } from './paths.js'
 import { askMe, enterForLine, leaveLine, readLineLink } from './line-out.js'
@@ -564,7 +564,7 @@ export async function runCli(args: string[], io: CliIO): Promise<number> {
     return 0
   }
   const usage = (): number => {
-    io.stderr(USAGE)
+    io.stderr(usageError('devices', wrongArguments(command!, rest)))
     return 2
   }
   if ((command === '--help' || command === '-h') && !rest.length) {
@@ -738,6 +738,8 @@ export async function runCli(args: string[], io: CliIO): Promise<number> {
         return print({ ok: true })
       }
       default:
+        io.stderr(command === undefined ? USAGE : usageError('devices', unknownWord(command)))
+        return 2
     }
   } catch (err) {
     if (!(err instanceof Refused || err instanceof Unreadable)) throw err

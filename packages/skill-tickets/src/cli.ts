@@ -46,7 +46,7 @@ export interface CliIo {
 
 /** Run the CLI: `argv` is everything after the program name. Resolves to the exit code. */
 export function runCli(argv: string[], io: CliIo, git: GitRunner = nodeGitRunner()): Promise<number> {
-  return runCommandLine(argv, io, { usage: USAGE, commands: COMMANDS, failure: GIT_FAILED }, io, git)
+  return runCommandLine(argv, io, { program: 'tickets', usage: USAGE, commands: COMMANDS, failure: GIT_FAILED }, io, git)
 }
 
 const COMMANDS: Record<string, Command<[CliIo, GitRunner]>> = {

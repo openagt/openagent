@@ -141,7 +141,7 @@ interface Context extends Services {
 /** Run the CLI: `argv` is everything after the program name. Resolves to the exit code. */
 export function runCli(argv: string[], io: CliIo, deps: CliDeps = {}): Promise<number> {
   const context: Context = { ...realServices(), ...deps, cwd: io.cwd, stderr: io.stderr }
-  return runCommandLine(argv, io, { usage: USAGE, commands: COMMANDS, failure: GIT_HOST_FAILED }, context)
+  return runCommandLine(argv, io, { program: 'github', usage: USAGE, commands: COMMANDS, failure: GIT_HOST_FAILED }, context)
 }
 
 /** A failure no command meant: the git host, or `gh` talking to it, said no in a way no rule names. */

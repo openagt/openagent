@@ -91,7 +91,7 @@ export interface CliIo {
 }
 
 export function runCli(argv: string[], io: CliIo, git: GitRunner = nodeGitRunner()): Promise<number> {
-  return runCommandLine(argv, io, { usage: USAGE, commands: COMMANDS }, io, git)
+  return runCommandLine(argv, io, { program: 'scheduler', usage: USAGE, commands: COMMANDS }, io, git)
 }
 
 const COMMANDS: Record<string, Command<[CliIo, GitRunner]>> = {

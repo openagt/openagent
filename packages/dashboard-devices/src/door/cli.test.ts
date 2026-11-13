@@ -124,7 +124,7 @@ test('a file that cannot be read is said in one line, by every command that woul
   }
 })
 
-test('serve is refused without OpenAgent\'s address or with a port that is none, and ends; a command line that cannot be read prints the usage', async () => {
+test('serve is refused without OpenAgent\'s address or with a port that is none, and ends; a command line that cannot be read says what was wrong', async () => {
   const home = await testHome()
   try {
     // Run as OpenAgent runs it, with no signal of the test's: a refusal must leave nothing that keeps the process alive.
@@ -135,11 +135,10 @@ test('serve is refused without OpenAgent\'s address or with a port that is none,
     const badPort = await run({ ...home.env, OPENAGENT_URL: 'http://127.0.0.1:1', OPENAGENT_REMOTE_ACCESS_PORT: 'abc' }, ['serve'], asOpenAgentRunsIt)
     assert.equal(badPort.code, 1)
     assert.deepEqual(badPort.err, ['OPENAGENT_REMOTE_ACCESS_PORT is not a port'])
-    for (const args of [[], ['nope'], ['remove'], ['status', 'extra']]) {
-      const unread = await run(home.env, args)
-      assert.equal(unread.code, 2)
-      assert.deepEqual(unread.err, [USAGE])
-    }
+    assert.deepEqual(await run(home.env, []), { code: 2, out: undefined, err: [USAGE] })
+    assert.deepEqual(await run(home.env, ['nope']), { code: 2, out: undefined, err: ['unknown command: nope\nRun `devices --help` for usage.'] })
+    assert.deepEqual(await run(home.env, ['remove']), { code: 2, out: undefined, err: ['wrong arguments for remove: none\nRun `devices --help` for usage.'] })
+    assert.deepEqual(await run(home.env, ['status', 'extra']), { code: 2, out: undefined, err: ['wrong arguments for status: extra\nRun `devices --help` for usage.'] })
   } finally {
     await home.remove()
   }

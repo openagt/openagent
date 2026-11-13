@@ -89,7 +89,7 @@ export interface CliIo {
 }
 
 export function runCli(argv: string[], io: CliIo, git: GitRunner = nodeGitRunner()): Promise<number> {
-  return runCommandLine(argv, io, { usage: USAGE, commands: COMMANDS }, io, git)
+  return runCommandLine(argv, io, { program: 'agent-runner', usage: USAGE, commands: COMMANDS }, io, git)
 }
 
 /** The flags of `run`: what a run is asked, how its process is started, and what a resume continues it with. */

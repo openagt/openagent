@@ -4,6 +4,7 @@ import { chmod, mkdir, open, readFile, rm, stat, writeFile } from 'node:fs/promi
 import { tmpdir } from 'node:os'
 import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { unknownWord, usageError, wrongArguments } from '@openagt/agent-data'
 import { resolveChromePath } from './chrome.js'
 import type { HostAnswer, HostCommand, HostState } from './host.js'
 
@@ -73,7 +74,7 @@ export async function runCli(argv: string[], io: CliIo): Promise<number> {
   }
   const arity = name !== undefined && Object.hasOwn(ARITY, name) ? ARITY[name as HostCommand['name']] : undefined
   if (!arity || args.length < arity[0] || args.length > arity[1]) {
-    io.stderr(USAGE)
+    io.stderr(name === undefined ? USAGE : usageError('browser', arity ? wrongArguments(name, args) : unknownWord(name)))
     return 2
   }
   const refuse = (reason: string): number => {

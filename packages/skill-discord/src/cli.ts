@@ -1,3 +1,4 @@
+import { unknownWord, usageError, wrongArguments } from '@openagt/agent-data'
 import { clearWebhook, invalidWebhook, postMessage, resolveWebhook, saveWebhook, WEBHOOK_ENV } from './webhook.js'
 
 /**
@@ -30,7 +31,7 @@ export async function runCli(argv: string[], io: CliIo): Promise<number> {
     return result['ok'] === true ? 0 : 1
   }
   const usage = (): number => {
-    io.stderr(USAGE)
+    io.stderr(command === undefined ? USAGE : usageError('discord', ['send', 'setup', 'status'].includes(command) ? wrongArguments(command, args) : unknownWord(command)))
     return 2
   }
 

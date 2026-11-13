@@ -1,3 +1,4 @@
+import { unknownWord, usageError } from '@openagt/agent-data'
 import { defaultIO, install, uninstall, type InstallIO } from './install.js'
 
 const HELP = {
@@ -28,8 +29,7 @@ Options:
 export async function runCommand(command: 'install' | 'uninstall', argv: string[], io: InstallIO = defaultIO): Promise<number> {
   const unknown = argv.find(arg => arg !== '--help' && arg !== '-h')
   if (unknown !== undefined) {
-    io.err(unknown.startsWith('-') ? `unknown option: ${unknown}` : `unknown command: ${unknown}`)
-    io.err(`Run \`npx @openagt/${command} --help\` for usage.`)
+    io.err(usageError(`npx @openagt/${command}`, unknownWord(unknown)))
     return 2
   }
   if (argv.length > 0) {
