@@ -108,8 +108,8 @@ export function PresetCreatePanel({
                 aria-pressed={scope === value}
                 className={
                   scope === value
-                    ? 'bg-foreground px-2 py-0.5 text-background'
-                    : 'px-2 py-0.5 text-foreground hover:bg-[var(--color-muted)]'
+                    ? 'bg-foreground px-2 py-1 text-background'
+                    : 'px-2 py-1 text-foreground hover:bg-[var(--color-muted)]'
                 }
               >
                 {value === 'user' ? 'Just me' : 'This project'}
