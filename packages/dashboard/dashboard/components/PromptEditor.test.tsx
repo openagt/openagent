@@ -198,6 +198,16 @@ describe('words given back after the draft (append)', () => {
     expect(said(onChange)).toBe('look at #src/a.ts first\n\nthe words it never read')
   })
 
+  test.each(['a < b & c > d', 'run `pnpm test` & see', '- one\n- two'])('they read as typed, as the same words loaded into the box read: %s', async words => {
+    const { box, editor, handle, onChange } = await renderDraft()
+    act(() => void editor.commands.insertContent('first draft words'))
+    act(() => handle.append(words))
+    const appended = { text: editor.getText(), markdown: said(onChange) }
+    expect(box.textContent).not.toMatch(/&(lt|gt|amp);/)
+    act(() => void handle.loadTemplate(`first draft words\n\n${words}`, false))
+    expect(appended).toEqual({ text: editor.getText(), markdown: said(onChange) })
+  })
+
   test('one undo takes them out again; in an empty box they are all there is', async () => {
     const { box, editor, handle, onChange } = await renderDraft()
     act(() => void editor.commands.insertContent('first draft words'))

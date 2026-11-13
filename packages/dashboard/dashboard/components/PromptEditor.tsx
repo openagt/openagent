@@ -3,7 +3,7 @@ import type { ProjectSummary, CustomPreset } from '../../src/index.js'
 import { EditorContent, useEditor } from '@tiptap/react'
 import StarterKit from '@tiptap/starter-kit'
 import { Markdown } from 'tiptap-markdown'
-import type { Editor, Range } from '@tiptap/core'
+import { createDocument, type Editor, type Range } from '@tiptap/core'
 import { Token, type TokenSpec } from './prompt-editor/tokens.js'
 import { makeTrigger } from './prompt-editor/suggestion.js'
 import { ScrollArea } from './ui/scroll-area.js'
@@ -319,7 +319,9 @@ export const PromptEditor = forwardRef<PromptEditorHandle, PromptEditorProps>(fu
     append: (text: string) => {
       if (!editor) return
       if (editor.isEmpty) return void loadTemplateInto(editor, text, false)
-      editor.commands.insertContentAt(editor.state.doc.content.size, text, { updateSelection: false })
+      // Parsed as blocks, as a loaded text is: the insert command's own inline parse leaves `<` as `&lt;` in plain words.
+      const blocks = createDocument(editor.storage.markdown.parser.parse(text), editor.schema).content
+      editor.commands.insertContentAt(editor.state.doc.content.size, blocks, { updateSelection: false })
     },
   }))
 
