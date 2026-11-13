@@ -41,7 +41,7 @@ function detailOf(item: Intervention): string | undefined {
 
 /** Where a click on the row takes the person, said on its hover. */
 function hoverOf(item: Intervention): string {
-  if (item.kind === 'awaiting') return 'Open the agent to answer'
+  if (item.kind === 'awaiting') return 'Open the session to answer'
   if (item.kind === 'uncommitted') return 'Open the session: it left files uncommitted'
   if (item.kind === 'unpushed') return `Open the session: work on ${item.branch ?? ''} is not published`
   return item.agentId ? `Open the session of PR #${item.number}` : `Open PR #${item.number}`
