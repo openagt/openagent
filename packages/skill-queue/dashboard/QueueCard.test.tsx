@@ -101,6 +101,13 @@ describe('QueueCard', () => {
     expect(host.openAgent).toHaveBeenCalledWith('p1', 'run-7')
   })
 
+  test('the count is the Queue page\'s control: typed in its box as well as stepped', async () => {
+    render({ p1: [LOGIN, 'Tidy the loader', 'Third', 'Fourth'] })
+    await screen.findByText('Login page')
+    fireEvent.change(screen.getByRole('spinbutton', { name: 'How many agents to start' }), { target: { value: '4' } })
+    expect(screen.getByRole('button', { name: 'Start 4' })).toBeTruthy()
+  })
+
   test('the fan-out is capped at the entries there are, and stops at the first refusal with its reason', async () => {
     render({ p1: [LOGIN, 'Tidy the loader'], p2: [] })
     await screen.findByText('Login page')

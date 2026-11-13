@@ -142,6 +142,15 @@ describe('QueuePage', () => {
       expect(screen.getByRole('button', { name: 'Start 1 agent' })).toBeTruthy()
     })
 
+    test('the count is stepped as well as typed, the AI Queue card\'s control', async () => {
+      show()
+      await screen.findByText('Urgent')
+      fireEvent.click(screen.getByRole('button', { name: 'One agent fewer' }))
+      expect(screen.getByRole('button', { name: 'Start 2 agents' })).toBeTruthy()
+      fireEvent.click(screen.getByRole('button', { name: 'One agent more' }))
+      expect(screen.getByRole('button', { name: 'Start 3 agents' })).toBeTruthy()
+    })
+
     test('a start that is refused says why', async () => {
       show()
       await screen.findByText('Urgent')

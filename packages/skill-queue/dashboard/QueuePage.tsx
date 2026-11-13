@@ -12,9 +12,6 @@ import {
   SelectTrigger,
   SelectValue,
   StartAgentButton,
-  Tooltip,
-  TooltipContent,
-  TooltipTrigger,
   cn,
   inPlace,
   pathsIn,
@@ -33,6 +30,7 @@ import type { PlacedEntry } from '../src/queue.js'
 import { DEFAULT_PRIORITY, PRIORITIES, QUEUE_COMMAND, addTextArgs, doneArgs, fanOutLabel, isPlacedEntry, isWorkingOn, priorityMeaning, readEntries, unclaimedEntries, workOnEntryPrompt } from '../src/module.js'
 import { AgentOnEntry, EntryTitle, entryView } from './entry.js'
 import { useQueueStarts, type QueueStarts } from './starts.js'
+import { BatchCount } from './batch-count.js'
 
 /** One project's queue as read: its entries with their sections and the project's agents at work, or why the command failed. */
 interface ProjectRead {
@@ -139,30 +137,7 @@ function ProjectQueue({ read, titled, schedule, names, starts, reload }: { read:
         {free.length > 0 && (
           <div className="ml-auto flex items-center gap-2">
             {/* The project's batch act: how many, then the button the count qualifies. */}
-            <Tooltip>
-              <TooltipTrigger
-                render={
-                  <Input
-                    name="agent-count"
-                    type="number"
-                    min={1}
-                    max={free.length}
-                    step={1}
-                    value={count}
-                    aria-label="How many agents to start"
-                    onChange={event => {
-                      // An emptied box is mid-edit rather than a count: `Number('')` is 0.
-                      const typed = event.target.value.trim()
-                      if (!typed) return
-                      const next = Math.round(Number(typed))
-                      if (Number.isFinite(next)) starts.setCount(project.id, next)
-                    }}
-                    className="h-7 w-14 px-1 text-center text-xs tabular-nums"
-                  />
-                }
-              />
-              <TooltipContent>How many agents to start: one per entry, from the top of the queue.</TooltipContent>
-            </Tooltip>
+            <BatchCount count={count} max={free.length} onChange={next => starts.setCount(project.id, next)} />
             {/* The chevron sends the top entry alone: a launcher can only ever start one agent. */}
             <StartAgentButton
               size="xs"

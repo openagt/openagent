@@ -1,8 +1,9 @@
-import { FastForward, ListTodo, Minus, Play, Plus } from 'lucide-react'
-import { Card, CardContent, CardHeader, CardTitleLink, StartAgentButton, Tooltip, TooltipContent, TooltipTrigger, cn, pathsIn, useFileNames, useModuleHost, type ModuleCardProps } from '@openagt/dashboard/module'
+import { FastForward, ListTodo, Play } from 'lucide-react'
+import { Card, CardContent, CardHeader, CardTitleLink, StartAgentButton, cn, pathsIn, useFileNames, useModuleHost, type ModuleCardProps } from '@openagt/dashboard/module'
 import { fanOutLabel, isWorkingOn, unclaimedEntries, workOnEntryPrompt } from '../src/module.js'
 import { AgentOnEntry, EntryTitle, entryView } from './entry.js'
 import { useQueueStarts } from './starts.js'
+import { BatchCount } from './batch-count.js'
 import { useQueueReads } from './reads.js'
 
 // The Overview's AI Queue card: every project's open entries, the work agents pick up on their own,
@@ -66,24 +67,10 @@ export function QueueCard({ projects }: ModuleCardProps) {
                     <span className="shrink-0 text-xs tabular-nums text-muted-foreground">{entries.length} queued</span>
                     {free.length > 0 && (
                       <>
-                        {/* The project's batch act, said as one: how many agents (a stepper, never more
-                            than the entries), then "Start N", which starts them from the top. */}
-                        <Tooltip>
-                          <TooltipTrigger
-                            render={
-                              <div role="group" aria-label="How many agents to start" className="ml-auto flex h-7 shrink-0 items-center rounded-md border border-border text-xs tabular-nums" />
-                            }
-                          >
-                            <button type="button" aria-label="One agent fewer" disabled={count <= 1} onClick={() => starts.setCount(project.id, count - 1)} className="flex h-full w-6 items-center justify-center text-muted-foreground hover:text-foreground disabled:opacity-40">
-                              <Minus className="h-3 w-3" aria-hidden />
-                            </button>
-                            <span className="w-4 text-center">{count}</span>
-                            <button type="button" aria-label="One agent more" disabled={count >= free.length} onClick={() => starts.setCount(project.id, count + 1)} className="flex h-full w-6 items-center justify-center text-muted-foreground hover:text-foreground disabled:opacity-40">
-                              <Plus className="h-3 w-3" aria-hidden />
-                            </button>
-                          </TooltipTrigger>
-                          <TooltipContent>How many agents to start: one per entry, from the top of the queue.</TooltipContent>
-                        </Tooltip>
+                        {/* The project's batch act, said as one: how many agents, then "Start N", which starts them from the top. */}
+                        <div className="ml-auto">
+                          <BatchCount count={count} max={free.length} onChange={next => starts.setCount(project.id, next)} />
+                        </div>
                         {/* The chevron sends the top entry alone: a launcher can only ever start one agent. */}
                         <StartAgentButton
                           icon={<FastForward className="h-3.5 w-3.5" aria-hidden />}
