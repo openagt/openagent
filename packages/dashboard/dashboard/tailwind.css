@@ -766,6 +766,28 @@ html[data-pinned] body {
   scrollbar-gutter: stable;
 }
 
+/* A page's top bar draws its line only while the chat is scrolled under it: the chat's scroller
+   names its scroll (`chat-scroll`), the room around the bar and the chat shares the name
+   (`chat-scope`), and the line comes in over the first pixels scrolled. A browser with no scroll
+   timeline draws the line always. */
+@utility chat-scroll {
+  scroll-timeline: --chat-scroll y;
+}
+@utility chat-scope {
+  timeline-scope: --chat-scroll;
+}
+@utility top-bar-line {
+  box-shadow: inset 0 -1px 0 transparent;
+  animation: top-bar-line linear both;
+  animation-timeline: --chat-scroll;
+  animation-range: 0 8px;
+}
+@keyframes top-bar-line {
+  to {
+    box-shadow: inset 0 -1px 0 var(--color-hairline);
+  }
+}
+
 /*
  * The switch between the dashboard and the website's landing page (#1919), two pages of one
  * address: the logo and the toggle stay where they are (both pages draw them at the same place),

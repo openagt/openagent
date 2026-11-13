@@ -31,8 +31,11 @@ export function ProjectActions({
         <PaneMenu />
         <div className="grow shrink-0" />
         {/* No project, no menu of a project's. */}
-        {projectId !== SESSIONS_ID && <ProjectMenu projectId={projectId} onProjectRemoved={onProjectRemoved} />}
-        <PaneToggles />
+        {/* The ⋮ and the panes' icons, one kind of button, 4px apart. */}
+        <div className="flex shrink-0 items-center gap-1">
+          {projectId !== SESSIONS_ID && <ProjectMenu projectId={projectId} onProjectRemoved={onProjectRemoved} />}
+          <PaneToggles />
+        </div>
       </div>
     </TopBar>
   )

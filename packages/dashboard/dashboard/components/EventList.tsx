@@ -941,7 +941,7 @@ export function EventList({
       <FollowSent sent={(sending === undefined || answeredInPlace ? 0 : 1) + queued.length} />
       {/* A layer of its own: "Jump to latest" stays under the message box's bar. */}
       <MessageScroller className="isolate flex-1">
-        <MessageScrollerViewport ref={viewport} aria-label="Agent output" className="scroll-pb-(--chat-bottom)">
+        <MessageScrollerViewport ref={viewport} aria-label="Agent output" className="chat-scroll scroll-pb-(--chat-bottom)">
           <MessageScrollerContent spacerClassName="order-last" className="mx-auto w-full max-w-3xl gap-3 px-4 pt-4 font-mono text-xs">
             {/* First in the page, so never the row the browser keeps in place when a row above
                 it grows: a steps line opened at the log's end opens under the line, the line

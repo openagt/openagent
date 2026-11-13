@@ -180,14 +180,14 @@ export function AgentActionsMenu({
             type="button"
             aria-label={label ? `${label}, ${title.toLowerCase()}` : title}
             title={label}
-            className="flex min-w-0 items-center gap-1 rounded px-1 py-1 text-left text-xs hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-primary)] data-[popup-open]:bg-muted"
+            className={cn(buttonVariants({ variant: 'ghost', size: 'sm' }), 'min-w-0 shrink justify-start gap-1 text-left data-[popup-open]:bg-accent')}
           >
             {label ? (
-              <span className="min-w-0 truncate font-medium text-foreground">
+              <span className="min-w-0 truncate text-foreground">
                 <RevealedTitle key={label} text={label} start={waited.current.naming} />
               </span>
-            ) : <span data-testid="title-placeholder" className="h-3 w-40 max-w-full rounded bg-muted" />}
-            <ChevronDown className="h-3 w-3 shrink-0 text-muted-foreground" aria-hidden />
+            ) : <span data-testid="title-placeholder" className="h-3 w-40 max-w-full rounded-sm bg-muted" />}
+            <ChevronDown className="size-3 shrink-0 text-faint-foreground" aria-hidden />
           </DropdownMenuTrigger>
         ) : (
           <Tooltip>
@@ -196,11 +196,11 @@ export function AgentActionsMenu({
                 <DropdownMenuTrigger
                   type="button"
                   aria-label={title}
-                  className={cn(buttonVariants({ variant: 'outline', size: 'icon-sm' }), 'shrink-0')}
+                  className={cn(buttonVariants({ variant: 'ghost', size: 'icon-sm' }), 'relative shrink-0 text-muted-foreground data-[popup-open]:bg-accent max-md:after:absolute max-md:after:-inset-2')}
                 />
               }
             >
-              <MoreVertical className="h-3.5 w-3.5" />
+              <MoreVertical className="size-4" />
             </TooltipTrigger>
             <TooltipContent>{title}</TooltipContent>
           </Tooltip>
@@ -274,7 +274,7 @@ export function AgentActionsMenu({
               <span className="flex-1">
                 {copied ? 'Copied' : info.workspace ? 'Copy resume command' : 'Copy session id'}
               </span>
-              <span className="ml-auto pl-3 font-mono text-[10px] text-muted-foreground">
+              <span className="ml-auto pl-3 font-mono text-xs text-muted-foreground">
                 {info.sessionId.slice(0, 8)}
               </span>
             </DropdownMenuItem>
@@ -292,7 +292,7 @@ export function AgentActionsMenu({
           {removable && (
             <DropdownMenuItem disabled={busy} onClick={() => removeWorktree()}>
               <FolderX className="h-3.5 w-3.5 shrink-0" /> <span className="flex-1">Remove worktree</span>
-              {size && <span className="ml-auto pl-3 text-[10px] text-muted-foreground">{size}</span>}
+              {size && <span className="ml-auto pl-3 text-xs text-muted-foreground">{size}</span>}
             </DropdownMenuItem>
           )}
           {deletable && (

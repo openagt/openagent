@@ -59,10 +59,6 @@
   "dashboard/dashboard/components/AddProjectPanel.tsx": {
     "rounded": 3
   },
-  "dashboard/dashboard/components/AgentActionsMenu.tsx": {
-    "rounded": 2,
-    "text-[10px]": 2
-  },
   "dashboard/dashboard/components/AgentComposer.tsx": {
     "h-[17px]": 1,
     "rounded": 1,

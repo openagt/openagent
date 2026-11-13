@@ -77,7 +77,7 @@ export function ProjectHome({
       {/* Laid out as an agent's page is: what waits for the person fills the page from the top, in
           the chat's column, and scrolls there; the box to start an agent stays at the bottom, in
           the place and at the width of an agent's message box. */}
-      <ScrollArea className="min-h-0 flex-1">
+      <ScrollArea className="min-h-0 flex-1" viewportClassName="chat-scroll h-full">
         <div className="mx-auto w-full max-w-3xl">
           {/* No section at all when nothing waits: an empty "Waiting on you" is noise on every launch. */}
           {waiting.length > 0 && (

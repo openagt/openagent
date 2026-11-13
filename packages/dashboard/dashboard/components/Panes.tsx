@@ -8,7 +8,7 @@ import { ModuleSlot } from './ModulePageView.js'
 import { PaneHeaderContext } from './PaneHeader.js'
 import { useMountedModules, type MountedPanel } from '../lib/use-modules.js'
 import type { ModuleContext, ModulePanelProps } from '../module/index.js'
-import { Button } from './ui/button.js'
+import { Button, buttonVariants } from './ui/button.js'
 import { cn } from '../lib/utils.js'
 import { usePolled } from '../lib/use-async.js'
 import { DropdownMenu, DropdownMenuCheckboxItem, DropdownMenuContent, DropdownMenuTrigger } from './ui/dropdown-menu.js'
@@ -78,9 +78,30 @@ interface PanesValue {
   docsLoaded: boolean
   /** What the Subagent pane shows. */
   subagent: ReactNode
+  /** How many icons to hold room for until the modules and the docs are read: as many as this project had when they last were. */
+  held: number
 }
 
-const NO_PANES: PanesValue = { page: '', enabled: false, panes: [], open: [], expanded: undefined, panelProps: undefined, reveal: undefined, show: undefined, docs: [], docsLoaded: false, subagent: null }
+const NO_PANES: PanesValue = { page: '', enabled: false, panes: [], open: [], expanded: undefined, panelProps: undefined, reveal: undefined, show: undefined, docs: [], docsLoaded: false, subagent: null, held: 0 }
+
+/** localStorage key prefix of how many pane icons each project's top bar had once its panes were all known. */
+const ICONS_KEY = 'oa.pane-icons:'
+
+function keptIcons(projectId: string): number {
+  try {
+    return Number(globalThis.localStorage?.getItem(ICONS_KEY + projectId)) || 0
+  } catch {
+    return 0
+  }
+}
+
+function keepIcons(projectId: string, count: number): void {
+  try {
+    globalThis.localStorage?.setItem(ICONS_KEY + projectId, String(count))
+  } catch {
+    // Kept for this page's life only.
+  }
+}
 const PanesContext = createContext<PanesValue>(NO_PANES)
 
 /** The last ask from the chat the panes moved for. */
@@ -145,7 +166,7 @@ export function PanesProvider({
   // The modules' panes for this project: every one is offered, since the top bar cannot tell a
   // module's pane is empty without rendering it; an empty one says so inside. The dashboard's own
   // Docs pane is earned by content (#1146): one that can only say "nothing yet" is not offered.
-  const { panels: mounted } = useMountedModules()
+  const { panels: mounted, loaded: modulesLoaded } = useMountedModules()
   const page = panesPage(shown ?? '', agentId)
   // The Subagent pane is there once a row asked for a subagent on this page.
   const subagentAsked = useRevealedSubagent(page)
@@ -159,6 +180,15 @@ export function PanesProvider({
     ]
     return [...ofModules, ...own]
   }, [mounted, shown, docs.length, showsSubagent])
+
+  // A module's icon is its own component, so it cannot be drawn before the module is loaded: until
+  // then the bar holds the room the icons took last time, and the ⋮ before them stays where it is.
+  const settled = modulesLoaded && docsLoaded
+  const iconCount = panes.filter(pane => !pane.hidden).length
+  useEffect(() => {
+    if (shown && settled) keepIcons(shown, iconCount)
+  }, [shown, settled, iconCount])
+  const held = shown && !settled ? keptIcons(shown) : 0
 
   const openIds = useOpenPanes(page)
   const open = useMemo(() => openIds.flatMap(id => panes.find(pane => pane.id === id) ?? []), [openIds, panes])
@@ -195,8 +225,8 @@ export function PanesProvider({
   )
 
   const value = useMemo<PanesValue>(
-    () => ({ page, enabled: shown !== null, panes, open, expanded: open.some(pane => pane.id === expanded) ? expanded : undefined, panelProps, reveal, show, docs, docsLoaded, subagent: subagent ?? null }),
-    [page, shown, panes, open, expanded, panelProps, reveal, show, docs, docsLoaded, subagent],
+    () => ({ page, enabled: shown !== null, panes, open, expanded: open.some(pane => pane.id === expanded) ? expanded : undefined, panelProps, reveal, show, docs, docsLoaded, subagent: subagent ?? null, held }),
+    [page, shown, panes, open, expanded, panelProps, reveal, show, docs, docsLoaded, subagent, held],
   )
   return <PanesContext.Provider value={value}>{children}</PanesContext.Provider>
 }
@@ -204,10 +234,15 @@ export function PanesProvider({
 /** The row over the page and its panes that the page's top bar is drawn in (PaneLayout); none on a phone, or on a page with no panes. */
 const TopBarRow = createContext<HTMLElement | null>(null)
 
-/** A page's top bar: in the row over the page and its panes where there is one, else where it stands. */
+/**
+ * A page's top bar: in the row over the page and its panes where there is one, else where it
+ * stands. It draws a line under itself only while the chat is scrolled under it (`top-bar-line`,
+ * tailwind.css).
+ */
 export function TopBar({ children }: { children: ReactNode }) {
   const row = useContext(TopBarRow)
-  return row ? createPortal(children, row) : children
+  const bar = <div className="top-bar-line">{children}</div>
+  return row ? createPortal(bar, row) : bar
 }
 
 /** On a phone with a pane open the column of panes lies over the icons' end of the top bar: they are one menu at its start. */
@@ -218,11 +253,14 @@ function useFolded(): boolean {
 
 /** The panes' icons, for the end of a page's top bar: one per pane, lit while its pane is open. */
 export function PaneToggles() {
-  const { page, panes, open } = useContext(PanesContext)
+  const { page, panes, open, held } = useContext(PanesContext)
   const offered = panes.filter(pane => !pane.hidden)
-  if (useFolded() || offered.length === 0) return null
+  if (useFolded() || (offered.length === 0 && held === 0)) return null
   return (
-    <div role="group" aria-label="Panes" className="flex shrink-0 items-center gap-0.5">
+    <div role="group" aria-label="Panes" className="flex shrink-0 items-center gap-1">
+      {Array.from({ length: held - offered.length }, (_, at) => (
+        <span key={`held-${at}`} className="size-7 shrink-0" aria-hidden />
+      ))}
       {offered.map(pane => {
         const isOpen = open.includes(pane)
         return (
@@ -232,7 +270,7 @@ export function PaneToggles() {
                 <Button
                   variant="ghost"
                   size="icon-sm"
-                  className={cn('shrink-0 text-muted-foreground', isOpen && 'bg-accent text-accent-foreground')}
+                  className={cn('relative shrink-0 text-muted-foreground max-md:after:absolute max-md:after:-inset-2', isOpen && 'bg-accent text-accent-foreground')}
                   aria-label={pane.label}
                   aria-pressed={isOpen}
                   onClick={() => setPaneOpen(page, pane.id, !isOpen)}
@@ -256,7 +294,7 @@ export function PaneMenu() {
   if (!useFolded()) return null
   return (
     <DropdownMenu>
-      <DropdownMenuTrigger aria-label="Panes" className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-muted-foreground hover:bg-accent hover:text-accent-foreground">
+      <DropdownMenuTrigger aria-label="Panes" className={cn(buttonVariants({ variant: 'ghost', size: 'icon-sm' }), 'relative shrink-0 text-muted-foreground data-[popup-open]:bg-accent max-md:after:absolute max-md:after:-inset-2')}>
         <MoreVertical className="h-4 w-4" aria-hidden />
       </DropdownMenuTrigger>
       <DropdownMenuContent align="start" className="min-w-[12rem]">
@@ -387,7 +425,8 @@ export function PaneLayout({ children }: { children: ReactNode }) {
   }
   return (
     // `relative`: a pane that fills the page is laid over all of this.
-    <div className="relative flex min-w-0 flex-1 flex-col">
+    // `chat-scope`: the top bar, in the row over the chat or in the chat's own top, sees how far the chat is scrolled.
+    <div className="chat-scope relative flex min-w-0 flex-1 flex-col">
       {!isMobile && <div ref={setRow} className="shrink-0" />}
       <TopBarRow.Provider value={row}>
         {/* No line is dragged under a pane that fills the page. */}
