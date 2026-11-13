@@ -55,6 +55,8 @@ export function AutomationsPage({ projects }: ModulePageProps) {
   /** Hold a row for one more thing of its own in flight, and let it go of one once that is over. */
   const hold = (id: string): void => setBusy(current => [...current, id])
   const letGo = (id: string): void => setBusy(current => current.filter((_, index) => index !== current.indexOf(id)))
+  /** Where a row's switch was pressed to, while that is saved and read back: it moves at the press. */
+  const [switched, setSwitched] = useState<Readonly<Record<string, boolean>>>({})
   /** The rows whose "Run now" has not answered yet, each as often as it was pressed. */
   const [starting, setStarting] = useState<readonly string[]>([])
   /** What the last save or start on a row answered, said on that row. */
@@ -296,9 +298,12 @@ export function AutomationsPage({ projects }: ModulePageProps) {
                                   Edit
                                 </button>
                                 <Switch
-                                  checked={scheduled.on}
+                                  checked={switched[id] ?? scheduled.on}
                                   disabled={saving || down}
-                                  onCheckedChange={next => void save(id, run(row.project, ['switch', scheduled.command, next ? 'on' : 'off']), answer => (answer.ok ? undefined : { failed: `The switch was not saved: ${answer.error}` }))}
+                                  onCheckedChange={next => {
+                                    setSwitched(current => ({ ...current, [id]: next }))
+                                    void save(id, run(row.project, ['switch', scheduled.command, next ? 'on' : 'off']), answer => (answer.ok ? undefined : { failed: `The switch was not saved: ${answer.error}` })).then(() => setSwitched(({ [id]: _pressed, ...rest }) => rest))
+                                  }}
                                   aria-label={`Run ${title} by itself`}
                                 />
                               </div>

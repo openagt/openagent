@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, test, vi } from 'vitest'
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { ModuleHostContext, type ModuleCommandResult, type ModuleHost, type ModuleProject } from '@openagt/dashboard/module'
-import { OpenAgentDown } from '@openagt/dashboard/module/testing'
+import { OpenAgentDown, fakeHost } from '@openagt/dashboard/module/testing'
 import { AutomationsPage } from './AutomationsPage.js'
 import { ANY_AGENT, ON_CLAUDE, STATUS, hostAnswering } from './fixtures.js'
 import { checked, choices, offered, openList, pick, queryRadio, radio, radioNames, showing } from '../../dashboard/dashboard/test-controls.js'
@@ -240,6 +240,20 @@ describe('the Automations page: its rows', () => {
     await waitFor(() => expect(runCommand).toHaveBeenCalledWith('p1', ['switch', 'work-queue', 'on']))
     fireEvent.click(screen.getByRole('switch', { name: 'Run /post-merge-cleanup by itself' }))
     await waitFor(() => expect(runCommand).toHaveBeenCalledWith('p1', ['switch', 'post-merge-cleanup', 'off']))
+  })
+
+  test("a row's switch moves at the press and is held while it saves; one the command refused goes back, with why", async () => {
+    let answer: (result: ModuleCommandResult) => void = () => {}
+    const runCommand = vi.fn(async (_projectId: string, args: string[]): Promise<ModuleCommandResult> => (args[0] === 'status' ? { ok: true, output: STATUS } : new Promise(resolve => (answer = resolve))))
+    show(fakeHost('@openagt/skill-scheduler', { runCommand, act: runCommand }))
+    await screen.findByRole('region', { name: 'gemstack' })
+    const toggle = screen.getByRole('switch', { name: 'Run /work-queue by itself' })
+    fireEvent.click(toggle)
+    expect(toggle.getAttribute('aria-checked')).toBe('true')
+    await waitFor(() => expect(disabled(toggle)).toBe(true))
+    answer({ ok: false, error: 'the schedule of work-queue cannot be read' })
+    expect((await within(row('/work-queue')).findByRole('alert')).textContent).toBe('The switch was not saved: the schedule of work-queue cannot be read')
+    await waitFor(() => expect(toggle.getAttribute('aria-checked')).toBe('false'))
   })
 
   test('"Run now" runs `now` for its row, switched on or off, and the row says it started a run, which "Open it" opens; an answer that names no run still says it started', async () => {
