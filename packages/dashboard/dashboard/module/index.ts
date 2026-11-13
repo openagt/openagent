@@ -399,9 +399,10 @@ export interface ModuleHost {
   /**
    * Open a page a module adds (this one's or another's), at a sub-path, in the project picked in
    * the dashboard, or in `projectId`, which is then the one picked: `openPage('tickets', [file], projectId)`.
-   * A page the picked project's packages do not add shows "No such page".
+   * A page the picked project's packages do not add shows "No such page". With `replace`, the address
+   * takes the place of the current one, so Back steps over it: a pick the page keeps in its address.
    */
-  openPage(segment: string, path?: string[], projectId?: string): void
+  openPage(segment: string, path?: string[], projectId?: string, options?: { replace?: boolean }): void
   /** The address of a page a module adds, with the project picked in the dashboard: a link's `href`, for a link that also opens in a new tab. */
   pageHref(segment: string): string
   /** Open an entry of Settings over the page, by its id: `openSettings('devices')`. */

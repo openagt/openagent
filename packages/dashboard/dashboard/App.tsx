@@ -361,7 +361,7 @@ export function App() {
     ...DAEMON_SERVICES,
     openAgent: selectAgentInProject,
     agentHref: (inProject, id) => hrefOf({ projectId: inProject, agentId: id }),
-    openPage: (segment, path, inProject) => go({ projectId: null, agentId: null, page: segment, ...(path && path.length ? { pagePath: path } : {}), ...(inProject ? { scope: inProject } : {}) }),
+    openPage: (segment, path, inProject, options) => go({ projectId: null, agentId: null, page: segment, ...(path && path.length ? { pagePath: path } : {}), ...(inProject ? { scope: inProject } : {}) }, options),
     pageHref: segment => formatRoute({ projectId: null, agentId: null, page: segment, ...(scope ? { scope } : {}) }, addresses),
     openSettings: entry => showSettings(entry),
     startRun: async (inProject, prompt, opts) => {

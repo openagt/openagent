@@ -178,7 +178,7 @@ export function LogsPage({ projects, path }: ModulePageProps) {
     <Page
       title="Logs"
       description={capped ? `The last ${LIMIT} runs recorded in ${many ? 'each of these projects' : 'this project'}, newest first.` : `Every run recorded in ${many ? 'these projects' : 'this project'}, newest first.`}
-      bar={<FilterChips chips={counts} total={read.rows.length} picked={status} onPick={value => host.openPage('logs', value === null ? [] : [value])} />}
+      bar={<FilterChips chips={counts} total={read.rows.length} picked={status} onPick={value => host.openPage('logs', value === null ? [] : [value], undefined, { replace: true })} />}
     >
       {read.failed.map(({ project, error }) => (
         <p key={project.id} role="alert" className="mb-3 text-sm text-danger">
