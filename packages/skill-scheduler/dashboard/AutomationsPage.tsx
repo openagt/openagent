@@ -373,17 +373,20 @@ function SkillsLink() {
   )
 }
 
-/** An item of a row's line after its first, with the "·" before it: the two wrap together, so no line ends in a "·". */
+/** An item of a row's line, with the "·" before it: the two wrap together, so no line ends in a "·", and {@link LINE} hides the one each line starts with. */
 function Next({ children }: { children: ReactNode }) {
   return (
     <span>
-      <span aria-hidden className="mr-2 text-muted-foreground">
+      <span aria-hidden className="mr-2 inline-block w-1 text-center text-muted-foreground">
         ·
       </span>
       {children}
     </span>
   )
 }
+
+/** A row's line of {@link Next} items: moved left by one "·" and its space, and cut there, so no line starts with a "·". */
+const LINE = 'flex flex-wrap gap-x-2 -ml-3 [clip-path:inset(-0.25rem_-0.25rem_-0.25rem_0.75rem)]'
 
 /**
  * Where a row stands, in one line: on or off; when it last ran, that its last run failed, or that
@@ -397,11 +400,13 @@ function Stands({ host, project, scheduled, stopped }: { host: ModuleHost; proje
   const decision = idle ? `Does not start: ${stopped.charAt(0).toLowerCase()}${stopped.slice(1)}` : decided(scheduled)
   const starts = scheduled.on && !idle
   return (
-    <p className="mt-1 flex flex-wrap items-center gap-x-2 text-xs">
-      <span className={cn('inline-flex items-center gap-1.5 font-medium', starts ? 'text-success' : 'text-muted-foreground')}>
-        <span aria-hidden className={cn('h-1.5 w-1.5 rounded-full', starts ? 'bg-success' : 'bg-muted-foreground/50')} />
-        {scheduled.on ? 'On' : 'Off'}
-      </span>
+    <p className={cn(LINE, 'mt-1 items-center text-xs')}>
+      <Next>
+        <span className={cn('inline-flex items-center gap-1.5 font-medium', starts ? 'text-success' : 'text-muted-foreground')}>
+          <span aria-hidden className={cn('h-1.5 w-1.5 rounded-full', starts ? 'bg-success' : 'bg-muted-foreground/50')} />
+          {scheduled.on ? 'On' : 'Off'}
+        </span>
+      </Next>
       <Next>
         {last === undefined ? (
           <span className="text-muted-foreground">Never ran</span>
@@ -427,8 +432,8 @@ function Stands({ host, project, scheduled, stopped }: { host: ModuleHost; proje
 function Picks({ scheduled, schedulerModel, agents }: { scheduled: SchedulerCommand; schedulerModel: string | undefined; agents: readonly AgentModels[] }) {
   const follows = !isOwn(scheduled)
   return (
-    <p className="mt-1 flex flex-wrap gap-x-2 text-xs text-muted-foreground">
-      <span>{pace(scheduled)}</span>
+    <p className={cn(LINE, 'mt-1 text-xs text-muted-foreground')}>
+      <Next>{pace(scheduled)}</Next>
       {follows && ownPace(scheduled) && (
         <Next>
           <span className="text-info">your pick</span>
