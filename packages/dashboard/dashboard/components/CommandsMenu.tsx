@@ -22,7 +22,7 @@ export type CommandEntry = ProjectLauncher['commands'][number]
 // prompts a person saved. Loading used to live only behind typing `/` in the editor, which gave
 // a first-time user no sign that any exist. This button is the one surface that loads, saves,
 // and deletes; the `/` menu stays as the fast path for those who know it.
-/** One saved (user or project) prompt row: click loads it, the X deletes it. */
+/** One saved (user or project) prompt row: click loads it, the X or the Delete key deletes it. */
 function SavedPresetRow({
   preset,
   busy,
@@ -35,7 +35,17 @@ function SavedPresetRow({
   onDelete: (id: string) => void
 }) {
   return (
-    <DropdownMenuItem disabled={busy} onClick={() => onLoad(preset.prompt, preset.label)} className="items-center gap-2">
+    <DropdownMenuItem
+      disabled={busy}
+      onClick={() => onLoad(preset.prompt, preset.label)}
+      onKeyDown={e => {
+        if (e.key !== 'Delete' && e.key !== 'Backspace') return
+        e.preventDefault()
+        onDelete(preset.id)
+      }}
+      aria-keyshortcuts="Delete"
+      className="items-center gap-2"
+    >
       <span className="flex-1 truncate">{preset.label}</span>
       <Tooltip>
         <TooltipTrigger
@@ -49,7 +59,7 @@ function SavedPresetRow({
                 onDelete(preset.id)
               }}
               aria-label={`Delete saved prompt ${preset.label}`}
-              className="rounded p-0.5 text-[var(--color-muted-foreground)] hover:text-danger"
+              className="flex size-6 shrink-0 items-center justify-center rounded text-[var(--color-muted-foreground)] hover:text-danger"
             />
           }
         >
