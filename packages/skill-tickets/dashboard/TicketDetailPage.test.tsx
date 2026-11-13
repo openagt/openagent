@@ -233,6 +233,13 @@ describe('TicketDetailPage (#1144)', () => {
     expect(host.openAgent).toHaveBeenCalledWith('p1', '2026-08-30T10-00-00-000Z')
   })
 
+  test('a claim reads as its run\'s short name once the run has one, as the sidebar names it', async () => {
+    agents = [{ id: 'run-1', name: 'login-page', title: 'Fix the login page', status: 'running', startedAt: '2026-08-30T10:00:00.000Z' }]
+    onTicket.mockResolvedValue(ticket({ locked: true, lockedBy: 'run-1' }))
+    render(<TicketDetailPage projectId="p1" slug="2026-07-20_do-the-thing.md" />)
+    expect(await screen.findByRole('button', { name: 'Fix the login page' })).toBeTruthy()
+  })
+
   test('the run holding the claim is one press away at the top: looked at while it works, gone on with once it stopped', async () => {
     agents = [{ id: 'run-1', name: 'login-page', status: 'running', startedAt: '2026-08-30T10:00:00.000Z' }]
     onTicket.mockResolvedValue(ticket({ locked: true, lockedBy: 'run-1' }))

@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react'
 import { Button, FadeWhileStale, LinkActions, Page, usePolled, useAction, useModuleHost, type ProjectLinks, type ModuleLink, type ModuleProject } from '@openagt/dashboard/module'
 import { heldBack, holderAgent, planLink, ticketLink, withHolder } from '../src/module.js'
+import { holdingRun } from './lib/holding-run.js'
 import type { ProjectTickets, WorkspaceTicket } from './lib/types.js'
 import { listTickets } from './lib/list.js'
 import { openFromList } from './lib/back-to-list.js'
@@ -53,7 +54,7 @@ export function TicketsPage({ projects }: { projects: ModuleProject[] }) {
         projects.map(async (project): Promise<ProjectRead> => {
           const [listed, agents] = await Promise.all([listTickets(host, project.id), host.agents(project.id).catch(() => [])])
           if ('error' in listed) return { projectId: project.id, projectName: project.name, tickets: [], error: listed.error }
-          const tickets = listed.tickets.map(ticket => withHolder(ticket, holderAgent(agents, ticket.lockedBy)))
+          const tickets = listed.tickets.map(ticket => withHolder(ticket, holdingRun(holderAgent(agents, ticket.lockedBy))))
           return { projectId: project.id, projectName: project.name, tickets }
         }),
       ),

@@ -2,6 +2,7 @@ import { useState, type ReactNode } from 'react'
 import { ArrowUp, Bot, CirclePause, Clock, Flame, WifiOff, type LucideIcon } from 'lucide-react'
 import { Button, Card, CardContent, CardHeader, CardTitleLink, LinkActions, cn, formatDateTime, usePolled, useModuleHost, useOpenAgentDown, type ModuleCardProps, type ModuleProject } from '@openagt/dashboard/module'
 import { claimState, heldBack, holderAgent, hotLane, ticketLink, withHolder, type ClaimState, type HotLane } from '../src/module.js'
+import { holdingRun } from './lib/holding-run.js'
 import { listTickets } from './lib/list.js'
 import type { WorkspaceTicket } from './lib/types.js'
 import { releaseClaim } from './lib/release.js'
@@ -66,7 +67,7 @@ export function HotTicketsCard({ projects }: ModuleCardProps) {
             hot.push({
               project,
               lane,
-              ticket: withHolder(ticket, agent),
+              ticket: withHolder(ticket, holdingRun(agent)),
               ...(agent ? { holder: { id: agent.id, status: agent.status, ...(agent.machine ? { machine: agent.machine } : {}), ...(agent.seenAt ? { seenAt: agent.seenAt } : {}) } } : {}),
             })
           }
