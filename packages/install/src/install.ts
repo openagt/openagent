@@ -115,9 +115,9 @@ function openInBrowser(command: string, url: string): void {
 
 /**
  * `npx @openagt/install`: the dashboard starts at login, at `https://openagent.build`. Asks for
- * the person's password as the administrator, for the name and its port; on a Mac also macOS's
- * own window, to trust the certificate made here. Typed again, it does the same, and asks nothing
- * it needs no more.
+ * the person's password as the administrator, to point the name at this computer and its port 443
+ * at the dashboard; on a Mac also macOS's own window, to trust the certificate made here. Run
+ * again, it does the same and asks for the password again, but not for what is already in place.
  */
 export async function install(io: InstallIO = defaultIO, env: NodeJS.ProcessEnv = process.env): Promise<number> {
   const platform = PLATFORMS[process.platform]
