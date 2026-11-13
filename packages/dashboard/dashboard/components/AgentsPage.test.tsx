@@ -152,6 +152,20 @@ describe('the Agents page', () => {
     await waitFor(() => expect(rpc.sendSaveAgent).toHaveBeenCalledWith({ id: 'reviewer', name: 'Reviewer', skills: ['ask', 'readability'], accounts: { github: 'octo-agent' }, projectSkills: false }))
   })
 
+  test('this computer\u2019s own login, logged out, is not offered; an agent that has it picked still shows it, saying it is not logged in', async () => {
+    const claude = [{ id: 'This computer', name: 'Claude login on Studio', loggedOut: true }, { id: 'Dani', name: 'Dani' }]
+    rpc.onAgentsList.mockResolvedValue({ ...VIEW, agents: [DEFAULT, { ...REVIEWER, accounts: { claude: ['This computer'] } }], claude })
+    render(<AgentsPage />)
+    fireEvent.click(await screen.findByRole('button', { name: 'New agent' }))
+    const editor = screen.getByRole('dialog', { name: 'New agent' })
+    expect(within(editor).queryByLabelText(/Claude login on Studio/)).toBeNull()
+    expect(within(editor).getByLabelText('Claude account Dani')).toBeTruthy()
+    fireEvent.click(within(editor).getByRole('button', { name: 'Cancel' }))
+    fireEvent.click(await screen.findByRole('button', { name: 'Edit Reviewer' }))
+    const edited = screen.getByRole('dialog', { name: 'Editing Reviewer' })
+    expect(within(edited).getByLabelText('Claude account Claude login on Studio, not logged in').getAttribute('aria-checked')).toBe('true')
+  })
+
   test('with no GitHub account of OpenAgent\u2019s yet, one is added from the editor, in its dialog, and is then the one picked; what was typed stays', async () => {
     const github = (accounts: string[]) => ({ hosts: [{ host: 'github.com', projects: [], provider: { name: 'GitHub', requestWord: 'pull request', tool: 'gh', installed: true, install: 'brew install gh', accounts: accounts.map(login => ({ login, runs: true, ok: true })) } }] })
     rpc.onAgentsList.mockResolvedValue({ ...VIEW, github: { host: 'github.com', accounts: [] } })

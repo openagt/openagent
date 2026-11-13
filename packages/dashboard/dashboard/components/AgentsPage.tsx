@@ -1,6 +1,6 @@
 import { useEffect, useId, useRef, useState, type FormEvent } from 'react'
 import { Bot, Check, Loader2, Pencil, Plus, RefreshCw, Trash2 } from 'lucide-react'
-import { onAgentLogins, onAgentsList, sendCopyAgentLogins, sendRemoveAgent, sendSaveAgent, type AgentLoginsOn, type AgentRecord, type AgentsView } from '../rpc/agents.js'
+import { onAgentLogins, onAgentsList, sendCopyAgentLogins, sendRemoveAgent, sendSaveAgent, type AgentAccountChoice, type AgentLoginsOn, type AgentRecord, type AgentsView } from '../rpc/agents.js'
 import { DEFAULT_AGENT } from '../../src/client.js'
 import { usePolled } from '../lib/use-async.js'
 import { cn } from '../lib/utils.js'
@@ -420,8 +420,12 @@ function AgentEditor({ agent, view, onAccounts, onDone }: { agent?: AgentRecord;
   )
 }
 
-/** A coding agent's accounts to pick from: "All", ticked while none is picked, is every one of this computer's; one or more ticked, those alone, where the computer has them. */
-function AccountPicks({ label, accounts, picked, busy, onTick, onAll }: { label: string; accounts: readonly { id: string; name: string }[]; picked: Set<string>; busy: boolean; onTick: (id: string, on: boolean) => void; onAll: () => void }) {
+/**
+ * A coding agent's accounts to pick from: "All", ticked while none is picked, is every one of this computer's; one or more ticked, those alone, where the computer has them.
+ * This computer's own login, logged out, is offered only while it is picked, and says so.
+ */
+function AccountPicks({ label, accounts: all, picked, busy, onTick, onAll }: { label: string; accounts: readonly AgentAccountChoice[]; picked: Set<string>; busy: boolean; onTick: (id: string, on: boolean) => void; onAll: () => void }) {
+  const accounts = all.filter(account => !account.loggedOut || picked.has(account.id))
   if (accounts.length === 0) return null
   return (
     <fieldset className="space-y-1.5">
@@ -432,12 +436,15 @@ function AccountPicks({ label, accounts, picked, busy, onTick, onAll }: { label:
           <Checkbox checked={picked.size === 0} onCheckedChange={checked => checked === true && onAll()} disabled={busy} aria-label={`All ${label} accounts`} />
           All
         </label>
-        {accounts.map(account => (
-          <label key={account.id} className="flex cursor-pointer items-center gap-2 text-sm">
-            <Checkbox checked={picked.has(account.id)} onCheckedChange={checked => onTick(account.id, checked === true)} disabled={busy} aria-label={`${label} account ${account.name}`} />
-            {account.name}
-          </label>
-        ))}
+        {accounts.map(account => {
+          const name = account.loggedOut ? `${account.name}, not logged in` : account.name
+          return (
+            <label key={account.id} className="flex cursor-pointer items-center gap-2 text-sm">
+              <Checkbox checked={picked.has(account.id)} onCheckedChange={checked => onTick(account.id, checked === true)} disabled={busy} aria-label={`${label} account ${name}`} />
+              {name}
+            </label>
+          )
+        })}
       </div>
       <p className="text-xs text-muted-foreground">{picked.size === 0 ? `All of this computer's ${label} accounts, the next free one taking over at a limit.` : `Only these, where the computer the run goes to has them.`}</p>
     </fieldset>
