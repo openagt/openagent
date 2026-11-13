@@ -6,6 +6,10 @@ import { cn } from '../../lib/utils.js'
 // its children's inner corners and drops the border between them through its own selectors, which
 // outweigh a single class: a module's stylesheet, loaded after the dashboard's, redefines
 // `.rounded-md` and would round a child's own `rounded-r-none` back off.
+//
+// Inner means beside another control, not "not the first or last child": an open menu puts hidden
+// spans of its own next to its trigger (focus guards, and the span that owns its popup), and the
+// arrow that is the group's last control would lose its outer corners while its menu is open.
 
 export function ButtonGroup({ className, ...props }: HTMLAttributes<HTMLDivElement>) {
   return (
@@ -15,7 +19,8 @@ export function ButtonGroup({ className, ...props }: HTMLAttributes<HTMLDivEleme
       className={cn(
         'flex w-fit shrink-0 items-stretch',
         '[&>*]:focus-visible:relative [&>*]:focus-visible:z-10',
-        '[&>*:not(:first-child)]:rounded-l-none [&>*:not(:first-child)]:border-l-0 [&>*:not(:last-child)]:rounded-r-none',
+        '[&>:not([data-base-ui-focus-guard],[aria-owns])~*]:rounded-l-none [&>:not([data-base-ui-focus-guard],[aria-owns])~*]:border-l-0',
+        '[&>*:has(~:not([data-base-ui-focus-guard],[aria-owns]))]:rounded-r-none',
         className,
       )}
       {...props}
