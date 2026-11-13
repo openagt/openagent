@@ -329,7 +329,7 @@ export function TicketsPanel({
           {hiddenByFilter} ticket{hiddenByFilter === 1 ? '' : 's'} hidden by the current filters.
         </p>
         {onClearFilters && (
-          <Button variant="outline" size="xs" onClick={onClearFilters}>
+          <Button variant="outline" size="sm" onClick={onClearFilters}>
             Clear filters
           </Button>
         )}
@@ -403,7 +403,7 @@ export function TicketsPanel({
 /** A ticket written by hand, beside the ones imported from the tracker. */
 function NewTicketButton({ onClick, className }: { onClick: () => void; className?: string | undefined }) {
   return (
-    <Button variant="outline" size="sm" onClick={onClick} className={className ?? 'gap-1.5'}>
+    <Button variant="outline" onClick={onClick} className={className ?? 'gap-1.5'}>
       <Plus className="h-3.5 w-3.5" aria-hidden /> New ticket
     </Button>
   )

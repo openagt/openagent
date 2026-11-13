@@ -67,7 +67,7 @@ function AgentUpdateLine({ update, onUpdated }: { update: AgentUpdate; onUpdated
           {label} {update.latest} is out. This computer has {update.installed}.
         </span>
         {/* Busy, it keeps the focus it was pressed with: a disabled press would drop it to the page. */}
-        <Button size="xs" variant="outline" aria-disabled={busy || undefined} className={cn(busy && 'opacity-50')} onClick={() => void (busy || press())}>
+        <Button size="sm" variant="outline" aria-disabled={busy || undefined} className={cn(busy && 'opacity-50')} onClick={() => void (busy || press())}>
           {busy ? 'Updating…' : `Update ${label}`}
         </Button>
       </div>

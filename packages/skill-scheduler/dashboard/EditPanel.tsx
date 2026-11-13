@@ -196,7 +196,7 @@ export function EditPanel({
         </p>
         <p className="mt-2">{editedWords(saved)}</p>
         <div className="mt-3 flex justify-end">
-          <Button size="sm" autoFocus onClick={onClose}>
+          <Button autoFocus onClick={onClose}>
             Done
           </Button>
         </div>
@@ -225,10 +225,10 @@ export function EditPanel({
         )}
         <div className="mt-3 flex justify-end gap-2">
           {/* The keyboard lands on the way out, not on the deletion. */}
-          <Button variant="outline" size="sm" autoFocus disabled={saving} onClick={back}>
+          <Button variant="outline" autoFocus disabled={saving} onClick={back}>
             Cancel
           </Button>
-          <Button variant="destructive" size="sm" disabled={saving || down} onClick={() => void remove()}>
+          <Button variant="destructive" disabled={saving || down} onClick={() => void remove()}>
             Remove
           </Button>
         </div>
@@ -326,14 +326,14 @@ export function EditPanel({
         <div className="flex gap-2">
           {/* Only what the tool wrote is the tool's to delete. */}
           {scheduled.editable && opened && (
-            <Button variant="outline" size="sm" disabled={saving} onClick={() => (setAsking(true), setFailed(undefined))} className="text-danger">
+            <Button variant="outline" disabled={saving} onClick={() => (setAsking(true), setFailed(undefined))} className="text-danger">
               Remove
             </Button>
           )}
-          <Button variant="outline" size="sm" disabled={saving} onClick={onClose}>
+          <Button variant="outline" disabled={saving} onClick={onClose}>
             Cancel
           </Button>
-          <Button size="sm" disabled={saving || down || problem !== undefined || !dirty} onClick={() => void save()}>
+          <Button disabled={saving || down || problem !== undefined || !dirty} onClick={() => void save()}>
             Save
           </Button>
         </div>

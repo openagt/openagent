@@ -94,7 +94,7 @@ export function SaidFields({ project, said, agent, autoFocus, onChange }: { proj
         className="bg-background"
       />
       <div className="flex flex-wrap items-center gap-3">
-        <Button variant="outline" size="sm" disabled={words === '' || written === 'writing'} onClick={() => void writeIt()}>
+        <Button variant="outline" disabled={words === '' || written === 'writing'} onClick={() => void writeIt()}>
           {written === 'writing' ? 'Writing…' : 'Write the line'}
         </Button>
         <span className={hint}>Asks {AGENT_LABELS[agent]} once for a shell line from these words, and puts it below; costs a fraction of a cent. Nothing is run or saved.</span>
@@ -125,7 +125,7 @@ export function SaidFields({ project, said, agent, autoFocus, onChange }: { proj
         <span className="font-mono">$LAST_RUN</span> is the time the row last started an agent, or was switched on when that is later.
       </p>
       <div className="flex flex-wrap items-center gap-3">
-        <Button variant="outline" size="sm" disabled={line === '' || tried === 'trying'} onClick={() => void tryIt()}>
+        <Button variant="outline" disabled={line === '' || tried === 'trying'} onClick={() => void tryIt()}>
           {tried === 'trying' ? 'Trying…' : 'Try it'}
         </Button>
         <span className={hint}>Runs the line once, now, on this machine, for 20 seconds at most. Nothing is saved and no agent starts.</span>

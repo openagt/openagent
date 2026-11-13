@@ -191,7 +191,7 @@ export function AutomationsPage({ projects }: ModulePageProps) {
                       setCreating(row.project.id)
                     }}
                     aria-label={`New automation in ${row.project.name}`}
-                    className={cn(buttonVariants({ variant: 'outline', size: 'xs' }), 'ml-auto')}
+                    className={cn(buttonVariants({ variant: 'outline', size: 'sm' }), 'ml-auto')}
                   >
                     New automation
                   </button>
@@ -215,7 +215,6 @@ export function AutomationsPage({ projects }: ModulePageProps) {
                   <p>{removed.text}</p>
                   <Button
                     variant="outline"
-                    size="sm"
                     autoFocus
                     onClick={() => {
                       setRemoved(undefined)
@@ -279,7 +278,7 @@ export function AutomationsPage({ projects }: ModulePageProps) {
                                 <div className="flex shrink-0 items-center gap-2">
                                   <Button
                                     variant="outline"
-                                    size="xs"
+                                    size="sm"
                                     disabled={saving || down || cannotRun(scheduled) !== undefined}
                                     onClick={() => void startNow(id, row.project, scheduled.command)}
                                     aria-label={`Run ${title} now`}
@@ -295,7 +294,7 @@ export function AutomationsPage({ projects }: ModulePageProps) {
                                     disabled={saving || shown !== undefined || held}
                                     onClick={() => void open(id, row.project, scheduled)}
                                     aria-label={`Edit ${title}`}
-                                    className={buttonVariants({ variant: 'outline', size: 'xs' })}
+                                    className={buttonVariants({ variant: 'outline', size: 'sm' })}
                                   >
                                     Edit
                                   </button>

@@ -196,8 +196,8 @@ function Buttons() {
       </Row>
       <Row label="Sizes">
         <Button size="default">Default</Button>
-        <Button size="sm">Small</Button>
-        <Button size="xs">Extra small</Button>
+        <Button>Small</Button>
+        <Button size="sm">Extra small</Button>
         <Button size="icon" aria-label="Icon">
           <span className="text-xs">IC</span>
         </Button>
@@ -448,7 +448,7 @@ function EmptyStates() {
       <Card>
         <CardContent className="flex flex-col items-start gap-3">
           <p className="text-sm text-muted-foreground">Nothing on the agent queue.</p>
-          <Button size="sm" variant="outline">
+          <Button variant="outline">
             Add an entry
           </Button>
         </CardContent>

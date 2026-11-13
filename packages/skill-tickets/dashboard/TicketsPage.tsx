@@ -188,7 +188,7 @@ export function TicketsPage({ projects }: { projects: ModuleProject[] }) {
               <span className="tabular-nums">
                 {selectedShown.length} selected
               </span>
-              <Button variant="outline" size="xs" onClick={() => setSelected(new Set())}>
+              <Button variant="outline" size="sm" onClick={() => setSelected(new Set())}>
                 Clear selection
               </Button>
             </span>
@@ -258,7 +258,7 @@ export function TicketsPage({ projects }: { projects: ModuleProject[] }) {
               <span>
                 {rows.length - visible.length} ticket{rows.length - visible.length === 1 ? '' : 's'} hidden by the current filters.
               </span>
-              <Button variant="outline" size="xs" onClick={clearFilters}>
+              <Button variant="outline" size="sm" onClick={clearFilters}>
                 Clear filters
               </Button>
             </div>

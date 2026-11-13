@@ -153,7 +153,7 @@ export function AddProjectPanel({
               </p>
             )}
             <div className="flex justify-end">
-              <Button type="button" size="sm" autoFocus onClick={onClose}>
+              <Button type="button" autoFocus onClick={onClose}>
                 Done
               </Button>
             </div>
@@ -181,10 +181,10 @@ export function AddProjectPanel({
             <p className="mb-3 text-xs text-muted-foreground">It is cloned into the projects folder of this computer, with the logins this computer has.</p>
             {error && <p className="mb-2 text-xs text-danger">{error}</p>}
             <div className="flex justify-end gap-2">
-              <Button type="button" variant="ghost" size="sm" onClick={onClose}>
+              <Button type="button" variant="ghost" onClick={onClose}>
                 Cancel
               </Button>
-              <Button type="submit" size="sm" disabled={busy || !typed.trim()}>
+              <Button type="submit" disabled={busy || !typed.trim()}>
                 Next
               </Button>
             </div>
@@ -194,13 +194,13 @@ export function AddProjectPanel({
             <p className="mb-2 text-sm font-medium">Add project</p>
             <p className="mb-3 text-xs text-danger">{pickError}</p>
             <div className="flex flex-wrap justify-end gap-2">
-              <Button type="button" variant="ghost" size="sm" onClick={onClose}>
+              <Button type="button" variant="ghost" onClick={onClose}>
                 Cancel
               </Button>
-              <Button type="button" variant="outline" size="sm" onClick={() => setByAddress(true)}>
+              <Button type="button" variant="outline" onClick={() => setByAddress(true)}>
                 Add from a GitHub address
               </Button>
-              <Button type="button" size="sm" onClick={() => void pick()}>
+              <Button type="button" onClick={() => void pick()}>
                 Try again
               </Button>
             </div>
@@ -227,7 +227,6 @@ export function AddProjectPanel({
               <Button
                 type="button"
                 variant="ghost"
-                size="sm"
                 autoFocus
                 disabled={busy}
                 onClick={() => {
@@ -239,7 +238,7 @@ export function AddProjectPanel({
               >
                 {target ? 'Change the address' : folder ? 'Cancel' : 'Choose again'}
               </Button>
-              <Button type="button" size="sm" disabled={busy} onClick={() => void confirmAdd()}>
+              <Button type="button" disabled={busy} onClick={() => void confirmAdd()}>
                 {busy ? (target ? 'Cloning…' : 'Adding…') : target ? 'I trust it, clone and add it' : 'I trust it, add it'}
               </Button>
             </div>
@@ -251,7 +250,7 @@ export function AddProjectPanel({
               Choose the repository&apos;s folder in the system dialog…
             </p>
             <div className="flex justify-end">
-              <Button type="button" variant="ghost" size="sm" onClick={onClose}>
+              <Button type="button" variant="ghost" onClick={onClose}>
                 Cancel
               </Button>
             </div>

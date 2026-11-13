@@ -122,7 +122,7 @@ function Adding({ host, onClose }: { host: string; onClose: (added?: string) => 
       <div className="space-y-3">
         <Install row={row} error={installError} onError={setInstallError} onChanged={reload} />
         <div className="flex justify-end">
-          <Button size="sm" variant="ghost" onClick={() => onClose()}>
+          <Button variant="ghost" onClick={() => onClose()}>
             Cancel
           </Button>
         </div>
@@ -162,11 +162,11 @@ function Adding({ host, onClose }: { host: string; onClose: (added?: string) => 
       </div>
       <div className="flex items-center justify-end gap-2">
         {(ended || error !== undefined) && (
-          <Button size="sm" disabled={asking} onClick={() => void start()}>
+          <Button disabled={asking} onClick={() => void start()}>
             Get a new code
           </Button>
         )}
-        <Button size="sm" variant="ghost" onClick={() => onClose()}>
+        <Button variant="ghost" onClick={() => onClose()}>
           Cancel
         </Button>
       </div>
@@ -220,7 +220,7 @@ export function useAddGitAccount(onAdded?: (login: string, host: string) => void
 }
 
 /** The press for a host with no account, or no tool: it opens the dialog that adds one. Nothing for a host that has one. */
-export function HostFix({ row, onChanged, size = 'sm', variant }: { row: GitHostRow; onChanged: () => Promise<void>; size?: 'sm' | 'xs' | undefined; variant?: 'outline' | undefined }) {
+export function HostFix({ row, onChanged, size = 'default', variant }: { row: GitHostRow; onChanged: () => Promise<void>; size?: 'default' | 'sm' | undefined; variant?: 'outline' | undefined }) {
   const adding = useAddGitAccount(onChanged)
   const p = row.provider
   if (!p) return null

@@ -158,7 +158,7 @@ function OnRow({ project, command, stopped, lookedAt, onOpenRun, reload }: { pro
       {cannotRun(command) === undefined && (
         <Button
           variant="ghost"
-          size="xs"
+          size="sm"
           disabled={busy || down}
           onClick={() => void runNow()}
           aria-label={`Run ${rowTitle(command)} now`}

@@ -82,7 +82,7 @@ export function ProfileSettings() {
               }}
               className="h-8 w-48"
             />
-            <Button type="submit" size="sm" disabled={saving.busy || !changedName} className="min-w-16">
+            <Button type="submit" disabled={saving.busy || !changedName} className="min-w-16">
               {saving.busy ? 'Saving…' : 'Save'}
             </Button>
           </div>
@@ -101,7 +101,7 @@ export function ProfileSettings() {
           <div className="flex items-center gap-2">
             <Avatar person={person} size="h-8 w-8 text-xs" />
             {person.avatar && (
-              <Button variant="outline" size="sm" disabled={removing.busy} onClick={remove}>
+              <Button variant="outline" disabled={removing.busy} onClick={remove}>
                 Remove
               </Button>
             )}
@@ -136,7 +136,7 @@ export function ProfileSettings() {
               }}
               className="h-8 w-48"
             />
-            <Button type="submit" size="sm" variant="outline" disabled={syncing.busy || !github.trim()} className="min-w-16">
+            <Button type="submit" variant="outline" disabled={syncing.busy || !github.trim()} className="min-w-16">
               {syncing.busy ? 'Syncing…' : 'Sync'}
             </Button>
           </div>

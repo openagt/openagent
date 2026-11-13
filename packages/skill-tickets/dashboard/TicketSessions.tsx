@@ -44,7 +44,7 @@ export function TicketSessions({ sessions, onOpen }: { sessions: readonly Ticket
               {` · ${running ? 'at work' : agent.status} · ${formatAge(agent.endedAt ?? agent.startedAt)}`}
             </span>
             <Tooltip>
-              <TooltipTrigger render={<Button variant="outline" size="xs" className="shrink-0 gap-1.5" onClick={() => onOpen(agent.id)} />}>
+              <TooltipTrigger render={<Button variant="outline" size="sm" className="shrink-0 gap-1.5" onClick={() => onOpen(agent.id)} />}>
                 <MessageSquare className="h-3 w-3" aria-hidden /> Open session
               </TooltipTrigger>
               <TooltipContent className="max-w-72">

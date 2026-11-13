@@ -203,7 +203,7 @@ function NextStep({
       <>
         <Uncommitted paths={paths} committed={!handoff.empty} />
         <Button
-          size="xs"
+          size="sm"
           variant="ghost"
           className={NEXT_STEP}
           {...step}
@@ -248,7 +248,7 @@ function NextStep({
       return (
         <>
           <Reason>not in the PR yet</Reason>
-          <Button size="xs" variant="ghost" className={NEXT_STEP} {...step} onClick={push}>
+          <Button size="sm" variant="ghost" className={NEXT_STEP} {...step} onClick={push}>
             <Steady words={['Update PR', 'Updating PR…']} now={pending === 'push' ? 1 : 0} />
           </Button>
         </>
@@ -256,7 +256,7 @@ function NextStep({
     }
     return (
       <Button
-        size="xs"
+        size="sm"
         variant="ghost"
         className={NEXT_STEP}
         {...step}
@@ -294,7 +294,7 @@ function NextStep({
       <>
         <Reason>Not in {mainBranchName(handoff.base)} yet.</Reason>
         <Button
-          size="xs"
+          size="sm"
           variant="ghost"
           className={NEXT_STEP}
           {...step}
@@ -311,7 +311,7 @@ function NextStep({
     if (handoff.pushed) return null
     return (
       <>
-        <Button size="xs" variant="ghost" className={NEXT_STEP} {...step} onClick={push}>
+        <Button size="sm" variant="ghost" className={NEXT_STEP} {...step} onClick={push}>
           <Steady words={['Publish branch', 'Publishing…']} now={pending === 'push' ? 1 : 0} />
         </Button>
       </>
@@ -333,7 +333,7 @@ function NextStep({
       {handoff.carries && <Carries carries={handoff.carries} />}
       <ButtonGroup>
         <Button
-          size="xs"
+          size="sm"
           variant="ghost"
           className={cn(NEXT_STEP, 'pr-1.5!')}
           {...step}
@@ -348,7 +348,7 @@ function NextStep({
               aria-label="Other choices"
               {...step}
               className={cn(
-                buttonVariants({ size: 'xs', variant: 'ghost' }),
+                buttonVariants({ size: 'sm', variant: 'ghost' }),
                 NEXT_STEP,
                 // Open, it looks hovered: the menus' own open color is the bar's, and the arrow would vanish into it.
                 'px-1 text-muted-foreground data-[popup-open]:bg-background data-[popup-open]:text-foreground',

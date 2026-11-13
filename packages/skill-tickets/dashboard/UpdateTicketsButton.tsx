@@ -16,7 +16,7 @@ export function UpdateTicketsButton({
   lastImportedAt,
   disabled,
   variant,
-  size = 'sm',
+  size = 'default',
   className,
 }: {
   busy: boolean
@@ -29,7 +29,7 @@ export function UpdateTicketsButton({
   lastImportedAt?: string | undefined
   disabled?: boolean | undefined
   variant?: 'default' | 'outline' | undefined
-  size?: 'xs' | 'sm' | undefined
+  size?: 'sm' | 'default' | undefined
   className?: string | undefined
 }) {
   return (

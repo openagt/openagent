@@ -95,10 +95,10 @@ function Choose({ kinds, onPicked, onClose }: { kinds: typeof KINDS; onPicked: (
           ))}
         </div>
         <div className="flex justify-end gap-2">
-          <Button size="sm" variant="ghost" onClick={onClose}>
+          <Button variant="ghost" onClick={onClose}>
             Cancel
           </Button>
-          <Button size="sm" onClick={() => onPicked(picked)}>
+          <Button onClick={() => onPicked(picked)}>
             Continue
           </Button>
         </div>
@@ -181,10 +181,10 @@ function AddPhone({ d, onClose }: { d: Devices; onClose: () => void }) {
             )}
           </div>
           <div className="flex justify-end gap-2">
-            <Button size="sm" variant="ghost" onClick={onClose}>
+            <Button variant="ghost" onClick={onClose}>
               Back
             </Button>
-            <Button size="sm" onClick={() => setWhere(picked)}>
+            <Button onClick={() => setWhere(picked)}>
               Show the code
             </Button>
           </div>
@@ -199,11 +199,11 @@ function AddPhone({ d, onClose }: { d: Devices; onClose: () => void }) {
         <div className="space-y-4 text-sm">
           <p>{status.problem ?? 'The door on your Tailscale network is opening. One moment.'}</p>
           <div className="flex justify-end gap-2">
-            <Button size="sm" variant="ghost" onClick={onClose}>
+            <Button variant="ghost" onClick={onClose}>
               Cancel
             </Button>
             {status.fixAt !== undefined && (
-              <a href={status.fixAt} target="_blank" rel="noreferrer" className={buttonVariants({ size: 'sm' })}>
+              <a href={status.fixAt} target="_blank" rel="noreferrer" className={buttonVariants()}>
                 Turn on Serve
               </a>
             )}
@@ -221,12 +221,11 @@ function AddPhone({ d, onClose }: { d: Devices; onClose: () => void }) {
           {!status?.on && <p className="text-xs text-muted-foreground">{WARNING}</p>}
           {error !== undefined && <Problem>{error}</Problem>}
           <div className="flex justify-end gap-2">
-            <Button size="sm" variant="ghost" onClick={onClose}>
+            <Button variant="ghost" onClick={onClose}>
               Cancel
             </Button>
             {!status?.on && (
               <Button
-                size="sm"
                 disabled={turning || !status}
                 onClick={() => {
                   setTurning(true)
@@ -340,7 +339,7 @@ function AddComputer({ d, onClose }: { d: Devices; onClose: () => void }) {
                   <span className="block truncate text-sm">{computer.name}</span>
                   {computer.version !== undefined && <span className="block text-xs text-muted-foreground">{`OpenAgent ${computer.version}`}</span>}
                 </span>
-                <Button size="sm" variant={at === 0 ? 'default' : 'outline'} aria-label={`Connect ${computer.name}`} onClick={() => setConnecting(computer)}>
+                <Button variant={at === 0 ? 'default' : 'outline'} aria-label={`Connect ${computer.name}`} onClick={() => setConnecting(computer)}>
                   Connect
                 </Button>
               </li>
@@ -353,7 +352,7 @@ function AddComputer({ d, onClose }: { d: Devices; onClose: () => void }) {
             Somewhere else?
             <span className="block text-xs text-muted-foreground">{server ? `At the office, at a friend's: it joins through ${server.label}.` : "At the office, at a friend's: it joins through a server. Add a server first."}</span>
           </span>
-          <Button size="sm" type="button" variant="outline" disabled={!server} onClick={() => setGiving(true)}>
+          <Button type="button" variant="outline" disabled={!server} onClick={() => setGiving(true)}>
             <Ticket className="h-3.5 w-3.5" aria-hidden />
             Give it a code
           </Button>
@@ -438,11 +437,11 @@ export function GiveCode({ d, server, onClose }: { d: Devices; server: ModuleMac
         )}
         <div className="flex justify-end gap-2">
           {!asking && !done && (expired || error !== undefined || !code) && joined === undefined && (
-            <Button size="sm" variant="outline" onClick={() => void again()}>
+            <Button variant="outline" onClick={() => void again()}>
               New code
             </Button>
           )}
-          <Button size="sm" variant={done ? 'default' : 'ghost'} onClick={onClose}>
+          <Button variant={done ? 'default' : 'ghost'} onClick={onClose}>
             {done ? 'Done' : 'Cancel'}
           </Button>
         </div>

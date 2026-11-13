@@ -139,7 +139,7 @@ function ProjectQueue({ read, titled, schedule, names, starts, reload }: { read:
             {/* The project's batch act, as one control: how many, then the button the count qualifies.
                 The chevron sends the top entry alone: a launcher can only ever start one agent. */}
             <StartAgentButton
-              size="xs"
+              size="sm"
               leading={<BatchCount count={count} max={free.length} onChange={next => starts.setCount(project.id, next)} />}
               icon={<FastForward className="h-3.5 w-3.5" aria-hidden />}
               label={count === 1 ? 'Start 1 agent' : `Start ${count} agents`}
@@ -339,7 +339,7 @@ function AddEntry({ project, reload }: { project: ModuleProject; reload: () => P
             ))}
           </SelectContent>
         </Select>
-        <Button type="submit" variant="outline" size="sm" disabled={text.trim() === '' || adding || down}>
+        <Button type="submit" variant="outline" disabled={text.trim() === '' || adding || down}>
           <Plus className="h-3.5 w-3.5" aria-hidden />
           {adding ? 'Adding…' : 'Add to queue'}
         </Button>

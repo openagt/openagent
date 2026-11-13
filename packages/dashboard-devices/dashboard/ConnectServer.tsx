@@ -100,7 +100,7 @@ export function ConnectServer({ d, onClose, onInvite }: { d: Devices; onClose: (
                 ? 'Your own user on the PC, which becomes root without a password: only to install and to update. What runs there afterwards runs as a user of its own, openagent.'
                 : 'root, or a user that becomes root without a password: only to install and to update. What runs there afterwards runs as a user of its own, openagent.'}
             </p>
-            <Button size="sm" type="submit" variant="outline" disabled={testing || !at || !as || knownWords !== undefined}>
+            <Button type="submit" variant="outline" disabled={testing || !at || !as || knownWords !== undefined}>
               {testing ? <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden /> : <PlugZap className="h-3.5 w-3.5" aria-hidden />}
               Test connection
             </Button>
@@ -108,10 +108,10 @@ export function ConnectServer({ d, onClose, onInvite }: { d: Devices; onClose: (
             {kind === 'tailscale' && at !== '' && !/\.ts\.net$/i.test(at) && <p className="text-xs text-muted-foreground">Its full name on Tailscale, as Tailscale shows it, like homepc.tail1234.ts.net: the door is at that name.</p>}
             {current !== undefined && !testing && <TestResult answer={current} address={at} user={as} home={pc} />}
             <Footer>
-              <Button size="sm" type="button" variant="ghost" onClick={() => setStage('where')}>
+              <Button type="button" variant="ghost" onClick={() => setStage('where')}>
                 Back
               </Button>
-              <Button size="sm" type="button" disabled={!current?.ok || !current.value.ok || knownWords !== undefined || (kind === 'tailscale' && !/\.ts\.net$/i.test(at))} onClick={() => setStage('logins')}>
+              <Button type="button" disabled={!current?.ok || !current.value.ok || knownWords !== undefined || (kind === 'tailscale' && !/\.ts\.net$/i.test(at))} onClick={() => setStage('logins')}>
                 Continue
               </Button>
             </Footer>
@@ -141,11 +141,11 @@ export function ConnectServer({ d, onClose, onInvite }: { d: Devices; onClose: (
             )}
             {d.error !== undefined && <Problem>{d.error}</Problem>}
             <Footer>
-              <Button size="sm" variant="ghost" onClick={() => setStage('connect')}>
+              <Button variant="ghost" onClick={() => setStage('connect')}>
                 Back
               </Button>
               {/* Not before this computer has said which OpenAgent it runs: that is the one the server gets. */}
-              <Button size="sm" disabled={d.busy || !d.machines} onClick={() => void install()}>
+              <Button disabled={d.busy || !d.machines} onClick={() => void install()}>
                 {d.busy && <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden />}
                 Install
               </Button>
@@ -248,10 +248,10 @@ function Where({ kind, onKind, doors, through, onVia, onCancel, onNext }: { kind
         </div>
       )}
       <Footer>
-        <Button size="sm" variant="ghost" onClick={onCancel}>
+        <Button variant="ghost" onClick={onCancel}>
           Cancel
         </Button>
-        <Button size="sm" onClick={onNext}>
+        <Button onClick={onNext}>
           Continue
         </Button>
       </Footer>
@@ -377,21 +377,21 @@ function Installing({ d, server, useMine, syncData, onReady, onClose }: { d: Dev
       {d.error !== undefined && <Problem>{d.error}</Problem>}
       <Footer>
         {failed && (
-          <Button size="sm" disabled={d.busy} onClick={() => void d.install(server.address, server.user)}>
+          <Button disabled={d.busy} onClick={() => void d.install(server.address, server.user)}>
             Try again
           </Button>
         )}
         {reason !== undefined && (
-          <Button size="sm" disabled={d.busy} onClick={() => void d.addToMachines(server)}>
+          <Button disabled={d.busy} onClick={() => void d.addToMachines(server)}>
             Try again
           </Button>
         )}
         {done && saved && (loginsFailed || dataFailed) && (
-          <Button size="sm" onClick={onReady}>
+          <Button onClick={onReady}>
             Continue
           </Button>
         )}
-        <Button size="sm" variant="outline" onClick={onClose}>
+        <Button variant="outline" onClick={onClose}>
           Close
         </Button>
       </Footer>
@@ -413,10 +413,10 @@ function Ready({ d, server, onInvite, onClose }: { d: Devices; server: ServerRow
       </div>
       {server.through !== undefined && <RunsThrough host={d.host} server={{ ...server, through: server.through }} label={name} busy={d.busy} onChange={d.act} />}
       <Footer>
-        <Button size="sm" variant="outline" onClick={onInvite}>
+        <Button variant="outline" onClick={onInvite}>
           Add people
         </Button>
-        <Button size="sm" onClick={onClose}>
+        <Button onClick={onClose}>
           Done
         </Button>
       </Footer>

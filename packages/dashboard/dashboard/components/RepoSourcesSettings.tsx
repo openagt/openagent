@@ -70,7 +70,7 @@ export function RepoSourcesSettings() {
             }}
             className="h-8 max-w-xs"
           />
-          <Button type="submit" size="sm" variant="outline" disabled={busy || !owner.trim()}>
+          <Button type="submit" variant="outline" disabled={busy || !owner.trim()}>
             Add
           </Button>
         </form>

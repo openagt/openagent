@@ -74,7 +74,7 @@ function OptionRow({
  *  this with its own handlers via `render`, so everything unknown is forwarded to the Button. */
 function FacetTrigger({ label, active, ...props }: { label: string; active: number } & React.ComponentProps<typeof Button>) {
   return (
-    <Button variant="outline" size="xs" {...props} className={cn('gap-1', active > 0 && 'border-[var(--color-primary)]/50')}>
+    <Button variant="outline" size="sm" {...props} className={cn('gap-1', active > 0 && 'border-[var(--color-primary)]/50')}>
       {label}
       {active > 0 && <span className="rounded bg-primary/15 px-1 text-[10px] text-primary">{active}</span>}
       <ChevronDown className="h-3 w-3 opacity-60" aria-hidden />
@@ -336,7 +336,7 @@ export function TicketFilterBar({
       {(notLinked > 0 || f.unlinked) && (
         <Button
           variant="outline"
-          size="xs"
+          size="sm"
           onClick={() => set({ unlinked: !f.unlinked })}
           className={cn(f.unlinked && 'border-[var(--color-primary)]/50 bg-primary/10')}
           aria-pressed={f.unlinked}
@@ -346,7 +346,7 @@ export function TicketFilterBar({
       )}
 
       {filtered && (
-        <Button variant="ghost" size="xs" onClick={() => onChange({ ...view, filters: defaultView().filters })}>
+        <Button variant="ghost" size="sm" onClick={() => onChange({ ...view, filters: defaultView().filters })}>
           <X className="h-3 w-3" aria-hidden /> Clear
         </Button>
       )}
@@ -356,7 +356,7 @@ export function TicketFilterBar({
         <DropdownMenu>
           <DropdownMenuTrigger
             render={
-              <Button variant="outline" size="xs" className="gap-1">
+              <Button variant="outline" size="sm" className="gap-1">
                 Sort: {SORT_LABELS[view.sort.key]}
                 {view.sort.dir === 'desc' ? <ArrowDown className="h-3 w-3" aria-hidden /> : <ArrowUp className="h-3 w-3" aria-hidden />}
                 <ChevronDown className="h-3 w-3 opacity-60" aria-hidden />

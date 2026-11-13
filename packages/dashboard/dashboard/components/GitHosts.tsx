@@ -42,14 +42,14 @@ export function GitHostsCard() {
           </CardTitle>
           {/* Another account, at the card's title as the coding agents' card has it: the one host's dialog at once, a menu of them with more. */}
           {hosts.length === 1 && (
-            <Button size="sm" variant="outline" aria-label={`Add a ${hosts[0]!.provider!.name} account`} onClick={() => adding.add(hosts[0]!.host)}>
+            <Button variant="outline" aria-label={`Add a ${hosts[0]!.provider!.name} account`} onClick={() => adding.add(hosts[0]!.host)}>
               <Plus className="size-3.5" aria-hidden />
               Add
             </Button>
           )}
           {hosts.length > 1 && (
             <DropdownMenu>
-              <DropdownMenuTrigger render={<Button size="sm" variant="outline" aria-label="Add a git host account" />}>
+              <DropdownMenuTrigger render={<Button variant="outline" aria-label="Add a git host account" />}>
                 <Plus className="size-3.5" aria-hidden />
                 Add
                 <ChevronDown className="size-3 opacity-70" aria-hidden />
@@ -164,10 +164,10 @@ function HostAccounts({ row, onChanged }: { row: GitHostRow; onChanged: () => Pr
                           ? `Runs use @${account.login}. Without it they have no ${p.name} account until you add one.`
                           : `OpenAgent forgets @${account.login}. The login goes on working wherever else it is.`}
                       </p>
-                      <Button size="xs" variant="destructive" disabled={busy} onClick={() => void act(account.login, 'remove', () => sendForgetGitHostAccount(row.host, account.login))}>
+                      <Button size="sm" variant="destructive" disabled={busy} onClick={() => void act(account.login, 'remove', () => sendForgetGitHostAccount(row.host, account.login))}>
                         {busy ? 'Removing…' : 'Remove'}
                       </Button>
-                      <Button size="xs" variant="ghost" disabled={busy} onClick={() => setRemoving(undefined)}>
+                      <Button size="sm" variant="ghost" disabled={busy} onClick={() => setRemoving(undefined)}>
                         Cancel
                       </Button>
                     </div>

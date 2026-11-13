@@ -88,7 +88,7 @@ export function ServerPage({ d, item, onBack, invite = false }: { d: Devices; it
       {(behind || unfinished || failed) && !server.working && (
         <div role="status" className="mb-2 flex flex-wrap items-center justify-between gap-3 rounded-lg border border-border bg-card p-3">
           <p className="text-xs">{failed ? `${machine ? 'The update' : 'The install'} stopped at a step: see Overview.` : behind ? `OpenAgent ${machine!.version} runs there: behind this computer, which runs ${d.machines!.version}.` : 'A step of the install never ran there.'}</p>
-          <Button size="sm" disabled={busy || !d.machines} aria-label={failed ? `Try ${server.address} again` : `Update ${server.address}`} onClick={() => void d.install(server.address, server.user)}>
+          <Button disabled={busy || !d.machines} aria-label={failed ? `Try ${server.address} again` : `Update ${server.address}`} onClick={() => void d.install(server.address, server.user)}>
             {spins && <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden />}
             {failed ? 'Try again' : 'Update'}
           </Button>
@@ -100,7 +100,7 @@ export function ServerPage({ d, item, onBack, invite = false }: { d: Devices; it
         <Part>
           <div className="flex items-center justify-between gap-3">
             <p className="text-sm">{read ? `Who is in (${read.devices.length})` : 'Who is in'}</p>
-            <Button size="sm" disabled={busy} aria-label={`Add person to ${server.address}`} title={firstWay === 'code' ? 'Someone else, by their name: they add this server to their own OpenAgent with the code, and get a user of their own here.' : `Someone on ${hostOf(server.through!)}, by their name: they get a user of their own here, and reach it through ${hostOf(server.through!)}.${firstWay === 'ask' ? ' Or someone with a code at its own door.' : ''}`} onClick={() => (setJoined(undefined), setInviting(firstWay))}>
+            <Button disabled={busy} aria-label={`Add person to ${server.address}`} title={firstWay === 'code' ? 'Someone else, by their name: they add this server to their own OpenAgent with the code, and get a user of their own here.' : `Someone on ${hostOf(server.through!)}, by their name: they get a user of their own here, and reach it through ${hostOf(server.through!)}.${firstWay === 'ask' ? ' Or someone with a code at its own door.' : ''}`} onClick={() => (setJoined(undefined), setInviting(firstWay))}>
               <UserPlus className="h-3.5 w-3.5" aria-hidden />
               Add person
             </Button>
@@ -195,7 +195,7 @@ function Overview({ d, item }: { d: Devices; item: ServerItem }) {
           </button>
         )}
         {done && machine?.version === undefined && (reason !== undefined || !server.adding) && (
-          <Button size="sm" variant="outline" disabled={busy} aria-label={machine ? `Connect ${server.address} again` : `Finish connecting ${server.address}`} onClick={() => void d.addToMachines(server)}>
+          <Button variant="outline" disabled={busy} aria-label={machine ? `Connect ${server.address} again` : `Finish connecting ${server.address}`} onClick={() => void d.addToMachines(server)}>
             {machine ? 'Connect again' : 'Finish connecting'}
           </Button>
         )}
@@ -212,7 +212,7 @@ function Overview({ d, item }: { d: Devices; item: ServerItem }) {
         <div className="pt-4">
           <ConfirmDialog
             trigger={
-              <Button size="sm" variant="outline" className="text-danger" disabled={busy} aria-label={`Remove ${server.address}`} title="Takes the server off this list, and this computer out of the server.">
+              <Button variant="outline" className="text-danger" disabled={busy} aria-label={`Remove ${server.address}`} title="Takes the server off this list, and this computer out of the server.">
                 Remove server
               </Button>
             }
@@ -265,7 +265,7 @@ function Accounts({ host, machine, name, busy }: { host: ModuleHost; machine: Mo
                   <span className="ml-2 text-xs text-muted-foreground">{[account.from !== undefined ? `from ${account.from}` : account.own ? `${name}'s own login` : undefined, account.first ? 'runs take it first' : undefined].filter(Boolean).join(' · ')}</span>
                 </span>
                 {!account.own && (
-                  <Button size="xs" variant="ghost" disabled={busy || removing !== undefined} aria-label={`Remove ${account.name}'s ${title} account on ${name}`} title={account.from !== undefined ? `Runs on ${name} no longer use it. ${account.from} offers it again on the Permissions page.` : `Runs on ${name} no longer use it.`} onClick={() => void remove(agent, account)}>
+                  <Button size="sm" variant="ghost" disabled={busy || removing !== undefined} aria-label={`Remove ${account.name}'s ${title} account on ${name}`} title={account.from !== undefined ? `Runs on ${name} no longer use it. ${account.from} offers it again on the Permissions page.` : `Runs on ${name} no longer use it.`} onClick={() => void remove(agent, account)}>
                     {removing === `${agent} ${account.id}` && <Loader2 className="h-3 w-3 animate-spin" aria-hidden />}
                     Remove
                   </Button>
@@ -317,7 +317,7 @@ function AddPersonWay({ label, at, codeWay, onWay, onClose }: { label: string; a
           <span className="block text-xs text-muted-foreground">You type their name and send them a code; they add it in their own OpenAgent.</span>
         </button>
         <div className="flex justify-end">
-          <Button size="sm" variant="ghost" onClick={onClose}>
+          <Button variant="ghost" onClick={onClose}>
             Cancel
           </Button>
         </div>
@@ -378,11 +378,11 @@ export function PickPeople({ host, server, label, onChange, onClose }: { host: M
           </>
         )}
         <div className="flex justify-end gap-2">
-          <Button size="sm" variant="ghost" onClick={onClose}>
+          <Button variant="ghost" onClick={onClose}>
             Cancel
           </Button>
           {choices.length > 0 && (
-            <Button size="sm" disabled={picked.length === 0 || adding} onClick={() => void add()}>
+            <Button disabled={picked.length === 0 || adding} onClick={() => void add()}>
               {adding && <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden />}
               {picked.length > 1 ? `Add ${picked.length} people` : 'Add person'}
             </Button>
@@ -427,7 +427,7 @@ export function ComputersThrough({ host, machine, busy, everyMs }: { host: Modul
               {computer.added ? (
                 <span className="shrink-0 text-muted-foreground">In "Run on"</span>
               ) : (
-                <Button size="sm" variant="outline" className="shrink-0" disabled={busy || adding !== undefined} aria-label={`Add ${computer.name} through ${machine.label}`} onClick={() => void add(computer.id)}>
+                <Button variant="outline" className="shrink-0" disabled={busy || adding !== undefined} aria-label={`Add ${computer.name} through ${machine.label}`} onClick={() => void add(computer.id)}>
                   {adding === computer.id && <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden />}
                   Add
                 </Button>
@@ -463,7 +463,7 @@ function DeviceLine({ device, address, busy, ownKey, onRemove }: { device: Devic
         )}
       </div>
       {!own && (
-        <Button size="sm" variant="ghost" disabled={busy} aria-label={`Remove ${device.name} from ${address}`} onClick={onRemove}>
+        <Button variant="ghost" disabled={busy} aria-label={`Remove ${device.name} from ${address}`} onClick={onRemove}>
           Remove
         </Button>
       )}
@@ -514,7 +514,7 @@ function People({ d, address, ownDevice, through, picks = false }: { d: Devices;
                 {!person.owner && (
                   <ConfirmDialog
                     trigger={
-                      <Button size="sm" variant="ghost" disabled={busy || removing} aria-label={`Remove ${person.name} from ${address}`}>
+                      <Button variant="ghost" disabled={busy || removing} aria-label={`Remove ${person.name} from ${address}`}>
                         Remove person
                       </Button>
                     }

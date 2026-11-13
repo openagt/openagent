@@ -52,7 +52,7 @@ export function BackupNotice({ onChanged }: { onChanged?: () => void }) {
                     </li>
                   ))}
                 </ul>
-                {row ? <HostFix row={row} onChanged={reloadHosts} size="xs" /> : <p className="text-xs text-muted-foreground">{`No package answers for ${host} yet.`}</p>}
+                {row ? <HostFix row={row} onChanged={reloadHosts} size="sm" /> : <p className="text-xs text-muted-foreground">{`No package answers for ${host} yet.`}</p>}
               </>
             ) : (
               <ul className="space-y-2">
@@ -117,7 +117,7 @@ function GapRow({ gap, at, onChanged }: { gap: BackupGap; at: SendAsHost; onChan
       </p>
       <div className="flex flex-wrap items-center gap-2">
         <SendAs host={at} value={login} onChange={setPicked} disabled={busy} label="Back up as" />
-        <Button size="xs" disabled={busy || login === undefined} onClick={() => void backUp()}>
+        <Button size="sm" disabled={busy || login === undefined} onClick={() => void backUp()}>
           {busy && <Loader2 className="size-3 animate-spin" aria-hidden />}
           {busy ? 'Backing up…' : 'Back up'}
         </Button>

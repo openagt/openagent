@@ -118,10 +118,10 @@ export function TicketEditor({
         </p>
       )}
       <div className="flex justify-end gap-2">
-        <Button type="button" variant="ghost" size="sm" onClick={onCancel} disabled={saving}>
+        <Button type="button" variant="ghost" onClick={onCancel} disabled={saving}>
           Cancel
         </Button>
-        <Button type="submit" size="sm" disabled={!ready}>
+        <Button type="submit" disabled={!ready}>
           {saving ? 'Saving…' : file === undefined ? 'Create ticket' : 'Save'}
         </Button>
       </div>

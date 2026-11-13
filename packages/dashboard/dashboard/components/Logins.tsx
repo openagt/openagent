@@ -127,7 +127,7 @@ export function hostWords(row: GitHostRow): string {
 }
 
 /** A press that fixes one thing: its button, what it is doing while it does, the command it runs, why it failed. */
-export function FixAction({ label, busy, busyWords, command, failed, onPress, size = 'sm', variant }: { label: string; busy: boolean; busyWords: string; command?: string; failed?: string; onPress: () => void; size?: 'sm' | 'xs' | undefined; variant?: 'outline' | undefined }) {
+export function FixAction({ label, busy, busyWords, command, failed, onPress, size = 'default', variant }: { label: string; busy: boolean; busyWords: string; command?: string; failed?: string; onPress: () => void; size?: 'default' | 'sm' | undefined; variant?: 'outline' | undefined }) {
   return (
     <div className="min-w-0 space-y-1">
       {/* Busy, the press stays with the focus it was pressed with, and says it is waiting beside it. */}
@@ -169,7 +169,7 @@ function agentBusyWords(state: AgentState): string {
 }
 
 /** The agent's fix as one press: [Install Claude Code] or [Log this computer in to Claude Code], with the command; the command alone where it is typed; nothing when nothing fixes it. */
-export function AgentFix({ state, onChanged, size, variant }: { state: AgentState; onChanged: () => void; size?: 'sm' | 'xs' | undefined; variant?: 'outline' | undefined }) {
+export function AgentFix({ state, onChanged, size, variant }: { state: AgentState; onChanged: () => void; size?: 'default' | 'sm' | undefined; variant?: 'outline' | undefined }) {
   const [error, setError] = useState<string | undefined>()
   if (state.ready || !state.fix) return null
   if (state.typed)

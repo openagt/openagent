@@ -91,7 +91,7 @@ export function AgentsPage() {
       title="Agents"
       description="An agent is a name, a set of skills and a set of accounts. Pick one under the message box; it works in any project, or in none."
       actions={
-        <Button ref={newAgent} size="sm" disabled={!view || adding} onClick={() => setAdding(true)}>
+        <Button ref={newAgent} disabled={!view || adding} onClick={() => setAdding(true)}>
           <Plus className="size-3.5" aria-hidden />
           New agent
         </Button>
@@ -126,14 +126,14 @@ function AgentCard({ agent, view, devices, onChanged, onRemoved }: { agent: Agen
         <div className="flex items-center gap-2">
           <Bot className="size-4 shrink-0 text-muted-foreground" aria-hidden />
           <CardTitle className="min-w-0 flex-1 truncate text-base">{agent.name}</CardTitle>
-          <Button size="xs" variant="ghost" aria-label={`Edit ${agent.name}`} onClick={() => setEditing(true)}>
+          <Button size="sm" variant="ghost" aria-label={`Edit ${agent.name}`} onClick={() => setEditing(true)}>
             <Pencil className="size-3.5" aria-hidden />
             Edit
           </Button>
           {!isDefault && (
             <ConfirmDialog
               trigger={
-                <Button size="xs" variant="ghost" className="hover:text-danger" aria-label={`Remove ${agent.name}`}>
+                <Button size="sm" variant="ghost" className="hover:text-danger" aria-label={`Remove ${agent.name}`}>
                   <Trash2 className="size-3.5" aria-hidden />
                   Remove
                 </Button>
@@ -219,7 +219,7 @@ function OnDevices({ login, devices, onCopied }: { login: string; devices: Agent
       })}
       {failed && (
         <li>
-          <Button size="xs" variant="ghost" className="-ml-2 font-normal" disabled={copying} onClick={() => void copy()}>
+          <Button size="sm" variant="ghost" className="-ml-2 font-normal" disabled={copying} onClick={() => void copy()}>
             {copying ? <Loader2 className="size-3 animate-spin" aria-hidden /> : <RefreshCw className="size-3" aria-hidden />}
             {copying ? 'Copying…' : 'Copy again'}
           </Button>
@@ -312,10 +312,10 @@ function AgentEditor({ agent, view, onAccounts, onDone }: { agent?: AgentRecord;
             </p>
           )}
           <div className="flex items-center justify-end gap-2">
-            <Button size="sm" variant="ghost" disabled={busy} onClick={() => void onDone(false)}>
+            <Button variant="ghost" disabled={busy} onClick={() => void onDone(false)}>
               Cancel
             </Button>
-            <Button type="submit" form={formId} size="sm" disabled={busy}>
+            <Button type="submit" form={formId} disabled={busy}>
               {busy && <Loader2 className="size-3.5 animate-spin" aria-hidden />}
               {busy ? 'Saving…' : 'Save'}
             </Button>
@@ -407,7 +407,7 @@ function AgentEditor({ agent, view, onAccounts, onDone }: { agent?: AgentRecord;
                 </SelectContent>
               </Select>
               {view.github && (
-                <Button type="button" size="sm" variant="outline" disabled={busy} onClick={() => addingAccount.add(view.github!.host)}>
+                <Button type="button" variant="outline" disabled={busy} onClick={() => addingAccount.add(view.github!.host)}>
                   <Plus className="size-3.5" aria-hidden />
                   Add account
                 </Button>

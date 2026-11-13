@@ -369,7 +369,7 @@ export function StartAgentForm({
             title={`Your ${missingThere.join(' and ')} ${missingThere.length === 1 ? 'login is' : 'logins are'} not on ${name} yet.`}
             detail={`Runs there use your own logins. Log ${missingThere.length === 1 ? 'it' : 'them'} in on its page, or start your first run there from your page on ${reachedThrough(machine.url) ?? 'its server'}, which copies yours.`}
             actions={
-              <Button type="button" size="xs" onClick={() => openSettings('devices', machine.id)}>
+              <Button type="button" size="sm" onClick={() => openSettings('devices', machine.id)}>
                 {`Log in on ${name}`}
               </Button>
             }
@@ -387,7 +387,7 @@ export function StartAgentForm({
                   title={`${agentName} is not installed on ${name}.`}
                   detail={`Update ${name} to get it.`}
                   actions={
-                    <Button type="button" size="xs" onClick={() => openSettings('devices', machine.id)}>
+                    <Button type="button" size="sm" onClick={() => openSettings('devices', machine.id)}>
                       {`Update ${name}`}
                     </Button>
                   }
@@ -396,7 +396,7 @@ export function StartAgentForm({
             ) : (
               <Refusal
                 key={problem}
-                {...(agent && !agent.ready ? { title: agentWords(agent), actions: <AgentFix state={agent} onChanged={() => void reloadAgent()} size="xs" /> } : said(problem))}
+                {...(agent && !agent.ready ? { title: agentWords(agent), actions: <AgentFix state={agent} onChanged={() => void reloadAgent()} size="sm" /> } : said(problem))}
               />
             )
           ) : (
@@ -445,7 +445,7 @@ function OpenInEditor({ projectId }: { projectId: string }) {
   const [opened, setOpened] = useState(false)
   return (
     <>
-      <Button type="button" size="xs" disabled={busy} onClick={() => void run(() => sendOpenInApp(projectId, 'editor'), 'Failed to open.').then(outcome => setOpened(outcome.ok))}>
+      <Button type="button" size="sm" disabled={busy} onClick={() => void run(() => sendOpenInApp(projectId, 'editor'), 'Failed to open.').then(outcome => setOpened(outcome.ok))}>
         Open in your editor
       </Button>
       {error ? (

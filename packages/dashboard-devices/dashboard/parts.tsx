@@ -246,11 +246,11 @@ export function RenameForm({ name, rename, onClose }: { name: string; rename: Re
     <div className="space-y-1">
       <form className="flex flex-wrap items-center gap-2" onSubmit={event => void save(event)}>
         <Input name="device-name" autoFocus aria-label="Name" value={picked} maxLength={60} onChange={event => setPicked(event.target.value)} className="h-8 w-56" />
-        <Button size="sm" type="submit" disabled={busy || !picked.trim()}>
+        <Button type="submit" disabled={busy || !picked.trim()}>
           {busy && <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden />}
           Save
         </Button>
-        <Button size="sm" type="button" variant="ghost" onClick={onClose}>
+        <Button type="button" variant="ghost" onClick={onClose}>
           Cancel
         </Button>
       </form>
@@ -278,7 +278,7 @@ export function Head({ icon: Icon, name, badge, facts, rename }: { icon: Compone
           <Facts>{facts}</Facts>
         </div>
         {rename && !renaming && (
-          <Button ref={press} size="sm" variant="ghost" onClick={open}>
+          <Button ref={press} variant="ghost" onClick={open}>
             <Pencil className="h-3.5 w-3.5" aria-hidden />
             Rename
           </Button>

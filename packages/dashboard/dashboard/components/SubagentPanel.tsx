@@ -78,7 +78,7 @@ function Shown({ row, projectId, events, onOpenAgent }: { row: SubagentRow; proj
       </PaneTitle>
       {runId && onOpenAgent && (
         <PaneActions>
-          <Button variant="ghost" size="sm" className="h-7 text-xs text-muted-foreground" onClick={() => onOpenAgent(runId)}>
+          <Button variant="ghost" className="h-7 text-xs text-muted-foreground" onClick={() => onOpenAgent(runId)}>
             Open its page
           </Button>
         </PaneActions>

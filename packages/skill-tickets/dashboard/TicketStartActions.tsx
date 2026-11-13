@@ -76,7 +76,7 @@ export function TicketStartActions({
     disabled: queued === 'running' || queued === 'done' || action.done,
     onSelect: () => void queue(action.key),
   }))
-  const size = compact ? 'xs' : 'sm'
+  const size = compact ? 'sm' : 'default'
   const iconClass = compact ? 'h-3 w-3' : 'h-3.5 w-3.5'
   return (
     <>

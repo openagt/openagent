@@ -154,7 +154,7 @@ function SigningIn({ agent, adding, noBrowser, onChanged }: { agent: (typeof AGE
         <p className="text-muted-foreground">Type this code at the page below, signed in to the account to add. If it asks, first allow device code sign-in in ChatGPT's security settings.</p>
         <div className="flex flex-wrap items-center gap-2">
           <code className="rounded bg-muted px-2 py-1 font-mono text-sm font-medium tracking-wider">{adding.code}</code>
-          <Button size="xs" variant="ghost" aria-label="Copy the code" onClick={() => copy(adding.code!)}>
+          <Button size="sm" variant="ghost" aria-label="Copy the code" onClick={() => copy(adding.code!)}>
             {copyIcon}
           </Button>
           <a href={adding.url} target="_blank" rel="noreferrer" className="text-[var(--color-primary)] underline-offset-2 hover:underline">
@@ -177,7 +177,7 @@ function SigningIn({ agent, adding, noBrowser, onChanged }: { agent: (typeof AGE
           }}
         >
           <Input name="login-code" aria-label="Code from Claude" placeholder="2. Paste the code it shows" value={code} onChange={event => setCode(event.target.value)} className="h-9 min-w-0 grow basis-40 text-sm" />
-          <Button size="sm" type="submit" disabled={code.trim() === '' || adding.checking === true || down}>
+          <Button type="submit" disabled={code.trim() === '' || adding.checking === true || down}>
             {adding.checking ? 'Checking…' : 'Done'}
           </Button>
         </form>
@@ -192,7 +192,7 @@ function SigningIn({ agent, adding, noBrowser, onChanged }: { agent: (typeof AGE
     <div role="status" className="flex flex-wrap items-center gap-x-2 gap-y-1">
       <p className="text-xs text-muted-foreground">{noBrowser ? `Adding ${adding.name}'s account: getting the page to sign in at…` : agent.adding(adding.name)}</p>
       {adding.url !== undefined && (
-        <Button size="xs" variant="ghost" onClick={() => copy(adding.url!)}>
+        <Button size="sm" variant="ghost" onClick={() => copy(adding.url!)}>
           {copyIcon}
           {copied ? 'Copied' : 'Copy link for a private window'}
         </Button>
@@ -245,7 +245,7 @@ function AddAccount({ agent, now, failed, from, field, onChanged, onClose }: { a
       ) : from !== undefined && !here ? (
         <>
           <p className="text-sm">{agent.easiest(from)}</p>
-          <Button size="sm" variant="outline" onClick={() => setHere(true)}>
+          <Button variant="outline" onClick={() => setHere(true)}>
             Sign in here instead
           </Button>
         </>
@@ -259,7 +259,7 @@ function AddAccount({ agent, now, failed, from, field, onChanged, onClose }: { a
             }}
           >
             <Input ref={field} autoFocus={opened} name="account-name" aria-label="Whose account" placeholder="Whose account, e.g. Dani" value={name} onChange={event => setName(event.target.value)} className="h-8 min-w-0 grow basis-32" />
-            <Button size="sm" type="submit" disabled={busy || down || name.trim() === ''}>
+            <Button type="submit" disabled={busy || down || name.trim() === ''}>
               {agent.logIn}
             </Button>
           </form>
@@ -272,7 +272,7 @@ function AddAccount({ agent, now, failed, from, field, onChanged, onClose }: { a
         </p>
       )}
       <div className="flex justify-end">
-        <Button size="sm" variant="ghost" onClick={onClose}>
+        <Button variant="ghost" onClick={onClose}>
           Cancel
         </Button>
       </div>
@@ -408,10 +408,10 @@ function AccountRow({
                 {open.asking === 'remove' && account.from !== undefined ? ` It stays off until you press Allow on ${account.from}.` : ''}
               </p>
               <div role="group" aria-label={open.asking === 'logout' ? `Log out ${shown}` : `Remove ${shown}'s account`} className="flex items-center gap-1">
-                <Button size="xs" variant="destructive" disabled={busy} onClick={() => onPress(open.asking === 'logout' ? ['logout', agent.id] : ['remove', agent.id, account.name])}>
+                <Button size="sm" variant="destructive" disabled={busy} onClick={() => onPress(open.asking === 'logout' ? ['logout', agent.id] : ['remove', agent.id, account.name])}>
                   {open.asking === 'logout' ? 'Log out' : 'Remove'}
                 </Button>
-                <Button size="xs" variant="ghost" disabled={busy} onClick={() => onOpen({})}>
+                <Button size="sm" variant="ghost" disabled={busy} onClick={() => onOpen({})}>
                   Cancel
                 </Button>
               </div>
@@ -421,18 +421,18 @@ function AccountRow({
               {more !== '' && <p className="text-xs text-muted-foreground">{more}</p>}
               <div className="-ml-2 flex items-center gap-1">
                 {!first && (
-                  <Button variant="ghost" size="xs" disabled={busy} aria-label={`Use ${shown} first`} onClick={() => onPress(['use-first', agent.id, account.name])}>
+                  <Button variant="ghost" size="sm" disabled={busy} aria-label={`Use ${shown} first`} onClick={() => onPress(['use-first', agent.id, account.name])}>
                     Use first
                   </Button>
                 )}
                 {account.own && (
-                  <Button variant="ghost" size="xs" className="hover:text-danger" disabled={busy} aria-label={`Log out ${shown}`} onClick={() => onOpen({ asking: 'logout' })}>
+                  <Button variant="ghost" size="sm" className="hover:text-danger" disabled={busy} aria-label={`Log out ${shown}`} onClick={() => onOpen({ asking: 'logout' })}>
                     Log out
                   </Button>
                 )}
                 {/* One a computer hands over as it is would be back within a minute: it is removed there. */}
                 {!account.own && !account.comesBack && (
-                  <Button variant="ghost" size="xs" className="hover:text-danger" disabled={busy} aria-label={`Remove ${shown}'s account`} onClick={() => onOpen({ asking: 'remove' })}>
+                  <Button variant="ghost" size="sm" className="hover:text-danger" disabled={busy} aria-label={`Remove ${shown}'s account`} onClick={() => onOpen({ asking: 'remove' })}>
                     Remove
                   </Button>
                 )}
@@ -546,7 +546,7 @@ export function AccountsCard({ accountWhere }: ModuleCardProps) {
           {/* Another account, at the card's title: whose agent it is for, then its sign-in in a dialog. With none yet, the presses are in the card. */}
           {list?.ok && !none && (
             <DropdownMenu>
-              <DropdownMenuTrigger ref={addPress} render={<Button size="sm" variant="outline" aria-label="Add an account" />}>
+              <DropdownMenuTrigger ref={addPress} render={<Button variant="outline" aria-label="Add an account" />}>
                 <Plus className="size-3.5" aria-hidden />
                 Add
                 <ChevronDown className="size-3 opacity-70" aria-hidden />
@@ -597,7 +597,7 @@ export function AccountsCard({ accountWhere }: ModuleCardProps) {
             <p className="min-w-0 grow basis-48 text-sm text-muted-foreground">No account yet. Runs need one to start.</p>
             <div className="flex flex-wrap gap-2">
               {AGENTS.map(agent => (
-                <Button key={agent.id} size="sm" variant="outline" onClick={() => setNaming(agent.id)}>
+                <Button key={agent.id} variant="outline" onClick={() => setNaming(agent.id)}>
                   <agent.Logo className="size-3.5" />
                   Add a {agent.account} account
                 </Button>

@@ -91,7 +91,7 @@ export function ProjectSkillsLine({ projectId, onChanged }: { projectId: string;
           <span>
             <Subject names={newer} /> {newer.length === 1 ? 'has a newer version' : 'have newer versions'}.
           </span>
-          <Button type="button" variant="outline" size="xs" className="shrink-0" disabled={pending !== null} onClick={() => void update()}>
+          <Button type="button" variant="outline" size="sm" className="shrink-0" disabled={pending !== null} onClick={() => void update()}>
             {pending === 'update' ? 'Updating…' : 'Update'}
           </Button>
         </span>
@@ -102,7 +102,7 @@ export function ProjectSkillsLine({ projectId, onChanged }: { projectId: string;
             <Subject names={here} /> {is(here)} {skills.remote ? 'on this computer only' : 'not committed'}, so your agents do not have {it(here)} yet.
             {skills.local && skills.remote && ' Or pick My local branch when you start an agent.'}
           </span>
-          <Button type="button" variant="outline" size="xs" className="shrink-0" disabled={pending !== null} onClick={() => void send()}>
+          <Button type="button" variant="outline" size="sm" className="shrink-0" disabled={pending !== null} onClick={() => void send()}>
             {pending === 'send' ? 'Sending…' : sendWord(skills)}
           </Button>
         </span>
@@ -112,7 +112,7 @@ export function ProjectSkillsLine({ projectId, onChanged }: { projectId: string;
           <span>
             <Subject names={waiting} /> {is(waiting)} in pull request #{skills.request!.number}. Your agents get {it(waiting)} once it is merged.
           </span>
-          <a href={skills.request!.url} target="_blank" rel="noreferrer" className={buttonVariants({ variant: 'outline', size: 'xs', className: 'shrink-0' })}>
+          <a href={skills.request!.url} target="_blank" rel="noreferrer" className={buttonVariants({ variant: 'outline', size: 'sm', className: 'shrink-0' })}>
             Open #{skills.request!.number}
           </a>
         </span>
@@ -276,11 +276,11 @@ function SkillCards({ projectId, skills, onDone }: { projectId: string; skills: 
         {error && <p className="text-danger">{saved.written.length + saved.removed.length > 0 ? `Saved in the project's folder, not sent: ${error}` : error}</p>}
         <div className="flex justify-end gap-2 pt-1">
           {error && saved.written.length + saved.removed.length > 0 && skills.git && (
-            <Button type="button" size="sm" disabled={busy} onClick={() => void send([...saved.written, ...saved.removed])}>
+            <Button type="button" disabled={busy} onClick={() => void send([...saved.written, ...saved.removed])}>
               {busy ? 'Sending…' : 'Send again'}
             </Button>
           )}
-          <Button type="button" variant="outline" size="sm" disabled={busy} onClick={onDone}>
+          <Button type="button" variant="outline" disabled={busy} onClick={onDone}>
             Done
           </Button>
         </div>
@@ -320,10 +320,10 @@ function SkillCards({ projectId, skills, onDone }: { projectId: string; skills: 
           <span className="mr-auto text-xs text-muted-foreground">
             {nothing ? 'Nothing to change.' : [write.length > 0 ? `${count(write.length, 'skill', 'skills')} to write` : '', remove.length > 0 ? `${count(remove.length, 'skill', 'skills')} to delete` : ''].filter(Boolean).join(', ') + '.'}
           </span>
-          <Button type="button" variant="outline" size="sm" disabled={busy || nothing} onClick={cancel}>
+          <Button type="button" variant="outline" disabled={busy || nothing} onClick={cancel}>
             Cancel
           </Button>
-          <Button type="button" size="sm" disabled={busy || nothing} onClick={() => void save()}>
+          <Button type="button" disabled={busy || nothing} onClick={() => void save()}>
             {busy ? 'Saving…' : saveWord}
           </Button>
         </div>

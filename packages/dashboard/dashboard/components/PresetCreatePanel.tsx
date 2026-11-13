@@ -122,10 +122,10 @@ export function PresetCreatePanel({
         </div>
       )}
       <div className="mt-1 flex items-center justify-end gap-2">
-        <Button type="button" variant="ghost" size="sm" onClick={onCancel}>
+        <Button type="button" variant="ghost" onClick={onCancel}>
           Cancel
         </Button>
-        <Button type="submit" size="sm" disabled={busy || !trimmedLabel || !trimmedPrompt}>
+        <Button type="submit" disabled={busy || !trimmedLabel || !trimmedPrompt}>
           Save prompt
         </Button>
       </div>

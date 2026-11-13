@@ -107,7 +107,7 @@ export function SkillsCard({ projects, onSelectProject }: { projects: ProjectSum
           <Puzzle className="h-4 w-4 text-muted-foreground" aria-hidden />
           Skills
           {updatable.length > 1 && (
-            <Button variant="outline" size="xs" className="ml-auto font-normal" disabled={updatingAll} onClick={() => void updateAll()} title={`Take the newer versions in ${updatable.map(read => read.project.name).join(', ')}`}>
+            <Button variant="outline" size="sm" className="ml-auto font-normal" disabled={updatingAll} onClick={() => void updateAll()} title={`Take the newer versions in ${updatable.map(read => read.project.name).join(', ')}`}>
               {updatingAll ? 'Updating…' : `Update all (${updatable.length})`}
             </Button>
           )}
@@ -161,16 +161,16 @@ function Row({ read, reload, onOpen }: { read: Read; reload: () => Promise<void>
             // None yet: nothing is up to date, there is nothing. Add opens the Skills page to pick them.
             <>
               <span className="text-xs text-muted-foreground">no skills yet</span>
-              <Button variant="outline" size="xs" onClick={() => openSettings(SKILLS_ENTRY, project.id)} title="Open the project's Skills page">
+              <Button variant="outline" size="sm" onClick={() => openSettings(SKILLS_ENTRY, project.id)} title="Open the project's Skills page">
                 Add
               </Button>
             </>
           ) : says.newer.length > 0 ? (
-            <Button variant="outline" size="xs" disabled={pending} onClick={() => void act(() => updateSkills(project.id, skills, run))} title={`Newer versions: ${says.newer.join(', ')}`}>
+            <Button variant="outline" size="sm" disabled={pending} onClick={() => void act(() => updateSkills(project.id, skills, run))} title={`Newer versions: ${says.newer.join(', ')}`}>
               {pending ? 'Updating…' : `Update ${says.newer.length}`}
             </Button>
           ) : says.sending ? (
-            <Button variant="outline" size="xs" disabled={pending} onClick={() => void act(() => run(() => sendProjectSkills(project.id), 'Could not send the skills.'))} title={`Not where agents start from yet: ${says.here.join(', ')}`}>
+            <Button variant="outline" size="sm" disabled={pending} onClick={() => void act(() => run(() => sendProjectSkills(project.id), 'Could not send the skills.'))} title={`Not where agents start from yet: ${says.here.join(', ')}`}>
               {pending ? 'Sending…' : sendWord(skills)}
             </Button>
           ) : says.inRequest ? (

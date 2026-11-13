@@ -131,7 +131,7 @@ export function OnboardingChecklist({
         description: p.installed && p.accounts.length === 0 ? `OpenAgent pushes and opens ${p.requestWord}s with an account of its own, never your own login.` : hostWords(row),
         done,
         ...(runs ? { doneNote: `@${runs}` } : {}),
-        action: <HostFix row={row} onChanged={reloadMissing} size="sm" />,
+        action: <HostFix row={row} onChanged={reloadMissing} size="default" />,
       },
     ]
   })
@@ -171,7 +171,7 @@ export function OnboardingChecklist({
             description: 'The agent queue: each entry is work the agent picks up on its own, so a filled queue is what lets it keep going without you.',
             done: (data?.totals.openTodos ?? 0) > 0,
             action: (
-              <Button size="sm" variant="outline" onClick={() => services.openPage('queue')}>
+              <Button variant="outline" onClick={() => services.openPage('queue')}>
                 Open the Queue
               </Button>
             ),
@@ -220,7 +220,7 @@ export function OnboardingChecklist({
         ) : permission === 'unsupported' ? (
           <span className="text-xs text-muted-foreground">Not supported by this browser</span>
         ) : (
-          <Button size="sm" variant="outline" onClick={enableBrowserNotifications}>
+          <Button variant="outline" onClick={enableBrowserNotifications}>
             Turn on
           </Button>
         ),
@@ -248,7 +248,6 @@ export function OnboardingChecklist({
           )}
           {ready && targetProjectId && (
             <Button
-              size="sm"
               onClick={() => {
                 updatePreferences({ onboardingDismissed: true })
                 onSelectProject(targetProjectId)
@@ -258,7 +257,7 @@ export function OnboardingChecklist({
             </Button>
           )}
           <Tooltip>
-            <TooltipTrigger render={<Button variant="ghost" size="sm" onClick={() => updatePreferences({ onboardingDismissed: true })} aria-label={HIDE} />}>
+            <TooltipTrigger render={<Button variant="ghost" onClick={() => updatePreferences({ onboardingDismissed: true })} aria-label={HIDE} />}>
               <X className="h-4 w-4" aria-hidden />
             </TooltipTrigger>
             <TooltipContent>{HIDE}</TooltipContent>

@@ -190,16 +190,16 @@ function Row({ hot, showProject, reload }: { hot: HotTicket; showProject: boolea
   const actions = lane === 'stale' ? (
     <>
       {holder && (
-        <Button variant="ghost" size="xs" onClick={() => host.openAgent(project.id, holder.id)} title="Open the run that claimed it, to go on with its work">
+        <Button variant="ghost" size="sm" onClick={() => host.openAgent(project.id, holder.id)} title="Open the run that claimed it, to go on with its work">
           Continue
         </Button>
       )}
-      <Button variant="ghost" size="xs" disabled={releasing || down} onClick={() => void release()} title="Lift the claim: any agent may take the ticket again">
+      <Button variant="ghost" size="sm" disabled={releasing || down} onClick={() => void release()} title="Lift the claim: any agent may take the ticket again">
         {releasing ? 'Releasing…' : 'Release'}
       </Button>
     </>
   ) : lane !== 'working' && !heldBack(ticket) ? (
-    <LinkActions projects={[project.id]} targets={[{ projectId: project.id, links: [ticketLink(ticket)] }]} resetKey={`${project.id}:${ticket.file}`} size="xs" variant="ghost" />
+    <LinkActions projects={[project.id]} targets={[{ projectId: project.id, links: [ticketLink(ticket)] }]} resetKey={`${project.id}:${ticket.file}`} size="sm" variant="ghost" />
   ) : null
   const { Icon, says, tone } = stateOf(hot)
   // The short fact at the row's end, in grey.

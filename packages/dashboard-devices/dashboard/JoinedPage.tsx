@@ -60,7 +60,7 @@ export function JoinedPage({ d, item, onBack }: { d: Devices; item: JoinedItem; 
           <div className="pt-4">
             <ConfirmDialog
               trigger={
-                <Button size="sm" variant="outline" className="text-danger" disabled={busy} aria-label={`Remove ${item.name}`}>
+                <Button variant="outline" className="text-danger" disabled={busy} aria-label={`Remove ${item.name}`}>
                   Remove server
                 </Button>
               }
@@ -124,7 +124,7 @@ function DevicesThere({ d, machine, name, devices, line, busy, onBusy, onError }
                 {own && <p className="text-muted-foreground">This computer. To take it out, remove the server.</p>}
               </div>
               {!own && (
-                <Button size="sm" variant="ghost" disabled={busy} aria-label={`Remove ${device.name} from ${name}`} onClick={() => void remove(device)}>
+                <Button variant="ghost" disabled={busy} aria-label={`Remove ${device.name} from ${name}`} onClick={() => void remove(device)}>
                   Remove
                 </Button>
               )}
@@ -188,12 +188,12 @@ export function OtherPage({ d, item, onBack }: { d: Devices; item: OtherItem; on
             {read !== undefined && !read.ok && <p className="text-xs text-muted-foreground">{`${name} did not say: ${read.error}`}</p>}
             <ul aria-label={`Your logins on ${name}`} className="space-y-3 text-xs">
               <LoginLine label="GitHub" words={otherWords('GitHub', row?.github, name)} said={undefined}>
-                <Button size="sm" variant="outline" disabled={busy || account === undefined} aria-label={`Log in to GitHub on ${name} instead`} title={account !== undefined ? `Copies the login of ${account} from this computer to your own OpenAgent on ${name}.${copies}` : noLogin} onClick={() => void act(() => otherLogin(host, machine.url, 'github'))}>
+                <Button variant="outline" disabled={busy || account === undefined} aria-label={`Log in to GitHub on ${name} instead`} title={account !== undefined ? `Copies the login of ${account} from this computer to your own OpenAgent on ${name}.${copies}` : noLogin} onClick={() => void act(() => otherLogin(host, machine.url, 'github'))}>
                   {row?.github === undefined ? 'Log in here' : 'Log in here instead'}
                 </Button>
               </LoginLine>
               <LoginLine label="Claude" words={making.asking ? "Claude: say yes in the page this computer's browser opened." : making.working ? `Claude: one moment, ${name} is being told.` : otherWords('Claude', row?.claude, name)} said={making.working ? undefined : making.said}>
-                <Button size="sm" variant="outline" disabled={busy || (making.working && making.asking !== true)} aria-label={`Log in to Claude on ${name} instead`} title={`Opens this computer's browser, where you say yes once. The login is made for your OpenAgent on ${name} alone and lasts a year.${copies}`} onClick={() => void act(() => otherLogin(host, machine.url, 'claude'))}>
+                <Button variant="outline" disabled={busy || (making.working && making.asking !== true)} aria-label={`Log in to Claude on ${name} instead`} title={`Opens this computer's browser, where you say yes once. The login is made for your OpenAgent on ${name} alone and lasts a year.${copies}`} onClick={() => void act(() => otherLogin(host, machine.url, 'claude'))}>
                   {making.asking ? 'Start over' : row?.claude === undefined ? 'Log in here' : 'Log in here instead'}
                 </Button>
               </LoginLine>
@@ -201,7 +201,6 @@ export function OtherPage({ d, item, onBack }: { d: Devices; item: OtherItem; on
           </Part>
           <div className="pt-4">
             <Button
-              size="sm"
               variant="outline"
               className="text-danger"
               disabled={busy}

@@ -402,7 +402,7 @@ export const Composer = forwardRef<ComposerHandle, {
       </p>
       <Button
         type="button"
-        size="xs"
+        size="sm"
         variant="outline"
         onClick={() => {
           setToldNow(selectedMachine!.id)

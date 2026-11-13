@@ -251,7 +251,7 @@ export function ProjectPicker({
   const name = look === 'sidebar' ? `Project: ${pending ? 'loading' : shown}` : look === 'add' ? none.label : 'The session works in'
   const button =
     look === 'add' ? (
-      <button type="button" className={buttonVariants({ size: 'sm' })}>
+      <button type="button" className={buttonVariants()}>
         <FolderPlus className="h-3.5 w-3.5" aria-hidden />
         {none.label}
       </button>

@@ -124,7 +124,7 @@ export function ThisComputer({ d, start }: { d: Devices; /** The start page: not
         </div>
         {/* Its owner names it, and everyone sees that name: a person the owner invited has no Rename. */}
         {!renaming && d.machines?.renames === true && (
-          <Button ref={renamePress} size="sm" variant="ghost" onClick={rename}>
+          <Button ref={renamePress} variant="ghost" onClick={rename}>
             <Pencil className="h-3.5 w-3.5" aria-hidden />
             Rename
           </Button>
@@ -158,7 +158,7 @@ export function ThisComputer({ d, start }: { d: Devices; /** The start page: not
             <div className="space-y-2 py-1 pl-6">
               <Problem>{status.problem}</Problem>
               {status.fixAt !== undefined && (
-                <a href={status.fixAt} target="_blank" rel="noreferrer" className={buttonVariants({ size: 'sm', variant: 'outline' })}>
+                <a href={status.fixAt} target="_blank" rel="noreferrer" className={buttonVariants({ variant: 'outline' })}>
                   Turn on Serve
                 </a>
               )}
@@ -182,10 +182,10 @@ export function ThisComputer({ d, start }: { d: Devices; /** The start page: not
             <div role="alertdialog" aria-label="Turn on On this Wi-Fi" className="space-y-3 py-2 pl-6">
               <p className="text-sm">{WARNING}</p>
               <div className="flex gap-2">
-                <Button size="sm" onClick={() => wifi(true)}>
+                <Button onClick={() => wifi(true)}>
                   Turn on
                 </Button>
-                <Button size="sm" variant="outline" onClick={() => setConfirming(false)}>
+                <Button variant="outline" onClick={() => setConfirming(false)}>
                   Cancel
                 </Button>
               </div>

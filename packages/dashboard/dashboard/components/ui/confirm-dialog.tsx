@@ -93,7 +93,7 @@ export function ConfirmDialog({
           <div className="mt-4 flex justify-end gap-2">
             <AlertDialog.Close
               render={
-                <Button variant="outline" size="sm" disabled={busy}>
+                <Button variant="outline" disabled={busy}>
                   Cancel
                 </Button>
               }
@@ -101,7 +101,6 @@ export function ConfirmDialog({
             {/* Busy, it stays focusable: a disabled button drops the focus to the page behind the dialog. */}
             <Button
               variant={destructive ? 'destructive' : 'default'}
-              size="sm"
               disabled={(down && onConfirm !== undefined) || confirmDisabled}
               aria-disabled={busy || undefined}
               onClick={confirm}
