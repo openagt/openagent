@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest'
 import { act, renderHook } from '@testing-library/react'
-import { openAgents, openPermissions, openSettings, useRoute } from './use-route.js'
+import { holdEntry, openAgents, openPermissions, openSettings, useRoute } from './use-route.js'
 import { projectAddresses } from '../../src/project-address.js'
 
 // F1: this used to mock Vike's `usePageContext` and `navigate`. There is nothing to mock now —
@@ -151,5 +151,31 @@ describe('openPermissions and openAgents', () => {
     at('/my-repo/1-run?all')
     act(() => openAgents())
     expect(window.location.pathname).toBe('/agents')
+  })
+})
+
+describe('holdEntry', () => {
+  /** Whether leaving the document now would have the browser ask. */
+  const asks = (): boolean => {
+    const leaving = new Event('beforeunload', { cancelable: true })
+    window.dispatchEvent(leaving)
+    return leaving.defaultPrevented
+  }
+
+  it('has the browser ask before the document is left while an entry is held, and only then', () => {
+    expect(asks()).toBe(false)
+    const release = holdEntry(() => {})
+    expect(asks()).toBe(true)
+    release()
+    expect(asks()).toBe(false)
+  })
+
+  it('a hold that replaced another asks until it is released itself', () => {
+    const first = holdEntry(() => {})
+    const second = holdEntry(() => {})
+    first()
+    expect(asks()).toBe(true)
+    second()
+    expect(asks()).toBe(false)
   })
 })

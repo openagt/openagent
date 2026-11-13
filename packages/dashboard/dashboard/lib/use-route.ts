@@ -21,11 +21,21 @@ function notify(): void {
 /** The entry shown while it holds what leaving it would lose, and what asks before it goes. */
 let held: { url: string; state: unknown; ask: (leave: () => void) => void } | null = null
 
-/** Keep the entry shown when Back or Forward would leave it: its address is put back, and `ask` is handed the step that leaves. Until the returned function is called. */
+/** Keep the entry shown when Back or Forward would leave it: its address is put back, and `ask` is handed the step that leaves; leaving the document, the browser asks. Until the returned function is called. */
 export function holdEntry(ask: (leave: () => void) => void): () => void {
   const entry = { url: currentUrl(), state: window.history.state as unknown, ask }
   held = entry
-  return () => void (held === entry && (held = null))
+  window.addEventListener('beforeunload', askBeforeUnload)
+  return () => {
+    if (held !== entry) return
+    held = null
+    window.removeEventListener('beforeunload', askBeforeUnload)
+  }
+}
+
+/** Back past the dashboard's first entry, a reload or the tab closed, while an entry is held: the browser asks in its own words. */
+function askBeforeUnload(event: BeforeUnloadEvent): void {
+  event.preventDefault()
 }
 
 /** Back or Forward: the route is read again, and the page goes back to where it was scrolled on that entry. */
