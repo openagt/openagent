@@ -90,6 +90,15 @@ describe('QueueCard', () => {
     )
   })
 
+  test('an agent waiting on the person\'s answer is on its entry too: the fan-out gives that entry no second agent', async () => {
+    host = fakeHost({ p1: { '--local': [LOGIN, 'Tidy the loader'] }, p2: { '--local': [] } })
+    host.agents.mockImplementation(async (projectId: string) => (projectId === 'p1' ? [{ id: 'run-7', status: 'waiting', startedAt: '2026-10-01T10:00:00.000Z', ask: workOnEntryPrompt(LOGIN) }] : []))
+    renderWithHost(<QueueCard projects={[alpha, beta]} />, host)
+    await screen.findByRole('button', { name: 'An agent is on it' })
+    fireEvent.click(screen.getByRole('button', { name: 'Start 1' }))
+    await waitFor(() => expect(started()).toEqual([['p1', workOnEntryPrompt('Tidy the loader'), { land: false }]]))
+  })
+
   test('an entry a working agent was asked says so, as on the Queue page, and opens that agent in place of a start', async () => {
     host = fakeHost({ p1: { '--local': [LOGIN, 'Tidy the loader'] }, p2: { '--local': [] } })
     host.agents.mockImplementation(async (projectId: string) => (projectId === 'p1' ? [{ id: 'run-7', status: 'running', startedAt: '2026-10-01T10:00:00.000Z', ask: workOnEntryPrompt(LOGIN) }] : []))

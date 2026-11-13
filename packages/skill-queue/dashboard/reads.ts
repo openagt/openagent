@@ -5,7 +5,7 @@ import { isEntryLine, readEntries } from '../src/module.js'
 export interface ProjectRead {
   project: ModuleProject
   entries: string[]
-  /** The project's agents that are working now: an entry one of them was asked is being worked on. */
+  /** The project's agents that are working now or waiting on the person: an entry one of them was asked is being worked on. */
   working: ModuleAgent[]
   error?: string
 }
@@ -25,7 +25,7 @@ export function useQueueReads(projects: ModuleProject[]): { reads: ProjectRead[]
       Promise.all(
         projects.map(async (project): Promise<ProjectRead> => {
           const [read, agents] = await Promise.all([host.runCommand(project.id, ['--local']).then(result => readEntries(result, isEntryLine)), host.agents(project.id).catch(() => [])])
-          const working = agents.filter(agent => agent.status === 'running')
+          const working = agents.filter(agent => agent.status === 'running' || agent.status === 'waiting')
           return 'error' in read ? { project, entries: [], working, error: read.error } : { project, entries: read.entries, working }
         }),
       ),
