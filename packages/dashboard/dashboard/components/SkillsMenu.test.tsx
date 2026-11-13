@@ -123,7 +123,7 @@ describe('the Skills menu under the launcher\'s box', () => {
     forgetRemembered()
     onProjectSkills.mockReturnValue(new Promise(() => {}))
     render(<SkillsOff projectId="p1" agent="default" />)
-    expect(screen.getByText((_, el) => el?.tabIndex === 0 && el.textContent!.startsWith('Skills: 4.'))).toBeTruthy()
+    expect(screen.getByText((_, el) => el?.getAttribute('tabindex') === '0' && el.textContent!.startsWith('Skills: 4.'))).toBeTruthy()
   })
 
   test('a save on the Skills page is counted at once', async () => {
@@ -169,7 +169,7 @@ vi.mock('./ui/tooltip.js', async () => {
 })
 
 /** The session's Skills words, found as the keyboard and a screen reader meet them: "Skills: ", the count, then why they stay. */
-const skillsSaid = (count: number) => screen.findByText((_, el) => el?.tabIndex === 0 && el.textContent!.startsWith(`Skills: ${count}.`))
+const skillsSaid = (count: number) => screen.findByText((_, el) => el?.getAttribute('tabindex') === '0' && el.textContent!.startsWith(`Skills: ${count}.`))
 
 describe("the session page's Skills, as words", () => {
   test('words the keyboard stops on, counted as the launcher counts, their hover saying what the session got', async () => {
@@ -201,7 +201,7 @@ describe("the session page's Skills, as words", () => {
     forgetRemembered()
     onProjectSkills.mockReturnValue(new Promise(() => {}))
     render(<SkillsOff projectId="p1" agent="default" />)
-    expect(screen.getByText((_, el) => el?.tabIndex === 0 && el.textContent!.startsWith('Skills: 4.'))).toBeTruthy()
+    expect(screen.getByText((_, el) => el?.getAttribute('tabindex') === '0' && el.textContent!.startsWith('Skills: 4.'))).toBeTruthy()
   })
 
   test('a save on the Skills page is counted at once', async () => {
