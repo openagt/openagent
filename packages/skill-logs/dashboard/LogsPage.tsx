@@ -185,7 +185,7 @@ export function LogsPage({ projects, path }: ModulePageProps) {
           Could not read the runs of {project.name}: {error}
         </p>
       ))}
-      {!loaded && <p className="text-sm text-muted-foreground">Loading…</p>}
+      {!loaded && read.rows.length === 0 && <p className="text-sm text-muted-foreground">Loading…</p>}
       {loaded && read.rows.length === 0 && read.failed.length === 0 && <p className="text-sm text-muted-foreground">No runs recorded yet.</p>}
       {days.length > 0 && (
         // One table for every day, so the columns stand in one place down the page; each day opens

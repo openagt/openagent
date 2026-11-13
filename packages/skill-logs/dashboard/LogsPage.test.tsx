@@ -149,6 +149,21 @@ test('a second visit opens with the last list at once, while the runs are read a
   await waitFor(() => expect(row.closest('[data-stale]')).not.toBeNull(), { timeout: 2000 })
 })
 
+test('the runs the dashboard lists show while the records are still read, with no "Loading…" over them', async () => {
+  const host = fakeHost('@openagt/skill-logs', {
+    runCommand: () => new Promise(() => {}),
+    agents: async () => [{ id: 'r1', startedAt: at(now - 1000), status: 'running', title: 'Going' }] as ModuleAgent[],
+  })
+  render(
+    <ModuleHostContext.Provider value={host}>
+      <LogsPage projects={[{ id: 'p1', name: 'alpha', gitHost: true }]} projectId={null} path={[]} />
+    </ModuleHostContext.Provider>,
+  )
+  expect(screen.getByText('Loading…')).toBeTruthy()
+  await screen.findAllByText('Going')
+  expect(screen.queryByText('Loading…')).toBeNull()
+})
+
 test('each run as the dashboard says it stands: a record that still says running reads unknown while its computer is offline, and a run with no record yet is listed', async () => {
   const seenAt = at(now - HOUR)
   const host = hostWith(
