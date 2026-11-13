@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, test, vi } from 'vitest'
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
-import { ModuleHostContext, type ModuleCommandResult, type ModuleHost, type ModuleProject } from '@openagt/dashboard/module'
+import { ModuleHostContext, forgetRemembered, type ModuleCommandResult, type ModuleHost, type ModuleProject } from '@openagt/dashboard/module'
 import { OpenAgentDown, fakeHost } from '@openagt/dashboard/module/testing'
 import { AutomationsPage } from './AutomationsPage.js'
 import { ANY_AGENT, ON_CLAUDE, STATUS, hostAnswering } from './fixtures.js'
@@ -243,6 +243,20 @@ describe('the Automations page: its rows', () => {
       // Its picks can still be set: another agent is one of them.
       expect(disabled(within(row(name)).getByRole('button', { name: `Edit ${name}` })), name).toBe(false)
     }
+  })
+
+  test('a second visit opens with the last rows at once, while they are read again', async () => {
+    show(scheduler().host)
+    await screen.findByRole('listitem', { name: '/work-queue' })
+    cleanup()
+    forgetRemembered()
+    // The next visit, after a reload: the read does not answer yet.
+    let answer: (result: ModuleCommandResult) => void = () => {}
+    const runCommand = vi.fn(() => new Promise<ModuleCommandResult>(resolve => (answer = resolve)))
+    show(fakeHost('@openagt/skill-scheduler', { runCommand, act: runCommand }))
+    expect(screen.getByRole('listitem', { name: '/work-queue' })).toBeTruthy()
+    expect(screen.queryByText('Loading…')).toBeNull()
+    answer({ ok: true, output: STATUS })
   })
 
   test("flipping a row's switch runs `switch` in its project", async () => {
