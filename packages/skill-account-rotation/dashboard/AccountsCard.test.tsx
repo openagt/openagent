@@ -217,7 +217,7 @@ describe('AccountsCard', () => {
 
   test('a sign-in that does not go through keeps the dialog open with why, and asks again; closed, the card does not say it a second time', async () => {
     let now: Record<string, unknown> = { claude: {}, codex: {} }
-    renderAdding(() => now, args => {
+    const calls = renderAdding(() => now, args => {
       if (args[0] === 'add') now = { claude: { adding: { name: 'Dani' } }, codex: {} }
       return { ok: true, output: {} }
     })
@@ -231,6 +231,8 @@ describe('AccountsCard', () => {
     fireEvent.click(within(dialog).getByRole('button', { name: 'Cancel' }))
     await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
     expect(screen.queryByRole('alert')).toBeNull()
+    // Said in the dialog, it is forgotten by the command too: no other card or page says it again.
+    await waitFor(() => expect(calls.some(call => call.args.join(' ') === 'add-cancel claude')).toBe(true))
     // Opened again, the old failure is not said: it is a new try.
     expect(within(await add('Claude Code')).queryByRole('alert')).toBeNull()
   }, 15_000)

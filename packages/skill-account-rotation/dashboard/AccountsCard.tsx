@@ -493,13 +493,13 @@ export function AccountsCard({ accountWhere }: ModuleCardProps) {
       .finally(() => setBusy(false))
   }
 
-  /** Closing the dialog gives up the sign-in under way, as its Cancel does. */
+  /** Closing the dialog gives up the sign-in under way, as its Cancel does, and forgets why the last one did not go through: the dialog said it. */
   const close = (): void => {
     const agent = naming
     setNaming(undefined)
     if (agent === undefined) return
     setDismissed(adding?.[agent]?.failed)
-    if (adding?.[agent]?.adding) void host.runComputerCommand(['add-cancel', agent]).then(changed)
+    if (adding?.[agent]?.adding || adding?.[agent]?.failed !== undefined) void host.runComputerCommand(['add-cancel', agent]).then(changed)
   }
 
   // Rotation does something only for an agent with two accounts or more.
