@@ -1,5 +1,5 @@
 import { useContext, useEffect, useState, type ReactNode } from 'react'
-import { Check } from 'lucide-react'
+import { Check, Loader2 } from 'lucide-react'
 import { moduleHost, type LinkActionResult, type ModuleLink } from '../module/index.js'
 import { useMountedModules, type MountedLinkAction } from '../lib/use-modules.js'
 import { HostServicesContext, INERT_HOST_SERVICES } from '../lib/host-services.js'
@@ -92,9 +92,14 @@ export function LinkActions({
       {actions.map(action => {
         const Icon = action.icon
         const rested = done.has(actionKey(action))
+        const busy = running === actionKey(action)
         const content = rested ? (
           <>
             <Check className="h-3.5 w-3.5" aria-hidden /> <span className="max-md:min-w-0 max-md:truncate">{action.doneLabel ?? action.label}</span>
+          </>
+        ) : busy ? (
+          <>
+            <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden /> <span className="max-md:min-w-0 max-md:truncate">{action.busyLabel ?? action.label}</span>
           </>
         ) : (
           <>

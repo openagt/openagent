@@ -145,6 +145,8 @@ export type LinkActionResult = { ok: true } | { ok: false; error: string }
 export interface LinkAction {
   /** The button's label, a short verb phrase: "Add to queue". */
   label: string
+  /** What the button says while the action runs: "Adding…". The label with a spinner otherwise. */
+  busyLabel?: string
   /** What the button says once the action is done: "Queued". The label with a check mark otherwise. */
   doneLabel?: string
   /** The button's icon; none otherwise. */

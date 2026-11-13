@@ -104,6 +104,16 @@ describe('LinkActions', () => {
     await waitFor(() => expect(run).toHaveBeenCalledWith(expect.anything(), 'p1', [{ text: 'late' }]))
   })
 
+  test('while the action runs, the button says its busy word', async () => {
+    render(
+      <ModulesContext.Provider value={modules([mounted(() => new Promise(() => {}), { busyLabel: 'Adding…' })])}>
+        <LinkActions projects={['p1']} targets={[{ projectId: 'p1', links: [LINK] }]} />
+      </ModulesContext.Provider>,
+    )
+    fireEvent.click(screen.getByRole('button', { name: 'Add to queue' }))
+    expect(await screen.findByRole('button', { name: 'Adding…' })).toBeTruthy()
+  })
+
   test('a failure shows the reason and leaves the button ready to try again', async () => {
     const run = vi.fn().mockResolvedValue({ ok: false, error: 'the repository has no remote' })
     render(

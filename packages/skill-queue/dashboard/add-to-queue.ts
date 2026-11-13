@@ -10,6 +10,7 @@ import { addToQueue } from '../src/module.js'
  */
 export const ADD_TO_QUEUE: LinkAction = {
   label: 'Add to queue',
+  busyLabel: 'Adding…',
   doneLabel: 'Queued',
   icon: ListPlus,
   run: (host, projectId, links) => addToQueue(args => host.runCommand(projectId, args), links),
