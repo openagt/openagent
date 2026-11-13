@@ -488,9 +488,9 @@ function useOwnEntries(): Entry[] {
       title: 'Claude web',
       icon: Globe,
       body: (
-        <Section description="A Claude web agent hands off and ends, so the questions its session asks never reach this dashboard. The browser bridge carries them back and types your answers into the session.">
+        <Section description="A Claude web agent hands off and ends, so the questions its session asks never reach this dashboard. The Claude web bridge carries them back and types your answers into the session.">
           <ToggleRow
-            label="Browser bridge"
+            label="Claude web bridge"
             description="Carry claude.ai questions into this dashboard and type your answers back. A browser signed in to claude.ai does the work, through the bridge extension."
             checked={preferences.bridge ?? false}
             onChange={next => updatePreferences({ bridge: next })}

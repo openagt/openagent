@@ -223,7 +223,7 @@ describe('Settings on and off rows', () => {
       ['New activity', false],
     ])
     fireEvent.click(screen.getByRole('button', { name: 'Claude web' }))
-    expect(switches()).toEqual([['Browser bridge', false]])
+    expect(switches()).toEqual([['Claude web bridge', false]])
     fireEvent.click(screen.getByRole('button', { name: 'Notifications' }))
     fireEvent.click(row('New activity'))
     expect(checked(row('New activity'))).toBe(true)
@@ -337,7 +337,7 @@ describe('Settings › Claude web (#1332)', () => {
     prefsRead.mockResolvedValueOnce({ bridge: false })
     refreshPreferences()
     open('claude-web')
-    const bridge = await screen.findByRole('switch', { name: 'Browser bridge' })
+    const bridge = await screen.findByRole('switch', { name: 'Claude web bridge' })
     await waitFor(() => expect(checked(bridge)).toBe(false))
     expect(screen.queryByText(/Which browser does the work/)).toBeNull()
     expect(screen.queryByRole('radio')).toBeNull()

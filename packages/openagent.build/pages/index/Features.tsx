@@ -45,7 +45,7 @@ export function Features() {
           more.
         </Feature>
         <Feature title="Notifications">Get browser and/or Discord notifications when AI is finished or needs you.</Feature>
-        <Feature title="Claude Code Web">Orchestrate agents via Claude Code Web for 0% local CPU usage.</Feature>
+        <Feature title="Claude web bridge">Orchestrate agents via Claude Code Web for 0% local CPU usage.</Feature>
         <Feature title="Swarm of local computers">Orchestrate agents across multiple local computers.</Feature>
         <Feature title="Discord bot">Use the discord bot for agentic team conversations.</Feature>
       </div>
