@@ -243,9 +243,6 @@
   "dashboard/dashboard/components/ui/copy-button.tsx": {
     "rounded": 1
   },
-  "dashboard/dashboard/components/ui/dialog.tsx": {
-    "rounded": 1
-  },
   "dashboard/dashboard/components/ui/gauge.tsx": {
     "duration-500": 1,
     "text-[9px]": 2

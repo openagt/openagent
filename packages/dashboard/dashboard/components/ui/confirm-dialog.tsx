@@ -5,6 +5,7 @@ import { useAction } from '../../lib/use-action.js'
 import { DaemonDown } from '../../lib/use-daemon-health.js'
 import { Button } from './button.js'
 import { cn } from '../../lib/utils.js'
+import { BACKDROP_CLASS, DIALOG_POPUP_CLASS, DIALOG_PRESSES_CLASS } from './dialog.js'
 
 // A confirm-before-you-act dialog on Base UI's AlertDialog (#1032): for the one action that cannot
 // be taken back. The trigger is whatever the caller renders; confirming runs `onConfirm` through
@@ -82,18 +83,18 @@ export function ConfirmDialog({
     >
       {trigger && <AlertDialog.Trigger render={trigger as never} />}
       <AlertDialog.Portal>
-        <AlertDialog.Backdrop className="fixed inset-0 z-50 bg-black/40 backdrop-blur-[1px]" />
-        <AlertDialog.Popup className="fixed left-1/2 top-1/2 z-50 w-[min(26rem,calc(100vw-2rem))] -translate-x-1/2 -translate-y-1/2 rounded-lg border border-border bg-card p-5 text-card-foreground shadow-lg">
-          <AlertDialog.Title className="text-sm font-semibold">{title}</AlertDialog.Title>
-          <AlertDialog.Description className="mt-2 text-xs leading-relaxed text-muted-foreground">
+        <AlertDialog.Backdrop className={BACKDROP_CLASS} />
+        <AlertDialog.Popup className={cn(DIALOG_POPUP_CLASS, 'md:w-[min(26rem,calc(100vw-2rem))]')}>
+          <AlertDialog.Title className="text-base font-semibold">{title}</AlertDialog.Title>
+          <AlertDialog.Description className="mt-2 text-sm text-muted-foreground">
             {body}
           </AlertDialog.Description>
           {extra && <div className="mt-3">{extra}</div>}
           {error && <p className="mt-2 text-xs text-danger">{error}</p>}
-          <div className="mt-4 flex justify-end gap-2">
+          <div className={cn('mt-5 flex justify-end gap-2', DIALOG_PRESSES_CLASS)}>
             <AlertDialog.Close
               render={
-                <Button variant="outline" disabled={busy}>
+                <Button variant="secondary" disabled={busy}>
                   Cancel
                 </Button>
               }

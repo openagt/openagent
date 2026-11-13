@@ -3,7 +3,7 @@ import { ChevronRight, Check } from 'lucide-react'
 import type { ComponentProps, ReactNode } from 'react'
 import { cn } from '../../lib/utils.js'
 import { ScrollArea } from './scroll-area.js'
-import { usePopupPlacement } from './popup-placement.js'
+import { POPUP_MOTION_CLASS, usePopupPlacement } from './popup-placement.js'
 
 // The shadcn "base" dropdown menu (built on Base UI, not Radix) — trimmed to what the Start
 // form's Commands + agent/model menus need (#649/#650). On the menu surface, which sets the theme's
@@ -17,18 +17,18 @@ import { usePopupPlacement } from './popup-placement.js'
 // The surface is shadcn create's menu in the theme's colours (`.menu-surface`, tailwind.css):
 // rounded, see-through over a blur, a faint ring for an edge.
 export const MENU_SURFACE_CLASS = 'menu-surface rounded-lg shadow-lg ring-1 ring-foreground/10 backdrop-blur-xl outline-none'
-export const MENU_POPUP_CLASS = cn('min-w-[13rem]', MENU_SURFACE_CLASS)
+export const MENU_POPUP_CLASS = cn('min-w-[13rem]', MENU_SURFACE_CLASS, POPUP_MOTION_CLASS)
 
 /** The scrolled body every popup shares: caps at the space the positioner allows, pads the items. */
 function PopupBody({ children }: { children: ReactNode }) {
   return (
     <ScrollArea viewportClassName="max-h-[var(--available-height)]">
-      <div className="p-1.5">{children}</div>
+      <div className="p-1">{children}</div>
     </ScrollArea>
   )
 }
 export const MENU_ITEM_CLASS =
-  'relative flex cursor-pointer select-none items-center gap-2 rounded-lg px-2 py-1.5 text-sm font-medium outline-none data-[highlighted]:bg-accent data-[highlighted]:text-accent-foreground data-[disabled]:pointer-events-none data-[disabled]:opacity-50'
+  'relative flex cursor-pointer select-none items-center gap-2 rounded-md px-2 py-1.5 text-sm font-normal outline-none md:min-h-8 max-md:min-h-11 data-[highlighted]:bg-accent data-[highlighted]:text-accent-foreground data-[disabled]:pointer-events-none data-[disabled]:opacity-50'
 
 export const DropdownMenu = Menu.Root
 export const DropdownMenuGroup = Menu.Group
@@ -87,12 +87,13 @@ export function DropdownMenuCheckboxItem({
 }: ComponentProps<typeof Menu.CheckboxItem>) {
   return (
     <Menu.CheckboxItem className={cn(MENU_ITEM_CLASS, className)} closeOnClick={closeOnClick} {...props}>
-      <span className="mt-0.5 flex h-3.5 w-3.5 shrink-0 items-center justify-center">
+      {children}
+      {/* The picked one is marked at the right, where every item's mark stands. */}
+      <span className="ml-auto flex size-4 shrink-0 items-center justify-center">
         <Menu.CheckboxItemIndicator>
-          <Check className="h-3.5 w-3.5" />
+          <Check className="size-4" />
         </Menu.CheckboxItemIndicator>
       </span>
-      {children}
     </Menu.CheckboxItem>
   )
 }
@@ -108,7 +109,7 @@ export function DropdownMenuSubTrigger({ className, children, ...props }: Compon
       {...props}
     >
       {children}
-      <ChevronRight className="ml-auto h-3.5 w-3.5 shrink-0 opacity-70" />
+      <ChevronRight className="ml-auto size-4 shrink-0 text-muted-foreground" />
     </Menu.SubmenuTrigger>
   )
 }
@@ -127,7 +128,7 @@ export function DropdownMenuSubContent({ className, children, ...props }: Compon
 }
 
 export function DropdownMenuSeparator({ className, ...props }: ComponentProps<typeof Menu.Separator>) {
-  return <Menu.Separator className={cn('-mx-1.5 my-1.5 h-px bg-border', className)} {...props} />
+  return <Menu.Separator className={cn('-mx-1 my-1 h-px bg-border', className)} {...props} />
 }
 
 export function DropdownMenuLabel({ className, ...props }: ComponentProps<typeof Menu.GroupLabel>) {
