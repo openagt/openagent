@@ -425,7 +425,7 @@ function AgentEditor({ agent, view, onAccounts, onDone }: { agent?: AgentRecord;
 }
 
 /**
- * A coding agent's accounts to pick from: "All", ticked while none is picked, is every one of this computer's; one or more ticked, those alone, where the computer has them.
+ * A coding agent's accounts to pick from: "Every account, also new ones", ticked while none is picked, is every one of this computer's, also one added later; one or more ticked, those alone, where the computer has them.
  * This computer's own login, logged out, is offered only while it is picked, and says so.
  */
 function AccountPicks({ label, accounts: all, picked, busy, onTick, onAll }: { label: string; accounts: readonly AgentAccountChoice[]; picked: Set<string>; busy: boolean; onTick: (id: string, on: boolean) => void; onAll: () => void }) {
@@ -437,8 +437,8 @@ function AccountPicks({ label, accounts: all, picked, busy, onTick, onAll }: { l
       <div className="flex flex-wrap gap-3">
         {/* Left by ticking an account, as a radio is left by picking another. */}
         <label className="flex cursor-pointer items-center gap-2 text-sm">
-          <Checkbox checked={picked.size === 0} onCheckedChange={checked => checked === true && onAll()} disabled={busy} aria-label={`All ${label} accounts`} />
-          All
+          <Checkbox checked={picked.size === 0} onCheckedChange={checked => checked === true && onAll()} disabled={busy} aria-label={`Every ${label} account, also new ones`} />
+          Every account, also new ones
         </label>
         {accounts.map(account => {
           const name = account.loggedOut ? `${account.name}, not logged in` : account.name
