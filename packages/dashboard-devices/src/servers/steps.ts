@@ -84,6 +84,41 @@ const ROOT = '/opt/openagent'
 /** The Node the server gets: the newest of this line, read off nodejs.org with its checksum. */
 const NODE_LINE = 24
 
+/**
+ * The part of the tools step that brings Node into `root`/node: the newest release of {@link NODE_LINE},
+ * at every install and every update, so a server gets the line's security releases too. The newest
+ * is the version nodejs.org lists in the line's checksums. When nodejs.org cannot be reached, a Node
+ * of the line already there stays; with none there, the step fails. Uses the step's `$dir`.
+ */
+export function nodeScript(root: string): string {
+  return `
+  have=$(${root}/node/bin/node -v 2>/dev/null || true)
+  arch=x64
+  [ "$(uname -m)" = aarch64 ] && arch=arm64
+  from=https://nodejs.org/dist/latest-v${NODE_LINE}.x
+  if curl -fsSL "$from/SHASUMS256.txt" -o "$dir/SHASUMS256.txt"; then
+    file=$(grep -o "node-v[0-9.]*-linux-$arch\\.tar\\.xz" "$dir/SHASUMS256.txt" | head -n 1 || true)
+    [ -n "$file" ] || fail "nodejs.org lists no Node ${NODE_LINE} for this server's chip."
+    want=\${file#node-}
+    want=\${want%-linux-*}
+  elif [ "\${have%%.*}" = v${NODE_LINE} ]; then
+    want=$have
+  else
+    fail "nodejs.org could not be reached to download Node ${NODE_LINE}."
+  fi
+  if [ "$have" != "$want" ]; then
+    curl -fsSL "$from/$file" -o "$dir/$file"
+    (cd "$dir" && grep " $file\\$" SHASUMS256.txt | sha256sum -c - >/dev/null) || fail "The Node that was downloaded is not the one nodejs.org lists."
+    rm -rf ${root}/node.new
+    mkdir -p ${root}/node.new
+    # Root's, whoever the download names as the files' owner: on a server that owner could be the user the agents run as.
+    tar -xJf "$dir/$file" -C ${root}/node.new --strip-components=1 --no-same-owner
+    rm -rf ${root}/node
+    mv ${root}/node.new ${root}/node
+    touch ${root}/restart
+  fi`
+}
+
 /** The door's own command, inside the OpenAgent the install brought. */
 const DOOR = `${ROOT}/node/bin/node ${ROOT}/node/lib/node_modules/@openagt/dashboard/node_modules/@openagt/dashboard-devices/bin/devices`
 
@@ -512,24 +547,7 @@ export const STEPS: readonly StepDef[] = [
     apt install gh
   fi
 
-  have=$(${ROOT}/node/bin/node -p 'process.versions.node.split(".")[0]' 2>/dev/null || true)
-  if [ "$have" != ${NODE_LINE} ]; then
-    arch=x64
-    [ "$(uname -m)" = aarch64 ] && arch=arm64
-    from=https://nodejs.org/dist/latest-v${NODE_LINE}.x
-    curl -fsSL "$from/SHASUMS256.txt" -o "$dir/SHASUMS256.txt"
-    file=$(grep -o "node-v[0-9.]*-linux-$arch\\.tar\\.xz" "$dir/SHASUMS256.txt" | head -n 1 || true)
-    [ -n "$file" ] || fail "nodejs.org lists no Node ${NODE_LINE} for this server's chip."
-    curl -fsSL "$from/$file" -o "$dir/$file"
-    (cd "$dir" && grep " $file\\$" SHASUMS256.txt | sha256sum -c - >/dev/null) || fail "The Node that was downloaded is not the one nodejs.org lists."
-    rm -rf ${ROOT}/node.new
-    mkdir -p ${ROOT}/node.new
-    # Root's, whoever the download names as the files' owner: on a server that owner could be the user the agents run as.
-    tar -xJf "$dir/$file" -C ${ROOT}/node.new --strip-components=1 --no-same-owner
-    rm -rf ${ROOT}/node
-    mv ${ROOT}/node.new ${ROOT}/node
-    touch ${ROOT}/restart
-  fi
+${nodeScript(ROOT)}
   for bin in node npm npx; do ln -sf ${ROOT}/node/bin/$bin /usr/local/bin/$bin; done
 
   # A browser that is there and does not start is none: Ubuntu's own package is only a pointer to its snap store.
