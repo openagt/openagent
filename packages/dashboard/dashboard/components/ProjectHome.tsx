@@ -5,6 +5,7 @@ import { ProjectErrorBanner } from './ProjectErrorBanner.js'
 import { ProjectSkillsLine } from './ProjectSkills.js'
 import { HumanQueueList } from './HumanQueueList.js'
 import { ScrollArea } from './ui/scroll-area.js'
+import { Section } from './ui/section.js'
 import type { StartPicks } from '../lib/started-from.js'
 import { SESSIONS_ID } from '../../src/project-address.js'
 
@@ -81,11 +82,10 @@ export function ProjectHome({
         <div className="mx-auto w-full max-w-3xl">
           {/* No section at all when nothing waits: an empty "Waiting on you" is noise on every launch. */}
           {waiting.length > 0 && (
-            <section aria-label="Waiting on you" className="p-3">
-              {/* Set in as far as the rows' own text, so the title, the rows and "Show more" start at one place. */}
-              <h2 className="mb-3 px-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Waiting on you · {waiting.length}</h2>
+            // The heading set in as far as the rows' own text, so the heading and the rows start at one place.
+            <Section title="Waiting on you" count={waiting.length} className="px-2 pt-6 [&>div:first-child]:px-3">
               <HumanQueueList key={projectId} items={waiting} onOpenAgent={onOpenAgent} />
-            </section>
+            </Section>
           )}
           {/* What the project's skills need from the person, when they need something (#2023): a card
               under the agents that wait, in the same column; with nothing to say there is no card,

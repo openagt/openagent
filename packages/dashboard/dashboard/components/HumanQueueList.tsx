@@ -2,12 +2,11 @@ import { useContext, useState, type ComponentType } from 'react'
 import { ArrowRight, CircleHelp, FilePen, GitBranch, GitPullRequest } from 'lucide-react'
 import type { Intervention } from '../../src/index.js'
 import { interventionKey } from '../../src/client.js'
-import { Tooltip, TooltipTrigger, TooltipContent } from './ui/tooltip.js'
+import { Row } from './ui/list.js'
 import { cn } from '../lib/utils.js'
 import { formatRelative } from '../lib/format-date.js'
 import { OnComputer } from './MachineMark.js'
 import { HostServicesContext, INERT_HOST_SERVICES } from '../lib/host-services.js'
-import { inPlace } from '../lib/in-place.js'
 
 /**
  * What a person does next for one kind of row, said the same wherever the row is: the Human Queue,
@@ -52,9 +51,9 @@ function hoverOf(item: Intervention): string {
 /**
  * The things only a person can clear (#632/#1139), one row each, as the Human Queue and the
  * launcher's "Waiting on you" both list them: what is needed, the run's name as the sidebar says it,
- * then what it is about, its project, how long ago, and an arrow to where the row goes. A row is
- * one line that lights up under the pointer, with no rule between rows and no panel around them
- * (his picks). The rows read as columns: what is needed takes the width of the widest word, so
+ * then what it is about, its project, how long ago, and an arrow to where the row goes, shown under
+ * the pointer and the keyboard. A row is one line that lights up under the pointer, with no rule
+ * between rows and no panel around them (his picks). The rows read as columns: what is needed takes the width of the widest word, so
  * every name starts at one place, and the time is set right. The project is named only when the
  * rows are of several: on one project's page every row would say the same word. Every row opens the session it is about; a request opened anywhere else, by
  * hand or by a session this dashboard never ran, opens on the git host. The first few show, and a
@@ -86,58 +85,54 @@ export function HumanQueueList({
           const { Icon, tone } = MARKS[item.kind]
           const detail = detailOf(item)
           const since = formatRelative(item.createdAt, '')
-          const row = (
-            <>
-              {grouped ? (
-                <span title={needsWord(item.kind, item.gitHost)} className={cn('flex size-4 shrink-0 items-center justify-center', tone)}>
-                  <Icon className="h-3.5 w-3.5" aria-hidden />
-                </span>
-              ) : (
-                <span className={cn('flex shrink-0 items-center gap-1.5 text-xs md:w-28 max-md:flex-1', tone)}>
-                  <Icon className="h-3.5 w-3.5 shrink-0" />
-                  {needsWord(item.kind, item.gitHost)}
-                </span>
-              )}
-              {/* The name and what it is about give up width, each cut short with an ellipsis: in a
-                  narrow column the row still fits, and nothing scrolls sideways. On a phone each
-                  has a line of its own under what is needed, where, and since when. */}
-              <span className={cn('min-w-0 shrink truncate text-foreground md:max-w-[50%]', grouped ? 'max-md:flex-1' : 'max-md:order-1 max-md:basis-full')}>{item.title}</span>
-              {/* A count is never cut; a question keeps room for its first words. */}
-              <span className={cn('truncate text-muted-foreground md:grow max-md:order-2 max-md:basis-full', item.kind === 'awaiting' ? 'max-md:min-w-0 md:min-w-24' : 'min-w-0 shrink-0')}>{detail}</span>
-              {/* A run on another of the person's computers is marked by its kind's icon before the
-                  project, as the list of runs marks it: a row has no room for its name too. */}
-              {item.computer && <OnComputer computer={item.computer} named={false} />}
-              {projects && <span className="shrink-0 text-xs text-muted-foreground">{item.projectName}</span>}
-              <span className="min-w-14 shrink-0 text-right text-xs tabular-nums text-muted-foreground">{since}</span>
-              <ArrowRight className="h-3.5 w-3.5 shrink-0 text-muted-foreground" aria-hidden />
-            </>
-          )
-          const rowClass =
-            'flex w-full items-center overflow-hidden whitespace-nowrap rounded-md px-2 py-1.5 text-left text-sm hover:bg-accent/40 md:gap-3 max-md:flex-wrap max-md:gap-x-3 max-md:gap-y-0.5'
+          const href = item.agentId ? services.agentHref(item.projectId, item.agentId) : item.kind === 'pr' ? item.url : undefined
+          const open = item.agentId
+            ? () => onOpenAgent(item.projectId, item.agentId!)
+            : item.kind === 'pr'
+              ? () => window.open(item.url, '_blank', 'noreferrer')
+              : () => onOpenProject?.(item.projectId)
           return (
-            <li key={interventionKey(item)}>
-              <Tooltip>
-                <TooltipTrigger
-                  render={
-                    item.agentId ? (
-                      <a href={services.agentHref(item.projectId, item.agentId)} onClick={inPlace(() => onOpenAgent(item.projectId, item.agentId!))} className={rowClass} />
-                    ) : item.kind === 'pr' ? (
-                      <a href={item.url} target="_blank" rel="noreferrer" className={rowClass} />
-                    ) : (
-                      <button type="button" onClick={() => onOpenProject?.(item.projectId)} className={rowClass} />
-                    )
-                  }
-                >
-                  {row}
-                </TooltipTrigger>
-                <TooltipContent>{item.computer ? `${hoverOf(item)} · runs on ${item.computer.name}` : hoverOf(item)}</TooltipContent>
-              </Tooltip>
-            </li>
+            <Row
+              key={interventionKey(item)}
+              // The words keep 4.5:1 on the hover's fill: what is quiet at rest is the text's own colour under the pointer.
+              className="text-muted-foreground"
+              leading={
+                grouped ? (
+                  <span title={needsWord(item.kind, item.gitHost)} className={cn('flex size-4 items-center justify-center', tone)}>
+                    <Icon className="size-4" aria-hidden />
+                  </span>
+                ) : (
+                  <span className="flex items-center gap-2 text-foreground md:w-32">
+                    <Icon className={cn('size-4 shrink-0', tone)} aria-hidden />
+                    {needsWord(item.kind, item.gitHost)}
+                  </span>
+                )
+              }
+              title={
+                // Where a click takes the person, on a hover that waits, with the computer it runs on.
+                <span title={item.computer ? `${hoverOf(item)} · runs on ${item.computer.name}` : hoverOf(item)} className="text-foreground">
+                  {item.title}
+                  {detail !== undefined && <span className="ml-3 font-normal text-muted-foreground group-hover/row:text-foreground">{detail}</span>}
+                </span>
+              }
+              meta={
+                <span className="flex items-center gap-2 group-hover/row:text-foreground">
+                  {/* A run on another of the person's computers is marked by its kind's icon before the
+                      project, as the list of runs marks it: a row has no room for its name too. */}
+                  {item.computer && <OnComputer computer={item.computer} named={false} />}
+                  {projects && <span>{item.projectName}</span>}
+                  <span className="min-w-14 text-right">{since}</span>
+                </span>
+              }
+              actions={<ArrowRight className="size-4 text-muted-foreground" aria-hidden />}
+              {...(href !== undefined ? { href } : {})}
+              onClick={open}
+            />
           )
         })}
       </ul>
       {hidden > 0 && (
-        <button type="button" onClick={() => setAll(!all)} className="mt-1 px-2 py-1 text-xs text-muted-foreground hover:text-foreground">
+        <button type="button" onClick={() => setAll(!all)} className="focus-ring mt-1 rounded-md px-3 py-1 text-sm text-muted-foreground hover:text-foreground">
           {all ? 'Show fewer' : `Show ${hidden} more`}
         </button>
       )}

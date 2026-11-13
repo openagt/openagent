@@ -18,9 +18,10 @@ const { ProjectActions } = await import('./ProjectActions.js')
 afterEach(cleanup)
 
 describe('ProjectActions', () => {
-  test('the ⋮ menu alone: no project name, no branch, no clean or dirty', () => {
+  test('the page\'s name and the ⋮ menu: no project name, no branch, no clean or dirty', () => {
     const { container } = render(<ProjectActions projectId="p1" />)
-    expect(container.textContent).toBe('Agent actions')
+    expect(container.textContent).toBe('New agent sessionAgent actions')
+    expect(screen.getByRole('heading', { name: 'New agent session' })).toBeTruthy()
     expect(screen.getByRole('button', { name: 'Agent actions' })).toBeTruthy()
     // The menu acts on the project: it is given the project and no agent.
     expect(menu).toHaveBeenCalledWith(expect.objectContaining({ projectId: 'p1', events: [] }))
@@ -45,9 +46,9 @@ describe('ProjectActions', () => {
     // one: a module's stylesheet has its own copy of that class, which comes later and would win.
     for (const cls of ['pr-2', 'max-md:pl-11']) expect(row.className.split(' ')).toContain(cls)
     for (const cls of ['px-4', 'pl-4']) expect(row.className.split(' ')).not.toContain(cls)
-    // A spacer that takes the row's width, then the menu, last.
-    expect(row.children).toHaveLength(2)
-    expect(row.children[0]!.className).toContain('grow')
+    // The page's name, a spacer that takes the row's width, then the menu, last.
+    expect(row.children).toHaveLength(3)
+    expect(row.children[1]!.className).toContain('grow')
     expect(row.lastElementChild!.contains(screen.getByRole('button', { name: 'Agent actions' }))).toBe(true)
   })
 })

@@ -46,7 +46,8 @@ describe('ProjectHome', () => {
       await Promise.resolve()
     })
     // The waiting rows come first and the box to start an agent last, as on an agent's page.
-    expect(screen.getByRole('heading', { name: 'Waiting on you · 1' })).toBeTruthy()
+    expect(screen.getByRole('region', { name: 'Waiting on you' })).toBeTruthy()
+    expect(screen.getByRole('heading', { name: 'Waiting on you 1' })).toBeTruthy()
     const questions = screen.getByText('1 rows')
     const form = screen.getByText('start form')
     expect(questions.compareDocumentPosition(form) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
