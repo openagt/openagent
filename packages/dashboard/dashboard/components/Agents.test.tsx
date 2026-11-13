@@ -46,6 +46,15 @@ describe('Agents (#1139)', () => {
 
 
 
+  test("a working agent's row is a link to its session: a Ctrl+click is the browser's, for a new tab", () => {
+    const onSelectAgent = vi.fn()
+    render(<Agents loaded working={[active('r1')]} namesRuns onSelectAgent={onSelectAgent} />)
+    const row = screen.getByRole('link', { name: /working on r1/ })
+    expect(row.getAttribute('href')).toBe('/p1/r1')
+    fireEvent.click(row, { ctrlKey: true })
+    expect(onSelectAgent).not.toHaveBeenCalled()
+  })
+
   test('a working session with no intent still gets a label', () => {
     // An unlabelled row would be a blank line you cannot tell apart from its neighbours: the
     // scope, else the project, names it.
