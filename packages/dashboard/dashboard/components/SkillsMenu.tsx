@@ -75,6 +75,14 @@ export function skillPicksSaid(picks: { skillsOn?: readonly string[] | undefined
   return `${agents}, and ${project}`
 }
 
+/**
+ * The project's own skills, as a run's checkout has them, kept in this browser: the Skills item
+ * counts them, and counted from the last load it holds its place in the row from the first frame.
+ */
+function useProjectSkills(projectId: string | undefined) {
+  return useLoaded(projectId !== undefined ? () => onProjectSkills(projectId) : null, null, [projectId], projectId !== undefined ? { remember: `project-skills:${projectId}`, stored: true } : undefined, skillsAgain)
+}
+
 export function SkillsMenu({
   projectId,
   agent,
@@ -93,8 +101,7 @@ export function SkillsMenu({
   onChange: (picks: SkillPicks) => void
   busy: boolean
 }) {
-  // The project's own skills, by name, as a run's checkout has them: the list's and the project's own.
-  const project = useLoaded(projectId !== undefined ? () => onProjectSkills(projectId) : null, null, [projectId], undefined, skillsAgain)
+  const project = useProjectSkills(projectId)
   const held = project?.held ?? []
   if (!agent || !groups) return null
   const own = agent.skills
@@ -207,7 +214,7 @@ export function SkillsMenu({
  */
 export function SkillsOff({ projectId, agent, skillsOn, skillsOff, projectSkills }: { projectId: string | undefined; agent: string | undefined; skillsOn?: string[] | undefined; skillsOff?: string[] | undefined; projectSkills?: 'none' | string[] | undefined }) {
   const { view } = useAgentsList()
-  const project = useLoaded(projectId !== undefined ? () => onProjectSkills(projectId) : null, null, [projectId], undefined, skillsAgain)
+  const project = useProjectSkills(projectId)
   if (!view || (projectId !== undefined && project === null)) return null
   const record = view.agents.find(one => one.id === (agent ?? DEFAULT_AGENT))
   const count = skillCount(sessionSkills(record, { on: skillsOn ?? [], off: skillsOff ?? [] }), projectId !== undefined ? projectKept(project?.held ?? [], projectSkills) : [])

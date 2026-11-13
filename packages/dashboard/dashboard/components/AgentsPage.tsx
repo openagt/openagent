@@ -26,9 +26,13 @@ import { Skeleton, useSkeleton } from './ui/skeleton.js'
 /** How often the agents are read again while the page is open. */
 const SELDOM_MS = 30_000
 
-/** The agents (a name, skills and accounts each) as the dashboard reads them, remembered across pages so a menu lands whole. */
+/**
+ * The agents (a name, skills and accounts each) as the dashboard reads them, remembered across
+ * pages and loads so a menu lands whole and the box's rows, which name the agent and count its
+ * skills, are drawn from the first frame.
+ */
 export function useAgentsList(): { view: AgentsView | undefined; reload: () => Promise<void> } {
-  const { value, reload } = usePolled<AgentsView | undefined>(onAgentsList, undefined, SELDOM_MS, [], { remember: 'agents' })
+  const { value, reload } = usePolled<AgentsView | undefined>(onAgentsList, undefined, SELDOM_MS, [], { remember: 'agents', stored: true })
   return { view: value, reload }
 }
 

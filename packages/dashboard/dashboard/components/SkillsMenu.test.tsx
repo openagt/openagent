@@ -15,6 +15,7 @@ const { NO_PICKS, SkillsMenu, SkillsOff, agentPicks, sessionSkills, skillPicksSa
 afterEach(() => {
   cleanup()
   forgetRemembered()
+  localStorage.clear()
   onProjectSkills.mockReset()
 })
 
@@ -113,6 +114,18 @@ describe('the Skills menu under the launcher\'s box', () => {
     expect(await screen.findByRole('button', { name: 'Skills: 3' })).toBeTruthy()
   })
 
+  test('a session opened again after a reload has its Skills from the first frame, so nothing after it in the row moves', async () => {
+    onProjectSkills.mockResolvedValue({ held: ['tickets'] })
+    render(<SkillsOff projectId="p1" agent="default" />)
+    await skillsSaid(4)
+    cleanup()
+    // The reload: the page's memory gone, this browser's store as the last load left it, the reads not answered yet.
+    forgetRemembered()
+    onProjectSkills.mockReturnValue(new Promise(() => {}))
+    render(<SkillsOff projectId="p1" agent="default" />)
+    expect(screen.getByText((_, el) => el?.tabIndex === 0 && el.textContent!.startsWith('Skills: 4.'))).toBeTruthy()
+  })
+
   test('a save on the Skills page is counted at once', async () => {
     onProjectSkills.mockResolvedValue(PROJECT)
     renderMenu()
@@ -177,6 +190,18 @@ describe("the session page's Skills, as words", () => {
     onProjectSkills.mockResolvedValue({ held: ['ask', 'tickets'] })
     render(<SkillsOff projectId="p1" agent="default" />)
     expect(await skillsSaid(4)).toBeTruthy()
+  })
+
+  test('a session opened again after a reload has its Skills from the first frame, so nothing after it in the row moves', async () => {
+    onProjectSkills.mockResolvedValue({ held: ['tickets'] })
+    render(<SkillsOff projectId="p1" agent="default" />)
+    await skillsSaid(4)
+    cleanup()
+    // The reload: the page's memory gone, this browser's store as the last load left it, the reads not answered yet.
+    forgetRemembered()
+    onProjectSkills.mockReturnValue(new Promise(() => {}))
+    render(<SkillsOff projectId="p1" agent="default" />)
+    expect(screen.getByText((_, el) => el?.tabIndex === 0 && el.textContent!.startsWith('Skills: 4.'))).toBeTruthy()
   })
 
   test('a save on the Skills page is counted at once', async () => {
