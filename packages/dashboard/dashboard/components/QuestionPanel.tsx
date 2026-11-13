@@ -44,7 +44,7 @@ function Choices({ multi, labelledBy, picked, onPick, disabled, children }: { mu
 // A choice's row: the radio group's radio, or a box the row toggles. Rows are parted by a line, as
 // Claude Code on the web parts them; none is filled but the one under the pointer.
 function Choice({ multi, value, on, disabled, onPick, children }: { multi: boolean | undefined; value: string | typeof OTHER; on: boolean; disabled: boolean; onPick: () => void; children: ReactNode }) {
-  const row = 'flex w-full items-start gap-3 p-4 text-left enabled:hover:bg-foreground/[0.03] disabled:opacity-60'
+  const row = 'flex w-full items-start gap-3 p-4 text-left enabled:hover:bg-foreground/[0.03] dark:enabled:hover:bg-foreground/[0.07] disabled:opacity-60'
   return multi ? (
     <button type="button" role="checkbox" aria-checked={on} disabled={disabled} onClick={onPick} className={row}>
       {children}
