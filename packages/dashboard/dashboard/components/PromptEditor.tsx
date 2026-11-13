@@ -68,6 +68,8 @@ interface PromptEditorProps {
   initialText?: string | undefined
   /** Whether `initialText` takes the caret as it is applied: it does unless told not to. */
   initialFocus?: boolean
+  /** A draft `initialText` is loaded over: one undo brings it back. */
+  replacedText?: string | undefined
   /** Take the caret as soon as the editor exists. */
   autoFocus?: boolean
 }
@@ -96,7 +98,7 @@ function applyTemplate(editor: Editor, text: string, focus = true): void {
 }
 
 export const PromptEditor = forwardRef<PromptEditorHandle, PromptEditorProps>(function PromptEditor(
-  { onChange, onSubmit, onPreset, onMentionProject, onMentionFile, onMentionRemoved, projects, files = [], commands, customPresets = [], projectPresets = [], onNewPreset, disabled = false, placeholder = 'Describe what to do…', label = 'Prompt', initialText, initialFocus = true, autoFocus = false },
+  { onChange, onSubmit, onPreset, onMentionProject, onMentionFile, onMentionRemoved, projects, files = [], commands, customPresets = [], projectPresets = [], onNewPreset, disabled = false, placeholder = 'Describe what to do…', label = 'Prompt', initialText, initialFocus = true, replacedText, autoFocus = false },
   ref,
 ) {
   const [isEmpty, setIsEmpty] = useState(true)
@@ -327,6 +329,8 @@ export const PromptEditor = forwardRef<PromptEditorHandle, PromptEditorProps>(fu
   useEffect(() => {
     if (!editor || seeded.current || !initialText) return
     seeded.current = true
+    // The draft beneath is no step of its own, so the undo of the load ends on it, not on an empty box.
+    if (replacedText) editor.chain().setMeta('addToHistory', false).setContent(replacedText).run()
     loadTemplateInto(editor, initialText, initialFocus)
   }, [editor, initialText])
 

@@ -68,7 +68,7 @@ vi.mock('./PromptEditor.js', async () => {
     }, [ready, props.initialText])
     return (
       <div>
-        <input aria-label="prompt" value={held} onChange={e => put(e.target.value)} disabled={props.disabled} data-seed-focus={String(props.initialFocus ?? true)} data-label={props.label} />
+        <input aria-label="prompt" value={held} onChange={e => put(e.target.value)} disabled={props.disabled} data-seed-focus={String(props.initialFocus ?? true)} data-replaced={props.replacedText} data-label={props.label} />
         <button type="button" onClick={() => props.onSubmit()}>
           editor-submit
         </button>
@@ -255,6 +255,23 @@ describe('Composer (#721)', () => {
     cleanup()
     renderComposer({ draftKey: 'launcher:p1' })
     expect(editorText()).toBe('')
+  })
+
+  test('a draft handed over to a box that kept one is loaded over it, said as a load over a draft, and the kept one is under it for an undo', () => {
+    const onPreset = vi.fn()
+    localStorage.setItem('oa.draft:launcher:p1', 'my own long draft')
+    sessionStorage.setItem('oa.pending-draft', 'carried from a ticket')
+    renderComposer({ draftKey: 'launcher:p1', onPreset })
+    expect(editorText()).toBe('carried from a ticket')
+    expect(screen.getByLabelText('prompt').getAttribute('data-replaced')).toBe('my own long draft')
+    expect(onPreset).toHaveBeenCalledWith('The prompt', true)
+    cleanup()
+    onPreset.mockReset()
+    // The same words handed over again replace nothing.
+    sessionStorage.setItem('oa.pending-draft', 'carried from a ticket')
+    renderComposer({ draftKey: 'launcher:p1', onPreset })
+    expect(screen.getByLabelText('prompt').getAttribute('data-replaced')).toBeNull()
+    expect(onPreset).not.toHaveBeenCalled()
   })
 
   test('on a phone a kept draft comes back without the caret, and one a press handed over takes it; elsewhere a kept draft takes it', () => {

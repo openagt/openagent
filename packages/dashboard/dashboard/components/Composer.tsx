@@ -222,14 +222,18 @@ export const Composer = forwardRef<ComposerHandle, {
   // (`immediatelyRender: false`), so pushing it at mount dropped the draft and left an empty
   // composer. `prompt` then arrives the normal way, through the editor's own onChange.
   // On a phone a kept draft comes back without the caret, which would raise the keyboard; one a press handed over takes it.
-  const [carriedDraft, setCarriedDraft] = useState<{ text: string; handedOver: boolean } | undefined>(() => {
+  // A draft handed over to a box that kept one is loaded over it, as a saved prompt is: said, and one undo away.
+  const [carriedDraft, setCarriedDraft] = useState<{ text: string; handedOver: boolean; over?: string } | undefined>(() => {
     const kept = draftKey !== undefined ? keptDraft(draftKey) : undefined
     return kept === undefined ? undefined : { text: kept, handedOver: false }
   })
   useEffect(() => {
     if (inAgent) return
     const carried = takePendingDraft()
-    if (carried) setCarriedDraft({ text: carried, handedOver: true })
+    if (!carried) return
+    const over = carriedDraft?.text !== carried ? carriedDraft?.text : undefined
+    setCarriedDraft({ text: carried, handedOver: true, ...(over !== undefined ? { over } : {}) })
+    if (over !== undefined) onPreset?.('The prompt', true)
   }, [inAgent])
   const phone = useIsMobile()
 
@@ -279,7 +283,7 @@ export const Composer = forwardRef<ComposerHandle, {
       disabled={busy}
       {...(placeholder ? { placeholder } : {})}
       label={inAgent ? 'Message' : 'Prompt'}
-      {...(carriedDraft ? { initialText: carriedDraft.text, initialFocus: carriedDraft.handedOver || !phone } : {})}
+      {...(carriedDraft ? { initialText: carriedDraft.text, initialFocus: carriedDraft.handedOver || !phone, replacedText: carriedDraft.over } : {})}
       autoFocus={autoFocus}
     />
   )

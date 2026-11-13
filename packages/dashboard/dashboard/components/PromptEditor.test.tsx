@@ -43,6 +43,19 @@ test('a text the box opens with takes the caret, unless it is told not to', asyn
   expect(document.activeElement?.textContent).toBe('a kept draft')
 })
 
+test('a text the box opens with over a draft: one undo brings the draft back', async () => {
+  render(<PromptEditor onChange={vi.fn()} onSubmit={vi.fn()} projects={[]} commands={[]} initialText="the handed prompt" replacedText="my own draft" />)
+  const box = await waitFor(() => {
+    const el = document.querySelector<HTMLElement>('[role="textbox"]')
+    if (el?.textContent !== 'the handed prompt') throw new Error('not seeded yet')
+    return el
+  })
+  fireEvent.keyDown(box, { key: 'z', ctrlKey: true })
+  expect(box.textContent).toBe('my own draft')
+  fireEvent.keyDown(box, { key: 'z', ctrlKey: true })
+  expect(box.textContent).toBe('my own draft')
+})
+
 test('the box is called what it takes: a prompt unless told otherwise', async () => {
   const { rerender } = render(<PromptEditor key="a" onChange={vi.fn()} onSubmit={vi.fn()} projects={[]} commands={[]} />)
   await waitFor(() => expect(document.querySelector('[role="textbox"]')?.getAttribute('aria-label')).toBe('Prompt'))
