@@ -217,23 +217,25 @@ function AddAccount({ agent, now, failed, from, field, onChanged, onClose }: { a
   const [error, setError] = useState<string>()
   const [here, setHere] = useState(false)
   const down = useOpenAgentDown()
+  // The read shown when `add` answered that the sign-in began: any read after it is that sign-in's, the same words as the last one's included.
+  const shown = useRef(now)
+  shown.current = now
+  const begunOver = useRef<AddingNow>(undefined)
   const start = async (): Promise<void> => {
     setBusy(true)
     setError(undefined)
-    failedAtPress.current = now.failed
     const done = await host.runComputerCommand(['add', agent.id, name])
-    if (!done.ok) {
+    if (done.ok) begunOver.current = shown.current
+    else {
       setBusy(false)
       setError(done.error)
     }
     onChanged()
   }
-  // A started sign-in keeps the press busy until a read shows it under way, or a new why it did not go through.
-  const failedAtPress = useRef<string | undefined>(undefined)
+  // A started sign-in keeps the press busy until a read shows it under way, or a read after it began says why it did not go through.
   useEffect(() => {
-    if (now.failed === undefined) failedAtPress.current = undefined
-    if (now.adding || (now.failed !== undefined && now.failed !== failedAtPress.current)) setBusy(false)
-  }, [now.adding, now.failed])
+    if (now.adding || (now.failed !== undefined && begunOver.current !== undefined && now !== begunOver.current)) setBusy(false)
+  }, [now])
   const shownError = error ?? failed
   return (
     <div className="space-y-3">

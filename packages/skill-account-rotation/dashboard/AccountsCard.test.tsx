@@ -280,6 +280,19 @@ describe('AccountsCard', () => {
     expect(within(await add('Claude Code')).queryByRole('alert')).toBeNull()
   }, 15_000)
 
+  test('a sign-in that fails again with the same words gives the press back, saying why', async () => {
+    // Each read a new answer, as one over the wire is. Started, the sign-in is under way; it fails before any read sees it, as the last one did.
+    renderAdding(() => ({ claude: { failed: 'The sign-in service is not answering.' }, codex: {} }), args => (args[0] === 'add' ? { ok: true, output: { adding: { name: 'Dani' } } } : { ok: true, output: {} }))
+    const dialog = await add('Claude Code')
+    expect((await within(dialog).findByRole('alert')).textContent).toBe('The sign-in service is not answering.')
+    fireEvent.change(within(dialog).getByRole('textbox', { name: 'Whose account' }), { target: { value: 'Dani' } })
+    const press = within(dialog).getByRole('button', { name: 'Log in to Claude' }) as HTMLButtonElement
+    fireEvent.click(press)
+    await waitFor(() => expect(press.disabled).toBe(true))
+    await waitFor(() => expect(press.disabled).toBe(false), { timeout: 5000 })
+    expect(within(dialog).getByRole('alert').textContent).toBe('The sign-in service is not answering.')
+  })
+
   test("says the command's refusal of a name, and keeps asking", async () => {
     renderAdding(() => ({ claude: {}, codex: {} }), () => ({ ok: false, error: 'There is an account named Dani already.' }))
     await add('Claude Code')
