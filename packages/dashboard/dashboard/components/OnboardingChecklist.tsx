@@ -1,4 +1,4 @@
-import { useRef, useState, type ReactNode } from 'react'
+import { useContext, useRef, useState, type ReactNode } from 'react'
 import type { DashboardData, ProjectSummary } from '../../src/index.js'
 import { Check, Info, X } from 'lucide-react'
 import { onDashboard } from '../rpc/reads.js'
@@ -17,6 +17,7 @@ import { HostFix } from './AddGitAccount.js'
 import { hostLoginState, hostWords, useMissing } from './Logins.js'
 import { firstName } from './PersonMenu.js'
 import { Tooltip, TooltipTrigger, TooltipContent } from './ui/tooltip.js'
+import { HostServicesContext, INERT_HOST_SERVICES } from '../lib/host-services.js'
 
 // The Overview's first steps (#958): what a new install needs, each with the state it is actually
 // in rather than a static list to read past.
@@ -88,6 +89,7 @@ export function OnboardingChecklist({
   const permission = useNotificationPermission()
   const { start, busy: starting, error: startError } = useStartAgent()
   const { person } = usePerson()
+  const services = useContext(HostServicesContext) ?? INERT_HOST_SERVICES
   // What runs need on this computer: the coding agent's login, and an account at each git host.
   const { missing, hosts, loaded: missingLoaded, reload: reloadMissing } = useMissing()
   // The steps shown once stay, done or not: the coding agent's is there only once it was missing.
@@ -168,6 +170,11 @@ export function OnboardingChecklist({
             label: 'Populate the queue of AI tasks',
             description: 'The agent queue: each entry is work the agent picks up on its own, so a filled queue is what lets it keep going without you.',
             done: (data?.totals.openTodos ?? 0) > 0,
+            action: (
+              <Button size="sm" variant="outline" onClick={() => services.openPage('queue')}>
+                Open the Queue
+              </Button>
+            ),
           },
         ]
       : []),

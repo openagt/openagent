@@ -3,6 +3,7 @@ import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testi
 import { forgetRemembered } from '../lib/use-async.js'
 import type { DashboardData, ProjectSummary } from '../../src/index.js'
 import { configureFirst } from '../test-utils.js'
+import { HostServicesContext, INERT_HOST_SERVICES } from '../lib/host-services.js'
 
 // The first steps read their state over several RPC stubs and hooks; stub them all so nothing
 // reaches for a daemon and each step's "done" comes from a fixture instead.
@@ -191,6 +192,19 @@ describe('the first steps on the Overview', () => {
     expect(within(row('Populate the tickets')).getByText('Optional')).toBeTruthy()
     expect(within(row('Turn on notifications')).getByText('Optional')).toBeTruthy()
     expect(within(row('Populate the queue of AI tasks')).queryByText('Optional')).toBeNull()
+  })
+
+  test('the queue step opens the Queue page, where its entries are added', async () => {
+    onDashboard.mockResolvedValue({ ...WITH_PROJECT, queue: [{ projectId: 'p1', projectName: 'shop', entries: [] }] } as unknown as DashboardData)
+    const openPage = vi.fn()
+    render(
+      <HostServicesContext.Provider value={{ ...INERT_HOST_SERVICES, openPage }}>
+        <OnboardingChecklist projects={[SHOP]} onAgentStarted={vi.fn()} onSelectProject={vi.fn()} onProjectAdded={vi.fn()} />
+      </HostServicesContext.Provider>,
+    )
+    await openStep('Populate the queue of AI tasks')
+    fireEvent.click(within(row('Populate the queue of AI tasks')).getByRole('button', { name: 'Open the Queue' }))
+    expect(openPage).toHaveBeenCalledWith('queue')
   })
 
   test('the queue step is there only while some project has a queue at all, the tickets step only while some project provides tickets (#1774)', async () => {
