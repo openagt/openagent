@@ -105,7 +105,7 @@ export function ContextMenu({
               </Tooltip>
             ))
           ) : (
-            <p className="px-2 py-1 text-xs text-muted-foreground/60">No other repos to add.</p>
+            <p className="px-2 py-1 text-xs text-muted-foreground/60">No other projects to add.</p>
           )}
         </DropdownMenuGroup>
         <DropdownMenuSeparator />
