@@ -222,6 +222,7 @@ function AddAccount({ agent, now, failed, from, field, onChanged, onClose }: { a
   shown.current = now
   const begunOver = useRef<AddingNow>(undefined)
   const start = async (): Promise<void> => {
+    begunOver.current = undefined
     setBusy(true)
     setError(undefined)
     const done = await host.runComputerCommand(['add', agent.id, name])

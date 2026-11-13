@@ -293,6 +293,47 @@ describe('AccountsCard', () => {
     expect(within(dialog).getByRole('alert').textContent).toBe('The sign-in service is not answering.')
   })
 
+  test('a retry stays busy until its own command answers, though a read of the last failure lands meanwhile', async () => {
+    let now: Record<string, unknown> = { claude: {}, codex: {} }
+    let reads = 0
+    let adds = 0
+    let answer: ((done: ModuleCommandResult) => void) | undefined
+    const runComputerCommand = vi.fn(async (args: string[]): Promise<ModuleCommandResult> => {
+      if (args[0] === 'list') return { ok: true, output: { claude: [{ name: 'This computer', who: 'Ada', own: true }], codex: [] } }
+      if (args[0] === 'usage') return { ok: true, output: { claude: [], codex: [] } }
+      // Each read a new answer, as one over the wire is.
+      if (args[0] === 'adding') {
+        reads++
+        return { ok: true, output: structuredClone(now) }
+      }
+      if (args[0] !== 'add') return { ok: true, output: {} }
+      if (++adds === 1) {
+        now = { claude: { adding: { name: 'Dani' } }, codex: {} }
+        return { ok: true, output: now['claude'] }
+      }
+      // The second try's command is slow to answer.
+      return new Promise(resolve => (answer = resolve))
+    })
+    renderWithHost(<AccountsCard projects={[]} />, fakeHost('@openagt/skill-account-rotation', { runComputerCommand }))
+    const dialog = await add('Claude Code')
+    fireEvent.change(within(dialog).getByRole('textbox', { name: 'Whose account' }), { target: { value: 'Dani' } })
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Log in to Claude' }))
+    await within(dialog).findByText(/Adding Dani's account/)
+    now = { claude: { failed: 'Nobody signed in in time.' }, codex: {} }
+    expect((await within(dialog).findByRole('alert', undefined, { timeout: 5000 })).textContent).toBe('Nobody signed in in time.')
+    const press = within(dialog).getByRole('button', { name: 'Log in to Claude' }) as HTMLButtonElement
+    fireEvent.click(press)
+    await waitFor(() => expect(adds).toBe(2))
+    expect(press.disabled).toBe(true)
+    // The tab is shown again, and reads the last try's failure once more.
+    const before = reads
+    fireEvent(document, new Event('visibilitychange'))
+    await waitFor(() => expect(reads).toBeGreaterThan(before))
+    await new Promise(resolve => setTimeout(resolve, 100))
+    expect(press.disabled).toBe(true)
+    answer?.({ ok: false, error: 'Cancelled.' })
+  }, 15_000)
+
   test("says the command's refusal of a name, and keeps asking", async () => {
     renderAdding(() => ({ claude: {}, codex: {} }), () => ({ ok: false, error: 'There is an account named Dani already.' }))
     await add('Claude Code')
