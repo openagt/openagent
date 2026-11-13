@@ -496,6 +496,8 @@ describe('Settings › Devices: another computer, once', () => {
     fireEvent.click(within(row).getByRole('button', { name: 'Save' }))
     await waitFor(() => expect(host.renameComputer).toHaveBeenCalledWith('Suleiman’s MacBook'))
     expect(await within(row).findByText('Suleiman’s MacBook')).toBeTruthy()
+    // The focus is back on Rename, the press it started from.
+    await waitFor(() => expect(document.activeElement).toBe(within(row).getByRole('button', { name: 'Rename' })))
   })
 
   const FOUND = { name: 'Studio Mac', version: '0.36.0', url: 'http://192.168.1.5:4201' }

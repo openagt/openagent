@@ -1,4 +1,4 @@
-import { useState, type ComponentType, type FormEvent, type ReactNode } from 'react'
+import { useEffect, useRef, useState, type ComponentType, type FormEvent, type ReactNode, type RefObject } from 'react'
 import { ChevronRight, Circle, CircleArrowUp, CircleCheck, CircleX, Loader2, Pencil } from 'lucide-react'
 import { Button, Input, cn } from '@openagt/dashboard/module'
 import type { StepState } from './servers.js'
@@ -211,6 +211,23 @@ export function useChange(reload: () => Promise<unknown>) {
 /** A rename: the person's picked name, and what saving it answered. */
 export type Rename = (name: string) => Promise<{ ok: true } | { ok: false; error: string }>
 
+/** Rename's press and its form: open, the form has the focus; closed, by Save or Cancel, its press has it again. */
+export function useRenaming(): { renaming: boolean; open: () => void; close: () => void; press: RefObject<HTMLButtonElement | null> } {
+  const [renaming, setRenaming] = useState(false)
+  const press = useRef<HTMLButtonElement>(null)
+  const closed = useRef(false)
+  useEffect(() => {
+    if (renaming || !closed.current) return
+    closed.current = false
+    press.current?.focus()
+  }, [renaming])
+  const close = (): void => {
+    closed.current = true
+    setRenaming(false)
+  }
+  return { renaming, open: () => setRenaming(true), close, press }
+}
+
 /** A name being changed in place: the field, Save and Cancel; a refusal is said below the field. */
 export function RenameForm({ name, rename, onClose }: { name: string; rename: Rename; onClose: () => void }) {
   const [picked, setPicked] = useState(name)
@@ -244,14 +261,14 @@ export function RenameForm({ name, rename, onClose }: { name: string; rename: Re
 
 /** The top of a device's page: its icon, name and facts, and Rename. */
 export function Head({ icon: Icon, name, badge, facts, rename }: { icon: ComponentType<{ className?: string; 'aria-hidden'?: boolean }>; name: string; badge?: string; facts: ReactNode[]; rename?: Rename }) {
-  const [renaming, setRenaming] = useState(false)
+  const { renaming, open, close, press } = useRenaming()
   return (
     <div className="space-y-1 py-2">
       <div className="flex items-center gap-3">
         <Icon aria-hidden className="h-5 w-5 shrink-0 text-muted-foreground" />
         <div className="min-w-0 flex-1">
           {renaming && rename ? (
-            <RenameForm name={name} rename={rename} onClose={() => setRenaming(false)} />
+            <RenameForm name={name} rename={rename} onClose={close} />
           ) : (
             <p className="flex min-w-0 items-center gap-2 text-base font-semibold">
               <span className="truncate">{name}</span>
@@ -261,7 +278,7 @@ export function Head({ icon: Icon, name, badge, facts, rename }: { icon: Compone
           <Facts>{facts}</Facts>
         </div>
         {rename && !renaming && (
-          <Button size="sm" variant="ghost" onClick={() => setRenaming(true)}>
+          <Button ref={press} size="sm" variant="ghost" onClick={open}>
             <Pencil className="h-3.5 w-3.5" aria-hidden />
             Rename
           </Button>
