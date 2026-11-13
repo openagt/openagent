@@ -16,6 +16,7 @@ import {
   TooltipContent,
   TooltipTrigger,
   cn,
+  inPlace,
   pathsIn,
   useFileNames,
   useModuleHost,
@@ -244,11 +245,7 @@ function TakerLine({ schedule, projectId }: { schedule: Schedule; projectId: str
             Change it in{' '}
             <a
               href={page.href}
-              onClick={event => {
-                if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return
-                event.preventDefault()
-                schedule.open()
-              }}
+              onClick={inPlace(schedule.open)}
               className="underline hover:text-foreground"
             >
               {page.label}

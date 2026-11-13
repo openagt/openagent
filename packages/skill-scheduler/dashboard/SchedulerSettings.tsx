@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { Input, MAX_SPEND_OFFSET, SettingsRow, SettingsSection, useModuleHost, useOpenAgentDown, usePolled, type ModuleSettingsProps } from '@openagt/dashboard/module'
+import { Input, MAX_SPEND_OFFSET, inPlace, SettingsRow, SettingsSection, useModuleHost, useOpenAgentDown, usePolled, type ModuleSettingsProps } from '@openagt/dashboard/module'
 import { loosestSpendOffset, notAsked, offsetsThatDiffer, readSchedulers, schedulersKey, saveSpendOffset, typedOffset, type SchedulerRow } from './schedulers.js'
 
 // Settings › Scheduler: how far past the quota boundary scheduled work may still start. Each
@@ -58,11 +58,7 @@ export function SchedulerSettings({ projects }: ModuleSettingsProps) {
           How far past the quota scheduled work may go, on this machine. What a project starts by itself is on the{' '}
           <a
             href={host.pageHref('automations')}
-            onClick={event => {
-              if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return
-              event.preventDefault()
-              host.openPage('automations')
-            }}
+            onClick={inPlace(() => host.openPage('automations'))}
             className="underline hover:text-foreground"
           >
             Automations page

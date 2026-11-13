@@ -1,5 +1,5 @@
-import type { MouseEvent } from 'react'
 import { cn } from '../lib/utils.js'
+import { inPlace } from '../lib/in-place.js'
 
 /**
  * Whether this page is the dashboard answering the website's own name (#1919): there, and only
@@ -42,8 +42,4 @@ export function ViewToggle() {
  * The switch takes the place of the page it leaves in the history: both views are at `/`, so Back
  * could only show the view just left. A click with a modifier, or another button, is the browser's.
  */
-function switchInPlace(event: MouseEvent<HTMLAnchorElement>): void {
-  if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return
-  event.preventDefault()
-  location.replace(event.currentTarget.href)
-}
+const switchInPlace = inPlace<HTMLAnchorElement>(event => location.replace(event.currentTarget.href))

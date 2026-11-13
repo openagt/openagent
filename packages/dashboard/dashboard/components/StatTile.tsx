@@ -1,6 +1,7 @@
 import type { ReactNode } from 'react'
 import { cn } from '../lib/utils.js'
 import { STATUS_DOT } from '../lib/status-tone.js'
+import { inPlace } from '../lib/in-place.js'
 
 // A number that says how things stand, as a small card of the Overview's: its name, the number, and
 // a line under it. The Overview's own (what needs the person, who is at work) and a package's (the
@@ -43,11 +44,7 @@ export function StatTile({ label, value, note, tone, live = false, href, onClick
       <a
         href={href}
         className={className}
-        onClick={event => {
-          if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return
-          event.preventDefault()
-          onClick?.()
-        }}
+        onClick={inPlace(() => onClick?.())}
       >
         {body}
       </a>
