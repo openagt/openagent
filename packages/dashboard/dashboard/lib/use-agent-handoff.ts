@@ -113,19 +113,20 @@ export function useAgentHandoff(projectId: string, agentId: string | null | unde
   const [pending, setPending] = useState<Press | null>(null)
   const [failed, setFailed] = useState<string | null>(null)
   // The press's answer over the read it was pressed on, and over a newer one still looking up its
-  // pull request (#1028): the first read that knows is the branch's own word.
-  const [answer, setAnswer] = useState<{ over: AgentHandoff; with: Partial<AgentHandoff> } | null>(null)
+  // pull request (#1028): the first read that knows is the branch's own word. It is its run's alone.
+  const [answer, setAnswer] = useState<{ over: AgentHandoff; with: Partial<AgentHandoff>; of: string | undefined } | null>(null)
   const latest = useRef(handoff)
   latest.current = handoff
 
   const act = async <T,>(which: Press, fn: () => Promise<T>, said: string, answered?: (value: Exclude<T, { ok: false }>) => Partial<AgentHandoff> | undefined) => {
+    const of = key
     setPending(which)
     const outcome = await run(fn, said)
     setFailed(outcome.ok ? null : said)
     const over = latest.current
     const known = outcome.ok && over ? answered?.(outcome.value) : undefined
     if (known && over) {
-      setAnswer({ over, with: known })
+      setAnswer({ over, with: known, of })
       setPending(null)
       void reload()
     } else {
@@ -137,7 +138,7 @@ export function useAgentHandoff(projectId: string, agentId: string | null | unde
     return outcome.ok ? outcome.value : undefined
   }
 
-  const stands = handoff !== null && answer !== null && (answer.over === handoff || handoff.prPending === true)
+  const stands = handoff !== null && answer !== null && answer.of === key && (answer.over === handoff || handoff.prPending === true)
   useEffect(() => {
     if (answer && handoff && !stands) setAnswer(null)
   }, [answer, handoff, stands])

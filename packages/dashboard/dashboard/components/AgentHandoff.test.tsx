@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest'
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { openMenu } from '../test-utils.js'
 
 const onAgentHandoff = vi.fn(async () => null as unknown)
@@ -32,13 +32,14 @@ const worked = {
 
 // The same composition AgentView uses: the verdict and the next step, side by side in one bar.
 // `working`: the run's turn is going, so nothing is read and the answer read before it is dropped.
-function Harness({ subagent = false, working = false }: { subagent?: boolean; working?: boolean }) {
-  const state = useAgentHandoff('p1', 'run-1', !working, false, working)
+// `agentId`: the session shown; the agent view keeps the hook when another one opens.
+function Harness({ subagent = false, working = false, agentId = 'run-1' }: { subagent?: boolean; working?: boolean; agentId?: string }) {
+  const state = useAgentHandoff('p1', agentId, !working, false, working)
   return (
     <>
       <HandoffSummary handoff={state.handoff} subagent={subagent} />
       {state.error && <span>{state.error}</span>}
-      <HandoffActions projectId="p1" agentId="run-1" state={state} subagent={subagent} />
+      <HandoffActions projectId="p1" agentId={agentId} state={state} subagent={subagent} />
     </>
   )
 }
@@ -284,6 +285,30 @@ describe('run handoff (#799)', () => {
     await new Promise(resolve => setTimeout(resolve, 20))
     expect(screen.getByRole('button', { name: 'Merge PR' })).toBeTruthy()
     expect(document.querySelector('[aria-live="polite"]')!.textContent).toBe('Opened PR #3.')
+  })
+
+  test("a PR opened for one session is never shown on another opened while it was opening, nor once it is open", async () => {
+    const other = { ...worked, branch: 'openagent/other' }
+    onAgentHandoff.mockImplementation((async (_project: string, agent: string) => (agent === 'run-1' ? worked : { ...other, prPending: true })) as never)
+    let opened!: (answer: unknown) => void
+    sendOpenPullRequest.mockReturnValue(new Promise(resolve => (opened = resolve)))
+    const bar = render(<Harness />)
+    fireEvent.click(await screen.findByText('Open PR'))
+    bar.rerender(<Harness agentId="run-2" />)
+    await waitFor(() => expect(onAgentHandoff).toHaveBeenLastCalledWith('p1', 'run-2'))
+    await act(async () => opened({ ok: true, number: 3, url: 'https://example.test/3' }))
+    await new Promise(resolve => setTimeout(resolve, 20))
+    expect(screen.queryByRole('button', { name: 'Merge PR' })).toBeNull()
+    // Answered while its own session shows, then another opened that still looks up its PR.
+    cleanup()
+    sendOpenPullRequest.mockResolvedValue({ ok: true, number: 4, url: 'https://example.test/4' })
+    const again = render(<Harness />)
+    fireEvent.click(await screen.findByText('Open PR'))
+    expect(await screen.findByRole('button', { name: 'Merge PR' })).toBeTruthy()
+    again.rerender(<Harness agentId="run-2" />)
+    await waitFor(() => expect(onAgentHandoff).toHaveBeenLastCalledWith('p1', 'run-2'))
+    await new Promise(resolve => setTimeout(resolve, 20))
+    expect(screen.queryByRole('button', { name: 'Merge PR' })).toBeNull()
   })
 
   test('a merge left to wait for the checks says so, and is not offered again', async () => {
