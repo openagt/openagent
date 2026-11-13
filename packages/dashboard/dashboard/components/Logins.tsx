@@ -98,7 +98,7 @@ function CommandLine({ command }: { command: string }) {
   const long = command.length > LONG
   return (
     <div className="flex min-w-0 items-start gap-1">
-      <code className={cn('min-w-0 font-mono text-[11px] text-muted-foreground', long && !whole ? 'truncate' : 'break-all')}>{command}</code>
+      <code className={cn('min-w-0 font-mono text-[11px] text-muted-foreground', long && !whole ? 'truncate' : 'wrap-anywhere')}>{command}</code>
       {long && (
         <button type="button" className="shrink-0 text-[11px] text-muted-foreground underline-offset-2 hover:text-foreground hover:underline" onClick={() => setWhole(!whole)}>
           {whole ? 'Less' : 'Show all'}
