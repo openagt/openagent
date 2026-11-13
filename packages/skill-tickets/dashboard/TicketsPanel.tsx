@@ -67,6 +67,8 @@ export function TicketRow({
   const holder = ticket.lockedByAgent?.name ?? ticket.lockedBy
   // In review or waiting: no agent is started on it nor on its plan, the tickets skill's own rule.
   const held = heldBack(ticket)
+  // Claimed: an agent is on it, and its own page offers no start either.
+  const startable = !held && !ticket.locked
   const workPrompt = workOnTicketPrompt(ticket.file)
   const planPrompt = planTicketPrompt(ticket.file)
   return (
@@ -90,7 +92,7 @@ export function TicketRow({
           Its chevron opens the launcher with the same ask (#1507), since the model and where the
           agent runs are nowhere on this row. */}
       <div className="flex w-16 shrink-0 items-center justify-center">
-        {!held && (
+        {startable && (
           <StartAgentButton
             variant="ghost"
             size="icon-sm"
@@ -240,7 +242,7 @@ export function TicketRow({
             </TooltipTrigger>
             <TooltipContent>View the plan</TooltipContent>
           </Tooltip>
-        ) : held ? null : (
+        ) : !startable ? null : (
           <StartAgentButton
             variant="ghost"
             size="icon-sm"

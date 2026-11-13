@@ -109,6 +109,13 @@ describe('TicketsPanel (#697/#1144)', () => {
     expect(screen.queryByRole('button', { name: /start work on planned/i })).toBeNull()
   })
 
+  test('a claimed ticket offers no start and no plan: an agent is on it', async () => {
+    render(<TicketsPanel projectId="p1" tickets={[ticket({ locked: true, lockedBy: 'agent-1' })]} loaded onOpen={() => {}} />)
+    expect(await screen.findByText('agent-1')).toBeTruthy()
+    expect(screen.queryByRole('button', { name: /start work on do the thing/i })).toBeNull()
+    expect(screen.queryByRole('button', { name: /create a plan for do the thing/i })).toBeNull()
+  })
+
   test('a claimed ticket shows the hammer marker with its holder inline (#1420/#1144)', async () => {
     render(<TicketsPanel projectId="p1" tickets={[ticket({ locked: true, lockedBy: 'plan-1-0' })]} loaded onOpen={() => {}} />)
     // Inline, not tooltip-only: a still 1-2s hover is how nobody discovers anything. The tooltip
