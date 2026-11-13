@@ -418,8 +418,8 @@ export function StartAgentForm({
             <span className="text-shimmer">{cloning && sentTo ? `Cloning ${projectName ?? 'this project'} on ${sentTo}, the first time only` : note}</span>
           </p>
         )}
+        {note !== STARTING && note && !error && <p role="status" className="px-1.5 text-xs text-muted-foreground">{note}</p>}
       </div>
-      {note !== STARTING && note && !error && <p role="status" className="mt-2 text-xs text-muted-foreground">{note}</p>}
     </form>
   )
 }

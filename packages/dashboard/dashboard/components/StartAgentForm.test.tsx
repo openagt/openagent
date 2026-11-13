@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest'
-import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { forgetRemembered } from '../lib/use-async.js'
 import { openMenu } from '../test-utils.js'
 import { takePendingDraft } from '../lib/draft-handoff.js'
@@ -177,6 +177,14 @@ describe('StartAgentForm (#1774)', () => {
     await waitFor(() => expect(screen.getByRole('status').textContent).toBe('Starting session'))
     answer({ agentId: 'r1' })
     await waitFor(() => expect(screen.queryByRole('status')).toBeNull())
+  })
+
+  test('a loaded prompt is said above the box, over the page, so the box does not move', async () => {
+    onCommands.mockResolvedValue({ commands: [], startHook: true, gitHost: true })
+    render(<StartAgentForm {...props} />)
+    act(() => (composerProps.current.onPreset as (label: string, replaced: boolean) => void)('footer', false))
+    expect(screen.getByRole('status').textContent).toBe('footer loaded — review or edit, then Start')
+    expect(screen.getByRole('status').parentElement!.className).toContain('bottom-full')
   })
 
   test('a refused start gives the prompt the focus, however Start was pressed: typing goes on in it', async () => {
