@@ -320,7 +320,7 @@ function CardBar({ label, widths, width, first, last, onStep, onWidth, onHide }:
               type="button"
               aria-pressed={option === width}
               onClick={() => onWidth(option)}
-              className={cn('min-w-7 px-1.5 py-0.5 tabular-nums transition-colors', option === width ? 'bg-accent text-accent-foreground' : 'text-muted-foreground hover:text-foreground')}
+              className={cn('min-w-7 px-1.5 py-1 tabular-nums transition-colors', option === width ? 'bg-accent text-accent-foreground' : 'text-muted-foreground hover:text-foreground')}
             >
               {WIDTH_WORDS[option]}
             </button>
