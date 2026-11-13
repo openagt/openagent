@@ -97,6 +97,26 @@ describe('the Agents page', () => {
     await waitFor(() => expect(rpc.sendSaveAgent).toHaveBeenCalledWith(expect.objectContaining({ name: 'Social media' })))
   })
 
+  test('Esc on an editor with something changed asks first: Cancel there keeps what was typed, Discard closes it; with nothing changed it closes at once', async () => {
+    render(<AgentsPage />)
+    fireEvent.click(await screen.findByRole('button', { name: 'New agent' }))
+    const editor = screen.getByRole('dialog', { name: 'New agent' })
+    fireEvent.change(within(editor).getByLabelText('Name'), { target: { value: 'Reviewer two' } })
+    fireEvent.keyDown(within(editor).getByLabelText('Name'), { key: 'Escape' })
+    const asked = await screen.findByRole('alertdialog', { name: 'Discard the new agent?' })
+    fireEvent.click(within(asked).getByRole('button', { name: 'Cancel' }))
+    await waitFor(() => expect(screen.queryByRole('alertdialog')).toBeNull())
+    expect((within(screen.getByRole('dialog', { name: 'New agent' })).getByLabelText('Name') as HTMLInputElement).value).toBe('Reviewer two')
+    fireEvent.click(within(screen.getByRole('dialog', { name: 'New agent' })).getByRole('button', { name: 'Close' }))
+    fireEvent.click(within(await screen.findByRole('alertdialog')).getByRole('button', { name: 'Discard' }))
+    await waitFor(() => expect(screen.queryByRole('dialog', { name: 'New agent' })).toBeNull())
+    fireEvent.click(screen.getByRole('button', { name: 'Edit Reviewer' }))
+    fireEvent.keyDown(within(screen.getByRole('dialog', { name: 'Editing Reviewer' })).getByLabelText('Name'), { key: 'Escape' })
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
+    expect(screen.queryByRole('alertdialog')).toBeNull()
+    expect(rpc.sendSaveAgent).not.toHaveBeenCalled()
+  })
+
   test('an agent edited in place keeps its id; a refusal is said under the editor and nothing closes', async () => {
     rpc.sendSaveAgent.mockResolvedValue({ ok: false, error: 'OpenAgent has no GitHub account stranger on this computer.' })
     render(<AgentsPage />)

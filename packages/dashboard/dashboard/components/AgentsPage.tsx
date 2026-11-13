@@ -63,6 +63,12 @@ function draftOf(agent?: AgentRecord): Draft {
   return { ...(agent ? { id: agent.id } : {}), name: agent?.name ?? '', skills: new Set(agent?.skills ?? ['ask', 'github']), ...(agent?.accounts.github !== undefined ? { github: agent.accounts.github } : {}), claude: new Set(agent?.accounts.claude ?? []), codex: new Set(agent?.accounts.codex ?? []), projectSkills: agent?.projectSkills ?? true }
 }
 
+/** Whether two drafts hold the same agent. */
+function sameDraft(a: Draft, b: Draft): boolean {
+  const same = (x: Set<string>, y: Set<string>) => x.size === y.size && [...x].every(one => y.has(one))
+  return a.name === b.name && a.github === b.github && a.projectSkills === b.projectSkills && same(a.skills, b.skills) && same(a.claude, b.claude) && same(a.codex, b.codex)
+}
+
 /** The Agents page. */
 export function AgentsPage() {
   const { view, reload } = useAgentsList()
@@ -222,7 +228,8 @@ const COMPUTERS = ''
 
 /**
  * An agent edited, or a new one, in a dialog over the page: the name, the skills ticked, the
- * accounts picked; Save, or Enter in the name, writes it, Cancel leaves it. Its parts scroll under the title while Save
+ * accounts picked; Save, or Enter in the name, writes it, Cancel leaves it, and Esc or the ✕ ask first
+ * once something is changed. Its parts scroll under the title while Save
  * and Cancel stay in view, and a click beside it closes nothing: much is typed here. A GitHub
  * account OpenAgent does not have yet is added from here, in its own dialog over this one, and is
  * then the one picked; `onAccounts` reads the accounts again.
@@ -230,6 +237,8 @@ const COMPUTERS = ''
 function AgentEditor({ agent, view, onAccounts, onDone }: { agent?: AgentRecord; view: AgentsView; onAccounts: () => Promise<void>; onDone: (saved: boolean) => Promise<void> | void }) {
   // What is being typed is the editor's own from its first frame: the page reading the agents again changes nothing in it.
   const [draft, setDraft] = useState<Draft>(() => draftOf(agent))
+  const opened = useRef(draft).current
+  const [leaving, setLeaving] = useState(false)
   const nameField = useRef<HTMLInputElement>(null)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | undefined>()
@@ -278,7 +287,11 @@ function AgentEditor({ agent, view, onAccounts, onDone }: { agent?: AgentRecord;
       wide
       keepOnOutsidePress
       initialFocus={nameField}
-      onOpenChange={open => !open && !busy && void onDone(false)}
+      onOpenChange={open => {
+        if (open || busy) return
+        if (sameDraft(draft, opened)) void onDone(false)
+        else setLeaving(true)
+      }}
       title={agent ? `Editing ${agent.name}` : 'New agent'}
       footer={
         <div className="space-y-2">
@@ -296,6 +309,15 @@ function AgentEditor({ agent, view, onAccounts, onDone }: { agent?: AgentRecord;
               {busy ? 'Saving…' : 'Save'}
             </Button>
           </div>
+          <ConfirmDialog
+            open={leaving}
+            onOpenChange={setLeaving}
+            title={agent ? `Discard your changes to ${agent.name}?` : 'Discard the new agent?'}
+            body="What you typed and ticked here is not saved."
+            confirmLabel="Discard"
+            onConfirm={async () => {}}
+            onSuccess={() => void onDone(false)}
+          />
         </div>
       }
     >
