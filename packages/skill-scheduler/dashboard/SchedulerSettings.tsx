@@ -81,6 +81,7 @@ export function SchedulerSettings({ projects }: ModuleSettingsProps) {
               min={-MAX_SPEND_OFFSET}
               max={MAX_SPEND_OFFSET}
               disabled={down}
+              step={0.1}
               onChange={e => {
                 const raw = e.target.value
                 setText(raw)
