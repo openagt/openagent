@@ -461,6 +461,17 @@ describe('the Settings list', () => {
     expect(screen.queryByRole('alertdialog')).toBeNull()
   })
 
+  test('a press on the entry already shown asks nothing and keeps the tick held: the next entry still asks', async () => {
+    show('skills', 'p1')
+    fireEvent.click(await screen.findByRole('checkbox', { name: 'skill-of-p1' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Skills' }))
+    expect(screen.queryByRole('alertdialog')).toBeNull()
+    expect(screen.getByRole('checkbox', { name: 'skill-of-p1' }).getAttribute('aria-checked')).toBe('false')
+    expect(title()).toBe('SettingsgemstackSkills')
+    fireEvent.click(screen.getByRole('button', { name: 'Appearance' }))
+    expect(await screen.findByRole('alertdialog', { name: 'Leave without saving?' })).toBeTruthy()
+  })
+
   test('with OpenAgent not answering, Leave still goes: it sends nothing', async () => {
     render(
       <DaemonDown.Provider value={true}>
@@ -548,6 +559,14 @@ describe('the Settings list', () => {
     expect(screen.getByRole('switch', { name: 'Onboarding on the Overview' })).toBeTruthy()
     fireEvent.click(screen.getByRole('button', { name: 'All settings' }))
     expect(screen.getByRole('navigation', { name: 'Settings' })).toBeTruthy()
+  })
+
+  test('on a phone a press on the list\'s first entry opens it', () => {
+    vi.stubGlobal('matchMedia', (query: string) => ({ matches: true, media: query, addEventListener: () => {}, removeEventListener: () => {} }))
+    show('')
+    fireEvent.click(screen.getByRole('button', { name: 'Profile' }))
+    expect(screen.queryByRole('navigation', { name: 'Settings' })).toBeNull()
+    expect(screen.getByText('Your name and picture')).toBeTruthy()
   })
 
   test('entries are ordered by their order, 50 when unsaid, then by package name', () => {

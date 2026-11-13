@@ -143,7 +143,10 @@ export function SettingsDialog({
         <button
           type="button"
           aria-current={e === current ? 'page' : undefined}
-          onClick={() => leave(() => onEntry(e.id))}
+          onClick={() => {
+            // The entry shown, pressed again, goes nowhere: it asks nothing, and what it holds stays held.
+            if (e !== current || listOnly) leave(() => onEntry(e.id))
+          }}
           className={cn(
             'flex w-full items-center gap-2 rounded-md px-2 text-left text-sm outline-none hover:bg-sidebar-accent/50 hover:text-sidebar-accent-foreground focus-visible:ring-2 focus-visible:ring-[var(--color-primary)]',
             // A hovered row is a lighter shade than the picked one, so the two never read alike. On a
