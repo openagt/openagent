@@ -1,6 +1,6 @@
 import { FastForward, ListTodo, Play } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitleLink, StartAgentButton, cn, pathsIn, useFileNames, useModuleHost, type ModuleCardProps } from '@openagt/dashboard/module'
-import { fanOutLabel, isWorkingOn, unclaimedEntries, workOnEntryPrompt } from '../src/module.js'
+import { fanOutLabel, fanOutPress, isWorkingOn, unclaimedEntries, workOnEntryPrompt } from '../src/module.js'
 import { AgentOnEntry, EntryTitle, entryView } from './entry.js'
 import { useQueueStarts } from './starts.js'
 import { BatchCount } from './batch-count.js'
@@ -67,14 +67,14 @@ export function QueueCard({ projects }: ModuleCardProps) {
                     <span className="shrink-0 text-xs tabular-nums text-muted-foreground">{entries.length} queued</span>
                     {free.length > 0 && (
                       <>
-                        {/* The project's batch act, said as one: how many agents, then "Start N", which starts them from the top. */}
+                        {/* The project's batch act, said as one: how many agents, then "Start N agents", which starts them from the top. */}
                         <div className="ml-auto">
                           <BatchCount count={count} max={free.length} onChange={next => starts.setCount(project.id, next)} />
                         </div>
                         {/* The chevron sends the top entry alone: a launcher can only ever start one agent. */}
                         <StartAgentButton
                           icon={<FastForward className="h-3.5 w-3.5" aria-hidden />}
-                          label={`Start ${count}`}
+                          label={fanOutPress(count)}
                           menuAriaLabel={`Other ways to start agents on ${project.name}'s queue`}
                           tooltip={fanOutLabel(count)}
                           busy={inFlight}

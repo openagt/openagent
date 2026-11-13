@@ -27,7 +27,7 @@ import {
   type Schedule,
 } from '@openagt/dashboard/module'
 import type { PlacedEntry } from '../src/queue.js'
-import { DEFAULT_PRIORITY, PRIORITIES, QUEUE_COMMAND, addTextArgs, doneArgs, fanOutLabel, isPlacedEntry, isWorkingOn, priorityMeaning, readEntries, unclaimedEntries, workOnEntryPrompt } from '../src/module.js'
+import { DEFAULT_PRIORITY, PRIORITIES, QUEUE_COMMAND, addTextArgs, doneArgs, fanOutLabel, fanOutPress, isPlacedEntry, isWorkingOn, priorityMeaning, readEntries, unclaimedEntries, workOnEntryPrompt } from '../src/module.js'
 import { AgentOnEntry, EntryTitle, entryView } from './entry.js'
 import { useQueueStarts, type QueueStarts } from './starts.js'
 import { BatchCount } from './batch-count.js'
@@ -142,7 +142,7 @@ function ProjectQueue({ read, titled, schedule, names, starts, reload }: { read:
               size="sm"
               leading={<BatchCount count={count} max={free.length} onChange={next => starts.setCount(project.id, next)} />}
               icon={<FastForward className="h-3.5 w-3.5" aria-hidden />}
-              label={count === 1 ? 'Start 1 agent' : `Start ${count} agents`}
+              label={fanOutPress(count)}
               menuAriaLabel={`Other ways to start agents on ${project.name}'s queue`}
               tooltip={fanOutLabel(count)}
               busy={starts.inFlight}
