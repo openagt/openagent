@@ -46,7 +46,8 @@ export function Dialog({
   return (
     <BaseDialog.Root open={open} onOpenChange={onOpenChange} disablePointerDismissal={keepOnOutsidePress}>
       <BaseDialog.Portal>
-        <BaseDialog.Backdrop className="fixed inset-0 z-50 bg-black/40 backdrop-blur-[1px]" />
+        {/* Drawn over another dialog too (Settings), which Base UI leaves undimmed unless told. */}
+        <BaseDialog.Backdrop forceRender className="fixed inset-0 z-50 bg-black/40 backdrop-blur-[1px]" />
         <BaseDialog.Popup
           initialFocus={initialFocus && (() => (initialFocus.current?.matches(':enabled') ? initialFocus.current : true))}
           {...(finalFocus ? { finalFocus } : {})}
