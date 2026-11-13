@@ -568,8 +568,10 @@ export function App() {
   const sidebarWidth = useSidebarWidth()
   // Hidden by its button or Cmd/Ctrl+B, and remembered; a phone's sheet is opened apart from it.
   const sidebarHidden = useSidebarHidden()
+  // An address that shows a "No such …" page: its own words are further down.
+  const notFound = unknownProject || sessionGone || (pageSegment !== null && addressesRead && !OWN_PAGES.has(pageSegment) && !modulePage)
   // The name a phone's top bar gives the page; null on a project's own pages, which have a top row.
-  const phoneTitle = pageSegment ? (OWN_PAGES.get(pageSegment) ?? modulePage?.label ?? '') : projectId === null ? 'Overview' : null
+  const phoneTitle = notFound ? 'Not found' : pageSegment ? (OWN_PAGES.get(pageSegment) ?? modulePage?.label ?? '') : projectId === null ? 'Overview' : null
   // A page with no chat (the Overview, a module's page) scrolls as a page: the browser's own
   // scrolling, which bounces at either end, and its header goes up with the rest. On a phone its bar
   // stays at the top; on a wider screen the sidebar stays beside it. A chat keeps its box at the

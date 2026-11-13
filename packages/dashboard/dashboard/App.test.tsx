@@ -139,6 +139,19 @@ describe('module pages in the shell (#1774)', () => {
     }
   })
 
+  test('on a phone the bar of a page that is not found says so', async () => {
+    answerShell([])
+    const wide = phoneScreen()
+    try {
+      window.history.replaceState(null, '', '/nothing')
+      render(<App />)
+      const bar = (await screen.findByRole('button', { name: 'Open the menu' })).parentElement!
+      await waitFor(() => expect(bar.textContent).toBe('Not found'))
+    } finally {
+      wide()
+    }
+  })
+
   test('a skill saved in Settings gives or takes a page: the projects and their modules are read again at once', async () => {
     answerShell([])
     render(<App />)
