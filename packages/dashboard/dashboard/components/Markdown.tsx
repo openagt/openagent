@@ -106,7 +106,7 @@ function diffLineClass(line: string): string | undefined {
  * (`highlight.tsx`), as Claude Code on the web colours one; until its grammar is loaded, and for a
  * language it does not know, the text is plain.
  *
- * A card, as Claude Code on the web sets one: a bordered box with the copy button in its corner,
+ * A card, as Claude Code on the web sets one: a box a level above the page with the copy button in its corner,
  * its lines wrapped to the box rather than cut at its edge, and no strip naming the language. Code
  * is the one thing in an answer a reader takes somewhere else, and selecting it by hand is where
  * that went wrong.
@@ -118,8 +118,9 @@ function CodeBlock({ lines, language, document, wrap = false }: { lines: string[
   // In a page, as Claude Code on the web's file preview sets one: as wide as the text, the language
   // it was fenced as beside the copy button, and its lines kept whole, the box scrolling sideways.
   const box = (
-    <div className={cn('relative max-w-full rounded-lg border border-border', document ? 'w-full' : 'w-fit min-w-40')}>
-      <div className="absolute top-2.5 right-2.5 flex items-center gap-2">
+    // A surface a level above the page; its copy press shows under the pointer and the keyboard, always on touch.
+    <div className={cn('group/code relative max-w-full rounded-md border border-hairline bg-card', document ? 'w-full' : 'w-fit min-w-40')}>
+      <div className="absolute top-2 right-2 flex items-center gap-2 transition-opacity focus-within:opacity-100 pointer-fine:opacity-0 pointer-fine:group-hover/code:opacity-100">
         {document && language !== '' && <span className="text-xs text-muted-foreground">{language}</span>}
         <CopyButton text={text} label="Copy the code" />
       </div>
@@ -384,12 +385,12 @@ function inlineLines(text: string): ReactNode {
  */
 function PageTable({ header, body }: { header: string[]; body: string[][] }) {
   return (
-    <div className="overflow-x-auto rounded-lg border border-border">
+    <div className="overflow-x-auto rounded-lg border border-hairline">
       <table className="min-w-full border-separate border-spacing-0 text-sm">
         <thead>
           <tr>
             {header.map((cell, i) => (
-              <th key={i} className="border-b border-border bg-muted/50 px-3 py-[7px] text-left font-semibold">
+              <th key={i} className="border-b border-hairline bg-muted px-3 py-2 text-left font-semibold">
                 {inline(cell)}
               </th>
             ))}
@@ -399,7 +400,7 @@ function PageTable({ header, body }: { header: string[]; body: string[][] }) {
           {body.map((cells, r) => (
             <tr key={r}>
               {header.map((_, c) => (
-                <td key={c} className={cn('px-3 py-[7px] align-top', r > 0 && 'border-t border-border', c === 0 ? 'whitespace-nowrap' : 'min-w-40')}>
+                <td key={c} className={cn('px-3 py-2 align-top', r > 0 && 'border-t border-hairline', c === 0 ? 'whitespace-nowrap' : 'min-w-40')}>
                   {inline(cells[c] ?? '')}
                 </td>
               ))}
@@ -423,7 +424,7 @@ function replyTable(header: string[], body: string[][], compact: boolean, key: n
         <thead>
           <tr>
             {header.map((cell, i) => (
-              <th key={i} className={cn('border-b border-border text-left font-medium', compact ? 'py-1 pr-3' : 'py-2.5 pr-6')}>
+              <th key={i} className={cn('border-b border-hairline text-left font-medium', compact ? 'py-1 pr-3' : 'py-2 pr-6')}>
                 {inline(cell)}
               </th>
             ))}
@@ -433,7 +434,7 @@ function replyTable(header: string[], body: string[][], compact: boolean, key: n
           {body.map((cells, r) => (
             <tr key={r}>
               {header.map((_, c) => (
-                <td key={c} className={cn('border-b border-border/60 align-top', compact ? 'py-1 pr-3' : 'py-2.5 pr-6')}>
+                <td key={c} className={cn('border-b border-hairline align-top', compact ? 'py-1 pr-3' : 'py-2 pr-6')}>
                   {inline(cells[c] ?? '')}
                 </td>
               ))}
@@ -459,8 +460,8 @@ function Heading({ level, text, page = false }: { level: number; text: string; p
   const Tag = `h${Math.min(level, 6)}` as 'h1'
   // Inside a dashboard page, under the page's own title: a step below it, and closer together.
   const size = page
-    ? ['text-base font-semibold', 'text-[15px] font-semibold', 'text-sm font-semibold', 'text-sm font-medium', 'text-sm font-medium', 'text-sm font-medium'][level - 1]
-    : ['text-[26px] leading-[30px] font-medium', 'text-xl leading-[25px] font-medium', 'text-base font-semibold', 'font-semibold', 'font-semibold', 'font-semibold'][level - 1]
+    ? ['text-base font-semibold', 'text-base font-medium', 'text-sm font-semibold', 'text-sm font-medium', 'text-sm font-medium', 'text-sm font-medium'][level - 1]
+    : ['text-2xl font-medium', 'text-xl font-medium', 'text-base font-semibold', 'font-semibold', 'font-semibold', 'font-semibold'][level - 1]
   return (
     <Tag data-heading={slug(text)} className={cn(size, level > 1 && (page ? 'pt-5 first:pt-0' : 'pt-7 first:pt-0'))}>
       {inline(text)}
@@ -551,7 +552,7 @@ function renderBlocks(lines: string[], look: Look, depth = 0): ReactNode[] {
       const quoted = lines.slice(i, end).map(l => l.replace(/^\s*>\s?/, ''))
       blocks.push(
         // In a page the quote keeps the text's colour, as Claude Code on the web's file preview sets one; in a reply it is dimmed.
-        <blockquote key={key++} className={cn('space-y-1.5 border-l-4 border-border pl-4', document ? 'text-foreground' : 'text-muted-foreground', !compact && 'my-3 ml-2')}>
+        <blockquote key={key++} className={cn('space-y-1.5 border-l-2 border-border pl-4', document ? 'text-foreground' : 'text-muted-foreground', !compact && 'my-3 ml-2')}>
           {renderBlocks(quoted, look, depth + 1)}
         </blockquote>,
       )
@@ -586,9 +587,9 @@ function renderBlocks(lines: string[], look: Look, depth = 0): ReactNode[] {
 const LINK_CLASS = 'text-primary underline underline-offset-2 break-all'
 // A name in the text (a file, a branch, a command) is on a faint fill, so it stands out from the
 // sentence around it, as Claude Code on the web sets one.
-const CODE_CLASS = 'rounded-[4px] bg-foreground/[0.075] px-1 py-px text-[0.9em]'
+const CODE_CLASS = 'rounded-sm bg-foreground/[0.075] px-1 py-px text-[0.9em]'
 // `#12` as a link: the issue or pull request of that number, on the project's GitHub page.
-const ISSUE_CLASS = 'whitespace-nowrap rounded bg-primary/10 px-1.5 text-primary hover:bg-primary/15'
+const ISSUE_CLASS = 'whitespace-nowrap rounded-sm bg-primary/10 px-1.5 text-primary hover:bg-primary/15'
 
 /**
  * Where `#12` in an answer leads: the project's page on GitHub, under which `issues/12` opens the
