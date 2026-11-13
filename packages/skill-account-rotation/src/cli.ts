@@ -4,7 +4,7 @@ import { addingNow, beginAdding, bringCode, cancelAdding, runAdding } from './ad
 import { comesBackFrom, logOut, ownLoginThere, ownName, removeAdded } from './login.js'
 import { loginWiring, type LoginWiring } from './wiring.js'
 import { readUsage } from './usage.js'
-import { unknownWord, usageError, wrongArguments } from '@openagt/agent-data'
+import { unknownWord, usageError, wrongArguments, helpRows } from '@openagt/agent-data'
 
 /**
  * The command line: a result is one JSON document on stdout; a refusal is one line for a person on
@@ -14,16 +14,17 @@ import { unknownWord, usageError, wrongArguments } from '@openagt/agent-data'
 
 export const USAGE = `usage: account-rotation <command>
 
-  list                          the accounts of each agent in the order runs try them, never a login
-  usage                         how full each account is, read now where it can be
-  add <claude|codex> <name>     start adding a new account under <name>: the person signs in, and this answers at once
-  adding                        how adding stands for each agent: where to sign in, and why the last one did not go through
-  add-code <claude|codex>       hand the sign-in the code its page showed, on standard input
-  add-cancel <claude|codex>     stop adding
-  remove <claude|codex> <name>  take an added account off the list
-  logout <claude|codex>         log the person's own login out, their terminal too
-  use-first <claude|codex> <name>
-                                the account runs try first from now on`
+${helpRows([
+  ['list', 'the accounts of each agent in the order runs try them, never a login'],
+  ['usage', 'how full each account is, read now where it can be'],
+  ['add <claude|codex> <name>', 'start adding a new account under <name>: the person signs in, and this answers at once'],
+  ['adding', 'how adding stands for each agent: where to sign in, and why the last one did not go through'],
+  ['add-code <claude|codex>', 'hand the sign-in the code its page showed, on standard input'],
+  ['add-cancel <claude|codex>', 'stop adding'],
+  ['remove <claude|codex> <name>', 'take an added account off the list'],
+  ['logout <claude|codex>', `log the person's own login out, their terminal too`],
+  ['use-first <claude|codex> <name>', 'the account runs try first from now on'],
+])}`
 
 export interface CliIo {
   stdout: (line: string) => void

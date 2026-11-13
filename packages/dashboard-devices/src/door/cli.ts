@@ -1,7 +1,7 @@
 import { addressOf, nameAddress, numberAddress, ownAddresses, ownName, serverWhere, urlHost, type AddressDeps } from './address.js'
 import { doorFingerprint } from './certificate.js'
 import { execFile } from 'node:child_process'
-import { personalFolder, readPersonRecord, unknownWord, usageError, wrongArguments } from '@openagt/agent-data'
+import { personalFolder, readPersonRecord, unknownWord, usageError, wrongArguments, helpRows } from '@openagt/agent-data'
 import { codeLink, readKeyWord } from './door.js'
 import { ENTER_PATH } from './paths.js'
 import { askMe, enterForLine, leaveLine, readLineLink } from './line-out.js'
@@ -24,57 +24,35 @@ import { ownStdin, pidAlive, untilStopped } from '../process.js'
 
 export const USAGE = `usage: devices <command>
 
-  status         whether On this Wi-Fi is on, whether the door listens, and the devices that are in
-  on             On this Wi-Fi on: the door opens on the network this computer is on, over plain HTTP
-  off            On this Wi-Fi off: nothing listens on the network; the devices stay in the list
-  add [--for <name>] [--qr]
-                 a code a new device gets in with, once, for ten minutes, and the link a QR code holds; with --for,
-                 the device is that person's, by their name (the owner is named first); where
-                 OPENAGENT_PERSON_HELPER names the helper, the person gets a user and an OpenAgent of their own;
-                 with --qr, the QR code is drawn on standard error too, for a computer with no screen of its own
-  remove <id>    take one device out, by its id as status names it; it is out at once, a computer with all it holds here
-  rename <id> <name>
-                 call a device by another name, by its id as status names it; a computer under all it holds here
-  me             the name of the person at this computer, as git knows it: who the owner would be
-  owner <name>
-                 name this computer's owner, once: the devices already in are theirs
-  remove-person <name>
-                 take a person out, with every device of theirs, and their user with all it holds; the owner stays
-  keep <name>    keep a person a server's line made here, though that server no longer has them: nobody is asked about them again
-  https <at>     this computer is a server, reached at this number or name: the door is open to every network,
-                 over HTTPS, with a certificate it asks for and renews itself (ports 80 and 443 must be reachable)
-  https off      no longer a server: On this Wi-Fi decides again
-  tailscale on   the door is open to your own devices on your Tailscale network, over HTTPS, at this computer's
-                 name there; Tailscale must run here, signed in, and Serve be on for your Tailscale network.
-                 On this Wi-Fi goes on beside it, as its switch says
-  tailscale off  no longer on Tailscale: On this Wi-Fi goes on as its switch says
-  line add <link> [watch]
-                 keep a line open to a server, so a run can be started on this computer from the server's page;
-                 the link is the one the server gives for a new device, or - to read it from standard input;
-                 with watch the server only reads
-  line full <at> the server at this number or name may start runs here through its line; who there may is as named
-  line for <at> [<name>...]
-                 this computer's own person there, and these people, each as a user of their own here; only where
-                 OPENAGENT_PERSON_HELPER names the helper, on a computer set up as a server; with no name, its own person only
-  line watch <at>
-                 it may only read: this computer's runs are seen from the server's page, and none is started or told anything
-  line remove <at>
-                 no line to that server any more, and this computer's key for it there is taken out
-  find           the computers on this Wi-Fi whose door is open there: their name, OpenAgent's version, where their door is
-  ask <url>      ask the computer whose door is at <url>, as find names it, to let this one in: the number both screens
-                 show, and the secret the answer is heard by
-  ask-answer <url> -
-                 whether a person there allowed it, with the secret on standard input: waits a while for the answer, and
-                 once allowed, answers the link this computer gets in with
-  ask-cancel <url> -
-                 take this computer's ask away there, with the secret on standard input
-  asks [--wait <seconds>] [--seen <id,…>]
-                 the computers on this Wi-Fi asking to get in here; with --wait, waits up to that long (at most 25) until
-                 they are other than --seen says
-  allow <id>     let in the computer asking by that id; deny <id> says no, and it waits a minute to ask again
-  serve          the door's own process, run by OpenAgent for as long as it runs itself (OPENAGENT_URL says where OpenAgent is)
-  server <command>
-                 the servers this computer sets up over SSH: devices server lists their commands`
+${helpRows([
+  ['status', 'whether On this Wi-Fi is on, whether the door listens, and the devices that are in'],
+  ['on', 'On this Wi-Fi on: the door opens on the network this computer is on, over plain HTTP'],
+  ['off', 'On this Wi-Fi off: nothing listens on the network; the devices stay in the list'],
+  ['add [--for <name>] [--qr]', `a code a new device gets in with, once, for ten minutes, and the link a QR code holds; with --for, the device is that person's, by their name (the owner is named first); where OPENAGENT_PERSON_HELPER names the helper, the person gets a user and an OpenAgent of their own; with --qr, the QR code is drawn on standard error too, for a computer with no screen of its own`],
+  ['remove <id>', 'take one device out, by its id as status names it; it is out at once, a computer with all it holds here'],
+  ['rename <id> <name>', 'call a device by another name, by its id as status names it; a computer under all it holds here'],
+  ['me', 'the name of the person at this computer, as git knows it: who the owner would be'],
+  ['owner <name>', `name this computer's owner, once: the devices already in are theirs`],
+  ['remove-person <name>', 'take a person out, with every device of theirs, and their user with all it holds; the owner stays'],
+  ['keep <name>', `keep a person a server's line made here, though that server no longer has them: nobody is asked about them again`],
+  ['https <at>', 'this computer is a server, reached at this number or name: the door is open to every network, over HTTPS, with a certificate it asks for and renews itself (ports 80 and 443 must be reachable)'],
+  ['https off', 'no longer a server: On this Wi-Fi decides again'],
+  ['tailscale on', `the door is open to your own devices on your Tailscale network, over HTTPS, at this computer's name there; Tailscale must run here, signed in, and Serve be on for your Tailscale network. On this Wi-Fi goes on beside it, as its switch says`],
+  ['tailscale off', 'no longer on Tailscale: On this Wi-Fi goes on as its switch says'],
+  ['line add <link> [watch]', `keep a line open to a server, so a run can be started on this computer from the server's page; the link is the one the server gives for a new device, or - to read it from standard input; with watch the server only reads`],
+  ['line full <at>', 'the server at this number or name may start runs here through its line; who there may is as named'],
+  ['line for <at> [<name>...]', `this computer's own person there, and these people, each as a user of their own here; only where OPENAGENT_PERSON_HELPER names the helper, on a computer set up as a server; with no name, its own person only`],
+  ['line watch <at>', `it may only read: this computer's runs are seen from the server's page, and none is started or told anything`],
+  ['line remove <at>', `no line to that server any more, and this computer's key for it there is taken out`],
+  ['find', `the computers on this Wi-Fi whose door is open there: their name, OpenAgent's version, where their door is`],
+  ['ask <url>', 'ask the computer whose door is at <url>, as find names it, to let this one in: the number both screens show, and the secret the answer is heard by'],
+  ['ask-answer <url> -', 'whether a person there allowed it, with the secret on standard input: waits a while for the answer, and once allowed, answers the link this computer gets in with'],
+  ['ask-cancel <url> -', `take this computer's ask away there, with the secret on standard input`],
+  ['asks [--wait <seconds>] [--seen <id,…>]', 'the computers on this Wi-Fi asking to get in here; with --wait, waits up to that long (at most 25) until they are other than --seen says'],
+  ['allow <id>', 'let in the computer asking by that id; deny <id> says no, and it waits a minute to ask again'],
+  ['serve', `the door's own process, run by OpenAgent for as long as it runs itself (OPENAGENT_URL says where OpenAgent is)`],
+  ['server <command>', 'the servers this computer sets up over SSH: devices server lists their commands'],
+])}`
 
 export interface CliIO {
   env: NodeJS.ProcessEnv

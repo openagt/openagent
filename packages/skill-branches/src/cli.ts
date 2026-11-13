@@ -1,6 +1,6 @@
 import { basename, resolve } from 'node:path'
 import { realpath, stat } from 'node:fs/promises'
-import { GIT_FAILED, Refused, UsageError, checkoutRoot, inRepo, nodeGitRunner, parseCommandArgs, runCommandLine, type Command, type GitRunner } from '@openagt/agent-data'
+import { GIT_FAILED, Refused, UsageError, checkoutRoot, inRepo, nodeGitRunner, parseCommandArgs, runCommandLine, helpRows, helpText, type Command, type GitRunner } from '@openagt/agent-data'
 import { agentBranchName, agentIdFromWorktreeDir, isSafeAgentId, sessionNameOf } from './branch-names.js'
 import { branchPushed, currentBranch, isWorktreeRoot, projectRoot, worktreeBranch, worktreeClean, worktreeDirEntries, worktreePath, worktreeSize } from './worktree.js'
 import { nameBranch, type NameBranchRefusal } from './name.js'
@@ -31,27 +31,23 @@ import { cleanup } from './cleanup.js'
 
 export const USAGE = `usage: branches <command>
 
-  create <id> [--base <ref>]   a checkout for agent <id>, on a fresh branch agent-<id>; a <ref> of refs/remotes/origin/<branch> is fetched first
-  attach <id> <branch> [--base <ref>]
-                               a checkout for agent <id>, on an existing branch; one that is gone starts again from <ref>
-  name <name>                  rename this checkout's branch to agent-<name>; prints the name it got
-  status [path]                the checkout's branch, whether it is clean, whether it is on the remote
-  show [--from <commit>] <branch>...
-                               what each branch holds and where it stands: its commits and files beyond the base, whether it is pushed, merged, and what its checkout left uncommitted;
-                               measured from <commit>, the one the branches started from, in place of the default branch; a full commit id in place of a branch is read as a branch that ends there
-  ahead [--from <commit>] <branch>...
-                               how many commits of its own each branch has beyond the base, whether it is pushed or was and is gone from origin, whether it is merged, how many paths its checkout left uncommitted: no file lists, every branch in one read
-  push [--branch <b>]          push this checkout's branch, or branch <b>, to origin; a dirty checkout is refused
-  merge <branch>               merge branch <branch> into the default branch, in the project's folder, then delete it; a conflict changes nothing and names the files
-  list [--sizes]               every agent checkout under .branches/
-  remove <id> [--from <commit>] reclaim agent <id>'s checkout, once its branch holds everything in it; the branch stays, nothing is pushed;
-                               <commit> is the one its branch started from, in place of the default branch
-         [--discard]           ... or drop it whatever it holds, uncommitted work included; the branch stays
-  prune                        remove, for every checkout
-  cleanup                      remove what this tool left in the project: prune, then .branches/ and the rules hiding this tool's files from git once no checkout is left;
-                               a checkout with uncommitted work stays, and every branch with work on it; the command a dashboard asks for when a project is removed with its files
+${helpRows([
+  ['create <id> [--base <ref>]', 'a checkout for agent <id>, on a fresh branch agent-<id>; a <ref> of refs/remotes/origin/<branch> is fetched first'],
+  ['attach <id> <branch> [--base <ref>]', 'a checkout for agent <id>, on an existing branch; one that is gone starts again from <ref>'],
+  ['name <name>', `rename this checkout's branch to agent-<name>; prints the name it got`],
+  ['status [path]', `the checkout's branch, whether it is clean, whether it is on the remote`],
+  ['show [--from <commit>] <branch>...', 'what each branch holds and where it stands: its commits and files beyond the base, whether it is pushed, merged, and what its checkout left uncommitted; measured from <commit>, the one the branches started from, in place of the default branch; a full commit id in place of a branch is read as a branch that ends there'],
+  ['ahead [--from <commit>] <branch>...', 'how many commits of its own each branch has beyond the base, whether it is pushed or was and is gone from origin, whether it is merged, how many paths its checkout left uncommitted: no file lists, every branch in one read'],
+  ['push [--branch <b>]', `push this checkout's branch, or branch <b>, to origin; a dirty checkout is refused`],
+  ['merge <branch>', `merge branch <branch> into the default branch, in the project's folder, then delete it; a conflict changes nothing and names the files`],
+  ['list [--sizes]', 'every agent checkout under .branches/'],
+  ['remove <id> [--from <commit>]', `reclaim agent <id>'s checkout, once its branch holds everything in it; the branch stays, nothing is pushed; <commit> is the one its branch started from, in place of the default branch`],
+  ['       [--discard]', '... or drop it whatever it holds, uncommitted work included; the branch stays'],
+  ['prune', 'remove, for every checkout'],
+  ['cleanup', `remove what this tool left in the project: prune, then .branches/ and the rules hiding this tool's files from git once no checkout is left; a checkout with uncommitted work stays, and every branch with work on it; the command a dashboard asks for when a project is removed with its files`],
+])}
 
-JSON on stdout. Exit code 1 for a refusal or a git failure (the reason on stderr), 2 for a usage error.`
+${helpText('JSON on stdout. Exit code 1 for a refusal or a git failure (the reason on stderr), 2 for a usage error.')}`
 
 /** The streams and the working directory a run of the CLI sees. */
 export interface CliIo {

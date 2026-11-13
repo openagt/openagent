@@ -1,25 +1,21 @@
-import { unknownWord, usageError } from '@openagt/agent-data'
+import { helpRows, helpText, unknownWord, usageError } from '@openagt/agent-data'
 import { defaultIO, install, uninstall, type InstallIO } from './install.js'
+
+const OPTIONS = helpRows(['Options:', ['-h, --help', 'Show this help.']])
 
 const HELP = {
   install: `Usage: npx @openagt/install
 
-Installs OpenAgent on this computer: the dashboard starts when you log in, at https://openagent.build,
-which this computer then answers itself. It asks for your password as the administrator, for that
-name and its port. Typed again, it does the same, and asks nothing it needs no more.
+${helpText('Installs OpenAgent on this computer: the dashboard starts when you log in, at https://openagent.build, which this computer then answers itself. It asks for your password as the administrator, for that name and its port. Typed again, it does the same, and asks nothing it needs no more.')}
 
-\`npx @openagt/uninstall\` takes it all off again.
+${helpText('`npx @openagt/uninstall` takes it all off again.')}
 
-Options:
-  -h, --help  Show this help.`,
+${OPTIONS}`,
   uninstall: `Usage: npx @openagt/uninstall
 
-Takes OpenAgent off this computer: everything \`npx @openagt/install\` put on it. It asks for your
-password as the administrator, for the name and its port. Your projects and their agents' records
-are left as they are.
+${helpText('Takes OpenAgent off this computer: everything `npx @openagt/install` put on it. It asks for your password as the administrator, for the name and its port. Your projects and their agents\' records are left as they are.')}
 
-Options:
-  -h, --help  Show this help.`,
+${OPTIONS}`,
 }
 
 /**

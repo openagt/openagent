@@ -1,4 +1,4 @@
-import { unknownWord, usageError, wrongArguments } from '@openagt/agent-data'
+import { unknownWord, usageError, wrongArguments, helpRows, helpText } from '@openagt/agent-data'
 import { clearWebhook, invalidWebhook, postMessage, resolveWebhook, saveWebhook, WEBHOOK_ENV } from './webhook.js'
 
 /**
@@ -9,12 +9,14 @@ import { clearWebhook, invalidWebhook, postMessage, resolveWebhook, saveWebhook,
 
 export const USAGE = `usage: discord <command>
 
-  send <message>          post the message to this machine's Discord webhook
-  setup <webhook>         save the webhook for this machine (${WEBHOOK_ENV} in the environment wins over it)
-  setup --clear           forget this machine's webhook
-  status                  whether a webhook is set here, and where it comes from (never the URL)
+${helpRows([
+  ['send <message>', `post the message to this machine's Discord webhook`],
+  ['setup <webhook>', `save the webhook for this machine (${WEBHOOK_ENV} in the environment wins over it)`],
+  ['setup --clear', `forget this machine's webhook`],
+  ['status', 'whether a webhook is set here, and where it comes from (never the URL)'],
+])}
 
-JSON on stdout. Exit code 1 for a refusal or a failure (the reason on stderr), 2 for a usage error.`
+${helpText('JSON on stdout. Exit code 1 for a refusal or a failure (the reason on stderr), 2 for a usage error.')}`
 
 export interface CliIo {
   env: NodeJS.ProcessEnv

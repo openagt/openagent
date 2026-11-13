@@ -4,7 +4,7 @@ import { chmod, mkdir, open, readFile, rm, stat, writeFile } from 'node:fs/promi
 import { tmpdir } from 'node:os'
 import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { unknownWord, usageError, wrongArguments } from '@openagt/agent-data'
+import { unknownWord, usageError, wrongArguments, helpRows, helpText } from '@openagt/agent-data'
 import { resolveChromePath } from './chrome.js'
 import type { HostAnswer, HostCommand, HostState } from './host.js'
 
@@ -18,19 +18,19 @@ import type { HostAnswer, HostCommand, HostState } from './host.js'
 
 export const USAGE = `usage: browser <command>
 
-  open <address>          open the address, starting the browser if none is open, and print the page
-  read                    print the page: its text, then its numbered elements
-  click <n>               click element n of the last read, then print the page
-  type <n> <text>         replace what element n holds with the text (a select: pick that option),
-                          then print the page
-  press <key>             press Enter, Tab, Escape, Backspace, Space, ArrowUp, ArrowDown, ArrowLeft
-                          or ArrowRight, then print the page
-  screenshot [file]       save what the page shows as a PNG, and print the file's path
-  eval <script>           run JavaScript in the page and print what it returns, as JSON
-  console                 print the page's console: what it logged, and its errors
-  close                   close the browser
+${helpRows([
+  ['open <address>', 'open the address, starting the browser if none is open, and print the page'],
+  ['read', 'print the page: its text, then its numbered elements'],
+  ['click <n>', 'click element n of the last read, then print the page'],
+  ['type <n> <text>', 'replace what element n holds with the text (a select: pick that option), then print the page'],
+  ['press <key>', 'press Enter, Tab, Escape, Backspace, Space, ArrowUp, ArrowDown, ArrowLeft or ArrowRight, then print the page'],
+  ['screenshot [file]', `save what the page shows as a PNG, and print the file's path`],
+  ['eval <script>', 'run JavaScript in the page and print what it returns, as JSON'],
+  ['console', `print the page's console: what it logged, and its errors`],
+  ['close', 'close the browser'],
+])}
 
-Exit code 1 for a refusal (the reason on stderr), 2 for a usage error.`
+${helpText('Exit code 1 for a refusal (the reason on stderr), 2 for a usage error.')}`
 
 export interface CliIo {
   cwd: string
