@@ -1,4 +1,5 @@
-import { pathsIn, type FileNames } from '@openagt/dashboard/module'
+import { Bot } from 'lucide-react'
+import { Tooltip, TooltipContent, TooltipTrigger, pathsIn, useModuleHost, type FileNames, type ModuleAgent } from '@openagt/dashboard/module'
 import { entryLabel } from '../src/module.js'
 
 // How one queue entry reads, on the Queue page and on the Overview's card alike. An entry is a
@@ -49,5 +50,21 @@ export function EntryTitle({ view, entry, className }: { view: EntryView; entry:
     <span className={className ?? 'min-w-0 truncate'} title={entry}>
       {view.title}
     </span>
+  )
+}
+
+/** The mark of an entry an agent is working on, which opens that agent: on the Queue page and on the Overview's card alike. */
+export function AgentOnEntry({ projectId, agent }: { projectId: string; agent: ModuleAgent }) {
+  const host = useModuleHost()
+  return (
+    <Tooltip>
+      <TooltipTrigger
+        render={<button type="button" onClick={() => host.openAgent(projectId, agent.id)} className="inline-flex shrink-0 items-center gap-1 rounded-full bg-success/15 px-2 py-0.5 text-xs font-medium text-success hover:underline" />}
+      >
+        <Bot className="h-3 w-3" aria-hidden />
+        <span className="max-md:sr-only">An agent is on it</span>
+      </TooltipTrigger>
+      <TooltipContent>An agent is working on this entry: open it</TooltipContent>
+    </Tooltip>
   )
 }

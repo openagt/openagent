@@ -90,6 +90,17 @@ describe('QueueCard', () => {
     )
   })
 
+  test('an entry a working agent was asked says so, as on the Queue page, and opens that agent in place of a start', async () => {
+    host = fakeHost({ p1: { '--local': [LOGIN, 'Tidy the loader'] }, p2: { '--local': [] } })
+    host.agents.mockImplementation(async (projectId: string) => (projectId === 'p1' ? [{ id: 'run-7', status: 'running', startedAt: '2026-10-01T10:00:00.000Z', ask: workOnEntryPrompt(LOGIN) }] : []))
+    renderWithHost(<QueueCard projects={[alpha, beta]} />, host)
+    const on = await screen.findByRole('button', { name: 'An agent is on it' })
+    expect(on.closest('li')?.textContent).toContain('Login page')
+    expect(screen.getAllByRole('button', { name: 'Start an agent working on this entry' })).toHaveLength(1)
+    fireEvent.click(on)
+    expect(host.openAgent).toHaveBeenCalledWith('p1', 'run-7')
+  })
+
   test('the fan-out is capped at the entries there are, and stops at the first refusal with its reason', async () => {
     render({ p1: [LOGIN, 'Tidy the loader'], p2: [] })
     await screen.findByText('Login page')

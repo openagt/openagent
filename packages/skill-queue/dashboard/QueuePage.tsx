@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Bot, FastForward, Play, Plus, Trash2 } from 'lucide-react'
+import { FastForward, Play, Plus, Trash2 } from 'lucide-react'
 import {
   Button,
   ConfirmDialog,
@@ -30,7 +30,7 @@ import {
 } from '@openagt/dashboard/module'
 import type { PlacedEntry } from '../src/queue.js'
 import { DEFAULT_PRIORITY, PRIORITIES, QUEUE_COMMAND, addTextArgs, doneArgs, fanOutLabel, isPlacedEntry, isWorkingOn, priorityMeaning, readEntries, unclaimedEntries, workOnEntryPrompt } from '../src/module.js'
-import { EntryTitle, entryView } from './entry.js'
+import { AgentOnEntry, EntryTitle, entryView } from './entry.js'
 import { useQueueStarts, type QueueStarts } from './starts.js'
 
 /** One project's queue as read: its entries with their sections and the project's agents at work, or why the command failed. */
@@ -280,17 +280,7 @@ function EntryRow({ project, placed, agent, names, starts, reload }: { project: 
         {/* The line as written, under a name that stands in for it: it is what an agent is handed. */}
         {view.renamed && <span className="block truncate font-mono text-xs text-muted-foreground">{entry}</span>}
       </div>
-      {agent && (
-        <Tooltip>
-          <TooltipTrigger
-            render={<button type="button" onClick={() => host.openAgent(project.id, agent.id)} className="inline-flex shrink-0 items-center gap-1 rounded-full bg-success/15 px-2 py-0.5 text-xs font-medium text-success hover:underline" />}
-          >
-            <Bot className="h-3 w-3" aria-hidden />
-            <span className="max-md:sr-only">An agent is on it</span>
-          </TooltipTrigger>
-          <TooltipContent>An agent is working on this entry: open it</TooltipContent>
-        </Tooltip>
-      )}
+      {agent && <AgentOnEntry projectId={project.id} agent={agent} />}
       {!agent && (
         <StartAgentButton
           variant="ghost"
