@@ -7,6 +7,7 @@ import { sendBridgeAnswer, sendBridgeAnswerCancel } from '../rpc/control.js'
 import { cloudSession } from '../lib/live-state.js'
 import { QuestionPanel } from './QuestionPanel.js'
 import { CopyButton } from './ui/copy-button.js'
+import { buttonVariants } from './ui/button.js'
 
 /** How often to ask the daemon whether the bridge reported a question. */
 const POLL_MS = 4000
@@ -33,8 +34,8 @@ export function CloudAgentNotice({
   const answer = useBridgeAnswer(session?.id)
   if (target !== 'web') return null
   return (
-    <div className="border-b border-border bg-muted/40">
-      <div role="status" className="flex flex-wrap items-center gap-2 px-4 py-2 text-xs text-muted-foreground">
+    <div className="mx-auto w-full max-w-3xl">
+      <div role="status" className="flex flex-wrap items-center gap-2 px-4 py-2 text-sm text-muted-foreground">
         <Cloud className="h-3.5 w-3.5 shrink-0" aria-hidden />
         <span className="min-w-0 flex-1">
           {session
@@ -44,7 +45,7 @@ export function CloudAgentNotice({
         {session && (
           <>
             <span className="inline-flex shrink-0 items-center gap-1">
-              <code className="rounded bg-muted px-1 py-0.5">claude --teleport {session.id}</code>
+              <code className="rounded-sm bg-muted px-1 py-0.5 font-mono text-xs">claude --teleport {session.id}</code>
               <CopyButton text={`claude --teleport ${session.id}`} label="Copy the command that continues this session here" />
             </span>
             <a
@@ -109,18 +110,18 @@ function ParkedQuestion({
   failure?: BridgeAnswer | undefined
 }) {
   return (
-    <div className="border-t border-border">
+    <div>
       {failure && (
-        <p className="flex items-center gap-1 px-4 pt-2.5 text-xs text-destructive">
-          <TriangleAlert className="h-3 w-3 shrink-0" aria-hidden />
+        <p className="flex items-center gap-2 px-4 pt-2 text-sm text-danger">
+          <TriangleAlert className="size-3.5 shrink-0" aria-hidden />
           Sending “{failure.labels.join(', ')}” failed{failure.note ? `: ${failure.note}` : ''}. Pick again, or answer in the session.
         </p>
       )}
       {/* Not `active`: the keys belong to a question in the chat, and to the message box. */}
       <QuestionPanel key={question.title} projectId={projectId} agentId={agentId} choice={bridgeChoiceRequest(question)} send={bridgeSend(sessionId)} />
-      <a href={url} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 px-4 py-2.5 text-xs text-primary hover:underline">
+      <a href={url} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 px-4 py-2 text-sm text-primary hover:underline">
         Answer it in the session
-        <ExternalLink className="h-3 w-3" aria-hidden />
+        <ExternalLink className="size-3.5" aria-hidden />
       </a>
     </div>
   )
@@ -133,7 +134,7 @@ function ParkedQuestion({
  */
 function AnswerState({ answer, url, sessionId }: { answer: BridgeAnswer; url: string; sessionId: string }) {
   return (
-    <div className="flex items-center gap-2 border-t border-border px-4 py-2.5 text-xs text-muted-foreground">
+    <div className="flex items-center gap-2 px-4 py-2 text-sm text-muted-foreground">
       {answer.state === 'queued' ? (
         <>
           <Loader2 className="h-3.5 w-3.5 shrink-0 animate-spin text-primary" aria-hidden />
@@ -143,7 +144,7 @@ function AnswerState({ answer, url, sessionId }: { answer: BridgeAnswer; url: st
           <button
             type="button"
             onClick={() => void sendBridgeAnswerCancel(sessionId).catch(() => {})}
-            className="shrink-0 rounded border border-border px-2 py-1 hover:border-primary/50 hover:text-foreground"
+            className={buttonVariants({ variant: 'secondary', size: 'sm' })}
           >
             Cancel
           </button>
@@ -156,7 +157,7 @@ function AnswerState({ answer, url, sessionId }: { answer: BridgeAnswer; url: st
           </span>
           <a href={url} target="_blank" rel="noreferrer" className="inline-flex shrink-0 items-center gap-1 text-primary hover:underline">
             Open the session
-            <ExternalLink className="h-3 w-3" aria-hidden />
+            <ExternalLink className="size-3.5" aria-hidden />
           </a>
         </>
       )}
@@ -210,11 +211,11 @@ export function CloudMirrorRow({
   const scroller = useScrollToNewest(turns.at(-1)?.seq, turns.at(-1)?.text.length)
   if (target !== 'web' || !session) return null
   return (
-    <div role="status" aria-label="Cloud session mirror" className="mt-2 rounded-md border border-border bg-muted/40 font-sans">
-      <div className="flex flex-wrap items-center gap-2 border-b border-border px-3 py-1.5 text-[10px] text-muted-foreground">
-        <Cloud className="h-3 w-3 shrink-0 text-primary" aria-hidden />
-        <span className="font-medium uppercase tracking-wide">Cloud session mirror</span>
-        <span className="opacity-70">a best-effort view of the Claude tab, not the run's own log</span>
+    <div role="status" aria-label="Cloud session mirror" className="mt-2 rounded-lg border border-hairline font-sans">
+      <div className="flex flex-wrap items-center gap-2 px-3 pt-2 text-xs text-muted-foreground">
+        <Cloud className="size-3.5 shrink-0 text-primary" aria-hidden />
+        <span className="font-medium">Cloud session mirror</span>
+        <span className="text-faint-foreground">a best-effort view of the Claude tab, not the run's own log</span>
       </div>
       {turns.length > 0 ? (
         <div ref={scroller} className="max-h-80 space-y-2 overflow-y-auto px-3 py-2 text-xs">
@@ -222,7 +223,7 @@ export function CloudMirrorRow({
             turn.role === 'user' ? (
               // The user's side is one line: the opening turn is the run's whole prompt, and
               // what the session did is the point of the mirror, not what it was told.
-              <div key={turn.seq} className="truncate text-muted-foreground/70" title={turn.text}>
+              <div key={turn.seq} className="truncate text-faint-foreground" title={turn.text}>
                 <span className="font-medium">you ›</span> {firstLine(turn.text)}
               </div>
             ) : (

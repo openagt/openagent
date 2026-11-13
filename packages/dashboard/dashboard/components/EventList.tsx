@@ -334,7 +334,7 @@ function CopyMessage({ text }: { text: string }) {
 /** How long ago a message was said, small and grey, the whole time on hover. */
 function Age({ at }: { at: string }) {
   return (
-    <time dateTime={at} title={new Date(at).toLocaleString()} className="px-1 text-[11px]">
+    <time dateTime={at} title={new Date(at).toLocaleString()} className="px-1 text-xs">
       {formatAge(at)}
     </time>
   )
@@ -389,10 +389,10 @@ function TurnFiles({ files, onOpen, footer }: { files: readonly ChangedFile[]; o
   )
 }
 
-// The user's own message: a grey box on the right, as Markdown in the page's font. No label says
+// The user's own message: a soft box on the right, as Markdown in the page's font. No label says
 // whose it is; the place and the box do. A long one is cut short with "Show more" under it. The
-// time it was sent sits under the box and shows while the pointer is on the message; its line is
-// always there, so nothing moves when it shows.
+// time it was sent sits beside the box's foot and shows while the pointer is on the message; its
+// room is always there, so nothing moves when it shows.
 // `waiting`: a message the working agent has not read yet, as Claude Code on the web shows one:
 // under it, when the agent reads it and Send now, or "Queued" for one sent for after the turn, and
 // on hover the copy and Cancel and edit, which takes it back into the box.
@@ -405,47 +405,55 @@ function Prompt({ text, at, waiting, attached, fresh = false }: { text: string; 
   const down = useContext(DaemonDown)
   return (
     <div className={`group/prompt flex min-w-0 flex-1 flex-col items-end font-sans text-foreground ${fresh ? 'bubble-in' : ''}`}>
-      <div role="group" aria-label={waiting ? 'Your message, waiting' : 'Your message'} className="max-w-[85%] min-w-0 rounded-lg bg-muted px-3.5 py-2">
-        <div className={tall && !open ? 'max-h-40 overflow-hidden' : ''}>
-          <Markdown text={text} />
-        </div>
-        {tall && (
-          <button type="button" onClick={() => setOpen(o => !o)} aria-expanded={open} className="mt-1 text-xs text-muted-foreground hover:text-foreground">
-            {open ? 'Show less' : 'Show more'}
-          </button>
+      {/* When it was sent and a copy of it, beside the box's foot where they take no line of their
+          own, shown while the pointer is on the message. A waiting one says so under the box instead. */}
+      <div className="flex w-full min-w-0 items-end justify-end gap-1">
+        {!waiting && (
+          <div className="flex h-6 shrink-0 items-center gap-1 text-muted-foreground opacity-0 transition-opacity focus-within:opacity-100 group-hover/prompt:opacity-100">
+            {at !== undefined && <Age at={at} />}
+            <CopyMessage text={text} />
+          </div>
         )}
-      </div>
-      {attached !== undefined && <Attached text={attached} />}
-      {/* When it was sent and a copy of it, as Claude Code on the web shows under a message, 6px
-          below the box so a button's hover does not touch it. A waiting one says so instead of its time. */}
-      <div className="mt-1.5 flex h-6 items-center gap-1 text-muted-foreground">
-        <div className="flex items-center gap-1 opacity-0 transition-opacity focus-within:opacity-100 group-hover/prompt:opacity-100">
-          {!waiting && at !== undefined && <Age at={at} />}
-          <CopyMessage text={text} />
-          {waiting?.onEdit && (
-            <button type="button" aria-label="Cancel and edit message" title="Cancel and edit message" onClick={waiting.onEdit} disabled={down} className="flex h-6 w-6 items-center justify-center rounded-md hover:bg-accent hover:text-accent-foreground disabled:opacity-50">
-              <PencilLine className="h-3.5 w-3.5" aria-hidden />
+        <div role="group" aria-label={waiting ? 'Your message, waiting' : 'Your message'} className="max-w-[80%] min-w-0 rounded-lg bg-muted px-3 py-2">
+          <div className={tall && !open ? 'max-h-40 overflow-hidden' : ''}>
+            <Markdown text={text} />
+          </div>
+          {tall && (
+            <button type="button" onClick={() => setOpen(o => !o)} aria-expanded={open} className="mt-1 text-xs text-muted-foreground hover:text-foreground">
+              {open ? 'Show less' : 'Show more'}
             </button>
           )}
         </div>
-        {waiting &&
-          (waiting.later || !waiting.onSendNow ? (
-            <span className="pr-1 text-[11px] leading-6">Queued</span>
+      </div>
+      {attached !== undefined && <Attached text={attached} />}
+      {waiting && (
+        <div className="mt-1 flex h-6 items-center gap-1 text-muted-foreground">
+          <div className="flex items-center gap-1 opacity-0 transition-opacity focus-within:opacity-100 group-hover/prompt:opacity-100">
+            <CopyMessage text={text} />
+            {waiting.onEdit && (
+              <button type="button" aria-label="Cancel and edit message" title="Cancel and edit message" onClick={waiting.onEdit} disabled={down} className="flex h-6 w-6 items-center justify-center rounded-md hover:bg-accent hover:text-accent-foreground disabled:opacity-50">
+                <PencilLine className="h-3.5 w-3.5" aria-hidden />
+              </button>
+            )}
+          </div>
+          {waiting.later || !waiting.onSendNow ? (
+            <span className="pr-1 text-xs leading-6">Queued</span>
           ) : (
             <>
-              <span className="pl-1 text-[11px] leading-6">Read at the agent's next step</span>
+              <span className="pl-1 text-xs leading-6">Read at the agent's next step</span>
               <button
                 type="button"
                 onClick={waiting.onSendNow}
                 disabled={down}
                 title="The agent reads it now; what it runs goes on in the background"
-                className="rounded-md px-1.5 text-[11px] leading-6 hover:bg-accent hover:text-accent-foreground disabled:opacity-50"
+                className="rounded-md px-1.5 text-xs leading-6 hover:bg-accent hover:text-accent-foreground disabled:opacity-50"
               >
                 Send now
               </button>
             </>
-          ))}
-      </div>
+          )}
+        </div>
+      )}
     </div>
   )
 }
@@ -471,7 +479,7 @@ export interface WaitingMessage extends Waiting {
 function Attached({ text }: { text: string }) {
   const [open, setOpen] = useState(false)
   return (
-    <div className="mt-1 flex max-w-[85%] min-w-0 flex-col items-end text-xs text-muted-foreground">
+    <div className="mt-1 flex max-w-[80%] min-w-0 flex-col items-end text-xs text-muted-foreground">
       <button type="button" onClick={() => setOpen(o => !o)} aria-expanded={open} className="flex items-center gap-1 hover:text-foreground">
         <span>Sent with this message</span>
         <ChevronRight className={`h-3.5 w-3.5 shrink-0 transition-transform ${open ? 'rotate-90' : ''}`} aria-hidden />
@@ -597,7 +605,7 @@ function ScreenRow({ label, onOpen }: { label: string; onOpen?: (() => void) | u
 
 // A row's time: small, at the row's right edge, shown while the pointer is on the row. Its place
 // is always there, so nothing moves when it shows.
-const TIME = 'ml-auto shrink-0 pt-0.5 text-[10px] tabular-nums text-muted-foreground opacity-0 transition-opacity group-hover/row:opacity-100'
+const TIME = 'ml-auto shrink-0 pt-0.5 text-xs tabular-nums text-muted-foreground opacity-0 transition-opacity group-hover/row:opacity-100'
 
 /** The grouping key of a row about one of the run's subagents. */
 const SUBAGENT = 'subagent'
@@ -990,7 +998,7 @@ export function EventList({
                 {startedRows(i)}
                 {/* Every row carries the same -mx/px pair so a washed row's band and a plain row's
                     text share the exact same columns; only the background differs. */}
-                <MessageScrollerItem messageId={idOf(e)} data-prompt={(own && !answer) || undefined} className={`group/row relative -mx-1.5 flex items-start gap-2 rounded-sm px-1.5 ${answer || inPlace ? 'mt-1 mb-3.5' : own ? '-mb-2.5 mt-4 first:mt-0' : ''} ${end ? '' : rowWash(e)}`}>
+                <MessageScrollerItem messageId={idOf(e)} data-prompt={(own && !answer) || undefined} className={`group/row relative -mx-1.5 flex items-start gap-2 rounded-sm px-1.5 ${answer || inPlace ? 'mt-1 mb-3' : own ? 'mt-3 first:mt-0' : ''} ${end ? '' : rowWash(e)}`}>
                   {answer ? (
                     <Answer {...answer} />
                   ) : inPlace && sentAnswer ? (

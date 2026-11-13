@@ -220,7 +220,7 @@ function ReadDetail({ path, read }: { path: string; read: FileLines }) {
   // The widest number, and the room after it.
   const width = `${String(read.lines.at(-1)!.number).length}ch`
   return (
-    <div className="mt-1.5 flex flex-col gap-2.5">
+    <div className="mt-1.5 flex flex-col gap-2">
       {openFile ? (
         <button type="button" title={`Open ${path}`} onClick={() => openFile(path)} className="min-w-0 truncate text-left text-[13px] text-foreground hover:underline hover:underline-offset-2">
           {path}
@@ -231,7 +231,7 @@ function ReadDetail({ path, read }: { path: string; read: FileLines }) {
       <div aria-label="File" className="max-h-[400px] overflow-auto rounded-lg border border-border py-1.5 font-mono text-[13px] leading-[19px]">
         {read.lines.map((line, i) => (
           <div key={line.number} className="flex w-max min-w-full whitespace-pre text-foreground">
-            <span className="shrink-0 select-none pr-4 pl-3 text-right tabular-nums text-muted-foreground/60" style={{ width: `calc(${width} + 1.75rem)` }}>
+            <span className="shrink-0 select-none pr-4 pl-3 text-right tabular-nums text-faint-foreground" style={{ width: `calc(${width} + 1.75rem)` }}>
               {line.number}
             </span>
             <span className="pr-3">{coloured?.[i] ? <ColouredLine pieces={coloured[i]} /> : line.text || ' '}</span>
@@ -427,11 +427,11 @@ export function ToolCalls({ steps, lead, live }: { steps: readonly ToolStep[]; l
       <span className="min-w-0 truncate text-left">
         {summary.parts.map((part, at) => (
           <Fragment key={at}>
-            <span className="group-hover/status:text-foreground/80 group-has-focus-visible/status:text-foreground/80">
+            <span className="group-hover/status:text-foreground group-has-focus-visible/status:text-foreground">
               {at > 0 && ', '}
               {part.words}
             </span>
-            {part.target !== undefined && <span className="text-foreground/80 group-hover/status:text-foreground group-has-focus-visible/status:text-foreground"> {part.target}</span>}
+            {part.target !== undefined && <span className="text-foreground"> {part.target}</span>}
           </Fragment>
         ))}
       </span>

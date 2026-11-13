@@ -102,13 +102,6 @@
     "text-[10px]": 1,
     "text-[13px]": 3
   },
-  "dashboard/dashboard/components/CloudAgentNotice.tsx": {
-    "pt-2.5": 1,
-    "py-2.5": 2,
-    "rounded": 2,
-    "text-[10px]": 1,
-    "text-muted-foreground/70": 1
-  },
   "dashboard/dashboard/components/CommandsMenu.tsx": {
     "rounded": 1
   },
@@ -128,11 +121,6 @@
   },
   "dashboard/dashboard/components/DiffStat.tsx": {
     "text-[10px]": 1
-  },
-  "dashboard/dashboard/components/EventList.tsx": {
-    "px-3.5": 1,
-    "text-[10px]": 1,
-    "text-[11px]": 4
   },
   "dashboard/dashboard/components/FadeWhileStale.tsx": {
     "duration-300": 1
@@ -210,23 +198,14 @@
     "gap-2.5": 1,
     "py-2.5": 1
   },
-  "dashboard/dashboard/components/SubagentLine.tsx": {
-    "group-has-focus-visible/status:text-foreground/80": 1,
-    "group-hover/status:text-foreground/80": 1
-  },
   "dashboard/dashboard/components/SubagentPanel.tsx": {
     "px-3.5": 1,
     "py-2.5": 1
   },
   "dashboard/dashboard/components/ToolCalls.tsx": {
-    "gap-2.5": 1,
-    "group-has-focus-visible/status:text-foreground/80": 1,
-    "group-hover/status:text-foreground/80": 1,
     "leading-[19px]": 2,
     "max-h-[400px]": 1,
-    "text-[13px]": 4,
-    "text-foreground/80": 1,
-    "text-muted-foreground/60": 1
+    "text-[13px]": 4
   },
   "dashboard/dashboard/components/prompt-editor/SuggestionList.tsx": {
     "rounded": 1,
