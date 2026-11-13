@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Card, CardContent, CardHeader, CardTitle } from './ui/card.js'
 import { ClaudeLogo, CodexLogo } from './driver-logos.js'
-import { Skeleton } from './ui/skeleton.js'
+import { Skeleton, useSkeleton } from './ui/skeleton.js'
 import type { DriverName } from '../../src/client.js'
 import { takeLostFocus } from '../lib/lost-focus.js'
 import { useMountedModules } from '../lib/use-modules.js'
@@ -52,8 +52,9 @@ export function AccountsList() {
 function RotationCard() {
   const { cards, loaded } = useMountedModules()
   const card = cards.find(each => each.package === ACCOUNT_ROTATION && each.id === 'accounts')
-  if (!card)
-    return loaded ? (
+  const reading = useSkeleton(!card && !loaded)
+  if (!card || reading)
+    return loaded && !reading ? (
       <Card>
         <CardContent className="pt-6! text-sm text-muted-foreground">The accounts card did not load.</CardContent>
       </Card>

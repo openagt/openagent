@@ -625,7 +625,7 @@ export function useOpenAgentDown(): boolean {
 export { Button, buttonVariants, type ButtonProps } from '../components/ui/button.js'
 export { CopyButton } from '../components/ui/copy-button.js'
 export { Card, CardHeader, CardTitle, CardTitleLink, CardContent } from '../components/ui/card.js'
-export { Skeleton } from '../components/ui/skeleton.js'
+export { Skeleton, useSkeleton } from '../components/ui/skeleton.js'
 export { Input } from '../components/ui/input.js'
 export { GaugeFace } from '../components/ui/gauge.js'
 export { ClaudeLogo, CodexLogo } from '../components/driver-logos.js'

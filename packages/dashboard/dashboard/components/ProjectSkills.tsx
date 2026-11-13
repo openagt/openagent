@@ -7,7 +7,7 @@ import { useSettingsHold } from '../lib/settings-hold.js'
 import { cn } from '../lib/utils.js'
 import { Button, buttonVariants } from './ui/button.js'
 import { Checkbox } from './ui/checkbox.js'
-import { Skeleton } from './ui/skeleton.js'
+import { Skeleton, useSkeleton } from './ui/skeleton.js'
 
 // A project's skills (#2023). The "Skills" menu under the box (SkillsMenu.tsx) opens Settings on
 // the project's Skills page: a card with a tick for each skill a project picks beyond the ones
@@ -171,7 +171,8 @@ export function SkillsSettings({ projectId }: { projectId: string }) {
   const [visit, setVisit] = useState(0)
   // `undefined` is not read yet; a read that fails answers like a project unknown here.
   const skills = useLoaded<ProjectSkills | null | undefined>(() => onProjectSkills(projectId).catch(() => null), undefined, [projectId, visit])
-  if (skills === undefined) {
+  const reading = useSkeleton(skills === undefined)
+  if (skills === undefined || reading) {
     return (
       <div aria-label="Reading the skills" className="grid grid-cols-2 gap-3 max-sm:grid-cols-1">
         {Array.from({ length: 6 }, (_, index) => (

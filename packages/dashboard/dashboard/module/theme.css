@@ -50,6 +50,16 @@
   --ease-out: cubic-bezier(0.2, 0, 0, 1);
   --default-transition-duration: 100ms;
   --default-transition-timing-function: var(--ease-out);
+  /* A skeleton is not drawn for the first 200ms of a wait, so a fast answer draws no flash; then it
+     pulses, and under reduced motion it stands still. */
+  --animate-skeleton: skeleton-wait 200ms step-end both, pulse 2s cubic-bezier(0.4, 0, 0.6, 1) 200ms infinite;
+  --animate-skeleton-still: skeleton-wait 200ms step-end both;
+
+  @keyframes skeleton-wait {
+    from {
+      opacity: 0;
+    }
+  }
 
   /* The person's three fonts (Settings › Appearance), as the page sets them (`--font-app`,
      `--font-code`, `--font-document`, tailwind.css and AppFrame): Tailwind's body font and every

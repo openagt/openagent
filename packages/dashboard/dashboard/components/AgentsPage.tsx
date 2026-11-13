@@ -14,7 +14,7 @@ import { Input } from './ui/input.js'
 import { Label } from './ui/label.js'
 import { Page } from './Page.js'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select.js'
-import { Skeleton } from './ui/skeleton.js'
+import { Skeleton, useSkeleton } from './ui/skeleton.js'
 
 // The Agents page (Rom's design): an agent is a name, a set of skills and a set of accounts, made
 // once and used in any project or none. One card per agent, the default first, each edited in
@@ -72,6 +72,7 @@ function sameDraft(a: Draft, b: Draft): boolean {
 /** The Agents page. */
 export function AgentsPage() {
   const { view, reload } = useAgentsList()
+  const reading = useSkeleton(!view)
   const { devices, reload: reloadDevices } = useAgentLogins()
   const [adding, setAdding] = useState(false)
   const newAgent = useRef<HTMLButtonElement>(null)
@@ -97,7 +98,7 @@ export function AgentsPage() {
         </Button>
       }
     >
-      {!view ? (
+      {!view || reading ? (
         <Skeleton className="h-32 w-full" />
       ) : (
         <div className="space-y-4">
