@@ -217,7 +217,7 @@ function AddPhone({ d, onClose }: { d: Devices; onClose: () => void }) {
     return (
       <Dialog open onOpenChange={open => !open && onClose()} title="Add phone">
         <div className="space-y-4 text-sm">
-          <p>{status?.on ? 'The door on this Wi-Fi is opening. One moment.' : 'A phone on this Wi-Fi reaches this computer once "On this Wi-Fi" is on.'}</p>
+          <p>{status?.on ? 'The door on this Wi-Fi is opening. One moment.' : 'Turning this on opens this computer to the phones on this Wi-Fi.'}</p>
           {!status?.on && <p className="text-xs text-muted-foreground">{WARNING}</p>}
           {error !== undefined && <Problem>{error}</Problem>}
           <div className="flex justify-end gap-2">
