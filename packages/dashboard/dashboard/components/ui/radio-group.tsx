@@ -42,7 +42,7 @@ export function RadioGroupItem({ className, disabled, ...props }: RadioGroupItem
       {...(disabled !== undefined ? { disabled } : {})}
       className={cn(
         // A 16px mark in a 24px hit area.
-        'focus-ring relative inline-flex size-4 shrink-0 items-center justify-center rounded-full border border-border bg-transparent after:absolute after:-inset-1 hover:not-data-[checked]:border-faint-foreground',
+        'focus-ring relative inline-flex size-4 shrink-0 items-center justify-center rounded-full border border-input bg-transparent after:absolute after:-inset-1 hover:not-data-[checked]:border-input-hover',
         'transition-colors data-[checked]:border-primary',
         'data-[disabled]:pointer-events-none data-[disabled]:opacity-50',
         className,

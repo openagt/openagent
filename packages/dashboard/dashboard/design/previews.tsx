@@ -300,6 +300,9 @@ const UNITS = [
 function FormControls() {
   return (
     <div className="space-y-5">
+      <p className="text-xs text-muted-foreground">
+        Every field, select and mark has the one edge, <code>--input</code>, at 3:1 or more on each surface it sits on (the page, a card, the sidebar, a hovered row): OpenAgent light 3.08–3.65:1, dark 3.18–3.94:1; Neutral light 3.52–3.84:1, dark 3.32–4.34:1. Under the pointer it goes a step further; ticked or on, it is the primary colour.
+      </p>
       <Labelled label="Radio group: one pick among a few that stay in view">
         <RadioGroup aria-label="Wait after a start" defaultValue="skill">
           <RadioGroupOption value="skill">

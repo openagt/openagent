@@ -71,6 +71,9 @@
   /* One line that sits right on every surface: the text's colour, mostly transparent. */
   --color-hairline: color-mix(in oklab, var(--foreground) 12%, transparent);
   --color-border: var(--border);
+  /* The edge of a field, a select or a mark (tailwind.css), and under the pointer a step further. */
+  --color-input: var(--input);
+  --color-input-hover: color-mix(in oklab, var(--foreground) 40%, var(--input));
   --color-primary: var(--primary);
   --color-primary-foreground: var(--primary-foreground);
   --color-accent: var(--accent);
