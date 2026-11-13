@@ -16,7 +16,10 @@ const alpha = { id: 'p1', name: 'alpha', gitHost: true }
 const PLAN = 'Create tickets/2026-08-01_login-page.plan.md'
 const FULL = [{ entry: 'Hand-written on top' }, { entry: 'Urgent', priority: 8 }, { entry: 'Also urgent', priority: 8 }, { entry: 'Later', priority: 3 }]
 
-afterEach(cleanup)
+afterEach(() => {
+  cleanup()
+  forgetRemembered()
+})
 
 let host: FakeHost
 /** The page over a queue that answers `full`, and takes every `done` and `add`. */
@@ -91,6 +94,15 @@ describe('QueuePage', () => {
       await screen.findByText('Urgent')
       await new Promise(resolve => setTimeout(resolve, 20))
       expect(screen.queryByRole('status', { name: 'Who takes from the queue' })).toBeNull()
+    })
+
+    test('coming back to the page, the line stands from the first frame: what was read last time, until the fresh read lands', async () => {
+      show(FULL, scheduling([{ command: 'work-queue', on: true }]))
+      await waitFor(() => expect(taker()).toContain('/work-queue is on'))
+      cleanup()
+      show(FULL, { ...scheduling([]), schedule: { page: 'automations', read: () => new Promise(() => {}), package: 'a-scheduler', projects: ['p1'] } })
+      await screen.findByText('Urgent')
+      expect(taker()).toContain('/work-queue is on')
     })
 
     test('a project whose scheduled commands hold none that works the queue has nothing taking from it', async () => {
