@@ -1,4 +1,4 @@
-import { FadeWhileStale, FilterChips, Page, PersonMark, STATUS_DOT, STATUS_RING, Table, TableBody, TableCell, TableHead, TableHeader, TableRow, cn, formatDateTime, formatDuration, personSaid, runName, useGitHostPeople, useModuleHost, usePolled, type ModuleAgent, type ModuleHostPerson, type ModulePageProps, type ModuleProject } from '@openagt/dashboard/module'
+import { FadeWhileStale, FilterChips, Page, PersonMark, STATUS_DOT, STATUS_RING, Table, TableBody, TableCell, TableHead, TableHeader, TableRow, cn, formatDateTime, formatDuration, inPlace, personSaid, runName, useGitHostPeople, useModuleHost, usePolled, type ModuleAgent, type ModuleHostPerson, type ModulePageProps, type ModuleProject } from '@openagt/dashboard/module'
 import type { RunCard } from '../src/run.js'
 
 /** How many runs each project lists: the command's own default page is 20; the page shows more. */
@@ -220,7 +220,7 @@ export function LogsPage({ projects, path }: ModulePageProps) {
                       <div className="flex items-center gap-2.5">
                         <RunPerson person={card.person} account={accountOf(project.id, card.person)} />
                         <div className="min-w-0 flex-1">
-                          <RunName card={card} title={card.title ?? card.intent} onOpen={() => host.openAgent(project.id, card.id)} />
+                          <RunName card={card} title={card.title ?? card.intent} href={host.agentHref(project.id, card.id)} onOpen={() => host.openAgent(project.id, card.id)} />
                           {card.title?.trim() && card.intent?.trim() && (
                             <p className="truncate text-xs text-muted-foreground" title={card.intent}>
                               {card.intent}
@@ -264,7 +264,7 @@ export function LogsPage({ projects, path }: ModulePageProps) {
                 <li key={`${project.id}/${card.id}`} onClick={() => host.openAgent(project.id, card.id)} className="flex cursor-pointer items-center gap-2.5 border-b border-border py-2 hover:bg-accent">
                   <RunPerson person={card.person} account={accountOf(project.id, card.person)} />
                   <div className="min-w-0 flex-1">
-                    <RunName card={card} title={card.intent} onOpen={() => host.openAgent(project.id, card.id)} />
+                    <RunName card={card} title={card.intent} href={host.agentHref(project.id, card.id)} onOpen={() => host.openAgent(project.id, card.id)} />
                     <p className="mt-0.5 flex flex-wrap items-center gap-x-3 text-xs text-muted-foreground">
                       <Status status={card.status} offline={card.offline} />
                       {many && <span>{project.name}</span>}
@@ -287,21 +287,23 @@ export function LogsPage({ projects, path }: ModulePageProps) {
   )
 }
 
-/** A run's name, a button that opens the run: what the keyboard reaches of a row the pointer opens anywhere. */
-function RunName({ card, title, onOpen }: { card: Row['card']; title: string | undefined; onOpen: () => void }) {
+/** A run's name, a link to the run: what the keyboard reaches of a row the pointer opens anywhere, and what opens it in a new tab. */
+function RunName({ card, title, href, onOpen }: { card: Row['card']; title: string | undefined; href: string; onOpen: () => void }) {
+  const open = inPlace(onOpen)
   return (
-    <button
-      type="button"
+    <a
+      href={href}
       title={title}
       onClick={event => {
+        // Not the row's too: a click the browser takes opens the run in a new tab, not also here.
         event.stopPropagation()
-        onOpen()
+        open(event)
       }}
       className="-mx-1 block max-w-[calc(100%+0.5rem)] truncate rounded-sm px-1 text-left font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-primary)]"
     >
       {/* As every list names a run; a run with none of those goes by its id. */}
       {runName(card) ?? card.id}
-    </button>
+    </a>
   )
 }
 

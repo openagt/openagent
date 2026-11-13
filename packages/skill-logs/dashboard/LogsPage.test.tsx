@@ -68,14 +68,17 @@ test('the runs cut by day, each day with its runs and their cost; a run by its n
   expect(host.openAgent).toHaveBeenCalledWith('p1', 'r1')
 })
 
-test("a run's name is a button: the keyboard reaches it, and it opens the run once, on a phone too", async () => {
+test("a run's name is a link to the run: the keyboard reaches it, it opens the run once, on a phone too, and a Ctrl+click is the browser's", async () => {
   const host = hostWith([{ id: 'r1', startedAt: at(now - 1000), endedAt: at(now), status: 'done', title: 'Login page' }])
   render(
     <ModuleHostContext.Provider value={host}>
       <LogsPage projects={[{ id: 'p1', name: 'alpha', gitHost: true }]} projectId={null} path={[]} />
     </ModuleHostContext.Provider>,
   )
-  const [table, phone] = await screen.findAllByRole('button', { name: 'Login page' })
+  const [table, phone] = await screen.findAllByRole('link', { name: 'Login page' })
+  expect(table!.getAttribute('href')).toBe('/p1/r1')
+  expect(fireEvent.click(table!, { ctrlKey: true })).toBe(true)
+  expect(host.openAgent).not.toHaveBeenCalled()
   fireEvent.click(table!)
   expect(host.openAgent.mock.calls).toEqual([['p1', 'r1']])
   fireEvent.click(phone!)
@@ -123,8 +126,8 @@ test('a run goes by the name every list gives it: with no short name and no prom
       <LogsPage projects={[{ id: 'p1', name: 'alpha', gitHost: true }]} projectId={null} path={[]} />
     </ModuleHostContext.Provider>,
   )
-  expect((await screen.findAllByRole('button', { name: 'agent-fix-header' })).length).toBeGreaterThan(0)
-  expect(screen.getAllByRole('button', { name: 'r2' }).length).toBeGreaterThan(0)
+  expect((await screen.findAllByRole('link', { name: 'agent-fix-header' })).length).toBeGreaterThan(0)
+  expect(screen.getAllByRole('link', { name: 'r2' }).length).toBeGreaterThan(0)
 })
 
 test('a second visit opens with the last list at once, while the runs are read again, faded once that read has been out a second', async () => {
