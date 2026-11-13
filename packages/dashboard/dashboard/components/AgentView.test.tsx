@@ -29,6 +29,7 @@ vi.mock('../rpc/control.js', () => ({
   withdrawMessage,
   sendNow,
   sendOpenPullRequest: vi.fn(async () => null),
+  sendMerge: vi.fn(async () => ({ ok: true, merge: 'auto' })),
   sendSetHandoff: vi.fn(async () => null),
   sendBridgeAnswer: vi.fn(async () => null),
   sendBridgeAnswerCancel: vi.fn(async () => null),
@@ -268,6 +269,37 @@ describe('AgentView: the bar above the message box', () => {
     const order = (a: Element, b: Element) => Boolean(a.compareDocumentPosition(b) & Node.DOCUMENT_POSITION_FOLLOWING)
     expect(order(screen.getByTestId('bar-ready'), screen.getByTestId('work-bar'))).toBe(true)
     expect(order(screen.getByTestId('work-bar'), screen.getByTestId('composer-live'))).toBe(true)
+  })
+})
+
+describe("the bar's own state is one session's", () => {
+  const pr = (number: number) => ({ ...PUSHED, pr: { number, url: `https://example.test/${number}`, state: 'OPEN', title: 'T' } })
+  // Repo B's session seen first; then repo A's #42 set to merge once its checks pass, and B's session again, its PR numbered `other`.
+  const armA = async (other: number) => {
+    onAgent.mockResolvedValue(ARCHIVED)
+    onAgentHandoff.mockImplementation((async (project: string) => (project === 'p1' ? pr(42) : pr(other))) as never)
+    const page = render(view({ projectId: 'p2', agentId: 'run-2' }))
+    await screen.findByRole('button', { name: 'Merge PR' })
+    page.rerender(view())
+    await waitFor(() => expect(onAgentHandoff).toHaveBeenCalledWith('p1', 'run-1'))
+    await new Promise(resolve => setTimeout(resolve, 20))
+    fireEvent.click(await screen.findByRole('button', { name: 'Merge PR' }))
+    await waitFor(() => expect(document.querySelector('[aria-live="polite"]')!.textContent).toBe('PR #42 merges when its checks pass.'))
+    expect(screen.queryByRole('button', { name: 'Merge PR' })).toBeNull()
+    page.rerender(view({ projectId: 'p2', agentId: 'run-2' }))
+    await waitFor(() => expect(onAgentHandoff).toHaveBeenCalledWith('p2', 'run-2'))
+    await new Promise(resolve => setTimeout(resolve, 20))
+  }
+
+  test("another repository's session with a PR of the same number still offers its Merge", async () => {
+    await armA(42)
+    expect(await screen.findByRole('button', { name: 'Merge PR' })).toBeTruthy()
+  })
+
+  test("another repository's session is not told the first one's PR merges when its checks pass", async () => {
+    await armA(43)
+    expect(screen.getByRole('button', { name: 'Merge PR' })).toBeTruthy()
+    expect(document.querySelector('[aria-live="polite"]')!.textContent).toBe('')
   })
 })
 

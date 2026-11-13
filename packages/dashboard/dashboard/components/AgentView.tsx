@@ -386,7 +386,8 @@ export function AgentView({
             actions={
               // A run that is working is still writing its branch; the next step is offered once it has ended,
               // and a run whose subagents still work has not: it goes on as each of them ends.
-              committing ? <Committing /> : ended ? <HandoffActions projectId={projectId} agentId={agentId} state={handoff} subagent={subagent} onAsked={onSending} /> : undefined
+              // Keyed: what a press said, and a merge it armed, are that session's alone.
+              committing ? <Committing /> : ended ? <HandoffActions key={`${projectId}/${agentId}`} projectId={projectId} agentId={agentId} state={handoff} subagent={subagent} onAsked={onSending} /> : undefined
             }
             error={ready && showHandoff ? handoff.error : undefined}
             show={say}
