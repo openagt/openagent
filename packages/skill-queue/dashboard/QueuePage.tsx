@@ -134,34 +134,36 @@ function ProjectQueue({ read, titled, schedule, names, starts, reload }: { read:
         {raw.length > 0 && <span className="rounded-full bg-muted px-2 py-0.5 text-xs tabular-nums text-muted-foreground">{raw.length === 1 ? '1 entry' : `${raw.length} entries`}</span>}
         {raw.length > 0 && (
           <div className="ml-auto flex items-center gap-2">
-            {/* The project's batch act: how many, then the button the count qualifies. */}
-            <Tooltip>
-              <TooltipTrigger
-                render={
-                  <Input
-                    name="agent-count"
-                    type="number"
-                    min={1}
-                    max={raw.length}
-                    step={1}
-                    value={count}
-                    aria-label="How many agents to start"
-                    onChange={event => {
-                      // An emptied box is mid-edit rather than a count: `Number('')` is 0.
-                      const typed = event.target.value.trim()
-                      if (!typed) return
-                      const next = Math.round(Number(typed))
-                      if (Number.isFinite(next)) starts.setCount(project.id, next)
-                    }}
-                    className="h-7 w-14 px-1 text-center text-xs tabular-nums"
-                  />
-                }
-              />
-              <TooltipContent>How many agents to start: one per entry, from the top of the queue.</TooltipContent>
-            </Tooltip>
-            {/* The chevron sends the top entry alone: a launcher can only ever start one agent. */}
+            {/* The project's batch act, as one control: how many, then the button the count qualifies.
+                The chevron sends the top entry alone: a launcher can only ever start one agent. */}
             <StartAgentButton
               size="xs"
+              leading={
+                <Tooltip>
+                  <TooltipTrigger
+                    render={
+                      <Input
+                        name="agent-count"
+                        type="number"
+                        min={1}
+                        max={raw.length}
+                        step={1}
+                        value={count}
+                        aria-label="How many agents to start"
+                        onChange={event => {
+                          // An emptied box is mid-edit rather than a count: `Number('')` is 0.
+                          const typed = event.target.value.trim()
+                          if (!typed) return
+                          const next = Math.round(Number(typed))
+                          if (Number.isFinite(next)) starts.setCount(project.id, next)
+                        }}
+                        className="h-7 w-14 px-1 text-center text-xs tabular-nums"
+                      />
+                    }
+                  />
+                  <TooltipContent>How many agents to start: one per entry, from the top of the queue.</TooltipContent>
+                </Tooltip>
+              }
               icon={<FastForward className="h-3.5 w-3.5" aria-hidden />}
               label={count === 1 ? 'Start 1 agent' : `Start ${count} agents`}
               menuAriaLabel={`Other ways to start agents on ${project.name}'s queue`}

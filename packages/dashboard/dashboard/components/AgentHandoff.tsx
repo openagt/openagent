@@ -6,6 +6,7 @@ import type { AgentHandoffState } from '../lib/use-agent-handoff.js'
 import { DaemonDown } from '../lib/use-daemon-health.js'
 import { cn } from '../lib/utils.js'
 import { Button, buttonVariants } from './ui/button.js'
+import { ButtonGroup, ButtonGroupSeparator } from './ui/button-group.js'
 import { DiffStat } from './DiffStat.js'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from './ui/dropdown-menu.js'
 
@@ -250,16 +251,17 @@ export function HandoffActions({
   return (
     <>
       {handoff.carries && <Carries carries={handoff.carries} />}
-      <span className="inline-flex">
+      <ButtonGroup>
         <Button
           size="xs"
           variant="ghost"
-          className={cn(NEXT_STEP, 'rounded-r-none pr-1.5')}
+          className={cn(NEXT_STEP, 'pr-1.5')}
           disabled={busy}
           onClick={() => openPr(false)}
         >
           {pending === 'pr' ? 'Opening PR…' : pending === 'push' ? 'Publishing…' : 'Open PR'}
         </Button>
+        <ButtonGroupSeparator className="bg-border opacity-100" />
         <DropdownMenu>
             <DropdownMenuTrigger
               type="button"
@@ -268,7 +270,7 @@ export function HandoffActions({
               className={cn(
                 buttonVariants({ size: 'xs', variant: 'ghost' }),
                 NEXT_STEP,
-                'rounded-l-none px-1 text-muted-foreground data-[popup-open]:bg-[var(--color-accent)] data-[popup-open]:text-[var(--color-accent-foreground)]',
+                'px-1 text-muted-foreground data-[popup-open]:bg-[var(--color-accent)] data-[popup-open]:text-[var(--color-accent-foreground)]',
               )}
             >
               <ChevronDown className="h-3.5 w-3.5" />
@@ -286,7 +288,7 @@ export function HandoffActions({
               )}
             </DropdownMenuContent>
           </DropdownMenu>
-      </span>
+      </ButtonGroup>
     </>
   )
 }

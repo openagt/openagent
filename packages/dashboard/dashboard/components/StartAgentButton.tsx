@@ -4,6 +4,7 @@ import { stashPendingDraft } from '../lib/draft-handoff.js'
 import { DaemonDown } from '../lib/use-daemon-health.js'
 import { cn } from '../lib/utils.js'
 import { Button, buttonVariants } from './ui/button.js'
+import { ButtonGroup, ButtonGroupSeparator } from './ui/button-group.js'
 import { OptionLabel } from './ui/option-label.js'
 import { Tooltip, TooltipTrigger, TooltipContent } from './ui/tooltip.js'
 import {
@@ -54,6 +55,7 @@ export function StartAgentButton({
   onStart,
   onConfigure,
   moreItems = [],
+  leading,
   busy = false,
   starting = false,
   disabled = false,
@@ -93,6 +95,8 @@ export function StartAgentButton({
    * caller's; an item that starts nothing stays live while a start is in flight, like the configure one.
    */
   moreItems?: readonly StartMenuItem[] | undefined
+  /** A control the start counts on, drawn as the group's first part: how many agents to start, say. */
+  leading?: ReactNode
   /** A start is in flight somewhere on this surface: the primary half is out until it settles. */
   busy?: boolean | undefined
   /** *This* button's start is the one in flight, so only it reads as busy. */
@@ -118,7 +122,8 @@ export function StartAgentButton({
   const down = useContext(DaemonDown)
 
   return (
-    <div className="inline-flex shrink-0 items-center">
+    <ButtonGroup>
+      {leading}
       <Tooltip>
         <TooltipTrigger
           render={
@@ -129,7 +134,7 @@ export function StartAgentButton({
               disabled={disabled || busy || down}
               onClick={onStart}
               {...(ariaLabel ? { 'aria-label': ariaLabel } : {})}
-              className={cn('rounded-r-none', variant === 'outline' && 'border-r-0', className)}
+              className={className}
             />
           }
         >
@@ -138,6 +143,9 @@ export function StartAgentButton({
         </TooltipTrigger>
         <TooltipContent {...(tooltipClassName ? { className: tooltipClassName } : {})}>{tooltip}</TooltipContent>
       </Tooltip>
+      {/* A filled pair has no border to tell its halves apart: a hairline does. An outline pair shares
+          its border, and a ghost pair needs none — nothing is drawn between them until one is hovered. */}
+      {variant === 'default' && <ButtonGroupSeparator className="bg-[var(--color-primary-foreground)]" />}
       {/* Never gated on `busy` or on OpenAgent not answering, only on `disabled`: this starts nothing, and
           being unable to go and look at the settings because a start is in flight would be the opposite of the point. */}
       <DropdownMenu>
@@ -147,12 +155,7 @@ export function StartAgentButton({
           aria-label={menuAriaLabel}
           className={cn(
             buttonVariants({ variant, size }),
-            'w-auto rounded-l-none px-1.5',
-            // What separates the two halves. An outline button's own left border already does it
-            // (its sibling drops its right one); a filled button has no border to borrow, so it
-            // gets a hairline in its own foreground. A ghost pair needs none — there is nothing
-            // drawn between them until one is hovered, and a rule would only clutter a dense row.
-            variant === 'default' && 'border-l border-[var(--color-primary-foreground)]/25',
+            'w-auto px-1.5',
             className,
           )}
         >
@@ -169,6 +172,6 @@ export function StartAgentButton({
           </DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>
-    </div>
+    </ButtonGroup>
   )
 }
