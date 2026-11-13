@@ -389,7 +389,7 @@ function Next({ children }: { children: ReactNode }) {
 }
 
 /** A row's line of {@link Next} items: moved left by one "·" and its space, and cut there, so no line starts with a "·". */
-const LINE = 'flex flex-wrap gap-x-2 -ml-3 [clip-path:inset(-0.25rem_-0.25rem_-0.25rem_0.75rem)]'
+const LINE = 'flex flex-wrap gap-x-2 -ml-3 [clip-path:inset(-0.5rem_-0.25rem_-0.5rem_0.75rem)]'
 
 /**
  * Where a row stands, in one line: on or off; when it last ran, that its last run failed, or that
@@ -415,7 +415,7 @@ function Stands({ host, project, scheduled, stopped }: { host: ModuleHost; proje
           <span className="text-muted-foreground">Never ran</span>
         ) : (
           <Tooltip>
-            <TooltipTrigger render={<a href={host.agentHref(project.id, last.id)} onClick={inPlace(() => host.openAgent(project.id, last.id))} className={cn('underline', last.failed ? 'text-danger' : 'text-muted-foreground hover:text-foreground')} />}>
+            <TooltipTrigger render={<a href={host.agentHref(project.id, last.id)} onClick={inPlace(() => host.openAgent(project.id, last.id))} className={cn('relative underline after:absolute after:-inset-y-1.5 after:inset-x-0', last.failed ? 'text-danger' : 'text-muted-foreground hover:text-foreground')} />}>
               {last.failed ? 'Last run failed' : last.running ? 'Running, started' : 'Last ran'} <span className="tabular-nums">{formatAge(last.at)}</span>
             </TooltipTrigger>
             <TooltipContent>{formatDateTime(last.at)}</TooltipContent>
