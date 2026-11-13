@@ -343,7 +343,7 @@ export const PromptEditor = forwardRef<PromptEditorHandle, PromptEditorProps>(fu
     loadTemplateInto(editor, initialText, initialFocus)
   }, [editor, initialText])
 
-  // The placeholder is absolutely positioned, so it must share the editor's padding (`px-3 py-2.5`)
+  // The placeholder is absolutely positioned, so it must share the editor's padding (`px-3 py-2`)
   // to sit exactly where the first typed character will (#721). The composer's box is one line tall
   // when empty, as tall as the submit beside it. One line too: on a phone a long one is cut short,
   // where a second line would hang out of the box.
@@ -357,12 +357,12 @@ export const PromptEditor = forwardRef<PromptEditorHandle, PromptEditorProps>(fu
       <ScrollArea
         // The height cap goes on the viewport (the scroller), not the Root — a Root max-h cannot be
         // resolved by the viewport's height, so the editor would grow instead of scrolling.
-        viewportClassName="max-h-64 min-h-10"
+        viewportClassName="max-h-64 min-h-9"
       >
-        <EditorContent editor={editor} className="w-full bg-transparent text-sm pointer-coarse:text-base px-3 py-2.5" />
+        <EditorContent editor={editor} className="w-full bg-transparent text-sm pointer-coarse:text-base px-3 py-2" />
       </ScrollArea>
       {isEmpty && (
-        <span className="pointer-events-none absolute truncate text-sm text-muted-foreground pointer-coarse:text-base inset-x-3 top-2.5">
+        <span className="pointer-events-none absolute truncate text-sm text-faint-foreground pointer-coarse:text-base inset-x-3 top-2">
           {placeholder}
         </span>
       )}

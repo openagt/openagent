@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react'
-import { CircleAlert } from 'lucide-react'
+import { CircleAlert, TriangleAlert } from 'lucide-react'
 import type { ProjectSummary, StartFromPick } from '../../src/index.js'
 import { onCloneCheck, onStartBranches, onStartCheck } from '../rpc/projects.js'
 import { thisMachineName } from '../lib/this-machine.js'
@@ -404,7 +404,8 @@ export function StartAgentForm({
           ),
         )}
         {readiness?.warnings.map(warning => (
-          <p key={warning} role="alert" className="rounded-lg border border-warning/30 bg-[color-mix(in_oklab,var(--color-warning)_8%,var(--color-background))] px-3 py-1.5 text-xs text-warning">
+          <p key={warning} role="alert" className="flex items-start gap-2 rounded-lg bg-[color-mix(in_oklab,var(--color-warning)_8%,var(--color-background))] px-3 py-2 text-sm text-foreground">
+            <TriangleAlert className="mt-0.5 size-4 shrink-0 text-warning" aria-hidden />
             {warning}
           </p>
         ))}
@@ -422,12 +423,12 @@ export function StartAgentForm({
           // The chat's own first line (`SessionLine.tsx`), in its words and its look: the page that
           // opens a moment later goes on saying it. A machine that does not have the project yet
           // clones it first, which can take minutes: the line says so for as long as it does.
-          <p role="status" className="flex items-center gap-2 px-1.5 text-sm text-muted-foreground">
+          <p role="status" className="flex items-center gap-2 px-2 text-sm text-muted-foreground">
             <Dots />
             <span className="text-shimmer">{cloning && sentTo ? `Cloning ${projectName ?? 'this project'} on ${sentTo}, the first time only` : note}</span>
           </p>
         )}
-        {note !== STARTING && note && !error && <p role="status" className="px-1.5 text-xs text-muted-foreground">{note}</p>}
+        {note !== STARTING && note && !error && <p role="status" className="px-2 text-xs text-muted-foreground">{note}</p>}
       </div>
     </form>
   )
@@ -459,18 +460,19 @@ function OpenInEditor({ projectId }: { projectId: string }) {
 
 /**
  * Why no run starts, or would not, above the message box: what is wrong in one line, then smaller
- * what to do about it, and the press that does it. Opaque under its tint, since it lies over the page.
+ * what to do about it, and the press that does it. The tint and the mark say it is wrong; the words are the
+ * text's own colour, which reads on the tint. Opaque, since it lies over the page.
  */
 function Refusal({ title, detail, actions }: { title: ReactNode; detail?: ReactNode | undefined; actions?: ReactNode | undefined }) {
   return (
-    <div role="alert" className="flex items-start gap-2.5 rounded-lg border border-danger/30 bg-[color-mix(in_oklab,var(--color-danger)_8%,var(--color-background))] px-3 py-2.5 shadow-sm">
-      <CircleAlert className="mt-0.5 h-4 w-4 shrink-0 text-danger" aria-hidden />
+    <div role="alert" className="flex items-start gap-2 rounded-lg bg-[color-mix(in_oklab,var(--color-danger)_8%,var(--color-background))] px-3 py-2 text-foreground">
+      <CircleAlert className="mt-0.5 size-4 shrink-0 text-danger" aria-hidden />
       <div className="min-w-0 flex-1 [overflow-wrap:anywhere]">
-        <p className="text-sm font-medium text-danger">{title}</p>
+        <p className="text-sm font-medium">{title}</p>
         {detail !== undefined && (
           <>
             {' '}
-            <p className="mt-0.5 text-xs text-muted-foreground">{detail}</p>
+            <p className="mt-0.5 text-xs">{detail}</p>
           </>
         )}
         {actions !== undefined && <div className="mt-2 flex flex-wrap items-center gap-2 text-foreground">{actions}</div>}

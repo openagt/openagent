@@ -218,24 +218,23 @@ export function AgentComposer({
     return () => window.removeEventListener('keydown', onKey, true)
   })
 
-  // The empty box's slot control while the agent works: Stop, as Claude Code's, a square and no button around it.
+  // The empty box's slot control while the agent works: Stop, as Claude Code's, a square in the box's one primary press.
   const idleControl = live ? (
     <Tooltip>
       <TooltipTrigger
         render={
           <Button
             type="button"
-            variant="ghost"
             size="icon-sm"
             onClick={stopSession}
             disabled={stopping || down}
             aria-label="Stop agent"
             // Stopping draws its spinner in full; off while OpenAgent is not answering, Stop is dimmed as any button off.
-            className={stopping ? 'h-8 w-8 shrink-0 disabled:opacity-100' : 'h-8 w-8 shrink-0'}
+            className={stopping ? 'shrink-0 disabled:opacity-100' : 'shrink-0'}
           />
         }
       >
-        {stopping ? <Loader2 className="h-4 w-4 animate-spin" /> : <Square className="h-3.5 w-3.5 rounded-[3px] fill-current" />}
+        {stopping ? <Loader2 className="h-4 w-4 animate-spin" /> : <Square className="size-3 fill-current" />}
       </TooltipTrigger>
       <TooltipContent className="flex items-center gap-1.5">
         {stopping ? (
@@ -243,7 +242,7 @@ export function AgentComposer({
         ) : (
           <>
             Stop
-            <kbd className="flex h-[17px] items-center justify-center rounded border border-background/20 px-1 font-sans text-[11px]">Esc</kbd>
+            <kbd className="flex h-5 items-center justify-center rounded-sm border border-hairline px-1 font-sans text-xs">Esc</kbd>
           </>
         )}
       </TooltipContent>

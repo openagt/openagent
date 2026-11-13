@@ -74,7 +74,7 @@ export function ContextMenu({
             />
           }
         >
-          <Layers className="h-3.5 w-3.5 shrink-0" aria-hidden />
+          <Layers className="size-4 shrink-0" aria-hidden />
           Context{summary && <span className="text-primary"> · {summary}</span>}
         </TooltipTrigger>
         <TooltipContent>Narrow the run to specific repos and files</TooltipContent>

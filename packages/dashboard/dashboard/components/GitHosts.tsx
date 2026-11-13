@@ -256,7 +256,7 @@ export function GitAccountMenu({ address, machineId, on, busy, picked, onPick, o
     return (
       <>
         <button type="button" disabled={busy} onClick={onAdd} className={cn(rowButtonClass, 'text-warning')}>
-          <PackageLogo svg={p.logo} className="size-3.5" />
+          <PackageLogo svg={p.logo} className="size-4" />
           <span className="truncate">{p.installed ? `Add a ${p.name} account` : `${p.tool} not installed`}</span>
         </button>
         {adding.dialog}
@@ -268,9 +268,9 @@ export function GitAccountMenu({ address, machineId, on, busy, picked, onPick, o
     <DropdownMenu>
       <Tooltip>
         <TooltipTrigger render={<DropdownMenuTrigger type="button" disabled={busy} aria-label={`${p.name} account: @${account}`} className={rowButtonClass} />}>
-          <PackageLogo svg={p.logo} className="size-3.5" />
+          <PackageLogo svg={p.logo} className="size-4" />
           <span className="max-w-32 truncate">@{account}</span>
-          <ChevronDown className="h-3 w-3 shrink-0 opacity-70" aria-hidden />
+          <ChevronDown className="size-3 shrink-0 text-faint-foreground" aria-hidden />
         </TooltipTrigger>
         <TooltipContent>{said}</TooltipContent>
       </Tooltip>
@@ -310,9 +310,9 @@ export function GitHostOff({ home, account }: { home: GitHostHome | null; accoun
   return (
     <RowOff tip={account !== undefined ? `This run works as @${account} on ${home.name}` : `This project is on ${home.name}`}>
       <button type="button" disabled className={rowButtonClass}>
-        <PackageLogo svg={logo} className="size-3.5" />
+        <PackageLogo svg={logo} className="size-4" />
         <span className="max-w-32 truncate">{account !== undefined ? `@${account}` : home.name}</span>
-        <ChevronDown className="h-3 w-3 shrink-0 opacity-70" aria-hidden />
+        <ChevronDown className="size-3 shrink-0 text-faint-foreground" aria-hidden />
       </button>
     </RowOff>
   )

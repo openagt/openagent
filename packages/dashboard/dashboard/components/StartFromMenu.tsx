@@ -51,9 +51,9 @@ export function prTargetBranch(pick: StartFromPick | undefined, main: string, lo
 export function BranchButton({ label, className, ...props }: { label: string } & ComponentProps<'button'>) {
   return (
     <button type="button" {...props} className={cn(rowButtonClass, 'max-w-[16rem]!', className)}>
-      <GitBranch className="h-3.5 w-3.5 shrink-0" aria-hidden />
+      <GitBranch className="size-4 shrink-0" aria-hidden />
       <span className="truncate">{label}</span>
-      <ChevronDown className="h-3 w-3 shrink-0 opacity-70" aria-hidden />
+      <ChevronDown className="size-3 shrink-0 text-faint-foreground" aria-hidden />
     </button>
   )
 }

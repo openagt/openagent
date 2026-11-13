@@ -67,7 +67,7 @@ export function AutoMenu({
           }
         >
           <span className="truncate">{`Auto: ${PUBLISH_LABELS[publish]}${into ? ` → ${into.into}` : ''}`}</span>
-          <ChevronDown className="h-3 w-3 shrink-0 opacity-70" aria-hidden />
+          <ChevronDown className="size-3 shrink-0 text-faint-foreground" aria-hidden />
         </TooltipTrigger>
         <TooltipContent>{`What the agent does by itself when it finishes.${into ? ` The pull request goes into ${into.into}.` : ''}`}</TooltipContent>
       </Tooltip>

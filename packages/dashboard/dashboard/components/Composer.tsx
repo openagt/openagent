@@ -34,7 +34,7 @@ import { readyCommands, useProjectLauncher } from '../lib/use-project-launcher.j
 import { AgentAccountItems, firstAccount, readMachineAccountsAhead, useAccountsOn } from './AgentAccounts.js'
 import { readMachineGitHostsAhead } from './GitHosts.js'
 import { Tooltip, TooltipTrigger, TooltipContent } from './ui/tooltip.js'
-import { RowAboveBox, rowClass, rowLeftClass } from './ui/row-item.js'
+import { RowAboveBox, rowClass, rowItemClass, rowLeftClass } from './ui/row-item.js'
 
 // The driver + model tree (#650/#656/#658): each driver lists ONLY its own models, since the
 // model passes straight through to that coding agent. Picking a model in a driver's submenu sets both, so an
@@ -50,6 +50,12 @@ const DRIVER_UI: Record<DriverName, { icon: DriverOption['icon'] }> = {
   'claude-code': { icon: <ClaudeLogo className="h-4 w-4" /> },
   codex: { icon: <CodexLogo className="h-4 w-4" /> },
 }
+
+/**
+ * The message box's surface: the raised one, with the hairline. It is focused almost all the time it
+ * is on screen, so focus is its own edge in the primary colour and nothing more: the caret says the rest.
+ */
+const BOX = 'flex items-end rounded-lg border border-hairline bg-card shadow-lg transition-colors has-[[contenteditable]:focus]:border-primary'
 
 export interface ComposerHandle {
   clear: () => void
@@ -359,12 +365,12 @@ export const Composer = forwardRef<ComposerHandle, {
             className={cn(
               // `disabled:opacity-*` overrides the base (the button is disabled while empty/busy), so the
               // hidden state must force it to 0 and the shown state back to full for the busy spinner.
-              'h-8 w-8 shrink-0 transition-[margin,opacity,transform] duration-150 ease-out',
+              'shrink-0 transition-[margin,opacity,transform]',
               hasPrompt
                 ? // Full while busy, for its spinner; faded while something else holds the start (the note's OK, a machine offline).
                   cn('ml-0 translate-x-0 opacity-100', busy ? 'disabled:opacity-100' : 'disabled:opacity-40')
-                // The hidden submit takes no room: its own w-8 (2rem) back.
-                : 'pointer-events-none translate-x-2 opacity-0 disabled:opacity-0 -ml-8',
+                // The hidden submit takes no room: its own width (1.75rem) back.
+                : 'pointer-events-none translate-x-2 opacity-0 disabled:opacity-0 -ml-7',
             )}
           />
         }
@@ -429,16 +435,16 @@ export const Composer = forwardRef<ComposerHandle, {
 
       {loginsNote}
 
-      {/* The box, as Claude Code's: a fill a step above the page and rounder corners than the rest
-          of the app, the commands menu (+) at its left, the text, and the submit at its right,
-          the two kept at the last line. One line tall when empty, growing with what is typed. The
-          editor is borderless: the border is the box's. */}
-      <div className="flex items-end rounded-lg border border-border bg-card focus-within:border-muted-foreground">
+      {/* The box, as Claude Code's: the raised surface, the commands menu (+) at its left, the text,
+          and the submit at its right, the two kept at the last line. One line tall when empty,
+          growing with what is typed. The editor is borderless: the edge is the box's. */}
+      <div className={BOX}>
         {/* The editor's own inset sets the text off the box's edge; beside the + it pulls in, so the
-            text starts close to it, as in Claude Code's. */}
-        <div className="-mr-2 flex shrink-0 items-center p-1">{commandsEl}</div>
+            text starts close to it, as in Claude Code's. The + and the send sit as close to the
+            box's edges as the rows' first and last items sit to theirs, so the three share both edges. */}
+        <div className="-mr-2 flex shrink-0 items-center py-1 pr-1 pl-0.5">{commandsEl}</div>
         <div className="min-w-0 flex-1">{editorEl}</div>
-        <div className="flex shrink-0 items-center p-1">{slotEl}</div>
+        <div className="flex shrink-0 items-center py-1 pr-0.5 pl-1">{slotEl}</div>
       </div>
 
       {/* How it runs, under the box: the caller's controls at the left, the model at the right. The
@@ -450,7 +456,7 @@ export const Composer = forwardRef<ComposerHandle, {
           {controlsEnd}
           {driverModelEl || (
             <span className="flex items-center">
-              {sessionModel !== undefined && <span className="px-2 text-[13px] text-muted-foreground">{sessionModel}</span>}
+              {sessionModel !== undefined && <span className={rowItemClass}>{sessionModel}</span>}
               {sessionContext}
             </span>
           )}

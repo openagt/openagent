@@ -117,9 +117,9 @@ export function SkillsMenu({
     <DropdownMenu>
       <Tooltip>
         <TooltipTrigger render={<DropdownMenuTrigger type="button" disabled={busy} aria-label={`Skills: ${count}`} className={rowButtonClass} />}>
-          <Puzzle className="h-3.5 w-3.5 shrink-0" aria-hidden />
+          <Puzzle className="size-4 shrink-0" aria-hidden />
           <span className="truncate">{`Skills: ${count}`}</span>
-          <ChevronDown className="h-3 w-3 shrink-0 opacity-70" aria-hidden />
+          <ChevronDown className="size-3 shrink-0 text-faint-foreground" aria-hidden />
         </TooltipTrigger>
         <TooltipContent>{said}</TooltipContent>
       </Tooltip>
@@ -210,7 +210,7 @@ export function SkillsOff({ projectId, agent, skillsOn, skillsOff, projectSkills
   const count = skillCount(sessionSkills(record, { on: skillsOn ?? [], off: skillsOff ?? [] }), projectId !== undefined ? projectKept(project?.held ?? [], projectSkills) : [])
   return (
     <RowSaid tip={`This session got ${skillPicksSaid({ skillsOn, skillsOff, projectSkills: projectId === undefined ? 'none' : projectSkills })}`}>
-      <Puzzle className="h-3.5 w-3.5 shrink-0" aria-hidden />
+      <Puzzle className="size-4 shrink-0" aria-hidden />
       <span className="truncate">{`Skills: ${count}`}</span>
     </RowSaid>
   )

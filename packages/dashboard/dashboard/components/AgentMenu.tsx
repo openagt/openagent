@@ -23,9 +23,9 @@ export function AgentMenu({ agents, picked, busy, onPick }: { agents: readonly A
     <DropdownMenu>
       <Tooltip>
         <TooltipTrigger render={<DropdownMenuTrigger type="button" disabled={busy} aria-label={`Agent: ${on.name}`} className={rowButtonClass} />}>
-          <Bot className="h-3.5 w-3.5 shrink-0" aria-hidden />
+          <Bot className="size-4 shrink-0" aria-hidden />
           <span className="max-w-32 truncate">{on.name}</span>
-          <ChevronDown className="h-3 w-3 shrink-0 opacity-70" aria-hidden />
+          <ChevronDown className="size-3 shrink-0 text-faint-foreground" aria-hidden />
         </TooltipTrigger>
         <TooltipContent>{said}</TooltipContent>
       </Tooltip>
@@ -60,7 +60,7 @@ export function AgentOff({ agent }: { agent: string | undefined }) {
   if (name === undefined) return null
   return (
     <RowSaid tip={`This session is on the agent ${name}: its skills and accounts`}>
-      <Bot className="h-3.5 w-3.5 shrink-0" aria-hidden />
+      <Bot className="size-4 shrink-0" aria-hidden />
       <span className="sr-only">Agent: </span>
       <span className="max-w-32 truncate">{name}</span>
     </RowSaid>

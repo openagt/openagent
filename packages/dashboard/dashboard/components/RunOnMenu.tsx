@@ -58,11 +58,11 @@ export function RunOnWords({ icon: Icon, elsewhere, label }: { icon: LucideIcon;
   return (
     <>
       <span className="relative flex shrink-0">
-        <Icon className="h-3.5 w-3.5" aria-hidden />
+        <Icon className="size-4 shrink-0" aria-hidden />
         {elsewhere && <span className="absolute -right-0.5 -top-0.5 h-1.5 w-1.5 rounded-full bg-[var(--color-primary)]" />}
       </span>
       <span className="truncate">{label}</span>
-      <ChevronDown className="h-3 w-3 shrink-0 opacity-70" aria-hidden />
+      <ChevronDown className="size-3 shrink-0 text-faint-foreground" aria-hidden />
     </>
   )
 }
