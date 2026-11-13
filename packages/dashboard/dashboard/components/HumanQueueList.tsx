@@ -98,7 +98,8 @@ export function HumanQueueList({
                   narrow column the row still fits, and nothing scrolls sideways. On a phone each
                   has a line of its own under what is needed, where, and since when. */}
               <span className={cn('min-w-0 shrink truncate text-foreground md:max-w-[50%]', grouped ? 'max-md:flex-1' : 'max-md:order-1 max-md:basis-full')}>{item.title}</span>
-              <span className="min-w-0 truncate text-muted-foreground md:flex-auto max-md:order-2 max-md:basis-full">{detail}</span>
+              {/* A count is never cut; a question keeps room for its first words. */}
+              <span className={cn('truncate text-muted-foreground md:grow max-md:order-2 max-md:basis-full', item.kind === 'awaiting' ? 'max-md:min-w-0 md:min-w-24' : 'min-w-0 shrink-0')}>{detail}</span>
               {/* A run on another of the person's computers is marked by its kind's icon before the
                   project, as the list of runs marks it: a row has no room for its name too. */}
               {item.computer && <OnComputer computer={item.computer} named={false} />}
