@@ -142,10 +142,23 @@ export function FixAction({ label, busy, busyWords, command, failed, onPress, si
       {command && <CommandLine command={command} />}
       {failed && (
         <p role="alert" className="whitespace-pre-line text-xs text-danger">
-          {failed}
+          <Linked text={failed} />
         </p>
       )}
     </div>
+  )
+}
+
+/** A program's words, each address in them a link: a sign-in page it names is opened from here. */
+function Linked({ text }: { text: string }) {
+  return text.split(/(https?:\/\/[^\s<>"]+)/).map((part, at) =>
+    at % 2 === 1 ? (
+      <a key={at} href={part} target="_blank" rel="noreferrer" className="underline underline-offset-2">
+        {part}
+      </a>
+    ) : (
+      part
+    ),
   )
 }
 

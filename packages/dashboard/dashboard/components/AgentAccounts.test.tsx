@@ -97,6 +97,16 @@ describe('Agent accounts', () => {
     expect((await within(card).findByRole('status', {}, { timeout: 5000 })).textContent).toBe('Claude Code is ready: runs can start with it.')
   })
 
+  test('an address in a failed login\u2019s words is a link', async () => {
+    views({ now: NOW, accounts: [{ id: 'This computer', name: 'This computer', own: true, windows: [] }] })
+    states({ driver: 'claude-code', ready: false, problem: '`claude` is not logged in.', fix: { kind: 'log-in', command: 'claude auth login' }, failed: 'Open https://auth.example/device?code=1 to sign in.\nError logging in: access_denied' })
+    render(<AccountsList />)
+    const card = await screen.findByRole('region', { name: 'Claude Code' })
+    const link = await within(card).findByRole('link', { name: 'https://auth.example/device?code=1' })
+    expect(link.getAttribute('href')).toBe('https://auth.example/device?code=1')
+    expect(within(card).getByRole('alert').textContent).toBe('Open https://auth.example/device?code=1 to sign in.\nError logging in: access_denied')
+  })
+
   test('on a computer with no browser the log-in is no press: the card gives the command to type there', async () => {
     views({ now: NOW, accounts: [{ id: 'This computer', name: 'This computer', own: true, windows: [] }] })
     states({ driver: 'claude-code', ready: false, problem: '`claude` is not logged in.', fix: { kind: 'log-in', command: 'claude auth login' }, typed: true })
