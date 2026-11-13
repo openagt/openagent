@@ -270,7 +270,8 @@ export function HandoffActions({
               className={cn(
                 buttonVariants({ size: 'xs', variant: 'ghost' }),
                 NEXT_STEP,
-                'px-1 text-muted-foreground data-[popup-open]:bg-[var(--color-accent)] data-[popup-open]:text-[var(--color-accent-foreground)]',
+                // Open, it looks hovered: the menus' own open color is the bar's, and the arrow would vanish into it.
+                'px-1 text-muted-foreground data-[popup-open]:bg-background data-[popup-open]:text-foreground',
               )}
             >
               <ChevronDown className="h-3.5 w-3.5" />
