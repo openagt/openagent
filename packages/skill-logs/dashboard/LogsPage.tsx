@@ -72,12 +72,15 @@ const NOTHING_READ: Read = { rows: [], failed: [] }
 /** The statuses a chip picks, in this order: what is going, then how runs ended, then the runs whose computer does not answer. */
 const STATUSES = ['running', 'waiting', 'done', 'stopped', 'failed', 'unknown']
 
+/** A status as the rest of the dashboard says it: a live run is "working". */
+const wordOf = (status: string): string => (status === 'running' ? 'working' : status)
+
 /** A run's status as a dot in the dashboard's colors and its word: the dot filled while something is going on, a ring once nothing is. One whose computer does not answer says which, pointed at. */
 function Status({ status, offline }: { status: string; offline?: string | undefined }) {
   return (
     <span className="inline-flex items-center gap-1.5" {...(offline ? { title: offline } : {})}>
       <span aria-hidden className={cn('size-1.5 shrink-0 rounded-full', STATUS_DOT[status] ?? cn('border', STATUS_RING[status] ?? STATUS_RING['done']))} />
-      {status === 'unknown' ? 'status unknown' : status}
+      {status === 'unknown' ? 'status unknown' : wordOf(status)}
     </span>
   )
 }
@@ -166,7 +169,7 @@ export function LogsPage({ projects, path }: ModulePageProps) {
   // Which status the list shows: every one, until a chip picks one, kept in the address (`/logs/waiting`) so a
   // reload or Back from a run shows the list the person left. One no run has any more goes back to all.
   const picked = path[0] ?? null
-  const counts = STATUSES.map(value => ({ value, label: value[0]!.toUpperCase() + value.slice(1), count: read.rows.filter(row => row.card.status === value).length })).filter(c => c.count > 0)
+  const counts = STATUSES.map(value => ({ value, label: wordOf(value)[0]!.toUpperCase() + wordOf(value).slice(1), count: read.rows.filter(row => row.card.status === value).length })).filter(c => c.count > 0)
   const status = counts.some(c => c.value === picked) ? picked : null
   const shown = status === null ? read.rows : read.rows.filter(row => row.card.status === status)
   const days = byDay(shown)

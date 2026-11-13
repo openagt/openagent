@@ -183,7 +183,7 @@ test('each run as the dashboard says it stands: a record that still says running
   expect(added.textContent).toContain('done')
   const frozen = screen.getAllByText('frozen in the records')[0]!.closest('tr')!
   expect(within(frozen).getByText('status unknown').closest('[title]')!.getAttribute('title')).toBe(`MacBook offline · last seen ${new Date(seenAt).toLocaleString()}`)
-  expect(screen.queryAllByText('running')).toHaveLength(0)
+  expect(screen.queryAllByText('working')).toHaveLength(0)
 })
 
 test("each run says whose it is: their picture where the project's git host knows them, else two letters; a very old card has no mark, and its name stays in line", async () => {
