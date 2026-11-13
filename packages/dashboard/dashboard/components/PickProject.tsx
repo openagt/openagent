@@ -12,7 +12,7 @@ export function PickProject({ words, projects, onPick }: { words: string; projec
   return (
     <div className="space-y-2">
       <p className="text-sm text-muted-foreground">{words}</p>
-      <List>
+      <List boxed>
         {projects.map(project => (
           <Row
             key={project.id}

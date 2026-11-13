@@ -488,6 +488,18 @@ function Lists() {
           <Row leading={<Folder className="size-4" aria-hidden />} title={LONG_TITLE} meta="$0.15 · 2d ago" href="#long" actions={remove} />
         </List>
       </Section>
+      <Section title="Boxed: in something with no edge of its own" count="2">
+        <List boxed aria-label="Boxed">
+          <Row leading={<Folder className="size-4" aria-hidden />} title="shop" meta={<ChevronRight className="size-4" aria-hidden />} onClick={() => {}} />
+          <Row leading={<Folder className="size-4" aria-hidden />} title="blog" meta={<ChevronRight className="size-4" aria-hidden />} onClick={() => {}} />
+        </List>
+      </Section>
+      <Section title="Two lines on a phone" count="2">
+        <List aria-label="Stacked on a phone">
+          <Row stackOnPhone title={LONG_TITLE} meta="shop · done · $0.15 · 12:04" href="#stacked" onClick={() => {}} />
+          <Row stackOnPhone title="A short one stays one line, 44 high" meta="12:01" href="#short" onClick={() => {}} />
+        </List>
+      </Section>
       <Section title="Nothing in it" count="0">
         <p className="text-sm text-muted-foreground">No run yet. Start one from the message box.</p>
       </Section>
@@ -591,7 +603,7 @@ export const PREVIEWS: Preview[] = [
     path: 'components/list.html',
     group: 'Components',
     name: 'Section + list',
-    subtitle: 'A heading with its count and press, then rows that are a link, a press, or hold their own action',
+    subtitle: 'A heading with its count and press, then rows on the page or boxed, a link, a press, or holding their own action',
     width: 900,
     node: <Lists />,
   },

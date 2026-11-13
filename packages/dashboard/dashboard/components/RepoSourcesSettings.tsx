@@ -41,7 +41,7 @@ export function RepoSourcesSettings() {
         <p className="text-sm">GitHub users and organizations</p>
         <p className="text-xs text-muted-foreground">Their repos are listed in the picker, read as the GitHub account runs use; picked, one is cloned. The same on each of your computers.</p>
         {sources.owners.length > 0 && (
-          <List aria-label="GitHub users and organizations">
+          <List boxed aria-label="GitHub users and organizations">
             {sources.owners.map(name => (
               <Row
                 key={name}
@@ -83,7 +83,7 @@ export function RepoSourcesSettings() {
         <p className="text-sm">Folders searched on this computer</p>
         <p className="text-xs text-muted-foreground">Your home folder, and the folders added with &ldquo;Search another folder&hellip;&rdquo; in the picker.</p>
         {sources.folders.length > 0 && (
-          <List aria-label="Folders searched">
+          <List boxed aria-label="Folders searched">
             {sources.folders.map(folder => (
               <Row
                 key={folder}
