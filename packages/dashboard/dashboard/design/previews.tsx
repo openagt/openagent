@@ -323,12 +323,12 @@ function FormControls() {
           </SelectTrigger>
         </Select>
         <Select items={UNITS} defaultValue="d">
-          <SelectTrigger size="sm" aria-label="Unit, small" className="w-28">
+          <SelectTrigger aria-label="Unit, small" className="w-28">
             <SelectValue />
           </SelectTrigger>
         </Select>
         <Select items={UNITS} defaultValue="h" disabled>
-          <SelectTrigger size="sm" aria-label="Unit, disabled" className="w-28">
+          <SelectTrigger aria-label="Unit, disabled" className="w-28">
             <SelectValue />
           </SelectTrigger>
         </Select>

@@ -234,7 +234,7 @@ function Where({ kind, onKind, doors, through, onVia, onCancel, onNext }: { kind
         <div className="flex items-center gap-2 pl-9 text-xs text-muted-foreground">
           Reached through
           <Select items={doors} value={through} onValueChange={next => onVia(next as string)}>
-            <SelectTrigger size="sm" aria-label="The server it is reached through" className="w-48">
+            <SelectTrigger aria-label="The server it is reached through" className="w-48">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>

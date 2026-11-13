@@ -36,7 +36,7 @@ export function SendAs({ host, value, onChange, disabled = false, label = 'Send 
     <div className="flex items-center gap-2 text-xs text-muted-foreground">
       <span>{label}</span>
       <Select items={items} value={value ?? null} onValueChange={next => next && onChange(String(next))} disabled={disabled}>
-        <SelectTrigger size="sm" aria-label={label} className="h-7 min-w-0">
+        <SelectTrigger aria-label={label} className="h-7 min-w-0">
           <SelectValue />
         </SelectTrigger>
         <SelectContent>

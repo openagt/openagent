@@ -110,7 +110,7 @@ export function SettingsSelectRow({
       description={description}
       control={
         <Select items={items} value={value === '' ? NO_VALUE : value} onValueChange={picked} disabled={down}>
-          <SelectTrigger size="sm" aria-label={label} className="max-w-[min(16rem,45vw)]">
+          <SelectTrigger aria-label={label} className="max-w-[min(16rem,45vw)]">
             <SelectValue />
           </SelectTrigger>
           <SelectContent align="end">

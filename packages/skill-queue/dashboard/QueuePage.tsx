@@ -327,7 +327,7 @@ function AddEntry({ project, reload }: { project: ModuleProject; reload: () => P
       <div className="flex flex-wrap items-center gap-2">
         <Input ref={field} name="task" value={text} onChange={event => (setText(event.target.value), setFailed(undefined))} readOnly={adding} placeholder="Add a task: what an agent should do" aria-label="A task to add to the queue" className="h-8 min-w-48 flex-1 px-2" />
         <Select items={items} value={String(priority)} disabled={adding} onValueChange={next => setPriority(Number(next))}>
-          <SelectTrigger size="sm" aria-label="Priority of the new task" className="w-32">
+          <SelectTrigger aria-label="Priority of the new task" className="w-32">
             <SelectValue />
           </SelectTrigger>
           <SelectContent>

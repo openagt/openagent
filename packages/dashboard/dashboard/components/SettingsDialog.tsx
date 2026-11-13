@@ -288,7 +288,7 @@ function ProjectSelect({ projects, value, onChange }: { projects: ProjectSummary
   const items = [{ value: ALL_PROJECTS, label: 'All projects' }, ...projects.map(p => ({ value: p.id, label: label(p.id, p.name) }))]
   return (
     <Select items={items} value={value} onValueChange={next => onChange(String(next ?? ALL_PROJECTS))}>
-      <SelectTrigger size="sm" aria-label="Project" className="h-6 min-w-0 flex-1 border-transparent bg-transparent px-1.5 text-xs shadow-none">
+      <SelectTrigger aria-label="Project" className="h-6 min-w-0 flex-1 border-transparent bg-transparent px-1.5 text-xs shadow-none">
         <SelectValue />
       </SelectTrigger>
       <SelectContent>
