@@ -305,7 +305,7 @@ function WeekBar({
       {/* The legend, and — on the same row (#960 Edit) — whether the knob has left any room to
           project. Grouped on the right since both describe the same knob: the warning first, since
           it explains why the state beside it might be worth a second look. */}
-      <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1 text-[11px] text-muted-foreground max-sm:text-xs">
+      <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1 text-muted-foreground sm:text-[11px] max-sm:text-xs">
         <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
           <LegendItem swatch={<span className={cn('h-2 w-2 rounded-sm', TONE_FILL[tone])} aria-hidden />}>Used</LegendItem>
           {limited && <LegendItem swatch={<span className={cn('h-2 w-2 rounded-sm opacity-35', TONE_FILL[tone])} aria-hidden />}>Budget for Autonomous AI</LegendItem>}

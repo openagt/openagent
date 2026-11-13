@@ -41,7 +41,7 @@ export function CardTitleLink({ icon, children, segment, onOpen, className }: { 
       >
         {icon}
         {children}
-        <ArrowRight className="h-3.5 w-3.5 text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100 group-focus-visible:opacity-100 max-md:opacity-100" aria-hidden />
+        <ArrowRight className="h-3.5 w-3.5 text-muted-foreground transition-opacity md:opacity-0 md:group-hover:opacity-100 md:group-focus-visible:opacity-100" aria-hidden />
       </a>
     </CardTitle>
   )

@@ -162,7 +162,7 @@ function OnRow({ project, command, stopped, lookedAt, onOpenRun, reload }: { pro
           disabled={busy || down}
           onClick={() => void runNow()}
           aria-label={`Run ${rowTitle(command)} now`}
-          className="absolute inset-y-0 right-1 my-auto bg-[inherit] opacity-0 transition-opacity group-hover/row:opacity-100 focus-visible:opacity-100 disabled:opacity-100 max-md:static max-md:ml-auto max-md:opacity-100"
+          className="bg-[inherit] transition-opacity md:absolute md:inset-y-0 md:right-1 md:my-auto md:opacity-0 md:group-hover/row:opacity-100 md:focus-visible:opacity-100 md:disabled:opacity-100 max-md:ml-auto"
         >
           {busy ? 'Starting…' : 'Run now'}
         </Button>

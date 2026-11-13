@@ -119,7 +119,7 @@ function HotList({ hot, errors, loaded, title, showProject, reload }: { hot: Hot
   return (
     <Card>
       <CardHeader>{title}</CardHeader>
-      <CardContent className="pt-2">
+      <CardContent className="pt-2!">
         {errors.map(({ project, error }) => (
           <p key={project.id} role="alert" className="mb-2 text-xs text-danger">
             Could not read the tickets of {project.name}: {error}

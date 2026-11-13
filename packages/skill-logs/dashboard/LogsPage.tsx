@@ -208,7 +208,7 @@ export function LogsPage({ projects, path }: ModulePageProps) {
               <TableBody>
                 {days.map(({ day, rows, cost }) => [
                   <TableRow key={day} className="hover:bg-transparent">
-                    <TableCell colSpan={many ? 7 : 6} className="pt-5 pb-1.5">
+                    <TableCell colSpan={many ? 7 : 6} className="pt-5! pb-1.5!">
                       <DayHeading day={day} runs={rows.length} cost={cost} />
                     </TableCell>
                   </TableRow>,

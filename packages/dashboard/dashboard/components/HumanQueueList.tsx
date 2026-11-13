@@ -93,7 +93,7 @@ export function HumanQueueList({
                   <Icon className="h-3.5 w-3.5" aria-hidden />
                 </span>
               ) : (
-                <span className={cn('flex w-28 shrink-0 items-center gap-1.5 text-xs max-md:w-auto max-md:flex-1', tone)}>
+                <span className={cn('flex shrink-0 items-center gap-1.5 text-xs md:w-28 max-md:flex-1', tone)}>
                   <Icon className="h-3.5 w-3.5 shrink-0" />
                   {needsWord(item.kind, item.gitHost)}
                 </span>

@@ -335,7 +335,7 @@ function NextStep({
         <Button
           size="xs"
           variant="ghost"
-          className={cn(NEXT_STEP, 'pr-1.5')}
+          className={cn(NEXT_STEP, 'pr-1.5!')}
           {...step}
           onClick={() => openPr(false)}
         >

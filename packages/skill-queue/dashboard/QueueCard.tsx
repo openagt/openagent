@@ -107,7 +107,7 @@ export function QueueCard({ projects }: ModuleCardProps) {
                           {agent ? (
                             <AgentOnEntry projectId={project.id} agent={agent} />
                           ) : (
-                            <div className="shrink-0 opacity-0 transition-opacity group-hover/row:opacity-100 focus-within:opacity-100 has-[[aria-expanded=true]]:opacity-100 max-md:opacity-100">
+                            <div className="shrink-0 transition-opacity md:opacity-0 md:group-hover/row:opacity-100 md:focus-within:opacity-100 md:has-[[aria-expanded=true]]:opacity-100">
                               <StartAgentButton
                                 variant="ghost"
                                 size="icon-sm"

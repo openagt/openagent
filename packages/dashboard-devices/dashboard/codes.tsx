@@ -218,7 +218,7 @@ export function PhoneCode({
         ) : expired ? (
           <RanOut />
         ) : (
-          <div className="flex items-start gap-5 max-sm:flex-col max-sm:items-center">
+          <div className="flex gap-5 sm:items-start max-sm:flex-col max-sm:items-center">
             <div className="shrink-0">
               <QrCode text={link!} label="The code a new device scans" />
             </div>

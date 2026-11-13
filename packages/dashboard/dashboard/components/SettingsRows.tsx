@@ -19,7 +19,7 @@ export function SettingsSection({ description, action, children }: { description
         // On a phone the action goes under the words: beside them it squeezes them to a word a line.
         <div className="flex items-start justify-between gap-3 max-sm:flex-col">
           {description !== undefined && <p className="text-sm text-muted-foreground">{description}</p>}
-          {action !== undefined && <div className="ml-auto shrink-0 max-sm:ml-0">{action}</div>}
+          {action !== undefined && <div className="shrink-0 sm:ml-auto">{action}</div>}
         </div>
       )}
       <div className="divide-y divide-border">{children}</div>

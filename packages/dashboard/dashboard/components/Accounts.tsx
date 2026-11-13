@@ -55,7 +55,7 @@ function RotationCard() {
   if (!card)
     return loaded ? (
       <Card>
-        <CardContent className="pt-6 text-sm text-muted-foreground">The accounts card did not load.</CardContent>
+        <CardContent className="pt-6! text-sm text-muted-foreground">The accounts card did not load.</CardContent>
       </Card>
     ) : (
       <Skeleton className="h-32 w-full" />
