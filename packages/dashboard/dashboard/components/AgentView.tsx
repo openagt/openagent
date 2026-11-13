@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type MutableRefObject } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore, type MutableRefObject } from 'react'
 import type { AgentDoing, AgentMeta, AgentWorktree, OpenAgentEvent } from '../../src/index.js'
 import { onAgentMainBranch, onAgentsDoing, onGitHostHome, onRetainedWorktrees } from '../rpc/reads.js'
 import { useLoaded, usePolled } from '../lib/use-async.js'
@@ -487,6 +487,11 @@ export function AgentView({
 /** A message sent to a working agent, with how many prompts its log held then: a later prompt of its text is it, read. */
 type Queued = QueuedMessage & { prompts: number }
 
+function onVisibilityChange(changed: () => void): () => void {
+  document.addEventListener('visibilitychange', changed)
+  return () => document.removeEventListener('visibilitychange', changed)
+}
+
 /**
  * The messages on their way to an agent, shown in its feed until the agent's own line of each
  * arrives: the one just sent to the ended agent (`sending`, which `onSending` sets), or the prompt
@@ -549,8 +554,10 @@ function useMessagesOnTheirWay(
   const giveBack = useRef<((text: string) => void) | null>(null)
   const unreadNow = useRef(queued)
   unreadNow.current = queued
+  // With the session open in two tabs, the words go to the one the person looks at.
+  const onScreen = useSyncExternalStore(onVisibilityChange, () => document.visibilityState !== 'hidden', () => true)
   useEffect(() => {
-    if (queued.length === 0 || !ended) return
+    if (queued.length === 0 || !ended || !onScreen) return
     const timer = setTimeout(
       () => {
         giveBack.current?.(unreadNow.current.map(message => message.text).join('\n\n'))
@@ -559,7 +566,7 @@ function useMessagesOnTheirWay(
       stopped ? 0 : QUEUED_UNREAD_MS,
     )
     return () => clearTimeout(timer)
-  }, [queued.length, ended, stopped, setQueued])
+  }, [queued.length, ended, stopped, onScreen, setQueued])
   const onQueued = useCallback((message: QueuedMessage) => setQueued(was => [...was, { ...message, prompts }]), [setQueued, prompts])
   // Cancel and edit puts the message back in the box; the composer says how.
   const editInBox = useRef<((text: string) => void) | null>(null)

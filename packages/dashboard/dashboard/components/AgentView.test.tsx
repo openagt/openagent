@@ -761,6 +761,32 @@ describe('a message sent while the agent works', () => {
     }
   })
 
+  test('a tab in the background leaves the words for the tab that is shown, and takes them once it is shown and they still wait', async () => {
+    vi.useFakeTimers()
+    const setShown = (shown: boolean) => {
+      Object.defineProperty(document, 'visibilityState', { configurable: true, get: () => (shown ? 'visible' : 'hidden') })
+      act(() => void document.dispatchEvent(new Event('visibilitychange')))
+    }
+    try {
+      givenBack.length = 0
+      const { rerender } = render(view({ live: true, events: [start('go'), text] }))
+      fireEvent.click(screen.getByText('queue-one'))
+      setShown(false)
+      rerender(view({ live: false, card: { status: 'stopped' }, events: [start('go'), text, { kind: 'end', ok: false, stopped: true }] as OpenAgentEvent[] }))
+      await act(async () => {})
+      act(() => void vi.advanceTimersByTime(10_000))
+      expect(queuedBoxes()).toHaveLength(1)
+      expect(givenBack).toEqual([])
+      setShown(true)
+      act(() => void vi.advanceTimersByTime(0))
+      expect(queuedBoxes()).toHaveLength(0)
+      expect(givenBack).toEqual(['and then this'])
+    } finally {
+      delete (document as { visibilityState?: unknown }).visibilityState
+      vi.useRealTimers()
+    }
+  })
+
   test('a run whose feed shows its end is ended at once, its Stop gone with the end line, before the list of runs says so', () => {
     const { rerender } = render(view({ live: true, events: [start('go'), text] }))
     expect(screen.getByTestId('composer-live').textContent).toBe('true')
