@@ -466,20 +466,22 @@ export function AccountsCard({ accountWhere }: ModuleCardProps) {
   const [dismissed, setDismissed] = useState<string>()
   const signingIn = AGENTS.find(agent => adding?.[agent.id]?.adding !== undefined)?.id
   const underWay = signingIn !== undefined
-  const wasUnderWay = useRef(false)
+  // Said in the render that sees a sign-in start or end, so the dialog never draws its form again over an account that is there.
+  const [wasUnderWay, setWasUnderWay] = useState(false)
+  if (underWay !== wasUnderWay) {
+    setWasUnderWay(underWay)
+    // A sign-in found under way, started before this page was opened, is shown as it is.
+    if (underWay) setNaming(now => now ?? signingIn)
+    // The account is there: the dialog closes on it. One that did not go through stays, with why.
+    else setNaming(now => (now !== undefined && adding?.[now]?.failed === undefined ? undefined : now))
+  }
   useEffect(() => {
-    if (underWay) {
-      setFollowing(true)
-      // A sign-in found under way, started before this page was opened, is shown as it is.
-      setNaming(now => now ?? signingIn)
-    } else if (wasUnderWay.current) {
+    if (underWay) setFollowing(true)
+    else if (following) {
       setFollowing(false)
-      // The account is there: the dialog closes on it. One that did not go through stays, with why.
-      setNaming(now => (now !== undefined && adding?.[now]?.failed === undefined ? undefined : now))
       void reload()
       void reloadUsage()
     }
-    wasUnderWay.current = underWay
     // Only when a sign-in starts or ends: the reads are the same from render to render in what they do.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [underWay])

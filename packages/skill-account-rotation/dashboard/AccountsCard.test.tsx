@@ -224,6 +224,25 @@ describe('AccountsCard', () => {
     expect(calls.some(call => call.args[0] === 'add-cancel')).toBe(false)
   })
 
+  test('once the sign-in ended, the dialog closes without drawing its form again', async () => {
+    let now: Record<string, unknown> = { claude: {}, codex: {} }
+    renderAdding(() => now, args => {
+      if (args[0] === 'add') now = { claude: { adding: { name: 'Dani' } }, codex: {} }
+      return { ok: true, output: {} }
+    })
+    const dialog = await add('Claude Code')
+    fireEvent.change(within(dialog).getByRole('textbox', { name: 'Whose account' }), { target: { value: 'Dani' } })
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Log in to Claude' }))
+    expect(await within(dialog).findByText(/Adding Dani's account: say yes/)).toBeTruthy()
+    const drawn: Node[] = []
+    const watch = new MutationObserver(records => drawn.push(...records.flatMap(record => [...record.addedNodes])))
+    watch.observe(document.body, { childList: true, subtree: true })
+    now = { claude: {}, codex: {} }
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull(), { timeout: 5000 })
+    watch.disconnect()
+    expect(drawn.some(node => node instanceof Element && (node.matches('input[name="account-name"]') || node.querySelector('input[name="account-name"]') !== null))).toBe(false)
+  })
+
   test('the press stays busy from the press until a read shows the sign-in under way', async () => {
     let now: Record<string, unknown> = { claude: {}, codex: {} }
     renderAdding(() => now)
