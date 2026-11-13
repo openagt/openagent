@@ -182,7 +182,7 @@ function Overview({ d, item }: { d: Devices; item: ServerItem }) {
               {done && <StepLine label="Runs can be sent to it" state={sendable} said={machine ? undefined : reason} />}
             </ol>
             {settled && (
-              <button type="button" className="ml-5.5 text-xs text-muted-foreground underline hover:text-foreground" onClick={() => setOpened(false)}>
+              <button type="button" className="relative ml-5.5 text-xs text-muted-foreground underline after:absolute after:-inset-y-1 after:inset-x-0 hover:text-foreground" onClick={() => setOpened(false)}>
                 Hide the steps
               </button>
             )}

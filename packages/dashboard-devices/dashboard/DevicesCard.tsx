@@ -53,7 +53,7 @@ export function DevicesCard(_props: ModuleCardProps) {
           </ul>
         )}
         {phones.length > 0 && (
-          <button type="button" onClick={() => host.openSettings('devices')} className="block text-left text-xs text-muted-foreground hover:text-foreground hover:underline">
+          <button type="button" onClick={() => host.openSettings('devices')} className="relative block text-left text-xs text-muted-foreground after:absolute after:-inset-y-1 after:inset-x-0 hover:text-foreground hover:underline">
             {phones.length === 1 ? '1 phone or browser' : `${phones.length} phones and browsers`} in
             {lastSeen ? ` · last seen ${formatAge(lastSeen)}` : ''}
           </button>
