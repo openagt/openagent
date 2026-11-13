@@ -121,6 +121,19 @@ describe('Settings dropdowns (#1172)', () => {
 })
 
 describe('Settings › Coding agent', () => {
+  test('a coding agent that is not installed says so in its row', async () => {
+    const answered = onModels.getMockImplementation()!
+    onModels.mockResolvedValue({ 'claude-code': { models: [], error: 'not found', missing: true }, codex: { models: [], error: 'not logged in' } } as never)
+    prefsRead.mockResolvedValueOnce({})
+    refreshPreferences()
+    try {
+      open('agent')
+      expect(await screen.findByText('Which coding agent runs the work. Claude Code is not installed on this computer.')).toBeTruthy()
+    } finally {
+      onModels.mockImplementation(answered)
+    }
+  })
+
   test("the Model row offers the agent's own list, the start menu's, after the agent's own default", async () => {
     prefsRead.mockResolvedValueOnce({})
     refreshPreferences()

@@ -1,7 +1,7 @@
 import { useCallback, useId, useRef, useState, type ComponentType, type ReactNode } from 'react'
 import { Dialog as BaseDialog } from '@base-ui/react/dialog'
 import { ArrowLeft, Bell, Bot, ChevronRight, Database, FolderGit2, Globe, Palette, Puzzle, UserRound, X, FolderSearch } from 'lucide-react'
-import { ACCENTS, DEFAULT_ACCENT_LABELS, accentOf, CODE_FONTS, DOCUMENT_FONTS, DRIVERS, FONTS, PALETTES, PALETTE_LABELS, type Accent, type CodeFont, type DocumentFont, type Font, type Palette as ColourPalette } from '../../src/client.js'
+import { ACCENTS, DEFAULT_ACCENT_LABELS, accentOf, CODE_FONTS, DOCUMENT_FONTS, DRIVERS, DRIVER_LABELS, isDriverName, FONTS, PALETTES, PALETTE_LABELS, type Accent, type CodeFont, type DocumentFont, type Font, type Palette as ColourPalette } from '../../src/client.js'
 import { driverOptions, useModels } from '../lib/models.js'
 import type { DriverOption } from './DriverModelMenu.js'
 import type { ProjectSummary } from '../../src/index.js'
@@ -302,8 +302,11 @@ function useOwnEntries(): Entry[] {
   const editors = useDetectedEditors()
   const theme = themePreference(preferences)
   // The start menu's own list (#1874), so Settings offers exactly the picks the menu does.
-  const drivers = driverOptions(useModels())
+  const models = useModels()
+  const drivers = driverOptions(models)
   const driver = preferences.driver ?? DRIVERS[0]
+  const driverAnswer = isDriverName(driver) ? models?.[driver] : undefined
+  const missingDriver = isDriverName(driver) && driverAnswer !== undefined && 'missing' in driverAnswer && driverAnswer.missing ? DRIVER_LABELS[driver] : undefined
   const model = preferences.model ?? ''
   // A notification toggle is a preference; whether it can deliver is the browser's permission
   // (#948). Both are shown, the same way the bell does, so the row cannot promise delivery that
@@ -434,7 +437,7 @@ function useOwnEntries(): Entry[] {
         <Section>
           <SelectRow
             label="Coding agent"
-            description="Which coding agent runs the work."
+            description={`Which coding agent runs the work.${missingDriver !== undefined ? ` ${missingDriver} is not installed on this computer.` : ''}`}
             value={driver}
             options={drivers}
             // A model is always one agent's own (the start menu's rule), so a new agent starts unpinned.
