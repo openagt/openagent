@@ -225,21 +225,22 @@ function Buttons() {
 function Badges() {
   return (
     <div className="space-y-5">
-      <Labelled label="Event kinds">
-        <Badge>driver</Badge>
-        <Badge>tool</Badge>
-        <Badge>gate</Badge>
-        <Badge>end</Badge>
+      <Labelled label="A count, a topic">
+        <Badge>3</Badge>
+        <Badge>12</Badge>
+        <Badge>dashboard</Badge>
+        <Badge>Effort: 2</Badge>
       </Labelled>
-      <Labelled label="Status (as used today)">
-        <Badge className="border-transparent bg-success/15 text-success">DONE</Badge>
-        <Badge className="border-transparent bg-danger/15 text-danger">FAILED</Badge>
-        <Badge className="border-transparent bg-warning/15 text-warning">STOPPED</Badge>
-        <Badge className="border-transparent bg-primary/15 text-primary">RUNNING</Badge>
+      <Labelled label="A status word">
+        <Badge tone="success">Done</Badge>
+        <Badge tone="danger">Failed</Badge>
+        <Badge tone="warning">Stopped</Badge>
+        <Badge tone="info">Not pushed</Badge>
+        <Badge tone="primary">Running</Badge>
+        <Badge tone="neutral">Queued</Badge>
       </Labelled>
       <p className="text-xs text-muted-foreground">
-        The Badge primitive carries no variant prop, so status colouring is applied by hand at each
-        call site — the reason the same status reads differently in different rails.
+        Each in one size: a count or a topic is a pill on a soft fill; a status word is its colour in a dot and the text&apos;s colour in the word, so it reads at 4.5:1 on every surface.
       </p>
     </div>
   )

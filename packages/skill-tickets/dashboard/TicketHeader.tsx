@@ -256,7 +256,7 @@ function TicketFacts({
       {ticket.topics && ticket.topics.length > 0 && (
         <span className="ml-1 flex flex-wrap gap-1">
           {ticket.topics.map(topic => (
-            <Badge key={topic} className="border-border px-1.5 text-[10px] text-muted-foreground">
+            <Badge key={topic}>
               {topic}
             </Badge>
           ))}

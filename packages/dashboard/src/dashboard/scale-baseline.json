@@ -298,9 +298,6 @@
     "rounded": 2,
     "text-[10px]": 3
   },
-  "skill-tickets/dashboard/TicketHeader.tsx": {
-    "text-[10px]": 1
-  },
   "skill-tickets/dashboard/TicketPageShell.tsx": {
     "rounded": 1
   },
@@ -313,7 +310,7 @@
   "skill-tickets/dashboard/TicketsPanel.tsx": {
     "hover:text-info/80": 1,
     "rounded": 1,
-    "text-[10px]": 11,
+    "text-[10px]": 8,
     "text-muted-foreground/70": 1
   }
 }
