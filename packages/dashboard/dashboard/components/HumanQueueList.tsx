@@ -84,6 +84,7 @@ export function HumanQueueList({
         {shown.map(item => {
           const { Icon, tone } = MARKS[item.kind]
           const detail = detailOf(item)
+          const needs = needsWord(item.kind, item.gitHost)
           const since = formatRelative(item.createdAt, '')
           const href = item.agentId ? services.agentHref(item.projectId, item.agentId) : item.kind === 'pr' ? item.url : undefined
           const open = item.agentId
@@ -96,21 +97,23 @@ export function HumanQueueList({
               key={interventionKey(item)}
               // The words keep 4.5:1 on the hover's fill: what is quiet at rest is the text's own colour under the pointer.
               className="text-muted-foreground"
+              // What is needed is said in the link's own name too, so the keyboard and a screen reader meet it there, once.
               leading={
                 grouped ? (
-                  <span title={needsWord(item.kind, item.gitHost)} className={cn('flex size-4 items-center justify-center', tone)}>
-                    <Icon className="size-4" aria-hidden />
+                  <span title={needs} aria-hidden className={cn('flex size-4 items-center justify-center', tone)}>
+                    <Icon className="size-4" />
                   </span>
                 ) : (
-                  <span className="flex items-center gap-2 text-foreground md:w-32">
-                    <Icon className={cn('size-4 shrink-0', tone)} aria-hidden />
-                    {needsWord(item.kind, item.gitHost)}
+                  <span aria-hidden className="flex items-center gap-2 text-foreground md:w-32">
+                    <Icon className={cn('size-4 shrink-0', tone)} />
+                    {needs}
                   </span>
                 )
               }
               title={
                 // Where a click takes the person, on a hover that waits, with the computer it runs on.
                 <span title={item.computer ? `${hoverOf(item)} · runs on ${item.computer.name}` : hoverOf(item)} className="text-foreground">
+                  <span className="sr-only">{`${needs}: `}</span>
                   {item.title}
                   {detail !== undefined && <span className="ml-3 font-normal text-muted-foreground group-hover/row:text-foreground">{detail}</span>}
                 </span>
