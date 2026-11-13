@@ -260,16 +260,20 @@ export function PhoneCode({
             </div>
           </div>
         )}
+        {/* Cancel before the other press; once joined, Done is the press the dialog ends on, last. */}
         <div className="flex justify-end gap-2">
+          {joined === undefined && (
+            <Button variant="ghost" onClick={onClose}>
+              Cancel
+            </Button>
+          )}
           {!asking && (joined !== undefined || expired || error !== undefined || !code) && (
             <Button variant="outline" onClick={() => void again()}>
               <RotateCw className="h-3.5 w-3.5" aria-hidden />
               {joined !== undefined ? 'Add another' : 'New code'}
             </Button>
           )}
-          <Button variant={joined !== undefined ? 'default' : 'ghost'} onClick={onClose}>
-            {joined !== undefined ? 'Done' : 'Cancel'}
-          </Button>
+          {joined !== undefined && <Button onClick={onClose}>Done</Button>}
         </div>
       </div>
     </Dialog>

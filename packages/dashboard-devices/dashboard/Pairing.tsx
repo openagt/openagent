@@ -131,14 +131,14 @@ export function Connecting({ d, computer, canBoth, onBack, onClose }: { d: Devic
             </Button>
           ) : (
             <>
+              <Button variant="ghost" disabled={phase.at === 'saving'} onClick={onBack}>
+                {phase.at === 'waiting' || phase.at === 'asking' ? 'Cancel' : 'Back'}
+              </Button>
               {(phase.at === 'gone' || phase.at === 'failed') && (
                 <Button variant="outline" onClick={() => setRound(round + 1)}>
                   Try again
                 </Button>
               )}
-              <Button variant="ghost" disabled={phase.at === 'saving'} onClick={onBack}>
-                {phase.at === 'waiting' || phase.at === 'asking' ? 'Cancel' : 'Back'}
-              </Button>
             </>
           )}
         </div>

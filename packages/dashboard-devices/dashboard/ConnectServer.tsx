@@ -376,6 +376,9 @@ function Installing({ d, server, useMine, syncData, onReady, onClose }: { d: Dev
       {!failed && !done && <p className="text-xs text-muted-foreground">A few minutes. You can close this: it goes on, and its row shows how far it is.</p>}
       {d.error !== undefined && <Problem>{d.error}</Problem>}
       <Footer>
+        <Button variant="outline" onClick={onClose}>
+          Close
+        </Button>
         {failed && (
           <Button disabled={d.busy} onClick={() => void d.install(server.address, server.user)}>
             Try again
@@ -391,9 +394,6 @@ function Installing({ d, server, useMine, syncData, onReady, onClose }: { d: Dev
             Continue
           </Button>
         )}
-        <Button variant="outline" onClick={onClose}>
-          Close
-        </Button>
       </Footer>
     </div>
   )

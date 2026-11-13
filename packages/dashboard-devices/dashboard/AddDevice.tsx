@@ -436,14 +436,14 @@ export function GiveCode({ d, server, onClose }: { d: Devices; server: ModuleMac
           </>
         )}
         <div className="flex justify-end gap-2">
+          <Button variant={done ? 'default' : 'ghost'} onClick={onClose}>
+            {done ? 'Done' : 'Cancel'}
+          </Button>
           {!asking && !done && (expired || error !== undefined || !code) && joined === undefined && (
             <Button variant="outline" onClick={() => void again()}>
               New code
             </Button>
           )}
-          <Button variant={done ? 'default' : 'ghost'} onClick={onClose}>
-            {done ? 'Done' : 'Cancel'}
-          </Button>
         </div>
       </div>
     </Dialog>
