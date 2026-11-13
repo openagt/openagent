@@ -410,6 +410,23 @@ describe('the Settings list', () => {
     expect(title()).toBe('SettingsgemstackSkills')
   })
 
+  test('a tick on Skills not saved asks before another entry shows: Cancel keeps it, Leave goes', async () => {
+    show('skills', 'p1')
+    fireEvent.click(await screen.findByRole('checkbox', { name: 'skill-of-p1' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Appearance' }))
+    const asked = await screen.findByRole('alertdialog', { name: 'Leave without saving?' })
+    fireEvent.click(within(asked).getByRole('button', { name: 'Cancel' }))
+    await waitFor(() => expect(screen.queryByRole('alertdialog')).toBeNull())
+    expect(screen.getByRole('checkbox', { name: 'skill-of-p1' }).getAttribute('aria-checked')).toBe('false')
+    fireEvent.click(screen.getByRole('button', { name: 'Appearance' }))
+    fireEvent.click(within(await screen.findByRole('alertdialog')).getByRole('button', { name: 'Leave' }))
+    await waitFor(() => expect(title()).toBe('SettingsAppearance'))
+    // Nothing held any more: the next step asks nothing.
+    fireEvent.click(screen.getByRole('button', { name: 'Skills' }))
+    await waitFor(() => expect(title()).toBe('SettingsgemstackSkills'))
+    expect(screen.queryByRole('alertdialog')).toBeNull()
+  })
+
   test('Skills with no project given follows the sidebar\'s pick', async () => {
     show('skills', 'p3')
     expect(showing(select('Project'))).toBe('plain')
