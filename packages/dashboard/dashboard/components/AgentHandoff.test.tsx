@@ -66,6 +66,8 @@ describe('run handoff (#799)', () => {
     await waitFor(() => expect(screen.getByLabelText('1 commit · 1 file')).toBeTruthy())
     expect(screen.getByText('+12')).toBeTruthy()
     expect(screen.getByText('−3')).toBeTruthy()
+    // A screen reader says the pair in words, not as its signs.
+    expect(screen.getByText('12 lines added, 3 removed')).toBeTruthy()
     // The commits and the files themselves are in the side panel's Changes tab.
     expect(screen.queryByText('add dark mode')).toBeNull()
     expect(screen.queryByText('src/theme.ts')).toBeNull()
