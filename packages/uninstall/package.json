@@ -25,8 +25,8 @@
     "build": "tsc -p tsconfig.build.json",
     "prepack": "node -e \"if(!process.env.npm_config_user_agent?.startsWith('pnpm/')){console.error('Pack and publish with pnpm: it replaces workspace:* with the real version, npm does not');process.exit(1)}\"",
     "typecheck": "tsc --noEmit",
-    "test": "echo 'no tests: the command is the install package'\"'\"'s uninstall'",
-    "clean": "rm -rf dist"
+    "test": "tsc -p tsconfig.test.json && node ../../scripts/test-node.mjs",
+    "clean": "rm -rf dist dist-test"
   },
   "dependencies": {
     "@openagt/install": "workspace:*"

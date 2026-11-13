@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, test, vi } from 'vitest'
-import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { ModuleHostContext, type ModuleCommandResult, type ModuleComputerThrough, type ModuleHost, type ModuleMachine, type ModuleMachines } from '@openagt/dashboard/module'
 import { fakeHost } from '@openagt/dashboard/module/testing'
 import { DevicesSettings } from './DevicesSettings.js'
@@ -496,6 +496,8 @@ describe('Settings › Devices: another computer, once', () => {
     fireEvent.click(within(row).getByRole('button', { name: 'Save' }))
     await waitFor(() => expect(host.renameComputer).toHaveBeenCalledWith('Suleiman’s MacBook'))
     expect(await within(row).findByText('Suleiman’s MacBook')).toBeTruthy()
+    // The focus is back on Rename, the press it started from.
+    await waitFor(() => expect(document.activeElement).toBe(within(row).getByRole('button', { name: 'Rename' })))
   })
 
   const FOUND = { name: 'Studio Mac', version: '0.36.0', url: 'http://192.168.1.5:4201' }
@@ -513,6 +515,22 @@ describe('Settings › Devices: another computer, once', () => {
       return ok(args[0] === 'add' ? LINK : status)
     })
   }
+
+  test('Add computer with nothing found on this Wi-Fi after a while says so, and keeps looking', async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true })
+    try {
+      const { host, runComputerCommand } = door(args => ok(args[0] === 'find' ? { found: [] } : OPEN))
+      show(host)
+      await addComputer()
+      expect(await screen.findByText('Looking on this Wi-Fi…')).toBeTruthy()
+      act(() => void vi.advanceTimersByTime(10_000))
+      expect(await screen.findByText('No computer found on this Wi-Fi yet. Still looking…')).toBeTruthy()
+      const looks = runComputerCommand.mock.calls.filter(([args]) => args[0] === 'find').length
+      await waitFor(() => expect(runComputerCommand.mock.calls.filter(([args]) => args[0] === 'find').length).toBeGreaterThan(looks), { timeout: 5000 })
+    } finally {
+      vi.useRealTimers()
+    }
+  })
 
   test('Add computer lists the computers found on this Wi-Fi; Connect shows the number to match there, and once allowed it is saved and let in here: runs go both ways', async () => {
     const { host, runComputerCommand } = pairing(OPEN, ['waiting', 'allowed'])

@@ -2,6 +2,7 @@ import { useContext, type HTMLAttributes, type ReactNode } from 'react'
 import { ArrowRight } from 'lucide-react'
 import { cn } from '../../lib/utils.js'
 import { HostServicesContext, INERT_HOST_SERVICES } from '../../lib/host-services.js'
+import { inPlace } from '../../lib/in-place.js'
 
 // Minimal shadcn-style Card for the dashboard page (#471): a bordered surface with an
 // optional header. Just enough structure to keep the page's panels consistent.
@@ -35,11 +36,7 @@ export function CardTitleLink({ icon, children, segment, onOpen, className }: { 
     <CardTitle className={cn('text-base', className)}>
       <a
         href={services.pageHref(segment)}
-        onClick={event => {
-          if (event.defaultPrevented || event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return
-          event.preventDefault()
-          onOpen()
-        }}
+        onClick={inPlace(onOpen)}
         className="group -mx-1 inline-flex items-center gap-2 rounded px-1 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-primary)]"
       >
         {icon}

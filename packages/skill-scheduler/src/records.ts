@@ -66,13 +66,16 @@ export interface LastRun {
   at: string
   /** Whether the run ended `failed`. */
   failed?: true
+  /** Whether the run is still going: its record says `running`. */
+  running?: true
 }
 
 /**
  * Each command's last run: the latest run it has, by its start, whatever became of it. It says
  * `failed` only when that run ended `failed`: one still going, ended well, stopped by a person or
- * waiting for an answer does not, so a later run takes a failure's place. Counted like the
- * starts: every machine's runs for a skill's command, this machine's for an automation kept here.
+ * waiting for an answer does not, so a later run takes a failure's place. One still going says
+ * `running`. Counted like the starts: every machine's runs for a skill's command, this machine's
+ * for an automation kept here.
  */
 export async function lastRuns(repo: string, schedule: Schedule, host: string, deps: LogsDeps = {}): Promise<Record<string, LastRun>> {
   const latest = new Map<string, LastRun>()
@@ -81,7 +84,7 @@ export async function lastRuns(repo: string, schedule: Schedule, host: string, d
       const at = command === undefined ? undefined : startFor(card, command, schedule, host)
       if (command === undefined || at === undefined) continue
       const known = latest.get(command)
-      if (!known || at > known.at) latest.set(command, { id: card.id, at, ...(card.status === 'failed' ? { failed: true as const } : {}) })
+      if (!known || at > known.at) latest.set(command, { id: card.id, at, ...(card.status === 'failed' ? { failed: true as const } : {}), ...(card.status === 'running' ? { running: true as const } : {}) })
     }
   }
   return Object.fromEntries(latest)

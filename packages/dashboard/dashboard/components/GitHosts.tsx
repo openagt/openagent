@@ -183,7 +183,7 @@ function HostAccounts({ row, onChanged }: { row: GitHostRow; onChanged: () => Pr
       {empty && (
         // The press beside what is missing, else under it. A wrap and `grow`: a module's stylesheet loaded later has its own `.flex-1` and `.items-center`.
         <div className="flex flex-wrap items-center gap-3 pt-1">
-          <p className="min-w-0 grow basis-60 text-xs text-muted-foreground">{hostWords(row)}</p>
+          <p className="min-w-0 grow basis-60 text-sm text-muted-foreground">{hostWords(row)}</p>
           <div className="shrink-0">
             <HostFix row={row} variant="outline" onChanged={onChanged} />
           </div>

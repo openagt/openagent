@@ -31,7 +31,7 @@ test('a message to a run that ended continues it', needsChrome, async () => {
     await start(page, 'add a header')
     await page.getByText(/done: .*add a header/).waitFor()
     await runIn('add a header', ['done'])
-    await page.getByLabel('Prompt').click()
+    await page.getByRole('textbox', { name: 'Message', exact: true }).click()
     await page.keyboard.type('and make it blue')
     await page.getByRole('button', { name: 'Send' }).click()
     await page.getByText(/done: .*and make it blue/).waitFor()

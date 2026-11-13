@@ -1,6 +1,6 @@
 import { onAgentsList, type AgentsView } from '../rpc/agents.js'
 import { usePolled } from '../lib/use-async.js'
-import { openAgents } from '../lib/use-route.js'
+import { AGENTS_PAGE, openAgents } from '../lib/use-route.js'
 import { StatTile } from './StatTile.js'
 
 // The Overview's "Your agents" tile: how many agents the person has, by name, and their page a
@@ -11,5 +11,5 @@ const EVERY_MS = 60_000
 
 export function YourAgentsTile() {
   const { value } = usePolled<AgentsView | undefined>(onAgentsList, undefined, EVERY_MS, [], { remember: 'agents' })
-  return <StatTile label="Your agents" value={value?.agents.length} note={value === undefined ? 'Loading…' : value.agents.map(agent => agent.name).join(', ')} onClick={openAgents} />
+  return <StatTile label="Your agents" value={value?.agents.length} note={value === undefined ? 'Loading…' : value.agents.map(agent => agent.name).join(', ')} href={`/${AGENTS_PAGE}`} onClick={openAgents} />
 }

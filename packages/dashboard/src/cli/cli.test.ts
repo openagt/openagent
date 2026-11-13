@@ -48,6 +48,9 @@ test('parseArgs flags unknown options and bad values', () => {
   assert.match(parseArgs(['--nope']).error!, /unknown option/)
   assert.match(parseArgs(['--port', '-1']).error!, /--port/)
   assert.match(parseArgs(['--port']).error!, /--port/)
+  assert.match(parseArgs(['--port', '65536']).error!, /--port/)
+  assert.match(parseArgs(['--port', '']).error!, /--port/)
+  assert.equal(parseArgs(['--port', '65535']).port, 65535)
   assert.match(parseArgs(['--host', '0.0.0.0']).error!, /unknown option: --host/) // the first unreadable thing is the one told
   // Every flag that configured a run is gone: the command runs no agent, and what a run needs
   // is the project's start hook's business (#1774).
@@ -159,9 +162,9 @@ test('a second run hands its repository to the dashboard on the port, prints the
       assert.equal(await runCli(['--port', String(running.port)], io), 0, err.join('\n'))
       const url = `http://127.0.0.1:${running.port}`
       assert.deepEqual(out, [`◆ dashboard already running: ${url}`, '◆ project added: /code/gemstack', `◆ project: ${url}/gemstack`])
-      // Run from inside this repository: that is the folder handed over.
-      assert.equal(asked.length, 1)
-      assert.match(JSON.stringify(asked[0]), /"path":"\/_rpc\/sendStartedAgain","args":\["\/[^"]+"\]/)
+      // Asked first whether a dashboard answers; then run from inside this repository: that is the folder handed over.
+      assert.equal(asked.length, 2)
+      assert.match(JSON.stringify(asked[1]), /"path":"\/_rpc\/sendStartedAgain","args":\["\/[^"]+"\]/)
     })
   } finally {
     await running.close()
@@ -193,6 +196,19 @@ test('on a server, the folder its service starts in is never handed over as a pr
     if (before === undefined) delete process.env.OPENAGENT_SERVER
     else process.env.OPENAGENT_SERVER = before
     await running.close()
+  }
+})
+
+test('a port held by a program that never answers is said to be taken, within seconds', { timeout: 10_000 }, async () => {
+  const silent = await holdPort(() => {})
+  try {
+    await withConfig(async () => {
+      const { io, err } = capture()
+      assert.equal(await runCli(['--port', String(silent.port)], io), 1)
+      assert.deepEqual(err, [`could not start the dashboard: port ${silent.port} is taken by another program. Pass --port <n> to use another one.`])
+    })
+  } finally {
+    await silent.close()
   }
 })
 

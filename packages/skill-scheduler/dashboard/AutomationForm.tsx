@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Button, Input, RadioGroup, RadioGroupOption, type ModuleCommandResult, type ModuleProject } from '@openagt/dashboard/module'
+import { Button, Input, RadioGroup, RadioGroupOption, useOpenAgentDown, type ModuleCommandResult, type ModuleProject } from '@openagt/dashboard/module'
 import { EMPTY_DRAFT, addArgs, draftProblem, draftSentence, isUntouched, nameProblem, ownPaceArgs, whatAndWhenProblem, savedFile, savedWords, whereHint, type AutomationDraft, type OwnPace } from './automation-form.js'
 import { PaceFields, SaidFields, Section } from './fields.js'
 import { DEFAULT_AGENT } from '../src/names.js'
@@ -35,6 +35,7 @@ export function AutomationForm({
 }) {
   const [draft, setDraft] = useState<AutomationDraft>(EMPTY_DRAFT)
   const [saving, setSaving] = useState(false)
+  const down = useOpenAgentDown()
   const [failed, setFailed] = useState<string | undefined>()
   const [saved, setSaved] = useState<{ command: string; file: string; startsFrom: string; onThisMachine: boolean; timeNotKept?: string } | undefined>()
   const set = (change: Partial<AutomationDraft>): void => {
@@ -165,7 +166,7 @@ export function AutomationForm({
           <Button variant="outline" size="sm" disabled={saving} onClick={onClose}>
             Cancel
           </Button>
-          <Button size="sm" disabled={saving || problem !== undefined} onClick={() => void save()}>
+          <Button size="sm" disabled={saving || down || problem !== undefined} onClick={() => void save()}>
             Save
           </Button>
         </div>

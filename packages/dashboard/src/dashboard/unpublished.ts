@@ -31,7 +31,11 @@ export interface Unpublished {
  * pushed, in a project with a remote to push to. A branch pushed once whose copy on the remote is
  * gone since, as a merged pull request's is, left the machine. So did a run with a pull request: its
  * request is what the queue and its row show, and a branch pushed without an upstream reads, once
- * its request merged and the remote's copy went, as never pushed.
+ * its request merged and the remote's copy went, as never pushed. Where the project's work ends in a
+ * pull request, a pushed branch with no request is still waiting for one, as the run's bar offers
+ * it, unless the run was started to go no further than its branch: `openRequests` gives the
+ * branches the git host has a request open for, asked only when such a branch is there, and none
+ * for a project with no git host. When it cannot be read, a pushed branch is not counted.
  *
  * Every run is asked, in one quick read of the provider (`ahead`: counts, no file lists). A run
  * started from another branch is asked apart, from the commit it started at, or that branch's work
@@ -41,7 +45,12 @@ export interface Unpublished {
  * and a run still working is still writing its branch. A provider that cannot be found, or does not
  * answer for every branch asked, throws: "nothing waits" would be a false answer.
  */
-export async function unpublishedRuns(cwd: string, agents: readonly AgentMeta[], branches: BranchesFor = projectBranches): Promise<Map<string, Unpublished>> {
+export async function unpublishedRuns(
+  cwd: string,
+  agents: readonly AgentMeta[],
+  branches: BranchesFor = projectBranches,
+  openRequests?: () => Promise<ReadonlySet<string | undefined> | undefined>,
+): Promise<Map<string, Unpublished>> {
   const finished = agents.flatMap(agent => {
     const branch = agent.branch
     return branch === undefined || agent.status === 'running' || agent.parent !== undefined ? [] : [{ agent, branch }]
@@ -66,11 +75,19 @@ export async function unpublishedRuns(cwd: string, agents: readonly AgentMeta[],
     const known = branch === undefined ? undefined : newest.get(branch)
     if (branch !== undefined && (!known || agent.startedAt > known.startedAt)) newest.set(branch, agent)
   }
+  const stateOf = (agent: AgentMeta, branch: string) => counts.get(`${fromOf(agent) ?? ''}\0${branch}`)
+  const own = (agent: AgentMeta, state: BranchAhead) => agent.pr === undefined && state.ahead > 0 && !state.merged && !state.gone && state.hasRemote
+  const awaitsRequest = (agent: AgentMeta, state: BranchAhead) => own(agent, state) && state.pushed && agent.publish !== 'branch'
+  const asked = finished.some(({ agent, branch }) => {
+    const state = stateOf(agent, branch)
+    return state !== undefined && state.exists && state.agent && awaitsRequest(agent, state)
+  })
+  const open = asked ? await openRequests?.().catch(() => undefined) : undefined
   for (const { agent, branch } of finished) {
-    const state = counts.get(`${fromOf(agent) ?? ''}\0${branch}`)
+    const state = stateOf(agent, branch)
     if (!state || !state.exists || !state.agent) continue
     const uncommitted = agent.status === 'waiting' || newest.get(branch) !== agent ? 0 : state.uncommitted
-    const commits = agent.pr === undefined && state.ahead > 0 && !state.merged && !state.pushed && !state.gone && state.hasRemote ? state.ahead : 0
+    const commits = own(agent, state) && (!state.pushed || (awaitsRequest(agent, state) && open?.has(branch) === false)) ? state.ahead : 0
     if (uncommitted > 0 || commits > 0) found.set(agent.id, { branch, commits, uncommitted })
   }
   return found

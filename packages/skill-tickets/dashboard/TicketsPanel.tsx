@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import { ExternalLink, ClipboardPlus, ClipboardList, Hammer, Play } from 'lucide-react'
 import { Badge, Button, Checkbox, StartAgentButton, Tooltip, TooltipTrigger, TooltipContent, cn, formatRelative, formatAge, formatDateTime, useAction, useLoaded, useModuleHost } from '@openagt/dashboard/module'
 import { UPDATE_TICKETS_PROMPT, heldBack, planTicketPrompt, readMeta, workOnTicketPrompt, type TicketsMeta } from '../src/module.js'
@@ -22,6 +23,7 @@ export function TicketRow({
   ticket,
   projectName,
   busy,
+  starting,
   selected,
   onToggleSelect,
   onOpen,
@@ -37,6 +39,8 @@ export function TicketRow({
   projectName?: string | undefined
   /** Disables the session-starting buttons while a session start is in flight. */
   busy: boolean
+  /** The prompt of the start in flight, if any: the button that asks it spins. */
+  starting: string | null
   /** Whether the row is picked for the surrounding page's bulk actions — the page owns the
    *  selection, the row only shows and toggles it. Without a toggle handler no checkbox
    *  renders, like the click-to-filter handlers: selection is a page feature, not the row's. */
@@ -63,6 +67,8 @@ export function TicketRow({
   const holder = ticket.lockedByAgent?.name ?? ticket.lockedBy
   // In review or waiting: no agent is started on it nor on its plan, the tickets skill's own rule.
   const held = heldBack(ticket)
+  // Claimed: an agent is on it, and its own page offers no start either.
+  const startable = !held && !ticket.locked
   const workPrompt = workOnTicketPrompt(ticket.file)
   const planPrompt = planTicketPrompt(ticket.file)
   return (
@@ -76,7 +82,7 @@ export function TicketRow({
           like every control on the row. */}
       {onToggleSelect && (
         <div className="flex w-8 shrink-0 items-center justify-center">
-          <Checkbox checked={selected ?? false} onCheckedChange={() => onToggleSelect()} aria-label={`Select ${ticket.title}`} />
+          <Checkbox checked={selected ?? false} onCheckedChange={() => onToggleSelect()} aria-label={`Select ${ticket.title}`} className="relative after:absolute after:-inset-[5px]" />
         </div>
       )}
       {/* The start column: one click spins up an agent implementing this
@@ -86,7 +92,7 @@ export function TicketRow({
           Its chevron opens the launcher with the same ask (#1507), since the model and where the
           agent runs are nowhere on this row. */}
       <div className="flex w-16 shrink-0 items-center justify-center">
-        {!held && (
+        {startable && (
           <StartAgentButton
             variant="ghost"
             size="icon-sm"
@@ -95,6 +101,7 @@ export function TicketRow({
             menuAriaLabel={`Other ways to work on ${ticket.title}`}
             tooltip="Start an agent working on this ticket"
             busy={busy}
+            starting={starting === workPrompt}
             onStart={() => onStart(workPrompt, 'The work agent could not be started.')}
             onConfigure={() => onConfigure(workPrompt)}
             prompt={workPrompt}
@@ -235,7 +242,7 @@ export function TicketRow({
             </TooltipTrigger>
             <TooltipContent>View the plan</TooltipContent>
           </Tooltip>
-        ) : held ? null : (
+        ) : !startable ? null : (
           <StartAgentButton
             variant="ghost"
             size="icon-sm"
@@ -244,6 +251,7 @@ export function TicketRow({
             menuAriaLabel={`Other ways to plan ${ticket.title}`}
             tooltip="Plan this ticket — starts an agent to write its plan"
             busy={busy}
+            starting={starting === planPrompt}
             onStart={() => onStart(planPrompt, 'The planning agent could not be started.')}
             onConfigure={() => onConfigure(planPrompt)}
             prompt={planPrompt}
@@ -323,6 +331,8 @@ export function TicketsPanel({
   onClearFilters?: (() => void) | undefined
 }) {
   const { busy, error, run } = useAction()
+  // Which start is in flight, by its prompt: one `busy` holds every start back, and only this one spins.
+  const [starting, setStarting] = useState<string | null>(null)
   const host = useModuleHost()
   // When `tickets/` last caught up with the issue tracker, from `tickets meta --local`. Read here rather than
   // passed down: the cross-project page reads one ticket list per project, and this is the one
@@ -340,7 +350,9 @@ export function TicketsPanel({
   // The dashboard starts the run with the person's own picks and lands on it, so its progress
   // is watchable instead of the panel sitting on stale rows until files land.
   const startSession = async (prompt: string, failure: string) => {
+    setStarting(prompt)
     await run(() => host.startRun(projectId, prompt), failure)
+    setStarting(null)
   }
 
   const updateTickets = () => startSession(UPDATE_TICKETS_PROMPT, 'The update could not be started.')
@@ -370,7 +382,7 @@ export function TicketsPanel({
           plans from.
         </p>
         {error && <p className="text-xs text-danger">{error}</p>}
-        <UpdateTicketsButton busy={busy} onStart={() => void updateTickets()} onConfigure={() => configure(UPDATE_TICKETS_PROMPT)} />
+        <UpdateTicketsButton busy={busy} starting={starting === UPDATE_TICKETS_PROMPT} onStart={() => void updateTickets()} onConfigure={() => configure(UPDATE_TICKETS_PROMPT)} />
       </div>
     )
   }
@@ -390,6 +402,7 @@ export function TicketsPanel({
         </span>
         <UpdateTicketsButton
           busy={busy}
+          starting={starting === UPDATE_TICKETS_PROMPT}
           onStart={() => void updateTickets()}
           onConfigure={() => configure(UPDATE_TICKETS_PROMPT)}
           lastImportedAt={meta.lastImportedAt}
@@ -402,6 +415,7 @@ export function TicketsPanel({
             key={ticket.file}
             ticket={ticket}
             busy={busy}
+            starting={starting}
             selected={isSelected?.(ticket.file) ?? false}
             onToggleSelect={onToggleSelect ? () => onToggleSelect(ticket.file) : undefined}
             onOpen={() => onOpen(ticket.file)}

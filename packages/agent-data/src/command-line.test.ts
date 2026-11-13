@@ -42,9 +42,20 @@ test('a refusal is the outcome on stdout and the line on stderr, exit 1; a failu
 
 test('a line that cannot be read is the usage on stderr, exit 2: no command, an unknown one, or a misread argument', async () => {
   assert.deepEqual(await run([], LINE), { code: 2, stdout: [], stderr: ['usage: tool <command>'] })
-  assert.deepEqual(await run(['--local'], LINE), { code: 2, stdout: [], stderr: ['usage: tool <command>'] })
-  assert.deepEqual(await run(['toString'], LINE), { code: 2, stdout: [], stderr: ['usage: tool <command>'] })
+  assert.deepEqual(await run(['--local'], LINE), { code: 2, stdout: [], stderr: ['unknown option: --local\n\nusage: tool <command>'] })
+  assert.deepEqual(await run(['toString'], LINE), { code: 2, stdout: [], stderr: ['unknown command: toString\n\nusage: tool <command>'] })
   assert.deepEqual(await run(['misread'], LINE), { code: 2, stdout: [], stderr: ['that is not a number\n\nusage: tool <command>'] })
+})
+
+test('--help is the usage on stdout, exit 0, also where a bare command takes flags', async () => {
+  for (const line of [LINE, { ...LINE, bare: async () => ({ bare: true }) }]) {
+    for (const help of ['--help', '-h']) {
+      const stdout: string[] = []
+      const stderr: string[] = []
+      assert.equal(await runCommandLine([help], { stdout: text => stdout.push(text), stderr: text => stderr.push(text) }, line, 'the context'), 0)
+      assert.deepEqual([stdout, stderr], [['usage: tool <command>'], []])
+    }
+  }
 })
 
 test('a line that names no command runs the bare one, with every argument', async () => {
@@ -58,6 +69,8 @@ test('the arguments are read strictly: an unknown flag, or too few or too many p
   assert.equal(parseCommandArgs(['a', '--local'], { local: { type: 'boolean' } }, 1).values.local, true)
   assert.deepEqual(parseCommandArgs(['a'], {}, 0, 1).positionals, ['a'])
   assert.throws(() => parseCommandArgs(['--nope'], {}, 0), UsageError)
+  assert.throws(() => parseCommandArgs(['a', '--help'], { local: { type: 'boolean' } }, 1), { name: 'Error', message: 'unknown option: --help' })
+  assert.throws(() => parseCommandArgs(['--local', '-x', 'a'], { local: { type: 'boolean' } }, 1), { message: 'unknown option: -x' })
   assert.throws(() => parseCommandArgs([], {}, 1), { name: 'Error', message: 'expected 1 argument(s), got 0' })
   assert.throws(() => parseCommandArgs(['a', 'b', 'c'], {}, 0, 2), { message: 'expected at most 2 argument(s), got 3' })
   assert.throws(() => parseCommandArgs(['a'], {}, 2, 3), { message: 'expected 2 to 3 argument(s), got 1' })

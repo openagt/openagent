@@ -1,6 +1,7 @@
 import { Bell, BellOff } from 'lucide-react'
 import { setBrowserNotifications, useNotificationPermission } from '../lib/notification-permission.js'
 import { usePreferences, updatePreferences, notificationsEnabled, newActivityEnabled, humanInterventionEnabled } from '../lib/preferences.js'
+import { HUMAN_QUEUE_ABOUT, NEW_ACTIVITY_ABOUT, browserHint, kindHint } from '../lib/notification-words.js'
 import { OptionLabel } from './ui/option-label.js'
 import {
   DropdownMenuSub,
@@ -28,12 +29,6 @@ export function NotificationsSubmenu() {
   // Browser delivery only actually fires once the browser has granted permission: only then are they "On".
   const active = browser && permission === 'granted'
 
-  const browserHint = blocked
-    ? 'Blocked in your browser settings'
-    : browser && permission === 'default'
-      ? 'Click to allow browser notifications'
-      : 'Desktop notifications while the dashboard is open'
-
   return (
     <DropdownMenuSub>
       <DropdownMenuSubTrigger>
@@ -53,7 +48,7 @@ export function NotificationsSubmenu() {
                 onCheckedChange={setBrowserNotifications}
                 className="items-start"
               >
-                <OptionLabel label="Browser" description={browserHint} />
+                <OptionLabel label="Browser" description={browserHint(permission)} />
               </DropdownMenuCheckboxItem>
             </DropdownMenuGroup>
             <DropdownMenuSeparator />
@@ -68,14 +63,14 @@ export function NotificationsSubmenu() {
             onCheckedChange={next => updatePreferences({ notifyHumanIntervention: next })}
             className="items-start"
           >
-            <OptionLabel label="Human Queue" description="An agent awaiting your answer, or a PR ready to review" />
+            <OptionLabel label="Human Queue" description={kindHint(HUMAN_QUEUE_ABOUT, permission, browser)} />
           </DropdownMenuCheckboxItem>
           <DropdownMenuCheckboxItem
             checked={activity}
             onCheckedChange={next => updatePreferences({ notifyNewActivity: next })}
             className="items-start"
           >
-            <OptionLabel label="New activity" description="An agent starts or finishes" />
+            <OptionLabel label="New activity" description={kindHint(NEW_ACTIVITY_ABOUT, permission, browser)} />
           </DropdownMenuCheckboxItem>
         </DropdownMenuGroup>
       </DropdownMenuSubContent>

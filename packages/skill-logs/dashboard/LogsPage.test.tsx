@@ -50,14 +50,14 @@ test('the runs cut by day, each day with its runs and their cost; a run by its n
   const login = screen.getAllByText('Login page')[0]!.closest('tr')!
   expect(within(login).getByText('make the login page')).toBeTruthy()
   expect(screen.getAllByText('yesterday work')[0]!.closest('tr')!.textContent).toContain('2m')
-  // A chip per status the runs have, each with its count; its pick is kept in the page's address.
+  // A chip per status the runs have, each with its count; its pick is kept in the page's address, in the place of the last one, so Back leaves the page.
   fireEvent.click(screen.getByRole('button', { name: /^Failed/ }))
-  expect(host.openPage).toHaveBeenLastCalledWith('logs', ['failed'])
+  expect(host.openPage).toHaveBeenLastCalledWith('logs', ['failed'], undefined, { replace: true })
   rerender(page(['failed']))
   expect(screen.queryAllByText('Login page')).toHaveLength(0)
   expect(screen.getAllByText('break it').length).toBeGreaterThan(0)
   fireEvent.click(screen.getByRole('button', { name: /^All/ }))
-  expect(host.openPage).toHaveBeenLastCalledWith('logs', [])
+  expect(host.openPage).toHaveBeenLastCalledWith('logs', [], undefined, { replace: true })
   rerender(page([]))
   expect(screen.getAllByText('Login page').length).toBeGreaterThan(0)
   // A status no run has any more shows them all.
@@ -68,14 +68,17 @@ test('the runs cut by day, each day with its runs and their cost; a run by its n
   expect(host.openAgent).toHaveBeenCalledWith('p1', 'r1')
 })
 
-test("a run's name is a button: the keyboard reaches it, and it opens the run once, on a phone too", async () => {
+test("a run's name is a link to the run: the keyboard reaches it, it opens the run once, on a phone too, and a Ctrl+click is the browser's", async () => {
   const host = hostWith([{ id: 'r1', startedAt: at(now - 1000), endedAt: at(now), status: 'done', title: 'Login page' }])
   render(
     <ModuleHostContext.Provider value={host}>
       <LogsPage projects={[{ id: 'p1', name: 'alpha', gitHost: true }]} projectId={null} path={[]} />
     </ModuleHostContext.Provider>,
   )
-  const [table, phone] = await screen.findAllByRole('button', { name: 'Login page' })
+  const [table, phone] = await screen.findAllByRole('link', { name: 'Login page' })
+  expect(table!.getAttribute('href')).toBe('/p1/r1')
+  expect(fireEvent.click(table!, { ctrlKey: true })).toBe(true)
+  expect(host.openAgent).not.toHaveBeenCalled()
   fireEvent.click(table!)
   expect(host.openAgent.mock.calls).toEqual([['p1', 'r1']])
   fireEvent.click(phone!)
@@ -123,8 +126,8 @@ test('a run goes by the name every list gives it: with no short name and no prom
       <LogsPage projects={[{ id: 'p1', name: 'alpha', gitHost: true }]} projectId={null} path={[]} />
     </ModuleHostContext.Provider>,
   )
-  expect((await screen.findAllByRole('button', { name: 'agent-fix-header' })).length).toBeGreaterThan(0)
-  expect(screen.getAllByRole('button', { name: 'r2' }).length).toBeGreaterThan(0)
+  expect((await screen.findAllByRole('link', { name: 'agent-fix-header' })).length).toBeGreaterThan(0)
+  expect(screen.getAllByRole('link', { name: 'r2' }).length).toBeGreaterThan(0)
 })
 
 test('a second visit opens with the last list at once, while the runs are read again, faded once that read has been out a second', async () => {
@@ -144,6 +147,21 @@ test('a second visit opens with the last list at once, while the runs are read a
   const row = screen.getAllByText('Login page')[0]!
   expect(row.closest('[data-stale]')).toBeNull()
   await waitFor(() => expect(row.closest('[data-stale]')).not.toBeNull(), { timeout: 2000 })
+})
+
+test('the runs the dashboard lists show while the records are still read, with no "Loading…" over them', async () => {
+  const host = fakeHost('@openagt/skill-logs', {
+    runCommand: () => new Promise(() => {}),
+    agents: async () => [{ id: 'r1', startedAt: at(now - 1000), status: 'running', title: 'Going' }] as ModuleAgent[],
+  })
+  render(
+    <ModuleHostContext.Provider value={host}>
+      <LogsPage projects={[{ id: 'p1', name: 'alpha', gitHost: true }]} projectId={null} path={[]} />
+    </ModuleHostContext.Provider>,
+  )
+  expect(screen.getByText('Loading…')).toBeTruthy()
+  await screen.findAllByText('Going')
+  expect(screen.queryByText('Loading…')).toBeNull()
 })
 
 test('each run as the dashboard says it stands: a record that still says running reads unknown while its computer is offline, and a run with no record yet is listed', async () => {

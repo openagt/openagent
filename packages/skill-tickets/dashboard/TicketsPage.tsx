@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react'
 import { Button, FadeWhileStale, LinkActions, Page, usePolled, useAction, useModuleHost, type ProjectLinks, type ModuleLink, type ModuleProject } from '@openagt/dashboard/module'
 import { heldBack, holderAgent, planLink, ticketLink, withHolder } from '../src/module.js'
+import { holdingRun } from './lib/holding-run.js'
 import type { ProjectTickets, WorkspaceTicket } from './lib/types.js'
 import { listTickets } from './lib/list.js'
 import { openFromList } from './lib/back-to-list.js'
@@ -53,7 +54,7 @@ export function TicketsPage({ projects }: { projects: ModuleProject[] }) {
         projects.map(async (project): Promise<ProjectRead> => {
           const [listed, agents] = await Promise.all([listTickets(host, project.id), host.agents(project.id).catch(() => [])])
           if ('error' in listed) return { projectId: project.id, projectName: project.name, tickets: [], error: listed.error }
-          const tickets = listed.tickets.map(ticket => withHolder(ticket, holderAgent(agents, ticket.lockedBy)))
+          const tickets = listed.tickets.map(ticket => withHolder(ticket, holdingRun(holderAgent(agents, ticket.lockedBy))))
           return { projectId: project.id, projectName: project.name, tickets }
         }),
       ),
@@ -103,8 +104,12 @@ export function TicketsPage({ projects }: { projects: ModuleProject[] }) {
   // action with the row's own project (a panel binds one projectId; the flat list has one per row).
   // The dashboard starts the run with the person's own picks and lands on it.
   const { busy, error, run } = useAction()
+  // Which start is in flight, by its project and prompt: only the button that asked it spins.
+  const [starting, setStarting] = useState<{ projectId: string; prompt: string } | null>(null)
   const startSession = async (projectId: string, prompt: string, failure: string) => {
+    setStarting({ projectId, prompt })
     await run(() => host.startRun(projectId, prompt), failure)
+    setStarting(null)
   }
   // The page-wide adds: every unclaimed shown ticket handed, as a link, to the actions the
   // installed modules offer on links — "Add to queue" when a project has a queue package — as the
@@ -273,6 +278,7 @@ export function TicketsPage({ projects }: { projects: ModuleProject[] }) {
                     ticket={r.ticket}
                     projectName={r.projectName}
                     busy={busy}
+                    starting={starting?.projectId === r.projectId ? starting.prompt : null}
                     selected={selected.has(`${r.projectId}/${r.ticket.file}`)}
                     onToggleSelect={() => toggleSelected(`${r.projectId}/${r.ticket.file}`)}
                     onOpen={() => onOpenTicket(r.projectId, r.ticket.file)}

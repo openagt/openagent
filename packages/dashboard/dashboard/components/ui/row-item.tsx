@@ -38,6 +38,22 @@ export function RowAboveBox({ children }: { children: ReactNode }) {
 }
 
 /**
+ * Words a session keeps from its start, in a row item's look, not a press: the keyboard stops on them
+ * and their hover or focus says why they stay; a screen reader hears the words and the why together.
+ */
+export function RowSaid({ tip, children }: { tip: string; children: ReactNode }) {
+  return (
+    <Tooltip>
+      <TooltipTrigger render={<span tabIndex={0} className={cn(rowItemClass, 'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary')} />}>
+        {children}
+        <span className="sr-only">{`. ${tip}`}</span>
+      </TooltipTrigger>
+      <TooltipContent>{tip}</TooltipContent>
+    </Tooltip>
+  )
+}
+
+/**
  * A disabled row button and what its hover says. A disabled button takes no pointer, so the hover
  * is on what holds it, which gives way in the row as the button does.
  */

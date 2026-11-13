@@ -1,16 +1,19 @@
-import { useId, useRef, useState, type ComponentType, type ReactNode } from 'react'
+import { useCallback, useId, useRef, useState, type ComponentType, type ReactNode } from 'react'
 import { Dialog as BaseDialog } from '@base-ui/react/dialog'
 import { ArrowLeft, Bell, Bot, ChevronRight, Database, FolderGit2, Globe, Palette, Puzzle, UserRound, X, FolderSearch } from 'lucide-react'
-import { ACCENTS, DEFAULT_ACCENT_LABELS, accentOf, CODE_FONTS, DOCUMENT_FONTS, DRIVERS, FONTS, PALETTES, PALETTE_LABELS, type Accent, type CodeFont, type DocumentFont, type Font, type Palette as ColourPalette } from '../../src/client.js'
+import { ACCENTS, DEFAULT_ACCENT_LABELS, accentOf, CODE_FONTS, DOCUMENT_FONTS, DRIVERS, DRIVER_LABELS, isDriverName, FONTS, PALETTES, PALETTE_LABELS, type Accent, type CodeFont, type DocumentFont, type Font, type Palette as ColourPalette } from '../../src/client.js'
 import { driverOptions, useModels } from '../lib/models.js'
 import type { DriverOption } from './DriverModelMenu.js'
 import type { ProjectSummary } from '../../src/index.js'
 import { useMountedModules, type MountedSettings } from '../lib/use-modules.js'
 import { SettingsCrumbContext, type SettingsCrumb } from '../lib/settings-crumb.js'
+import { SettingsHoldContext } from '../lib/settings-hold.js'
+import { holdEntry } from '../lib/use-route.js'
 import { useIsMobile } from '../lib/use-mobile.js'
 import { useDetectedEditors } from '../lib/editors.js'
 import { usePreferences, updatePreferences, themePreference, type ThemePreference } from '../lib/preferences.js'
 import { setBrowserNotifications, useNotificationPermission } from '../lib/notification-permission.js'
+import { HUMAN_QUEUE_ABOUT, NEW_ACTIVITY_ABOUT, browserHint, kindHint } from '../lib/notification-words.js'
 import { BridgeSettings } from './BridgeSettings.js'
 import { AGENT_DATA_ENTRY, AgentDataSettings } from './AgentDataSettings.js'
 import { PROFILE_ENTRY, ProfileSettings } from './ProfileSettings.js'
@@ -20,6 +23,7 @@ import { PickProject } from './PickProject.js'
 import { PROJECT_AGENT_DATA_ENTRY, ProjectAgentDataSettings } from './ProjectAgentDataSettings.js'
 import { BridgeBrowserSettings } from './BridgeBrowserSettings.js'
 import { ModuleSlot, projectsHaving } from './ModulePageView.js'
+import { ConfirmDialog } from './ui/confirm-dialog.js'
 import { Switch } from './ui/switch.js'
 import { RadioGroup, RadioGroupItem } from './ui/radio-group.js'
 import { ScrollArea } from './ui/scroll-area.js'
@@ -88,6 +92,14 @@ export function SettingsDialog({
   const own = useOwnEntries()
   // A page inside the entry shown, which the entry says it opened: its title in the header, and the back arrow to the entry.
   const [crumb, setCrumb] = useState<SettingsCrumb | undefined>()
+  // A change the entry holds and has not saved: leaving it, by Back too, asks first, and the step asked about waits here.
+  const [leaving, setLeaving] = useState<(() => void) | undefined>()
+  const held = useRef<(() => void) | null>(null)
+  const setHeld = useCallback((now: boolean) => {
+    held.current?.()
+    held.current = now ? holdEntry(step => setLeaving(() => step)) : null
+  }, [])
+  const leave = (step: () => void): void => (held.current ? setLeaving(() => step) : step())
   const moduleEntry = (section: MountedSettings, of: ProjectSummary[]): Entry => {
     const Body = section.Section
     return {
@@ -131,7 +143,10 @@ export function SettingsDialog({
         <button
           type="button"
           aria-current={e === current ? 'page' : undefined}
-          onClick={() => onEntry(e.id)}
+          onClick={() => {
+            // The entry shown, pressed again, goes nowhere: it asks nothing, and what it holds stays held.
+            if (e !== current || listOnly) leave(() => onEntry(e.id))
+          }}
           className={cn(
             'flex w-full items-center gap-2 rounded-md px-2 text-left text-sm outline-none hover:bg-sidebar-accent/50 hover:text-sidebar-accent-foreground focus-visible:ring-2 focus-visible:ring-[var(--color-primary)]',
             // A hovered row is a lighter shade than the picked one, so the two never read alike. On a
@@ -147,7 +162,7 @@ export function SettingsDialog({
   }
 
   return (
-    <BaseDialog.Root open onOpenChange={open => !open && onClose()}>
+    <BaseDialog.Root open onOpenChange={open => !open && leave(onClose)}>
       <BaseDialog.Portal>
         <BaseDialog.Backdrop className="fixed inset-0 z-50 bg-black/40 backdrop-blur-[1px]" />
         <BaseDialog.Popup
@@ -164,7 +179,7 @@ export function SettingsDialog({
               {phone && (
                 <div className="flex h-10 items-center justify-between px-2">
                   <BaseDialog.Title className="text-base font-semibold">Settings</BaseDialog.Title>
-                  <BaseDialog.Close aria-label="Close settings" className="rounded p-1 text-muted-foreground outline-none hover:text-foreground">
+                  <BaseDialog.Close aria-label="Close settings" className="rounded p-1 text-muted-foreground outline-none hover:text-foreground focus-visible:ring-2 focus-visible:ring-[var(--color-primary)]">
                     <X className="size-4" aria-hidden />
                   </BaseDialog.Close>
                 </div>
@@ -176,7 +191,7 @@ export function SettingsDialog({
               <section aria-label="Project">
                 <div className="flex items-center gap-2 px-2 pb-1">
                   <p className="text-xs font-medium text-muted-foreground">Project</p>
-                  <ProjectSelect projects={projects} value={project?.id ?? ALL_PROJECTS} onChange={setPicked} />
+                  <ProjectSelect projects={projects} value={project?.id ?? ALL_PROJECTS} onChange={id => leave(() => setPicked(id))} />
                 </div>
                 {projectEntries.length > 0 ? (
                   <ul className="flex flex-col gap-1">{projectEntries.map(item)}</ul>
@@ -195,7 +210,7 @@ export function SettingsDialog({
                   </button>
                 ) : (
                   phone && (
-                    <button type="button" aria-label="All settings" onClick={() => onEntry('')} className="-ml-1 rounded p-1 text-muted-foreground outline-none hover:text-foreground">
+                    <button type="button" aria-label="All settings" onClick={() => leave(() => onEntry(''))} className="-ml-1 rounded p-1 text-muted-foreground outline-none hover:text-foreground">
                       <ArrowLeft className="size-4" aria-hidden />
                     </button>
                   )
@@ -229,7 +244,7 @@ export function SettingsDialog({
                     <span className="truncate font-medium">{current.title}</span>
                   )}
                 </BaseDialog.Title>
-                <BaseDialog.Close aria-label="Close settings" className="rounded p-1 text-muted-foreground outline-none hover:text-foreground">
+                <BaseDialog.Close aria-label="Close settings" className="rounded p-1 text-muted-foreground outline-none hover:text-foreground focus-visible:ring-2 focus-visible:ring-[var(--color-primary)]">
                   <X className="size-4" aria-hidden />
                 </BaseDialog.Close>
               </div>
@@ -242,12 +257,25 @@ export function SettingsDialog({
                   )}
                   {/* Keyed by the projects too: an entry's reads and picks are of the projects it was drawn for. */}
                   <div key={`${current.id}/${project?.id ?? ALL_PROJECTS}`}>
-                    <SettingsCrumbContext.Provider value={setCrumb}>{current.body}</SettingsCrumbContext.Provider>
+                    <SettingsCrumbContext.Provider value={setCrumb}>
+                      <SettingsHoldContext.Provider value={setHeld}>{current.body}</SettingsHoldContext.Provider>
+                    </SettingsCrumbContext.Provider>
                   </div>
                 </div>
               </ScrollArea>
             </div>
           )}
+          <ConfirmDialog
+            open={leaving !== undefined}
+            onOpenChange={open => !open && setLeaving(undefined)}
+            title="Leave without saving?"
+            body={`What you changed in ${current.title} is not saved.`}
+            confirmLabel="Leave"
+            onSuccess={() => {
+              setHeld(false)
+              leaving?.()
+            }}
+          />
         </BaseDialog.Popup>
       </BaseDialog.Portal>
     </BaseDialog.Root>
@@ -280,8 +308,11 @@ function useOwnEntries(): Entry[] {
   const editors = useDetectedEditors()
   const theme = themePreference(preferences)
   // The start menu's own list (#1874), so Settings offers exactly the picks the menu does.
-  const drivers = driverOptions(useModels())
+  const models = useModels()
+  const drivers = driverOptions(models)
   const driver = preferences.driver ?? DRIVERS[0]
+  const driverAnswer = isDriverName(driver) ? models?.[driver] : undefined
+  const missingDriver = isDriverName(driver) && driverAnswer !== undefined && 'missing' in driverAnswer && driverAnswer.missing ? DRIVER_LABELS[driver] : undefined
   const model = preferences.model ?? ''
   // A notification toggle is a preference; whether it can deliver is the browser's permission
   // (#948). Both are shown, the same way the bell does, so the row cannot promise delivery that
@@ -377,33 +408,31 @@ function useOwnEntries(): Entry[] {
       title: 'Notifications',
       icon: Bell,
       body: (
-        <Section>
-          <ToggleRow
-            label="Browser"
-            description={
-              browserBlocked
-                ? 'Blocked in your browser settings'
-                : permission === 'default'
-                  ? 'Desktop notifications while the dashboard is open. Switched on, the browser asks to allow them.'
-                  : 'Desktop notifications while the dashboard is open.'
-            }
-            checked={(preferences.notifyBrowser ?? true) && permission !== 'default' && !browserBlocked}
-            disabled={browserBlocked}
-            onChange={setBrowserNotifications}
-          />
-          <ToggleRow
-            label="Human Queue"
-            description="An agent awaiting your answer, or a PR ready to review."
-            checked={preferences.notifyHumanIntervention ?? true}
-            onChange={next => updatePreferences({ notifyHumanIntervention: next })}
-          />
-          <ToggleRow
-            label="New activity"
-            description="An agent starts or finishes."
-            checked={preferences.notifyNewActivity ?? false}
-            onChange={next => updatePreferences({ notifyNewActivity: next })}
-          />
-        </Section>
+        <div className="space-y-6">
+          <HeadedSection heading="Deliver to">
+            <ToggleRow
+              label="Browser"
+              description={browserHint(permission)}
+              checked={(preferences.notifyBrowser ?? true) && permission !== 'default' && !browserBlocked}
+              disabled={browserBlocked}
+              onChange={setBrowserNotifications}
+            />
+          </HeadedSection>
+          <HeadedSection heading="Notify me about">
+            <ToggleRow
+              label="Human Queue"
+              description={kindHint(HUMAN_QUEUE_ABOUT, permission, preferences.notifyBrowser ?? true)}
+              checked={preferences.notifyHumanIntervention ?? true}
+              onChange={next => updatePreferences({ notifyHumanIntervention: next })}
+            />
+            <ToggleRow
+              label="New activity"
+              description={kindHint(NEW_ACTIVITY_ABOUT, permission, preferences.notifyBrowser ?? true)}
+              checked={preferences.notifyNewActivity ?? false}
+              onChange={next => updatePreferences({ notifyNewActivity: next })}
+            />
+          </HeadedSection>
+        </div>
       ),
     },
     {
@@ -414,7 +443,7 @@ function useOwnEntries(): Entry[] {
         <Section>
           <SelectRow
             label="Coding agent"
-            description="Which coding agent runs the work."
+            description={`Which coding agent runs the work.${missingDriver !== undefined ? ` ${missingDriver} is not installed on this computer.` : ''}`}
             value={driver}
             options={drivers}
             // A model is always one agent's own (the start menu's rule), so a new agent starts unpinned.
@@ -524,6 +553,19 @@ function BridgeBrowserChoice({ daemonBrowser, onChange }: { daemonBrowser: boole
   )
 }
 
+/** A group of rows under a heading of its own. */
+function HeadedSection({ heading, children }: { heading: string; children: ReactNode }) {
+  const id = useId()
+  return (
+    <section aria-labelledby={id} className="space-y-2">
+      <h3 id={id} className="text-xs font-semibold text-muted-foreground">
+        {heading}
+      </h3>
+      <Section>{children}</Section>
+    </section>
+  )
+}
+
 /** A setting that is on or off and takes effect at once: a switch, not a box to tick in a form still to be sent. */
 function ToggleRow({
   label,
@@ -539,13 +581,16 @@ function ToggleRow({
   /** A capability the daemon or browser withholds, e.g. notifications the browser has blocked. */
   disabled?: boolean
 }) {
+  const id = useId()
   return (
     <Row
       label={label}
       description={description}
       dimmed={disabled}
+      labelFor={id}
       control={
         <Switch
+          id={id}
           checked={checked}
           disabled={disabled}
           onCheckedChange={next => onChange(next === true)}

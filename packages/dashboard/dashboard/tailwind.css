@@ -398,6 +398,17 @@
   color: var(--foreground);
 }
 
+/* Every enabled press shows the hand; in the base layer, so a part's own `cursor-*` class wins. */
+@layer base {
+  button:not(:disabled, [aria-disabled='true']),
+  :is([role='button'], [role='switch'], [role='checkbox'], [role='radio']):not(
+      [aria-disabled='true'],
+      [data-disabled]
+    ) {
+    cursor: pointer;
+  }
+}
+
 body {
   background-color: var(--background);
   color: var(--foreground);

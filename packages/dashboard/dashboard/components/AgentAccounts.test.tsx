@@ -71,6 +71,54 @@ describe('Agent accounts', () => {
     expect(within(out).getByRole('status').textContent).toMatch(/Say yes in the page this computer's browser opened/)
   })
 
+  test('the press that logs Claude Code in keeps the focus while it waits, beside what it waits for', async () => {
+    views({ now: NOW, accounts: [{ id: 'This computer', name: 'This computer', own: true, windows: [] }] })
+    const waiting = { driver: 'claude-code', ready: false, problem: '`claude` is not logged in.', fix: { kind: 'log-in', command: 'claude auth login' } }
+    states(waiting)
+    logins.sendAgentFix.mockImplementation(async () => (states({ ...waiting, fixing: 'log-in' }), { ok: true }))
+    render(<AccountsList />)
+    const card = await screen.findByRole('region', { name: 'Claude Code' })
+    const press = await within(card).findByRole('button', { name: 'Log this computer in to Claude Code' })
+    press.focus()
+    fireEvent.click(press)
+    expect((await within(card).findByRole('status')).textContent).toMatch(/Say yes in the page/)
+    expect(document.activeElement).toBe(press)
+    expect(press.getAttribute('aria-disabled')).toBe('true')
+  })
+
+  test('once the press worked, the card says Claude Code is ready instead of going away', async () => {
+    views({ now: NOW, accounts: [{ id: 'This computer', name: 'This computer', own: true, windows: [] }] })
+    states({ driver: 'claude-code', ready: false, problem: '`claude` is not logged in.', fix: { kind: 'log-in', command: 'claude auth login' } })
+    logins.sendAgentFix.mockImplementation(async () => (states({ driver: 'claude-code', ready: true }), { ok: true }))
+    render(<AccountsList />)
+    const card = await screen.findByRole('region', { name: 'Claude Code' })
+    expect(await within(card).findByText('Not logged in')).toBeTruthy()
+    fireEvent.click(within(card).getByRole('button', { name: 'Log this computer in to Claude Code' }))
+    expect((await within(card).findByRole('status', {}, { timeout: 5000 })).textContent).toBe('Claude Code is ready: runs can start with it.')
+  })
+
+  test('once the focused press worked, the focus is on the line that says Claude Code is ready', async () => {
+    views({ now: NOW, accounts: [{ id: 'This computer', name: 'This computer', own: true, windows: [] }] })
+    states({ driver: 'claude-code', ready: false, problem: '`claude` is not logged in.', fix: { kind: 'log-in', command: 'claude auth login' } })
+    logins.sendAgentFix.mockImplementation(async () => (states({ driver: 'claude-code', ready: true }), { ok: true }))
+    render(<AccountsList />)
+    const card = await screen.findByRole('region', { name: 'Claude Code' })
+    const press = await within(card).findByRole('button', { name: 'Log this computer in to Claude Code' })
+    press.focus()
+    fireEvent.click(press)
+    expect(await within(card).findByRole('status', {}, { timeout: 5000 })).toBe(document.activeElement)
+  })
+
+  test('an address in a failed login\u2019s words is a link', async () => {
+    views({ now: NOW, accounts: [{ id: 'This computer', name: 'This computer', own: true, windows: [] }] })
+    states({ driver: 'claude-code', ready: false, problem: '`claude` is not logged in.', fix: { kind: 'log-in', command: 'claude auth login' }, failed: 'Open https://auth.example/device?code=1 to sign in.\nError logging in: access_denied' })
+    render(<AccountsList />)
+    const card = await screen.findByRole('region', { name: 'Claude Code' })
+    const link = await within(card).findByRole('link', { name: 'https://auth.example/device?code=1' })
+    expect(link.getAttribute('href')).toBe('https://auth.example/device?code=1')
+    expect(within(card).getByRole('alert').textContent).toBe('Open https://auth.example/device?code=1 to sign in.\nError logging in: access_denied')
+  })
+
   test('on a computer with no browser the log-in is no press: the card gives the command to type there', async () => {
     views({ now: NOW, accounts: [{ id: 'This computer', name: 'This computer', own: true, windows: [] }] })
     states({ driver: 'claude-code', ready: false, problem: '`claude` is not logged in.', fix: { kind: 'log-in', command: 'claude auth login' }, typed: true })

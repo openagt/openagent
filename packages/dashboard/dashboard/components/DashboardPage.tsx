@@ -178,12 +178,14 @@ export function DashboardPage({
                 {layoutKey === ALL_PROJECTS ? 'Reset to the default layout' : 'Use the all-projects layout'}
               </Button>
             )}
-            <Button size="sm" onClick={() => setEditing(false)}>
+            {/* Focused as it takes Customize's place, which the press took away from the keyboard. */}
+            <Button size="sm" autoFocus onClick={() => setEditing(false)}>
               Done
             </Button>
           </>
         ) : (
-          <Button variant="ghost" size="sm" className="gap-1.5 text-muted-foreground" onClick={() => setEditing(true)}>
+          // Under the description on a phone: pulled back by its padding, so its icon lines up with the words above.
+          <Button variant="ghost" size="sm" className="gap-1.5 text-muted-foreground max-sm:-ml-3" onClick={() => setEditing(true)}>
             <SlidersHorizontal className="h-3.5 w-3.5" aria-hidden />
             Customize
           </Button>

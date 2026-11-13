@@ -26,6 +26,8 @@ export function ProfileSettings() {
   const removing = useAction()
   // What the last Sync did, said once it is done: a press that changed nothing still answers.
   const [synced, setSynced] = useState<string | undefined>()
+  // The name just saved, said until it is typed into again.
+  const [savedName, setSavedName] = useState(false)
   if (!person) return null
   const name = typedName ?? person.name
   const github = typedGithub ?? person.github ?? ''
@@ -37,7 +39,11 @@ export function ProfileSettings() {
     await reload()
     personChanged()
   }
-  const save = () => void saving.run(() => sendSavePersonName(name), 'Could not save your name.').then(done)
+  const save = () =>
+    void saving.run(() => sendSavePersonName(name), 'Could not save your name.').then(async outcome => {
+      await done(outcome)
+      setSavedName(outcome.ok)
+    })
   const sync = () => {
     setSynced(undefined)
     void syncing.run(() => sendSyncPersonFromGitHub(github), 'Could not read that GitHub profile.').then(async outcome => {
@@ -72,15 +78,21 @@ export function ProfileSettings() {
               onChange={event => {
                 setName(event.target.value)
                 saving.reset()
+                setSavedName(false)
               }}
               className="h-8 w-48"
             />
-            <Button type="submit" size="sm" disabled={saving.busy || !changedName}>
+            <Button type="submit" size="sm" disabled={saving.busy || !changedName} className="min-w-16">
               {saving.busy ? 'Saving…' : 'Save'}
             </Button>
           </div>
         </form>
         {saving.error && <p className="mt-2 text-xs text-danger">{saving.error}</p>}
+        {savedName && (
+          <p role="status" className="mt-2 text-xs text-muted-foreground">
+            Saved.
+          </p>
+        )}
       </div>
       <SettingsRow
         label="Picture"
@@ -124,7 +136,7 @@ export function ProfileSettings() {
               }}
               className="h-8 w-48"
             />
-            <Button type="submit" size="sm" variant="outline" disabled={syncing.busy || !github.trim()}>
+            <Button type="submit" size="sm" variant="outline" disabled={syncing.busy || !github.trim()} className="min-w-16">
               {syncing.busy ? 'Syncing…' : 'Sync'}
             </Button>
           </div>

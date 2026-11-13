@@ -30,6 +30,16 @@ describe('Settings › Profile', () => {
     expect(await screen.findByText(/what the servers you join call you/)).toBeTruthy()
   })
 
+  test('a name that was saved says so, until it is typed into again', async () => {
+    render(<ProfileSettings />)
+    fireEvent.change(await screen.findByLabelText('Name'), { target: { value: 'Suleiman S' } })
+    person = { name: 'Suleiman S', own: true }
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }))
+    expect((await screen.findByRole('status')).textContent).toBe('Saved.')
+    fireEvent.change(screen.getByLabelText('Name'), { target: { value: 'Suleiman' } })
+    expect(screen.queryByRole('status')).toBeNull()
+  })
+
   test('Sync from GitHub copies a profile once; the picture it gave can be removed', async () => {
     render(<ProfileSettings />)
     fireEvent.change(await screen.findByLabelText('Sync from GitHub'), { target: { value: 'suleimansh' } })

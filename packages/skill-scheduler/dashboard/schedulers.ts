@@ -112,18 +112,19 @@ export function runsOnWords(command: SchedulerCommand, schedulerModel: string | 
   return model === undefined ? AGENT_LABELS[agent] : `${AGENT_LABELS[agent]}, ${modelLabel(agents, agent, model)}`
 }
 
-/** A command's last run as the scheduler lists it: the run's id, when it started (ISO), and whether it failed. */
+/** A command's last run as the scheduler lists it: the run's id, when it started (ISO), whether it failed, and whether it is still going. */
 export interface LastRun {
   id: string
   at: string
   failed?: true
+  running?: true
 }
 
 /** A row's last run out of what `status` printed; nothing when it is not what the command promises. */
 function lastRunOf(value: unknown): LastRun | undefined {
   const run = record(value)
   if (typeof run['id'] !== 'string' || run['id'] === '' || !isTime(run['at'])) return undefined
-  return { id: run['id'], at: run['at'], ...(run['failed'] === true ? { failed: true as const } : {}) }
+  return { id: run['id'], at: run['at'], ...(run['failed'] === true ? { failed: true as const } : {}), ...(run['running'] === true ? { running: true as const } : {}) }
 }
 
 /**

@@ -44,6 +44,10 @@
       "types": "./dist/secure-address.d.ts",
       "default": "./dist/secure-address.js"
     },
+    "./join-dashboard": {
+      "types": "./dist/join-dashboard.d.ts",
+      "default": "./dist/join-dashboard.js"
+    },
     "./package.json": "./package.json"
   },
   "scripts": {

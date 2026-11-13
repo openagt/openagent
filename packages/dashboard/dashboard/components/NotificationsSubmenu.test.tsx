@@ -78,12 +78,20 @@ describe('NotificationsSubmenu (#676)', () => {
     vi.stubGlobal('Notification', { permission: 'default', requestPermission: vi.fn(async () => 'default') })
     render(<Menu />)
     open()
-    const browser = screen.getByRole('menuitemcheckbox', { name: /Browser/ })
+    const browser = screen.getByRole('menuitemcheckbox', { name: /^Browser/ })
     expect(browser.getAttribute('aria-checked')).toBe('false')
-    expect(screen.getByText('Click to allow browser notifications')).toBeTruthy()
+    expect(screen.getByText(/Switched on, the browser asks to allow them/)).toBeTruthy()
     fireEvent.click(browser)
     expect(updatePreferences).toHaveBeenCalledWith({ notifyBrowser: true })
     expect((globalThis.Notification as unknown as { requestPermission: () => void }).requestPermission).toHaveBeenCalled()
+  })
+
+  test('with Browser off, each kind of notification says it is sent once Browser is on', () => {
+    prefs = { notifyBrowser: false }
+    render(<Menu />)
+    open()
+    expect(screen.getByText('An agent awaiting your answer, or a PR ready to review. Sent once Browser is on.')).toBeTruthy()
+    expect(screen.getByText('An agent starts or finishes. Sent once Browser is on.')).toBeTruthy()
   })
 
   test('the row says On when Browser is on and granted, Off otherwise', () => {

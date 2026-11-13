@@ -14,8 +14,8 @@ const LONGER_THAN_A_WAITING_READ_MS = 30_000
 // shell can say out loud. Recovery needs no action here: the channels reconcile and the polls
 // resume on their own once the daemon answers again. The first probe is one cadence after the page
 // opened, which asks the daemon plenty on its own then; a tab not shown asks nothing.
-export function useDaemonHealth(): boolean {
-  const [healthy, setHealthy] = useState(true)
+export function useDaemonHealth(): Daemon {
+  const [daemon, setDaemon] = useState<Daemon>('answering')
 
   useEffect(() => {
     let timer: ReturnType<typeof setTimeout> | undefined
@@ -28,20 +28,21 @@ export function useDaemonHealth(): boolean {
       }
       const ask = new AbortController()
       asking = ask
-      const settle = (answered: boolean) => {
+      const settle = (answered: Daemon) => {
         if (asking !== ask) return
         asking = undefined
         clearTimeout(timer)
-        setHealthy(answered)
+        setDaemon(answered)
         timer = setTimeout(probe, PROBE_MS)
       }
       timer = setTimeout(() => {
-        settle(false)
+        settle('silent')
         ask.abort()
       }, LONGER_THAN_A_WAITING_READ_MS)
+      // Refused at once, by a computer that is online: nothing serves the page's address.
       rpc<typeof impl.onProjects>('onProjects', { signal: ask.signal })().then(
-        () => settle(true),
-        () => settle(false),
+        () => settle('answering'),
+        () => settle(navigator.onLine ? 'stopped' : 'silent'),
       )
     }
     timer = setTimeout(probe, PROBE_MS)
@@ -53,8 +54,14 @@ export function useDaemonHealth(): boolean {
     }
   }, [])
 
-  return healthy
+  return daemon
 }
+
+/** OpenAgent answers; takes a probe and answers nothing in time; or refuses it, as a stopped one's address does. */
+export type Daemon = 'answering' | 'silent' | 'stopped'
+
+/** How an installed OpenAgent starts again, said the same wherever the page asks for a restart. */
+export const INSTALLED_RESTARTS = 'an installed one restarts with the computer or with its installer\u2019s command'
 
 /** OpenAgent is not answering ({@link useDaemonHealth}): what would ask it, Start, Send, Stop, an answer and a run's next step, is off until it does. */
 export const DaemonDown = createContext(false)

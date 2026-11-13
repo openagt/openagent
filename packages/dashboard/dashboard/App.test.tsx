@@ -1,8 +1,8 @@
 import { afterEach, describe, expect, test, vi } from 'vitest'
 import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
-import { createElement } from 'react'
+import { createElement, useContext } from 'react'
 import { openMenu, phoneScreen } from './test-utils.js'
-import { useModuleHost, type ModuleCardProps, type ModuleDefinition, type ModulePageProps } from './module/index.js'
+import { useModuleHost, useOpenAgentDown, type ModuleCardProps, type ModuleDefinition, type ModulePageProps } from './module/index.js'
 import { forgetRemembered } from './lib/use-async.js'
 import { openSettings } from './lib/use-route.js'
 import { skillsSaved } from './lib/skills-saved.js'
@@ -22,17 +22,21 @@ vi.mock('./lib/rpc.js', () => ({
 
 // Settings and a project's launcher read a dozen things of their own; these tests are about the
 // shell around them, so each is a line naming itself.
-vi.mock('./components/SettingsDialog.js', () => ({
-  SettingsDialog: ({ entry, scope, onEntry, onClose }: { entry: string; scope: string | null; onEntry: (id: string) => void; onClose: () => void }) =>
-    createElement(
-      'div',
-      null,
-      createElement('p', null, `the settings dialog on '${entry}'`),
-      createElement('p', null, `its project: ${scope ?? 'every project'}`),
-      createElement('button', { onClick: () => onEntry('agent') }, 'to Agent'),
-      createElement('button', { onClick: onClose }, 'shut the dialog'),
-    ),
-}))
+vi.mock('./components/SettingsDialog.js', async () => {
+  const { DaemonDown } = await import('./lib/use-daemon-health.js')
+  return {
+    SettingsDialog: ({ entry, scope, onEntry, onClose }: { entry: string; scope: string | null; onEntry: (id: string) => void; onClose: () => void }) =>
+      createElement(
+        'div',
+        null,
+        createElement('p', null, `the settings dialog on '${entry}'`),
+        createElement('p', null, `its project: ${scope ?? 'every project'}`),
+        createElement('p', null, `its saves: ${useContext(DaemonDown) ? 'off' : 'on'}`),
+        createElement('button', { onClick: () => onEntry('agent') }, 'to Agent'),
+        createElement('button', { onClick: onClose }, 'shut the dialog'),
+      ),
+  }
+})
 vi.mock('./components/ProjectHome.js', () => ({
   ProjectHome: ({ projectName, onProjectRemoved }: { projectName?: string; onProjectRemoved?: () => void }) =>
     createElement('p', null, `the launcher of ${projectName}`, createElement('button', { onClick: onProjectRemoved }, 'remove the project')),
@@ -82,7 +86,7 @@ describe('module pages in the shell (#1774)', () => {
     window.history.replaceState(null, '', '/elsewhere')
     render(<App />)
 
-    const row = await screen.findByRole('button', { name: 'Logs' })
+    const row = await screen.findByRole('link', { name: 'Logs' })
     fireEvent.click(row)
     expect(window.location.pathname).toBe('/logs')
     expect(await screen.findByText('runs of app')).toBeTruthy()
@@ -116,6 +120,13 @@ describe('module pages in the shell (#1774)', () => {
     expect(await screen.findByText('No such page')).toBeTruthy()
   })
 
+  test('a page that is not found is named by its heading, as every other page is', async () => {
+    answerShell([])
+    window.history.replaceState(null, '', '/nothing')
+    render(<App />)
+    expect(await screen.findByRole('heading', { level: 1, name: 'No such page' })).toBeTruthy()
+  })
+
   test("on a phone the bar names the dashboard's own pages, as it names a module's", async () => {
     answerShell([{ package: '@acme/logs', url: moduleModule('__phoneLogs', { pages: [{ segment: 'logs', label: 'Logs', Page: () => null }] }), projects: [PROJECT.id] }])
     const wide = phoneScreen()
@@ -127,6 +138,19 @@ describe('module pages in the shell (#1774)', () => {
         await waitFor(() => expect(bar.textContent).toBe(name))
         cleanup()
       }
+    } finally {
+      wide()
+    }
+  })
+
+  test('on a phone the bar of a page that is not found says so', async () => {
+    answerShell([])
+    const wide = phoneScreen()
+    try {
+      window.history.replaceState(null, '', '/nothing')
+      render(<App />)
+      const bar = (await screen.findByRole('button', { name: 'Open the menu' })).parentElement!
+      await waitFor(() => expect(bar.textContent).toBe('Not found'))
     } finally {
       wide()
     }
@@ -279,6 +303,42 @@ describe('module cards on the Overview (#1818)', () => {
     }
   })
 
+  test('an OpenAgent that refuses the page says it has stopped and how it starts again, from a terminal or installed', async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true })
+    try {
+      answerShell([])
+      render(<App />)
+      expect(await screen.findByRole('heading', { name: 'Overview' })).toBeTruthy()
+      answers.set('onProjects', () => { throw new TypeError('Failed to fetch') })
+      await act(async () => void (await vi.advanceTimersByTimeAsync(5000)))
+      const banner = (await screen.findByRole('alert')).textContent
+      expect(banner).toBe('OpenAgent has stopped. Start it again with openagent in a terminal; an installed one restarts with the computer or with its installer\u2019s command.')
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  test("while OpenAgent is not answering, Settings and a module's popup say so as the pages do", async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true })
+    try {
+      function Popup() {
+        return createElement('p', null, `the popup's saves: ${useOpenAgentDown() ? 'off' : 'on'}`)
+      }
+      answerShell([{ package: '@acme/door', url: moduleModule('__downPopup', { everyPage: Popup }), projects: [], computer: true }])
+      window.history.replaceState(null, '', '/?settings=scheduler')
+      render(<App />)
+      expect(await screen.findByText('its saves: on')).toBeTruthy()
+      expect(await screen.findByText("the popup's saves: on")).toBeTruthy()
+      answers.set('onProjects', () => { throw new TypeError('Failed to fetch') })
+      await act(async () => void (await vi.advanceTimersByTimeAsync(5000)))
+      expect(await screen.findByRole('alert')).toBeTruthy()
+      expect(screen.getByText('its saves: off')).toBeTruthy()
+      expect(screen.getByText("the popup's saves: off")).toBeTruthy()
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
   test("a card of this computer's package is on the Overview though no project has the package", async () => {
     answerOverview([{ package: '@acme/devices', url: moduleModule('__devicesCard', { cards: [{ id: 'devices', label: 'Devices', Card: () => createElement('p', null, 'devices card') }] }), projects: [], computer: true }])
     window.history.replaceState(null, '', '/')
@@ -348,7 +408,7 @@ describe('module cards on the Overview (#1818)', () => {
     await waitFor(() => expect(document.querySelector('[title="Fix flaky login test"]')).toBeTruthy())
     expect(screen.queryByTestId('title-placeholder')).toBeNull()
   })
-  test('a run just started is starting until a list has had it; then a list without it says it is gone, as after a delete and Back', async () => {
+  test('a run just started is starting until a list has had it; then a list without it says no such session, as after a delete and Back', async () => {
     const { useModuleHost } = await import('./module/index.js')
     function Starter({ projects }: ModuleCardProps) {
       const host = useModuleHost()
@@ -365,11 +425,11 @@ describe('module cards on the Overview (#1818)', () => {
     fireEvent.click(await screen.findByRole('button', { name: 'start' }))
     await waitFor(() => expect(window.location.pathname).toBe('/app/9-d'))
     await waitFor(() => expect(calls.filter(call => call.name === 'onAgents').length).toBeGreaterThan(1))
-    expect(screen.queryByText('This session is gone')).toBeNull()
+    expect(screen.queryByText('No such session')).toBeNull()
     listed = [run]
-    await waitFor(() => expect(document.querySelector('button[aria-label="Session actions"][title="tidy up"]')).toBeTruthy())
+    await waitFor(() => expect(document.querySelector('button[aria-label="tidy up, session actions"]')).toBeTruthy())
     listed = []
-    expect(await screen.findByText('This session is gone', {}, { timeout: 5000 })).toBeTruthy()
+    expect(await screen.findByText('No such session', {}, { timeout: 5000 })).toBeTruthy()
   })
 })
 
@@ -446,12 +506,12 @@ describe('the project select (#1513)', () => {
     answerTwo()
     window.history.replaceState(null, '', '/site/overview')
     render(<App />)
-    fireEvent.click(await screen.findByRole('button', { name: 'Logs' }))
+    fireEvent.click(await screen.findByRole('link', { name: 'Logs' }))
     expect(url()).toBe('/site/logs')
     expect(await screen.findByText('runs of site')).toBeTruthy()
     // The sidebar marks the page that is open, also with Settings open over it. The Overview row's
     // name carries its Human Queue count here, and the person's row ends in "settings", hence the patterns.
-    const marked = () => ['Overview', 'Logs', 'Settings'].filter(name => screen.getByRole('button', { name: name === 'Settings' ? /settings$/i : new RegExp(`^${name}`) }).getAttribute('aria-current') === 'page')
+    const marked = () => ['Overview', 'Logs', 'Settings'].filter(name => screen.getByRole(name === 'Settings' ? 'button' : 'link', { name: name === 'Settings' ? /settings$/i : new RegExp(`^${name}`) }).getAttribute('aria-current') === 'page')
     expect(marked()).toEqual(['Logs'])
     fireEvent.click(screen.getByRole('button', { name: /settings$/i }))
     fireEvent.click(screen.getByRole('menuitem', { name: 'Settings' }))
@@ -479,7 +539,7 @@ describe('the project select (#1513)', () => {
     answerTwo()
     window.history.replaceState(null, '', '/site/overview')
     render(<App />)
-    fireEvent.click(await screen.findByRole('button', { name: 'Logs' }))
+    fireEvent.click(await screen.findByRole('link', { name: 'Logs' }))
     window.history.replaceState({ written: 'by the page' }, '')
     fireEvent.click(screen.getByRole('button', { name: /settings$/i }))
     fireEvent.click(screen.getByRole('menuitem', { name: 'Settings' }))
@@ -517,7 +577,7 @@ describe('the project select (#1513)', () => {
     fireEvent.click(await screen.findByText('site ran'))
     // All projects stay shown there.
     expect(url()).toBe('/site/3-s?all')
-    await waitFor(() => expect(document.querySelector('button[aria-label="Session actions"][title="site ran"]')).toBeTruthy())
+    await waitFor(() => expect(document.querySelector('button[aria-label="site ran, session actions"]')).toBeTruthy())
   })
 
   test('New agent session starts in the picked project; picking another on the launcher moves to its launcher, and all keeps the page', async () => {
@@ -589,18 +649,18 @@ describe('the project select (#1513)', () => {
   test('with a project picked the sidebar lists only the pages that project has; all projects lists every page', async () => {
     answerTwoWithTickets()
     render(<App />)
-    expect(await screen.findByRole('button', { name: 'Tickets' })).toBeTruthy()
-    expect(screen.getByRole('button', { name: 'Logs' })).toBeTruthy()
+    expect(await screen.findByRole('link', { name: 'Tickets' })).toBeTruthy()
+    expect(screen.getByRole('link', { name: 'Logs' })).toBeTruthy()
 
     await pick('All projects', /site/)
-    await waitFor(() => expect(screen.queryByRole('button', { name: 'Tickets' })).toBeNull())
-    expect(screen.getByRole('button', { name: 'Logs' })).toBeTruthy()
+    await waitFor(() => expect(screen.queryByRole('link', { name: 'Tickets' })).toBeNull())
+    expect(screen.getByRole('link', { name: 'Logs' })).toBeTruthy()
 
     await pick('site', /app/)
-    expect(await screen.findByRole('button', { name: 'Tickets' })).toBeTruthy()
+    expect(await screen.findByRole('link', { name: 'Tickets' })).toBeTruthy()
     await pick('app', /All projects/)
-    expect(screen.getByRole('button', { name: 'Tickets' })).toBeTruthy()
-    expect(screen.getByRole('button', { name: 'Logs' })).toBeTruthy()
+    expect(screen.getByRole('link', { name: 'Tickets' })).toBeTruthy()
+    expect(screen.getByRole('link', { name: 'Logs' })).toBeTruthy()
   })
 
   test('picking a project on a page it does not have goes to the Overview, and a link to such a page says the project has none', async () => {
@@ -647,7 +707,7 @@ describe('the project select (#1513)', () => {
     answers.set('onRepos', () => ({ repos: [{ path: '/work/new', name: 'new' }], canAddFolder: false }))
     answers.set('sendAddProject', () => ({ ok: true, alreadyActivated: false }))
     render(<App />)
-    await screen.findByRole('button', { name: 'Logs' })
+    await screen.findByRole('link', { name: 'Logs' })
     const reads = () => calls.filter(call => call.name === 'onModules').length
     const before = reads()
     await openMenu(screen.getByRole('combobox', { name: 'Project: All projects' }))
@@ -660,7 +720,7 @@ describe('the project select (#1513)', () => {
     answerTwo()
     window.history.replaceState(null, '', '/site')
     render(<App />)
-    await screen.findByRole('button', { name: 'Logs' })
+    await screen.findByRole('link', { name: 'Logs' })
     const reads = () => calls.filter(call => call.name === 'onModules').length
     const before = reads()
     fireEvent.click(await screen.findByRole('button', { name: 'remove the project' }))
@@ -672,7 +732,7 @@ describe('the project select (#1513)', () => {
     answerTwo()
     window.history.replaceState(null, '', '/site/3-s')
     render(<App />)
-    await screen.findByRole('button', { name: 'Logs' })
+    await screen.findByRole('link', { name: 'Logs' })
     const reads = () => calls.filter(call => call.name === 'onModules').length
     const before = reads()
     fireEvent.click(await screen.findByRole('button', { name: 'remove the project from its menu' }))
@@ -682,7 +742,7 @@ describe('the project select (#1513)', () => {
     answers.set('onProjects', () => [{ ...OTHER, machine: 'studio' }])
     window.history.replaceState(null, '', '/site/3-s')
     render(<App />)
-    await screen.findByRole('button', { name: 'Session actions' })
+    await screen.findByRole('button', { name: /session actions/i })
     expect(screen.queryByRole('button', { name: 'remove the project from its menu' })).toBeNull()
   })
 
@@ -777,7 +837,7 @@ describe('the shell on a phone', () => {
       // too, to a screen reader only: the bar already names the page.
       expect(await screen.findByRole('heading', { name: 'Overview' })).toBeTruthy()
       expect(screen.getAllByText('Overview').map(el => (el.closest('h1') ? 'heading' : el.tagName))).toEqual(['SPAN', 'heading'])
-      expect(screen.queryByRole('button', { name: 'Overview' })).toBeNull()
+      expect(screen.queryByRole('link', { name: 'Overview' })).toBeNull()
 
       expect(open.getAttribute('aria-expanded')).toBe('false')
       fireEvent.click(open)
@@ -786,14 +846,14 @@ describe('the shell on a phone', () => {
       fireEvent.click(await screen.findByRole('button', { name: /settings$/i }))
       fireEvent.click(screen.getByRole('menuitem', { name: 'Settings' }))
       expect(await screen.findByText("the settings dialog on ''")).toBeTruthy()
-      await waitFor(() => expect(screen.queryByRole('button', { name: 'Overview' })).toBeNull())
+      await waitFor(() => expect(screen.queryByRole('link', { name: 'Overview' })).toBeNull())
 
       // The launcher has a top row of its own, which keeps its corner free for the button.
       fireEvent.click(screen.getByRole('button', { name: 'Open the menu' }))
       // New is one click, to the page of a session with no project.
-      fireEvent.click(await screen.findByRole('button', { name: 'New agent session' }))
+      fireEvent.click(await screen.findByRole('link', { name: 'New agent session' }))
       expect(await screen.findByText(/^the launcher of/)).toBeTruthy()
-      await waitFor(() => expect(screen.queryByRole('button', { name: 'New agent session' })).toBeNull())
+      await waitFor(() => expect(screen.queryByRole('link', { name: 'New agent session' })).toBeNull())
       expect(screen.getByRole('button', { name: 'Open the menu' })).toBeTruthy()
       expect(screen.queryByText('Overview')).toBeNull()
       expect(screen.queryByText('Settings')).toBeNull()
@@ -807,12 +867,12 @@ describe('the shell on a phone', () => {
     try {
       const { unmount } = render(<App />)
       fireEvent.click(await screen.findByRole('button', { name: 'Hide the sidebar' }))
-      expect(screen.queryByRole('button', { name: 'Overview' })).toBeNull()
+      expect(screen.queryByRole('link', { name: 'Overview' })).toBeNull()
       // The page's own header holds the button that shows it again.
       fireEvent.click(await screen.findByRole('button', { name: 'Show the sidebar' }))
-      expect(await screen.findByRole('button', { name: 'Overview' })).toBeTruthy()
+      expect(await screen.findByRole('link', { name: 'Overview' })).toBeTruthy()
       fireEvent.keyDown(window, { key: 'b', metaKey: true })
-      await waitFor(() => expect(screen.queryByRole('button', { name: 'Overview' })).toBeNull())
+      await waitFor(() => expect(screen.queryByRole('link', { name: 'Overview' })).toBeNull())
       unmount()
       // Kept in this browser: hidden still on the next load (the module reads it once, as a page load does).
       expect(localStorage.getItem('oa.sidebar-hidden')).toBe('true')
@@ -841,7 +901,7 @@ describe('the shell on a phone', () => {
   test('on a wide screen there is no bar and no button: the sidebar is beside the page', async () => {
     answerShell([])
     render(<App />)
-    expect(await screen.findByRole('button', { name: 'Overview' })).toBeTruthy()
+    expect(await screen.findByRole('link', { name: 'Overview' })).toBeTruthy()
     expect(screen.queryByRole('button', { name: 'Open the menu' })).toBeNull()
     // The sidebar's row, and the page's own heading: no bar names it a third time.
     expect(await screen.findByRole('heading', { name: 'Overview' })).toBeTruthy()

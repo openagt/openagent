@@ -1,4 +1,4 @@
-import { FadeWhileStale, FilterChips, Page, PersonMark, STATUS_DOT, STATUS_RING, Table, TableBody, TableCell, TableHead, TableHeader, TableRow, cn, formatDateTime, formatDuration, personSaid, runName, useGitHostPeople, useModuleHost, usePolled, type ModuleAgent, type ModuleHostPerson, type ModulePageProps, type ModuleProject } from '@openagt/dashboard/module'
+import { FadeWhileStale, FilterChips, Page, PersonMark, STATUS_DOT, STATUS_RING, Table, TableBody, TableCell, TableHead, TableHeader, TableRow, cn, formatDateTime, formatDuration, inPlace, personSaid, runName, useGitHostPeople, useModuleHost, usePolled, type ModuleAgent, type ModuleHostPerson, type ModulePageProps, type ModuleProject } from '@openagt/dashboard/module'
 import type { RunCard } from '../src/run.js'
 
 /** How many runs each project lists: the command's own default page is 20; the page shows more. */
@@ -178,130 +178,135 @@ export function LogsPage({ projects, path }: ModulePageProps) {
     <Page
       title="Logs"
       description={capped ? `The last ${LIMIT} runs recorded in ${many ? 'each of these projects' : 'this project'}, newest first.` : `Every run recorded in ${many ? 'these projects' : 'this project'}, newest first.`}
-      bar={<FilterChips chips={counts} total={read.rows.length} picked={status} onPick={value => host.openPage('logs', value === null ? [] : [value])} />}
+      bar={<FilterChips chips={counts} total={read.rows.length} picked={status} onPick={value => host.openPage('logs', value === null ? [] : [value], undefined, { replace: true })} />}
     >
       {read.failed.map(({ project, error }) => (
         <p key={project.id} role="alert" className="mb-3 text-sm text-danger">
           Could not read the runs of {project.name}: {error}
         </p>
       ))}
-      {!loaded && <p className="text-sm text-muted-foreground">Loading…</p>}
+      {!loaded && read.rows.length === 0 && <p className="text-sm text-muted-foreground">Loading…</p>}
       {loaded && read.rows.length === 0 && read.failed.length === 0 && <p className="text-sm text-muted-foreground">No runs recorded yet.</p>}
-      {days.length > 0 && (
-        // One table for every day, so the columns stand in one place down the page; each day opens
-        // with a row of its own: the day, how many runs it had and what they cost together.
-        <FadeWhileStale stale={stale} className="max-md:hidden">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead className="w-24">Status</TableHead>
-                <TableHead>Run</TableHead>
-                {many && <TableHead>Project</TableHead>}
-                <TableHead>Branch</TableHead>
-                <TableHead className="text-right">Took</TableHead>
-                <TableHead className="text-right">Cost</TableHead>
-                <TableHead className="w-20 text-right">Started</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {days.map(({ day, rows, cost }) => [
-                <TableRow key={day} className="hover:bg-transparent">
-                  <TableCell colSpan={many ? 7 : 6} className="pt-5 pb-1.5">
-                    <DayHeading day={day} runs={rows.length} cost={cost} />
-                  </TableCell>
-                </TableRow>,
-                ...rows.map(({ project, card }) => (
-                  <TableRow key={`${project.id}/${card.id}`} onClick={() => host.openAgent(project.id, card.id)} className="cursor-pointer">
-                    <TableCell>
-                      <Status status={card.status} offline={card.offline} />
+      {/* The table or the list by the page column's own width, which the sidebar takes from the screen's. */}
+      <div className="@container">
+        {days.length > 0 && (
+          // One table for every day, so the columns stand in one place down the page; each day opens
+          // with a row of its own: the day, how many runs it had and what they cost together.
+          <FadeWhileStale stale={stale} className="@max-4xl:hidden">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead className="w-24">Status</TableHead>
+                  <TableHead>Run</TableHead>
+                  {many && <TableHead>Project</TableHead>}
+                  <TableHead>Branch</TableHead>
+                  <TableHead className="text-right">Took</TableHead>
+                  <TableHead className="text-right">Cost</TableHead>
+                  <TableHead className="w-20 text-right">Started</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {days.map(({ day, rows, cost }) => [
+                  <TableRow key={day} className="hover:bg-transparent">
+                    <TableCell colSpan={many ? 7 : 6} className="pt-5 pb-1.5">
+                      <DayHeading day={day} runs={rows.length} cost={cost} />
                     </TableCell>
-                    {/* The run's short name, and what it was asked under it; a run with no name yet is its ask. */}
-                    <TableCell className="max-w-md">
-                      <div className="flex items-center gap-2.5">
-                        <RunPerson person={card.person} account={accountOf(project.id, card.person)} />
-                        <div className="min-w-0 flex-1">
-                          <RunName card={card} title={card.title ?? card.intent} onOpen={() => host.openAgent(project.id, card.id)} />
-                          {card.title?.trim() && card.intent?.trim() && (
-                            <p className="truncate text-xs text-muted-foreground" title={card.intent}>
-                              {card.intent}
-                            </p>
-                          )}
+                  </TableRow>,
+                  ...rows.map(({ project, card }) => (
+                    <TableRow key={`${project.id}/${card.id}`} onClick={() => host.openAgent(project.id, card.id)} className="cursor-pointer">
+                      <TableCell>
+                        <Status status={card.status} offline={card.offline} />
+                      </TableCell>
+                      {/* The run's short name, and what it was asked under it; a run with no name yet is its ask. */}
+                      <TableCell className="max-w-md">
+                        <div className="flex items-center gap-2.5">
+                          <RunPerson person={card.person} account={accountOf(project.id, card.person)} />
+                          <div className="min-w-0 flex-1">
+                            <RunName card={card} title={card.title ?? card.intent} href={host.agentHref(project.id, card.id)} onOpen={() => host.openAgent(project.id, card.id)} />
+                            {card.title?.trim() && card.intent?.trim() && (
+                              <p className="truncate text-xs text-muted-foreground" title={card.intent}>
+                                {card.intent}
+                              </p>
+                            )}
+                          </div>
                         </div>
-                      </div>
-                    </TableCell>
-                    {many && <TableCell className="text-muted-foreground">{project.name}</TableCell>}
-                    <TableCell className="max-w-56">
-                      {card.pr ? (
-                        <a href={card.pr.url} target="_blank" rel="noreferrer" onClick={event => event.stopPropagation()} className="text-info hover:underline">
-                          #{card.pr.number}
-                        </a>
-                      ) : (
-                        <span className="block truncate font-mono text-xs text-muted-foreground" title={card.branch}>
-                          {card.branch ?? '—'}
-                        </span>
-                      )}
-                    </TableCell>
-                    <TableCell className="text-right text-muted-foreground tabular-nums">{took(card)}</TableCell>
-                    <TableCell className="text-right tabular-nums">{card.cost !== undefined ? dollars(card.cost) : '—'}</TableCell>
-                    <TableCell className="whitespace-nowrap text-right text-muted-foreground tabular-nums" title={formatDateTime(card.startedAt)}>
-                      {clock(card.startedAt)}
-                    </TableCell>
-                  </TableRow>
-                )),
-              ])}
-            </TableBody>
-          </Table>
+                      </TableCell>
+                      {many && <TableCell className="text-muted-foreground">{project.name}</TableCell>}
+                      <TableCell className="max-w-56">
+                        {card.pr ? (
+                          <a href={card.pr.url} target="_blank" rel="noreferrer" onClick={event => event.stopPropagation()} className="text-info hover:underline">
+                            #{card.pr.number}
+                          </a>
+                        ) : (
+                          <span className="block truncate font-mono text-xs text-muted-foreground" title={card.branch}>
+                            {card.branch ?? '—'}
+                          </span>
+                        )}
+                      </TableCell>
+                      <TableCell className="text-right text-muted-foreground tabular-nums">{took(card)}</TableCell>
+                      <TableCell className="text-right tabular-nums">{card.cost !== undefined ? dollars(card.cost) : '—'}</TableCell>
+                      <TableCell className="whitespace-nowrap text-right text-muted-foreground tabular-nums" title={formatDateTime(card.startedAt)}>
+                        {clock(card.startedAt)}
+                      </TableCell>
+                    </TableRow>
+                  )),
+                ])}
+              </TableBody>
+            </Table>
+          </FadeWhileStale>
+        )}
+        {/* A phone, or a column narrowed by the sidebar, has no width for the table's columns: there a
+            run is two lines, its name and then the rest, and its branch is left to its own page. */}
+        <FadeWhileStale stale={stale} className="space-y-5 @4xl:hidden">
+          {days.map(({ day, rows, cost }) => (
+            <section key={day} aria-label={day}>
+              <DayHeading day={day} runs={rows.length} cost={cost} />
+              <ul className="mt-1 text-sm">
+                {rows.map(({ project, card }) => (
+                  <li key={`${project.id}/${card.id}`} onClick={() => host.openAgent(project.id, card.id)} className="flex cursor-pointer items-center gap-2.5 border-b border-border py-2 hover:bg-accent">
+                    <RunPerson person={card.person} account={accountOf(project.id, card.person)} />
+                    <div className="min-w-0 flex-1">
+                      <RunName card={card} title={card.intent} href={host.agentHref(project.id, card.id)} onOpen={() => host.openAgent(project.id, card.id)} />
+                      <p className="mt-0.5 flex flex-wrap items-center gap-x-3 text-xs text-muted-foreground">
+                        <Status status={card.status} offline={card.offline} />
+                        {many && <span>{project.name}</span>}
+                        {card.pr && (
+                          <a href={card.pr.url} target="_blank" rel="noreferrer" onClick={event => event.stopPropagation()} className="text-info hover:underline">
+                            #{card.pr.number}
+                          </a>
+                        )}
+                        {card.cost !== undefined && <span className="tabular-nums">{dollars(card.cost)}</span>}
+                        <span className="tabular-nums">{clock(card.startedAt)}</span>
+                      </p>
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            </section>
+          ))}
         </FadeWhileStale>
-      )}
-      {/* A phone has no width for the table's columns: there a run is two lines, its name and then
-          the rest, and its branch is left to its own page. */}
-      <FadeWhileStale stale={stale} className="space-y-5 md:hidden">
-        {days.map(({ day, rows, cost }) => (
-          <section key={day} aria-label={day}>
-            <DayHeading day={day} runs={rows.length} cost={cost} />
-            <ul className="mt-1 text-sm">
-              {rows.map(({ project, card }) => (
-                <li key={`${project.id}/${card.id}`} onClick={() => host.openAgent(project.id, card.id)} className="flex cursor-pointer items-center gap-2.5 border-b border-border py-2 hover:bg-accent">
-                  <RunPerson person={card.person} account={accountOf(project.id, card.person)} />
-                  <div className="min-w-0 flex-1">
-                    <RunName card={card} title={card.intent} onOpen={() => host.openAgent(project.id, card.id)} />
-                    <p className="mt-0.5 flex flex-wrap items-center gap-x-3 text-xs text-muted-foreground">
-                      <Status status={card.status} offline={card.offline} />
-                      {many && <span>{project.name}</span>}
-                      {card.pr && (
-                        <a href={card.pr.url} target="_blank" rel="noreferrer" onClick={event => event.stopPropagation()} className="text-info hover:underline">
-                          #{card.pr.number}
-                        </a>
-                      )}
-                      {card.cost !== undefined && <span className="tabular-nums">{dollars(card.cost)}</span>}
-                      <span className="tabular-nums">{clock(card.startedAt)}</span>
-                    </p>
-                  </div>
-                </li>
-              ))}
-            </ul>
-          </section>
-        ))}
-      </FadeWhileStale>
+      </div>
     </Page>
   )
 }
 
-/** A run's name, a button that opens the run: what the keyboard reaches of a row the pointer opens anywhere. */
-function RunName({ card, title, onOpen }: { card: Row['card']; title: string | undefined; onOpen: () => void }) {
+/** A run's name, a link to the run: what the keyboard reaches of a row the pointer opens anywhere, and what opens it in a new tab. */
+function RunName({ card, title, href, onOpen }: { card: Row['card']; title: string | undefined; href: string; onOpen: () => void }) {
+  const open = inPlace(onOpen)
   return (
-    <button
-      type="button"
+    <a
+      href={href}
       title={title}
       onClick={event => {
+        // Not the row's too: a click the browser takes opens the run in a new tab, not also here.
         event.stopPropagation()
-        onOpen()
+        open(event)
       }}
       className="-mx-1 block max-w-[calc(100%+0.5rem)] truncate rounded-sm px-1 text-left font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-primary)]"
     >
       {/* As every list names a run; a run with none of those goes by its id. */}
       {runName(card) ?? card.id}
-    </button>
+    </a>
   )
 }
 

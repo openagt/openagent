@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest'
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 
 // The two writes this component makes: what the person says to the run, and the slot's Stop (#1455).
 const sendMessage = vi.hoisted(() => vi.fn())
@@ -20,7 +20,7 @@ vi.mock('../lib/use-project-launcher.js', () => ({ useProjectLauncher: () => ({ 
 vi.mock('./ContextMenu.js', () => ({ ProjectContextMenu: ({ context }: { context: Set<string> }) => <span>Context · {[...context].join(', ')}</span> }))
 // The launcher's other items, each tested on its own: stand-ins that say what they were given.
 vi.mock('./AgentMenu.js', () => ({ AgentOff: ({ agent }: { agent?: string }) => <span>Agent · {agent ?? 'default'}</span> }))
-vi.mock('./SkillsMenu.js', () => ({ SkillsOff: ({ skillsOff, projectSkills, noProject }: { skillsOff?: string[]; projectSkills?: 'none' | string[]; noProject?: boolean }) => <span>Skills · {noProject ? 'no project' : `${(skillsOff ?? []).join('+') || 'all'}/${projectSkills === undefined ? 'all' : projectSkills === 'none' ? 'none' : projectSkills.join('+')}`}</span> }))
+vi.mock('./SkillsMenu.js', () => ({ SkillsOff: ({ projectId, skillsOff, projectSkills }: { projectId?: string; skillsOff?: string[]; projectSkills?: 'none' | string[] }) => <span>Skills · {projectId === undefined ? 'no project' : `${(skillsOff ?? []).join('+') || 'all'}/${projectSkills === undefined ? 'all' : projectSkills === 'none' ? 'none' : projectSkills.join('+')}`}</span> }))
 vi.mock('./GitHosts.js', () => ({ GitHostOff: ({ home, account }: { home: { name: string } | null; account?: string }) => (home ? <span>Account · {account ?? home.name}</span> : null) }))
 
 // The Composer is exercised by its own tests; here it only has to hand back a submit and report
@@ -36,7 +36,7 @@ vi.mock('./Composer.js', async () => {
         submit later
       </button>
       <span data-testid="composer-props">
-        {JSON.stringify({ inAgent: props.inAgent, busyLabel: props.submitBusyLabel, placeholder: props.placeholder, sessionModel: props.sessionModel })}
+        {JSON.stringify({ inAgent: props.inAgent, busyLabel: props.submitBusyLabel, placeholder: props.placeholder, sessionModel: props.sessionModel, autoFocus: props.autoFocus })}
       </span>
       {/* The empty-box slot control (#1455), rendered so the Stop/Resume tests can press it. */}
       {props.idleControl}
@@ -56,7 +56,7 @@ function renderComposer(over: Partial<Parameters<typeof AgentComposer>[0]> = {})
   return { onAgentStarted }
 }
 
-const props = (): { inAgent: boolean; busyLabel: string; placeholder: string; sessionModel?: string } =>
+const props = (): { inAgent: boolean; busyLabel: string; placeholder: string; sessionModel?: string; autoFocus?: boolean } =>
   JSON.parse(screen.getByTestId('composer-props').textContent ?? '{}')
 
 beforeEach(() => {
@@ -100,6 +100,20 @@ describe('AgentComposer row under the box', () => {
 })
 
 describe('AgentComposer box', () => {
+  test('a session opened takes what is typed next in its box; on a phone it waits for a tap', () => {
+    renderComposer()
+    expect(props().autoFocus).toBe(true)
+    cleanup()
+    vi.stubGlobal('matchMedia', (query: string) => ({ matches: true, media: query, addEventListener: () => {}, removeEventListener: () => {} }))
+    try {
+      renderComposer()
+      expect(props().autoFocus).toBe(false)
+    } finally {
+      vi.unstubAllGlobals()
+    }
+  })
+
+
   test('the model the session runs on is handed to the box, to be said under it; none when not known', () => {
     renderComposer({ model: 'Opus 5.5' })
     expect(props().sessionModel).toBe('Opus 5.5')
@@ -115,6 +129,17 @@ describe('AgentComposer box', () => {
     cleanup()
     renderComposer({ live: false })
     expect(props().placeholder).toBe('Message the agent to continue it…')
+  })
+
+  test('on a touch screen the box names no keys', () => {
+    const matchMedia = window.matchMedia
+    window.matchMedia = (query: string) => ({ ...matchMedia(query), matches: query === '(pointer: coarse)' || matchMedia(query).matches })
+    try {
+      renderComposer()
+      expect(props().placeholder).toBe('Message the agent…')
+    } finally {
+      window.matchMedia = matchMedia
+    }
   })
 })
 
@@ -234,6 +259,19 @@ describe('AgentComposer, live (#714)', () => {
     fireEvent.click(screen.getByText('submit'))
     await waitFor(() => expect(screen.getByRole('alert').textContent).toBe('unknown session'))
     expect(onQueued).not.toHaveBeenCalled()
+  })
+})
+
+describe('AgentComposer, given back what the run never read', () => {
+  test('says the words were not sent, until the next message goes', async () => {
+    const giveBack: { current: ((text: string) => void) | null } = { current: null }
+    sendMessage.mockResolvedValue({ ok: true })
+    renderComposer({ live: false, giveBack })
+    expect(screen.queryByText('Not sent: the session stopped first.')).toBeNull()
+    act(() => giveBack.current!('and add a test'))
+    expect(screen.getByRole('status').textContent).toBe('Not sent: the session stopped first.')
+    fireEvent.click(screen.getByText('submit'))
+    await waitFor(() => expect(screen.queryByText('Not sent: the session stopped first.')).toBeNull())
   })
 })
 

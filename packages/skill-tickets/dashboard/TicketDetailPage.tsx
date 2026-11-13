@@ -1,7 +1,8 @@
-import { useState } from 'react'
-import { Bot, ExternalLink, LockOpen, Play } from 'lucide-react'
-import { Badge, Button, LinkActions, Markdown, cn, formatAge, formatDateTime, useAction, usePolled, useModuleHost } from '@openagt/dashboard/module'
-import { claimState, heldBack, holderAgent, readShown, ticketBody, ticketLink, withHolder } from '../src/module.js'
+import { useEffect, useRef, useState } from 'react'
+import { Bot, ClipboardPlus, ExternalLink, LockOpen, Play } from 'lucide-react'
+import { Badge, Button, ConfirmDialog, LinkActions, Markdown, StartAgentButton, cn, formatAge, formatDateTime, useAction, usePolled, useModuleHost, useOpenAgentDown } from '@openagt/dashboard/module'
+import { claimState, heldBack, holderAgent, planTicketPrompt, readShown, ticketBody, ticketLink, withHolder, workOnTicketPrompt } from '../src/module.js'
+import { holdingRun } from './lib/holding-run.js'
 import type { WorkspaceTicketDetail } from './lib/types.js'
 import { TicketPageShell, TicketPageNote } from './TicketPageShell.js'
 import { releaseClaim } from './lib/release.js'
@@ -34,7 +35,7 @@ export function TicketDetailPage({
       if ('error' in shown) return shown
       if (!shown.shown) return { ticket: null }
       const agent = holderAgent(agents, shown.shown.ticket.lockedBy)
-      return { ticket: withHolder(shown.shown.ticket, agent), ...(agent ? { holderStatus: agent.status } : {}) }
+      return { ticket: withHolder(shown.shown.ticket, holdingRun(agent)), ...(agent ? { holderStatus: agent.status } : {}) }
     },
     null,
     10_000,
@@ -42,6 +43,7 @@ export function TicketDetailPage({
   )
   const ticket = read && 'ticket' in read ? read.ticket : null
   const { busy, error, run } = useAction()
+  const down = useOpenAgentDown()
   const onBack = useBackToList(host, [slug])
   const onOpenAgent = (agentId: string) => host.openAgent(projectId, agentId)
 
@@ -52,11 +54,31 @@ export function TicketDetailPage({
   const holder = ticket?.lockedByAgent?.name ?? ticket?.lockedBy
   const holderStatus = read && 'ticket' in read ? read.holderStatus : undefined
   const working = claimState(holderStatus) === 'working'
+  // Released, the press is gone: the focus goes to the ticket's title, not to the page's body. Once
+  // the page is drawn without the press, so a dialog that asked is closed and takes no focus back.
+  const title = useRef<HTMLHeadingElement>(null)
+  useEffect(() => {
+    if (released) title.current?.focus()
+  }, [released])
   const release = async () => {
     if (!ticket) return
     const outcome = await run(() => releaseClaim(host, projectId, ticket.file), 'The lock could not be released.')
     if (outcome.ok) setReleased(true)
   }
+  // Which start is in flight, by its prompt: one `busy` holds every start back, and only this one spins.
+  const [starting, setStarting] = useState<string | null>(null)
+  const workPrompt = ticket ? workOnTicketPrompt(ticket.file) : ''
+  const planPrompt = ticket ? planTicketPrompt(ticket.file) : ''
+  const startSession = async (prompt: string, failure: string) => {
+    setStarting(prompt)
+    await run(() => host.startRun(projectId, prompt), failure)
+    setStarting(null)
+  }
+  const releaseLock = (
+    <Button size="sm" variant="outline" disabled={busy || down} onClick={working ? undefined : () => void release()} title={holder ? `Claimed by ${holder}` : undefined} className="gap-1.5">
+      <LockOpen className="h-3.5 w-3.5" /> Release lock
+    </Button>
+  )
 
   return (
     <TicketPageShell onBack={onBack}>
@@ -72,7 +94,9 @@ export function TicketDetailPage({
       ) : (
         <>
           <div className="flex flex-wrap items-start justify-between gap-3">
-            <h1 className="text-lg font-semibold">{ticket.title}</h1>
+            <h1 ref={title} tabIndex={-1} className="text-lg font-semibold outline-none">
+              {ticket.title}
+            </h1>
             <div className="flex shrink-0 items-center gap-1.5">
               {/* The run holding the claim, one press away: at work (or waiting on an answer) it is
                   looked at; stopped, failed or ended, it is gone on with, in its own chat. */}
@@ -82,17 +106,57 @@ export function TicketDetailPage({
                   {working ? 'Open the run' : 'Continue'}
                 </Button>
               )}
-              {claimed && (
-                <Button
-                  size="sm"
-                  variant="outline"
-                  disabled={busy}
-                  onClick={() => void release()}
-                  title={holder ? `Claimed by ${holder}` : undefined}
-                  className="gap-1.5"
-                >
-                  <LockOpen className="h-3.5 w-3.5" /> Release lock
-                </Button>
+              {/* A run at work on it keeps working: the ticket is then free for another agent, so the press asks first. */}
+              {claimed &&
+                (working ? (
+                  <ConfirmDialog
+                    trigger={releaseLock}
+                    title="An agent is working on this ticket. Release it anyway?"
+                    body={`${holder ?? 'The agent'} goes on working, and the ticket can be started or queued again.`}
+                    confirmLabel="Release"
+                    confirmBusyLabel="Releasing…"
+                    onConfirm={async () => {
+                      const outcome = await releaseClaim(host, projectId, ticket.file)
+                      if (!outcome.ok) throw new Error(outcome.error)
+                    }}
+                    onSuccess={() => setReleased(true)}
+                    fallbackError="The lock could not be released."
+                  />
+                ) : (
+                  releaseLock
+                ))}
+              {/* The row's two starts, offered where the row offers them: neither on a claimed ticket nor on one in review or waiting. */}
+              {!heldBack(ticket) && !claimed && (
+                <>
+                  <StartAgentButton
+                    size="sm"
+                    icon={<Play className="h-3.5 w-3.5" aria-hidden />}
+                    label="Start"
+                    menuAriaLabel={`Other ways to work on ${ticket.title}`}
+                    tooltip="Start an agent working on this ticket"
+                    busy={busy}
+                    starting={starting === workPrompt}
+                    onStart={() => void startSession(workPrompt, 'The work agent could not be started.')}
+                    onConfigure={() => host.configureRun(projectId, workPrompt)}
+                    prompt={workPrompt}
+                    configureDescription="Opens the launcher with this ticket's prompt, so you can set the model and where it runs."
+                  />
+                  {!ticket.planned && (
+                    <StartAgentButton
+                      size="sm"
+                      icon={<ClipboardPlus className="h-3.5 w-3.5" aria-hidden />}
+                      label="Plan"
+                      menuAriaLabel={`Other ways to plan ${ticket.title}`}
+                      tooltip="Plan this ticket — starts an agent to write its plan"
+                      busy={busy}
+                      starting={starting === planPrompt}
+                      onStart={() => void startSession(planPrompt, 'The planning agent could not be started.')}
+                      onConfigure={() => host.configureRun(projectId, planPrompt)}
+                      prompt={planPrompt}
+                      configureDescription="Opens the launcher with the plan prompt, so you can set the model and where it runs."
+                    />
+                  )}
+                </>
               )}
               {/* The ticket as a link, for whatever the installed modules offer on one (#1774);
                   none for a ticket in review or waiting, which is never queued, nor for a claimed

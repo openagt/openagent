@@ -178,9 +178,9 @@ export function AgentActionsMenu({
           // same from the first frame.
           <DropdownMenuTrigger
             type="button"
-            aria-label={title}
+            aria-label={label ? `${label}, ${title.toLowerCase()}` : title}
             title={label}
-            className="flex min-w-0 items-center gap-1 rounded px-1 py-0.5 text-left text-xs hover:bg-muted data-[popup-open]:bg-muted"
+            className="flex min-w-0 items-center gap-1 rounded px-1 py-1 text-left text-xs hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-primary)] data-[popup-open]:bg-muted"
           >
             {label ? (
               <span className="min-w-0 truncate font-medium text-foreground">
@@ -243,8 +243,12 @@ export function AgentActionsMenu({
               <Code className="h-3.5 w-3.5 shrink-0" /> Open in editor
             </DropdownMenuSubTrigger>
             <DropdownMenuSubContent className="min-w-[15rem]">
-              <DropdownMenuItem disabled={busy} onClick={() => void openApp('editor')}>
-                <Code className="h-3.5 w-3.5 shrink-0" /> {agentId ? "Open this session's checkout" : 'Open in your editor'}
+              <DropdownMenuItem
+                disabled={busy}
+                onClick={() => void openApp('editor')}
+                title={agentId && !hasOwnFolder ? 'This session no longer has its own checkout' : undefined}
+              >
+                <Code className="h-3.5 w-3.5 shrink-0" /> {agentId ? (hasOwnFolder ? "Open this session's checkout" : 'Open the project') : 'Open in your editor'}
               </DropdownMenuItem>
               <DropdownMenuSeparator />
               <PreferredEditorItems busy={busy} />

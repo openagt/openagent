@@ -15,11 +15,11 @@ export const STATUS_DOT: Record<string, string> = {
   running: 'bg-primary',
   waiting: 'bg-warning',
   saving: 'bg-success',
-  failed: 'bg-danger',
 }
 
 export const STATUS_RING: Record<string, string> = {
   stopped: 'border-warning/70',
+  failed: 'border-danger/70',
   merged: 'border-success/70',
   done: 'border-muted-foreground/60',
   // Its computer does not answer: a broken ring, nothing known to be going.

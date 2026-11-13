@@ -1,5 +1,5 @@
 import { MonitorSmartphone } from 'lucide-react'
-import { Card, CardContent, CardHeader, CardTitle, GaugeFace, MachineMark, Tooltip, TooltipContent, TooltipTrigger, formatAge, machineKind, machineName, usePolled, useModuleHost, type Health, type MachineKind, type ModuleCardProps, type ModuleMachines } from '@openagt/dashboard/module'
+import { Card, CardContent, CardHeader, CardTitle, GaugeFace, inPlace, MachineMark, Tooltip, TooltipContent, TooltipTrigger, formatAge, machineKind, machineName, usePolled, useModuleHost, type Health, type MachineKind, type ModuleCardProps, type ModuleMachines } from '@openagt/dashboard/module'
 import { loadStatus, type Answer, type DoorStatus } from './devices.js'
 import { isComputer } from './model.js'
 import { olderThan } from './parts.js'
@@ -26,10 +26,11 @@ export function DevicesCard(_props: ModuleCardProps) {
     <Card>
       <CardHeader>
         <CardTitle className="text-base">
-          <button type="button" onClick={() => host.openSettings('devices')} className="-mx-1 inline-flex items-center gap-2 rounded px-1 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-primary)]">
+          {/* The address of Settings › Devices over the page that is open: its query alone. */}
+          <a href="?settings=devices" onClick={inPlace(() => host.openSettings('devices'))} className="-mx-1 inline-flex items-center gap-2 rounded px-1 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-primary)]">
             <MonitorSmartphone className="h-4 w-4 text-muted-foreground" aria-hidden />
             Devices
-          </button>
+          </a>
         </CardTitle>
       </CardHeader>
       <CardContent className="space-y-2.5">
@@ -52,7 +53,7 @@ export function DevicesCard(_props: ModuleCardProps) {
           </ul>
         )}
         {phones.length > 0 && (
-          <button type="button" onClick={() => host.openSettings('devices')} className="block text-left text-xs text-muted-foreground hover:text-foreground hover:underline">
+          <button type="button" onClick={() => host.openSettings('devices')} className="relative block text-left text-xs text-muted-foreground after:absolute after:-inset-y-1 after:inset-x-0 hover:text-foreground hover:underline">
             {phones.length === 1 ? '1 phone or browser' : `${phones.length} phones and browsers`} in
             {lastSeen ? ` · last seen ${formatAge(lastSeen)}` : ''}
           </button>

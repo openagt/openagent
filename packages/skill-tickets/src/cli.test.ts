@@ -86,7 +86,7 @@ test('reads: list and show come off origin, and a missing ticket is a refusal', 
     // Usage: an unknown command, a wrong argument count.
     const unknown = await run(a!, ['dance'])
     assert.equal(unknown.code, 2)
-    assert.equal(unknown.stderr, USAGE)
+    assert.equal(unknown.stderr, `unknown command: dance\n\n${USAGE}`)
     assert.equal((await run(a!, ['show'])).code, 2)
   } finally {
     await cleanup()

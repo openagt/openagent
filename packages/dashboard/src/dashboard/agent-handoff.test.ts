@@ -437,7 +437,8 @@ test("the Merge action lands the session's open PR through the git host (#1391)"
     { gitHost, prs: async () => ({ value: { number: 7, url: 'https://github.com/o/r/pull/7', state: 'OPEN', title: 'x' }, pending: false }) },
   )
   assert.deepEqual(calls, [['merge', 7]])
-  assert.deepEqual(result, { ok: true, url: 'https://github.com/o/r/pull/7', number: 7 })
+  // How it went is said back, so the bar can say a merge armed to wait for the checks.
+  assert.deepEqual(result, { ok: true, url: 'https://github.com/o/r/pull/7', number: 7, merge: 'auto-armed' })
 })
 
 test('the Merge action refuses a session with no PR, one already landed, and a project with no git host (#1391)', async () => {

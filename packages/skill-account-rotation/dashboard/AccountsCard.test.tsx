@@ -35,7 +35,7 @@ const add = async (agent: 'Claude Code' | 'Codex'): Promise<HTMLElement> => {
     if (trigger.getAttribute('aria-expanded') !== 'true') fireEvent.click(trigger)
     if (trigger.getAttribute('aria-expanded') !== 'true') throw new Error('the menu did not open')
   })
-  fireEvent.click(await screen.findByRole('menuitem', { name: `Add ${agent} account` }))
+  fireEvent.click(await screen.findByRole('menuitem', { name: agent === 'Claude Code' ? 'Add a Claude account' : 'Add a Codex account' }))
   return await screen.findByRole('dialog', { name: agent === 'Claude Code' ? 'Add a Claude account' : 'Add a Codex account' })
 }
 
@@ -162,6 +162,15 @@ describe('AccountsCard', () => {
     await waitFor(() => expect(document.activeElement).toBe(press))
   })
 
+  test('closing the dialog opened from the "Add" menu gives the focus back to "Add"', async () => {
+    renderAdding(() => ({ claude: {}, codex: {} }))
+    const dialog = await add('Claude Code')
+    await waitFor(() => expect(document.activeElement).toBe(within(dialog).getByRole('textbox', { name: 'Whose account' })))
+    fireEvent.keyDown(document.activeElement!, { key: 'Escape' })
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
+    await waitFor(() => expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Add an account' })))
+  })
+
   test("calls the person's own login who it is, and the press still names it as the command knows it", async () => {
     const run = renderCard(listed([{ name: 'Work', own: false }, { name: 'This computer', who: 'Ada', own: true }]))
     await openRow('Ada')
@@ -215,9 +224,43 @@ describe('AccountsCard', () => {
     expect(calls.some(call => call.args[0] === 'add-cancel')).toBe(false)
   })
 
-  test('a sign-in that does not go through keeps the dialog open with why, and asks again; closed, the card does not say it a second time', async () => {
+  test('once the sign-in ended, the dialog closes without drawing its form again', async () => {
     let now: Record<string, unknown> = { claude: {}, codex: {} }
     renderAdding(() => now, args => {
+      if (args[0] === 'add') now = { claude: { adding: { name: 'Dani' } }, codex: {} }
+      return { ok: true, output: {} }
+    })
+    const dialog = await add('Claude Code')
+    fireEvent.change(within(dialog).getByRole('textbox', { name: 'Whose account' }), { target: { value: 'Dani' } })
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Log in to Claude' }))
+    expect(await within(dialog).findByText(/Adding Dani's account: say yes/)).toBeTruthy()
+    const drawn: Node[] = []
+    const watch = new MutationObserver(records => drawn.push(...records.flatMap(record => [...record.addedNodes])))
+    watch.observe(document.body, { childList: true, subtree: true })
+    now = { claude: {}, codex: {} }
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull(), { timeout: 5000 })
+    watch.disconnect()
+    expect(drawn.some(node => node instanceof Element && (node.matches('input[name="account-name"]') || node.querySelector('input[name="account-name"]') !== null))).toBe(false)
+  })
+
+  test('the press stays busy from the press until a read shows the sign-in under way', async () => {
+    let now: Record<string, unknown> = { claude: {}, codex: {} }
+    renderAdding(() => now)
+    const dialog = await add('Claude Code')
+    fireEvent.change(within(dialog).getByRole('textbox', { name: 'Whose account' }), { target: { value: 'Dani' } })
+    const press = within(dialog).getByRole('button', { name: 'Log in to Claude' }) as HTMLButtonElement
+    fireEvent.click(press)
+    // The command answered, and the read after it does not show the sign-in yet.
+    await waitFor(() => expect(press.disabled).toBe(true))
+    await new Promise(resolve => setTimeout(resolve, 100))
+    expect(press.disabled).toBe(true)
+    now = { claude: { adding: { name: 'Dani' } }, codex: {} }
+    expect(await within(dialog).findByText(/Adding Dani's account/, undefined, { timeout: 5000 })).toBeTruthy()
+  })
+
+  test('a sign-in that does not go through keeps the dialog open with why, and asks again; closed, the card does not say it a second time', async () => {
+    let now: Record<string, unknown> = { claude: {}, codex: {} }
+    const calls = renderAdding(() => now, args => {
       if (args[0] === 'add') now = { claude: { adding: { name: 'Dani' } }, codex: {} }
       return { ok: true, output: {} }
     })
@@ -231,8 +274,64 @@ describe('AccountsCard', () => {
     fireEvent.click(within(dialog).getByRole('button', { name: 'Cancel' }))
     await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
     expect(screen.queryByRole('alert')).toBeNull()
+    // Said in the dialog, it is forgotten by the command too: no other card or page says it again.
+    await waitFor(() => expect(calls.some(call => call.args.join(' ') === 'add-cancel claude')).toBe(true))
     // Opened again, the old failure is not said: it is a new try.
     expect(within(await add('Claude Code')).queryByRole('alert')).toBeNull()
+  }, 15_000)
+
+  test('a sign-in that fails again with the same words gives the press back, saying why', async () => {
+    // Each read a new answer, as one over the wire is. Started, the sign-in is under way; it fails before any read sees it, as the last one did.
+    renderAdding(() => ({ claude: { failed: 'The sign-in service is not answering.' }, codex: {} }), args => (args[0] === 'add' ? { ok: true, output: { adding: { name: 'Dani' } } } : { ok: true, output: {} }))
+    const dialog = await add('Claude Code')
+    expect((await within(dialog).findByRole('alert')).textContent).toBe('The sign-in service is not answering.')
+    fireEvent.change(within(dialog).getByRole('textbox', { name: 'Whose account' }), { target: { value: 'Dani' } })
+    const press = within(dialog).getByRole('button', { name: 'Log in to Claude' }) as HTMLButtonElement
+    fireEvent.click(press)
+    await waitFor(() => expect(press.disabled).toBe(true))
+    await waitFor(() => expect(press.disabled).toBe(false), { timeout: 5000 })
+    expect(within(dialog).getByRole('alert').textContent).toBe('The sign-in service is not answering.')
+  })
+
+  test('a retry stays busy until its own command answers, though a read of the last failure lands meanwhile', async () => {
+    let now: Record<string, unknown> = { claude: {}, codex: {} }
+    let reads = 0
+    let adds = 0
+    let answer: ((done: ModuleCommandResult) => void) | undefined
+    const runComputerCommand = vi.fn(async (args: string[]): Promise<ModuleCommandResult> => {
+      if (args[0] === 'list') return { ok: true, output: { claude: [{ name: 'This computer', who: 'Ada', own: true }], codex: [] } }
+      if (args[0] === 'usage') return { ok: true, output: { claude: [], codex: [] } }
+      // Each read a new answer, as one over the wire is.
+      if (args[0] === 'adding') {
+        reads++
+        return { ok: true, output: structuredClone(now) }
+      }
+      if (args[0] !== 'add') return { ok: true, output: {} }
+      if (++adds === 1) {
+        now = { claude: { adding: { name: 'Dani' } }, codex: {} }
+        return { ok: true, output: now['claude'] }
+      }
+      // The second try's command is slow to answer.
+      return new Promise(resolve => (answer = resolve))
+    })
+    renderWithHost(<AccountsCard projects={[]} />, fakeHost('@openagt/skill-account-rotation', { runComputerCommand }))
+    const dialog = await add('Claude Code')
+    fireEvent.change(within(dialog).getByRole('textbox', { name: 'Whose account' }), { target: { value: 'Dani' } })
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Log in to Claude' }))
+    await within(dialog).findByText(/Adding Dani's account/)
+    now = { claude: { failed: 'Nobody signed in in time.' }, codex: {} }
+    expect((await within(dialog).findByRole('alert', undefined, { timeout: 5000 })).textContent).toBe('Nobody signed in in time.')
+    const press = within(dialog).getByRole('button', { name: 'Log in to Claude' }) as HTMLButtonElement
+    fireEvent.click(press)
+    await waitFor(() => expect(adds).toBe(2))
+    expect(press.disabled).toBe(true)
+    // The tab is shown again, and reads the last try's failure once more.
+    const before = reads
+    fireEvent(document, new Event('visibilitychange'))
+    await waitFor(() => expect(reads).toBeGreaterThan(before))
+    await new Promise(resolve => setTimeout(resolve, 100))
+    expect(press.disabled).toBe(true)
+    answer?.({ ok: false, error: 'Cancelled.' })
   }, 15_000)
 
   test("says the command's refusal of a name, and keeps asking", async () => {

@@ -1,5 +1,5 @@
 import { cva, type VariantProps } from 'class-variance-authority'
-import type { ButtonHTMLAttributes } from 'react'
+import type { ComponentProps } from 'react'
 import { cn } from '../../lib/utils.js'
 
 // A trimmed shadcn/ui Button — enough to judge the component model + tokens (#406).
@@ -8,7 +8,8 @@ const buttonVariants = cva(
   {
     variants: {
       variant: {
-        default: 'bg-[var(--color-primary)] text-[var(--color-primary-foreground)] hover:opacity-90',
+        default:
+          'bg-[var(--color-primary)] text-[var(--color-primary-foreground)] hover:opacity-90 focus-visible:ring-offset-2 focus-visible:ring-offset-background',
         outline:
           'border border-[var(--color-border)] bg-transparent hover:bg-[var(--color-accent)] hover:text-[var(--color-accent-foreground)]',
         ghost: 'hover:bg-[var(--color-accent)] hover:text-[var(--color-accent-foreground)]',
@@ -29,7 +30,7 @@ const buttonVariants = cva(
 )
 
 export interface ButtonProps
-  extends ButtonHTMLAttributes<HTMLButtonElement>,
+  extends ComponentProps<'button'>,
     VariantProps<typeof buttonVariants> {}
 
 export function Button({ className, variant, size, ...props }: ButtonProps) {

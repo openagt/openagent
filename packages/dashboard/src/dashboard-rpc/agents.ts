@@ -3,7 +3,7 @@ import { createRequire } from 'node:module'
 import { dirname, join } from 'node:path'
 import { agentIdOf, DEFAULT_AGENT, DEFAULT_AGENT_SKILLS, isAgentId, isAgentName, listAgents, readAgent, removeAgent, writeAgent, type AgentAccounts, type AgentRecord } from '@openagt/agent-data'
 import { carriedSkills, GROUPS } from '../project-skills/catalogue.js'
-import { onAgentAccounts, type AccountResult } from './accounts.js'
+import { onAgentAccounts, type AccountResult, type AccountRow } from './accounts.js'
 import { onGitHosts } from './logins.js'
 import { agentLoginsOn, syncLogins, type AgentLoginsOn } from '../dashboard/logins-sync.js'
 
@@ -34,10 +34,18 @@ export interface AgentsView {
   skills: { title: string; skills: AgentSkillChoice[] }[]
   /** OpenAgent's GitHub accounts on this computer, and the host one more is added at. */
   github?: { host: string; accounts: string[] }
-  /** The Claude accounts of the Permissions page, by id and name. */
-  claude: { id: string; name: string }[]
+  /** The Claude accounts of the Permissions page, by id and name; this computer's own login says when it is logged out. */
+  claude: AgentAccountChoice[]
   /** The Codex accounts, the same way. */
-  codex: { id: string; name: string }[]
+  codex: AgentAccountChoice[]
+}
+
+/** A coding agent's account an agent can be given. */
+export interface AgentAccountChoice {
+  id: string
+  name: string
+  /** This computer's own login, and the coding agent is not logged in: no run takes it while another account is there. */
+  loggedOut?: true
 }
 
 /** The group the default agent's skills are shown in. */
@@ -81,9 +89,13 @@ export async function onAgentsList(): Promise<AgentsView> {
     agents,
     skills,
     ...(provider ? { github: { host: GITHUB, accounts: provider.accounts.filter(account => account.ok).map(account => account.login) } } : {}),
-    claude: claude.accounts.map(account => ({ id: account.id, name: account.name })),
-    codex: codex.accounts.map(account => ({ id: account.id, name: account.name })),
+    claude: claude.accounts.map(accountChoice),
+    codex: codex.accounts.map(accountChoice),
   }
+}
+
+function accountChoice(account: AccountRow): AgentAccountChoice {
+  return { id: account.id, name: account.name, ...(account.loggedOut ? { loggedOut: true } : {}) }
 }
 
 /** What the page sends to save an agent: a new one has no id yet. */

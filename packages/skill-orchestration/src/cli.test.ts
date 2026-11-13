@@ -637,7 +637,7 @@ test('plan: saved beside the run\'s record, read back, and no subagent starts un
     assert.deepEqual((await run(checkout, MAIN, ['plan'])).out, { ok: false, reason: 'no-plan' })
 
     const question = await savePlan(repo, checkout, MAIN, PLAN)
-    assert.match(question, /^Start the subagents on plan [0-9a-f]{8}\?$/)
+    assert.match(question, /^Start the subagents on the plan above, 3 tasks \(plan [0-9a-f]{8}\)\?$/)
     assert.equal(await git(['show', `${DATA_BRANCH}:agents/tester@example.com/${MAIN}.plan.md`], join(dirname(repo), 'origin.git')), PLAN, 'on origin, beside the run\'s card')
     // What the command read the plan as, beside the plan itself: the shared context once, and one
     // row per task with everything but the words the agent wrote.
@@ -665,7 +665,7 @@ test('plan: saved beside the run\'s record, read back, and no subagent starts un
     await prompted(repo, MAIN, continuationPrompt(question, 'Change the plan'))
     await prompted(repo, MAIN, 'Approve')
     await prompted(repo, MAIN, `The run ${FIRST}, started for this run, ended done. Its last reply: ${approval}`)
-    await prompted(repo, MAIN, continuationPrompt('Start the subagents on plan 00000000?', 'Approve'))
+    await prompted(repo, MAIN, continuationPrompt('Start the subagents on the plan above, 3 tasks (plan 00000000)?', 'Approve'))
     await prompted(repo, MAIN, approval, 'action')
     assert.equal((await run(checkout, MAIN, ['start', '--task', TESTS])).out.reason, 'not-approved')
 

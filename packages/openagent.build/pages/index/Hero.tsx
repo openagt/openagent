@@ -1,11 +1,10 @@
 import type { CSSProperties } from 'react'
-import { COPY_LABEL, CommandChip, CommandLine, PmTabs, pickedCommand } from './commands'
-import { copyPress, useCopy } from './copy'
+import { CommandChip, CommandLine, PmTabs, usePickedCommand } from './commands'
+import { CopiedStatus, copyPress, useCopy } from './copy'
 import { BADGES, kickerStyle, mono } from './ui'
-import { useDashboardHref } from './ViewToggle'
+import { switchInPlace, useDashboardHref } from './ViewToggle'
 
 const commentStyle: CSSProperties = { color: '#859289' }
-const cmdLineStyle: CSSProperties = { display: 'flex', flexWrap: 'wrap', gap: '2px 16px' }
 
 function Badge({ label, copied }: { label: string; copied: boolean }) {
   return (
@@ -34,6 +33,7 @@ function Badge({ label, copied }: { label: string; copied: boolean }) {
 
 export function Hero() {
   const tryCopy = useCopy()
+  const tryCommand = usePickedCommand('try')
   const dashboardHref = useDashboardHref()
 
   return (
@@ -88,10 +88,11 @@ export function Hero() {
           letterSpacing: '-0.02em',
         }}
       >
-        <span
+        <del
           className="strike"
           style={{
             display: 'table',
+            textDecoration: 'none',
             position: 'relative',
             margin: '0 auto 0px',
             fontSize: 'clamp(26px, 6vw, 42px)',
@@ -100,7 +101,7 @@ export function Hero() {
           }}
         >
           Babysit AI
-        </span>
+        </del>
         Autonomous AI
       </h1>
       <p
@@ -118,6 +119,7 @@ export function Hero() {
       </p>
       <a
         href={dashboardHref}
+        onClick={switchInPlace}
         className="dashboard-cta"
         style={{
           display: 'inline-flex',
@@ -175,7 +177,7 @@ export function Hero() {
             </div>
             <div
               className="copy-box"
-              {...copyPress(COPY_LABEL.try, (e) => tryCopy.copy(pickedCommand('try'), e))}
+              {...copyPress(`Copy ${tryCommand}`, (e) => tryCopy.copy(tryCommand, e))}
               style={{
                 position: 'relative',
                 cursor: 'pointer',
@@ -187,11 +189,9 @@ export function Hero() {
                 fontSize: 'clamp(11px, 3.4vw, 15px)',
               }}
             >
-              <div style={cmdLineStyle}>
-                <CommandLine command="try" />
-                <span style={commentStyle}># One-shot (no install)</span>
-              </div>
+              <CommandLine command="try" after={<span style={commentStyle}># One-shot (no install)</span>} />
             </div>
+            <CopiedStatus copied={tryCopy.copied} />
           </div>
         </div>
         <p

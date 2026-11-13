@@ -127,6 +127,8 @@ describe('the Overview', () => {
   test("while the page is arranged, a card's own buttons are asleep: no focus, no press", async () => {
     show()
     fireEvent.click(await screen.findByRole('button', { name: 'Customize' }))
+    // The press that took Customize away hands the keyboard to Done, not to the page.
+    expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Done' }))
     expect(screen.getByText("a package's card").closest('[inert]')).not.toBeNull()
     fireEvent.click(screen.getByRole('button', { name: 'Done' }))
     expect(screen.getByText("a package's card").closest('[inert]')).toBeNull()
@@ -269,6 +271,6 @@ describe('the Overview', () => {
     fireEvent.click(screen.getByText('Add DESCRIPTION.md'))
     expect(onSelectAgent.mock.calls).toEqual([['p1', 'r1'], ['p1', 'r6']])
     expect(screen.getByText('Condense README').closest('a')?.getAttribute('href')).toBe('https://x/pull/8')
-    expect(screen.getByText('Add DESCRIPTION.md').closest('a')).toBeNull()
+    expect(screen.getByText('Add DESCRIPTION.md').closest('a')?.getAttribute('href')).toBe('/p1/r6')
   })
 })

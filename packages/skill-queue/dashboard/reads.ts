@@ -1,10 +1,12 @@
-import { usePolled, useModuleHost, type ModuleProject } from '@openagt/dashboard/module'
+import { usePolled, useModuleHost, type ModuleAgent, type ModuleProject } from '@openagt/dashboard/module'
 import { isEntryLine, readEntries } from '../src/module.js'
 
-/** One project's open entries as read, or why the command failed. */
+/** One project's open entries as read, or why the command failed, and its agents at work. */
 export interface ProjectRead {
   project: ModuleProject
   entries: string[]
+  /** The project's agents that are working now or waiting on the person: an entry one of them was asked is being worked on. */
+  working: ModuleAgent[]
   error?: string
 }
 
@@ -22,8 +24,9 @@ export function useQueueReads(projects: ModuleProject[]): { reads: ProjectRead[]
     () =>
       Promise.all(
         projects.map(async (project): Promise<ProjectRead> => {
-          const read = readEntries(await host.runCommand(project.id, ['--local']), isEntryLine)
-          return 'error' in read ? { project, entries: [], error: read.error } : { project, entries: read.entries }
+          const [read, agents] = await Promise.all([host.runCommand(project.id, ['--local']).then(result => readEntries(result, isEntryLine)), host.agents(project.id).catch(() => [])])
+          const working = agents.filter(agent => agent.status === 'running' || agent.status === 'waiting')
+          return 'error' in read ? { project, entries: [], working, error: read.error } : { project, entries: read.entries, working }
         }),
       ),
     NOTHING_READ,

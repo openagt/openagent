@@ -13,12 +13,12 @@ export function CodeWords({ text }: { text: string }) {
   )
 }
 
-/** A command to run in the project, on a line of its own: set as code, with a button that copies it. What it does is the sentence's before it, so every command lays out alike. */
+/** A command to run in the project, on a line of its own: set as code, with a button that copies it, named by the command's last word ("Copy the start command"). What it does is the sentence's before it, so every command lays out alike. */
 export function Command({ text }: { text: string }) {
   return (
     <span className="my-1.5 flex items-center gap-2">
       <code className="min-w-0 rounded bg-muted px-1.5 py-0.5 font-mono text-xs break-all text-foreground">{text}</code>
-      <CopyButton text={text} label="Copy the command" />
+      <CopyButton text={text} label={`Copy the ${text.split(' ').at(-1)} command`} />
     </span>
   )
 }

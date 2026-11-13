@@ -1,4 +1,4 @@
-import { useRef, useState, type KeyboardEvent } from 'react'
+import { useId, useRef, useState, type FormEvent, type KeyboardEvent } from 'react'
 import type { CustomPreset } from '../../src/index.js'
 import { Button } from './ui/button.js'
 import { Input } from './ui/input.js'
@@ -39,15 +39,19 @@ export function PresetCreatePanel({
   const [prompt, setPrompt] = useState(currentPrompt)
   const [scope, setScope] = useState<PresetScope>('user')
 
-  const save = () => {
-    const trimmedLabel = label.trim()
-    const trimmedPrompt = prompt.trim()
+  // What an empty field needs, said under it while Save waits for it.
+  const needs = useId()
+  const trimmedLabel = label.trim()
+  const trimmedPrompt = prompt.trim()
+
+  const save = (e?: FormEvent) => {
+    e?.preventDefault()
     if (!trimmedLabel || !trimmedPrompt) return
     onSave({ id: newId(), label: trimmedLabel, prompt: trimmedPrompt }, canSaveToProject ? scope : 'user')
   }
 
   // ⌘/Ctrl+Enter saves, matching the composer (#948); Esc closes via the Dialog itself.
-  const onKeyDown = (e: KeyboardEvent<HTMLDivElement>) => {
+  const onKeyDown = (e: KeyboardEvent<HTMLFormElement>) => {
     if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') {
       e.preventDefault()
       save()
@@ -56,7 +60,7 @@ export function PresetCreatePanel({
 
   return (
     <Dialog open onOpenChange={next => { if (!next) onCancel() }} title="Save prompt" initialFocus={labelField}>
-      <div className="flex w-full flex-col gap-2" onKeyDown={onKeyDown}>
+      <form className="flex w-full flex-col gap-2" onKeyDown={onKeyDown} onSubmit={save}>
       <Input
         name="prompt-name"
         ref={labelField}
@@ -64,19 +68,33 @@ export function PresetCreatePanel({
         value={label}
         maxLength={LABEL_MAX}
         placeholder="Name"
+        aria-label="Name"
+        {...(!trimmedLabel ? { 'aria-describedby': `${needs}-name` } : {})}
         disabled={busy}
         onChange={e => setLabel(e.target.value)}
         className="h-8 bg-background px-2"
       />
+      {!trimmedLabel && (
+        <p id={`${needs}-name`} className="text-xs text-muted-foreground">
+          Name it to save it: Commands lists it by its name.
+        </p>
+      )}
       <Textarea
         name="prompt"
         value={prompt}
         placeholder="The prompt to save…"
+        aria-label="Prompt"
+        {...(!trimmedPrompt ? { 'aria-describedby': `${needs}-prompt` } : {})}
         disabled={busy}
         rows={5}
         onChange={e => setPrompt(e.target.value)}
         className="resize-y px-2 py-1 font-mono text-xs"
       />
+      {!trimmedPrompt && (
+        <p id={`${needs}-prompt`} className="text-xs text-muted-foreground">
+          Write the prompt it loads into the box.
+        </p>
+      )}
       {canSaveToProject && (
         <div className="flex items-center gap-2 text-xs text-[var(--color-muted-foreground)]">
           <span>Save to</span>
@@ -90,8 +108,8 @@ export function PresetCreatePanel({
                 aria-pressed={scope === value}
                 className={
                   scope === value
-                    ? 'bg-foreground px-2 py-0.5 text-background'
-                    : 'px-2 py-0.5 text-foreground hover:bg-[var(--color-muted)]'
+                    ? 'bg-foreground px-2 py-1 text-background'
+                    : 'px-2 py-1 text-foreground hover:bg-[var(--color-muted)]'
                 }
               >
                 {value === 'user' ? 'Just me' : 'This project'}
@@ -107,11 +125,11 @@ export function PresetCreatePanel({
         <Button type="button" variant="ghost" size="sm" onClick={onCancel}>
           Cancel
         </Button>
-        <Button type="button" size="sm" disabled={busy || !label.trim() || !prompt.trim()} onClick={save}>
+        <Button type="submit" size="sm" disabled={busy || !trimmedLabel || !trimmedPrompt}>
           Save prompt
         </Button>
       </div>
-      </div>
+      </form>
     </Dialog>
   )
 }

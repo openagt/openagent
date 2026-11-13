@@ -1,6 +1,6 @@
 import type { OpenAgentEvent } from '../../src/index.js'
 import { AgentActionsMenu } from './AgentActionsMenu.js'
-import { PaneMenu, PaneToggles } from './Panes.js'
+import { PaneMenu, PaneToggles, TopBar } from './Panes.js'
 import { ShowSidebarButton } from './SidebarToggle.js'
 import { SESSIONS_ID } from '../../src/project-address.js'
 
@@ -25,13 +25,15 @@ export function ProjectActions({
 }) {
   return (
     // As an agent's top bar does, on a phone the row keeps its start free for the menu's button.
-    <div className="flex h-11 shrink-0 items-center gap-2 overflow-hidden pr-2 md:pl-4 max-md:pl-11">
-      <ShowSidebarButton />
-      <PaneMenu />
-      <div className="grow shrink-0" />
-      {/* No project, no menu of a project's. */}
-      {projectId !== SESSIONS_ID && <ProjectMenu projectId={projectId} onProjectRemoved={onProjectRemoved} />}
-      <PaneToggles />
-    </div>
+    <TopBar>
+      <div className="flex h-11 shrink-0 items-center gap-2 overflow-hidden pr-2 md:pl-4 max-md:pl-11">
+        <ShowSidebarButton />
+        <PaneMenu />
+        <div className="grow shrink-0" />
+        {/* No project, no menu of a project's. */}
+        {projectId !== SESSIONS_ID && <ProjectMenu projectId={projectId} onProjectRemoved={onProjectRemoved} />}
+        <PaneToggles />
+      </div>
+    </TopBar>
   )
 }

@@ -26,6 +26,7 @@ import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { FakeDriver, QUESTION_TAG, continuationPrompt, logDiaryFile, parseQuestion, type LogEndStatus } from '@openagt/agent-driver'
 import { nodeGitRunner } from '@openagt/agent-data'
+import { isPublish, type Publish } from '@openagt/agent-runner'
 import { agentBranchName, attachCheckout, createCheckout, reclaimWorktree, worktreeBranch, worktreePath } from '@openagt/skill-branches'
 import { findRun, parseRunCard, readDiary, writeRun, type AnyDiaryLine, type RunCard } from '@openagt/skill-logs'
 import { agentIdFromStartedAt } from '../agent-id.js'
@@ -45,6 +46,12 @@ function record(entry: Record<string, unknown>): void {
 /** The run's own process, detached from the hook line that answers for it. */
 function detach(args: string[]): void {
   spawn(process.execPath, [fileURLToPath(import.meta.url), ...args], { cwd: repo, detached: true, stdio: 'ignore', env: process.env }).unref()
+}
+
+/** How far the run takes its work, on its card as agent-runner keeps it: the level its hook was given, none for `nothing`, else the one it had. */
+function publishOf(given: string | undefined, had: unknown): { publish?: Publish } {
+  if (isPublish(given)) return { publish: given }
+  return given === undefined && isPublish(had) ? { publish: had } : {}
 }
 
 async function exists(path: string): Promise<boolean> {
@@ -73,7 +80,11 @@ async function session(id: string, checkout: string, prompt: string, card: Omit<
   let lastText = ''
   try {
     if (prompt.includes('hold')) {
-      while (!stop.signal.aborted && !(await exists(join(dir, 'go')))) await new Promise(r => setTimeout(r, 50))
+      while (!stop.signal.aborted && !(await exists(join(dir, 'go')))) {
+        // Its checkout removed under it (the demo's home gone): nothing is left to release it or to write to.
+        if (!(await exists(checkout))) return
+        await new Promise(r => setTimeout(r, 50))
+      }
     }
     if (prompt.includes('commit') && !continued) {
       await writeFile(join(checkout, 'work.txt'), `${prompt}\n`)
@@ -122,8 +133,9 @@ async function main(): Promise<void> {
   if (mode === 'run' && runId) {
     const prompt = process.env['PROMPT'] ?? ''
     const checkout = await createCheckout(repo, { agentId: runId }, git)
-    const caller = { pid: process.pid, host: hostname(), workspace: checkout.path }
-    await session(runId, checkout.path, prompt, { id: runId, startedAt: new Date().toISOString(), intent: prompt, driver: process.env['DRIVER'] ?? 'fake', ...(process.env['MODEL'] ? { model: process.env['MODEL'] } : {}), branch: checkout.branch, caller }, false)
+    const caller = { pid: process.pid, host: hostname(), workspace: checkout.path, ...publishOf(process.env['PUBLISH'], undefined) }
+    // The coding agent named as agent-runner names it, its default when the start named none.
+    await session(runId, checkout.path, prompt, { id: runId, startedAt: new Date().toISOString(), intent: prompt, driver: process.env['DRIVER'] ?? 'claude-code', ...(process.env['MODEL'] ? { model: process.env['MODEL'] } : {}), branch: checkout.branch, caller }, false)
     return
   }
   if (mode === 'continue' && runId) {
@@ -140,7 +152,8 @@ async function main(): Promise<void> {
     const answer = process.env['ANSWER']
     const prompt = answer !== undefined ? continuationPrompt(String(question?.['title'] ?? ''), answer) : (process.env['TEXT'] ?? '')
     const { status: _status, endedAt: _endedAt, ...rest } = card
-    await session(runId, checkout, prompt, { ...rest, caller: { ...card.caller, pid: process.pid, host: hostname(), workspace: checkout } }, true)
+    const { publish: had, ...caller } = card.caller ?? {}
+    await session(runId, checkout, prompt, { ...rest, caller: { ...caller, pid: process.pid, host: hostname(), workspace: checkout, ...publishOf(process.env['PUBLISH'], had) } }, true)
     return
   }
   throw new Error(`fake-run-bin: unknown mode ${mode}`)

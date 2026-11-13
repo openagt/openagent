@@ -5,6 +5,7 @@ import {
   checkForUpdate,
   compareVersions,
   formatUpdateStatus,
+  updateCommand,
   type VersionFetcher,
 } from './update-check.js'
 
@@ -76,6 +77,14 @@ test('formatUpdateStatus: update-available line', () => {
     formatUpdateStatus({ kind: 'update-available', current: '1.2.3', latest: '1.3.0' }),
     `  v1.3.0 is out. Run: npm i -g ${PACKAGE_NAME}`,
   )
+})
+
+test('the update line names what updates the copy that runs: the install\'s own by its installer, any other by npm', () => {
+  const available = { kind: 'update-available', current: '0.65.0', latest: '0.66.0' } as const
+  assert.equal(formatUpdateStatus(available, updateCommand('/home/ada/.local/share/openagent/node_modules/@openagt/dashboard', 'linux')), '  v0.66.0 is out. Run: npx @openagt/install@latest')
+  assert.equal(formatUpdateStatus(available, updateCommand('/Users/ada/Library/Application Support/OpenAgent/node_modules/@openagt/dashboard', 'darwin')), '  v0.66.0 is out. Run: npx @openagt/install@latest')
+  assert.equal(formatUpdateStatus(available, updateCommand('/usr/lib/node_modules/@openagt/dashboard', 'linux')), `  v0.66.0 is out. Run: npm i -g ${PACKAGE_NAME}`)
+  assert.equal(formatUpdateStatus(available, updateCommand('/home/ada/.npm/_npx/1a2b/node_modules/@openagt/dashboard', 'linux')), `  v0.66.0 is out. Run: npm i -g ${PACKAGE_NAME}`)
 })
 
 test('formatUpdateStatus: unknown -> undefined (print nothing)', () => {

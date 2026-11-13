@@ -35,6 +35,9 @@ function useStartWait(waited: string | boolean | null, read: () => unknown, ever
   }, [waited, read, everyMs])
 }
 
+/** Stable initial for a project's runs, so it does not churn on every render. */
+const NO_AGENTS: AgentMeta[] = []
+
 /**
  * `everyMs`: how often the list is read, every two seconds by default, for a run's page whose
  * status a person watches; a page that only shows the list beside it (the Overview) reads it less.
@@ -44,12 +47,13 @@ function useStartWait(waited: string | boolean | null, read: () => unknown, ever
 export function useAgents(projectId: string | null, starting: string | null = null, everyMs = 2000): { agents: AgentMeta[]; reload: () => void; loaded: boolean } {
   // `reload` is the shared guarded one now: it used to be a second, unguarded copy of the
   // read, so an agent started just before a project switch could write the old project's agents.
-  const { value: agents, reload, loaded } = usePolled<AgentMeta[]>(
+  // Kept for the next visit: the rail shows the project's last list at once, while it is read again.
+  const { value: agents, reload, loaded, stale } = usePolled<AgentMeta[]>(
     projectId ? () => onAgents(projectId) : null,
-    [],
+    NO_AGENTS,
     useRunsPace(everyMs),
     [projectId],
-    undefined,
+    projectId ? { remember: `agents:${projectId}`, stored: true } : undefined,
     runsAgain(projectId ?? undefined),
   )
   const naming = usePreferences().nameRuns !== false
@@ -58,8 +62,9 @@ export function useAgents(projectId: string | null, starting: string | null = nu
     projectId !== null && starting !== null && (started === undefined || (started.status === 'running' && started.branch === undefined) || awaitingName(started, naming))
   useStartWait(settingUp && starting, reload, STARTING_EVERY_MS)
   // `loaded` is what lets the shell tell a session that is gone from one it has not read yet
-  // (#784): a bookmarked link must not flash "gone" while the first read is still out.
-  return { agents, reload, loaded }
+  // (#784): a bookmarked link must not flash "gone" while the first read is still out, nor while
+  // only an earlier visit's list is shown.
+  return { agents, reload, loaded: loaded && !stale }
 }
 
 /** Stable initial for the cross-project recents poll, so it does not churn on every render. */
@@ -74,10 +79,10 @@ const NO_RECENTS: RecentAgent[] = []
  * the list is shown.
  */
 export function useRecentAgents(shown: boolean, started: { id: string | null; projectId: string | null; at: number }): { recentAgents: RecentAgent[]; reload: () => Promise<void>; loaded: boolean } {
-  const { value: recentAgents, reload, loaded } = usePolled<RecentAgent[]>(shown ? onRecentAgents : null, NO_RECENTS, useRunsPace(10_000), [shown], undefined, runsAgain(undefined))
+  const { value: recentAgents, reload, loaded, stale } = usePolled<RecentAgent[]>(shown ? onRecentAgents : null, NO_RECENTS, useRunsPace(10_000), [shown], { remember: 'recent-agents', stored: true }, runsAgain(undefined))
   const naming = usePreferences().nameRuns !== false
   const row = started.id === null ? undefined : recentAgents.find(recent => recent.agent.id === started.id && recent.projectId === started.projectId)
   const waited = shown && started.id !== null && Date.now() - started.at < STARTING_AT_MOST_MS && (row === undefined || awaitingName(row.agent, naming))
   useStartWait(waited, reload, 1000)
-  return { recentAgents, reload, loaded }
+  return { recentAgents, reload, loaded: loaded && !stale }
 }

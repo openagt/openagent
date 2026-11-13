@@ -407,7 +407,8 @@ export async function resumeRun(repo: string, opts: ResumeOptions): Promise<RunO
       const title = typeof question?.['title'] === 'string' ? (question['title'] as string) : 'your question'
       prompt = continuationPrompt(title, opts.answer)
     } else if (opts.text) {
-      prompt = opts.text
+      // A run stopped before its agent took its own prompt never had it: it goes first, the words after it.
+      prompt = card.intent !== undefined && !diary.some(line => line.kind === 'start') ? `${card.intent}\n\n${opts.text}` : opts.text
     } else {
       throw new Error('a text or an answer is needed to resume a run')
     }
@@ -419,6 +420,8 @@ export async function resumeRun(repo: string, opts: ResumeOptions): Promise<RunO
     // A branch that was gone everywhere was just made again, from where it starts as that is now:
     // that is where the run's own work begins. One still on origin came back with its work.
     const restarted = checkout.again ? await startCommit(checkout.path, here.git) : {}
+    // What the leg that ended left in the inbox it did not take: never this leg's to send.
+    await takeInbox(inboxPath(checkout.path))
 
     // The record is written running again over the ended one, so every reader sees the run in flight.
     // The level its record names, or the one this resume gives it from here on.

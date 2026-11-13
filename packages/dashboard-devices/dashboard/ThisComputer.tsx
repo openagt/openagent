@@ -4,7 +4,7 @@ import { Button, Switch, buttonVariants, cn } from '@openagt/dashboard/module'
 import { setSwitch, setTailscale } from './devices.js'
 import { reach, sharedReach } from './servers.js'
 import { hasDoor, hasServer } from './model.js'
-import { Problem, RenameForm } from './parts.js'
+import { Problem, RenameForm, useRenaming } from './parts.js'
 import type { Devices } from './use-devices.js'
 
 // Settings › Devices, at the top: this computer, and how the person's devices reach it. On this
@@ -47,7 +47,7 @@ export function ThisComputer({ d, start }: { d: Devices; /** The start page: not
   const [confirming, setConfirming] = useState(false)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | undefined>()
-  const [renaming, setRenaming] = useState(false)
+  const { renaming, open: rename, close: renamed, press: renamePress } = useRenaming()
   const name = d.machines?.name ?? 'This computer'
 
   const change = async (run: () => Promise<{ ok: true } | { ok: false; error: string }>, reload: () => Promise<unknown>): Promise<boolean> => {
@@ -113,7 +113,7 @@ export function ThisComputer({ d, start }: { d: Devices; /** The start page: not
                 await d.reloadMachines().catch(() => {})
                 return renamed
               }}
-              onClose={() => setRenaming(false)}
+              onClose={renamed}
             />
           ) : (
             <p className="truncate text-sm font-medium">
@@ -124,7 +124,7 @@ export function ThisComputer({ d, start }: { d: Devices; /** The start page: not
         </div>
         {/* Its owner names it, and everyone sees that name: a person the owner invited has no Rename. */}
         {!renaming && d.machines?.renames === true && (
-          <Button size="sm" variant="ghost" onClick={() => setRenaming(true)}>
+          <Button ref={renamePress} size="sm" variant="ghost" onClick={rename}>
             <Pencil className="h-3.5 w-3.5" aria-hidden />
             Rename
           </Button>

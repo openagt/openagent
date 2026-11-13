@@ -346,7 +346,7 @@ async function addDevice(io: CliIO, said?: string): Promise<Given> {
     // After the code, what the door's key is known by: a device that opens the link knows the door again by it.
     return { url: codeLink(`https://${where}`, code, fingerprint), where, code: shownCode(code), expires, ...(person !== undefined ? { person } : {}) }
   }
-  if (!status.on) throw new Refused('On this Wi-Fi is off: turn it on first')
+  if (!status.on) throw new Refused('On this Wi-Fi is off: turn it on first, with devices on')
   if (!status.listening) throw new Refused(status.problem ?? 'the door is not open')
   const port = store.listening!.port
   const name = await nameAddress(io.address)

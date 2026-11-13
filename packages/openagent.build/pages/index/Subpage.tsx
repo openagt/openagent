@@ -9,26 +9,32 @@ export const pStyle: CSSProperties = { margin: 0, fontSize: 15, lineHeight: 1.6,
 /** A page beside the landing page (/press, /go-to-dashboard): the site's nav and footer around one column, its title and lead first. */
 export function Subpage({ title, lead, children }: { title: string; lead: string; children: ReactNode }) {
   return (
-    <>
+    // At least the window's height, so a short page's footer sits at its bottom.
+    <div style={{ display: 'flex', flexDirection: 'column', minHeight: '100dvh' }}>
       <TopNav />
-      <main
-        style={{
-          maxWidth: 680,
-          margin: '0 auto',
-          padding: 'clamp(40px, 8vw, 80px) clamp(14px, 4vw, 24px) clamp(72px, 12vw, 120px)',
-          display: 'flex',
-          flexDirection: 'column',
-          gap: 40,
-        }}
-      >
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-          <h1 style={h2Style}>{title}</h1>
-          <p style={pStyle}>{lead}</p>
-        </div>
-        {children}
-      </main>
-      <Footer />
-    </>
+      <div style={{ flexGrow: 1 }}>
+        <main
+          style={{
+            maxWidth: 680,
+            margin: '0 auto',
+            padding: 'clamp(40px, 8vw, 80px) clamp(14px, 4vw, 24px) clamp(72px, 12vw, 120px)',
+            display: 'flex',
+            flexDirection: 'column',
+            gap: 40,
+          }}
+        >
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+            <h1 style={h2Style}>{title}</h1>
+            <p style={pStyle}>{lead}</p>
+          </div>
+          {children}
+        </main>
+      </div>
+      {/* A block, not a flex item: as one, the footer's auto margins shrink it to its words. */}
+      <div>
+        <Footer />
+      </div>
+    </div>
   )
 }
 

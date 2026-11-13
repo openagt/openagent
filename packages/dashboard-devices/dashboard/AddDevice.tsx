@@ -217,7 +217,7 @@ function AddPhone({ d, onClose }: { d: Devices; onClose: () => void }) {
     return (
       <Dialog open onOpenChange={open => !open && onClose()} title="Add phone">
         <div className="space-y-4 text-sm">
-          <p>{status?.on ? 'The door on this Wi-Fi is opening. One moment.' : 'A phone on this Wi-Fi reaches this computer once "On this Wi-Fi" is on.'}</p>
+          <p>{status?.on ? 'The door on this Wi-Fi is opening. One moment.' : 'Turning this on opens this computer to the phones on this Wi-Fi.'}</p>
           {!status?.on && <p className="text-xs text-muted-foreground">{WARNING}</p>}
           {error !== undefined && <Problem>{error}</Problem>}
           <div className="flex justify-end gap-2">
@@ -279,6 +279,9 @@ function Choice({ on, icon: Icon, title, words, recommended = false, onPick }: {
   )
 }
 
+/** How long the Wi-Fi is looked on before it is said that nothing was found yet: a look takes a few seconds itself. */
+const NONE_YET_MS = 10_000
+
 /** How long the Wi-Fi rests between two looks, while the list is on the page: each look takes a few seconds itself. */
 const FIND_REST_MS = 3_000
 
@@ -312,6 +315,11 @@ function AddComputer({ d, onClose }: { d: Devices; onClose: () => void }) {
   const [giving, setGiving] = useState(false)
   const [connecting, setConnecting] = useState<FoundComputer | undefined>()
   const { found, error } = useFound(d, !giving && connecting === undefined)
+  const [noneYet, setNoneYet] = useState(false)
+  useEffect(() => {
+    const timer = setTimeout(() => setNoneYet(true), NONE_YET_MS)
+    return () => clearTimeout(timer)
+  }, [])
   const server = serversOf(d)[0]
 
   if (giving && server) return <GiveCode d={d} server={server} onClose={onClose} />
@@ -321,7 +329,7 @@ function AddComputer({ d, onClose }: { d: Devices; onClose: () => void }) {
   return (
     <Dialog open onOpenChange={next => !next && onClose()} title="Add computer">
       <div className="space-y-3">
-        <Waiting>Looking on this Wi-Fi…</Waiting>
+        <Waiting>{noneYet && !found?.length ? 'No computer found on this Wi-Fi yet. Still looking…' : 'Looking on this Wi-Fi…'}</Waiting>
         {error !== undefined && <Problem>{error}</Problem>}
         {found !== undefined && found.length > 0 && (
           <ul aria-label="On this Wi-Fi" className="divide-y divide-border border-y border-border">

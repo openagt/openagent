@@ -110,12 +110,16 @@ export function mintedIn(shown: string): string | undefined {
   return MINTED.exec(words(shown))?.[1]
 }
 
+/** What the lent terminal says when there is no Claude Code to start. */
+const NOT_INSTALLED = 'Claude Code is not on this computer.'
+
 /** Why Claude Code ended without a login, from what it showed: its last lines, never a part of a login. */
 export function notMinted(shown: string): string {
   const text = words(shown)
   // However the screen was drawn: where a login or its heading shows, none of the screen is told.
   if (/YourOAuthtoken|sk-ant-/.test(text.replace(/\s/g, ''))) return 'Claude Code made a login, and this OpenAgent could not read it off what Claude Code showed.'
   const lines = [...new Set(text.split('\n').map(line => line.trim().replace(/\s+/g, ' ')).filter(line => line && !STARTED_AS.test(line)))]
+  if (lines.includes(NOT_INSTALLED)) return NOT_INSTALLED
   return ['Claude Code ended without a login.', ...lines.slice(-5)].join('\n')
 }
 
@@ -181,7 +185,7 @@ const STARTED_AS = /^started as \d+$/
  */
 export const mintClaude: Mint = ({ signal, timeoutMs = MINT_TIMEOUT_MS, command = 'claude setup-token', onLink, onRefused } = {}) =>
   new Promise(resolve => {
-    const inner = `echo "started as $$"; stty cols ${COLUMNS} rows ${ROWS}; command -v ${command.split(' ')[0]} >/dev/null || { echo "Claude Code is not on this computer."; exit 1; }; exec ${command}`
+    const inner = `echo "started as $$"; stty cols ${COLUMNS} rows ${ROWS}; command -v ${command.split(' ')[0]} >/dev/null || { echo "${NOT_INSTALLED}"; exit 1; }; exec ${command}`
     const lent = process.platform === 'darwin' ? 'script -q /dev/null sh -c "$0"' : 'script -q -e -c "$0" /dev/null'
     // On Linux `script` starts its program with the person's own shell, and the line above is written for sh.
     const child = spawn('sh', ['-c', `cat | { ${lent}; kill 0; }`, inner], { stdio: ['pipe', 'pipe', 'pipe'], detached: true, env: { ...process.env, SHELL: '/bin/sh' } })

@@ -40,6 +40,12 @@ describe('QuestionPanel', () => {
     expect(screen.getByRole('button', { name: 'Submit' })).toBeTruthy()
   })
 
+  test('Submit names its keys where there is a keyboard, never on a touch screen', () => {
+    render(panel({ active: true }))
+    const keys = screen.getByRole('button', { name: 'Submit' }).querySelector('kbd')!.parentElement!
+    expect(keys.className.split(' ')).toContain('pointer-coarse:hidden')
+  })
+
   test('the recommended option starts picked; picking a row sends nothing until Submit', async () => {
     sendChoice.mockResolvedValue({ ok: true })
     render(panel())
@@ -50,6 +56,14 @@ describe('QuestionPanel', () => {
     expect(sendChoice).not.toHaveBeenCalled()
     fireEvent.click(screen.getByRole('button', { name: 'Submit' }))
     await waitFor(() => expect(sendChoice).toHaveBeenCalledWith('p1', 'await-choices', 'lite', 'r1'))
+  })
+
+  test('the question a session opens on has the focus on its picked option; one asked later leaves the focus where it is', () => {
+    render(panel({ choice: { ...choice, recommended: 'lite' }, focused: true }))
+    expect(document.activeElement).toBe(option(/SQLite/))
+    cleanup()
+    render(panel())
+    expect(document.activeElement).toBe(document.body)
   })
 
   test('the recommended option starts picked wherever it stands in the list', () => {

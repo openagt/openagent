@@ -1,3 +1,6 @@
+import { join, resolve, sep } from 'node:path'
+import { fileURLToPath } from 'node:url'
+
 /**
  * CLI "up-to-date?" check (#312): after the bare-`openagent` version footer,
  * tell the user whether a newer version is published on npm. Display only;
@@ -72,13 +75,28 @@ export async function checkForUpdate(
     : { kind: 'up-to-date', current }
 }
 
+/** This package's folder as it runs: this file is in its `dist/cli`. */
+const RUNNING_FROM = fileURLToPath(new URL('../..', import.meta.url))
+
+/** The end of the path of the dashboard `@openagt/install` starts at login, in the folder it keeps it in (its platforms' `appDir`). */
+const INSTALLED_AT: Partial<Record<NodeJS.Platform, string>> = {
+  linux: join('openagent', 'node_modules', '@openagt', 'dashboard'),
+  darwin: join('Library', 'Application Support', 'OpenAgent', 'node_modules', '@openagt', 'dashboard'),
+}
+
+/** The command that updates the copy of the dashboard in `dir`: the install's own copy by its installer, which `npm i -g` would leave as it was; any other by npm. */
+export function updateCommand(dir: string = RUNNING_FROM, platform: NodeJS.Platform = process.platform): string {
+  const installed = INSTALLED_AT[platform]
+  return installed !== undefined && resolve(dir).endsWith(sep + installed) ? 'npx @openagt/install@latest' : `npm i -g ${PACKAGE_NAME}`
+}
+
 /** The one-line message to print for a status, or undefined for 'unknown' (print nothing). */
-export function formatUpdateStatus(status: UpdateStatus): string | undefined {
+export function formatUpdateStatus(status: UpdateStatus, command: string = updateCommand()): string | undefined {
   switch (status.kind) {
     case 'up-to-date':
       return '  Up to date.'
     case 'update-available':
-      return `  v${status.latest} is out. Run: npm i -g ${PACKAGE_NAME}`
+      return `  v${status.latest} is out. Run: ${command}`
     case 'unknown':
       return undefined
   }

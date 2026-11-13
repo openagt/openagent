@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { Input, MAX_SPEND_OFFSET, SettingsRow, SettingsSection, useModuleHost, usePolled, type ModuleSettingsProps } from '@openagt/dashboard/module'
+import { Input, MAX_SPEND_OFFSET, inPlace, SettingsRow, SettingsSection, useModuleHost, useOpenAgentDown, usePolled, type ModuleSettingsProps } from '@openagt/dashboard/module'
 import { loosestSpendOffset, notAsked, offsetsThatDiffer, readSchedulers, schedulersKey, saveSpendOffset, typedOffset, type SchedulerRow } from './schedulers.js'
 
 // Settings › Scheduler: how far past the quota boundary scheduled work may still start. Each
@@ -17,6 +17,9 @@ export function SchedulerSettings({ projects }: ModuleSettingsProps) {
   const key = projects.map(p => p.id).join(',')
   const { value: rows, loaded, reload } = usePolled(() => readSchedulers(host, projects), EMPTY, 10_000, [key], { remember: schedulersKey(key) })
   const [error, setError] = useState<string | undefined>()
+  const down = useOpenAgentDown()
+  // The offset just saved, said until it is changed again.
+  const [offsetSaved, setOffsetSaved] = useState(false)
 
   // The offset as typed, kept until a read made after the save brings it back.
   const read = loosestSpendOffset(rows)
@@ -32,6 +35,7 @@ export function SchedulerSettings({ projects }: ModuleSettingsProps) {
   const offset = typed ?? read
   const setOffset = (points: number): void => {
     setTyped(points)
+    setOffsetSaved(false)
     clearTimeout(timer.current)
     timer.current = setTimeout(() => {
       setError(undefined)
@@ -41,7 +45,7 @@ export function SchedulerSettings({ projects }: ModuleSettingsProps) {
         if (!saved.ok) {
           setTyped(undefined)
           setError(`The spend offset was not saved: ${saved.error}`)
-        }
+        } else setOffsetSaved(true)
         await reload().catch(() => {})
       })
     }, OFFSET_SAVE_DELAY_MS)
@@ -57,11 +61,7 @@ export function SchedulerSettings({ projects }: ModuleSettingsProps) {
           How far past the quota scheduled work may go, on this machine. What a project starts by itself is on the{' '}
           <a
             href={host.pageHref('automations')}
-            onClick={event => {
-              if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return
-              event.preventDefault()
-              host.openPage('automations')
-            }}
+            onClick={inPlace(() => host.openPage('automations'))}
             className="underline hover:text-foreground"
           >
             Automations page
@@ -83,6 +83,8 @@ export function SchedulerSettings({ projects }: ModuleSettingsProps) {
               value={text ?? String(Math.round(offset * 10) / 10)}
               min={-MAX_SPEND_OFFSET}
               max={MAX_SPEND_OFFSET}
+              disabled={down}
+              step={0.1}
               onChange={e => {
                 const raw = e.target.value
                 setText(raw)
@@ -96,6 +98,11 @@ export function SchedulerSettings({ projects }: ModuleSettingsProps) {
             />
           }
         />
+      )}
+      {offsetSaved && (
+        <p role="status" className="py-2 text-xs text-muted-foreground">
+          Saved.
+        </p>
       )}
       {unread.map(row => (
         <p key={row.project.id} role="alert" className="py-2 text-xs text-danger">{`The scheduler of ${row.project.name} could not be read: ${row.error}`}</p>
