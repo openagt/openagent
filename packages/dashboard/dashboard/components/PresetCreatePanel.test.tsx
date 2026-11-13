@@ -23,6 +23,22 @@ describe('PresetCreatePanel (#649)', () => {
     expect((screen.getByRole('button', { name: 'Save prompt' }) as HTMLButtonElement).disabled).toBe(true)
   })
 
+  test('Enter in the name saves, and each field is named and says what it needs while it is empty', () => {
+    const onSave = vi.fn()
+    render(<PresetCreatePanel currentPrompt="" busy={false} canSaveToProject={false} onSave={onSave} onCancel={() => {}} />)
+    const name = screen.getByRole('textbox', { name: 'Name' })
+    const prompt = screen.getByRole('textbox', { name: 'Prompt' })
+    const needs = (field: HTMLElement) => document.getElementById(field.getAttribute('aria-describedby') ?? '')?.textContent
+    expect(needs(name)).toBe('Name it to save it: Commands lists it by its name.')
+    expect(needs(prompt)).toBe('Write the prompt it loads into the box.')
+    fireEvent.change(name, { target: { value: 'My preset' } })
+    fireEvent.change(prompt, { target: { value: 'sweep it' } })
+    expect(name.hasAttribute('aria-describedby')).toBe(false)
+    expect(prompt.hasAttribute('aria-describedby')).toBe(false)
+    fireEvent.submit(name.closest('form')!)
+    expect((onSave.mock.calls[0]![0] as CustomPreset).label).toBe('My preset')
+  })
+
   test('with a project open, saving "This project" reports the project scope (#1025)', () => {
     const onSave = vi.fn()
     render(<PresetCreatePanel currentPrompt="shared prompt" busy={false} canSaveToProject onSave={onSave} onCancel={() => {}} />)
