@@ -269,6 +269,6 @@ describe('the Overview', () => {
     fireEvent.click(screen.getByText('Add DESCRIPTION.md'))
     expect(onSelectAgent.mock.calls).toEqual([['p1', 'r1'], ['p1', 'r6']])
     expect(screen.getByText('Condense README').closest('a')?.getAttribute('href')).toBe('https://x/pull/8')
-    expect(screen.getByText('Add DESCRIPTION.md').closest('a')).toBeNull()
+    expect(screen.getByText('Add DESCRIPTION.md').closest('a')?.getAttribute('href')).toBe('/p1/r6')
   })
 })

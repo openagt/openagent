@@ -390,6 +390,8 @@ export interface ModuleHost {
   read(projectId: string, name: string, input?: Record<string, unknown>): Promise<ModuleReadResult>
   /** Open one agent's page in the dashboard: its live feed while it runs, its record after. */
   openAgent(projectId: string, agentId: string): void
+  /** The address of one agent's page: a link's `href`, for a link that also opens in a new tab. */
+  agentHref(projectId: string, agentId: string): string
   /**
    * Open a page a module adds (this one's or another's), at a sub-path, in the project picked in
    * the dashboard, or in `projectId`, which is then the one picked: `openPage('tickets', [file], projectId)`.

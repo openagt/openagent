@@ -1,4 +1,4 @@
-import { useState, type ComponentType } from 'react'
+import { useContext, useState, type ComponentType } from 'react'
 import { ArrowRight, CircleHelp, FilePen, GitBranch, GitPullRequest } from 'lucide-react'
 import type { Intervention } from '../../src/index.js'
 import { interventionKey } from '../../src/client.js'
@@ -6,6 +6,8 @@ import { Tooltip, TooltipTrigger, TooltipContent } from './ui/tooltip.js'
 import { cn } from '../lib/utils.js'
 import { formatRelative } from '../lib/format-date.js'
 import { OnComputer } from './MachineMark.js'
+import { HostServicesContext, INERT_HOST_SERVICES } from '../lib/host-services.js'
+import { inPlace } from '../lib/in-place.js'
 
 /**
  * What a person does next for one kind of row, said the same wherever the row is: the Human Queue,
@@ -71,6 +73,7 @@ export function HumanQueueList({
   /** For a row that somehow names no run: its project, rather than nothing. */
   onOpenProject?: ((projectId: string) => void) | undefined
 }) {
+  const services = useContext(HostServicesContext) ?? INERT_HOST_SERVICES
   const [all, setAll] = useState(false)
   const shown = all ? items : items.slice(0, SHOWN_AT_FIRST)
   const hidden = items.length - SHOWN_AT_FIRST
@@ -115,14 +118,12 @@ export function HumanQueueList({
               <Tooltip>
                 <TooltipTrigger
                   render={
-                    item.kind === 'pr' && !item.agentId ? (
+                    item.agentId ? (
+                      <a href={services.agentHref(item.projectId, item.agentId)} onClick={inPlace(() => onOpenAgent(item.projectId, item.agentId!))} className={rowClass} />
+                    ) : item.kind === 'pr' ? (
                       <a href={item.url} target="_blank" rel="noreferrer" className={rowClass} />
                     ) : (
-                      <button
-                        type="button"
-                        onClick={() => (item.agentId ? onOpenAgent(item.projectId, item.agentId) : onOpenProject?.(item.projectId))}
-                        className={rowClass}
-                      />
+                      <button type="button" onClick={() => onOpenProject?.(item.projectId)} className={rowClass} />
                     )
                   }
                 >

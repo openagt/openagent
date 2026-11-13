@@ -14,6 +14,7 @@ export type HostServices = Omit<ModuleHostBase, 'package'>
  */
 export const INERT_HOST_SERVICES: HostServices = {
   openAgent() {},
+  agentHref: (projectId, agentId) => `/${projectId}/${agentId}`,
   openPage() {},
   pageHref: segment => `/${segment}`,
   openSettings() {},

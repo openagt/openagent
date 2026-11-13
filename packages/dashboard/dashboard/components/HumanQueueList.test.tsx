@@ -101,4 +101,14 @@ describe('the Human Queue\'s rows', () => {
     expect(onOpenAgent.mock.calls).toEqual([['p1', 'r1'], ['p1', 'r6']])
     expect(screen.getByText('Opened by hand').closest('a')?.getAttribute('href')).toBe('https://x/pull/8')
   })
+
+  test('a row is a link to its session: a Ctrl+click or a middle click is the browser\'s, for a new tab', () => {
+    const onOpenAgent = vi.fn()
+    render(<HumanQueueList items={[item({ kind: 'awaiting', title: 'Asks', question: 'q?', agentId: 'r1', awaitId: 'q' })]} onOpenAgent={onOpenAgent} />)
+    const row = screen.getByText('Asks').closest('a')!
+    expect(row.getAttribute('href')).toBe('/p1/r1')
+    expect(fireEvent.click(row, { ctrlKey: true })).toBe(true)
+    expect(fireEvent.click(row, { button: 1 })).toBe(true)
+    expect(onOpenAgent).not.toHaveBeenCalled()
+  })
 })

@@ -14,7 +14,7 @@ import { ownComputerName } from './this-machine.js'
 // a run.
 
 /** The services only the shell can give: they go somewhere on the page, or land on a run. */
-type ShellServices = 'openAgent' | 'openPage' | 'pageHref' | 'openSettings' | 'startRun' | 'configureRun'
+type ShellServices = 'openAgent' | 'agentHref' | 'openPage' | 'pageHref' | 'openSettings' | 'startRun' | 'configureRun'
 
 export const DAEMON_SERVICES: Omit<HostServices, ShellServices> = {
   gitHostPeople: onGitHostPeople,

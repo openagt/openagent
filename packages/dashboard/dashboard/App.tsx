@@ -357,6 +357,7 @@ export function App() {
   const hostServices = useSteadyServices({
     ...DAEMON_SERVICES,
     openAgent: selectAgentInProject,
+    agentHref: (inProject, id) => hrefOf({ projectId: inProject, agentId: id }),
     openPage: (segment, path, inProject) => go({ projectId: null, agentId: null, page: segment, ...(path && path.length ? { pagePath: path } : {}), ...(inProject ? { scope: inProject } : {}) }),
     pageHref: segment => formatRoute({ projectId: null, agentId: null, page: segment, ...(scope ? { scope } : {}) }, addresses),
     openSettings: entry => showSettings(entry),
