@@ -1,5 +1,5 @@
 import { useContext, useState, type ComponentType } from 'react'
-import { ArrowRight, CircleHelp, FilePen, GitBranch, GitPullRequest } from 'lucide-react'
+import { CircleHelp, FilePen, GitBranch, GitPullRequest } from 'lucide-react'
 import type { Intervention } from '../../src/index.js'
 import { interventionKey } from '../../src/client.js'
 import { Row } from './ui/list.js'
@@ -51,8 +51,8 @@ function hoverOf(item: Intervention): string {
 /**
  * The things only a person can clear (#632/#1139), one row each, as the Human Queue and the
  * launcher's "Waiting on you" both list them: what is needed, the run's name as the sidebar says it,
- * then what it is about, its project, how long ago, and an arrow to where the row goes, shown under
- * the pointer and the keyboard. A row is one line that lights up under the pointer, with no rule
+ * then what it is about, its project and how long ago, on the list's right edge: the row's fill
+ * under the pointer, its cursor and its focus say it opens. A row is one line, with no rule
  * between rows and no panel around them (his picks). The rows read as columns: what is needed takes the width of the widest word, so
  * every name starts at one place, and the time is set right. The project is named only when the
  * rows are of several: on one project's page every row would say the same word. Every row opens the session it is about; a request opened anywhere else, by
@@ -124,7 +124,6 @@ export function HumanQueueList({
                   <span className="min-w-14 text-right">{since}</span>
                 </span>
               }
-              actions={<ArrowRight className="size-4 text-muted-foreground" aria-hidden />}
               {...(href !== undefined ? { href } : {})}
               onClick={open}
             />

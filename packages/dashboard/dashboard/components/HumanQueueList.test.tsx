@@ -31,12 +31,12 @@ describe('the Human Queue\'s rows', () => {
     ])
   })
 
-  test('a row ends with how long ago, and an arrow to where it goes', () => {
+  test('a row ends with how long ago, on the right edge: no arrow, its fill, cursor and focus say it opens', () => {
     const since = new Date(Date.now() - 2 * 86_400_000).toISOString()
     render(<HumanQueueList items={[item({ kind: 'awaiting', title: 'Asks', question: 'q?', agentId: 'r1', awaitId: 'q', createdAt: since })]} onOpenAgent={() => {}} />)
     const row = screen.getByRole('listitem')
     expect(row.textContent).toBe('Needs answerAsksq?2d ago')
-    expect(row.querySelector('.lucide-arrow-right')).toBeTruthy()
+    expect(row.querySelector('.lucide-arrow-right')).toBeNull()
     expect(row.querySelector('.lucide-circle-help')).toBeTruthy()
   })
 
