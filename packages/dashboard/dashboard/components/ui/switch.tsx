@@ -15,9 +15,9 @@ export function Switch({ className, disabled = false, ...props }: SwitchProps) {
     <SwitchPrimitive.Root
       disabled={disabled}
       className={cn(
-        'inline-flex h-5 w-9 shrink-0 items-center rounded-full border border-border bg-muted p-0.5',
+        'inline-flex h-5 w-9 shrink-0 items-center rounded-full border border-border bg-muted p-0.5 hover:not-data-[checked]:border-foreground/40',
         'transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-primary)]',
-        'data-[checked]:border-primary data-[checked]:bg-primary',
+        'data-[checked]:border-primary data-[checked]:bg-primary data-[checked]:hover:opacity-90',
         'data-[disabled]:pointer-events-none data-[disabled]:opacity-50',
         className,
       )}

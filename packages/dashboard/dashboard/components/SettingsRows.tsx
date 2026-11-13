@@ -33,17 +33,27 @@ export function SettingsRow({
   description,
   control,
   dimmed = false,
+  labelFor,
 }: {
   label: string
   description: ReactNode
   control: ReactNode
   /** A row the rules turned off: greyed, but still shown with its reason. */
   dimmed?: boolean
+  /** The control's `id`: a click on the label works the control. */
+  labelFor?: string
 }) {
+  const named = cn('text-sm', dimmed && 'text-muted-foreground')
   return (
     <div className="flex items-start justify-between gap-4 py-3 first:pt-0 last:pb-0">
       <div className="min-w-0">
-        <p className={cn('text-sm', dimmed && 'text-muted-foreground')}>{label}</p>
+        {labelFor === undefined ? (
+          <p className={named}>{label}</p>
+        ) : (
+          <label htmlFor={labelFor} className={cn('block', !dimmed && 'cursor-pointer', named)}>
+            {label}
+          </label>
+        )}
         <p className="text-xs text-muted-foreground">{description}</p>
       </div>
       <div className="shrink-0">{control}</div>

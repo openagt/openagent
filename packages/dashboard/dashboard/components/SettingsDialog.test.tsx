@@ -230,6 +230,16 @@ describe('Settings on and off rows', () => {
     expect([checked(row('Human Queue')), checked(row('Browser'))]).toEqual([false, false])
   })
 
+  test("a click on a switch's name switches it, as a click on the switch does", async () => {
+    prefsRead.mockResolvedValueOnce({ notifyNewActivity: false })
+    refreshPreferences()
+    open('notifications')
+    await waitFor(() => expect(checked(row('New activity'))).toBe(false))
+    fireEvent.click(screen.getByText('New activity'))
+    expect(checked(row('New activity'))).toBe(true)
+    expect(saves()).toEqual([{ notifyNewActivity: true }])
+  })
+
   test('notifications the browser was not asked for yet: the Browser row reads off, and switching it on asks the browser', async () => {
     const requestPermission = vi.fn(async () => 'default')
     vi.stubGlobal('Notification', { permission: 'default', requestPermission })

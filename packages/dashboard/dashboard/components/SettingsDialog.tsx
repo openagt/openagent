@@ -575,13 +575,16 @@ function ToggleRow({
   /** A capability the daemon or browser withholds, e.g. notifications the browser has blocked. */
   disabled?: boolean
 }) {
+  const id = useId()
   return (
     <Row
       label={label}
       description={description}
       dimmed={disabled}
+      labelFor={id}
       control={
         <Switch
+          id={id}
           checked={checked}
           disabled={disabled}
           onCheckedChange={next => onChange(next === true)}
