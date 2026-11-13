@@ -18,6 +18,8 @@ export function SchedulerSettings({ projects }: ModuleSettingsProps) {
   const { value: rows, loaded, reload } = usePolled(() => readSchedulers(host, projects), EMPTY, 10_000, [key], { remember: schedulersKey(key) })
   const [error, setError] = useState<string | undefined>()
   const down = useOpenAgentDown()
+  // The offset just saved, said until it is changed again.
+  const [offsetSaved, setOffsetSaved] = useState(false)
 
   // The offset as typed, kept until a read made after the save brings it back.
   const read = loosestSpendOffset(rows)
@@ -33,6 +35,7 @@ export function SchedulerSettings({ projects }: ModuleSettingsProps) {
   const offset = typed ?? read
   const setOffset = (points: number): void => {
     setTyped(points)
+    setOffsetSaved(false)
     clearTimeout(timer.current)
     timer.current = setTimeout(() => {
       setError(undefined)
@@ -42,7 +45,7 @@ export function SchedulerSettings({ projects }: ModuleSettingsProps) {
         if (!saved.ok) {
           setTyped(undefined)
           setError(`The spend offset was not saved: ${saved.error}`)
-        }
+        } else setOffsetSaved(true)
         await reload().catch(() => {})
       })
     }, OFFSET_SAVE_DELAY_MS)
@@ -95,6 +98,11 @@ export function SchedulerSettings({ projects }: ModuleSettingsProps) {
             />
           }
         />
+      )}
+      {offsetSaved && (
+        <p role="status" className="py-2 text-xs text-muted-foreground">
+          Saved.
+        </p>
       )}
       {unread.map(row => (
         <p key={row.project.id} role="alert" className="py-2 text-xs text-danger">{`The scheduler of ${row.project.name} could not be read: ${row.error}`}</p>

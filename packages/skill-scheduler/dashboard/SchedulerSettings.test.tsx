@@ -77,6 +77,16 @@ describe('Settings → Scheduler', () => {
     expect(runCommand.mock.calls.filter(([, args]) => args[0] === 'offset')).toHaveLength(2)
   })
 
+  test('an offset that was saved says so, until it is changed again', async () => {
+    const { host } = scheduler()
+    show(host)
+    const offset = (await screen.findByLabelText('Spend offset')) as HTMLInputElement
+    fireEvent.change(offset, { target: { value: '20' } })
+    expect((await screen.findByRole('status')).textContent).toBe('Saved.')
+    fireEvent.change(offset, { target: { value: '21' } })
+    expect(screen.queryByRole('status')).toBeNull()
+  })
+
   test('an offset the command refused says why, and the number shown is the saved one again', async () => {
     const { host } = scheduler(() => ({ ok: false, error: 'not inside a git repository' }))
     show(host)
