@@ -20,13 +20,13 @@ const MISSING_MS = 8_000
 const SELDOM_MS = 30_000
 
 /**
- * A read asked again at the pace its last answer calls for. Its answer is kept under `key` for the
- * page's life: a place that opens later (the person's menu) shows it from its first frame, never
- * empty while the same question, asked a moment ago, is asked again.
+ * A read asked again at the pace its last answer calls for. Its answer is kept under `key`, in this
+ * browser too: a place that opens later (the person's menu, the next load's Permissions) shows it
+ * from its first frame, never empty while the same question is asked again.
  */
 function usePaced<T>(key: string, load: (() => Promise<T>) | null, pace: (value: T | undefined) => number, deps: unknown[]): { value: T | undefined; reload: () => Promise<void> } {
   const [every, setEvery] = useState(SELDOM_MS)
-  const { value, reload } = usePolled<T | undefined>(load, undefined, every, [...deps, every], { remember: key })
+  const { value, reload } = usePolled<T | undefined>(load, undefined, every, [...deps, every], { remember: key, stored: true })
   const next = pace(value)
   useEffect(() => {
     if (next !== every) setEvery(next)
