@@ -162,6 +162,15 @@ describe('AccountsCard', () => {
     await waitFor(() => expect(document.activeElement).toBe(press))
   })
 
+  test('closing the dialog opened from the "Add" menu gives the focus back to "Add"', async () => {
+    renderAdding(() => ({ claude: {}, codex: {} }))
+    const dialog = await add('Claude Code')
+    await waitFor(() => expect(document.activeElement).toBe(within(dialog).getByRole('textbox', { name: 'Whose account' })))
+    fireEvent.keyDown(document.activeElement!, { key: 'Escape' })
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
+    await waitFor(() => expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Add an account' })))
+  })
+
   test("calls the person's own login who it is, and the press still names it as the command knows it", async () => {
     const run = renderCard(listed([{ name: 'Work', own: false }, { name: 'This computer', who: 'Ada', own: true }]))
     await openRow('Ada')

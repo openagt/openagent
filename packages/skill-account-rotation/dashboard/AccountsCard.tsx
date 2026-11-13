@@ -461,6 +461,7 @@ export function AccountsCard({ accountWhere }: ModuleCardProps) {
   // The agent an account is being added for: the dialog is open on it, from the press until the account is there or the dialog is closed.
   const [naming, setNaming] = useState<AgentId>()
   const nameField = useRef<HTMLInputElement>(null)
+  const addPress = useRef<HTMLButtonElement>(null)
   // Why the last sign-in did not go through, once the person closed the dialog on it: not said again when it opens next.
   const [dismissed, setDismissed] = useState<string>()
   const signingIn = AGENTS.find(agent => adding?.[agent.id]?.adding !== undefined)?.id
@@ -540,7 +541,7 @@ export function AccountsCard({ accountWhere }: ModuleCardProps) {
           {/* Another account, at the card's title: whose agent it is for, then its sign-in in a dialog. With none yet, the presses are in the card. */}
           {list?.ok && !none && (
             <DropdownMenu>
-              <DropdownMenuTrigger render={<Button size="sm" variant="outline" aria-label="Add an account" />}>
+              <DropdownMenuTrigger ref={addPress} render={<Button size="sm" variant="outline" aria-label="Add an account" />}>
                 <Plus className="size-3.5" aria-hidden />
                 Add
                 <ChevronDown className="size-3 opacity-70" aria-hidden />
@@ -600,7 +601,7 @@ export function AccountsCard({ accountWhere }: ModuleCardProps) {
           </div>
         )}
       </CardContent>
-      <Dialog open={namingAgent !== undefined} onOpenChange={open => !open && close()} title={namingAgent ? `Add a ${namingAgent.account} account` : ''} initialFocus={nameField}>
+      <Dialog open={namingAgent !== undefined} onOpenChange={open => !open && close()} title={namingAgent ? `Add a ${namingAgent.account} account` : ''} initialFocus={nameField} finalFocus={addPress}>
         {namingAgent && (
           <AddAccount
             key={namingAgent.id}
