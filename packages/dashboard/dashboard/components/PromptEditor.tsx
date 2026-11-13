@@ -18,13 +18,15 @@ import type { CommandEntry } from './CommandsMenu.js'
 // prompt over the wire is what it reads as, and it also adds the project's path or the file to
 // the Context (#439/#504); deleting the chip takes it out again. Markdown is live (StarterKit shortcuts) and
 // round-trips via tiptap-markdown. Text flows out via onChange, and the handle only clears,
-// focuses and loads.
+// focuses, loads and appends.
 
 export interface PromptEditorHandle {
   clear: () => void
   focus: () => void
   /** Load a text (a command, a saved prompt) into the editor, with the caret unless `focus` is false. Returns whether it replaced a draft. */
   loadTemplate: (text: string, focus?: boolean) => boolean
+  /** Add a text after the draft's last line, as lines of its own: the caret, the chips and the scroll stay as they are, and one undo takes it out. */
+  append: (text: string) => void
 }
 
 interface PromptEditorProps {
@@ -314,6 +316,11 @@ export const PromptEditor = forwardRef<PromptEditorHandle, PromptEditorProps>(fu
     },
     focus: () => editor?.commands.focus('end'),
     loadTemplate: (text: string, focus?: boolean) => (editor ? loadTemplateInto(editor, text, focus) : false),
+    append: (text: string) => {
+      if (!editor) return
+      if (editor.isEmpty) return void loadTemplateInto(editor, text, false)
+      editor.commands.insertContentAt(editor.state.doc.content.size, text, { updateSelection: false })
+    },
   }))
 
   // Switched off while a start is asked for, and on again after. That is no edit, so no change is

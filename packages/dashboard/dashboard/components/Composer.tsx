@@ -211,7 +211,7 @@ export const Composer = forwardRef<ComposerHandle, {
       setPrompt(text)
       editorRef.current?.focus()
     },
-    append: text => void editorRef.current?.loadTemplate(prompt.trim() ? `${prompt}\n\n${text}` : text, false),
+    append: text => editorRef.current?.append(text),
   }))
 
   // Rehydrate a draft carried in from the click that navigated here (#1139), launcher-only, else the

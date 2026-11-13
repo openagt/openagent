@@ -59,6 +59,7 @@ vi.mock('./PromptEditor.js', async () => {
         put(text)
         return false
       },
+      append: (text: string) => put(held.trim() ? `${held}\n\n${text}` : text),
     }))
     const seeded = useRef(false)
     useEffect(() => {

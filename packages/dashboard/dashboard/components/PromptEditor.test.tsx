@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, test, vi } from 'vitest'
 import { createRef } from 'react'
 import { act, cleanup, fireEvent, render, waitFor } from '@testing-library/react'
+import type { Editor } from '@tiptap/core'
 import { PromptEditor, type PromptEditorHandle } from './PromptEditor.js'
 
 // The real Tiptap editor (no mock): what's under test is the keyboard seam itself — which
@@ -153,5 +154,58 @@ describe('the `/` menu closes once a command is in the box', () => {
     await waitFor(() => expect(box.getAttribute('aria-expanded')).toBe('true'))
     act(() => void editor.loadTemplate('/research'))
     await waitFor(() => expect(box.getAttribute('aria-expanded')).toBe('false'))
+  })
+})
+
+describe('words given back after the draft (append)', () => {
+  async function renderDraft() {
+    const ref = createRef<PromptEditorHandle>()
+    const onChange = vi.fn()
+    const onMentionRemoved = vi.fn()
+    render(<PromptEditor ref={ref} onChange={onChange} onSubmit={vi.fn()} onMentionRemoved={onMentionRemoved} projects={[]} commands={[]} />)
+    const box = await waitFor(() => {
+      const el = document.querySelector('[role="textbox"]')
+      if (!el) throw new Error('editor not mounted yet')
+      return el as HTMLElement & { editor: Editor }
+    })
+    return { box, editor: box.editor, handle: ref.current!, onChange, onMentionRemoved }
+  }
+  const said = (onChange: ReturnType<typeof vi.fn>) => onChange.mock.calls.at(-1)![0]
+
+  test('they go after the draft as lines of their own, and a caret in its middle stays where it was', async () => {
+    const { editor, handle, onChange } = await renderDraft()
+    act(() => void editor.commands.insertContent('first draft words'))
+    act(() => void editor.commands.setTextSelection(4))
+    act(() => handle.append('the words it never read'))
+    expect(said(onChange)).toBe('first draft words\n\nthe words it never read')
+    expect([editor.state.selection.from, editor.state.selection.to]).toEqual([4, 4])
+  })
+
+  test('a range selected in the draft stays selected', async () => {
+    const { editor, handle } = await renderDraft()
+    act(() => void editor.commands.insertContent('first draft words'))
+    act(() => void editor.commands.setTextSelection({ from: 2, to: 8 }))
+    act(() => handle.append('the words it never read'))
+    expect([editor.state.selection.from, editor.state.selection.to]).toEqual([2, 8])
+  })
+
+  test('a chip in the draft stays a chip, and what it added to the Context stays', async () => {
+    const { box, editor, handle, onChange, onMentionRemoved } = await renderDraft()
+    act(() => void editor.commands.insertContent([{ type: 'text', text: 'look at ' }, { type: 'token', attrs: { kind: 'file', label: '#src/a.ts', text: '#src/a.ts' } }, { type: 'text', text: ' first' }]))
+    act(() => handle.append('the words it never read'))
+    expect(box.querySelectorAll('[data-token]').length).toBe(1)
+    expect(onMentionRemoved).not.toHaveBeenCalled()
+    expect(said(onChange)).toBe('look at #src/a.ts first\n\nthe words it never read')
+  })
+
+  test('one undo takes them out again; in an empty box they are all there is', async () => {
+    const { box, editor, handle, onChange } = await renderDraft()
+    act(() => void editor.commands.insertContent('first draft words'))
+    act(() => handle.append('the words it never read'))
+    fireEvent.keyDown(box, { key: 'z', ctrlKey: true })
+    expect(box.textContent).toBe('first draft words')
+    act(() => void editor.commands.clearContent(true))
+    act(() => handle.append('the words it never read'))
+    expect(said(onChange)).toBe('the words it never read')
   })
 })
