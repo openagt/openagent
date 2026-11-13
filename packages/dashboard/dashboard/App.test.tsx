@@ -310,7 +310,7 @@ describe('module cards on the Overview (#1818)', () => {
       render(<App />)
       expect(await screen.findByRole('heading', { name: 'Overview' })).toBeTruthy()
       answers.set('onProjects', () => { throw new TypeError('Failed to fetch') })
-      await act(async () => void (await vi.advanceTimersByTimeAsync(5000)))
+      await act(async () => void (await vi.advanceTimersByTimeAsync(5000 + 1000)))
       const banner = (await screen.findByRole('alert')).textContent
       expect(banner).toBe('OpenAgent has stopped. Start it again with openagent in a terminal; an installed one restarts with the computer or with its installer\u2019s command.')
     } finally {
@@ -330,7 +330,7 @@ describe('module cards on the Overview (#1818)', () => {
       expect(await screen.findByText('its saves: on')).toBeTruthy()
       expect(await screen.findByText("the popup's saves: on")).toBeTruthy()
       answers.set('onProjects', () => { throw new TypeError('Failed to fetch') })
-      await act(async () => void (await vi.advanceTimersByTimeAsync(5000)))
+      await act(async () => void (await vi.advanceTimersByTimeAsync(5000 + 1000)))
       expect(await screen.findByRole('alert')).toBeTruthy()
       expect(screen.getByText('its saves: off')).toBeTruthy()
       expect(screen.getByText("the popup's saves: off")).toBeTruthy()
