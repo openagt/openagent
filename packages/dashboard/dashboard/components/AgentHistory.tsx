@@ -560,7 +560,7 @@ function RecentsSortMenu({ order }: { order: RecentsSort }) {
             <DropdownMenuTrigger
               type="button"
               aria-label="Sort agents"
-              className="ml-auto flex h-5 w-5 items-center justify-center rounded-sm text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground"
+              className="relative ml-auto flex h-5 w-5 items-center justify-center rounded-sm text-muted-foreground transition-colors after:absolute after:-inset-0.5 hover:bg-accent hover:text-accent-foreground"
             />
           }
         >
