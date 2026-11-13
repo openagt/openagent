@@ -1,4 +1,4 @@
-import { useSyncExternalStore, type CSSProperties } from 'react'
+import { useSyncExternalStore, type CSSProperties, type ReactNode } from 'react'
 import { CopiedStatus, copyPress, useCopy } from './copy'
 import { mono } from './ui'
 
@@ -65,19 +65,23 @@ export function PmTabs() {
 }
 
 const dollarStyle: CSSProperties = { userSelect: 'none', color: '#a7c080' }
+/** A command with words after it: they follow the command, under it once the line is too narrow, and the `$` stays beside it. */
+const followedLineStyle: CSSProperties = { display: 'flex', alignItems: 'baseline' }
+const followedStyle: CSSProperties = { display: 'inline-flex', flexWrap: 'wrap', gap: '2px 16px' }
 
 /**
  * `$ command`, in every package manager, the picked one shown (all are pre-rendered, styles.css
  * shows one). They share one place, so the line is as wide as the longest and a pick moves nothing.
  */
-export function CommandLine({ command }: { command: Command }) {
+export function CommandLine({ command, after }: { command: Command; /** Said after each command, so it follows the picked one. */ after?: ReactNode }) {
   return (
-    <span>
-      <span style={dollarStyle}>$ </span>
+    <span style={after === undefined ? undefined : followedLineStyle}>
+      <span style={{ ...dollarStyle, whiteSpace: 'pre' }}>$ </span>
       <span className="pm-commands">
         {PM_NAMES.map((name) => (
-          <span key={name} className={'pm-only pm-only-' + name}>
-            {PMS[name][command]}
+          <span key={name} className={'pm-only pm-only-' + name} style={after === undefined ? undefined : followedStyle}>
+            {after === undefined ? PMS[name][command] : <span>{PMS[name][command]}</span>}
+            {after}
           </span>
         ))}
       </span>

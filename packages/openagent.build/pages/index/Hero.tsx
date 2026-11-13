@@ -5,7 +5,6 @@ import { BADGES, kickerStyle, mono } from './ui'
 import { switchInPlace, useDashboardHref } from './ViewToggle'
 
 const commentStyle: CSSProperties = { color: '#859289' }
-const cmdLineStyle: CSSProperties = { display: 'flex', flexWrap: 'wrap', gap: '2px 16px' }
 
 function Badge({ label, copied }: { label: string; copied: boolean }) {
   return (
@@ -190,10 +189,7 @@ export function Hero() {
                 fontSize: 'clamp(11px, 3.4vw, 15px)',
               }}
             >
-              <div style={cmdLineStyle}>
-                <CommandLine command="try" />
-                <span style={commentStyle}># One-shot (no install)</span>
-              </div>
+              <CommandLine command="try" after={<span style={commentStyle}># One-shot (no install)</span>} />
             </div>
             <CopiedStatus copied={tryCopy.copied} />
           </div>
