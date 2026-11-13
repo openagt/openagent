@@ -766,15 +766,16 @@ html[data-pinned] body {
   scrollbar-gutter: stable;
 }
 
-/* The chat's type, set here and nowhere else (DECISIONS.md, "The chat is set at Claude Code's
-   sizes"): the text of the chat and of a reply, and its code, in a reply and in what a tool shows. */
+/* The chat's type, set here and nowhere else: the text of the chat and of a reply on the scale's
+   prose step (`text-base`, 16px on 24px lines), and its code, in a reply and in what a tool shows,
+   a step under it (14px on 20px). */
 @utility text-chat {
-  font-size: 0.9375rem;
-  line-height: 1.3125rem;
+  font-size: var(--text-base);
+  line-height: var(--text-base--line-height);
 }
 @utility text-chat-code {
-  font-size: 0.8125rem;
-  line-height: 1.1875rem;
+  font-size: var(--text-sm);
+  line-height: var(--text-sm--line-height);
 }
 
 /* A page's top bar draws its line only while the chat is scrolled under it: the chat's scroller
