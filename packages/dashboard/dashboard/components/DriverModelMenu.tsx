@@ -136,7 +136,7 @@ export function DriverModelMenu({
               <span className="flex-1">{a.label}</span>
               {/* A long name gives way, never how full the account is. */}
               {a.account && (
-                <span className="flex max-w-36 min-w-0 text-muted-foreground">
+                <span className="flex max-w-48 min-w-0 text-muted-foreground">
                   <span className="truncate">{a.account.name}</span>
                   <span className="shrink-0 whitespace-pre">{a.account.percent}</span>
                 </span>
