@@ -43,7 +43,9 @@ describe('QuestionPanel', () => {
   test('Submit names its keys where there is a keyboard, never on a touch screen', () => {
     render(panel({ active: true }))
     const keys = screen.getByRole('button', { name: 'Submit' }).querySelector('kbd')!.parentElement!
-    expect(keys.className.split(' ')).toContain('pointer-coarse:hidden')
+    // Each pointer's display by name: a plain `flex` would be put back by a module's own `.flex`, loaded after it.
+    expect(keys.className.split(' ')).toEqual(expect.arrayContaining(['not-pointer-coarse:flex', 'pointer-coarse:hidden']))
+    expect(keys.className.split(' ')).not.toContain('flex')
   })
 
   test('the recommended option starts picked; picking a row sends nothing until Submit', async () => {

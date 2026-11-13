@@ -254,7 +254,7 @@ export function QuestionPanel({
         <Button disabled={busy || down || !ready} onClick={submit}>
           Submit
           {active && (
-            <span className="flex gap-0.5 pointer-coarse:hidden" aria-hidden>
+            <span className="gap-0.5 not-pointer-coarse:flex pointer-coarse:hidden" aria-hidden>
               <kbd className="flex h-5 min-w-5 items-center justify-center rounded-sm border border-primary-foreground/30 px-1 font-sans text-xs font-normal">{MOD_KEY}</kbd>
               <kbd className="flex h-5 min-w-5 items-center justify-center rounded-sm border border-primary-foreground/30 px-1 font-sans text-xs font-normal">Enter</kbd>
             </span>
