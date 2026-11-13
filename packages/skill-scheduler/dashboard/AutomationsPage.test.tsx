@@ -186,8 +186,9 @@ describe('the Automations page: its rows', () => {
     const { host } = hostAnswering((_, args) => (args[0] === 'status' ? { ok: true, output: status } : { ok: true, output: { ok: true } }))
     show(host)
     await screen.findByRole('region', { name: 'gemstack' })
-    // When it last ran is said with its age, and opens that run.
-    const ran = within(row('/post-merge-cleanup')).getByRole('button', { name: /^Last ran \d+\w+ ago$/ })
+    // When it last ran is said with its age, and is a link to that run.
+    const ran = within(row('/post-merge-cleanup')).getByRole('link', { name: /^Last ran \d+\w+ ago$/ })
+    expect(ran.getAttribute('href')).toBe('/p1/r1')
     expect(ran.className).not.toMatch(/text-danger/)
     fireEvent.click(ran)
     expect(host.openAgent).toHaveBeenLastCalledWith('p1', 'r1')
@@ -201,7 +202,7 @@ describe('the Automations page: its rows', () => {
     expect(within(row('/check-links')).getByText('Check failed: gh: not found')).toBeTruthy()
     // Switched off here, and its failure is still said: nothing tries the work again by itself. An off row says no decision.
     const off = row('/work-queue')
-    const failed = within(off).getByRole('button', { name: /^Last run failed \d+\w+ ago$/ })
+    const failed = within(off).getByRole('link', { name: /^Last run failed \d+\w+ ago$/ })
     expect(failed.className).toMatch(/text-danger/)
     fireEvent.click(failed)
     expect(host.openAgent).toHaveBeenLastCalledWith('p1', '2026-10-03T09-00-00-000Z')
