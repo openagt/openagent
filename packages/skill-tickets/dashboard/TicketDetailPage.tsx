@@ -1,6 +1,6 @@
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Bot, ExternalLink, LockOpen, Play } from 'lucide-react'
-import { Badge, Button, LinkActions, Markdown, cn, formatAge, formatDateTime, useAction, usePolled, useModuleHost, useOpenAgentDown } from '@openagt/dashboard/module'
+import { Badge, Button, ConfirmDialog, LinkActions, Markdown, cn, formatAge, formatDateTime, useAction, usePolled, useModuleHost, useOpenAgentDown } from '@openagt/dashboard/module'
 import { claimState, heldBack, holderAgent, readShown, ticketBody, ticketLink, withHolder } from '../src/module.js'
 import type { WorkspaceTicketDetail } from './lib/types.js'
 import { TicketPageShell, TicketPageNote } from './TicketPageShell.js'
@@ -53,11 +53,22 @@ export function TicketDetailPage({
   const holder = ticket?.lockedByAgent?.name ?? ticket?.lockedBy
   const holderStatus = read && 'ticket' in read ? read.holderStatus : undefined
   const working = claimState(holderStatus) === 'working'
+  // Released, the press is gone: the focus goes to the ticket's title, not to the page's body. Once
+  // the page is drawn without the press, so a dialog that asked is closed and takes no focus back.
+  const title = useRef<HTMLHeadingElement>(null)
+  useEffect(() => {
+    if (released) title.current?.focus()
+  }, [released])
   const release = async () => {
     if (!ticket) return
     const outcome = await run(() => releaseClaim(host, projectId, ticket.file), 'The lock could not be released.')
     if (outcome.ok) setReleased(true)
   }
+  const releaseLock = (
+    <Button size="sm" variant="outline" disabled={busy || down} onClick={working ? undefined : () => void release()} title={holder ? `Claimed by ${holder}` : undefined} className="gap-1.5">
+      <LockOpen className="h-3.5 w-3.5" /> Release lock
+    </Button>
+  )
 
   return (
     <TicketPageShell onBack={onBack}>
@@ -73,7 +84,9 @@ export function TicketDetailPage({
       ) : (
         <>
           <div className="flex flex-wrap items-start justify-between gap-3">
-            <h1 className="text-lg font-semibold">{ticket.title}</h1>
+            <h1 ref={title} tabIndex={-1} className="text-lg font-semibold outline-none">
+              {ticket.title}
+            </h1>
             <div className="flex shrink-0 items-center gap-1.5">
               {/* The run holding the claim, one press away: at work (or waiting on an answer) it is
                   looked at; stopped, failed or ended, it is gone on with, in its own chat. */}
@@ -83,18 +96,25 @@ export function TicketDetailPage({
                   {working ? 'Open the run' : 'Continue'}
                 </Button>
               )}
-              {claimed && (
-                <Button
-                  size="sm"
-                  variant="outline"
-                  disabled={busy || down}
-                  onClick={() => void release()}
-                  title={holder ? `Claimed by ${holder}` : undefined}
-                  className="gap-1.5"
-                >
-                  <LockOpen className="h-3.5 w-3.5" /> Release lock
-                </Button>
-              )}
+              {/* A run at work on it keeps working: the ticket is then free for another agent, so the press asks first. */}
+              {claimed &&
+                (working ? (
+                  <ConfirmDialog
+                    trigger={releaseLock}
+                    title="An agent is working on this ticket. Release it anyway?"
+                    body={`${holder ?? 'The agent'} goes on working, and the ticket can be started or queued again.`}
+                    confirmLabel="Release"
+                    confirmBusyLabel="Releasing…"
+                    onConfirm={async () => {
+                      const outcome = await releaseClaim(host, projectId, ticket.file)
+                      if (!outcome.ok) throw new Error(outcome.error)
+                    }}
+                    onSuccess={() => setReleased(true)}
+                    fallbackError="The lock could not be released."
+                  />
+                ) : (
+                  releaseLock
+                ))}
               {/* The ticket as a link, for whatever the installed modules offer on one (#1774);
                   none for a ticket in review or waiting, which is never queued, nor for a claimed
                   one: an agent the queue hands it to finds it taken. Released, it is offered. */}
