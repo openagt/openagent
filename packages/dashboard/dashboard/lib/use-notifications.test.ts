@@ -51,6 +51,18 @@ describe('useInterventionNotifications (#627)', () => {
     expect(ctor.mock.calls[0]![1]?.body).toContain('Cache the auth store?')
   })
 
+  test('a question is told with its own tag, the same in every open tab, so the system shows it once', () => {
+    const tab = () => {
+      const { rerender } = render(true)
+      rerender({ items: read([] as Intervention[]) })
+      rerender({ items: read([awaiting('g1', 'Cache the auth store?')]) })
+    }
+    tab()
+    tab()
+    expect(ctor).toHaveBeenCalledTimes(2)
+    expect(ctor.mock.calls.map(call => call[1]?.tag)).toEqual(['awaiting:p::g1', 'awaiting:p::g1'])
+  })
+
   test('never fires when notifications are disabled', () => {
     const { rerender } = render(false)
     rerender({ items: read([item(1, 'u1')]) })

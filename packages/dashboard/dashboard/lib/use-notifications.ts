@@ -29,7 +29,8 @@ function fire<T>(items: T[], spec: NotificationSpec<T>): void {
   if (typeof Notification === 'undefined' || Notification.permission !== 'granted') return
   const first = items[0]
   if (!first) return
-  const notification = new Notification(spec.title(first, items.length), { body: items.map(spec.label).join('\n') })
+  // Every open tab of the dashboard fires its own: one tag per item, so the system shows one.
+  const notification = new Notification(spec.title(first, items.length), { body: items.map(spec.label).join('\n'), tag: spec.keyOf(first) })
   notification.onclick = () => {
     const url = spec.clickUrl(first)
     if (url) window.open(url, '_blank', 'noopener')
