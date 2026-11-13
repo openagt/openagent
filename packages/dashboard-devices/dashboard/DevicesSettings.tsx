@@ -159,7 +159,7 @@ function Tile({ icon: Icon, title, words, button, primary = false, onClick }: { 
       <Icon aria-hidden className="h-4 w-4 text-primary" />
       <p className="text-sm font-semibold">{title}</p>
       <p className="flex-1 text-xs text-muted-foreground">{words}</p>
-      <Button size="sm" variant={primary ? 'default' : 'outline'} className="self-start" onClick={onClick}>
+      <Button size="sm" variant={primary ? 'default' : 'outline'} className="h-auto min-h-8 self-start py-1.5" onClick={onClick}>
         {button}
       </Button>
     </div>
