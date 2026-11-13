@@ -215,6 +215,21 @@ describe('AccountsCard', () => {
     expect(calls.some(call => call.args[0] === 'add-cancel')).toBe(false)
   })
 
+  test('the press stays busy from the press until a read shows the sign-in under way', async () => {
+    let now: Record<string, unknown> = { claude: {}, codex: {} }
+    renderAdding(() => now)
+    const dialog = await add('Claude Code')
+    fireEvent.change(within(dialog).getByRole('textbox', { name: 'Whose account' }), { target: { value: 'Dani' } })
+    const press = within(dialog).getByRole('button', { name: 'Log in to Claude' }) as HTMLButtonElement
+    fireEvent.click(press)
+    // The command answered, and the read after it does not show the sign-in yet.
+    await waitFor(() => expect(press.disabled).toBe(true))
+    await new Promise(resolve => setTimeout(resolve, 100))
+    expect(press.disabled).toBe(true)
+    now = { claude: { adding: { name: 'Dani' } }, codex: {} }
+    expect(await within(dialog).findByText(/Adding Dani's account/, undefined, { timeout: 5000 })).toBeTruthy()
+  })
+
   test('a sign-in that does not go through keeps the dialog open with why, and asks again; closed, the card does not say it a second time', async () => {
     let now: Record<string, unknown> = { claude: {}, codex: {} }
     const calls = renderAdding(() => now, args => {

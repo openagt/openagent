@@ -220,11 +220,20 @@ function AddAccount({ agent, now, failed, from, field, onChanged, onClose }: { a
   const start = async (): Promise<void> => {
     setBusy(true)
     setError(undefined)
+    failedAtPress.current = now.failed
     const done = await host.runComputerCommand(['add', agent.id, name])
-    setBusy(false)
-    if (!done.ok) setError(done.error)
+    if (!done.ok) {
+      setBusy(false)
+      setError(done.error)
+    }
     onChanged()
   }
+  // A started sign-in keeps the press busy until a read shows it under way, or a new why it did not go through.
+  const failedAtPress = useRef<string | undefined>(undefined)
+  useEffect(() => {
+    if (now.failed === undefined) failedAtPress.current = undefined
+    if (now.adding || (now.failed !== undefined && now.failed !== failedAtPress.current)) setBusy(false)
+  }, [now.adding, now.failed])
   const shownError = error ?? failed
   return (
     <div className="space-y-3">
