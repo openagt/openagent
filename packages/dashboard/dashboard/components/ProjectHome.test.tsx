@@ -45,12 +45,13 @@ describe('ProjectHome', () => {
       await Promise.resolve()
       await Promise.resolve()
     })
-    // The waiting rows come first and the box to start an agent last, as on an agent's page.
+    // The box to start an agent first and the waiting rows under it; on a phone the box is drawn last, at the bottom.
     expect(screen.getByRole('region', { name: 'Waiting on you' })).toBeTruthy()
     expect(screen.getByRole('heading', { name: 'Waiting on you 1' })).toBeTruthy()
     const questions = screen.getByText('1 rows')
     const form = screen.getByText('start form')
-    expect(questions.compareDocumentPosition(form) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+    expect(form.compareDocumentPosition(questions) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+    expect(form.parentElement!.className).toContain('max-md:order-last')
     // The rows scroll in the chat's column; the box is outside what scrolls, so it stays in place.
     expect(questions.closest('.max-w-3xl')).toBeTruthy()
     expect(form.closest('[data-slot="scroll-area"]')).toBeNull()

@@ -13,10 +13,11 @@ import { SESSIONS_ID } from '../../src/project-address.js'
 // one appends an agent to the rail and adds that agent's own view (AgentView) alongside, and this
 // page stays put, so you can launch again.
 //
-// It is laid out as an agent's page is. What waits on the person is rows at the top, in the chat's
-// column (#1455 item 4), the Human Queue's own rows, and the box to start an agent is at the bottom, where an agent's
-// message box is. The project's Docs are not here: they are the Docs pane (Panes), on this page
-// as on an agent's.
+// The box to start an agent is what the page is for: from 768px up it stands at the page's optical
+// centre with what waits on the person under it, in the chat's column (#1455 item 4), the Human
+// Queue's own rows; on a phone it is at the bottom, where an agent's message box is, with the rows
+// above it. Starting a run carries the box to its place on the run's page (StartAgentForm). The
+// project's Docs are not here: they are the Docs pane (Panes), on this page as on an agent's.
 //
 // With no project (`SESSIONS_ID`), the page is the same without what a project has: its skills.
 export function ProjectHome({
@@ -75,41 +76,47 @@ export function ProjectHome({
       {/* Above everything, because an agent started on a project whose agent-data branch cannot
           reach origin (#1599) works from stale tickets and a queue nobody else will see. */}
       <ProjectErrorBanner errors={errors} />
-      {/* Laid out as an agent's page is: what waits for the person fills the page from the top, in
-          the chat's column, and scrolls there; the box to start an agent stays at the bottom, in
-          the place and at the width of an agent's message box. */}
-      <ScrollArea className="min-h-0 flex-1" viewportClassName="chat-scroll h-full">
-        <div className="mx-auto w-full max-w-3xl">
-          {/* No section at all when nothing waits: an empty "Waiting on you" is noise on every launch. */}
-          {waiting.length > 0 && (
-            // On the box's edges, as an agent's chat is; the rows reach past them by their own padding, so
-            // their words start where the heading does.
-            <Section title="Waiting on you" count={waiting.length} className="px-4 pt-6">
-              <div className="-mx-3">
-                <HumanQueueList key={projectId} items={waiting} onOpenAgent={onOpenAgent} />
-              </div>
-            </Section>
-          )}
-          {/* What the project's skills need from the person, when they need something (#2023): a card
-              under the agents that wait, in the same column; with nothing to say there is no card,
-              and "Skills" under the box opens the project's Skills page in Settings. */}
-          {!noProject && <ProjectSkillsLine key={projectId} projectId={projectId} onChanged={onSkillsChanged} />}
+      {/* The page is for the box: from 768px up it stands where the eye lands, its top at about 38% of
+          the page, and what waits for the person is under it, scrolling under it and never pushing
+          it. On a phone the box stays at the bottom, in the thumb's reach, with what waits above it,
+          as an agent's page has its chat. */}
+      <div className="flex min-h-0 flex-1 flex-col">
+        <div className="shrink-0 max-md:hidden md:basis-[38%]" aria-hidden />
+        <div className="shrink-0 max-md:order-last">
+          <StartAgentForm
+            projectId={projectId}
+            projectName={projectName}
+            onAgentStarted={onAgentStarted}
+            files={files}
+            context={context}
+            addContext={addContext}
+            removeContext={removeContext}
+            toggleContext={toggleContext}
+            home={home}
+            projects={projects}
+            onPickProject={onPickProject}
+            onProjectAdded={onProjectAdded}
+          />
         </div>
-      </ScrollArea>
-      <StartAgentForm
-        projectId={projectId}
-        projectName={projectName}
-        onAgentStarted={onAgentStarted}
-        files={files}
-        context={context}
-        addContext={addContext}
-        removeContext={removeContext}
-        toggleContext={toggleContext}
-        home={home}
-        projects={projects}
-        onPickProject={onPickProject}
-        onProjectAdded={onProjectAdded}
-      />
+        <ScrollArea className="min-h-0 flex-1" viewportClassName="chat-scroll h-full">
+          <div className="mx-auto w-full max-w-3xl">
+            {/* No section at all when nothing waits: an empty "Waiting on you" is noise on every launch. */}
+            {waiting.length > 0 && (
+              // On the box's edges, as an agent's chat is; the rows reach past them by their own padding, so
+              // their words start where the heading does.
+              <Section title="Waiting on you" count={waiting.length} className="px-4 pt-6">
+                <div className="-mx-3">
+                  <HumanQueueList key={projectId} items={waiting} onOpenAgent={onOpenAgent} />
+                </div>
+              </Section>
+            )}
+            {/* What the project's skills need from the person, when they need something (#2023): a card
+                under the agents that wait, in the same column; with nothing to say there is no card,
+                and "Skills" under the box opens the project's Skills page in Settings. */}
+            {!noProject && <ProjectSkillsLine key={projectId} projectId={projectId} onChanged={onSkillsChanged} />}
+          </div>
+        </ScrollArea>
+      </div>
     </>
   )
 }

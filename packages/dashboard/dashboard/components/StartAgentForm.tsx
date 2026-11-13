@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react'
+import { flushSync } from 'react-dom'
 import { CircleAlert, TriangleAlert } from 'lucide-react'
 import type { ProjectSummary, StartFromPick } from '../../src/index.js'
 import { onCloneCheck, onStartBranches, onStartCheck } from '../rpc/projects.js'
@@ -274,7 +275,7 @@ export function StartAgentForm({
       // A remote agent (#1067) carries the machine label so the view can mark where it executes.
       // What this page says goes with it, for the run's page until the run's record says it.
       const started = startFrom ? (startFromPick?.kind === 'local' ? startFrom.local : startFromPick?.kind === 'published' ? startFromPick.branch : startFrom.main) : undefined
-      onAgentStarted?.(text, result.agentId, machine?.label, result.projectId, {
+      carryBox(() => onAgentStarted?.(text, result.agentId, machine?.label, result.projectId, {
         ...(started !== undefined ? { branch: started } : {}),
         ...(!noProject && remote && account !== undefined ? { gitAccount: account } : {}),
         ...(agentId !== undefined ? { agent: agentId } : {}),
@@ -285,7 +286,7 @@ export function StartAgentForm({
         ...(preferences.model ? { model: preferences.model } : {}),
         ...(preferences.effort ? { effort: preferences.effort } : {}),
         ...(noProject && !machine && repos.length > 0 ? { repos: repos.map(repo => ({ name: repo.name, from: repo.path })) } : {}),
-      }) // select the run we just started (#761)
+      })) // select the run we just started (#761)
       composerRef.current?.clear()
       setRepos([])
       setSkillPicks(agentPicks(onAgent))
@@ -432,6 +433,18 @@ export function StartAgentForm({
       </div>
     </form>
   )
+}
+
+/**
+ * Starting a run carries the box from this page to its place on the run's page in one movement: the
+ * browser's own view transition, the box named the same on both (`composer`, Composer and
+ * tailwind.css). Under reduced motion, or where the browser has none, the page just changes.
+ */
+function carryBox(update: () => void): void {
+  if (typeof document.startViewTransition !== 'function' || matchMedia('(prefers-reduced-motion: reduce)').matches) return update()
+  const root = document.documentElement
+  root.classList.add('carrying-box')
+  void document.startViewTransition(() => flushSync(update)).finished.finally(() => root.classList.remove('carrying-box'))
 }
 
 /** This computer, in "Cloning … on …": by the name the page was reached at, or as this computer when it is open on it. */

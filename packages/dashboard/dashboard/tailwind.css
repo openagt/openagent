@@ -810,6 +810,14 @@ html[data-pinned] body {
   @view-transition {
     navigation: auto;
   }
+  /* Starting a run (StartAgentForm): the box moves to its place on the run's page, the rest of the
+     page changes under it, both on the scale's 180ms. */
+  .carrying-box::view-transition-group(composer),
+  .carrying-box::view-transition-old(root),
+  .carrying-box::view-transition-new(root) {
+    animation-duration: 180ms;
+    animation-timing-function: var(--ease-out);
+  }
   ::view-transition-group(oa-toggle-thumb) {
     animation-duration: 0.25s;
     animation-timing-function: ease-in-out;

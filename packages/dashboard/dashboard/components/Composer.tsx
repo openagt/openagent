@@ -56,7 +56,7 @@ const DRIVER_UI: Record<DriverName, { icon: DriverOption['icon'] }> = {
  * starts as its first line and the row of how it runs as its last. It is focused almost all the time
  * it is on screen, so focus is its own edge in the primary colour and nothing more: the caret says the rest.
  */
-const SURFACE = 'flex flex-col rounded-lg border border-hairline bg-card p-1 shadow-lg transition-colors has-[[contenteditable]:focus]:border-primary'
+const SURFACE = '[view-transition-name:composer] flex flex-col rounded-lg border border-hairline bg-card p-1 shadow-lg transition-colors has-[[contenteditable]:focus]:border-primary'
 
 export interface ComposerHandle {
   clear: () => void
