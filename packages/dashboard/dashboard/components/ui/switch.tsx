@@ -17,7 +17,7 @@ export function Switch({ className, disabled = false, ...props }: SwitchProps) {
       className={cn(
         // A 16px track in a 24px hit area.
         'focus-ring relative inline-flex h-4 w-7 shrink-0 items-center rounded-full border border-input bg-muted p-0.5 after:absolute after:-inset-y-1 after:inset-x-0 hover:not-data-[checked]:border-input-hover',
-        'transition-colors data-[checked]:border-primary data-[checked]:bg-primary data-[checked]:hover:bg-primary/90',
+        'transition-colors data-[checked]:border-primary data-[checked]:bg-primary data-[checked]:hover:border-primary-hover data-[checked]:hover:bg-primary-hover',
         'data-[disabled]:pointer-events-none data-[disabled]:opacity-50',
         className,
       )}

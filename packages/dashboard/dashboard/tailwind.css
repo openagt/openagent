@@ -34,7 +34,8 @@
   --card: #ffffff;
   --card-foreground: #3a4248;
   --muted: #f3f5f2;
-  --muted-foreground: #66756c;
+  /* 4.5:1 or more on the hover fill (`--accent`) and the sidebar, not only on the page. */
+  --muted-foreground: #5f6e65;
   --faint-foreground: #86928a;
   --border: #e3e7e1;
   /* The edge of what a person types into or ticks: 3:1 or more on every surface it sits on (the
@@ -152,7 +153,7 @@
   --card: oklch(1 0 0);
   --card-foreground: oklch(0.145 0 0);
   --muted: oklch(0.97 0 0);
-  --muted-foreground: oklch(0.556 0 0);
+  --muted-foreground: oklch(0.54 0 0);
   --faint-foreground: oklch(0.62 0 0);
   --border: oklch(0.922 0 0);
   --input: color-mix(in oklab, var(--foreground) 46%, var(--background));

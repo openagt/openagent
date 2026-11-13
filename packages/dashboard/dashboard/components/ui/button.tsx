@@ -12,13 +12,13 @@ const buttonVariants = cva(
   {
     variants: {
       variant: {
-        default: 'bg-primary text-primary-foreground hover:bg-primary/90 active:bg-primary/80',
+        default: 'bg-primary text-primary-foreground hover:bg-primary-hover active:bg-primary-active',
         secondary: 'bg-accent text-accent-foreground hover:bg-foreground/10 active:bg-foreground/15',
         outline: 'border border-border bg-transparent hover:bg-accent hover:text-accent-foreground active:bg-foreground/10',
         ghost: 'hover:bg-accent hover:text-accent-foreground active:bg-foreground/10',
         // A confirmed destructive action (#1032): --danger is a fill, so its label inverts the
         // opposite way (text-background).
-        destructive: 'bg-danger text-background hover:bg-danger/90 active:bg-danger/80',
+        destructive: 'bg-danger text-background hover:bg-danger-hover active:bg-danger-active',
         link: 'h-auto px-0 text-primary underline-offset-4 hover:underline',
       },
       size: {

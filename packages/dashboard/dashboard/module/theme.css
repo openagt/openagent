@@ -76,11 +76,17 @@
   --color-input-hover: color-mix(in oklab, var(--foreground) 40%, var(--input));
   --color-primary: var(--primary);
   --color-primary-foreground: var(--primary-foreground);
+  /* A solid press under the pointer and pressed: a step and two towards the text's colour, so its
+     label stands out more, never less, in every palette and accent. */
+  --color-primary-hover: color-mix(in oklab, var(--primary) 85%, var(--foreground));
+  --color-primary-active: color-mix(in oklab, var(--primary) 70%, var(--foreground));
   --color-accent: var(--accent);
   --color-accent-foreground: var(--accent-foreground);
   --color-success: var(--success);
   --color-warning: var(--warning);
   --color-danger: var(--danger);
+  --color-danger-hover: color-mix(in oklab, var(--danger) 85%, var(--foreground));
+  --color-danger-active: color-mix(in oklab, var(--danger) 70%, var(--foreground));
   --color-info: var(--info);
   --color-merged: var(--merged);
 
