@@ -172,7 +172,7 @@ export function SettingsDialog({
               {phone && (
                 <div className="flex h-10 items-center justify-between px-2">
                   <BaseDialog.Title className="text-base font-semibold">Settings</BaseDialog.Title>
-                  <BaseDialog.Close aria-label="Close settings" className="rounded p-1 text-muted-foreground outline-none hover:text-foreground">
+                  <BaseDialog.Close aria-label="Close settings" className="rounded p-1 text-muted-foreground outline-none hover:text-foreground focus-visible:ring-2 focus-visible:ring-[var(--color-primary)]">
                     <X className="size-4" aria-hidden />
                   </BaseDialog.Close>
                 </div>
@@ -237,7 +237,7 @@ export function SettingsDialog({
                     <span className="truncate font-medium">{current.title}</span>
                   )}
                 </BaseDialog.Title>
-                <BaseDialog.Close aria-label="Close settings" className="rounded p-1 text-muted-foreground outline-none hover:text-foreground">
+                <BaseDialog.Close aria-label="Close settings" className="rounded p-1 text-muted-foreground outline-none hover:text-foreground focus-visible:ring-2 focus-visible:ring-[var(--color-primary)]">
                   <X className="size-4" aria-hidden />
                 </BaseDialog.Close>
               </div>

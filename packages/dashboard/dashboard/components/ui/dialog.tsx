@@ -60,7 +60,7 @@ export function Dialog({
             <BaseDialog.Title className="text-sm font-semibold">{title}</BaseDialog.Title>
             <BaseDialog.Close
               aria-label="Close"
-              className="rounded p-0.5 text-muted-foreground outline-none hover:text-foreground"
+              className="-m-0.5 rounded p-1 text-muted-foreground outline-none hover:text-foreground focus-visible:ring-2 focus-visible:ring-[var(--color-primary)]"
             >
               <X className="h-4 w-4" aria-hidden />
             </BaseDialog.Close>
