@@ -99,10 +99,10 @@ export function useAgentHandoff(projectId: string, agentId: string | null | unde
     null,
     everyMs,
     [projectId, agentId, enabled, everyMs, saving],
-    // Remembered per run: going back to a run shows its last answer at once while it is read
-    // again, and a cadence flip (prPending 15s↔1s) keeps the answer rather than blanking the
-    // summary for a beat. Another run's answer is never shown.
-    key !== undefined ? { remember: key } : undefined,
+    // Remembered per run, in this browser too: going back to a run, or loading it again, shows its
+    // last answer at once while it is read again, and a cadence flip (prPending 15s↔1s) keeps the
+    // answer rather than blanking the summary for a beat. Another run's answer is never shown.
+    key !== undefined ? { remember: key, stored: true } : undefined,
   )
   useEffect(() => setEveryMs(handoff?.prPending ? PR_PENDING_MS : settling ? SETTLING_EVERY_MS : REST_MS), [handoff?.prPending, settling])
   // Once the branch has something to say, the run's work is on it: back to the resting pace.

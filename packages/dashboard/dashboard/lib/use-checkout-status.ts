@@ -23,10 +23,10 @@ export function useCheckoutStatus(projectId: string, agentId: string, turn?: boo
     null,
     everyMs,
     [projectId, agentId, everyMs],
-    // An agent seen before shows what was read last time at once, while it is read again. One
-    // never seen shows no facts until its own answer: never the previous agent's, which read as
-    // this one's for the beat the read took.
-    { remember: `worktree:${projectId}:${agentId}` },
+    // An agent seen before, by this load or an earlier one, shows what was read last time at once,
+    // while it is read again. One never seen shows no facts until its own answer: never the
+    // previous agent's, which read as this one's for the beat the read took.
+    { remember: `worktree:${projectId}:${agentId}`, stored: true },
   )
   useEffect(() => setEveryMs(status?.prPending ? PR_PENDING_MS : settling ? SETTLING_EVERY_MS : 10_000), [status?.prPending, settling])
   useEffect(() => {
