@@ -343,7 +343,7 @@ function sameDeps(a: DependencyList, b: DependencyList): boolean {
 }
 
 /**
- * Read once, and again whenever `deps` change.
+ * Read once, again whenever `deps` change, and again when `again` tells of a change.
  *
  * Pass `null` for `load` when there is nothing to read yet (no project selected): the
  * value stays `initial` and no read is made. `load` must close over exactly `deps`.
@@ -353,8 +353,9 @@ export function useLoaded<T>(
   initial: T,
   deps: DependencyList,
   keep?: Keep,
+  again?: Again,
 ): T {
-  return useAsyncValue(load, initial, null, deps, keep).value
+  return useAsyncValue(load, initial, null, deps, keep, again).value
 }
 
 /**

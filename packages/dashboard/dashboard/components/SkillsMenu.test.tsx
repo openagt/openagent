@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, test, vi } from 'vitest'
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { skillsSaved } from '../lib/skills-saved.js'
 import { forgetRemembered } from '../lib/use-async.js'
 import { hoverTooltip, openMenu } from '../test-utils.js'
 
@@ -112,6 +113,15 @@ describe('the Skills menu under the launcher\'s box', () => {
     expect(await screen.findByRole('button', { name: 'Skills: 3' })).toBeTruthy()
   })
 
+  test('a save on the Skills page is counted at once', async () => {
+    onProjectSkills.mockResolvedValue(PROJECT)
+    renderMenu()
+    await screen.findByRole('button', { name: 'Skills: 4' })
+    onProjectSkills.mockResolvedValue({ ...PROJECT, held: ['tickets', 'plan', 'queue'] })
+    skillsSaved()
+    expect(await screen.findByRole('button', { name: 'Skills: 5' })).toBeTruthy()
+  })
+
   test('nothing until the agents are read', () => {
     onProjectSkills.mockResolvedValue(PROJECT)
     renderMenu({ agent: undefined })
@@ -164,5 +174,14 @@ describe("the session page's Skills, as words", () => {
     onProjectSkills.mockResolvedValue({ held: ['ask', 'tickets'] })
     render(<SkillsOff projectId="p1" agent="default" />)
     expect(await screen.findByText('Skills: 4')).toBeTruthy()
+  })
+
+  test('a save on the Skills page is counted at once', async () => {
+    onProjectSkills.mockResolvedValue({ held: ['tickets'] })
+    render(<SkillsOff projectId="p1" agent="default" />)
+    await screen.findByText('Skills: 4')
+    onProjectSkills.mockResolvedValue({ held: ['tickets', 'queue'] })
+    skillsSaved()
+    expect(await screen.findByText('Skills: 5')).toBeTruthy()
   })
 })

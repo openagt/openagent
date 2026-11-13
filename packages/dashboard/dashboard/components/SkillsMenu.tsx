@@ -1,6 +1,7 @@
 import { Check, ChevronDown, Puzzle, Settings2 } from 'lucide-react'
 import type { AgentRecord, AgentsView } from '../rpc/agents.js'
 import { onProjectSkills } from '../rpc/skills.js'
+import { skillsAgain } from '../lib/skills-saved.js'
 import { useLoaded } from '../lib/use-async.js'
 import { openSettings } from '../lib/use-route.js'
 import { cn } from '../lib/utils.js'
@@ -93,7 +94,7 @@ export function SkillsMenu({
   busy: boolean
 }) {
   // The project's own skills, by name, as a run's checkout has them: the list's and the project's own.
-  const project = useLoaded(projectId !== undefined ? () => onProjectSkills(projectId) : null, null, [projectId])
+  const project = useLoaded(projectId !== undefined ? () => onProjectSkills(projectId) : null, null, [projectId], undefined, skillsAgain)
   const held = project?.held ?? []
   if (!agent || !groups) return null
   const own = agent.skills
@@ -203,7 +204,7 @@ export function SkillsMenu({
  */
 export function SkillsOff({ projectId, agent, skillsOn, skillsOff, projectSkills }: { projectId: string | undefined; agent: string | undefined; skillsOn?: string[] | undefined; skillsOff?: string[] | undefined; projectSkills?: 'none' | string[] | undefined }) {
   const { view } = useAgentsList()
-  const project = useLoaded(projectId !== undefined ? () => onProjectSkills(projectId) : null, null, [projectId])
+  const project = useLoaded(projectId !== undefined ? () => onProjectSkills(projectId) : null, null, [projectId], undefined, skillsAgain)
   if (!view || (projectId !== undefined && project === null)) return null
   const record = view.agents.find(one => one.id === (agent ?? DEFAULT_AGENT))
   const count = skillCount(sessionSkills(record, { on: skillsOn ?? [], off: skillsOff ?? [] }), projectId !== undefined ? projectKept(project?.held ?? [], projectSkills) : [])
