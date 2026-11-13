@@ -363,7 +363,7 @@ describe('module cards on the Overview (#1818)', () => {
     await waitFor(() => expect(document.querySelector('[title="Fix flaky login test"]')).toBeTruthy())
     expect(screen.queryByTestId('title-placeholder')).toBeNull()
   })
-  test('a run just started is starting until a list has had it; then a list without it says it is gone, as after a delete and Back', async () => {
+  test('a run just started is starting until a list has had it; then a list without it says no such session, as after a delete and Back', async () => {
     const { useModuleHost } = await import('./module/index.js')
     function Starter({ projects }: ModuleCardProps) {
       const host = useModuleHost()
@@ -380,11 +380,11 @@ describe('module cards on the Overview (#1818)', () => {
     fireEvent.click(await screen.findByRole('button', { name: 'start' }))
     await waitFor(() => expect(window.location.pathname).toBe('/app/9-d'))
     await waitFor(() => expect(calls.filter(call => call.name === 'onAgents').length).toBeGreaterThan(1))
-    expect(screen.queryByText('This session is gone')).toBeNull()
+    expect(screen.queryByText('No such session')).toBeNull()
     listed = [run]
     await waitFor(() => expect(document.querySelector('button[aria-label="tidy up, session actions"]')).toBeTruthy())
     listed = []
-    expect(await screen.findByText('This session is gone', {}, { timeout: 5000 })).toBeTruthy()
+    expect(await screen.findByText('No such session', {}, { timeout: 5000 })).toBeTruthy()
   })
 })
 

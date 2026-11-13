@@ -533,8 +533,8 @@ export function App() {
         return <AgentView {...agentPage} live={justStarted ? true : null} label={namesRuns ? startedTitle : (justStarted && agentStart.intent) || undefined} naming={justStarted && namesRuns && startedTitle === undefined} remoteLabel={justStarted ? agentStart.runsOn : undefined} />
       return (
         <NotFound
-          title="This session is gone"
-          detail="There is no record of this session."
+          title="No such session"
+          detail="No session of this project has this address. It may have been deleted, or the link may be from another machine."
           actionLabel="Back to the project"
           onAction={() => selectAgent(null)}
         />
