@@ -10,6 +10,7 @@ import { UPDATE_TICKETS_PROMPT } from '../src/module.js'
  */
 export function UpdateTicketsButton({
   busy,
+  starting,
   onStart,
   onConfigure,
   lastImportedAt,
@@ -19,6 +20,8 @@ export function UpdateTicketsButton({
   className,
 }: {
   busy: boolean
+  /** This update is the start in flight: the button spins, not the one beside it that started something else. */
+  starting: boolean
   onStart: () => void
   /** Open the launcher with this prompt instead of spending a session on it. */
   onConfigure: () => void
@@ -44,7 +47,7 @@ export function UpdateTicketsButton({
           : 'Bring tickets/ up to date with the issue tracker. With no import on record, everything open comes across.'
       }
       busy={busy}
-      starting={busy}
+      starting={starting}
       onStart={onStart}
       onConfigure={onConfigure}
       prompt={UPDATE_TICKETS_PROMPT}

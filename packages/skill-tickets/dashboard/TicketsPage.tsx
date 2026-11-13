@@ -103,8 +103,12 @@ export function TicketsPage({ projects }: { projects: ModuleProject[] }) {
   // action with the row's own project (a panel binds one projectId; the flat list has one per row).
   // The dashboard starts the run with the person's own picks and lands on it.
   const { busy, error, run } = useAction()
+  // Which start is in flight, by its project and prompt: only the button that asked it spins.
+  const [starting, setStarting] = useState<{ projectId: string; prompt: string } | null>(null)
   const startSession = async (projectId: string, prompt: string, failure: string) => {
+    setStarting({ projectId, prompt })
     await run(() => host.startRun(projectId, prompt), failure)
+    setStarting(null)
   }
   // The page-wide adds: every unclaimed shown ticket handed, as a link, to the actions the
   // installed modules offer on links — "Add to queue" when a project has a queue package — as the
@@ -273,6 +277,7 @@ export function TicketsPage({ projects }: { projects: ModuleProject[] }) {
                     ticket={r.ticket}
                     projectName={r.projectName}
                     busy={busy}
+                    starting={starting?.projectId === r.projectId ? starting.prompt : null}
                     selected={selected.has(`${r.projectId}/${r.ticket.file}`)}
                     onToggleSelect={() => toggleSelected(`${r.projectId}/${r.ticket.file}`)}
                     onOpen={() => onOpenTicket(r.projectId, r.ticket.file)}
