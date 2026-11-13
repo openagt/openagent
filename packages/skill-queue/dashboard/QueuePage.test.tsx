@@ -151,6 +151,22 @@ describe('QueuePage', () => {
       fireEvent.click(on)
       expect(host.openAgent).toHaveBeenCalledWith('p1', 'run-7')
     })
+
+    test('an entry an agent is on gets no second one: its row offers no start, and the batch starts the entries nobody is on', async () => {
+      host = fakeHost({ p1: { '--local --full': FULL } })
+      host.agents.mockImplementation(async () => [{ id: 'run-7', status: 'running', startedAt: '2026-10-01T10:00:00.000Z', ask: workOnEntryPrompt('Hand-written on top') }])
+      renderWithHost(<QueuePage projects={[alpha]} projectId={null} path={[]} />, host)
+      await screen.findByRole('button', { name: 'An agent is on it' })
+      expect(screen.queryByRole('button', { name: 'Start an agent on entry 1' })).toBeNull()
+      fireEvent.change(screen.getByRole('spinbutton', { name: 'How many agents to start' }), { target: { value: '2' } })
+      fireEvent.click(screen.getByRole('button', { name: 'Start 2 agents' }))
+      await waitFor(() =>
+        expect(host.startRun.mock.calls).toEqual([
+          ['p1', workOnEntryPrompt('Urgent'), { land: false }],
+          ['p1', workOnEntryPrompt('Also urgent'), { land: false }],
+        ]),
+      )
+    })
   })
 
   describe('removing', () => {

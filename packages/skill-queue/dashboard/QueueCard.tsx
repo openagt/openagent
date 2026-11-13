@@ -1,6 +1,6 @@
 import { FastForward, ListTodo, Minus, Play, Plus } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitleLink, StartAgentButton, Tooltip, TooltipContent, TooltipTrigger, cn, pathsIn, useFileNames, useModuleHost, type ModuleCardProps } from '@openagt/dashboard/module'
-import { fanOutLabel, workOnEntryPrompt } from '../src/module.js'
+import { fanOutLabel, unclaimedEntries, workOnEntryPrompt } from '../src/module.js'
 import { EntryTitle, entryView } from './entry.js'
 import { useQueueStarts } from './starts.js'
 import { useQueueReads } from './reads.js'
@@ -56,13 +56,15 @@ export function QueueCard({ projects }: ModuleCardProps) {
           <ul className="space-y-4">
             {shown.map(read => {
               const { project, entries } = read
-              const count = starts.batchOf(project.id, entries)
+              // An entry an agent is on gets no second one: the batch starts from the top of the others.
+              const free = unclaimedEntries(entries, read.working)
+              const count = starts.batchOf(project.id, free)
               return (
                 <li key={project.id}>
                   <div className="flex w-full items-center gap-2">
                     <span className="truncate text-sm font-medium">{project.name}</span>
                     <span className="shrink-0 text-xs tabular-nums text-muted-foreground">{entries.length} queued</span>
-                    {entries.length > 0 && (
+                    {free.length > 0 && (
                       <>
                         {/* The project's batch act, said as one: how many agents (a stepper, never more
                             than the entries), then "Start N", which starts them from the top. */}
@@ -76,7 +78,7 @@ export function QueueCard({ projects }: ModuleCardProps) {
                               <Minus className="h-3 w-3" aria-hidden />
                             </button>
                             <span className="w-4 text-center">{count}</span>
-                            <button type="button" aria-label="One agent more" disabled={count >= entries.length} onClick={() => starts.setCount(project.id, count + 1)} className="flex h-full w-6 items-center justify-center text-muted-foreground hover:text-foreground disabled:opacity-40">
+                            <button type="button" aria-label="One agent more" disabled={count >= free.length} onClick={() => starts.setCount(project.id, count + 1)} className="flex h-full w-6 items-center justify-center text-muted-foreground hover:text-foreground disabled:opacity-40">
                               <Plus className="h-3 w-3" aria-hidden />
                             </button>
                           </TooltipTrigger>
@@ -90,9 +92,9 @@ export function QueueCard({ projects }: ModuleCardProps) {
                           tooltip={fanOutLabel(count)}
                           busy={inFlight}
                           starting={starts.fanningOut(project.id)}
-                          onStart={() => void starts.fanOutProject(project.id, entries)}
-                          onConfigure={() => host.configureRun(project.id, workOnEntryPrompt(entries[0]!))}
-                          prompt={workOnEntryPrompt(entries[0]!)}
+                          onStart={() => void starts.fanOutProject(project.id, free)}
+                          onConfigure={() => host.configureRun(project.id, workOnEntryPrompt(free[0]!))}
+                          prompt={workOnEntryPrompt(free[0]!)}
                           configureDescription="Opens the launcher with the top entry's prompt — one agent, not the batch."
                         />
                       </>

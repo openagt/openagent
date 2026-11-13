@@ -77,6 +77,19 @@ describe('QueueCard', () => {
     )
   })
 
+  test('the fan-out starts the entries nobody is on: an entry a working agent was asked gets no second agent', async () => {
+    host = fakeHost({ p1: { '--local': [LOGIN, 'Tidy the loader', 'Third'] }, p2: { '--local': [] } })
+    host.agents.mockImplementation(async (projectId: string) => (projectId === 'p1' ? [{ id: 'run-7', status: 'running', startedAt: '2026-10-01T10:00:00.000Z', ask: workOnEntryPrompt(LOGIN) }] : []))
+    renderWithHost(<QueueCard projects={[alpha, beta]} />, host)
+    fireEvent.click(await screen.findByRole('button', { name: 'Start 2' }))
+    await waitFor(() =>
+      expect(started()).toEqual([
+        ['p1', workOnEntryPrompt('Tidy the loader'), { land: false }],
+        ['p1', workOnEntryPrompt('Third'), { land: false }],
+      ]),
+    )
+  })
+
   test('the fan-out is capped at the entries there are, and stops at the first refusal with its reason', async () => {
     render({ p1: [LOGIN, 'Tidy the loader'], p2: [] })
     await screen.findByText('Login page')

@@ -29,7 +29,7 @@ import {
   type Schedule,
 } from '@openagt/dashboard/module'
 import type { PlacedEntry } from '../src/queue.js'
-import { DEFAULT_PRIORITY, PRIORITIES, QUEUE_COMMAND, addTextArgs, doneArgs, fanOutLabel, isPlacedEntry, isWorkingOn, priorityMeaning, readEntries, workOnEntryPrompt } from '../src/module.js'
+import { DEFAULT_PRIORITY, PRIORITIES, QUEUE_COMMAND, addTextArgs, doneArgs, fanOutLabel, isPlacedEntry, isWorkingOn, priorityMeaning, readEntries, unclaimedEntries, workOnEntryPrompt } from '../src/module.js'
 import { EntryTitle, entryView } from './entry.js'
 import { useQueueStarts, type QueueStarts } from './starts.js'
 
@@ -127,13 +127,15 @@ function ProjectQueue({ read, titled, schedule, names, starts, reload }: { read:
   const host = useModuleHost()
   const { project, entries, error, working } = read
   const raw = (entries ?? []).map(placed => placed.entry)
-  const count = starts.batchOf(project.id, raw)
+  // An entry an agent is on gets no second one: the batch starts from the top of the others.
+  const free = unclaimedEntries(raw, working)
+  const count = starts.batchOf(project.id, free)
   return (
     <section aria-label={project.name}>
       <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
         {titled && <h2 className="text-sm font-semibold">{project.name}</h2>}
         {raw.length > 0 && <span className="rounded-full bg-muted px-2 py-0.5 text-xs tabular-nums text-muted-foreground">{raw.length === 1 ? '1 entry' : `${raw.length} entries`}</span>}
-        {raw.length > 0 && (
+        {free.length > 0 && (
           <div className="ml-auto flex items-center gap-2">
             {/* The project's batch act: how many, then the button the count qualifies. */}
             <Tooltip>
@@ -143,7 +145,7 @@ function ProjectQueue({ read, titled, schedule, names, starts, reload }: { read:
                     name="agent-count"
                     type="number"
                     min={1}
-                    max={raw.length}
+                    max={free.length}
                     step={1}
                     value={count}
                     aria-label="How many agents to start"
@@ -169,9 +171,9 @@ function ProjectQueue({ read, titled, schedule, names, starts, reload }: { read:
               tooltip={fanOutLabel(count)}
               busy={starts.inFlight}
               starting={starts.fanningOut(project.id)}
-              onStart={() => void starts.fanOutProject(project.id, raw)}
-              onConfigure={() => host.configureRun(project.id, workOnEntryPrompt(raw[0]!))}
-              prompt={workOnEntryPrompt(raw[0]!)}
+              onStart={() => void starts.fanOutProject(project.id, free)}
+              onConfigure={() => host.configureRun(project.id, workOnEntryPrompt(free[0]!))}
+              prompt={workOnEntryPrompt(free[0]!)}
               configureDescription="Opens the launcher with the top entry's prompt: one agent, not the batch."
             />
           </div>
@@ -289,21 +291,23 @@ function EntryRow({ project, placed, agent, names, starts, reload }: { project: 
           <TooltipContent>An agent is working on this entry: open it</TooltipContent>
         </Tooltip>
       )}
-      <StartAgentButton
-        variant="ghost"
-        size="icon-sm"
-        icon={<Play className="h-3.5 w-3.5" aria-hidden />}
-        ariaLabel={`Start an agent on entry ${place}`}
-        menuAriaLabel={`Other ways to run ${view.title}`}
-        tooltip="Start an agent working on this entry"
-        busy={starts.inFlight}
-        starting={starts.starting(project.id, entry)}
-        onStart={() => void starts.startEntry(project.id, entry)}
-        onConfigure={() => host.configureRun(project.id, workOnEntryPrompt(entry))}
-        prompt={workOnEntryPrompt(entry)}
-        configureDescription="Opens the launcher with this entry's prompt, so you can set the model and where it runs."
-        className="text-muted-foreground hover:text-foreground"
-      />
+      {!agent && (
+        <StartAgentButton
+          variant="ghost"
+          size="icon-sm"
+          icon={<Play className="h-3.5 w-3.5" aria-hidden />}
+          ariaLabel={`Start an agent on entry ${place}`}
+          menuAriaLabel={`Other ways to run ${view.title}`}
+          tooltip="Start an agent working on this entry"
+          busy={starts.inFlight}
+          starting={starts.starting(project.id, entry)}
+          onStart={() => void starts.startEntry(project.id, entry)}
+          onConfigure={() => host.configureRun(project.id, workOnEntryPrompt(entry))}
+          prompt={workOnEntryPrompt(entry)}
+          configureDescription="Opens the launcher with this entry's prompt, so you can set the model and where it runs."
+          className="text-muted-foreground hover:text-foreground"
+        />
+      )}
       <ConfirmDialog
         trigger={
           <Button variant="ghost" size="icon-sm" aria-label={`Remove entry ${place} from the queue`} title="Remove from the queue" className="shrink-0 text-muted-foreground hover:text-danger">
