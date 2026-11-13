@@ -24,8 +24,9 @@ import { isMobileScreen, useIsMobile } from '../lib/use-mobile.js'
 // the end of the page's top bar. An icon opens its pane and closes it again, and an open pane's
 // icon is lit. The open panes are cards in one column beside the chat, in the order they were
 // opened; the line between the chat and the column, and the line between two panes, is dragged to
-// share the room. A pane's card has its name, a button that lets it fill the page and one that
-// closes it. Which panes are open and how the room is shared is remembered for each page
+// share the room; a line is drawn only under the pointer and while it is dragged, the cards' own
+// edges part them at rest. A pane's card has its name, a button that lets it fill the page and one
+// that closes it. Which panes are open and how the room is shared is remembered for each page
 // (`lib/panes.ts`). A closed pane renders nothing, so nothing in it reads anything.
 //
 // On a phone there is no room beside the chat: the column of cards lies over the chat's right two
@@ -322,14 +323,14 @@ function PaneCard({ pane }: { pane: Pane }) {
   return (
     // A pane that fills the page is laid over the whole of it, where it is: its contents are not
     // drawn anew, so what was opened and scrolled in it stays.
-    <div className={fills ? 'absolute inset-0 z-30 flex bg-background' : 'flex h-full min-h-0 min-w-0'}>
-      <section aria-label={pane.label} className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden bg-background">
-        {/* As tall as the page's top bar, and lined under. */}
-        <header className="flex h-11 shrink-0 items-center gap-0.5 border-b border-border pr-2 pl-2">
+    <div className={fills ? 'absolute inset-0 z-30 flex bg-background p-2' : 'flex h-full min-h-0 min-w-0'}>
+      {/* A card: the surface with the hairline, its header 40 high and lined under. */}
+      <section aria-label={pane.label} className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden rounded-lg border border-hairline bg-card">
+        <header className="flex h-10 shrink-0 items-center gap-1 border-b border-hairline px-1">
           {/* The pane's name stands until the pane puts its own title here. */}
-          <div ref={setTitle} className="peer flex min-w-0 flex-1 items-center gap-0.5 empty:hidden" />
-          <h2 className="min-w-0 flex-1 truncate pl-2 text-[13px] text-muted-foreground peer-[:not(:empty)]:hidden">{pane.label}</h2>
-          <div ref={setActions} className="flex shrink-0 items-center gap-0.5 empty:hidden" />
+          <div ref={setTitle} className="peer flex min-w-0 flex-1 items-center gap-1 empty:hidden" />
+          <h2 className="min-w-0 flex-1 truncate pl-2 text-sm font-medium peer-[:not(:empty)]:hidden">{pane.label}</h2>
+          <div ref={setActions} className="flex shrink-0 items-center gap-1 empty:hidden" />
           <Tooltip>
             <TooltipTrigger
               render={
@@ -343,7 +344,7 @@ function PaneCard({ pane }: { pane: Pane }) {
                 />
               }
             >
-              {fills ? <Minimize2 className="h-3.5 w-3.5" /> : <Maximize2 className="h-3.5 w-3.5" />}
+              {fills ? <Minimize2 className="size-4" /> : <Maximize2 className="size-4" />}
             </TooltipTrigger>
             <TooltipContent>{fills ? 'Back to its place' : 'Fill the page'}</TooltipContent>
           </Tooltip>
@@ -392,10 +393,12 @@ function PaneStack() {
   }
   return (
     // No line is dragged under a pane that fills the page.
-    <ResizablePanelGroup orientation="vertical" disabled={expanded !== undefined} onLayoutChanged={remember}>
+    // The cards stand 8px apart and 8px in from the column's edges; the line between two is drawn
+    // only under the pointer and while it is dragged.
+    <ResizablePanelGroup orientation="vertical" disabled={expanded !== undefined} onLayoutChanged={remember} className="py-1 pr-2">
       {open.flatMap((pane, at) => [
-        ...(at > 0 ? [<ResizableHandle key={`above-${pane.id}`} aria-label={`The height of ${open[at - 1]!.label} and ${pane.label}`} />] : []),
-        <ResizablePanel key={pane.id} id={named(pane)} defaultSize={`${shares?.[pane.id] ?? 100 / open.length}%`} minSize={96} style={{ overflow: 'hidden' }}>
+        ...(at > 0 ? [<ResizableHandle key={`above-${pane.id}`} className="bg-transparent" aria-label={`The height of ${open[at - 1]!.label} and ${pane.label}`} />] : []),
+        <ResizablePanel key={pane.id} id={named(pane)} defaultSize={`${shares?.[pane.id] ?? 100 / open.length}%`} minSize={96} className="py-1" style={{ overflow: 'hidden' }}>
           <PaneCard pane={pane} />
         </ResizablePanel>,
       ])}
@@ -434,7 +437,7 @@ export function PaneLayout({ children }: { children: ReactNode }) {
           <ResizablePanel id={CHAT} minSize={320} className="flex min-w-0 flex-col" style={{ overflow: 'hidden' }}>
             {children}
           </ResizablePanel>
-          {beside && <ResizableHandle aria-label="The width of the chat and the panes" />}
+          {beside && <ResizableHandle className="bg-transparent" aria-label="The width of the chat and the panes" />}
           {beside && (
             <ResizablePanel id={columnId} defaultSize={`${column}%`} minSize={288} style={{ overflow: 'hidden' }}>
               <PaneStack />
@@ -444,7 +447,7 @@ export function PaneLayout({ children }: { children: ReactNode }) {
       </TopBarRow.Provider>
       {isMobile && open.length > 0 && (
         // Over the chat's right two thirds, as Claude Code's are; all of the page while one pane fills it.
-        <div className={cn('absolute inset-y-0 right-0 z-20 flex flex-col divide-y divide-border border-l border-border bg-background', expanded ? 'left-0' : 'w-2/3 min-w-64 max-w-full')}>
+        <div className={cn('absolute inset-y-0 right-0 z-20 flex flex-col gap-2 border-l border-hairline bg-background p-2', expanded ? 'left-0' : 'w-2/3 min-w-64 max-w-full')}>
           {open.map(pane => (
             <div key={pane.id} className="min-h-0 flex-1">
               <PaneCard pane={pane} />

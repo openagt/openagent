@@ -74,11 +74,11 @@ function Shown({ row, projectId, events, onOpenAgent }: { row: SubagentRow; proj
   return (
     <div className="flex min-h-0 flex-1 flex-col">
       <PaneTitle>
-        <h2 className="min-w-0 flex-1 truncate pl-2 text-xs font-medium text-foreground">{row.name}</h2>
+        <h2 className="min-w-0 flex-1 truncate pl-2 text-sm font-medium text-foreground">{row.name}</h2>
       </PaneTitle>
       {runId && onOpenAgent && (
         <PaneActions>
-          <Button variant="ghost" className="h-7 text-xs text-muted-foreground" onClick={() => onOpenAgent(runId)}>
+          <Button variant="ghost" size="sm" className="text-muted-foreground" onClick={() => onOpenAgent(runId)}>
             Open its page
           </Button>
         </PaneActions>
@@ -104,7 +104,7 @@ function PaneHead({ row }: { row: SubagentRow }) {
   return (
     <div className="flex flex-col gap-4 pb-3 font-sans text-sm">
       {row.prompt && (
-        <section aria-label="Its prompt" className="max-h-64 overflow-auto rounded-lg bg-muted px-3.5 py-2.5 break-words whitespace-pre-wrap text-foreground">
+        <section aria-label="Its prompt" className="max-h-64 overflow-auto rounded-lg bg-muted px-3 py-2 break-words whitespace-pre-wrap text-foreground">
           {row.prompt}
         </section>
       )}
