@@ -71,6 +71,21 @@ describe('Agent accounts', () => {
     expect(within(out).getByRole('status').textContent).toMatch(/Say yes in the page this computer's browser opened/)
   })
 
+  test('the press that logs Claude Code in keeps the focus while it waits, beside what it waits for', async () => {
+    views({ now: NOW, accounts: [{ id: 'This computer', name: 'This computer', own: true, windows: [] }] })
+    const waiting = { driver: 'claude-code', ready: false, problem: '`claude` is not logged in.', fix: { kind: 'log-in', command: 'claude auth login' } }
+    states(waiting)
+    logins.sendAgentFix.mockImplementation(async () => (states({ ...waiting, fixing: 'log-in' }), { ok: true }))
+    render(<AccountsList />)
+    const card = await screen.findByRole('region', { name: 'Claude Code' })
+    const press = await within(card).findByRole('button', { name: 'Log this computer in to Claude Code' })
+    press.focus()
+    fireEvent.click(press)
+    expect((await within(card).findByRole('status')).textContent).toMatch(/Say yes in the page/)
+    expect(document.activeElement).toBe(press)
+    expect(press.getAttribute('aria-disabled')).toBe('true')
+  })
+
   test('on a computer with no browser the log-in is no press: the card gives the command to type there', async () => {
     views({ now: NOW, accounts: [{ id: 'This computer', name: 'This computer', own: true, windows: [] }] })
     states({ driver: 'claude-code', ready: false, problem: '`claude` is not logged in.', fix: { kind: 'log-in', command: 'claude auth login' }, typed: true })
