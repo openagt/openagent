@@ -106,6 +106,12 @@ describe('the Skills menu under the launcher\'s box', () => {
     expect(screen.queryByRole('menuitemradio', { name: 'All' })).toBeNull()
   })
 
+  test('a skill the agent has and the project holds too is counted once', async () => {
+    onProjectSkills.mockResolvedValue({ ...PROJECT, held: ['ask', 'plan'] })
+    renderMenu()
+    expect(await screen.findByRole('button', { name: 'Skills: 3' })).toBeTruthy()
+  })
+
   test('nothing until the agents are read', () => {
     onProjectSkills.mockResolvedValue(PROJECT)
     renderMenu({ agent: undefined })
@@ -152,5 +158,11 @@ describe("the session page's Skills, as words", () => {
     render(<SkillsOff projectId={undefined} agent="default" skillsOn={['plan']} />)
     const alone = (await screen.findByText('Skills: 4')).parentElement!
     expect((await hoverTooltip(alone)).textContent).toBe("This session got its agent's skills with plan, and no project skill")
+  })
+
+  test('a skill its agent has and the project holds too is counted once, as the launcher counts it', async () => {
+    onProjectSkills.mockResolvedValue({ held: ['ask', 'tickets'] })
+    render(<SkillsOff projectId="p1" agent="default" />)
+    expect(await screen.findByText('Skills: 4')).toBeTruthy()
   })
 })

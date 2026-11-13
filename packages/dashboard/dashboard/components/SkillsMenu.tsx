@@ -58,6 +58,11 @@ function projectKept(held: readonly string[], project: SkillPicks['project']): s
   return project === undefined ? [...held] : project === 'none' ? [] : held.filter(name => project.includes(name))
 }
 
+/** How many skills the session gets: a project skill of the same name takes the agent's one's place, so the session has it once. */
+function skillCount(ofAgent: readonly string[], kept: readonly string[]): number {
+  return new Set([...ofAgent, ...kept]).size
+}
+
 /** What the session's picks say, in a few words for a hover: what differs from its agent's list and from every project skill. */
 export function skillPicksSaid(picks: { skillsOn?: readonly string[] | undefined; skillsOff?: readonly string[] | undefined; projectSkills?: 'none' | readonly string[] | undefined }): string {
   const parts = [
@@ -95,7 +100,7 @@ export function SkillsMenu({
   const ofAgent = sessionSkills(agent, picks)
   const listed = [...own, ...picks.on.filter(name => !own.includes(name))]
   const kept = projectKept(held, picks.project)
-  const count = ofAgent.length + (projectId !== undefined ? kept.length : 0)
+  const count = skillCount(ofAgent, projectId !== undefined ? kept : [])
   const toggleOfAgent = (name: string) => {
     if (own.includes(name)) onChange({ ...picks, off: picks.off.includes(name) ? picks.off.filter(one => one !== name) : [...picks.off, name] })
     else onChange({ ...picks, on: picks.on.filter(one => one !== name) })
@@ -201,7 +206,7 @@ export function SkillsOff({ projectId, agent, skillsOn, skillsOff, projectSkills
   const project = useLoaded(projectId !== undefined ? () => onProjectSkills(projectId) : null, null, [projectId])
   if (!view || (projectId !== undefined && project === null)) return null
   const record = view.agents.find(one => one.id === (agent ?? DEFAULT_AGENT))
-  const count = sessionSkills(record, { on: skillsOn ?? [], off: skillsOff ?? [] }).length + (projectId !== undefined ? projectKept(project?.held ?? [], projectSkills).length : 0)
+  const count = skillCount(sessionSkills(record, { on: skillsOn ?? [], off: skillsOff ?? [] }), projectId !== undefined ? projectKept(project?.held ?? [], projectSkills) : [])
   return (
     <RowSaid tip={`This session got ${skillPicksSaid({ skillsOn, skillsOff, projectSkills: projectId === undefined ? 'none' : projectSkills })}`}>
       <Puzzle className="h-3.5 w-3.5 shrink-0" aria-hidden />
