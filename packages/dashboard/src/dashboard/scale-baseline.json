@@ -62,9 +62,6 @@
   "dashboard/dashboard/components/AgentDetails.tsx": {
     "text-muted-foreground/70": 4
   },
-  "dashboard/dashboard/components/AgentHandoff.tsx": {
-    "text-[11px]": 1
-  },
   "dashboard/dashboard/components/AgentHistory.tsx": {
     "rounded": 1,
     "text-[11px]": 1,
@@ -72,11 +69,6 @@
   },
   "dashboard/dashboard/components/AgentView.tsx": {
     "py-2.5": 1
-  },
-  "dashboard/dashboard/components/AgentWorkBar.tsx": {
-    "rounded": 1,
-    "text-[10px]": 1,
-    "text-[13px]": 1
   },
   "dashboard/dashboard/components/Agents.tsx": {
     "rounded": 1,
