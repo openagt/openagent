@@ -483,17 +483,18 @@ describe('the Automations page: its rows', () => {
     // How it starts with the dashboard: Settings › Skills, whose tick does it, or `init`.
     fireEvent.click(within(other).getByRole('button', { name: 'Settings › Skills' }))
     expect(host.openSettings).toHaveBeenCalledWith('skills')
-    // The two commands, `start` (now) and `init`, each set as code with a button that copies it.
+    // The two commands, `start` (now) and `init`, each set as code with a button that copies it, named by the command.
     expect(within(other).getByText('npx @openagt/skill-scheduler@0.1 init').tagName).toBe('CODE')
     expect(within(other).getByText('npx @openagt/skill-scheduler@0.1 start').tagName).toBe('CODE')
-    expect(within(other).getAllByRole('button', { name: 'Copy the command' })).toHaveLength(2)
+    expect(within(other).getByRole('button', { name: 'Copy the start command' })).toBeTruthy()
+    expect(within(other).getByRole('button', { name: 'Copy the init command' })).toBeTruthy()
     expect(within(gemstack).queryByText(/so nothing here starts/)).toBeNull()
     cleanup()
     const { host: stopped } = hostAnswering(() => ({ ok: true, output: { ...STATUS, running: false } }))
     show(stopped)
     expect(await screen.findByText(/^The scheduler is on but its process is not running, so nothing here starts by itself/)).toBeTruthy()
     expect(screen.getByText('npx @openagt/skill-scheduler@0.1 start').tagName).toBe('CODE')
-    expect(screen.getAllByRole('button', { name: 'Copy the command' })).toHaveLength(1)
+    expect(screen.getAllByRole('button', { name: 'Copy the start command' })).toHaveLength(1)
   })
 
   test('a row switched on while the scheduler is off, or not running, is not green: it says it does not start', async () => {
