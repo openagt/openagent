@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type ComponentType, type FormEvent, type ReactNode, type RefObject } from 'react'
 import { ChevronRight, Circle, CircleArrowUp, CircleCheck, CircleX, Loader2, Pencil } from 'lucide-react'
-import { Button, Input, cn } from '@openagt/dashboard/module'
+import { Button, Input, Section, cn } from '@openagt/dashboard/module'
 import type { StepState } from './servers.js'
 
 // The small pieces the pages of Settings › Devices share: a row of the list, the tabs of a
@@ -114,12 +114,14 @@ export function Tabs<T extends string>({ tabs, value, onChange, label }: { tabs:
 
 /** A part of a device's page, with its heading. */
 export function Part({ title, children }: { title?: string; children: ReactNode }) {
-  return (
-    <section className="space-y-3 border-b border-border py-4 last:border-b-0">
-      {title !== undefined && <h3 className="text-sm font-medium">{title}</h3>}
-      {children}
-    </section>
-  )
+  const look = 'border-b border-border py-4 last:border-b-0'
+  if (title !== undefined)
+    return (
+      <Section title={title} className={look}>
+        <div className="space-y-3">{children}</div>
+      </Section>
+    )
+  return <section className={cn('space-y-3', look)}>{children}</section>
 }
 
 /** A switch row of a page: what it is, what it means now, and the switch. */

@@ -1,4 +1,4 @@
-import { FadeWhileStale, FilterChips, Page, PersonMark, STATUS_DOT, STATUS_RING, Table, TableBody, TableCell, TableHead, TableHeader, TableRow, cn, formatDateTime, formatDuration, inPlace, personSaid, runName, useGitHostPeople, useModuleHost, usePolled, type ModuleAgent, type ModuleHostPerson, type ModulePageProps, type ModuleProject } from '@openagt/dashboard/module'
+import { FadeWhileStale, FilterChips, Page, PersonMark, STATUS_DOT, Section, STATUS_RING, Table, TableBody, TableCell, TableHead, TableHeader, TableRow, cn, formatDateTime, formatDuration, inPlace, personSaid, runName, useGitHostPeople, useModuleHost, usePolled, type ModuleAgent, type ModuleHostPerson, type ModulePageProps, type ModuleProject } from '@openagt/dashboard/module'
 import type { RunCard } from '../src/run.js'
 
 /** How many runs each project lists: the command's own default page is 20; the page shows more. */
@@ -262,9 +262,8 @@ export function LogsPage({ projects, path }: ModulePageProps) {
             run is two lines, its name and then the rest, and its branch is left to its own page. */}
         <FadeWhileStale stale={stale} className="space-y-5 @4xl:hidden">
           {days.map(({ day, rows, cost }) => (
-            <section key={day} aria-label={day}>
-              <DayHeading day={day} runs={rows.length} cost={cost} />
-              <ul className="mt-1 text-sm">
+            <Section key={day} title={day} count={runsSaid(rows.length, cost)}>
+              <ul className="text-sm">
                 {rows.map(({ project, card }) => (
                   <li key={`${project.id}/${card.id}`} onClick={() => host.openAgent(project.id, card.id)} className="flex cursor-pointer items-center gap-2.5 border-b border-border py-2 hover:bg-accent">
                     <RunPerson person={card.person} account={accountOf(project.id, card.person)} />
@@ -285,7 +284,7 @@ export function LogsPage({ projects, path }: ModulePageProps) {
                   </li>
                 ))}
               </ul>
-            </section>
+            </Section>
           ))}
         </FadeWhileStale>
       </div>
@@ -324,10 +323,12 @@ function DayHeading({ day, runs, cost }: { day: string; runs: number; cost: numb
   return (
     <h2 className="flex items-baseline gap-2 text-sm font-semibold text-foreground">
       {day}
-      <span className="text-xs font-normal text-muted-foreground tabular-nums">
-        {runs === 1 ? '1 run' : `${runs} runs`}
-        {cost > 0 && ` · ${dollars(cost)}`}
-      </span>
+      <span className="text-xs font-normal text-muted-foreground tabular-nums">{runsSaid(runs, cost)}</span>
     </h2>
   )
+}
+
+/** How many runs a day had and what they cost together. */
+function runsSaid(runs: number, cost: number): string {
+  return `${runs === 1 ? '1 run' : `${runs} runs`}${cost > 0 ? ` · ${dollars(cost)}` : ''}`
 }

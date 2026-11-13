@@ -652,6 +652,8 @@ export { DropdownMenu, DropdownMenuContent, DropdownMenuCheckboxItem, DropdownMe
 export { ContextMenu, ContextMenuTrigger } from '../components/ui/context-menu.js'
 export { PaneTitle, PaneActions } from '../components/PaneHeader.js'
 export { Page } from '../components/Page.js'
+export { Section } from '../components/ui/section.js'
+export { List, Row } from '../components/ui/list.js'
 export { ShowSidebarButton } from '../components/SidebarToggle.js'
 export { StatTile } from '../components/StatTile.js'
 export { FilterChips, type FilterChip } from '../components/FilterChips.js'

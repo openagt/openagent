@@ -13,6 +13,9 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '.
 import { Textarea } from '../components/ui/textarea.js'
 import { OptionLabel } from '../components/ui/option-label.js'
 import { DisclosureToggle } from '../components/DisclosureToggle.js'
+import { Section } from '../components/ui/section.js'
+import { List, Row } from '../components/ui/list.js'
+import { ChevronRight, Folder, Trash2 } from 'lucide-react'
 
 // The gallery's card registry (#DESIGN). Every entry renders the REAL component wherever the
 // component can stand alone, so a card cannot quietly drift from what ships. The few that cannot
@@ -32,7 +35,7 @@ export interface Preview {
 }
 
 /** A labelled row inside a card. */
-function Row({ label, children }: { label: string; children: ReactNode }) {
+function Labelled({ label, children }: { label: string; children: ReactNode }) {
   return (
     <div className="flex flex-col gap-2">
       <span className="text-xs font-medium uppercase tracking-wide text-muted-foreground">{label}</span>
@@ -189,12 +192,12 @@ function Depth() {
 function Buttons() {
   return (
     <div className="space-y-5">
-      <Row label="Variants">
+      <Labelled label="Variants">
         <Button>Start agent</Button>
         <Button variant="outline">Outline</Button>
         <Button variant="ghost">Ghost</Button>
-      </Row>
-      <Row label="Sizes">
+      </Labelled>
+      <Labelled label="Sizes">
         <Button size="default">Default</Button>
         <Button>Small</Button>
         <Button size="sm">Extra small</Button>
@@ -204,13 +207,13 @@ function Buttons() {
         <Button size="icon-sm" aria-label="Icon small">
           <span className="text-[10px]">S</span>
         </Button>
-      </Row>
-      <Row label="States">
+      </Labelled>
+      <Labelled label="States">
         <Button disabled>Disabled</Button>
         <Button variant="outline" disabled>
           Disabled outline
         </Button>
-      </Row>
+      </Labelled>
       <p className="text-xs text-muted-foreground">
         There is no destructive variant, so every irreversible action in the app (remove worktree,
         delete preset, stop a run) is styled ad hoc at the call site.
@@ -222,18 +225,18 @@ function Buttons() {
 function Badges() {
   return (
     <div className="space-y-5">
-      <Row label="Event kinds">
+      <Labelled label="Event kinds">
         <Badge>driver</Badge>
         <Badge>tool</Badge>
         <Badge>gate</Badge>
         <Badge>end</Badge>
-      </Row>
-      <Row label="Status (as used today)">
+      </Labelled>
+      <Labelled label="Status (as used today)">
         <Badge className="border-transparent bg-success/15 text-success">DONE</Badge>
         <Badge className="border-transparent bg-danger/15 text-danger">FAILED</Badge>
         <Badge className="border-transparent bg-warning/15 text-warning">STOPPED</Badge>
         <Badge className="border-transparent bg-primary/15 text-primary">RUNNING</Badge>
-      </Row>
+      </Labelled>
       <p className="text-xs text-muted-foreground">
         The Badge primitive carries no variant prop, so status colouring is applied by hand at each
         call site — the reason the same status reads differently in different rails.
@@ -297,7 +300,7 @@ const UNITS = [
 function FormControls() {
   return (
     <div className="space-y-5">
-      <Row label="Radio group: one pick among a few that stay in view">
+      <Labelled label="Radio group: one pick among a few that stay in view">
         <RadioGroup aria-label="Wait after a start" defaultValue="skill">
           <RadioGroupOption value="skill">
             As the skill says <span className="text-xs text-muted-foreground">(6 hours)</span>
@@ -309,14 +312,14 @@ function FormControls() {
           </div>
           <RadioGroupOption value="work">No wait</RadioGroupOption>
         </RadioGroup>
-      </Row>
-      <Row label="Radio group, disabled">
+      </Labelled>
+      <Labelled label="Radio group, disabled">
         <RadioGroup aria-label="Disabled" defaultValue="a" disabled>
           <RadioGroupOption value="a">Picked</RadioGroupOption>
           <RadioGroupOption value="b">Not picked</RadioGroupOption>
         </RadioGroup>
-      </Row>
-      <Row label="Select: one pick from a list that opens (trigger shown; the list is a menu popup)">
+      </Labelled>
+      <Labelled label="Select: one pick from a list that opens (trigger shown; the list is a menu popup)">
         <Select items={UNITS} defaultValue="h">
           <SelectTrigger aria-label="Unit" className="w-36">
             <SelectValue />
@@ -332,16 +335,16 @@ function FormControls() {
             <SelectValue />
           </SelectTrigger>
         </Select>
-      </Row>
-      <Row label="Switch: on or off, at once. Checkbox: one line of a form or a list">
+      </Labelled>
+      <Labelled label="Switch: on or off, at once. Checkbox: one line of a form or a list">
         <Switch aria-label="On" defaultChecked />
         <Switch aria-label="Off" />
         <Switch aria-label="Disabled" disabled />
         <Checkbox aria-label="Ticked" defaultChecked />
         <Checkbox aria-label="Not ticked" />
         <Checkbox aria-label="Disabled" disabled />
-      </Row>
-      <Row label="Label, input, textarea">
+      </Labelled>
+      <Labelled label="Label, input, textarea">
         <div className="w-full max-w-md space-y-2">
           <Label htmlFor="ds-name">
             A name <span className="text-xs text-muted-foreground">optional</span>
@@ -351,7 +354,7 @@ function FormControls() {
           <Textarea id="ds-prompt" rows={3} placeholder="Answer each new comment below." />
           <Input disabled placeholder="Disabled" />
         </div>
-      </Row>
+      </Labelled>
     </div>
   )
 }
@@ -463,6 +466,34 @@ function EmptyStates() {
 
 // ---------------------------------------------------------------- registry
 
+const LONG_TITLE = 'Move the release notes for every package into one page the website renders, and link each version from the changelog of its own'
+
+function Lists() {
+  const remove = (
+    <Button variant="ghost" size="icon-sm" aria-label="Remove">
+      <Trash2 className="size-4" aria-hidden />
+    </Button>
+  )
+  return (
+    <div className="space-y-8">
+      <Section title="Runs" count="4" action={<Button variant="secondary" size="sm">New run</Button>}>
+        <List aria-label="Runs">
+          <Row leading={<Folder className="size-4" aria-hidden />} title="A link: the whole row opens it, Ctrl+click in a new tab" meta="4h ago" href="#row" onClick={() => {}} actions={remove} />
+          <Row leading={<Folder className="size-4" aria-hidden />} title="A press: the whole row does it" meta={<ChevronRight className="size-4" aria-hidden />} onClick={() => {}} />
+          <Row title="Neither: only its own action, shown under the pointer" meta="12 files" actions={remove} />
+          <Row leading={<Folder className="size-4" aria-hidden />} title={LONG_TITLE} meta="$0.15 · 2d ago" href="#long" actions={remove} />
+        </List>
+      </Section>
+      <Section title="Nothing in it" count="0">
+        <p className="text-sm text-muted-foreground">No run yet. Start one from the message box.</p>
+      </Section>
+      <Section title={LONG_TITLE} count="40" action={<Button variant="link" size="sm">All runs</Button>}>
+        <p className="text-sm text-muted-foreground">A long heading is cut; its count and its press stay.</p>
+      </Section>
+    </div>
+  )
+}
+
 export const PREVIEWS: Preview[] = [
   {
     path: 'foundations/color-tokens.html',
@@ -551,6 +582,14 @@ export const PREVIEWS: Preview[] = [
     subtitle: 'A list with columns, and a card that opens its page',
     width: 900,
     node: <Tables />,
+  },
+  {
+    path: 'components/list.html',
+    group: 'Components',
+    name: 'Section + list',
+    subtitle: 'A heading with its count and press, then rows that are a link, a press, or hold their own action',
+    width: 900,
+    node: <Lists />,
   },
   {
     path: 'components/disclosure.html',

@@ -179,9 +179,6 @@
   "dashboard/dashboard/components/PersonMenu.tsx": {
     "text-[10px]": 1
   },
-  "dashboard/dashboard/components/PickProject.tsx": {
-    "rounded": 1
-  },
   "dashboard/dashboard/components/ProjectPicker.tsx": {
     "rounded": 1
   },
