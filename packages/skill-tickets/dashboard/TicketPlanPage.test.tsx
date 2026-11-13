@@ -24,8 +24,9 @@ describe('TicketPlanPage (#685)', () => {
     await waitFor(() => expect(host.runCommand).toHaveBeenCalledWith('p1', ['show', SLUG, '--local']))
     expect(await screen.findByText('The plan')).toBeTruthy()
     expect(screen.getByText('Do it in two steps.')).toBeTruthy()
-    // The way back names the plan's file beside it.
-    expect(screen.getByText('tickets/2026-07-20_do-the-thing.plan.md')).toBeTruthy()
+    // The breadcrumb names the ticket, which it opens, and this page.
+    expect(screen.getByRole('navigation', { name: 'Breadcrumb' }).textContent).toBe('Tickets›Do the thing›Plan'.replace(/›/g, ''))
+    expect(screen.getByRole('tab', { name: 'Plan', selected: true })).toBeTruthy()
   })
 
   test('a ticket with no plan says so rather than showing a blank page', async () => {

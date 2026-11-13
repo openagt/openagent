@@ -9,7 +9,7 @@ export function NewTicketPage({ projectId }: { projectId: string }) {
   const host = useModuleHost()
   const back = () => host.openPage('tickets')
   return (
-    <TicketPageShell onBack={back}>
+    <TicketPageShell onBack={back} crumbs={[{ label: 'New ticket' }]}>
       <h1 className="mb-4 text-lg font-semibold">New ticket</h1>
       <TicketEditor projectId={projectId} initial={BLANK} onSaved={file => host.openPage('tickets', [file], projectId)} onCancel={back} />
     </TicketPageShell>

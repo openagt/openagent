@@ -1,15 +1,15 @@
 import { useEffect, useState } from 'react'
 import { Check, ClipboardPlus, Play } from 'lucide-react'
-import { LinkActions, StartAgentButton, useLinkActions, type StartMenuItem } from '@openagt/dashboard/module'
+import { StartAgentButton, useLinkActions, type StartMenuItem } from '@openagt/dashboard/module'
 import { planLink, planTicketPrompt, ticketLink, workOnTicketPrompt } from '../src/module.js'
 
 /**
  * A ticket's next step, now or later, wherever the ticket is shown: with no plan yet, its plan is
  * written now or queued; with one, the work is started now or queued. "Now" starts an agent;
  * "later" hands the same ask to the installed modules' link actions — "Add to queue" when the
- * project has a queue package — and offers nothing without one. On the list's dense rows
- * (`compact`) the step is one button and the rest are in its menu; a page has the room to show the
- * queue beside it. The caller leaves it out for a ticket no agent is handed: in review, waiting, claimed.
+ * project has a queue package — and offers nothing without one. One button, the step now, the rest
+ * in its menu, so a ticket's actions never crowd it; shorter words on the list's dense rows
+ * (`compact`). The caller leaves it out for a ticket no agent is handed: in review, waiting, claimed.
  */
 export function TicketStartActions({
   projectId,
@@ -27,7 +27,7 @@ export function TicketStartActions({
   onStart: (prompt: string, failure: string) => void
   /** The launcher, prefilled with the ask. */
   onConfigure: (prompt: string) => void
-  /** One button with a menu, for the list's rows. */
+  /** The list's rows: a smaller button, shorter words. */
   compact?: boolean | undefined
 }) {
   const step = ticket.planned
@@ -65,26 +65,24 @@ export function TicketStartActions({
     const result = await run(key, targets)
     setQueued(result.ok ? 'done' : { error: result.error })
   }
-  const moreItems: StartMenuItem[] = compact
-    ? actions.map(action => ({
-        label: queued === 'done' ? `${action.doneLabel ?? action.label}` : step.later,
-        description: step.laterSays,
-        disabled: queued === 'running' || queued === 'done',
-        onSelect: () => void queue(action.key),
-      }))
-    : []
+  const moreItems: StartMenuItem[] = actions.map(action => ({
+    label: queued === 'done' ? `${action.doneLabel ?? action.label}` : step.later,
+    description: step.laterSays,
+    disabled: queued === 'running' || queued === 'done',
+    onSelect: () => void queue(action.key),
+  }))
   const size = compact ? 'xs' : 'sm'
   const iconClass = compact ? 'h-3 w-3' : 'h-3.5 w-3.5'
   return (
     <>
-      {compact && queued === 'done' && (
+      {queued === 'done' && (
         <span className="flex items-center gap-1 text-[10px] text-muted-foreground">
           <Check className="h-3 w-3" aria-hidden /> Queued
         </span>
       )}
-      {compact && queued !== null && typeof queued === 'object' && (
-        <span role="alert" title={queued.error} className="text-[10px] text-danger">
-          Not queued
+      {queued !== null && typeof queued === 'object' && (
+        <span role="alert" title={queued.error} className={compact ? 'text-[10px] text-danger' : 'text-xs text-danger'}>
+          {compact ? 'Not queued' : `Not queued: ${queued.error}`}
         </span>
       )}
       <StartAgentButton
@@ -100,17 +98,6 @@ export function TicketStartActions({
         onConfigure={() => onConfigure(step.prompt)}
         moreItems={moreItems}
       />
-      {!compact && (
-        <LinkActions
-          projects={[projectId]}
-          targets={targets}
-          resetKey={`${ticket.file}\n${step.prompt}`}
-          label={() => step.later}
-          tooltip={`Adds it to the queue. ${step.laterSays}`}
-          size={size}
-          disabled={busy}
-        />
-      )}
     </>
   )
 }

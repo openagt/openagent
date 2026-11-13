@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, test, vi } from 'vitest'
 import { cleanup, fireEvent, screen, waitFor } from '@testing-library/react'
+import { openMenu } from '../../dashboard/dashboard/test-utils.js'
 import type { ReactElement } from 'react'
 import type { ModuleAgent } from '@openagt/dashboard/module'
 import type { MountedModules } from '@openagt/dashboard/module/testing'
@@ -39,6 +40,17 @@ const render = (ui: ReactElement, mounted: MountedModules = modules()) => {
   return renderWithHost(ui, host, mounted)
 }
 
+/** Queue the ticket's next step: its start button's menu, then the item. */
+const queueFromMenu = async (menu: string, item: string) => {
+  await openMenu(await screen.findByRole('button', { name: menu }))
+  fireEvent.click(await screen.findByText(item))
+}
+/** Lift the claim: More, then its item. */
+const releaseFromMenu = async () => {
+  await openMenu(await screen.findByRole('button', { name: 'More' }))
+  fireEvent.click(await screen.findByText('Release the claim'))
+}
+
 const ticket = (over: Record<string, unknown> = {}) => ({
   file: '2026-07-20_do-the-thing.md',
   title: 'Do the thing',
@@ -65,20 +77,21 @@ describe('TicketDetailPage (#1144)', () => {
     render(<TicketDetailPage projectId="p1" slug="2026-07-20_do-the-thing.md" />)
     expect(await screen.findByText('More detail below the fold.')).toBeTruthy()
     expect(screen.getByRole('heading', { name: 'Do the thing' })).toBeTruthy()
-    expect(screen.getAllByText('Do the thing')).toHaveLength(1)
+    // The heading, and the breadcrumb's last step: the text never says it again.
+    expect(screen.getAllByText('Do the thing')).toHaveLength(2)
     expect(screen.getAllByText('The thing is not done.')).toHaveLength(1)
     expect(screen.queryByText('Priority: 8', { selector: 'p' })).toBeNull()
     // A bare "8" would be cryptic on its own (#1265); the badge spells out what it rates.
     expect(screen.getByText('Priority 8')).toBeTruthy()
-    expect(screen.getByText('planned')).toBeTruthy()
+    expect(screen.getByRole('tab', { name: 'Plan' })).toBeTruthy()
     expect(host.runCommand).toHaveBeenCalledWith('p1', ['show', '2026-07-20_do-the-thing.md', '--local'])
   })
 
-  test('shows the issue link, date, and priority in that order under the title (#1144/#1265)', async () => {
+  test('shows the issue link, then the date, then the priority under the title (#1144/#1265)', async () => {
     onTicket.mockResolvedValue(ticket({ priority: '3', issue: { label: '#42', url: 'https://example.com/org/repo/issues/42' } }))
     render(<TicketDetailPage projectId="p1" slug="2026-07-20_do-the-thing.md" />)
     const meta = (await screen.findByText(/ ago$/)).parentElement!
-    const order = [meta.textContent?.indexOf('ago'), meta.textContent?.indexOf('Priority'), meta.textContent?.indexOf('#42')]
+    const order = [meta.textContent?.indexOf('#42'), meta.textContent?.indexOf('ago'), meta.textContent?.indexOf('Priority')]
     expect(order.every(i => i !== undefined && i !== -1)).toBe(true)
     expect(order[0]).toBeLessThan(order[1] as number)
     expect(order[1]).toBeLessThan(order[2] as number)
@@ -97,7 +110,7 @@ describe('TicketDetailPage (#1144)', () => {
   test('a ticket in review or waiting is never offered to the queue, and says which', async () => {
     onTicket.mockResolvedValue(ticket({ pr: { label: '#12', url: 'https://example.com/pull/12' } }))
     render(<TicketDetailPage projectId="p1" slug="2026-07-20_do-the-thing.md" />)
-    expect(await screen.findByText('in review')).toBeTruthy()
+    expect(await screen.findByText(/In review/)).toBeTruthy()
     expect(screen.queryByRole('button', { name: /^Queue / })).toBeNull()
     cleanup()
     onTicket.mockResolvedValue(ticket({ waiting: 'the vendor answer' }))
@@ -117,7 +130,7 @@ describe('TicketDetailPage (#1144)', () => {
     onTicket.mockResolvedValue(ticket({ planned: true, priority: '8' }))
     addToQueue.mockResolvedValue({ ok: true })
     render(<TicketDetailPage projectId="p1" slug="2026-07-20_do-the-thing.md" />)
-    fireEvent.click(await screen.findByRole('button', { name: 'Queue work' }))
+    await queueFromMenu('Other ways to work on Do the thing', 'Queue work')
     // The title as the link, pointing back at the ticket's file, its priority as a number on the
     // queue's own 0–10 scale.
     await waitFor(() => expect(addToQueue).toHaveBeenCalledWith(expect.anything(), 'p1', [{ text: 'Do the thing', href: 'tickets/2026-07-20_do-the-thing.md', priority: 8 }]))
@@ -127,7 +140,7 @@ describe('TicketDetailPage (#1144)', () => {
     onTicket.mockResolvedValue(ticket({ planned: true }))
     addToQueue.mockResolvedValue({ ok: true })
     render(<TicketDetailPage projectId="p1" slug="2026-07-20_do-the-thing.md" />)
-    fireEvent.click(await screen.findByRole('button', { name: 'Queue work' }))
+    await queueFromMenu('Other ways to work on Do the thing', 'Queue work')
     await waitFor(() => expect(addToQueue).toHaveBeenCalledWith(expect.anything(), 'p1', [{ text: 'Do the thing', href: 'tickets/2026-07-20_do-the-thing.md', priority: 5 }]))
   })
 
@@ -137,7 +150,7 @@ describe('TicketDetailPage (#1144)', () => {
     render(<TicketDetailPage projectId="p1" slug="2026-07-20_do-the-thing.md" />)
     expect(await screen.findByRole('button', { name: 'Plan now' })).toBeTruthy()
     expect(screen.queryByRole('button', { name: 'Start work' })).toBeNull()
-    fireEvent.click(screen.getByRole('button', { name: 'Queue plan' }))
+    await queueFromMenu('Other ways to plan Do the thing', 'Queue plan')
     await waitFor(() => expect(addToQueue).toHaveBeenCalledWith(expect.anything(), 'p1', [{ text: 'Create tickets/2026-07-20_do-the-thing.plan.md', priority: 8 }]))
   })
 
@@ -145,25 +158,30 @@ describe('TicketDetailPage (#1144)', () => {
     onTicket.mockResolvedValue(ticket())
     addToQueue.mockResolvedValue({ ok: true })
     render(<TicketDetailPage projectId="p1" slug="2026-07-20_do-the-thing.md" />)
-    fireEvent.click(await screen.findByRole('button', { name: 'Queue plan' }))
-    const queued = await screen.findByRole('button', { name: 'Queued' })
-    expect((queued as HTMLButtonElement).disabled).toBe(true)
+    await queueFromMenu('Other ways to plan Do the thing', 'Queue plan')
+    expect(await screen.findByText('Queued')).toBeTruthy()
+    // Its item in the menu now says so, and cannot be pressed again.
+    await openMenu(screen.getByRole('button', { name: 'Other ways to plan Do the thing' }))
+    const item = (await screen.findAllByText('Queued')).find(el => el.closest('[role="menuitem"]'))
+    expect(item?.closest('[role="menuitem"]')?.getAttribute('aria-disabled')).toBe('true')
   })
 
   test('a failed action surfaces its reason and leaves the button addable', async () => {
     onTicket.mockResolvedValue(ticket())
     addToQueue.mockResolvedValue({ ok: false, error: 'the queue could not be written' })
     render(<TicketDetailPage projectId="p1" slug="2026-07-20_do-the-thing.md" />)
-    fireEvent.click(await screen.findByRole('button', { name: 'Queue plan' }))
+    await queueFromMenu('Other ways to plan Do the thing', 'Queue plan')
     expect(await screen.findByText(/could not be written/i)).toBeTruthy()
-    expect(screen.queryByRole('button', { name: 'Queued' })).toBeNull()
+    expect(screen.queryByText('Queued')).toBeNull()
   })
 
   test('no module offering an action on links in this project, no button (#1774)', async () => {
     onTicket.mockResolvedValue(ticket())
     render(<TicketDetailPage projectId="p1" slug="2026-07-20_do-the-thing.md" />, modules(['p2']))
     await screen.findByRole('heading', { name: 'Do the thing' })
-    expect(screen.queryByRole('button', { name: /queue/i })).toBeNull()
+    await openMenu(screen.getByRole('button', { name: 'Other ways to plan Do the thing' }))
+    expect(await screen.findByText('Configure first, then run')).toBeTruthy()
+    expect(screen.queryByText('Queue plan')).toBeNull()
   })
 
   test('a missing ticket says so rather than rendering blank', async () => {
@@ -175,11 +193,12 @@ describe('TicketDetailPage (#1144)', () => {
   test('a claimed ticket shows its badge, holder, and a release button (#1420)', async () => {
     onTicket.mockResolvedValue(ticket({ locked: true, lockedBy: 'plan-1-0' }))
     render(<TicketDetailPage projectId="p1" slug="2026-07-20_do-the-thing.md" />)
-    await screen.findByText('claimed')
+    await screen.findByText(/Claimed/)
     // The holder reads inline so a human knows whose claim they are about to lift — the detail
     // page has the room, no tooltip hunt needed.
     expect(screen.getByText(/· plan-1-0/)).toBeTruthy()
-    expect(screen.getByRole('button', { name: /release lock/i })).toBeTruthy()
+    await openMenu(screen.getByRole('button', { name: 'More' }))
+    expect(await screen.findByText('Release the claim')).toBeTruthy()
     // Not queued while claimed: the agent the queue hands it to would find it taken.
     expect(screen.queryByRole('button', { name: /^Queue / })).toBeNull()
   })
@@ -188,31 +207,31 @@ describe('TicketDetailPage (#1144)', () => {
     onTicket.mockResolvedValue(ticket())
     render(<TicketDetailPage projectId="p1" slug="2026-07-20_do-the-thing.md" />)
     await screen.findByRole('heading', { name: 'Do the thing' })
-    expect(screen.queryByText('claimed')).toBeNull()
-    expect(screen.queryByRole('button', { name: /release lock/i })).toBeNull()
+    expect(screen.queryByText(/Claimed/)).toBeNull()
+    expect(screen.queryByText(/Claimed/)).toBeNull()
   })
 
   test('releasing runs `release --force` as an act and withdraws the claim without waiting for the next poll (#1420)', async () => {
     onTicket.mockResolvedValue(ticket({ locked: true, lockedBy: 'plan-1-0' }))
     sendReleaseTicketLock.mockResolvedValue({ ok: true })
     render(<TicketDetailPage projectId="p1" slug="2026-07-20_do-the-thing.md" />)
-    fireEvent.click(await screen.findByRole('button', { name: /release lock/i }))
+    await releaseFromMenu()
     // An act, not a read: the dashboard syncs the branch and reads the lifted lock back at once.
     await waitFor(() => expect(host.act).toHaveBeenCalledWith('p1', ['release', '2026-07-20_do-the-thing.md', '--force']))
     expect(host.runCommand).not.toHaveBeenCalledWith('p1', expect.arrayContaining(['release']))
     await waitFor(() => expect(screen.queryByText('claimed')).toBeNull())
-    expect(screen.queryByRole('button', { name: /release lock/i })).toBeNull()
+    expect(screen.queryByText(/Claimed/)).toBeNull()
     // Released, it is a ticket like any other: it may be queued.
-    expect(screen.getByRole('button', { name: 'Queue plan' })).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'Plan now' })).toBeTruthy()
   })
 
   test('a failed release surfaces and keeps the claim visible (#1420)', async () => {
     onTicket.mockResolvedValue(ticket({ locked: true }))
     sendReleaseTicketLock.mockResolvedValue({ ok: false, error: 'the release could not be committed' })
     render(<TicketDetailPage projectId="p1" slug="2026-07-20_do-the-thing.md" />)
-    fireEvent.click(await screen.findByRole('button', { name: /release lock/i }))
+    await releaseFromMenu()
     expect(await screen.findByText(/could not be committed/i)).toBeTruthy()
-    expect(screen.getByText('claimed')).toBeTruthy()
+    expect(screen.getByText(/Claimed/)).toBeTruthy()
   })
 
   test('Back returns to the list, the module\'s own page', async () => {
@@ -244,8 +263,9 @@ describe('TicketDetailPage (#1144)', () => {
     expect(host.openAgent).toHaveBeenCalledWith('p1', 'plan-run')
     fireEvent.click(work!)
     expect(host.openAgent).toHaveBeenCalledWith('p1', 'run-1')
-    // The claim can still be lifted beside it.
-    expect(screen.getByRole('button', { name: /release lock/i })).toBeTruthy()
+    // The claim can still be lifted, from More.
+    await openMenu(screen.getByRole('button', { name: 'More' }))
+    expect(await screen.findByText('Release the claim')).toBeTruthy()
     cleanup()
 
     // Its claim released once the work was done, the work's session is still found by what it was asked.

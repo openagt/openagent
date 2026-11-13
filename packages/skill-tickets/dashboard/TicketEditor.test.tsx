@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, test } from 'vitest'
 import { cleanup, fireEvent, screen, waitFor } from '@testing-library/react'
+import { openMenu } from '../../dashboard/dashboard/test-utils.js'
 import { fakeHost, renderWithHost } from './test-host.js'
 import { NewTicketPage } from './NewTicketPage.js'
 import { TicketDetailPage } from './TicketDetailPage.js'
@@ -54,7 +55,8 @@ describe('a ticket written by hand', () => {
     const host = fakeHost({ p1: { [`show ${slug} --local`]: { ok: true, ticket } } })
     host.act.mockImplementation(async () => ({ ok: true, output: { ok: true } }))
     renderWithHost(<TicketDetailPage projectId="p1" slug={slug} />, host)
-    fireEvent.click(await screen.findByRole('button', { name: 'Edit' }))
+    await openMenu(await screen.findByRole('button', { name: 'More' }))
+    fireEvent.click(await screen.findByText('Edit ticket'))
     expect(screen.getByText(/follows issue #12/)).toBeTruthy()
     expect((screen.getByLabelText('Title') as HTMLInputElement).value).toBe('Do the thing')
     type('Text', 'The thing is half done.')
@@ -63,6 +65,6 @@ describe('a ticket written by hand', () => {
       expect(host.act).toHaveBeenCalledWith('p1', ['put', slug], undefined, 'Priority: 8\nIssue: [#12](https://example.com/issues/12)\n\n# Do the thing\n\nThe thing is half done.\n'),
     )
     // Saved, the page shows the ticket again.
-    expect(await screen.findByRole('button', { name: 'Edit' })).toBeTruthy()
+    expect(await screen.findByRole('tab', { name: 'Ticket' })).toBeTruthy()
   })
 })
