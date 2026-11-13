@@ -1,6 +1,7 @@
 import { strict as assert } from 'node:assert'
 import { test } from 'node:test'
 import { buildInterventions, interventionKey } from './interventions.js'
+import { forgetStartedNames, nameStarted } from '../started-names.js'
 import type { OpenPr } from './pull-requests.js'
 import type { BranchAhead, BranchesFor } from '../store/branches.js'
 import type { ProjectSummary } from './projects.js'
@@ -108,6 +109,18 @@ test('buildInterventions adds an awaiting item for a run waiting on the question
     { kind: 'awaiting', project: 'a', title: 'Auth store caching', question: 'Cache the auth store?', awaitId: 'gate-1', agentId: 'r1' },
   )
   assert.deepEqual(read, ['/a r1'], "only the waiting run's diary is read")
+})
+
+test('a run just started goes by the name asked for it, as the sidebar names it, until its record has one', async () => {
+  nameStarted('r1', Promise.resolve('Auth store caching'))
+  await new Promise(resolve => setImmediate(resolve))
+  try {
+    const liveAgents = async (): Promise<LiveAgent[]> => [live(runningAgentMeta({ status: 'waiting', intent: 'please look at how the auth store caches its reads and decide' }))]
+    const { items } = await buildInterventions([project('a', '/a')], { prs: noPrs, liveAgents, events: async () => waitingOn('gate-1', 'q?') })
+    assert.equal(items[0]?.title, 'Auth store caching')
+  } finally {
+    forgetStartedNames()
+  }
 })
 
 test('buildInterventions adds no awaiting item for a run that is not waiting, or whose diary shows no open question', async () => {

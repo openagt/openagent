@@ -7,6 +7,7 @@ import { unpublishedRuns, type Unpublished } from './unpublished.js'
 import { cachedOpenPrs, type PrLister } from './pull-requests.js'
 import { interventionKey } from './keys.js'
 import { runName } from '../run-name.js'
+import { withStartedNames } from '../started-names.js'
 import { bridgeChoiceRequest, type BridgeQuestion } from './bridge-question.js'
 import { bridgeQuestions } from './bridge-store.js'
 import type { MachineKind } from '../reached-by-line.js'
@@ -128,11 +129,11 @@ async function projectInterventions(project: ProjectSummary, deps: Interventions
     sawEverything = false
     return []
   }
-  // The project's runs, recorded and live, read once for every source that asks.
+  // The project's runs, recorded and live, read once for every source that asks; a just-started run by the sidebar's name.
   const [open, recorded, live] = await Promise.all([
     prs(project.path).catch(() => undefined),
-    (deps.agents ?? listAgents)(project.path).catch(() => undefined),
-    liveAgents(project.path).catch(() => undefined),
+    (deps.agents ?? listAgents)(project.path).then(agents => withStartedNames(agents)).catch(() => undefined),
+    liveAgents(project.path).then(agents => withStartedNames(agents)).catch(() => undefined),
   ])
   // Newest first: a branch name reused by a later run, or a run continued on it, is that run's now.
   const runs = [...(live ?? []), ...(recorded ?? [])].sort((a, b) => b.startedAt.localeCompare(a.startedAt))

@@ -35,7 +35,7 @@ export async function startedName(id: string): Promise<string | undefined> {
 }
 
 /** The rows with the name asked for at their start, on each row whose record has none of its own yet. */
-export function withStartedNames(rows: AgentMeta[], now = Date.now()): AgentMeta[] {
+export function withStartedNames<T extends AgentMeta>(rows: T[], now = Date.now()): T[] {
   if (started.size === 0) return rows
   return rows.map(row => {
     const one = row.title === undefined ? started.get(row.id) : undefined
