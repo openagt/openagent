@@ -82,7 +82,7 @@ export function TicketRow({
           like every control on the row. */}
       {onToggleSelect && (
         <div className="flex w-8 shrink-0 items-center justify-center">
-          <Checkbox checked={selected ?? false} onCheckedChange={() => onToggleSelect()} aria-label={`Select ${ticket.title}`} />
+          <Checkbox checked={selected ?? false} onCheckedChange={() => onToggleSelect()} aria-label={`Select ${ticket.title}`} className="relative after:absolute after:-inset-[5px]" />
         </div>
       )}
       {/* The start column: one click spins up an agent implementing this
