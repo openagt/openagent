@@ -249,7 +249,7 @@ export async function startDashboard(opts: DashboardOptions): Promise<Dashboard>
     return { ...dashboard, secureUrl: secureUrlOf(opts.secure.name, await listen(secureServer, opts.secure.port)) }
   } catch (err) {
     // A secure address that cannot start leaves the dashboard on its plain address, as without one.
-    console.log(`the secure address ${opts.secure.name} could not start (${err instanceof Error ? err.message : String(err)}): the dashboard answers on ${dashboard.url} only`)
+    console.log(`[openagent] the secure address ${opts.secure.name} could not start (${err instanceof Error ? err.message : String(err)}): the dashboard answers on ${dashboard.url} only`)
     return dashboard
   }
 }
