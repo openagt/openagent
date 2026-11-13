@@ -86,6 +86,17 @@ describe('Agent accounts', () => {
     expect(press.getAttribute('aria-disabled')).toBe('true')
   })
 
+  test('once the press worked, the card says Claude Code is ready instead of going away', async () => {
+    views({ now: NOW, accounts: [{ id: 'This computer', name: 'This computer', own: true, windows: [] }] })
+    states({ driver: 'claude-code', ready: false, problem: '`claude` is not logged in.', fix: { kind: 'log-in', command: 'claude auth login' } })
+    logins.sendAgentFix.mockImplementation(async () => (states({ driver: 'claude-code', ready: true }), { ok: true }))
+    render(<AccountsList />)
+    const card = await screen.findByRole('region', { name: 'Claude Code' })
+    expect(await within(card).findByText('Not logged in')).toBeTruthy()
+    fireEvent.click(within(card).getByRole('button', { name: 'Log this computer in to Claude Code' }))
+    expect((await within(card).findByRole('status', {}, { timeout: 5000 })).textContent).toBe('Claude Code is ready: runs can start with it.')
+  })
+
   test('on a computer with no browser the log-in is no press: the card gives the command to type there', async () => {
     views({ now: NOW, accounts: [{ id: 'This computer', name: 'This computer', own: true, windows: [] }] })
     states({ driver: 'claude-code', ready: false, problem: '`claude` is not logged in.', fix: { kind: 'log-in', command: 'claude auth login' }, typed: true })
