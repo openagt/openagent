@@ -82,9 +82,12 @@ export function ProjectHome({
         <div className="mx-auto w-full max-w-3xl">
           {/* No section at all when nothing waits: an empty "Waiting on you" is noise on every launch. */}
           {waiting.length > 0 && (
-            // The heading set in as far as the rows' own text, so the heading and the rows start at one place.
-            <Section title="Waiting on you" count={waiting.length} className="px-2 pt-6 [&>div:first-child]:px-3">
-              <HumanQueueList key={projectId} items={waiting} onOpenAgent={onOpenAgent} />
+            // On the box's edges, as an agent's chat is; the rows reach past them by their own padding, so
+            // their words start where the heading does.
+            <Section title="Waiting on you" count={waiting.length} className="px-4 pt-6">
+              <div className="-mx-3">
+                <HumanQueueList key={projectId} items={waiting} onOpenAgent={onOpenAgent} />
+              </div>
             </Section>
           )}
           {/* What the project's skills need from the person, when they need something (#2023): a card

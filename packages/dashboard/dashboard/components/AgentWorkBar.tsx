@@ -41,7 +41,7 @@ export function AgentWorkBar({
   if (branch === undefined || !show || away) return null
   return (
     // `-mb-4`: over the box's own top padding and 8px further, under the box's top edge.
-    <div className="mx-auto -mb-4 w-full max-w-3xl px-2 pt-2">
+    <div className="mx-auto -mb-4 w-full max-w-3xl px-4 pt-2">
       {/* One line; in a narrow chat (a phone, a chat beside panes) it is as many as its parts need,
           the next step at the end of a line of its own. In the dark theme the hover fill is the bar's own colour, so its buttons get Everforest's
           next step up (both names: `bg-accent` reads the first, the Button's variants the second). */}

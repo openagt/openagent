@@ -18,7 +18,7 @@ beforeEach(() => {
   observers = []
   HTMLElement.prototype.getBoundingClientRect = function (this: HTMLElement) { return rect(0, heights[this.dataset['testid'] ?? ''] ?? 0) }
   // Only an element styled as the chat's scroller is has a scroll bar to measure: its box, and its box without the bar (`clientWidth`, 0 here).
-  Object.defineProperty(HTMLElement.prototype, 'offsetWidth', { configurable: true, get(this: HTMLElement) { return ['scrollbar-thin', 'overflow-y-scroll'].every(cls => this.classList.contains(cls)) ? scrollBar : 0 } })
+  Object.defineProperty(HTMLElement.prototype, 'offsetWidth', { configurable: true, get(this: HTMLElement) { return ['scrollbar-thin', 'scrollbar-gutter-stable'].every(cls => this.classList.contains(cls)) ? scrollBar : 0 } })
   vi.stubGlobal('ResizeObserver', class {
     readonly targets: Element[] = []
     constructor(readonly fire: () => void) { observers.push(this) }
@@ -77,16 +77,19 @@ describe('ChatPane', () => {
   test('the message box\'s bar lies over the chat and stops short of its scroll bar; a scroll bar that lies over the content takes no room, and the bar still leaves it a strip', () => {
     const { unmount } = render(<ChatPane top={<b>top bar</b>} bottom={<b>message box</b>}><p>chat</p></ChatPane>)
     const bar = screen.getByTestId('chat-bottom').className.split(' ')
-    expect(bar).toEqual(expect.arrayContaining(['absolute', 'bottom-0', 'left-0', 'right-[max(var(--chat-scroll-bar),0.75rem)]', 'bg-background']))
-    // As much more on its left, so the message box stays centered under the chat.
-    expect(bar).toContain('pl-[calc(max(var(--chat-scroll-bar),0.75rem)_-_var(--chat-scroll-bar))]')
+    expect(bar).toEqual(expect.arrayContaining(['absolute', 'bottom-0', 'left-0', 'right-(--chat-edge)', 'bg-background']))
+    // As much more on its left as it leaves past the scroll bar, so the message box stays centered under the chat.
+    expect(bar).toContain('pl-[calc(var(--chat-edge)_-_var(--chat-scroll-bar))]')
     // A phone's chat ends above the bar: no strip there.
     expect(bar).toEqual(expect.arrayContaining(['pointer-coarse:right-(--chat-scroll-bar)', 'pointer-coarse:pl-0']))
+    // A scroll bar with room of its own: the bar stops at it exactly, so the chat and the box share both edges.
     expect(room('--chat-scroll-bar')).toBe('11px')
+    expect(room('--chat-edge')).toBe('11px')
     unmount()
     scrollBar = 0
     render(<ChatPane top={<b>top bar</b>} bottom={<b>message box</b>}><p>chat</p></ChatPane>)
     expect(room('--chat-scroll-bar')).toBe('0px')
+    expect(room('--chat-edge')).toBe('12px')
   })
 
   test('a bar too tall for the chat\'s room scrolls inside itself', () => {
@@ -99,7 +102,7 @@ describe('ChatPane', () => {
     const chatRoom = screen.getByText('chat').parentElement!
     const fades = [...chatRoom.querySelectorAll<HTMLElement>(':scope > [aria-hidden]')].filter(el => el.className.includes('to-transparent')).map(el => el.className.split(' '))
     expect(fades).toHaveLength(2)
-    for (const fade of fades) expect(fade).toEqual(expect.arrayContaining(['pointer-events-none', 'absolute', 'left-0', 'right-[max(var(--chat-scroll-bar),0.75rem)]']))
+    for (const fade of fades) expect(fade).toEqual(expect.arrayContaining(['pointer-events-none', 'absolute', 'left-0', 'right-(--chat-edge)']))
     expect(fades[0]).toEqual(expect.arrayContaining(['top-0', 'bg-gradient-to-b']))
     expect(fades[1]).toEqual(expect.arrayContaining(['bottom-(--chat-bar)', 'bg-gradient-to-t']))
   })

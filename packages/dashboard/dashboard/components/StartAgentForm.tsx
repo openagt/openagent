@@ -300,7 +300,7 @@ export function StartAgentForm({
   return (
     // The width and the padding of an agent's message box (`AgentComposer.tsx`): the box is in the
     // same place on both pages.
-    <form onSubmit={e => e.preventDefault()} className="@container relative mx-auto w-full max-w-3xl p-2">
+    <form onSubmit={e => e.preventDefault()} className="@container relative mx-auto w-full max-w-3xl px-4 py-2">
       <Composer
         // A box of its own per project, so the prompt carried over from the picker lands in it (below).
         key={projectId}
@@ -360,7 +360,7 @@ export function StartAgentForm({
       />
 
       {/* Feedback right where the action is (#948): above the box, over the page, so the box never moves. */}
-      <div className="absolute inset-x-2 bottom-full flex flex-col gap-1.5 pb-1">
+      <div className="absolute inset-x-4 bottom-full flex flex-col gap-1.5 pb-1">
         {/* A start that hit what the check says, or the missing logins, says nothing the boxes below do not. */}
         {/* A refusal of this computer's hooks.yml: the project opens in the editor from here as from its menu. */}
         {error && missingThere.length === 0 && !readiness?.problems.length && <Refusal {...said(error)} {...(!machine && !clonedHere && error.includes('.openagent/hooks.yml') ? { actions: <OpenInEditor projectId={projectId} /> } : {})} />}
