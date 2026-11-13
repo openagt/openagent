@@ -126,9 +126,6 @@
   "dashboard/dashboard/components/PersonMark.tsx": {
     "text-[10px]": 1
   },
-  "dashboard/dashboard/components/PersonMenu.tsx": {
-    "text-[10px]": 1
-  },
   "dashboard/dashboard/components/ProjectPicker.tsx": {
     "rounded": 1
   },

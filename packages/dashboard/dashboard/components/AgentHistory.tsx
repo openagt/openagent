@@ -321,12 +321,12 @@ export function AgentHistory({
     // it is placed against the window too, or each scroll carries it off and pulls it back a frame later.
     <PopupPlacementContext.Provider value={pinned || isMobile ? 'fixed' : 'absolute'}>
       {pinned && <div aria-hidden className="w-(--sidebar-width) shrink-0" />}
-      <Sidebar className={cn('relative w-(--sidebar-width) border-r border-sidebar-border', pinned && 'fixed top-(--top-banner,0px) left-0 z-20 h-[calc(100dvh-var(--top-banner,0px))]')}>
+      <Sidebar className={cn('relative w-(--sidebar-width)', pinned && 'fixed top-(--top-banner,0px) left-0 z-20 h-[calc(100dvh-var(--top-banner,0px))]')}>
         {/* The brand and the project select (#1513): the project picked here is the one every page
             under it shows. No rule under it: the room around it sets it apart. */}
         <SidebarHeader className="gap-4 pb-2">
           {/* The mark + wordmark, the way home (#909), now that there is no navbar to hold them. */}
-          <div className="flex items-center justify-between gap-2 px-1 pt-1">
+          <div className="flex items-center justify-between gap-2 pt-1 pl-1">
             <BrandLink working={working} href={homeHref} onNavigate={leave(onDashboard)} />
             <HideSidebarButton />
           </div>
@@ -366,15 +366,15 @@ export function AgentHistory({
             Overview: suppress SidebarContent's own `overflow-auto` and let the ScrollArea own it. */}
         <SidebarContent className="overflow-hidden">
           <ScrollArea className="min-h-0 flex-1">
-            {/* pr-3 keeps the rows (and the active card) clear of the overlaid scrollbar (w-2.5). The `!`, as on the
+            {/* The rows keep the nav's edges, the scrollbar laid over their right padding while it shows. The `!`, as on the
                 nav above: a module's stylesheet has the group's own `p-2`, which would otherwise win on its page. */}
-            <SidebarGroup className="pt-3! pr-3!">
+            <SidebarGroup className="pt-3!">
               {/* The label sticks to the top of the scroll; the gradient strip under it (also sticky)
                   fades the rows into the background as they scroll up beneath the label. Shown even
                   when the list is empty (#1147): the heading is what makes "No sessions yet." read as
                   the state of this list rather than a lonely line in the sidebar. */}
               <div className="sticky top-0 z-10">
-                <SidebarGroupLabel className="rounded-none bg-sidebar font-normal tracking-wide text-muted-foreground">
+                <SidebarGroupLabel className="rounded-none bg-sidebar px-1.5">
                   Log
                   <RecentsSortMenu order={order} />
                 </SidebarGroupLabel>
@@ -442,7 +442,7 @@ export function AgentHistory({
         </SidebarContent>
         {/* The person at this dashboard, as one row that opens their menu: the theme, the
             notifications and Settings (PersonMenu). */}
-        <SidebarFooter className="border-t border-sidebar-border">
+        <SidebarFooter>
           <PersonMenu onSettings={leave(onSettings)} />
         </SidebarFooter>
         {/* Its right edge, dragged to set its width; a phone's sheet has none. */}
@@ -476,7 +476,7 @@ function NavRow({
       onClick={inPlace(onClick)}
       aria-current={active ? 'page' : undefined}
       className={cn(
-        'flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-primary)]',
+        'flex w-full items-center gap-2 rounded-md px-1.5 py-1.5 text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-primary)]',
         active ? 'bg-sidebar-accent text-sidebar-accent-foreground' : 'text-foreground hover:bg-sidebar-accent/60',
       )}
     >
@@ -534,7 +534,7 @@ function NewButton({
   // py-1.5 override the button size's default h-9/px-4/py-2. The active fill (same tokens as
   // Overview) only on this project's launcher; otherwise plain, since New is an action, not a place.
   const cls = cn(
-    'h-auto w-full justify-start gap-2 px-2 py-1.5 font-normal',
+    'h-auto w-full justify-start gap-2 px-1.5 py-1.5 font-normal',
     active && 'bg-sidebar-accent text-sidebar-accent-foreground',
   )
   const target = scope ?? SESSIONS_ID
@@ -560,11 +560,12 @@ function RecentsSortMenu({ order }: { order: RecentsSort }) {
             <DropdownMenuTrigger
               type="button"
               aria-label="Sort agents"
-              className="relative ml-auto flex h-5 w-5 items-center justify-center rounded-sm text-muted-foreground transition-colors after:absolute after:-inset-0.5 hover:bg-accent hover:text-accent-foreground"
+              // A ghost press of 24, its glyph on the rows' right edge.
+              className={cn(buttonVariants({ variant: 'ghost', size: 'icon-sm' }), '-mr-1 ml-auto size-6 text-muted-foreground')}
             />
           }
         >
-          <ArrowDownUp className="h-3.5 w-3.5" aria-hidden />
+          <ArrowDownUp className="size-4 shrink-0" aria-hidden />
         </TooltipTrigger>
         <TooltipContent>Sort by: {RECENTS_SORT_LABELS[order]}</TooltipContent>
       </Tooltip>
@@ -765,15 +766,9 @@ function AgentHistoryRow({
     <>
       {/* The circle stands where the status word stood, and carries that word for a reader who
           cannot see a colour. */}
-      <span
-        role="img"
-        aria-label={word}
-        className={cn(
-          'inline-block h-2 w-2 shrink-0 rounded-full',
-          dotTone ?? cn('border', ringTone),
-          working && 'animate-pulse',
-        )}
-      />
+      <span className="flex size-4 shrink-0 items-center justify-center">
+        <span role="img" aria-label={word} className={cn('size-2 rounded-full', dotTone ?? cn('border', ringTone), working && 'animate-pulse')} />
+      </span>
       <Tooltip disabled={!overflowing}>
         <TooltipTrigger render={<span ref={titleRef} className={titleClass} />}>
           {/* Nothing yet, and something coming: a bar where the name goes, rather than a blank row or
@@ -870,7 +865,7 @@ function AgentHistoryRow({
   const row = {
     'aria-label': `${naming ? 'Naming this session' : titleText} · ${said}`,
     'aria-current': active ? ('page' as const) : undefined,
-    className: cn(buttonVariants({ variant: 'ghost' }), 'rail-row h-8 w-full items-center gap-2 px-2 text-left', active && 'bg-accent text-accent-foreground'),
+    className: cn(buttonVariants({ variant: 'ghost' }), 'rail-row h-8 w-full items-center gap-2 px-1.5 text-left', active && 'bg-accent text-accent-foreground'),
     ...(standIn ? { 'data-stand-in': '' } : {}),
     onPointerEnter: onNear,
     onFocus: onNear,

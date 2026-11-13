@@ -37,10 +37,10 @@ export function SidebarResizer() {
           setSidebarWidth(width + (event.key === 'ArrowRight' ? STEP : -STEP))
         } else if (event.key === 'Enter' && width !== SIDEBAR_DEFAULT) setSidebarWidth(undefined)
       }}
-      // A strip over the sidebar's own border that lights up along its whole length while the pointer or the keyboard is on it, as the panes' lines do.
+      // A strip over the sidebar's edge that draws nothing at rest, and a line along its whole length while the pointer, a drag or the keyboard is on it, as the panes' lines do.
       className="group/edge absolute inset-y-0 -right-1 z-20 flex w-2 cursor-ew-resize touch-none justify-center outline-none"
     >
-      <span aria-hidden className="w-[3px] bg-transparent transition-colors group-hover/edge:bg-primary group-focus-visible/edge:bg-primary group-active/edge:bg-primary" />
+      <span aria-hidden className="w-0.5 bg-transparent transition-colors group-hover/edge:bg-primary group-focus-visible/edge:bg-primary group-active/edge:bg-primary" />
     </div>
   )
 }
