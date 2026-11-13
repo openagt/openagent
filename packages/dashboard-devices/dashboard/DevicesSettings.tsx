@@ -142,13 +142,12 @@ function Start({ d, onAdd }: { d: Devices; onAdd: (adding: Adding) => void }) {
           Join with a code
         </button>
       </p>
-      <p className="text-xs text-muted-foreground">
-        On Tailscale?{' '}
-        <button type="button" className="underline hover:text-foreground disabled:opacity-50" disabled={turning} onClick={() => void onTailscale()}>
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
+        <p className="text-xs text-muted-foreground">On Tailscale? From anywhere, with no server:</p>
+        <Button size="sm" variant="outline" disabled={turning} onClick={() => void onTailscale()}>
           Reach this computer on your Tailscale network
-        </button>
-        , from anywhere, with no server.
-      </p>
+        </Button>
+      </div>
       {why !== undefined && <Problem>{why}</Problem>}
     </>
   )
