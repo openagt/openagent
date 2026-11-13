@@ -41,7 +41,7 @@ export function Agents({
             apart. */}
         <CardTitle className="flex items-center gap-2 text-base">
           <Bot className="h-4 w-4 shrink-0 text-muted-foreground" />
-          Agents
+          Agents at work
           <span className="truncate text-xs font-normal text-muted-foreground">Agents currently working</span>
         </CardTitle>
       </CardHeader>
