@@ -18,15 +18,60 @@ function notify(): void {
   for (const listener of listeners) listener()
 }
 
+/** Back or Forward: the route is read again, and the page goes back to where it was scrolled on that entry. */
+function onPopState(): void {
+  notify()
+  restoreScroll()
+}
+
 function subscribe(listener: () => void): () => void {
   // `popstate` covers Back/Forward; the History API does not fire it for our own pushes, which is
   // why `go` notifies directly.
-  if (listeners.size === 0) window.addEventListener('popstate', notify)
+  if (listeners.size === 0) window.addEventListener('popstate', onPopState)
   listeners.add(listener)
   return () => {
     listeners.delete(listener)
-    if (listeners.size === 0) window.removeEventListener('popstate', notify)
+    if (listeners.size === 0) window.removeEventListener('popstate', onPopState)
   }
+}
+
+/** Where a history entry keeps how far its page was scrolled when it was left. */
+const SCROLL = 'openagent:scroll'
+
+/** Leaving the page for another entry: the entry keeps how far the page was scrolled. */
+function keepScroll(): void {
+  window.history.replaceState({ ...window.history.state, [SCROLL]: window.scrollY }, '')
+}
+
+/** How long a restore waits for the page to be tall enough again: its lists read, or remembered. */
+const RESTORE_WAIT_MS = 3000
+/** What a person does to scroll themselves, which a pending restore yields to. */
+const OWN_SCROLL = ['wheel', 'touchstart', 'keydown', 'pointerdown'] as const
+let stopRestore = (): void => {}
+
+/** Scroll to where the entry was left once the page is tall enough again: drawn from its reads, it is short for a moment. */
+function restoreScroll(): void {
+  stopRestore()
+  const y: unknown = window.history.state?.[SCROLL]
+  if (typeof y !== 'number' || y <= 0) return
+  const root = document.documentElement
+  const observer = typeof ResizeObserver === 'undefined' ? undefined : new ResizeObserver(() => tryNow())
+  const timer = setTimeout(() => stopRestore(), RESTORE_WAIT_MS)
+  const stop = (): void => {
+    observer?.disconnect()
+    clearTimeout(timer)
+    for (const event of OWN_SCROLL) window.removeEventListener(event, stop)
+    stopRestore = () => {}
+  }
+  const tryNow = (): void => {
+    if (root.scrollHeight - window.innerHeight < y) return
+    window.scrollTo(0, y)
+    stop()
+  }
+  stopRestore = stop
+  for (const event of OWN_SCROLL) window.addEventListener(event, stop, { passive: true })
+  observer?.observe(document.body)
+  tryNow()
 }
 
 const currentUrl = (): string => window.location.pathname + window.location.search
@@ -58,7 +103,11 @@ export function useRoute(projects: ProjectAddresses): {
     // Going where you already are is not a history entry.
     if (url === current) return
     if (options?.replace) window.history.replaceState(window.history.state, '', url)
-    else window.history.pushState(options?.overPage ? OVER_PAGE_STATE : null, '', url)
+    else {
+      // Settings over the page leaves the page mounted, scrolled where it was.
+      if (!options?.overPage) keepScroll()
+      window.history.pushState(options?.overPage ? OVER_PAGE_STATE : null, '', url)
+    }
     notify()
   }
 
@@ -73,12 +122,14 @@ export const AGENTS_PAGE = 'agents'
 
 /** Go to the Agents page, from a part of the page that has no route to hand. */
 export function openAgents(): void {
+  keepScroll()
   window.history.pushState(null, '', `/${AGENTS_PAGE}`)
   notify()
 }
 
 /** Go to the Permissions page, from a part of the page that has no route to hand. */
 export function openPermissions(): void {
+  keepScroll()
   window.history.pushState(null, '', `/${PERMISSIONS_PAGE}`)
   notify()
 }
