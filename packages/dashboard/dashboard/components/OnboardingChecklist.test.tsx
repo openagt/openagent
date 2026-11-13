@@ -123,6 +123,14 @@ describe('the first steps on the Overview', () => {
     expect(screen.queryByText('Loading…')).toBeNull()
   })
 
+  test('while it reads, the card draws a row per step it knows of, so what is below it does not move when they land', async () => {
+    onDashboard.mockImplementation(() => new Promise(() => {}))
+    steps()
+    await screen.findByText('Loading…')
+    const frame = document.querySelector('ol[aria-hidden="true"]')
+    expect([...(frame?.children ?? [])].map(item => item.lastElementChild?.textContent)).toContain('Add your first project')
+  })
+
   test('what adding a project does is behind an ⓘ beside the open step, not in its way', async () => {
     onDashboard.mockResolvedValue(EMPTY)
     steps()

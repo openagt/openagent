@@ -267,7 +267,18 @@ export function OnboardingChecklist({
       </CardHeader>
       <CardContent>
         {reading ? (
-          <p className="text-sm text-muted-foreground">Loading…</p>
+          <>
+            <p className="sr-only">Loading…</p>
+            {/* The steps' rows, with no state yet, so the card is about its size from the first frame. */}
+            <ol aria-hidden="true" className="divide-y divide-border">
+              {steps.map((step, at) => (
+                <li key={step.key} className="flex items-start gap-3 py-3 first:pt-0 last:pb-0">
+                  <span className="mt-0.5 flex size-6 shrink-0 items-center justify-center rounded-full border border-border text-xs font-medium text-muted-foreground tabular-nums">{at + 1}</span>
+                  <span className="mt-1 text-sm text-muted-foreground">{step.label}</span>
+                </li>
+              ))}
+            </ol>
+          </>
         ) : (
           <ol className="divide-y divide-border">
             {steps.map((step, at) => {
