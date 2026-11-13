@@ -326,7 +326,6 @@ function AgentEditor({ agent, view, onAccounts, onDone }: { agent?: AgentRecord;
             title={agent ? `Discard your changes to ${agent.name}?` : 'Discard the new agent?'}
             body="What you typed and ticked here is not saved."
             confirmLabel="Discard"
-            onConfirm={async () => {}}
             onSuccess={() => void onDone(false)}
           />
         </div>

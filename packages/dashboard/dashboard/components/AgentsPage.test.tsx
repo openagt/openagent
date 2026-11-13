@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest'
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { forgetRemembered } from '../lib/use-async.js'
+import { DaemonDown } from '../lib/use-daemon-health.js'
 
 const rpc = vi.hoisted(() => ({ onAgentsList: vi.fn(), sendSaveAgent: vi.fn(), sendRemoveAgent: vi.fn(), onAgentLogins: vi.fn(), sendCopyAgentLogins: vi.fn() }))
 vi.mock('../rpc/agents.js', () => rpc)
@@ -114,6 +115,19 @@ describe('the Agents page', () => {
     fireEvent.keyDown(within(screen.getByRole('dialog', { name: 'Editing Reviewer' })).getByLabelText('Name'), { key: 'Escape' })
     await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
     expect(screen.queryByRole('alertdialog')).toBeNull()
+    expect(rpc.sendSaveAgent).not.toHaveBeenCalled()
+  })
+
+  test('with OpenAgent not answering after a name is typed, Discard still closes the editor: it sends nothing', async () => {
+    const page = render(<DaemonDown.Provider value={false}><AgentsPage /></DaemonDown.Provider>)
+    fireEvent.click(await screen.findByRole('button', { name: 'New agent' }))
+    fireEvent.change(within(screen.getByRole('dialog', { name: 'New agent' })).getByLabelText('Name'), { target: { value: 'Offline draft' } })
+    page.rerender(<DaemonDown.Provider value={true}><AgentsPage /></DaemonDown.Provider>)
+    fireEvent.click(within(screen.getByRole('dialog', { name: 'New agent' })).getByRole('button', { name: 'Close' }))
+    const discard = within(await screen.findByRole('alertdialog', { name: 'Discard the new agent?' })).getByRole('button', { name: 'Discard' }) as HTMLButtonElement
+    expect(discard.disabled).toBe(false)
+    fireEvent.click(discard)
+    await waitFor(() => expect(screen.queryByRole('dialog', { name: 'New agent' })).toBeNull())
     expect(rpc.sendSaveAgent).not.toHaveBeenCalled()
   })
 

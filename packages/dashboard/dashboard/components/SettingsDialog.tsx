@@ -268,7 +268,6 @@ export function SettingsDialog({
             title="Leave without saving?"
             body={`What you changed in ${current.title} is not saved.`}
             confirmLabel="Leave"
-            onConfirm={async () => {}}
             onSuccess={() => {
               setHeld(false)
               leaving?.()

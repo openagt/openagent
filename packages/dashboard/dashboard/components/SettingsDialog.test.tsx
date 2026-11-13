@@ -3,6 +3,7 @@ import { afterEach, describe, expect, test, vi } from 'vitest'
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { refreshPreferences } from '../lib/preferences.js'
 import { forgetRemembered } from '../lib/use-async.js'
+import { DaemonDown } from '../lib/use-daemon-health.js'
 import { ModulesContext, byMountOrder, type MountedModules } from '../lib/use-modules.js'
 import { CalendarClock, Network, Smartphone } from 'lucide-react'
 import { checked, choices, closeList, offered, openList, pick, showing } from '../test-controls.js'
@@ -458,6 +459,22 @@ describe('the Settings list', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Skills' }))
     await waitFor(() => expect(title()).toBe('SettingsgemstackSkills'))
     expect(screen.queryByRole('alertdialog')).toBeNull()
+  })
+
+  test('with OpenAgent not answering, Leave still goes: it sends nothing', async () => {
+    render(
+      <DaemonDown.Provider value={true}>
+        <ModulesContext.Provider value={MODULES}>
+          <Shown start="skills" scope="p1" projects={PROJECTS as ProjectSummary[]} />
+        </ModulesContext.Provider>
+      </DaemonDown.Provider>,
+    )
+    fireEvent.click(await screen.findByRole('checkbox', { name: 'skill-of-p1' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Appearance' }))
+    const leave = within(await screen.findByRole('alertdialog', { name: 'Leave without saving?' })).getByRole('button', { name: 'Leave' }) as HTMLButtonElement
+    expect(leave.disabled).toBe(false)
+    fireEvent.click(leave)
+    await waitFor(() => expect(title()).toBe('SettingsAppearance'))
   })
 
   test('Back with a tick on Skills not saved asks first, and the address stays on Settings: Cancel keeps the tick, Leave goes back', async () => {

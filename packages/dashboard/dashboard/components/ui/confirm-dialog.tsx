@@ -39,8 +39,8 @@ export function ConfirmDialog({
   body: ReactNode
   confirmLabel: string
   confirmBusyLabel?: string
-  /** Runs on confirm; a refused or thrown result keeps the dialog open with the error. */
-  onConfirm: () => Promise<unknown>
+  /** Runs on confirm; a refused or thrown result keeps the dialog open with the error. Omitted, the confirm sends nothing, so it stays on while OpenAgent is not answering. */
+  onConfirm?: () => Promise<unknown>
   /** Fires once, after the dialog has closed on a successful confirm — safe to navigate away in. */
   onSuccess?: () => void
   fallbackError?: string
@@ -56,14 +56,17 @@ export function ConfirmDialog({
   const { busy, error, run, reset } = useAction()
   const down = useContext(DaemonDown)
 
+  const close = (): void => {
+    setOpen(false)
+    // After the close, so a caller that unmounts this (navigating off the deleted session) does
+    // not tear the dialog down mid-transition.
+    queueMicrotask(() => onSuccess?.())
+  }
   const confirm = (): void => {
     if (busy) return
+    if (!onConfirm) return close()
     void run(onConfirm, fallbackError).then(outcome => {
-      if (!outcome.ok) return
-      setOpen(false)
-      // After the close, so a caller that unmounts this (navigating off the deleted session) does
-      // not tear the dialog down mid-transition.
-      queueMicrotask(() => onSuccess?.())
+      if (outcome.ok) close()
     })
   }
 
@@ -99,7 +102,7 @@ export function ConfirmDialog({
             <Button
               variant={destructive ? 'destructive' : 'default'}
               size="sm"
-              disabled={down || confirmDisabled}
+              disabled={(down && onConfirm !== undefined) || confirmDisabled}
               aria-disabled={busy || undefined}
               onClick={confirm}
               className={cn(busy && 'cursor-progress opacity-50')}
