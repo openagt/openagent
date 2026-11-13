@@ -173,13 +173,6 @@
   "dashboard/dashboard/components/PromptEditor.tsx": {
     "py-2.5": 2
   },
-  "dashboard/dashboard/components/QuestionPanel.tsx": {
-    "h-[17px]": 2,
-    "px-2.5": 1,
-    "rounded": 3,
-    "text-[11px]": 2,
-    "text-[13px]": 2
-  },
   "dashboard/dashboard/components/Quota.tsx": {
     "sm:text-[11px]": 1,
     "text-[10px]": 1
