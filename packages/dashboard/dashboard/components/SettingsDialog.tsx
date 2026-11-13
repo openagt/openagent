@@ -12,6 +12,7 @@ import { useIsMobile } from '../lib/use-mobile.js'
 import { useDetectedEditors } from '../lib/editors.js'
 import { usePreferences, updatePreferences, themePreference, type ThemePreference } from '../lib/preferences.js'
 import { setBrowserNotifications, useNotificationPermission } from '../lib/notification-permission.js'
+import { HUMAN_QUEUE_ABOUT, NEW_ACTIVITY_ABOUT, browserHint, kindHint } from '../lib/notification-words.js'
 import { BridgeSettings } from './BridgeSettings.js'
 import { AGENT_DATA_ENTRY, AgentDataSettings } from './AgentDataSettings.js'
 import { PROFILE_ENTRY, ProfileSettings } from './ProfileSettings.js'
@@ -398,33 +399,31 @@ function useOwnEntries(): Entry[] {
       title: 'Notifications',
       icon: Bell,
       body: (
-        <Section>
-          <ToggleRow
-            label="Browser"
-            description={
-              browserBlocked
-                ? 'Blocked in your browser settings'
-                : permission === 'default'
-                  ? 'Desktop notifications while the dashboard is open. Switched on, the browser asks to allow them.'
-                  : 'Desktop notifications while the dashboard is open.'
-            }
-            checked={(preferences.notifyBrowser ?? true) && permission !== 'default' && !browserBlocked}
-            disabled={browserBlocked}
-            onChange={setBrowserNotifications}
-          />
-          <ToggleRow
-            label="Human Queue"
-            description="An agent awaiting your answer, or a PR ready to review."
-            checked={preferences.notifyHumanIntervention ?? true}
-            onChange={next => updatePreferences({ notifyHumanIntervention: next })}
-          />
-          <ToggleRow
-            label="New activity"
-            description="An agent starts or finishes."
-            checked={preferences.notifyNewActivity ?? false}
-            onChange={next => updatePreferences({ notifyNewActivity: next })}
-          />
-        </Section>
+        <div className="space-y-6">
+          <HeadedSection heading="Deliver to">
+            <ToggleRow
+              label="Browser"
+              description={browserHint(permission)}
+              checked={(preferences.notifyBrowser ?? true) && permission !== 'default' && !browserBlocked}
+              disabled={browserBlocked}
+              onChange={setBrowserNotifications}
+            />
+          </HeadedSection>
+          <HeadedSection heading="Notify me about">
+            <ToggleRow
+              label="Human Queue"
+              description={kindHint(HUMAN_QUEUE_ABOUT, permission, preferences.notifyBrowser ?? true)}
+              checked={preferences.notifyHumanIntervention ?? true}
+              onChange={next => updatePreferences({ notifyHumanIntervention: next })}
+            />
+            <ToggleRow
+              label="New activity"
+              description={kindHint(NEW_ACTIVITY_ABOUT, permission, preferences.notifyBrowser ?? true)}
+              checked={preferences.notifyNewActivity ?? false}
+              onChange={next => updatePreferences({ notifyNewActivity: next })}
+            />
+          </HeadedSection>
+        </div>
       ),
     },
     {
@@ -542,6 +541,19 @@ function BridgeBrowserChoice({ daemonBrowser, onChange }: { daemonBrowser: boole
         )}
       </RadioGroup>
     </div>
+  )
+}
+
+/** A group of rows under a heading of its own. */
+function HeadedSection({ heading, children }: { heading: string; children: ReactNode }) {
+  const id = useId()
+  return (
+    <section aria-labelledby={id} className="space-y-2">
+      <h3 id={id} className="text-xs font-semibold text-muted-foreground">
+        {heading}
+      </h3>
+      <Section>{children}</Section>
+    </section>
   )
 }
 

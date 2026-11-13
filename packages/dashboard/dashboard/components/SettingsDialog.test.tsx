@@ -246,6 +246,14 @@ describe('Settings on and off rows', () => {
     await waitFor(() => expect(browser.getAttribute('aria-disabled')).toBe('true'), { timeout: 1000 })
   })
 
+  test('Notifications groups its switches under the headings of the person menu', () => {
+    open('notifications')
+    expect(screen.getByRole('region', { name: 'Deliver to' }).textContent).toContain('Browser')
+    const kinds = screen.getByRole('region', { name: 'Notify me about' }).textContent
+    expect(kinds).toContain('Human Queue')
+    expect(kinds).toContain('New activity')
+  })
+
   test('notifications the browser blocked: the Browser row says so, reads off, and cannot be switched', async () => {
     vi.stubGlobal('Notification', { permission: 'denied' })
     prefsRead.mockResolvedValueOnce({ notifyBrowser: true })
