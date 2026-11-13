@@ -223,7 +223,7 @@ function Row({ hot, showProject, reload }: { hot: HotTicket; showProject: boolea
       <span className="relative flex shrink-0 items-center gap-2.5 self-stretch md:bg-[inherit]">
         {/* Laid over the title's end, on the row's own colour, so the row never moves under the pointer and its fact stays in view. */}
         {actions && (
-          <div className="flex items-center gap-0.5 md:absolute md:inset-y-0 md:right-full md:bg-[inherit] md:pl-3 md:opacity-0 md:transition-opacity md:group-hover/row:opacity-100 md:focus-within:opacity-100">
+          <div className="flex items-center gap-0.5 md:absolute md:inset-y-0 md:right-full md:w-max md:bg-[inherit] md:pl-3 md:opacity-0 md:transition-opacity md:group-hover/row:opacity-100 md:focus-within:opacity-100">
             {actions}
           </div>
         )}
