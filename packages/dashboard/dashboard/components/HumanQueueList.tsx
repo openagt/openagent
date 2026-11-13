@@ -75,8 +75,9 @@ export function HumanQueueList({
 }) {
   const services = useContext(HostServicesContext) ?? INERT_HOST_SERVICES
   const [all, setAll] = useState(false)
-  const shown = all ? items : items.slice(0, SHOWN_AT_FIRST)
-  const hidden = items.length - SHOWN_AT_FIRST
+  // A line that would offer one more row costs as much room as that row: the list shows whole then.
+  const hidden = items.length - SHOWN_AT_FIRST > 1 ? items.length - SHOWN_AT_FIRST : 0
+  const shown = all || hidden === 0 ? items : items.slice(0, SHOWN_AT_FIRST)
   const projects = new Set(items.map(item => item.projectId)).size > 1
   return (
     <>

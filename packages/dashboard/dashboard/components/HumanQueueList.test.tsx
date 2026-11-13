@@ -79,6 +79,13 @@ describe('the Human Queue\'s rows', () => {
     expect(screen.getAllByRole('listitem')).toHaveLength(5)
   })
 
+  test('six: the sixth shows too, since a line offering one more is as tall as the row it hides', () => {
+    const items = Array.from({ length: 6 }, (_, i) => item({ kind: 'uncommitted', title: `run ${i}`, agentId: `r${i}` }))
+    render(<HumanQueueList items={items} onOpenAgent={() => {}} />)
+    expect(screen.getAllByRole('listitem')).toHaveLength(6)
+    expect(screen.queryByRole('button', { name: /more|fewer/ })).toBeNull()
+  })
+
   test('five or fewer: no line offers more', () => {
     render(<HumanQueueList items={[item({ kind: 'uncommitted', agentId: 'r1' })]} onOpenAgent={() => {}} />)
     expect(screen.queryByRole('button', { name: /more|fewer/ })).toBeNull()
