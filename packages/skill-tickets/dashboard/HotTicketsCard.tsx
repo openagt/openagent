@@ -168,7 +168,7 @@ function stateOf(hot: HotTicket): { Icon: LucideIcon; says: string; tone: string
 /**
  * One ticket: its mark, its title, which opens its page, a short fact at the end (its priority,
  * what it waits on, its project where the card spans several), and, under the pointer, what can be
- * done with it, laid over the row's end rather than pushing the row. A ticket held for nobody can be
+ * done with it, laid over the title's end beside that fact rather than pushing the row. A ticket held for nobody can be
  * gone on with (its run opens) or let go (the claim is lifted, and it is a ticket like any other
  * again); one held by a run at work, or in review or waiting, has nothing to be done here. A phone
  * has no hover: there the actions always show, in the row.
@@ -219,18 +219,20 @@ function Row({ hot, showProject, reload }: { hot: HotTicket; showProject: boolea
       <button type="button" onClick={() => host.openPage('tickets', [ticket.file], project.id)} className="min-w-0 flex-1 truncate text-left text-foreground hover:underline">
         {ticket.title}
       </button>
-      {(fact || showProject) && (
-        <span className="max-w-[40%] shrink-0 truncate text-xs text-muted-foreground" title={fact}>
-          {[fact, showProject ? project.name : undefined].filter(Boolean).join(' · ')}
-        </span>
-      )}
       {failed && <span className="shrink-0 text-xs text-danger">{failed}</span>}
-      {/* Laid over the row's end, on the row's own colour, so the row never moves under the pointer. */}
-      {actions && (
-        <div className="absolute inset-y-0 right-0 flex items-center gap-0.5 rounded-r-md bg-[inherit] pr-1 pl-3 opacity-0 transition-opacity group-hover/row:opacity-100 focus-within:opacity-100 max-md:static max-md:bg-transparent max-md:p-0 max-md:opacity-100">
-          {actions}
-        </div>
-      )}
+      <span className="relative flex shrink-0 items-center gap-2.5 self-stretch md:bg-[inherit]">
+        {/* Laid over the title's end, on the row's own colour, so the row never moves under the pointer and its fact stays in view. */}
+        {actions && (
+          <div className="flex items-center gap-0.5 md:absolute md:inset-y-0 md:right-full md:bg-[inherit] md:pl-3 md:opacity-0 md:transition-opacity md:group-hover/row:opacity-100 md:focus-within:opacity-100">
+            {actions}
+          </div>
+        )}
+        {(fact || showProject) && (
+          <span className="max-w-40 truncate text-xs text-muted-foreground" title={fact}>
+            {[fact, showProject ? project.name : undefined].filter(Boolean).join(' · ')}
+          </span>
+        )}
+      </span>
     </li>
   )
 }
