@@ -102,22 +102,21 @@ describe('TicketsPanel (#697/#1144)', () => {
       />,
     )
     expect(await screen.findByText('Reviewed')).toBeTruthy()
-    for (const title of ['Reviewed', 'Blocked']) {
-      expect(screen.queryByRole('button', { name: new RegExp(`start work on ${title}`, 'i') })).toBeNull()
-      expect(screen.queryByRole('button', { name: new RegExp(`create a plan for ${title}`, 'i') })).toBeNull()
+    expect(screen.queryByRole('button', { name: /^(start|plan)$/i })).toBeNull()
+    for (const title of ['Reviewed', 'Blocked', 'Planned']) {
+      expect(screen.queryByRole('button', { name: new RegExp(`other ways to (work on|plan) ${title}`, 'i') })).toBeNull()
     }
     expect(screen.getByRole('link', { name: 'In review #12' }).getAttribute('href')).toBe('https://example.com/pull/12')
     expect(screen.getAllByText('Waiting')[0]?.getAttribute('title')).toBe('Waiting: the vendor answer')
     // A plan that exists is still there to read.
     expect(screen.getByRole('button', { name: /view the plan for planned/i })).toBeTruthy()
-    expect(screen.queryByRole('button', { name: /start work on planned/i })).toBeNull()
   })
 
   test('a claimed ticket offers no start and no plan: an agent is on it', async () => {
     render(<TicketsPanel projectId="p1" tickets={[ticket({ locked: true, lockedBy: 'agent-1' })]} loaded onOpen={() => {}} />)
     expect(await screen.findByText('agent-1')).toBeTruthy()
-    expect(screen.queryByRole('button', { name: /start work on do the thing/i })).toBeNull()
-    expect(screen.queryByRole('button', { name: /create a plan for do the thing/i })).toBeNull()
+    expect(screen.queryByRole('button', { name: /^(start|plan)$/i })).toBeNull()
+    expect(screen.queryByRole('button', { name: /other ways to (work on|plan) do the thing/i })).toBeNull()
   })
 
   test('a claimed ticket shows the hammer marker with its holder inline (#1420/#1144)', async () => {
