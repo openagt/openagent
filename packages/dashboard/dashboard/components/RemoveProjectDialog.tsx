@@ -66,7 +66,8 @@ export function RemoveProjectDialog({
     >
       <AlertDialog.Portal>
         <AlertDialog.Backdrop className="fixed inset-0 z-50 bg-black/40 backdrop-blur-[1px]" />
-        <AlertDialog.Popup initialFocus={cancel} className="fixed left-1/2 top-1/2 z-50 max-h-[calc(100vh-2rem)] w-[min(28rem,calc(100vw-2rem))] -translate-x-1/2 -translate-y-1/2 overflow-y-auto rounded-lg border border-border bg-card p-5 text-card-foreground shadow-lg">
+        {/* Gone with the project, the menu that opened it takes no focus back: the project picker, where the next project is picked, does. */}
+        <AlertDialog.Popup initialFocus={cancel} finalFocus={() => (removed ? document.querySelector<HTMLElement>('[data-project-picker]') : true)} className="fixed left-1/2 top-1/2 z-50 max-h-[calc(100vh-2rem)] w-[min(28rem,calc(100vw-2rem))] -translate-x-1/2 -translate-y-1/2 overflow-y-auto rounded-lg border border-border bg-card p-5 text-card-foreground shadow-lg">
           {removed ? (
             <>
               <AlertDialog.Title className="text-sm font-semibold">Project removed</AlertDialog.Title>
