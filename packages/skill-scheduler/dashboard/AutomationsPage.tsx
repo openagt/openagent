@@ -386,10 +386,10 @@ function Next({ children }: { children: ReactNode }) {
 }
 
 /**
- * Where a row stands, in one line: on or off; when it last ran, or that its last run failed, which
- * opens that run; and what the scheduler last decided for it while it is on, or, while the
- * scheduler is stopped, that it does not start. A command the coding agent cannot run says so
- * whatever its switch.
+ * Where a row stands, in one line: on or off; when it last ran, that its last run failed, or that
+ * it is still going, on or off, which opens that run; and what the scheduler last decided for it
+ * while it is on, or, while the scheduler is stopped, that it does not start. A command the coding
+ * agent cannot run says so whatever its switch.
  */
 function Stands({ host, project, scheduled, stopped }: { host: ModuleHost; project: ModuleProject; scheduled: SchedulerCommand; /** Why nothing starts by itself in its project, while that is so ({@link schedulerStopped}). */ stopped: string | undefined }) {
   const last = scheduled.lastRun
@@ -408,7 +408,7 @@ function Stands({ host, project, scheduled, stopped }: { host: ModuleHost; proje
         ) : (
           <Tooltip>
             <TooltipTrigger render={<a href={host.agentHref(project.id, last.id)} onClick={inPlace(() => host.openAgent(project.id, last.id))} className={cn('underline', last.failed ? 'text-danger' : 'text-muted-foreground hover:text-foreground')} />}>
-              {last.failed ? 'Last run failed' : 'Last ran'} <span className="tabular-nums">{formatAge(last.at)}</span>
+              {last.failed ? 'Last run failed' : last.running ? 'Running, started' : 'Last ran'} <span className="tabular-nums">{formatAge(last.at)}</span>
             </TooltipTrigger>
             <TooltipContent>{formatDateTime(last.at)}</TooltipContent>
           </Tooltip>

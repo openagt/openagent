@@ -212,6 +212,19 @@ describe('the Automations page: its rows', () => {
     expect(within(row('/update-tickets')).queryByRole('button', { name: /^Last r/ })).toBeNull()
   })
 
+  test('a row whose run is still going says so, switched on or off, and opens that run', async () => {
+    const going = { id: 'r9', at: new Date(Date.now() - 9000).toISOString(), running: true }
+    const status = { ...STATUS, schedule: STATUS.schedule.map(c => ({ ...c, lastRun: going })) }
+    const { host } = hostAnswering((_, args) => (args[0] === 'status' ? { ok: true, output: status } : { ok: true, output: { ok: true } }))
+    show(host)
+    await screen.findByRole('region', { name: 'gemstack' })
+    for (const name of ['/post-merge-cleanup', '/work-queue']) {
+      const link = within(row(name)).getByRole('link', { name: /^Running, started \d+s ago$/ })
+      expect(link.getAttribute('href')).toBe('/p1/r9')
+    }
+    expect(within(row('/work-queue')).getByText('Off')).toBeTruthy()
+  })
+
   test('a row set to a coding agent that cannot read its skill says so whatever its switch, read off the files and not off the last look, and its "Run now" is held: it would start nothing', async () => {
     // One skill only in Codex's folder and picked for Claude Code here; one in Claude Code's folder alone whose skill names Codex.
     const schedule = [
