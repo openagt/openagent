@@ -82,7 +82,7 @@ export function ProfileSettings() {
               }}
               className="h-8 w-48"
             />
-            <Button type="submit" size="sm" disabled={saving.busy || !changedName}>
+            <Button type="submit" size="sm" disabled={saving.busy || !changedName} className="min-w-16">
               {saving.busy ? 'Saving…' : 'Save'}
             </Button>
           </div>
@@ -136,7 +136,7 @@ export function ProfileSettings() {
               }}
               className="h-8 w-48"
             />
-            <Button type="submit" size="sm" variant="outline" disabled={syncing.busy || !github.trim()}>
+            <Button type="submit" size="sm" variant="outline" disabled={syncing.busy || !github.trim()} className="min-w-16">
               {syncing.busy ? 'Syncing…' : 'Sync'}
             </Button>
           </div>
