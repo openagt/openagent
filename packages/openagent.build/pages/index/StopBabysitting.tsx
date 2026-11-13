@@ -3,8 +3,8 @@ import type { EmojiChar } from './ui'
 import { cardStyle, CodeChip, Emoji, mono, SectionHead, sectionStyle } from './ui'
 
 const ROW_STYLES = {
-  bad: { bg: '#2d353b', border: '#3d484d', labelColor: '#859289' },
-  good: { bg: '#232a2e', border: '#475258', labelColor: '#a7c080' },
+  bad: { bg: 'var(--background)', border: 'var(--border)', labelColor: 'var(--muted-foreground)' },
+  good: { bg: 'var(--card)', border: 'var(--border)', labelColor: 'var(--success)' },
 } as const
 
 // Inline arrows in the mono font and accent green: the sans-serif glyphs are
@@ -111,13 +111,13 @@ export function StopBabysitting() {
                   fontSize: 11.5,
                   letterSpacing: '0.08em',
                   textTransform: 'uppercase',
-                  color: '#e67e80',
+                  color: 'var(--danger)',
                 }}
               >
                 Problem
               </span>
               <h3 style={{ margin: 0, fontSize: 21, fontWeight: 600, lineHeight: 1.3 }}>{p.title}</h3>
-              {p.desc && <p style={{ margin: 0, fontSize: 14, lineHeight: 1.55, color: '#9da9a0' }}>{p.desc}</p>}
+              {p.desc && <p style={{ margin: 0, fontSize: 14, lineHeight: 1.55, color: 'var(--muted-foreground)' }}>{p.desc}</p>}
             </div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
               {p.rows.map((r, i) => {
@@ -143,7 +143,7 @@ export function StopBabysitting() {
                       </span>
                       {r.label}
                     </span>
-                    <p style={{ margin: 0, fontSize: 14.5, lineHeight: 1.6, color: '#d3c6aa' }}>{r.body}</p>
+                    <p style={{ margin: 0, fontSize: 14.5, lineHeight: 1.6, color: 'var(--foreground)' }}>{r.body}</p>
                   </div>
                 )
               })}

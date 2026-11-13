@@ -4,7 +4,7 @@ import { cardStyle, CodeChip, Note, SectionHead, sectionStyle } from './ui'
 function Item({ children }: { children: ReactNode }) {
   return (
     <li style={{ display: 'flex', gap: 10 }}>
-      <span style={{ color: '#a7c080' }}>✓</span>
+      <span style={{ color: 'var(--success)' }}>✓</span>
       {children}
     </li>
   )
@@ -22,7 +22,7 @@ function Card({ title, lead, children }: { title: string; lead: string; children
       }}
     >
       <h3 style={{ margin: 0, fontSize: 20, fontWeight: 600 }}>{title}</h3>
-      <p style={{ margin: 0, fontSize: 14, color: '#859289' }}>{lead}</p>
+      <p style={{ margin: 0, fontSize: 14, color: 'var(--muted-foreground)' }}>{lead}</p>
       <ul
         style={{
           margin: 0,

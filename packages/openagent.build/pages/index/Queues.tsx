@@ -2,10 +2,10 @@ import type { CSSProperties, ReactNode } from 'react'
 import type { EmojiChar } from './ui'
 import { cardStyle, CodeChip, Emoji, h3Style } from './ui'
 
-const leadStyle = { color: '#d3c6aa', fontWeight: 500 } as const
+const leadStyle = { color: 'var(--foreground)', fontWeight: 500 } as const
 
 function P({ children }: { children: ReactNode }) {
-  return <p style={{ margin: 0, fontSize: 14, lineHeight: 1.6, color: '#9da9a0' }}>{children}</p>
+  return <p style={{ margin: 0, fontSize: 14, lineHeight: 1.6, color: 'var(--muted-foreground)' }}>{children}</p>
 }
 
 function QueueCard({ title, icon, iconStyle, children }: { title: string; icon: EmojiChar; iconStyle: CSSProperties; children: ReactNode }) {

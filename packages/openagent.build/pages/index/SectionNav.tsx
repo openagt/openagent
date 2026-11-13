@@ -68,7 +68,7 @@ export function SectionNav() {
           alignItems: 'center',
           gap: 8,
           padding: '96px clamp(14px, 4vw, 24px) 8px',
-          color: '#a7c080',
+          color: 'var(--success)',
           fontFamily: mono,
           fontSize: 11.5,
           letterSpacing: '0.12em',
@@ -104,11 +104,11 @@ export function SectionNav() {
           position: 'sticky',
           top: 0,
           zIndex: 50,
-          background: stuck ? 'rgba(35, 42, 46, 0.92)' : '#232a2e',
+          background: stuck ? 'color-mix(in oklab, var(--card) 92%, transparent)' : 'var(--card)',
           backdropFilter: 'blur(10px)',
           WebkitBackdropFilter: 'blur(10px)',
-          borderTop: stuck ? 'none' : '1px solid #3d484d',
-          borderBottom: '1px solid #3d484d',
+          borderTop: stuck ? 'none' : '1px solid var(--border)',
+          borderBottom: '1px solid var(--border)',
         }}
       >
         <div

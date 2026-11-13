@@ -13,6 +13,14 @@
 @import '@fontsource/ibm-plex-mono/latin-500.css';
 @import '@fontsource/ibm-plex-mono/latin-600.css';
 
+/* OpenAgent's colours, the dashboard's own, so the page and the dashboard it switches with are one. */
+@import '../../../dashboard/dashboard/tokens.css';
+
+/* The level of a card on the page, which the dashboard's palette has no name for. */
+:root {
+  --raised: color-mix(in oklab, var(--foreground) 6%, var(--background));
+}
+
 html {
   scroll-behavior: smooth;
 }
@@ -29,21 +37,21 @@ h3 {
 }
 body {
   margin: 0;
-  background: #2d353b;
-  color: #d3c6aa;
+  background: var(--background);
+  color: var(--foreground);
   font-family: 'IBM Plex Sans', sans-serif;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 }
 a {
-  color: #7fbbb3;
+  color: var(--primary);
   text-decoration: none;
 }
 a:hover {
-  color: #83c092;
+  color: color-mix(in oklab, var(--primary) 70%, var(--foreground));
 }
 ::selection {
-  background: #475258;
+  background: color-mix(in oklab, var(--primary) 35%, var(--background));
 }
 section[id] {
   scroll-margin-top: 76px;
@@ -51,7 +59,7 @@ section[id] {
 
 /* --- Hover states (from `style-hover`) --- */
 .nav-btn:hover {
-  border-color: #859289 !important;
+  border-color: var(--muted-foreground) !important;
 }
 /* The toggle under the logo and the big Dashboard button: only on a computer with OpenAgent installed (+Head.tsx, ViewToggle). */
 .view-toggle {
@@ -68,7 +76,7 @@ html[data-installed] .dashboard-cta {
   display: inline-flex !important;
 }
 .view-toggle-off:hover {
-  color: #fdf6e3 !important;
+  color: var(--foreground) !important;
 }
 
 /*
@@ -87,33 +95,32 @@ html[data-installed] .dashboard-cta {
   }
 }
 .dashboard-cta:hover {
-  background: #b5cc92 !important;
+  background: color-mix(in oklab, var(--success) 85%, var(--foreground)) !important;
 }
 .nav-btn-primary:hover {
-  background: rgba(167, 192, 128, 0.08) !important;
-  border-color: #b5cc92 !important;
+  background: color-mix(in oklab, var(--success) 8%, transparent) !important;
+  border-color: color-mix(in oklab, var(--success) 85%, var(--foreground)) !important;
 }
 .pm-tab:hover {
-  color: #d3c6aa !important;
+  color: var(--foreground) !important;
 }
 .copy-box:hover,
 .copy-box:focus-visible {
-  background: rgba(167, 192, 128, 0.04) !important;
+  background: color-mix(in oklab, var(--success) 4%, transparent) !important;
 }
-/* Same hover tint as .copy-box (#a7c080 = rgb(167, 192, 128) at 4%), pre-composited
- * over the chip's own #232a2e base since its background is opaque. */
+/* Same hover tint as .copy-box, mixed into the chip's own fill since that fill is opaque. */
 .install-chip:hover,
 .install-chip:focus-visible {
-  background: color-mix(in srgb, #a7c080 4%, #232a2e) !important;
+  background: color-mix(in oklab, var(--success) 4%, var(--card)) !important;
 }
 .cta-primary:hover {
-  background: #b5cc92 !important;
+  background: color-mix(in oklab, var(--success) 85%, var(--foreground)) !important;
 }
 .cta-secondary:hover {
-  border-color: #859289 !important;
+  border-color: var(--muted-foreground) !important;
 }
 .footer-link:hover {
-  color: #d3c6aa !important;
+  color: var(--foreground) !important;
 }
 
 /* --- Package-manager choice ---
@@ -139,16 +146,16 @@ html:not([data-pm]) .pm-only-npm {
 .pm-tab {
   background: transparent;
   border: 1px solid transparent;
-  color: #859289;
+  color: var(--muted-foreground);
 }
 html[data-pm='npm'] .pm-tab-npm,
 html[data-pm='pnpm'] .pm-tab-pnpm,
 html[data-pm='bun'] .pm-tab-bun,
 html[data-pm='yarn'] .pm-tab-yarn,
 html:not([data-pm]) .pm-tab-npm {
-  background: #232a2e;
-  border-color: #475258;
-  color: #d3c6aa;
+  background: var(--card);
+  border-color: var(--border);
+  color: var(--foreground);
 }
 
 /* --- Section nav --- */
@@ -156,15 +163,15 @@ html:not([data-pm]) .pm-tab-npm {
   display: none;
 }
 .section-link {
-  color: #9da9a0;
+  color: var(--muted-foreground);
   border-bottom: 2px solid transparent;
 }
 .section-link.active {
-  color: #a7c080;
-  border-bottom-color: #a7c080;
+  color: var(--success);
+  border-bottom-color: var(--success);
 }
 .section-link:hover {
-  color: #d3c6aa;
+  color: var(--foreground);
 }
 /* The links fill the bar, which scrolls sideways and so clips anything outside it: the ring goes inside. */
 .section-link:focus-visible {
@@ -206,7 +213,7 @@ html:not([data-pm]) .pm-tab-npm {
   width: 106%;
   height: 4px;
   border-radius: 2px;
-  background: #e67e80;
+  background: var(--danger);
   opacity: 0.9;
   transform-origin: left center;
   transform: rotate(-5deg) scaleX(0.1);
@@ -218,7 +225,7 @@ html:not([data-pm]) .pm-tab-npm {
   top: 100%;
   right: 11px;
   border: 5px solid transparent;
-  border-top-color: #14181b;
+  border-top-color: var(--foreground);
 }
 .copy-tip-side::after {
   content: '';
@@ -227,7 +234,7 @@ html:not([data-pm]) .pm-tab-npm {
   top: 50%;
   margin-top: -5px;
   border: 5px solid transparent;
-  border-right-color: #14181b;
+  border-right-color: var(--foreground);
 }
 
 /* --- Responsive --- */

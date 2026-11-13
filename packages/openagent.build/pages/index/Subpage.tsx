@@ -4,7 +4,7 @@ import { TopNav } from './TopNav'
 import { h2Style, kickerStyle } from './ui'
 
 /** A subpage's paragraph. */
-export const pStyle: CSSProperties = { margin: 0, fontSize: 15, lineHeight: 1.6, color: '#9da9a0', textWrap: 'pretty' }
+export const pStyle: CSSProperties = { margin: 0, fontSize: 15, lineHeight: 1.6, color: 'var(--muted-foreground)', textWrap: 'pretty' }
 
 /** A page beside the landing page (/press, /go-to-dashboard): the site's nav and footer around one column, its title and lead first. */
 export function Subpage({ title, lead, children }: { title: string; lead: string; children: ReactNode }) {

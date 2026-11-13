@@ -64,7 +64,7 @@ export function PmTabs() {
   )
 }
 
-const dollarStyle: CSSProperties = { userSelect: 'none', color: '#a7c080' }
+const dollarStyle: CSSProperties = { userSelect: 'none', color: 'var(--success)' }
 /** A command with words after it: they follow the command, under it once the line is too narrow, and the `$` stays beside it. */
 const followedLineStyle: CSSProperties = { display: 'flex', alignItems: 'baseline' }
 const followedStyle: CSSProperties = { display: 'inline-flex', flexWrap: 'wrap', gap: '2px 16px' }
@@ -94,8 +94,8 @@ const chipStyle: CSSProperties = {
   cursor: 'pointer',
   display: 'inline-flex',
   alignItems: 'center',
-  background: '#232a2e',
-  border: '1px solid #475258',
+  background: 'var(--card)',
+  border: '1px solid var(--border)',
   borderRadius: 7,
   padding: '4px 10px',
   fontFamily: mono,
@@ -108,8 +108,8 @@ const copyTipStyle: CSSProperties = {
   left: 'calc(100% + 11px)',
   top: '50%',
   transform: 'translateY(-50%)',
-  background: '#14181b',
-  color: '#d3c6aa',
+  background: 'var(--foreground)',
+  color: 'var(--background)',
   fontWeight: 600,
   fontSize: 9.5,
   letterSpacing: '0.1em',

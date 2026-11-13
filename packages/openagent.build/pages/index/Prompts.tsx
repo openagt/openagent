@@ -8,7 +8,7 @@ const chipStyle: CSSProperties = {
   padding: '7px 14px',
   fontSize: 14,
   fontWeight: 600,
-  color: '#d3c6aa',
+  color: 'var(--foreground)',
 }
 
 // A demoted band, not a third pillar, in the site's Note dress — a <div> rather
@@ -19,7 +19,7 @@ export function Prompts() {
       <div style={{ ...noteContainerStyle, display: 'flex', flexDirection: 'column', gap: 12 }}>
         <p style={{ margin: 0, textWrap: 'pretty' }}>
           <NoteText>
-            Everything is powered by open source <b style={{ color: '#d3c6aa', fontWeight: 600 }}>state-of-the-art prompts</b> (you can also bring your own):
+            Everything is powered by open source <b style={{ color: 'var(--foreground)', fontWeight: 600 }}>state-of-the-art prompts</b> (you can also bring your own):
           </NoteText>
         </p>
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10 }}>
@@ -28,7 +28,7 @@ export function Prompts() {
               {title}
             </span>
           ))}
-          <span style={{ ...chipStyle, background: 'transparent', border: '1.5px dashed #4f585e', color: '#a7c080' }}>
+          <span style={{ ...chipStyle, background: 'transparent', border: '1.5px dashed var(--border)', color: 'var(--success)' }}>
             ＋ Add yours
           </span>
         </div>

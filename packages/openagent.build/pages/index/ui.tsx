@@ -8,9 +8,9 @@ export const mono = "'IBM Plex Mono', monospace" as const
 
 /** The three claims under the hero's title, each in its color; the banner says them too. */
 export const BADGES = [
-  ['100% Open Source', '#a7c080'],
-  ['100% Free', '#dbbc7f'],
-  ['100% Local', '#7fbbb3'],
+  ['100% Open Source', 'var(--success)'],
+  ['100% Free', 'var(--warning)'],
+  ['100% Local', 'var(--primary)'],
 ] as const
 
 // A content section: max-width column with the shared vertical rhythm. The
@@ -41,8 +41,8 @@ export const h3Style: CSSProperties = {
 }
 
 export const cardStyle: CSSProperties = {
-  background: '#343f44',
-  border: '1px solid #3d484d',
+  background: 'var(--raised)',
+  border: '1px solid var(--border)',
   borderRadius: 12,
 }
 
@@ -52,7 +52,7 @@ export const kickerStyle: CSSProperties = {
   fontSize: 11.5,
   letterSpacing: '0.12em',
   textTransform: 'uppercase',
-  color: '#a7c080',
+  color: 'var(--success)',
 }
 
 // Centered chapter break: the one centered element on a left-anchored page, so
@@ -72,8 +72,8 @@ export function SectionHead({ title, sub }: { title: ReactNode; sub?: string }) 
       }}
     >
       <h2 style={h2Style}>{title}</h2>
-      <span aria-hidden style={{ width: 68, height: 4, borderRadius: 2, background: '#a7c080' }} />
-      {sub && <p style={{ margin: 0, fontSize: 17, lineHeight: 1.6, color: '#9da9a0' }}>{sub}</p>}
+      <span aria-hidden style={{ width: 68, height: 4, borderRadius: 2, background: 'var(--success)' }} />
+      {sub && <p style={{ margin: 0, fontSize: 17, lineHeight: 1.6, color: 'var(--muted-foreground)' }}>{sub}</p>}
     </div>
   )
 }
@@ -84,9 +84,9 @@ export const noteContainerStyle: CSSProperties = {
   margin: 0,
   fontSize: 14,
   lineHeight: 1.6,
-  color: '#9da9a0',
-  background: 'rgba(219, 188, 127, 0.07)',
-  borderLeft: '3px solid #dbbc7f',
+  color: 'var(--muted-foreground)',
+  background: 'color-mix(in oklab, var(--warning) 7%, transparent)',
+  borderLeft: '3px solid var(--warning)',
   borderRadius: '0 8px 8px 0',
   padding: '12px 16px',
 }
@@ -97,7 +97,7 @@ const noteLabelStyle: CSSProperties = {
   fontWeight: 600,
   letterSpacing: '0.1em',
   textTransform: 'uppercase',
-  color: '#dbbc7f',
+  color: 'var(--warning)',
   marginRight: 10,
 }
 
@@ -129,8 +129,8 @@ export function WipBadge() {
         fontSize: 10.5,
         fontWeight: 600,
         letterSpacing: '0.08em',
-        color: '#dbbc7f',
-        border: '1px solid rgba(219, 188, 127, 0.4)',
+        color: 'var(--warning)',
+        border: '1px solid color-mix(in oklab, var(--warning) 40%, transparent)',
         borderRadius: 4,
         padding: '1px 6px',
         whiteSpace: 'nowrap',
@@ -172,13 +172,13 @@ export function CodeChip({ children, fontSize }: { children: string; fontSize: n
         fontStyle: 'normal',
         fontFamily: mono,
         fontSize,
-        background: '#232a2e',
-        // The border keeps the chip visible even on #232a2e surfaces (e.g. the
+        background: 'var(--card)',
+        // The border keeps the chip visible even on surfaces of its own fill (e.g. the
         // good-solution rows), where the background alone disappears.
-        border: '1px solid #475258',
+        border: '1px solid var(--border)',
         borderRadius: 5,
         padding: '1px 6px',
-        color: '#dbbc7f',
+        color: 'var(--warning)',
       }}
     >
       {children}

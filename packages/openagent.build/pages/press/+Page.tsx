@@ -4,23 +4,25 @@ import { CodeChip } from '../index/ui'
 
 const BRAND_REPO = 'https://github.com/brillout/brand-the-framework'
 
-function Swatch({ bg, label, border }: { bg: string; label: string; border: string }) {
+/** The logo on a tile of the dark theme's page, or on white. */
+function Swatch({ dark, label }: { dark?: boolean; label: string }) {
   return (
     <div
+      className={dark ? 'dark' : undefined}
       style={{
         flex: '1 1 200px',
         display: 'flex',
         flexDirection: 'column',
         alignItems: 'center',
         gap: 14,
-        background: bg,
-        border: `1px solid ${border}`,
+        background: dark ? 'var(--background)' : '#ffffff',
+        border: '1px solid var(--border)',
         borderRadius: 12,
         padding: '28px 20px 16px',
       }}
     >
       <img src="/assets/logo.svg" alt="OpenAgent logo" style={{ width: 72, height: 82 }} />
-      <span style={{ fontSize: 12.5, color: '#859289' }}>{label}</span>
+      <span style={{ fontSize: 12.5, color: 'var(--muted-foreground)' }}>{label}</span>
     </div>
   )
 }
@@ -34,8 +36,8 @@ export default function Page() {
           backgrounds:
         </p>
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: 14 }}>
-          <Swatch bg="#232a2e" border="#3d484d" label="on dark" />
-          <Swatch bg="#ffffff" border="#3d484d" label="on light" />
+          <Swatch dark label="on dark" />
+          <Swatch label="on light" />
         </div>
         <p style={pStyle}>
           Download: <a href="/assets/logo.svg">logo.svg</a> — more variants (palettes, sizes) can be generated with
@@ -44,7 +46,7 @@ export default function Page() {
       </Step>
       <Step kicker="Name">
         <p style={pStyle}>
-          The name is written <b style={{ color: '#d3c6aa', fontWeight: 600 }}>OpenAgent</b> (one word, capital O, capital
+          The name is written <b style={{ color: 'var(--foreground)', fontWeight: 600 }}>OpenAgent</b> (one word, capital O, capital
           A), and the package is <CodeChip fontSize={13}>@openagt/dashboard</CodeChip>.
         </p>
       </Step>
@@ -53,7 +55,7 @@ export default function Page() {
           <img
             src="/banner.jpg"
             alt="OpenAgent banner"
-            style={{ width: 'min(476px, 100%)', height: 'auto', display: 'block', outline: '1px solid #3d484d', borderRadius: 4 }}
+            style={{ width: 'min(476px, 100%)', height: 'auto', display: 'block', outline: '1px solid var(--border)', borderRadius: 4 }}
           />
         </a>
         <p style={pStyle}>

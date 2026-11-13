@@ -23,7 +23,7 @@ function Card({ title, children }: { title: string; children: ReactNode }) {
           gap: 10,
           fontSize: 14.5,
           lineHeight: 1.55,
-          color: '#9da9a0',
+          color: 'var(--muted-foreground)',
         }}
       >
         {children}
@@ -36,7 +36,7 @@ function Item({ children, marker }: { children: ReactNode; marker?: ReactNode })
   return (
     <li style={{ display: 'flex', gap: 10 }}>
       {/* Fixed marker width: every row's text (and its wrapped lines) starts in the same column. */}
-      <span style={{ color: '#a7c080', flex: 'none', width: 18 }}>{marker ?? '✓'}</span>
+      <span style={{ color: 'var(--success)', flex: 'none', width: 18 }}>{marker ?? '✓'}</span>
       <span>{children}</span>
     </li>
   )
@@ -48,7 +48,7 @@ export function YourFramework() {
       <SectionHead
         title={
           <>
-            <span style={{ color: '#a7c080' }}>Your</span> framework
+            <span style={{ color: 'var(--success)' }}>Your</span> framework
           </>
         }
         sub="It isn't our framework. It's yours."

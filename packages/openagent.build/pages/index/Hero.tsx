@@ -4,7 +4,7 @@ import { CopiedStatus, copyPress, useCopy } from './copy'
 import { BADGES, kickerStyle, mono } from './ui'
 import { switchInPlace, useDashboardHref } from './ViewToggle'
 
-const commentStyle: CSSProperties = { color: '#859289' }
+const commentStyle: CSSProperties = { color: 'var(--muted-foreground)' }
 
 function Badge({ label, copied }: { label: string; copied: boolean }) {
   return (
@@ -13,8 +13,8 @@ function Badge({ label, copied }: { label: string; copied: boolean }) {
       style={{
         marginLeft: 'auto',
         position: 'relative',
-        background: '#14181b',
-        color: '#d3c6aa',
+        background: 'var(--foreground)',
+        color: 'var(--background)',
         fontWeight: 600,
         fontSize: 10,
         letterSpacing: '0.1em',
@@ -67,7 +67,7 @@ export function Hero() {
               display: 'flex',
               alignItems: 'center',
               gap: 7,
-              border: '1px solid #475258',
+              border: '1px solid var(--border)',
               borderRadius: 999,
               padding: '5px 12px',
               color,
@@ -97,7 +97,7 @@ export function Hero() {
             margin: '0 auto 0px',
             fontSize: 'clamp(26px, 6vw, 42px)',
             fontWeight: 500,
-            color: '#9da9a0',
+            color: 'var(--muted-foreground)',
           }}
         >
           Babysit AI
@@ -110,7 +110,7 @@ export function Hero() {
           fontSize: 'clamp(19px, 4.5vw, 25px)',
           fontWeight: 500,
           lineHeight: 1.45,
-          color: '#d3c6aa',
+          color: 'var(--foreground)',
           maxWidth: 680,
           textWrap: 'pretty',
         }}
@@ -126,8 +126,8 @@ export function Hero() {
           alignItems: 'center',
           gap: 10,
           marginTop: 6,
-          background: '#a7c080',
-          color: '#232a2e',
+          background: 'var(--success)',
+          color: 'var(--background)',
           borderRadius: 12,
           padding: '14px 30px',
           fontSize: 19,
@@ -154,9 +154,9 @@ export function Hero() {
             style={{
               maxWidth: '100%',
               boxSizing: 'border-box',
-              background: '#232a2e',
-              border: '1.5px solid #a7c080',
-              boxShadow: '0 0 0 4px rgba(167, 192, 128, 0.12)',
+              background: 'var(--card)',
+              border: '1.5px solid var(--success)',
+              boxShadow: '0 0 0 4px color-mix(in oklab, var(--success) 12%, transparent)',
               borderRadius: 12,
               overflow: 'hidden',
               textAlign: 'left',
@@ -168,8 +168,8 @@ export function Hero() {
                 alignItems: 'center',
                 gap: 4,
                 padding: '7px 8px',
-                background: '#2d353b',
-                borderBottom: '1px solid #3d484d',
+                background: 'var(--background)',
+                borderBottom: '1px solid var(--border)',
               }}
             >
               <PmTabs />
@@ -198,7 +198,7 @@ export function Hero() {
           style={{
             margin: 0,
             fontSize: 14,
-            color: '#9da9a0',
+            color: 'var(--muted-foreground)',
             display: 'flex',
             alignItems: 'center',
             gap: 10,
@@ -227,14 +227,14 @@ export function Hero() {
       >
         <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
           <span style={kickerStyle}>What is it?</span>
-          <p style={{ margin: 0, fontSize: 15.5, lineHeight: 1.7, color: '#9da9a0', textWrap: 'pretty' }}>
+          <p style={{ margin: 0, fontSize: 15.5, lineHeight: 1.7, color: 'var(--muted-foreground)', textWrap: 'pretty' }}>
             It turns AI agents into autonomous teammates that handle work end-to-end — while you stay in control of key
             decisions.
           </p>
         </div>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
           <span style={kickerStyle}>Any software</span>
-          <p style={{ margin: 0, fontSize: 15.5, lineHeight: 1.7, color: '#9da9a0', textWrap: 'pretty' }}>
+          <p style={{ margin: 0, fontSize: 15.5, lineHeight: 1.7, color: 'var(--muted-foreground)', textWrap: 'pretty' }}>
             (Semi-)autonomously build anything from simple web apps to complex software.
           </p>
         </div>

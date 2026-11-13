@@ -27,7 +27,7 @@ test('a command is drawn as code, and what HTML would read as a tag is shown as 
 })
 
 test("the pages are in the dashboard's palette, light and dark, and carry its logo", () => {
-  const css = dashboardFile('tailwind.css')
+  const css = dashboardFile('tokens.css')
   const light = propertiesOf(css.slice(css.indexOf(':root {'), css.indexOf('}', css.indexOf(':root {'))))
   const dark = propertiesOf(css.slice(css.indexOf('.dark {'), css.indexOf('}', css.indexOf('.dark {'))))
   const strands = [...dashboardFile('components/Logo.tsx').matchAll(/d: '([^']+)'/g)].map(([, d]) => d!)

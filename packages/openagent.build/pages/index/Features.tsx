@@ -13,7 +13,7 @@ function Feature({ title, gap = 12, children }: { title: string; gap?: number; c
   return (
     <div style={{ ...featureCardStyle, gap }}>
       <h3 style={{ margin: 0, fontSize: 19, fontWeight: 600 }}>{title}</h3>
-      <p style={{ margin: 0, fontSize: 14.5, lineHeight: 1.6, color: '#9da9a0' }}>{children}</p>
+      <p style={{ margin: 0, fontSize: 14.5, lineHeight: 1.6, color: 'var(--muted-foreground)' }}>{children}</p>
     </div>
   )
 }
