@@ -5,7 +5,7 @@ import { join } from 'node:path'
 import { test } from 'node:test'
 import { runAdding, type AddingNow } from './adding.js'
 import { accountsPath, addAccount, copiedPath, markLimited, nameOwnAccount, readAccounts } from './accounts.js'
-import { runCli } from './cli.js'
+import { runCli, USAGE } from './cli.js'
 import { loginWiring, type LoginWiring } from './wiring.js'
 
 interface Run {
@@ -383,6 +383,11 @@ test('add-cancel stops the sign-in under way and forgets it, keeping nothing', (
     await signIn
     assert.deepEqual(await adding(env), {})
     assert.deepEqual(readAccounts(accountsPath('claude', env)).map(a => a.name), ['This computer'])
+  }))
+
+test('--help is the usage on stdout, exit 0', () =>
+  inDir(async env => {
+    for (const help of ['--help', '-h']) assert.deepEqual(await run([help], env), { code: 0, out: [USAGE], err: [] })
   }))
 
 test('a command that cannot be read says the usage and exits 2', () =>

@@ -567,6 +567,10 @@ export async function runCli(args: string[], io: CliIO): Promise<number> {
     io.stderr(USAGE)
     return 2
   }
+  if ((command === '--help' || command === '-h') && !rest.length) {
+    io.stdout(USAGE)
+    return 0
+  }
   try {
     switch (command) {
       case 'status':

@@ -76,6 +76,10 @@ export async function runCli(argv: readonly string[], io: CliIo): Promise<number
     io.stdout(JSON.stringify(value))
     return 0
   }
+  if ((command === '--help' || command === '-h') && argv.length === 1) {
+    io.stdout(USAGE)
+    return 0
+  }
   if (command === 'list' && argv.length === 1) {
     return answer({ claude: await listed('claude', wiring), codex: await listed('codex', wiring) })
   }

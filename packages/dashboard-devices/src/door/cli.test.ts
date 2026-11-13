@@ -145,6 +145,20 @@ test('serve is refused without OpenAgent\'s address or with a port that is none,
   }
 })
 
+test('--help is the usage on stdout, exit 0', async () => {
+  const home = await testHome()
+  try {
+    for (const help of ['--help', '-h']) {
+      const out: string[] = []
+      const err: string[] = []
+      assert.equal(await runCli([help], { env: home.env, stdout: line => out.push(line), stderr: line => err.push(line) }), 0)
+      assert.deepEqual([out, err], [[USAGE], []])
+    }
+  } finally {
+    await home.remove()
+  }
+})
+
 test('https <address> makes this computer a server and https off undoes it; what is no number or name is refused', async () => {
   const home = await testHome()
   try {

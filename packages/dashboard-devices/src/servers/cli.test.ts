@@ -20,6 +20,15 @@ async function run(env: NodeJS.ProcessEnv, args: string[], over: Partial<CliIO> 
 
 const serversOf = (ran: Ran): Status['servers'] => (ran.out as Status).servers
 
+test('--help is the usage on stdout, exit 0', async () => {
+  for (const help of ['--help', '-h']) {
+    const out: string[] = []
+    const err: string[] = []
+    assert.equal(await runCli([help], { env: {}, stdout: line => out.push(line), stderr: line => err.push(line) }), 0)
+    assert.deepEqual([out, err], [[USAGE], []])
+  }
+})
+
 test('no server until one is connected; what is no address, user or version is refused in words, and nothing is started', async () => {
   const home = await testHome()
   try {

@@ -494,6 +494,10 @@ export async function runCli(args: string[], io: CliIO): Promise<number> {
     return 0
   }
   const ssh = sshOf(io)
+  if ((command === '--help' || command === '-h') && !rest.length) {
+    io.stdout(USAGE)
+    return 0
+  }
   try {
     switch (command) {
       case 'status':
