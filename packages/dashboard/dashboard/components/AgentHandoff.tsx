@@ -222,7 +222,7 @@ function NextStep({
             press('commit', ask, 'Could not ask the agent to commit.')
           }}
         >
-          {pending === 'commit' ? 'Asking…' : 'Commit'}
+          <Steady words={['Commit', 'Asking…']} now={pending === 'commit' ? 1 : 0} />
         </Button>
       </>
     )
@@ -247,7 +247,7 @@ function NextStep({
         <>
           <Reason>not in the PR yet</Reason>
           <Button size="xs" variant="ghost" className={NEXT_STEP} {...step} onClick={push}>
-            {pending === 'push' ? 'Updating PR…' : 'Update PR'}
+            <Steady words={['Update PR', 'Updating PR…']} now={pending === 'push' ? 1 : 0} />
           </Button>
         </>
       )
@@ -268,7 +268,7 @@ function NextStep({
           )
         }
       >
-        {pending === 'merge' ? 'Merging…' : 'Merge PR'}
+        <Steady words={['Merge PR', 'Merging…']} now={pending === 'merge' ? 1 : 0} />
       </Button>
     )
   }
@@ -298,7 +298,7 @@ function NextStep({
           {...step}
           onClick={() => press('merge-branch', () => sendMergeBranch(projectId, agentId), 'Could not merge the branch.')}
         >
-          {pending === 'merge-branch' ? 'Merging…' : 'Merge'}
+          <Steady words={['Merge', 'Merging…']} now={pending === 'merge-branch' ? 1 : 0} />
         </Button>
       </>
     )
@@ -310,7 +310,7 @@ function NextStep({
     return (
       <>
         <Button size="xs" variant="ghost" className={NEXT_STEP} {...step} onClick={push}>
-          {pending === 'push' ? 'Publishing…' : 'Publish branch'}
+          <Steady words={['Publish branch', 'Publishing…']} now={pending === 'push' ? 1 : 0} />
         </Button>
       </>
     )
@@ -337,7 +337,7 @@ function NextStep({
           {...step}
           onClick={() => openPr(false)}
         >
-          {pending === 'pr' ? 'Opening PR…' : pending === 'push' ? 'Publishing…' : 'Open PR'}
+          <Steady words={['Open PR', 'Opening PR…', 'Publishing…']} now={pending === 'pr' ? 1 : pending === 'push' ? 2 : 0} />
         </Button>
         <DropdownMenu>
             <DropdownMenuTrigger
@@ -412,6 +412,24 @@ function namePending(paths: string[]): string {
   const shown = paths.slice(0, 2).join(', ')
   const rest = paths.length - Math.min(paths.length, 2)
   return rest > 0 ? `${shown} and ${rest} more` : shown
+}
+
+/**
+ * A press's word (`words[now]`) in the room its widest word takes, so the bar does not move as the
+ * press turns into what it is doing. The other words stand invisible in the same place, as
+ * generated text the page's text and a screen reader leave out.
+ */
+function Steady({ words, now }: { words: readonly string[]; now: number }) {
+  const [first, second] = words.filter((_, at) => at !== now)
+  return (
+    <span
+      data-also={first}
+      data-also-too={second ?? ''}
+      className="inline-grid whitespace-nowrap *:col-start-1 *:row-start-1 before:invisible before:col-start-1 before:row-start-1 before:h-0 before:content-[attr(data-also)] after:invisible after:col-start-1 after:row-start-1 after:h-0 after:content-[attr(data-also-too)]"
+    >
+      <span>{words[now]}</span>
+    </span>
+  )
 }
 
 /** Why there is nothing to press. Reads as part of the bar, not as an error. `hidden`: said to a screen reader elsewhere. */
