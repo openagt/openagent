@@ -24,7 +24,7 @@ import { useIsMobile } from './lib/use-mobile.js'
 import { usePinnedPage } from './lib/use-pinned-page.js'
 import { NotFound } from './components/NotFound.js'
 import { ModulePageView, ModuleSlot } from './components/ModulePageView.js'
-import { useModules, ModulesContext } from './lib/use-modules.js'
+import { useListedPages, useModules, ModulesContext } from './lib/use-modules.js'
 import { HostServicesContext, useSteadyServices } from './lib/host-services.js'
 import { DAEMON_SERVICES } from './lib/daemon-services.js'
 import { startPicks } from './lib/use-start-agent.js'
@@ -157,6 +157,9 @@ export function App() {
   // packages that project has. The sidebar lists these, and a URL names a page only among these.
   const shownPages = useMemo(() => (scope ? modulePages.filter(page => page.projects.includes(scope)) : modulePages), [modulePages, scope])
   const modulePage = pageSegment ? shownPages.find(page => page.segment === pageSegment) : undefined
+  // The sidebar's rows of them, there from the first frame: the last load's until the modules are imported.
+  const listedPages = useListedPages(modules)
+  const sidebarPages = useMemo(() => (scope ? listedPages.filter(page => page.projects.includes(scope)) : listedPages), [listedPages, scope])
 
   // Every navigation keeps the picked project, and one into another project's page, or into a
   // page in a named project, picks that project: the pages never show a project the select does not name.
@@ -641,7 +644,7 @@ export function App() {
           working={working}
           onDashboard={showDashboard}
           onSettings={showSettings}
-          pages={shownPages}
+          pages={sidebarPages}
           activePage={pageSegment}
           onPage={showPage}
           interventionCount={interventions.length}

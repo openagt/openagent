@@ -190,3 +190,32 @@ export const ModulesContext = createContext<MountedModules>(NOTHING_MOUNTED)
 export function useMountedModules(): MountedModules {
   return useContext(ModulesContext)
 }
+
+/** Where the modules' pages the sidebar listed are kept in this browser, for the next load's first frame. */
+const LISTED_PAGES_KEY = 'openagent:listed-pages'
+
+/** A module's page as the sidebar lists it: before its module is imported, without its icon. */
+export type ListedPage = Pick<MountedPage, 'segment' | 'label' | 'projects'> & Partial<Pick<MountedPage, 'icon'>>
+
+/** The pages the sidebar lists: the imported ones, and until every module is, those of the last load. */
+export function useListedPages({ pages, loaded }: MountedModules): readonly ListedPage[] {
+  const [last] = useState(readListedPages)
+  useEffect(() => {
+    if (!loaded) return
+    try {
+      globalThis.localStorage?.setItem(LISTED_PAGES_KEY, JSON.stringify(pages.map(({ segment, label, projects }) => ({ segment, label, projects }))))
+    } catch {
+      // No room, or no storage: the next load lists the pages once they are imported.
+    }
+  }, [pages, loaded])
+  return loaded ? pages : last
+}
+
+function readListedPages(): ListedPage[] {
+  try {
+    const listed: unknown = JSON.parse(globalThis.localStorage?.getItem(LISTED_PAGES_KEY) ?? '[]')
+    return Array.isArray(listed) ? listed.filter((page): page is ListedPage => typeof page?.segment === 'string' && typeof page.label === 'string' && Array.isArray(page.projects)) : []
+  } catch {
+    return []
+  }
+}
