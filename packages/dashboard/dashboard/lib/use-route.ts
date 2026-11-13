@@ -18,8 +18,22 @@ function notify(): void {
   for (const listener of listeners) listener()
 }
 
+/** The entry shown while it holds what leaving it would lose, and what asks before it goes. */
+let held: { url: string; state: unknown; ask: (leave: () => void) => void } | null = null
+
+/** Keep the entry shown when Back or Forward would leave it: its address is put back, and `ask` is handed the step that leaves. Until the returned function is called. */
+export function holdEntry(ask: (leave: () => void) => void): () => void {
+  const entry = { url: currentUrl(), state: window.history.state as unknown, ask }
+  held = entry
+  return () => void (held === entry && (held = null))
+}
+
 /** Back or Forward: the route is read again, and the page goes back to where it was scrolled on that entry. */
 function onPopState(): void {
+  if (held) {
+    window.history.pushState(held.state, '', held.url)
+    return held.ask(() => window.history.back())
+  }
   notify()
   restoreScroll()
 }

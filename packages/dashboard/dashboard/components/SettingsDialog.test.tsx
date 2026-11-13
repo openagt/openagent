@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { afterEach, describe, expect, test, vi } from 'vitest'
-import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { refreshPreferences } from '../lib/preferences.js'
 import { forgetRemembered } from '../lib/use-async.js'
 import { ModulesContext, byMountOrder, type MountedModules } from '../lib/use-modules.js'
@@ -49,6 +49,8 @@ vi.mock('../rpc/reads.js', async importOriginal => ({
 }))
 
 import { SettingsDialog } from './SettingsDialog.js'
+import { useRoute } from '../lib/use-route.js'
+import { NO_PROJECTS } from '../../src/project-address.js'
 import type { ProjectSummary } from '../../src/index.js'
 
 const onClose = vi.fn()
@@ -456,6 +458,32 @@ describe('the Settings list', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Skills' }))
     await waitFor(() => expect(title()).toBe('SettingsgemstackSkills'))
     expect(screen.queryByRole('alertdialog')).toBeNull()
+  })
+
+  test('Back with a tick on Skills not saved asks first, and the address stays on Settings: Cancel keeps the tick, Leave goes back', async () => {
+    window.history.replaceState(null, '', '/page')
+    window.history.pushState(null, '', '/page?settings=skills')
+    // The app's route, which follows Back.
+    const Routed = () => (useRoute(NO_PROJECTS), null)
+    render(<Routed />)
+    show('skills', 'p1')
+    fireEvent.click(await screen.findByRole('checkbox', { name: 'skill-of-p1' }))
+    const back = async () => {
+      const popped = new Promise(resolve => window.addEventListener('popstate', resolve, { once: true }))
+      window.history.back()
+      await act(async () => void (await popped))
+    }
+    await back()
+    const asked = await screen.findByRole('alertdialog', { name: 'Leave without saving?' })
+    expect(window.location.search).toBe('?settings=skills')
+    fireEvent.click(within(asked).getByRole('button', { name: 'Cancel' }))
+    await waitFor(() => expect(screen.queryByRole('alertdialog')).toBeNull())
+    expect(screen.getByRole('checkbox', { name: 'skill-of-p1' }).getAttribute('aria-checked')).toBe('false')
+    await back()
+    const popped = new Promise(resolve => window.addEventListener('popstate', resolve, { once: true }))
+    fireEvent.click(within(await screen.findByRole('alertdialog')).getByRole('button', { name: 'Leave' }))
+    await act(async () => void (await popped))
+    expect(window.location.pathname + window.location.search).toBe('/page')
   })
 
   test('Skills with no project given follows the sidebar\'s pick', async () => {

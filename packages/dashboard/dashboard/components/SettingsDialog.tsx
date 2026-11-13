@@ -8,6 +8,7 @@ import type { ProjectSummary } from '../../src/index.js'
 import { useMountedModules, type MountedSettings } from '../lib/use-modules.js'
 import { SettingsCrumbContext, type SettingsCrumb } from '../lib/settings-crumb.js'
 import { SettingsHoldContext } from '../lib/settings-hold.js'
+import { holdEntry } from '../lib/use-route.js'
 import { useIsMobile } from '../lib/use-mobile.js'
 import { useDetectedEditors } from '../lib/editors.js'
 import { usePreferences, updatePreferences, themePreference, type ThemePreference } from '../lib/preferences.js'
@@ -91,10 +92,13 @@ export function SettingsDialog({
   const own = useOwnEntries()
   // A page inside the entry shown, which the entry says it opened: its title in the header, and the back arrow to the entry.
   const [crumb, setCrumb] = useState<SettingsCrumb | undefined>()
-  // A change the entry holds and has not saved: leaving it asks first, and the step asked about waits here.
-  const held = useRef(false)
-  const setHeld = useCallback((now: boolean) => void (held.current = now), [])
+  // A change the entry holds and has not saved: leaving it, by Back too, asks first, and the step asked about waits here.
   const [leaving, setLeaving] = useState<(() => void) | undefined>()
+  const held = useRef<(() => void) | null>(null)
+  const setHeld = useCallback((now: boolean) => {
+    held.current?.()
+    held.current = now ? holdEntry(step => setLeaving(() => step)) : null
+  }, [])
   const leave = (step: () => void): void => (held.current ? setLeaving(() => step) : step())
   const moduleEntry = (section: MountedSettings, of: ProjectSummary[]): Entry => {
     const Body = section.Section
@@ -266,7 +270,7 @@ export function SettingsDialog({
             confirmLabel="Leave"
             onConfirm={async () => {}}
             onSuccess={() => {
-              held.current = false
+              setHeld(false)
               leaving?.()
             }}
           />
