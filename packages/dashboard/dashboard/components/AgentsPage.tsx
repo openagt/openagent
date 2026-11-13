@@ -342,7 +342,7 @@ function AgentEditor({ agent, view, onAccounts, onDone }: { agent?: AgentRecord;
             disabled={busy || isDefault}
             placeholder="Social media"
             aria-invalid={nameMissing}
-            {...(nameMissing ? { 'aria-describedby': 'agent-name-missing' } : {})}
+            {...(nameMissing ? { 'aria-describedby': 'agent-name-missing' } : isDefault ? { 'aria-describedby': 'agent-name-kept' } : {})}
             onChange={event => {
               setNameMissing(false)
               setDraft(d => ({ ...d, name: event.target.value }))
@@ -352,6 +352,11 @@ function AgentEditor({ agent, view, onAccounts, onDone }: { agent?: AgentRecord;
           {nameMissing && (
             <p id="agent-name-missing" className="text-xs text-danger">
               Give the agent a name.
+            </p>
+          )}
+          {isDefault && (
+            <p id="agent-name-kept" className="text-xs text-muted-foreground">
+              The default agent keeps its name: it is the one a session is on unless you pick another.
             </p>
           )}
         </div>
