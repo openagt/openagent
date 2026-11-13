@@ -30,7 +30,10 @@ export function Subpage({ title, lead, children }: { title: string; lead: string
           {children}
         </main>
       </div>
-      <Footer />
+      {/* A block, not a flex item: as one, the footer's auto margins shrink it to its words. */}
+      <div>
+        <Footer />
+      </div>
     </div>
   )
 }
