@@ -76,6 +76,13 @@ describe('AgentHistory (#785)', () => {
     expect([onSelect.mock.calls, onPage.mock.calls]).toEqual([[['run-1']], [['logs']]])
   })
 
+  test('a failed run\'s circle is a red ring: nothing is going on in it, as the dots\' rule says', () => {
+    renderRail(<AgentHistory projectId="p1" scope="p1" agents={[agent({ status: 'failed' })]} selectedAgentId={null} onSelect={() => {}} />)
+    const dot = screen.getByLabelText('failed')
+    expect(dot.className).toContain('border-danger')
+    expect(dot.className).not.toContain('bg-danger')
+  })
+
   test('a working run reads as running and animates', () => {
     // One line: the circle says what the row used to print as a word, and the row's name says it too.
     const { container } = renderRail(<AgentHistory projectId="p1" scope="p1" agents={[agent()]} selectedAgentId={null} onSelect={() => {}} />)
