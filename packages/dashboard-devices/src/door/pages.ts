@@ -11,6 +11,11 @@ const STYLE = `
   p { margin: 0; opacity: 0.8; white-space: pre-line; }
 `
 
+/** `text` as HTML shows it: what HTML would read as markup, escaped. */
+function escaped(text: string): string {
+  return text.replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;').replaceAll('"', '&quot;')
+}
+
 function page(title: string, body: string, script = '', nonce = ''): string {
   return `<!doctype html>
 <html lang="en">
@@ -22,8 +27,8 @@ function page(title: string, body: string, script = '', nonce = ''): string {
 </head>
 <body>
 <main>
-<h1 id="title">${title}</h1>
-<p id="text">${body}</p>
+<h1 id="title">${escaped(title)}</h1>
+<p id="text">${escaped(body)}</p>
 </main>
 ${script ? `<script nonce="${nonce}">${script}</script>` : ''}
 </body>
