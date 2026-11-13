@@ -17,10 +17,10 @@
   color-scheme: light;
   /* The fonts with no pick in Settings › Appearance: IBM Plex Sans, the website's own;
      JetBrains Mono for code; Source Serif 4 for a Markdown file read as a page, as Claude Code
-     on the web reads one in a serif. AppFrame sets another pick here. */
-  --font-app: 'IBM Plex Sans', ui-sans-serif, system-ui, sans-serif;
-  --font-code: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
-  --font-document: 'Source Serif 4', ui-serif, Georgia, serif;
+     on the web reads one in a serif. AppFrame sets another pick here; lib/fonts.ts ships them. */
+  --font-app: 'IBM Plex Sans Variable', ui-sans-serif, system-ui, sans-serif;
+  --font-code: 'JetBrains Mono Variable', ui-monospace, SFMono-Regular, Menlo, monospace;
+  --font-document: 'Source Serif 4 Variable', ui-serif, Georgia, serif;
   /* Everforest's greens on a white canvas (#1141). Everforest Light is paper-coloured (#fdf6e3),
      which reads as orange next to any other app; the identity people recognise is the green, not
      the paper, so the hues stay and the canvas goes near-white, in the greens' own cool grey. As

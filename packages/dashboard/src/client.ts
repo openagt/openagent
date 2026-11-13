@@ -7,7 +7,7 @@ export { PUBLISH_LABELS, isPublishPick, offeredPublishPicks, publishPickIn, type
 /** The default agent's id: the agent a run is on when none is picked (`agent-data`'s `agents.ts`). */
 export const DEFAULT_AGENT = 'default'
 export { formatOpenAgentEvent } from './terminal.js'
-export { ACCENTS, DEFAULT_ACCENT_LABELS, accentOf, CODE_FONTS, DOCUMENT_FONTS, FONTS, PALETTES, PALETTE_LABELS, type Accent, type CodeFont, type DocumentFont, type Font, type Palette } from './appearance.js'
+export { ACCENTS, DEFAULT_ACCENT_LABELS, accentOf, CODE_FONTS, DOCUMENT_FONTS, FONTS, fontFace, PALETTES, PALETTE_LABELS, type Accent, type CodeFont, type DocumentFont, type Font, type Palette } from './appearance.js'
 // What every list calls a run, so the same run never goes by two names.
 export { runName } from './run-name.js'
 export { foldScreenRows } from './screens.js'

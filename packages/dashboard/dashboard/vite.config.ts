@@ -162,6 +162,28 @@ function openagentRenderBlocking(): Plugin {
   }
 }
 
+/** The Latin file of the page's own font (tailwind.css, lib/fonts.ts), as fontsource names it. */
+const PRELOADED_FONT = 'ibm-plex-sans-latin-wght-normal'
+
+/**
+ * The page's font is fetched with the page, not once its text is laid out, so the first frame has
+ * it. Code's and a document's font come when text uses them: most pages draw neither.
+ */
+function openagentPreloadFont(): Plugin {
+  return {
+    name: 'openagent:preload-font',
+    apply: 'build',
+    transformIndexHtml: {
+      order: 'post',
+      handler(_html, { bundle }) {
+        const file = Object.keys(bundle ?? {}).find(fileName => fileName.startsWith(`assets/${PRELOADED_FONT}-`) && fileName.endsWith('.woff2'))
+        if (!file) throw new Error(`the build wrote no ${PRELOADED_FONT}.woff2`)
+        return [{ tag: 'link', attrs: { rel: 'preload', href: `/${file}`, as: 'font', type: 'font/woff2', crossorigin: '' }, injectTo: 'head' }]
+      },
+    },
+  }
+}
+
 // Dashboard (#405): a plain Vite SPA — React + Tailwind v4 + shadcn, talking to the daemon over
 // plain HTTP (`POST /_rpc/<name>`, plus an SSE stream for the live feed). `index.html` beside this
 // file is the whole entry; the daemon serves the built output as static files with an SPA fallback.
@@ -170,7 +192,7 @@ export default defineConfig({
   // (A7), so `root` is pinned to this file's directory instead of inherited from the cwd — the
   // scripts that run it live one level up.
   root: fileURLToPath(new URL('.', import.meta.url)),
-  plugins: [openagentDevDaemon(), openagentHostModules(), openagentRenderBlocking(), react(), tailwindcss()],
+  plugins: [openagentDevDaemon(), openagentHostModules(), openagentRenderBlocking(), openagentPreloadFont(), react(), tailwindcss()],
   build: {
     // Straight into the package's own dist, where the daemon serves it from. There used to be a
     // copy step between the two — a whole turbo task — because the bundle was built in a

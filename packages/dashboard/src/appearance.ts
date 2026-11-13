@@ -58,6 +58,11 @@ export const DOCUMENT_FONTS = {
 } as const
 export type DocumentFont = keyof typeof DOCUMENT_FONTS
 
+/** The name a family's face is declared under in the stylesheets that ship it (dashboard/lib/fonts.ts): the variable font's, but for IBM Plex Mono, which has none. */
+export function fontFace(family: string): string {
+  return family === 'IBM Plex Mono' ? family : `${family} Variable`
+}
+
 export const isPalette = (value: unknown): value is Palette => (PALETTES as readonly unknown[]).includes(value)
 export const isFont = (value: unknown): value is Font => typeof value === 'string' && Object.hasOwn(FONTS, value)
 export const isCodeFont = (value: unknown): value is CodeFont => typeof value === 'string' && Object.hasOwn(CODE_FONTS, value)
