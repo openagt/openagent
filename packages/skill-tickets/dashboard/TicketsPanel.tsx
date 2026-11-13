@@ -1,7 +1,8 @@
 import { useState } from 'react'
-import { ExternalLink, ClipboardPlus, ClipboardList, Hammer, Play } from 'lucide-react'
-import { Badge, Button, Checkbox, StartAgentButton, Tooltip, TooltipTrigger, TooltipContent, cn, formatRelative, formatAge, formatDateTime, useAction, useLoaded, useModuleHost } from '@openagt/dashboard/module'
-import { UPDATE_TICKETS_PROMPT, heldBack, planTicketPrompt, readMeta, workOnTicketPrompt, type TicketsMeta } from '../src/module.js'
+import { ExternalLink, ClipboardList, Hammer, Plus } from 'lucide-react'
+import { Badge, Button, Checkbox, Tooltip, TooltipTrigger, TooltipContent, cn, formatRelative, formatAge, formatDateTime, useAction, useLoaded, useModuleHost } from '@openagt/dashboard/module'
+import { NEW_TICKET, UPDATE_TICKETS_PROMPT, heldBack, readMeta, type TicketsMeta } from '../src/module.js'
+import { TicketStartActions } from './TicketStartActions.js'
 import type { WorkspaceTicket } from './lib/types.js'
 import { UpdateTicketsButton } from './UpdateTicketsButton.js'
 import { priorityTone } from './lib/ticket-priority.js'
@@ -20,6 +21,7 @@ const NO_META: TicketsMeta = {}
  * since the topic badges and the claim marker filter on click (#1144), they are controls now.
  */
 export function TicketRow({
+  projectId,
   ticket,
   projectName,
   busy,
@@ -34,6 +36,8 @@ export function TicketRow({
   onClaimedClick,
   onOpenAgent,
 }: {
+  /** The ticket's project: where its next step starts or is queued. */
+  projectId: string
   ticket: WorkspaceTicket
   /** Shown on the row in the flat cross-project list, where the section heading no longer says it. */
   projectName?: string | undefined
@@ -47,11 +51,10 @@ export function TicketRow({
   selected?: boolean | undefined
   onToggleSelect?: (() => void) | undefined
   onOpen: () => void
-  /** Spin up an agent with one of the row's asks — the start column's (implement this one
-   *  ticket) or the plan column's (write its plan) — in the ticket's project; `failure` is what
-   *  to say when it cannot start and says no more. */
+  /** Spin up an agent with the row's next step — write the ticket's plan, or with one, work on
+   *  the ticket — in the ticket's project; `failure` is what to say when it cannot start and says no more. */
   onStart: (prompt: string, failure: string) => void
-  /** A start button's chevron (#1507): the ticket's project launcher, prefilled with that button's ask. */
+  /** The start button's chevron (#1507): the ticket's project launcher, prefilled with its ask. */
   onConfigure: (prompt: string) => void
   onOpenPlan?: (() => void) | undefined
   /** Click-to-filter (#1144): a topic badge adds its topic to the page's filter. Without a
@@ -65,12 +68,10 @@ export function TicketRow({
   // The holder as a person reads it: the agent's session name once it has one, else the id the
   // lock names as written (#1748).
   const holder = ticket.lockedByAgent?.name ?? ticket.lockedBy
-  // In review or waiting: no agent is started on it nor on its plan, the tickets skill's own rule.
+  // In review or waiting: no agent is started on it nor on its plan, the tickets skill's own rule;
+  // claimed: an agent holds it. Either way the row offers no next step.
   const held = heldBack(ticket)
-  // Claimed: an agent is on it, and its own page offers no start either.
-  const startable = !held && !ticket.locked
-  const workPrompt = workOnTicketPrompt(ticket.file)
-  const planPrompt = planTicketPrompt(ticket.file)
+  const offered = !held && !ticket.locked
   return (
     // On a phone the title is the row's first line, across the whole width, and every control and
     // fact is under it. A class that holds on a phone only is never laid over a plain one
@@ -85,32 +86,6 @@ export function TicketRow({
           <Checkbox checked={selected ?? false} onCheckedChange={() => onToggleSelect()} aria-label={`Select ${ticket.title}`} className="relative after:absolute after:-inset-[5px]" />
         </div>
       )}
-      {/* The start column: one click spins up an agent implementing this
-          ticket — the AI Queue card's play button (#855), offered where the backlog is read
-          instead of only after queueing. A sibling of the open button like every control on the
-          row (an interactive control nested in a button is invalid HTML): starting is not opening.
-          Its chevron opens the launcher with the same ask (#1507), since the model and where the
-          agent runs are nowhere on this row. */}
-      <div className="flex w-16 shrink-0 items-center justify-center">
-        {startable && (
-          <StartAgentButton
-            variant="ghost"
-            size="icon-sm"
-            icon={<Play className="h-4 w-4" aria-hidden />}
-            ariaLabel={`Start work on ${ticket.title}`}
-            menuAriaLabel={`Other ways to work on ${ticket.title}`}
-            tooltip="Start an agent working on this ticket"
-            busy={busy}
-            starting={starting === workPrompt}
-            onStart={() => onStart(workPrompt, 'The work agent could not be started.')}
-            onConfigure={() => onConfigure(workPrompt)}
-            prompt={workPrompt}
-            configureDescription="Opens the launcher with this ticket's prompt, so you can set the model and where it runs."
-            // Quiet like the plan column's create button: an available action, not a state.
-            className="text-muted-foreground/50 hover:text-foreground"
-          />
-        )}
-      </div>
       <button type="button" onClick={onOpen} className="flex min-w-0 items-center gap-2 py-2 pr-3 text-left text-sm md:flex-1 md:pl-0 max-md:order-first max-md:basis-full max-md:pl-3">
         {/* The title is the row's one flexible column: it truncates when long and stretches
             when short, so the whole of a row's slack lands here — the way a table's wide
@@ -212,15 +187,12 @@ export function TicketRow({
       >
         {formatAge(ticket.date)}
       </span>
-      {/* The plan column (#685): a `.plan.md` is either there to read or waiting to be written.
-          Planned → a link to the rendered plan; not planned → a button that starts a session to
-          write one. A sibling of the row's button, not a child, for the same reason the issue
-          link is: an interactive control nested in a button is invalid HTML, and the two go
-          different places. */}
-      <div className="flex w-16 shrink-0 items-center justify-center">
-        {ticket.planned ? (
-          // A plan that exists is a link, not a start — so no chevron: there is nothing to
-          // configure about reading a file.
+      {/* The plan, when there is one to read: a link to it, strong blue and thicker-stroked so the
+          planned rows are scannable. A sibling of the row's button, not a child: an interactive
+          control nested in a button is invalid HTML. The same width with no plan keeps the
+          columns lined up. */}
+      <div className="flex w-8 shrink-0 items-center justify-center">
+        {ticket.planned && (
           <Tooltip>
             <TooltipTrigger
               render={
@@ -229,11 +201,6 @@ export function TicketRow({
                   onClick={() => onOpenPlan?.()}
                   disabled={!onOpenPlan}
                   aria-label={`View the plan for ${ticket.title}`}
-                  // Strong blue for a plan that exists, thicker-stroked (2.5) so it reads
-                  // bolder still against the light-grey create button below — colour and
-                  // weight together tell the two near-identical clipboards apart and make the
-                  // planned rows scannable. `info` is the theme's only blue (`primary` is
-                  // defined as `success`'s green), and it renders at full strength here.
                   className="text-info hover:text-info/80 disabled:pointer-events-none disabled:opacity-50"
                 />
               }
@@ -242,24 +209,20 @@ export function TicketRow({
             </TooltipTrigger>
             <TooltipContent>View the plan</TooltipContent>
           </Tooltip>
-        ) : !startable ? null : (
-          <StartAgentButton
-            variant="ghost"
-            size="icon-sm"
-            icon={<ClipboardPlus className="h-4 w-4" aria-hidden />}
-            ariaLabel={`Create a plan for ${ticket.title}`}
-            menuAriaLabel={`Other ways to plan ${ticket.title}`}
-            tooltip="Plan this ticket — starts an agent to write its plan"
+        )}
+      </div>
+      {/* The next step (TicketStartActions): Plan with no plan, Start with one; queueing it and
+          setting it up first are in its menu. A fixed width keeps the columns lined up row to row. */}
+      <div className="flex shrink-0 items-center justify-end gap-1.5 md:w-36 max-md:px-1">
+        {offered && (
+          <TicketStartActions
+            compact
+            projectId={projectId}
+            ticket={ticket}
             busy={busy}
-            starting={starting === planPrompt}
-            onStart={() => onStart(planPrompt, 'The planning agent could not be started.')}
-            onConfigure={() => onConfigure(planPrompt)}
-            prompt={planPrompt}
-            configureDescription="Opens the launcher with the plan prompt, so you can set the model and where it runs."
-            // Light grey, lighter than the row's "4d ago" date, against the view
-            // button's bold blue: a plan yet to be written is the quiet state, an
-            // available action rather than something already there.
-            className="text-muted-foreground/50 hover:text-foreground"
+            starting={starting}
+            onStart={onStart}
+            onConfigure={onConfigure}
           />
         )}
       </div>
@@ -285,8 +248,7 @@ export function TicketRow({
 // The tickets list (#697/#1144): the project's `tickets/*.md` as one-liners — priority, topics,
 // what the agent already did to it, and how recently, all on the row — so the backlog is scannable
 // without opening one. A row opens its detail page (#1144), which is where Queue and the summary
-// live, and carries two direct starts: the start column (an agent implementing the ticket) and the
-// plan column (an agent writing its plan, #685). An empty `tickets/` offers to import the project's
+// live, and carries the ticket's next step, now or queued: its plan, or with one, its work (#685). An empty `tickets/` offers to import the project's
 // issues instead of just saying "nothing here"; a filled one offers to update it (#1208)
 // instead of a re-import re-walking the whole backlog.
 export function TicketsPanel({
@@ -356,6 +318,7 @@ export function TicketsPanel({
   }
 
   const updateTickets = () => startSession(UPDATE_TICKETS_PROMPT, 'The update could not be started.')
+  const newTicket = () => host.openPage('tickets', [NEW_TICKET], projectId)
 
   if (tickets.length === 0 && hiddenByFilter > 0) {
     // Filtered to nothing, not genuinely empty (#1144/#1230): offering an import here would ask
@@ -382,7 +345,10 @@ export function TicketsPanel({
           plans from.
         </p>
         {error && <p className="text-xs text-danger">{error}</p>}
-        <UpdateTicketsButton busy={busy} starting={starting === UPDATE_TICKETS_PROMPT} onStart={() => void updateTickets()} onConfigure={() => configure(UPDATE_TICKETS_PROMPT)} />
+        <div className="flex flex-wrap items-center gap-2">
+          <UpdateTicketsButton busy={busy} starting={starting === UPDATE_TICKETS_PROMPT} onStart={() => void updateTickets()} onConfigure={() => configure(UPDATE_TICKETS_PROMPT)} />
+          <NewTicketButton onClick={newTicket} />
+        </div>
       </div>
     )
   }
@@ -408,11 +374,13 @@ export function TicketsPanel({
           lastImportedAt={meta.lastImportedAt}
           className="h-6 gap-1 px-2 text-xs"
         />
+        <NewTicketButton onClick={newTicket} className="ml-auto h-6 gap-1 px-2 text-xs" />
       </div>
       <ul className="divide-y divide-border">
         {tickets.map(ticket => (
           <TicketRow
             key={ticket.file}
+            projectId={projectId}
             ticket={ticket}
             busy={busy}
             starting={starting}
@@ -429,5 +397,14 @@ export function TicketsPanel({
         ))}
       </ul>
     </div>
+  )
+}
+
+/** A ticket written by hand, beside the ones imported from the tracker. */
+function NewTicketButton({ onClick, className }: { onClick: () => void; className?: string | undefined }) {
+  return (
+    <Button variant="outline" size="sm" onClick={onClick} className={className ?? 'gap-1.5'}>
+      <Plus className="h-3.5 w-3.5" aria-hidden /> New ticket
+    </Button>
   )
 }

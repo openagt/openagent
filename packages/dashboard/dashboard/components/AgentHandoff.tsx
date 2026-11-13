@@ -6,6 +6,7 @@ import type { AgentHandoffState } from '../lib/use-agent-handoff.js'
 import { DaemonDown } from '../lib/use-daemon-health.js'
 import { cn } from '../lib/utils.js'
 import { Button, buttonVariants } from './ui/button.js'
+import { ButtonGroup, ButtonGroupSeparator } from './ui/button-group.js'
 import { DiffStat } from './DiffStat.js'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from './ui/dropdown-menu.js'
 
@@ -117,7 +118,8 @@ export function HandoffActions(props: {
   const saying = said?.work === work ? said : null
   const press: Pressed = (which, fn, failed, answered, says) => {
     if (props.state.busy) return
-    const bar = document.activeElement instanceof HTMLElement ? document.activeElement.closest<HTMLElement>('[role="group"]') : null
+    // The bar, not the split button around a press: that group is gone once its press is done.
+    const bar = document.activeElement instanceof HTMLElement ? document.activeElement.closest<HTMLElement>('[role="group"]:not([data-slot="button-group"])') : null
     void act(which, fn, failed, answered).then(value => {
       const told = value === undefined ? undefined : says?.(value)
       if (told) setSaid({ ...told, work })
@@ -329,16 +331,17 @@ function NextStep({
   return (
     <>
       {handoff.carries && <Carries carries={handoff.carries} />}
-      <span className="inline-flex">
+      <ButtonGroup>
         <Button
           size="xs"
           variant="ghost"
-          className={cn(NEXT_STEP, 'rounded-r-none pr-1.5')}
+          className={cn(NEXT_STEP, 'pr-1.5')}
           {...step}
           onClick={() => openPr(false)}
         >
           <Steady words={['Open PR', 'Opening PR…', 'Publishing…']} now={pending === 'pr' ? 1 : pending === 'push' ? 2 : 0} />
         </Button>
+        <ButtonGroupSeparator className="bg-border opacity-100" />
         <DropdownMenu>
             <DropdownMenuTrigger
               type="button"
@@ -347,7 +350,8 @@ function NextStep({
               className={cn(
                 buttonVariants({ size: 'xs', variant: 'ghost' }),
                 NEXT_STEP,
-                'rounded-l-none px-1 text-muted-foreground data-[popup-open]:bg-[var(--color-accent)] data-[popup-open]:text-[var(--color-accent-foreground)]',
+                // Open, it looks hovered: the menus' own open color is the bar's, and the arrow would vanish into it.
+                'px-1 text-muted-foreground data-[popup-open]:bg-background data-[popup-open]:text-foreground',
               )}
             >
               <ChevronDown className="h-3.5 w-3.5" />
@@ -365,7 +369,7 @@ function NextStep({
               )}
             </DropdownMenuContent>
           </DropdownMenu>
-      </span>
+      </ButtonGroup>
     </>
   )
 }

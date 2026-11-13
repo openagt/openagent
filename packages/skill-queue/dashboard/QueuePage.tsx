@@ -136,11 +136,11 @@ function ProjectQueue({ read, titled, schedule, names, starts, reload }: { read:
         {raw.length > 0 && <span className="rounded-full bg-muted px-2 py-0.5 text-xs tabular-nums text-muted-foreground">{raw.length === 1 ? '1 entry' : `${raw.length} entries`}</span>}
         {free.length > 0 && (
           <div className="ml-auto flex items-center gap-2">
-            {/* The project's batch act: how many, then the button the count qualifies. */}
-            <BatchCount count={count} max={free.length} onChange={next => starts.setCount(project.id, next)} />
-            {/* The chevron sends the top entry alone: a launcher can only ever start one agent. */}
+            {/* The project's batch act, as one control: how many, then the button the count qualifies.
+                The chevron sends the top entry alone: a launcher can only ever start one agent. */}
             <StartAgentButton
               size="xs"
+              leading={<BatchCount count={count} max={free.length} onChange={next => starts.setCount(project.id, next)} />}
               icon={<FastForward className="h-3.5 w-3.5" aria-hidden />}
               label={count === 1 ? 'Start 1 agent' : `Start ${count} agents`}
               menuAriaLabel={`Other ways to start agents on ${project.name}'s queue`}

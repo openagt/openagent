@@ -171,6 +171,18 @@ describe('Markdown lists', () => {
     await waitFor(() => expect(written).toEqual(['npm test']))
   })
 
+  test('in a dashboard page a document keeps the page\'s font, its headings under the page\'s title, its code wrapped; a file keeps its own look', () => {
+    render(<Markdown text={'## Plan\n\n```css\nfooter { position: fixed; }\n```'} page />)
+    expect(document.querySelector('[data-markdown]')!.className).not.toContain('font-serif')
+    expect(screen.getByRole('heading', { name: 'Plan' }).className).toContain('text-[15px]')
+    expect(screen.getByText('css')).toBeTruthy()
+    expect(document.querySelector('pre')!.className).toContain('whitespace-pre-wrap')
+    cleanup()
+    render(<Markdown text={'## Plan\n\n```css\nfooter { position: fixed; }\n```'} document />)
+    expect(document.querySelector('[data-markdown]')!.className).toContain('font-serif')
+    expect(document.querySelector('pre')!.className).not.toContain('whitespace-pre-wrap')
+  })
+
   test('a closing fence written at the left edge leaves the code as it is under a well-closed one', () => {
     render(<Markdown text={'1. run:\n   ```bash\n   npm test\n   npm run build\n```\n2. next'} />)
     expect(document.querySelector('pre')!.textContent).toBe('npm test\nnpm run build')

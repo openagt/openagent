@@ -36,6 +36,21 @@ beforeEach(() => {
 afterEach(cleanup)
 
 describe('StartAgentButton (#1507)', () => {
+  test('the two halves, and a control the start counts on, are one group: one control, not buttons side by side', () => {
+    renderButton({ leading: <input aria-label="How many" /> })
+    const group = screen.getByRole('group')
+    expect([...group.children].map(child => child.getAttribute('aria-label') ?? child.textContent)).toEqual(['How many', 'Run now', MENU])
+  })
+
+  test('a menu holds the surface\'s other choices above Configure first', async () => {
+    const onQueue = vi.fn()
+    renderButton({ moreItems: [{ label: 'Queue work', description: 'Later.', onSelect: onQueue }] })
+    await openMenu(screen.getByRole('button', { name: MENU }))
+    fireEvent.click(await screen.findByText('Queue work'))
+    expect(onQueue).toHaveBeenCalledOnce()
+    expect(onStart).not.toHaveBeenCalled()
+  })
+
   test('the primary half starts it, and hands the launcher nothing', () => {
     renderButton()
     fireEvent.click(screen.getByRole('button', { name: 'Run now' }))

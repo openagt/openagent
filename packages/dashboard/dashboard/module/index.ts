@@ -370,8 +370,9 @@ export interface ModuleHost {
    * The same, for a command that changes the project's data (a claim released, an entry added):
    * the dashboard then syncs the project's data with origin and forgets what it had read, so the
    * change shows at once instead of at the next sync. A link action's host runs every command so.
+   * `input` is what the command reads on standard input: a whole file it writes, a ticket say.
    */
-  act(projectId: string, args: string[], command?: string): Promise<ModuleCommandResult>
+  act(projectId: string, args: string[], command?: string, input?: string): Promise<ModuleCommandResult>
   /**
    * Run one of the module package's own commands in no project, for a package that is this
    * computer's (the door to it, its servers, its accounts): what such a package keeps is the
@@ -598,7 +599,7 @@ export function moduleHost(base: ModuleHostBase, opts: { acts?: boolean } = {}):
   return {
     ...base,
     runCommand: (projectId, args, command) => runModuleCommand(projectId, base.package, args, command, opts.acts ?? false),
-    act: (projectId, args, command) => runModuleCommand(projectId, base.package, args, command, true),
+    act: (projectId, args, command, input) => runModuleCommand(projectId, base.package, args, command, true, input),
     runComputerCommand: (args, command, input) => runComputerCommand(base.package, args, command, input),
     runComputerCommandOn: (machineId, args, command) => runComputerCommandOn(base.package, machineId, args, command),
     read: (projectId, name, input = {}) => readModule(projectId, base.package, name, input),
@@ -656,8 +657,9 @@ export { StatTile } from '../components/StatTile.js'
 export { FilterChips, type FilterChip } from '../components/FilterChips.js'
 export { FileIcon } from '../components/FileIcon.js'
 export { Markdown, FileLinks } from '../components/Markdown.js'
-export { StartAgentButton } from '../components/StartAgentButton.js'
-export { LinkActions, type ProjectLinks, type LinkTargets } from '../components/LinkActions.js'
+export { StartAgentButton, type StartMenuItem } from '../components/StartAgentButton.js'
+export { ButtonGroup, ButtonGroupSeparator } from '../components/ui/button-group.js'
+export { LinkActions, useLinkActions, type LinkActionOffer, type ProjectLinks, type LinkTargets } from '../components/LinkActions.js'
 export { MachineMark } from '../components/MachineMark.js'
 export { PersonMark, personName } from '../components/PersonMark.js'
 export { useGitHostPeople, personSaid } from '../lib/use-git-host-people.js'

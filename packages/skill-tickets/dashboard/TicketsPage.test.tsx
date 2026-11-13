@@ -364,19 +364,19 @@ describe('TicketsPage grouping (#1144)', () => {
 
   test("a flat row's start button spins up an agent in that row's own project (#1144)", async () => {
     onAllTickets.mockResolvedValue([
-      { projectId: 'p2', projectName: 'Beta', tickets: [ticket({ file: 'b.md', title: 'Beta ticket' })] },
+      { projectId: 'p2', projectName: 'Beta', tickets: [ticket({ file: 'b.md', title: 'Beta ticket', planned: true })] },
     ])
     window.history.replaceState(null, '', '/tickets?group=none')
     render()
-    fireEvent.click(await screen.findByRole('button', { name: /start work on beta ticket/i }))
+    fireEvent.click(await screen.findByRole('button', { name: 'Start' }))
     // The row's own project, not a panel-bound one — the flat list carries one per row.
     await waitFor(() => expect(started()).toEqual([['p2', workOnTicketPrompt('b.md')]]))
   })
 
   test("a flat row's Configure first opens that row's own project's launcher (#1507)", async () => {
     onAllTickets.mockResolvedValue([
-      { projectId: 'p1', projectName: 'Alpha', tickets: [ticket({ file: 'a.md', title: 'Alpha ticket' })] },
-      { projectId: 'p2', projectName: 'Beta', tickets: [ticket({ file: 'b.md', title: 'Beta ticket' })] },
+      { projectId: 'p1', projectName: 'Alpha', tickets: [ticket({ file: 'a.md', title: 'Alpha ticket', planned: true })] },
+      { projectId: 'p2', projectName: 'Beta', tickets: [ticket({ file: 'b.md', title: 'Beta ticket', planned: true })] },
     ])
     window.history.replaceState(null, '', '/tickets?group=none')
     render()
@@ -401,7 +401,7 @@ describe('TicketsPage add the shown set to the AI queue', () => {
     ])
     await controls()
     render()
-    fireEvent.click(await screen.findByRole('button', { name: 'Add to queue: all 2 tickets shown below' }))
+    fireEvent.click(await screen.findByRole('button', { name: 'Add to queue: 2 tickets' }))
     // Queued exactly as the detail page's Queue button queues (#1164): title as the entry, the
     // ticket named so the entry links back, its priority picking the section.
     await waitFor(() => expect(addToQueue).toHaveBeenCalledTimes(1))
@@ -413,7 +413,7 @@ describe('TicketsPage add the shown set to the AI queue', () => {
     expect((queued as HTMLButtonElement).disabled).toBe(true)
     // …and narrowing the shown set arms it again, counting the new set.
     fireEvent.change(screen.getByRole('textbox', { name: /search tickets/i }), { target: { value: 'First' } })
-    expect(await screen.findByRole('button', { name: 'Add to queue: the ticket shown below' })).toBeTruthy()
+    expect(await screen.findByRole('button', { name: 'Add to queue: one ticket' })).toBeTruthy()
   })
 
   test('claimed tickets are left to the agents holding them, and the label says so', async () => {
@@ -427,7 +427,7 @@ describe('TicketsPage add the shown set to the AI queue', () => {
     await controls()
     render()
     // The label counts only what the click will add, never promising the claimed row.
-    fireEvent.click(await screen.findByRole('button', { name: 'Add to queue: the one ready ticket shown below' }))
+    fireEvent.click(await screen.findByRole('button', { name: 'Add to queue: one ticket' }))
     await screen.findByRole('button', { name: 'Queued' })
     expect(handed('p1')).toEqual([[link('First', 'a.md')]])
   })
@@ -446,10 +446,10 @@ describe('TicketsPage add the shown set to the AI queue', () => {
     ])
     await controls()
     render()
-    fireEvent.click(await screen.findByRole('button', { name: 'Add to queue: a plan for the one unplanned ticket shown below' }))
+    fireEvent.click(await screen.findByRole('button', { name: 'Add to queue: one plan' }))
     await waitFor(() => expect(addToQueue).toHaveBeenCalledTimes(1))
     expect(handed('p1')).toEqual([[plan('a.md')]])
-    fireEvent.click(screen.getByRole('button', { name: 'Add to queue: the one ready ticket shown below' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Add to queue: one ticket' }))
     await waitFor(() => expect(addToQueue).toHaveBeenCalledTimes(2))
     expect(handed('p1')).toEqual([[plan('a.md')], [link('First', 'a.md')]])
   })
@@ -509,7 +509,7 @@ describe('TicketsPage queue plans for the shown set', () => {
     ])
     await controls()
     render()
-    fireEvent.click(await screen.findByRole('button', { name: 'Add to queue: plans for all 2 tickets shown below' }))
+    fireEvent.click(await screen.findByRole('button', { name: 'Add to queue: 2 plans' }))
     // One plan ask per ticket, the ticket named with its priority so the entry lands in its
     // section — and neither an implementation entry nor an agent comes out of this button.
     await waitFor(() => expect(addToQueue).toHaveBeenCalledTimes(1))
@@ -533,7 +533,7 @@ describe('TicketsPage queue plans for the shown set', () => {
     ])
     await controls()
     render()
-    fireEvent.click(await screen.findByRole('button', { name: 'Add to queue: a plan for the one unplanned ticket shown below' }))
+    fireEvent.click(await screen.findByRole('button', { name: 'Add to queue: one plan' }))
     await screen.findByRole('button', { name: 'Queued' })
     expect(handed('p1')).toEqual([[plan('a.md')]])
   })
@@ -545,7 +545,7 @@ describe('TicketsPage queue plans for the shown set', () => {
     render()
     await screen.findByText('First')
     expect(screen.queryByRole('button', { name: /add to queue: (a plan|plans) for/i })).toBeNull()
-    expect(screen.getByRole('button', { name: 'Add to queue: the ticket shown below' })).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'Add to queue: one ticket' })).toBeTruthy()
   })
 
   test('no module offering an action on links, no add buttons at all (#1774)', async () => {
@@ -581,12 +581,12 @@ describe('TicketsPage selection scopes the queue buttons', () => {
     fireEvent.click(screen.getByRole('checkbox', { name: 'Select Third' }))
     expect(screen.getByText('2 selected')).toBeTruthy()
     // The label stops speaking for the shown set and counts the selection instead.
-    fireEvent.click(screen.getByRole('button', { name: 'Add to queue: the 2 selected tickets' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Add to queue: 2 tickets' }))
     await screen.findByRole('button', { name: 'Queued' })
     expect(handed('p1')).toEqual([[link('First', 'a.md', 7), link('Third', 'c.md')]])
     // Changing the selection is changing the set: the rested button arms again for the new one.
     fireEvent.click(screen.getByRole('checkbox', { name: 'Select Second' }))
-    expect(await screen.findByRole('button', { name: 'Add to queue: the 3 selected tickets' })).toBeTruthy()
+    expect(await screen.findByRole('button', { name: 'Add to queue: 3 tickets' })).toBeTruthy()
   })
 
   test('the plan button narrows to the selection the same way', async () => {
@@ -595,7 +595,7 @@ describe('TicketsPage selection scopes the queue buttons', () => {
     render()
     await screen.findByText('First')
     fireEvent.click(screen.getByRole('checkbox', { name: 'Select Second' }))
-    fireEvent.click(screen.getByRole('button', { name: 'Add to queue: a plan for the selected ticket' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Add to queue: one plan' }))
     await screen.findByRole('button', { name: 'Queued' })
     expect(handed('p1')).toEqual([[plan('b.md')]])
   })
@@ -605,10 +605,10 @@ describe('TicketsPage selection scopes the queue buttons', () => {
     render()
     await screen.findByText('First')
     fireEvent.click(screen.getByRole('checkbox', { name: 'Select First' }))
-    expect(screen.getByRole('button', { name: 'Add to queue: the selected ticket' })).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'Add to queue: one ticket' })).toBeTruthy()
     fireEvent.click(screen.getByRole('button', { name: 'Clear selection' }))
     expect(screen.queryByText(/selected/)).toBeNull()
-    expect(screen.getByRole('button', { name: 'Add to queue: all 3 tickets shown below' })).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'Add to queue: 3 tickets' })).toBeTruthy()
   })
 
   test('a claimed ticket in the selection is still skipped, and the label counts without it', async () => {
@@ -627,7 +627,7 @@ describe('TicketsPage selection scopes the queue buttons', () => {
     await screen.findByText('First')
     fireEvent.click(screen.getByRole('checkbox', { name: 'Select First' }))
     fireEvent.click(screen.getByRole('checkbox', { name: 'Select Second' }))
-    fireEvent.click(screen.getByRole('button', { name: 'Add to queue: the one ready selected ticket' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Add to queue: one ticket' }))
     await screen.findByRole('button', { name: 'Queued' })
     expect(handed('p1')).toEqual([[link('First', 'a.md')]])
   })
@@ -643,7 +643,7 @@ describe('TicketsPage selection scopes the queue buttons', () => {
     fireEvent.change(screen.getByRole('textbox', { name: /search tickets/i }), { target: { value: 'First' } })
     await waitFor(() => expect(screen.queryByText('Second')).toBeNull())
     expect(screen.queryByText('1 selected')).toBeNull()
-    fireEvent.click(screen.getByRole('button', { name: 'Add to queue: the ticket shown below' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Add to queue: one ticket' }))
     await screen.findByRole('button', { name: 'Queued' })
     expect(handed('p1')).toEqual([[link('First', 'a.md', 7)]])
     // The tick itself survives the filter and comes back with the row.
@@ -662,7 +662,7 @@ describe('TicketsPage selection scopes the queue buttons', () => {
     render()
     await screen.findByText('Beta ticket')
     fireEvent.click(screen.getByRole('checkbox', { name: 'Select Beta ticket' }))
-    fireEvent.click(screen.getByRole('button', { name: 'Add to queue: the selected ticket' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Add to queue: one ticket' }))
     await screen.findByRole('button', { name: 'Queued' })
     expect(addToQueue).toHaveBeenCalledTimes(1)
     expect(handed('p2')).toEqual([[link('Beta ticket', 'b.md')]])

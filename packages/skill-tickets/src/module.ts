@@ -58,6 +58,41 @@ export function planAgentFor<A extends AgentLike>(agents: readonly A[], file: st
 }
 
 /**
+ * The agent that worked a ticket, as far as its runs say: the newest whose ask names the ticket's
+ * file — the start column's ask, or a queued entry linking it, started from the queue's page. A
+ * run the scheduler took off the queue was asked `/work-queue`, and is found only while it holds
+ * the ticket's claim ({@link holderAgent}).
+ */
+export function workAgentFor<A extends AgentLike>(agents: readonly A[], file: string): A | undefined {
+  const named = `${TICKETS_DIR}/${file}`
+  return agents.filter(agent => agent.ask !== undefined && mentions(agent.ask, named)).sort((a, b) => b.startedAt.localeCompare(a.startedAt))[0]
+}
+
+/** Whether `text` names `path` itself, not a longer path it begins (`tickets/a.md` in `tickets/a.md.bak`). */
+function mentions(text: string, path: string): boolean {
+  for (let at = text.indexOf(path); at >= 0; at = text.indexOf(path, at + 1)) {
+    // A full stop ends a sentence, unless a name goes on after it (`.bak`).
+    const after = text.slice(at + path.length, at + path.length + 2)
+    if (!/^[\w-]/.test(after) && !/^\.\w/.test(after)) return true
+  }
+  return false
+}
+
+/**
+ * A plan's text as a page shows it, under its own heading: without the lines above its title
+ * (`Effort:`, `Uncertainty:`, `Outdated:`, which the page shows as facts) and without the
+ * `# [Plan] …` title itself, which only repeats the ticket's.
+ */
+export function planBody(plan: string): string {
+  const lines = plan.replace(/\r\n/g, '\n').split('\n')
+  const at = lines.findIndex(line => line.startsWith('# '))
+  const head = at < 0 ? [] : lines.slice(0, at)
+  // Only a head of `key: value` lines is a preamble; anything else above the title is kept.
+  if (at < 0 || head.some(line => line.trim() !== '' && !/^[A-Za-z]+:\s/.test(line))) return plan.trim()
+  return lines.slice(at + 1).join('\n').trim()
+}
+
+/**
  * The agent a claim names, when the lock's holder is one of the project's runs: a lock names an
  * agent id — the same id the run's checkout is named with — so a claim a run made resolves to the
  * run's page and its session name; any other holder (another machine's, a branch name) is shown
@@ -94,19 +129,28 @@ export function claimState(holderStatus: string | undefined): ClaimState {
   return 'stale'
 }
 
-/** Where the module's URL points: the list of tickets, one ticket, or its plan. */
-export type ModuleRoute = { view: 'list' } | { view: 'ticket'; projectId: string; file: string } | { view: 'plan'; projectId: string; file: string } | { view: 'unknown' }
+/** Where the module's URL points: the list of tickets, a new ticket, one ticket, or its plan. */
+export type ModuleRoute =
+  | { view: 'list' }
+  | { view: 'new'; projectId: string }
+  | { view: 'ticket'; projectId: string; file: string }
+  | { view: 'plan'; projectId: string; file: string }
+  | { view: 'unknown' }
+
+/** The segment of a new ticket's page: never a ticket's filename, which ends in `.md`. */
+export const NEW_TICKET = 'new'
 
 /**
  * The module's page from the project the address starts with, if any, and the URL segments after
  * its own: none is the list; a ticket filename in a project is that ticket's page (the dashboard's
  * link convention: `tickets/<file>` in a project opens `/<project>/tickets/<file>`); `plan` after it
- * is the ticket's plan. A ticket with no project, a filename that is not a ticket's, or anything
- * longer, names nothing.
+ * is the ticket's plan; `new` in a project is a new ticket's page. A ticket with no project, a
+ * filename that is not a ticket's, or anything longer, names nothing.
  */
 export function routeOf(projectId: string | null, path: readonly string[]): ModuleRoute {
   const [file, plan, ...rest] = path
   if (file === undefined) return { view: 'list' }
+  if (file === NEW_TICKET && plan === undefined) return projectId === null ? { view: 'unknown' } : { view: 'new', projectId }
   if (projectId === null || !isTicketFile(file) || rest.length > 0) return { view: 'unknown' }
   if (plan === undefined) return { view: 'ticket', projectId, file }
   return plan === 'plan' ? { view: 'plan', projectId, file } : { view: 'unknown' }
@@ -122,23 +166,27 @@ export interface NamedPath {
 /**
  * What each of `paths` is called, by the tickets as listed: a ticket's file is its title; a
  * ticket's plan file (`tickets/<stem>.plan.md`) is "Plan: " and the ticket's title, and opens the
- * ticket, since an entry that names a plan is often the ask to write it. A path that is no
+ * ticket, since an entry that names a plan is often the ask to write it. A plan the ticket already
+ * has, and not outdated, says so: an ask to write it again is left over. A path that is no
  * ticket's, or whose ticket is not listed (closed, deleted), has no name.
  */
-export function namesOf(paths: readonly string[], tickets: readonly { file: string; title: string }[]): Record<string, NamedPath> {
-  const titles = new Map(tickets.map(ticket => [ticket.file, ticket.title]))
+export function namesOf(paths: readonly string[], tickets: readonly { file: string; title: string; planned?: boolean; outdated?: true }[]): Record<string, NamedPath> {
+  const byFile = new Map(tickets.map(ticket => [ticket.file, ticket]))
   const named: Record<string, NamedPath> = {}
   for (const path of paths) {
     const file = nameInTickets(path)
     if (file === undefined) continue
-    const title = titles.get(file)
-    if (title !== undefined) {
-      named[path] = { title }
+    const listed = byFile.get(file)
+    if (listed !== undefined) {
+      named[path] = { title: listed.title }
       continue
     }
     const ticket = ticketOfPlan(file)
-    const planned = ticket === undefined ? undefined : titles.get(ticket)
-    if (ticket !== undefined && planned !== undefined) named[path] = { title: `Plan: ${planned}`, href: `${TICKETS_DIR}/${ticket}` }
+    const planned = ticket === undefined ? undefined : byFile.get(ticket)
+    if (ticket !== undefined && planned !== undefined) {
+      const written = planned.planned === true && planned.outdated !== true
+      named[path] = { title: `Plan: ${planned.title}${written ? ' · already written' : ''}`, href: `${TICKETS_DIR}/${ticket}` }
+    }
   }
   return named
 }

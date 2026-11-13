@@ -62,6 +62,8 @@ When the repository has the `queue` skill, a ticket goes on the agent queue as a
 npx @openagt/skill-queue@0.1 add '[<title>](tickets/<file>)' --priority <N>
 ```
 
+A plan is asked for on the queue as the sentence `Create tickets/<name>.plan.md`. Once you wrote a ticket's plan, however you were asked to: `npx @openagt/skill-queue@0.1 done` that entry when the queue holds it, and release your claim.
+
 Once the work is committed and its pull request is open: `npx @openagt/skill-queue@0.1 done` the entry, its exact text, write the pull request into the ticket as its `PR:` line (`put` the whole ticket, the line added above the title), and release your claim. The ticket is in review. Do not close it: it closes when the pull request merges, through the update from the issue tracker, which reads the line `Closes tickets/<file>` in the pull request's body; add `Closes #<number>` when the ticket has an issue.
 
 ## Formats
