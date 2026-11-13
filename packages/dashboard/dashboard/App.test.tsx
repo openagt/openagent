@@ -1,8 +1,8 @@
 import { afterEach, describe, expect, test, vi } from 'vitest'
 import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
-import { createElement } from 'react'
+import { createElement, useContext } from 'react'
 import { openMenu, phoneScreen } from './test-utils.js'
-import { useModuleHost, type ModuleCardProps, type ModuleDefinition, type ModulePageProps } from './module/index.js'
+import { useModuleHost, useOpenAgentDown, type ModuleCardProps, type ModuleDefinition, type ModulePageProps } from './module/index.js'
 import { forgetRemembered } from './lib/use-async.js'
 import { openSettings } from './lib/use-route.js'
 import { skillsSaved } from './lib/skills-saved.js'
@@ -22,17 +22,21 @@ vi.mock('./lib/rpc.js', () => ({
 
 // Settings and a project's launcher read a dozen things of their own; these tests are about the
 // shell around them, so each is a line naming itself.
-vi.mock('./components/SettingsDialog.js', () => ({
-  SettingsDialog: ({ entry, scope, onEntry, onClose }: { entry: string; scope: string | null; onEntry: (id: string) => void; onClose: () => void }) =>
-    createElement(
-      'div',
-      null,
-      createElement('p', null, `the settings dialog on '${entry}'`),
-      createElement('p', null, `its project: ${scope ?? 'every project'}`),
-      createElement('button', { onClick: () => onEntry('agent') }, 'to Agent'),
-      createElement('button', { onClick: onClose }, 'shut the dialog'),
-    ),
-}))
+vi.mock('./components/SettingsDialog.js', async () => {
+  const { DaemonDown } = await import('./lib/use-daemon-health.js')
+  return {
+    SettingsDialog: ({ entry, scope, onEntry, onClose }: { entry: string; scope: string | null; onEntry: (id: string) => void; onClose: () => void }) =>
+      createElement(
+        'div',
+        null,
+        createElement('p', null, `the settings dialog on '${entry}'`),
+        createElement('p', null, `its project: ${scope ?? 'every project'}`),
+        createElement('p', null, `its saves: ${useContext(DaemonDown) ? 'off' : 'on'}`),
+        createElement('button', { onClick: () => onEntry('agent') }, 'to Agent'),
+        createElement('button', { onClick: onClose }, 'shut the dialog'),
+      ),
+  }
+})
 vi.mock('./components/ProjectHome.js', () => ({
   ProjectHome: ({ projectName, onProjectRemoved }: { projectName?: string; onProjectRemoved?: () => void }) =>
     createElement('p', null, `the launcher of ${projectName}`, createElement('button', { onClick: onProjectRemoved }, 'remove the project')),
@@ -309,6 +313,27 @@ describe('module cards on the Overview (#1818)', () => {
       await act(async () => void (await vi.advanceTimersByTimeAsync(5000)))
       const banner = (await screen.findByRole('alert')).textContent
       expect(banner).toBe('OpenAgent has stopped. Start it again with openagent in a terminal; an installed one restarts with the computer or with its installer\u2019s command.')
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  test("while OpenAgent is not answering, Settings and a module's popup say so as the pages do", async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true })
+    try {
+      function Popup() {
+        return createElement('p', null, `the popup's saves: ${useOpenAgentDown() ? 'off' : 'on'}`)
+      }
+      answerShell([{ package: '@acme/door', url: moduleModule('__downPopup', { everyPage: Popup }), projects: [], computer: true }])
+      window.history.replaceState(null, '', '/?settings=scheduler')
+      render(<App />)
+      expect(await screen.findByText('its saves: on')).toBeTruthy()
+      expect(await screen.findByText("the popup's saves: on")).toBeTruthy()
+      answers.set('onProjects', () => { throw new TypeError('Failed to fetch') })
+      await act(async () => void (await vi.advanceTimersByTimeAsync(5000)))
+      expect(await screen.findByRole('alert')).toBeTruthy()
+      expect(screen.getByText('its saves: off')).toBeTruthy()
+      expect(screen.getByText("the popup's saves: off")).toBeTruthy()
     } finally {
       vi.useRealTimers()
     }

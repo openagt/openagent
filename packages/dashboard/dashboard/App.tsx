@@ -589,6 +589,7 @@ export function App() {
     <HostServicesContext.Provider value={hostServices}>
     <OpenProjectContext.Provider value={projectId}>
     <ProjectLabelsContext.Provider value={labels}>
+    <DaemonDown.Provider value={!healthy}>
     {/* As tall as what the screen shows, never taller: a phone's 100vh reaches under its browser's
         bars, and the page then scrolled around the column that scrolls. */}
     {/* `--top-banner`: the height of the daemon's banner while it shows, which a page that scrolls
@@ -658,7 +659,6 @@ export function App() {
         {isMobile && !pageScrolls && <MenuButton />}
         {/* A project's page and an agent's have panes beside them (Panes). A module's page takes
             the full width itself (#1774), the way the Overview does. */}
-        <DaemonDown.Provider value={!healthy}>
         <PanesProvider
           projectId={projectId}
           agentId={agentId}
@@ -679,7 +679,6 @@ export function App() {
             </main>
           </PaneLayout>
         </PanesProvider>
-        </DaemonDown.Provider>
       </div>
       {/* What a module of this computer's draws over every page: a popup it raises itself. */}
       {modules.everyPage.map(({ EveryPage, package: pkg }) => (
@@ -690,6 +689,7 @@ export function App() {
       {/* Once what the address names is read: the project its "Project" group opens on, and the entries the projects and their packages add. */}
       {route.settings !== undefined && addressesRead && <SettingsDialog entry={route.settings} openItem={route.settingsItem} onEntry={showSettingsEntry} onClose={closeSettings} scope={scope} projects={projects} />}
     </SidebarProvider>
+    </DaemonDown.Provider>
     </ProjectLabelsContext.Provider>
     </OpenProjectContext.Provider>
     </HostServicesContext.Provider>
