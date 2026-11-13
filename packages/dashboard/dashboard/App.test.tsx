@@ -116,6 +116,13 @@ describe('module pages in the shell (#1774)', () => {
     expect(await screen.findByText('No such page')).toBeTruthy()
   })
 
+  test('a page that is not found is named by its heading, as every other page is', async () => {
+    answerShell([])
+    window.history.replaceState(null, '', '/nothing')
+    render(<App />)
+    expect(await screen.findByRole('heading', { level: 1, name: 'No such page' })).toBeTruthy()
+  })
+
   test("on a phone the bar names the dashboard's own pages, as it names a module's", async () => {
     answerShell([{ package: '@acme/logs', url: moduleModule('__phoneLogs', { pages: [{ segment: 'logs', label: 'Logs', Page: () => null }] }), projects: [PROJECT.id] }])
     const wide = phoneScreen()
