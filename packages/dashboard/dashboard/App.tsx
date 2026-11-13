@@ -186,11 +186,11 @@ export function App() {
   // at once, before the run's tool writes its card, and its page says what the start said.
   const [agentStart, setAgentStart] = useState<StartedRun>(NO_RUN_STARTED)
   // The agents of the project on screen, for its pages, or of the picked project, for the sidebar:
-  // the same project whenever both are set. Read once the address is: before, it names the project
-  // by its address, not by its id.
+  // the same project whenever both are set. Read once the projects are: before, the address names
+  // the project by its address, not by its id.
   // Every two seconds on the project's own pages, where a run's status is watched; every ten beside
   // the Overview or a module's page, whose rail only lists them (as every project's rail does).
-  const agentsOf = addressesRead ? (projectId ?? scope) : null
+  const agentsOf = projectsLoaded ? (projectId ?? scope) : null
   const { agents, reload, loaded: agentsLoaded } = useAgents(agentsOf, agentStart.id !== null && agentStart.projectId === agentsOf ? agentStart.id : null, projectId !== null ? 2000 : 10_000)
   useEffect(() => {
     const startedId = agentStart.id
