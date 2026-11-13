@@ -219,6 +219,16 @@ describe('QueuePage', () => {
       await waitFor(() => expect(field().value).toBe(''))
     })
 
+    test('once a task is added, by Enter or by the press, the caret is back in the field, for the next one', async () => {
+      show()
+      await screen.findByText('Urgent')
+      fireEvent.change(field(), { target: { value: 'Tidy the loader' } })
+      add().focus()
+      fireEvent.click(add())
+      await waitFor(() => expect(field().value).toBe(''))
+      expect(document.activeElement).toBe(field())
+    })
+
     test('the priority picked is the section the task goes to', async () => {
       show()
       await screen.findByText('Urgent')

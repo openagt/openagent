@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import { FastForward, Play, Plus, Trash2 } from 'lucide-react'
 import {
   Button,
@@ -324,6 +324,8 @@ function AddEntry({ project, reload }: { project: ModuleProject; reload: () => P
   const [priority, setPriority] = useState(DEFAULT_PRIORITY)
   const [adding, setAdding] = useState(false)
   const [failed, setFailed] = useState<string | undefined>()
+  // The next task goes in where this one went: the caret is back in the field once it is added.
+  const field = useRef<HTMLInputElement>(null)
   const down = useOpenAgentDown()
   const items = PRIORITIES.map(p => ({ value: String(p), label: `Priority ${p}` }))
   const add = async (): Promise<void> => {
@@ -336,6 +338,7 @@ function AddEntry({ project, reload }: { project: ModuleProject; reload: () => P
       await reload()
     } else setFailed(answer.error)
     setAdding(false)
+    field.current?.focus()
   }
   return (
     <form
@@ -347,7 +350,7 @@ function AddEntry({ project, reload }: { project: ModuleProject; reload: () => P
       className="mt-4"
     >
       <div className="flex flex-wrap items-center gap-2">
-        <Input name="task" value={text} onChange={event => (setText(event.target.value), setFailed(undefined))} disabled={adding} placeholder="Add a task: what an agent should do" aria-label="A task to add to the queue" className="h-8 min-w-48 flex-1 px-2" />
+        <Input ref={field} name="task" value={text} onChange={event => (setText(event.target.value), setFailed(undefined))} readOnly={adding} placeholder="Add a task: what an agent should do" aria-label="A task to add to the queue" className="h-8 min-w-48 flex-1 px-2" />
         <Select items={items} value={String(priority)} disabled={adding} onValueChange={next => setPriority(Number(next))}>
           <SelectTrigger size="sm" aria-label="Priority of the new task" className="w-32">
             <SelectValue />
