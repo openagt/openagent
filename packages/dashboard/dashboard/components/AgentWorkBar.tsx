@@ -42,25 +42,24 @@ export function AgentWorkBar({
   return (
     // `-mb-4`: over the box's own top padding and 8px further, under the box's top edge.
     <div className="mx-auto -mb-4 w-full max-w-3xl px-4 pt-2">
-      {/* One line; in a narrow chat (a phone, a chat beside panes) it is as many as its parts need,
-          the next step at the end of a line of its own. In the dark theme the hover fill is the bar's own colour, so its buttons get Everforest's
+      {/* One line at every width: on a phone too the branch gives way and the rest keeps its place.
+          In the dark theme the hover fill is the bar's own colour, so its buttons get Everforest's
           next step up (both names: `bg-accent` reads the first, the Button's variants the second). */}
       {/* Focusable by script only: a press that leaves nothing to press next leaves the focus here. */}
       <div role="group" aria-label="This session's work" tabIndex={-1} className="overflow-hidden rounded-t-lg border-x border-t border-hairline bg-muted px-2 pb-2 text-sm outline-none dark:[--accent:#374145] dark:[--color-accent:#374145]">
-        <div className="flex items-center @lg:h-10 @lg:gap-2 @max-lg:min-h-10 @max-lg:flex-wrap @max-lg:gap-x-2 @max-lg:gap-y-1 @max-lg:py-1.5">
-          {/* The branch is the one part that gives up width: it truncates and still reads. No icon
-              beside it: the name says what it is, and the row is shorter without one. */}
-          <span className="flex min-w-0 items-center pl-1 font-mono text-xs text-muted-foreground">
+        <div className="flex h-10 items-center gap-2">
+          {/* The branch is the one part that gives up width: it takes what the rest leaves, cut
+              short, its whole name in its tooltip. No icon beside it: the name says what it is, and
+              the row is shorter without one. */}
+          <span className="flex min-w-0 flex-1 items-center pl-1 font-mono text-xs text-muted-foreground">
             <Tooltip>
               <TooltipTrigger render={<span className="truncate" />}>{branch}</TooltipTrigger>
               <TooltipContent className="whitespace-pre-line">{[branch, checkout?.checkout?.path].filter(Boolean).join('\n')}</TooltipContent>
             </Tooltip>
           </span>
-          {/* Everything after this sits at the end, in Claude Code's order: what the branch holds,
-              its pull request, the next step, the ✕. The first three wrap as one, so a narrow bar
-              moves them down together. */}
-          <div className="grow" />
-          <div className="flex items-center gap-2 @lg:shrink-0 @max-lg:ml-auto @max-lg:min-w-0 @max-lg:flex-wrap">
+          {/* Everything after it sits at the end, in Claude Code's order, at its whole width: what
+              the branch holds, its pull request, the next step, the ✕. */}
+          <div className="flex shrink-0 items-center gap-2">
             <span className="shrink-0 tabular-nums">{summary}</span>
             {checkout?.pr && (
               <Tooltip>
