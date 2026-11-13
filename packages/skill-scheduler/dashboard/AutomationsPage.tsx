@@ -376,11 +376,11 @@ function SkillsLink() {
   )
 }
 
-/** An item of a row's line, with the "·" before it: the two wrap together, so no line ends in a "·", and {@link LINE} hides the one each line starts with. */
+/** An item of a row's line, with the "·" before it: the two wrap together, so no line ends in a "·", and {@link LINE} hides the one each line starts with. Its own later lines start where its words do, past that cut. */
 function Next({ children }: { children: ReactNode }) {
   return (
-    <span>
-      <span aria-hidden className="mr-2 inline-block w-1 text-center text-muted-foreground">
+    <span className="relative pl-3">
+      <span aria-hidden className="absolute left-0 w-1 text-center text-muted-foreground">
         ·
       </span>
       {children}
