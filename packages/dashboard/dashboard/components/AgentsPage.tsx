@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react'
+import { useId, useRef, useState, type FormEvent } from 'react'
 import { Bot, Check, Loader2, Pencil, Plus, RefreshCw, Trash2 } from 'lucide-react'
 import { onAgentLogins, onAgentsList, sendCopyAgentLogins, sendRemoveAgent, sendSaveAgent, type AgentLoginsOn, type AgentRecord, type AgentsView } from '../rpc/agents.js'
 import { DEFAULT_AGENT } from '../../src/client.js'
@@ -222,7 +222,7 @@ const COMPUTERS = ''
 
 /**
  * An agent edited, or a new one, in a dialog over the page: the name, the skills ticked, the
- * accounts picked; Save writes it, Cancel leaves it. Its parts scroll under the title while Save
+ * accounts picked; Save, or Enter in the name, writes it, Cancel leaves it. Its parts scroll under the title while Save
  * and Cancel stay in view, and a click beside it closes nothing: much is typed here. A GitHub
  * account OpenAgent does not have yet is added from here, in its own dialog over this one, and is
  * then the one picked; `onAccounts` reads the accounts again.
@@ -233,6 +233,8 @@ function AgentEditor({ agent, view, onAccounts, onDone }: { agent?: AgentRecord;
   const nameField = useRef<HTMLInputElement>(null)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | undefined>()
+  const formId = useId()
+  const [nameMissing, setNameMissing] = useState(false)
   const addingAccount = useAddGitAccount(async login => {
     setDraft(d => ({ ...d, github: login }))
     await onAccounts()
@@ -262,6 +264,13 @@ function AgentEditor({ agent, view, onAccounts, onDone }: { agent?: AgentRecord;
       setBusy(false)
     }
   }
+  const submit = (event: FormEvent) => {
+    event.preventDefault()
+    if (busy) return
+    if (draft.name.trim()) return void save()
+    setNameMissing(true)
+    nameField.current?.focus()
+  }
   const githubItems = [{ value: COMPUTERS, label: 'None — whatever the computer uses' }, ...[...new Set([...(view.github?.accounts ?? []), ...(draft.github !== undefined ? [draft.github] : [])])].map(login => ({ value: login, label: `@${login}` }))]
   return (
     <Dialog
@@ -282,7 +291,7 @@ function AgentEditor({ agent, view, onAccounts, onDone }: { agent?: AgentRecord;
             <Button size="sm" variant="ghost" disabled={busy} onClick={() => void onDone(false)}>
               Cancel
             </Button>
-            <Button size="sm" disabled={busy || !draft.name.trim()} onClick={() => void save()}>
+            <Button type="submit" form={formId} size="sm" disabled={busy}>
               {busy && <Loader2 className="size-3.5 animate-spin" aria-hidden />}
               {busy ? 'Saving…' : 'Save'}
             </Button>
@@ -290,10 +299,28 @@ function AgentEditor({ agent, view, onAccounts, onDone }: { agent?: AgentRecord;
         </div>
       }
     >
-      <div className="space-y-5 pb-1">
+      <form id={formId} noValidate onSubmit={submit} className="space-y-5 pb-1">
         <div className="space-y-1.5">
           <Label htmlFor="agent-name">Name</Label>
-          <Input id="agent-name" ref={nameField} value={draft.name} disabled={busy || isDefault} placeholder="Social media" onChange={event => setDraft(d => ({ ...d, name: event.target.value }))} className="max-w-sm" />
+          <Input
+            id="agent-name"
+            ref={nameField}
+            value={draft.name}
+            disabled={busy || isDefault}
+            placeholder="Social media"
+            aria-invalid={nameMissing}
+            {...(nameMissing ? { 'aria-describedby': 'agent-name-missing' } : {})}
+            onChange={event => {
+              setNameMissing(false)
+              setDraft(d => ({ ...d, name: event.target.value }))
+            }}
+            className="max-w-sm"
+          />
+          {nameMissing && (
+            <p id="agent-name-missing" className="text-xs text-danger">
+              Give the agent a name.
+            </p>
+          )}
         </div>
         <div className="space-y-3">
           <div>
@@ -355,7 +382,7 @@ function AgentEditor({ agent, view, onAccounts, onDone }: { agent?: AgentRecord;
           <AccountPicks label="Claude" accounts={view.claude} picked={draft.claude} busy={busy} onTick={(id, on) => tick('claude', id, on)} onAll={() => setDraft(d => ({ ...d, claude: new Set() }))} />
           <AccountPicks label="Codex" accounts={view.codex} picked={draft.codex} busy={busy} onTick={(id, on) => tick('codex', id, on)} onAll={() => setDraft(d => ({ ...d, codex: new Set() }))} />
         </div>
-      </div>
+      </form>
     </Dialog>
   )
 }

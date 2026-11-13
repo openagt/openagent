@@ -82,6 +82,21 @@ describe('the Agents page', () => {
     expect(screen.queryByRole('dialog', { name: 'New agent' })).toBeNull()
   })
 
+  test('the editor is a form: Enter in the name saves; with no name, Save says what it needs under the field and saves nothing', async () => {
+    render(<AgentsPage />)
+    fireEvent.click(await screen.findByRole('button', { name: 'New agent' }))
+    const editor = screen.getByRole('dialog', { name: 'New agent' })
+    const name = within(editor).getByLabelText('Name') as HTMLInputElement
+    fireEvent.click(within(editor).getByRole('button', { name: 'Save' }))
+    expect(name.getAttribute('aria-invalid')).toBe('true')
+    expect(document.getElementById(name.getAttribute('aria-describedby')!)!.textContent).toBe('Give the agent a name.')
+    expect(rpc.sendSaveAgent).not.toHaveBeenCalled()
+    fireEvent.change(name, { target: { value: 'Social media' } })
+    expect(name.getAttribute('aria-invalid')).toBe('false')
+    fireEvent.submit(name.form!)
+    await waitFor(() => expect(rpc.sendSaveAgent).toHaveBeenCalledWith(expect.objectContaining({ name: 'Social media' })))
+  })
+
   test('an agent edited in place keeps its id; a refusal is said under the editor and nothing closes', async () => {
     rpc.sendSaveAgent.mockResolvedValue({ ok: false, error: 'OpenAgent has no GitHub account stranger on this computer.' })
     render(<AgentsPage />)
