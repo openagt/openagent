@@ -1,18 +1,18 @@
 import type { ReactNode } from 'react'
-import { cardStyle, CodeChip, Emoji, SectionHead, sectionStyle, WipBadge } from './ui'
+import { cardStyle, CodeChip, Emoji, SectionHead, sectionStyle, text, WipBadge } from './ui'
 
 function Card({ title, children }: { title: string; children: ReactNode }) {
   return (
     <div
       style={{
         ...cardStyle,
-        padding: 'clamp(18px, 4.5vw, 26px)',
+        padding: 24,
         display: 'flex',
         flexDirection: 'column',
-        gap: 14,
+        gap: 12,
       }}
     >
-      <h3 style={{ margin: 0, fontSize: 18, fontWeight: 600 }}>{title}</h3>
+      <h3 style={{ margin: 0, ...text('lg'), fontWeight: 600 }}>{title}</h3>
       <ul
         style={{
           margin: 0,
@@ -20,9 +20,8 @@ function Card({ title, children }: { title: string; children: ReactNode }) {
           listStyle: 'none',
           display: 'flex',
           flexDirection: 'column',
-          gap: 10,
-          fontSize: 14.5,
-          lineHeight: 1.55,
+          gap: 8,
+          ...text('sm'),
           color: 'var(--muted-foreground)',
         }}
       >
@@ -34,9 +33,9 @@ function Card({ title, children }: { title: string; children: ReactNode }) {
 
 function Item({ children, marker }: { children: ReactNode; marker?: ReactNode }) {
   return (
-    <li style={{ display: 'flex', gap: 10 }}>
+    <li style={{ display: 'flex', gap: 8 }}>
       {/* Fixed marker width: every row's text (and its wrapped lines) starts in the same column. */}
-      <span style={{ color: 'var(--success)', flex: 'none', width: 18 }}>{marker ?? '✓'}</span>
+      <span style={{ color: 'var(--success)', flex: 'none', width: 20 }}>{marker ?? '✓'}</span>
       <span>{children}</span>
     </li>
   )
@@ -57,7 +56,7 @@ export function YourFramework() {
         style={{
           display: 'grid',
           gridTemplateColumns: 'repeat(auto-fit, minmax(min(260px, 100%), 1fr))',
-          gap: 18,
+          gap: 16,
         }}
       >
         <Card title="Flexible">
@@ -71,7 +70,7 @@ export function YourFramework() {
           <Item>No backdoors, no tracking</Item>
           <Item>
             <span>
-              Memory is saved in your Git repository at <CodeChip fontSize={12.5}>knowledge-base/*.md</CodeChip>
+              Memory is saved in your Git repository at <CodeChip>knowledge-base/*.md</CodeChip>
             </span>
           </Item>
           <Item>Data is fully yours</Item>

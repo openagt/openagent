@@ -1,6 +1,6 @@
 import type { CSSProperties, MouseEvent } from 'react'
 import { DiscordIcon, GitHubIcon } from './icons'
-import { DISCORD_URL, GITHUB_URL } from './ui'
+import { DISCORD_URL, GITHUB_URL, text } from './ui'
 import { ViewToggle } from './ViewToggle'
 
 const navBtnStyle: CSSProperties = {
@@ -9,8 +9,9 @@ const navBtnStyle: CSSProperties = {
   gap: 8,
   color: 'var(--foreground)',
   border: '1px solid var(--border)',
-  borderRadius: 8,
-  padding: '7px 14px',
+  borderRadius: 'var(--radius-lg)',
+  padding: '6px 12px',
+  ...text('sm'),
   fontWeight: 500,
 }
 
@@ -64,8 +65,7 @@ export function TopNav() {
           right: 12,
           top: 8,
           display: 'flex',
-          gap: 'clamp(10px, 2.5vw, 20px)',
-          fontSize: 14.5,
+          gap: 12,
         }}
       >
         <a href={DISCORD_URL} className="nav-btn" style={navBtnStyle}>

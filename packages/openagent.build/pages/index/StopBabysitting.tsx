@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react'
 import type { EmojiChar } from './ui'
-import { cardStyle, CodeChip, Emoji, mono, SectionHead, sectionStyle } from './ui'
+import { cardStyle, CodeChip, Emoji, mono, SectionHead, sectionStyle, text } from './ui'
 
 const ROW_STYLES = {
   bad: { bg: 'var(--background)', border: 'var(--border)', labelColor: 'var(--muted-foreground)' },
@@ -10,7 +10,7 @@ const ROW_STYLES = {
 // Inline arrows in the mono font and accent green: the sans-serif glyphs are
 // thin and vanish in the muted body text.
 function Arrow({ glyph }: { glyph: '→' | '↔' }) {
-  return <span style={{ fontFamily: mono, fontWeight: 500, fontSize: '1.25em' }}>{glyph}</span>
+  return <span style={{ fontFamily: mono, fontWeight: 500 }}>{glyph}</span>
 }
 
 type Row = { kind: keyof typeof ROW_STYLES; emoji: EmojiChar; label: string; body: ReactNode }
@@ -81,7 +81,7 @@ const PROBLEMS: { title: string; desc?: string; rows: Row[] }[] = [
     rows: [
       bad('You keep repeating yourself (previous decisions, business context, …).'),
       good(
-        <><b>AI retains knowledge via files</b> such as <CodeChip fontSize={13}>knowledge-base/DECISIONS.md</CodeChip> and <CodeChip fontSize={13}>knowledge-base/INSIGHTS.md</CodeChip>.</>,
+        <><b>AI retains knowledge via files</b> such as <CodeChip>knowledge-base/DECISIONS.md</CodeChip> and <CodeChip>knowledge-base/INSIGHTS.md</CodeChip>.</>,
       ),
     ],
   },
@@ -91,14 +91,14 @@ export function StopBabysitting() {
   return (
     <section id="stop-babysitting" style={sectionStyle}>
       <SectionHead title="Stop babysitting" />
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
         {PROBLEMS.map((p) => (
           <div
             key={p.title}
             className="problem-card"
             style={{
               ...cardStyle,
-              padding: 'clamp(18px, 4vw, 28px)',
+              padding: 24,
               display: 'grid',
               gridTemplateColumns: '280px 1fr',
               gap: 32,
@@ -108,7 +108,7 @@ export function StopBabysitting() {
               <span
                 style={{
                   fontFamily: mono,
-                  fontSize: 11.5,
+                  ...text('xs'),
                   letterSpacing: '0.08em',
                   textTransform: 'uppercase',
                   color: 'var(--danger)',
@@ -116,8 +116,8 @@ export function StopBabysitting() {
               >
                 Problem
               </span>
-              <h3 style={{ margin: 0, fontSize: 21, fontWeight: 600, lineHeight: 1.3 }}>{p.title}</h3>
-              {p.desc && <p style={{ margin: 0, fontSize: 14, lineHeight: 1.55, color: 'var(--muted-foreground)' }}>{p.desc}</p>}
+              <h3 style={{ margin: 0, ...text('lg'), fontWeight: 600 }}>{p.title}</h3>
+              {p.desc && <p style={{ margin: 0, ...text('sm'), color: 'var(--muted-foreground)' }}>{p.desc}</p>}
             </div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
               {p.rows.map((r, i) => {
@@ -129,21 +129,21 @@ export function StopBabysitting() {
                     style={{
                       display: 'grid',
                       gridTemplateColumns: '118px 1fr',
-                      gap: 14,
+                      gap: 12,
                       alignItems: 'baseline',
                       padding: '12px 16px',
-                      borderRadius: 9,
+                      borderRadius: 'var(--radius-lg)',
                       background: s.bg,
                       border: `1px solid ${s.border}`,
                     }}
                   >
-                    <span style={{ fontFamily: mono, fontSize: 12, color: s.labelColor, whiteSpace: 'nowrap' }}>
+                    <span style={{ fontFamily: mono, ...text('xs'), color: s.labelColor, whiteSpace: 'nowrap' }}>
                       <span style={{ fontSize: 16, verticalAlign: -2, marginRight: 4 }}>
                         <Emoji e={r.emoji} />
                       </span>
                       {r.label}
                     </span>
-                    <p style={{ margin: 0, fontSize: 14.5, lineHeight: 1.6, color: 'var(--foreground)' }}>{r.body}</p>
+                    <p style={{ margin: 0, ...text('sm'), color: 'var(--foreground)' }}>{r.body}</p>
                   </div>
                 )
               })}

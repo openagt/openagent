@@ -1,19 +1,19 @@
 import type { ReactNode } from 'react'
-import { cardStyle, SectionHead, sectionStyle } from './ui'
+import { cardStyle, SectionHead, sectionStyle, text } from './ui'
 
 const featureCardStyle = {
   ...cardStyle,
-  padding: 'clamp(18px, 4vw, 26px) clamp(16px, 4.5vw, 28px)',
+  padding: 24,
   display: 'flex',
   flexDirection: 'column',
 } as const
 
 /** One feature's card: its name, then what it does. */
-function Feature({ title, gap = 12, children }: { title: string; gap?: number; children: ReactNode }) {
+function Feature({ title, children }: { title: string; children: ReactNode }) {
   return (
-    <div style={{ ...featureCardStyle, gap }}>
-      <h3 style={{ margin: 0, fontSize: 19, fontWeight: 600 }}>{title}</h3>
-      <p style={{ margin: 0, fontSize: 14.5, lineHeight: 1.6, color: 'var(--muted-foreground)' }}>{children}</p>
+    <div style={{ ...featureCardStyle, gap: 8 }}>
+      <h3 style={{ margin: 0, ...text('base'), fontWeight: 600 }}>{title}</h3>
+      <p style={{ margin: 0, ...text('sm'), color: 'var(--muted-foreground)' }}>{children}</p>
     </div>
   )
 }
@@ -26,7 +26,7 @@ export function Features() {
         style={{
           display: 'grid',
           gridTemplateColumns: 'repeat(auto-fit, minmax(min(300px, 100%), 1fr))',
-          gap: 18,
+          gap: 16,
         }}
       >
         <Feature title="Bring your own subscription">
@@ -40,7 +40,7 @@ export function Features() {
         <Feature title="Bring your own prompts">
           Save and quickly re-use your favorite prompts. Share them with your teammates or keep them personal.
         </Feature>
-        <Feature title="Dashboard" gap={14}>
+        <Feature title="Dashboard">
           Pro-rata usage quota, current AI agents, queued AI tasks, queue of required reviews, "hot" tickets, and
           more.
         </Feature>

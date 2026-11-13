@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import type { MouseEvent, ReactNode } from 'react'
-import { mono } from './ui'
+import { mono, text } from './ui'
 
 const SECTIONS: { id: string; title: ReactNode }[] = [
   { id: 'stop-babysitting', title: 'Stop babysitting' },
@@ -36,7 +36,7 @@ export function SectionNav() {
       // A section claims the highlight once its content crosses just below the
       // viewport's midpoint — eager enough to follow the reader, without
       // flipping while the title still hugs the bottom edge. Nav clicks land
-      // content at y=76, within the line.
+      // content at y=64, within the line.
       const spyLine = Math.max(130, window.innerHeight * 0.55)
       let a = ''
       for (const s of SECTIONS) {
@@ -67,18 +67,18 @@ export function SectionNav() {
           justifyContent: 'center',
           alignItems: 'center',
           gap: 8,
-          padding: '96px clamp(14px, 4vw, 24px) 8px',
+          padding: '64px var(--space-gutter) 8px',
           color: 'var(--success)',
           fontFamily: mono,
-          fontSize: 11.5,
-          letterSpacing: '0.12em',
+          ...text('xs'),
+          letterSpacing: '0.08em',
           textTransform: 'uppercase',
           userSelect: 'none',
         }}
       >
         <svg
-          width="13"
-          height="13"
+          width="14"
+          height="14"
           viewBox="0 0 24 24"
           fill="none"
           stroke="currentColor"
@@ -116,15 +116,15 @@ export function SectionNav() {
           style={{
             maxWidth: 1120,
             margin: '0 auto',
-            padding: '0 clamp(14px, 4vw, 24px)',
+            padding: '0 var(--space-gutter)',
             display: 'flex',
             justifyContent: 'flex-start',
             alignItems: 'center',
-            gap: 'clamp(18px, 3vw, 30px)',
+            gap: 24,
             overflowX: 'auto',
             scrollbarWidth: 'none',
             fontFamily: mono,
-            fontSize: 13,
+            ...text('sm'),
             whiteSpace: 'nowrap',
           }}
         >
@@ -140,9 +140,9 @@ export function SectionNav() {
               flex: 'none',
               display: 'flex',
               alignItems: 'center',
-              padding: '11px 2px',
+              padding: '12px 2px',
               opacity: stuck ? 1 : 0,
-              transition: 'opacity 0.35s ease',
+              transition: 'opacity var(--duration-enter) var(--ease-out)',
               pointerEvents: stuck ? 'auto' : 'none',
             }}
           >
@@ -158,7 +158,7 @@ export function SectionNav() {
               key={s.id}
               href={'#' + s.id}
               className={'section-link' + (active === s.id ? ' active' : '')}
-              style={{ flex: 'none', padding: '17px 2px 15px' }}
+              style={{ flex: 'none', padding: '12px 2px' }}
             >
               {s.title}
             </a>

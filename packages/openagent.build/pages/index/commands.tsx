@@ -1,6 +1,6 @@
 import { useSyncExternalStore, type CSSProperties, type ReactNode } from 'react'
 import { CopiedStatus, copyPress, useCopy } from './copy'
-import { mono } from './ui'
+import { mono, text } from './ui'
 
 // Trying runs the dashboard once; installing starts it at every login, at openagent.build (#1919).
 const PMS = {
@@ -55,7 +55,7 @@ export function PmTabs() {
           className={'pm-tab pm-tab-' + name}
           aria-pressed={name === pm}
           onClick={() => pickPm(name)}
-          style={{ borderRadius: 7, padding: '4px 13px', fontFamily: mono, fontSize: 12, cursor: 'pointer' }}
+          style={{ borderRadius: 'var(--radius-md)', padding: '2px 12px', fontFamily: mono, ...text('xs'), cursor: 'pointer' }}
         >
           {name}
         </button>
@@ -96,28 +96,26 @@ const chipStyle: CSSProperties = {
   alignItems: 'center',
   background: 'var(--card)',
   border: '1px solid var(--border)',
-  borderRadius: 7,
-  padding: '4px 10px',
+  borderRadius: 'var(--radius-md)',
+  padding: '4px 8px',
   fontFamily: mono,
-  fontSize: 12.5,
+  ...text('xs'),
   wordBreak: 'break-all',
 }
 
 const copyTipStyle: CSSProperties = {
   position: 'absolute',
-  left: 'calc(100% + 11px)',
+  left: 'calc(100% + 12px)',
   top: '50%',
   transform: 'translateY(-50%)',
   background: 'var(--foreground)',
   color: 'var(--background)',
   fontWeight: 600,
-  fontSize: 9.5,
-  letterSpacing: '0.1em',
-  textTransform: 'uppercase',
-  borderRadius: 4,
-  padding: '4px 8px',
+  ...text('xs'),
+  borderRadius: 'var(--radius-sm)',
+  padding: '2px 8px',
   whiteSpace: 'nowrap',
-  transition: 'opacity 0.15s',
+  transition: 'opacity var(--duration-hover) var(--ease-out)',
   pointerEvents: 'none',
   userSelect: 'none',
 }

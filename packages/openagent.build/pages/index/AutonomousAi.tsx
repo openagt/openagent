@@ -1,9 +1,9 @@
 import type { ReactNode } from 'react'
-import { cardStyle, CodeChip, Note, SectionHead, sectionStyle } from './ui'
+import { cardStyle, CodeChip, Note, SectionHead, sectionStyle, text } from './ui'
 
 function Item({ children }: { children: ReactNode }) {
   return (
-    <li style={{ display: 'flex', gap: 10 }}>
+    <li style={{ display: 'flex', gap: 8 }}>
       <span style={{ color: 'var(--success)' }}>✓</span>
       {children}
     </li>
@@ -15,14 +15,14 @@ function Card({ title, lead, children }: { title: string; lead: string; children
     <div
       style={{
         ...cardStyle,
-        padding: 'clamp(18px, 4.5vw, 28px)',
+        padding: 24,
         display: 'flex',
         flexDirection: 'column',
         gap: 16,
       }}
     >
-      <h3 style={{ margin: 0, fontSize: 20, fontWeight: 600 }}>{title}</h3>
-      <p style={{ margin: 0, fontSize: 14, color: 'var(--muted-foreground)' }}>{lead}</p>
+      <h3 style={{ margin: 0, ...text('lg'), fontWeight: 600 }}>{title}</h3>
+      <p style={{ margin: 0, ...text('sm'), color: 'var(--muted-foreground)' }}>{lead}</p>
       <ul
         style={{
           margin: 0,
@@ -30,9 +30,8 @@ function Card({ title, lead, children }: { title: string; lead: string; children
           listStyle: 'none',
           display: 'flex',
           flexDirection: 'column',
-          gap: 11,
-          fontSize: 15,
-          lineHeight: 1.55,
+          gap: 8,
+          ...text('base'),
         }}
       >
         {children}
@@ -51,7 +50,7 @@ export function AutonomousAi() {
         style={{
           display: 'grid',
           gridTemplateColumns: 'repeat(auto-fit, minmax(min(300px, 100%), 1fr))',
-          gap: 18,
+          gap: 16,
         }}
       >
         <Card title="Autonomous Product Management" lead="Let AI autonomously:">
@@ -60,7 +59,7 @@ export function AutonomousAi() {
           <Item>Turn your team conversations into tickets</Item>
           <Item>
             <span>
-              Save your team conversations to <CodeChip fontSize={13}>{'conversations/<DATE>_<TOPICS_SLUG>.md'}</CodeChip>
+              Save your team conversations to <CodeChip>{'conversations/<DATE>_<TOPICS_SLUG>.md'}</CodeChip>
             </span>
           </Item>
           <Item>Market research</Item>
@@ -72,7 +71,7 @@ export function AutonomousAi() {
           <Item>Consensual work</Item>
         </Card>
       </div>
-      <div style={{ display: 'flex', gap: 18, flexWrap: 'wrap' }}>
+      <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap' }}>
         <Note style={noteFlexStyle}>Agents still ask for your confirmation for non-obvious decisions.</Note>
         <Note style={noteFlexStyle}>You're still in control — only pick the autonomicity that works for you.</Note>
       </div>

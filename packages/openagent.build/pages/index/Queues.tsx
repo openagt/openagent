@@ -1,19 +1,19 @@
 import type { CSSProperties, ReactNode } from 'react'
 import type { EmojiChar } from './ui'
-import { cardStyle, CodeChip, Emoji, h3Style } from './ui'
+import { cardStyle, CodeChip, Emoji, h3Style, text } from './ui'
 
 const leadStyle = { color: 'var(--foreground)', fontWeight: 500 } as const
 
 function P({ children }: { children: ReactNode }) {
-  return <p style={{ margin: 0, fontSize: 14, lineHeight: 1.6, color: 'var(--muted-foreground)' }}>{children}</p>
+  return <p style={{ margin: 0, ...text('sm'), color: 'var(--muted-foreground)' }}>{children}</p>
 }
 
 function QueueCard({ title, icon, iconStyle, children }: { title: string; icon: EmojiChar; iconStyle: CSSProperties; children: ReactNode }) {
   return (
     <div
-      style={{ ...cardStyle, padding: 'clamp(16px, 4.5vw, 24px)', display: 'flex', flexDirection: 'column', gap: 10 }}
+      style={{ ...cardStyle, padding: 24, display: 'flex', flexDirection: 'column', gap: 8 }}
     >
-      <h4 style={{ margin: 0, fontSize: 17, fontWeight: 600 }}>
+      <h4 style={{ margin: 0, ...text('base'), fontWeight: 600 }}>
         {title}{' '}
         <span aria-hidden style={{ marginLeft: 4, ...iconStyle }}>
           <Emoji e={icon} />
@@ -26,13 +26,13 @@ function QueueCard({ title, icon, iconStyle, children }: { title: string; icon: 
 
 export function Queues() {
   return (
-    <section id="queues" style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+    <section id="queues" style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
       <h3 style={h3Style}>Queues</h3>
       <div
         style={{
           display: 'grid',
           gridTemplateColumns: 'repeat(auto-fit, minmax(min(280px, 100%), 1fr))',
-          gap: 18,
+          gap: 16,
         }}
       >
         <QueueCard title="AI Queue" icon="🤖" iconStyle={{ verticalAlign: 1 }}>
@@ -45,7 +45,7 @@ export function Queues() {
             Agents autonomously populating the AI queue is what <span style={leadStyle}>makes AI autonomous</span>.
           </P>
           <P>
-            Technically, it's just a <CodeChip fontSize={12}>TODO_AGENTS.md</CodeChip> file in your Git repositories.
+            Technically, it's just a <CodeChip>TODO_AGENTS.md</CodeChip> file in your Git repositories.
           </P>
         </QueueCard>
         <QueueCard title="Human Queue" icon="🙋" iconStyle={{ verticalAlign: 0 }}>

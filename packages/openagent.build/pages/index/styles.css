@@ -8,7 +8,6 @@
 @import '@fontsource/ibm-plex-sans/latin-400.css';
 @import '@fontsource/ibm-plex-sans/latin-500.css';
 @import '@fontsource/ibm-plex-sans/latin-600.css';
-@import '@fontsource/ibm-plex-sans/latin-700.css';
 @import '@fontsource/ibm-plex-mono/latin-400.css';
 @import '@fontsource/ibm-plex-mono/latin-500.css';
 @import '@fontsource/ibm-plex-mono/latin-600.css';
@@ -21,14 +20,51 @@
   --raised: color-mix(in oklab, var(--foreground) 6%, var(--background));
 }
 
+/* The site's scale, the dashboard's one step up (ui.tsx's `text`): seven sizes on whole pixels,
+ * nothing under 12, and the dashboard's spacing steps, corners and motion. */
+:root {
+  --text-xs: 12px;
+  --leading-xs: 16px;
+  --text-sm: 14px;
+  --leading-sm: 20px;
+  --text-base: 16px;
+  --leading-base: 26px;
+  --text-lg: 20px;
+  --leading-lg: 28px;
+  --text-xl: 28px;
+  --leading-xl: 36px;
+  --text-2xl: 40px;
+  --leading-2xl: 48px;
+  --text-3xl: 56px;
+  --leading-3xl: 64px;
+  /* Lines of prose hold 68 characters at most. */
+  --measure: 34em;
+
+  /* Between sections, between a section's heading and what it holds, between the things it
+   * holds, and the page's side margin. */
+  --space-section: 64px;
+  --space-head: 32px;
+  --space-items: 32px;
+  --space-gutter: 32px;
+
+  --radius-sm: 4px;
+  --radius-md: 6px;
+  --radius-lg: 8px;
+
+  --ease-out: cubic-bezier(0.2, 0, 0, 1);
+  /* Colour and opacity on hover; something entering. */
+  --duration-hover: 100ms;
+  --duration-enter: 140ms;
+}
 html {
   scroll-behavior: smooth;
 }
-* {
-  transition:
-    border-color 0.15s,
-    background-color 0.15s,
-    color 0.15s;
+a,
+button,
+[role='button'] {
+  transition-property: color, background-color, border-color;
+  transition-duration: var(--duration-hover);
+  transition-timing-function: var(--ease-out);
 }
 h1,
 h2,
@@ -54,7 +90,7 @@ a:hover {
   background: color-mix(in oklab, var(--primary) 35%, var(--background));
 }
 section[id] {
-  scroll-margin-top: 76px;
+  scroll-margin-top: 64px;
 }
 
 /* --- Hover states (from `style-hover`) --- */
@@ -223,7 +259,7 @@ html:not([data-pm]) .pm-tab-npm {
   content: '';
   position: absolute;
   top: 100%;
-  right: 11px;
+  right: 12px;
   border: 5px solid transparent;
   border-top-color: var(--foreground);
 }
@@ -244,7 +280,7 @@ html:not([data-pm]) .pm-tab-npm {
     display: none;
   }
   .nav-btn {
-    padding: 7px 10px !important;
+    padding: 6px 8px !important;
   }
   .nav-btn-primary {
     padding: 7px 9.5px !important;
@@ -255,7 +291,7 @@ html:not([data-pm]) .pm-tab-npm {
     align-items: center;
     text-align: center;
     gap: 16px !important;
-    padding: 30px 16px 36px !important;
+    padding: 32px 16px !important;
   }
 }
 @media (max-width: 860px) {
@@ -265,7 +301,7 @@ html:not([data-pm]) .pm-tab-npm {
   }
   .problem-card {
     grid-template-columns: 1fr !important;
-    gap: 18px !important;
+    gap: 16px !important;
   }
 }
 @media (max-width: 760px) {
@@ -273,7 +309,7 @@ html:not([data-pm]) .pm-tab-npm {
     left: auto !important;
     right: 0 !important;
     top: auto !important;
-    bottom: calc(100% + 9px) !important;
+    bottom: calc(100% + 8px) !important;
     transform: none !important;
   }
   .copy-tip-side::after {

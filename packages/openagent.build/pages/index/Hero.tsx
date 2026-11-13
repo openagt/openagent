@@ -1,7 +1,7 @@
 import type { CSSProperties } from 'react'
 import { CommandChip, CommandLine, PmTabs, usePickedCommand } from './commands'
 import { CopiedStatus, copyPress, useCopy } from './copy'
-import { BADGES, kickerStyle, mono } from './ui'
+import { BADGES, kickerStyle, mono, proseStyle, text } from './ui'
 import { switchInPlace, useDashboardHref } from './ViewToggle'
 
 const commentStyle: CSSProperties = { color: 'var(--muted-foreground)' }
@@ -16,12 +16,10 @@ function Badge({ label, copied }: { label: string; copied: boolean }) {
         background: 'var(--foreground)',
         color: 'var(--background)',
         fontWeight: 600,
-        fontSize: 10,
-        letterSpacing: '0.1em',
-        textTransform: 'uppercase',
-        borderRadius: 5,
-        padding: '4px 9px',
-        transition: 'opacity 0.15s',
+        ...text('xs'),
+        borderRadius: 'var(--radius-sm)',
+        padding: '2px 8px',
+        transition: 'opacity var(--duration-hover) var(--ease-out)',
         pointerEvents: 'none',
         userSelect: 'none',
       }}
@@ -42,12 +40,12 @@ export function Hero() {
       style={{
         maxWidth: 1120,
         margin: '0 auto',
-        padding: 'clamp(32px, 6vw, 56px) clamp(14px, 4vw, 24px) 32px',
+        padding: '48px var(--space-gutter) 32px',
         textAlign: 'center',
         display: 'flex',
         flexDirection: 'column',
         alignItems: 'center',
-        gap: 20,
+        gap: 16,
       }}
     >
       <div
@@ -56,7 +54,7 @@ export function Hero() {
           gap: 8,
           flexWrap: 'wrap',
           justifyContent: 'center',
-          fontSize: 12,
+          ...text('xs'),
           fontFamily: mono,
         }}
       >
@@ -66,10 +64,10 @@ export function Hero() {
             style={{
               display: 'flex',
               alignItems: 'center',
-              gap: 7,
+              gap: 6,
               border: '1px solid var(--border)',
               borderRadius: 999,
-              padding: '5px 12px',
+              padding: '4px 12px',
               color,
             }}
           >
@@ -82,9 +80,8 @@ export function Hero() {
       <h1
         style={{
           margin: 0,
-          fontSize: 'clamp(32px, 11vw, 68px)',
-          lineHeight: 1.08,
-          fontWeight: 700,
+          ...text('3xl'),
+          fontWeight: 600,
           letterSpacing: '-0.02em',
         }}
       >
@@ -94,8 +91,8 @@ export function Hero() {
             display: 'table',
             textDecoration: 'none',
             position: 'relative',
-            margin: '0 auto 0px',
-            fontSize: 'clamp(26px, 6vw, 42px)',
+            margin: '0 auto',
+            ...text('xl'),
             fontWeight: 500,
             color: 'var(--muted-foreground)',
           }}
@@ -106,12 +103,11 @@ export function Hero() {
       </h1>
       <p
         style={{
-          margin: '-10px 0 0',
-          fontSize: 'clamp(19px, 4.5vw, 25px)',
+          margin: 0,
+          ...text('lg'),
           fontWeight: 500,
-          lineHeight: 1.45,
           color: 'var(--foreground)',
-          maxWidth: 680,
+          maxWidth: 'var(--measure)',
           textWrap: 'pretty',
         }}
       >
@@ -124,13 +120,13 @@ export function Hero() {
         style={{
           display: 'inline-flex',
           alignItems: 'center',
-          gap: 10,
-          marginTop: 6,
+          gap: 8,
+          marginTop: 8,
           background: 'var(--success)',
           color: 'var(--background)',
-          borderRadius: 12,
-          padding: '14px 30px',
-          fontSize: 19,
+          borderRadius: 'var(--radius-lg)',
+          padding: '12px 24px',
+          ...text('base'),
           fontWeight: 600,
         }}
       >
@@ -143,11 +139,11 @@ export function Hero() {
           flexDirection: 'column',
           gap: 16,
           alignItems: 'center',
-          marginTop: 18,
+          marginTop: 16,
           maxWidth: '100%',
         }}
       >
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 7, alignItems: 'center', maxWidth: '100%' }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 8, alignItems: 'center', maxWidth: '100%' }}>
           <span style={kickerStyle}>Try:</span>
           <div
             className="try-box"
@@ -155,9 +151,9 @@ export function Hero() {
               maxWidth: '100%',
               boxSizing: 'border-box',
               background: 'var(--card)',
-              border: '1.5px solid var(--success)',
+              border: '1px solid var(--success)',
               boxShadow: '0 0 0 4px color-mix(in oklab, var(--success) 12%, transparent)',
-              borderRadius: 12,
+              borderRadius: 'var(--radius-lg)',
               overflow: 'hidden',
               textAlign: 'left',
             }}
@@ -167,7 +163,7 @@ export function Hero() {
                 display: 'flex',
                 alignItems: 'center',
                 gap: 4,
-                padding: '7px 8px',
+                padding: '6px 8px',
                 background: 'var(--background)',
                 borderBottom: '1px solid var(--border)',
               }}
@@ -183,10 +179,10 @@ export function Hero() {
                 cursor: 'pointer',
                 display: 'flex',
                 flexDirection: 'column',
-                gap: 7,
-                padding: '14px clamp(12px, 3vw, 20px)',
+                gap: 8,
+                padding: '12px 16px',
                 fontFamily: mono,
-                fontSize: 'clamp(11px, 3.4vw, 15px)',
+                ...text('sm'),
               }}
             >
               <CommandLine command="try" after={<span style={commentStyle}># One-shot (no install)</span>} />
@@ -197,11 +193,11 @@ export function Hero() {
         <p
           style={{
             margin: 0,
-            fontSize: 14,
+            ...text('sm'),
             color: 'var(--muted-foreground)',
             display: 'flex',
             alignItems: 'center',
-            gap: 10,
+            gap: 8,
             flexWrap: 'wrap',
             justifyContent: 'center',
             maxWidth: '100%',
@@ -214,8 +210,7 @@ export function Hero() {
 
       <div
         style={{
-          marginTop: 16,
-          paddingTop: 8,
+          marginTop: 24,
           width: '100%',
           maxWidth: 1056,
           boxSizing: 'border-box',
@@ -227,14 +222,14 @@ export function Hero() {
       >
         <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
           <span style={kickerStyle}>What is it?</span>
-          <p style={{ margin: 0, fontSize: 15.5, lineHeight: 1.7, color: 'var(--muted-foreground)', textWrap: 'pretty' }}>
+          <p style={{ ...proseStyle, color: 'var(--muted-foreground)' }}>
             It turns AI agents into autonomous teammates that handle work end-to-end — while you stay in control of key
             decisions.
           </p>
         </div>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
           <span style={kickerStyle}>Any software</span>
-          <p style={{ margin: 0, fontSize: 15.5, lineHeight: 1.7, color: 'var(--muted-foreground)', textWrap: 'pretty' }}>
+          <p style={{ ...proseStyle, color: 'var(--muted-foreground)' }}>
             (Semi-)autonomously build anything from simple web apps to complex software.
           </p>
         </div>

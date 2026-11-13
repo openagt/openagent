@@ -6,6 +6,15 @@ export const NPM_URL = 'https://www.npmjs.com/package/@openagt/dashboard'
 
 export const mono = "'IBM Plex Mono', monospace" as const
 
+/** A step of the site's type scale (styles.css): its size and its line. */
+export const text = (step: 'xs' | 'sm' | 'base' | 'lg' | 'xl' | '2xl' | '3xl'): CSSProperties => ({
+  fontSize: `var(--text-${step})`,
+  lineHeight: `var(--leading-${step})`,
+})
+
+/** Prose: the body size, in lines of 68 characters at most. */
+export const proseStyle: CSSProperties = { margin: 0, ...text('base'), maxWidth: 'var(--measure)', textWrap: 'pretty' }
+
 /** The three claims under the hero's title, each in its color; the banner says them too. */
 export const BADGES = [
   ['100% Open Source', 'var(--success)'],
@@ -18,39 +27,38 @@ export const BADGES = [
 // clicks land on the section's content instead of a screen of padding.
 export const sectionStyle: CSSProperties = {
   maxWidth: 1120,
-  margin: 'clamp(72px, 13vw, 140px) auto 0',
-  padding: '0 clamp(14px, 4vw, 24px)',
+  margin: 'var(--space-section) auto 0',
+  padding: '0 var(--space-gutter)',
   display: 'flex',
   flexDirection: 'column',
-  gap: 36,
+  gap: 'var(--space-head)',
 }
 
 export const h2Style: CSSProperties = {
   margin: 0,
-  fontSize: 'clamp(30px, 6vw, 40px)',
-  fontWeight: 700,
-  letterSpacing: '-0.015em',
+  ...text('xl'),
+  fontWeight: 600,
+  letterSpacing: '-0.01em',
 }
 
 // Subsection heading (the "How it works" children).
 export const h3Style: CSSProperties = {
   margin: 0,
-  fontSize: 'clamp(23px, 4.5vw, 28px)',
-  fontWeight: 700,
-  letterSpacing: '-0.01em',
+  ...text('lg'),
+  fontWeight: 600,
 }
 
 export const cardStyle: CSSProperties = {
   background: 'var(--raised)',
   border: '1px solid var(--border)',
-  borderRadius: 12,
+  borderRadius: 'var(--radius-lg)',
 }
 
 // Small mono uppercase label (e.g. "Try", "What is it?", "Problem").
 export const kickerStyle: CSSProperties = {
   fontFamily: mono,
-  fontSize: 11.5,
-  letterSpacing: '0.12em',
+  ...text('xs'),
+  letterSpacing: '0.08em',
   textTransform: 'uppercase',
   color: 'var(--success)',
 }
@@ -67,13 +75,13 @@ export function SectionHead({ title, sub }: { title: ReactNode; sub?: string }) 
         alignItems: 'center',
         textAlign: 'center',
         gap: 12,
-        maxWidth: 640,
+        maxWidth: 'var(--measure)',
         margin: '0 auto',
       }}
     >
       <h2 style={h2Style}>{title}</h2>
       <span aria-hidden style={{ width: 68, height: 4, borderRadius: 2, background: 'var(--success)' }} />
-      {sub && <p style={{ margin: 0, fontSize: 17, lineHeight: 1.6, color: 'var(--muted-foreground)' }}>{sub}</p>}
+      {sub && <p style={{ margin: 0, ...text('base'), color: 'var(--muted-foreground)' }}>{sub}</p>}
     </div>
   )
 }
@@ -82,23 +90,22 @@ export function SectionHead({ title, sub }: { title: ReactNode; sub?: string }) 
 // prompts band, whose chip row needs a block container): this box, around NoteText.
 export const noteContainerStyle: CSSProperties = {
   margin: 0,
-  fontSize: 14,
-  lineHeight: 1.6,
+  ...text('sm'),
   color: 'var(--muted-foreground)',
   background: 'color-mix(in oklab, var(--warning) 7%, transparent)',
   borderLeft: '3px solid var(--warning)',
-  borderRadius: '0 8px 8px 0',
+  borderRadius: '0 var(--radius-lg) var(--radius-lg) 0',
   padding: '12px 16px',
 }
 
 const noteLabelStyle: CSSProperties = {
   fontFamily: mono,
-  fontSize: 11,
+  ...text('xs'),
   fontWeight: 600,
-  letterSpacing: '0.1em',
+  letterSpacing: '0.08em',
   textTransform: 'uppercase',
   color: 'var(--warning)',
-  marginRight: 10,
+  marginRight: 8,
 }
 
 /** A note's words: its "Note" label, then the note in italics. */
@@ -126,13 +133,12 @@ export function WipBadge() {
       style={{
         fontStyle: 'normal',
         fontFamily: mono,
-        fontSize: 10.5,
+        ...text('xs'),
         fontWeight: 600,
-        letterSpacing: '0.08em',
         color: 'var(--warning)',
         border: '1px solid color-mix(in oklab, var(--warning) 40%, transparent)',
-        borderRadius: 4,
-        padding: '1px 6px',
+        borderRadius: 'var(--radius-sm)',
+        padding: '0 6px',
         whiteSpace: 'nowrap',
       }}
     >
@@ -159,7 +165,8 @@ export function Emoji({ e }: { e: EmojiChar }) {
   return <img src={`/assets/emoji-${EMOJIS[e]}.svg`} alt={e} style={{ height: '1em', verticalAlign: '-0.12em' }} />
 }
 
-export function CodeChip({ children, fontSize }: { children: string; fontSize: number }) {
+/** A path or a file name in the text, in mono a step (2px) under the text around it. */
+export function CodeChip({ children }: { children: string }) {
   return (
     <code
       style={{
@@ -171,13 +178,13 @@ export function CodeChip({ children, fontSize }: { children: string; fontSize: n
         // Upright even inside italic contexts (notes).
         fontStyle: 'normal',
         fontFamily: mono,
-        fontSize,
+        fontSize: 'calc(1em - 2px)',
         background: 'var(--card)',
         // The border keeps the chip visible even on surfaces of its own fill (e.g. the
         // good-solution rows), where the background alone disappears.
         border: '1px solid var(--border)',
-        borderRadius: 5,
-        padding: '1px 6px',
+        borderRadius: 'var(--radius-sm)',
+        padding: '0 4px',
         color: 'var(--warning)',
       }}
     >

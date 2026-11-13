@@ -1,7 +1,7 @@
 import { DiscordIcon, GitHubIcon, NpmIcon } from './icons'
-import { DISCORD_URL, GITHUB_URL, NPM_URL } from './ui'
+import { DISCORD_URL, GITHUB_URL, NPM_URL, text } from './ui'
 
-const linkStyle = { display: 'inline-flex', alignItems: 'center', gap: 7, color: 'var(--muted-foreground)' } as const
+const linkStyle = { display: 'inline-flex', alignItems: 'center', gap: 8, color: 'var(--muted-foreground)' } as const
 
 export function Footer() {
   return (
@@ -9,7 +9,7 @@ export function Footer() {
       className="site-footer"
       style={{
         borderTop: '1px solid var(--border)',
-        padding: '28px clamp(14px, 4vw, 24px)',
+        padding: '24px var(--space-gutter)',
         maxWidth: 1120,
         margin: '0 auto',
         boxSizing: 'border-box',
@@ -21,11 +21,11 @@ export function Footer() {
         justifyContent: 'space-between',
         gap: 24,
         rowGap: 12,
-        fontSize: 13.5,
+        ...text('sm'),
         color: 'var(--muted-foreground)',
       }}
     >
-      <span style={{ display: 'flex', alignItems: 'center', gap: 9 }}>
+      <span style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
         <img src="/assets/logo.svg" alt="" style={{ width: 20, height: 23 }} />
         OpenAgent
       </span>
