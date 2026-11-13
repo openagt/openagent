@@ -110,7 +110,8 @@ export function CommandsMenu({
         >
           <Plus className="h-4 w-4" aria-hidden />
         </TooltipTrigger>
-        <TooltipContent>Run a command or load a saved prompt. In the box: / commands · @ projects · # files</TooltipContent>
+        {/* Beside the box, not over the pickers above it. */}
+        <TooltipContent side="left" className="max-w-[15rem]">{'Run a command or load a saved prompt. In the box: /\u00a0commands · @\u00a0projects · #\u00a0files'}</TooltipContent>
       </Tooltip>
       <DropdownMenuContent align="start" className="min-w-[16rem] max-w-[20rem]">
         <DropdownMenuGroup>
