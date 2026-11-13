@@ -121,6 +121,13 @@ describe('Quota (#960)', () => {
     expect(screen.queryByRole('img')).toBeNull()
   })
 
+  test('a read that failed with no reading before it says so, not that it is reading', async () => {
+    view = { windows: [], unavailable: 'fetch-failed' }
+    await show()
+    expect(screen.queryByText(/Reading your usage/)).toBeNull()
+    expect(screen.getByText(/could not read your usage/)).toBeTruthy()
+  })
+
   test('draws the week as one track, labelled with where consumption stands', async () => {
     view = reading(20)
     await show()

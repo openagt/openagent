@@ -412,7 +412,7 @@ function unavailableNote(view: QuotaView, signedOut: boolean): string | undefine
     default:
       return view.windows.length
         ? "Couldn't refresh just now, so these numbers may be a little behind."
-        : 'Reading your usage now.'
+        : 'Claude Code could not read your usage just now. Trying again in a few minutes.'
   }
 }
 
