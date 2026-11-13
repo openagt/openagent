@@ -127,33 +127,36 @@ export function DriverModelMenu({
         <TooltipContent>{said}</TooltipContent>
       </Tooltip>
       <DropdownMenuContent align="end">
-        {drivers.map(a => (
-          <DropdownMenuSub key={a.value}>
-            {/* The tick leads every row of this menu (his pick): the rows' ends carry the account and the way into its models. */}
-            <DropdownMenuSubTrigger>
-              <Check className={cn('h-3.5 w-3.5 shrink-0', a.value === driver ? 'opacity-100' : 'opacity-0')} aria-hidden />
-              {a.icon && <span className="flex h-4 w-4 items-center justify-center">{a.icon}</span>}
-              <span className="flex-1">{a.label}</span>
-              {/* A long name gives way, never how full the account is. */}
-              {a.account && (
-                <span className="flex max-w-48 min-w-0 text-muted-foreground">
-                  <span className="truncate">{a.account.name}</span>
-                  <span className="shrink-0 whitespace-pre">{a.account.percent}</span>
-                </span>
-              )}
-            </DropdownMenuSubTrigger>
-            <DropdownMenuSubContent className="min-w-[15rem]">
-              {a.models.length === 0 && a.modelsNote && <DropdownMenuItem disabled>{a.modelsNote}</DropdownMenuItem>}
-              {a.models.map(m => (
-                <DropdownMenuItem key={m.value} onClick={() => onChange(a.value, m.value)}>
-                  <Check className={cn('h-3.5 w-3.5 shrink-0', a.value === driver && m.value === model ? 'opacity-100' : 'opacity-0')} aria-hidden />
-                  {m.label}
-                </DropdownMenuItem>
-              ))}
-              {a.accounts}
-            </DropdownMenuSubContent>
-          </DropdownMenuSub>
-        ))}
+        <DropdownMenuGroup>
+          <DropdownMenuLabel>Coding agent</DropdownMenuLabel>
+          {drivers.map(a => (
+            <DropdownMenuSub key={a.value}>
+              {/* The tick leads every row of this menu (his pick): the rows' ends carry the account and the way into its models. */}
+              <DropdownMenuSubTrigger>
+                <Check className={cn('h-3.5 w-3.5 shrink-0', a.value === driver ? 'opacity-100' : 'opacity-0')} aria-hidden />
+                {a.icon && <span className="flex h-4 w-4 items-center justify-center">{a.icon}</span>}
+                <span className="flex-1">{a.label}</span>
+                {/* A long name gives way, never how full the account is. */}
+                {a.account && (
+                  <span className="flex max-w-48 min-w-0 text-muted-foreground">
+                    <span className="truncate">{a.account.name}</span>
+                    <span className="shrink-0 whitespace-pre">{a.account.percent}</span>
+                  </span>
+                )}
+              </DropdownMenuSubTrigger>
+              <DropdownMenuSubContent className="min-w-[15rem]">
+                {a.models.length === 0 && a.modelsNote && <DropdownMenuItem disabled>{a.modelsNote}</DropdownMenuItem>}
+                {a.models.map(m => (
+                  <DropdownMenuItem key={m.value} onClick={() => onChange(a.value, m.value)}>
+                    <Check className={cn('h-3.5 w-3.5 shrink-0', a.value === driver && m.value === model ? 'opacity-100' : 'opacity-0')} aria-hidden />
+                    {m.label}
+                  </DropdownMenuItem>
+                ))}
+                {a.accounts}
+              </DropdownMenuSubContent>
+            </DropdownMenuSub>
+          ))}
+        </DropdownMenuGroup>
         {levels.length > 0 && (
           <>
             <DropdownMenuSeparator />
