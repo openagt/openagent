@@ -5,6 +5,7 @@ import type { ModuleAgent } from '@openagt/dashboard/module'
 import type { MountedModules } from '@openagt/dashboard/module/testing'
 import { fakeHost, renderWithHost, type FakeHost } from './test-host.js'
 import { TicketDetailPage } from './TicketDetailPage.js'
+import { planTicketPrompt, workOnTicketPrompt } from '../src/module.js'
 
 // The page reads one ticket with `tickets show <file> --local` through the host, and lifts a
 // claim with `tickets release <file> --force` as an act. `onTicket` is what the command answers:
@@ -231,6 +232,27 @@ describe('TicketDetailPage (#1144)', () => {
     render(<TicketDetailPage projectId="p1" slug="2026-07-20_do-the-thing.md" />)
     fireEvent.click(await screen.findByRole('button', { name: 'login-page' }))
     expect(host.openAgent).toHaveBeenCalledWith('p1', '2026-08-30T10-00-00-000Z')
+  })
+
+  test('a ready ticket is started or planned from its own page, as from its row; a planned, claimed or waiting one offers what its row does', async () => {
+    onTicket.mockResolvedValue(ticket())
+    render(<TicketDetailPage projectId="p1" slug="2026-07-20_do-the-thing.md" />)
+    fireEvent.click(await screen.findByRole('button', { name: 'Start' }))
+    await waitFor(() => expect(host.startRun).toHaveBeenCalledWith('p1', workOnTicketPrompt('2026-07-20_do-the-thing.md')))
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Plan' }).hasAttribute('disabled')).toBe(false))
+    fireEvent.click(screen.getByRole('button', { name: 'Plan' }))
+    await waitFor(() => expect(host.startRun).toHaveBeenCalledWith('p1', planTicketPrompt('2026-07-20_do-the-thing.md')))
+    cleanup()
+    onTicket.mockResolvedValue(ticket({ planned: true }))
+    render(<TicketDetailPage projectId="p1" slug="2026-07-20_do-the-thing.md" />)
+    expect(await screen.findByRole('button', { name: 'Start' })).toBeTruthy()
+    expect(screen.queryByRole('button', { name: 'Plan' })).toBeNull()
+    cleanup()
+    onTicket.mockResolvedValue(ticket({ waiting: 'the design review' }))
+    render(<TicketDetailPage projectId="p1" slug="2026-07-20_do-the-thing.md" />)
+    await screen.findByRole('heading', { name: 'Do the thing' })
+    expect(screen.queryByRole('button', { name: 'Start' })).toBeNull()
+    expect(screen.queryByRole('button', { name: 'Plan' })).toBeNull()
   })
 
   test('a claim reads as its run\'s short name once the run has one, as the sidebar names it', async () => {
