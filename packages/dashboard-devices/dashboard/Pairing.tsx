@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { Laptop, Loader2 } from 'lucide-react'
-import { Button, Checkbox, Dialog, useModuleHost } from '@openagt/dashboard/module'
+import { Button, Checkbox, Dialog, useModuleHost, useOpenAgentDown } from '@openagt/dashboard/module'
 import { Joined, Waiting } from './codes.js'
 import { addDevice, answerAsk, askComputer, cancelAsk, hearAnswer, loadAsks, type AskHere, type AskedThere, type FoundComputer } from './devices.js'
 import { Problem } from './parts.js'
@@ -176,6 +176,7 @@ export function AskPopup() {
   const [closed, setClosed] = useState<ReadonlySet<string>>(new Set())
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | undefined>()
+  const down = useOpenAgentDown()
 
   useEffect(() => {
     let stopped = false
@@ -232,10 +233,10 @@ export function AskPopup() {
         </p>
         {error !== undefined && <Problem>{error}</Problem>}
         <div className="flex justify-end gap-2">
-          <Button size="sm" variant="outline" disabled={busy} onClick={() => void answer(false)}>
+          <Button size="sm" variant="outline" disabled={busy || down} onClick={() => void answer(false)}>
             Deny
           </Button>
-          <Button size="sm" disabled={busy} onClick={() => void answer(true)}>
+          <Button size="sm" disabled={busy || down} onClick={() => void answer(true)}>
             {busy && <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden />}
             Allow
           </Button>
