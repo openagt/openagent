@@ -3,6 +3,7 @@ import { Card, CardContent, CardHeader, CardTitle } from './ui/card.js'
 import { ClaudeLogo, CodexLogo } from './driver-logos.js'
 import { Skeleton } from './ui/skeleton.js'
 import type { DriverName } from '../../src/client.js'
+import { takeLostFocus } from '../lib/lost-focus.js'
 import { useMountedModules } from '../lib/use-modules.js'
 import { useAgentAccounts } from './AgentAccounts.js'
 import { GitHostsCard } from './GitHosts.js'
@@ -86,7 +87,9 @@ function AgentSetup({ driver, title, Logo }: { driver: DriverName; title: string
       </CardHeader>
       <CardContent className="space-y-2">
         {state.ready ? (
-          <p role="status" className="text-sm text-muted-foreground">{`${title} is ready: runs can start with it.`}</p>
+          <p ref={takeLostFocus} role="status" tabIndex={-1} className="text-sm text-muted-foreground outline-none">
+            {`${title} is ready: runs can start with it.`}
+          </p>
         ) : (
           <>
             <p className="text-sm text-muted-foreground">{agentWords(state)}</p>

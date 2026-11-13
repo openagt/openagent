@@ -63,6 +63,17 @@ test('a failed update says what failed and what to do before the program\'s line
   expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Update Claude Code' }))
 })
 
+test('once the focused press worked, the focus is on the line that says the version it installed', async () => {
+  models.onAgentUpdates.mockResolvedValueOnce([{ agent: 'codex', installed: '0.144.4', latest: '0.166.0' }]).mockResolvedValue([])
+  models.sendAgentUpdate.mockResolvedValue({ ok: true, version: '0.166.0' })
+  models.onModels.mockResolvedValue({ 'claude-code': { models: [] }, codex: { models: [] } })
+  render(<AgentUpdates />)
+  const press = await screen.findByRole('button', { name: 'Update Codex' })
+  press.focus()
+  fireEvent.click(press)
+  expect(await screen.findByRole('status')).toBe(document.activeElement)
+})
+
 test('nothing when every agent is up to date', async () => {
   models.onAgentUpdates.mockResolvedValue([])
   const { container } = render(<AgentUpdates />)

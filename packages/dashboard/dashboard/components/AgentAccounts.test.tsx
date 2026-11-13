@@ -97,6 +97,18 @@ describe('Agent accounts', () => {
     expect((await within(card).findByRole('status', {}, { timeout: 5000 })).textContent).toBe('Claude Code is ready: runs can start with it.')
   })
 
+  test('once the focused press worked, the focus is on the line that says Claude Code is ready', async () => {
+    views({ now: NOW, accounts: [{ id: 'This computer', name: 'This computer', own: true, windows: [] }] })
+    states({ driver: 'claude-code', ready: false, problem: '`claude` is not logged in.', fix: { kind: 'log-in', command: 'claude auth login' } })
+    logins.sendAgentFix.mockImplementation(async () => (states({ driver: 'claude-code', ready: true }), { ok: true }))
+    render(<AccountsList />)
+    const card = await screen.findByRole('region', { name: 'Claude Code' })
+    const press = await within(card).findByRole('button', { name: 'Log this computer in to Claude Code' })
+    press.focus()
+    fireEvent.click(press)
+    expect(await within(card).findByRole('status', {}, { timeout: 5000 })).toBe(document.activeElement)
+  })
+
   test('an address in a failed login\u2019s words is a link', async () => {
     views({ now: NOW, accounts: [{ id: 'This computer', name: 'This computer', own: true, windows: [] }] })
     states({ driver: 'claude-code', ready: false, problem: '`claude` is not logged in.', fix: { kind: 'log-in', command: 'claude auth login' }, failed: 'Open https://auth.example/device?code=1 to sign in.\nError logging in: access_denied' })
