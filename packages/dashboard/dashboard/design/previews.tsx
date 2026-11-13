@@ -98,7 +98,7 @@ function StatusPalette() {
     <div className="space-y-4">
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
         {STATUS.map(([label, fill, value]) => (
-          <div key={label} className="flex items-center gap-2.5">
+          <div key={label} className="flex items-center gap-2">
             <span className={`h-8 w-8 shrink-0 rounded-md ${fill}`} />
             <div className="min-w-0">
               <div className="truncate text-xs font-medium">{label}</div>
@@ -205,7 +205,7 @@ function Buttons() {
           <span className="text-xs">IC</span>
         </Button>
         <Button size="icon-sm" aria-label="Icon small">
-          <span className="text-[10px]">S</span>
+          <span className="text-xs">S</span>
         </Button>
       </Labelled>
       <Labelled label="States">

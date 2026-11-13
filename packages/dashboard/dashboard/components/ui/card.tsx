@@ -37,7 +37,7 @@ export function CardTitleLink({ icon, children, segment, onOpen, className }: { 
       <a
         href={services.pageHref(segment)}
         onClick={inPlace(onOpen)}
-        className="group -mx-1 inline-flex items-center gap-2 rounded px-1 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-primary)]"
+        className="group -mx-1 inline-flex items-center gap-2 rounded-sm px-1 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-primary)]"
       >
         {icon}
         {children}

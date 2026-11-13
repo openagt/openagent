@@ -237,18 +237,9 @@
     "text-[10px]": 1,
     "text-muted-foreground/70": 1
   },
-  "dashboard/dashboard/components/ui/card.tsx": {
-    "rounded": 1
-  },
-  "dashboard/dashboard/components/ui/copy-button.tsx": {
-    "rounded": 1
-  },
   "dashboard/dashboard/components/ui/gauge.tsx": {
     "duration-500": 1,
     "text-[9px]": 2
-  },
-  "dashboard/dashboard/components/ui/message-scroller.tsx": {
-    "duration-200": 1
   },
   "dashboard/dashboard/components/ui/resizable.tsx": {
     "group-aria-[orientation=horizontal]/handle:h-[3px]": 1
@@ -261,10 +252,6 @@
     "mx-3.5": 1,
     "px-2.5": 1,
     "text-sidebar-foreground/70": 1
-  },
-  "dashboard/dashboard/design/previews.tsx": {
-    "gap-2.5": 1,
-    "text-[10px]": 1
   },
   "skill-account-rotation/dashboard/AccountsCard.tsx": {
     "gap-2.5": 1,
