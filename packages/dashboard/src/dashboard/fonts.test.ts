@@ -24,3 +24,25 @@ test('every font Settings › Appearance offers has its faces in the built style
     'a font with no faces in the stylesheet: import its @fontsource package in dashboard/lib/fonts.ts',
   )
 })
+
+// The SIL Open Font License asks that its text go with every copy of a font: each build carries
+// `LICENSE-fonts.txt` (scripts/font-licenses.mjs), naming every family its stylesheets declare.
+for (const [build, dir] of [
+  ['the dashboard', '../../dist/dashboard-bundle/'],
+  ['the website the dashboard carries', '../../dist/website/'],
+] as const)
+  test(`every font ${build} ships comes with its licence`, () => {
+    const root = fileURLToPath(new URL(dir, import.meta.url))
+    assert.ok(existsSync(root), `${build} is not built: run \`pnpm build\` first`)
+    const css = readdirSync(root, { recursive: true, encoding: 'utf8' })
+      .filter(file => file.endsWith('.css'))
+      .map(file => readFileSync(join(root, file), 'utf8'))
+      .join('')
+    const shipped = new Set([...css.matchAll(/@font-face\{[^}]*?font-family:\s*["']?([^;"'}]+)/g)].map(match => match[1]!.trim()))
+    assert.ok(shipped.size > 0, `${build} ships no font: this test reads nothing`)
+    const licenses = existsSync(join(root, 'LICENSE-fonts.txt')) ? readFileSync(join(root, 'LICENSE-fonts.txt'), 'utf8') : ''
+    const named = new Set(
+      [...licenses.matchAll(/^(.+) \(@fontsource[^)]*\)\n\n(.+)/gm)].filter(([, , text]) => text!.length > 0).flatMap(([, families]) => families!.split(', ')),
+    )
+    assert.deepEqual([...shipped].filter(family => !named.has(family)), [], 'a font shipped without its licence in LICENSE-fonts.txt')
+  })
