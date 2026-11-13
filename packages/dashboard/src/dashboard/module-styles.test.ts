@@ -97,11 +97,12 @@ function groups(sources: Map<string, string>, shared: Map<string, { file: string
       found.push({ file, classes: match[0] === 'className=' ? written : merged(written) })
     }
     for (const [component, own] of shared) {
-      if (file === own.file) continue
+      // A file's own component of the same name is not the shared one.
+      if (file === own.file || new RegExp(`\\bfunction ${component}\\b`).test(code)) continue
       for (const match of code.matchAll(new RegExp(`<${component}\\b`, 'g'))) {
         const tag = openingTag(code, match.index)
-        const className = /className=/.exec(tag)
-        if (className) found.push({ file, classes: merged([...words(own.code), ...words(balanced(tag, className.index + 10))]) })
+        const className = ownClassName(tag)
+        if (className !== undefined) found.push({ file, classes: merged([...words(own.code), ...words(balanced(tag, className + 10))]) })
       }
     }
   }
@@ -121,6 +122,18 @@ function balanced(code: string, from: number): string {
     if (depth <= 0 && i > from) return code.slice(from, i + 1)
   }
   return code.slice(from)
+}
+
+/** Where an opening tag's own `className=` starts: not one of an element passed in another prop (`leading={<Icon className=…/>}`). */
+function ownClassName(tag: string): number | undefined {
+  let depth = 0
+  for (let i = 0; i < tag.length; i++) {
+    const c = tag[i]!
+    if (c === '{') depth++
+    else if (c === '}') depth--
+    else if (depth === 0 && tag.startsWith('className=', i)) return i
+  }
+  return undefined
 }
 
 /** A JSX element's opening tag, from its `<`. */
