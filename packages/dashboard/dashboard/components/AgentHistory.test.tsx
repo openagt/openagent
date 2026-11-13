@@ -61,11 +61,26 @@ function agent(over: Partial<AgentMeta> = {}): AgentMeta {
 const renderRail = (ui: ReactElement) => render(<SidebarProvider>{ui}</SidebarProvider>)
 
 describe('AgentHistory (#785)', () => {
+  test('a row and a nav item are links to their pages: a plain click goes there in place, a Ctrl+click is the browser\'s, for a new tab', () => {
+    const onSelect = vi.fn()
+    const onPage = vi.fn()
+    renderRail(<AgentHistory projectId="p1" scope="p1" agents={[agent({ status: 'done' })]} selectedAgentId={null} onSelect={onSelect} pages={[{ segment: 'logs', label: 'Logs' }]} onPage={onPage} hrefOf={route => `/${route.scope ?? route.projectId}/${route.page ?? route.agentId}`} />)
+    const row = screen.getByRole('link', { name: /Welcome/ })
+    const logs = screen.getByRole('link', { name: 'Logs' })
+    expect([row.getAttribute('href'), logs.getAttribute('href')]).toEqual(['/p1/run-1', '/p1/logs'])
+    expect(fireEvent.click(row, { ctrlKey: true })).toBe(true)
+    expect(fireEvent.click(logs, { button: 1 })).toBe(true)
+    expect([onSelect.mock.calls, onPage.mock.calls]).toEqual([[], []])
+    expect(fireEvent.click(row)).toBe(false)
+    expect(fireEvent.click(logs)).toBe(false)
+    expect([onSelect.mock.calls, onPage.mock.calls]).toEqual([[['run-1']], [['logs']]])
+  })
+
   test('a working run reads as running and animates', () => {
     // One line: the circle says what the row used to print as a word, and the row's name says it too.
     const { container } = renderRail(<AgentHistory projectId="p1" scope="p1" agents={[agent()]} selectedAgentId={null} onSelect={() => {}} />)
     expect(screen.getByLabelText('running')).toBeTruthy()
-    expect(screen.getByRole('button', { name: /· running ·/ })).toBeTruthy()
+    expect(screen.getByRole('link', { name: /· running ·/ })).toBeTruthy()
     expect(container.querySelector('.animate-pulse')).toBeTruthy()
   })
 
@@ -117,7 +132,7 @@ describe('AgentHistory (#785)', () => {
         <AgentHistory projectId="p1" scope="p1" agents={[]} selectedAgentId="run-2" onSelect={() => {}} startTick={1} startIntent="add dark mode" />
       </SidebarProvider>,
     )
-    const rows = [...container.querySelectorAll('button')]
+    const rows = [...container.querySelectorAll('a, button')]
     const home = rows.find(row => row.textContent?.trim() === 'New agent session')
     const starting = rows.find(row => row.hasAttribute('data-stand-in'))
     expect(starting?.className).toContain('bg-accent')
@@ -133,7 +148,7 @@ describe('AgentHistory (#785)', () => {
         <AgentHistory projectId="p1" scope={null} agents={[]} recentAgents={[]} selectedAgentId="run-2" onSelect={() => {}} startTick={1} startIntent="add dark mode" startId="run-2" startProjectName="alpha" />
       </SidebarProvider>,
     )
-    const row = [...container.querySelectorAll('button')].find(row => row.hasAttribute('data-stand-in'))!
+    const row = [...container.querySelectorAll('a, button')].find(row => row.hasAttribute('data-stand-in'))!
     // The run's own row will carry a name seconds from now, so this one holds the place: printing
     // the prompt here is what made the rail flicker, the prompt swapped for the name a beat later.
     expect(row.textContent).toBe('alpha')
@@ -152,7 +167,7 @@ describe('AgentHistory (#785)', () => {
         <AgentHistory projectId="p1" scope="p1" agents={[]} selectedAgentId="run-3" onSelect={() => {}} startTick={1} startIntent="add a footer" startId="run-3" startProjectName="alpha" />
       </SidebarProvider>,
     )
-    const standInRow = [...container.querySelectorAll('button')].find(row => row.hasAttribute('data-stand-in'))!
+    const standInRow = [...container.querySelectorAll('a, button')].find(row => row.hasAttribute('data-stand-in'))!
     expect(standInRow.textContent).toBe('')
     expect(standInRow.getAttribute('aria-label')).toBe('Naming this session · running · just now')
   })
@@ -167,7 +182,7 @@ describe('AgentHistory (#785)', () => {
       </SidebarProvider>
     )
     rerender(started())
-    const standIn = () => [...container.querySelectorAll('button')].find(row => row.hasAttribute('data-stand-in'))!
+    const standIn = () => [...container.querySelectorAll('a, button')].find(row => row.hasAttribute('data-stand-in'))!
     expect(standIn().querySelector('.rail-title .animate-pulse')).toBeTruthy()
     rerender(started('Fix flaky login test'))
     expect(standIn().querySelector('.rail-title .animate-pulse')).toBeNull()
@@ -185,7 +200,7 @@ describe('AgentHistory (#785)', () => {
         <AgentHistory projectId="p1" scope="p1" agents={[]} selectedAgentId="run-4" onSelect={() => {}} startTick={1} startIntent="add a footer" startId="run-4" />
       </SidebarProvider>,
     )
-    const row = [...container.querySelectorAll('button')].find(row => row.hasAttribute('data-stand-in'))!
+    const row = [...container.querySelectorAll('a, button')].find(row => row.hasAttribute('data-stand-in'))!
     expect(row.textContent).toBe('add a footer')
     expect(row.querySelector('.rail-title .animate-pulse')).toBeNull()
   })
@@ -203,7 +218,7 @@ describe('AgentHistory (#785)', () => {
         <AgentHistory projectId="p1" scope="p1" agents={[]} selectedAgentId={null} onSelect={() => {}} startTick={1} startIntent="hi" startId="run-9" />
       </SidebarProvider>,
     )
-    expect([...container.querySelectorAll('button')].some(row => row.hasAttribute('data-stand-in'))).toBe(true)
+    expect([...container.querySelectorAll('a, button')].some(row => row.hasAttribute('data-stand-in'))).toBe(true)
 
     // The poll catches up: the agent is already over, and was never seen running.
     rerender(
@@ -219,7 +234,7 @@ describe('AgentHistory (#785)', () => {
         />
       </SidebarProvider>,
     )
-    const rows = [...container.querySelectorAll('button')]
+    const rows = [...container.querySelectorAll('a, button')]
     expect(rows.some(row => row.hasAttribute('data-stand-in'))).toBe(false)
     expect(rows.some(row => row.getAttribute('aria-label')?.includes('failed'))).toBe(true)
   })
@@ -236,7 +251,7 @@ describe('AgentHistory (#785)', () => {
         <AgentHistory projectId="p1" scope="p1" agents={[older]} selectedAgentId={null} onSelect={() => {}} startTick={1} startIntent="hi" startId="run-new" />
       </SidebarProvider>,
     )
-    expect([...container.querySelectorAll('button')].some(row => row.hasAttribute('data-stand-in'))).toBe(true)
+    expect([...container.querySelectorAll('a, button')].some(row => row.hasAttribute('data-stand-in'))).toBe(true)
   })
 
   test('a run the list already holds when its start comes back gets no starting row, running or ended', () => {
@@ -246,7 +261,7 @@ describe('AgentHistory (#785)', () => {
     const { container, rerender } = renderRail(
       <AgentHistory projectId="p1" scope="p1" agents={[running]} selectedAgentId={null} onSelect={() => {}} startTick={0} startIntent="" />,
     )
-    const standIn = () => [...container.querySelectorAll('button')].some(row => row.hasAttribute('data-stand-in'))
+    const standIn = () => [...container.querySelectorAll('a, button')].some(row => row.hasAttribute('data-stand-in'))
     rerender(
       <SidebarProvider>
         <AgentHistory projectId="p1" scope="p1" agents={[running]} selectedAgentId="run-7" onSelect={() => {}} startTick={1} startIntent="hi" startId="run-7" />
@@ -275,7 +290,7 @@ describe('AgentHistory rows', () => {
     const main = agent({ id: 'main', target: 'remote', remoteLabel: 'my-laptop', driver: 'codex' })
     const sub = agent({ id: 'sub', parent: 'main', status: 'done', driver: 'codex' })
     renderRail(<AgentHistory projectId="p1" scope="p1" agents={[main, sub]} selectedAgentId={null} onSelect={() => {}} />)
-    const row = screen.getByLabelText('Runs on my-laptop').closest('button')!
+    const row = screen.getByLabelText('Runs on my-laptop').closest('a')!
     const marks = [...row.querySelectorAll('[aria-label]')].map(mark => mark.getAttribute('aria-label'))
     expect(marks.at(-1)).toBe('Codex')
     expect(marks.indexOf('Runs on my-laptop')).toBeLessThan(marks.indexOf('Codex'))
@@ -303,7 +318,7 @@ describe('AgentHistory rows', () => {
     const dot = screen.getByRole('img', { name: 'status unknown' })
     expect(dot.getAttribute('class')).toContain('border-dashed')
     expect(dot.getAttribute('class')).not.toContain('animate-pulse')
-    expect(dot.closest('button')!.getAttribute('aria-label')).toContain('status unknown')
+    expect(dot.closest('a')!.getAttribute('aria-label')).toContain('status unknown')
   })
 
   test('a run another machine started says whose it is; this daemon\'s own does not (#1067, #1648)', () => {
@@ -332,7 +347,7 @@ describe('AgentHistory rows', () => {
     // Files left uncommitted come first: committing them is the run's next step.
     expect(screen.getByLabelText('Needs commit · 1 file').querySelector('svg')!.getAttribute('class')).toContain('lucide-file-pen')
     // Just before the logo, where a pull request's mark stands.
-    const row = screen.getByLabelText('Needs PR · 2 commits').closest('button')!
+    const row = screen.getByLabelText('Needs PR · 2 commits').closest('a')!
     const marks = [...row.querySelectorAll('[aria-label]')].map(mark => mark.getAttribute('aria-label'))
     expect(marks.slice(-2)).toEqual(['Needs PR · 2 commits', 'Claude Code'])
     expect(row.getAttribute('aria-label')).toContain('Needs PR · 2 commits')
@@ -364,9 +379,9 @@ describe('AgentHistory rows', () => {
     expect(glyph('PR #15 closed')).toContain('text-danger')
     // A request whose state is not known has no mark, which would read as one more state; its number stays in the row's sentence.
     expect(screen.getAllByLabelText(/^PR #/)).toHaveLength(4)
-    expect(screen.getByRole('button', { name: /PR #16$/ })).toBeTruthy()
+    expect(screen.getByRole('link', { name: /PR #16$/ })).toBeTruthy()
     // Just before the logo, so the PR marks stand in one column.
-    const row = screen.getByLabelText('PR #12 open').closest('button')!
+    const row = screen.getByLabelText('PR #12 open').closest('a')!
     const marks = [...row.querySelectorAll('[aria-label]')].map(mark => mark.getAttribute('aria-label'))
     expect(marks.slice(-2)).toEqual(['PR #12 open', 'Claude Code'])
     expect(row.getAttribute('aria-label')).toContain('PR #12 open')
@@ -404,7 +419,7 @@ describe('AgentHistory rows', () => {
     )
     expect(screen.getByText('fix login')).toBeTruthy()
     // Which project a row belongs to is in the row's own name now, not printed under it.
-    expect(screen.getByRole('button', { name: /fix login · running · alpha/ })).toBeTruthy()
+    expect(screen.getByRole('link', { name: /fix login · running · alpha/ })).toBeTruthy()
     fireEvent.click(screen.getByText('add tests'))
     expect(picked).toEqual(['proj-b', 'r-b'])
   })
@@ -419,7 +434,7 @@ describe('whose run a row is', () => {
   })
 
   const ada = { email: 'ada@x.dev', login: 'ada', avatar: 'https://avatars.githubusercontent.com/u/1' }
-  const row = (name: RegExp) => screen.getByRole('button', { name })
+  const row = (name: RegExp) => screen.getByRole('link', { name })
 
   test("two letters at first, the person's picture once the git host said, before the agent's logo; pointed at, it says who", async () => {
     onGitHostPeople.mockResolvedValue([ada])
@@ -550,7 +565,7 @@ describe('subagents on the rail', () => {
     let picked: string | null = null
     renderRail(<AgentHistory projectId="p1" scope="p1" agents={[sub('c2'), sub('c1'), main]} selectedAgentId={null} onSelect={id => (picked = id)} />)
     const fold = screen.getByRole('button', { name: '2 agents' })
-    expect(fold.closest('button')?.textContent).toContain('split the login work')
+    expect(fold.closest('a')?.textContent).toContain('split the login work')
     fireEvent.click(fold)
     expect(screen.getByText('task c1')).toBeTruthy()
     expect(picked).toBeNull()
@@ -610,7 +625,7 @@ describe('subagents on the rail', () => {
     renderRail(<AgentHistory projectId={null} agents={[]} recentAgents={recentAgents} selectedAgentId={null} onSelect={() => {}} />)
     expect(screen.getAllByRole('button', { name: /1 agent/ })).toHaveLength(1)
     // The subagent's row does not name the project again: it is its main agent's.
-    expect(screen.getAllByRole('button', { name: /alpha/ })).toHaveLength(1)
+    expect(screen.getAllByRole('link', { name: /alpha/ })).toHaveLength(1)
     const titles = screen.getAllByText(/^(split the login work|task c1|other project)$/).map(el => el.textContent)
     expect(titles).toEqual(['other project', 'split the login work', 'task c1'])
   })
@@ -649,7 +664,7 @@ describe('AgentHistory New button (#new-button)', () => {
         onSelect={() => {}}
       />,
     )
-    const button = screen.getByRole('button', { name: 'New agent session' })
+    const button = screen.getByRole('link', { name: 'New agent session' })
     expect(button.getAttribute('aria-haspopup')).toBeNull()
     fireEvent.click(button)
     expect(started).toBe('session')
@@ -902,14 +917,14 @@ describe('the project select (#1513)', () => {
       { projectId: 'p2', projectName: 'beta', agent: agent({ id: 'b1', status: 'done', intent: 'second' }) },
     ]
     renderRail(<AgentHistory projectId="p2" agents={[]} recentAgents={recentAgents} selectedAgentId="b1" onSelect={() => {}} projects={[stranded, idle]} />)
-    expect(screen.getByText('second').closest('button')?.className).toContain('bg-accent')
-    expect(screen.getByText('first').closest('button')?.className).not.toContain('bg-accent ')
+    expect(screen.getByText('second').closest('a')?.className).toContain('bg-accent')
+    expect(screen.getByText('first').closest('a')?.className).not.toContain('bg-accent ')
   })
 
   test('with all projects showing, New opens a session with no project even on a project\'s own page', () => {
     let started: string | null = null
     renderRail(<AgentHistory projectId="p2" agents={[]} recentAgents={[]} selectedAgentId={null} onSelect={() => {}} projects={[stranded, idle]} onNewAgentInProject={id => (started = id)} />)
-    fireEvent.click(screen.getByRole('button', { name: 'New agent session' }))
+    fireEvent.click(screen.getByRole('link', { name: 'New agent session' }))
     expect(started).toBe('session')
   })
 })
@@ -919,13 +934,13 @@ describe('the rail marks the page that is open', () => {
   /** The person's row at the rail's foot, which opens their menu with Settings in it. */
   const person = () => screen.getByRole('button', { name: /settings$/i })
   /** Which of the rail's ways somewhere say they are the page open now: the rows at its top, and the person's row at its foot. */
-  const current = () => [['Overview', screen.getByRole('button', { name: 'Overview' })], ['Logs', screen.getByRole('button', { name: 'Logs' })], ['Settings', person()]].filter(([, row]) => (row as HTMLElement).getAttribute('aria-current') === 'page').map(([name]) => name)
+  const current = () => [['Overview', screen.getByRole('link', { name: 'Overview' })], ['Logs', screen.getByRole('link', { name: 'Logs' })], ['Settings', person()]].filter(([, row]) => (row as HTMLElement).getAttribute('aria-current') === 'page').map(([name]) => name)
 
   test('with no project, no page and no Settings open, the Overview row is the one marked', () => {
     renderRail(<AgentHistory projectId={null} agents={[]} recentAgents={[]} selectedAgentId={null} onSelect={() => {}} pages={PAGES} />)
     expect(current()).toEqual(['Overview'])
     // Not marked is no attribute at all, on a row as on the person's.
-    expect(screen.getByRole('button', { name: 'Logs' }).hasAttribute('aria-current')).toBe(false)
+    expect(screen.getByRole('link', { name: 'Logs' }).hasAttribute('aria-current')).toBe(false)
     expect(person().hasAttribute('aria-current')).toBe(false)
   })
 
@@ -955,7 +970,7 @@ describe('AgentHistory reads a log ahead', () => {
 
   test('the pointer reaching an ended agent\'s row reads its log before any click, once', () => {
     renderRail(<AgentHistory projectId="p1" scope="p1" agents={[agent({ status: 'done' })]} selectedAgentId={null} onSelect={() => {}} />)
-    const row = screen.getByText("replace 'Hello, world!' with 'Welcome!'").closest('button')!
+    const row = screen.getByText("replace 'Hello, world!' with 'Welcome!'").closest('a')!
     expect(onAgent).not.toHaveBeenCalled()
     fireEvent.pointerEnter(row)
     fireEvent.pointerEnter(row)
@@ -964,20 +979,20 @@ describe('AgentHistory reads a log ahead', () => {
 
   test('the keyboard reaching the row reads it too', () => {
     renderRail(<AgentHistory projectId="p1" scope="p1" agents={[agent({ status: 'failed' })]} selectedAgentId={null} onSelect={() => {}} />)
-    fireEvent.focus(screen.getByText("replace 'Hello, world!' with 'Welcome!'").closest('button')!)
+    fireEvent.focus(screen.getByText("replace 'Hello, world!' with 'Welcome!'").closest('a')!)
     expect(onAgent.mock.calls).toEqual([['p1', 'run-1']])
   })
 
   test('a working agent\'s row reads nothing: its page shows the live feed, not a saved log', () => {
     renderRail(<AgentHistory projectId="p1" scope="p1" agents={[agent()]} selectedAgentId={null} onSelect={() => {}} />)
-    fireEvent.pointerEnter(screen.getByText("replace 'Hello, world!' with 'Welcome!'").closest('button')!)
+    fireEvent.pointerEnter(screen.getByText("replace 'Hello, world!' with 'Welcome!'").closest('a')!)
     expect(onAgent).not.toHaveBeenCalled()
   })
 
   test('with every project shown, a row reads the log in its own project', () => {
     const recent = { projectId: 'p2', projectName: 'other', agent: agent({ status: 'done' }) }
     renderRail(<AgentHistory projectId={null} scope={null} agents={[]} recentAgents={[recent]} selectedAgentId={null} onSelect={() => {}} />)
-    fireEvent.pointerEnter(screen.getByText("replace 'Hello, world!' with 'Welcome!'").closest('button')!)
+    fireEvent.pointerEnter(screen.getByText("replace 'Hello, world!' with 'Welcome!'").closest('a')!)
     expect(onAgent.mock.calls).toEqual([['p2', 'run-1']])
   })
 })
@@ -990,19 +1005,19 @@ test('Agents and Permissions are rows of the rail, after the modules\u2019 pages
       <AgentHistory projectId={null} agents={[]} selectedAgentId={null} onSelect={vi.fn()} pages={[{ segment: 'logs', label: 'Logs' }]} onPage={onPage} />
     </SidebarProvider>,
   )
-  const labels = screen.getAllByRole('button').map(button => button.textContent)
+  const labels = screen.getAllByRole('link').map(link => link.textContent)
   expect(labels.indexOf('Agents')).toBe(labels.indexOf('Logs') + 1)
   expect(labels.indexOf('Permissions')).toBe(labels.indexOf('Agents') + 1)
-  fireEvent.click(screen.getByRole('button', { name: 'Agents' }))
+  fireEvent.click(screen.getByRole('link', { name: 'Agents' }))
   expect(onPage).toHaveBeenCalledWith('agents')
-  fireEvent.click(screen.getByRole('button', { name: 'Permissions' }))
+  fireEvent.click(screen.getByRole('link', { name: 'Permissions' }))
   expect(onPage).toHaveBeenCalledWith('permissions')
   rerender(
     <SidebarProvider>
       <AgentHistory projectId={null} agents={[]} selectedAgentId={null} onSelect={vi.fn()} pages={[{ segment: 'logs', label: 'Logs' }]} onPage={onPage} activePage="permissions" />
     </SidebarProvider>,
   )
-  expect(screen.getByRole('button', { name: 'Permissions' }).getAttribute('aria-current')).toBe('page')
+  expect(screen.getByRole('link', { name: 'Permissions' }).getAttribute('aria-current')).toBe('page')
 })
 
 // A phone has no width for the rail beside the page (#1824): it is a sheet over the page.
@@ -1019,12 +1034,12 @@ describe('AgentHistory on a phone', () => {
         </SidebarProvider>
       )
       render(ui)
-      expect(screen.queryByRole('button', { name: 'Logs' })).toBeNull()
+      expect(screen.queryByRole('link', { name: 'Logs' })).toBeNull()
 
       fireEvent.click(screen.getByRole('button', { name: 'Open the menu' }))
-      fireEvent.click(await screen.findByRole('button', { name: 'Logs' }))
+      fireEvent.click(await screen.findByRole('link', { name: 'Logs' }))
       expect(onPage).toHaveBeenCalledWith('logs')
-      await waitFor(() => expect(screen.queryByRole('button', { name: 'Logs' })).toBeNull())
+      await waitFor(() => expect(screen.queryByRole('link', { name: 'Logs' })).toBeNull())
 
       // An agent's row closes it too.
       fireEvent.click(screen.getByRole('button', { name: 'Open the menu' }))
@@ -1038,7 +1053,7 @@ describe('AgentHistory on a phone', () => {
 
   test('on a wide screen the rail is a column, always there', () => {
     renderRail(<AgentHistory projectId={null} scope="p1" agents={[]} selectedAgentId={null} onSelect={() => {}} pages={[{ segment: 'logs', label: 'Logs' }]} />)
-    expect(screen.getByRole('button', { name: 'Logs' })).toBeTruthy()
+    expect(screen.getByRole('link', { name: 'Logs' })).toBeTruthy()
   })
 
   test('the list is in the order picked beside "Log": by creation unless picked otherwise, whatever order it was given in', async () => {
@@ -1047,7 +1062,7 @@ describe('AgentHistory on a phone', () => {
       agent({ id: 'old', status: 'waiting', startedAt: '2026-10-18T10:00:00Z', updatedAt: '2026-10-20T09:00:00Z', title: 'Old question' }),
       agent({ id: 'new', status: 'done', startedAt: '2026-10-20T08:00:00Z', updatedAt: '2026-10-20T08:01:00Z', title: 'New work' }),
     ]
-    const names = () => screen.getAllByRole('button', { name: / · / }).map(row => row.getAttribute('aria-label')!.split(' · ')[0])
+    const names = () => screen.getAllByRole('link', { name: / · / }).map(row => row.getAttribute('aria-label')!.split(' · ')[0])
     renderRail(<AgentHistory projectId="p1" scope="p1" agents={agents} selectedAgentId={null} onSelect={() => {}} />)
     expect(names()).toEqual(['New work', 'Old question'])
     cleanup()

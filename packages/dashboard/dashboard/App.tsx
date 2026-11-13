@@ -160,7 +160,10 @@ export function App() {
 
   // Every navigation keeps the picked project, and one into another project's page, or into a
   // page in a named project, picks that project: the pages never show a project the select does not name.
-  const go = (next: Route, options?: { replace?: boolean }) => navigate({ ...next, ...(scope ? { scope: next.scope ?? next.projectId ?? scope } : {}) }, options)
+  const scoped = (next: Route): Route => ({ ...next, ...(scope ? { scope: next.scope ?? next.projectId ?? scope } : {}) })
+  const go = (next: Route, options?: { replace?: boolean }) => navigate(scoped(next), options)
+  /** Where `go` would take the page: a link's address. */
+  const hrefOf = (next: Route) => formatRoute(scoped(next), addresses)
 
   // Pick the one project every page shows, or all of them. The page stays, with what it mirrored
   // into the query (a list's filters), unless it is another project's: its launcher becomes the
@@ -641,6 +644,7 @@ export function App() {
           activePage={pageSegment}
           onPage={showPage}
           interventionCount={interventions.length}
+          hrefOf={hrefOf}
         />
         {/* On a phone the sidebar is a sheet, and this button, over the page's top left corner,
             opens it. An agent's page and the "New agent session" page keep that corner of their top row

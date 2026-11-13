@@ -82,7 +82,7 @@ describe('module pages in the shell (#1774)', () => {
     window.history.replaceState(null, '', '/elsewhere')
     render(<App />)
 
-    const row = await screen.findByRole('button', { name: 'Logs' })
+    const row = await screen.findByRole('link', { name: 'Logs' })
     fireEvent.click(row)
     expect(window.location.pathname).toBe('/logs')
     expect(await screen.findByText('runs of app')).toBeTruthy()
@@ -461,12 +461,12 @@ describe('the project select (#1513)', () => {
     answerTwo()
     window.history.replaceState(null, '', '/site/overview')
     render(<App />)
-    fireEvent.click(await screen.findByRole('button', { name: 'Logs' }))
+    fireEvent.click(await screen.findByRole('link', { name: 'Logs' }))
     expect(url()).toBe('/site/logs')
     expect(await screen.findByText('runs of site')).toBeTruthy()
     // The sidebar marks the page that is open, also with Settings open over it. The Overview row's
     // name carries its Human Queue count here, and the person's row ends in "settings", hence the patterns.
-    const marked = () => ['Overview', 'Logs', 'Settings'].filter(name => screen.getByRole('button', { name: name === 'Settings' ? /settings$/i : new RegExp(`^${name}`) }).getAttribute('aria-current') === 'page')
+    const marked = () => ['Overview', 'Logs', 'Settings'].filter(name => screen.getByRole(name === 'Settings' ? 'button' : 'link', { name: name === 'Settings' ? /settings$/i : new RegExp(`^${name}`) }).getAttribute('aria-current') === 'page')
     expect(marked()).toEqual(['Logs'])
     fireEvent.click(screen.getByRole('button', { name: /settings$/i }))
     fireEvent.click(screen.getByRole('menuitem', { name: 'Settings' }))
@@ -494,7 +494,7 @@ describe('the project select (#1513)', () => {
     answerTwo()
     window.history.replaceState(null, '', '/site/overview')
     render(<App />)
-    fireEvent.click(await screen.findByRole('button', { name: 'Logs' }))
+    fireEvent.click(await screen.findByRole('link', { name: 'Logs' }))
     window.history.replaceState({ written: 'by the page' }, '')
     fireEvent.click(screen.getByRole('button', { name: /settings$/i }))
     fireEvent.click(screen.getByRole('menuitem', { name: 'Settings' }))
@@ -604,18 +604,18 @@ describe('the project select (#1513)', () => {
   test('with a project picked the sidebar lists only the pages that project has; all projects lists every page', async () => {
     answerTwoWithTickets()
     render(<App />)
-    expect(await screen.findByRole('button', { name: 'Tickets' })).toBeTruthy()
-    expect(screen.getByRole('button', { name: 'Logs' })).toBeTruthy()
+    expect(await screen.findByRole('link', { name: 'Tickets' })).toBeTruthy()
+    expect(screen.getByRole('link', { name: 'Logs' })).toBeTruthy()
 
     await pick('All projects', /site/)
-    await waitFor(() => expect(screen.queryByRole('button', { name: 'Tickets' })).toBeNull())
-    expect(screen.getByRole('button', { name: 'Logs' })).toBeTruthy()
+    await waitFor(() => expect(screen.queryByRole('link', { name: 'Tickets' })).toBeNull())
+    expect(screen.getByRole('link', { name: 'Logs' })).toBeTruthy()
 
     await pick('site', /app/)
-    expect(await screen.findByRole('button', { name: 'Tickets' })).toBeTruthy()
+    expect(await screen.findByRole('link', { name: 'Tickets' })).toBeTruthy()
     await pick('app', /All projects/)
-    expect(screen.getByRole('button', { name: 'Tickets' })).toBeTruthy()
-    expect(screen.getByRole('button', { name: 'Logs' })).toBeTruthy()
+    expect(screen.getByRole('link', { name: 'Tickets' })).toBeTruthy()
+    expect(screen.getByRole('link', { name: 'Logs' })).toBeTruthy()
   })
 
   test('picking a project on a page it does not have goes to the Overview, and a link to such a page says the project has none', async () => {
@@ -662,7 +662,7 @@ describe('the project select (#1513)', () => {
     answers.set('onRepos', () => ({ repos: [{ path: '/work/new', name: 'new' }], canAddFolder: false }))
     answers.set('sendAddProject', () => ({ ok: true, alreadyActivated: false }))
     render(<App />)
-    await screen.findByRole('button', { name: 'Logs' })
+    await screen.findByRole('link', { name: 'Logs' })
     const reads = () => calls.filter(call => call.name === 'onModules').length
     const before = reads()
     await openMenu(screen.getByRole('combobox', { name: 'Project: All projects' }))
@@ -675,7 +675,7 @@ describe('the project select (#1513)', () => {
     answerTwo()
     window.history.replaceState(null, '', '/site')
     render(<App />)
-    await screen.findByRole('button', { name: 'Logs' })
+    await screen.findByRole('link', { name: 'Logs' })
     const reads = () => calls.filter(call => call.name === 'onModules').length
     const before = reads()
     fireEvent.click(await screen.findByRole('button', { name: 'remove the project' }))
@@ -687,7 +687,7 @@ describe('the project select (#1513)', () => {
     answerTwo()
     window.history.replaceState(null, '', '/site/3-s')
     render(<App />)
-    await screen.findByRole('button', { name: 'Logs' })
+    await screen.findByRole('link', { name: 'Logs' })
     const reads = () => calls.filter(call => call.name === 'onModules').length
     const before = reads()
     fireEvent.click(await screen.findByRole('button', { name: 'remove the project from its menu' }))
@@ -792,7 +792,7 @@ describe('the shell on a phone', () => {
       // too, to a screen reader only: the bar already names the page.
       expect(await screen.findByRole('heading', { name: 'Overview' })).toBeTruthy()
       expect(screen.getAllByText('Overview').map(el => (el.closest('h1') ? 'heading' : el.tagName))).toEqual(['SPAN', 'heading'])
-      expect(screen.queryByRole('button', { name: 'Overview' })).toBeNull()
+      expect(screen.queryByRole('link', { name: 'Overview' })).toBeNull()
 
       expect(open.getAttribute('aria-expanded')).toBe('false')
       fireEvent.click(open)
@@ -801,14 +801,14 @@ describe('the shell on a phone', () => {
       fireEvent.click(await screen.findByRole('button', { name: /settings$/i }))
       fireEvent.click(screen.getByRole('menuitem', { name: 'Settings' }))
       expect(await screen.findByText("the settings dialog on ''")).toBeTruthy()
-      await waitFor(() => expect(screen.queryByRole('button', { name: 'Overview' })).toBeNull())
+      await waitFor(() => expect(screen.queryByRole('link', { name: 'Overview' })).toBeNull())
 
       // The launcher has a top row of its own, which keeps its corner free for the button.
       fireEvent.click(screen.getByRole('button', { name: 'Open the menu' }))
       // New is one click, to the page of a session with no project.
-      fireEvent.click(await screen.findByRole('button', { name: 'New agent session' }))
+      fireEvent.click(await screen.findByRole('link', { name: 'New agent session' }))
       expect(await screen.findByText(/^the launcher of/)).toBeTruthy()
-      await waitFor(() => expect(screen.queryByRole('button', { name: 'New agent session' })).toBeNull())
+      await waitFor(() => expect(screen.queryByRole('link', { name: 'New agent session' })).toBeNull())
       expect(screen.getByRole('button', { name: 'Open the menu' })).toBeTruthy()
       expect(screen.queryByText('Overview')).toBeNull()
       expect(screen.queryByText('Settings')).toBeNull()
@@ -822,12 +822,12 @@ describe('the shell on a phone', () => {
     try {
       const { unmount } = render(<App />)
       fireEvent.click(await screen.findByRole('button', { name: 'Hide the sidebar' }))
-      expect(screen.queryByRole('button', { name: 'Overview' })).toBeNull()
+      expect(screen.queryByRole('link', { name: 'Overview' })).toBeNull()
       // The page's own header holds the button that shows it again.
       fireEvent.click(await screen.findByRole('button', { name: 'Show the sidebar' }))
-      expect(await screen.findByRole('button', { name: 'Overview' })).toBeTruthy()
+      expect(await screen.findByRole('link', { name: 'Overview' })).toBeTruthy()
       fireEvent.keyDown(window, { key: 'b', metaKey: true })
-      await waitFor(() => expect(screen.queryByRole('button', { name: 'Overview' })).toBeNull())
+      await waitFor(() => expect(screen.queryByRole('link', { name: 'Overview' })).toBeNull())
       unmount()
       // Kept in this browser: hidden still on the next load (the module reads it once, as a page load does).
       expect(localStorage.getItem('oa.sidebar-hidden')).toBe('true')
@@ -856,7 +856,7 @@ describe('the shell on a phone', () => {
   test('on a wide screen there is no bar and no button: the sidebar is beside the page', async () => {
     answerShell([])
     render(<App />)
-    expect(await screen.findByRole('button', { name: 'Overview' })).toBeTruthy()
+    expect(await screen.findByRole('link', { name: 'Overview' })).toBeTruthy()
     expect(screen.queryByRole('button', { name: 'Open the menu' })).toBeNull()
     // The sidebar's row, and the page's own heading: no bar names it a third time.
     expect(await screen.findByRole('heading', { name: 'Overview' })).toBeTruthy()
