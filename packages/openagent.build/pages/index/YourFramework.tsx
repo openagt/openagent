@@ -4,7 +4,7 @@ import { Construction } from 'lucide-react'
 import { CodeChip, h2Style, sectionStyle, text, WipBadge } from './ui'
 
 /**
- * The page's one moment: the sentence set large, its words coming to full strength in reading order
+ * The page's one moment: the sentence under its heading, at its size, its words coming to full strength in reading order
  * as it enters the screen, once. Drawn whole without scripting, under reduced motion, and when it
  * is already in view as the page starts.
  */
@@ -29,7 +29,7 @@ function Moment({ words }: { words: string }) {
     <p
       ref={ref}
       className="moment"
-      style={{ margin: 0, fontSize: 'var(--text-hero)', lineHeight: 'var(--leading-hero)', fontWeight: 600, letterSpacing: '-0.02em', textWrap: 'balance' }}
+      style={{ ...h2Style, textWrap: 'balance' }}
     >
       {words.split(' ').map((word, i) => (
         <span key={i}>
@@ -77,8 +77,11 @@ function Item({ children, marker }: { children: ReactNode; marker?: ReactNode })
 export function YourFramework() {
   return (
     <section id="your-framework" style={sectionStyle}>
-      <h2 style={h2Style}>Your framework</h2>
-      <Moment words="It isn't our framework. It's yours." />
+      {/* The heading and its sentence, one thought at one size. */}
+      <div>
+        <h2 style={h2Style}>Your framework</h2>
+        <Moment words="It isn't our framework. It's yours." />
+      </div>
       <div className="rows">
         <Pillar title="Flexible">
           <Item>OpenAgent doesn't force anything — pick only the features you need</Item>
