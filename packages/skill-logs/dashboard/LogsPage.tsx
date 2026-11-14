@@ -211,7 +211,6 @@ export function LogsPage({ projects, path }: ModulePageProps) {
                 <Row
                   key={`${project.id}/${card.id}`}
                   stackOnPhone
-                  leading={<StatusDot status={card.status} />}
                   // As every list names a run, over what it was asked; a run with none of those goes by its id.
                   title={runName(card) ?? card.id}
                   detail={card.title?.trim() && card.intent?.trim() ? card.intent : undefined}
@@ -219,7 +218,9 @@ export function LogsPage({ projects, path }: ModulePageProps) {
                   onClick={() => host.openAgent(project.id, card.id)}
                   meta={
                     <>
-                      <span className="md:w-24">
+                      {/* Its state said once: the dot beside its word. */}
+                      <span className="flex items-center gap-1 md:w-28">
+                        <StatusDot status={card.status} />
                         <StatusWord status={card.status} offline={card.offline} />
                       </span>
                       {columns.who && <RunPerson person={card.person} account={accountOf(project.id, card.person)} />}
