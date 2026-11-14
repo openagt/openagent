@@ -63,14 +63,14 @@ export function PersonMenu({ onSettings }: { onSettings: (entry?: string) => voi
         <span className="min-w-0 flex-1 truncate">{person ? firstName(person.name) : ''}</span>
         <Settings className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden />
       </DropdownMenuTrigger>
-      {/* As wide as the row it opens from: a long line is cut, and said whole on its own page. */}
-      <DropdownMenuContent align="start" className="w-(--anchor-width)">
+      {/* As wide as its longest line, from the row's width up to 320: a longer line goes onto a second one, never cut. */}
+      <DropdownMenuContent align="start" className="w-max min-w-(--anchor-width) max-w-80">
         {person && (
           <>
             <DropdownMenuGroup>
               <DropdownMenuLabel className="flex flex-col font-normal">
-                <span className="truncate font-medium text-foreground">{person.name}</span>
-                {person.github && <span className="truncate font-normal">@{person.github}</span>}
+                <span className="font-medium text-foreground">{person.name}</span>
+                {person.github && <span className="font-normal">@{person.github}</span>}
               </DropdownMenuLabel>
             </DropdownMenuGroup>
             <DropdownMenuSeparator />
@@ -81,13 +81,13 @@ export function PersonMenu({ onSettings }: { onSettings: (entry?: string) => voi
             {missing.map(item => (
               <DropdownMenuItem key={item.key} onClick={openPermissions}>
                 <CircleAlert className="size-4 shrink-0 text-warning" aria-hidden />
-                <span className="flex-1 truncate">{item.words}</span>
+                <span className="flex-1">{item.words}</span>
               </DropdownMenuItem>
             ))}
             {notBackedUp && (
               <DropdownMenuItem onClick={() => onSettings(AGENT_DATA_ENTRY)}>
                 <CircleAlert className="size-4 shrink-0 text-warning" aria-hidden />
-                <span className="flex-1 truncate">Agent data not backed up</span>
+                <span className="flex-1">Agent data not backed up</span>
               </DropdownMenuItem>
             )}
             <DropdownMenuSeparator />
