@@ -50,15 +50,16 @@ export function DropdownMenuTrigger({ className, ...props }: ComponentProps<type
 
 export function DropdownMenuContent({
   className,
+  side = 'bottom',
   sideOffset = 6,
   align = 'start',
   children,
   ...props
-}: ComponentProps<typeof Menu.Popup> & { sideOffset?: number; align?: 'start' | 'center' | 'end' }) {
+}: ComponentProps<typeof Menu.Popup> & Pick<ComponentProps<typeof Menu.Positioner>, 'side'> & { sideOffset?: number; align?: 'start' | 'center' | 'end' }) {
   const positionMethod = usePopupPlacement()
   return (
     <Menu.Portal>
-      <Menu.Positioner positionMethod={positionMethod} sideOffset={sideOffset} align={align} className="z-50 outline-none">
+      <Menu.Positioner positionMethod={positionMethod} side={side} sideOffset={sideOffset} align={align} className="z-50 outline-none">
         <Menu.Popup className={cn(MENU_POPUP_CLASS, className)} {...props}>
           <PopupBody>{children}</PopupBody>
         </Menu.Popup>

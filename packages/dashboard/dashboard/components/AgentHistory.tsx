@@ -587,7 +587,7 @@ function RecentsSortMenu({ order }: { order: RecentsSort }) {
         </TooltipTrigger>
         <TooltipContent>Sort by: {RECENTS_SORT_LABELS[order]}</TooltipContent>
       </Tooltip>
-      <DropdownMenuContent align="end" className="min-w-40">
+      <DropdownMenuContent side="top" align="end" className="min-w-40">
         <DropdownMenuGroup>
           <DropdownMenuLabel className="font-normal">Sort by</DropdownMenuLabel>
           <DropdownMenuRadioGroup value={order} onValueChange={(pick: RecentsSort) => updatePreferences({ recentsSort: pick })}>
