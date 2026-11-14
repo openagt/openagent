@@ -75,6 +75,14 @@ describe('run handoff (#799)', () => {
     expect(screen.getByText('Open PR')).toBeTruthy()
   })
 
+  test('a count of none is not drawn: a run that only added lines says what it added', async () => {
+    onAgentHandoff.mockResolvedValue({ ...worked, files: [{ path: 'src/login.ts', insertions: 1, deletions: 0, binary: false }], insertions: 1, deletions: 0 })
+    render(<Harness />)
+    await waitFor(() => expect(screen.getByText('+1')).toBeTruthy())
+    expect(screen.queryByText('−0')).toBeNull()
+    expect(screen.getByText('1 line added')).toBeTruthy()
+  })
+
   test('the branch name is not repeated — the action bar it sits in already says it (#1023)', async () => {
     onAgentHandoff.mockResolvedValue(worked)
     render(<Harness />)

@@ -1,20 +1,23 @@
 import type { ReactNode } from 'react'
 import type { AgentWorktree } from '../../src/index.js'
 import { X } from 'lucide-react'
+import { cn } from '../lib/utils.js'
 import { Button } from './ui/button.js'
+import { MiddleCut } from './MiddleCut.js'
 import { Tooltip, TooltipTrigger, TooltipContent } from './ui/tooltip.js'
 
-// The bar above the message box and its row, as Claude Code on the web has one: the agent's branch,
-// what it holds (+N −N), its pull request, and, at the end, the next step as a button and an ✕ that
-// puts the bar away. The row under it says the project. A step that failed says why on a line of its
-// own. It is there while there is something to say: the agent has changes, a pull request or a next
-// step. An agent that changed nothing has no bar.
+// The bar above the message box and its row, as Claude Code on the web has one: what the run did in
+// its own words, its branch, what it holds (+N −N), its pull request, and, at the end, the next step
+// as a button and an ✕ that puts the bar away. The row under it says the project. A step that
+// failed says why on a line of its own. It is there while there is something to say: the agent has
+// changes, a pull request or a next step. An agent that changed nothing has no bar.
 //
 // It is a quiet strip joined to the box's top edge, at its x and its width: its foot runs on under
 // the box's rounded top, so bar and box read as one block of controls under the conversation rather
 // than as two boxes.
 export function AgentWorkBar({
   checkout,
+  did,
   summary,
   actions,
   error,
@@ -24,6 +27,8 @@ export function AgentWorkBar({
 }: {
   /** The agent's checkout as the page read it: its branch and its pull request. */
   checkout: AgentWorktree | null
+  /** What the run did, in its own words: its last commit's subject. */
+  did?: string | undefined
   /** What the branch holds, in a phrase. */
   summary?: ReactNode
   /** The next step (Commit, Open PR, Merge), or the words that stand where it would be. */
@@ -48,12 +53,15 @@ export function AgentWorkBar({
       {/* Focusable by script only: a press that leaves nothing to press next leaves the focus here. */}
       <div role="group" aria-label="This session's work" tabIndex={-1} className="overflow-hidden rounded-t-box border-x border-t border-hairline bg-muted px-2 pb-2 text-sm outline-none dark:[--accent:#374145] dark:[--color-accent:#374145]">
         <div className="flex h-10 items-center gap-2">
-          {/* The branch is the one part that gives up width: it takes what the rest leaves, cut
-              short, its whole name in its tooltip. No icon beside it: the name says what it is, and
-              the row is shorter without one. */}
-          <span className="flex min-w-0 flex-1 items-center pl-1 font-mono text-xs text-muted-foreground">
+          {/* What the run did, then its branch: the two parts that give up width, each cut short, the
+              branch in its middle so the end that tells it apart stays, its whole name in its
+              tooltip. No icon beside it: the name says what it is, and the row is shorter without one. */}
+          <span className="flex min-w-0 flex-1 items-baseline gap-2 pl-1">
+            {did && <span className="min-w-0 shrink truncate text-foreground">{did}</span>}
             <Tooltip>
-              <TooltipTrigger render={<span className="truncate" />}>{branch}</TooltipTrigger>
+              <TooltipTrigger render={<span className={cn('flex min-w-0 font-mono text-xs text-muted-foreground', did ? 'max-w-1/2 shrink-0' : 'flex-1')} />}>
+                <MiddleCut text={branch} />
+              </TooltipTrigger>
               <TooltipContent className="whitespace-pre-line">{[branch, checkout?.checkout?.path].filter(Boolean).join('\n')}</TooltipContent>
             </Tooltip>
           </span>
