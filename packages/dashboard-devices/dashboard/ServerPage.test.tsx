@@ -418,9 +418,10 @@ describe('Settings › Devices: a server this computer installed', () => {
     // A person's own computer, reached by the line it keeps open to this server: saved by the address that stands for it here.
     const saved: ModuleMachines = { version: '1.2.3', machines: [{ id: 'http://127.0.0.1:4210', label: 'MacBook', url: 'http://127.0.0.1:4210', version: '1.2.3' }] }
     const { host, ran, addMachine, removeMachine } = dashboard(() => (fails ? { ok: false, error: 'the command could not be run' } : { ok: true, output: { server: true, servers: [server(ALL_DONE)] } }), saved)
-    const { container } = show(host)
-    // Nothing before this computer said which it is: a server never offers to set one up for a moment.
-    expect(container.textContent).toBe('')
+    show(host)
+    // Only the wait before this computer said which it is: a server never offers to set one up for a moment.
+    expect(screen.getByRole('status').textContent).toBe('Loading…')
+    expect(screen.queryByRole('button')).toBeNull()
     const row = await findRow('MacBook')
     expect(row.textContent).toContain('keeps a line open here')
     expect(within(row).getByText('Online')).toBeTruthy()
@@ -1095,7 +1096,7 @@ describe('Settings › Devices: a computer at home set up as a server, through a
     expect(await screen.findByText('Who is it?')).toBeTruthy()
     fireEvent.click(screen.getByRole('button', { name: /Someone on 165\.245\.244\.10/ }))
     // The picker: the server has not said who is there in this test, so it still asks.
-    expect(await screen.findByText('Asking 165.245.244.10 who is there…')).toBeTruthy()
+    expect(await screen.findByText('Loading…')).toBeTruthy()
     fireEvent.click(screen.getByRole('button', { name: 'Cancel' }))
     fireEvent.click(screen.getByRole('button', { name: 'Add person to 192.168.1.20' }))
     fireEvent.click(await screen.findByRole('button', { name: /Someone on your Tailscale network/ }))

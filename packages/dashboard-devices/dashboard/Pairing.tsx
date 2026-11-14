@@ -234,11 +234,10 @@ export function AskPopup() {
         </p>
         {error !== undefined && <Problem>{error}</Problem>}
         <div className="flex justify-end gap-2">
-          <Button variant="secondary" disabled={busy || down} onClick={() => void answer(false)}>
+          <Button variant="secondary" loading={busy} disabled={down} onClick={() => void answer(false)}>
             Deny
           </Button>
-          <Button disabled={busy || down} onClick={() => void answer(true)}>
-            {busy && <Loader2 className="size-4 animate-spin" aria-hidden />}
+          <Button loading={busy} disabled={down} onClick={() => void answer(true)}>
             Allow
           </Button>
         </div>

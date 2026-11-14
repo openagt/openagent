@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { ChevronLeft, Ellipsis, House, Loader2, Monitor, Plus, Server, Smartphone, Tablet, UserPlus, UserRound } from 'lucide-react'
-import { Badge, Button, ConfirmDialog, Dialog, DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, Input, List as Rows, Row, Section, SettingsRow, SettingsSection, buttonVariants, formatDateTime, formatRelative, useOpenAgentDown, usePolled, useSettingsCrumb } from '@openagt/dashboard/module'
+import { Badge, Button, ConfirmDialog, Dialog, DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, Input, List as Rows, Row, RowShapes, Section, SettingsRow, SettingsRowShapes, SettingsSection, Slot, buttonVariants, formatDateTime, formatRelative, useOpenAgentDown, usePolled, useSettingsCrumb } from '@openagt/dashboard/module'
 import { addDevice, keepPerson, loadMine, myName, nameOwner, removeDevice, removeMine, removePerson, renameDevice, setTailscale, type Answer, type DeviceRow, type DoorStatus, type LineRow, type PersonRow, type PersonThere } from './devices.js'
 import { installFailed, removeDevice as removeServerDevice } from './servers.js'
 import { AddDevice, useJoined, type Adding } from './AddDevice.js'
@@ -60,8 +60,9 @@ export function DevicesSettings({ everyMs = 3_000, devicesEveryMs = 30_000, devi
 
   // One person's own OpenAgent on a computer several people use: their devices are the door's, and only they are shown.
   if (status?.person !== undefined) return <PersonDevices person={status.person} everyMs={everyMs} />
-  // Nothing shows until this computer said what it is: a server never offers a server to set up for a moment.
-  if (d.door === undefined || (d.machines === undefined && d.door.ok)) return null
+  // Nothing but the rows' shape until this computer said what it is: a server never offers a server to set up for a moment.
+  const known = d.door !== undefined && !(d.machines === undefined && d.door.ok)
+  if (!known) return <Slot of={{ state: 'unknown', value: undefined }} shape={<SettingsRowShapes rows={3} />}>{() => null}</Slot>
 
   const dialogs = adding !== undefined && (
     <AddDevice
@@ -488,16 +489,20 @@ function PersonDevices({ person, everyMs }: { person: string; everyMs: number })
   return (
     <div className="space-y-8">
       <p className="max-w-180 text-sm text-muted-foreground">{`This computer is shared, and you are on it as ${person}. Your devices are in until you remove them. A new device gets in with a code from the computer's owner.`}</p>
-      {mine !== undefined && (
-        <Section title="Your devices" {...(devices.length > 0 ? { count: devices.length } : {})}>
-          {devices.length === 0 && <p className="text-sm text-muted-foreground">None.</p>}
-          <Rows aria-label="Your devices">
-            {devices.map(device => (
-              <DoorDevice key={device.id} device={device} mine busy={busy} onRemove={() => void remove(device.id)} />
-            ))}
-          </Rows>
-        </Section>
-      )}
+      <Slot of={{ state: read === undefined ? 'unknown' : 'fresh', value: mine }} shape={<RowShapes />}>
+        {mine =>
+          mine !== undefined && (
+            <Section title="Your devices" {...(devices.length > 0 ? { count: devices.length } : {})}>
+              {devices.length === 0 && <p className="text-sm text-muted-foreground">None.</p>}
+              <Rows aria-label="Your devices">
+                {devices.map(device => (
+                  <DoorDevice key={device.id} device={device} mine busy={busy} onRemove={() => void remove(device.id)} />
+                ))}
+              </Rows>
+            </Section>
+          )
+        }
+      </Slot>
       {read !== undefined && !read.ok && <Problem>{`Your devices could not be read: ${read.error}`}</Problem>}
       {error !== undefined && <Problem>{error}</Problem>}
     </div>

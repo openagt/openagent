@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { ChevronRight, CircleCheck, House, Laptop, Loader2, Server, UserPlus, UserRound } from 'lucide-react'
-import { Button, Checkbox, ConfirmDialog, Dialog, List, Row, Switch, useOpenAgentDown, usePolled, type ModuleAccountsAgent, type ModuleComputersThrough, type ModuleHost, type ModuleMachine, type ModuleMachineAccount } from '@openagt/dashboard/module'
+import { Button, Checkbox, ConfirmDialog, Dialog, List, Row, RowShapes, Slot, Switch, useOpenAgentDown, usePolled, type ModuleAccountsAgent, type ModuleComputersThrough, type ModuleHost, type ModuleMachine, type ModuleMachineAccount } from '@openagt/dashboard/module'
 import { idsOf, myName, type Answer, type DeviceRow } from './devices.js'
 import { installDone, installFailed, nameOwner, removeDevice, removePerson, setPeople, setWho, askLink, type ServerRow } from './servers.js'
 import { labelOf, type ServerItem } from './model.js'
@@ -367,7 +367,9 @@ export function PickPeople({ host, server, label, onChange, onClose }: { host: M
     <Dialog open onOpenChange={open => !open && onClose()} title={`Add person to ${label}`}>
       <div className="space-y-4 text-sm">
         {there === undefined ? (
-          <p className="text-xs text-muted-foreground">{`Asking ${at} who is there…`}</p>
+          <Slot of={{ state: 'unknown', value: undefined }} shape={<RowShapes />}>
+            {() => null}
+          </Slot>
         ) : choices.length === 0 ? (
           <p className="text-xs text-muted-foreground">{have.length ? `Everyone on ${at} is here already. Someone new is added on ${at} first: its People.` : `Nobody else is on ${at} yet. Add them there first: its People.`}</p>
         ) : (
@@ -491,8 +493,14 @@ function People({ d, address, ownDevice, through, picks = false }: { d: Devices;
 
   return (
     <div className="space-y-2 text-xs">
-      {(devices === undefined || (devices.length === 0 && persons.length < 2)) && (
-        <p className="text-muted-foreground">{devices === undefined ? (error === undefined ? 'Asking the server who is in…' : 'The devices that are in on the server could not be read.') : picks ? `Nobody yet. Add person picks someone on ${through}; they get a user of their own here.` : 'Nobody yet. Invite gives someone a code; your own phone is added with Add device.'}</p>
+      {devices === undefined && error === undefined && (
+        <Slot of={{ state: 'unknown', value: undefined }} shape={<RowShapes />}>
+          {() => null}
+        </Slot>
+      )}
+      {devices === undefined && error !== undefined && <p className="text-sm text-danger">The devices that are in on the server could not be read.</p>}
+      {devices !== undefined && devices.length === 0 && persons.length < 2 && (
+        <p className="text-sm text-muted-foreground">{picks ? `Nobody yet. Add person picks someone on ${through}; they get a user of their own here.` : 'Nobody yet. Invite gives someone a code; your own phone is added with Add device.'}</p>
       )}
       {devices !== undefined &&
         (devices.length > 0 || persons.length > 1) &&

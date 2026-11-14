@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { Check, CircleCheck, Copy, ExternalLink, Loader2, RotateCw } from 'lucide-react'
-import { Button, Dialog, Input, QrCode, useOpenAgentDown } from '@openagt/dashboard/module'
+import { Button, Dialog, Input, QrCode, Skeleton, Slot, useOpenAgentDown } from '@openagt/dashboard/module'
 import { failed, type Answer, type Given } from './devices.js'
 import { CodeStrip, LinkPress, Problem } from './parts.js'
 
@@ -130,14 +130,36 @@ export function Joined({ children, words = 'It stays in until it is removed. The
   )
 }
 
-/** While a code is asked for, or why there is none. */
-export function NoCodeYet({ asking, error }: { asking: boolean; error: string | undefined }) {
+/** Where and the code while they are asked for: {@link CodeCard}'s shape. */
+export const CODE_SHAPE = (
+  <div className="space-y-3">
+    {[0, 1].map(at => (
+      <div key={at} className="space-y-1">
+        <Skeleton className="h-4 w-12" />
+        <Skeleton className="h-9 w-full" />
+      </div>
+    ))}
+  </div>
+)
+
+/** A phone's code while it is asked for: the QR code's square and the steps beside it. */
+const QR_SHAPE = (
+  <div className="flex gap-6 max-sm:flex-col max-sm:items-center">
+    <Skeleton className="size-64 shrink-0 rounded-lg" />
+    <div className="w-full space-y-3">
+      <Skeleton className="h-4 w-3/4" />
+      <Skeleton className="h-4 w-2/3" />
+    </div>
+  </div>
+)
+
+/** While a code is asked for, in the shape of what it brings; or why there is none. */
+export function NoCodeYet({ asking, error, shape = CODE_SHAPE }: { asking: boolean; error: string | undefined; shape?: ReactNode }) {
   if (asking)
     return (
-      <div role="status" className="flex items-center gap-2 py-10 text-sm text-muted-foreground">
-        <Loader2 className="size-4 shrink-0 animate-spin text-primary" aria-hidden />
-        Asking for a code…
-      </div>
+      <Slot of={{ state: 'unknown', value: undefined }} shape={shape}>
+        {() => null}
+      </Slot>
     )
   return <Problem>{`No code: ${error ?? 'none was given'}`}</Problem>
 }
@@ -216,7 +238,7 @@ export function PhoneCode({
         {joined !== undefined ? (
           <Joined>{`${joined} is in.`}</Joined>
         ) : asking || error !== undefined || !code ? (
-          <NoCodeYet asking={asking} error={error} />
+          <NoCodeYet asking={asking} error={error} shape={QR_SHAPE} />
         ) : expired ? (
           <RanOut />
         ) : (
