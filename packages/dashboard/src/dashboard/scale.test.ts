@@ -25,7 +25,9 @@ const OFF_SCALE: { off: RegExp; use: string }[] = [
 ]
 
 /** Classes off the scale on purpose, with the reason. */
-const ALLOWED: Record<string, string> = {}
+const ALLOWED: Record<string, string> = {
+  'text-[17px]': "BrandLink's wordmark: the website draws the same mark at the same size in the same place, and the switch between the two (the `oa-brand` view transition) keeps it still",
+}
 
 /** A class as written, without its variants and its `!`: `md:hover:px-2.5!` is `px-2.5`. */
 function utility(written: string): string {

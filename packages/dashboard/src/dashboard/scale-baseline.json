@@ -73,9 +73,6 @@
   "dashboard/dashboard/components/AgentsPage.tsx": {
     "gap-2.5": 2
   },
-  "dashboard/dashboard/components/BrandLink.tsx": {
-    "text-[17px]": 1
-  },
   "dashboard/dashboard/components/BridgeSettings.tsx": {
     "rounded": 1
   },
