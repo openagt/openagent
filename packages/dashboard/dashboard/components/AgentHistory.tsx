@@ -564,8 +564,8 @@ function RecentsSortMenu({ order }: { order: RecentsSort }) {
             <DropdownMenuTrigger
               type="button"
               aria-label="Sort agents"
-              // A ghost press of 24, its glyph on the rows' right edge.
-              className={cn(buttonVariants({ variant: 'ghost', size: 'icon-sm' }), '-mr-1 ml-auto size-6 text-muted-foreground')}
+              // A ghost press of 24 (a finger's 48 on a phone), its glyph on the rows' right edge.
+              className={cn(buttonVariants({ variant: 'ghost', size: 'icon-sm' }), 'relative -mr-1 ml-auto size-6 text-muted-foreground max-md:after:absolute max-md:after:-inset-3')}
             />
           }
         >

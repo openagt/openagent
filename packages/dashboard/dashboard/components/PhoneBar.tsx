@@ -15,7 +15,8 @@ export function MenuButton({ inBar = false }: { inBar?: boolean }) {
   const { toggleSidebar, openMobile } = useSidebar()
   return (
     // In the bar of a page that scrolls as a page, so the two move as one when the phone bounces at the top.
-    <Button variant="ghost" size="icon-sm" className={cn('z-10 h-7 w-7', inBar ? 'shrink-0' : 'absolute top-2 left-2')} aria-label="Open the menu" aria-expanded={openMobile} onClick={toggleSidebar}>
+    // A press of 28 whose hit area is 44, a finger's.
+    <Button variant="ghost" size="icon-sm" className={cn('z-10 after:absolute after:-inset-2', inBar ? 'relative shrink-0' : 'absolute top-2 left-2')} aria-label="Open the menu" aria-expanded={openMobile} onClick={toggleSidebar}>
       <Menu className="h-4 w-4" aria-hidden />
     </Button>
   )
@@ -24,7 +25,7 @@ export function MenuButton({ inBar = false }: { inBar?: boolean }) {
 /** The top row of a page that has none of its own: the {@link MenuButton} and the page's name. It stays at the top as the page scrolls. */
 export function PhoneBar({ title }: { title: string }) {
   return (
-    <div className="sticky top-0 z-20 flex h-11 shrink-0 items-center gap-2 border-b border-border bg-background pr-4 pl-2 text-sm font-medium">
+    <div className="sticky top-0 z-20 flex h-12 shrink-0 items-center gap-2 border-b border-border bg-background pr-4 pl-2 text-sm font-medium">
       <MenuButton inBar />
       <span className="truncate">{title}</span>
     </div>
