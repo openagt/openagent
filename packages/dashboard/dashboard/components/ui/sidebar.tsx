@@ -1,5 +1,6 @@
 'use client'
 import * as React from 'react'
+import { flushSync } from 'react-dom'
 import { useRender } from '@base-ui/react/use-render'
 
 import { cn } from '../../lib/utils.js'
@@ -71,8 +72,15 @@ function SidebarProvider({
     [setOpenProp, open],
   )
 
+  // By its button or its key: the keyboard in what goes, the sidebar or the pressed button, or on
+  // nothing (a press that took no focus), goes to the button drawn in its place. A phone's sheet
+  // gives it back to its opener itself.
   const toggleSidebar = React.useCallback(() => {
-    return isMobile ? setOpenMobile(prev => !prev) : setOpen(prev => !prev)
+    if (isMobile) return setOpenMobile(prev => !prev)
+    const at = document.activeElement
+    const goes = !at || at === document.body || at.closest('[data-slot="sidebar"], [data-sidebar-toggle]')
+    flushSync(() => setOpen(prev => !prev))
+    if (goes) document.querySelector<HTMLElement>('[data-sidebar-toggle]')?.focus()
   }, [isMobile, setOpen, setOpenMobile])
 
   useShortcut('sidebar', toggleSidebar)
