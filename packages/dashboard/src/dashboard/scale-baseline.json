@@ -17,7 +17,6 @@
     "text-[11px]": 1
   },
   "dashboard-devices/dashboard/DevicesCard.tsx": {
-    "rounded": 1,
     "space-y-2.5": 2
   },
   "dashboard-devices/dashboard/DevicesSettings.tsx": {

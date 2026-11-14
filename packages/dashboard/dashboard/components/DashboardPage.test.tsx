@@ -44,10 +44,10 @@ describe('the Overview', () => {
     expect(screen.getByText('No agent is at work.')).toBeTruthy()
     // Full width is the whole row at every size; a third is a half once the column has the room, a
     // third once it is wide; a quarter (the number tiles) a third, then a quarter; a row's cards fill it.
-    expect(drawn()[0]!.spans).toContain('@4xl:basis-[calc(25%_-_0.75rem)]')
+    expect(drawn()[0]!.spans).toContain('@4xl:basis-[calc(25%_-_1.5rem)]')
     expect(drawn()[4]!.spans).toContain('basis-full')
     expect(drawn()[4]!.spans).not.toMatch(/@\w+:basis-/)
-    expect(drawn()[7]!.spans).toContain('@2xl:basis-[calc(50%_-_0.5rem)]')
+    expect(drawn()[7]!.spans).toContain('@2xl:basis-[calc(50%_-_1rem)]')
     expect(drawn()[7]!.spans).toContain('grow-[6]')
     cleanup()
     working = [active('r1', 'p1')]
@@ -71,10 +71,10 @@ describe('the Overview', () => {
     await screen.findByText('Human Queue')
     expect(drawn().map(card => card.id)).toEqual(['@x/tickets/hot', 'human-queue', 'needs-you', 'working-now', 'your-agents', 'working', 'skills'])
     expect(screen.queryByText('usage')).toBeNull()
-    expect(drawn()[0]!.spans).toContain('@5xl:basis-[calc(33.333%_-_0.667rem)]')
+    expect(drawn()[0]!.spans).toContain('@5xl:basis-[calc(33.333%_-_1.333rem)]')
     // The Human Queue fits half at the narrowest: a quarter is passed over for its own width, the whole row.
     expect(drawn()[1]!.spans).not.toMatch(/@\w+:basis-/)
-    expect(drawn()[2]!.spans).toContain('@4xl:basis-[calc(25%_-_0.75rem)]')
+    expect(drawn()[2]!.spans).toContain('@4xl:basis-[calc(25%_-_1.5rem)]')
   })
 
   test("a project's layout is its own; a project never arranged is laid out as all projects are", async () => {
@@ -264,7 +264,7 @@ describe('the Overview', () => {
     ]
     render(<DashboardPage onProjectAdded={() => {}} onSelectProject={() => {}} projectHref={id => `/${id}`} onSelectAgent={onSelectAgent} onAgentStarted={() => {}} interventions={interventions} interventionsStale={false} interventionsLoaded active={{ active: [], stale: false, loaded: true }} projects={[]} scope={null} />)
     // Grouped by kind, each under its heading, in the order that holds a run up most; a row says its kind on its icon's hover.
-    expect(screen.getAllByRole('region').map(group => group.getAttribute('aria-label'))).toEqual(['Pull requests', 'To commit'])
+    expect(within(screen.getByRole('region', { name: 'Human Queue' })).getAllByRole('region').map(group => group.getAttribute('aria-label'))).toEqual(['Pull requests', 'To commit'])
     expect(screen.getByTitle('Needs commit')).toBeTruthy()
     expect(screen.getByText('1 file')).toBeTruthy()
     fireEvent.click(screen.getByText('Create test.md'))

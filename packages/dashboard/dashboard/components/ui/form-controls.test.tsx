@@ -3,7 +3,7 @@ import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/re
 import { useState } from 'react'
 import { RadioGroup, RadioGroupItem, RadioGroupOption } from './radio-group.js'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './select.js'
-import { CardTitleLink } from './card.js'
+import { PageLink } from './card.js'
 import { openMenu } from '../../test-utils.js'
 import { HostServicesContext, INERT_HOST_SERVICES } from '../../lib/host-services.js'
 
@@ -122,32 +122,20 @@ describe('Select', () => {
   })
 })
 
-describe('CardTitleLink', () => {
-  test('a real link to the card\'s page: a plain click goes through the dashboard\'s own navigation, a click with a modifier is left to the browser', () => {
+describe('PageLink', () => {
+  test('a real link to the section\'s page: a plain click goes through the dashboard\'s own navigation, a click with a modifier is left to the browser', () => {
     const onOpen = vi.fn()
     render(
-      <CardTitleLink segment="queue" onOpen={onOpen}>
-        AI Queue
-      </CardTitleLink>,
+      <PageLink href="/shop/queue" onOpen={onOpen}>
+        Queue
+      </PageLink>,
     )
-    const link = screen.getByRole('link', { name: 'AI Queue' })
-    expect(link.getAttribute('href')).toBe('/queue')
-    expect(screen.getByRole('heading', { name: 'AI Queue' })).toBeTruthy()
+    const link = screen.getByRole('link', { name: 'Queue' })
+    expect(link.getAttribute('href')).toBe('/shop/queue')
     expect(fireEvent.click(link)).toBe(false)
     expect(onOpen).toHaveBeenCalledTimes(1)
     // Opening it in a new tab is the browser's to do.
     expect(fireEvent.click(link, { metaKey: true })).toBe(true)
     expect(onOpen).toHaveBeenCalledTimes(1)
-  })
-
-  test("its address is the dashboard's for the page, with the picked project: a new tab shows that project too", () => {
-    render(
-      <HostServicesContext.Provider value={{ ...INERT_HOST_SERVICES, pageHref: segment => `/shop/${segment}` }}>
-        <CardTitleLink segment="queue" onOpen={() => {}}>
-          AI Queue
-        </CardTitleLink>
-      </HostServicesContext.Provider>,
-    )
-    expect(screen.getByRole('link', { name: 'AI Queue' }).getAttribute('href')).toBe('/shop/queue')
   })
 })

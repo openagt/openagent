@@ -26,11 +26,11 @@ export interface Placed {
 // the base class again would win over the refinement.
 const FULL = '@max-2xl:basis-full'
 const FLEX: Record<CardWidth, string> = {
-  '1/4': `${FULL} grow-[3] @2xl:basis-[calc(33.333%_-_0.667rem)] @4xl:basis-[calc(25%_-_0.75rem)]`,
-  '1/3': `${FULL} grow-[4] @2xl:basis-[calc(50%_-_0.5rem)] @5xl:basis-[calc(33.333%_-_0.667rem)]`,
-  '1/2': `${FULL} grow-[6] @2xl:basis-[calc(50%_-_0.5rem)]`,
-  '2/3': `${FULL} grow-[8] @2xl:basis-[calc(50%_-_0.5rem)] @5xl:basis-[calc(66.667%_-_0.334rem)]`,
-  '3/4': `${FULL} grow-[9] @2xl:basis-[calc(50%_-_0.5rem)] @5xl:basis-[calc(75%_-_0.25rem)]`,
+  '1/4': `${FULL} grow-[3] @2xl:basis-[calc(33.333%_-_1.333rem)] @4xl:basis-[calc(25%_-_1.5rem)]`,
+  '1/3': `${FULL} grow-[4] @2xl:basis-[calc(50%_-_1rem)] @5xl:basis-[calc(33.333%_-_1.333rem)]`,
+  '1/2': `${FULL} grow-[6] @2xl:basis-[calc(50%_-_1rem)]`,
+  '2/3': `${FULL} grow-[8] @2xl:basis-[calc(50%_-_1rem)] @5xl:basis-[calc(66.667%_-_0.667rem)]`,
+  '3/4': `${FULL} grow-[9] @2xl:basis-[calc(50%_-_1rem)] @5xl:basis-[calc(75%_-_0.5rem)]`,
   '1': 'basis-full grow-[12]',
 }
 
@@ -61,7 +61,8 @@ function CardCell({ card, className }: { card: OverviewCard; className: string }
 function Grid({ children, onDragOver, onDrop }: { children: ReactNode; onDragOver?: (event: DragEvent) => void; onDrop?: (event: DragEvent) => void }) {
   return (
     <div className="@container">
-      <div className="flex flex-wrap gap-4" onDragOver={onDragOver} onDrop={onDrop}>
+      {/* 40 down between the rows of parts, 32 across: space, not lines, sets them apart. */}
+      <div className="flex flex-wrap gap-x-8 gap-y-10" onDragOver={onDragOver} onDrop={onDrop}>
         {children}
       </div>
     </div>
@@ -83,7 +84,7 @@ const transitionName = (id: string): string => `card-${id.replace(/[^a-zA-Z0-9_-
 
 /** The bar in the gap beside a card where a dragged card lands. */
 function DropBar({ side }: { side: 'before' | 'after' }) {
-  return <span data-drop={side} aria-hidden className={cn('pointer-events-none absolute inset-y-0 z-20 w-1 rounded-full bg-primary', side === 'before' ? '-left-2.5' : '-right-2.5')} />
+  return <span data-drop={side} aria-hidden className={cn('pointer-events-none absolute inset-y-0 z-20 w-1 rounded-full bg-primary', side === 'before' ? '-left-4.5' : '-right-4.5')} />
 }
 
 /**

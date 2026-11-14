@@ -1,5 +1,4 @@
-import { MonitorSmartphone } from 'lucide-react'
-import { Card, CardContent, CardHeader, CardTitle, GaugeFace, inPlace, MachineMark, Tooltip, TooltipContent, TooltipTrigger, formatAge, machineKind, machineName, usePolled, useModuleHost, type Health, type MachineKind, type ModuleCardProps, type ModuleMachines } from '@openagt/dashboard/module'
+import { GaugeFace, PageLink, Section, MachineMark, Tooltip, TooltipContent, TooltipTrigger, formatAge, machineKind, machineName, usePolled, useModuleHost, type Health, type MachineKind, type ModuleCardProps, type ModuleMachines } from '@openagt/dashboard/module'
 import { loadStatus, type Answer, type DoorStatus } from './devices.js'
 import { isComputer } from './model.js'
 import { olderThan } from './parts.js'
@@ -10,7 +9,7 @@ import { olderThan } from './parts.js'
 // browsers in at this computer. Read from what is cheap to ask: one short call to each saved
 // machine (its ping, which says how it stands), and this computer's door. Never a server's SSH,
 // which Settings › Devices reads: a card polled on the Overview logging in to every server would
-// be a login every few seconds. Its title opens Settings › Devices.
+// be a login every few seconds. The link at its heading opens Settings › Devices.
 
 /** How often the card asks again: each time is one call to each saved machine. */
 const EVERY_MS = 30_000
@@ -23,43 +22,37 @@ export function DevicesCard(_props: ModuleCardProps) {
   const phones = door?.ok ? door.value.devices.filter(device => !isComputer(device)) : []
   const lastSeen = phones.map(phone => phone.seen ?? '').sort().at(-1)
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle className="text-base">
-          {/* The address of Settings › Devices over the page that is open: its query alone. */}
-          <a href="?settings=devices" onClick={inPlace(() => host.openSettings('devices'))} className="-mx-1 inline-flex items-center gap-2 rounded px-1 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-primary)]">
-            <MonitorSmartphone className="h-4 w-4 text-muted-foreground" aria-hidden />
-            Devices
-          </a>
-        </CardTitle>
-      </CardHeader>
-      <CardContent className="space-y-2.5">
-        {!loaded || !machines ? (
-          <p className="text-sm text-muted-foreground">Loading…</p>
-        ) : (
-          <ul className="space-y-2.5">
-            <Row kind="computer" name={machines.name ?? 'This computer'} note="this computer" online health={machines.health} />
-            {machines.machines.map(machine => (
-              <Row
-                key={machine.id}
-                kind={machineKind(machine).kind}
-                name={machineName(machine)}
-                note={machineKind(machine).place}
-                online={machine.version !== undefined}
-                health={machine.health}
-                behind={machine.version !== undefined && olderThan(machine.version, machines.version) ? machine.version : undefined}
-              />
-            ))}
-          </ul>
-        )}
-        {phones.length > 0 && (
-          <button type="button" onClick={() => host.openSettings('devices')} className="relative block text-left text-xs text-muted-foreground after:absolute after:-inset-y-1 after:inset-x-0 hover:text-foreground hover:underline">
-            {phones.length === 1 ? '1 phone or browser' : `${phones.length} phones and browsers`} in
-            {lastSeen ? ` · last seen ${formatAge(lastSeen)}` : ''}
-          </button>
-        )}
-      </CardContent>
-    </Card>
+    <Section
+      title="Devices"
+      // The address of Settings › Devices over the page that is open: its query alone.
+      action={<PageLink href="?settings=devices" onOpen={() => host.openSettings('devices')}>Settings</PageLink>}
+      className="space-y-2.5"
+  >
+      {!loaded || !machines ? (
+        <p className="text-sm text-muted-foreground">Loading…</p>
+      ) : (
+        <ul className="space-y-2.5">
+          <Row kind="computer" name={machines.name ?? 'This computer'} note="this computer" online health={machines.health} />
+          {machines.machines.map(machine => (
+            <Row
+              key={machine.id}
+              kind={machineKind(machine).kind}
+              name={machineName(machine)}
+              note={machineKind(machine).place}
+              online={machine.version !== undefined}
+              health={machine.health}
+              behind={machine.version !== undefined && olderThan(machine.version, machines.version) ? machine.version : undefined}
+            />
+          ))}
+        </ul>
+      )}
+      {phones.length > 0 && (
+        <button type="button" onClick={() => host.openSettings('devices')} className="relative block text-left text-xs text-muted-foreground after:absolute after:-inset-y-1 after:inset-x-0 hover:text-foreground hover:underline">
+          {phones.length === 1 ? '1 phone or browser' : `${phones.length} phones and browsers`} in
+          {lastSeen ? ` · last seen ${formatAge(lastSeen)}` : ''}
+        </button>
+      )}
+    </Section>
   )
 }
 

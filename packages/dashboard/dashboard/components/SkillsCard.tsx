@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { CircleCheck, Puzzle } from 'lucide-react'
+import { CircleCheck } from 'lucide-react'
 import type { ProjectSummary } from '../../src/index.js'
 import { onProjectSkills, sendProjectSkills, type ProjectSkills } from '../rpc/skills.js'
 import { runModuleCommand } from '../rpc/modules.js'
@@ -9,7 +9,7 @@ import { usePolled } from '../lib/use-async.js'
 import { openSettings } from '../lib/use-route.js'
 import { cn } from '../lib/utils.js'
 import { Button } from './ui/button.js'
-import { Card, CardContent, CardHeader, CardTitle } from './ui/card.js'
+import { Section } from './ui/section.js'
 import { useAction } from '../lib/use-action.js'
 import { SKILLS_ENTRY, sendWord, skillsSay, updateSkills } from './ProjectSkills.js'
 
@@ -102,35 +102,31 @@ export function SkillsCard({ projects, onSelectProject, projectHref }: { project
     }
   }
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle className="flex items-center gap-2 text-base">
-          <Puzzle className="h-4 w-4 text-muted-foreground" aria-hidden />
-          Skills
-          {updatable.length > 1 && (
-            <Button variant="outline" size="sm" className="ml-auto font-normal" disabled={updatingAll} onClick={() => void updateAll()} title={`Take the newer versions in ${updatable.map(read => read.project.name).join(', ')}`}>
-              {updatingAll ? 'Updating…' : `Update all (${updatable.length})`}
-            </Button>
-          )}
-        </CardTitle>
-        <p className="text-xs text-muted-foreground">What each project adds to its agents, and what is new</p>
-      </CardHeader>
-      <CardContent>
-        {!loaded ? (
-          <p className="text-sm text-muted-foreground">Loading…</p>
-        ) : (
-          <>
-            <ul className="space-y-2">
-              {reads.map(read => (
-                <Row key={read.project.id} read={read} reload={reload} href={projectHref(read.project.id)} onOpen={() => onSelectProject(read.project.id)} />
-              ))}
-            </ul>
-            {all.error && <p className="mt-2 text-xs text-danger">{all.error}</p>}
-            <Usage used={used} unused={unused} />
-          </>
-        )}
-      </CardContent>
-    </Card>
+    <Section
+      title="Skills"
+      action={
+        updatable.length > 1 ? (
+          <Button variant="outline" size="sm" disabled={updatingAll} onClick={() => void updateAll()} title={`Take the newer versions in ${updatable.map(read => read.project.name).join(', ')}`}>
+            {updatingAll ? 'Updating…' : `Update all (${updatable.length})`}
+          </Button>
+        ) : undefined
+      }
+    >
+      <p className="-mt-1 mb-3 text-xs text-muted-foreground">What each project adds to its agents, and what is new</p>
+      {!loaded ? (
+        <p className="text-sm text-muted-foreground">Loading…</p>
+      ) : (
+        <>
+          <ul className="space-y-2">
+            {reads.map(read => (
+              <Row key={read.project.id} read={read} reload={reload} href={projectHref(read.project.id)} onOpen={() => onSelectProject(read.project.id)} />
+            ))}
+          </ul>
+          {all.error && <p className="mt-2 text-xs text-danger">{all.error}</p>}
+          <Usage used={used} unused={unused} />
+        </>
+      )}
+    </Section>
   )
 }
 

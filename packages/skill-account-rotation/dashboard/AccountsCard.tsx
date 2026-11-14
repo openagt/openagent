@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type RefObject } from 'react'
-import { Check, ChevronDown, Copy, Info, KeyRound, MoreHorizontal, Plus } from 'lucide-react'
-import { Button, Card, CardContent, CardHeader, CardTitle, ClaudeLogo, CodexLogo, Dialog, DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, GaugeFace, Input, Skeleton, Tooltip, TooltipContent, TooltipTrigger, cn, useModuleHost, useOpenAgentDown, usePolled, type ModuleCardProps, type ModuleHost } from '@openagt/dashboard/module'
+import { Check, ChevronDown, Copy, Info, MoreHorizontal, Plus } from 'lucide-react'
+import { Button, ClaudeLogo, CodexLogo, Dialog, DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, GaugeFace, Input, Section, Skeleton, Tooltip, TooltipContent, TooltipTrigger, cn, useModuleHost, useOpenAgentDown, usePolled, type ModuleCardProps, type ModuleHost } from '@openagt/dashboard/module'
 
 // The accounts each coding agent's runs try, in order: how full each one is, whether it is at a
 // limit, adding one: the command's own sign-in, which goes on by itself while the card follows it,
@@ -525,25 +525,20 @@ export function AccountsCard({ accountWhere }: ModuleCardProps) {
   const namingNow = (naming !== undefined ? adding?.[naming] : undefined) ?? {}
 
   return (
-    <Card>
-      <CardHeader>
-        <div className="flex items-center justify-between gap-2">
-          <CardTitle className="text-base">
-            <span className="inline-flex items-center gap-2">
-              <KeyRound className="h-4 w-4 text-muted-foreground" aria-hidden />
-              Coding agent accounts
-              {/* What this card's package does with them, said only where it does something: an agent with two accounts or more. */}
-              {rotates && (
-                <Tooltip>
-                  <TooltipTrigger render={<button type="button" aria-label="What happens at an account's limit" className="font-normal text-muted-foreground hover:text-foreground" />}>
-                    <Info className="h-3.5 w-3.5" aria-hidden />
-                  </TooltipTrigger>
-                  <TooltipContent className="max-w-xs">When an account hits its limit, the next free one of the same agent takes the run over where it stopped.</TooltipContent>
-                </Tooltip>
-              )}
-            </span>
-          </CardTitle>
-          {/* Another account, at the card's title: whose agent it is for, then its sign-in in a dialog. With none yet, the presses are in the card. */}
+    <Section
+      title="Coding agent accounts"
+      action={
+        <>
+          {/* What this card's package does with them, said only where it does something: an agent with two accounts or more. */}
+          {rotates && (
+            <Tooltip>
+              <TooltipTrigger render={<Button variant="ghost" size="icon-sm" aria-label="What happens at an account's limit" className="text-muted-foreground" />}>
+                <Info className="size-4" aria-hidden />
+              </TooltipTrigger>
+              <TooltipContent className="max-w-xs">When an account hits its limit, the next free one of the same agent takes the run over where it stopped.</TooltipContent>
+            </Tooltip>
+          )}
+          {/* Another account, at the heading: whose agent it is for, then its sign-in in a dialog. With none yet, the presses are under it. */}
           {list?.ok && !none && (
             <DropdownMenu>
               <DropdownMenuTrigger ref={addPress} render={<Button variant="outline" aria-label="Add an account" />}>
@@ -561,9 +556,10 @@ export function AccountsCard({ accountWhere }: ModuleCardProps) {
               </DropdownMenuContent>
             </DropdownMenu>
           )}
-        </div>
-      </CardHeader>
-      <CardContent className="flex flex-col gap-1">
+        </>
+      }
+    >
+      <div className="flex flex-col gap-1">
         {list === undefined && !loaded && <Skeleton className="h-16 w-full" />}
         {list?.ok === false && <p className="text-sm text-danger">{list.error}</p>}
         {list?.ok &&
@@ -605,7 +601,7 @@ export function AccountsCard({ accountWhere }: ModuleCardProps) {
             </div>
           </div>
         )}
-      </CardContent>
+      </div>
       <Dialog open={namingAgent !== undefined} onOpenChange={open => !open && close()} title={namingAgent ? `Add a ${namingAgent.account} account` : ''} initialFocus={nameField} finalFocus={addPress}>
         {namingAgent && (
           <AddAccount
@@ -620,6 +616,6 @@ export function AccountsCard({ accountWhere }: ModuleCardProps) {
           />
         )}
       </Dialog>
-    </Card>
+    </Section>
   )
 }

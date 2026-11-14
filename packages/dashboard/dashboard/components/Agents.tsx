@@ -1,7 +1,6 @@
 import { useContext } from 'react'
 import type { ActiveAgent } from '../../src/index.js'
-import { Bot } from 'lucide-react'
-import { Card, CardContent, CardHeader, CardTitle } from './ui/card.js'
+import { Section } from './ui/section.js'
 import { Tooltip, TooltipTrigger, TooltipContent } from './ui/tooltip.js'
 import { formatAge, formatDateTime } from '../lib/format-date.js'
 import { OnComputer } from './MachineMark.js'
@@ -38,41 +37,30 @@ export function Agents({
 }) {
   const services = useContext(HostServicesContext) ?? INERT_HOST_SERVICES
   return (
-    <Card>
-      <CardHeader>
-        {/* The one-line description sits beside the title rather than under a "Current" eyebrow of
-            its own: with the Recent column gone there is nothing left for column headers to tell
-            apart. */}
-        <CardTitle className="flex items-center gap-2 text-base">
-          <Bot className="h-4 w-4 shrink-0 text-muted-foreground" />
-          Agents at work
-          <span className="truncate text-xs font-normal text-muted-foreground">Agents currently working</span>
-        </CardTitle>
-      </CardHeader>
-      <CardContent>
-        {!loaded ? (
-          <p className="text-sm text-muted-foreground">Loading…</p>
-        ) : working.length === 0 ? (
-          <p className="text-sm text-muted-foreground">No agent is at work.</p>
-        ) : (
-          <ul className="space-y-0.5">
-            {working.map(a => (
-              <AgentRow
-                key={`${a.projectId}:${a.agentId}`}
-                label={activeLabel(a)}
-                naming={awaitingName(a, namesRuns)}
-                cloud={a.cloud}
-                computer={a.computer}
-                at={a.updatedAt}
-                projectName={a.projectName}
-                href={services.agentHref(a.projectId, a.agentId)}
-                onOpen={() => onSelectAgent(a.projectId, a.agentId)}
-              />
-            ))}
-          </ul>
-        )}
-      </CardContent>
-    </Card>
+    <Section title="Agents at work" count={loaded && working.length > 0 ? working.length : undefined}>
+      <p className="-mt-1 mb-3 text-xs text-muted-foreground">Agents currently working</p>
+      {!loaded ? (
+        <p className="text-sm text-muted-foreground">Loading…</p>
+      ) : working.length === 0 ? (
+        <p className="text-sm text-muted-foreground">No agent is at work.</p>
+      ) : (
+        <ul className="-mx-2 space-y-0.5">
+          {working.map(a => (
+            <AgentRow
+              key={`${a.projectId}:${a.agentId}`}
+              label={activeLabel(a)}
+              naming={awaitingName(a, namesRuns)}
+              cloud={a.cloud}
+              computer={a.computer}
+              at={a.updatedAt}
+              projectName={a.projectName}
+              href={services.agentHref(a.projectId, a.agentId)}
+              onOpen={() => onSelectAgent(a.projectId, a.agentId)}
+            />
+          ))}
+        </ul>
+      )}
+    </Section>
   )
 }
 

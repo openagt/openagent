@@ -1,9 +1,8 @@
 import type { ReactNode } from 'react'
 import { Button } from '../components/ui/button.js'
-import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card.js'
+import { Card, CardContent, CardHeader, CardTitle, PageLink } from '../components/ui/card.js'
 import { Input } from '../components/ui/input.js'
 import { Badge } from '../components/ui/badge.js'
-import { CardTitleLink } from '../components/ui/card.js'
 import { Checkbox } from '../components/ui/checkbox.js'
 import { Label } from '../components/ui/label.js'
 import { RadioGroup, RadioGroupItem, RadioGroupOption } from '../components/ui/radio-group.js'
@@ -396,17 +395,9 @@ function Tables() {
           </TableRow>
         </TableBody>
       </Table>
-      <Card className="max-w-sm">
-        <CardHeader>
-          <CardTitleLink segment="queue" onOpen={() => {}}>
-            A card whose title opens its page
-          </CardTitleLink>
-          <p className="text-xs text-muted-foreground">The arrow shows on hover and focus, and always on a phone.</p>
-        </CardHeader>
-        <CardContent>
-          <p className="text-sm text-muted-foreground">A summary; the whole is on the page.</p>
-        </CardContent>
-      </Card>
+      <Section title="A part of the Overview" count={3} action={<PageLink href="/queue" onOpen={() => {}}>Queue</PageLink>} className="max-w-sm">
+        <p className="text-sm text-muted-foreground">A summary; the whole is on the page its link opens.</p>
+      </Section>
     </div>
   )
 }

@@ -6,7 +6,7 @@ import { useQuota } from '../lib/quota.js'
 import { useModuleHost, type ModuleProject, type UsageLimitSaved } from '../module/index.js'
 import { useMountedModules, type MountedUsageLimit } from '../lib/use-modules.js'
 import { usePolled } from '../lib/use-async.js'
-import { Card, CardContent, CardHeader, CardTitle } from './ui/card.js'
+import { Section } from './ui/section.js'
 import { cn } from '../lib/utils.js'
 import { ModuleSlot, projectsHaving } from './ModulePageView.js'
 import { formatRelative, formatResetDay, formatResetTooltip, formatDuration, formatDurationLong } from '../lib/format-date.js'
@@ -498,11 +498,8 @@ export function Quota({ projects }: { projects: ProjectSummary[] }) {
   const windows = view?.windows ?? []
 
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle className="text-base">Usage</CardTitle>
-      </CardHeader>
-      <CardContent className="space-y-4">
+    <Section title="Usage">
+      <div className="space-y-4">
         {!view && <p className="text-sm text-muted-foreground">Reading your usage…</p>}
 
         {/* Without a placeable week there is no axis to draw. Say so, loudly — no fallback (Rom):
@@ -542,7 +539,7 @@ export function Quota({ projects }: { projects: ProjectSummary[] }) {
             {staleAt !== undefined ? ` Last read ${formatRelative(new Date(staleAt).toISOString())}.` : ''}
           </p>
         ) : null}
-      </CardContent>
-    </Card>
+      </div>
+    </Section>
   )
 }

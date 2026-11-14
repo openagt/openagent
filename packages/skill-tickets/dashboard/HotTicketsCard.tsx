@@ -1,6 +1,6 @@
-import { useState, type ReactNode } from 'react'
-import { ArrowUp, Bot, CirclePause, Clock, Flame, WifiOff, type LucideIcon } from 'lucide-react'
-import { Button, Card, CardContent, CardHeader, CardTitleLink, LinkActions, cn, formatDateTime, inPlace, usePolled, useModuleHost, useOpenAgentDown, type ModuleCardProps, type ModuleProject } from '@openagt/dashboard/module'
+import { useState } from 'react'
+import { ArrowUp, Bot, CirclePause, Clock, WifiOff, type LucideIcon } from 'lucide-react'
+import { Button, LinkActions, PageLink, Section, cn, formatDateTime, inPlace, usePolled, useModuleHost, useOpenAgentDown, type ModuleCardProps, type ModuleProject } from '@openagt/dashboard/module'
 import { claimState, heldBack, holderAgent, hotLane, ticketLink, withHolder, type ClaimState, type HotLane } from '../src/module.js'
 import { holdingRun } from './lib/holding-run.js'
 import { listTickets } from './lib/list.js'
@@ -87,25 +87,17 @@ export function HotTicketsCard({ projects }: ModuleCardProps) {
     { remember: `skill-tickets:hot:${key}`, stored: true },
   )
 
-  const title = (
-    <CardTitleLink icon={<Flame className="h-4 w-4 text-muted-foreground" aria-hidden />} segment="tickets" onOpen={() => host.openPage('tickets')}>
-      Hot tickets
-    </CardTitleLink>
+  return (
+    <Section title="Hot tickets" count={read.hot.length > 0 ? read.hot.length : undefined} action={<PageLink href={host.pageHref('tickets')} onOpen={() => host.openPage('tickets')}>Tickets</PageLink>}>
+      {loaded && read.hot.length === 0 && read.errors.length === 0 ? (
+        // Named lanes, not "no tickets": the list is a shortlist, and its empty state must not
+        // claim the backlog is empty when merely nothing qualifies.
+        <p className="text-sm text-muted-foreground">Nothing claimed, high priority or waiting.</p>
+      ) : (
+        <HotList hot={read.hot} errors={read.errors} loaded={loaded} showProject={projects.length > 1} reload={reload} />
+      )}
+    </Section>
   )
-  // Nothing hot: the card is its title and one line, not a box as tall as a full one.
-  if (loaded && read.hot.length === 0 && read.errors.length === 0)
-    return (
-      <Card>
-        <CardHeader className="pb-4">
-          {title}
-          {/* Named lanes, not "no tickets": the card is a shortlist, and its empty state must not
-              claim the backlog is empty when merely nothing qualifies. */}
-          <p className="text-xs text-muted-foreground">Nothing claimed, high priority or waiting.</p>
-        </CardHeader>
-      </Card>
-    )
-
-  return <HotList hot={read.hot} errors={read.errors} loaded={loaded} title={title} showProject={projects.length > 1} reload={reload} />
 }
 
 /**
@@ -114,40 +106,37 @@ export function HotTicketsCard({ projects }: ModuleCardProps) {
  * what needs a person most: a claim held for nobody, then work going on, then what is flagged,
  * then what waits on someone else. A kind with nothing in it has no heading.
  */
-function HotList({ hot, errors, loaded, title, showProject, reload }: { hot: HotTicket[]; errors: Read['errors']; loaded: boolean; title: ReactNode; showProject: boolean; reload: () => Promise<void> }) {
+function HotList({ hot, errors, loaded, showProject, reload }: { hot: HotTicket[]; errors: Read['errors']; loaded: boolean; showProject: boolean; reload: () => Promise<void> }) {
   const groups = LANES.map(lane => ({ lane, tickets: hot.filter(t => t.lane === lane.key) })).filter(group => group.tickets.length > 0)
   return (
-    <Card>
-      <CardHeader>{title}</CardHeader>
-      <CardContent className="pt-2!">
-        {errors.map(({ project, error }) => (
-          <p key={project.id} role="alert" className="mb-2 text-xs text-danger">
-            Could not read the tickets of {project.name}: {error}
-          </p>
-        ))}
-        {!loaded ? (
-          <p className="py-2 text-sm text-muted-foreground">Loading…</p>
-        ) : (
-          // Every ticket, never a "+N more": the card is the shortlist. Pulled out by the rows' own
-          // inset, so their text starts where the card's title does.
-          <div className="-mx-2 space-y-3">
-            {groups.map(({ lane, tickets }) => (
-              <section key={lane.key} aria-label={lane.heading}>
-                <h4 className="flex items-baseline gap-1.5 px-2 pb-0.5 text-xs font-medium text-muted-foreground">
-                  {lane.heading}
-                  <span className="tabular-nums opacity-70">{tickets.length}</span>
-                </h4>
-                <ul>
-                  {tickets.map(t => (
-                    <Row key={`${t.project.id}:${t.ticket.file}`} hot={t} showProject={showProject} reload={reload} />
-                  ))}
-                </ul>
-              </section>
-            ))}
-          </div>
-        )}
-      </CardContent>
-    </Card>
+    <>
+      {errors.map(({ project, error }) => (
+        <p key={project.id} role="alert" className="mb-2 text-xs text-danger">
+          Could not read the tickets of {project.name}: {error}
+        </p>
+      ))}
+      {!loaded ? (
+        <p className="text-sm text-muted-foreground">Loading…</p>
+      ) : (
+        // Every ticket, never a "+N more": the list is the shortlist. Pulled out by the rows' own
+        // inset, so their text starts where the heading does.
+        <div className="-mx-2 space-y-3">
+          {groups.map(({ lane, tickets }) => (
+            <section key={lane.key} aria-label={lane.heading}>
+              <h3 className="flex items-baseline gap-1.5 px-2 pb-0.5 text-xs font-medium text-muted-foreground">
+                {lane.heading}
+                <span className="tabular-nums opacity-70">{tickets.length}</span>
+              </h3>
+              <ul>
+                {tickets.map(t => (
+                  <Row key={`${t.project.id}:${t.ticket.file}`} hot={t} showProject={showProject} reload={reload} />
+                ))}
+              </ul>
+            </section>
+          ))}
+        </div>
+      )}
+    </>
   )
 }
 

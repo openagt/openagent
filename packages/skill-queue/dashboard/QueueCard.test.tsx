@@ -135,11 +135,11 @@ describe('QueueCard', () => {
     expect(started()).toEqual([])
   })
 
-  test('the entries are numbered in the order agents take them, and the card\'s title opens the Queue page', async () => {
+  test('the entries are numbered in the order agents take them, and the link at its heading opens the Queue page', async () => {
     render({ p1: [LOGIN, 'Tidy the loader'] })
     await screen.findByText('Login page')
     expect([...document.querySelectorAll('ul ul > li')].map(row => row.querySelector('span')?.textContent)).toEqual(['1.', '2.'])
-    const title = screen.getByRole('link', { name: 'AI Queue' })
+    const title = screen.getByRole('link', { name: 'Queue' })
     expect(title.getAttribute('href')).toBe('/queue')
     fireEvent.click(title)
     expect(host.openPage).toHaveBeenCalledWith('queue')

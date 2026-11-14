@@ -1,8 +1,8 @@
 import type { ActiveAgent, Intervention } from '../../src/index.js'
 import { useState } from 'react'
-import { Inbox, SlidersHorizontal } from 'lucide-react'
+import { SlidersHorizontal } from 'lucide-react'
 import { Quota } from './Quota.js'
-import { Card, CardContent, CardHeader, CardTitle } from './ui/card.js'
+import { Section } from './ui/section.js'
 import { Button } from './ui/button.js'
 import { HumanQueueList } from './HumanQueueList.js'
 import { updatePreferences, usePreferences, usePreferencesLoaded } from '../lib/preferences.js'
@@ -238,42 +238,29 @@ function HumanQueue({
 }) {
   const groups = KINDS.map(kind => ({ ...kind, items: items.filter(item => item.kind === kind.value) })).filter(group => group.items.length > 0)
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle className="flex items-center gap-2 text-base">
-          <Inbox className="h-4 w-4 text-muted-foreground" />
-          Human Queue
-          {items.length > 0 && (
-            <span className="rounded-full bg-primary px-1.5 text-xs font-semibold text-primary-foreground tabular-nums">
-              {items.length}
-            </span>
-          )}
-        </CardTitle>
-        <p className="text-xs text-muted-foreground">Agents awaiting your approval, review, or input</p>
-      </CardHeader>
-      <CardContent>
-        {!loaded ? (
-          <p className="py-2 text-sm text-muted-foreground">Loading…</p>
-        ) : items.length === 0 ? (
-          <p className="py-2 text-sm text-muted-foreground">AI doesn&apos;t need you.</p>
-        ) : (
-          // One group per kind, under a quiet heading with how many: a few questions are not lost
-          // among many checkouts left to commit. Each group shows its first rows and offers the rest.
-          // Pulled out by the rows' own inset, so their text starts where the card's title does.
-          <div className="-mx-2 space-y-3">
-            {groups.map(group => (
-              <section key={group.value} aria-label={group.label}>
-                <h4 className="flex items-baseline gap-1.5 px-2 pb-0.5 text-xs font-medium text-muted-foreground">
-                  {group.label}
-                  <span className="tabular-nums opacity-70">{group.items.length}</span>
-                </h4>
-                <HumanQueueList grouped items={group.items} onOpenAgent={onSelectAgent} onOpenProject={onSelectProject} />
-              </section>
-            ))}
-          </div>
-        )}
-      </CardContent>
-    </Card>
+    <Section title="Human Queue" count={items.length > 0 ? items.length : undefined}>
+      <p className="-mt-1 mb-3 text-xs text-muted-foreground">Agents awaiting your approval, review, or input</p>
+      {!loaded ? (
+        <p className="text-sm text-muted-foreground">Loading…</p>
+      ) : items.length === 0 ? (
+        <p className="text-sm text-muted-foreground">AI doesn&apos;t need you.</p>
+      ) : (
+        // One group per kind, under a quiet heading with how many: a few questions are not lost
+        // among many checkouts left to commit. Each group shows its first rows and offers the rest.
+        // Pulled out by the rows' own inset, so their text starts where the heading does.
+        <div className="-mx-3 space-y-3">
+          {groups.map(group => (
+            <section key={group.value} aria-label={group.label}>
+              <h3 className="flex items-baseline gap-1.5 px-3 pb-0.5 text-xs font-medium text-muted-foreground">
+                {group.label}
+                <span className="tabular-nums opacity-70">{group.items.length}</span>
+              </h3>
+              <HumanQueueList grouped items={group.items} onOpenAgent={onSelectAgent} onOpenProject={onSelectProject} />
+            </section>
+          ))}
+        </div>
+      )}
+    </Section>
   )
 }
 

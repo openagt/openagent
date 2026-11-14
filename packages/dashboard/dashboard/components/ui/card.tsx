@@ -1,7 +1,6 @@
-import { useContext, type HTMLAttributes, type ReactNode } from 'react'
+import type { HTMLAttributes, ReactNode } from 'react'
 import { ArrowRight } from 'lucide-react'
 import { cn } from '../../lib/utils.js'
-import { HostServicesContext, INERT_HOST_SERVICES } from '../../lib/host-services.js'
 import { inPlace } from '../../lib/in-place.js'
 
 // Minimal shadcn-style Card for the dashboard page (#471): a bordered surface with an
@@ -22,27 +21,20 @@ export function CardContent({ className, ...props }: HTMLAttributes<HTMLDivEleme
   return <div className={cn('p-4', className)} {...props} />
 }
 
-
 /**
- * A card's title that opens the card's own page, named by its `segment`. A card on the Overview
- * is a summary: its title is the way to the whole. A real link, so it also opens in a new tab,
- * with the project the dashboard is showing; a plain click goes through `onOpen`, the dashboard's
- * own navigation. The arrow shows on hover and focus, and always on a
- * phone, where nothing hovers.
+ * The way from a part of the Overview to its own page, at its heading's right: the page's name and an
+ * arrow. A real link, so it also opens in a new tab; a plain click goes through `onOpen`, the
+ * dashboard's own navigation.
  */
-export function CardTitleLink({ icon, children, segment, onOpen, className }: { icon?: ReactNode; children: ReactNode; /** The page the title opens, by its segment. */ segment: string; onOpen: () => void; className?: string }) {
-  const services = useContext(HostServicesContext) ?? INERT_HOST_SERVICES
+export function PageLink({ children, href, onOpen }: { children: ReactNode; href: string; onOpen: () => void }) {
   return (
-    <CardTitle className={cn('text-base', className)}>
-      <a
-        href={services.pageHref(segment)}
-        onClick={inPlace(onOpen)}
-        className="group -mx-1 inline-flex items-center gap-2 rounded-sm px-1 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-primary)]"
-      >
-        {icon}
-        {children}
-        <ArrowRight className="h-3.5 w-3.5 text-muted-foreground transition-opacity md:opacity-0 md:group-hover:opacity-100 md:group-focus-visible:opacity-100" aria-hidden />
-      </a>
-    </CardTitle>
+    <a
+      href={href}
+      onClick={inPlace(onOpen)}
+      className="focus-ring -mr-2 inline-flex items-center gap-1 rounded-md px-2 text-sm text-muted-foreground transition-colors hover:bg-accent hover:text-foreground active:bg-foreground/10 md:h-7 max-md:h-11"
+    >
+      {children}
+      <ArrowRight className="size-3.5" aria-hidden />
+    </a>
   )
 }

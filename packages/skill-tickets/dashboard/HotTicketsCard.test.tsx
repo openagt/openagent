@@ -107,7 +107,7 @@ describe('HotTicketsCard', () => {
     expect(screen.getByRole('region', { name: 'Claimed, run stopped' }).textContent).toContain('left')
     expect(screen.getByLabelText('Its run waits on your answer, claimed by run-2: open the run')).toBeTruthy()
     // The claims held for nobody come first: they are the ones a person has to act on.
-    expect(screen.getAllByRole('region')[0]!.getAttribute('aria-label')).toBe('Claimed, run stopped')
+    expect(within(screen.getByRole('region', { name: 'Hot tickets' })).getAllByRole('region')[0]!.getAttribute('aria-label')).toBe('Claimed, run stopped')
   })
 
   test("a claim whose run's computer is offline is neither being worked on nor stopped: it says which computer and since when", async () => {
@@ -197,11 +197,10 @@ describe('HotTicketsCard', () => {
     expect(screen.queryByRole('region', { name: 'Claimed, run stopped' })).toBeNull()
   })
 
-  test('the card\'s title opens the Tickets page', async () => {
+  test('the link at its heading opens the Tickets page', async () => {
     render({ p1: { 'list --local': [] }, p2: { 'list --local': [] } })
-    // Read once the card has loaded: the loading card is drawn anew as the empty one.
     await screen.findByText('Nothing claimed, high priority or waiting.')
-    const title = screen.getByRole('link', { name: 'Hot tickets' })
+    const title = screen.getByRole('link', { name: 'Tickets' })
     expect(title.getAttribute('href')).toBe('/tickets')
     fireEvent.click(title)
     expect(host.openPage).toHaveBeenCalledWith('tickets')
