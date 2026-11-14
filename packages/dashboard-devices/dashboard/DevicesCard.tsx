@@ -26,12 +26,12 @@ export function DevicesCard(_props: ModuleCardProps) {
       title="Devices"
       // The address of Settings › Devices over the page that is open: its query alone.
       action={<PageLink href="?settings=devices" onOpen={() => host.openSettings('devices')}>Settings</PageLink>}
-      className="space-y-2.5"
+      className="space-y-2"
   >
       {!loaded || !machines ? (
         <p className="text-sm text-muted-foreground">Loading…</p>
       ) : (
-        <ul className="space-y-2.5">
+        <ul className="space-y-1">
           <Row kind="computer" name={machines.name ?? 'This computer'} note="this computer" online health={machines.health} />
           {machines.machines.map(machine => (
             <Row
@@ -64,7 +64,7 @@ export function DevicesCard(_props: ModuleCardProps) {
  */
 function Row({ kind, name, note, online, health, behind }: { kind: MachineKind; name: string; note?: string | undefined; online: boolean; health: Health | undefined; behind?: string | undefined }) {
   return (
-    <li className="flex min-w-0 items-center gap-2">
+    <li className="flex min-w-0 items-center gap-3 md:min-h-10 max-md:min-h-11">
       <MachineMark kind={kind} online={online} labelled />
       <div className="min-w-0 flex-1">
         <p className="min-w-0 truncate text-sm font-medium" title={name}>

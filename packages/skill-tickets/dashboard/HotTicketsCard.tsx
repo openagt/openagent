@@ -120,12 +120,12 @@ function HotList({ hot, errors, loaded, showProject, reload }: { hot: HotTicket[
       ) : (
         // Every ticket, never a "+N more": the list is the shortlist. Pulled out by the rows' own
         // inset, so their text starts where the heading does.
-        <div className="-mx-2 space-y-3">
+        <div className="-mx-3 space-y-3">
           {groups.map(({ lane, tickets }) => (
             <section key={lane.key} aria-label={lane.heading}>
-              <h3 className="flex items-baseline gap-1.5 px-2 pb-0.5 text-xs font-medium text-muted-foreground">
+              <h3 className="flex items-baseline gap-1.5 px-3 pb-0.5 text-xs font-medium text-muted-foreground">
                 {lane.heading}
-                <span className="tabular-nums opacity-70">{tickets.length}</span>
+                <span className="tabular-nums">{tickets.length}</span>
               </h3>
               <ul>
                 {tickets.map(t => (
@@ -159,8 +159,8 @@ function stateOf(hot: HotTicket): { Icon: LucideIcon; says: string; tone: string
  * what it waits on, its project where the card spans several), and, under the pointer, what can be
  * done with it, laid over the title's end beside that fact rather than pushing the row. A ticket held for nobody can be
  * gone on with (its run opens) or let go (the claim is lifted, and it is a ticket like any other
- * again); one held by a run at work, or in review or waiting, has nothing to be done here. A phone
- * has no hover: there the actions always show, in the row.
+ * again); one held by a run at work, or in review or waiting, has nothing to be done here. A touch
+ * screen has no hover: there the actions always show.
  */
 function Row({ hot, showProject, reload }: { hot: HotTicket; showProject: boolean; reload: () => Promise<void> }) {
   const host = useModuleHost()
@@ -195,7 +195,7 @@ function Row({ hot, showProject, reload }: { hot: HotTicket; showProject: boolea
   const fact = lane === 'waiting' ? ticket.waiting : lane === 'high-priority' && ticket.priority ? `P${ticket.priority}` : undefined
   const mark = <Icon className="h-3.5 w-3.5" aria-hidden />
   return (
-    <li className="group/row relative flex h-8 items-center gap-2.5 rounded-md px-2 text-sm hover:bg-accent">
+    <li className="group/row relative flex items-center gap-3 rounded-md px-3 text-sm transition-colors hover:bg-accent md:h-10 max-md:h-11">
       {lane === 'working' && holder ? (
         <button type="button" onClick={() => host.openAgent(project.id, holder.id)} title={says} aria-label={says} className={cn('flex size-4 shrink-0 items-center justify-center', tone)}>
           {mark}
@@ -205,14 +205,14 @@ function Row({ hot, showProject, reload }: { hot: HotTicket; showProject: boolea
           {mark}
         </span>
       )}
-      <a href={host.pageHref('tickets', [ticket.file], project.id)} onClick={inPlace(() => host.openPage('tickets', [ticket.file], project.id))} className="min-w-0 flex-1 truncate text-left text-foreground hover:underline">
+      <a href={host.pageHref('tickets', [ticket.file], project.id)} onClick={inPlace(() => host.openPage('tickets', [ticket.file], project.id))} className="focus-ring min-w-0 flex-1 truncate rounded-sm text-left font-medium text-foreground">
         {ticket.title}
       </a>
       {failed && <span className="shrink-0 text-xs text-danger">{failed}</span>}
-      <span className="relative flex shrink-0 items-center gap-2.5 self-stretch md:bg-[inherit]">
+      <span className="relative flex shrink-0 items-center gap-3 self-stretch md:bg-[inherit]">
         {/* Laid over the title's end, on the row's own colour, so the row never moves under the pointer and its fact stays in view. */}
         {actions && (
-          <div className="flex items-center gap-0.5 md:absolute md:inset-y-0 md:right-full md:w-max md:bg-[inherit] md:pl-3 md:opacity-0 md:transition-opacity md:group-hover/row:opacity-100 md:focus-within:opacity-100">
+          <div className="flex items-center gap-0.5 md:absolute md:inset-y-0 md:right-full md:w-max md:bg-[inherit] md:pl-3 transition-opacity pointer-fine:opacity-0 pointer-fine:group-hover/row:opacity-100 pointer-fine:focus-within:opacity-100">
             {actions}
           </div>
         )}

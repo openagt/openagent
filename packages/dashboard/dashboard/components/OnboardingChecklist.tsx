@@ -305,7 +305,7 @@ export function OnboardingChecklist({
                         >
                           <span>{step.label}</span>
                           {step.done && step.doneNote && <span className="truncate text-xs text-muted-foreground">· {step.doneNote}</span>}
-                          {step.optional && !step.done && <span className="rounded-full border border-border px-1.5 py-0.5 text-[10px] font-normal uppercase tracking-wide text-muted-foreground">Optional</span>}
+                          {step.optional && !step.done && <span className="text-xs font-normal text-muted-foreground">Optional</span>}
                         </button>
                         {isOpen && step.info && (
                           <Tooltip>

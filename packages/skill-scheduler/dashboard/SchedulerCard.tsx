@@ -122,9 +122,9 @@ function OnRow({ project, command, stopped, lookedAt, onOpenRun, reload }: { pro
   return (
     // One line, whatever the card's width: the name whole, when it starts next cut short (and said
     // whole on hover), never a second line that leaves the rows at uneven gaps.
-    <li className="group/row relative -mx-2 flex h-8 items-center gap-3 rounded-md px-2 text-sm hover:bg-accent/60">
+    <li className="group/row relative -mx-3 flex items-center gap-3 rounded-md px-3 text-sm transition-colors hover:bg-accent md:h-10 max-md:h-11">
       <span aria-hidden className={cn('size-1.5 shrink-0 rounded-full', stopped ? 'bg-muted-foreground/50' : 'bg-success')} />
-      <span className="shrink-0 font-mono text-[13px]">{rowTitle(command)}</span>
+      <span className="shrink-0 font-mono text-xs font-medium">{rowTitle(command)}</span>
       {/* While the scheduler is stopped a row has no next start: the line above says why. */}
       {!stopped && (
         <span title={startsNext(command)} className="min-w-0 truncate text-xs text-muted-foreground">
@@ -146,7 +146,7 @@ function OnRow({ project, command, stopped, lookedAt, onOpenRun, reload }: { pro
           <CodeWords text={said.failed} />
         </span>
       )}
-      {/* Under the pointer, or with the keyboard on it; a phone has no hover, and there it always shows. */}
+      {/* Under the pointer, or with the keyboard on it; a touch screen has no hover, and there it always shows. */}
       {cannotRun(command) === undefined && (
         <Button
           variant="ghost"
@@ -154,7 +154,7 @@ function OnRow({ project, command, stopped, lookedAt, onOpenRun, reload }: { pro
           disabled={busy || down}
           onClick={() => void runNow()}
           aria-label={`Run ${rowTitle(command)} now`}
-          className="bg-[inherit] transition-opacity md:absolute md:inset-y-0 md:right-1 md:my-auto md:opacity-0 md:group-hover/row:opacity-100 md:focus-visible:opacity-100 md:disabled:opacity-100 max-md:ml-auto"
+          className="bg-[inherit] transition-opacity md:absolute md:inset-y-0 md:right-1 md:my-auto pointer-fine:opacity-0 pointer-fine:group-hover/row:opacity-100 pointer-fine:focus-visible:opacity-100 pointer-fine:disabled:opacity-100 max-md:ml-auto"
         >
           {busy ? 'Starting…' : 'Run now'}
         </Button>

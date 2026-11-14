@@ -117,7 +117,7 @@ export function SkillsCard({ projects, onSelectProject, projectHref }: { project
         <p className="text-sm text-muted-foreground">Loading…</p>
       ) : (
         <>
-          <ul className="space-y-2">
+          <ul>
             {reads.map(read => (
               <Row key={read.project.id} read={read} reload={reload} href={projectHref(read.project.id)} onOpen={() => onSelectProject(read.project.id)} />
             ))}
@@ -146,7 +146,7 @@ function Row({ read, reload, href, onOpen }: { read: Read; reload: () => Promise
   const says = skills ? skillsSay(skills) : undefined
   return (
     <li aria-label={project.name} className="min-w-0">
-      <div className="flex min-w-0 items-center gap-2 text-sm">
+      <div className="flex min-w-0 items-center gap-2 text-sm md:min-h-10 max-md:min-h-11">
         <a href={href} onClick={inPlace(onOpen)} className="min-w-0 truncate font-medium hover:underline">
           {project.name}
         </a>
@@ -211,8 +211,8 @@ function Usage({ used, unused }: { used: SkillUse[]; unused: string[] }) {
   const most = used[0]!.uses
   const more = used.length - TOP
   return (
-    <section aria-label="Most used" className="mt-3 border-t border-border pt-3">
-      <h4 className="mb-1.5 text-xs font-medium text-muted-foreground">Most used, last 30 days</h4>
+    <section aria-label="Most used" className="mt-4">
+      <h3 className="mb-1.5 text-xs font-medium text-muted-foreground">Most used, last 30 days</h3>
       <ul className="space-y-1">
         {used.slice(0, TOP).map(use => (
           <li key={use.skill} aria-label={use.skill} className="flex items-center gap-2 text-xs" title={`Used ${use.uses} times in ${use.runs === 1 ? '1 run' : `${use.runs} runs`}`}>
@@ -227,7 +227,7 @@ function Usage({ used, unused }: { used: SkillUse[]; unused: string[] }) {
       {more > 0 && <p className="mt-1 text-xs text-muted-foreground">and {more === 1 ? '1 more' : `${more} more`}</p>}
       {unused.length > 0 && (
         <p className="mt-2 text-xs text-muted-foreground" title={unused.join(', ')}>
-          <span className="text-foreground/80">Not used:</span> {unused.slice(0, 4).join(', ')}
+          <span className="text-foreground">Not used:</span> {unused.slice(0, 4).join(', ')}
           {unused.length > 4 ? ` and ${unused.length - 4} more` : ''}
         </p>
       )}

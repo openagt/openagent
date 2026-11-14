@@ -253,7 +253,7 @@ function HumanQueue({
             <section key={group.value} aria-label={group.label}>
               <h3 className="flex items-baseline gap-1.5 px-3 pb-0.5 text-xs font-medium text-muted-foreground">
                 {group.label}
-                <span className="tabular-nums opacity-70">{group.items.length}</span>
+                <span className="tabular-nums">{group.items.length}</span>
               </h3>
               <HumanQueueList grouped items={group.items} onOpenAgent={onSelectAgent} onOpenProject={onSelectProject} />
             </section>

@@ -66,9 +66,9 @@ export function MembersCard({ projects }: ModuleCardProps) {
       ) : members.length === 0 ? (
         <p className="text-sm text-muted-foreground">No one has started an agent here yet.</p>
       ) : (
-        <ul className="space-y-2.5">
+        <ul className="space-y-1">
           {members.map(member => (
-            <li key={member.person} aria-label={personName(member.person, member.name)} className="flex min-w-0 items-center gap-2.5">
+            <li key={member.person} aria-label={personName(member.person, member.name)} className="flex min-w-0 items-center gap-3 md:min-h-10 max-md:min-h-11">
               <PersonMark email={member.person} name={member.name} picture={member.account?.avatar} you={member.you} />
               <div className="min-w-0 flex-1">
                 <p className="flex min-w-0 items-center gap-1.5 text-sm">

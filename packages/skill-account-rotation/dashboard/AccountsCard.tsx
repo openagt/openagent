@@ -365,7 +365,7 @@ function AccountRow({
         aria-label={`Details of ${shown}`}
         aria-expanded={isOpen}
         onClick={() => onOpen(isOpen ? undefined : {})}
-        className="group -mx-2 flex w-[calc(100%+1rem)] min-w-0 items-center gap-2.5 rounded-md px-2 py-1 text-left transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-primary)]"
+        className="focus-ring group -mx-3 flex w-[calc(100%+1.5rem)] min-w-0 items-center gap-3 rounded-md px-3 py-1 text-left transition-colors hover:bg-accent active:bg-foreground/10 md:min-h-10 max-md:min-h-11"
       >
         <agent.Logo className="size-4 shrink-0 text-muted-foreground" />
         <span className="min-w-0 flex-1">

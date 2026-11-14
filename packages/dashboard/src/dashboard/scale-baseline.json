@@ -16,9 +16,6 @@
     "rounded": 1,
     "text-[11px]": 1
   },
-  "dashboard-devices/dashboard/DevicesCard.tsx": {
-    "space-y-2.5": 2
-  },
   "dashboard-devices/dashboard/DevicesSettings.tsx": {
     "text-[10px]": 1
   },
@@ -64,11 +61,6 @@
   "dashboard/dashboard/components/AgentView.tsx": {
     "py-2.5": 1
   },
-  "dashboard/dashboard/components/Agents.tsx": {
-    "rounded": 1,
-    "text-[10px]": 1,
-    "text-muted-foreground/80": 1
-  },
   "dashboard/dashboard/components/AgentsPage.tsx": {
     "gap-2.5": 2
   },
@@ -111,16 +103,11 @@
     "text-[15px]": 1
   },
   "dashboard/dashboard/components/OnboardingChecklist.tsx": {
-    "rounded": 1,
-    "text-[10px]": 1
+    "rounded": 1
   },
   "dashboard/dashboard/components/ProjectSkills.tsx": {
     "gap-2.5": 1,
     "rounded": 4
-  },
-  "dashboard/dashboard/components/Quota.tsx": {
-    "sm:text-[11px]": 1,
-    "text-[10px]": 1
   },
   "dashboard/dashboard/components/ServerLogins.tsx": {
     "gap-x-2.5": 1,
@@ -128,9 +115,6 @@
   },
   "dashboard/dashboard/components/SettingsDialog.tsx": {
     "rounded": 5
-  },
-  "dashboard/dashboard/components/SkillsCard.tsx": {
-    "text-foreground/80": 1
   },
   "dashboard/dashboard/components/ToolCalls.tsx": {
     "max-h-[400px]": 1
@@ -148,7 +132,6 @@
     "group-aria-[orientation=horizontal]/handle:h-[3px]": 1
   },
   "skill-account-rotation/dashboard/AccountsCard.tsx": {
-    "gap-2.5": 1,
     "rounded": 1
   },
   "skill-browser/dashboard/BrowserPanel.tsx": {
@@ -159,21 +142,8 @@
     "gap-2.5": 2,
     "text-[9px]": 1
   },
-  "skill-logs/dashboard/MembersCard.tsx": {
-    "gap-2.5": 1,
-    "space-y-2.5": 1
-  },
-  "skill-queue/dashboard/QueueCard.tsx": {
-    "text-muted-foreground/70": 1
-  },
   "skill-scheduler/dashboard/CodeWords.tsx": {
     "rounded": 2
-  },
-  "skill-scheduler/dashboard/SchedulerCard.tsx": {
-    "text-[13px]": 1
-  },
-  "skill-tickets/dashboard/HotTicketsCard.tsx": {
-    "gap-2.5": 2
   },
   "skill-tickets/dashboard/TicketFilterBar.tsx": {
     "rounded": 2,

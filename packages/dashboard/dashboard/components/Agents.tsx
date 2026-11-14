@@ -1,6 +1,8 @@
 import { useContext } from 'react'
 import type { ActiveAgent } from '../../src/index.js'
 import { Section } from './ui/section.js'
+import { List, Row } from './ui/list.js'
+import { Skeleton } from './ui/skeleton.js'
 import { Tooltip, TooltipTrigger, TooltipContent } from './ui/tooltip.js'
 import { formatAge, formatDateTime } from '../lib/format-date.js'
 import { OnComputer } from './MachineMark.js'
@@ -9,7 +11,6 @@ import { awaitingName } from '../lib/agent-label.js'
 import { STATUS_DOT } from '../lib/status-tone.js'
 import { cn } from '../lib/utils.js'
 import { HostServicesContext, INERT_HOST_SERVICES } from '../lib/host-services.js'
-import { inPlace } from '../lib/in-place.js'
 
 // The Overview's Agents card (#1139): the sessions working right now. Each row is the whole line,
 // clickable straight into that session — its label is the one-liner the sidebar shows, and its age
@@ -44,7 +45,7 @@ export function Agents({
       ) : working.length === 0 ? (
         <p className="text-sm text-muted-foreground">No agent is at work.</p>
       ) : (
-        <ul className="-mx-2 space-y-0.5">
+        <List>
           {working.map(a => (
             <AgentRow
               key={`${a.projectId}:${a.agentId}`}
@@ -58,7 +59,7 @@ export function Agents({
               onOpen={() => onSelectAgent(a.projectId, a.agentId)}
             />
           ))}
-        </ul>
+        </List>
       )}
     </Section>
   )
@@ -91,39 +92,40 @@ function AgentRow({
   onOpen: () => void
 }) {
   return (
-    <li>
-      {/* No hint on the row itself: that a session row opens the session is the one thing this card
-          says already, and a tooltip on the row would sit over the one on the age (#1149). */}
-      <a
-        href={href}
-        onClick={inPlace(onOpen)}
-        className="flex w-full items-baseline gap-2 rounded-md px-2 py-1.5 text-left hover:bg-accent focus-visible:bg-accent focus-visible:outline-none"
-      >
-        <span aria-hidden className={cn('size-1.5 shrink-0 self-center rounded-full', STATUS_DOT[cloud === 'waiting' ? 'waiting' : 'running'])} />
-        {naming ? (
-          <span className="min-w-0 flex-1 self-center">
-            <span className="block h-3.5 w-2/3 animate-pulse rounded bg-muted-foreground/20" />
+    // No hint on the row itself: that a session row opens the session is the one thing this list
+    // says already, and a tooltip on the row would sit over the one on the age (#1149).
+    <Row
+      leading={
+        <span className="flex size-4 items-center justify-center" aria-hidden>
+          <span className={cn('size-1.5 rounded-full', STATUS_DOT[cloud === 'waiting' ? 'waiting' : 'running'])} />
+        </span>
+      }
+      title={
+        naming ? (
+          <>
+            <Skeleton className="h-3.5 w-2/3" aria-hidden />
             <span className="sr-only">Naming this session</span>
-          </span>
+          </>
         ) : (
-          <span className="min-w-0 flex-1 truncate text-sm">{label}</span>
-        )}
-        {cloud && <span className="shrink-0 text-[10px] uppercase text-muted-foreground">{cloud === 'waiting' ? 'waiting' : 'in cloud'}</span>}
-        <span className="shrink-0 text-xs text-muted-foreground">{projectName}</span>
-        {computer && <OnComputer computer={computer} />}
-
-        {at && (
-          <Tooltip>
-            <TooltipTrigger
-              render={<span className="shrink-0 whitespace-nowrap text-xs tabular-nums text-muted-foreground/80" />}
-            >
-              {formatAge(at)}
-            </TooltipTrigger>
-            <TooltipContent>{formatDateTime(at)}</TooltipContent>
-          </Tooltip>
-        )}
-      </a>
-    </li>
+          label
+        )
+      }
+      meta={
+        <>
+          {cloud && <span>{cloud === 'waiting' ? 'waiting' : 'in cloud'}</span>}
+          <span>{projectName}</span>
+          {computer && <OnComputer computer={computer} />}
+          {at && (
+            <Tooltip>
+              <TooltipTrigger render={<span className="relative whitespace-nowrap tabular-nums" />}>{formatAge(at)}</TooltipTrigger>
+              <TooltipContent>{formatDateTime(at)}</TooltipContent>
+            </Tooltip>
+          )}
+        </>
+      }
+      href={href}
+      onClick={onOpen}
+    />
   )
 }
 

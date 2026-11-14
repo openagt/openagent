@@ -74,22 +74,22 @@ export function QueueCard({ projects }: ModuleCardProps) {
                     Could not read the queue of {project.name}: {read.error}
                   </p>
                 )}
-                <ul className="mt-1 pl-0.5">
+                <ul className="mt-1">
                   {entries.map((entry, i) => {
                     // A queued link reads as its text, a named file as its name; the whole line stays in the tooltip.
                     const view = entryView(project.id, entry, names)
                     const agent = read.working.find(working => isWorkingOn(working.ask, entry))
                     return (
-                      <li key={i} className="group/row -mx-2 flex h-8 items-center gap-2 rounded-md px-2 text-sm text-muted-foreground hover:bg-accent">
-                        <span aria-hidden className="w-4 shrink-0 text-right text-xs tabular-nums text-muted-foreground/70">
+                      <li key={i} className="group/row -mx-3 flex items-center gap-3 rounded-md px-3 text-sm transition-colors hover:bg-accent md:h-10 max-md:min-h-11">
+                        <span aria-hidden className="w-4 shrink-0 text-right text-xs tabular-nums text-muted-foreground">
                           {i + 1}.
                         </span>
-                        <EntryTitle view={view} entry={entry} className={cn('min-w-0 flex-1 truncate text-left max-sm:line-clamp-2 max-sm:whitespace-normal!', (view.open ?? view.url) !== undefined && 'hover:text-foreground hover:underline')} />
-                        {/* The agent on the entry, else its start: under the pointer, or with the keyboard on it; a phone has no hover, and there it always shows. */}
+                        <EntryTitle view={view} entry={entry} className={cn('min-w-0 flex-1 truncate text-left font-medium max-sm:line-clamp-2 max-sm:whitespace-normal!', (view.open ?? view.url) !== undefined && 'hover:underline')} />
+                        {/* The agent on the entry, else its start: under the pointer, or with the keyboard on it; a touch screen has no hover, and there it always shows. */}
                         {agent ? (
                           <AgentOnEntry projectId={project.id} agent={agent} />
                         ) : (
-                          <div className="shrink-0 transition-opacity md:opacity-0 md:group-hover/row:opacity-100 md:focus-within:opacity-100 md:has-[[aria-expanded=true]]:opacity-100">
+                          <div className="shrink-0 transition-opacity pointer-fine:opacity-0 pointer-fine:group-hover/row:opacity-100 pointer-fine:focus-within:opacity-100 pointer-fine:has-[[aria-expanded=true]]:opacity-100">
                             <StartAgentButton
                               variant="ghost"
                               size="icon-sm"
