@@ -12,6 +12,7 @@ import {
   DropdownMenuTrigger,
   FileIcon,
   MiddleCut,
+  PathCut,
   treeRow,
   Input,
   PaneActions,
@@ -92,7 +93,7 @@ function ChangeRow({ path, mark, label, picked, rings, onPick }: { path: string;
       >
         <FileIcon path={path} />
         <span className={cn('flex min-w-0 flex-1', mark.status === 'deleted' && 'line-through')}>
-          <MiddleCut text={label} />
+          <PathCut path={label} />
         </span>
         {rings && !mark.committed && <span aria-label="not committed" className="size-1.5 shrink-0 rounded-full border border-current text-muted-foreground" />}
         <Counts mark={mark} />
@@ -567,7 +568,7 @@ export function ChangesPanel({ projectId, agentId, activity, reveal }: ModulePan
                     <ChevronRight aria-hidden className={cn('size-4 shrink-0', !isFolded && 'rotate-90')} />
                     <FileIcon path={path} />
                     <span className={cn('flex min-w-0', mark.status === 'deleted' && 'line-through')}>
-                      <MiddleCut text={path} />
+                      <PathCut path={path} />
                     </span>
                     {isNewFile(mark.status) && mark.added !== undefined && <span className="shrink-0 text-xs">{`new file, ${mark.added} ${mark.added === 1 ? 'line' : 'lines'}`}</span>}
                   </button>

@@ -1,6 +1,6 @@
 import { useMemo } from 'react'
 import { Code, Eye, FolderIcon } from 'lucide-react'
-import { Button, FileLinks, Markdown, PaneNote, Skeleton, Slot, Tooltip, TooltipContent, TooltipTrigger, useModuleHost, usePolled } from '@openagt/dashboard/module'
+import { Button, FileLinks, Markdown, PaneNote, PathCut, Skeleton, Slot, Tooltip, TooltipContent, TooltipTrigger, useModuleHost, usePolled } from '@openagt/dashboard/module'
 import type { FileContent } from '../src/read.js'
 import { readContent } from './reads.js'
 import { contentKey } from './keys.js'
@@ -61,7 +61,6 @@ export function FileView({ page, projectId, agentId, path, wrap, source, files, 
   const read = usePolled<FileContent | null>(() => readContent(host, projectId, path, agentId), null, 5_000, [projectId, agentId, path], { remember: contentKey(projectId, agentId, path) })
   const markdown = isMarkdown(path)
   const rendered = markdown && !source
-  const folder = path.includes('/') ? path.slice(0, path.lastIndexOf('/') + 1) : ''
   const opens = useMemo(
     () => (name: string) => {
       const file = linkedFile(files, path, name)
@@ -75,8 +74,7 @@ export function FileView({ page, projectId, agentId, path, wrap, source, files, 
       {/* One line: the folders cut short first, so the file's name stays. */}
       <div className="flex h-9 shrink-0 items-center gap-2 border-b border-hairline pr-1 pl-3">
         <p className="flex min-w-0 flex-1 text-sm" title={path}>
-          <span className="min-w-0 truncate text-muted-foreground">{folder}</span>
-          <span className="shrink-0">{path.slice(folder.length)}</span>
+          <PathCut path={path} />
         </p>
         {markdown && (
           <Tooltip>
