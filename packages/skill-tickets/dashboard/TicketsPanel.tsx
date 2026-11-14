@@ -1,4 +1,4 @@
-import { useState, type ReactNode } from 'react'
+import { createContext, useContext, useState, type ReactNode } from 'react'
 import { ExternalLink, ClipboardList, Hammer, Plus } from 'lucide-react'
 import { Badge, Button, Checkbox, List, Tooltip, TooltipTrigger, TooltipContent, cn, formatRelative, formatAge, formatDateTime, inPlace, useAction, useLoaded, useModuleHost } from '@openagt/dashboard/module'
 import { NEW_TICKET, UPDATE_TICKETS_PROMPT, heldBack, readMeta, type TicketsMeta } from '../src/module.js'
@@ -10,13 +10,22 @@ import { priorityTone } from './lib/ticket-priority.js'
 /** Captured once: `useLoaded` treats a fresh `{}` literal as a new value on every render. */
 const NO_META: TicketsMeta = {}
 
+/** The fact columns some row of the list fills; a row draws only those. A row outside a {@link TicketList} draws them all. */
+const FilledColumns = createContext({ priority: true, plan: true, issue: true })
+
 /**
  * The rows of a tickets list, on the page with no line around them. Laid out by the list's own
  * width (#1144 follow-up): a narrow list puts a row's facts on a second line under its title, so a
- * title is never cut to a word to make room for them.
+ * title is never cut to a word to make room for them. A fact column no ticket of the list fills
+ * gives up its room in every row, so the others still line up.
  */
-export function TicketList({ children }: { children: ReactNode }) {
-  return <List className="@container">{children}</List>
+export function TicketList({ tickets, children }: { tickets: readonly WorkspaceTicket[]; children: ReactNode }) {
+  const filled = { priority: tickets.some(t => t.priority), plan: tickets.some(t => t.planned), issue: tickets.some(t => t.issue) }
+  return (
+    <FilledColumns.Provider value={filled}>
+      <List className="@container">{children}</List>
+    </FilledColumns.Provider>
+  )
 }
 
 /**
@@ -80,6 +89,7 @@ export function TicketRow({
   // claimed: an agent holds it. Either way the row offers no next step.
   const held = heldBack(ticket)
   const offered = !held && !ticket.locked
+  const filled = useContext(FilledColumns)
   return (
     <li
       className={cn(
@@ -172,34 +182,42 @@ export function TicketRow({
           {ticket.uncertainty !== undefined && <Badge>Uncertainty: {ticket.uncertainty}</Badge>}
         </span>
         {/* Priority and age: fixed widths, kept (and drawn even when empty) so the columns line up
-            row to row. The priority is in the text's colour; only a critical one is red, its words saying it too. */}
-        <span className={cn('shrink-0 tabular-nums @max-2xl:empty:hidden @2xl:w-16 @2xl:text-right', priorityTone(ticket.priority))}>
-          {ticket.priority ? `Priority ${ticket.priority}` : ''}
-        </span>
+            row to row; the priority's is given up when no ticket of the list has one. The priority
+            is in the text's colour; only a critical one is red, its words saying it too. */}
+        {filled.priority && (
+          <span className={cn('shrink-0 tabular-nums @max-2xl:empty:hidden @2xl:w-16 @2xl:text-right', priorityTone(ticket.priority))}>
+            {ticket.priority ? `Priority ${ticket.priority}` : ''}
+          </span>
+        )}
         <span className="shrink-0 tabular-nums @2xl:w-14 @2xl:text-right" title={formatDateTime(ticket.date)}>
           {formatAge(ticket.date)}
         </span>
-        {/* The plan, when there is one to read. The same width with no plan keeps the columns lined up. */}
-        <span className="flex shrink-0 justify-center @max-2xl:empty:hidden @2xl:w-7">
-          {ticket.planned && (
-            <Tooltip>
-              <TooltipTrigger
-                render={<Button variant="ghost" size="icon-sm" onClick={() => onOpenPlan?.()} disabled={!onOpenPlan} aria-label={`View the plan for ${ticket.title}`} className="text-info" />}
-              >
-                <ClipboardList className="size-4" aria-hidden />
-              </TooltipTrigger>
-              <TooltipContent>View the plan</TooltipContent>
-            </Tooltip>
-          )}
-        </span>
-        <span className="flex shrink-0 justify-end @max-2xl:empty:hidden @2xl:w-16">
-          {ticket.issue && (
-            <a href={ticket.issue.url} target="_blank" rel="noreferrer" className="focus-ring inline-flex items-center gap-1 rounded-sm hover:text-foreground hover:underline">
-              <ExternalLink className="size-3.5" aria-hidden />
-              {ticket.issue.label}
-            </a>
-          )}
-        </span>
+        {/* The plan, when there is one to read, then the issue: each the same width when empty, so the
+            columns line up, and given up when no ticket of the list has one. */}
+        {filled.plan && (
+          <span className="flex shrink-0 justify-center @max-2xl:empty:hidden @2xl:w-7">
+            {ticket.planned && (
+              <Tooltip>
+                <TooltipTrigger
+                  render={<Button variant="ghost" size="icon-sm" onClick={() => onOpenPlan?.()} disabled={!onOpenPlan} aria-label={`View the plan for ${ticket.title}`} className="text-info" />}
+                >
+                  <ClipboardList className="size-4" aria-hidden />
+                </TooltipTrigger>
+                <TooltipContent>View the plan</TooltipContent>
+              </Tooltip>
+            )}
+          </span>
+        )}
+        {filled.issue && (
+          <span className="flex shrink-0 justify-end @max-2xl:empty:hidden @2xl:w-16">
+            {ticket.issue && (
+              <a href={ticket.issue.url} target="_blank" rel="noreferrer" className="focus-ring inline-flex items-center gap-1 rounded-sm hover:text-foreground hover:underline">
+                <ExternalLink className="size-3.5" aria-hidden />
+                {ticket.issue.label}
+              </a>
+            )}
+          </span>
+        )}
       </span>
     </li>
   )
@@ -338,7 +356,7 @@ export function TicketsPanel({
           {error && <p role="alert" className="basis-full text-xs text-danger">{error}</p>}
         </div>
       )}
-      <TicketList>
+      <TicketList tickets={tickets}>
         {tickets.map(ticket => (
           <TicketRow
             key={ticket.file}

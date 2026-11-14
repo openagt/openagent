@@ -230,7 +230,7 @@ export function TicketsPage({ projects }: { projects: ModuleProject[] }) {
                   {rows.length === 0 ? 'No tickets in any project yet — group by project to import a project\'s issues.' : 'No tickets match.'}
                 </p>
               ) : (
-                <TicketList>
+                <TicketList tickets={flatRows.map(r => r.ticket)}>
                     {flatRows.map(r => (
                       <TicketRow
                         key={`${r.projectId}/${r.ticket.file}`}

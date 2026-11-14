@@ -227,6 +227,25 @@ describe('TicketsPanel (#697/#1144)', () => {
     expect(onOpen).toHaveBeenCalledWith('2026-07-20_do-the-thing.md')
   })
 
+  test('a fact column no ticket of the list fills gives up its room in every row; one that some ticket fills is kept in all of them (#1265)', async () => {
+    render(
+      <TicketsPanel
+        projectId="p1"
+        tickets={[ticket({ issue: { label: '#42', url: 'https://example.com/org/repo/issues/42' } }), ticket({ file: '2026-07-21_other.md', title: 'Other thing' })]}
+        onOpen={() => {}}
+      />,
+    )
+    // The columns by their widths: the priority's and the issue's are 16 wide, the plan's 7.
+    const columns = (title: string) => {
+      const row = screen.getByText(title).closest('li')!
+      const count = (selector: string) => row.querySelectorAll(selector).length
+      return { priority: count('[class*="@2xl:w-16"][class*="@2xl:text-right"]'), plan: count('[class*="@2xl:w-7"]'), issue: count('[class*="@2xl:w-16"][class*="justify-end"]') }
+    }
+    await screen.findByText('Other thing')
+    expect(columns('Do the thing')).toEqual({ priority: 0, plan: 0, issue: 1 })
+    expect(columns('Other thing')).toEqual({ priority: 0, plan: 0, issue: 1 })
+  })
+
   test('shows the effort the plan recorded, and keeps the row meta in priority/date/issue order (#1144/#1265)', async () => {
     const twoDaysAgo = new Date(Date.now() - 2 * 24 * 60 * 60_000).toISOString()
     render(
