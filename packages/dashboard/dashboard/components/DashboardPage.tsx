@@ -172,6 +172,7 @@ export function DashboardPage({
   return (
     <Page
       title="Overview"
+      width="wide"
       description="What needs you, the agents at work, and what comes next."
       actions={
         editing ? (
