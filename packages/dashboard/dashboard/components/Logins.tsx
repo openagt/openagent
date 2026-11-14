@@ -110,7 +110,11 @@ export function FixAction({ label, busy, busyWords, command, failed, onPress, wo
   return (
     <div className="min-w-0 space-y-2">
       {words === undefined ? (
-        press
+        // The command beside its press where both fit, so the two take one line.
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
+          {press}
+          {command && <CommandLine command={command} />}
+        </div>
       ) : (
         <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
           <p className="min-w-0 grow basis-60 text-sm text-muted-foreground">{words}</p>
@@ -138,7 +142,7 @@ export function FixAction({ label, busy, busyWords, command, failed, onPress, wo
           )}
         </div>
       )}
-      {command && <CommandLine command={command} />}
+      {command && words !== undefined && <CommandLine command={command} />}
       {failed && (
         <p role="alert" className="whitespace-pre-line text-xs text-danger">
           <Linked text={failed} />

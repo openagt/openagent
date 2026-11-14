@@ -266,7 +266,7 @@ export function OnboardingChecklist({
         {reading ? (
           <>
             <p className="sr-only">Loading…</p>
-            {/* The steps' rows, with no state yet, the first one as the open step is laid out (its words, then its press beside them or under), so the steps are about their size from the first frame. */}
+            {/* The steps' rows, with no state yet, the first one as the open step is laid out (its words, then its press and its command beside them or under), so the steps are about their size from the first frame. */}
             <ol aria-hidden="true">
               {steps.map((step, at) => (
                 <li key={step.key} className="flex items-start gap-3 py-2">
@@ -278,7 +278,7 @@ export function OnboardingChecklist({
                         <Skeleton className="h-4 w-full" />
                         <Skeleton className="h-4 w-2/3" />
                       </div>
-                      <div className="flex shrink-0 flex-col gap-1">
+                      <div className="flex shrink-0 flex-wrap items-center gap-3">
                         <Skeleton className="h-8 w-40" />
                         <Skeleton className="h-6 w-72 max-w-full" />
                       </div>
@@ -305,8 +305,8 @@ export function OnboardingChecklist({
                       {at + 1}
                     </span>
                   )}
-                  {/* The action goes under the words until it fits beside them with the words 16rem wide or more. */}
-                  <div className="flex min-w-0 flex-1 flex-wrap items-start gap-3">
+                  {/* The action goes under the words until it fits beside them with the words 16rem wide or more; beside them, a command goes under its press where the two do not fit one line. */}
+                  <div className="@container flex min-w-0 flex-1 flex-wrap items-start gap-3">
                     <div className="min-w-0 flex-[1_1_16rem] space-y-1">
                       <div className="mt-1 flex flex-wrap items-center gap-x-2">
                         <button
@@ -330,7 +330,7 @@ export function OnboardingChecklist({
                       </div>
                       {isOpen && step.description && (typeof step.description === 'string' ? <p className="text-xs text-muted-foreground">{step.description}</p> : step.description)}
                     </div>
-                    {isOpen && step.action && <div className="flex max-w-full shrink-0">{step.action}</div>}
+                    {isOpen && step.action && <div className="flex max-w-full shrink-0 @xl:max-w-[calc(100%-16.75rem)]">{step.action}</div>}
                   </div>
                 </li>
               )
