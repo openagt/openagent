@@ -1,14 +1,14 @@
 import { useEffect, useRef, useState } from 'react'
 import type { AgentHandoff } from '../../src/index.js'
 import { onAgentHandoff } from '../rpc/reads.js'
-import { forgetRemembered, usePolled } from './use-async.js'
+import { forgetRemembered, usePolled, type ReadState } from './use-async.js'
 import { useAction } from './use-action.js'
 
 /** What the agent view knows about the session's branch, and how it acts on it. */
 export type AgentHandoffState = {
   handoff: AgentHandoff | null
-  /** True once the read has answered, so an empty state isn't flashed before then. */
-  loaded: boolean
+  /** What is known of the branch: an empty state isn't flashed while it is unknown. */
+  state: ReadState
   busy: boolean
   error: string | null
   /** Which button is in flight, so it can say "Opening PR…" rather than silently greying (#948). */
@@ -94,7 +94,7 @@ export function useAgentHandoff(projectId: string, agentId: string | null | unde
   // the pull request lookup is out, every fifteen seconds at rest. A cadence change reads at once,
   // which is how the read the moment a run ends is taken at all.
   const [everyMs, setEveryMs] = useState(REST_MS)
-  const { value: handoff, reload, loaded } = usePolled<AgentHandoff | null>(
+  const { value: handoff, reload, state } = usePolled<AgentHandoff | null>(
     enabled && agentId ? () => onAgentHandoff(projectId, agentId) : null,
     null,
     everyMs,
@@ -144,5 +144,5 @@ export function useAgentHandoff(projectId: string, agentId: string | null | unde
   }, [answer, handoff, stands])
   const shown = stands ? { ...handoff, ...answer.with, ...(answer.with.pr ? { prPending: false } : {}) } : handoff
   const said = error === null || failed === null || error === failed ? error : `${failed}\n${error}`
-  return { handoff: shown, loaded, busy, error: said, pending, act }
+  return { handoff: shown, state, busy, error: said, pending, act }
 }

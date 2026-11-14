@@ -20,7 +20,7 @@ export function TicketDetailPage({
   slug: string
 }) {
   const host = useModuleHost()
-  const { read, loaded, reload } = useTicket(projectId, slug)
+  const { read, state, reload } = useTicket(projectId, slug)
   const ticket = read && 'ticket' in read ? read.ticket : null
   const onBack = useBackToList(host, [slug])
   // The ticket written by hand in place of its text, until saved or left.
@@ -28,7 +28,7 @@ export function TicketDetailPage({
 
   return (
     <TicketPageShell onBack={onBack} crumbs={ticket ? [{ label: ticket.title }] : []}>
-      {!loaded ? (
+      {state === 'unknown' ? (
         <TicketPageNote>Loading…</TicketPageNote>
       ) : read && 'error' in read ? (
         <TicketPageNote>

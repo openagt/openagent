@@ -78,8 +78,7 @@ export function QueuePage({ projects }: ModulePageProps) {
   const key = projects.map(p => p.id).join(',')
   const {
     value: reads,
-    loaded,
-    stale,
+    state,
     reload,
   } = usePolled<ProjectRead[]>(
     () =>
@@ -106,13 +105,13 @@ export function QueuePage({ projects }: ModulePageProps) {
       title="Queue"
       description={`What agents will work on next, from the top${projects.length > 1 ? ', one list per project' : ''}. A higher priority is taken first: 10 is the most urgent, 0 is only if there is capacity.`}
     >
-      {!loaded && <p className="text-sm text-muted-foreground">Loading…</p>}
+      {state === 'unknown' && <p className="text-sm text-muted-foreground">Loading…</p>}
       {starts.error && (
         <p role="alert" className="mb-4 text-sm text-danger">
           {starts.error}
         </p>
       )}
-      <FadeWhileStale stale={stale} className="space-y-6">
+      <FadeWhileStale stale={state === 'kept'} className="space-y-6">
         {reads.map(read => (
           <ProjectQueue key={read.project.id} read={read} titled={projects.length > 1} schedule={schedule} names={names} starts={starts} reload={reload} />
         ))}

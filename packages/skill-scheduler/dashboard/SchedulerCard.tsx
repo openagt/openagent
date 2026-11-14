@@ -29,9 +29,9 @@ export function SchedulerCard({ projects }: ModuleCardProps) {
   const host = useModuleHost()
   const key = projects.map(p => p.id).join(',')
   // One read with the Automations page and Settings under the same key, kept for the next visit.
-  const { value: rows, loaded, reload } = usePolled(() => readSchedulers(host, projects), EMPTY, 10_000, [key], { remember: schedulersKey(key), stored: true })
+  const { value: rows, state, reload } = usePolled(() => readSchedulers(host, projects), EMPTY, 10_000, [key], { remember: schedulersKey(key), stored: true })
   const open = (): void => host.openPage('automations')
-  const reading = useSkeleton(!loaded)
+  const reading = useSkeleton(state === 'unknown')
   /** A link to the Automations page, which also opens in a new tab. */
   const toPage = (words: string) => (
     <a

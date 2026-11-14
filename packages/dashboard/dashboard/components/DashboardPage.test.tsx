@@ -22,8 +22,8 @@ const active = (agentId: string, projectId = 'p1'): ActiveAgent => ({ projectId,
 const projects = [{ id: 'p1', name: 'alpha' }, { id: 'p2', name: 'beta' }] as never[]
 /** The agents at work, as the shell read them. */
 let working: ActiveAgent[] = []
-const show = (scope: string | null = null, stale = { interventions: false, active: false }, loaded = true) =>
-  render(<DashboardPage onProjectAdded={() => {}} onSelectProject={() => {}} projectHref={id => `/${id}`} onSelectAgent={() => {}} onAgentStarted={() => {}} interventions={[]} interventionsStale={stale.interventions} interventionsLoaded={loaded} active={{ active: working, stale: stale.active, loaded }} projects={projects} scope={scope} />)
+const show = (scope: string | null = null, kept = { interventions: false, active: false }, read = true) =>
+  render(<DashboardPage onProjectAdded={() => {}} onSelectProject={() => {}} projectHref={id => `/${id}`} onSelectAgent={() => {}} onAgentStarted={() => {}} interventions={[]} interventionsState={!read ? 'unknown' : kept.interventions ? 'kept' : 'fresh'} active={{ active: working, state: !read ? 'unknown' : kept.active ? 'kept' : 'fresh' }} projects={projects} scope={scope} />)
 /** The cards drawn, in order, each with its grid classes. */
 const drawn = () => [...document.querySelectorAll<HTMLElement>('[data-card]')].map(el => ({ id: el.dataset['card'], spans: el.className }))
 
@@ -251,7 +251,7 @@ describe('the Overview', () => {
     const item = (kind: Intervention['kind'], n: number): Intervention => ({ projectId: 'p1', projectName: 'alpha', kind, title: `t${n}`, agentId: `r${n}` })
     const scrolled = vi.fn()
     Element.prototype.scrollIntoView = scrolled
-    render(<DashboardPage onProjectAdded={() => {}} onSelectProject={() => {}} projectHref={id => `/${id}`} onSelectAgent={() => {}} onAgentStarted={() => {}} interventions={[item('awaiting', 1), item('awaiting', 2), item('pr', 3)]} interventionsStale={false} interventionsLoaded active={{ active: [], stale: false, loaded: true }} projects={projects} scope={null} />)
+    render(<DashboardPage onProjectAdded={() => {}} onSelectProject={() => {}} projectHref={id => `/${id}`} onSelectAgent={() => {}} onAgentStarted={() => {}} interventions={[item('awaiting', 1), item('awaiting', 2), item('pr', 3)]} interventionsState="fresh" active={{ active: [], state: 'fresh' }} projects={projects} scope={null} />)
     const part = await screen.findByRole('button', { name: '3 need you' })
     expect(part.getAttribute('title')).toBe('2 questions, 1 pull request')
     fireEvent.click(part)
@@ -268,7 +268,7 @@ describe('the Overview', () => {
       item({ number: 6, title: 'Add DESCRIPTION.md', url: 'https://x/pull/6', agentId: 'r6' }),
       item({ number: 8, title: 'Condense README', url: 'https://x/pull/8' }),
     ]
-    render(<DashboardPage onProjectAdded={() => {}} onSelectProject={() => {}} projectHref={id => `/${id}`} onSelectAgent={onSelectAgent} onAgentStarted={() => {}} interventions={interventions} interventionsStale={false} interventionsLoaded active={{ active: [], stale: false, loaded: true }} projects={[]} scope={null} />)
+    render(<DashboardPage onProjectAdded={() => {}} onSelectProject={() => {}} projectHref={id => `/${id}`} onSelectAgent={onSelectAgent} onAgentStarted={() => {}} interventions={interventions} interventionsState="fresh" active={{ active: [], state: 'fresh' }} projects={[]} scope={null} />)
     // Grouped by kind, each under its heading, in the order that holds a run up most; a row says its kind on its icon's hover.
     expect(within(screen.getByRole('region', { name: 'Human Queue' })).getAllByRole('region').map(group => group.getAttribute('aria-label'))).toEqual(['Pull requests', 'To commit'])
     expect(screen.getByTitle('Needs commit')).toBeTruthy()

@@ -16,6 +16,7 @@ import { SkillsCard } from './SkillsCard.js'
 import { CardGrid, EditOverview, TakeOffMark } from './CustomizeOverview.js'
 import { ALL_PROJECTS, arrangeCards } from '../../src/client.js'
 import type { ProjectSummary } from '../../src/index.js'
+import type { ReadState } from '../lib/use-async.js'
 import { Page } from './Page.js'
 import { LinePart, NEEDS_YOU_ID, WORKING_ID, counted, scrollToPart } from './LinePart.js'
 import { YourAgentsPart } from './YourAgentsPart.js'
@@ -40,8 +41,7 @@ export function DashboardPage({
   onSelectAgent,
   onAgentStarted,
   interventions,
-  interventionsStale,
-  interventionsLoaded,
+  interventionsState,
   active,
   projects,
   scope,
@@ -56,12 +56,10 @@ export function DashboardPage({
   onAgentStarted: (projectId: string, intent: string, agentId: string) => void
   /** The Human Queue's items, already only the picked project's when one is picked. */
   interventions: Intervention[]
-  /** The Human Queue's items are only what an earlier visit read, not yet read again: its cards are faded. */
-  interventionsStale: boolean
-  /** The Human Queue's items were read, by this visit or an earlier one: until then its tile has no count. */
-  interventionsLoaded: boolean
-  /** Every agent going right now, across the projects, whether that is only what an earlier visit read, and whether anything was read yet. */
-  active: { active: ActiveAgent[]; stale: boolean; loaded: boolean }
+  /** What is known of the Human Queue's items: until they are read, by this visit or an earlier one, its part has no count; while they are only an earlier visit's, its card is faded. */
+  interventionsState: ReadState
+  /** Every agent going right now, across the projects, and what is known of it. */
+  active: { active: ActiveAgent[]; state: ReadState }
   /** Every registered project. The usage bar is given all of them: usage is the account's, not a project's. */
   projects: ProjectSummary[]
   /** The one project the page shows (#1513), or null for all: the agents at work and the packages' cards show only its, and a card of a package it does not have is not drawn. */
@@ -87,7 +85,7 @@ export function DashboardPage({
       order: 1,
       node: (
         <LinePart
-          reading={!interventionsLoaded}
+          reading={interventionsState === 'unknown'}
           note={waiting.length === 0 ? 'Nothing waits on you' : waiting.map(({ kind, count }) => kind.counted(count)).join(', ')}
           onClick={() => scrollToPart(NEEDS_YOU_ID)}
         >
@@ -99,7 +97,7 @@ export function DashboardPage({
       id: 'working-now',
       order: 2,
       node: (
-        <LinePart reading={!active.loaded} live={working.length > 0} note={counted(working.length, 'agent at work', 'agents at work', 'No agent is at work')} {...(working.length > 0 ? { onClick: () => scrollToPart(WORKING_ID) } : {})}>
+        <LinePart reading={active.state === 'unknown'} live={working.length > 0} note={counted(working.length, 'agent at work', 'agents at work', 'No agent is at work')} {...(working.length > 0 ? { onClick: () => scrollToPart(WORKING_ID) } : {})}>
           {working.length === 0 ? 'no agent working' : `${working.length} working`}
         </LinePart>
       ),
@@ -113,27 +111,27 @@ export function DashboardPage({
     { id: 'usage', label: 'Usage', order: 5, width: '1', minWidth: '1/2', node: <Quota projects={projects} /> },
     {
       id: 'human-queue',
-      stale: interventionsStale,
+      stale: interventionsState === 'kept',
       label: 'Human Queue',
       order: 6,
       width: '1',
       minWidth: '1/2',
       node: (
         <div id={NEEDS_YOU_ID} className="flex scroll-mt-6 flex-col *:flex-1">
-          <HumanQueue items={interventions} loaded={interventionsLoaded} onSelectProject={onSelectProject} onSelectAgent={onSelectAgent} />
+          <HumanQueue items={interventions} loaded={interventionsState !== 'unknown'} onSelectProject={onSelectProject} onSelectAgent={onSelectAgent} />
         </div>
       ),
     },
     {
       id: 'working',
-      stale: active.stale,
+      stale: active.state === 'kept',
       label: 'Agents at work',
       order: 7,
       width: '1/2',
       minWidth: '1/3',
       node: (
         <div id={WORKING_ID} className="flex scroll-mt-6 flex-col *:flex-1">
-          <Agents working={working} loaded={active.loaded} namesRuns={namesRuns} onSelectAgent={onSelectAgent} />
+          <Agents working={working} loaded={active.state !== 'unknown'} namesRuns={namesRuns} onSelectAgent={onSelectAgent} />
         </div>
       ),
     },

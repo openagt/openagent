@@ -223,14 +223,15 @@ export function AgentView({
   // for a branch with commits of its own, which the clean-up keeps.
   const read = useAgentHandoff(projectId, agentId, live === false && !going, card?.saving === true, going)
   const kept = read.handoff !== null && read.handoff.exists && !read.handoff.empty
-  const handoff = card?.saving && !kept ? { ...read, handoff: null, loaded: false } : read
+  const handoff = card?.saving && !kept ? { ...read, handoff: null, state: 'unknown' as const } : read
+  const branchKnown = handoff.state !== 'unknown'
   // The agent is doing what the Commit button asked: said where the button was, from the ask going
   // out until the next step is known, so the place is never empty in between: the agent's turn
   // ends, its checkout is cleaned up, and only then is its branch read. Read off the last prompt,
   // so a refresh says the same.
   const lastPrompt = shownSending ?? [...shown].reverse().find(e => e.kind === 'driver' && e.event.type === 'start')
   const commitAsked = isCommitAsk(typeof lastPrompt === 'string' ? lastPrompt : lastPrompt?.kind === 'driver' && lastPrompt.event.type === 'start' ? lastPrompt.event.prompt : undefined)
-  const committing = commitAsked && (going || (live === false && !handoff.loaded))
+  const committing = commitAsked && (going || (live === false && !branchKnown))
   // How the agent ended (#948), read once for the Resume offer and the wait for subagents below:
   // its events say it, and until they are read (or when they hold no ending) its card does, so
   // both are right from the first frame.
@@ -238,7 +239,7 @@ export function AgentView({
   // Until the handoff has actually loaded, a just-stopped agent keeps showing the modules' summaries
   // (the Changes module's count of changed files, #1030): the summary swaps once, to the handoff,
   // instead of blanking for the beat the handoff read takes.
-  const showHandoff = live === false && handoff.loaded
+  const showHandoff = live === false && branchKnown
   // Whether this run's own facts are in, so the bar shows them together: its log (for an ended
   // run; a running one streams it) and what its branch holds (when that is read at all). Before
   // then the bar names the run and nothing else, never facts left from the run before. A run
@@ -252,7 +253,7 @@ export function AgentView({
   }, [agentId])
   // The branch's answer counts once its pull request lookup is in too: the bar offers nothing
   // while it is out, so showing the facts before it would add them in two steps.
-  const branchRead = card?.saving === true || (handoff.loaded && !handoff.handoff?.prPending)
+  const branchRead = card?.saving === true || (branchKnown && !handoff.handoff?.prPending)
   const ready = working || waitedFor === agentId || (archived !== null && branchRead)
   // Whether the feed shows this agent yet. On a first visit it would otherwise pass through what
   // each read still out has to say: "Waiting for the session to start…" while the list of agents
@@ -312,7 +313,7 @@ export function AgentView({
     (committing ||
       (!prUnknown &&
         (live === false
-          ? handoff.loaded
+          ? branchKnown
             ? pr !== undefined || handoffSays(onBranch) || held
             : held
           : live === true

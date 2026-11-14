@@ -447,7 +447,7 @@ function AccountRow({
 
 export function AccountsCard({ accountWhere }: ModuleCardProps) {
   const host = useModuleHost()
-  const { value: list, loaded, reload } = usePolled<Read<Account> | undefined>(() => read<Account>(host, 'list'), undefined, LIST_EVERY_MS, [], { remember: 'account-rotation:list', stored: true })
+  const { value: list, state, reload } = usePolled<Read<Account> | undefined>(() => read<Account>(host, 'list'), undefined, LIST_EVERY_MS, [], { remember: 'account-rotation:list', stored: true })
   const { value: usage, reload: reloadUsage } = usePolled<Read<Usage> | undefined>(() => read<Usage>(host, 'usage'), undefined, USAGE_EVERY_MS, [], { remember: 'account-rotation:usage', stored: true })
   // Followed closely from a press until the sign-in has ended, which the person may take minutes over.
   const [following, setFollowing] = useState(false)
@@ -560,7 +560,7 @@ export function AccountsCard({ accountWhere }: ModuleCardProps) {
       }
     >
       <div className="flex flex-col gap-1">
-        {list === undefined && !loaded && <Skeleton className="h-16 w-full" />}
+        {list === undefined && state === 'unknown' && <Skeleton className="h-16 w-full" />}
         {list?.ok === false && <p className="text-sm text-danger">{list.error}</p>}
         {list?.ok &&
           AGENTS.map(agent => (

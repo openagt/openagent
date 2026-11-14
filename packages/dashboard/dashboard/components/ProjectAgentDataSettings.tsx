@@ -29,11 +29,11 @@ const KIND_WORDS: Record<KeptData['kind'], (n: number) => string> = {
  * never as the person's own login.
  */
 export function ProjectAgentDataSettings({ projectId }: { projectId: string }) {
-  const { value: data, loaded, reload } = usePolled<ProjectAgentData | null>(() => onProjectAgentData(projectId), null, EVERY_MS, [projectId])
+  const { value: data, state, reload } = usePolled<ProjectAgentData | null>(() => onProjectAgentData(projectId), null, EVERY_MS, [projectId])
   const [confirmShare, setConfirmShare] = useState(false)
   const [picked, setPicked] = useState<string | undefined>()
   const { busy, error, run } = useAction()
-  if (!loaded) return null
+  if (state === 'unknown') return null
   if (!data) return <p className="text-sm text-muted-foreground">This project&rsquo;s agent data is on the computer the project is on.</p>
 
   const folder = (

@@ -21,17 +21,17 @@ import { useQueueReads } from './reads.js'
 
 export function QueueCard({ projects }: ModuleCardProps) {
   const host = useModuleHost()
-  const { reads, loaded } = useQueueReads(projects)
+  const { reads, state } = useQueueReads(projects)
   const starts = useQueueStarts(host)
   const names = useFileNames(reads.map(read => ({ projectId: read.project.id, paths: read.entries.flatMap(pathsIn) })))
   const { inFlight, error } = starts
 
   const shown = reads.filter(read => read.entries.length > 0 || read.error !== undefined)
   const total = reads.reduce((sum, read) => sum + read.entries.length, 0)
-  const reading = useSkeleton(!loaded)
+  const reading = useSkeleton(state === 'unknown')
   return (
-    <Section title="AI Queue" count={loaded && total > 0 ? total : undefined} action={<PageLink href={host.pageHref('queue')} onOpen={() => host.openPage('queue')}>Queue</PageLink>}>
-      {loaded && shown.length === 0 && !error ? null : <p className="-mt-1 mb-3 text-xs text-muted-foreground">Tasks AI will work on next</p>}
+    <Section title="AI Queue" count={state !== 'unknown' && total > 0 ? total : undefined} action={<PageLink href={host.pageHref('queue')} onOpen={() => host.openPage('queue')}>Queue</PageLink>}>
+      {state !== 'unknown' && shown.length === 0 && !error ? null : <p className="-mt-1 mb-3 text-xs text-muted-foreground">Tasks AI will work on next</p>}
       {reading ? (
         <RowsLoading />
       ) : shown.length === 0 ? (

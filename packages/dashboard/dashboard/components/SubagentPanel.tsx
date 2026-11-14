@@ -60,7 +60,7 @@ function Shown({ row, projectId, events, onOpenAgent }: { row: SubagentRow; proj
   // A run's own log, read often while it works. Remembered by the run, so the pane opened again,
   // and the read that goes on when the subagent ends, show what was read from the first frame:
   // without that the pane said it had nothing to show until the read answered.
-  const { value: ownLog, loaded } = usePolled<OpenAgentEvent[]>(
+  const { value: ownLog, state } = usePolled<OpenAgentEvent[]>(
     runId ? () => onAgent(projectId, runId) : null,
     NO_EVENTS,
     row.working ? TRANSCRIPT_EVERY_MS : ENDED_EVERY_MS,
@@ -92,7 +92,7 @@ function Shown({ row, projectId, events, onOpenAgent }: { row: SubagentRow; proj
           head={<PaneHead row={row} />}
           tail={!row.working && transcript.length > 0 ? <PaneFoot row={row} calls={calls} /> : undefined}
         />
-        {transcript.length === 0 && !(runId && !loaded) && <p className="px-3 text-sm text-muted-foreground">{row.working ? 'Nothing said or done yet.' : 'It left nothing to show.'}</p>}
+        {transcript.length === 0 && !(runId && state === 'unknown') && <p className="px-3 text-sm text-muted-foreground">{row.working ? 'Nothing said or done yet.' : 'It left nothing to show.'}</p>}
       </div>
     </div>
   )

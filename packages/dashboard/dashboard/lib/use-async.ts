@@ -127,8 +127,8 @@ interface ReadLine {
   out?: { n: number; settled: Promise<void> }
   /** The last change it was read again for ({@link Again}): every read under its key is told of it, and it is read once. */
   changed?: number
-  /** Told when a read settles: with its answer, or with nothing when it failed or was dropped. */
-  waiting: Set<(answer?: { value: unknown }) => void>
+  /** Told when a read settles: with its answer, or with nothing when it failed or was dropped (`failed` for a failure no later answer covers). */
+  waiting: Set<(answer?: { value: unknown }, failed?: boolean) => void>
 }
 
 const shared = new Map<string, ReadLine>()
@@ -146,8 +146,8 @@ function lineFor(key: string | undefined): ReadLine {
 function ask(line: ReadLine, load: () => Promise<unknown>, key: string | undefined, again: boolean): Promise<void> {
   if (line.out && !again) return line.out.settled
   const n = ++line.asked
-  const tell = (answer?: { value: unknown }): void => {
-    for (const wait of [...line.waiting]) wait(answer)
+  const tell = (answer?: { value: unknown }, failed = false): void => {
+    for (const wait of [...line.waiting]) wait(answer, failed)
   }
   const settled = load().then(
     value => {
@@ -159,7 +159,7 @@ function ask(line: ReadLine, load: () => Promise<unknown>, key: string | undefin
       }
       tell({ value })
     },
-    () => tell(),
+    () => tell(undefined, n > line.given),
   )
   const out = {
     n,
@@ -194,6 +194,22 @@ const hidden = (): boolean => typeof document !== 'undefined' && document.visibi
 export const StaleReads = createContext<((reader: object, stale: boolean) => void) | null>(null)
 
 /**
+ * What is known of a read's answer: `unknown`, none yet (the value is the `initial`, never an
+ * answer); `kept`, only one an earlier visit stored, which can be shown but never says something
+ * is gone or not there; `fresh`, one read during this page's life.
+ */
+export type ReadState = 'unknown' | 'kept' | 'fresh'
+
+/** A read as its caller sees it: the value, its state, whether its last ask failed, and a read made now. */
+export interface Polled<T> {
+  value: T
+  state: ReadState
+  /** The last ask failed: the value shown is what was there before it. */
+  failing: boolean
+  reload: () => Promise<void>
+}
+
+/**
  * A rejected read keeps the last value rather than blanking it, which is what the usage
  * panel already did deliberately: an empty bar reads as "nothing used" rather than "no
  * answer". The next tick usually succeeds.
@@ -205,25 +221,24 @@ function useAsyncValue<T>(
   deps: DependencyList,
   keep?: Keep,
   again?: Again,
-): { value: T; reload: () => Promise<void>; loaded: boolean; stale: boolean } {
+): Polled<T> {
   // A remembered answer is there from the very first frame, also on a page just mounted: the
   // effect below runs only after that frame is painted. One stored by an earlier visit stands in
   // when the page has none yet, and says it is stale.
   const keyOf = (): string | undefined => (load && typeof keep === 'object' ? keep.remember : undefined)
-  const kept = (key: string | undefined): { value: T; stale: boolean } | undefined => {
+  const kept = (key: string | undefined): { value: T; state: 'kept' | 'fresh' } | undefined => {
     if (key === undefined) return undefined
-    if (remembered.has(key)) return { value: remembered.get(key) as T, stale: false }
+    if (remembered.has(key)) return { value: remembered.get(key) as T, state: 'fresh' }
     if (typeof keep !== 'object' || !keep.stored || answered.has(key)) return undefined
     const stored = storedAnswer(key)
-    return stored ? { value: stored.value as T, stale: true } : undefined
+    return stored ? { value: stored.value as T, state: 'kept' } : undefined
   }
   const [first] = useState(() => kept(keyOf()))
   const [value, setValue] = useState<T>(() => (first ? first.value : initial))
-  // Whether `value` is an answer rather than the initial. Only a successful read sets it, so a
-  // caller that reads absence as a fact ("is this session gone, or just not fetched yet?", #784)
-  // never mistakes a daemon hiccup for an answer.
-  const [loaded, setLoaded] = useState(first !== undefined)
-  const [stale, setStale] = useState(first?.stale ?? false)
+  // Only a successful read makes the state fresh, so a caller that reads absence as a fact ("is
+  // this session gone, or just not fetched yet?", #784) never mistakes a daemon hiccup for an answer.
+  const [state, setState] = useState<ReadState>(first?.state ?? 'unknown')
+  const [failing, setFailing] = useState(false)
   // Captured once, like useState's own initial: it is also what a dep change resets to,
   // and callers pass literals like `[]` that would otherwise be a new value every render.
   const initialRef = useRef(initial)
@@ -252,14 +267,10 @@ function useAsyncValue<T>(
     lineRef.current = current
     // A switch shows nothing rather than the last target's data, unless `keep` says otherwise.
     const shown = kept(key)
-    if (shown) {
-      setValue(shown.value)
-      setLoaded(true)
-    } else {
-      if (keep !== 'previous') setValue(initialRef.current)
-      setLoaded(false)
-    }
-    setStale(shown?.stale ?? false)
+    if (shown) setValue(shown.value)
+    else if (keep !== 'previous') setValue(initialRef.current)
+    setState(shown?.state ?? 'unknown')
+    setFailing(false)
     shownFor.current = deps
     if (!load) return () => void (current.live = false)
     const anew = readBefore.current
@@ -274,14 +285,14 @@ function useAsyncValue<T>(
       if (ms !== null && !hidden()) timer = setTimeout(() => void (hidden() || read()), ms)
     }
     repace.current = next
-    const told = (answer?: { value: unknown }): void => {
+    const told = (answer?: { value: unknown }, failed?: boolean): void => {
       if (!current.live) return
       if (answer) {
         if (stored && key !== undefined) store(key, answer.value)
         setValue(answer.value as T)
-        setLoaded(true)
-        setStale(false)
-      }
+        setState('fresh')
+        setFailing(false)
+      } else if (failed) setFailing(true)
       next()
     }
     line.waiting.add(told)
@@ -322,7 +333,7 @@ function useAsyncValue<T>(
   // Told to the part of the page around this read, which fades while it is stale.
   const fade = useContext(StaleReads)
   const reader = useRef({})
-  const shownStale = stale && sameDeps(shownFor.current, deps)
+  const shownStale = state === 'kept' && sameDeps(shownFor.current, deps)
   useEffect(() => {
     if (!fade) return
     const id = reader.current
@@ -332,10 +343,10 @@ function useAsyncValue<T>(
 
   if (!sameDeps(shownFor.current, deps)) {
     const shown = kept(keyOf())
-    if (shown) return { value: shown.value, reload, loaded: true, stale: shown.stale }
-    return { value: keep === 'previous' ? value : initialRef.current, reload, loaded: false, stale: false }
+    if (shown) return { value: shown.value, state: shown.state, failing: false, reload }
+    return { value: keep === 'previous' ? value : initialRef.current, state: 'unknown', failing: false, reload }
   }
-  return { value, reload, loaded, stale }
+  return { value, state, failing, reload }
 }
 
 function sameDeps(a: DependencyList, b: DependencyList): boolean {
@@ -364,9 +375,9 @@ export function useLoaded<T>(
  * means the next tick is too late to wait for, and settles once that read has answered.
  *
  * Pass `null` for `load` when there is nothing to read yet. `load` must close over
- * exactly `deps`. `loaded` is false until the first successful read, and again after
- * a dep change — for callers that must tell "not there" from "not read yet". `stale` is true
- * while the value is only an answer stored by an earlier visit (`{ remember, stored: true }`).
+ * exactly `deps`. `state` is `unknown` until the first successful read, and again after a dep
+ * change, for callers that must tell "not there" from "not read yet"; `kept` while the value is
+ * only an answer stored by an earlier visit (`{ remember, stored: true }`).
  */
 export function usePolled<T>(
   load: (() => Promise<T>) | null,
@@ -375,6 +386,6 @@ export function usePolled<T>(
   deps: DependencyList,
   keep?: Keep,
   again?: Again,
-): { value: T; reload: () => Promise<void>; loaded: boolean; stale: boolean } {
+): Polled<T> {
   return useAsyncValue(load, initial, everyMs, deps, keep, again)
 }

@@ -135,14 +135,14 @@ function dollars(cost: number): string {
 export function LogsPage({ projects, path }: ModulePageProps) {
   const host = useModuleHost()
   const key = projects.map(p => p.id).join(',')
-  const { value: live, stale: liveStale } = usePolled<LiveRuns[]>(
+  const { value: live, state: liveState } = usePolled<LiveRuns[]>(
     () => Promise.all(projects.map(async project => ({ project, runs: await host.agents(project.id).catch((): ModuleAgent[] => []) }))),
     [],
     10_000,
     [key],
     { remember: `skill-logs:live:${key}`, stored: true },
   )
-  const { value: recorded, loaded, stale: recordedStale } = usePolled<Read>(
+  const { value: recorded, state: recordedState } = usePolled<Read>(
     async () => {
       const results = await Promise.all(projects.map(async project => ({ project, result: await host.runCommand(project.id, ['--limit', String(LIMIT)]) })))
       const rows: Row[] = []
@@ -163,7 +163,7 @@ export function LogsPage({ projects, path }: ModulePageProps) {
     { remember: `skill-logs:runs:${key}`, stored: true },
   )
   const read = { ...recorded, rows: withLiveRuns(recorded.rows, live) }
-  const stale = liveStale || recordedStale
+  const stale = liveState === 'kept' || recordedState === 'kept'
   const accountOf = useGitHostPeople(read.rows.map(({ project, card }) => ({ projectId: project.id, person: card.person })), host.gitHostPeople, 'skill-logs:people')
 
   // Which status the list shows: every one, until a chip picks one, kept in the address (`/logs/waiting`) so a
@@ -188,8 +188,8 @@ export function LogsPage({ projects, path }: ModulePageProps) {
           Could not read the runs of {project.name}: {error}
         </p>
       ))}
-      {!loaded && read.rows.length === 0 && <p className="text-sm text-muted-foreground">Loading…</p>}
-      {loaded && read.rows.length === 0 && read.failed.length === 0 && <p className="text-sm text-muted-foreground">No runs recorded yet.</p>}
+      {recordedState === 'unknown' && read.rows.length === 0 && <p className="text-sm text-muted-foreground">Loading…</p>}
+      {recordedState !== 'unknown' && read.rows.length === 0 && read.failed.length === 0 && <p className="text-sm text-muted-foreground">No runs recorded yet.</p>}
       {/* The table or the list by the page column's own width, which the sidebar takes from the screen's. */}
       <div className="@container">
         {days.length > 0 && (

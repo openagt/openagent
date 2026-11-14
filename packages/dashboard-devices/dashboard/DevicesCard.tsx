@@ -17,11 +17,11 @@ const EVERY_MS = 30_000
 export function DevicesCard(_props: ModuleCardProps) {
   const host = useModuleHost()
   // Kept for the next visit: the page opens with the last machines and devices, faded until they are read again.
-  const { value: machines, loaded } = usePolled<ModuleMachines | undefined>(() => host.machines(), undefined, EVERY_MS, [], { remember: 'devices:machines', stored: true })
+  const { value: machines, state } = usePolled<ModuleMachines | undefined>(() => host.machines(), undefined, EVERY_MS, [], { remember: 'devices:machines', stored: true })
   const { value: door } = usePolled<Answer<DoorStatus> | undefined>(() => loadStatus(host), undefined, EVERY_MS, [], { remember: 'devices:door', stored: true })
   const phones = door?.ok ? door.value.devices.filter(device => !isComputer(device)) : []
   const lastSeen = phones.map(phone => phone.seen ?? '').sort().at(-1)
-  const reading = useSkeleton(!loaded || !machines)
+  const reading = useSkeleton(state === 'unknown' || !machines)
   return (
     <Section
       title="Devices"

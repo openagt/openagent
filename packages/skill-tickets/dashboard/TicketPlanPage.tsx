@@ -18,13 +18,13 @@ export function TicketPlanPage({
   slug: string
 }) {
   const host = useModuleHost()
-  const { read, loaded, reload } = useTicket(projectId, slug)
+  const { read, state, reload } = useTicket(projectId, slug)
   const ticket = read && 'ticket' in read ? read.ticket : null
   const onBack = useBackToList(host, [slug, 'plan'])
 
   return (
     <TicketPageShell onBack={onBack} crumbs={ticket ? [{ label: ticket.title, onOpen: () => host.openPage('tickets', [ticket.file], projectId) }, { label: 'Plan' }] : []}>
-      {!loaded ? (
+      {state === 'unknown' ? (
         <TicketPageNote>Loading…</TicketPageNote>
       ) : read && 'error' in read ? (
         <TicketPageNote>

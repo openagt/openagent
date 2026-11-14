@@ -119,7 +119,7 @@ export function App() {
   // A skill saved in Settings gives or takes a page too.
   useEffect(() => onSkillsSaved(reloadProjects), [reloadProjects])
   // Kept for the next visit too: the Overview's cards are drawn for the projects before they are read again.
-  const { value: projects, loaded: projectsLoaded, stale: projectsStale } = usePolled<ProjectSummary[]>(onProjects, EMPTY_PROJECTS, 30_000, [projectsKey], { remember: 'projects', stored: true })
+  const { value: projects, state: projectsState } = usePolled<ProjectSummary[]>(onProjects, EMPTY_PROJECTS, 30_000, [projectsKey], { remember: 'projects', stored: true })
   // Read again when a project is added from the sidebar or removed from its project home: which
   // project has which module changes then.
   const modules = useModules(projectsKey)
@@ -129,7 +129,7 @@ export function App() {
   const projectIds = projects.map(p => p.id).join('\n')
   const pageWords = modulePages.map(page => page.segment).join('\n')
   const addresses = useMemo(() => projectAddresses(projectIds ? projectIds.split('\n') : [], pageWords ? pageWords.split('\n') : []), [projectIds, pageWords])
-  const addressesRead = projectsLoaded && modulesLoaded
+  const addressesRead = projectsState !== 'unknown' && modulesLoaded
   // How each project is named where it is listed: two clones called `shop` say which folder each is in.
   const labels = useMemo(() => projectLabels(projects), [projects])
   const { route, go: navigate } = useRoute(addresses)
@@ -194,8 +194,8 @@ export function App() {
   // the project by its address, not by its id.
   // Every two seconds on the project's own pages, where a run's status is watched; every ten beside
   // the Overview or a module's page, whose rail only lists them (as every project's rail does).
-  const agentsOf = projectsLoaded ? (projectId ?? scope) : null
-  const { agents, reload, loaded: agentsLoaded } = useAgents(agentsOf, agentStart.id !== null && agentStart.projectId === agentsOf ? agentStart.id : null, projectId !== null ? 2000 : 10_000)
+  const agentsOf = projectsState !== 'unknown' ? (projectId ?? scope) : null
+  const { agents, reload, state: agentsState } = useAgents(agentsOf, agentStart.id !== null && agentStart.projectId === agentsOf ? agentStart.id : null, projectId !== null ? 2000 : 10_000)
   useEffect(() => {
     const startedId = agentStart.id
     if (startedId === null || agentStart.listed || !agents.some(agent => agent.id === startedId)) return
@@ -234,7 +234,7 @@ export function App() {
   // The read as a whole goes to the notifier, which tells of every project's items whichever one
   // is picked, and also needs to know which projects the poll actually reached before it calls
   // anything "new" (#1625).
-  const { value: interventionsRead, stale: interventionsStale, loaded: interventionsLoaded } = usePolled<ProjectionRead<Intervention>>(onInterventions, EMPTY_INTERVENTIONS, 5000, [], {
+  const { value: interventionsRead, state: interventionsState } = usePolled<ProjectionRead<Intervention>>(onInterventions, EMPTY_INTERVENTIONS, 5000, [], {
     remember: 'interventions',
     stored: true,
   })
@@ -248,7 +248,7 @@ export function App() {
   // read, and a non-empty one, is the answer: the list this browser kept from its last load may lack
   // a project added since. Until that read, a project the kept list has is drawn from the first
   // frame and any other address waits, so "No such project" never replaces a project's page.
-  const projectsRead = projectsLoaded && !projectsStale
+  const projectsRead = projectsState === 'fresh'
   const projectAddress = projectId !== null && !noProject
   const listedProject = projectAddress && projects.some(p => p.id === projectId)
   const unknownProject = projectAddress && projectsRead && projects.length > 0 && !listedProject
@@ -261,7 +261,7 @@ export function App() {
   const preferences = usePreferences()
   // Only a fresh read: one stored by an earlier visit taken as what was already there would announce
   // everything that came while the page was closed.
-  useInterventionNotifications(interventionsStale ? EMPTY_INTERVENTIONS : interventionsRead, humanInterventionEnabled(preferences) && notificationsEnabled(preferences), (inProject, id) => selectAgentInProject(inProject, id))
+  useInterventionNotifications(interventionsState === 'fresh' ? interventionsRead : EMPTY_INTERVENTIONS, humanInterventionEnabled(preferences) && notificationsEnabled(preferences), (inProject, id) => selectAgentInProject(inProject, id))
 
   // The "New activity" category (#627): the default-off feed of agents starting/finishing. Its only
   // client consumer is the browser notification below, so it is polled exactly when that will fire —
@@ -273,7 +273,7 @@ export function App() {
   // The shared sidebar's recents when all projects show (#shared-shell): the rail pools every
   // project's sessions here.
   const allShow = scope === null && !scopePending
-  const { recentAgents, reload: reloadRecent, loaded: recentLoaded } = useRecentAgents(allShow, agentStart)
+  const { recentAgents, reload: reloadRecent, state: recentState } = useRecentAgents(allShow, agentStart)
 
   // An agent just started in `inProject`, which is not always the selected one: the onboarding
   // checklist starts one from the Overview, where nothing is selected (#1169).
@@ -427,11 +427,11 @@ export function App() {
   // message box offered what an ended agent's does whatever the agent's state, for a moment.
   const selectedAgent = agentId
     ? (agents.find(agent => agent.id === agentId) ??
-      (agentsLoaded ? undefined : recentAgents.find(recent => recent.projectId === projectId && recent.agent.id === agentId)?.agent))
+      (agentsState === 'fresh' ? undefined : recentAgents.find(recent => recent.projectId === projectId && recent.agent.id === agentId)?.agent))
     : undefined
   // A session with no record in a list that was read: it was deleted, or never was here. The run
   // just started is exempt only until a list has had it, the beat before its card lands.
-  const sessionGone = agentId !== null && !selectedAgent && agentsLoaded && (agentId !== agentStart.id || agentStart.listed === true)
+  const sessionGone = agentId !== null && !selectedAgent && agentsState === 'fresh' && (agentId !== agentStart.id || agentStart.listed === true)
   // The runs started for the selected one: rows in its chat.
   const subagents = useMemo(() => (agentId ? subagentsOf(agents, agentId) : []), [agents, agentId])
   // The project is off the list: read the list again and leave its page for the Overview of every
@@ -479,8 +479,7 @@ export function App() {
           onSelectAgent={selectAgentInProject}
           onAgentStarted={agentStarted}
           interventions={interventions}
-          interventionsStale={interventionsStale}
-          interventionsLoaded={interventionsLoaded}
+          interventionsState={interventionsState}
           active={activeAgents}
           projects={projects}
           scope={scope}
@@ -643,7 +642,7 @@ export function App() {
           projectId={projectId}
           scope={scope}
           scopePending={scopePending}
-          listLoaded={scope === null ? recentLoaded : agentsLoaded}
+          listLoaded={(scope === null ? recentState : agentsState) === 'fresh'}
           onScope={selectScope}
           homeHref={formatRoute({ projectId: null, agentId: null, ...(scope ? { scope } : {}) }, addresses)}
           agents={agents}

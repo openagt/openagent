@@ -48,7 +48,7 @@ export function TicketsPage({ projects }: { projects: ModuleProject[] }) {
   // among the project's runs: a lock names a run's id, so a claim a run made links to its page
   // and reads as its session name. A project whose command fails is named with the command's own
   // reason, and the other projects still show. A local read, no fetch: cheap enough to poll.
-  const { value: groups, loaded, stale } = usePolled<ProjectRead[]>(
+  const { value: groups, state } = usePolled<ProjectRead[]>(
     () =>
       Promise.all(
         projects.map(async (project): Promise<ProjectRead> => {
@@ -167,7 +167,7 @@ export function TicketsPage({ projects }: { projects: ModuleProject[] }) {
     <Page
       title="Tickets"
       // Shown/total beside the name it counts (#1144 follow-up): unfiltered it reads n/n, doubling as the backlog's total.
-      count={loaded && rows.length > 0 ? `${visible.length}/${rows.length}` : undefined}
+      count={state !== 'unknown' && rows.length > 0 ? `${visible.length}/${rows.length}` : undefined}
       description={
         <>
           {projects.length === 1 ? 'This project\u2019s' : 'Every project\u2019s'} <code className="rounded bg-muted px-1">tickets/</code> backlog: what agents plan from.
@@ -193,7 +193,7 @@ export function TicketsPage({ projects }: { projects: ModuleProject[] }) {
               </Button>
             </span>
           )}
-          {loaded && planTargets.length > 0 && (
+          {state !== 'unknown' && planTargets.length > 0 && (
             <LinkActions
               projects={projectsShown}
               targets={linksByProject(planTargets, planLink)}
@@ -210,7 +210,7 @@ export function TicketsPage({ projects }: { projects: ModuleProject[] }) {
               }
             />
           )}
-          {loaded && targets.length > 0 && (
+          {state !== 'unknown' && targets.length > 0 && (
             <LinkActions
               projects={projectsShown}
               targets={linksByProject(targets, ticketLink)}
@@ -244,7 +244,7 @@ export function TicketsPage({ projects }: { projects: ModuleProject[] }) {
         </>
       }
     >
-      {!loaded ? (
+      {state === 'unknown' ? (
         <p className="text-sm text-muted-foreground">Loading…</p>
       ) : groups.length === 0 ? (
         <p className="text-sm text-muted-foreground">No project has the tickets package.</p>
@@ -252,7 +252,7 @@ export function TicketsPage({ projects }: { projects: ModuleProject[] }) {
         // The flat cross-project list: one pool, one order, rows carrying their project. No
         // per-project Update bars here — those belong to the sections, and grouped mode is a
         // menu click away.
-        <FadeWhileStale stale={stale} className="space-y-2">
+        <FadeWhileStale stale={state === 'kept'} className="space-y-2">
           {filtered && rows.length - visible.length > 0 && (
             <div className="flex items-center gap-3 text-xs text-muted-foreground">
               <span>
@@ -294,7 +294,7 @@ export function TicketsPage({ projects }: { projects: ModuleProject[] }) {
           )}
         </FadeWhileStale>
       ) : (
-        <FadeWhileStale stale={stale} className="space-y-8">
+        <FadeWhileStale stale={state === 'kept'} className="space-y-8">
           {groups.map(g => {
             const groupRows = visible.filter(r => r.projectId === g.projectId)
             const sorted = sortRows(groupRows, view.sort)

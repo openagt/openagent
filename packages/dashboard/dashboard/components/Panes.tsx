@@ -156,13 +156,14 @@ export function PanesProvider({
   // Read here and not in the pane: the top bar has to know whether there is a document before it
   // offers the icon (#1146). Remembered per project: a project seen before says whether it has
   // documents from the first frame, so its icon neither comes late nor shows and goes.
-  const { value: docs, loaded: docsLoaded } = usePolled<WorkspaceDoc[]>(
+  const { value: docs, state: docsState } = usePolled<WorkspaceDoc[]>(
     shown ? () => onDocs(shown) : null,
     [],
     4000,
     [shown],
     shown ? { remember: `docs:${shown}` } : undefined,
   )
+  const docsLoaded = docsState !== 'unknown'
 
   // The modules' panes for this project: every one is offered, since the top bar cannot tell a
   // module's pane is empty without rendering it; an empty one says so inside. The dashboard's own

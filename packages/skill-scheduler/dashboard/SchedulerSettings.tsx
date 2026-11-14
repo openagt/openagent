@@ -15,7 +15,7 @@ const OFFSET_SAVE_DELAY_MS = 500
 export function SchedulerSettings({ projects }: ModuleSettingsProps) {
   const host = useModuleHost()
   const key = projects.map(p => p.id).join(',')
-  const { value: rows, loaded, reload } = usePolled(() => readSchedulers(host, projects), EMPTY, 10_000, [key], { remember: schedulersKey(key) })
+  const { value: rows, state, reload } = usePolled(() => readSchedulers(host, projects), EMPTY, 10_000, [key], { remember: schedulersKey(key) })
   const [error, setError] = useState<string | undefined>()
   const down = useOpenAgentDown()
   // The offset just saved, said until it is changed again.
@@ -70,7 +70,7 @@ export function SchedulerSettings({ projects }: ModuleSettingsProps) {
         </>
       }
     >
-      {!loaded && <p className="py-2 text-sm text-muted-foreground">Loading…</p>}
+      {state === 'unknown' && <p className="py-2 text-sm text-muted-foreground">Loading…</p>}
       {offset !== undefined && (
         <SettingsRow
           label="Spend offset"

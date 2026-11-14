@@ -63,7 +63,7 @@ const NONE: Read[] = []
 
 export function SkillsCard({ projects, onSelectProject, projectHref }: { projects: ProjectSummary[]; onSelectProject: (id: string) => void; projectHref: (id: string) => string }) {
   const key = projects.map(project => project.id).join(',')
-  const { value: reads, loaded, reload } = usePolled<Read[]>(
+  const { value: reads, state, reload } = usePolled<Read[]>(
     () =>
       Promise.all(
         projects.map(async (project): Promise<Read> => {
@@ -92,7 +92,7 @@ export function SkillsCard({ projects, onSelectProject, projectHref }: { project
   const unused = [...new Set(reads.flatMap(read => (read.skills ? skillsSay(read.skills).heldNames : [])))].filter(name => !usedNames.has(name)).sort()
   const updatable = reads.filter(read => read.skills && skillsSay(read.skills).newer.length > 0)
   const [updatingAll, setUpdatingAll] = useState(false)
-  const reading = useSkeleton(!loaded)
+  const reading = useSkeleton(state === 'unknown')
   const all = useAction()
   const updateAll = async (): Promise<void> => {
     setUpdatingAll(true)

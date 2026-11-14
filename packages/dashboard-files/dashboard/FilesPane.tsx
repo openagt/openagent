@@ -191,8 +191,8 @@ export function FilesPane({ projectId, agentId, activity, show, context }: Modul
 
   // The project's files (#492), polled so they track edits; with a run selected, the run's own
   // tree instead (#815), polled so they track an agent editing.
-  const { value: projectFiles, loaded: projectLoaded } = usePolled<string[]>(agentId ? null : () => readProject(host, projectId), EMPTY_FILES, 8_000, [projectId, agentId], { remember: projectKey(projectId) })
-  const { value: answer, loaded: treeLoaded, reload: reloadTree } = usePolled<AgentTree | null>(
+  const { value: projectFiles, state: projectState } = usePolled<string[]>(agentId ? null : () => readProject(host, projectId), EMPTY_FILES, 8_000, [projectId, agentId], { remember: projectKey(projectId) })
+  const { value: answer, state: treeState, reload: reloadTree } = usePolled<AgentTree | null>(
     agentId ? () => readTree(host, projectId, agentId) : null,
     null,
     8_000,
@@ -256,11 +256,11 @@ export function FilesPane({ projectId, agentId, activity, show, context }: Modul
       <Waiting className="p-3">{text}</Waiting>
     </>
   )
-  if (agentId && (!treeLoaded || runTree?.source === 'pending')) return waiting('Looking for this session’s files…')
+  if (agentId && (treeState === 'unknown' || runTree?.source === 'pending')) return waiting('Looking for this session’s files…')
   // No checkout, no branch and no merge commit on this machine: say so rather than show the
   // project's own files, which reads as "these are the run's".
   if (agentId && runTree?.source === 'gone') return line('This session’s files are gone from this machine: its checkout was reclaimed and it left no branch or merged pull request here.')
-  if (!agentId && !projectLoaded) return waiting('Reading the project’s files…')
+  if (!agentId && projectState === 'unknown') return waiting('Reading the project’s files…')
   if (files.length === 0) return line('No files here.')
 
   return (

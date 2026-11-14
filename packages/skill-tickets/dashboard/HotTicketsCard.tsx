@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { ArrowUp, Bot, CirclePause, Clock, WifiOff, type LucideIcon } from 'lucide-react'
-import { Button, LinkActions, PageLink, RowsLoading, Section, useSkeleton, cn, formatDateTime, inPlace, usePolled, useModuleHost, useOpenAgentDown, type ModuleCardProps, type ModuleProject } from '@openagt/dashboard/module'
+import { Button, LinkActions, PageLink, RowsLoading, Section, useSkeleton, cn, formatDateTime, inPlace, usePolled, useModuleHost, useOpenAgentDown, type ModuleCardProps, type ModuleProject, type ReadState } from '@openagt/dashboard/module'
 import { claimState, heldBack, holderAgent, hotLane, ticketLink, withHolder, type ClaimState, type HotLane } from '../src/module.js'
 import { holdingRun } from './lib/holding-run.js'
 import { listTickets } from './lib/list.js'
@@ -49,7 +49,7 @@ const ENDED: Record<string, string> = { stopped: 'Run stopped', failed: 'Run fai
 export function HotTicketsCard({ projects }: ModuleCardProps) {
   const host = useModuleHost()
   const key = projects.map(p => p.id).join(',')
-  const { value: read, loaded, reload } = usePolled<Read>(
+  const { value: read, state, reload } = usePolled<Read>(
     async () => {
       const reads = await Promise.all(
         projects.map(async project => {
@@ -89,12 +89,12 @@ export function HotTicketsCard({ projects }: ModuleCardProps) {
 
   return (
     <Section title="Hot tickets" count={read.hot.length > 0 ? read.hot.length : undefined} action={<PageLink href={host.pageHref('tickets')} onOpen={() => host.openPage('tickets')}>Tickets</PageLink>}>
-      {loaded && read.hot.length === 0 && read.errors.length === 0 ? (
+      {state !== 'unknown' && read.hot.length === 0 && read.errors.length === 0 ? (
         // Named lanes, not "no tickets": the list is a shortlist, and its empty state must not
         // claim the backlog is empty when merely nothing qualifies.
         <p className="text-sm text-muted-foreground">Nothing claimed, high priority or waiting.</p>
       ) : (
-        <HotList hot={read.hot} errors={read.errors} loaded={loaded} showProject={projects.length > 1} reload={reload} />
+        <HotList hot={read.hot} errors={read.errors} state={state} showProject={projects.length > 1} reload={reload} />
       )}
     </Section>
   )
@@ -106,9 +106,9 @@ export function HotTicketsCard({ projects }: ModuleCardProps) {
  * what needs a person most: a claim held for nobody, then work going on, then what is flagged,
  * then what waits on someone else. A kind with nothing in it has no heading.
  */
-function HotList({ hot, errors, loaded, showProject, reload }: { hot: HotTicket[]; errors: Read['errors']; loaded: boolean; showProject: boolean; reload: () => Promise<void> }) {
+function HotList({ hot, errors, state, showProject, reload }: { hot: HotTicket[]; errors: Read['errors']; state: ReadState; showProject: boolean; reload: () => Promise<void> }) {
   const groups = LANES.map(lane => ({ lane, tickets: hot.filter(t => t.lane === lane.key) })).filter(group => group.tickets.length > 0)
-  const reading = useSkeleton(!loaded)
+  const reading = useSkeleton(state === 'unknown')
   return (
     <>
       {/* Under the heading, with the way out: the read again, at once rather than at the next poll. */}

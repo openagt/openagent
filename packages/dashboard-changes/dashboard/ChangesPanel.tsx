@@ -160,14 +160,14 @@ const NO_POLL = 3_600_000
 
 function DiffBody({ projectId, agentId, path, commit, whole, wrap, version, poll, onWhole }: DiffProps) {
   const host = useModuleHost()
-  const { value, loaded } = usePolled<FileDiff | null>(() => readDiff(host, projectId, path, agentId, commit, whole), null, poll ? 8_000 : NO_POLL, [projectId, agentId, path, commit, whole, version], {
+  const { value, state } = usePolled<FileDiff | null>(() => readDiff(host, projectId, path, agentId, commit, whole), null, poll ? 8_000 : NO_POLL, [projectId, agentId, path, commit, whole, version], {
     remember: diffKey(projectId, agentId, path, commit, whole),
   })
   // Asked for whole, the diff shown so far stays until the whole file answers: the place clicked is not lost to a "Reading…" line.
   const shown = useRef<FileDiff | null>(null)
-  if (loaded) shown.current = value
-  const diff = loaded ? value : shown.current
-  if (!loaded && !diff) return <Waiting className="px-3 py-2">Reading the diff…</Waiting>
+  if (state !== 'unknown') shown.current = value
+  const diff = state !== 'unknown' ? value : shown.current
+  if (!diff && state === 'unknown') return <Waiting className="px-3 py-2">Reading the diff…</Waiting>
   if (!diff) return <p className="px-3 py-2 text-xs text-muted-foreground">No change to show.</p>
   return <DiffView diff={diff} wrap={wrap} whole={whole} onWhole={onWhole} className="py-1" />
 }
@@ -381,19 +381,19 @@ export function ChangesPanel({ projectId, agentId, activity, reveal }: ModulePan
   const [peek, setPeek] = useState(false)
   const listShown = narrow ? peek : settings.list
   const [commitsOpen, setCommitsOpen] = useState(true)
-  const { value: projectChanges, loaded: projectLoaded, reload: reloadProject } = usePolled<Record<string, FileMark>>(agentId ? null : () => readProject(host, projectId), NO_CHANGES, 8_000, [projectId, agentId], { remember: projectKey(projectId) })
-  const { value: answer, loaded: runLoaded, reload } = usePolled<RunChanges | null>(agentId ? () => readRun(host, projectId, agentId) : null, null, 8_000, [projectId, agentId], agentId ? { remember: runKey(projectId, agentId) } : undefined)
+  const { value: projectChanges, state: projectState, reload: reloadProject } = usePolled<Record<string, FileMark>>(agentId ? null : () => readProject(host, projectId), NO_CHANGES, 8_000, [projectId, agentId], { remember: projectKey(projectId) })
+  const { value: answer, state: runState, reload } = usePolled<RunChanges | null>(agentId ? () => readRun(host, projectId, agentId) : null, null, 8_000, [projectId, agentId], agentId ? { remember: runKey(projectId, agentId) } : undefined)
   // A run whose files move as it ends answers pending for a moment: the list it last showed stays.
   const moving = answer?.source === 'pending'
   const run = useHeld(agentId, answer, answer !== null && 'changes' in answer, moving)
-  const { value: commitsRead, loaded: commitsLoaded, reload: reloadCommits } = usePolled<AgentCommit[]>(agentId ? () => readCommits(host, projectId, agentId) : null, NO_COMMITS, 8_000, [projectId, agentId], agentId ? { remember: commitsKey(projectId, agentId) } : undefined)
+  const { value: commitsRead, state: commitsState, reload: reloadCommits } = usePolled<AgentCommit[]>(agentId ? () => readCommits(host, projectId, agentId) : null, NO_COMMITS, 8_000, [projectId, agentId], agentId ? { remember: commitsKey(projectId, agentId) } : undefined)
   // As with the list of files: while the run's files move as it ends, the commits last read stay.
-  const commits = useHeld(agentId, commitsRead, commitsLoaded && !moving, moving)
+  const commits = useHeld(agentId, commitsRead, commitsState !== 'unknown' && !moving, moving)
   // The commit picked on this page, while it is still one of the run's; none picked is "All changes".
   const [commitClick, setCommitClick] = useState<{ agentId: string; sha: string } | null>(null)
   const commit = commitClick !== null && commitClick.agentId === agentId ? commits.find(c => c.sha === commitClick.sha) : undefined
   const sha = commit?.sha
-  const { value: commitChanges, loaded: commitLoaded } = usePolled<Record<string, FileMark> | null>(agentId && sha ? () => readCommit(host, projectId, agentId, sha) : null, null, 60_000, [projectId, agentId, sha], agentId && sha ? { remember: commitKey(projectId, agentId, sha) } : undefined)
+  const { value: commitChanges, state: commitState } = usePolled<Record<string, FileMark> | null>(agentId && sha ? () => readCommit(host, projectId, agentId, sha) : null, null, 60_000, [projectId, agentId, sha], agentId && sha ? { remember: commitKey(projectId, agentId, sha) } : undefined)
   // "Refresh" in the ⋮ menu: every read again now, the diffs too.
   const [refresh, setRefresh] = useState(0)
   // The agent did something: read again now rather than on the next poll, once per burst, and the
@@ -491,14 +491,14 @@ export function ChangesPanel({ projectId, agentId, activity, reveal }: ModulePan
     </>
   )
   if (agentId) {
-    if (!runLoaded || !commitsLoaded || !run || run.source === 'pending') return waiting('Looking for this session’s changes…')
+    if (runState === 'unknown' || commitsState === 'unknown' || !run || run.source === 'pending') return waiting('Looking for this session’s changes…')
     if (run.source === 'gone') return line('This session’s changes are gone from this machine: its checkout was reclaimed and it left no branch or merged pull request here.')
-  } else if (!projectLoaded) return waiting('Reading the project’s files…')
+  } else if (projectState === 'unknown') return waiting('Reading the project’s files…')
   if (Object.keys(all).length === 0 && commits.length === 0) return line(agentId ? 'This session changed no files.' : 'Nothing is changed in the project’s folder.')
 
   const caption = commit ? `${commit.short} ${commit.subject}` : agentId ? undefined : 'Changed in the project’s folder, not committed.'
   // What stands where the diffs would be, when the list is empty.
-  const nothing = commit ? (commitLoaded ? 'This commit changed no files.' : 'Reading the commit…') : 'No change is left: the commits cancel out.'
+  const nothing = commit ? (commitState !== 'unknown' ? 'This commit changed no files.' : 'Reading the commit…') : 'No change is left: the commits cancel out.'
   return (
     <>
       {header}

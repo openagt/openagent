@@ -152,7 +152,8 @@ export function byMountOrder(a: { order?: number; package: string }, b: { order?
  * opened again imports the modules at once.
  */
 export function useModules(reloadKey = 0): MountedModules {
-  const { value: modules, loaded: listed } = usePolled(onModules, NO_MODULES, 30_000, [reloadKey], { remember: 'modules', stored: true })
+  const { value: modules, state: listState } = usePolled(onModules, NO_MODULES, 30_000, [reloadKey], { remember: 'modules', stored: true })
+  const listed = listState !== 'unknown'
   const [state, setState] = useState<MountedModules>(NOTHING_MOUNTED)
   useEffect(() => {
     if (!listed) return

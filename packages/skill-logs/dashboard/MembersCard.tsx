@@ -30,7 +30,7 @@ function didWords(member: Member): string {
 export function MembersCard({ projects }: ModuleCardProps) {
   const host = useModuleHost()
   const key = projects.map(project => project.id).join(',')
-  const { value: members, loaded } = usePolled<Shown[]>(
+  const { value: members, state } = usePolled<Shown[]>(
     async () => {
       const reads = await Promise.all(
         projects.map(async project => {
@@ -58,9 +58,9 @@ export function MembersCard({ projects }: ModuleCardProps) {
     // Kept for the next visit: the page opens with the last members, faded until they are read again.
     { remember: `skill-logs:members:${key}`, stored: true },
   )
-  const reading = useSkeleton(!loaded)
+  const reading = useSkeleton(state === 'unknown')
   return (
-    <Section title="Members" count={loaded && members.length > 0 ? members.length : undefined} action={<PageLink href={host.pageHref('logs')} onOpen={() => host.openPage('logs')}>Logs</PageLink>}>
+    <Section title="Members" count={state !== 'unknown' && members.length > 0 ? members.length : undefined} action={<PageLink href={host.pageHref('logs')} onOpen={() => host.openPage('logs')}>Logs</PageLink>}>
       <p className="-mt-1 mb-3 text-xs text-muted-foreground">Who worked here in the last 30 days: agents started, commits</p>
       {reading ? (
         <RowsLoading />

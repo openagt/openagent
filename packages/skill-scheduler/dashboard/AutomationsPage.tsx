@@ -42,7 +42,7 @@ export function AutomationsPage({ projects }: ModulePageProps) {
   const agents = useCodingAgents()
   const key = projects.map(p => p.id).join(',')
   // Kept for the next visit, as the Overview's card keeps it: the page opens with the last rows, faded until they are read again.
-  const { value: read, loaded, stale, reload } = usePolled(() => readSchedulers(host, projects), EMPTY, 10_000, [key], { remember: schedulersKey(key), stored: true })
+  const { value: read, state, reload } = usePolled(() => readSchedulers(host, projects), EMPTY, 10_000, [key], { remember: schedulersKey(key), stored: true })
   // A read that fails for a moment keeps the project's rows as they were last read, under the line
   // that says why: a panel open in one of them, and what was typed there, stays.
   const lastRead = useRef(new Map<string, SchedulerRow>())
@@ -83,10 +83,10 @@ export function AutomationsPage({ projects }: ModulePageProps) {
   // elsewhere, or another project was picked. Left open it would show nowhere, and hold every
   // button that opens one.
   useEffect(() => {
-    if (!loaded) return
+    if (state === 'unknown') return
     if (panel && !rows.some(row => row.commands.some(c => `${row.project.id}/${c.command}` === panel.id))) setPanel(undefined)
     if (creating !== undefined && !rows.some(row => row.project.id === creating)) setCreating(undefined)
-  }, [rows, loaded, panel, creating])
+  }, [rows, state, panel, creating])
   const editButtons = useRef(new Map<string, HTMLButtonElement>())
   /** Close a row's panel and hand the keyboard back to its Edit button. */
   const close = (id: string): void => {
@@ -150,8 +150,8 @@ export function AutomationsPage({ projects }: ModulePageProps) {
 
   return (
     <Page title="Automations" description="What starts by itself while nobody is at the keyboard. Every row starts switched off: it runs on this machine only once you switch it on here.">
-      {!loaded && <p className="text-sm text-muted-foreground">Loading…</p>}
-      <FadeWhileStale stale={stale}>
+      {state === 'unknown' && <p className="text-sm text-muted-foreground">Loading…</p>}
+      <FadeWhileStale stale={state === 'kept'}>
         {rows.map(row => {
           const status = schedulerStatus(row)
           const note = row.lastTick?.note

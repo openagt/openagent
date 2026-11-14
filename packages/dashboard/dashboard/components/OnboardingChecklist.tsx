@@ -85,7 +85,7 @@ export function OnboardingChecklist({
   // Slower than the Overview's own 5s poll: these change at human speed, and this read fans out
   // over every project to answer the tickets question.
   // Kept for the next visit: the steps open where they stood, not as titles that then grow.
-  const { value: data, reload, loaded } = usePolled<DashboardData | null>(onDashboard, null, 10_000, [], { remember: 'onboarding:dashboard', stored: true })
+  const { value: data, reload, state } = usePolled<DashboardData | null>(onDashboard, null, 10_000, [], { remember: 'onboarding:dashboard', stored: true })
   const preferences = usePreferences()
   const permission = useNotificationPermission()
   const { start, busy: starting, error: startError } = useStartAgent()
@@ -230,7 +230,7 @@ export function OnboardingChecklist({
   ]
 
   // No step before its reads have said where it stands: an unread project count is not "no project".
-  const reading = !loaded || !missingLoaded
+  const reading = state === 'unknown' || !missingLoaded
   const open = picked !== undefined && steps.some(step => step.key === picked && !step.done) ? picked : steps.find(step => !step.done)?.key
   const ready = !reading && steps.every(step => step.done || step.optional)
   const name = person ? `, ${firstName(person.name)}` : ''
