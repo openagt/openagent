@@ -132,6 +132,7 @@ export function EditOverview({ arranged, under, layouts, layoutKey, notice }: { 
   const aim = (to: Aim): void => {
     if (aimed === undefined || !sameAim(aimed, to)) setAimed(to)
   }
+  /** The layout changed: by a press or a key, the cards stand in their new places at once. */
   const write = (next: Placed[]): void =>
     updatePreferences({
       overviewLayouts: {
@@ -140,25 +141,24 @@ export function EditOverview({ arranged, under, layouts, layoutKey, notice }: { 
       },
     })
   /**
-   * The layout changed, the cards sliding to where they now stand rather than jumping: the browser's
-   * own view transition, each card named for itself. Where the browser has none, they just stand there.
+   * The layout changed by a drag: the cards slide to where they now stand, the browser's own view
+   * transition, each card named for itself; under reduced motion, or where the browser has none, they just stand there.
    */
-  const save = (next: Placed[]): void => {
+  const slide = (next: Placed[]): void => {
     const apply = (): void => flushSync(() => write(next))
-    if (typeof document.startViewTransition === 'function') document.startViewTransition(apply)
+    if (typeof document.startViewTransition === 'function' && !matchMedia('(prefers-reduced-motion: reduce)').matches) document.startViewTransition(apply)
     else apply()
   }
-  const indexOf = (id: string): number => arranged.findIndex(placed => placed.card.id === id)
-  /** The card `id` put where `before` stands (the end, when none), shown or not. */
-  const place = (id: string, before: string | undefined, hidden: boolean): void => {
-    const moving = arranged[indexOf(id)]
-    if (!moving) return
+  /** The layout with the card `id` put where `before` stands (the end, when none), shown or not. */
+  const moved = (id: string, before: string | undefined, hidden: boolean): Placed[] => {
+    const moving = arranged.find(placed => placed.card.id === id)!
     const rest = arranged.filter(placed => placed.card.id !== id)
     const at = before === undefined ? rest.length : rest.findIndex(placed => placed.card.id === before)
     rest.splice(at < 0 ? rest.length : at, 0, { ...moving, hidden })
-    save(rest)
+    return rest
   }
-  const change = (id: string, picked: Partial<Pick<Placed, 'width' | 'hidden'>>): void => save(arranged.map(placed => (placed.card.id === id ? { ...placed, ...picked } : placed)))
+  /** The layout with the card `id` changed. */
+  const changed = (id: string, picked: Partial<Pick<Placed, 'width' | 'hidden'>>): Placed[] => arranged.map(placed => (placed.card.id === id ? { ...placed, ...picked } : placed))
   const shown = arranged.filter(placed => !placed.hidden)
   const tray = arranged.filter(placed => placed.hidden)
   /** The card one step earlier or later among the shown ones. */
@@ -167,7 +167,7 @@ export function EditOverview({ arranged, under, layouts, layoutKey, notice }: { 
     const to = at + by
     if (to < 0 || to >= shown.length) return
     // Before the card it passes when moving up; before the one after that when moving down.
-    place(id, by < 0 ? shown[to]!.card.id : shown[to + 1]?.card.id, false)
+    write(moved(id, by < 0 ? shown[to]!.card.id : shown[to + 1]?.card.id, false))
   }
   const drop = (event: DragEvent): void => {
     event.preventDefault()
@@ -177,7 +177,7 @@ export function EditOverview({ arranged, under, layouts, layoutKey, notice }: { 
       // Dropped beside itself: it stays where it was.
       if (at?.id !== dragging.id) {
         const before = at === undefined ? undefined : at.side === 'before' ? at.id : shown.slice(shown.findIndex(placed => placed.card.id === at.id) + 1).find(placed => placed.card.id !== dragging.id)?.card.id
-        if (before !== dragging.id) place(dragging.id, before, false)
+        if (before !== dragging.id) slide(moved(dragging.id, before, false))
       }
     }
     endDrag()
@@ -243,8 +243,8 @@ export function EditOverview({ arranged, under, layouts, layoutKey, notice }: { 
               first={at === 0}
               last={at === shown.length - 1}
               onStep={by => step(card.id, by)}
-              onWidth={picked => change(card.id, { width: picked })}
-              onHide={() => change(card.id, { hidden: true })}
+              onWidth={picked => write(changed(card.id, { width: picked }))}
+              onHide={() => write(changed(card.id, { hidden: true }))}
             />
             {/* The card as it stands, its own buttons asleep while it is being arranged. */}
             <div inert className="flex flex-1 select-none flex-col *:flex-1">
@@ -259,7 +259,7 @@ export function EditOverview({ arranged, under, layouts, layoutKey, notice }: { 
         onDragOver={event => dragging?.from === 'page' && event.preventDefault()}
         onDrop={event => {
           event.preventDefault()
-          if (dragging?.from === 'page') change(dragging.id, { hidden: true })
+          if (dragging?.from === 'page') slide(changed(dragging.id, { hidden: true }))
           endDrag()
         }}
         className={cn('rounded-lg border border-dashed border-border px-3 py-3', dragging?.from === 'page' && 'border-primary bg-accent/40')}
@@ -292,7 +292,7 @@ export function EditOverview({ arranged, under, layouts, layoutKey, notice }: { 
               >
                 <GripVertical className="h-3.5 w-3.5 text-muted-foreground" aria-hidden />
                 {card.label}
-                <button type="button" aria-label={`Add ${card.label}`} onClick={() => place(card.id, undefined, false)} className="focus-ring flex size-6 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-foreground">
+                <button type="button" aria-label={`Add ${card.label}`} onClick={() => write(moved(card.id, undefined, false))} className="focus-ring flex size-6 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-foreground">
                   <Plus className="h-3.5 w-3.5" aria-hidden />
                 </button>
               </li>

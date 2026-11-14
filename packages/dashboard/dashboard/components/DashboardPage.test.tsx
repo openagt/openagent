@@ -201,6 +201,36 @@ describe('the Overview', () => {
     expect(order).toEqual(['skills', 'human-queue', 'usage', 'working', '@x/tickets/hot'])
   })
 
+  test('the cards slide to their places after a drag, never after a key or a press, nor under reduced motion', async () => {
+    working = []
+    const slide = vi.fn((update: () => void) => update())
+    document.startViewTransition = slide as never
+    const reduced = window.matchMedia
+    try {
+      window.matchMedia = ((query: string) => ({ ...reduced(query), matches: false })) as typeof window.matchMedia
+      show()
+      fireEvent.click(await screen.findByRole('button', { name: 'Customize' }))
+      fireEvent.keyDown(screen.getByRole('button', { name: 'Move Usage: arrow keys' }), { key: 'ArrowRight' })
+      fireEvent.click(screen.getByRole('button', { name: 'Take Skills off the page' }))
+      expect(slide).not.toHaveBeenCalled()
+      const transfer = { dataTransfer: { effectAllowed: '', setData: () => {} } }
+      fireEvent.dragStart(document.querySelector('[data-card="skills"]')!, transfer)
+      fireEvent.dragOver(document.querySelector('[data-card="human-queue"]')!, { ...transfer, clientX: 0 })
+      fireEvent.drop(document.querySelector('[data-card="human-queue"]')!, transfer)
+      expect(slide).toHaveBeenCalledTimes(1)
+      // Under reduced motion a drag moves the cards with no slide.
+      window.matchMedia = reduced
+      fireEvent.dragStart(document.querySelector('[data-card="skills"]')!, transfer)
+      fireEvent.dragOver(document.querySelector('[data-card="human-queue"]')!, { ...transfer, clientX: 0 })
+      fireEvent.drop(document.querySelector('[data-card="human-queue"]')!, transfer)
+      expect(slide).toHaveBeenCalledTimes(1)
+      expect(prefs.updatePreferences).toHaveBeenCalledTimes(4)
+    } finally {
+      window.matchMedia = reduced
+      delete (document as { startViewTransition?: unknown }).startViewTransition
+    }
+  })
+
   test('with every card off the page, the page says so beside the press that brings them back, which gives a room to drop the first one into', async () => {
     working = []
     prefs.value = { onboardingDismissed: true, overviewLayouts: { '*': ['usage', 'human-queue', 'working', 'skills', '@x/tickets/hot'].map(id => ({ id, hidden: true })) } }
