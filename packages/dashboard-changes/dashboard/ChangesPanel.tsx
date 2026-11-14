@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { ChevronRight, ListTree, MoreVertical, Search } from 'lucide-react'
 import {
   Button,
+  buttonVariants,
   DiffStat,
   DropdownMenu,
   DropdownMenuCheckboxItem,
@@ -225,7 +226,7 @@ function ChangeSearch({ paths, changes, onPick }: { paths: string[]; changes: Re
     <Popover open={open} onOpenChange={setOpen}>
       <Tooltip>
         <TooltipTrigger render={<PopoverTrigger render={<Button variant="ghost" size="icon-sm" className="shrink-0 text-muted-foreground" aria-label="Search changed files" />} />}>
-          <Search className="size-3.5" />
+          <Search className="size-4" />
         </TooltipTrigger>
         <TooltipContent>Search changed files</TooltipContent>
       </Tooltip>
@@ -291,14 +292,14 @@ function ChangesHeader({ between, merged, page, paths, changes, listShown, onPic
   return (
     <>
       <PaneTitle>
-        {/* One line, cut at its end on a narrow pane: the branches come first. */}
+        {/* One line, the branches cut in their middle on a narrow pane, so the run's own stays told apart. */}
         {between ? (
-          <h2 className="min-w-0 truncate pl-2 text-[13px] text-muted-foreground" title={between}>
-            {between}
-            {merged !== undefined && <span className="text-xs text-muted-foreground">{merged ? ' · merged' : ' · not merged yet'}</span>}
+          <h2 className="flex min-w-0 items-baseline gap-1 pl-2 text-sm text-muted-foreground" title={between}>
+            <MiddleCut text={between} />
+            {merged !== undefined && <span className="shrink-0 text-xs">{merged ? '· merged' : '· not merged yet'}</span>}
           </h2>
         ) : (
-          <h2 className="truncate pl-2 text-[13px] text-muted-foreground">Changes</h2>
+          <h2 className="truncate pl-2 text-sm font-medium">Changes</h2>
         )}
       </PaneTitle>
       <PaneActions>
@@ -321,7 +322,7 @@ function ChangesHeader({ between, merged, page, paths, changes, listShown, onPic
           <TooltipContent>{listShown ? 'Hide the list of files' : 'Show the list of files'}</TooltipContent>
         </Tooltip>
         <DropdownMenu>
-          <DropdownMenuTrigger aria-label="The pane’s settings" className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-muted-foreground hover:bg-accent hover:text-accent-foreground">
+          <DropdownMenuTrigger aria-label="The pane’s settings" className={cn(buttonVariants({ variant: 'ghost', size: 'icon-sm' }), 'shrink-0 text-muted-foreground data-[popup-open]:bg-accent')}>
             <MoreVertical aria-hidden className="size-4" />
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end" className="min-w-[12rem]">

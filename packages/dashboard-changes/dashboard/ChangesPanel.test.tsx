@@ -47,7 +47,8 @@ const diffLines = (root: HTMLElement = document.body) => [...root.querySelectorA
 describe('ChangesPanel', () => {
   test('a run’s page lists only the files the run changed, grouped by folder, and its header says between which branches and that they are not merged yet', async () => {
     render(<ChangesPanel projectId="p1" agentId="run-1" context={context} />)
-    await waitFor(() => expect(screen.getByTestId('pane-title').textContent).toBe(`${NOT_MERGED} · not merged yet`))
+    await waitFor(() => expect(within(screen.getByTestId('pane-title')).getByText(NOT_MERGED)).toBeTruthy())
+    expect(within(screen.getByTestId('pane-title')).getByText('· not merged yet')).toBeTruthy()
     expect(readRun).toHaveBeenCalledWith(expect.anything(), 'p1', 'run-1')
     expect(readProject).not.toHaveBeenCalled()
     expect(within(list()).getAllByRole('button').map(b => [b.textContent, b.title])).toEqual([

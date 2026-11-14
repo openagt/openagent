@@ -1,7 +1,4 @@
 {
-  "dashboard-changes/dashboard/ChangesPanel.tsx": {
-    "text-[13px]": 2
-  },
   "dashboard-devices/dashboard/AddDevice.tsx": {
     "py-2.5": 1,
     "text-[10px]": 1
@@ -67,9 +64,5 @@
   },
   "dashboard/dashboard/components/ui/resizable.tsx": {
     "group-aria-[orientation=horizontal]/handle:h-[3px]": 1
-  },
-  "skill-browser/dashboard/BrowserPanel.tsx": {
-    "text-[10px]": 1,
-    "text-[11px]": 1
   }
 }
