@@ -9,11 +9,7 @@ export function parsePriority(priority: string | undefined): number | undefined 
   return Number.isNaN(n) ? undefined : n
 }
 
-/** How a priority reads: red past 8, amber past 5, muted otherwise — including "none at all". */
+/** How a priority reads: a critical one (8 and up, the filter's "Critical") red, every other in the text's colour. */
 export function priorityTone(priority: string | undefined): string {
-  const n = parsePriority(priority)
-  if (n === undefined) return 'text-muted-foreground'
-  if (n >= 8) return 'text-danger'
-  if (n >= 5) return 'text-warning'
-  return 'text-muted-foreground'
+  return (parsePriority(priority) ?? 0) >= 8 ? 'text-danger' : 'text-foreground'
 }

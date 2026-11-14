@@ -16,7 +16,7 @@ import {
   type TicketsView,
 } from './lib/ticket-filter.js'
 import { TicketFilterBar } from './TicketFilterBar.js'
-import { TicketsPanel, TicketRow } from './TicketsPanel.js'
+import { TicketList, TicketsPanel, TicketRow } from './TicketsPanel.js'
 
 /** Stable initial for the cross-project tickets poll, so it does not churn on every render. */
 const EMPTY_GROUPS: ProjectTickets[] = []
@@ -256,11 +256,11 @@ export function TicketsPage({ projects }: { projects: ModuleProject[] }) {
         // menu click away.
         <FadeWhileStale stale={state === 'kept'} className="space-y-2">
           {filtered && rows.length - visible.length > 0 && (
-            <div className="flex items-center gap-3 text-xs text-muted-foreground">
+            <div className="flex flex-wrap items-center gap-x-3 gap-y-2 text-sm text-muted-foreground">
               <span>
                 {rows.length - visible.length} ticket{rows.length - visible.length === 1 ? '' : 's'} hidden by the current filters.
               </span>
-              <Button variant="outline" size="sm" onClick={clearFilters}>
+              <Button variant="secondary" onClick={clearFilters}>
                 Clear filters
               </Button>
             </div>
@@ -270,14 +270,13 @@ export function TicketsPage({ projects }: { projects: ModuleProject[] }) {
               {rows.length === 0 ? 'No tickets in any project yet — group by project to import a project\'s issues.' : 'No tickets match.'}
             </p>
           ) : (
-            <div className="overflow-hidden rounded-lg border border-border">
-              <ul className="divide-y divide-border">
+            <TicketList>
                 {flatRows.map(r => (
                   <TicketRow
                     key={`${r.projectId}/${r.ticket.file}`}
                     projectId={r.projectId}
                     ticket={r.ticket}
-                    projectName={r.projectName}
+                    projectName={projects.length > 1 ? r.projectName : undefined}
                     busy={busy}
                     starting={starting?.projectId === r.projectId ? starting.prompt : null}
                     selected={selected.has(`${r.projectId}/${r.ticket.file}`)}
@@ -291,8 +290,7 @@ export function TicketsPage({ projects }: { projects: ModuleProject[] }) {
                     onOpenAgent={agentId => onOpenAgent(r.projectId, agentId)}
                   />
                 ))}
-              </ul>
-            </div>
+            </TicketList>
           )}
         </FadeWhileStale>
       ) : (

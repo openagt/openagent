@@ -196,11 +196,6 @@ describe('TicketsPanel (#697/#1144)', () => {
     expect(screen.getByText('dx')).toBeTruthy()
     expect(screen.getByText('ui')).toBeTruthy()
     expect(screen.getByText('2d ago')).toBeTruthy()
-    // The tags fold away below sm with screen-size classes alone. With a bare `hidden` undone at
-    // a width, another page's stylesheet loaded later, with its own `.hidden`, hid them for good.
-    const tags = screen.getByText('dx').parentElement as HTMLElement
-    expect(tags.classList.contains('max-sm:hidden')).toBe(true)
-    expect(tags.classList.contains('hidden')).toBe(false)
   })
 
   test('sorts by date is the server\'s job — the list renders whatever order it is given (#1144)', async () => {

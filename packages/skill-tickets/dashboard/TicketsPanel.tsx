@@ -1,6 +1,6 @@
-import { useState } from 'react'
+import { useState, type ReactNode } from 'react'
 import { ExternalLink, ClipboardList, Hammer, Plus } from 'lucide-react'
-import { Badge, Button, Checkbox, Tooltip, TooltipTrigger, TooltipContent, cn, formatRelative, formatAge, formatDateTime, inPlace, useAction, useLoaded, useModuleHost } from '@openagt/dashboard/module'
+import { Badge, Button, Checkbox, List, Tooltip, TooltipTrigger, TooltipContent, cn, formatRelative, formatAge, formatDateTime, inPlace, useAction, useLoaded, useModuleHost } from '@openagt/dashboard/module'
 import { NEW_TICKET, UPDATE_TICKETS_PROMPT, heldBack, readMeta, type TicketsMeta } from '../src/module.js'
 import { TicketStartActions } from './TicketStartActions.js'
 import type { WorkspaceTicket } from './lib/types.js'
@@ -11,14 +11,21 @@ import { priorityTone } from './lib/ticket-priority.js'
 const NO_META: TicketsMeta = {}
 
 /**
- * One ticket as a one-liner row (#697/#1144): the start column, title, project (flat mode only),
- * topics, claim, effort/uncertainty, priority, age, the plan column, and the issue link.
- * Extracted from the panel so the flat cross-project list (#1144's Group: none) renders the same
- * row with per-row project context.
+ * The rows of a tickets list, on the page with no line around them. Laid out by the list's own
+ * width (#1144 follow-up): a narrow list puts a row's facts on a second line under its title, so a
+ * title is never cut to a word to make room for them.
+ */
+export function TicketList({ children }: { children: ReactNode }) {
+  return <List className="@container">{children}</List>
+}
+
+/**
+ * One ticket as a row (#697/#1144): the checkbox, the title, then its facts in columns that hold
+ * their place from row to row (project in the flat list, topics, claim, effort and uncertainty,
+ * priority, age, the plan, the issue), and its next step at the row's right edge.
  *
- * The metadata cluster is a *sibling* of the row's open button, not a child — same rule as the
- * plan cell and the issue link (an interactive control nested in a button is invalid HTML), and
- * since the topic badges and the claim marker filter on click (#1144), they are controls now.
+ * The facts are *siblings* of the title's link, not children: the topic badges and the claim
+ * marker filter on click (#1144), and an interactive control nested in a link is invalid HTML.
  */
 export function TicketRow({
   projectId,
@@ -74,177 +81,126 @@ export function TicketRow({
   const held = heldBack(ticket)
   const offered = !held && !ticket.locked
   return (
-    // On a phone the title is the row's first line, across the whole width, and every control and
-    // fact is under it. A class that holds on a phone only is never laid over a plain one
-    // of the same kind: the `.flex-1` of a stylesheet loaded later would win over it.
-    <li className="flex items-stretch transition-colors hover:bg-accent/60 max-md:flex-wrap max-md:pb-1">
+    <li
+      className={cn(
+        'group/row relative flex flex-wrap items-center gap-x-3 rounded-md px-3 text-sm transition-colors hover:bg-accent has-[[data-cover]:active]:bg-foreground/10',
+        'py-1.5 @2xl:h-10 @2xl:flex-nowrap @2xl:py-0',
+        selected && 'bg-accent',
+      )}
+    >
       {/* The selection checkbox, the row's left edge — the list idiom of issue trackers: pick some rows and the
           page's bulk actions narrow to them. Never disabled: selecting is page state, not an
-          action, so it costs nothing and can be changed any time. A sibling of the open button
-          like every control on the row. */}
-      {onToggleSelect && (
-        <div className="flex w-8 shrink-0 items-center justify-center">
-          <Checkbox checked={selected ?? false} onCheckedChange={() => onToggleSelect()} aria-label={`Select ${ticket.title}`} className="relative after:absolute after:-inset-[5px]" />
-        </div>
-      )}
-      <a href={host.pageHref('tickets', [ticket.file], projectId)} onClick={inPlace(onOpen)} className="flex min-w-0 items-center gap-2 py-2 pr-3 text-left text-sm md:flex-1 md:pl-0 max-md:order-first max-md:basis-full max-md:pl-3">
-        {/* The title is the row's one flexible column: it truncates when long and stretches
-            when short, so the whole of a row's slack lands here — the way a table's wide
-            first column carries the blank — instead of pooling mid-row between columns. */}
-        <span className="min-w-0 flex-1 truncate font-medium">{ticket.title}</span>
-      </a>
-      {projectName && <span className="flex shrink-0 items-center pr-2 text-xs text-muted-foreground">{projectName}</span>}
-      {/* The tags, content-sized and packed against the priority column (#1265): their right edge
-          is the aligned one, so rows with one tag and rows with four read as the same
-          right-aligned column. Folded away below sm with screen-size classes alone: a bare
-          `hidden` undone at a width loses to the `.hidden` of a stylesheet loaded later. */}
-      <span className="shrink-0 items-center gap-1.5 max-sm:hidden sm:flex">
-        {ticket.topics?.map(topic =>
-          onTopicClick ? (
-            <button
-              key={topic}
-              type="button"
-              onClick={() => onTopicClick(topic)}
-              title={`Filter by ${topic}`}
-              className="shrink-0 rounded-full border border-border px-1.5 text-[10px] text-muted-foreground hover:border-foreground/40 hover:text-foreground"
-            >
-              {topic}
-            </button>
-          ) : (
-            <Badge key={topic}>
-              {topic}
-            </Badge>
-          ),
-        )}
-        {/* An agent holds this ticket's `.lock.md` (#1420) — it is planning the ticket or
-            implementing it directly; the hammer says "being worked" either way. The holder is
-            named inline, not only in the tooltip — a still 1-2s hover is how nobody discovers
-            anything. When the lock names one of this project's agents (#1748) the name is the
-            agent's session name and opens its page; any other holder is shown as written.
-            Truncated to keep the dense row aligned; the tooltip keeps the full name. */}
-        {ticket.locked && (
-          <Tooltip>
-            <TooltipTrigger
-              render={
-                ticket.lockedByAgent && onOpenAgent ? (
-                  <button
-                    type="button"
-                    onClick={() => onOpenAgent(ticket.lockedByAgent!.id)}
-                    className="flex shrink-0 items-center gap-1 text-[10px] text-warning hover:opacity-80"
-                  />
-                ) : onClaimedClick ? (
-                  <button
-                    type="button"
-                    onClick={onClaimedClick}
-                    className="flex shrink-0 items-center gap-1 text-[10px] text-warning hover:opacity-80"
-                  />
-                ) : (
-                  <span className="flex shrink-0 items-center gap-1 text-[10px] text-warning" />
-                )
-              }
-            >
-              <Hammer className="h-3.5 w-3.5" aria-hidden />
-              {holder && <span className="inline-block max-w-[8rem] truncate">{holder}</span>}
-            </TooltipTrigger>
-            <TooltipContent>
-              {`Claimed${holder ? ` by ${holder}` : ''} — an agent is working on this ticket (planning it or implementing it).`}
-              {ticket.lockedByAgent && onOpenAgent ? " Click to open the agent's page." : onClaimedClick ? ' Click to see all claimed tickets.' : ''}
-            </TooltipContent>
-          </Tooltip>
-        )}
-        {/* In review: the pull request that closes it, one click away. Waiting: what it waits on,
-            in the tooltip. Either one is why the row offers no start and no plan. */}
-        {held === 'in-review' && ticket.pr && (
-          <a
-            href={ticket.pr.url}
-            target="_blank"
-            rel="noreferrer"
-            title="In review: this pull request closes the ticket once merged"
-            className="shrink-0 rounded-full border border-info/40 px-1.5 text-[10px] text-info hover:opacity-80"
-          >
-            In review {ticket.pr.label}
-          </a>
-        )}
-        {held === 'waiting' && (
-          <span title={`Waiting: ${ticket.waiting}`} className="shrink-0 rounded-full border border-warning/40 px-1.5 text-[10px] text-warning">
-            Waiting
-          </span>
-        )}
-        {ticket.effort !== undefined && (
-          <Badge>Effort: {ticket.effort}</Badge>
-        )}
-        {ticket.uncertainty !== undefined && (
-          <Badge>Uncertainty: {ticket.uncertainty}</Badge>
-        )}
-      </span>
-      {/* Priority and date: snug fixed widths — barely wider than their content, kept fixed (and
-          rendered even when empty) so the columns still line up down the table row to row. */}
-      <span className={cn('flex shrink-0 items-center justify-end text-[10px] md:w-16 max-md:px-1', priorityTone(ticket.priority))}>
-        {ticket.priority ? `Priority ${ticket.priority}` : ''}
-      </span>
-      <span
-        className="flex w-14 shrink-0 items-center justify-end text-[10px] text-muted-foreground/70 max-md:ml-auto"
-        title={formatDateTime(ticket.date)}
+          action, so it costs nothing and can be changed any time. Above the title's cover. */}
+      {onToggleSelect && <Checkbox checked={selected ?? false} onCheckedChange={() => onToggleSelect()} aria-label={`Select ${ticket.title}`} className="z-10" />}
+      {/* The title's link covers the row, so a click anywhere on it opens the ticket; the row's
+          other presses stand above that cover. It takes the row's slack and is cut only by it. */}
+      <a
+        data-cover
+        href={host.pageHref('tickets', [ticket.file], projectId)}
+        onClick={inPlace(onOpen)}
+        className="min-h-8 min-w-0 flex-1 content-center truncate font-medium outline-none after:absolute after:inset-0 after:rounded-md focus-visible:after:outline-2 focus-visible:after:-outline-offset-2 focus-visible:after:outline-primary"
       >
-        {formatAge(ticket.date)}
+        {ticket.title}
+      </a>
+      {/* The facts: under the title in a narrow list, in columns beside it in a wide one. */}
+      <span className={cn('relative order-last flex min-h-6 basis-full items-center gap-x-3 text-xs text-muted-foreground @2xl:order-none @2xl:basis-auto', onToggleSelect && 'pl-7 @2xl:pl-0')}>
+        {projectName && <span className="shrink-0">{projectName}</span>}
+        {/* The tags, content-sized and packed against the priority column (#1265): their right edge
+            is the aligned one, so rows with one tag and rows with four read as one column. */}
+        <span className="flex min-w-0 items-center gap-1.5 @max-2xl:empty:hidden @2xl:flex-1 @2xl:justify-end">
+          {ticket.topics?.map(topic =>
+            onTopicClick ? (
+              <button key={topic} type="button" onClick={() => onTopicClick(topic)} title={`Filter by ${topic}`} className="focus-ring shrink-0 rounded-full">
+                <Badge className="transition-colors hover:text-foreground">{topic}</Badge>
+              </button>
+            ) : (
+              <Badge key={topic}>{topic}</Badge>
+            ),
+          )}
+          {/* An agent holds this ticket's `.lock.md` (#1420) — it is planning the ticket or
+              implementing it directly; the hammer says "being worked" either way. The holder is
+              named inline, not only in the tooltip. When the lock names one of this project's
+              agents (#1748) the name is the agent's session name and opens its page; any other
+              holder is shown as written. Cut to keep the row aligned; the tooltip keeps the whole name. */}
+          {ticket.locked && (
+            <Tooltip>
+              <TooltipTrigger
+                render={
+                  ticket.lockedByAgent && onOpenAgent ? (
+                    <button type="button" onClick={() => onOpenAgent(ticket.lockedByAgent!.id)} className={CLAIM_CLASS} />
+                  ) : onClaimedClick ? (
+                    <button type="button" onClick={onClaimedClick} className={CLAIM_CLASS} />
+                  ) : (
+                    <span className={CLAIM_CLASS} />
+                  )
+                }
+              >
+                <Hammer className="size-3.5 shrink-0 text-warning" aria-hidden />
+                {holder && <span className="min-w-0 max-w-32 truncate">{holder}</span>}
+              </TooltipTrigger>
+              <TooltipContent>
+                {`Claimed${holder ? ` by ${holder}` : ''} — an agent is working on this ticket (planning it or implementing it).`}
+                {ticket.lockedByAgent && onOpenAgent ? " Click to open the agent's page." : onClaimedClick ? ' Click to see all claimed tickets.' : ''}
+              </TooltipContent>
+            </Tooltip>
+          )}
+          {/* In review: the pull request that closes it, one click away. Waiting: what it waits on,
+              in the tooltip. Either one is why the row offers no start and no plan. */}
+          {held === 'in-review' && ticket.pr && (
+            <a href={ticket.pr.url} target="_blank" rel="noreferrer" title="In review: this pull request closes the ticket once merged" className="focus-ring shrink-0 rounded-sm hover:underline">
+              <Badge tone="info">In review {ticket.pr.label}</Badge>
+            </a>
+          )}
+          {held === 'waiting' && (
+            <Badge tone="warning" title={`Waiting: ${ticket.waiting}`}>
+              Waiting
+            </Badge>
+          )}
+          {ticket.effort !== undefined && <Badge>Effort: {ticket.effort}</Badge>}
+          {ticket.uncertainty !== undefined && <Badge>Uncertainty: {ticket.uncertainty}</Badge>}
+        </span>
+        {/* Priority and age: fixed widths, kept (and drawn even when empty) so the columns line up
+            row to row. The priority is in the text's colour; only a critical one is red, its words saying it too. */}
+        <span className={cn('shrink-0 tabular-nums @max-2xl:empty:hidden @2xl:w-16 @2xl:text-right', priorityTone(ticket.priority))}>
+          {ticket.priority ? `Priority ${ticket.priority}` : ''}
+        </span>
+        <span className="shrink-0 tabular-nums @2xl:w-14 @2xl:text-right" title={formatDateTime(ticket.date)}>
+          {formatAge(ticket.date)}
+        </span>
+        {/* The plan, when there is one to read. The same width with no plan keeps the columns lined up. */}
+        <span className="flex shrink-0 justify-center @max-2xl:empty:hidden @2xl:w-7">
+          {ticket.planned && (
+            <Tooltip>
+              <TooltipTrigger
+                render={<Button variant="ghost" size="icon-sm" onClick={() => onOpenPlan?.()} disabled={!onOpenPlan} aria-label={`View the plan for ${ticket.title}`} className="text-info" />}
+              >
+                <ClipboardList className="size-4" aria-hidden />
+              </TooltipTrigger>
+              <TooltipContent>View the plan</TooltipContent>
+            </Tooltip>
+          )}
+        </span>
+        <span className="flex shrink-0 justify-end @max-2xl:empty:hidden @2xl:w-16">
+          {ticket.issue && (
+            <a href={ticket.issue.url} target="_blank" rel="noreferrer" className="focus-ring inline-flex items-center gap-1 rounded-sm hover:text-foreground hover:underline">
+              <ExternalLink className="size-3.5" aria-hidden />
+              {ticket.issue.label}
+            </a>
+          )}
+        </span>
       </span>
-      {/* The plan, when there is one to read: a link to it, strong blue and thicker-stroked so the
-          planned rows are scannable. A sibling of the row's button, not a child: an interactive
-          control nested in a button is invalid HTML. The same width with no plan keeps the
-          columns lined up. */}
-      <div className="flex w-8 shrink-0 items-center justify-center">
-        {ticket.planned && (
-          <Tooltip>
-            <TooltipTrigger
-              render={
-                <button
-                  type="button"
-                  onClick={() => onOpenPlan?.()}
-                  disabled={!onOpenPlan}
-                  aria-label={`View the plan for ${ticket.title}`}
-                  className="text-info hover:text-info/80 disabled:pointer-events-none disabled:opacity-50"
-                />
-              }
-            >
-              <ClipboardList className="h-4 w-4" strokeWidth={2.5} aria-hidden />
-            </TooltipTrigger>
-            <TooltipContent>View the plan</TooltipContent>
-          </Tooltip>
-        )}
-      </div>
       {/* The next step (TicketStartActions): Plan with no plan, Start with one; queueing it and
-          setting it up first are in its menu. A fixed width keeps the columns lined up row to row. */}
-      <div className="flex shrink-0 items-center justify-end gap-1.5 md:w-36 max-md:px-1">
-        {offered && (
-          <TicketStartActions
-            compact
-            projectId={projectId}
-            ticket={ticket}
-            busy={busy}
-            starting={starting}
-            onStart={onStart}
-            onConfigure={onConfigure}
-          />
-        )}
-      </div>
-      {ticket.issue ? (
-        <a
-          href={ticket.issue.url}
-          target="_blank"
-          rel="noreferrer"
-          className="flex shrink-0 items-center justify-end gap-1 text-xs text-muted-foreground hover:text-foreground hover:underline md:w-20 md:px-3 max-md:px-2"
-        >
-          <ExternalLink className="h-4 w-4" aria-hidden />
-          {ticket.issue.label}
-        </a>
-      ) : (
-        // Same width as the link so the row's right edge — and with it the priority and date
-        // columns inside — stays put on a row with no issue to link.
-        <span className="w-20 shrink-0 max-md:hidden" aria-hidden />
-      )}
+          setting it up first are in its menu. On the row's right edge, shown under the pointer and
+          the keyboard (and while its menu is open), always on touch; a fixed width keeps the columns lined up. */}
+      <span className="relative flex w-28 shrink-0 items-center justify-end gap-1.5 pointer-fine:opacity-0 pointer-fine:group-hover/row:opacity-100 pointer-fine:group-focus-within/row:opacity-100 pointer-fine:has-[[data-popup-open]]:opacity-100">
+        {offered && <TicketStartActions compact projectId={projectId} ticket={ticket} busy={busy} starting={starting} onStart={onStart} onConfigure={onConfigure} />}
+      </span>
     </li>
   )
 }
+
+/** The claim marker: a quiet fact, its hammer the one colour on it. */
+const CLAIM_CLASS = 'focus-ring flex min-w-0 shrink-0 items-center gap-1 rounded-sm hover:text-foreground'
 
 // The tickets list (#697/#1144): the project's `tickets/*.md` as one-liners — priority, topics,
 // what the agent already did to it, and how recently, all on the row — so the backlog is scannable
@@ -328,12 +284,12 @@ export function TicketsPanel({
     // Filtered to nothing, not genuinely empty (#1144/#1230): offering an import here would ask
     // for work already done.
     return (
-      <div className="flex items-center gap-3 rounded-lg border border-border p-4 text-sm">
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-2 text-sm">
         <p className="text-muted-foreground">
           {hiddenByFilter} ticket{hiddenByFilter === 1 ? '' : 's'} hidden by the current filters.
         </p>
         {onClearFilters && (
-          <Button variant="outline" size="sm" onClick={onClearFilters}>
+          <Button variant="secondary" onClick={onClearFilters}>
             Clear filters
           </Button>
         )}
@@ -343,16 +299,16 @@ export function TicketsPanel({
 
   if (tickets.length === 0) {
     return (
-      <div className="space-y-3 rounded-lg border border-border p-4 text-sm">
+      <div className="space-y-3 text-sm">
         <p className="text-muted-foreground">
-          No tickets yet. Tickets live in <code className="rounded bg-muted px-1">tickets/</code> and are what the agent
+          No tickets yet. Tickets live in <code className="rounded-sm bg-muted px-1 font-mono text-xs">tickets/</code> and are what the agent
           plans from.
         </p>
-        {error && <p className="text-xs text-danger">{error}</p>}
         <div className="flex flex-wrap items-center gap-2">
           <UpdateTicketsButton busy={busy} starting={starting === UPDATE_TICKETS_PROMPT} onStart={() => void updateTickets()} onConfigure={() => configure(UPDATE_TICKETS_PROMPT)} />
           <NewTicketButton onClick={newTicket} primary={lead} />
         </div>
+        {error && <p role="alert" className="text-xs text-danger">{error}</p>}
       </div>
     )
   }
@@ -363,7 +319,7 @@ export function TicketsPanel({
           branch being the first import. Here it sits beside the stamp it acts on (#1265), and the
           ticket written by hand is the list's one primary press. */}
       <div className="flex flex-wrap items-center gap-2">
-        <span className="min-w-0 flex-1 truncate text-xs text-muted-foreground">
+        <span className="min-w-0 basis-full text-xs text-muted-foreground sm:flex-1 sm:basis-0 sm:truncate">
           {meta.lastImportedAt
             ? `Updated from the tracker ${formatRelative(meta.lastImportedAt)}`
             : 'No record of an import yet'}
@@ -378,8 +334,7 @@ export function TicketsPanel({
         <NewTicketButton onClick={newTicket} primary={lead} />
         {error && <p role="alert" className="basis-full text-xs text-danger">{error}</p>}
       </div>
-      <div className="overflow-hidden rounded-lg border border-border">
-      <ul className="divide-y divide-border">
+      <TicketList>
         {tickets.map(ticket => (
           <TicketRow
             key={ticket.file}
@@ -398,8 +353,7 @@ export function TicketsPanel({
             onOpenAgent={onOpenAgent}
           />
         ))}
-      </ul>
-      </div>
+      </TicketList>
     </div>
   )
 }
