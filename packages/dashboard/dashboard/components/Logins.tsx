@@ -97,14 +97,14 @@ function CommandLine({ command }: { command: string }) {
   const [whole, setWhole] = useState(false)
   const long = command.length > LONG
   return (
-    <div className="flex min-w-0 items-start gap-1">
-      <code className={cn('min-w-0 font-mono text-[11px] text-muted-foreground', long && !whole ? 'truncate' : 'wrap-anywhere')}>{command}</code>
+    <div className="flex min-w-0 items-center gap-1 rounded-md bg-muted py-0.5 pr-0.5 pl-2">
+      <code className={cn('min-w-0 font-mono text-xs text-muted-foreground', long && !whole ? 'truncate' : 'wrap-anywhere')}>{command}</code>
       {long && (
-        <button type="button" className="shrink-0 text-[11px] text-muted-foreground underline-offset-2 hover:text-foreground hover:underline" onClick={() => setWhole(!whole)}>
+        <button type="button" className="focus-ring shrink-0 rounded-sm text-xs text-muted-foreground underline-offset-2 hover:text-foreground hover:underline" onClick={() => setWhole(!whole)}>
           {whole ? 'Less' : 'Show all'}
         </button>
       )}
-      <CopyButton text={command} label="Copy the command" />
+      <CopyButton text={command} label="Copy the command" className="justify-center md:size-6 max-md:size-11" />
     </div>
   )
 }

@@ -1,4 +1,4 @@
-import { useContext, useRef, useState, type ReactNode } from 'react'
+import { useContext, useId, useRef, useState, type ReactNode } from 'react'
 import type { DashboardData, ProjectSummary } from '../../src/index.js'
 import { Check, Info, X } from 'lucide-react'
 import { onDashboard } from '../rpc/reads.js'
@@ -6,7 +6,6 @@ import { usePolled } from '../lib/use-async.js'
 import { usePerson } from '../lib/use-person.js'
 import { cn } from '../lib/utils.js'
 import { Button } from './ui/button.js'
-import { Card, CardContent, CardHeader } from './ui/card.js'
 import { usePreferences, updatePreferences, notificationsEnabled } from '../lib/preferences.js'
 import { setBrowserNotifications, useNotificationPermission } from '../lib/notification-permission.js'
 import { startPicks, useStartAgent } from '../lib/use-start-agent.js'
@@ -90,6 +89,7 @@ export function OnboardingChecklist({
   const { start, busy: starting, error: startError } = useStartAgent()
   const { person } = usePerson()
   const services = useContext(HostServicesContext) ?? INERT_HOST_SERVICES
+  const headingId = useId()
   // What runs need on this computer: the coding agent's login, and an account at each git host.
   const { missing, hosts, loaded: missingLoaded, reload: reloadMissing } = useMissing()
   // The steps shown once stay, done or not: the coding agent's is there only once it was missing.
@@ -233,19 +233,16 @@ export function OnboardingChecklist({
   const ready = !reading && steps.every(step => step.done || step.optional)
   const name = person ? `, ${firstName(person.name)}` : ''
 
+  const doneCount = steps.filter(step => step.done).length
   return (
-    <Card>
-      <CardHeader className="flex flex-row items-center justify-between gap-3">
-        <h2 className="min-w-0 text-xl font-semibold">{ready ? `You're all set${name}` : `${greeting(new Date().getHours())}${name}`}</h2>
-        <div className="flex shrink-0 items-center gap-3">
-          {/* Where the steps stand, one dash each: the numbers below say which is which. Not on a phone, where the greeting needs the room and the steps' own ticks say it. */}
-          {!reading && (
-            <ol aria-label={`${steps.filter(step => step.done).length} of ${steps.length} done`} className="items-center gap-1.5 sm:flex max-sm:hidden">
-              {steps.map(step => (
-                <li key={step.key} aria-hidden className={cn('h-1.5 w-6 rounded-full', step.done ? 'bg-[var(--color-primary)]' : step.key === open ? 'bg-[var(--color-primary)]/40' : 'bg-muted-foreground/20')} />
-              ))}
-            </ol>
-          )}
+    <section aria-labelledby={headingId} className="min-w-0">
+      <div className="mb-3 flex items-center justify-between gap-3">
+        <div className="flex min-w-0 items-baseline gap-3">
+          <h2 id={headingId} className="min-w-0 text-xl font-semibold">{ready ? `You're all set${name}` : `${greeting(new Date().getHours())}${name}`}</h2>
+          {/* Where the steps stand, in words: the numbers below say which is which. */}
+          {!reading && <span className="shrink-0 text-sm tabular-nums text-muted-foreground">{`${doneCount} of ${steps.length}`}</span>}
+        </div>
+        <div className="flex shrink-0 items-center gap-2">
           {ready && targetProjectId && (
             <Button
               onClick={() => {
@@ -257,21 +254,20 @@ export function OnboardingChecklist({
             </Button>
           )}
           <Tooltip>
-            <TooltipTrigger render={<Button variant="ghost" onClick={() => updatePreferences({ onboardingDismissed: true })} aria-label={HIDE} />}>
+            <TooltipTrigger render={<Button variant="ghost" size="icon" onClick={() => updatePreferences({ onboardingDismissed: true })} aria-label={HIDE} className="text-muted-foreground" />}>
               <X className="h-4 w-4" aria-hidden />
             </TooltipTrigger>
             <TooltipContent>{HIDE}</TooltipContent>
           </Tooltip>
         </div>
-      </CardHeader>
-      <CardContent>
+      </div>
         {reading ? (
           <>
             <p className="sr-only">Loading…</p>
             {/* The steps' rows, with no state yet, so the card is about its size from the first frame. */}
-            <ol aria-hidden="true" className="divide-y divide-border">
+            <ol aria-hidden="true">
               {steps.map((step, at) => (
-                <li key={step.key} className="flex items-start gap-3 py-3 first:pt-0 last:pb-0">
+                <li key={step.key} className="flex items-start gap-3 py-2">
                   <span className="mt-0.5 flex size-6 shrink-0 items-center justify-center rounded-full border border-border text-xs font-medium text-muted-foreground tabular-nums">{at + 1}</span>
                   <span className="mt-1 text-sm text-muted-foreground">{step.label}</span>
                 </li>
@@ -279,11 +275,11 @@ export function OnboardingChecklist({
             </ol>
           </>
         ) : (
-          <ol className="divide-y divide-border">
+          <ol aria-label={`${doneCount} of ${steps.length} done`}>
             {steps.map((step, at) => {
               const isOpen = step.key === open
               return (
-                <li key={step.key} aria-label={step.label} aria-current={isOpen ? 'step' : undefined} className="flex items-start gap-3 py-3 first:pt-0 last:pb-0">
+                <li key={step.key} aria-label={step.label} aria-current={isOpen ? 'step' : undefined} className="flex items-start gap-3 py-2">
                   {step.done ? (
                     <span aria-label="Done" className="mt-0.5 flex size-6 shrink-0 items-center justify-center rounded-full bg-[var(--color-primary)] text-[var(--color-primary-foreground)]">
                       <Check className="h-3.5 w-3.5" aria-hidden />
@@ -325,7 +321,6 @@ export function OnboardingChecklist({
             })}
           </ol>
         )}
-      </CardContent>
-    </Card>
+    </section>
   )
 }
