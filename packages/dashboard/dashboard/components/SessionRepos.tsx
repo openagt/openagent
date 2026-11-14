@@ -5,7 +5,7 @@ import type { ProjectSummary } from '../../src/index.js'
 import { onRepos, type ReposRead } from '../rpc/projects.js'
 import { useLoaded } from '../lib/use-async.js'
 import { cn } from '../lib/utils.js'
-import { rowButtonClass, rowItemClass, RowOff } from './ui/row-item.js'
+import { rowButtonClass, rowItemClass, RowSaid } from './ui/row-item.js'
 import { ScrollArea } from './ui/scroll-area.js'
 import { Tooltip, TooltipTrigger, TooltipContent } from './ui/tooltip.js'
 import { MENU_ITEM_CLASS, MENU_POPUP_CLASS, MENU_TRIGGER_OPEN_CLASS } from './ui/dropdown-menu.js'
@@ -184,12 +184,10 @@ export function SessionRepoPicks({
 export function RepoChip({ repo, tip, onRemove }: { repo: { name: string }; tip: string; onRemove?: (() => void) | undefined }) {
   if (!onRemove) {
     return (
-      <RowOff tip={tip}>
-        <span className={rowItemClass}>
-          <FolderGit2 className="size-4 shrink-0" aria-hidden />
-          <span className="truncate">{repo.name}</span>
-        </span>
-      </RowOff>
+      <RowSaid tip={tip}>
+        <FolderGit2 className="size-4 shrink-0" aria-hidden />
+        <span className="truncate">{repo.name}</span>
+      </RowSaid>
     )
   }
   return (

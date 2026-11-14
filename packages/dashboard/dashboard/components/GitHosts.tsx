@@ -14,7 +14,7 @@ import { PackageLogo, hostWords, useGitHosts } from './Logins.js'
 import { AccountWhere, useServers } from './ServerLogins.js'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuGroup, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from './ui/dropdown-menu.js'
 import { Tooltip, TooltipContent, TooltipTrigger } from './ui/tooltip.js'
-import { RowOff, rowButtonClass, RowChevron } from './ui/row-item.js'
+import { RowSaid, rowButtonClass, RowChevron } from './ui/row-item.js'
 
 // The git hosts of the Permissions page: one card, "Git host accounts", with a section for each
 // host the projects' remotes are on and the host of the git host package OpenAgent brings, drawn
@@ -307,12 +307,9 @@ export function GitHostOff({ home, account }: { home: GitHostHome | null; accoun
   if (!home || !view) return null
   const logo = view.hosts.find(row => row.host === home.url.split('/')[2])?.provider?.logo
   return (
-    <RowOff tip={account !== undefined ? `This run works as @${account} on ${home.name}` : `This project is on ${home.name}`}>
-      <button type="button" disabled className={rowButtonClass}>
-        <PackageLogo svg={logo} className="size-4" />
-        <span className="max-w-32 truncate">{account !== undefined ? `@${account}` : home.name}</span>
-        <RowChevron />
-      </button>
-    </RowOff>
+    <RowSaid tip={account !== undefined ? `This run works as @${account} on ${home.name}` : `This project is on ${home.name}`}>
+      <PackageLogo svg={logo} className="size-4" />
+      <span className="max-w-32 truncate">{account !== undefined ? `@${account}` : home.name}</span>
+    </RowSaid>
   )
 }

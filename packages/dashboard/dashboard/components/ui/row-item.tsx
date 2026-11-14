@@ -1,4 +1,4 @@
-import type { ReactElement, ReactNode } from 'react'
+import type { ReactNode } from 'react'
 import { ChevronDown } from 'lucide-react'
 import { cn } from '../../lib/utils.js'
 import { Tooltip, TooltipContent, TooltipTrigger } from './tooltip.js'
@@ -14,14 +14,14 @@ import { Tooltip, TooltipContent, TooltipTrigger } from './tooltip.js'
 export const rowItemClass = 'inline-flex h-7 min-w-0 @xl:max-w-full items-center gap-1.5 overflow-hidden rounded-md px-2 text-sm font-normal text-muted-foreground'
 
 /** A row item that is a button: it lights up under the pointer and shows the keyboard's focus. */
-export const rowButtonClass = cn(rowItemClass, 'focus-ring transition-colors hover:bg-accent hover:text-accent-foreground disabled:pointer-events-none disabled:opacity-50')
+export const rowButtonClass = cn(rowItemClass, 'group/row focus-ring transition-colors hover:bg-accent hover:text-accent-foreground disabled:pointer-events-none disabled:opacity-50')
 
 /** Words of an item that a narrow box leaves to its icon: still in its accessible name, as its tooltip still says them. */
 export const rowWideClass = '@max-xl:sr-only'
 
-/** The chevron of an item that opens a menu: quiet, and left out in a narrow box, where the row has no room for it. */
+/** The chevron of an item that opens a menu: quiet at rest, the item's colour under the pointer, and left out in a narrow box, where the row has no room for it. */
 export function RowChevron() {
-  return <ChevronDown className="size-3 shrink-0 text-faint-foreground @max-xl:hidden" aria-hidden />
+  return <ChevronDown className="size-3 shrink-0 text-faint-foreground transition-colors group-hover/row:text-current @max-xl:hidden" aria-hidden />
 }
 
 /** A row of items above or under the box: one line of a fixed height, no wrap. */
@@ -54,19 +54,6 @@ export function RowSaid({ tip, children }: { tip: string; children: ReactNode })
         {children}
         <span className="sr-only">{`. ${tip}`}</span>
       </TooltipTrigger>
-      <TooltipContent>{tip}</TooltipContent>
-    </Tooltip>
-  )
-}
-
-/**
- * A disabled row button and what its hover says. A disabled button takes no pointer, so the hover
- * is on what holds it, which gives way in the row as the button does.
- */
-export function RowOff({ tip, children }: { tip: string; children: ReactElement }) {
-  return (
-    <Tooltip>
-      <TooltipTrigger render={<span className="inline-flex min-w-0 @xl:max-w-full" />}>{children}</TooltipTrigger>
       <TooltipContent>{tip}</TooltipContent>
     </Tooltip>
   )

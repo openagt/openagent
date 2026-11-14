@@ -60,18 +60,18 @@ describe('the git host in a session\'s row', () => {
   test('the account its record keeps, off, with the host\'s logo, whichever account is in use now', async () => {
     logins.onGitHosts.mockResolvedValue({ hosts: [{ host: 'github.com', projects: ['site'], provider: provider() }] })
     const { container } = render(<GitHostOff home={home} account="suleimansh" />)
-    const item = await screen.findByRole('button', { name: '@suleimansh' })
-    expect((item as HTMLButtonElement).disabled).toBe(true)
-    expect(container.textContent).toBe('@suleimansh')
+    const item = (await screen.findByText('@suleimansh')).parentElement!
+    expect(container.querySelector('button')).toBeNull()
+    expect(item.textContent).toBe('@suleimansh. This run works as @suleimansh on GitHub')
     expect(item.querySelector<HTMLElement>('[aria-hidden]')!.style.maskImage).toContain(encodeURIComponent('<svg'))
   })
 
   test('a record with no account: its logo and name, off; no account, whichever is in use now', async () => {
     logins.onGitHosts.mockResolvedValue({ hosts: [{ host: 'github.com', projects: ['site'], provider: provider() }] })
     const { container } = render(<GitHostOff home={home} />)
-    const item = await screen.findByRole('button', { name: 'GitHub' })
-    expect((item as HTMLButtonElement).disabled).toBe(true)
-    expect(container.textContent).toBe('GitHub')
+    const item = (await screen.findByText('GitHub')).parentElement!
+    expect(container.querySelector('button')).toBeNull()
+    expect(item.textContent).toBe('GitHub. This project is on GitHub')
     expect(container.textContent).not.toMatch(/@|octo/)
     // The host's own logo, from its package.
     expect(item.querySelector<HTMLElement>('[aria-hidden]')!.style.maskImage).toContain(encodeURIComponent('<svg'))
@@ -83,7 +83,7 @@ describe('the git host in a session\'s row', () => {
     const { container, rerender } = render(<GitHostOff home={home} />)
     expect(container.textContent).toBe('')
     answer({ hosts: [{ host: 'github.com', projects: [], provider: provider() }] })
-    await screen.findByRole('button', { name: 'GitHub' })
+    await screen.findByText('GitHub')
     rerender(<GitHostOff home={null} />)
     expect(container.textContent).toBe('')
   })

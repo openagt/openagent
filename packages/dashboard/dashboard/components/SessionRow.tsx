@@ -1,9 +1,8 @@
-import { Cloud, Folder, Laptop, Workflow, type LucideIcon } from 'lucide-react'
+import { Cloud, Folder, GitBranch, Laptop, Workflow, type LucideIcon } from 'lucide-react'
 import type { AgentMeta } from '../../src/index.js'
-import { BranchButton } from './StartFromMenu.js'
 import { MACHINE_ICONS } from './MachineMark.js'
 import { RunOnWords } from './RunOnMenu.js'
-import { RowAboveBox, RowOff, rowButtonClass } from './ui/row-item.js'
+import { RowAboveBox, RowSaid } from './ui/row-item.js'
 import { RepoChip } from './SessionRepos.js'
 
 /** The icon of where a session runs, as "Run on" has a machine's; the two that are no machine have their own. */
@@ -13,8 +12,8 @@ function runsOnIcon(target: AgentMeta['target'], kind: AgentMeta['remoteKind']):
   return kind ? MACHINE_ICONS[kind] : Laptop
 }
 
-// A session's row above the message box: the "New agent session" page's row, in its place and in its look,
-// with every item off, since a session keeps where it started. Where it runs, the project and the branch
+// A session's row above the message box: the "New agent session" page's row, in its place, each item
+// said in words rather than offered as a menu, since a session keeps where it started. Where it runs, the project and the branch
 // it started from; the agent and the account are under the box, as on "New agent session". The branch
 // means what it means there and does not flip as the agent renames its own, which its hover names and
 // the bar above says. The row's height is fixed, and each item lands in place: the branch last, so
@@ -48,23 +47,20 @@ export function SessionRow({
   const started = startedFrom && (worksOn && worksOn !== startedFrom ? `Started from ${startedFrom}, works on ${worksOn}` : `Started from ${startedFrom}`)
   return (
     <RowAboveBox>
-      <RowOff tip={`Runs on — ${runsOn}`}>
-        <button type="button" disabled className={rowButtonClass}>
-          <RunOnWords icon={runsOnIcon(target, remoteKind)} elsewhere={elsewhere} label={runsOn} />
-        </button>
-      </RowOff>
+      <RowSaid tip={`Runs on — ${runsOn}`}>
+        <RunOnWords icon={runsOnIcon(target, remoteKind)} elsewhere={elsewhere} label={runsOn} />
+      </RowSaid>
       {projectName && (
         <>
-          <RowOff tip={projectName}>
-            <button type="button" disabled className={rowButtonClass}>
-              <Folder className="size-4 shrink-0" aria-hidden />
-              <span className="truncate">{projectName}</span>
-            </button>
-          </RowOff>
+          <RowSaid tip={`The session works in ${projectName}`}>
+            <Folder className="size-4 shrink-0" aria-hidden />
+            <span className="truncate">{projectName}</span>
+          </RowSaid>
           {started && (
-            <RowOff tip={started}>
-              <BranchButton label={startedFrom} disabled />
-            </RowOff>
+            <RowSaid tip={started}>
+              <GitBranch className="size-4 shrink-0" aria-hidden />
+              <span className="truncate">{startedFrom}</span>
+            </RowSaid>
           )}
         </>
       )}

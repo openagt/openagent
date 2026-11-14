@@ -49,7 +49,7 @@ export function prTargetBranch(pick: StartFromPick | undefined, main: string, lo
  * of a menu. Of a set width at most, important to hold on a phone too: a branch's name can run
  * past the row's, and would squeeze the words beside it to nothing.
  */
-export function BranchButton({ label, className, ...props }: { label: string } & ComponentProps<'button'>) {
+function BranchButton({ label, className, ...props }: { label: string } & ComponentProps<'button'>) {
   return (
     <button type="button" {...props} className={cn(rowButtonClass, 'max-w-[16rem]!', className)}>
       <GitBranch className="size-4 shrink-0" aria-hidden />

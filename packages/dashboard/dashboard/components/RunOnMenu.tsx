@@ -53,7 +53,7 @@ function wordsOf(machine: Machine): string {
   return kind === 'shared' ? `${place}. Runs use your own logins.` : place
 }
 
-/** The target in words, as the row above the box draws it: its icon, with a dot when it is not this machine, and its name. */
+/** The target in words, as the row above the box draws it: its icon, with a dot when it is not this machine, and its name. The menu adds its chevron. */
 export function RunOnWords({ icon: Icon, elsewhere, label }: { icon: LucideIcon; elsewhere: boolean; label: string }) {
   return (
     <>
@@ -62,7 +62,6 @@ export function RunOnWords({ icon: Icon, elsewhere, label }: { icon: LucideIcon;
         {elsewhere && <span className="absolute -right-0.5 -top-0.5 h-1.5 w-1.5 rounded-full bg-[var(--color-primary)]" />}
       </span>
       <span className="truncate">{label}</span>
-      <RowChevron />
     </>
   )
 }
@@ -90,6 +89,7 @@ export function RunOnMenu({ connection, busy }: { connection: ConnectionControl;
           }
         >
           <RunOnWords icon={Icon} elsewhere={!onThisMachine} label={summary} />
+          <RowChevron />
         </TooltipTrigger>
         <TooltipContent>{`Run on — ${selectedMachine?.label ?? here}`}</TooltipContent>
       </Tooltip>
