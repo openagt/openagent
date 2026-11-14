@@ -39,7 +39,7 @@ export function TicketDetailPage({
             <TicketPageNote>This ticket does not exist.</TicketPageNote>
           ) : editing ? (
             <>
-              <h1 className="mb-4 text-xl font-semibold">Edit ticket</h1>
+              <h1 className="mb-6 text-xl font-semibold">Edit ticket</h1>
               <TicketEditor
                 projectId={projectId}
                 file={ticket.file}
