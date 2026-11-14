@@ -146,10 +146,42 @@ function ProjectLine({ project, label }: { project: ProjectSummary; label: strin
   )
 }
 
+/**
+ * A row's box, ticked or not: a click on it ticks or unticks it and nothing else, so the row is
+ * not picked and the menu stays open. Nothing where the row has no box (a repo).
+ */
+function TickBox({ box }: { box: { checked: boolean; tip: string; toggle: () => void } | undefined }) {
+  if (!box) return null
+  return (
+    <span
+      role="checkbox"
+      aria-checked={box.checked}
+      aria-label={box.tip}
+      title={box.tip}
+      onClick={event => {
+        event.preventDefault()
+        event.stopPropagation()
+        box.toggle()
+      }}
+      // The row picks on the release of a press that began elsewhere, too.
+      onMouseUp={event => event.stopPropagation()}
+      className={cn(
+        'mt-0.5 flex h-3.5 w-3.5 shrink-0 cursor-pointer items-center justify-center rounded-[3px] border transition-colors',
+        box.checked ? 'border-primary bg-primary text-primary-foreground' : 'border-muted-foreground/60 bg-background hover:border-foreground',
+      )}
+    >
+      {box.checked && <Check className="h-3 w-3" strokeWidth={3} aria-hidden />}
+    </span>
+  )
+}
+
 // The one picker of a project, in two places (Rom's "repos are not projects"): in the row above
 // the box on the "New agent session" page, where a session works — no project, one of the
-// projects, or any repo on this computer; and at the top of the sidebar, the project every page
-// shows (#1513) — all of them, or one. The menu is the same: the first row, the projects with
+// projects, or any repo on this computer; and at the top of the sidebar, the projects every page
+// shows (#1513) — all of them, one, or several. There each project's row and the first one have a
+// box: ticking it adds the project to the ones shown or takes it off, and the menu stays open;
+// a click anywhere else on the row shows that project alone, as Enter does on the row highlighted,
+// and Shift+Enter ticks it. The projects picked are listed first, as they were when the menu opened. The menu is the same: the first row, the projects with
 // their lines, the repos searchable, "Search another folder…" to look in one more folder, and a
 // repository's address typed into the search offered to add. The button reads the pick, so it is
 // on screen with the menu shut.
@@ -166,6 +198,7 @@ export function ProjectPicker({
   pending = false,
   none,
   look,
+  multi,
   onPick,
   onProjectAdded,
 }: {
@@ -181,7 +214,12 @@ export function ProjectPicker({
   none: { label: string; tip?: string }
   /** The button: a row button under the box, the sidebar's full-width one, or a button that adds a project (the Overview's first steps). */
   look: 'row' | 'sidebar' | 'add'
-  /** A project, or none, was picked. */
+  /**
+   * Several projects can be picked (the sidebar's look only): the ones picked, none for all of
+   * them, and a project ticked or unticked. `picked` is then the one picked when only one is.
+   */
+  multi?: { picked: readonly string[]; onToggle: (projectId: string) => void } | undefined
+  /** A project, or none, was picked: alone. */
   onPick: (projectId: string | null) => void
   /** A repo was added as a project: the projects are to be read again. */
   onProjectAdded: () => void
@@ -189,6 +227,10 @@ export function ProjectPicker({
   const label = useProjectLabel()
   const positionMethod = usePopupPlacement()
   const [open, setOpen] = useState(false)
+  // The projects picked as the menu opened, listed first: a tick does not move a row under the pointer.
+  const [listedFirst, setListedFirst] = useState<readonly string[]>([])
+  // The row the keyboard is on, which Shift+Enter ticks.
+  const highlighted = useRef<Row | undefined>(undefined)
   const [typed, setTyped] = useState('')
   const [adding, setAdding] = useState<{ folder: string } | { address: string } | null>(null)
   const triggerRef = useRef<HTMLButtonElement>(null)
@@ -215,10 +257,11 @@ export function ProjectPicker({
   }, [added, projects, onPick])
 
   const NONE: Row = useMemo(() => ({ value: 'none', label: none.label, pick: { kind: 'none' }, search: '' }), [none.label])
-  const projectRows = useMemo<Row[]>(
-    () => projects.map(p => ({ value: `project:${p.id}`, label: label(p.id, p.name), pick: { kind: 'project', project: p }, search: p.machine === undefined ? p.path : '' })),
-    [projects, label],
-  )
+  const projectRows = useMemo<Row[]>(() => {
+    const rows = projects.map((p): Row => ({ value: `project:${p.id}`, label: label(p.id, p.name), pick: { kind: 'project', project: p }, search: p.machine === undefined ? p.path : '' }))
+    const first = (row: Row) => row.pick.kind === 'project' && listedFirst.includes(row.pick.project.id)
+    return [...rows.filter(first), ...rows.filter(row => !first(row))]
+  }, [projects, label, listedFirst])
   const repoRows = useMemo<Row[]>(
     () => [
       ...(repos?.repos ?? []).map((repo): Row => ({ value: `repo:${repo.path}`, label: repo.name, detail: repoDetail(repo), pick: { kind: 'repo', path: repo.path }, search: `${repo.path}\n${repo.url ?? ''}` })),
@@ -235,7 +278,13 @@ export function ProjectPicker({
   )
   // A button that adds one has no "none" to pick: it is what the button says.
   const groups = pickerGroups(look === 'add' ? undefined : NONE, projectRows, repoRows, typed)
-  const current = picked === null ? NONE : (projectRows.find(row => row.value === `project:${picked}`) ?? { value: `project:${picked}`, label: pickedName ?? '', pick: { kind: 'none' }, search: '' })
+  // Several picked: the button names them all, and no row is the one value.
+  const several = multi && multi.picked.length > 1 ? projects.filter(p => multi.picked.includes(p.id)).map(p => label(p.id, p.name)) : null
+  const current: Row = several
+    ? { value: 'several', label: several.join(', '), pick: { kind: 'none' }, search: '' }
+    : picked === null
+      ? NONE
+      : (projectRows.find(row => row.value === `project:${picked}`) ?? { value: `project:${picked}`, label: pickedName ?? '', pick: { kind: 'none' }, search: '' })
   const shown = current.label
   // No project word until the name is known, never a wrong one.
   if (!shown && !pending) return null
@@ -248,7 +297,19 @@ export function ProjectPicker({
     else if (outcome.added) setFolders(k => k + 1)
   }
 
-  const name = look === 'sidebar' ? `Project: ${pending ? 'loading' : shown}` : look === 'add' ? none.label : 'The session works in'
+  // A row's box: whether it is ticked, and what ticking it does. The first row is ticked while every project shows.
+  const tick = (row: Row): { checked: boolean; tip: string; toggle: () => void } | undefined => {
+    if (!multi) return undefined
+    if (row.pick.kind === 'none') return { checked: multi.picked.length === 0, tip: 'Show every project', toggle: () => onPick(null) }
+    if (row.pick.kind !== 'project') return undefined
+    const id = row.pick.project.id
+    const checked = multi.picked.includes(id)
+    return { checked, tip: checked ? 'Remove from the projects shown' : 'Add to the projects shown', toggle: () => multi.onToggle(id) }
+  }
+  // What a click on a row shows, said on the row.
+  const rowTip = (row: Row): string | undefined => (!multi ? undefined : row.pick.kind === 'none' ? 'Show every project' : row.pick.kind === 'project' ? `Show only ${row.label}` : undefined)
+
+  const name = look === 'sidebar' ? `${several ? 'Projects' : 'Project'}: ${pending ? 'loading' : shown}` : look === 'add' ? none.label : 'The session works in'
   const button =
     look === 'add' ? (
       <button type="button" className={buttonVariants({ size: 'sm' })}>
@@ -269,7 +330,9 @@ export function ProjectPicker({
         ) : (
           <>
             {project ? <ProjectDot project={project} /> : <Layers className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden />}
-            <span className="flex-1 truncate text-left">{shown}</span>
+            <span className="flex-1 truncate text-left" {...(several ? { title: shown } : {})}>
+              {shown}
+            </span>
           </>
         )}
         <ChevronsUpDown className="h-3.5 w-3.5 shrink-0 opacity-70" aria-hidden />
@@ -297,7 +360,11 @@ export function ProjectPicker({
         open={open}
         onOpenChange={next => {
           setOpen(next)
-          if (!next) setTyped('')
+          if (next) setListedFirst(multi?.picked ?? [])
+          else setTyped('')
+        }}
+        onItemHighlighted={row => {
+          highlighted.current = row
         }}
         onValueChange={row => {
           if (!row) return
@@ -321,7 +388,15 @@ export function ProjectPicker({
             <Combobox.Popup aria-label={name} className={cn(MENU_POPUP_CLASS, 'group/picker w-[22rem] max-w-[var(--available-width)]')}>
               <div className="flex items-center gap-2 border-b border-border px-3">
                 <Search className="h-3.5 w-3.5 shrink-0 text-muted-foreground" aria-hidden />
-                <Combobox.Input aria-label="Search projects and repos" placeholder="Search, or paste a GitHub address" className="h-9 w-full min-w-0 bg-transparent text-sm outline-none placeholder:text-muted-foreground" />
+                <Combobox.Input
+                  onKeyDown={event => {
+                    const box = highlighted.current && tick(highlighted.current)
+                    if (event.key !== 'Enter' || !(event.shiftKey || event.metaKey || event.ctrlKey) || !box) return
+                    event.preventBaseUIHandler()
+                    event.preventDefault()
+                    box.toggle()
+                  }}
+                  aria-label="Search projects and repos" placeholder="Search, or paste a GitHub address" className="h-9 w-full min-w-0 bg-transparent text-sm outline-none placeholder:text-muted-foreground" />
               </div>
               {/* As tall as its rows; opened upward, from the message box's row, of a set height, so the search stays where it is as the list narrows. */}
               <ScrollArea viewportClassName="max-h-[min(20rem,calc(var(--available-height)-5rem))] group-data-[side=top]/picker:h-[min(20rem,calc(var(--available-height)-5rem))]">
@@ -333,7 +408,7 @@ export function ProjectPicker({
                         {group.label && <Combobox.GroupLabel className="px-2 pt-2 pb-1 text-xs font-normal text-muted-foreground">{group.label}</Combobox.GroupLabel>}
                         <Combobox.Collection>
                           {(row: Row) => (
-                            <Combobox.Item key={row.value} value={row} className={cn(MENU_ITEM_CLASS, 'items-start')}>
+                            <Combobox.Item key={row.value} value={row} title={rowTip(row)} className={cn(MENU_ITEM_CLASS, 'items-start')}>
                               {/* Each row leads with its own mark; the pick is the tick at the row's end. */}
                               {row.pick.kind === 'address' ? (
                                 <Plus className="mt-0.5 h-3.5 w-3.5 shrink-0 text-muted-foreground" aria-hidden />
@@ -352,13 +427,14 @@ export function ProjectPicker({
                                   {row.detail && <span className="block truncate text-xs text-muted-foreground">{row.detail}</span>}
                                 </span>
                               )}
-                              {row.value === current.value && <Check className="mt-0.5 h-3.5 w-3.5 shrink-0" aria-hidden />}
+                              {multi ? <TickBox box={tick(row)} /> : row.value === current.value && <Check className="mt-0.5 h-3.5 w-3.5 shrink-0" aria-hidden />}
                             </Combobox.Item>
                           )}
                         </Combobox.Collection>
                       </Combobox.Group>
                     )}
                   </Combobox.List>
+                  {multi && <p className="px-2 py-1.5 text-xs text-muted-foreground">Tick a box to show several projects · Shift+Enter ticks the highlighted one</p>}
                   {repos === null || repos.reposLoading ? (
                     <p role="status" className="px-2 py-1.5 text-xs text-muted-foreground">Looking for repos on this computer…</p>
                   ) : !typed.trim() && repoRows.length > REPOS_SHOWN ? (

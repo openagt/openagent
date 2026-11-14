@@ -22,7 +22,7 @@ const active = (agentId: string, projectId = 'p1'): ActiveAgent => ({ projectId,
 const projects = [{ id: 'p1', name: 'alpha' }, { id: 'p2', name: 'beta' }] as never[]
 /** The agents at work, as the shell read them. */
 let working: ActiveAgent[] = []
-const show = (scope: string | null = null, stale = { interventions: false, active: false }, loaded = true) =>
+const show = (scope: readonly string[] | null = null, stale = { interventions: false, active: false }, loaded = true) =>
   render(<DashboardPage onProjectAdded={() => {}} onSelectProject={() => {}} onSelectAgent={() => {}} onAgentStarted={() => {}} interventions={[]} interventionsStale={stale.interventions} interventionsLoaded={loaded} active={{ active: working, stale: stale.active, loaded }} projects={projects} scope={scope} />)
 /** The cards drawn, in order, each with its grid classes. */
 const drawn = () => [...document.querySelectorAll<HTMLElement>('[data-card]')].map(el => ({ id: el.dataset['card'], spans: el.className }))
@@ -56,7 +56,7 @@ describe('the Overview', () => {
     expect(drawn().map(card => card.id)).toEqual(['needs-you', 'working-now', 'your-agents', 'usage', 'human-queue', 'working', 'skills', '@x/tickets/hot'])
     cleanup()
     // With a project picked, only that project's agents count.
-    show('p2')
+    show(['p2'])
     await screen.findByText('Human Queue')
     expect(screen.queryByText('working on r1')).toBeNull()
   })
@@ -80,11 +80,11 @@ describe('the Overview', () => {
   test("a project's layout is its own; a project never arranged is laid out as all projects are", async () => {
     working = []
     prefs.value = { onboardingDismissed: true, overviewLayouts: { '*': [{ id: 'human-queue' }], p1: [{ id: '@x/tickets/hot' }] } }
-    show('p1')
+    show(['p1'])
     await screen.findByText('Human Queue')
     expect(drawn()[0]!.id).toBe('@x/tickets/hot')
     cleanup()
-    show('p2')
+    show(['p2'])
     await screen.findByText('Human Queue')
     expect(drawn()[0]!.id).toBe('human-queue')
   })
@@ -92,7 +92,7 @@ describe('the Overview', () => {
   test('Customize arranges the page on its cards: a width, ✕ to the tray, + back from it, the arrow keys to move; each change is this page\'s layout at once', async () => {
     working = []
     prefs.value = { onboardingDismissed: true, overviewLayouts: { '*': [{ id: 'usage' }], p1: [{ id: 'usage' }, { id: 'needs-you', hidden: true }] } }
-    show('p1')
+    show(['p1'])
     fireEvent.click(await screen.findByRole('button', { name: 'Customize' }))
     expect(screen.getByRole('status').textContent).toMatch(/Arranging the layout for alpha/)
     // Every shown card has its bar; the agents at work, though none works, are there to be placed.

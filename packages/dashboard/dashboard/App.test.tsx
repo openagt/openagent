@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, test, vi } from 'vitest'
-import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { createElement, useContext } from 'react'
 import { openMenu, phoneScreen } from './test-utils.js'
 import { useModuleHost, useOpenAgentDown, type ModuleCardProps, type ModuleDefinition, type ModulePageProps } from './module/index.js'
@@ -626,6 +626,54 @@ describe('the project select (#1513)', () => {
     expect(url()).toBe('/site/logs?q=races')
     await pick('site', /All projects/)
     expect(url()).toBe('/logs?q=races')
+  })
+
+  test('ticking a second project shows both on every page, in the address too; a click on a line narrows to it, and ticking "All projects" shows every one', async () => {
+    answerTwo()
+    window.history.replaceState(null, '', '/site/overview')
+    render(<App />)
+    await openMenu(await screen.findByRole('combobox', { name: 'Project: site' }))
+    fireEvent.click(within(screen.getByRole('option', { name: /^app/ })).getByRole('checkbox'))
+    expect(url()).toBe('/?project=app&project=site')
+    // The menu stays open on a tick.
+    expect(screen.getByRole('listbox')).toBeTruthy()
+    expect(await screen.findByText('card for app, site')).toBeTruthy()
+    expect(screen.getByText('app asks')).toBeTruthy()
+    expect(screen.getByText('site asks')).toBeTruthy()
+    expect(screen.getByText('app works')).toBeTruthy()
+    expect(await screen.findByText('app ran')).toBeTruthy()
+    expect(await screen.findByText('site ran')).toBeTruthy()
+    expect(screen.getByRole('combobox', { name: 'Projects: app, site' })).toBeTruthy()
+    expect(document.title).toBe('(2) 2 projects — OpenAgent')
+    // A module page keeps both, and so does a reload.
+    fireEvent.click(screen.getByRole('link', { name: 'Logs' }))
+    expect(url()).toBe('/logs?project=app&project=site')
+    expect(await screen.findByText('runs of app, site')).toBeTruthy()
+    cleanup()
+    render(<App />)
+    expect(await screen.findByRole('combobox', { name: 'Projects: app, site' })).toBeTruthy()
+    expect(await screen.findByText('runs of app, site')).toBeTruthy()
+    // Unticked, the one left shows alone.
+    await openMenu(screen.getByRole('combobox', { name: 'Projects: app, site' }))
+    fireEvent.click(within(screen.getByRole('option', { name: /^app/ })).getByRole('checkbox'))
+    expect(url()).toBe('/site/logs')
+    fireEvent.click(within(screen.getByRole('option', { name: /^app/ })).getByRole('checkbox'))
+    expect(url()).toBe('/logs?project=app&project=site')
+    // A click elsewhere on a line shows that project alone.
+    fireEvent.click(screen.getByRole('option', { name: /^site/ }))
+    expect(url()).toBe('/site/logs')
+    await openMenu(await screen.findByRole('combobox', { name: 'Project: site' }))
+    fireEvent.click(within(screen.getByRole('option', { name: /All projects/ })).getByRole('checkbox'))
+    expect(url()).toBe('/logs')
+  })
+
+  test("several projects picked keep on a picked project's agent page, and a jump into another project picks it alone", async () => {
+    answerTwo()
+    window.history.replaceState(null, '', '/?project=app&project=site')
+    render(<App />)
+    fireEvent.click(await screen.findByText('site ran'))
+    expect(url()).toBe('/site/3-s?project=app')
+    expect(await screen.findByRole('combobox', { name: 'Projects: app, site' })).toBeTruthy()
   })
 
   test('a project that is not registered picks nothing', async () => {
