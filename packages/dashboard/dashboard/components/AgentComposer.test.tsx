@@ -64,7 +64,10 @@ beforeEach(() => {
   sendMessage.mockReset()
   sendStop.mockReset()
 })
-afterEach(cleanup)
+afterEach(() => {
+  cleanup()
+  vi.useRealTimers()
+})
 
 // The empty box's submit slot holds Stop while the agent is live, and nothing (the launcher
 // collapse) once it ended, however it ended: a message continues it.
@@ -188,6 +191,8 @@ describe('AgentComposer slot control (#1455)', () => {
   })
 
   test('Esc stops a live session, as in Claude Code, unless a question or the box took it', async () => {
+    // The clock alone is stood in for: a double press is told by it.
+    vi.useFakeTimers({ toFake: ['Date'] })
     sendStop.mockResolvedValue(undefined)
     renderComposer()
     // A question over the session: the key is its Cancel.
@@ -202,9 +207,14 @@ describe('AgentComposer slot control (#1455)', () => {
     document.body.appendChild(box)
     fireEvent.keyDown(box, { key: 'Escape' })
     expect(sendStop).not.toHaveBeenCalled()
-    // Closed, Esc in the box stops the agent, even when the box takes the key.
+    // Closed, an Esc straight after the one that closed them is the same press, said twice; so is a key held down.
     box.setAttribute('aria-expanded', 'false')
     box.addEventListener('keydown', event => event.preventDefault())
+    fireEvent.keyDown(box, { key: 'Escape' })
+    vi.setSystemTime(Date.now() + 600)
+    fireEvent.keyDown(box, { key: 'Escape', repeat: true })
+    expect(sendStop).not.toHaveBeenCalled()
+    // A press of its own in the box stops the agent, even when the box takes the key.
     fireEvent.keyDown(box, { key: 'Escape' })
     await waitFor(() => expect(sendStop).toHaveBeenCalledWith('p1', 'run-1'))
     box.remove()

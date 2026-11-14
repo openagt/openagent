@@ -19,6 +19,9 @@ import { promptWithContext, type ContextSet } from '../lib/use-context-set.js'
 import { overlayOpen, pressed, shortcut } from '../lib/shortcut.js'
 import { useIsMobile } from '../lib/use-mobile.js'
 
+/** How long after an Esc that closed something a second Esc is still that press, said twice: a double press. */
+const DOUBLE_PRESS_MS = 500
+
 /** A message sent to a working agent that it has not read yet: shown waiting until it lands. */
 export interface QueuedMessage {
   id: string
@@ -207,11 +210,15 @@ export function AgentComposer({
 
   // Esc stops the agent, as in Claude Code, also typed in the box, unless it closes something open
   // first: a menu, a dialog, the box's own suggestions. Read before anything on the page takes the
-  // key, while what it closes still reads open.
+  // key, while what it closes still reads open. An Esc straight after the one that closed something
+  // is the same press to a person, and a key held down is no press: neither stops the agent.
+  const closedAt = useRef(-Infinity)
   useEffect(() => {
     if (!live) return
     const onKey = (event: KeyboardEvent) => {
-      if (!pressed(event, 'stop') || stopping || down || overlayOpen() || document.querySelector('.ProseMirror[aria-expanded="true"]')) return
+      if (!pressed(event, 'stop')) return
+      if (overlayOpen() || document.querySelector('.ProseMirror[aria-expanded="true"]')) return void (closedAt.current = Date.now())
+      if (event.repeat || Date.now() - closedAt.current < DOUBLE_PRESS_MS || stopping || down) return
       stopSession()
     }
     window.addEventListener('keydown', onKey, true)
