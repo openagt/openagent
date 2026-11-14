@@ -1,7 +1,45 @@
-import type { ReactNode } from 'react'
+import { useEffect, useRef, type CSSProperties, type ReactNode } from 'react'
 import { CheckIcon } from './icons'
 import { Construction } from 'lucide-react'
 import { CodeChip, h2Style, sectionStyle, text, WipBadge } from './ui'
+
+/**
+ * The page's one moment: the sentence set large, its words coming to full strength in reading order
+ * as it enters the screen, once. Drawn whole without scripting, under reduced motion, and when it
+ * is already in view as the page starts.
+ */
+function Moment({ words }: { words: string }) {
+  const ref = useRef<HTMLParagraphElement>(null)
+  useEffect(() => {
+    const p = ref.current!
+    if (matchMedia('(prefers-reduced-motion: reduce)').matches || p.getBoundingClientRect().top < innerHeight) return
+    p.classList.add('moment-armed')
+    const seen = new IntersectionObserver(
+      ([entry]) => {
+        if (!entry!.isIntersecting) return
+        p.classList.add('moment-on')
+        seen.disconnect()
+      },
+      { threshold: 1 },
+    )
+    seen.observe(p)
+    return () => seen.disconnect()
+  }, [])
+  return (
+    <p
+      ref={ref}
+      className="moment"
+      style={{ margin: 0, fontSize: 'var(--text-hero)', lineHeight: 'var(--leading-hero)', fontWeight: 600, letterSpacing: '-0.02em', textWrap: 'balance' }}
+    >
+      {words.split(' ').map((word, i) => (
+        <span key={i}>
+          {i > 0 && ' '}
+          <span style={{ '--i': i } as CSSProperties}>{word}</span>
+        </span>
+      ))}
+    </p>
+  )
+}
 
 /** One of the framework's three promises: its name in the split's third, its points beside it. */
 function Pillar({ title, children }: { title: string; children: ReactNode }) {
@@ -40,12 +78,7 @@ export function YourFramework() {
   return (
     <section id="your-framework" style={sectionStyle}>
       <h2 style={h2Style}>Your framework</h2>
-      <p
-        className="moment"
-        style={{ margin: 0, fontSize: 'var(--text-hero)', lineHeight: 'var(--leading-hero)', fontWeight: 600, letterSpacing: '-0.02em', textWrap: 'balance' }}
-      >
-        It isn't our framework. It's yours.
-      </p>
+      <Moment words="It isn't our framework. It's yours." />
       <div className="rows">
         <Pillar title="Flexible">
           <Item>OpenAgent doesn't force anything — pick only the features you need</Item>

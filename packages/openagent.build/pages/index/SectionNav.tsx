@@ -79,9 +79,10 @@ export function SectionNav() {
           position: 'sticky',
           top: 0,
           zIndex: 50,
-          background: stuck ? 'color-mix(in oklab, var(--card) 92%, transparent)' : 'var(--card)',
-          backdropFilter: 'blur(10px)',
-          WebkitBackdropFilter: 'blur(10px)',
+          // Once stuck, a strip the page shows through, blurred.
+          background: stuck ? 'color-mix(in oklab, var(--background) 72%, transparent)' : 'var(--card)',
+          backdropFilter: 'blur(12px) saturate(1.4)',
+          WebkitBackdropFilter: 'blur(12px) saturate(1.4)',
           borderTop: stuck ? 'none' : '1px solid var(--border)',
           borderBottom: '1px solid var(--border)',
         }}

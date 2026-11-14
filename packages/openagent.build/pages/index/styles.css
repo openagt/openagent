@@ -64,6 +64,8 @@
   /* Colour and opacity on hover; something entering. */
   --duration-hover: 100ms;
   --duration-enter: 140ms;
+  /* A word of the moment coming to full strength: the dashboard's step for a dialog entering. */
+  --duration-moment: 180ms;
 }
 /* A phone: the scale's smaller steps, and the hero's title on one line. */
 @media (max-width: 640px) {
@@ -88,7 +90,7 @@ html {
 a,
 button,
 [role='button'] {
-  transition-property: color, background-color, border-color;
+  transition-property: color, background-color, border-color, transform;
   transition-duration: var(--duration-hover);
   transition-timing-function: var(--ease-out);
 }
@@ -208,6 +210,9 @@ html[data-installed] .dashboard-cta {
   .install-chip:hover {
     background: color-mix(in oklab, var(--primary) 6%, var(--card)) !important;
   }
+}
+.press:active {
+  transform: translateY(1px);
 }
 .press-primary:active {
   background: color-mix(in oklab, var(--primary) 70%, var(--foreground));
@@ -430,4 +435,15 @@ html:not([data-pm]) .pm-tab-npm {
     position: sticky;
     top: 96px;
   }
+}
+
+/* The moment (YourFramework's Moment): armed only by its script, so without one, or under reduced
+ * motion, the sentence is whole. */
+.moment-armed span span {
+  opacity: 0.25;
+  transition: opacity var(--duration-moment) var(--ease-out);
+  transition-delay: calc(var(--i) * 90ms);
+}
+.moment-armed.moment-on span span {
+  opacity: 1;
 }
