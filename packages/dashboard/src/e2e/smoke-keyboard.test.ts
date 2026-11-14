@@ -65,7 +65,7 @@ test('Next in "Add project" keeps the keyboard while it waits and takes no secon
       ++reads === 1 ? route.fulfill({ status: 500, contentType: 'application/json', body: JSON.stringify({ error: 'not read yet' }) }) : route.fallback(),
     )
     await page.getByLabel('Project: shop').click()
-    await page.keyboard.type('github.com/demo/elsewhere')
+    await page.getByLabel('Search projects and repos').fill('github.com/demo/elsewhere')
     await page.getByRole('option', { name: /github\.com\/demo\/elsewhere/ }).click()
     const form = page.getByRole('dialog', { name: 'Add project' })
     await form.getByText('not read yet').waitFor()
