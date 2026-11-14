@@ -18,7 +18,7 @@ export function personChanged(): void {
 
 export function usePerson(): { person: Person | null; reload: () => Promise<void> } {
   // Kept for the page's life: on a phone the sidebar is drawn anew at each opening, and shows them at once.
-  const { value: person, reload } = usePolled<Person | null>(() => onPerson().catch(() => null), null, EVERY_MS, [], { remember: 'person' })
+  const { value: person, reload } = usePolled<Person | null>(onPerson, null, EVERY_MS, [], { remember: 'person' })
   useEffect(() => {
     const again = (): void => void reload()
     changed.add(again)

@@ -57,8 +57,8 @@ const NOTES: Partial<Record<ProjectSkill['standing'], string>> = {
 export const sendWord = (skills: ProjectSkills): string => (skills.remote ? `Send to ${skills.remote}` : 'Commit')
 
 export function ProjectSkillsLine({ projectId, onChanged }: { projectId: string; onChanged?: (() => void) | undefined }) {
-  // A read that fails answers like a project unknown here: no skills to show.
-  const { value: skills, reload } = usePolled<ProjectSkills | null>(() => onProjectSkills(projectId).catch(() => null), null, 15_000, [projectId], 'previous')
+  // Nothing to show until the skills are read, and a read that fails keeps what the last one said.
+  const { value: skills, reload } = usePolled<ProjectSkills | null>(() => onProjectSkills(projectId), null, 15_000, [projectId])
   const [pending, setPending] = useState<'update' | 'send' | null>(null)
   const { error, run } = useAction()
   // Saved on the Skills page, over this page: said here at once, not at the next read.
