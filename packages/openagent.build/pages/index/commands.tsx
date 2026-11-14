@@ -55,7 +55,7 @@ export function PmTabs() {
           className={'pm-tab pm-tab-' + name}
           aria-pressed={name === pm}
           onClick={() => pickPm(name)}
-          style={{ borderRadius: 'var(--radius-md)', padding: '2px 12px', fontFamily: mono, ...text('xs'), cursor: 'pointer' }}
+          style={{ borderRadius: 'var(--radius-md)', padding: '4px 12px', fontFamily: mono, ...text('xs'), cursor: 'pointer' }}
         >
           {name}
         </button>

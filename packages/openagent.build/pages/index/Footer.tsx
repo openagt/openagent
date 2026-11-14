@@ -1,7 +1,8 @@
 import { DiscordIcon, GitHubIcon, NpmIcon } from './icons'
 import { DISCORD_URL, GITHUB_URL, NPM_URL, text } from './ui'
 
-const linkStyle = { display: 'inline-flex', alignItems: 'center', gap: 8, color: 'var(--muted-foreground)' } as const
+// 28 high, a target a pointer finds; 44 on a phone (styles.css).
+const linkStyle = { display: 'inline-flex', alignItems: 'center', gap: 8, padding: '4px 0', color: 'var(--muted-foreground)' } as const
 
 export function Footer() {
   return (

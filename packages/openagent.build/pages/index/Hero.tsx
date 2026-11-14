@@ -103,19 +103,8 @@ export function Hero() {
       <a
         href={dashboardHref}
         onClick={switchInPlace}
-        className="dashboard-cta"
-        style={{
-          display: 'inline-flex',
-          alignItems: 'center',
-          gap: 8,
-          marginTop: 8,
-          background: 'var(--primary)',
-          color: 'var(--primary-foreground)',
-          borderRadius: 'var(--radius-lg)',
-          padding: '12px 24px',
-          ...text('base'),
-          fontWeight: 600,
-        }}
+        className="press press-primary dashboard-cta"
+        style={{ marginTop: 8 }}
       >
         Dashboard <span aria-hidden>→</span>
       </a>

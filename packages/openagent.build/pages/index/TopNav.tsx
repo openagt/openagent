@@ -1,19 +1,7 @@
-import type { CSSProperties, MouseEvent } from 'react'
+import type { MouseEvent } from 'react'
 import { DiscordIcon, GitHubIcon } from './icons'
-import { DISCORD_URL, GITHUB_URL, text } from './ui'
+import { DISCORD_URL, GITHUB_URL } from './ui'
 import { ViewToggle } from './ViewToggle'
-
-const navBtnStyle: CSSProperties = {
-  display: 'inline-flex',
-  alignItems: 'center',
-  gap: 8,
-  color: 'var(--foreground)',
-  border: '1px solid var(--border)',
-  borderRadius: 'var(--radius-lg)',
-  padding: '6px 12px',
-  ...text('sm'),
-  fontWeight: 500,
-}
 
 // On the landing page the logo scrolls back up; on subpages it navigates home.
 function goHome(e: MouseEvent) {
@@ -34,6 +22,7 @@ export function TopNav() {
       {/* Right-clicking the logo opens the press page (logo downloads etc.). */}
       <a
         href="/"
+        className="brand"
         onClick={goHome}
         onContextMenu={(e) => {
           e.preventDefault()
@@ -68,11 +57,11 @@ export function TopNav() {
           gap: 12,
         }}
       >
-        <a href={DISCORD_URL} className="nav-btn" style={navBtnStyle}>
+        <a href={DISCORD_URL} className="press press-quiet press-small nav-btn">
           <DiscordIcon width={16} height={13} />
           <span>Discord</span>
         </a>
-        <a href={GITHUB_URL} className="nav-btn" style={navBtnStyle}>
+        <a href={GITHUB_URL} className="press press-quiet press-small nav-btn">
           <GitHubIcon size={16} />
           <span>GitHub</span>
         </a>

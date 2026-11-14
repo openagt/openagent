@@ -29,40 +29,12 @@ export function Cta() {
         <Emoji e="🦾" />
       </h2>
       <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', justifyContent: 'center' }}>
-        <a
-          href={DISCORD_URL}
-          className="cta-primary"
-          style={{
-            display: 'inline-flex',
-            alignItems: 'center',
-            gap: 8,
-            background: 'var(--primary)',
-            color: 'var(--primary-foreground)',
-            fontWeight: 600,
-            ...text('base'),
-            borderRadius: 'var(--radius-lg)',
-            padding: '12px 24px',
-          }}
-        >
-          <DiscordIcon width={19} height={15} />
+        <a href={DISCORD_URL} className="press press-primary">
+          <DiscordIcon width={20} height={16} />
           Join us on Discord
         </a>
-        <a
-          href={GITHUB_URL}
-          className="cta-secondary"
-          style={{
-            display: 'inline-flex',
-            alignItems: 'center',
-            gap: 8,
-            border: '1px solid var(--border)',
-            color: 'var(--foreground)',
-            fontWeight: 500,
-            ...text('base'),
-            borderRadius: 'var(--radius-lg)',
-            padding: '12px 24px',
-          }}
-        >
-          <GitHubIcon size={17} />
+        <a href={GITHUB_URL} className="press press-quiet">
+          <GitHubIcon size={16} />
           Star on GitHub
         </a>
       </div>

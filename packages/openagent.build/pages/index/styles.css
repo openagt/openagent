@@ -83,9 +83,6 @@ a {
   color: var(--primary);
   text-decoration: none;
 }
-a:hover {
-  color: color-mix(in oklab, var(--primary) 70%, var(--foreground));
-}
 ::selection {
   background: color-mix(in oklab, var(--primary) 35%, var(--background));
 }
@@ -93,10 +90,6 @@ section[id] {
   scroll-margin-top: 64px;
 }
 
-/* --- Hover states (from `style-hover`) --- */
-.nav-btn:hover {
-  border-color: var(--muted-foreground) !important;
-}
 /* The toggle under the logo and the big Dashboard button: only on a computer with OpenAgent installed (+Head.tsx, ViewToggle). */
 .view-toggle {
   display: none !important;
@@ -110,9 +103,6 @@ html[data-installed] .view-toggle {
 }
 html[data-installed] .dashboard-cta {
   display: inline-flex !important;
-}
-.view-toggle-off:hover {
-  color: var(--foreground) !important;
 }
 
 /*
@@ -130,29 +120,78 @@ html[data-installed] .dashboard-cta {
     animation-timing-function: ease-in-out;
   }
 }
-.dashboard-cta:hover {
-  background: color-mix(in oklab, var(--primary) 85%, var(--foreground)) !important;
+
+/* --- Presses ---
+ * Two styles: the primary, solid, for the one thing a part of the page is for, and the quiet one,
+ * a soft fill, for every other. Hover raises the contrast a step and pressing two, only where a
+ * pointer hovers; the keyboard's focus is the dashboard's ring, on everything that takes it. */
+:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
 }
-.pm-tab:hover {
-  color: var(--foreground) !important;
+.press {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  height: 40px;
+  padding: 0 20px;
+  border-radius: var(--radius-lg);
+  font-size: var(--text-base);
+  line-height: var(--leading-base);
+  font-weight: 500;
+  white-space: nowrap;
 }
-.copy-box:hover,
+.press-primary {
+  background: var(--primary);
+  color: var(--primary-foreground);
+}
+.press-quiet {
+  background: var(--muted);
+  color: var(--foreground);
+}
+/* In the top bar, beside the logo: the dashboard's control height. */
+.press-small {
+  height: 32px;
+  padding: 0 12px;
+  font-size: var(--text-sm);
+  line-height: var(--leading-sm);
+}
+@media (hover: hover) {
+  a:hover {
+    color: color-mix(in oklab, var(--primary) 70%, var(--foreground));
+  }
+  .press-primary:hover {
+    color: var(--primary-foreground);
+    background: color-mix(in oklab, var(--primary) 85%, var(--foreground));
+  }
+  .press-quiet:hover {
+    color: var(--foreground);
+    background: color-mix(in oklab, var(--foreground) 14%, var(--background));
+  }
+  .view-toggle-off:hover,
+  .pm-tab:hover,
+  .section-link:hover,
+  .footer-link:hover {
+    color: var(--foreground) !important;
+  }
+  .copy-box:hover {
+    background: color-mix(in oklab, var(--primary) 6%, transparent);
+  }
+  /* Same hover tint as .copy-box, mixed into the chip's own fill since that fill is opaque. */
+  .install-chip:hover {
+    background: color-mix(in oklab, var(--primary) 6%, var(--card)) !important;
+  }
+}
+.press-primary:active {
+  background: color-mix(in oklab, var(--primary) 70%, var(--foreground));
+}
+.press-quiet:active {
+  background: color-mix(in oklab, var(--foreground) 20%, var(--background));
+}
+/* Inside the try box, which clips what is outside it: the ring goes inside. */
 .copy-box:focus-visible {
-  background: color-mix(in oklab, var(--primary) 6%, transparent) !important;
-}
-/* Same hover tint as .copy-box, mixed into the chip's own fill since that fill is opaque. */
-.install-chip:hover,
-.install-chip:focus-visible {
-  background: color-mix(in oklab, var(--primary) 6%, var(--card)) !important;
-}
-.cta-primary:hover {
-  background: color-mix(in oklab, var(--primary) 85%, var(--foreground)) !important;
-}
-.cta-secondary:hover {
-  border-color: var(--muted-foreground) !important;
-}
-.footer-link:hover {
-  color: var(--foreground) !important;
+  outline-offset: -2px;
 }
 
 /* --- Package-manager choice ---
@@ -177,7 +216,7 @@ html:not([data-pm]) .pm-only-npm {
 }
 .pm-tab {
   background: transparent;
-  border: 1px solid transparent;
+  border: none;
   color: var(--muted-foreground);
 }
 html[data-pm='npm'] .pm-tab-npm,
@@ -185,8 +224,7 @@ html[data-pm='pnpm'] .pm-tab-pnpm,
 html[data-pm='bun'] .pm-tab-bun,
 html[data-pm='yarn'] .pm-tab-yarn,
 html:not([data-pm]) .pm-tab-npm {
-  background: var(--card);
-  border-color: var(--border);
+  background: var(--muted);
   color: var(--foreground);
 }
 
@@ -201,9 +239,6 @@ html:not([data-pm]) .pm-tab-npm {
 .section-link.active {
   color: var(--foreground);
   border-bottom-color: var(--primary);
-}
-.section-link:hover {
-  color: var(--foreground);
 }
 /* The links fill the bar, which scrolls sideways and so clips anything outside it: the ring goes inside. */
 .section-link:focus-visible {
@@ -271,15 +306,32 @@ html:not([data-pm]) .pm-tab-npm {
 
 /* --- Responsive --- */
 @media (max-width: 480px) {
-  .nav-btn span,
-  .nav-btn-primary span {
+  .nav-btn span {
     display: none;
   }
+  /* Their icons alone, each a phone's whole target. */
   .nav-btn {
-    padding: 6px 8px !important;
+    width: 44px;
+    height: 44px;
+    padding: 0;
   }
-  .nav-btn-primary {
-    padding: 7px 9.5px !important;
+  .footer-link {
+    padding: 12px 0 !important;
+  }
+  /* A finger's 44px around the tabs, the install command and the logo, past their drawn edge. */
+  .press {
+    height: 44px;
+  }
+  .pm-tab,
+  .install-chip {
+    position: relative;
+  }
+  .pm-tab::before,
+  .install-chip::before,
+  .brand::before {
+    content: '';
+    position: absolute;
+    inset: -10px 0;
   }
   /* Stacked and centered footer. */
   .site-footer {
