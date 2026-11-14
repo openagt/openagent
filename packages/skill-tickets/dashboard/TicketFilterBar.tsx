@@ -281,7 +281,8 @@ export function TicketFilterBar({
           className="pr-8 pl-8 sm:w-56"
         />
         {!searchFocused && f.q === '' && (
-          <kbd className="pointer-events-none absolute top-1/2 right-2 -translate-y-1/2 rounded-sm border border-hairline px-1.5 font-mono text-xs text-muted-foreground">
+          // The key that focuses the search: not said where there is no keyboard.
+          <kbd className="pointer-events-none absolute top-1/2 right-2 -translate-y-1/2 rounded-sm border border-hairline px-1.5 font-mono text-xs text-muted-foreground pointer-coarse:hidden">
             /
           </kbd>
         )}
