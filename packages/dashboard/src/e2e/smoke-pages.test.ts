@@ -20,7 +20,8 @@ test("a class the dashboard says for one case wins over a module's plain one, wh
     await page.getByRole('link', { name: 'Tickets', exact: true }).click()
     await page.getByText('Dark mode').waitFor()
     await page.waitForFunction("[...document.querySelectorAll('link[rel=stylesheet]')].every(link => link.sheet)")
-    // The dashboard's own pairs (FileIcon's dark picture, a box shown from a width up), whose plain halves modules use too.
+    // The dashboard's own pairs (FileIcon's dark picture, the wordmark hidden on a narrow screen), whose plain halves modules use too.
+    await page.setViewportSize({ width: 390, height: 800 })
     const display = await page.evaluate(`(() => {
       document.documentElement.classList.add('dark')
       const shown = className => {
@@ -29,9 +30,9 @@ test("a class the dashboard says for one case wins over a module's plain one, wh
         box.remove()
         return value
       }
-      return { dark: shown('hidden dark:inline-flex'), wide: shown('hidden sm:flex') }
+      return { dark: shown('hidden dark:inline-flex'), narrow: shown('flex max-sm:hidden') }
     })()`)
-    assert.deepEqual(display, { dark: 'inline-flex', wide: 'flex' })
+    assert.deepEqual(display, { dark: 'inline-flex', narrow: 'none' })
   })
 })
 
