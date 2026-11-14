@@ -63,7 +63,7 @@ export function JumpButton() {
   return (
     <Tooltip>
       {/* A press of 28 whose hit area is 44 on a phone. */}
-      <TooltipTrigger render={<Button variant="ghost" size="icon-sm" className="relative shrink-0 text-muted-foreground max-md:after:absolute max-md:after:-inset-2" aria-label="Jump to" onClick={openJump} />}>
+      <TooltipTrigger render={<Button variant="ghost" size="icon-bar" className="text-muted-foreground" aria-label="Jump to" onClick={openJump} />}>
         <Search className="size-4" aria-hidden />
       </TooltipTrigger>
       <TooltipContent>

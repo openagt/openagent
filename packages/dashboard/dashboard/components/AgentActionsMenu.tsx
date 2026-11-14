@@ -197,7 +197,7 @@ export function AgentActionsMenu({
                 <DropdownMenuTrigger
                   type="button"
                   aria-label={title}
-                  className={cn(buttonVariants({ variant: 'ghost', size: 'icon-sm' }), 'relative shrink-0 text-muted-foreground data-[popup-open]:bg-accent max-md:after:absolute max-md:after:-inset-2')}
+                  className={cn(buttonVariants({ variant: 'ghost', size: 'icon-bar' }), 'text-muted-foreground data-[popup-open]:bg-accent')}
                 />
               }
             >

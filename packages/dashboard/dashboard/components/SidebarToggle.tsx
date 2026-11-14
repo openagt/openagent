@@ -30,7 +30,7 @@ function ToggleButton({ label, onClick }: { label: string; onClick: () => void }
   return (
     <Tooltip>
       {/* A press of 28 whose hit area is 44 on a phone. */}
-      <TooltipTrigger render={<Button data-sidebar-toggle variant="ghost" size="icon-sm" className="relative shrink-0 text-muted-foreground max-md:after:absolute max-md:after:-inset-2" aria-label={label} onClick={onClick} />}>
+      <TooltipTrigger render={<Button data-sidebar-toggle variant="ghost" size="icon-bar" className="text-muted-foreground" aria-label={label} onClick={onClick} />}>
         <PanelLeft className="h-4 w-4" aria-hidden />
       </TooltipTrigger>
       <TooltipContent>

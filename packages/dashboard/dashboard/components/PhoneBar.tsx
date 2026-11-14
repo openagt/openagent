@@ -16,7 +16,7 @@ export function MenuButton({ inBar = false }: { inBar?: boolean }) {
   return (
     // In the bar of a page that scrolls as a page, so the two move as one when the phone bounces at the top.
     // A press of 28 whose hit area is 44, a finger's.
-    <Button variant="ghost" size="icon-sm" className={cn('z-10 after:absolute after:-inset-2', inBar ? 'relative shrink-0' : 'absolute top-2 left-2')} aria-label="Open the menu" aria-expanded={openMobile} onClick={toggleSidebar}>
+    <Button variant="ghost" size="icon-bar" className={cn('z-10', inBar ? 'shrink-0' : 'absolute top-2 left-2')} aria-label="Open the menu" aria-expanded={openMobile} onClick={toggleSidebar}>
       <Menu className="h-4 w-4" aria-hidden />
     </Button>
   )

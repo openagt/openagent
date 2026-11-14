@@ -26,6 +26,8 @@ const buttonVariants = cva(
         lg: 'h-9 px-4',
         icon: 'size-8',
         'icon-sm': 'size-7',
+        // A bar's icon press: 28 square, and on a phone a finger's 44 around it.
+        'icon-bar': 'relative size-7 max-md:after:absolute max-md:after:-inset-2',
       },
     },
     defaultVariants: { variant: 'default', size: 'default' },

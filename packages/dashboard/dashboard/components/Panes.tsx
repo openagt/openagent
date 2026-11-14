@@ -266,8 +266,8 @@ export function PaneToggles() {
               render={
                 <Button
                   variant="ghost"
-                  size="icon-sm"
-                  className={cn('relative shrink-0 text-muted-foreground max-md:after:absolute max-md:after:-inset-2', isOpen && 'bg-accent text-accent-foreground')}
+                  size="icon-bar"
+                  className={cn('text-muted-foreground', isOpen && 'bg-accent text-accent-foreground')}
                   aria-label={pane.label}
                   aria-pressed={isOpen}
                   onClick={() => setPaneOpen(page, pane.id, !isOpen)}
@@ -306,7 +306,7 @@ function PaneCard({ pane, over = false }: { pane: Pane; /** Laid over the chat: 
           {over && (
             <Tooltip>
               <TooltipTrigger
-                render={<Button variant="ghost" size="icon-sm" className="relative shrink-0 text-muted-foreground max-md:after:absolute max-md:after:-inset-2" aria-label="Back to the chat" onClick={() => setPaneOpen(page, pane.id, false)} />}
+                render={<Button variant="ghost" size="icon-bar" className="text-muted-foreground" aria-label="Back to the chat" onClick={() => setPaneOpen(page, pane.id, false)} />}
               >
                 <ArrowLeft className="size-4" />
               </TooltipTrigger>
