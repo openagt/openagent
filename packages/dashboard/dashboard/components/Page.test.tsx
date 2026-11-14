@@ -52,6 +52,23 @@ test("the buttons stand in the name's row, at its right, and the line under that
   expect(heading.parentElement!.className.split(' ')).toContain('shrink-0')
 })
 
+test("a page's line stands where its description does from a tablet up, and on a phone first in the buttons' row, wrapping as text beside them", () => {
+  render(
+    <Page title="Overview" line={<span>2 need you · 1 working</span>} actions={<button type="button">Customize</button>}>
+      <p>the parts</p>
+    </Page>,
+  )
+  const line = screen.getByText('2 need you · 1 working').parentElement!
+  const row = screen.getByRole('button', { name: 'Customize' }).parentElement!.parentElement!
+  expect(line.parentElement).toBe(row)
+  // From a tablet up the row wraps to put the line under it; on a phone the buttons never go to another row.
+  expect(row.className.split(' ')).toEqual(expect.arrayContaining(['md:flex-wrap']))
+  expect(row.className.split(' ')).not.toContain('flex-wrap')
+  expect(line.className.split(' ')).toEqual(expect.arrayContaining(['max-md:order-first', 'max-md:flex-1', 'md:order-last', 'md:basis-full']))
+  expect(line.className).not.toContain('sr-only')
+  expect(row.parentElement!.className).not.toContain('sr-only')
+})
+
 test('on a phone, a page with no count and no buttons draws no empty row under the bar', () => {
   render(
     <Page title="Logs" description="Every run">

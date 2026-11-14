@@ -22,6 +22,7 @@ export function Page({
   title,
   count,
   description,
+  line,
   actions,
   bar,
   children,
@@ -30,6 +31,8 @@ export function Page({
   /** Beside the name, in grey: how many the page shows ("14/14"). Seen on a phone too. */
   count?: ReactNode
   description?: ReactNode
+  /** In the description's place, what the page's parts say now (the Overview's "2 need you · 1 working"): a phone shows it too, at the left of the buttons' row, wrapping as text beside them, so a part of it that changes its length never moves the buttons to another row. */
+  line?: ReactNode
   /** The page's own buttons, at the end of its name's row. */
   actions?: ReactNode
   /** Under the header: a bar of the page's own (the Tickets' filters). */
@@ -40,9 +43,9 @@ export function Page({
     <PageColumn>
       <header className="mb-6 max-md:mb-4">
         {/* A phone's bar names the page: there this block shows only the count and the buttons, and is said alone when it has neither, taking no room. */}
-        <div className={cn(bar !== undefined && 'mb-3', count === undefined && actions === undefined && 'max-md:sr-only max-md:mb-0')}>
+        <div className={cn(bar !== undefined && 'mb-3', count === undefined && actions === undefined && line === undefined && 'max-md:sr-only max-md:mb-0')}>
           {/* One row at every width: the name with its count, then the page's buttons at its right. */}
-          <div className="flex items-center justify-between gap-4 md:min-h-8">
+          <div className={cn('flex items-center justify-between gap-4 md:min-h-8', line !== undefined && 'md:flex-wrap md:gap-y-1')}>
             {/* A page's name and its count never give up width: the buttons do. */}
             <div className="flex shrink-0 items-center gap-2">
               {/* While the sidebar is hidden, the button that shows it again stands before the name. */}
@@ -61,6 +64,8 @@ export function Page({
             </div>
             {/* The buttons give up width: they go under each other, from the right, when the row is narrower than them, and on a phone a button's words longer than the screen are cut. */}
             {actions !== undefined && <div className="flex min-w-0 flex-wrap items-center justify-end gap-2">{actions}</div>}
+            {/* Under the row from a tablet up, as the description is; on a phone, where the bar names the page, first in the row. */}
+            {line !== undefined && <p className="min-w-0 text-sm text-muted-foreground max-md:order-first max-md:flex-1 md:order-last md:basis-full">{line}</p>}
           </div>
           {/* Under the row, so however long it is, the buttons stay at the name's right. On a phone, where the bar names the page, it is said to a screen reader only. */}
           {description !== undefined && <p className="mt-1 text-sm text-muted-foreground max-md:sr-only">{description}</p>}

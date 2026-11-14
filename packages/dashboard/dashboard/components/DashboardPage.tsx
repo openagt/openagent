@@ -186,8 +186,7 @@ export function DashboardPage({
   return (
     <Page
       title="Overview"
-      description={
-        // In the sentence's place, wrapping as text on a phone.
+      line={
         line.map((part, at) => (
           <Fragment key={part.id}>
             {at > 0 && <span aria-hidden className="mx-1.5">·</span>}
