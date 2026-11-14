@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { ChevronLeft, Ellipsis, House, Loader2, Monitor, Plus, Server, Smartphone, Tablet, UserPlus, UserRound } from 'lucide-react'
-import { Badge, Button, ConfirmDialog, Dialog, DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, Input, List as Rows, Row, Section, SettingsRow, SettingsSection, buttonVariants, formatDateTime, formatRelative, usePolled, useSettingsCrumb } from '@openagt/dashboard/module'
+import { Badge, Button, ConfirmDialog, Dialog, DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, Input, List as Rows, Row, Section, SettingsRow, SettingsSection, buttonVariants, formatDateTime, formatRelative, useOpenAgentDown, usePolled, useSettingsCrumb } from '@openagt/dashboard/module'
 import { addDevice, keepPerson, loadMine, myName, nameOwner, removeDevice, removeMine, removePerson, renameDevice, setTailscale, type Answer, type DeviceRow, type DoorStatus, type LineRow, type PersonRow, type PersonThere } from './devices.js'
 import { installFailed, removeDevice as removeServerDevice } from './servers.js'
 import { AddDevice, useJoined, type Adding } from './AddDevice.js'
@@ -115,6 +115,7 @@ export function DevicesSettings({ everyMs = 3_000, devicesEveryMs = 30_000, devi
 
 /** With no device yet: the three things a person starts with, a code someone gave them, and Tailscale for one who has it. */
 function Start({ d, onAdd }: { d: Devices; onAdd: (adding: Adding) => void }) {
+  const down = useOpenAgentDown()
   const [turning, setTurning] = useState(false)
   const [why, setWhy] = useState<string | undefined>()
   // The door behind Tailscale: from then on, This computer says how devices reach it there.
@@ -154,7 +155,7 @@ function Start({ d, onAdd }: { d: Devices; onAdd: (adding: Adding) => void }) {
             Someone gave you a code? <LinkPress onClick={() => onAdd('code')}>Join with a code</LinkPress>
           </p>
           <p>
-            On Tailscale? From anywhere, with no server: <LinkPress loading={turning} onClick={() => void onTailscale()}>Reach this computer on your Tailscale network</LinkPress>
+            On Tailscale? From anywhere, with no server: <LinkPress loading={turning} disabled={down} onClick={() => void onTailscale()}>Reach this computer on your Tailscale network</LinkPress>
           </p>
         </div>
         {why !== undefined && <Problem>{why}</Problem>}
@@ -269,6 +270,7 @@ function ItemRow({ d, item, onOpen }: { d: Devices; item: Item; onOpen: () => vo
 
 /** A phone or a browser: no page of its own, a menu to rename it here, or take it out. */
 function PhoneRow({ d, item }: { d: Devices; item: PhoneItem }) {
+  const down = useOpenAgentDown()
   const { host } = d
   const { icon, word } = phoneKind(item.name)
   const [renaming, setRenaming] = useState(false)
@@ -315,7 +317,7 @@ function PhoneRow({ d, item }: { d: Devices; item: PhoneItem }) {
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">
               {item.door && <DropdownMenuItem onClick={() => (setName(item.name), setRenaming(true))}>Rename</DropdownMenuItem>}
-              <DropdownMenuItem className="text-danger" onClick={() => (setRemoving(true), void act(remove))}>
+              <DropdownMenuItem className="text-danger" disabled={down} onClick={() => (setRemoving(true), void act(remove))}>
                 Remove
               </DropdownMenuItem>
             </DropdownMenuContent>
@@ -341,7 +343,7 @@ function PhoneRow({ d, item }: { d: Devices; item: PhoneItem }) {
               <Button type="button" variant="ghost" onClick={() => setRenaming(false)}>
                 Cancel
               </Button>
-              <Button type="submit" loading={busy} disabled={!name.trim()}>
+              <Button type="submit" loading={busy} disabled={!name.trim() || down}>
                 Save
               </Button>
             </div>
@@ -372,6 +374,7 @@ function RemovePerson({ name, label, busy, onConfirm }: { name: string; label: s
 
 /** A device in a person's list: its name, when it was seen, and what a computer of theirs is. */
 function DoorDevice({ device, mine, busy, onRemove }: { device: DeviceRow; mine: boolean; busy: boolean; onRemove: () => void }) {
+  const down = useOpenAgentDown()
   const { icon: Icon } = device.line ? { icon: Monitor } : phoneKind(device.name)
   const seen = device.seen !== undefined ? `Last seen ${formatRelative(device.seen)}, added ${formatRelative(device.added)}` : `Added ${formatRelative(device.added)}`
   const line = device.line ? `${device.person !== undefined && !mine ? `A computer of ${device.person}` : 'A computer of yours'}: runs can be started on it from here. Remove it and it is no longer in "Run on".` : undefined
@@ -383,7 +386,7 @@ function DoorDevice({ device, mine, busy, onRemove }: { device: DeviceRow; mine:
       {...(line !== undefined ? { meta: <span title={formatDateTime(device.seen ?? device.added)}>{seen}</span> } : {})}
       stackOnPhone
       actions={
-        <Button variant="ghost" size="sm" disabled={busy} aria-label={`Remove ${device.name}`} onClick={onRemove}>
+        <Button variant="ghost" size="sm" disabled={busy || down} aria-label={`Remove ${device.name}`} onClick={onRemove}>
           Remove
         </Button>
       }
@@ -393,6 +396,7 @@ function DoorDevice({ device, mine, busy, onRemove }: { device: DeviceRow; mine:
 
 /** On a computer several people use: its door's devices by person, the owner first, and what is become of each person. */
 function DoorPeople({ d, persons, devices, lines }: { d: Devices; persons: PersonRow[]; devices: DeviceRow[]; /** The servers this computer keeps a line to: how the owner, and the people a line made, use it. */ lines: LineRow[] }) {
+  const down = useOpenAgentDown()
   const { host } = d
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | undefined>()
@@ -433,7 +437,7 @@ function DoorPeople({ d, persons, devices, lines }: { d: Devices; persons: Perso
               <div role="group" aria-label={`${person.name} was removed from ${nameAt(person.from)}`} className="flex flex-wrap items-center justify-between gap-2">
                 <p className="text-xs text-warning">{`Removed from ${nameAt(person.from)}.`}</p>
                 <div className="flex gap-2">
-                  <Button variant="secondary" disabled={busy} onClick={() => void act(() => keepPerson(host, person.name))}>
+                  <Button variant="secondary" disabled={busy || down} onClick={() => void act(() => keepPerson(host, person.name))}>
                     Keep, switched off
                   </Button>
                   <RemovePerson name={person.name} label="Remove" busy={busy} onConfirm={() => act(() => removePerson(host, person.name))} />

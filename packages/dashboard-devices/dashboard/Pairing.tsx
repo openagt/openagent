@@ -25,6 +25,7 @@ type Phase = { at: 'asking' } | { at: 'waiting'; asked: AskedThere } | { at: 'sa
  * here, so runs go both ways in one go. That needs this computer's own door open on the Wi-Fi.
  */
 export function Connecting({ d, computer, canBoth, onBack, onClose }: { d: Devices; computer: FoundComputer; /** This computer's door is open: the other one can be let in here too. */ canBoth: boolean; onBack: () => void; onClose: () => void }) {
+  const down = useOpenAgentDown()
   const { host } = d
   const [phase, setPhase] = useState<Phase>({ at: 'asking' })
   const [both, setBoth] = useState(true)
@@ -135,7 +136,7 @@ export function Connecting({ d, computer, canBoth, onBack, onClose }: { d: Devic
                 {phase.at === 'waiting' || phase.at === 'asking' ? 'Cancel' : 'Back'}
               </Button>
               {(phase.at === 'gone' || phase.at === 'failed') && (
-                <Button variant="secondary" onClick={() => setRound(round + 1)}>
+                <Button variant="secondary" disabled={down} onClick={() => setRound(round + 1)}>
                   Try again
                 </Button>
               )}

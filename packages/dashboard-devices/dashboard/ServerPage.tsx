@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { ChevronRight, CircleCheck, House, Laptop, Loader2, Server, UserPlus, UserRound } from 'lucide-react'
-import { Button, Checkbox, ConfirmDialog, Dialog, List, Row, Switch, usePolled, type ModuleAccountsAgent, type ModuleComputersThrough, type ModuleHost, type ModuleMachine, type ModuleMachineAccount } from '@openagt/dashboard/module'
+import { Button, Checkbox, ConfirmDialog, Dialog, List, Row, Switch, useOpenAgentDown, usePolled, type ModuleAccountsAgent, type ModuleComputersThrough, type ModuleHost, type ModuleMachine, type ModuleMachineAccount } from '@openagt/dashboard/module'
 import { idsOf, myName, type Answer, type DeviceRow } from './devices.js'
 import { installDone, installFailed, nameOwner, removeDevice, removePerson, setPeople, setWho, askLink, type ServerRow } from './servers.js'
 import { labelOf, type ServerItem } from './model.js'
@@ -20,6 +20,7 @@ export const REMOVE_PERSON = (name: string): string =>
 type Tab = 'overview' | 'people'
 
 export function ServerPage({ d, item, onBack, invite = false }: { d: Devices; item: ServerItem; onBack: () => void; /** Opened to invite people: on its People, with Invite open. */ invite?: boolean }) {
+  const down = useOpenAgentDown()
   const { host, busy } = d
   const { server, machine } = item
   const home = server.through !== undefined
@@ -88,7 +89,7 @@ export function ServerPage({ d, item, onBack, invite = false }: { d: Devices; it
       {(behind || unfinished || failed) && !server.working && (
         <div role="status" className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-lg bg-muted py-2 pr-2 pl-3">
           <p className="text-sm">{failed ? `${machine ? 'The update' : 'The install'} stopped at a step: see Overview.` : behind ? `OpenAgent ${machine!.version} runs there: behind this computer, which runs ${d.machines!.version}.` : 'A step of the install never ran there.'}</p>
-          <Button loading={spins} disabled={!d.machines || (busy && !spins)} aria-label={failed ? `Try ${server.address} again` : `Update ${server.address}`} onClick={() => void d.install(server.address, server.user)}>
+          <Button loading={spins} disabled={!d.machines || (busy && !spins) || down} aria-label={failed ? `Try ${server.address} again` : `Update ${server.address}`} onClick={() => void d.install(server.address, server.user)}>
             {failed ? 'Try again' : 'Update'}
           </Button>
         </div>
@@ -161,6 +162,7 @@ function useDevicesBefore(devices: DeviceRow[] | undefined, waiting: boolean, on
 }
 
 function Overview({ d, item }: { d: Devices; item: ServerItem }) {
+  const down = useOpenAgentDown()
   const { host, busy } = d
   const { server, machine } = item
   const [opened, setOpened] = useState(false)
@@ -196,7 +198,7 @@ function Overview({ d, item }: { d: Devices; item: ServerItem }) {
           </button>
         )}
         {done && machine?.version === undefined && (reason !== undefined || !server.adding) && (
-          <Button variant="secondary" disabled={busy} aria-label={machine ? `Connect ${server.address} again` : `Finish connecting ${server.address}`} onClick={() => void d.addToMachines(server)}>
+          <Button variant="secondary" disabled={busy || down} aria-label={machine ? `Connect ${server.address} again` : `Finish connecting ${server.address}`} onClick={() => void d.addToMachines(server)}>
             {machine ? 'Connect again' : 'Finish connecting'}
           </Button>
         )}
@@ -240,6 +242,7 @@ const AGENTS: { agent: ModuleAccountsAgent; title: string }[] = [
  * offers again on the Permissions page. The server's own login stays: Claude Code or Codex keeps it.
  */
 function Accounts({ host, machine, name, busy }: { host: ModuleHost; machine: ModuleMachine; name: string; busy: boolean }) {
+  const down = useOpenAgentDown()
   const { value: read, reload } = usePolled<(ModuleMachineAccount[] | null)[] | undefined>(() => Promise.all(AGENTS.map(({ agent }) => host.machineAccounts(machine.id, agent))), undefined, 30_000, [machine.id])
   const [removing, setRemoving] = useState<string | undefined>()
   const [error, setError] = useState<string | undefined>()
@@ -266,7 +269,7 @@ function Accounts({ host, machine, name, busy }: { host: ModuleHost; machine: Mo
                   <span className="ml-2 text-xs text-muted-foreground">{[account.from !== undefined ? `from ${account.from}` : account.own ? `${name}'s own login` : undefined, account.first ? 'runs take it first' : undefined].filter(Boolean).join(' · ')}</span>
                 </span>
                 {!account.own && (
-                  <Button size="sm" variant="ghost" disabled={busy || removing !== undefined} aria-label={`Remove ${account.name}'s ${title} account on ${name}`} title={account.from !== undefined ? `Runs on ${name} no longer use it. ${account.from} offers it again on the Permissions page.` : `Runs on ${name} no longer use it.`} onClick={() => void remove(agent, account)}>
+                  <Button size="sm" variant="ghost" disabled={busy || removing !== undefined || down} aria-label={`Remove ${account.name}'s ${title} account on ${name}`} title={account.from !== undefined ? `Runs on ${name} no longer use it. ${account.from} offers it again on the Permissions page.` : `Runs on ${name} no longer use it.`} onClick={() => void remove(agent, account)}>
                     {removing === `${agent} ${account.id}` && <Loader2 className="h-3 w-3 animate-spin" aria-hidden />}
                     Remove
                   </Button>
@@ -287,11 +290,12 @@ function Accounts({ host, machine, name, busy }: { host: ModuleHost; machine: Mo
  * the switch changes nothing about who is named.
  */
 export function RunsThrough({ host, server, label = server.address, busy, onChange }: { host: ModuleHost; server: ServerRow & { through: string }; /** The computer's name, as its page shows it. */ label?: string; busy: boolean; onChange: (change: () => Promise<Answer<unknown>>) => Promise<boolean> }) {
+  const down = useOpenAgentDown()
   const at = hostOf(server.through)
   const on = server.who !== 'nobody'
   return (
     <SwitchLine label={`Your runs can go here from ${at}`} words={on ? `Pick ${label} under "Run on" on ${at}. The people on its People run here too, each as themselves.` : `Off: its runs only show on ${at}.`}>
-      <Switch aria-label={`Your runs can go here from ${at}`} checked={on} disabled={busy} onCheckedChange={next => void onChange(() => setWho(host, server.address, next ? 'me' : 'nobody'))} />
+      <Switch aria-label={`Your runs can go here from ${at}`} checked={on} disabled={busy || down} onCheckedChange={next => void onChange(() => setWho(host, server.address, next ? 'me' : 'nobody'))} />
     </SwitchLine>
   )
 }
@@ -336,6 +340,7 @@ function AddPersonWay({ label, at, codeWay, onWay, onClose }: { label: string; a
  * server they are already in at, and gets a user of their own on it at their first run.
  */
 export function PickPeople({ host, server, label, onChange, onClose }: { host: ModuleHost; server: ServerRow & { through: string }; /** The computer's name, as its page shows it. */ label: string; onChange: (change: () => Promise<Answer<unknown>>) => Promise<boolean>; onClose: () => void }) {
+  const down = useOpenAgentDown()
   const at = hostOf(server.through)
   const have = server.people ?? []
   const { value: there } = usePolled<{ me: string | undefined; persons: string[] } | undefined>(
@@ -385,7 +390,7 @@ export function PickPeople({ host, server, label, onChange, onClose }: { host: M
             Cancel
           </Button>
           {choices.length > 0 && (
-            <Button loading={adding} disabled={picked.length === 0} onClick={() => void add()}>
+            <Button loading={adding} disabled={picked.length === 0 || down} onClick={() => void add()}>
               {picked.length > 1 ? `Add ${picked.length} people` : 'Add person'}
             </Button>
           )}
@@ -401,6 +406,7 @@ export function PickPeople({ host, server, label, onChange, onClose }: { host: M
  * Nothing at all for a server no computer keeps a line to.
  */
 export function ComputersThrough({ host, machine, busy, everyMs }: { host: ModuleHost; machine: ModuleMachine; busy: boolean; everyMs: number }) {
+  const down = useOpenAgentDown()
   const { value: read, reload } = usePolled<ModuleComputersThrough | undefined>(() => host.computersThrough(machine.id), undefined, Math.max(everyMs, 10_000), [machine.id])
   const [adding, setAdding] = useState<string | undefined>()
   const [error, setError] = useState<string | undefined>()
@@ -429,7 +435,7 @@ export function ComputersThrough({ host, machine, busy, everyMs }: { host: Modul
               {computer.added ? (
                 <span className="shrink-0 text-muted-foreground">In "Run on"</span>
               ) : (
-                <Button variant="secondary" className="shrink-0" disabled={busy || adding !== undefined} aria-label={`Add ${computer.name} through ${machine.label}`} onClick={() => void add(computer.id)}>
+                <Button variant="secondary" className="shrink-0" disabled={busy || adding !== undefined || down} aria-label={`Add ${computer.name} through ${machine.label}`} onClick={() => void add(computer.id)}>
                   {adding === computer.id && <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden />}
                   Add
                 </Button>
@@ -448,6 +454,7 @@ export function ComputersThrough({ host, machine, busy, everyMs }: { host: Modul
 
 /** A device that is in on a server: what it is, when it was last there, and a way to take it out. */
 function DeviceLine({ device, address, busy, ownKey, onRemove }: { device: DeviceRow; address: string; busy: boolean; /** The device is this computer's OpenAgent, by the key it has on the server. */ ownKey: boolean; onRemove: () => void }) {
+  const down = useOpenAgentDown()
   // This computer is in on its server by itself: taken out there alone, its page here would go on asking with a key that opens nothing.
   const own = device.own === true || ownKey
   const note = own ? 'This computer. To take it out, remove the server.' : device.line ? `A computer that keeps a line open to the server: runs can be started on it from the server's page. Remove it and it is no longer in "Run on" there.` : undefined
@@ -455,7 +462,7 @@ function DeviceLine({ device, address, busy, ownKey, onRemove }: { device: Devic
     <Row
       title={device.name}
       detail={<Seen device={device} note={note} />}
-      {...(own ? {} : { actions: <Button variant="ghost" size="sm" disabled={busy} aria-label={`Remove ${device.name} from ${address}`} onClick={onRemove}>Remove</Button> })}
+      {...(own ? {} : { actions: <Button variant="ghost" size="sm" disabled={busy || down} aria-label={`Remove ${device.name} from ${address}`} onClick={onRemove}>Remove</Button> })}
     />
   )
 }

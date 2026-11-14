@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, test, vi } from 'vitest'
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { ModuleHostContext, type ModuleCommandResult, type ModuleComputerThrough, type ModuleHost, type ModuleMachine, type ModuleMachines } from '@openagt/dashboard/module'
-import { fakeHost } from '@openagt/dashboard/module/testing'
+import { OpenAgentDown, fakeHost } from '@openagt/dashboard/module/testing'
 import { DevicesSettings } from './DevicesSettings.js'
 import { WARNING } from './ThisComputer.js'
 
@@ -344,6 +344,25 @@ describe('Settings › Devices: this computer, and how devices reach it', () => 
     await waitFor(() => expect(runComputerCommand).toHaveBeenCalledWith(['remove', 'fff000fff000']))
     await waitFor(() => expect(queryRow('Mac, Chrome')).toBeNull())
     expect(getRow('iPhone, Safari')).toBeTruthy()
+  })
+
+  test('while OpenAgent is not answering, the ways in and a device\'s Remove are off and send nothing', async () => {
+    const { host, runComputerCommand } = door(() => ok({ ...OPEN, devices: [PHONE] }))
+    render(
+      <OpenAgentDown>
+        <ModuleHostContext.Provider value={host}>
+          <DevicesSettings everyMs={40} />
+        </ModuleHostContext.Provider>
+      </OpenAgentDown>,
+    )
+    await findRow('iPhone, Safari')
+    expect((await theSwitch()).hasAttribute('data-disabled')).toBe(true)
+    expect(screen.getByRole('switch', { name: 'On your Tailscale network' }).hasAttribute('data-disabled')).toBe(true)
+    fireEvent.click(screen.getByRole('button', { name: 'iPhone, Safari: more' }))
+    const remove = await screen.findByRole('menuitem', { name: 'Remove' })
+    expect(remove.hasAttribute('data-disabled')).toBe(true)
+    fireEvent.click(remove)
+    expect(runComputerCommand).not.toHaveBeenCalledWith(['remove', PHONE.id])
   })
 
   test('a device being removed says so on its row until the row is gone', async () => {

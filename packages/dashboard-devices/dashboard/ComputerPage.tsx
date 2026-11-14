@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { Monitor, Server } from 'lucide-react'
-import { Button, ConfirmDialog, Input, Switch } from '@openagt/dashboard/module'
+import { Button, ConfirmDialog, Input, Switch, useOpenAgentDown } from '@openagt/dashboard/module'
 import { addDevice, removeDevice } from './devices.js'
 import { hasDoor, reachedAt, type ComputerItem } from './model.js'
 import { ComputersThrough } from './ServerPage.js'
@@ -12,6 +12,7 @@ import type { Devices } from './use-devices.js'
 // machine saved here, and a device in at this computer's door; the page shows them as one computer.
 
 export function ComputerPage({ d, item, onBack, onSetUp }: { d: Devices; item: ComputerItem; onBack: () => void; /** Set this computer up as a server: the setup dialog. */ onSetUp: () => void }) {
+  const down = useOpenAgentDown()
   const { host } = d
   const { machine, door, through } = item
   const status = d.door?.ok ? d.door.value : undefined
@@ -58,7 +59,7 @@ export function ComputerPage({ d, item, onBack, onSetUp }: { d: Devices; item: C
           <Switch
             aria-label={`Your runs can go to ${item.name}`}
             checked={machine !== undefined}
-            disabled={busy}
+            disabled={busy || down}
             onCheckedChange={on => {
               if (on) setPasting(true)
               else if (machine) void act(async () => ((await d.removeMachine(machine.id)) ? { ok: true } : { ok: false, error: `${item.name} could not be taken off.` }))
@@ -77,7 +78,7 @@ export function ComputerPage({ d, item, onBack, onSetUp }: { d: Devices; item: C
               <span>{`On ${item.name}, open Settings › Devices › Add device › Computer › Give it this computer's link, and paste that link here:`}</span>
               <Input name="computer-link" autoFocus aria-label={`${item.name}'s link`} value={link} onChange={event => setLink(event.target.value)} />
             </label>
-            <Button type="submit" disabled={busy || !link.trim()}>
+            <Button type="submit" disabled={busy || !link.trim() || down}>
               Save
             </Button>
           </form>
@@ -85,7 +86,7 @@ export function ComputerPage({ d, item, onBack, onSetUp }: { d: Devices; item: C
         {/* A computer reached through a server is reached from that server: its runs come here that way. */}
         {!through && (
           <SwitchLine label={`${item.name} can start runs here`} words={door ? "They use this computer's logins." : machine ? `Off. Turn it on: ${item.name} is told this computer's link, and saves it.` : "They use this computer's logins."}>
-            <Switch aria-label={`${item.name} can start runs here`} checked={door !== undefined} disabled={busy} onCheckedChange={on => void act(on ? letIn : removeHere)} />
+            <Switch aria-label={`${item.name} can start runs here`} checked={door !== undefined} disabled={busy || down} onCheckedChange={on => void act(on ? letIn : removeHere)} />
           </SwitchLine>
         )}
       </Part>

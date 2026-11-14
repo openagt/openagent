@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Server } from 'lucide-react'
-import { Button, ConfirmDialog, List, Row, useAskOn, usePolled } from '@openagt/dashboard/module'
+import { Button, ConfirmDialog, List, Row, useAskOn, useOpenAgentDown, usePolled } from '@openagt/dashboard/module'
 import { idsOf, readPersonThere, type Answer, type DeviceRow } from './devices.js'
 import { loadOther, otherLogin, sharedForget, type OtherLogin, type OtherRow } from './servers.js'
 import { hasDoor, throughOf, type JoinedItem, type OtherItem } from './model.js'
@@ -92,6 +92,7 @@ export function JoinedPage({ d, item, onBack }: { d: Devices; item: JoinedItem; 
  * a key that opens nothing.
  */
 function DevicesThere({ d, machine, name, devices, line, busy, onBusy, onError }: { d: Devices; machine: JoinedItem['machine']; name: string; devices: DeviceRow[]; /** The id this computer's line has there, when it keeps one. */ line: string | undefined; busy: boolean; onBusy: (busy: boolean) => void; onError: (error: string | undefined) => void }) {
+  const down = useOpenAgentDown()
   const { host } = d
   const [changed, setChanged] = useState<DeviceRow[] | undefined>()
   const listed = changed ?? devices
@@ -121,7 +122,7 @@ function DevicesThere({ d, machine, name, devices, line, busy, onBusy, onError }
               key={device.id}
               title={device.name}
               detail={<Seen device={device} note={own ? 'This computer. To take it out, remove the server.' : undefined} />}
-              {...(own ? {} : { actions: <Button variant="ghost" size="sm" disabled={busy} aria-label={`Remove ${device.name} from ${name}`} onClick={() => void remove(device)}>Remove</Button> })}
+              {...(own ? {} : { actions: <Button variant="ghost" size="sm" disabled={busy || down} aria-label={`Remove ${device.name} from ${name}`} onClick={() => void remove(device)}>Remove</Button> })}
             />
           )
         })}
@@ -147,6 +148,7 @@ function otherWords(label: 'GitHub' | 'Claude', login: OtherLogin | undefined, n
  * person's own devices there are listed too.
  */
 export function OtherPage({ d, item, onBack }: { d: Devices; item: OtherItem; onBack: () => void }) {
+  const down = useOpenAgentDown()
   const { host, account, noLogin } = d
   const { machine, owner, person } = item
   const [tab, setTab] = useState<Tab>('overview')
@@ -183,12 +185,12 @@ export function OtherPage({ d, item, onBack }: { d: Devices; item: OtherItem; on
             {read !== undefined && !read.ok && <p className="text-xs text-muted-foreground">{`${name} did not say: ${read.error}`}</p>}
             <ul aria-label={`Your logins on ${name}`} className="space-y-3 text-xs">
               <LoginLine label="GitHub" words={otherWords('GitHub', row?.github, name)} said={undefined}>
-                <Button variant="secondary" disabled={busy || account === undefined} aria-label={`Log in to GitHub on ${name} instead`} title={account !== undefined ? `Copies the login of ${account} from this computer to your own OpenAgent on ${name}.${copies}` : noLogin} onClick={() => void act(() => otherLogin(host, machine.url, 'github'))}>
+                <Button variant="secondary" disabled={busy || account === undefined || down} aria-label={`Log in to GitHub on ${name} instead`} title={account !== undefined ? `Copies the login of ${account} from this computer to your own OpenAgent on ${name}.${copies}` : noLogin} onClick={() => void act(() => otherLogin(host, machine.url, 'github'))}>
                   {row?.github === undefined ? 'Log in here' : 'Log in here instead'}
                 </Button>
               </LoginLine>
               <LoginLine label="Claude" words={making.asking ? "Claude: say yes in the page this computer's browser opened." : making.working ? `Claude: one moment, ${name} is being told.` : otherWords('Claude', row?.claude, name)} said={making.working ? undefined : making.said}>
-                <Button variant="secondary" disabled={busy || (making.working && making.asking !== true)} aria-label={`Log in to Claude on ${name} instead`} title={`Opens this computer's browser, where you say yes once. The login is made for your OpenAgent on ${name} alone and lasts a year.${copies}`} onClick={() => void act(() => otherLogin(host, machine.url, 'claude'))}>
+                <Button variant="secondary" disabled={busy || (making.working && making.asking !== true) || down} aria-label={`Log in to Claude on ${name} instead`} title={`Opens this computer's browser, where you say yes once. The login is made for your OpenAgent on ${name} alone and lasts a year.${copies}`} onClick={() => void act(() => otherLogin(host, machine.url, 'claude'))}>
                   {making.asking ? 'Start over' : row?.claude === undefined ? 'Log in here' : 'Log in here instead'}
                 </Button>
               </LoginLine>
@@ -198,7 +200,7 @@ export function OtherPage({ d, item, onBack }: { d: Devices; item: OtherItem; on
             <Button
               variant="secondary"
               className="text-danger"
-              disabled={busy}
+              disabled={busy || down}
               aria-label={`Remove ${name}`}
               onClick={() =>
                 void (async () => {

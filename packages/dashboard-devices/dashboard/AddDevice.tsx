@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { Monitor, Ticket } from 'lucide-react'
-import { Button, Dialog, List, RadioGroup, Row, buttonVariants, type ModuleMachine } from '@openagt/dashboard/module'
+import { Button, Dialog, List, RadioGroup, Row, buttonVariants, useOpenAgentDown, type ModuleMachine } from '@openagt/dashboard/module'
 import { addDevice, findComputers, readPersonThere, setSwitch, type Answer, type FoundComputer, type Given } from './devices.js'
 import { askLink, installDone } from './servers.js'
 import { CodeCard, Joined, NoCodeYet, PhoneCode, RanOut, Waiting, clock, useCode } from './codes.js'
@@ -131,6 +131,7 @@ function placesOf(d: Devices): Place[] {
 }
 
 function AddPhone({ d, onClose }: { d: Devices; onClose: () => void }) {
+  const down = useOpenAgentDown()
   const { host } = d
   const status = d.door?.ok ? d.door.value : undefined
   const places = placesOf(d)
@@ -215,7 +216,7 @@ function AddPhone({ d, onClose }: { d: Devices; onClose: () => void }) {
             {!status?.on && (
               <Button
                 loading={turning}
-                disabled={!status}
+                disabled={!status || down}
                 onClick={() => {
                   setTurning(true)
                   void setSwitch(host, true).then(async answer => {
@@ -279,6 +280,7 @@ function useFound(d: Devices, looking: boolean): { found: FoundComputer[] | unde
 }
 
 function AddComputer({ d, onClose }: { d: Devices; onClose: () => void }) {
+  const down = useOpenAgentDown()
   const status = d.door?.ok ? d.door.value : undefined
   const [giving, setGiving] = useState(false)
   const [connecting, setConnecting] = useState<FoundComputer | undefined>()
@@ -308,7 +310,7 @@ function AddComputer({ d, onClose }: { d: Devices; onClose: () => void }) {
                 title={computer.name}
                 {...(computer.version !== undefined ? { detail: `OpenAgent ${computer.version}` } : {})}
                 meta={
-                  <Button variant={at === 0 ? 'default' : 'secondary'} aria-label={`Connect ${computer.name}`} onClick={() => setConnecting(computer)}>
+                  <Button variant={at === 0 ? 'default' : 'secondary'} disabled={down} aria-label={`Connect ${computer.name}`} onClick={() => setConnecting(computer)}>
                     Connect
                   </Button>
                 }
@@ -341,6 +343,7 @@ const JOIN_POLL_MS = 3_000
  * server, so runs go both ways in one go.
  */
 export function GiveCode({ d, server, onClose }: { d: Devices; server: ModuleMachine; onClose: () => void }) {
+  const down = useOpenAgentDown()
   const { host } = d
   const [joined, setJoined] = useState<{ name: string; saved: boolean } | undefined>()
   const { code, asking, error, left, expired, again } = useCode(() => codeAt(d, server), true, undefined, joined?.saved === true)
@@ -410,7 +413,7 @@ export function GiveCode({ d, server, onClose }: { d: Devices; server: ModuleMac
             {done ? 'Done' : 'Cancel'}
           </Button>
           {!asking && !done && (expired || error !== undefined || !code) && joined === undefined && (
-            <Button variant="secondary" onClick={() => void again()}>
+            <Button variant="secondary" disabled={down} onClick={() => void again()}>
               New code
             </Button>
           )}

@@ -1,6 +1,6 @@
 import { Fragment, useEffect, useRef, useState, type ComponentType, type FormEvent, type ReactNode, type RefObject } from 'react'
 import { ChevronRight, Circle, CircleArrowUp, CircleCheck, CircleX, Loader2, Pencil } from 'lucide-react'
-import { Badge, Button, Input, RadioGroupOption, Row, Section, cn, formatDateTime, formatRelative } from '@openagt/dashboard/module'
+import { Badge, Button, Input, RadioGroupOption, Row, Section, cn, formatDateTime, formatRelative, useOpenAgentDown } from '@openagt/dashboard/module'
 import type { DeviceRow as Listed } from './devices.js'
 import type { StepState } from './servers.js'
 
@@ -217,6 +217,7 @@ export function useRenaming(): { renaming: boolean; open: () => void; close: () 
 
 /** A name being changed in place: the field, Save and Cancel; a refusal is said below the field. */
 export function RenameForm({ name, rename, onClose }: { name: string; rename: Rename; onClose: () => void }) {
+  const down = useOpenAgentDown()
   const [picked, setPicked] = useState(name)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | undefined>()
@@ -233,7 +234,7 @@ export function RenameForm({ name, rename, onClose }: { name: string; rename: Re
     <div className="space-y-1">
       <form className="flex flex-wrap items-center gap-2" onSubmit={event => void save(event)}>
         <Input name="device-name" autoFocus aria-label="Name" value={picked} maxLength={60} onChange={event => setPicked(event.target.value)} className="h-8 w-56" />
-        <Button type="submit" loading={busy} disabled={!picked.trim()}>
+        <Button type="submit" loading={busy} disabled={!picked.trim() || down}>
           Save
         </Button>
         <Button type="button" variant="ghost" onClick={onClose}>
@@ -275,9 +276,9 @@ export function Head({ icon: Icon, name, badge, facts, rename }: { icon: Compone
 }
 
 /** A press that reads as a link in its sentence: blue, underlined under the pointer, with room around it for a finger. */
-export function LinkPress({ loading = false, onClick, children }: { loading?: boolean; onClick: () => void; children: ReactNode }) {
+export function LinkPress({ loading = false, disabled = false, onClick, children }: { loading?: boolean; disabled?: boolean; onClick: () => void; children: ReactNode }) {
   return (
-    <Button variant="link" loading={loading} onClick={onClick} className="relative h-auto px-0 text-xs font-normal whitespace-normal after:absolute after:inset-x-0 after:-inset-y-1.5 max-md:after:-inset-y-3.5">
+    <Button variant="link" loading={loading} disabled={disabled} onClick={onClick} className="relative h-auto px-0 text-xs font-normal whitespace-normal after:absolute after:inset-x-0 after:-inset-y-1.5 max-md:after:-inset-y-3.5">
       {children}
     </Button>
   )

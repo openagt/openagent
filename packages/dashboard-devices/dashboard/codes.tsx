@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { Check, CircleCheck, Copy, ExternalLink, Loader2, RotateCw } from 'lucide-react'
-import { Button, Dialog, Input, QrCode } from '@openagt/dashboard/module'
+import { Button, Dialog, Input, QrCode, useOpenAgentDown } from '@openagt/dashboard/module'
 import { failed, type Answer, type Given } from './devices.js'
 import { CodeStrip, LinkPress, Problem } from './parts.js'
 
@@ -204,6 +204,7 @@ export function PhoneCode({
   onCode?: (code: Given | undefined) => void
   onClose: () => void
 }) {
+  const down = useOpenAgentDown()
   const [byNumber, setByNumber] = useState(false)
   const [byWifi, setByWifi] = useState(false)
   const { code, asking, error, left, expired, again } = useCode(() => ask(), true, next => (setByNumber(false), setByWifi(false), onCode?.(next)), joined !== undefined)
@@ -265,7 +266,7 @@ export function PhoneCode({
             </Button>
           )}
           {!asking && (joined !== undefined || expired || error !== undefined || !code) && (
-            <Button variant="secondary" onClick={() => void again()}>
+            <Button variant="secondary" disabled={down} onClick={() => void again()}>
               <RotateCw className="size-4" aria-hidden />
               {joined !== undefined ? 'Add another' : 'New code'}
             </Button>
@@ -322,6 +323,7 @@ export function useNaming(persons: Persons) {
 
 /** The first time someone else is let in: the person at the page names themselves, the owner. */
 export function WhoAreYou({ title, naming, onType, onConfirm, onClose }: { title: string; naming: { typed: string; error?: string; busy: boolean }; onType: (typed: string) => void; onConfirm: (owner: string) => void; onClose: () => void }) {
+  const down = useOpenAgentDown()
   const name = nameOf(naming.typed)
   const field = useRef<HTMLInputElement>(null)
   // The field is disabled while the name is read and while it is tried; once either ends, it takes the focus.
@@ -350,7 +352,7 @@ export function WhoAreYou({ title, naming, onType, onConfirm, onClose }: { title
           <Button variant="ghost" type="button" onClick={onClose}>
             Cancel
           </Button>
-          <Button type="submit" loading={naming.busy} disabled={name === undefined}>
+          <Button type="submit" loading={naming.busy} disabled={name === undefined || down}>
             Continue
           </Button>
         </div>
@@ -385,6 +387,7 @@ export function Invite({
   onCode?: (code: Given | undefined) => void
   onClose: () => void
 }) {
+  const down = useOpenAgentDown()
   const title = `Add person to ${label}`
   const [typed, setTyped] = useState('')
   const field = useRef<HTMLInputElement>(null)
@@ -421,7 +424,7 @@ export function Invite({
           <div className="flex gap-2">
             <Input id="invite-name" ref={field} placeholder="Their name" value={typed} onChange={event => setTyped(event.target.value)} className="min-w-0 flex-1" />
             {(person === undefined || name !== person) && (
-              <Button type="submit" disabled={name === undefined || own || asking}>
+              <Button type="submit" disabled={name === undefined || own || asking || down}>
                 Make the code
               </Button>
             )}
@@ -466,7 +469,7 @@ export function Invite({
         )}
         <div className="flex justify-end gap-2">
           {person !== undefined && !asking && (joined !== undefined || expired || error !== undefined) && (
-            <Button variant="secondary" onClick={() => void again(person)}>
+            <Button variant="secondary" disabled={down} onClick={() => void again(person)}>
               <RotateCw className="size-4" aria-hidden />
               New code
             </Button>

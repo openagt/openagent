@@ -1,6 +1,6 @@
 import { useEffect, useState, type FormEvent, type ReactNode } from 'react'
 import { CircleCheck, CircleX, Loader2, PlugZap } from 'lucide-react'
-import { Button, Checkbox, Dialog, Input, RadioGroup, Select, SelectContent, SelectItem, SelectTrigger, SelectValue, cn, usePolled } from '@openagt/dashboard/module'
+import { Button, Checkbox, Dialog, Input, RadioGroup, Select, SelectContent, SelectItem, SelectTrigger, SelectValue, cn, useOpenAgentDown, usePolled } from '@openagt/dashboard/module'
 import type { Answer } from './devices.js'
 import { installDone, installFailed, testConnection, type ServerRow, type Tested } from './servers.js'
 import { CopyButton } from './codes.js'
@@ -28,6 +28,7 @@ const STAGES: readonly { id: Stage; title: string }[] = [
 type Kind = 'vps' | 'home' | 'tailscale'
 
 export function ConnectServer({ d, onClose, onInvite }: { d: Devices; onClose: () => void; /** Invite people to the server just set up: its page, inviting. */ onInvite: (address: string) => void }) {
+  const down = useOpenAgentDown()
   const doors = (d.machines?.machines ?? []).filter(hasDoor)
   const [stage, setStage] = useState<Stage>('where')
   const [kind, setKind] = useState<Kind>('vps')
@@ -100,7 +101,7 @@ export function ConnectServer({ d, onClose, onInvite }: { d: Devices; onClose: (
                 ? 'Your own user on the PC, which becomes root without a password: only to install and to update. What runs there afterwards runs as a user of its own, openagent.'
                 : 'root, or a user that becomes root without a password: only to install and to update. What runs there afterwards runs as a user of its own, openagent.'}
             </p>
-            <Button type="submit" variant="secondary" loading={testing} disabled={!at || !as || knownWords !== undefined}>
+            <Button type="submit" variant="secondary" loading={testing} disabled={!at || !as || knownWords !== undefined || down}>
               <PlugZap className="size-4" aria-hidden />
               Test connection
             </Button>
@@ -145,7 +146,7 @@ export function ConnectServer({ d, onClose, onInvite }: { d: Devices; onClose: (
                 Back
               </Button>
               {/* Not before this computer has said which OpenAgent it runs: that is the one the server gets. */}
-              <Button loading={d.busy} disabled={!d.machines} onClick={() => void install()}>
+              <Button loading={d.busy} disabled={!d.machines || down} onClick={() => void install()}>
                 Install
               </Button>
             </Footer>
@@ -297,6 +298,7 @@ function TestResult({ answer, address, user, home }: { answer: Answer<Tested>; a
 }
 
 function Installing({ d, server, useMine, syncData, onReady, onClose }: { d: Devices; server: ServerRow | undefined; /** The server is to use this computer's logins. */ useMine: boolean; /** And to sync this computer's agent data. */ syncData: boolean; onReady: () => void; onClose: () => void }) {
+  const down = useOpenAgentDown()
   const done = server !== undefined && installDone(server)
   const failed = server !== undefined && installFailed(server)
   const item = d.items.find(candidate => candidate.kind === 'server' && candidate.server.address === server?.address)
@@ -337,12 +339,12 @@ function Installing({ d, server, useMine, syncData, onReady, onClose }: { d: Dev
           Close
         </Button>
         {failed && (
-          <Button disabled={d.busy} onClick={() => void d.install(server.address, server.user)}>
+          <Button disabled={d.busy || down} onClick={() => void d.install(server.address, server.user)}>
             Try again
           </Button>
         )}
         {reason !== undefined && (
-          <Button disabled={d.busy} onClick={() => void d.addToMachines(server)}>
+          <Button disabled={d.busy || down} onClick={() => void d.addToMachines(server)}>
             Try again
           </Button>
         )}

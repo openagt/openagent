@@ -1,5 +1,5 @@
 import { useState, type ClipboardEvent, type FormEvent } from 'react'
-import { Button, Checkbox, Dialog, Input } from '@openagt/dashboard/module'
+import { Button, Checkbox, Dialog, Input, useOpenAgentDown } from '@openagt/dashboard/module'
 import { hasDoor } from './model.js'
 import { Problem } from './parts.js'
 import { sharedReach } from './servers.js'
@@ -48,6 +48,7 @@ export function linkOf(where: string, code: string): string | undefined {
 }
 
 export function JoinDialog({ d, onClose, onJoined }: { d: Devices; onClose: () => void; /** The code was someone else's computer's: its page opens, where their logins are set. */ onJoined?: (machineId: string) => void }) {
+  const down = useOpenAgentDown()
   const { host } = d
   const [where, setWhere] = useState('')
   const [code, setCode] = useState('')
@@ -135,7 +136,7 @@ export function JoinDialog({ d, onClose, onJoined }: { d: Devices; onClose: () =
             {error?.startsWith('Joined.') ? 'Done' : 'Cancel'}
           </Button>
           {!error?.startsWith('Joined.') && (
-            <Button type="submit" loading={joining} disabled={link === undefined}>
+            <Button type="submit" loading={joining} disabled={link === undefined || down}>
               Join
             </Button>
           )}

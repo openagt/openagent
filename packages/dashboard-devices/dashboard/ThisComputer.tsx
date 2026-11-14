@@ -1,6 +1,6 @@
 import { useState, type ReactNode } from 'react'
 import { Laptop, Pencil } from 'lucide-react'
-import { Button, Section, SettingsRow, Switch, buttonVariants } from '@openagt/dashboard/module'
+import { Button, Section, SettingsRow, Switch, buttonVariants, useOpenAgentDown } from '@openagt/dashboard/module'
 import { setSwitch, setTailscale } from './devices.js'
 import { reach, sharedReach } from './servers.js'
 import { hasDoor, hasServer } from './model.js'
@@ -31,6 +31,7 @@ interface Line {
 }
 
 export function ThisComputer({ d, start }: { d: Devices; /** The start page: nothing reaches this computer yet, and the card says so alone. */ start: boolean }) {
+  const down = useOpenAgentDown()
   const { host, door } = d
   const status = door?.ok ? door.value : undefined
   const [confirming, setConfirming] = useState(false)
@@ -140,7 +141,7 @@ export function ThisComputer({ d, start }: { d: Devices; /** The start page: not
                     : 'Your own phones and computers on Tailscale, from anywhere, with a lock. Tailscale must run on this computer.'
                 }
               >
-                <Switch aria-label="On your Tailscale network" checked={status?.tailscale !== undefined} disabled={busy || !status} onCheckedChange={onTailscale} />
+                <Switch aria-label="On your Tailscale network" checked={status?.tailscale !== undefined} disabled={busy || !status || down} onCheckedChange={onTailscale} />
               </Way>
             )}
             {where === undefined && status?.tailscale !== undefined && !status.listening && status.problem !== undefined && !busy && (
@@ -159,7 +160,7 @@ export function ThisComputer({ d, start }: { d: Devices; /** The start page: not
                 <Switch
                   aria-label="On this Wi-Fi"
                   checked={status?.on ?? false}
-                  disabled={busy || !status}
+                  disabled={busy || !status || down}
                   onCheckedChange={on => {
                     if (on) setConfirming(true)
                     else wifi(false)
@@ -174,7 +175,9 @@ export function ThisComputer({ d, start }: { d: Devices; /** The start page: not
                   <Button variant="ghost" onClick={() => setConfirming(false)}>
                     Cancel
                   </Button>
-                  <Button onClick={() => wifi(true)}>Turn on</Button>
+                  <Button disabled={down} onClick={() => wifi(true)}>
+                    Turn on
+                  </Button>
                 </div>
               </div>
             )}
@@ -190,7 +193,7 @@ export function ThisComputer({ d, start }: { d: Devices; /** The start page: not
                     : 'Your phone and your other computers start runs here from any internet. This computer must be on.'
                 }
               >
-                <Switch aria-label={`From anywhere, through ${line.label}`} checked={line.on} disabled={busy} onCheckedChange={on => void line.turn(on)} />
+                <Switch aria-label={`From anywhere, through ${line.label}`} checked={line.on} disabled={busy || down} onCheckedChange={on => void line.turn(on)} />
               </Way>
             ))}
             {server && !d.isServer && <p className="text-xs text-muted-foreground">{`Only you can use this computer. To share a computer with people${firstServer !== undefined ? ` on ${firstServer}` : ''}, set it up as a server: Linux for now.`}</p>}
