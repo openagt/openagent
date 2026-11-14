@@ -107,7 +107,7 @@ function FromLine() {
   const from = useAgentAccounts('claude').view?.from
   if (from === undefined) return null
   return (
-    <div className="rounded-lg bg-muted px-3 py-2.5">
+    <div className="rounded-lg bg-muted px-3 py-3">
       <p className="text-sm font-medium">{`Your logins and settings from ${from}`}</p>
       <p className="text-xs text-muted-foreground">Log in or out there, or change a setting, and this server follows.</p>
     </div>

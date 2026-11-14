@@ -189,7 +189,7 @@ export function OnboardingChecklist({
             label: 'Populate the tickets',
             description: (
               <p className="text-xs text-muted-foreground">
-                <code className="rounded bg-muted px-1">tickets/</code> holds the bigger things to work on, in the repo. The agent researches and plans them, and they are the input the queue is filled from.
+                <code className="rounded-sm bg-muted px-1">tickets/</code> holds the bigger things to work on, in the repo. The agent researches and plans them, and they are the input the queue is filled from.
               </p>
             ),
             done: hasTickets,

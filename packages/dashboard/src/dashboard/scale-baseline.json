@@ -46,9 +46,6 @@
   "dashboard-files/dashboard/FilesPane.tsx": {
     "text-[13px]": 2
   },
-  "dashboard/dashboard/components/Accounts.tsx": {
-    "py-2.5": 1
-  },
   "dashboard/dashboard/components/AddProjectEffects.tsx": {
     "rounded": 1
   },
@@ -95,9 +92,6 @@
     "text-[0.9em]": 2,
     "text-[15px]": 1
   },
-  "dashboard/dashboard/components/OnboardingChecklist.tsx": {
-    "rounded": 1
-  },
   "dashboard/dashboard/components/ProjectSkills.tsx": {
     "gap-2.5": 1,
     "rounded": 4
@@ -123,9 +117,6 @@
   },
   "dashboard/dashboard/components/ui/resizable.tsx": {
     "group-aria-[orientation=horizontal]/handle:h-[3px]": 1
-  },
-  "skill-account-rotation/dashboard/AccountsCard.tsx": {
-    "rounded": 1
   },
   "skill-browser/dashboard/BrowserPanel.tsx": {
     "text-[10px]": 1,
