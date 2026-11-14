@@ -262,13 +262,9 @@ function EntryRow({ project, placed, agent, names, starts, reload }: { project: 
     <Row
       stackOnPhone
       leading={<span className="w-5 text-right text-xs tabular-nums">{place}.</span>}
-      title={
-        <>
-          <EntryTitle view={view} entry={entry} className={cn('block max-w-full truncate text-left max-md:line-clamp-2 max-md:whitespace-normal', (view.open ?? view.url) !== undefined && 'hover:underline')} />
-          {/* The line as written, under a name that stands in for it: it is what an agent is handed. */}
-          {view.renamed && <span className="block truncate font-mono text-xs font-normal text-muted-foreground">{entry}</span>}
-        </>
-      }
+      title={<EntryTitle view={view} entry={entry} className={cn('block max-w-full truncate text-left max-md:line-clamp-2 max-md:whitespace-normal', (view.open ?? view.url) !== undefined && 'hover:underline')} />}
+      // The line as written, under a name that stands in for it: it is what an agent is handed.
+      detail={view.renamed ? <span className="font-mono">{entry}</span> : undefined}
       meta={agent && <AgentOnEntry projectId={project.id} agent={agent} />}
       actions={
         <>

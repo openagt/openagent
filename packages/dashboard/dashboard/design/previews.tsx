@@ -538,6 +538,7 @@ function Lists() {
           <Row leading={<Folder className="size-4" aria-hidden />} title="A link: the whole row opens it, Ctrl+click in a new tab" meta="4h ago" href="#row" onClick={() => {}} actions={remove} />
           <Row leading={<Folder className="size-4" aria-hidden />} title="A press: the whole row does it" meta={<ChevronRight className="size-4" aria-hidden />} onClick={() => {}} />
           <Row title="Neither: only its own action, shown under the pointer" meta="12 files" actions={remove} />
+          <Row leading={<Folder className="size-4" aria-hidden />} title="Two lines: its name" detail="and, under it, what it was asked: the row is 48 high" meta="2d ago" href="#two" onClick={() => {}} actions={remove} />
           <Row leading={<Folder className="size-4" aria-hidden />} title={LONG_TITLE} meta="$0.15 · 2d ago" href="#long" actions={remove} />
         </List>
       </Section>

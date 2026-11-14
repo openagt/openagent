@@ -67,7 +67,7 @@ describe('the Agents page', () => {
   test('one row per agent, the default first and marked; each with its skills and the accounts it works as, the computer’s where it names none', async () => {
     render(<AgentsPage />)
     const rows = await agentRows()
-    expect(rows.map(row => row.querySelector('span.block')?.textContent)).toEqual(['Default', 'Reviewer'])
+    expect(rows.map(row => row.querySelector('.flex-col')?.firstChild?.textContent)).toEqual(['Default', 'Reviewer'])
     expect(within(rows[0]!).getByText(/The agent a session is on unless you pick another/)).toBeTruthy()
     expect(within(rows[0]!).getByText('ask, github · GitHub: whatever the computer uses')).toBeTruthy()
     // An agent set to never pick up the project's own skills says so after its list; the default does not.

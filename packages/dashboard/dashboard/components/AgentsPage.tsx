@@ -136,14 +136,8 @@ function AgentRow({ agent, view, devices, onChanged, onRemoved }: { agent: Agent
       <Row
         stackOnPhone
         leading={<Bot className="size-4" aria-hidden />}
-        title={
-          <>
-            <span className="block truncate">{agent.name}</span>
-            <span className="block truncate text-xs font-normal text-muted-foreground" title={said}>
-              {said}
-            </span>
-          </>
-        }
+        title={agent.name}
+        detail={<span title={said}>{said}</span>}
         {...(isDefault ? { meta: 'The agent a session is on unless you pick another.' } : {})}
         actions={
           <>

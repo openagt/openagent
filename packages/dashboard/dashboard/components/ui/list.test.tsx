@@ -42,6 +42,20 @@ describe('Row', () => {
     expect(screen.queryByRole('link')).toBeNull()
   })
 
+  test('a second line under the title is the row\'s own: the link is named by the title alone, and the row is one height, 48', () => {
+    render(
+      <List>
+        <Row title="Fix the login" detail="make the login page remember the email" href="/shop/agents/a1" />
+        <Row title="Write the notes" href="/shop/agents/a2" />
+      </List>,
+    )
+    const [two, one] = screen.getAllByRole('listitem')
+    expect(screen.getByRole('link', { name: 'Fix the login' }).closest('li')).toBe(two)
+    expect(two!.textContent).toBe('Fix the loginmake the login page remember the email')
+    expect(two!.className.split(' ')).toEqual(expect.arrayContaining(['md:h-12', 'max-md:h-12']))
+    expect(one!.className.split(' ')).toEqual(expect.arrayContaining(['md:h-10', 'max-md:h-11']))
+  })
+
   test('a row with presses, link or not, is filled under the pointer, the keyboard and an open menu of its own, and its presses stay shown while that menu is open', () => {
     render(
       <List>

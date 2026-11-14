@@ -213,12 +213,8 @@ export function LogsPage({ projects, path }: ModulePageProps) {
                   stackOnPhone
                   leading={<StatusDot status={card.status} />}
                   // As every list names a run, over what it was asked; a run with none of those goes by its id.
-                  title={
-                    <>
-                      <span className="block truncate">{runName(card) ?? card.id}</span>
-                      {card.title?.trim() && card.intent?.trim() && <span className="block truncate text-xs font-normal text-muted-foreground">{card.intent}</span>}
-                    </>
-                  }
+                  title={runName(card) ?? card.id}
+                  detail={card.title?.trim() && card.intent?.trim() ? card.intent : undefined}
                   href={host.agentHref(project.id, card.id)}
                   onClick={() => host.openAgent(project.id, card.id)}
                   meta={
