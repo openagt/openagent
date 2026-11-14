@@ -1,6 +1,7 @@
 import { afterEach, expect, test } from 'vitest'
 import { cleanup, render, screen } from '@testing-library/react'
 import { Page } from './Page.js'
+import { PhoneBarCount } from './PhoneBar.js'
 
 // A page that is no chat: its header (name, count, line, buttons, a bar of its own) over what it
 // shows, in the one column every such page has. On a wide screen the name shows; on a phone the
@@ -76,4 +77,21 @@ test('on a phone, a page with no count and no buttons draws no empty row under t
     </Page>,
   )
   expect(screen.getByRole('heading', { level: 1 }).closest('header')!.firstElementChild!.className).toContain('max-md:sr-only')
+})
+
+test("on a phone the count stands beside the name in the phone's bar, and a page with no buttons then draws no row under the bar", () => {
+  const slot = document.createElement('span')
+  document.body.append(slot)
+  render(
+    <PhoneBarCount.Provider value={slot}>
+      <Page title="Tickets" count="2/40" description="Every project's backlog">
+        <p>the list</p>
+      </Page>
+    </PhoneBarCount.Provider>,
+  )
+  expect(slot.textContent).toBe('2/40')
+  const heading = screen.getByRole('heading', { level: 1 })
+  expect(heading.textContent).toBe('Tickets')
+  expect(heading.closest('header')!.firstElementChild!.className).toContain('max-md:sr-only')
+  slot.remove()
 })

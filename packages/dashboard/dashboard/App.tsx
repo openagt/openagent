@@ -17,7 +17,7 @@ import { agentLabel, awaitingName } from './lib/agent-label.js'
 import { subagentsOf, taskLabel } from './lib/subagents.js'
 import { PaneLayout, PanesProvider } from './components/Panes.js'
 import { SubagentPanel } from './components/SubagentPanel.js'
-import { MenuButton, PhoneBar } from './components/PhoneBar.js'
+import { MenuButton, PhoneBar, PhoneBarCount } from './components/PhoneBar.js'
 import { cn } from './lib/utils.js'
 import { onSkillsSaved } from './lib/skills-saved.js'
 import { usePolled } from './lib/use-async.js'
@@ -622,6 +622,8 @@ export function App() {
   // stays at the top; on a wider screen the sidebar stays beside it. A chat keeps its box at the
   // bottom, and only its own columns scroll.
   const pageScrolls = phoneTitle !== null
+  // The phone bar's place for the page's count, once the bar is drawn.
+  const [phoneCount, setPhoneCount] = useState<HTMLElement | null>(null)
   // Every other page is pinned: only its own columns scroll.
   usePinnedPage(!pageScrolls)
 
@@ -720,8 +722,8 @@ export function App() {
         >
           <PaneLayout>
             <FocusHome as="main" className="flex min-h-0 min-w-0 flex-1 flex-col">
-              {isMobile && phoneTitle !== null && <PhoneBar title={phoneTitle} />}
-              {renderMain()}
+              {isMobile && phoneTitle !== null && <PhoneBar title={phoneTitle} countSlot={setPhoneCount} />}
+              <PhoneBarCount.Provider value={phoneCount}>{renderMain()}</PhoneBarCount.Provider>
             </FocusHome>
           </PaneLayout>
         </PanesProvider>

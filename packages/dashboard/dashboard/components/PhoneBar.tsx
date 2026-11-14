@@ -1,3 +1,4 @@
+import { createContext } from 'react'
 import { Menu } from 'lucide-react'
 import { cn } from '../lib/utils.js'
 import { Button } from './ui/button.js'
@@ -22,12 +23,19 @@ export function MenuButton({ inBar = false }: { inBar?: boolean }) {
   )
 }
 
-/** The top row of a page that has none of its own: the {@link MenuButton} and the page's name. It stays at the top as the page scrolls. */
-export function PhoneBar({ title }: { title: string }) {
+/** Where a page's count is drawn while a {@link PhoneBar} names the page: beside that name. None where no bar is drawn. */
+export const PhoneBarCount = createContext<HTMLElement | null>(null)
+
+/**
+ * The top row of a page that has none of its own: the {@link MenuButton}, the page's name and the
+ * page's count, which the page draws into `countSlot`. It stays at the top as the page scrolls.
+ */
+export function PhoneBar({ title, countSlot }: { title: string; countSlot: (slot: HTMLElement | null) => void }) {
   return (
     <div className="sticky top-0 z-20 flex h-12 shrink-0 items-center gap-2 border-b border-border bg-background pr-4 pl-2 text-sm font-medium">
       <MenuButton inBar />
       <span className="truncate">{title}</span>
+      <span ref={countSlot} className="shrink-0 font-normal tabular-nums text-muted-foreground empty:hidden" />
     </div>
   )
 }

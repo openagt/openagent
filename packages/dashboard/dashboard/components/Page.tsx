@@ -1,4 +1,6 @@
-import type { ReactNode } from 'react'
+import { useContext, type ReactNode } from 'react'
+import { createPortal } from 'react-dom'
+import { PhoneBarCount } from './PhoneBar.js'
 import { ShowSidebarButton } from './SidebarToggle.js'
 import { cn } from '../lib/utils.js'
 
@@ -6,7 +8,7 @@ import { cn } from '../lib/utils.js'
 // Automations): its name, a line saying what it shows, and the page's own buttons at the end of
 // that row; under them, what the page shows. The page scrolls as a page (App), its header going up
 // with the rest. A phone's bar names the page already (PhoneBar): there the name is said to a
-// screen reader only.
+// screen reader only, and the count stands beside the name in the bar.
 
 /**
  * The one column every page that is no chat stands in, 960 at most, centred in what the sidebar
@@ -39,11 +41,13 @@ export function Page({
   bar?: ReactNode
   children: ReactNode
 }) {
+  const phoneCount = useContext(PhoneBarCount)
   return (
     <PageColumn>
+      {count !== undefined && phoneCount !== null && createPortal(count, phoneCount)}
       <header className="mb-6 max-md:mb-4">
-        {/* A phone's bar names the page: there this block shows only the count and the buttons, and is said alone when it has neither, taking no room. */}
-        <div className={cn(bar !== undefined && 'mb-3', count === undefined && actions === undefined && line === undefined && 'max-md:sr-only max-md:mb-0')}>
+        {/* A phone's bar names the page and says its count: there this block shows only the buttons and the line, and is said alone when it has neither, taking no room. */}
+        <div className={cn(bar !== undefined && 'mb-3', actions === undefined && line === undefined && 'max-md:sr-only max-md:mb-0')}>
           {/* One row at every width: the name with its count, then the page's buttons at its right. */}
           <div className={cn('flex items-center justify-between gap-4 md:min-h-8', line !== undefined && 'md:flex-wrap md:gap-y-1')}>
             {/* A page's name and its count never give up width: the buttons do. */}
@@ -53,7 +57,7 @@ export function Page({
               <h1 className="text-xl font-semibold">
                 <span className="max-md:sr-only">{title}</span>
                 {/* A space, not only a margin, so a screen reader says the name and the count apart. */}
-                {count !== undefined && (
+                {count !== undefined && phoneCount === null && (
                   <>
                     {' '}
                     {/* A margin from md up only: a module page's stylesheet, loaded after the dashboard's, redefines a plain ml-1 over a max-md:ml-0. */}
