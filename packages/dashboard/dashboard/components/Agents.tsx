@@ -2,7 +2,8 @@ import { useContext } from 'react'
 import type { ActiveAgent } from '../../src/index.js'
 import { Section } from './ui/section.js'
 import { List, Row } from './ui/list.js'
-import { Skeleton } from './ui/skeleton.js'
+import { Skeleton, useSkeleton } from './ui/skeleton.js'
+import { RowsLoading } from './ui/card.js'
 import { Tooltip, TooltipTrigger, TooltipContent } from './ui/tooltip.js'
 import { formatAge, formatDateTime } from '../lib/format-date.js'
 import { OnComputer } from './MachineMark.js'
@@ -37,11 +38,12 @@ export function Agents({
   onSelectAgent: (projectId: string, agentId: string) => void
 }) {
   const services = useContext(HostServicesContext) ?? INERT_HOST_SERVICES
+  const reading = useSkeleton(!loaded)
   return (
     <Section title="Agents at work" count={loaded && working.length > 0 ? working.length : undefined}>
       <p className="-mt-1 mb-3 text-xs text-muted-foreground">Agents currently working</p>
-      {!loaded ? (
-        <p className="text-sm text-muted-foreground">Loading…</p>
+      {reading ? (
+        <RowsLoading rows={1} />
       ) : working.length === 0 ? (
         <p className="text-sm text-muted-foreground">No agent is at work.</p>
       ) : (

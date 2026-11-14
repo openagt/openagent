@@ -3,6 +3,8 @@ import { useState } from 'react'
 import { SlidersHorizontal } from 'lucide-react'
 import { Quota } from './Quota.js'
 import { Section } from './ui/section.js'
+import { RowsLoading } from './ui/card.js'
+import { useSkeleton } from './ui/skeleton.js'
 import { Button } from './ui/button.js'
 import { HumanQueueList } from './HumanQueueList.js'
 import { updatePreferences, usePreferences, usePreferencesLoaded } from '../lib/preferences.js'
@@ -237,11 +239,12 @@ function HumanQueue({
   onSelectAgent: (projectId: string, agentId: string) => void
 }) {
   const groups = KINDS.map(kind => ({ ...kind, items: items.filter(item => item.kind === kind.value) })).filter(group => group.items.length > 0)
+  const reading = useSkeleton(!loaded)
   return (
     <Section title="Human Queue" count={items.length > 0 ? items.length : undefined}>
       <p className="-mt-1 mb-3 text-xs text-muted-foreground">Agents awaiting your approval, review, or input</p>
-      {!loaded ? (
-        <p className="text-sm text-muted-foreground">Loading…</p>
+      {reading ? (
+        <RowsLoading />
       ) : items.length === 0 ? (
         <p className="text-sm text-muted-foreground">AI doesn&apos;t need you.</p>
       ) : (

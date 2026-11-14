@@ -1,4 +1,4 @@
-import { GaugeFace, PageLink, Section, MachineMark, Tooltip, TooltipContent, TooltipTrigger, formatAge, machineKind, machineName, usePolled, useModuleHost, type Health, type MachineKind, type ModuleCardProps, type ModuleMachines } from '@openagt/dashboard/module'
+import { GaugeFace, PageLink, RowsLoading, Section, useSkeleton, MachineMark, Tooltip, TooltipContent, TooltipTrigger, formatAge, machineKind, machineName, usePolled, useModuleHost, type Health, type MachineKind, type ModuleCardProps, type ModuleMachines } from '@openagt/dashboard/module'
 import { loadStatus, type Answer, type DoorStatus } from './devices.js'
 import { isComputer } from './model.js'
 import { olderThan } from './parts.js'
@@ -21,6 +21,7 @@ export function DevicesCard(_props: ModuleCardProps) {
   const { value: door } = usePolled<Answer<DoorStatus> | undefined>(() => loadStatus(host), undefined, EVERY_MS, [], { remember: 'devices:door', stored: true })
   const phones = door?.ok ? door.value.devices.filter(device => !isComputer(device)) : []
   const lastSeen = phones.map(phone => phone.seen ?? '').sort().at(-1)
+  const reading = useSkeleton(!loaded || !machines)
   return (
     <Section
       title="Devices"
@@ -28,8 +29,8 @@ export function DevicesCard(_props: ModuleCardProps) {
       action={<PageLink href="?settings=devices" onOpen={() => host.openSettings('devices')}>Settings</PageLink>}
       className="space-y-2"
   >
-      {!loaded || !machines ? (
-        <p className="text-sm text-muted-foreground">Loading…</p>
+      {reading || !machines ? (
+        <RowsLoading rows={1} />
       ) : (
         <ul className="space-y-1">
           <Row kind="computer" name={machines.name ?? 'This computer'} note="this computer" online health={machines.health} />

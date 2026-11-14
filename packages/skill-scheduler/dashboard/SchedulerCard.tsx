@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Button, PageLink, Section, Tooltip, TooltipContent, TooltipTrigger, cn, formatAge, inPlace, formatDateTime, useModuleHost, useOpenAgentDown, usePolled, type ModuleCardProps, type ModuleProject } from '@openagt/dashboard/module'
+import { Button, PageLink, RowsLoading, Section, Tooltip, useSkeleton, TooltipContent, TooltipTrigger, cn, formatAge, inPlace, formatDateTime, useModuleHost, useOpenAgentDown, usePolled, type ModuleCardProps, type ModuleProject } from '@openagt/dashboard/module'
 import { CodeWords } from './CodeWords.js'
 import { cannotRun, notAsked, readSchedulers, schedulersKey, rowTitle, schedulerStatus, schedulerStopped, startedNow, startsNext, unlistedWords, type Answered, type SchedulerCommand, type SchedulerRow } from './schedulers.js'
 
@@ -31,6 +31,7 @@ export function SchedulerCard({ projects }: ModuleCardProps) {
   // One read with the Automations page and Settings under the same key, kept for the next visit.
   const { value: rows, loaded, reload } = usePolled(() => readSchedulers(host, projects), EMPTY, 10_000, [key], { remember: schedulersKey(key), stored: true })
   const open = (): void => host.openPage('automations')
+  const reading = useSkeleton(!loaded)
   /** A link to the Automations page, which also opens in a new tab. */
   const toPage = (words: string) => (
     <a
@@ -44,8 +45,8 @@ export function SchedulerCard({ projects }: ModuleCardProps) {
   return (
     <Section title="Automations" action={<PageLink href={host.pageHref('automations')} onOpen={open}>Automations</PageLink>}>
       <p className="-mt-1 mb-3 text-xs text-muted-foreground">What starts by itself while nobody is at the keyboard</p>
-      {!loaded ? (
-        <p className="text-sm text-muted-foreground">Loading…</p>
+      {reading ? (
+        <RowsLoading />
       ) : (
         <ul className="space-y-4">
           {rows.map(row => {

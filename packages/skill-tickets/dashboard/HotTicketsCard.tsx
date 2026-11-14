@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { ArrowUp, Bot, CirclePause, Clock, WifiOff, type LucideIcon } from 'lucide-react'
-import { Button, LinkActions, PageLink, Section, cn, formatDateTime, inPlace, usePolled, useModuleHost, useOpenAgentDown, type ModuleCardProps, type ModuleProject } from '@openagt/dashboard/module'
+import { Button, LinkActions, PageLink, RowsLoading, Section, useSkeleton, cn, formatDateTime, inPlace, usePolled, useModuleHost, useOpenAgentDown, type ModuleCardProps, type ModuleProject } from '@openagt/dashboard/module'
 import { claimState, heldBack, holderAgent, hotLane, ticketLink, withHolder, type ClaimState, type HotLane } from '../src/module.js'
 import { holdingRun } from './lib/holding-run.js'
 import { listTickets } from './lib/list.js'
@@ -108,15 +108,22 @@ export function HotTicketsCard({ projects }: ModuleCardProps) {
  */
 function HotList({ hot, errors, loaded, showProject, reload }: { hot: HotTicket[]; errors: Read['errors']; loaded: boolean; showProject: boolean; reload: () => Promise<void> }) {
   const groups = LANES.map(lane => ({ lane, tickets: hot.filter(t => t.lane === lane.key) })).filter(group => group.tickets.length > 0)
+  const reading = useSkeleton(!loaded)
   return (
     <>
+      {/* Under the heading, with the way out: the read again, at once rather than at the next poll. */}
       {errors.map(({ project, error }) => (
-        <p key={project.id} role="alert" className="mb-2 text-xs text-danger">
-          Could not read the tickets of {project.name}: {error}
-        </p>
+        <div key={project.id} className="mb-2 flex flex-wrap items-center gap-x-2">
+          <p role="alert" className="min-w-0 text-sm text-danger">
+            Could not read the tickets of {project.name}: {error}
+          </p>
+          <Button variant="ghost" size="sm" onClick={() => void reload()}>
+            Try again
+          </Button>
+        </div>
       ))}
-      {!loaded ? (
-        <p className="text-sm text-muted-foreground">Loading…</p>
+      {reading ? (
+        <RowsLoading />
       ) : (
         // Every ticket, never a "+N more": the list is the shortlist. Pulled out by the rows' own
         // inset, so their text starts where the heading does.

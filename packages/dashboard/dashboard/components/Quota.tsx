@@ -7,6 +7,8 @@ import { useModuleHost, type ModuleProject, type UsageLimitSaved } from '../modu
 import { useMountedModules, type MountedUsageLimit } from '../lib/use-modules.js'
 import { usePolled } from '../lib/use-async.js'
 import { Section } from './ui/section.js'
+import { RowsLoading } from './ui/card.js'
+import { useSkeleton } from './ui/skeleton.js'
 import { cn } from '../lib/utils.js'
 import { ModuleSlot, projectsHaving } from './ModulePageView.js'
 import { formatRelative, formatResetDay, formatResetTooltip, formatDuration, formatDurationLong } from '../lib/format-date.js'
@@ -496,11 +498,12 @@ export function Quota({ projects }: { projects: ProjectSummary[] }) {
   // Every window, in the order Claude Code reports them — the session, the account's own week
   // (also drawn as the bar above, but worth its own line here too), and a model's own week.
   const windows = view?.windows ?? []
+  const reading = useSkeleton(!view)
 
   return (
     <Section title="Usage">
       <div className="space-y-4">
-        {!view && <p className="text-sm text-muted-foreground">Reading your usage…</p>}
+        {reading && <RowsLoading rows={1} label="Reading your usage…" />}
 
         {/* Without a placeable week there is no axis to draw. Say so, loudly — no fallback (Rom):
             this used to degrade to the week as a plain figure, which hid a real defect for weeks —
