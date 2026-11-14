@@ -6,7 +6,7 @@ import { Button } from './ui/button.js'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from './ui/dropdown-menu.js'
 import { ClaudeLogo, CodexLogo } from './driver-logos.js'
 import { cn } from '../lib/utils.js'
-import { usePolled } from '../lib/use-async.js'
+import { useAskOn, usePolled } from '../lib/use-async.js'
 import { CopyButton } from './ui/copy-button.js'
 
 // The servers of the person's that use this computer's logins, on the Permissions page: under each
@@ -34,8 +34,8 @@ export function useServers(): Servers {
 /** The servers as read for the page, asked often while a press is under way. */
 export function ServersProvider({ children }: { children: ReactNode }) {
   const [often, setOften] = useState(false)
-  // The pace changes, the servers do not: what was read stays on the page until the next read.
-  const { value, reload } = usePolled<ServerLoginsView | undefined>(onServerLogins, undefined, often ? OFTEN_MS : SELDOM_MS, [often], 'previous')
+  const { value, reload, refresh } = usePolled<ServerLoginsView | undefined>(onServerLogins, undefined, often ? OFTEN_MS : SELDOM_MS, [])
+  useAskOn(often, refresh)
   const busy = value?.servers.some(server => server.allowing) ?? false
   useEffect(() => {
     if (busy !== often) setOften(busy)

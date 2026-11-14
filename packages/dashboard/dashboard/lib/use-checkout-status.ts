@@ -1,8 +1,8 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useState } from 'react'
 import type { AgentWorktree } from '../../src/index.js'
 import { onAgentWorktree } from '../rpc/reads.js'
-import { PR_PENDING_MS, SETTLING_EVERY_MS, SETTLING_MS } from './use-agent-handoff.js'
-import { usePolled } from './use-async.js'
+import { PR_PENDING_MS, SETTLING_EVERY_MS, useSettling } from './use-agent-handoff.js'
+import { useAskOn, usePolled } from './use-async.js'
 
 /**
  * An agent's checkout, polled: its branch, its pull request, and its checkout while it has one.
@@ -17,35 +17,20 @@ export function useCheckoutStatus(projectId: string, agentId: string, turn?: boo
   // clean-up pushes, opens its pull request and removes its checkout then, and the answer in the
   // middle of that was the bar's for ten seconds.
   const [everyMs, setEveryMs] = useState(10_000)
-  const [settling, setSettling] = useState(false)
-  const { value: status, reload } = usePolled<AgentWorktree | null>(
+  const { value: status, refresh } = usePolled<AgentWorktree | null>(
     () => onAgentWorktree(projectId, agentId),
     null,
     everyMs,
-    [projectId, agentId, everyMs],
+    [projectId, agentId],
     // An agent seen before, by this load or an earlier one, shows what was read last time at once,
     // while it is read again. One never seen shows no facts until its own answer: never the
     // previous agent's, which read as this one's for the beat the read took.
     { remember: `worktree:${projectId}:${agentId}`, stored: true },
   )
+  const settling = useSettling(turn === true)
   useEffect(() => setEveryMs(status?.prPending ? PR_PENDING_MS : settling ? SETTLING_EVERY_MS : 10_000), [status?.prPending, settling])
-  useEffect(() => {
-    if (!settling) return
-    const timer = setTimeout(() => setSettling(false), SETTLING_MS)
-    return () => clearTimeout(timer)
-  }, [settling])
-  // Not on the first render, nor when the agent changes: the poll reads then already.
-  const seen = useRef<{ key: string; turn: boolean | undefined }>({ key: '', turn })
-  useEffect(() => {
-    const key = `${projectId}\0${agentId}`
-    const changed = seen.current.key === key && seen.current.turn !== turn
-    const ended = changed && seen.current.turn === true && !turn
-    seen.current = { key, turn }
-    if (!changed) return
-    // A turn that ends starts the reads every second, and that change of pace reads at once; where
-    // the pace stays as it was (already every second, or a request's lookup out), it is read here.
-    if (ended) setSettling(true)
-    if (!ended || settling || status?.prPending) void reload()
-  }, [projectId, agentId, turn, reload, settling, status?.prPending])
+  // A turn that starts or ends is read at once, and the quicker pace after an end waits for that read.
+  useAskOn(turn, refresh)
+  useAskOn(everyMs, refresh)
   return status
 }

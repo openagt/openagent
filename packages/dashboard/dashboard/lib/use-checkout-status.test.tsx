@@ -48,6 +48,26 @@ describe('useCheckoutStatus', () => {
     await waitFor(() => expect(onAgentWorktree).toHaveBeenCalledTimes(2))
   })
 
+  test('a turn that ends is asked about once, however its pace changes with it, and its answer stays shown', async () => {
+    onAgentWorktree.mockResolvedValue({ branch: 'agent-run-o' })
+    const { rerender } = render(<Probe agentId="run-o" turn />)
+    await waitFor(() => expect(branch()).toBe('agent-run-o'))
+    vi.useFakeTimers()
+    try {
+      let answer!: (value: unknown) => void
+      onAgentWorktree.mockImplementation(() => new Promise(resolve => (answer = resolve)))
+      rerender(<Probe agentId="run-o" turn={false} />)
+      await vi.advanceTimersByTimeAsync(500)
+      expect(onAgentWorktree).toHaveBeenCalledTimes(2)
+      expect(branch()).toBe('agent-run-o')
+      answer({ branch: 'agent-run-o2' })
+      await vi.advanceTimersByTimeAsync(0)
+      expect(branch()).toBe('agent-run-o2')
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
   test('after a turn ends it is read every second for a while, then at rest again', async () => {
     onAgentWorktree.mockResolvedValue({ branch: 'agent-run-s' })
     const { rerender } = render(<Probe agentId="run-s" turn />)

@@ -1,7 +1,7 @@
 import { useEffect, useState, type ReactNode } from 'react'
 import { DRIVER_LABELS, type DriverName } from '../../src/client.js'
 import { onAgentState, onGitHosts, sendAgentFix, type AgentState, type GitHostRow, type GitHostsView } from '../rpc/logins.js'
-import { usePolled } from '../lib/use-async.js'
+import { useAskOn, usePolled } from '../lib/use-async.js'
 import { cn } from '../lib/utils.js'
 import { Button } from './ui/button.js'
 import { CopyButton } from './ui/copy-button.js'
@@ -26,7 +26,8 @@ const SELDOM_MS = 30_000
  */
 function usePaced<T>(key: string, load: (() => Promise<T>) | null, pace: (value: T | undefined) => number, deps: unknown[]): { value: T | undefined; reload: () => Promise<void> } {
   const [every, setEvery] = useState(SELDOM_MS)
-  const { value, reload } = usePolled<T | undefined>(load, undefined, every, [...deps, every], { remember: key, stored: true })
+  const { value, reload, refresh } = usePolled<T | undefined>(load, undefined, every, deps, { remember: key, stored: true })
+  useAskOn(every, refresh)
   const next = pace(value)
   useEffect(() => {
     if (next !== every) setEvery(next)

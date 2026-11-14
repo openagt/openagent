@@ -1,4 +1,4 @@
-import { useEffect } from 'react'
+import { useEffect, useState } from 'react'
 import type { AgentMeta, RecentAgent } from '../../src/index.js'
 import { STARTING_AT_MOST_MS } from '../../src/client.js'
 import { onAgents, onRecentAgents } from '../rpc/reads.js'
@@ -20,19 +20,20 @@ import { awaitingName } from './agent-label.js'
 const STARTING_EVERY_MS = 400
 
 /**
- * Read again every `everyMs` while a run just started is waited for (`waited` is set), for at most
- * {@link STARTING_AT_MOST_MS}. A new value of `waited` starts the wait over.
+ * The pace of a list read while a run just started is waited for: `everyMs` from when the run (or
+ * its start) is given to the setter, for at most {@link STARTING_AT_MOST_MS}, else `pace`. Another
+ * run starts the wait over, and `false` ends it.
  */
-function useStartWait(waited: string | boolean | null, read: () => unknown, everyMs: number): void {
+function useStartPace(everyMs: number, pace: number): [number, (waited: string | number | false) => void] {
+  const [wait, setWait] = useState<string | number | false>(false)
+  const [over, setOver] = useState(false)
   useEffect(() => {
-    if (!waited) return
-    const timer = setInterval(() => void read(), everyMs)
-    const stop = setTimeout(() => clearInterval(timer), STARTING_AT_MOST_MS)
-    return () => {
-      clearInterval(timer)
-      clearTimeout(stop)
-    }
-  }, [waited, read, everyMs])
+    setOver(false)
+    if (wait === false) return
+    const stop = setTimeout(() => setOver(true), STARTING_AT_MOST_MS)
+    return () => clearTimeout(stop)
+  }, [wait])
+  return [wait !== false && !over ? everyMs : pace, setWait]
 }
 
 /** Stable initial for a project's runs, so it does not churn on every render. */
@@ -48,10 +49,11 @@ export function useAgents(projectId: string | null, starting: string | null = nu
   // `reload` is the shared guarded one now: it used to be a second, unguarded copy of the
   // read, so an agent started just before a project switch could write the old project's agents.
   // Kept for the next visit: the rail shows the project's last list at once, while it is read again.
+  const [pace, waitFor] = useStartPace(STARTING_EVERY_MS, useRunsPace(everyMs))
   const { value: agents, reload, state } = usePolled<AgentMeta[]>(
     projectId ? () => onAgents(projectId) : null,
     NO_AGENTS,
-    useRunsPace(everyMs),
+    pace,
     [projectId],
     projectId ? { remember: `agents:${projectId}`, stored: true } : undefined,
     runsAgain(projectId ?? undefined),
@@ -60,7 +62,8 @@ export function useAgents(projectId: string | null, starting: string | null = nu
   const started = starting === null ? undefined : agents.find(agent => agent.id === starting)
   const settingUp =
     projectId !== null && starting !== null && (started === undefined || (started.status === 'running' && started.branch === undefined) || awaitingName(started, naming))
-  useStartWait(settingUp && starting, reload, STARTING_EVERY_MS)
+  const waited = settingUp && starting
+  useEffect(() => waitFor(waited), [waited, waitFor])
   // A fresh `state` is what lets the shell tell a session that is gone from one it has not read yet
   // (#784): a bookmarked link must not flash "gone" while the first read is still out, nor while
   // only an earlier visit's list is shown.
@@ -79,10 +82,11 @@ const NO_RECENTS: RecentAgent[] = []
  * the list is shown.
  */
 export function useRecentAgents(shown: boolean, started: { id: string | null; projectId: string | null; at: number }): { recentAgents: RecentAgent[]; reload: () => Promise<void>; state: ReadState } {
-  const { value: recentAgents, reload, state } = usePolled<RecentAgent[]>(shown ? onRecentAgents : null, NO_RECENTS, useRunsPace(10_000), [shown], { remember: 'recent-agents', stored: true }, runsAgain(undefined))
+  const [pace, waitFor] = useStartPace(1000, useRunsPace(10_000))
+  const { value: recentAgents, reload, state } = usePolled<RecentAgent[]>(shown ? onRecentAgents : null, NO_RECENTS, pace, [shown], { remember: 'recent-agents', stored: true }, runsAgain(undefined))
   const naming = usePreferences().nameRuns !== false
   const row = started.id === null ? undefined : recentAgents.find(recent => recent.agent.id === started.id && recent.projectId === started.projectId)
   const waited = shown && started.id !== null && Date.now() - started.at < STARTING_AT_MOST_MS && (row === undefined || awaitingName(row.agent, naming))
-  useStartWait(waited, reload, 1000)
+  useEffect(() => waitFor(waited ? started.at : false), [waited, started.at, waitFor])
   return { recentAgents, reload, state }
 }

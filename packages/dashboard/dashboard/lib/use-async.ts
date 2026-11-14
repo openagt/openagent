@@ -200,13 +200,16 @@ export const StaleReads = createContext<((reader: object, stale: boolean) => voi
  */
 export type ReadState = 'unknown' | 'kept' | 'fresh'
 
-/** A read as its caller sees it: the value, its state, whether its last ask failed, and a read made now. */
+/** A read as its caller sees it: the value, its state, whether its last ask failed, and two ways to ask now. */
 export interface Polled<T> {
   value: T
   state: ReadState
   /** The last ask failed: the value shown is what was there before it. */
   failing: boolean
+  /** Ask anew, even while a read is out: what it shows changed after that read was asked. */
   reload: () => Promise<void>
+  /** Ask now, or wait for the read already out. */
+  refresh: () => Promise<void>
 }
 
 /**
@@ -323,12 +326,15 @@ function useAsyncValue<T>(
     repace.current()
   }, [everyMs])
 
-  const reload = useCallback((): Promise<void> => {
+  const askNow = (again: boolean): Promise<void> => {
     const { line, key, live } = lineRef.current
     if (!load || !live) return Promise.resolve()
-    return ask(line, load, key, true)
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, deps)
+    return ask(line, load, key, again)
+  }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const reload = useCallback(() => askNow(true), deps)
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const refresh = useCallback(() => askNow(false), deps)
 
   // Told to the part of the page around this read, which fades while it is stale.
   const fade = useContext(StaleReads)
@@ -343,10 +349,20 @@ function useAsyncValue<T>(
 
   if (!sameDeps(shownFor.current, deps)) {
     const shown = kept(keyOf())
-    if (shown) return { value: shown.value, state: shown.state, failing: false, reload }
-    return { value: keep === 'previous' ? value : initialRef.current, state: 'unknown', failing: false, reload }
+    if (shown) return { value: shown.value, state: shown.state, failing: false, reload, refresh }
+    return { value: keep === 'previous' ? value : initialRef.current, state: 'unknown', failing: false, reload, refresh }
   }
-  return { value, state, failing, reload }
+  return { value, state, failing, reload, refresh }
+}
+
+/** Call `ask` whenever `trigger` changes after the first render: something the read follows moved (a turn ended, the pace quickened). */
+export function useAskOn(trigger: unknown, ask: () => Promise<void>): void {
+  const seen = useRef(trigger)
+  useEffect(() => {
+    if (Object.is(seen.current, trigger)) return
+    seen.current = trigger
+    void ask()
+  }, [trigger, ask])
 }
 
 function sameDeps(a: DependencyList, b: DependencyList): boolean {

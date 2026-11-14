@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Server } from 'lucide-react'
-import { Button, ConfirmDialog, formatDateTime, formatRelative, usePolled } from '@openagt/dashboard/module'
+import { Button, ConfirmDialog, formatDateTime, formatRelative, useAskOn, usePolled } from '@openagt/dashboard/module'
 import { idsOf, readPersonThere, type Answer, type DeviceRow } from './devices.js'
 import { loadOther, otherLogin, sharedForget, type OtherLogin, type OtherRow } from './servers.js'
 import { hasDoor, throughOf, type JoinedItem, type OtherItem } from './model.js'
@@ -158,7 +158,8 @@ export function OtherPage({ d, item, onBack }: { d: Devices; item: OtherItem; on
   const [tab, setTab] = useState<Tab>('overview')
   const [working, setWorking] = useState(false)
   const pace = working ? 3_000 : 30_000
-  const { value: read, reload } = usePolled<Answer<OtherRow[]> | undefined>(() => loadOther(host, [machine.url]), undefined, pace, [machine.url, pace], 'previous')
+  const { value: read, reload, refresh } = usePolled<Answer<OtherRow[]> | undefined>(() => loadOther(host, [machine.url]), undefined, pace, [machine.url])
+  useAskOn(pace, refresh)
   const { busy, setBusy, error, setError, act } = useChange(reload)
   const row = read?.ok ? read.value.find(candidate => candidate.url === machine.url) : undefined
   const making = row?.making ?? { working: false }
