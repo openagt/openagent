@@ -277,11 +277,11 @@ function SkillCards({ projectId, skills, onDone }: { projectId: string; skills: 
         {error && <p className="text-danger">{saved.written.length + saved.removed.length > 0 ? `Saved in the project's folder, not sent: ${error}` : error}</p>}
         <div className="flex justify-end gap-2 pt-1">
           {error && saved.written.length + saved.removed.length > 0 && skills.git && (
-            <Button type="button" disabled={busy} onClick={() => void send([...saved.written, ...saved.removed])}>
+            <Button type="button" loading={busy} onClick={() => void send([...saved.written, ...saved.removed])}>
               {busy ? 'Sending…' : 'Send again'}
             </Button>
           )}
-          <Button type="button" variant="outline" disabled={busy} onClick={onDone}>
+          <Button type="button" variant="secondary" disabled={busy} onClick={onDone}>
             Done
           </Button>
         </div>
@@ -291,9 +291,7 @@ function SkillCards({ projectId, skills, onDone }: { projectId: string; skills: 
 
   return (
     <div className="space-y-4">
-      <p className="text-sm text-muted-foreground">
-        A ticked skill is written into the project&rsquo;s folder and an unticked one is deleted{skills.remote ? `; Save sends the change to ${skills.remote}, where your agents start from` : skills.git ? '; Save commits the change' : ''}. The skills every agent gets by default come with every run and are not here.
-      </p>
+      <p className="text-sm text-muted-foreground">The skills every agent gets by default come with every run and are not here.</p>
       {skills.groups.map(group => (
         <fieldset key={group.title}>
           <legend className="mb-3 text-xs font-medium text-muted-foreground">{group.title}</legend>
@@ -311,13 +309,23 @@ function SkillCards({ projectId, skills, onDone }: { projectId: string; skills: 
       <SettingsFoot>
         {error && <p role="alert" className="mb-2 text-xs text-danger">{error}</p>}
         <div className="flex flex-wrap items-center justify-end gap-2">
-          <span className="mr-auto text-xs text-muted-foreground">
-            {nothing ? 'Nothing to change.' : [write.length > 0 ? `${count(write.length, 'skill', 'skills')} to write` : '', remove.length > 0 ? `${count(remove.length, 'skill', 'skills')} to delete` : ''].filter(Boolean).join(', ') + '.'}
+          {/* What a Save does to the project's files, beside it, once there is something to save. */}
+          <span className="mr-auto min-w-0 flex-1 basis-60 text-xs text-muted-foreground">
+            {nothing ? (
+              'Nothing to change.'
+            ) : (
+              <>
+                <span className="font-medium text-foreground">
+                  {[write.length > 0 ? `${count(write.length, 'skill', 'skills')} to write` : '', remove.length > 0 ? `${count(remove.length, 'skill', 'skills')} to delete` : ''].filter(Boolean).join(', ') + '.'}
+                </span>{' '}
+                A ticked skill is written into the project&rsquo;s folder and an unticked one is deleted{skills.remote ? `; Save sends the change to ${skills.remote}, where your agents start from` : skills.git ? '; Save commits the change' : ''}.
+              </>
+            )}
           </span>
-          <Button type="button" variant="outline" disabled={busy || nothing} onClick={cancel}>
+          <Button type="button" variant="secondary" disabled={busy || nothing} onClick={cancel}>
             Cancel
           </Button>
-          <Button type="button" disabled={busy || nothing} onClick={() => void save()}>
+          <Button type="button" disabled={nothing} loading={busy} onClick={() => void save()}>
             {busy ? 'Saving…' : saveWord}
           </Button>
         </div>
