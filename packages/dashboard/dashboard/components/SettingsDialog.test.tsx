@@ -131,7 +131,7 @@ describe('Settings › Coding agent', () => {
     refreshPreferences()
     try {
       open('agent')
-      expect(await screen.findByText('Which coding agent runs the work. Claude Code is not installed on this computer.')).toBeTruthy()
+      expect(await screen.findByText('Claude Code is not installed on this computer.')).toBeTruthy()
     } finally {
       onModels.mockImplementation(answered)
     }

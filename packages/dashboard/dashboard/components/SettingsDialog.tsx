@@ -477,7 +477,17 @@ function useOwnEntries(): Entry[] {
         <SettingsSection>
           <SelectRow
             label="Coding agent"
-            description={`Which coding agent runs the work.${missingDriver !== undefined ? ` ${missingDriver} is not installed on this computer.` : ''}`}
+            description={
+              <>
+                Which coding agent runs the work.
+                {missingDriver !== undefined && (
+                  <>
+                    {' '}
+                    <span className="text-warning">{missingDriver} is not installed on this computer.</span>
+                  </>
+                )}
+              </>
+            }
             value={driver}
             options={drivers}
             // A model is always one agent's own (the start menu's rule), so a new agent starts unpinned.
