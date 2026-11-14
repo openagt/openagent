@@ -1,5 +1,5 @@
 import { Fragment, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
-import { Button, FadeWhileStale, LinkActions, Page, Section, cn, usePolled, useAction, useModuleHost, type ProjectLinks, type ModuleLink, type ModuleProject } from '@openagt/dashboard/module'
+import { Button, LinkActions, Page, RowShapes, Section, Slot, cn, usePolled, useAction, useModuleHost, type ProjectLinks, type ModuleLink, type ModuleProject } from '@openagt/dashboard/module'
 import { heldBack, holderAgent, planLink, ticketLink, withHolder } from '../src/module.js'
 import { holdingRun } from './lib/holding-run.js'
 import type { ProjectTickets, WorkspaceTicket } from './lib/types.js'
@@ -196,91 +196,92 @@ export function TicketsPage({ projects }: { projects: ModuleProject[] }) {
         </>
       }
     >
-      {state === 'unknown' ? (
-        <p className="text-sm text-muted-foreground">Loading…</p>
-      ) : groups.length === 0 ? (
-        <p className="text-sm text-muted-foreground">No project has the tickets package.</p>
-      ) : view.group === 'none' ? (
-        // The flat cross-project list: one pool, one order, rows carrying their project. No
-        // per-project Update bars here — those belong to the sections, and grouped mode is a
-        // menu click away.
-        <FadeWhileStale stale={state === 'kept'} className="space-y-2">
-          {filtered && rows.length - visible.length > 0 && (
-            <div className="flex flex-wrap items-center gap-x-3 gap-y-2 text-sm text-muted-foreground">
-              <span>
-                {rows.length - visible.length} ticket{rows.length - visible.length === 1 ? '' : 's'} hidden by the current filters.
-              </span>
-              <Button variant="secondary" onClick={clearFilters}>
-                Clear filters
-              </Button>
+      <Slot of={{ state, value: groups }} shape={<RowShapes rows={3} />}>
+        {groups =>
+          groups.length === 0 ? (
+            <p className="text-sm text-muted-foreground">No project has the tickets package.</p>
+          ) : view.group === 'none' ? (
+            // The flat cross-project list: one pool, one order, rows carrying their project. No
+            // per-project Update bars here — those belong to the sections, and grouped mode is a
+            // menu click away.
+            <div className="space-y-2">
+              {filtered && rows.length - visible.length > 0 && (
+                <div className="flex flex-wrap items-center gap-x-3 gap-y-2 text-sm text-muted-foreground">
+                  <span>
+                    {rows.length - visible.length} ticket{rows.length - visible.length === 1 ? '' : 's'} hidden by the current filters.
+                  </span>
+                  <Button variant="secondary" onClick={clearFilters}>
+                    Clear filters
+                  </Button>
+                </div>
+              )}
+              {flatRows.length === 0 ? (
+                <p className="text-sm text-muted-foreground">
+                  {rows.length === 0 ? 'No tickets in any project yet — group by project to import a project\'s issues.' : 'No tickets match.'}
+                </p>
+              ) : (
+                <TicketList>
+                    {flatRows.map(r => (
+                      <TicketRow
+                        key={`${r.projectId}/${r.ticket.file}`}
+                        projectId={r.projectId}
+                        ticket={r.ticket}
+                        projectName={projects.length > 1 ? r.projectName : undefined}
+                        busy={busy}
+                        starting={starting?.projectId === r.projectId ? starting.prompt : null}
+                        selected={selected.has(`${r.projectId}/${r.ticket.file}`)}
+                        onToggleSelect={() => toggleSelected(`${r.projectId}/${r.ticket.file}`)}
+                        onOpen={() => onOpenTicket(r.projectId, r.ticket.file)}
+                        onStart={(prompt, failure) => void startSession(r.projectId, prompt, failure)}
+                        onConfigure={prompt => host.configureRun(r.projectId, prompt)}
+                        onOpenPlan={() => onOpenTicketPlan(r.projectId, r.ticket.file)}
+                        onTopicClick={addTopic}
+                        onClaimedClick={filterClaimed}
+                        onOpenAgent={agentId => onOpenAgent(r.projectId, agentId)}
+                      />
+                    ))}
+                </TicketList>
+              )}
             </div>
-          )}
-          {flatRows.length === 0 ? (
-            <p className="text-sm text-muted-foreground">
-              {rows.length === 0 ? 'No tickets in any project yet — group by project to import a project\'s issues.' : 'No tickets match.'}
-            </p>
           ) : (
-            <TicketList>
-                {flatRows.map(r => (
-                  <TicketRow
-                    key={`${r.projectId}/${r.ticket.file}`}
-                    projectId={r.projectId}
-                    ticket={r.ticket}
-                    projectName={projects.length > 1 ? r.projectName : undefined}
-                    busy={busy}
-                    starting={starting?.projectId === r.projectId ? starting.prompt : null}
-                    selected={selected.has(`${r.projectId}/${r.ticket.file}`)}
-                    onToggleSelect={() => toggleSelected(`${r.projectId}/${r.ticket.file}`)}
-                    onOpen={() => onOpenTicket(r.projectId, r.ticket.file)}
-                    onStart={(prompt, failure) => void startSession(r.projectId, prompt, failure)}
-                    onConfigure={prompt => host.configureRun(r.projectId, prompt)}
-                    onOpenPlan={() => onOpenTicketPlan(r.projectId, r.ticket.file)}
-                    onTopicClick={addTopic}
-                    onClaimedClick={filterClaimed}
-                    onOpenAgent={agentId => onOpenAgent(r.projectId, agentId)}
-                  />
-                ))}
-            </TicketList>
-          )}
-        </FadeWhileStale>
-      ) : (
-        <FadeWhileStale stale={state === 'kept'} className="space-y-8">
-          {groups.map(g => {
-            const groupRows = visible.filter(r => r.projectId === g.projectId)
-            const sorted = sortRows(groupRows, view.sort)
-            const panel = (
-              <>
-                {g.error !== undefined && (
-                  <p role="alert" className="mb-2 text-sm text-danger">
-                    Could not read the tickets of {g.projectName}: {g.error}
-                  </p>
-                )}
-                <TicketsPanel
-                  projectId={g.projectId}
-                  tickets={sorted.map(r => r.ticket)}
-                  loaded
-                  lead={groups.length === 1}
-                  hiddenByFilter={g.tickets.length - groupRows.length}
-                  isSelected={file => selected.has(`${g.projectId}/${file}`)}
-                  onToggleSelect={file => toggleSelected(`${g.projectId}/${file}`)}
-                  onOpen={file => onOpenTicket(g.projectId, file)}
-                  onOpenPlan={file => onOpenTicketPlan(g.projectId, file)}
-                  onTopicClick={addTopic}
-                  onClaimedClick={filterClaimed}
-                  onOpenAgent={agentId => onOpenAgent(g.projectId, agentId)}
-                  onClearFilters={filtered ? clearFilters : undefined}
-                />
-              </>
-            )
-            return (
-              <Fragment key={g.projectId}>
-                {/* One project's page needs no heading naming it: the sidebar does. */}
-                {groups.length === 1 ? panel : <Section title={g.projectName}>{panel}</Section>}
-              </Fragment>
-            )
-          })}
-        </FadeWhileStale>
-      )}
+            <div className="space-y-8">
+              {groups.map(g => {
+                const groupRows = visible.filter(r => r.projectId === g.projectId)
+                const sorted = sortRows(groupRows, view.sort)
+                const panel = (
+                  <>
+                    {g.error !== undefined && (
+                      <p role="alert" className="mb-2 text-sm text-danger">
+                        Could not read the tickets of {g.projectName}: {g.error}
+                      </p>
+                    )}
+                    <TicketsPanel
+                      projectId={g.projectId}
+                      tickets={sorted.map(r => r.ticket)}
+                      lead={groups.length === 1}
+                      hiddenByFilter={g.tickets.length - groupRows.length}
+                      isSelected={file => selected.has(`${g.projectId}/${file}`)}
+                      onToggleSelect={file => toggleSelected(`${g.projectId}/${file}`)}
+                      onOpen={file => onOpenTicket(g.projectId, file)}
+                      onOpenPlan={file => onOpenTicketPlan(g.projectId, file)}
+                      onTopicClick={addTopic}
+                      onClaimedClick={filterClaimed}
+                      onOpenAgent={agentId => onOpenAgent(g.projectId, agentId)}
+                      onClearFilters={filtered ? clearFilters : undefined}
+                    />
+                  </>
+                )
+                return (
+                  <Fragment key={g.projectId}>
+                    {/* One project's page needs no heading naming it: the sidebar does. */}
+                    {groups.length === 1 ? panel : <Section title={g.projectName}>{panel}</Section>}
+                  </Fragment>
+                )
+              })}
+            </div>
+          )
+        }
+      </Slot>
       {barRows.length > 0 && (
         <SelectionBar leaving={!hasSelection} count={barRows.length} onClear={() => setSelected(new Set())}>
           <QueueAdds rows={barRows} selection disabled={busy || !hasSelection} />

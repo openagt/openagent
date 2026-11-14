@@ -211,7 +211,6 @@ const CLAIM_CLASS = 'focus-ring flex min-w-0 shrink-0 items-center gap-1 rounded
 export function TicketsPanel({
   projectId,
   tickets,
-  loaded,
   hiddenByFilter = 0,
   isSelected,
   onToggleSelect,
@@ -225,7 +224,6 @@ export function TicketsPanel({
 }: {
   projectId: string | null
   tickets: WorkspaceTicket[]
-  loaded: boolean
   /** Whether a row's ticket is picked for the surrounding page's bulk actions — the selection
    *  lives on the page (it spans projects), the panel only threads it to its rows by file.
    *  Absent on a page with nothing to scope to a selection, and the rows then carry no
@@ -262,7 +260,6 @@ export function TicketsPanel({
   const meta = useLoaded<TicketsMeta>(projectId ? async () => readMeta(await host.runCommand(projectId, ['meta', '--local'])) : null, NO_META, [projectId])
 
   if (!projectId) return null
-  if (!loaded) return <p className="p-4 text-sm text-muted-foreground">Loading…</p>
 
   // Every "Configure first, then run" on the panel lands in the same place: this project's own
   // launcher, with the button's prompt drafted in, where the model, the run target and the prompt
