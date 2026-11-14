@@ -1,7 +1,7 @@
 import type { CSSProperties } from 'react'
 import { CommandChip, CommandLine, PmTabs, usePickedCommand } from './commands'
 import { CopiedStatus, copyPress, useCopy } from './copy'
-import { BADGES, labelStyle, mono, proseStyle, text } from './ui'
+import { BADGES, labelStyle, mono, proseStyle, Screenshot, text } from './ui'
 import { switchInPlace, useDashboardHref } from './ViewToggle'
 
 const commentStyle: CSSProperties = { color: 'var(--muted-foreground)' }
@@ -184,9 +184,19 @@ export function Hero() {
         </p>
       </div>
 
+      <div style={{ width: '100%', marginTop: 32 }}>
+        <Screenshot
+          name="run"
+          width={1440}
+          height={600}
+          first
+          alt="The OpenAgent dashboard: an agent's run asks which way to go, its recommended answer picked, beside the project's pages and runs."
+        />
+      </div>
+
       <div
         style={{
-          marginTop: 24,
+          marginTop: 32,
           width: '100%',
           maxWidth: 'var(--container)',
           boxSizing: 'border-box',

@@ -170,3 +170,46 @@ export function CodeChip({ children }: { children: string }) {
     </code>
   )
 }
+
+/**
+ * A capture of the dashboard (public/pictures/, taken by pictures.mjs), dark or light as the visitor's
+ * computer asks, framed by a hairline. Its size is the capture's at half its pixels, so its box is
+ * laid out before it arrives.
+ */
+export function Screenshot({
+  name,
+  width,
+  height,
+  alt,
+  first,
+}: {
+  name: 'run' | 'waiting' | 'tickets'
+  width: number
+  height: number
+  alt: string
+  /** The page's first picture: fetched with the page (after its fonts), not when it nears the screen. */
+  first?: boolean
+}) {
+  return (
+    <picture>
+      <source media="(prefers-color-scheme: light)" srcSet={`/pictures/${name}-light.webp`} />
+      <img
+        src={`/pictures/${name}-dark.webp`}
+        width={width}
+        height={height}
+        alt={alt}
+        loading={first ? 'eager' : 'lazy'}
+        style={{
+          display: 'block',
+          width: '100%',
+          height: 'auto',
+          // An outline, not a border: a border would change the box's ratio once the picture arrives.
+          outline: '1px solid var(--border)',
+          outlineOffset: -1,
+          borderRadius: 'var(--radius-lg)',
+          background: 'var(--card)',
+        }}
+      />
+    </picture>
+  )
+}
