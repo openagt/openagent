@@ -1,10 +1,10 @@
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import { ArrowUpCircle, CheckCircle2 } from 'lucide-react'
 import { DRIVER_LABELS, type DriverName } from '../../src/client.js'
 import { onAgentUpdates, onModels, sendAgentUpdate, type AgentUpdate } from '../rpc/models.js'
 import { forgetRemembered, readAhead, usePolled } from '../lib/use-async.js'
 import { cn } from '../lib/utils.js'
-import { takeLostFocus } from '../lib/lost-focus.js'
+import { FocusHome } from '../lib/focus-home.js'
 import { Button } from './ui/button.js'
 import { useAction } from '../lib/use-action.js'
 
@@ -32,11 +32,13 @@ export function AgentUpdates() {
   const [installed, setInstalled] = useState<Partial<Record<DriverName, string>>>({})
   const lines = updates.filter(update => installed[update.agent] === undefined)
   const said = Object.entries(installed) as [DriverName, string][]
+  // The line that says what a press installed takes the keyboard its press had: the newest, drawn last.
+  const saidLast = useRef<HTMLParagraphElement>(null)
   if (lines.length === 0 && said.length === 0) return null
   return (
-    <div className="space-y-2">
+    <FocusHome className="space-y-2" landing={saidLast}>
       {said.map(([agent, version]) => (
-        <p key={agent} ref={takeLostFocus} role="status" tabIndex={-1} className="flex items-center gap-3 rounded-md border border-border px-3 py-2 text-sm outline-none">
+        <p key={agent} ref={saidLast} role="status" tabIndex={-1} className="flex items-center gap-3 rounded-md border border-border px-3 py-2 text-sm outline-none">
           <CheckCircle2 className="h-4 w-4 shrink-0 text-success" aria-hidden />
           {`${DRIVER_LABELS[agent]} is now ${version}.`}
         </p>
@@ -51,7 +53,7 @@ export function AgentUpdates() {
           }}
         />
       ))}
-    </div>
+    </FocusHome>
   )
 }
 
