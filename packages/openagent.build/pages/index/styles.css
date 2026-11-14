@@ -47,6 +47,12 @@
   --space-items: 32px;
   --space-gutter: 32px;
 
+  /* The hero's title and the struck words over it. */
+  --text-hero: var(--text-3xl);
+  --leading-hero: var(--leading-3xl);
+  --text-struck: var(--text-xl);
+  --leading-struck: var(--leading-xl);
+
   --radius-sm: 4px;
   --radius-md: 6px;
   --radius-lg: 8px;
@@ -55,6 +61,19 @@
   /* Colour and opacity on hover; something entering. */
   --duration-hover: 100ms;
   --duration-enter: 140ms;
+}
+/* A phone: the scale's smaller steps, and the hero's title on one line. */
+@media (max-width: 640px) {
+  :root {
+    --space-section: 48px;
+    --space-head: 24px;
+    --space-items: 24px;
+    --space-gutter: 16px;
+    --text-hero: var(--text-2xl);
+    --leading-hero: var(--leading-2xl);
+    --text-struck: var(--text-lg);
+    --leading-struck: var(--leading-lg);
+  }
 }
 html {
   scroll-behavior: smooth;

@@ -40,7 +40,7 @@ export function Hero() {
       style={{
         maxWidth: 1120,
         margin: '0 auto',
-        padding: '48px var(--space-gutter) 32px',
+        padding: 'var(--space-head) var(--space-gutter) 32px',
         textAlign: 'center',
         display: 'flex',
         flexDirection: 'column',
@@ -67,7 +67,8 @@ export function Hero() {
       <h1
         style={{
           margin: 0,
-          ...text('3xl'),
+          fontSize: 'var(--text-hero)',
+          lineHeight: 'var(--leading-hero)',
           fontWeight: 600,
           letterSpacing: '-0.02em',
         }}
@@ -79,7 +80,8 @@ export function Hero() {
             textDecoration: 'none',
             position: 'relative',
             margin: '0 auto',
-            ...text('xl'),
+            fontSize: 'var(--text-struck)',
+            lineHeight: 'var(--leading-struck)',
             fontWeight: 500,
             color: 'var(--muted-foreground)',
           }}
@@ -191,7 +193,7 @@ export function Hero() {
           boxSizing: 'border-box',
           display: 'grid',
           gridTemplateColumns: 'repeat(auto-fit, minmax(min(300px, 100%), 1fr))',
-          gap: 48,
+          gap: 'var(--space-items) 48px',
           textAlign: 'left',
         }}
       >
