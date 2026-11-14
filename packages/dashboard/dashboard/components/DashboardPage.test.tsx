@@ -9,8 +9,9 @@ vi.mock('./Quota.js', () => ({ Quota: () => <div>usage</div> }))
 vi.mock('./OnboardingChecklist.js', () => ({ OnboardingChecklist: () => <div>onboarding</div> }))
 vi.mock('./SkillsCard.js', () => ({ SkillsCard: () => <div>skills</div> }))
 vi.mock('./YourAgentsPart.js', () => ({ YourAgentsPart: () => <span>your agents</span> }))
+const modules = vi.hoisted(() => ({ loaded: true, line: [] as { id: string; order: number; node: unknown }[] }))
 vi.mock('./ModuleCards.js', () => ({
-  useModuleCards: () => ({ cards: [{ id: '@x/tickets/hot', label: 'Hot tickets', width: '1/2', minWidth: '1/3', present: true, node: <div>a package's card</div> }], line: [] }),
+  useModuleCards: () => ({ cards: [{ id: '@x/tickets/hot', label: 'Hot tickets', width: '1/2', minWidth: '1/3', present: true, node: <div>a package's card</div> }], line: modules.line, loaded: modules.loaded }),
 }))
 const prefs = vi.hoisted(() => ({ value: { onboardingDismissed: true } as Record<string, unknown>, loaded: true, updatePreferences: vi.fn() }))
 vi.mock('../lib/preferences.js', () => ({ usePreferences: () => prefs.value, usePreferencesLoaded: () => prefs.loaded, updatePreferences: prefs.updatePreferences }))
@@ -22,8 +23,10 @@ const active = (agentId: string, projectId = 'p1'): ActiveAgent => ({ projectId,
 const projects = [{ id: 'p1', name: 'alpha' }, { id: 'p2', name: 'beta' }] as never[]
 /** The agents at work, as the shell read them. */
 let working: ActiveAgent[] = []
-const show = (scope: string | null = null, kept = { interventions: false, active: false }, read = true) =>
-  render(<DashboardPage onProjectAdded={() => {}} onSelectProject={() => {}} projectHref={id => `/${id}`} onSelectAgent={() => {}} onAgentStarted={() => {}} interventions={[]} interventionsState={!read ? 'unknown' : kept.interventions ? 'kept' : 'fresh'} active={{ active: working, state: !read ? 'unknown' : kept.active ? 'kept' : 'fresh' }} projects={projects} scope={scope} />)
+const overview = (scope: string | null = null, kept = { interventions: false, active: false }, read = true) => (
+  <DashboardPage onProjectAdded={() => {}} onSelectProject={() => {}} projectHref={id => `/${id}`} onSelectAgent={() => {}} onAgentStarted={() => {}} interventions={[]} interventionsState={!read ? 'unknown' : kept.interventions ? 'kept' : 'fresh'} active={{ active: working, state: !read ? 'unknown' : kept.active ? 'kept' : 'fresh' }} projects={projects} scope={scope} />
+)
+const show = (...args: Parameters<typeof overview>) => render(overview(...args))
 /** The cards drawn, in order, each with its grid classes. */
 const drawn = () => [...document.querySelectorAll<HTMLElement>('[data-card]')].map(el => ({ id: el.dataset['card'], spans: el.className }))
 
@@ -32,6 +35,8 @@ beforeEach(() => {
   prefs.value = { onboardingDismissed: true }
   prefs.loaded = true
   prefs.updatePreferences.mockReset()
+  modules.loaded = true
+  modules.line = []
 })
 afterEach(cleanup)
 
@@ -237,6 +242,21 @@ describe('the Overview', () => {
     show()
     expect(await screen.findByRole('button', { name: 'nothing needs you' })).toBeTruthy()
     expect(screen.getByText('no agent working')).toBeTruthy()
+  })
+
+  test("before the packages' code is in, their part of the line waits in its place, and the part that comes takes it", async () => {
+    modules.loaded = false
+    const { rerender } = show()
+    const line = (await screen.findByText('no agent working')).closest('p')!
+    expect(line.textContent).toBe('nothing needs you·no agent working·Loading…·your agents')
+    modules.line = [{ id: '@x/queue/queued', order: 3, node: <span>nothing queued</span> }]
+    rerender(overview())
+    expect(line.textContent).toBe('nothing needs you·no agent working·nothing queued·your agents')
+    // Every package in, none with a part: the line is its own parts only.
+    modules.loaded = true
+    modules.line = []
+    rerender(overview())
+    expect(line.textContent).toBe('nothing needs you·no agent working·your agents')
   })
 
   test('the Human Queue says it is loading before its read, not that nothing waits', async () => {

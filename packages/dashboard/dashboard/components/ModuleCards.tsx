@@ -25,10 +25,10 @@ export interface OverviewCard {
  * package: with one project picked, the cards of the packages that project does not have are not,
  * and before the projects are first read none is. A card of this computer's (its devices) is
  * always listed. Each is known by its package and its own id. A card that is a part of the line
- * under the title (`line`) is listed apart, by its order.
+ * under the title (`line`) is listed apart, by its order. `loaded` once every package's code is in.
  */
-export function useModuleCards(projects: ProjectSummary[]): { cards: OverviewCard[]; line: OverviewCard[] } {
-  const { cards } = useMountedModules()
+export function useModuleCards(projects: ProjectSummary[]): { cards: OverviewCard[]; line: OverviewCard[]; loaded: boolean } {
+  const { cards, loaded } = useMountedModules()
   const listed = cards.flatMap(card => {
     const Card = card.Card
     // A card of this computer's is about the computer: it is on every Overview, given every project shown.
@@ -50,5 +50,5 @@ export function useModuleCards(projects: ProjectSummary[]): { cards: OverviewCar
       },
     ]
   })
-  return { cards: listed.filter(card => !card.line), line: listed.filter(card => card.line) }
+  return { cards: listed.filter(card => !card.line), line: listed.filter(card => card.line), loaded }
 }

@@ -73,7 +73,7 @@ export function DashboardPage({
   const shownProjects = scope === null ? projects : projects.filter(project => project.id === scope)
   // Every card the Overview can show here, each with the widths it stands at; the person's layout
   // for this page (the picked project's, else all projects') orders them, sizes them, and hides some.
-  const { cards: moduleCards, line: moduleLine } = useModuleCards(shownProjects)
+  const { cards: moduleCards, line: moduleLine, loaded: modulesLoaded } = useModuleCards(shownProjects)
   // What the number counts, kind by kind: "1 question, 1 to publish".
   const waiting = KINDS.map(kind => ({ kind, count: interventions.filter(item => item.kind === kind.value).length })).filter(({ count }) => count > 0)
   // How things stand, in one line under the title, each part a link to where it is: what needs the
@@ -101,7 +101,9 @@ export function DashboardPage({
         </LinePart>
       ),
     },
-    ...moduleLine,
+    // Until the packages' code is in, one part waits in their place: a part that came after the line
+    // was drawn would lengthen it, and on a phone push the Customize press and the page under it.
+    ...(modulesLoaded || moduleLine.length > 0 ? moduleLine : [{ id: 'packages', order: 3, node: <LinePart reading>{null}</LinePart> }]),
     // The person's agents (Rom's design: an agent is a name, skills and accounts): how many, by name, a press from their page.
     { id: 'your-agents', order: 4, node: <YourAgentsPart /> },
   ].sort((one, other) => one.order - other.order)
