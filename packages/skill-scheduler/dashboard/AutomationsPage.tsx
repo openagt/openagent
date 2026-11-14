@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { List, Page, RowShapes, Section, Slot, Switch, Tooltip, TooltipContent, TooltipTrigger, Button, cn, formatAge, formatDateTime, inPlace, useCodingAgents, useModuleHost, useOpenAgentDown, usePolled, type ModuleCommandResult, type ModuleHost, type ModuleProject } from '@openagt/dashboard/module'
 import type { ModulePageProps } from '@openagt/dashboard/module'
+import { Plus } from 'lucide-react'
 import { AutomationForm } from './AutomationForm.js'
 import { CodeWords, Command } from './CodeWords.js'
 import { EditPanel } from './EditPanel.js'
@@ -168,6 +169,7 @@ export function AutomationsPage({ projects }: ModulePageProps) {
         }}
         aria-label={`New automation in ${row.project.name}`}
       >
+        <Plus className="size-4" aria-hidden />
         New automation
       </Button>
     )
@@ -329,7 +331,7 @@ export function AutomationsPage({ projects }: ModulePageProps) {
                                   <p role="status" className="mt-1 text-xs text-success">
                                     {says.resumed ? 'Resumed a run.' : 'Started a run.'}{' '}
                                     {says.started !== '' && (
-                                      <button type="button" onClick={() => host.openAgent(row.project.id, says.started!)} className="focus-ring rounded-sm underline">
+                                      <button type="button" onClick={() => host.openAgent(row.project.id, says.started!)} className="focus-ring rounded-sm text-primary hover:underline">
                                         Open it
                                       </button>
                                     )}
@@ -381,7 +383,7 @@ export function AutomationsPage({ projects }: ModulePageProps) {
 function SkillsLink() {
   const host = useModuleHost()
   return (
-    <button type="button" onClick={() => host.openSettings('skills')} className="underline hover:text-foreground">
+    <button type="button" onClick={() => host.openSettings('skills')} className="focus-ring rounded-sm text-primary hover:underline">
       Settings › Skills
     </button>
   )

@@ -36,7 +36,7 @@ export function SchedulerCard({ projects }: ModuleCardProps) {
     <a
       href={host.pageHref('automations')}
       onClick={inPlace(open)}
-      className="underline hover:text-foreground"
+      className="focus-ring rounded-sm text-primary hover:underline"
     >
       {words}
     </a>

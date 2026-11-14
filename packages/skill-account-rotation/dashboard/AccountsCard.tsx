@@ -245,7 +245,7 @@ function AddAccount({ agent, now, failed, from, field, onChanged, onClose }: { a
       ) : from !== undefined && !here ? (
         <>
           <p className="text-sm">{agent.easiest(from)}</p>
-          <Button variant="outline" onClick={() => setHere(true)}>
+          <Button variant="secondary" onClick={() => setHere(true)}>
             Sign in here instead
           </Button>
         </>
@@ -541,7 +541,7 @@ export function AccountsCard({ accountWhere }: ModuleCardProps) {
           {/* Another account, at the heading: whose agent it is for, then its sign-in in a dialog. With none yet, the presses are under it. */}
           {list?.ok && !none && (
             <DropdownMenu>
-              <DropdownMenuTrigger ref={addPress} render={<Button variant="outline" aria-label="Add an account" />}>
+              <DropdownMenuTrigger ref={addPress} render={<Button variant="secondary" aria-label="Add an account" />}>
                 <Plus className="size-3.5" aria-hidden />
                 Add
                 <ChevronDown className="size-3 opacity-70" aria-hidden />
@@ -593,7 +593,7 @@ export function AccountsCard({ accountWhere }: ModuleCardProps) {
             <p className="min-w-0 grow basis-48 text-sm text-muted-foreground">No account yet. Runs need one to start.</p>
             <div className="flex flex-wrap gap-2">
               {AGENTS.map(agent => (
-                <Button key={agent.id} variant="outline" onClick={() => setNaming(agent.id)}>
+                <Button key={agent.id} variant="secondary" onClick={() => setNaming(agent.id)}>
                   <agent.Logo className="size-3.5" />
                   Add a {agent.account} account
                 </Button>
