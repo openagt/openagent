@@ -331,19 +331,6 @@ html[data-pinned] body {
   }
 }
 
-/* Recents row title: the truncated end fades out (like the reference) instead of a hard ellipsis.
-   A long title's full text shows in a tooltip on hover (#1494) — the old hover marquee is gone. */
-.rail-title {
-  overflow: hidden;
-  white-space: nowrap;
-}
-/* Only a title that actually overflows fades (the `is-overflowing` class is set by a measure in
-   RunRow); a short one shows plainly, with no gradient. */
-.rail-title.is-overflowing {
-  -webkit-mask-image: linear-gradient(to right, #000 calc(100% - 3rem), transparent);
-  mask-image: linear-gradient(to right, #000 calc(100% - 3rem), transparent);
-}
-
 /* The Recents fade strip only appears once the list is scrolled, so it never dims the first row at
    rest. Its opacity is driven by the rail's own scroll position, on a scroll timeline. Without
    scroll-timeline support it stays hidden. */
