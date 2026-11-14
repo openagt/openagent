@@ -100,9 +100,9 @@ export function NoteText({ children }: { children: ReactNode }) {
   )
 }
 
-export function Note({ children, style }: { children: ReactNode; style?: CSSProperties }) {
+export function Note({ children }: { children: ReactNode }) {
   return (
-    <p style={{ ...noteContainerStyle, ...style }}>
+    <p style={noteContainerStyle}>
       <NoteText>{children}</NoteText>
     </p>
   )

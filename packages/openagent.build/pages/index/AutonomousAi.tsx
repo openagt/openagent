@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react'
 import { CheckIcon } from './icons'
-import { CodeChip, columnsStyle, columnStyle, Note, SectionHead, sectionStyle, text } from './ui'
+import { CodeChip, columnsStyle, columnStyle, Note, Screenshot, SectionHead, sectionStyle, text } from './ui'
 
 function Item({ children }: { children: ReactNode }) {
   return (
@@ -36,13 +36,11 @@ function Card({ title, lead, children }: { title: string; lead: string; children
   )
 }
 
-const noteFlexStyle = { flex: 1, minWidth: 'min(280px, 100%)', boxSizing: 'border-box' } as const
-
 export function AutonomousAi() {
   return (
     <section id="autonomous-ai" style={sectionStyle}>
       <SectionHead title="Autonomous AI" sub="Focus on what matters, let AI do the rest." />
-      <div style={columnsStyle(300)}>
+      <div style={columnsStyle(400)}>
         <Card title="Autonomous Product Management" lead="Let AI autonomously:">
           <Item>Test &amp; review</Item>
           <Item>Research, plan, and prioritize your tickets</Item>
@@ -60,10 +58,16 @@ export function AutonomousAi() {
           <Item>UX improvements</Item>
           <Item>Consensual work</Item>
         </Card>
-      </div>
-      <div style={{ display: 'flex', gap: 'var(--space-items)', flexWrap: 'wrap' }}>
-        <Note style={noteFlexStyle}>Agents still ask for your confirmation for non-obvious decisions.</Note>
-        <Note style={noteFlexStyle}>You're still in control — only pick the autonomicity that works for you.</Note>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+          <Note>Agents still ask for your confirmation for non-obvious decisions.</Note>
+          <Note>You're still in control — only pick the autonomicity that works for you.</Note>
+        </div>
+        <Screenshot
+          name="tickets"
+          width={768}
+          height={327}
+          alt="The dashboard's Tickets page: the project's two tickets, Dark mode and Login page, each with a Plan button, and Add to queue for both."
+        />
       </div>
     </section>
   )
