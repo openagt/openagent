@@ -305,6 +305,17 @@ html:not([data-pm]) .pm-tab-npm {
   transform: rotate(-5deg) scaleX(0.1);
   animation: strike 1.6s cubic-bezier(0.65, 0, 0.35, 1) 0.6s forwards;
 }
+/* Under reduced motion the strike is there from the start, and a jump on the page (a section, back
+ * to the top, which take this behaviour) is a cut. */
+@media (prefers-reduced-motion: reduce) {
+  .strike::after {
+    animation: none;
+    transform: rotate(-5deg);
+  }
+  html {
+    scroll-behavior: auto;
+  }
+}
 .try-badge::after {
   content: '';
   position: absolute;

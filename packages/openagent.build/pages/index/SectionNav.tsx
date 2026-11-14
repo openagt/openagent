@@ -19,7 +19,7 @@ const SECTIONS: { id: string; title: ReactNode }[] = [
 
 function scrollTop(e: MouseEvent) {
   e.preventDefault()
-  window.scrollTo({ top: 0, behavior: 'smooth' })
+  window.scrollTo({ top: 0 })
 }
 
 // Scroll-spy nav. The design export faked `position: sticky` with a spacer +

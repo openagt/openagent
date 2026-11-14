@@ -8,7 +8,7 @@ function goHome(e: MouseEvent) {
   if (window.location.pathname !== '/') return
   e.preventDefault()
   history.replaceState(null, '', window.location.pathname + window.location.search)
-  window.scrollTo({ top: 0, behavior: 'smooth' })
+  window.scrollTo({ top: 0 })
 }
 
 /*
