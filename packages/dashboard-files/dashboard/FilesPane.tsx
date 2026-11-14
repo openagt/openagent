@@ -9,6 +9,9 @@ import {
   DropdownMenuTrigger,
   FileIcon,
   PaneActions,
+  PaneNote,
+  RowShapes,
+  Slot,
   PaneTitle,
   Tooltip,
   TooltipContent,
@@ -17,7 +20,6 @@ import {
   useModuleHost,
   useNarrow,
   usePolled,
-  Waiting,
   type ModulePanelProps,
 } from '@openagt/dashboard/module'
 import type { AgentTree } from '../src/tree.js'
@@ -40,6 +42,8 @@ import { closeFile, openFile, setFilesSetting, showFile, useFilesSettings, useOp
 // changed is another pane's to list. It is a viewer, not an editor.
 
 const EMPTY_FILES: string[] = []
+/** A read not answered yet, for a {@link Slot} that only waits: the pane's answer is drawn in its place once it comes. */
+const UNKNOWN = { value: null, state: 'unknown' } as const
 
 /** Where a run's tree was read from, in the words the caption says it. */
 function sourceCaption(tree: AgentTree): string | undefined {
@@ -248,20 +252,23 @@ export function FilesPane({ projectId, agentId, activity, show, context }: Modul
   const line = (text: string) => (
     <>
       {header}
-      <p className="p-3 text-xs text-muted-foreground">{text}</p>
+      <PaneNote>{text}</PaneNote>
     </>
   )
-  const waiting = (text: string) => (
+  // The tree while it is read: rows in a row's shape, unseen for the first 200ms.
+  const waiting = (
     <>
       {header}
-      <Waiting className="p-3">{text}</Waiting>
+      <Slot of={UNKNOWN} shape={<RowShapes rows={3} />} className="px-3 py-1">
+        {() => null}
+      </Slot>
     </>
   )
-  if (agentId && (treeState === 'unknown' || runTree?.source === 'pending')) return waiting('Looking for this session’s files…')
+  if (agentId && (treeState === 'unknown' || runTree?.source === 'pending')) return waiting
   // No checkout, no branch and no merge commit on this machine: say so rather than show the
   // project's own files, which reads as "these are the run's".
   if (agentId && runTree?.source === 'gone') return line('This session’s files are gone from this machine: its checkout was reclaimed and it left no branch or merged pull request here.')
-  if (!agentId && projectState === 'unknown') return waiting('Reading the project’s files…')
+  if (!agentId && projectState === 'unknown') return waiting
   if (files.length === 0) return line('No files here.')
 
   return (

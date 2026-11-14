@@ -113,7 +113,7 @@ describe('ChangesPanel', () => {
     readRun.mockResolvedValue({ source: 'pending' })
     render(<ChangesPanel projectId="p1" agentId="run-3" context={context} />)
     await waitFor(() => expect(readRun).toHaveBeenCalledWith(expect.anything(), 'p1', 'run-3'))
-    expect(screen.getByText('Looking for this session’s changes…')).toBeTruthy()
+    expect(await screen.findByText('Loading…')).toBeTruthy()
   })
 
   test('the project’s own page lists what is changed in its folder and not committed, or says nothing is', async () => {
@@ -138,7 +138,7 @@ describe('ChangesPanel remembered', () => {
     readRun.mockReturnValue(new Promise(() => {}) as never)
     readCommits.mockReturnValue(new Promise(() => {}) as never)
     render(<ChangesPanel projectId="p1" agentId="run-1" context={context} />)
-    expect(screen.queryByText('Looking for this session’s changes…')).toBeNull()
+    expect(document.querySelector('[aria-busy]')).toBeNull()
     expect(screen.getByText(NOT_MERGED)).toBeTruthy()
     expect(readRun).toHaveBeenCalledTimes(2)
   })
@@ -152,7 +152,7 @@ describe('ChangesPanel remembered', () => {
     // Its commits have answered; its files have not.
     await waitFor(() => expect(readCommits).toHaveBeenCalledWith(expect.anything(), 'p1', 'run-2'))
     await new Promise(resolve => setTimeout(resolve, 20))
-    expect(screen.getByText('Looking for this session’s changes…')).toBeTruthy()
+    expect(await screen.findByText('Loading…')).toBeTruthy()
     expect(queryRow(/app\.ts/)).toBeNull()
   })
 })
@@ -245,7 +245,7 @@ describe('ChangesPanel commits', () => {
     await waitFor(() => expect(readRun).toHaveBeenCalled())
     await new Promise(resolve => setTimeout(resolve, 20))
     expect(screen.queryByText('This session changed no files.')).toBeNull()
-    expect(screen.getByText('Looking for this session’s changes…')).toBeTruthy()
+    expect(await screen.findByText('Loading…')).toBeTruthy()
     answer([NEW])
     await waitFor(() => expect(screen.getByText('No change is left: the commits cancel out.')).toBeTruthy())
   })

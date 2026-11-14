@@ -1,6 +1,6 @@
 import { useMemo } from 'react'
 import { Code, Eye, FolderIcon } from 'lucide-react'
-import { Button, FileLinks, Markdown, Tooltip, TooltipContent, TooltipTrigger, useModuleHost, usePolled, Waiting } from '@openagt/dashboard/module'
+import { Button, FileLinks, Markdown, PaneNote, Skeleton, Slot, Tooltip, TooltipContent, TooltipTrigger, useModuleHost, usePolled } from '@openagt/dashboard/module'
 import type { FileContent } from '../src/read.js'
 import { readContent } from './reads.js'
 import { contentKey } from './keys.js'
@@ -58,7 +58,7 @@ export function FileView({ page, projectId, agentId, path, wrap, source, files, 
   onOpen: (path: string, keep: boolean) => void
 }) {
   const host = useModuleHost()
-  const { value, state } = usePolled<FileContent | null>(() => readContent(host, projectId, path, agentId), null, 5_000, [projectId, agentId, path], { remember: contentKey(projectId, agentId, path) })
+  const read = usePolled<FileContent | null>(() => readContent(host, projectId, path, agentId), null, 5_000, [projectId, agentId, path], { remember: contentKey(projectId, agentId, path) })
   const markdown = isMarkdown(path)
   const rendered = markdown && !source
   const folder = path.includes('/') ? path.slice(0, path.lastIndexOf('/') + 1) : ''
@@ -97,22 +97,33 @@ export function FileView({ page, projectId, agentId, path, wrap, source, files, 
           </Tooltip>
         )}
       </div>
-      <div className="min-h-0 flex-auto overflow-auto">
-        {state === 'unknown' ? (
-          <Waiting className="p-3">Reading the file…</Waiting>
-        ) : !value ? (
-          <p className="p-3 text-xs text-muted-foreground">This file is not here: it was deleted or moved, or it cannot be read.</p>
-        ) : rendered && !value.binary && value.text ? (
-          <div className="max-w-prose px-5 py-4">
-            <FileLinks.Provider value={opens}>
-              <Markdown text={value.text} document />
-            </FileLinks.Provider>
-            {value.truncated && <Cut />}
-          </div>
-        ) : (
-          <ContentView content={value} wrap={wrap} className="py-1" />
-        )}
-      </div>
+      <Slot of={read} shape={<Lines />} className="flex min-h-0 flex-auto flex-col overflow-auto">
+        {value =>
+          !value ? (
+            <PaneNote>This file is not here: it was deleted or moved, or it cannot be read.</PaneNote>
+          ) : rendered && !value.binary && value.text ? (
+            <div className="max-w-prose px-5 py-4">
+              <FileLinks.Provider value={opens}>
+                <Markdown text={value.text} document />
+              </FileLinks.Provider>
+              {value.truncated && <Cut />}
+            </div>
+          ) : (
+            <ContentView content={value} wrap={wrap} className="py-1" />
+          )
+        }
+      </Slot>
+    </div>
+  )
+}
+
+/** A file's first lines while it is read, in its lines' shape. */
+function Lines() {
+  return (
+    <div className="flex flex-col gap-1 px-3 py-1">
+      {['w-1/2', 'w-2/3', 'w-1/3'].map(width => (
+        <Skeleton key={width} className={`h-3 ${width}`} />
+      ))}
     </div>
   )
 }

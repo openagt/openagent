@@ -5,6 +5,8 @@ import { cn } from '../lib/utils.js'
 import { Markdown } from './Markdown.js'
 import { ScrollArea } from './ui/scroll-area.js'
 import { PaneNote } from './PaneNote.js'
+import { Skeleton } from './ui/skeleton.js'
+import { Slot } from './ui/slot.js'
 
 // The surfaced documents (#319/#328): the PLAN/TODO the agent writes, rendered beside the agent.
 // The read lives in the rail (#1146), which needs to know whether there are any docs before it
@@ -14,7 +16,12 @@ export function DocsPanel({ docs, loaded }: { docs: WorkspaceDoc[]; loaded: bool
 
   // Loading and empty are different facts (#948): without the guard, a project with docs
   // flashed "No PLAN/TODO docs yet." on every open while the first read was still out.
-  if (!loaded) return <p className="p-4 text-sm text-muted-foreground">Loading…</p>
+  if (!loaded)
+    return (
+      <Slot of={UNKNOWN} shape={<Lines />} className="px-5 py-4">
+        {() => null}
+      </Slot>
+    )
   if (docs.length === 0) return <PaneNote>No PLAN/TODO docs yet.</PaneNote>
 
   const current = docs[Math.min(active, docs.length - 1)]!
@@ -38,6 +45,20 @@ export function DocsPanel({ docs, loaded }: { docs: WorkspaceDoc[]; loaded: bool
           <Markdown text={current.content} document />
         </div>
       </ScrollArea>
+    </div>
+  )
+}
+
+/** The docs not read yet, for a {@link Slot} that only waits. */
+const UNKNOWN = { value: null, state: 'unknown' } as const
+
+/** A document's first lines while it is read, in their shape. */
+function Lines() {
+  return (
+    <div className="flex flex-col gap-2">
+      {['w-1/3', 'w-2/3', 'w-1/2'].map(width => (
+        <Skeleton key={width} className={`h-4 ${width}`} />
+      ))}
     </div>
   )
 }

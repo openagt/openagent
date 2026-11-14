@@ -14,6 +14,8 @@ import {
   MiddleCut,
   Input,
   PaneActions,
+  PaneNote,
+  RowShapes,
   PaneTitle,
   Popover,
   PopoverContent,
@@ -27,7 +29,6 @@ import {
   useModuleHost,
   useNarrow,
   usePolled,
-  Waiting,
   type ModulePanelProps,
 } from '@openagt/dashboard/module'
 import type { AgentCommit, FileMark } from '../src/run.js'
@@ -57,9 +58,15 @@ import { foldAll, foldDiff, setChangesSetting, showWhole, useChangesSettings, us
 const NO_COMMITS: AgentCommit[] = []
 const NO_CHANGES: Record<string, FileMark> = {}
 
-function Line({ children }: { children: string }) {
-  return <p className="p-3 text-xs text-muted-foreground">{children}</p>
-}
+/** A read not answered yet, for a {@link Slot} that only waits: the pane's answer is drawn beside it once it comes. */
+const UNKNOWN = { value: null, state: 'unknown' } as const
+
+/** The pane while its list is read: rows in a row's shape, unseen for the first 200ms. */
+const Reading = () => (
+  <Slot of={UNKNOWN} shape={<RowShapes rows={3} />} className="px-3 py-1">
+    {() => null}
+  </Slot>
+)
 
 /** The last ask from the chat that was taken: a pane opened again later does not take it a second time. */
 let revealTaken = 0
@@ -508,24 +515,24 @@ export function ChangesPanel({ projectId, agentId, activity, reveal }: ModulePan
   const line = (text: string) => (
     <>
       {header}
-      <Line>{text}</Line>
+      <PaneNote>{text}</PaneNote>
     </>
   )
-  const waiting = (text: string) => (
+  const waiting = (
     <>
       {header}
-      <Waiting className="p-3">{text}</Waiting>
+      <Reading />
     </>
   )
   if (agentId) {
-    if (runState === 'unknown' || commitsState === 'unknown' || !run || run.source === 'pending') return waiting('Looking for this session’s changes…')
+    if (runState === 'unknown' || commitsState === 'unknown' || !run || run.source === 'pending') return waiting
     if (run.source === 'gone') return line('This session’s changes are gone from this machine: its checkout was reclaimed and it left no branch or merged pull request here.')
-  } else if (projectState === 'unknown') return waiting('Reading the project’s files…')
+  } else if (projectState === 'unknown') return waiting
   if (Object.keys(all).length === 0 && commits.length === 0) return line(agentId ? 'This session changed no files.' : 'Nothing is changed in the project’s folder.')
 
   const caption = commit ? `${commit.short} ${commit.subject}` : agentId ? undefined : 'Changed in the project’s folder, not committed.'
   // What stands where the diffs would be, when the list is empty.
-  const nothing = commit ? (commitState !== 'unknown' ? 'This commit changed no files.' : 'Reading the commit…') : 'No change is left: the commits cancel out.'
+  const nothing = commit ? (commitState !== 'unknown' ? 'This commit changed no files.' : undefined) : 'No change is left: the commits cancel out.'
   return (
     <>
       {header}
@@ -544,7 +551,7 @@ export function ChangesPanel({ projectId, agentId, activity, reveal }: ModulePan
                 {caption}
               </p>
             )}
-            {paths.length === 0 && <Line>{nothing}</Line>}
+            {paths.length === 0 && (nothing === undefined ? <Reading /> : <PaneNote>{nothing}</PaneNote>)}
             {paths.map(path => {
               const mark = changes[path]!
               const isFolded = folded.has(path)
