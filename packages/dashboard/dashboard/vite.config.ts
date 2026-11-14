@@ -5,6 +5,7 @@ import react from '@vitejs/plugin-react'
 import tailwindcss from '@tailwindcss/vite'
 import { defineConfig, type Plugin, type UserConfig } from 'vite'
 import { fontLicenses } from '../../../scripts/font-licenses.mjs'
+import { classList } from './module/vite.ts'
 
 // Opt-in (`pnpm dev:daemon`, i.e. OPENAGENT_DEV_DAEMON=1): let the dev server actually start runs.
 //
@@ -193,7 +194,7 @@ export default defineConfig({
   // (A7), so `root` is pinned to this file's directory instead of inherited from the cwd — the
   // scripts that run it live one level up.
   root: fileURLToPath(new URL('.', import.meta.url)),
-  plugins: [openagentDevDaemon(), openagentHostModules(), openagentRenderBlocking(), openagentPreloadFont(), fontLicenses(), react(), tailwindcss()],
+  plugins: [openagentDevDaemon(), openagentHostModules(), openagentRenderBlocking(), openagentPreloadFont(), fontLicenses(), react(), tailwindcss(), classList(fileURLToPath(new URL('.', import.meta.url)))],
   build: {
     // Straight into the package's own dist, where the daemon serves it from. There used to be a
     // copy step between the two — a whole turbo task — because the bundle was built in a
