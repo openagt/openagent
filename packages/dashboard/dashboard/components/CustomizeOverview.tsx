@@ -34,15 +34,34 @@ const FLEX: Record<CardWidth, string> = {
   '1': 'basis-full grow-[12]',
 }
 
+/** What is no card but stands among them, full width, right under the card `card`, or first when that card is not on the page: the first steps, under what needs the person. */
+export interface Under {
+  card: string
+  node: ReactNode
+}
+
+/** An {@link Under}'s room in the rows: none when it draws nothing, so it leaves no gap. */
+export function UnderCards({ under }: { under: Under }) {
+  return <div className="min-w-0 basis-full space-y-10 empty:hidden">{under.node}</div>
+}
+
+/** The cards with `under` drawn after the card it names, or before them all. */
+function withUnder<T extends { card: OverviewCard }>(cards: T[], under: Under, draw: (placed: T, at: number) => ReactNode): ReactNode[] {
+  const after = cards.findIndex(({ card }) => card.id === under.card)
+  const drawn = cards.map(draw)
+  drawn.splice(after + 1, 0, <UnderCards key="under" under={under} />)
+  return drawn
+}
+
 /**
  * The Overview's cards in rows, each at its width, in the order given, a row's cards filling it.
  * The cards of one row are as tall as its tallest, their content at the top: three bottoms at
  * three heights read as unfinished.
  */
-export function CardGrid({ cards }: { cards: Placed[] }) {
+export function CardGrid({ cards, under }: { cards: Placed[]; under: Under }) {
   return (
     <Grid>
-      {cards.map(({ card, width }) => (
+      {withUnder(cards, under, ({ card, width }) => (
         <CardCell key={card.id} card={card} className={cn('flex min-w-0 flex-col *:flex-1', FLEX[width])} />
       ))}
     </Grid>
@@ -99,7 +118,7 @@ function DropBar({ side }: { side: 'before' | 'after' }) {
  * new places: this page's (the picked project's, or the one of every project, which also lays out a
  * project never arranged on its own).
  */
-export function EditOverview({ arranged, layouts, layoutKey, notice }: { arranged: Placed[]; layouts: OverviewLayouts | undefined; layoutKey: string; /** What arranging does, said above the tray. */ notice: ReactNode }) {
+export function EditOverview({ arranged, under, layouts, layoutKey, notice }: { arranged: Placed[]; /** Drawn where it stands on the page, so arranging moves nothing. */ under: Under; layouts: OverviewLayouts | undefined; layoutKey: string; /** What arranging does, said above the tray. */ notice: ReactNode }) {
   const [dragging, setDragging] = useState<Dragging | null>(null)
   // Where the card being dragged lands: beside one card (before or after it, by which half of it the
   // pointer is over), or at the end, over the page's empty room. It is drawn as a bar in the gap,
@@ -193,7 +212,7 @@ export function EditOverview({ arranged, layouts, layoutKey, notice }: { arrange
             No card on the page. Drag one here, or press its +.
           </div>
         )}
-        {shown.map(({ card, width }, at) => (
+        {withUnder(shown, under, ({ card, width }, at) => (
           <div
             key={card.id}
             data-card={card.id}

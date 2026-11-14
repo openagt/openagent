@@ -45,7 +45,7 @@ describe('the Overview', () => {
     working = []
     show()
     await screen.findByText('Human Queue')
-    expect(drawn().map(card => card.id)).toEqual(['usage', 'human-queue', 'working', 'skills', '@x/tickets/hot'])
+    expect(drawn().map(card => card.id)).toEqual(['human-queue', 'usage', 'working', 'skills', '@x/tickets/hot'])
     expect(screen.getByText('No agent is at work.')).toBeTruthy()
     // Full width is the whole row at every size; a third is a half once the column has the room, a
     // third once it is wide; a row's cards fill it.
@@ -58,12 +58,29 @@ describe('the Overview', () => {
     working = [active('r1', 'p1')]
     show()
     expect(await screen.findByText('working on r1')).toBeTruthy()
-    expect(drawn().map(card => card.id)).toEqual(['usage', 'human-queue', 'working', 'skills', '@x/tickets/hot'])
+    expect(drawn().map(card => card.id)).toEqual(['human-queue', 'usage', 'working', 'skills', '@x/tickets/hot'])
     cleanup()
     // With a project picked, only that project's agents count.
     show('p2')
     await screen.findByText('Human Queue')
     expect(screen.queryByText('working on r1')).toBeNull()
+  })
+
+  test('the first steps stand right under what needs the person, wherever the layout puts it, and first when it is off the page', async () => {
+    working = []
+    prefs.value = {}
+    show()
+    const firstSteps = await screen.findByText('onboarding')
+    expect(firstSteps.parentElement!.previousElementSibling!.getAttribute('data-card')).toBe('human-queue')
+    expect(firstSteps.parentElement!.nextElementSibling!.getAttribute('data-card')).toBe('usage')
+    cleanup()
+    prefs.value = { overviewLayouts: { '*': [{ id: 'usage' }, { id: 'human-queue', hidden: true }] } }
+    show()
+    expect((await screen.findByText('onboarding')).parentElement!.previousElementSibling).toBeNull()
+    cleanup()
+    prefs.value = { overviewLayouts: { '*': ['usage', 'human-queue', 'working', 'skills', '@x/tickets/hot'].map(id => ({ id, hidden: true })) } }
+    show()
+    expect(await screen.findByText('onboarding')).toBeTruthy()
   })
 
   test('a layout orders, sizes and hides the cards; one it does not name comes after, at its own width; a width narrower than a card fits is not kept', async () => {
@@ -181,7 +198,7 @@ describe('the Overview', () => {
     expect(prefs.updatePreferences).not.toHaveBeenCalled()
     fireEvent.drop(document.querySelector('[data-card="human-queue"]')!, transfer)
     const order = (prefs.updatePreferences.mock.lastCall![0] as { overviewLayouts: Record<string, { id: string }[]> }).overviewLayouts['*']!.map(place => place.id)
-    expect(order).toEqual(['usage', 'skills', 'human-queue', 'working', '@x/tickets/hot'])
+    expect(order).toEqual(['skills', 'human-queue', 'usage', 'working', '@x/tickets/hot'])
   })
 
   test('with every card off the page, the page says so beside the press that brings them back, which gives a room to drop the first one into', async () => {

@@ -32,7 +32,7 @@ import { HostServicesContext, INERT_HOST_SERVICES } from '../lib/host-services.j
 // each a press from open. A step stays once shown, done or not, so the count never moves under a
 // person: "Connect GitHub" turns into a ✓, it does not vanish.
 //
-// It renders at the top of the Overview, greeting the person by the time of day. Its ✕ hides it,
+// It renders on the Overview under what needs the person, greeting them by the time of day. Its ✕ hides it,
 // and the "Onboarding on the Overview" switch in Settings › Appearance brings it back: what the ✕
 // promises. With every step a session needs done, it says so, and its button starts the first one.
 

@@ -12,7 +12,7 @@ import { AgentUpdates } from './AgentUpdates.js'
 import { Agents } from './Agents.js'
 import { useModuleCards, type OverviewCard } from './ModuleCards.js'
 import { SkillsCard } from './SkillsCard.js'
-import { CardGrid, EditOverview, TakeOffMark } from './CustomizeOverview.js'
+import { CardGrid, EditOverview, TakeOffMark, UnderCards, type Under } from './CustomizeOverview.js'
 import { ALL_PROJECTS, arrangeCards } from '../../src/client.js'
 import type { ProjectSummary } from '../../src/index.js'
 import type { ReadState } from '../lib/use-async.js'
@@ -27,8 +27,8 @@ import { YourAgentsPart } from './YourAgentsPart.js'
  */
 const PACKAGES_PLACE = 3
 
-// The Overview landing page (#1139): a focused at-a-glance board — usage first, then what needs a
-// human (Human Queue) beside the agents working now, then the cards the installed packages
+// The Overview landing page (#1139): a focused at-a-glance board — what needs a human (Human Queue)
+// first, the first steps under it, then usage and the agents working now, then the cards the installed packages
 // declare, in two columns (#1818: the queue package's AI Queue, the tickets package's hot tickets,
 // the scheduler package's Automations). A card with nothing to show says so in a sentence ("No agent is at work."). OpenAgent's own cards are projections of the same .openagent files
 // over the shell's own polls (the agents at work, the Human Queue), so they stay live; selecting a row jumps into its project or
@@ -115,13 +115,11 @@ export function DashboardPage({
     { id: 'your-agents', order: 4, node: <YourAgentsPart /> },
   ].sort((one, other) => one.order - other.order)
   const cards: OverviewCard[] = [
-    // Usage (#1139): the one figure that governs everything the agent may do next.
-    { id: 'usage', label: 'Usage', order: 5, width: '1', minWidth: '1/2', node: <Quota projects={projects} /> },
     {
       id: 'human-queue',
       stale: interventionsState === 'kept',
       label: 'Human Queue',
-      order: 6,
+      order: 5,
       width: '1',
       minWidth: '1/2',
       node: (
@@ -130,6 +128,8 @@ export function DashboardPage({
         </div>
       ),
     },
+    // Usage (#1139): the one figure that governs everything the agent may do next.
+    { id: 'usage', label: 'Usage', order: 6, width: '1', minWidth: '1/2', node: <Quota projects={projects} /> },
     {
       id: 'working',
       stale: active.state === 'kept',
@@ -168,6 +168,17 @@ export function DashboardPage({
     updatePreferences({ overviewLayouts: rest })
   }
 
+  // What needs the person leads; what a new install still has to do comes right under it, wherever the layout puts it.
+  const firstSteps: Under = {
+    card: 'human-queue',
+    node: (
+      <>
+        {!onboardingDismissed && <OnboardingChecklist projects={projects} onAgentStarted={onAgentStarted} onSelectProject={onSelectProject} onProjectAdded={onProjectAdded} />}
+        <AgentUpdates />
+      </>
+    ),
+  }
+
   return (
     <Page
       title="Overview"
@@ -203,11 +214,10 @@ export function DashboardPage({
     >
       {/* Arranging moves nothing: the first steps and the updates stay, each part keeps its place, and what arranging adds comes after the parts. */}
       <div className="space-y-10">
-        {!onboardingDismissed && <OnboardingChecklist projects={projects} onAgentStarted={onAgentStarted} onSelectProject={onSelectProject} onProjectAdded={onProjectAdded} />}
-        <AgentUpdates />
         {!layoutRead ? null : editing ? (
           <EditOverview
             arranged={arranged}
+            under={firstSteps}
             layouts={layouts}
             layoutKey={layoutKey}
             notice={
@@ -218,14 +228,17 @@ export function DashboardPage({
             }
           />
         ) : arranged.some(({ hidden }) => !hidden) ? (
-          <CardGrid cards={arranged.filter(({ hidden }) => !hidden)} />
+          <CardGrid cards={arranged.filter(({ hidden }) => !hidden)} under={firstSteps} />
         ) : (
-          <div className="flex flex-wrap items-center gap-3">
-            <p className="text-sm text-muted-foreground">Every card is off the Overview. Press Customize to put some back.</p>
-            <Button variant="secondary" onClick={() => setEditing(true)}>
-              Customize
-            </Button>
-          </div>
+          <>
+            <UnderCards under={firstSteps} />
+            <div className="flex flex-wrap items-center gap-3">
+              <p className="text-sm text-muted-foreground">Every card is off the Overview. Press Customize to put some back.</p>
+              <Button variant="secondary" onClick={() => setEditing(true)}>
+                Customize
+              </Button>
+            </div>
+          </>
         )}
       </div>
     </Page>
