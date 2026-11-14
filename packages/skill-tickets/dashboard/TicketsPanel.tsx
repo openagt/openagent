@@ -220,7 +220,7 @@ export function TicketsPanel({
   onClaimedClick,
   onOpenAgent,
   onClearFilters,
-  lead = false,
+  pressesInHead = false,
 }: {
   projectId: string | null
   tickets: WorkspaceTicket[]
@@ -247,8 +247,8 @@ export function TicketsPanel({
   /** Lets the "N hidden by filters" state clear them right there instead of pointing back up
    *  at the toolbar. */
   onClearFilters?: (() => void) | undefined
-  /** The page shows this project alone: its New ticket is the page's one primary press. */
-  lead?: boolean | undefined
+  /** The page shows this project alone: its update and its New ticket stand in the page's head ({@link ProjectTicketsPresses}), not here. */
+  pressesInHead?: boolean | undefined
 }) {
   const { busy, error, run } = useAction()
   // Which start is in flight, by its prompt: one `busy` holds every start back, and only this one spins.
@@ -257,7 +257,7 @@ export function TicketsPanel({
   // When `tickets/` last caught up with the issue tracker, from `tickets meta --local`. Read here rather than
   // passed down: the cross-project page reads one ticket list per project, and this is the one
   // extra read a section adds.
-  const meta = useLoaded<TicketsMeta>(projectId ? async () => readMeta(await host.runCommand(projectId, ['meta', '--local'])) : null, NO_META, [projectId])
+  const meta = useTicketsMeta(pressesInHead ? null : projectId)
 
   if (!projectId) return null
 
@@ -301,10 +301,12 @@ export function TicketsPanel({
           No tickets yet. Tickets live in <code className="rounded-sm bg-muted px-1 font-mono text-xs">tickets/</code> and are what the agent
           plans from.
         </p>
-        <div className="flex flex-wrap items-center gap-2">
-          <UpdateTicketsButton busy={busy} starting={starting === UPDATE_TICKETS_PROMPT} onStart={() => void updateTickets()} onConfigure={() => configure(UPDATE_TICKETS_PROMPT)} />
-          <NewTicketButton onClick={newTicket} primary={lead} />
-        </div>
+        {!pressesInHead && (
+          <div className="flex flex-wrap items-center gap-2">
+            <UpdateTicketsButton busy={busy} starting={starting === UPDATE_TICKETS_PROMPT} onStart={() => void updateTickets()} onConfigure={() => configure(UPDATE_TICKETS_PROMPT)} />
+            <NewTicketButton onClick={newTicket} />
+          </div>
+        )}
         {error && <p role="alert" className="text-xs text-danger">{error}</p>}
       </div>
     )
@@ -313,24 +315,23 @@ export function TicketsPanel({
   return (
     <div className="space-y-2">
       {/* The same update as the empty state's button (#1501): one command covers both, its empty
-          branch being the first import. Here it sits beside the stamp it acts on (#1265), and the
-          ticket written by hand is the list's one primary press. */}
-      <div className="flex flex-wrap items-center gap-2">
-        <span className="min-w-0 basis-full text-xs text-muted-foreground sm:flex-1 sm:basis-0 sm:truncate">
-          {meta.lastImportedAt
-            ? `Updated from the tracker ${formatRelative(meta.lastImportedAt)}`
-            : 'No record of an import yet'}
-        </span>
-        <UpdateTicketsButton
-          busy={busy}
-          starting={starting === UPDATE_TICKETS_PROMPT}
-          onStart={() => void updateTickets()}
-          onConfigure={() => configure(UPDATE_TICKETS_PROMPT)}
-          lastImportedAt={meta.lastImportedAt}
-        />
-        <NewTicketButton onClick={newTicket} primary={lead} />
-        {error && <p role="alert" className="basis-full text-xs text-danger">{error}</p>}
-      </div>
+          branch being the first import. Here it sits beside the stamp it acts on (#1265). */}
+      {pressesInHead ? (
+        error && <p role="alert" className="text-xs text-danger">{error}</p>
+      ) : (
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="min-w-0 basis-full text-xs text-muted-foreground sm:flex-1 sm:basis-0 sm:truncate">{importSaid(meta.lastImportedAt)}</span>
+          <UpdateTicketsButton
+            busy={busy}
+            starting={starting === UPDATE_TICKETS_PROMPT}
+            onStart={() => void updateTickets()}
+            onConfigure={() => configure(UPDATE_TICKETS_PROMPT)}
+            lastImportedAt={meta.lastImportedAt}
+          />
+          <NewTicketButton onClick={newTicket} />
+          {error && <p role="alert" className="basis-full text-xs text-danger">{error}</p>}
+        </div>
+      )}
       <TicketList>
         {tickets.map(ticket => (
           <TicketRow
@@ -352,6 +353,38 @@ export function TicketsPanel({
         ))}
       </TicketList>
     </div>
+  )
+}
+
+/** When `tickets/` last caught up with the issue tracker, from `tickets meta --local`; nothing is read for no project. */
+export function useTicketsMeta(projectId: string | null): TicketsMeta {
+  const host = useModuleHost()
+  return useLoaded<TicketsMeta>(projectId ? async () => readMeta(await host.runCommand(projectId, ['meta', '--local'])) : null, NO_META, [projectId])
+}
+
+/** The import stamp in words: "Updated from the tracker 3h ago". */
+export function importSaid(lastImportedAt: string | undefined): string {
+  return lastImportedAt ? `Updated from the tracker ${formatRelative(lastImportedAt)}` : 'No record of an import yet'
+}
+
+/**
+ * A project's own presses, at the right of a page's head that shows it alone: its tickets brought
+ * up to date with the tracker, then one written by hand, the page's primary.
+ */
+export function ProjectTicketsPresses({ projectId, busy, starting, onStart, lastImportedAt }: {
+  projectId: string
+  busy: boolean
+  /** The update is the start in flight. */
+  starting: boolean
+  onStart: () => void
+  lastImportedAt: string | undefined
+}) {
+  const host = useModuleHost()
+  return (
+    <>
+      <UpdateTicketsButton busy={busy} starting={starting} onStart={onStart} onConfigure={() => host.configureRun(projectId, UPDATE_TICKETS_PROMPT)} lastImportedAt={lastImportedAt} />
+      <NewTicketButton onClick={() => host.openPage('tickets', [NEW_TICKET], projectId)} primary />
+    </>
   )
 }
 

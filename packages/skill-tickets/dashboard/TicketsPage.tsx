@@ -1,6 +1,6 @@
 import { Fragment, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { Button, LinkActions, Page, RowShapes, Section, Slot, cn, usePolled, useAction, useModuleHost, type ProjectLinks, type ModuleLink, type ModuleProject } from '@openagt/dashboard/module'
-import { heldBack, holderAgent, planLink, ticketLink, withHolder } from '../src/module.js'
+import { UPDATE_TICKETS_PROMPT, heldBack, holderAgent, planLink, ticketLink, withHolder } from '../src/module.js'
 import { holdingRun } from './lib/holding-run.js'
 import type { ProjectTickets, WorkspaceTicket } from './lib/types.js'
 import { listTickets } from './lib/list.js'
@@ -16,7 +16,7 @@ import {
   type TicketsView,
 } from './lib/ticket-filter.js'
 import { TicketFilterBar } from './TicketFilterBar.js'
-import { TicketList, TicketsPanel, TicketRow } from './TicketsPanel.js'
+import { ProjectTicketsPresses, TicketList, TicketsPanel, TicketRow, importSaid, useTicketsMeta } from './TicketsPanel.js'
 
 /** Stable initial for the cross-project tickets poll, so it does not churn on every render. */
 const EMPTY_GROUPS: ProjectTickets[] = []
@@ -111,6 +111,9 @@ export function TicketsPage({ projects }: { projects: ModuleProject[] }) {
     await run(() => host.startRun(projectId, prompt), failure)
     setStarting(null)
   }
+  // A page of one project: its update and its New ticket stand in the page's head, its import stamp in the sentence under it.
+  const only = projects.length === 1 ? projects[0] : undefined
+  const meta = useTicketsMeta(only?.id ?? null)
   // The page-wide adds: every unclaimed shown ticket handed, as a link, to the actions the
   // installed modules offer on links — "Add to queue" when a project has a queue package — as the
   // ticket itself, or as the ask for its plan. Both walk the shown order, so within a priority
@@ -170,18 +173,31 @@ export function TicketsPage({ projects }: { projects: ModuleProject[] }) {
       count={state !== 'unknown' && rows.length > 0 ? `${visible.length}/${rows.length}` : undefined}
       description={
         <>
-          {projects.length === 1 ? 'This project\u2019s' : 'Every project\u2019s'} <code className="rounded-sm bg-muted px-1 font-mono text-xs">tickets/</code> backlog: what agents plan from.
+          {only ? 'This project\u2019s' : 'Every project\u2019s'} <code className="rounded-sm bg-muted px-1 font-mono text-xs">tickets/</code> backlog: what agents plan from.
+          {only && ` ${importSaid(meta.lastImportedAt)}.`}
         </>
       }
       // The whole shown set onto the queue: the detail page's Queue action lifted to the page, and
       // its plan sibling. While rows are ticked the selection's bar speaks for them instead, and
-      // these keep their place, unseen, so nothing on the page moves.
+      // these keep their place, unseen, so nothing on the page moves. Then the project's own
+      // presses, New ticket the primary, last.
       actions={
-        state !== 'unknown' && (
-          <span className={cn('contents', hasSelection && '[&>*]:invisible')} aria-hidden={hasSelection || undefined} inert={hasSelection || undefined}>
-            <QueueAdds rows={flatRows} selection={false} disabled={busy} />
-          </span>
-        )
+        <>
+          {state !== 'unknown' && (
+            <span className={cn('contents', hasSelection && '[&>*]:invisible')} aria-hidden={hasSelection || undefined} inert={hasSelection || undefined}>
+              <QueueAdds rows={flatRows} selection={false} disabled={busy} />
+            </span>
+          )}
+          {only && (
+            <ProjectTicketsPresses
+              projectId={only.id}
+              busy={busy}
+              starting={starting?.projectId === only.id && starting.prompt === UPDATE_TICKETS_PROMPT}
+              onStart={() => void startSession(only.id, UPDATE_TICKETS_PROMPT, 'The update could not be started.')}
+              lastImportedAt={meta.lastImportedAt}
+            />
+          )}
+        </>
       }
       bar={
         <>
@@ -258,7 +274,7 @@ export function TicketsPage({ projects }: { projects: ModuleProject[] }) {
                     <TicketsPanel
                       projectId={g.projectId}
                       tickets={sorted.map(r => r.ticket)}
-                      lead={groups.length === 1}
+                      pressesInHead={only !== undefined}
                       hiddenByFilter={g.tickets.length - groupRows.length}
                       isSelected={file => selected.has(`${g.projectId}/${file}`)}
                       onToggleSelect={file => toggleSelected(`${g.projectId}/${file}`)}

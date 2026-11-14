@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest'
-import { cleanup, fireEvent, screen, waitFor } from '@testing-library/react'
+import { cleanup, fireEvent, screen, waitFor, within } from '@testing-library/react'
 import { configureFirst } from '../../dashboard/dashboard/test-utils.js'
 import { forgetRemembered } from '@openagt/dashboard/module'
 import type { MountedModules } from '@openagt/dashboard/module/testing'
@@ -82,17 +82,21 @@ describe('TicketsPage (#1144)', () => {
     const title = screen.getByRole('heading', { level: 1 })
     expect(title.textContent).toBe('Tickets 2/2')
     expect(title.className).toBe('text-xl font-semibold')
-    const line = title.nextElementSibling!
+    const line = title.closest('header')!.querySelector('p')!
     expect(line.textContent).toBe('Every project\u2019s tickets/ backlog: what agents plan from.')
-    expect(line.className).toBe('mt-1 text-sm text-muted-foreground')
+    expect(line.className).toBe('mt-1 text-sm text-muted-foreground max-md:sr-only')
     // No bar of its own under the header.
     expect(title.closest('.border-b')).toBeNull()
     cleanup()
-    // With one project shown, the line does not say "every".
+    // With one project shown, the line does not say "every", and says when its tickets last came from the tracker;
+    // the project's update and its New ticket, the primary, stand last in the header's row.
     onAllTickets.mockResolvedValue([{ projectId: 'p1', projectName: 'Alpha', tickets: [ticket({ title: 'Do the thing' })] }])
     render()
     await screen.findByText('Do the thing')
-    expect(screen.getByRole('heading', { level: 1 }).nextElementSibling!.textContent).toBe('This project\u2019s tickets/ backlog: what agents plan from.')
+    const header = screen.getByRole('heading', { level: 1 }).closest('header')!
+    expect(header.querySelector('p')!.textContent).toBe('This project\u2019s tickets/ backlog: what agents plan from. No record of an import yet.')
+    const presses = within(header.firstElementChild as HTMLElement).getAllByRole('button').map(button => button.textContent?.trim()).filter(Boolean)
+    expect(presses.slice(-2)).toEqual(['Update tickets', 'New ticket'])
   })
 
   test('reads every project\'s tickets and lists each under its own project heading', async () => {
@@ -323,8 +327,8 @@ describe('TicketsPage filters (#1144)', () => {
     window.history.replaceState(null, '', '/tickets?q=zzz-no-match')
     render()
     expect(await screen.findByText(/2 tickets hidden by the current filters/i)).toBeTruthy()
-    // Not the update offer — these tickets exist, they are filtered (#1230's rule, kept).
-    expect(screen.queryByRole('button', { name: 'Update tickets' })).toBeNull()
+    // Not the update offer in the list — these tickets exist, they are filtered (#1230's rule, kept); the page's head keeps its own.
+    expect(screen.getAllByRole('button', { name: 'Update tickets' }).every(button => button.closest('header'))).toBe(true)
     fireEvent.click(screen.getByRole('button', { name: /clear filters/i }))
     expect(await screen.findByText('Improve the lock')).toBeTruthy()
     expect(window.location.search).toBe('')

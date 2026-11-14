@@ -1,5 +1,6 @@
 import type { ReactNode } from 'react'
 import { ShowSidebarButton } from './SidebarToggle.js'
+import { cn } from '../lib/utils.js'
 
 // A page of the dashboard that is no chat (the Overview, and a module's page: Logs, Queue, Tickets,
 // Automations): its name, a line saying what it shows, and the page's own buttons at the end of
@@ -38,11 +39,14 @@ export function Page({
   return (
     <PageColumn>
       <header className="mb-6 space-y-3">
-        <div className="flex flex-wrap items-start justify-between gap-x-4 gap-y-2">
-          <div className="flex min-w-0 items-start gap-2">
-            {/* While the sidebar is hidden, the button that shows it again stands before the name. */}
-            <ShowSidebarButton />
-            <div className="min-w-0">
+        {/* A phone's bar names the page: there this block shows only the count and the buttons, and is said alone when it has neither. */}
+        <div className={cn(count === undefined && actions === undefined && 'max-md:sr-only')}>
+          {/* One row at every width: the name with its count, then the page's buttons at its right. */}
+          <div className="flex items-center justify-between gap-4 md:min-h-8">
+            {/* A page's name and its count never give up width: the buttons do. */}
+            <div className="flex shrink-0 items-center gap-2">
+              {/* While the sidebar is hidden, the button that shows it again stands before the name. */}
+              <ShowSidebarButton />
               <h1 className="text-xl font-semibold">
                 <span className="max-md:sr-only">{title}</span>
                 {/* A space, not only a margin, so a screen reader says the name and the count apart. */}
@@ -54,11 +58,12 @@ export function Page({
                   </>
                 )}
               </h1>
-              {description !== undefined && <p className="mt-1 text-sm text-muted-foreground">{description}</p>}
             </div>
+            {/* The buttons give up width: they go under each other, from the right, when the row is narrower than them, and on a phone a button's words longer than the screen are cut. */}
+            {actions !== undefined && <div className="flex min-w-0 flex-wrap items-center justify-end gap-2">{actions}</div>}
           </div>
-          {/* The buttons give up width: they go under each other when the column is narrower than them, and on a phone a button's words longer than the screen are cut. */}
-          {actions !== undefined && <div className="flex min-w-0 flex-wrap items-center gap-2">{actions}</div>}
+          {/* Under the row, so however long it is, the buttons stay at the name's right. On a phone, where the bar names the page, it is said to a screen reader only. */}
+          {description !== undefined && <p className="mt-1 text-sm text-muted-foreground max-md:sr-only">{description}</p>}
         </div>
         {bar}
       </header>

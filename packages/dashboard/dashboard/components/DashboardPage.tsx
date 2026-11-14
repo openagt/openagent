@@ -194,8 +194,7 @@ export function DashboardPage({
             </Button>
           </>
         ) : (
-          // Under the description on a phone: pulled back by its padding, so its icon lines up with the words above.
-          <Button variant="ghost" className="gap-1.5 text-muted-foreground max-sm:-ml-3" onClick={() => setEditing(true)}>
+          <Button variant="ghost" className="gap-1.5 text-muted-foreground" onClick={() => setEditing(true)}>
             <SlidersHorizontal className="h-3.5 w-3.5" aria-hidden />
             Customize
           </Button>
