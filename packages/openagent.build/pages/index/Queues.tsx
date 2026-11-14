@@ -50,8 +50,6 @@ export function Queues() {
           <div style={{ marginTop: 16 }}>
             <Screenshot
               name="waiting"
-              width={768}
-              height={298}
               alt="The dashboard's Waiting on you: a run that needs an answer to Which way?, and one with a commit that needs a push."
             />
           </div>

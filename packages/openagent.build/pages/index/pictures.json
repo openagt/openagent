@@ -1,0 +1,74 @@
+{
+  "run": [
+    {
+      "window": 1120,
+      "width": 1120,
+      "height": 447,
+      "media": "(min-width: 1184px)"
+    },
+    {
+      "window": 960,
+      "width": 960,
+      "height": 447,
+      "media": "(min-width: 1024px)"
+    },
+    {
+      "window": 704,
+      "width": 662,
+      "height": 236,
+      "media": "(min-width: 768px)"
+    },
+    {
+      "window": 390,
+      "width": 348,
+      "height": 236,
+      "media": ""
+    }
+  ],
+  "waiting": [
+    {
+      "window": 970,
+      "width": 714,
+      "height": 155,
+      "media": "(min-width: 1184px)"
+    },
+    {
+      "window": 499,
+      "width": 499,
+      "height": 160,
+      "media": "(min-width: 861px)"
+    },
+    {
+      "window": 960,
+      "width": 704,
+      "height": 155,
+      "media": "(min-width: 768px)"
+    },
+    {
+      "window": 358,
+      "width": 358,
+      "height": 160,
+      "media": ""
+    }
+  ],
+  "tickets": [
+    {
+      "window": 1024,
+      "width": 768,
+      "height": 318,
+      "media": "(min-width: 832px)"
+    },
+    {
+      "window": 960,
+      "width": 704,
+      "height": 318,
+      "media": "(min-width: 768px)"
+    },
+    {
+      "window": 358,
+      "width": 358,
+      "height": 264,
+      "media": ""
+    }
+  ]
+}

@@ -62,13 +62,11 @@ export function AutonomousAi() {
           <Note>Agents still ask for your confirmation for non-obvious decisions.</Note>
           <Note>You're still in control — only pick the autonomicity that works for you.</Note>
         </div>
-        <Screenshot
-          name="tickets"
-          width={768}
-          height={327}
-          alt="The dashboard's Tickets page: the project's two tickets, Dark mode and Login page, each with a Plan button, and Add to queue for both."
-        />
       </div>
+      <Screenshot
+        name="tickets"
+        alt="The dashboard's Tickets page: the project's two tickets, Dark mode and Login page, and its presses to add them to the queue."
+      />
     </section>
   )
 }

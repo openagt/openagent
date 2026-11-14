@@ -187,8 +187,6 @@ export function Hero() {
       <div style={{ width: '100%', marginTop: 32 }}>
         <Screenshot
           name="run"
-          width={1440}
-          height={600}
           first
           alt="The OpenAgent dashboard: an agent's run asks which way to go, its recommended answer picked, beside the project's pages and runs."
         />

@@ -1,4 +1,5 @@
 import type { CSSProperties, ReactNode } from 'react'
+import PICTURES from './pictures.json'
 
 export const DISCORD_URL = 'https://discord.gg/qc8zvdzWNR'
 export const GITHUB_URL = 'https://github.com/openagt/openagent'
@@ -155,35 +156,41 @@ export function CodeChip({ children }: { children: string }) {
 
 /**
  * A capture of the dashboard (public/pictures/, taken by pictures.mjs), dark or light as the visitor's
- * computer asks, framed by a hairline. Its size is the capture's at half its pixels, so its box is
- * laid out before it arrives.
+ * computer asks, at its own pixels: one capture for each width of room the page gives it, so its words are
+ * the dashboard's own size. Each source carries its size, so the box is laid out before the picture arrives.
  */
-export function Screenshot({
-  name,
-  width,
-  height,
-  alt,
-  first,
-}: {
-  name: 'run' | 'waiting' | 'tickets'
-  width: number
-  height: number
+export function Screenshot({ name, alt, first }: {
+  name: keyof typeof PICTURES
   alt: string
   /** The page's first picture: fetched with the page (after its fonts), not when it nears the screen. */
   first?: boolean
 }) {
+  const sizes = PICTURES[name]
+  const file = (window: number, scheme: 'dark' | 'light') => `/pictures/${name}-${window}-${scheme}.webp 2x`
+  const last = sizes[sizes.length - 1]!
   return (
     <picture>
-      <source media="(prefers-color-scheme: light)" srcSet={`/pictures/${name}-light.webp`} />
+      {sizes.flatMap(({ window, width, height, media }) => [
+        <source
+          key={`${window}-light`}
+          media={[media, '(prefers-color-scheme: light)'].filter(Boolean).join(' and ')}
+          srcSet={file(window, 'light')}
+          width={width}
+          height={height}
+        />,
+        media && <source key={`${window}-dark`} media={media} srcSet={file(window, 'dark')} width={width} height={height} />,
+      ])}
       <img
-        src={`/pictures/${name}-dark.webp`}
-        width={width}
-        height={height}
+        srcSet={file(last.window, 'dark')}
+        width={last.width}
+        height={last.height}
         alt={alt}
         loading={first ? 'eager' : 'lazy'}
         style={{
-          display: 'block',
-          width: '100%',
+          // Inline, so it stands where its parent aligns text; never wider than its room.
+          display: 'inline-block',
+          verticalAlign: 'top',
+          maxWidth: '100%',
           height: 'auto',
           // An outline, not a border: a border would change the box's ratio once the picture arrives.
           outline: '1px solid var(--border)',
