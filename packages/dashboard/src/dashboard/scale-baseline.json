@@ -20,9 +20,7 @@
     "max-h-[400px]": 1
   },
   "dashboard/dashboard/components/prompt-editor/SuggestionList.tsx": {
-    "rounded": 1,
-    "text-[10px]": 1,
-    "text-muted-foreground/70": 1
+    "rounded": 1
   },
   "dashboard/dashboard/components/ui/resizable.tsx": {
     "group-aria-[orientation=horizontal]/handle:h-[3px]": 1
