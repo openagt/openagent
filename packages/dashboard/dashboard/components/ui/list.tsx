@@ -25,7 +25,7 @@ export function Row({ leading, title, meta, actions, href, onClick, stackOnPhone
   title: ReactNode
   /** At the right, quieter: an age, a count, a state. */
   meta?: ReactNode
-  /** The row's own presses: shown under the pointer and the keyboard, always on touch. */
+  /** The row's own presses: shown under the pointer and the keyboard, and while a menu of one is open; always on touch. */
   actions?: ReactNode
   href?: string
   onClick?: () => void
@@ -42,7 +42,9 @@ export function Row({ leading, title, meta, actions, href, onClick, stackOnPhone
       className={cn(
         'group/row relative flex items-center gap-3 rounded-md px-3 text-sm md:h-10',
         stackOnPhone ? 'max-md:min-h-11 max-md:py-2' : 'max-md:h-11',
-        pressable && 'transition-colors hover:bg-accent has-[[data-cover]:active]:bg-foreground/10',
+        // A row with presses is filled as a link's row is, under the pointer, the keyboard and an open menu of its own, so its presses read as its.
+        (pressable || actions !== undefined) && 'transition-colors hover:bg-accent has-[:focus-visible]:bg-accent has-[[aria-expanded=true]]:bg-accent',
+        pressable && 'has-[[data-cover]:active]:bg-foreground/10',
         className,
       )}
     >
@@ -62,7 +64,7 @@ export function Row({ leading, title, meta, actions, href, onClick, stackOnPhone
         {meta !== undefined && <span className="flex shrink-0 items-center gap-2 text-xs text-muted-foreground">{meta}</span>}
       </span>
       {actions !== undefined && (
-        <span className="relative flex shrink-0 items-center gap-1 pointer-fine:opacity-0 pointer-fine:group-hover/row:opacity-100 pointer-fine:group-focus-within/row:opacity-100">{actions}</span>
+        <span className="relative flex shrink-0 items-center gap-1 pointer-fine:opacity-0 pointer-fine:group-hover/row:opacity-100 pointer-fine:group-focus-within/row:opacity-100 pointer-fine:has-[[aria-expanded=true]]:opacity-100">{actions}</span>
       )}
     </li>
   )

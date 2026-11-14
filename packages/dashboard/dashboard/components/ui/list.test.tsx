@@ -41,6 +41,19 @@ describe('Row', () => {
     expect(screen.queryByRole('button', { name: 'blog' })).toBeNull()
     expect(screen.queryByRole('link')).toBeNull()
   })
+
+  test('a row with presses, link or not, is filled under the pointer, the keyboard and an open menu of its own, and its presses stay shown while that menu is open', () => {
+    render(
+      <List>
+        <Row title="Default" actions={<button type="button" aria-expanded="false">Edit</button>} />
+        <Row title="blog" />
+      </List>,
+    )
+    const [withPresses, bare] = screen.getAllByRole('listitem')
+    expect(withPresses!.className.split(' ')).toEqual(expect.arrayContaining(['hover:bg-accent', 'has-[:focus-visible]:bg-accent', 'has-[[aria-expanded=true]]:bg-accent']))
+    expect(bare!.className).not.toContain('hover:bg-accent')
+    expect(screen.getByRole('button', { name: 'Edit' }).parentElement!.className).toContain('pointer-fine:has-[[aria-expanded=true]]:opacity-100')
+  })
 })
 
 describe('Section', () => {
