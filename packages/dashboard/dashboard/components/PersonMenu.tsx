@@ -55,8 +55,8 @@ export function PersonMenu({ onSettings }: { onSettings: (entry?: string) => voi
     <DropdownMenu>
       <DropdownMenuTrigger
         aria-label={`${person ? `${person.name}: settings` : 'Settings'}${needs ? ', something is missing' : ''}`}
-        // A row of the sidebar's: 32 high (44 on a phone), half the accent fill under the pointer, the whole while its menu is open.
-        className="focus-ring flex w-full min-w-0 items-center gap-2 rounded-md px-1.5 text-left text-sm transition-colors hover:bg-sidebar-accent/50 active:bg-sidebar-accent data-[popup-open]:bg-sidebar-accent md:h-8 max-md:h-11"
+        // A row of the sidebar's: 32 high (44 on a phone), the text's colour at 4% under the pointer, at 8% while its menu is open.
+        className="focus-ring flex w-full min-w-0 items-center gap-2 rounded-md px-1.5 text-left text-sm transition-colors hover:bg-foreground/4 active:bg-foreground/8 data-[popup-open]:bg-foreground/8 md:h-8 max-md:h-11"
       >
         {/* 20 wide, laid out as 16, so its centre is on the icons' axis and the name on their labels' edge. */}
         <Avatar person={person} dot={needs} className="-mx-0.5" />

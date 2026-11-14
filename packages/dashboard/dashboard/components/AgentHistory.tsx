@@ -475,13 +475,13 @@ export function AgentHistory({
 
 /**
  * A row of the sidebar's navigation: 32 high (44 on a phone), its icon on the sidebar's axis. The
- * picked row has the accent fill and its icon in the text's colour; a row under the pointer has half
- * that fill, so the two are told apart at a glance; the weight never changes.
+ * picked row is filled with the text's colour at 8% and its icon is in the text's colour; a row under
+ * the pointer at 4%, so the two are told apart at a glance; the weight never changes.
  */
 function navRowClass(active: boolean): string {
   return cn(
     'focus-ring flex w-full items-center gap-2 rounded-md px-1.5 text-sm font-normal text-foreground transition-colors md:h-8 max-md:h-11 [&>svg]:size-4 [&>svg]:shrink-0',
-    active ? 'bg-sidebar-accent [&>svg]:text-foreground' : 'hover:bg-sidebar-accent/50 active:bg-sidebar-accent [&>svg]:text-muted-foreground',
+    active ? 'bg-foreground/8 [&>svg]:text-foreground' : 'hover:bg-foreground/4 active:bg-foreground/8 [&>svg]:text-muted-foreground',
   )
 }
 
@@ -871,7 +871,7 @@ function AgentHistoryRow({
     'aria-label': `${naming ? 'Naming this session' : titleText} · ${said}`,
     'aria-current': active ? ('page' as const) : undefined,
     // The navigation's row: 32 high (44 on a phone), the picked one filled, the one under the pointer half filled.
-    className: cn('focus-ring rail-row flex w-full items-center gap-2 rounded-md px-1.5 text-left text-sm text-foreground transition-colors md:h-8 max-md:h-11', active ? 'bg-sidebar-accent' : 'hover:bg-sidebar-accent/50 active:bg-sidebar-accent'),
+    className: cn('focus-ring rail-row flex w-full items-center gap-2 rounded-md px-1.5 text-left text-sm text-foreground transition-colors md:h-8 max-md:h-11', active ? 'bg-foreground/8' : 'hover:bg-foreground/4 active:bg-foreground/8'),
     ...(standIn ? { 'data-stand-in': '' } : {}),
     onPointerEnter: onNear,
     onFocus: onNear,

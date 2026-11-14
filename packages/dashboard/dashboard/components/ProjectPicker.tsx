@@ -260,7 +260,7 @@ export function ProjectPicker({
     ) : look === 'sidebar' ? (
       // A ghost row of the sidebar's, 32 high (44 on a phone) whatever it shows, so the rows under it never move: the
       // chevrons say it opens, the soft fill under the pointer that it is pressed.
-      <button type="button" className="focus-ring flex w-full items-center gap-2 rounded-md px-1.5 text-sm font-medium transition-colors hover:bg-sidebar-accent/50 active:bg-sidebar-accent md:h-8 max-md:h-11">
+      <button type="button" className="focus-ring flex w-full items-center gap-2 rounded-md px-1.5 text-sm font-medium transition-colors hover:bg-foreground/4 active:bg-foreground/8 md:h-8 max-md:h-11">
         <span className="flex size-4 shrink-0 items-center justify-center">
           {pending ? null : project ? <ProjectDot project={project} /> : <Layers className="size-4 text-muted-foreground" aria-hidden />}
         </span>

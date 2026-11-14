@@ -162,8 +162,8 @@ describe('AgentHistory (#785)', () => {
     const rows = [...container.querySelectorAll('a, button')]
     const home = rows.find(row => row.textContent?.trim() === 'New agent session')
     const starting = rows.find(row => row.hasAttribute('data-stand-in'))
-    expect(starting?.classList.contains('bg-sidebar-accent')).toBe(true)
-    expect(home?.classList.contains('bg-sidebar-accent')).toBe(false)
+    expect(starting?.classList.contains('bg-foreground/8')).toBe(true)
+    expect(home?.classList.contains('bg-foreground/8')).toBe(false)
   })
 
   test('the stand-in row reads as the run’s own row will: running, the project and "just now" where every project shows, the name on its way, not dimmed', () => {
@@ -934,8 +934,8 @@ describe('the project select (#1513)', () => {
       { projectId: 'p2', projectName: 'beta', agent: agent({ id: 'b1', status: 'done', intent: 'second' }) },
     ]
     renderRail(<AgentHistory projectId="p2" agents={[]} recentAgents={recentAgents} selectedAgentId="b1" onSelect={() => {}} projects={[stranded, idle]} />)
-    expect(screen.getByText('second').closest('a')?.classList.contains('bg-sidebar-accent')).toBe(true)
-    expect(screen.getByText('first').closest('a')?.classList.contains('bg-sidebar-accent')).toBe(false)
+    expect(screen.getByText('second').closest('a')?.classList.contains('bg-foreground/8')).toBe(true)
+    expect(screen.getByText('first').closest('a')?.classList.contains('bg-foreground/8')).toBe(false)
   })
 
   test('with all projects showing, New opens a session with no project even on a project\'s own page', () => {
