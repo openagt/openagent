@@ -204,7 +204,8 @@ export function AgentComposer({
     const sent = contextSet?.context
     const draft = composerRef.current?.clear()
     const went = await say(sent ? promptWithContext(text, sent) : text, later)
-    if (went) contextSet?.reset()
+    // Gone with the message, the Context it went with only: what was picked while it went is the next one's, with its chips.
+    if (went) for (const path of sent ?? []) contextSet?.remove(path)
     if (shown.current === agentId) {
       if (went) setNotSent(false)
       else {

@@ -62,3 +62,21 @@ test('a refused message comes back as the same draft, its picked file a chip aga
   expect(box.querySelectorAll('[data-token]').length).toBe(1)
   expect(screen.getByTestId('context').textContent).toBe('README.md')
 })
+
+test('a file picked while a message went keeps its Context once that message lands, and goes with the next one', async () => {
+  let answer: (outcome: unknown) => void = () => {}
+  sendMessage.mockReturnValueOnce(new Promise(resolve => (answer = resolve))).mockResolvedValue({ ok: true })
+  render(<Session />)
+  const box = (await screen.findByRole('textbox', { name: 'Message' })) as HTMLElement & { editor: Editor }
+  act(() => void box.editor.commands.insertContent([{ type: 'text', text: 'look at ' }, { type: 'token', attrs: { kind: 'file', label: '#README.md', text: '#README.md' } }]))
+  act(() => context.add('README.md'))
+  fireEvent.keyDown(box, { key: 'Enter' })
+  await waitFor(() => expect(sendMessage).toHaveBeenCalledWith('p1', 'look at #README.md\n\nContext: README.md', 'run-1'))
+  // Picked while the message went: a chip in the box, and the file in the Context.
+  act(() => void box.editor.commands.insertContent([{ type: 'text', text: 'then ' }, { type: 'token', attrs: { kind: 'file', label: '#src/b.ts', text: '#src/b.ts' } }]))
+  act(() => context.add('src/b.ts'))
+  await act(async () => answer({ ok: true }))
+  expect(screen.getByTestId('context').textContent).toBe('src/b.ts')
+  fireEvent.keyDown(box, { key: 'Enter' })
+  await waitFor(() => expect(sendMessage).toHaveBeenLastCalledWith('p1', 'then #src/b.ts\n\nContext: src/b.ts', 'run-1'))
+})

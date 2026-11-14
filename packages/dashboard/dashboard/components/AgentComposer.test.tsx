@@ -436,12 +436,13 @@ describe('AgentComposer sending to an ended run', () => {
 
   test('the Context picked goes with the next message, at its end, and is cleared once it went (his pick)', async () => {
     sendMessage.mockResolvedValue({ ok: true })
-    const reset = vi.fn()
-    const contextSet = { context: new Set(['src/app.ts']), add: vi.fn(), remove: vi.fn(), toggle: vi.fn(), reset }
+    const remove = vi.fn()
+    const contextSet = { context: new Set(['src/app.ts']), add: vi.fn(), remove, toggle: vi.fn(), reset: vi.fn() }
     renderComposer({ contextSet })
     expect(screen.getByText('Context · src/app.ts')).toBeTruthy()
     fireEvent.click(screen.getByText('submit'))
-    await waitFor(() => expect(reset).toHaveBeenCalled())
+    // Cleared of what it went with, which is all of it here (AgentComposer.editor.test.tsx: what was picked meanwhile stays).
+    await waitFor(() => expect(remove).toHaveBeenCalledWith('src/app.ts'))
     expect(sendMessage).toHaveBeenCalledWith('p1', 'hello\n\nContext: src/app.ts', 'run-1', null, { id: expect.any(String) })
   })
 
