@@ -60,7 +60,7 @@ export function DropdownMenuContent({
   return (
     <Menu.Portal>
       <Menu.Positioner positionMethod={positionMethod} side={side} sideOffset={sideOffset} align={align} className="z-50 outline-none">
-        <Menu.Popup className={cn(MENU_POPUP_CLASS, className)} {...props}>
+        <Menu.Popup data-overlay="menu" className={cn(MENU_POPUP_CLASS, className)} {...props}>
           <PopupBody>{children}</PopupBody>
         </Menu.Popup>
       </Menu.Positioner>
@@ -120,7 +120,7 @@ export function DropdownMenuSubContent({ className, children, ...props }: Compon
   return (
     <Menu.Portal>
       <Menu.Positioner positionMethod={positionMethod} side="right" align="start" sideOffset={2} className="z-50 outline-none">
-        <Menu.Popup className={cn(MENU_POPUP_CLASS, className)} {...props}>
+        <Menu.Popup data-overlay="menu" className={cn(MENU_POPUP_CLASS, className)} {...props}>
           <PopupBody>{children}</PopupBody>
         </Menu.Popup>
       </Menu.Positioner>

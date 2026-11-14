@@ -74,15 +74,23 @@ export function shortcutKeys(id: ShortcutId): string[] {
 }
 
 /**
- * Run `run` at the shortcut `id`, pressed anywhere on the page: not while a dialog is open, nor
- * when what has the focus took the key itself.
+ * Whether anything is open over the page, a hint aside: a key pressed then is the open thing's.
+ * Each popup of the kit says its kind in `data-overlay`; one playing its closing motion is closed.
+ */
+export function overlayOpen(): boolean {
+  return document.querySelector('[data-overlay]:not([data-overlay="hint"]):not([data-closed])') !== null
+}
+
+/**
+ * Run `run` at the shortcut `id`, pressed anywhere on the page: not while anything is open over
+ * it, nor when what has the focus took the key itself.
  */
 export function useShortcut(id: ShortcutId, run: () => void): void {
   const latest = useRef(run)
   latest.current = run
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
-      if (event.defaultPrevented || !pressed(event, id) || document.querySelector('[role="dialog"], [role="alertdialog"]')) return
+      if (event.defaultPrevented || !pressed(event, id) || overlayOpen()) return
       event.preventDefault()
       latest.current()
     }

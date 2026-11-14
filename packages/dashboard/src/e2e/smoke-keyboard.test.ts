@@ -6,7 +6,7 @@ import { needsChrome, smoke } from './smoke.js'
 // Where the keyboard is, in a real browser (smoke.ts): jsdom keeps the focus on a disabled button,
 // so only a browser shows it dropped to the page.
 
-const { flow } = smoke()
+const { flow, start, runIn } = smoke()
 
 /** The calls to one of the daemon's RPCs, each held unanswered until `answer`. */
 function hold(page: Page, name: string) {
@@ -70,5 +70,27 @@ test('Next in "Add project" keeps the keyboard while it waits and takes no secon
     const form = page.getByRole('dialog', { name: 'Add project' })
     await form.getByText('not read yet').waitFor()
     await waits(page, next, () => form.getByRole('button', { name: 'Next' }).click(), /^Next$/)
+  })
+})
+
+test('Escape in a question over a working run closes the question and stops nothing', needsChrome, async () => {
+  await flow('escape-question', async page => {
+    await page.route('**/_rpc/onRepositoryOffer', route => route.fulfill({ contentType: 'application/json', body: JSON.stringify({ ret: { repository: 'demo/shop', name: 'GitHub' } }) }))
+    let stops = 0
+    await page.route('**/_rpc/sendStop', route => (stops++, route.fallback()))
+    await start(page, 'hold the escape')
+    await runIn('hold the escape', ['running'])
+    await page.getByRole('button', { name: 'Stop agent' }).waitFor()
+    await page.getByRole('button', { name: 'Project actions' }).click()
+    await page.getByRole('menuitem', { name: 'Create a repository on GitHub…' }).click()
+    const question = page.getByRole('alertdialog', { name: 'Create a private repository on GitHub?' })
+    await question.waitFor()
+    // The menu that opened it gone, as it is by the time a person has read the question.
+    await page.locator('[role="menu"]').waitFor({ state: 'detached' })
+    await page.keyboard.press('Escape')
+    await question.waitFor({ state: 'detached' })
+    await page.waitForTimeout(500)
+    assert.equal(stops, 0, 'no stop was sent')
+    await runIn('hold the escape', ['running'])
   })
 })

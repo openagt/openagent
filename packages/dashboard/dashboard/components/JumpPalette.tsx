@@ -208,6 +208,7 @@ export function JumpPalette({ waiting, runs, pages, projects, scope, here, hrefO
       <BaseDialog.Portal>
         <BaseDialog.Backdrop className={BACKDROP_CLASS} />
         <BaseDialog.Popup
+          data-overlay="dialog"
           aria-label="Jump to"
           initialFocus={input}
           finalFocus={() => !picked.current}

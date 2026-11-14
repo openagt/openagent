@@ -109,7 +109,7 @@ export function StartFromMenu({ projectId, main, local, pick, onPick, busy }: { 
       </Tooltip>
       <Combobox.Portal>
         <Combobox.Positioner sideOffset={6} align="start" className="z-50 outline-none">
-          <Combobox.Popup aria-label="The agent starts from" className={cn(MENU_POPUP_CLASS, 'w-[22rem] max-w-[var(--available-width)]')}>
+          <Combobox.Popup data-overlay="picker" aria-label="The agent starts from" className={cn(MENU_POPUP_CLASS, 'w-[22rem] max-w-[var(--available-width)]')}>
             <div className="flex items-center gap-2 border-b border-border px-3">
               <Search className="h-3.5 w-3.5 shrink-0 text-muted-foreground" aria-hidden />
               <Combobox.Input aria-label="Search branches" placeholder="Search branches" className="h-9 w-full min-w-0 bg-transparent text-sm outline-none placeholder:text-muted-foreground" />

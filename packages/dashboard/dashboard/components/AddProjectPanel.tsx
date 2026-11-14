@@ -138,6 +138,7 @@ export function AddProjectPanel({
       <div
         ref={panelRef}
         role="dialog"
+        data-overlay="dialog"
         aria-modal="true"
         aria-label="Add project"
         className="relative w-96 max-w-[90vw] rounded-lg border border-border bg-background p-4 shadow-lg"

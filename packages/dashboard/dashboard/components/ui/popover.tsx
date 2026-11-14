@@ -35,6 +35,7 @@ export function PopoverContent({
     <BasePopover.Portal>
       <BasePopover.Positioner positionMethod={positionMethod} sideOffset={sideOffset} align={align} className="z-50 outline-none">
         <BasePopover.Popup
+          data-overlay="panel"
           className={cn(
             'rounded-lg border border-hairline bg-card text-card-foreground shadow-lg outline-none',
             POPUP_MOTION_CLASS,

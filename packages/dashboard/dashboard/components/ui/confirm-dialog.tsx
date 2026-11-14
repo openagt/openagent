@@ -83,7 +83,7 @@ export function ConfirmDialog({
       {trigger && <AlertDialog.Trigger render={trigger as never} />}
       <AlertDialog.Portal>
         <AlertDialog.Backdrop className={BACKDROP_CLASS} />
-        <AlertDialog.Popup className={cn(DIALOG_POPUP_CLASS, 'md:w-[min(26rem,calc(100vw-2rem))]')}>
+        <AlertDialog.Popup data-overlay="question" className={cn(DIALOG_POPUP_CLASS, 'md:w-[min(26rem,calc(100vw-2rem))]')}>
           <AlertDialog.Title className="text-base font-semibold">{title}</AlertDialog.Title>
           <AlertDialog.Description className="mt-2 text-sm text-muted-foreground">
             {body}

@@ -10,6 +10,7 @@ vi.mock('../lib/rpc.js', () => ({
 }))
 
 const { JumpPalette, openJump } = await import('./JumpPalette.js')
+const { Dialog } = await import('./ui/dialog.js')
 
 const run = (id: string, fields: Partial<AgentMeta> = {}): AgentMeta => ({ id, status: 'done', startedAt: '2026-11-01T10:00:00Z', updatedAt: '2026-11-01T10:00:00Z', ...fields }) as AgentMeta
 const found = (projectId: string, id: string, title: string): FoundAgent => ({ projectId, projectName: projectId, agent: { id, title, startedAt: '2026-01-01T10:00:00Z' } })
@@ -177,11 +178,10 @@ describe('the jump', () => {
 
   test('it never opens over a dialog that is open, nor for a key composing a character', () => {
     draw()
-    const dialog = document.body.appendChild(document.createElement('div'))
-    dialog.setAttribute('role', 'dialog')
+    const dialog = render(<Dialog open onOpenChange={() => {}} title="A dialog">Over the page</Dialog>)
     fireEvent.keyDown(document.body, { key: 'k', ctrlKey: true })
     expect(screen.queryByRole('combobox')).toBeNull()
-    dialog.remove()
+    dialog.unmount()
     fireEvent.keyDown(document.body, { key: 'k', ctrlKey: true, isComposing: true })
     expect(screen.queryByRole('combobox')).toBeNull()
   })

@@ -49,6 +49,7 @@ vi.mock('./Composer.js', async () => {
 })
 
 const { AgentComposer } = await import('./AgentComposer.js')
+const { ConfirmDialog } = await import('./ui/confirm-dialog.js')
 
 function renderComposer(over: Partial<Parameters<typeof AgentComposer>[0]> = {}) {
   const onAgentStarted = vi.fn()
@@ -186,15 +187,14 @@ describe('AgentComposer slot control (#1455)', () => {
     expect(screen.queryByRole('button', { name: 'Stop agent' })).toBeNull()
   })
 
-  test('Esc stops a live session, as in Claude Code, unless a dialog or menu took it', async () => {
+  test('Esc stops a live session, as in Claude Code, unless a question or the box took it', async () => {
     sendStop.mockResolvedValue(undefined)
     renderComposer()
-    const dialog = document.createElement('div')
-    dialog.setAttribute('role', 'dialog')
-    document.body.appendChild(dialog)
-    fireEvent.keyDown(window, { key: 'Escape' })
+    // A question over the session: the key is its Cancel.
+    const question = render(<ConfirmDialog open onOpenChange={() => {}} title="Delete this session?" body="It goes for good." confirmLabel="Delete" />)
+    fireEvent.keyDown(screen.getByRole('alertdialog'), { key: 'Escape' })
     expect(sendStop).not.toHaveBeenCalled()
-    dialog.remove()
+    question.unmount()
     // The box's own suggestions are open: the key closes them, and stops nothing.
     const box = document.createElement('div')
     box.className = 'ProseMirror'

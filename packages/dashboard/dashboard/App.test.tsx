@@ -47,6 +47,7 @@ vi.mock('./components/ProjectActions.js', async importOriginal => ({
 }))
 
 const { App } = await import('./App.js')
+const { Dialog } = await import('./components/ui/dialog.js')
 
 const PROJECT = { id: 'app-abc', path: '/work/app', name: 'app', activated: true }
 
@@ -945,11 +946,10 @@ describe('the keyboard shortcuts', () => {
     await screen.findByRole('heading', { name: 'Overview' })
     const field = document.body.appendChild(document.createElement('input'))
     fireEvent.keyDown(field, { key: '?', shiftKey: true })
-    const dialog = document.body.appendChild(document.createElement('div'))
-    dialog.setAttribute('role', 'dialog')
+    const dialog = render(<Dialog open onOpenChange={() => {}} title="A dialog">Over the page</Dialog>)
     fireEvent.keyDown(document.body, { key: '?', shiftKey: true })
     expect(screen.queryByText(/the settings dialog/)).toBeNull()
-    dialog.remove()
+    dialog.unmount()
     field.remove()
     fireEvent.keyDown(document.body, { key: '?', shiftKey: true })
     expect(await screen.findByText("the settings dialog on 'shortcuts'")).toBeTruthy()

@@ -54,6 +54,7 @@ export function SelectContent({
       {/* Under the trigger like a menu, not laid over it: the picked item stays readable while the list is open. */}
       <SelectPrimitive.Positioner positionMethod={positionMethod} sideOffset={sideOffset} align={align} alignItemWithTrigger={false} className="z-50 outline-none">
         <SelectPrimitive.Popup
+          data-overlay="menu"
           data-slot="select-content"
           className={cn(
             'max-h-[min(var(--available-height),20rem)] min-w-[var(--anchor-width)] max-w-[var(--available-width)] overflow-y-auto p-1.5',

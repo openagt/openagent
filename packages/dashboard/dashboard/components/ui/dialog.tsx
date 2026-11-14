@@ -71,6 +71,7 @@ export function Dialog({
         {/* Drawn over another dialog too (Settings), which Base UI leaves undimmed unless told. */}
         <BaseDialog.Backdrop forceRender className={BACKDROP_CLASS} />
         <BaseDialog.Popup
+          data-overlay="dialog"
           initialFocus={initialFocus && (() => (initialFocus.current?.matches(':enabled') ? initialFocus.current : true))}
           {...(finalFocus ? { finalFocus } : {})}
           className={cn(DIALOG_POPUP_CLASS, wide ? 'md:w-[min(46rem,calc(100vw-2rem))]' : 'md:w-[min(34rem,calc(100vw-2rem))]')}

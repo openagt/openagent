@@ -167,6 +167,7 @@ export function SettingsDialog({
       <BaseDialog.Portal>
         <BaseDialog.Backdrop className="fixed inset-0 z-50 bg-black/40 backdrop-blur-[1px]" />
         <BaseDialog.Popup
+          data-overlay="dialog"
           ref={popup}
           initialFocus={popup}
           className={cn(

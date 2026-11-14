@@ -139,7 +139,7 @@ export function SessionRepoPicks({
         </Tooltip>
         <Combobox.Portal>
           <Combobox.Positioner positionMethod={positionMethod} sideOffset={6} align="start" className="z-50 outline-none">
-            <Combobox.Popup aria-label="Add repo" className={cn(MENU_POPUP_CLASS, 'w-[24rem] max-w-[var(--available-width)]')}>
+            <Combobox.Popup data-overlay="picker" aria-label="Add repo" className={cn(MENU_POPUP_CLASS, 'w-[24rem] max-w-[var(--available-width)]')}>
               <div className="flex items-center gap-2 border-b border-border px-3">
                 <Search className="h-3.5 w-3.5 shrink-0 text-muted-foreground" aria-hidden />
                 <Combobox.Input aria-label="Search repos" placeholder="Search repos" className="h-9 w-full min-w-0 bg-transparent text-sm outline-none placeholder:text-muted-foreground" />

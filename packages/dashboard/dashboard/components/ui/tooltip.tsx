@@ -46,6 +46,7 @@ function TooltipContent({
         {...(align ? { align } : {})}
       >
         <TooltipPrimitive.Popup
+          data-overlay="hint"
           // Base UI leaves the popup unlabelled (it treats a tooltip as a supplement to the
           // trigger's own accessible name, which every trigger here has). The role costs nothing
           // and names the popup for assistive tech and for tests, which is how they read it now

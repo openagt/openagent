@@ -22,6 +22,7 @@ function SheetContent({
     <BaseDialog.Portal>
       <BaseDialog.Backdrop className={BACKDROP_CLASS} />
       <BaseDialog.Popup
+        data-overlay="sheet"
         className={cn(
           // In from its edge in 180ms, out in 120ms.
           'fixed inset-y-0 z-50 flex h-full w-3/4 max-w-sm flex-col bg-card text-card-foreground shadow-lg outline-none transition-transform duration-180 data-[ending-style]:duration-120',

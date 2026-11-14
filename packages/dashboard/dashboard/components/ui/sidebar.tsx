@@ -5,7 +5,7 @@ import { useRender } from '@base-ui/react/use-render'
 import { cn } from '../../lib/utils.js'
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from './sheet.js'
 import { useIsMobile } from '../../lib/use-mobile.js'
-import { pressed } from '../../lib/shortcut.js'
+import { pressed, useShortcut } from '../../lib/shortcut.js'
 
 // shadcn's "base" (Base UI, not Radix) Sidebar, ported to this repo (#314 rail, shared shell), and
 // kept to the parts the shell draws: a column of the page from md up, a sheet on a phone. The mobile
@@ -75,17 +75,7 @@ function SidebarProvider({
     return isMobile ? setOpenMobile(prev => !prev) : setOpen(prev => !prev)
   }, [isMobile, setOpen, setOpenMobile])
 
-  // Cmd/Ctrl+B toggles the sidebar.
-  React.useEffect(() => {
-    const handleKeyDown = (event: KeyboardEvent) => {
-      if (pressed(event, 'sidebar')) {
-        event.preventDefault()
-        toggleSidebar()
-      }
-    }
-    window.addEventListener('keydown', handleKeyDown)
-    return () => window.removeEventListener('keydown', handleKeyDown)
-  }, [toggleSidebar])
+  useShortcut('sidebar', toggleSidebar)
 
   // A data-state to drive the Tailwind styling (`data-state="expanded" | "collapsed"`).
   const state = open ? 'expanded' : 'collapsed'
@@ -128,6 +118,12 @@ function Sidebar({ side = 'left', className, children, ...props }: React.Compone
           className="bg-sidebar text-sidebar-foreground w-(--sidebar-width) p-0"
           style={{ '--sidebar-width': SIDEBAR_WIDTH_MOBILE } as React.CSSProperties}
           side={side}
+          // The key that opened it closes it: over the page, the page's keys wait.
+          onKeyDown={event => {
+            if (!pressed(event, 'sidebar')) return
+            event.preventDefault()
+            setOpenMobile(false)
+          }}
         >
           <SheetHeader className="sr-only">
             <SheetTitle>Sidebar</SheetTitle>
