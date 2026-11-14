@@ -10,6 +10,7 @@ import { ScrollArea } from './ui/scroll-area.js'
 import { Tooltip, TooltipTrigger, TooltipContent } from './ui/tooltip.js'
 import { MENU_ITEM_CLASS, MENU_POPUP_CLASS, MENU_TRIGGER_OPEN_CLASS } from './ui/dropdown-menu.js'
 import { usePopupPlacement } from './ui/popup-placement.js'
+import { usePickerSearch } from './ui/picker-search.js'
 import { ASK_AGAIN_MS, REPOS_SHOWN, repoDetail } from './ProjectPicker.js'
 
 /** The most rows a search lists. */
@@ -76,8 +77,8 @@ export function SessionRepoPicks({
   busy: boolean
   onChange: (picked: PickedRepo[]) => void
 }) {
-  const [open, setOpen] = useState(false)
-  const [typed, setTyped] = useState('')
+  const search = usePickerSearch()
+  const { open, typed } = search
   const positionMethod = usePopupPlacement()
   // Asked again shortly while the look through this computer is still on its way, and the menu is open.
   const [again, setAgain] = useState(0)
@@ -107,14 +108,8 @@ export function SessionRepoPicks({
         filteredItems={groups}
         value={null}
         itemToStringLabel={row => row.label}
-        inputValue={typed}
         autoHighlight
-        onInputValueChange={setTyped}
-        open={open}
-        onOpenChange={next => {
-          setOpen(next)
-          if (!next) setTyped('')
-        }}
+        {...search.root}
         onValueChange={row => {
           if (row) onChange([...picked, { path: row.path, name: folderName(row.path) }])
         }}
@@ -126,6 +121,7 @@ export function SessionRepoPicks({
                 disabled={busy}
                 aria-label="Add repo"
                 className={MENU_TRIGGER_OPEN_CLASS}
+                {...search.trigger}
                 render={
                   <button type="button" className={cn(rowButtonClass, 'shrink-0')}>
                     <Plus className="size-4 shrink-0" aria-hidden />

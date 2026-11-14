@@ -1,4 +1,4 @@
-import { useMemo, useState, type ComponentProps } from 'react'
+import { useMemo, type ComponentProps } from 'react'
 import { Combobox } from '@base-ui/react/combobox'
 import { Check, GitBranch, Search } from 'lucide-react'
 import type { StartFromPick } from '../../src/index.js'
@@ -11,6 +11,7 @@ import { OptionLabel } from './ui/option-label.js'
 import { ScrollArea } from './ui/scroll-area.js'
 import { Tooltip, TooltipTrigger, TooltipContent } from './ui/tooltip.js'
 import { MENU_ITEM_CLASS, MENU_POPUP_CLASS, MENU_TRIGGER_OPEN_CLASS } from './ui/dropdown-menu.js'
+import { usePickerSearch } from './ui/picker-search.js'
 
 /** The most rows the menu draws at once: the search reaches the rest. */
 const ROWS_DRAWN = 200
@@ -78,7 +79,8 @@ const samePick = (a: Row, b: Row): boolean => a.value === b.value
 // for its own typing-to-jump.
 export function StartFromMenu({ projectId, main, local, pick, onPick, busy }: { projectId: string; main: string; local: string; pick: StartFromPick | undefined; onPick: (pick: StartFromPick | undefined) => void; busy: boolean }) {
   const label = startFromLabel(pick, main, local)
-  const [open, setOpen] = useState(false)
+  const search = usePickerSearch()
+  const { open } = search
   // A project only another computer has is that computer's, and the read goes there by the project's id (`ELSEWHERE_FORWARDED`). A call that fails on the way is a list that could not be read.
   const read = useLoaded<StartBranches | null>(open ? () => onStartBranches(projectId).then(answer => answer ?? {}, () => ({})) : null, null, [open, projectId], { remember: `start-branches:${projectId}` })
   const others = read?.branches
@@ -97,14 +99,13 @@ export function StartFromMenu({ projectId, main, local, pick, onPick, busy }: { 
       limit={ROWS_DRAWN}
       value={picked}
       isItemEqualToValue={samePick}
-      open={open}
-      onOpenChange={setOpen}
+      {...search.root}
       onValueChange={row => {
         if (row) onPick(row.pick)
       }}
     >
       <Tooltip>
-        <TooltipTrigger render={<Combobox.Trigger disabled={busy} aria-label="The agent starts from" className={MENU_TRIGGER_OPEN_CLASS} render={<BranchButton label={label} />} />} />
+        <TooltipTrigger render={<Combobox.Trigger disabled={busy} aria-label="The agent starts from" className={MENU_TRIGGER_OPEN_CLASS} {...search.trigger} render={<BranchButton label={label} />} />} />
         <TooltipContent>{`The agent starts from ${label}`}</TooltipContent>
       </Tooltip>
       <Combobox.Portal>

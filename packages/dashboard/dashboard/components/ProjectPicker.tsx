@@ -19,6 +19,7 @@ import { Tooltip, TooltipTrigger, TooltipContent } from './ui/tooltip.js'
 import { MENU_ITEM_CLASS, MENU_POPUP_CLASS, MENU_TRIGGER_OPEN_CLASS } from './ui/dropdown-menu.js'
 import { PROJECT_ROW_CLASS } from './ui/nav-row.js'
 import { usePopupPlacement } from './ui/popup-placement.js'
+import { usePickerSearch } from './ui/picker-search.js'
 import { AddProjectPanel } from './AddProjectPanel.js'
 
 /** How many repos the menu lists before a search: the search reaches the rest. */
@@ -190,8 +191,8 @@ export function ProjectPicker({
 }) {
   const label = useProjectLabel()
   const positionMethod = usePopupPlacement()
-  const [open, setOpen] = useState(false)
-  const [typed, setTyped] = useState('')
+  const search = usePickerSearch()
+  const { open, typed } = search
   const [adding, setAdding] = useState<{ folder: string } | { address: string } | null>(null)
   const triggerRef = useRef<HTMLButtonElement>(null)
   // The folder just added, until the projects read again have it: then it is picked.
@@ -277,7 +278,7 @@ export function ProjectPicker({
         <RowChevron />
       </button>
     )
-  const trigger = <Combobox.Trigger ref={triggerRef} disabled={busy || pending} aria-label={name} className={MENU_TRIGGER_OPEN_CLASS} render={button} {...(look === 'sidebar' ? { 'data-project-picker': '' } : {})} />
+  const trigger = <Combobox.Trigger ref={triggerRef} disabled={busy || pending} aria-label={name} className={MENU_TRIGGER_OPEN_CLASS} render={button} {...search.trigger} {...(look === 'sidebar' ? { 'data-project-picker': '' } : {})} />
 
   return (
     <>
@@ -287,14 +288,8 @@ export function ProjectPicker({
         value={current}
         isItemEqualToValue={sameRow}
         itemToStringLabel={row => row.label}
-        inputValue={typed}
         autoHighlight
-        onInputValueChange={setTyped}
-        open={open}
-        onOpenChange={next => {
-          setOpen(next)
-          if (!next) setTyped('')
-        }}
+        {...search.root}
         onValueChange={row => {
           if (!row) return
           if (row.pick.kind === 'none') onPick(null)

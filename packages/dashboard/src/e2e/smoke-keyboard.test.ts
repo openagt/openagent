@@ -1,6 +1,6 @@
 import { strict as assert } from 'node:assert'
 import { test } from 'node:test'
-import type { Page, Route } from 'playwright-core'
+import type { Locator, Page, Route } from 'playwright-core'
 import { needsChrome, smoke } from './smoke.js'
 
 // Where the keyboard is, in a real browser (smoke.ts): jsdom keeps the focus on a disabled button,
@@ -114,5 +114,54 @@ test("a git account forgotten from its row leaves the keyboard in its host's sec
     await page.getByRole('listitem', { name: '@bob' }).waitFor({ state: 'detached' })
     await page.waitForTimeout(300)
     assert.ok(await page.evaluate(`!!document.activeElement?.closest('[aria-label="GitHub"]')`), `the keyboard is in GitHub's section, not on ${await focused(page)}`)
+  })
+})
+
+/** With the keyboard on the picker `name`'s button and its popup shut, "bl" typed: the picker opens searching for it, and nothing else changes. */
+async function typedOnPicker(page: Page, name: string, search: string, unchanged: (button: Locator) => Promise<unknown>) {
+  const button = page.getByRole('combobox', { name, exact: true })
+  const before = await unchanged(button)
+  await button.focus()
+  await page.keyboard.type('bl')
+  const field = page.getByLabel(search)
+  await field.waitFor()
+  await page.waitForTimeout(300)
+  assert.equal(await field.inputValue(), 'bl', 'the search holds what was typed')
+  assert.equal(await page.getByRole('dialog', { name: 'Add project' }).count(), 0, 'no dialog opened')
+  assert.deepEqual(await unchanged(button), before, 'nothing was picked')
+  await page.keyboard.press('Escape')
+}
+
+test("a letter typed on the sidebar's project picker starts its search and picks nothing", needsChrome, async () => {
+  await flow('typed-sidebar-picker', async page => {
+    await typedOnPicker(page, 'Project: shop', 'Search projects and repos', button => button.getAttribute('aria-label'))
+  })
+})
+
+test("a letter typed on the launcher's project picker starts its search and picks nothing", needsChrome, async () => {
+  await flow('typed-launcher-picker', async page => {
+    await typedOnPicker(page, 'The session works in', 'Search projects and repos', button => button.textContent())
+  })
+})
+
+test("a letter typed on the launcher's branch picker starts its search and picks nothing", needsChrome, async () => {
+  await flow('typed-branch-picker', async page => {
+    // The demo's project has no origin, so its launcher offers no branch: this one says it has one.
+    await page.route('**/_rpc/onCommands', async route => {
+      const answer = await (await route.fetch()).json()
+      await route.fulfill({ contentType: 'application/json', body: JSON.stringify({ ret: { ...answer.ret, startFrom: { main: 'main', local: 'main' } } }) })
+    })
+    await page.route('**/_rpc/onStartBranches', route => route.fulfill({ contentType: 'application/json', body: JSON.stringify({ ret: { branches: ['black', 'blue'] } }) }))
+    await page.reload()
+    await page.getByLabel('The agent starts from', { exact: true }).waitFor()
+    await typedOnPicker(page, 'The agent starts from', 'Search branches', button => button.textContent())
+  })
+})
+
+test('a letter typed on "Add repo" starts its search and adds nothing', needsChrome, async () => {
+  await flow('typed-add-repo', async page => {
+    await page.getByLabel('The session works in', { exact: true }).click()
+    await page.getByRole('option', { name: 'No project' }).click()
+    await typedOnPicker(page, 'Add repo', 'Search repos', () => page.locator('[aria-label^="Remove "]').count())
   })
 })

@@ -65,6 +65,12 @@ export function pressed(event: KeyPress, id: ShortcutId): boolean {
   return !event.metaKey && !event.ctrlKey && !event.altKey
 }
 
+/** The character a key press types, or none: a named key, a key held with ⌘, Ctrl or Alt, or one pressed to compose. */
+export function typedCharacter(event: KeyPress): string | undefined {
+  if ('nativeEvent' in event ? event.nativeEvent.isComposing : event.isComposing) return undefined
+  return event.key.length === 1 && !event.metaKey && !event.ctrlKey && !event.altKey ? event.key : undefined
+}
+
 /** The keys of a shortcut as this keyboard writes them, one cap each: ⌘ K on a Mac, Ctrl K elsewhere. */
 export function shortcutKeys(id: ShortcutId): string[] {
   const shortcut: Shortcut = SHORTCUTS[id]
