@@ -7,7 +7,8 @@ import { useModuleHost, type ModuleProject, type UsageLimitSaved } from '../modu
 import { useMountedModules, type MountedUsageLimit } from '../lib/use-modules.js'
 import { usePolled } from '../lib/use-async.js'
 import { Section } from './ui/section.js'
-import { RowShapes, Slot } from './ui/slot.js'
+import { Slot } from './ui/slot.js'
+import { SentenceShape } from './SentenceShape.js'
 import { cn } from '../lib/utils.js'
 import { ModuleSlot, projectsHaving } from './ModulePageView.js'
 import { formatRelative, formatResetDay, formatResetTooltip, formatDuration, formatDurationLong } from '../lib/format-date.js'
@@ -501,7 +502,7 @@ export function Quota({ projects }: { projects: ProjectSummary[] }) {
   return (
     <Section title="Usage">
       <div className="space-y-4">
-        <Slot of={{ state: view ? 'fresh' : 'unknown', value: view }} shape={<RowShapes rows={1} />}>
+        <Slot of={{ state: view ? 'fresh' : 'unknown', value: view }} shape={<SentenceShape />}>
           {() => (
             <div className="space-y-4">
               {/* Without a placeable week there is no axis to draw. Say so, loudly — no fallback (Rom):

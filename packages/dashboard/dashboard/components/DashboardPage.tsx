@@ -3,7 +3,8 @@ import { Fragment, useState, type ReactNode } from 'react'
 import { SlidersHorizontal } from 'lucide-react'
 import { Quota } from './Quota.js'
 import { Section } from './ui/section.js'
-import { RowShapes, Slot } from './ui/slot.js'
+import { Slot } from './ui/slot.js'
+import { SentenceShape } from './SentenceShape.js'
 import { Button } from './ui/button.js'
 import { HumanQueueList } from './HumanQueueList.js'
 import { updatePreferences, usePreferences, usePreferencesLoaded } from '../lib/preferences.js'
@@ -266,7 +267,7 @@ function HumanQueue({
   return (
     <Section title="Human Queue" count={items.length > 0 ? items.length : undefined}>
       <p className="-mt-1 mb-3 text-xs text-muted-foreground">Agents awaiting your approval, review, or input</p>
-      <Slot of={{ state, value: items }} shape={<RowShapes />}>
+      <Slot of={{ state, value: items }} shape={<SentenceShape />}>
         {() => items.length === 0 ? (
           <p className="text-sm text-muted-foreground">AI doesn&apos;t need you.</p>
         ) : (

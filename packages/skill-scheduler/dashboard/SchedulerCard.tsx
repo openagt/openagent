@@ -44,7 +44,7 @@ export function SchedulerCard({ projects }: ModuleCardProps) {
   return (
     <Section title="Automations" action={<PageLink href={host.pageHref('automations')} onOpen={open}>Automations</PageLink>}>
       <p className="-mt-1 mb-3 text-xs text-muted-foreground">What starts by itself while nobody is at the keyboard</p>
-      <Slot of={{ state, value: rows }} shape={<RowShapes />}>
+      <Slot of={{ state, value: rows }} shape={<RowShapes rows={projects.length || 1} />}>
         {() => (
           <ul className="space-y-4">
             {rows.map(row => {

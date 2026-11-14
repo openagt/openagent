@@ -3,7 +3,8 @@ import type { ActiveAgent } from '../../src/index.js'
 import { Section } from './ui/section.js'
 import { List, Row } from './ui/list.js'
 import { Skeleton } from './ui/skeleton.js'
-import { RowShapes, Slot } from './ui/slot.js'
+import { Slot } from './ui/slot.js'
+import { SentenceShape } from './SentenceShape.js'
 import type { ReadState } from '../lib/use-async.js'
 import { Tooltip, TooltipTrigger, TooltipContent } from './ui/tooltip.js'
 import { formatAge, formatDateTime } from '../lib/format-date.js'
@@ -42,7 +43,7 @@ export function Agents({
   return (
     <Section title="Agents at work" count={state !== 'unknown' && working.length > 0 ? working.length : undefined}>
       <p className="-mt-1 mb-3 text-xs text-muted-foreground">Agents currently working</p>
-      <Slot of={{ state, value: working }} shape={<RowShapes rows={1} />}>
+      <Slot of={{ state, value: working }} shape={<SentenceShape />}>
         {() => working.length === 0 ? (
           <p className="text-sm text-muted-foreground">No agent is at work.</p>
         ) : (

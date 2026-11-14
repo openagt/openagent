@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { ArrowUp, Bot, CirclePause, Clock, WifiOff, type LucideIcon } from 'lucide-react'
-import { Button, LinkActions, PageLink, RowShapes, Section, Slot, cn, formatDateTime, inPlace, usePolled, useModuleHost, useOpenAgentDown, type ModuleCardProps, type ModuleProject, type ReadState } from '@openagt/dashboard/module'
+import { Button, LinkActions, PageLink, Section, SentenceShape, Slot, cn, formatDateTime, inPlace, usePolled, useModuleHost, useOpenAgentDown, type ModuleCardProps, type ModuleProject, type ReadState } from '@openagt/dashboard/module'
 import { claimState, heldBack, holderAgent, hotLane, ticketLink, withHolder, type ClaimState, type HotLane } from '../src/module.js'
 import { holdingRun } from './lib/holding-run.js'
 import { listTickets } from './lib/list.js'
@@ -121,7 +121,7 @@ function HotList({ hot, errors, state, showProject, reload }: { hot: HotTicket[]
           </Button>
         </div>
       ))}
-      <Slot of={{ state, value: hot }} shape={<RowShapes />}>
+      <Slot of={{ state, value: hot }} shape={<SentenceShape />}>
         {() => (
           // Every ticket, never a "+N more": the list is the shortlist. Pulled out by the rows' own
           // inset, so their text starts where the heading does.
