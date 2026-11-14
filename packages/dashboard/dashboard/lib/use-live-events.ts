@@ -107,7 +107,6 @@ export function useLiveEvents(projectId: string | null, agentId?: string | null)
           else swap()
         }
         if (reconnect) graceTimer = setTimeout(atGrace, SYNC_GRACE_MS)
-        else setEvents([]) // fresh subscribe: start clean so the replay is not appended twice
         ch.listen(event => {
           if (event.kind === 'stream-sync') {
             if (graceTimer) clearTimeout(graceTimer)

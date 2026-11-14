@@ -46,10 +46,8 @@ const NO_AGENTS: AgentMeta[] = []
  * polled only as a safety (`runs-changed.ts`).
  */
 export function useAgents(projectId: string | null, starting: string | null = null, everyMs = 2000): { agents: AgentMeta[]; reload: () => void; state: ReadState } {
-  // `reload` is the shared guarded one now: it used to be a second, unguarded copy of the
-  // read, so an agent started just before a project switch could write the old project's agents.
-  // Kept for the next visit: the rail shows the project's last list at once, while it is read again.
   const [pace, waitFor] = useStartPace(STARTING_EVERY_MS, useRunsPace(everyMs))
+  // Kept for the next visit: the rail shows the project's last list at once, while it is read again.
   const { value: agents, reload, state } = usePolled<AgentMeta[]>(
     projectId ? () => onAgents(projectId) : null,
     NO_AGENTS,
