@@ -111,7 +111,18 @@ function show(host: ModuleHost) {
 
 const ok = (output: unknown): ModuleCommandResult => ({ ok: true, output })
 /** Open a device's page from the list, by its name. */
-const open = async (name: string): Promise<void> => void fireEvent.click(within(await screen.findByRole('listitem', { name })).getByRole('button'))
+/** What a row of a list is called: the first words in it. */
+const nameOfRow = (row: Element): string => [...row.querySelectorAll('*')].find(part => part.childElementCount === 0 && part.textContent)?.textContent ?? ''
+/** The rows of the lists shown that are called `name`. */
+const rowsNamed = (name: string): HTMLElement[] => screen.queryAllByRole('listitem').filter(row => nameOfRow(row) === name)
+const queryRow = (name: string): HTMLElement | null => rowsNamed(name)[0] ?? null
+function getRow(name: string): HTMLElement {
+  const row = queryRow(name)
+  if (!row) throw new Error(`No row called ${name}`)
+  return row
+}
+const findRow = (name: string, options?: { timeout: number }): Promise<HTMLElement> => waitFor(() => getRow(name), options)
+const open = async (name: string): Promise<void> => void fireEvent.click(within(await findRow(name)).getByRole('button'))
 /** Pick one of a page's tabs. */
 const tab = async (name: string): Promise<void> => void fireEvent.click(await screen.findByRole('tab', { name }))
 /** Open the server setup, as a person does: from the start page's card, or Add device › Server. */
@@ -136,7 +147,7 @@ describe('Settings › Devices: a server this computer installed', () => {
     const { host } = dashboard(() => ok({ servers: [server(['done', 'done', 'running'], { working: true, fingerprint: 'SHA256:abc' })] }))
     show(host)
     // Its row says so, and its page says which step.
-    expect(within(await screen.findByRole('listitem', { name: '203.0.113.5' })).getByText('Installing…')).toBeTruthy()
+    expect(within(await findRow('203.0.113.5')).getByText('Installing…')).toBeTruthy()
     await open('203.0.113.5')
     expect(await screen.findByText('Installing: step 3 of 8')).toBeTruthy()
     expect(stepNames()).toEqual(['Log in: done', 'A user of its own, openagent: done', 'git, gh, Node and Chrome: running', 'Your name and email for git: not started', 'OpenAgent: not started', 'Claude Code: not started', 'Starts by itself: not started', 'The door: not started'])
@@ -334,7 +345,7 @@ describe('Settings › Devices: a server this computer installed', () => {
 
     const behind = dashboard(() => ok({ servers: [server(ALL_DONE, { adding: false, user: 'ubuntu' })] }), BOX_SAVED({ version: '1.2.0' }))
     show(behind.host)
-    expect(within(await screen.findByRole('listitem', { name: '203.0.113.5' })).getByText('Update')).toBeTruthy()
+    expect(within(await findRow('203.0.113.5')).getByText('Update')).toBeTruthy()
     await open('203.0.113.5')
     expect(await screen.findByText('OpenAgent 1.2.0 runs there: behind this computer, which runs 1.2.3.')).toBeTruthy()
     fireEvent.click(screen.getByRole('button', { name: 'Update 203.0.113.5' }))
@@ -410,7 +421,7 @@ describe('Settings › Devices: a server this computer installed', () => {
     const { container } = show(host)
     // Nothing before this computer said which it is: a server never offers to set one up for a moment.
     expect(container.textContent).toBe('')
-    const row = await screen.findByRole('listitem', { name: 'MacBook' })
+    const row = await findRow('MacBook')
     expect(row.textContent).toContain('keeps a line open here')
     expect(within(row).getByText('Online')).toBeTruthy()
     // Nothing of a server to set up, and what this computer's own file holds of servers is not listed.
@@ -418,12 +429,12 @@ describe('Settings › Devices: a server this computer installed', () => {
     expect(await screen.findByRole('radio', { name: /^Computer/ })).toBeTruthy()
     expect(screen.queryByRole('radio', { name: /^Server/ })).toBeNull()
     fireEvent.click(screen.getByRole('button', { name: 'Cancel' }))
-    expect(screen.queryByRole('listitem', { name: '203.0.113.5' })).toBeNull()
+    expect(queryRow('203.0.113.5')).toBeNull()
     // A read that fails later does not bring any of it back.
     fails = true
     const before = ran().length
     await waitFor(() => expect(ran().length).toBeGreaterThan(before + 1))
-    expect(screen.queryByRole('listitem', { name: '203.0.113.5' })).toBeNull()
+    expect(queryRow('203.0.113.5')).toBeNull()
     expect(screen.queryByRole('alert')).toBeNull()
     // Only the question itself was asked: no GitHub login, no server's devices, and a server it holds is not added to anything.
     expect(new Set(ran())).toEqual(new Set(['status']))
@@ -474,12 +485,12 @@ describe('Settings › Devices: a server this computer installed', () => {
     const OFF = { id: 'http://box.tail.ts:4200', label: 'Old box', url: 'http://box.tail.ts:4200' }
     const { host, ran, removeMachine } = dashboard(() => ok({ servers: [server(ALL_DONE, { adding: false })] }), { version: '1.2.3', machines: [STUDIO, BOX, OFF] })
     show(host)
-    const studio = await screen.findByRole('listitem', { name: 'Studio' })
-    expect(within(screen.getByRole('list', { name: 'Your devices' })).getAllByRole('listitem').map(item => item.getAttribute('aria-label'))).toEqual(['Studio', 'Old box', '203.0.113.5'])
+    const studio = await findRow('Studio')
+    expect(within(screen.getByRole('list', { name: 'Your devices' })).getAllByRole('listitem').map(nameOfRow)).toEqual(['Studio', 'Old box', '203.0.113.5'])
     // A computer saved with its link: whether it answers, and no word about being behind.
     expect(within(studio).getByText('Online')).toBeTruthy()
     expect(studio.textContent).not.toContain('Update')
-    expect(within(screen.getByRole('listitem', { name: 'Old box' })).getByText('Offline')).toBeTruthy()
+    expect(within(getRow('Old box')).getByText('Offline')).toBeTruthy()
 
     await open('203.0.113.5')
     removeMachine.mockResolvedValueOnce({ ok: false, error: 'An agent is working on 203.0.113.5. Stop it, or wait until it ends, then remove the machine.' })
@@ -536,7 +547,7 @@ describe('Settings › Devices: a server this computer installed', () => {
     })
     show(host)
     // This person's phones at the server are in their list too, through it.
-    expect((await screen.findByRole('listitem', { name: 'iPhone, Safari' })).textContent).toContain('through 203.0.113.5')
+    expect((await findRow('iPhone, Safari')).textContent).toContain('through 203.0.113.5')
     await open('203.0.113.5')
     await tab('People')
     const list = await screen.findByRole('list', { name: 'The devices that are in on 203.0.113.5' })
@@ -695,13 +706,13 @@ describe('Settings › Devices: a server this computer installed', () => {
     let fails = false
     const { host } = dashboard(() => (fails ? { ok: false, error: 'servers printed no JSON' } : ok({ servers: [server(ALL_DONE, { adding: false })] })), BOX_SAVED())
     show(host)
-    const row = await screen.findByRole('listitem', { name: '203.0.113.5' })
+    const row = await findRow('203.0.113.5')
     expect(within(row).getByText('Server')).toBeTruthy()
     fails = true
     expect(await screen.findByText('The servers could not be read: servers printed no JSON')).toBeTruthy()
     // Still the server's own row, and not a computer of another kind.
-    expect(within(screen.getByRole('listitem', { name: '203.0.113.5' })).getByText('Server')).toBeTruthy()
-    expect(screen.getAllByRole('listitem', { name: '203.0.113.5' })).toHaveLength(1)
+    expect(within(getRow('203.0.113.5')).getByText('Server')).toBeTruthy()
+    expect(rowsNamed('203.0.113.5')).toHaveLength(1)
   })
 
   test('a code leaves the page once a device got in with it', async () => {
@@ -761,7 +772,7 @@ describe('Settings › Devices: a server this computer installed', () => {
   test('a server that is not among the machines, or still being installed, has no such switch; a line that could not be set up says why', async () => {
     const { host } = dashboard(() => ok({ servers: [server(['done', 'running'], { working: true })] }))
     show(host)
-    await screen.findByRole('listitem', { name: '203.0.113.5' })
+    await findRow('203.0.113.5')
     expect(screen.queryByRole('switch', { name: 'From anywhere, through 203.0.113.5' })).toBeNull()
     cleanup()
     const refusing = dashboard(args => (args[0] === 'reach' ? { ok: false, error: 'The server did not give a line: this door gives no line: only a server does' } : ok({ servers: [server(ALL_DONE, { adding: false })] })), BOX_SAVED())
@@ -832,7 +843,7 @@ describe('Settings › Devices: a server this computer installed', () => {
     await waitFor(() => expect(addComputerThrough).toHaveBeenCalledWith('https://203.0.113.5', 'abc123def456'))
     expect(await screen.findByText('In "Run on"')).toBeTruthy()
     fireEvent.click(screen.getByRole('button', { name: 'Back to Devices' }))
-    expect((await screen.findByRole('listitem', { name: 'Studio (through 203.0.113.5)' }, { timeout: 15_000 })).textContent).toContain('through 203.0.113.5')
+    expect((await findRow('Studio (through 203.0.113.5)', { timeout: 15_000 })).textContent).toContain('through 203.0.113.5')
   })
 
   test('a server no computer keeps a line to shows no such list', async () => {
@@ -856,7 +867,7 @@ describe('Settings › Devices: a server this computer installed', () => {
     fireEvent.click(await screen.findByRole('switch', { name: 'From anywhere, through 198.51.100.7' }))
     await waitFor(() => expect(runComputerCommand).toHaveBeenCalledWith(['shared-reach', SHARED, 'full']))
     // The person's phone there is in their list, through it.
-    expect((await screen.findByRole('listitem', { name: 'iPhone, Safari' })).textContent).toContain('through 198.51.100.7')
+    expect((await findRow('iPhone, Safari')).textContent).toContain('through 198.51.100.7')
 
     await open('198.51.100.7')
     expect(await screen.findByText('You are in as rom.')).toBeTruthy()
@@ -890,9 +901,9 @@ describe('Settings › Devices: a server this computer installed', () => {
     const theSwitch = await screen.findByRole('switch', { name: 'From anywhere, through my-vps' })
     fireEvent.click(theSwitch)
     await waitFor(() => expect(runComputerCommand).toHaveBeenCalledWith(['shared-reach', 'https://198.51.100.8', 'full']))
-    expect(within(await screen.findByRole('listitem', { name: 'my-vps' })).getByText('yours')).toBeTruthy()
+    expect(within(await findRow('my-vps')).getByText('yours')).toBeTruthy()
     // A machine whose door does not say is a computer like any other, with no switch through it.
-    expect(within(screen.getByRole('listitem', { name: 'Box' })).getByText('Computer')).toBeTruthy()
+    expect(within(getRow('Box')).getByText('Computer')).toBeTruthy()
     expect(screen.queryByRole('switch', { name: 'From anywhere, through Box' })).toBeNull()
     await open('my-vps')
     expect(await screen.findByText('Yours, set up from another computer.')).toBeTruthy()
@@ -913,7 +924,7 @@ describe('Settings › Devices: a server this computer installed', () => {
     )
     computersThrough.mockImplementation(async () => ({ ok: true, computers: [{ id: 'b0x1d2', name: 'rom-desktop', online: true, added: true, owner: 'rom' }] }))
     show(host)
-    expect((await screen.findByRole('listitem', { name: 'rom-desktop (through 203.0.113.5)' })).textContent).toContain("rom's, shared with you")
+    expect((await findRow('rom-desktop (through 203.0.113.5)')).textContent).toContain("rom's, shared with you")
     await open('203.0.113.5')
     const list = await screen.findByRole('list', { name: 'The computers on 203.0.113.5' })
     expect(list.textContent).toContain("rom-desktop· rom's · shared with you")
@@ -950,7 +961,7 @@ describe('Settings › Devices: a computer someone shared with this person at it
     machinePerson.mockImplementation(async () => ({ ok: true, said: { person: 'Suleiman', owner: false, ownerName: 'Dani', devices: [{ id: 'k1abcd', name: 'OpenAgent on Suleimans-MacBook-Pro', added: '2026-11-09T00:00:00.000Z' }, { id: 'p1abcd', name: 'iPhone, Safari', added: '2026-11-09T00:00:00.000Z' }] } }))
     removeMachineDevice.mockImplementation(async () => ({ ok: true, said: { person: 'Suleiman', owner: false, ownerName: 'Dani', devices: [] } }))
     show(host)
-    const row = await screen.findByRole('listitem', { name: 'dani-pc' })
+    const row = await findRow('dani-pc')
     await waitFor(() => expect(row.textContent).toContain('you are Suleiman'))
     expect(row.textContent).toContain("Dani's, shared with you")
     // No line through it: it is no server of this person's.
@@ -984,7 +995,7 @@ describe('Settings › Devices opened at one machine, as a link from elsewhere n
     )
     expect(await screen.findByRole('list', { name: 'Your logins on rom-desktop (through 203.0.113.5)' })).toBeTruthy()
     fireEvent.click(screen.getByRole('button', { name: 'Back to Devices' }))
-    expect(await screen.findByRole('listitem', { name: 'rom-desktop (through 203.0.113.5)' })).toBeTruthy()
+    expect(await findRow('rom-desktop (through 203.0.113.5)')).toBeTruthy()
   })
 })
 
@@ -1005,7 +1016,7 @@ describe('Settings › Devices: a computer at home set up as a server, through a
     const { host, ran, machinePerson } = dashboard(args => (args[0] === 'people' ? ok({ devices: [], persons: [{ name: 'rom', owner: true }] }) : ok({ servers: [box()] })), SAVED)
     machinePerson.mockImplementation(async id => (id === VPS ? { ok: true, said: { person: 'rom', owner: false, devices: [], persons: ['suleimansh', 'rom', 'dani'] } } : { ok: false, error: 'not said', unknown: true }))
     show(host)
-    const row = await screen.findByRole('listitem', { name: 'rom-box' })
+    const row = await findRow('rom-box')
     expect(row.textContent).toContain('Server at home')
     expect(row.textContent).toContain('through 165.245.244.10')
     expect(screen.queryByRole('switch', { name: 'From anywhere, through rom-box' })).toBeNull()
@@ -1057,7 +1068,7 @@ describe('Settings › Devices: a computer at home set up as a server, through a
     const saved: ModuleMachines = { ...SAVED, machines: [{ ...SAVED.machines[0]!, label: 'OpenAgentVPS' }, SAVED.machines[1]!] }
     const { host } = dashboard(() => ok({ servers: [box()] }), saved, undefined, undefined, () => ok({ devices: [], persons: [{ name: 'rom', owner: true }], door: { tailscale: 'rom-box.tail1234.ts.net' } }))
     show(host)
-    const row = await screen.findByRole('listitem', { name: 'rom-box' })
+    const row = await findRow('rom-box')
     await waitFor(() => expect(row.textContent).toContain('on Tailscale at rom-box.tail1234.ts.net'))
     expect(row.textContent).toContain('through OpenAgentVPS')
     expect(row.textContent).toContain('1 person')

@@ -7,9 +7,6 @@
     "rounded": 1,
     "text-[11px]": 1
   },
-  "dashboard-devices/dashboard/DevicesSettings.tsx": {
-    "text-[10px]": 1
-  },
   "dashboard-devices/dashboard/ServerPage.tsx": {
     "text-[11px]": 1
   },
@@ -17,7 +14,6 @@
     "text-[11px]": 1
   },
   "dashboard-devices/dashboard/parts.tsx": {
-    "rounded": 1,
     "text-[11px]": 1,
     "text-muted-foreground/50": 1
   },

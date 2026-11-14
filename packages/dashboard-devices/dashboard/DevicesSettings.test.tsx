@@ -68,7 +68,18 @@ async function fromMenu(row: string, item: string): Promise<void> {
   fireEvent.click(await screen.findByRole('button', { name: `${row}: more` }))
   fireEvent.click(await screen.findByRole('menuitem', { name: item }))
 }
-const open = async (name: string): Promise<void> => void fireEvent.click(within(await screen.findByRole('listitem', { name })).getByRole('button'))
+/** What a row of a list is called: the first words in it. */
+const nameOfRow = (row: Element): string => [...row.querySelectorAll('*')].find(part => part.childElementCount === 0 && part.textContent)?.textContent ?? ''
+/** The rows of the lists shown that are called `name`. */
+const rowsNamed = (name: string): HTMLElement[] => screen.queryAllByRole('listitem').filter(row => nameOfRow(row) === name)
+const queryRow = (name: string): HTMLElement | null => rowsNamed(name)[0] ?? null
+function getRow(name: string): HTMLElement {
+  const row = queryRow(name)
+  if (!row) throw new Error(`No row called ${name}`)
+  return row
+}
+const findRow = (name: string, options?: { timeout: number }): Promise<HTMLElement> => waitFor(() => getRow(name), options)
+const open = async (name: string): Promise<void> => void fireEvent.click(within(await findRow(name)).getByRole('button'))
 /** Add computer: from the start page's card, or Add device › Computer. */
 async function addComputer(): Promise<void> {
   const press = await screen.findByRole('button', { name: /^(Add computer|Add device)$/ })
@@ -175,7 +186,7 @@ describe('Settings › Devices: this computer, and how devices reach it', () => 
     await screen.findByRole('img', { name: 'The code a new device scans' })
     // A device fewer is no device got in: the code stays.
     devices = []
-    await waitFor(() => expect(screen.queryByRole('listitem', { name: 'iPhone, Safari' })).toBeNull())
+    await waitFor(() => expect(queryRow('iPhone, Safari')).toBeNull())
     expect(screen.getByRole('img', { name: 'The code a new device scans' })).toBeTruthy()
     devices = [{ id: 'new000new000', name: 'Android phone, Chrome', added: new Date().toISOString() }]
     expect(await screen.findByText('Android phone, Chrome is in.')).toBeTruthy()
@@ -201,12 +212,12 @@ describe('Settings › Devices: this computer, and how devices reach it', () => 
       return ok({ ...OPEN, devices: [PHONE] })
     })
     show({ ...host, runComputerCommand })
-    await screen.findByRole('listitem', { name: 'iPhone, Safari' })
+    await findRow('iPhone, Safari')
     await waitFor(() => expect(late).toBeDefined())
     await fromMenu('iPhone, Safari', 'Remove')
-    await waitFor(() => expect(screen.queryByRole('listitem', { name: 'iPhone, Safari' })).toBeNull())
+    await waitFor(() => expect(queryRow('iPhone, Safari')).toBeNull())
     await new Promise(resolve => setTimeout(resolve, 150))
-    expect(screen.queryByRole('listitem', { name: 'iPhone, Safari' })).toBeNull()
+    expect(queryRow('iPhone, Safari')).toBeNull()
   })
 
   test('on a server there is no switch: the card says where the door is open, a phone gets one link, and a missing certificate is said', async () => {
@@ -323,16 +334,16 @@ describe('Settings › Devices: this computer, and how devices reach it', () => 
       return ok(state)
     })
     show(host)
-    const phone = await screen.findByRole('listitem', { name: 'iPhone, Safari' })
+    const phone = await findRow('iPhone, Safari')
     expect(phone.textContent).toContain('Phone')
     expect(phone.textContent).toContain('on this Wi-Fi')
     expect(phone.textContent).toContain('last seen 1m ago')
-    expect(screen.getByRole('listitem', { name: 'Mac, Chrome' }).textContent).toContain('Browser')
-    expect(screen.getByRole('listitem', { name: 'Mac, Chrome' }).textContent).toContain('added 3m ago')
+    expect(getRow('Mac, Chrome').textContent).toContain('Browser')
+    expect(getRow('Mac, Chrome').textContent).toContain('added 3m ago')
     await fromMenu('Mac, Chrome', 'Remove')
     await waitFor(() => expect(runComputerCommand).toHaveBeenCalledWith(['remove', 'fff000fff000']))
-    await waitFor(() => expect(screen.queryByRole('listitem', { name: 'Mac, Chrome' })).toBeNull())
-    expect(screen.getByRole('listitem', { name: 'iPhone, Safari' })).toBeTruthy()
+    await waitFor(() => expect(queryRow('Mac, Chrome')).toBeNull())
+    expect(getRow('iPhone, Safari')).toBeTruthy()
   })
 
   test('a device being removed says so on its row until the row is gone', async () => {
@@ -347,11 +358,11 @@ describe('Settings › Devices: this computer, and how devices reach it', () => 
     })
     show(host)
     await fromMenu('iPhone, Safari', 'Remove')
-    const row = await screen.findByRole('listitem', { name: 'iPhone, Safari' })
+    const row = await findRow('iPhone, Safari')
     await waitFor(() => expect(row.textContent).toContain('Removing…'))
     expect(screen.getByRole('button', { name: 'iPhone, Safari: more' }).hasAttribute('disabled')).toBe(true)
     answerRemove!()
-    await waitFor(() => expect(screen.queryByRole('listitem', { name: 'iPhone, Safari' })).toBeNull())
+    await waitFor(() => expect(queryRow('iPhone, Safari')).toBeNull())
   })
 
   test('a phone is renamed from its menu: the door calls it by the name picked', async () => {
@@ -365,7 +376,7 @@ describe('Settings › Devices: this computer, and how devices reach it', () => 
     fireEvent.change(await screen.findByRole('textbox', { name: 'Name' }), { target: { value: ' My phone ' } })
     fireEvent.click(screen.getByRole('button', { name: 'Save' }))
     await waitFor(() => expect(runComputerCommand).toHaveBeenCalledWith(['rename', PHONE.id, 'My phone']))
-    expect(await screen.findByRole('listitem', { name: 'My phone' })).toBeTruthy()
+    expect(await findRow('My phone')).toBeTruthy()
   })
 
   test('a door that could not open says why, and a command that failed says so', async () => {
@@ -392,11 +403,11 @@ describe('Settings › Devices: another computer, once', () => {
     const LOOKALIKE = { id: 'aaaa00000000', name: 'OpenAgent on Studio', added: PHONE.added }
     const { host } = door(() => ok({ ...OPEN, devices: [IN_HERE, LOOKALIKE] }), [STUDIO])
     show(host)
-    const studio = await screen.findByRole('listitem', { name: 'Studio Mac' })
+    const studio = await findRow('Studio Mac')
     expect(studio.textContent).toContain('runs go both ways')
     expect(studio.textContent).toContain('Online')
     // The other one, named alike, starts runs here and is not saved: its own row, by its own name.
-    const other = screen.getByRole('listitem', { name: 'Studio' })
+    const other = getRow('Studio')
     expect(other.textContent).toContain('starts runs here')
     expect(within(screen.getByRole('list', { name: 'Your devices' })).getAllByRole('listitem')).toHaveLength(2)
   })
@@ -407,8 +418,8 @@ describe('Settings › Devices: another computer, once', () => {
     const { host } = door(() => ok({ ...OPEN, persons: [{ name: 'Rom', owner: true }, { name: 'Ada', ready: true }], devices: [OWN, ADAS] }))
     show(host)
     const mine = await screen.findByRole('list', { name: 'Your devices' })
-    expect(within(mine).getAllByRole('listitem').map(item => item.getAttribute('aria-label'))).toEqual(['Studio'])
-    expect(screen.queryByRole('listitem', { name: 'ada-laptop' })).toBeNull()
+    expect(within(mine).getAllByRole('listitem').map(nameOfRow)).toEqual(['Studio'])
+    expect(queryRow('ada-laptop')).toBeNull()
     // Listed under Ada, as a computer of hers that keeps a line here.
     expect(screen.getByRole('list', { name: 'Devices of Ada' }).textContent).toContain('ada-laptop')
   })
@@ -420,7 +431,7 @@ describe('Settings › Devices: another computer, once', () => {
       return ok({ ...OPEN, devices })
     }, [STUDIO])
     show(host)
-    expect((await screen.findByRole('listitem', { name: 'Studio Mac' })).textContent).toContain('your runs go there')
+    expect((await findRow('Studio Mac')).textContent).toContain('your runs go there')
     await open('Studio Mac')
     expect(await screen.findByText('Off. Turn it on: Studio Mac is told this computer\'s link, and saves it.')).toBeTruthy()
     fireEvent.click(screen.getByRole('switch', { name: 'Studio Mac can start runs here' }))

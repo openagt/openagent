@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { ChevronLeft, Ellipsis, House, Loader2, Monitor, Plus, Server, Smartphone, Tablet, UserPlus, UserRound } from 'lucide-react'
-import { Button, ConfirmDialog, Dialog, DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, Input, formatDateTime, formatRelative, usePolled, useSettingsCrumb } from '@openagt/dashboard/module'
+import { Badge, Button, ConfirmDialog, Dialog, DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, Input, List as Rows, Row, Section, SettingsRow, SettingsSection, buttonVariants, formatDateTime, formatRelative, usePolled, useSettingsCrumb } from '@openagt/dashboard/module'
 import { addDevice, keepPerson, loadMine, myName, nameOwner, removeDevice, removeMine, removePerson, renameDevice, setTailscale, type Answer, type DeviceRow, type DoorStatus, type LineRow, type PersonRow, type PersonThere } from './devices.js'
 import { installFailed, removeDevice as removeServerDevice } from './servers.js'
 import { AddDevice, useJoined, type Adding } from './AddDevice.js'
@@ -10,7 +10,7 @@ import { JoinedPage, OtherPage } from './JoinedPage.js'
 import { ServerPage } from './ServerPage.js'
 import { ThisComputer } from './ThisComputer.js'
 import { hasServer, labelOf, reachedAt, type Item, type PhoneItem } from './model.js'
-import { Problem, Row, State, olderThan } from './parts.js'
+import { LinkPress, ListedDevice, Problem, State, olderThan } from './parts.js'
 import { useDevices, type Devices, type Paces } from './use-devices.js'
 
 // Settings › Devices: this computer, how the person's devices reach it, and every device of
@@ -101,7 +101,7 @@ export function DevicesSettings({ everyMs = 3_000, devicesEveryMs = 30_000, devi
   const persons = status?.persons ?? []
   const start = d.items.length === 0 && !status?.on && status?.https === undefined && status?.tailscale === undefined && persons.length === 0
   return (
-    <div className="space-y-4 pt-1">
+    <div className="space-y-8">
       <ThisComputer d={d} start={start} />
       {start ? <Start d={d} onAdd={setAdding} /> : <List d={d} onOpen={item => setOpened(openedOf(item))} onAdd={() => setAdding('choose')} />}
       {d.door !== undefined && !d.door.ok && <Problem>{`The devices could not be read: ${d.door.error}`}</Problem>}
@@ -126,43 +126,40 @@ function Start({ d, onAdd }: { d: Devices; onAdd: (adding: Adding) => void }) {
     setTurning(false)
   }
   return (
-    <>
-      <div>
-        <p className="text-sm font-medium">Add your first device</p>
-        <p className="text-xs text-muted-foreground">Pick what you want to do. You can add the others later.</p>
-      </div>
-      <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-        <Tile icon={Smartphone} title="Use it on your phone" words="Start runs and answer your agents from your phone, on the same Wi-Fi as this computer." button="Add phone" primary onClick={() => onAdd('phone')} />
-        <Tile icon={Monitor} title="Use another computer" words="Run agents on your other computer, on the same Wi-Fi as this one." button="Add computer" onClick={() => onAdd('computer')} />
-        {!d.isServer && <Tile icon={Server} title="Get a server" words="Always on. Your phone and computers reach each other from anywhere, and you can share it with people." button="Set up a server" onClick={() => onAdd('server')} />}
-      </div>
-      <p className="text-xs text-muted-foreground">
-        Someone gave you a code?{' '}
-        <button type="button" className="underline hover:text-foreground" onClick={() => onAdd('code')}>
-          Join with a code
-        </button>
-      </p>
-      <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
-        <p className="text-xs text-muted-foreground">On Tailscale? From anywhere, with no server:</p>
-        <Button variant="outline" disabled={turning} onClick={() => void onTailscale()}>
-          Reach this computer on your Tailscale network
-        </Button>
-      </div>
-      {why !== undefined && <Problem>{why}</Problem>}
-    </>
-  )
-}
-
-function Tile({ icon: Icon, title, words, button, primary = false, onClick }: { icon: typeof Smartphone; title: string; words: string; button: string; primary?: boolean; onClick: () => void }) {
-  return (
-    <div className="flex flex-col gap-2 rounded-lg border border-border bg-card p-4">
-      <Icon aria-hidden className="h-4 w-4 text-primary" />
-      <p className="text-sm font-semibold">{title}</p>
-      <p className="flex-1 text-xs text-muted-foreground">{words}</p>
-      <Button variant={primary ? 'default' : 'outline'} className="h-auto min-h-8 self-start py-1.5" onClick={onClick}>
-        {button}
-      </Button>
-    </div>
+    <Section title="Add your first device">
+      <SettingsSection description="Pick what you want to do. You can add the others later.">
+        <SettingsRow label="Use it on your phone" description="Start runs and answer your agents from your phone, on the same Wi-Fi as this computer." control={<Button onClick={() => onAdd('phone')}>Add phone</Button>} />
+        <SettingsRow
+          label="Use another computer"
+          description="Run agents on your other computer, on the same Wi-Fi as this one."
+          control={
+            <Button variant="secondary" onClick={() => onAdd('computer')}>
+              Add computer
+            </Button>
+          }
+        />
+        {!d.isServer && (
+          <SettingsRow
+            label="Get a server"
+            description="Always on. Your phone and computers reach each other from anywhere, and you can share it with people."
+            control={
+              <Button variant="secondary" onClick={() => onAdd('server')}>
+                Set up a server
+              </Button>
+            }
+          />
+        )}
+        <div className="space-y-2 text-xs text-muted-foreground">
+          <p>
+            Someone gave you a code? <LinkPress onClick={() => onAdd('code')}>Join with a code</LinkPress>
+          </p>
+          <p>
+            On Tailscale? From anywhere, with no server: <LinkPress loading={turning} onClick={() => void onTailscale()}>Reach this computer on your Tailscale network</LinkPress>
+          </p>
+        </div>
+        {why !== undefined && <Problem>{why}</Problem>}
+      </SettingsSection>
+    </Section>
   )
 }
 
@@ -180,22 +177,24 @@ function List({ d, onOpen, onAdd }: { d: Devices; onOpen: (item: Item) => void; 
   const [codeOn, setCodeOn] = useState(false)
   const joined = useJoined(d, codeOn)
   return (
-    <div className="space-y-1">
-      <div className="flex items-center justify-between gap-4">
-        <p className="text-sm font-medium">{items.length ? `Your devices (${items.length})` : 'Your devices'}</p>
-        <div className="flex gap-2">
+    <Section
+      title="Your devices"
+      {...(items.length ? { count: items.length } : {})}
+      action={
+        <>
           {addsPersons && (
-            <Button variant="outline" title="Someone else, by their name: they add this computer to their own OpenAgent with the code, and get a user of their own here." onClick={() => setAddingPerson(true)}>
-              <UserPlus className="h-3.5 w-3.5" aria-hidden />
+            <Button variant="secondary" title="Someone else, by their name: they add this computer to their own OpenAgent with the code, and get a user of their own here." onClick={() => setAddingPerson(true)}>
+              <UserPlus className="size-4" aria-hidden />
               Add person
             </Button>
           )}
-          <Button variant="outline" onClick={onAdd}>
-            <Plus className="h-3.5 w-3.5" aria-hidden />
+          <Button onClick={onAdd}>
+            <Plus className="size-4" aria-hidden />
             Add device
           </Button>
-        </div>
-      </div>
+        </>
+      }
+    >
       {addingPerson && (
         <Invite
           label={d.machines?.name ?? 'this computer'}
@@ -218,14 +217,14 @@ function List({ d, onOpen, onAdd }: { d: Devices; onOpen: (item: Item) => void; 
           }}
         />
       )}
-      {items.length === 0 && !persons.length && <p className="text-xs text-muted-foreground">{server ? 'None yet. Add device: a phone from anywhere, or a computer.' : status?.tailscale ? 'None yet. Add device: a phone or a computer on your Tailscale network.' : 'None yet. Add device: a phone or a computer on the same Wi-Fi.'}</p>}
-      <ul aria-label="Your devices" className="divide-y divide-border">
+      {items.length === 0 && !persons.length && <p className="text-sm text-muted-foreground">{server ? 'None yet. Add device: a phone from anywhere, or a computer.' : status?.tailscale ? 'None yet. Add device: a phone or a computer on your Tailscale network.' : 'None yet. Add device: a phone or a computer on the same Wi-Fi.'}</p>}
+      <Rows aria-label="Your devices">
         {items.map(item => (
           <ItemRow key={item.key} d={d} item={item} onOpen={() => onOpen(item)} />
         ))}
-      </ul>
+      </Rows>
       {persons.length > 0 && <DoorPeople d={d} persons={persons} devices={status?.devices ?? []} lines={status?.lines ?? []} />}
-    </div>
+    </Section>
   )
 }
 
@@ -238,7 +237,7 @@ function ItemRow({ d, item, onOpen }: { d: Devices; item: Item; onOpen: () => vo
     const where = item.line ? 'keeps a line open here' : through ? `through ${through.label}` : reachedAt(machine)
     const runs = item.line ? undefined : machine && door ? 'runs go both ways' : machine ? 'your runs go there' : 'starts runs here'
     const state = machine ? machine.version !== undefined ? <State tone="good">Online</State> : <State tone="quiet">Offline</State> : undefined
-    return <Row icon={Monitor} name={item.name} facts={[state, 'Computer', where, runs]} onOpen={onOpen} />
+    return <ListedDevice icon={Monitor} name={item.name} facts={['Computer', where, runs]} state={state} onOpen={onOpen} />
   }
   if (item.kind === 'server') {
     const { server, machine } = item
@@ -247,19 +246,25 @@ function ItemRow({ d, item, onOpen }: { d: Devices; item: Item; onOpen: () => vo
     const behind = machine?.version !== undefined && d.machines !== undefined && olderThan(machine.version, d.machines.version)
     const state = server.working ? <State tone="working">{machine ? 'Updating…' : 'Installing…'}</State> : failed ? <State tone="bad">Stopped at a step</State> : machine?.version !== undefined ? <State tone="good">Online</State> : <State tone="quiet">{machine ? 'Offline' : 'Not connected yet'}</State>
     return (
-      <Row
+      <ListedDevice
         icon={home ? House : Server}
         name={item.name}
-        facts={[state, home ? 'Server at home' : 'Server', home ? `through ${labelOf(d.machines?.machines ?? [], server.through!)}` : undefined, item.door?.tailscale !== undefined ? `on Tailscale at ${item.door.tailscale}` : undefined, item.people !== undefined ? `${item.people} ${item.people === 1 ? 'person' : 'people'}` : undefined, behind && <span className="rounded-full border border-[var(--color-warning)] px-1.5 text-[10px] font-medium text-warning">Update</span>]}
+        facts={[home ? 'Server at home' : 'Server', home ? `through ${labelOf(d.machines?.machines ?? [], server.through!)}` : undefined, item.door?.tailscale !== undefined ? `on Tailscale at ${item.door.tailscale}` : undefined, item.people !== undefined ? `${item.people} ${item.people === 1 ? 'person' : 'people'}` : undefined]}
+        state={
+          <>
+            {behind && <Badge tone="warning">Update</Badge>}
+            {state}
+          </>
+        }
         onOpen={onOpen}
       />
     )
   }
   if (item.kind === 'joined') {
     const { machine, person } = item
-    return <Row icon={Server} name={item.name} facts={[machine.version !== undefined ? <State tone="good">Online</State> : <State tone="quiet">Offline</State>, 'Server', person.owner ? 'yours' : person.person !== undefined ? `you are ${person.person}` : undefined]} onOpen={onOpen} />
+    return <ListedDevice icon={Server} name={item.name} facts={['Server', person.owner ? 'yours' : person.person !== undefined ? `you are ${person.person}` : undefined]} state={machine.version !== undefined ? <State tone="good">Online</State> : <State tone="quiet">Offline</State>} onOpen={onOpen} />
   }
-  return <Row icon={Server} name={item.name} facts={[item.machine.version !== undefined ? <State tone="good">Online</State> : <State tone="quiet">Offline</State>, `${item.owner}'s, shared with you`, item.person?.person !== undefined ? `you are ${item.person.person}` : undefined]} onOpen={onOpen} />
+  return <ListedDevice icon={Server} name={item.name} facts={[`${item.owner}'s, shared with you`, item.person?.person !== undefined ? `you are ${item.person.person}` : undefined]} state={item.machine.version !== undefined ? <State tone="good">Online</State> : <State tone="quiet">Offline</State>} onOpen={onOpen} />
 }
 
 /** A phone or a browser: no page of its own, a menu to rename it here, or take it out. */
@@ -298,14 +303,15 @@ function PhoneRow({ d, item }: { d: Devices; item: PhoneItem }) {
   }
   return (
     <>
-      <Row
+      <ListedDevice
         icon={icon}
         name={item.name}
-        facts={[word, where, <span title={formatDateTime(item.seen ?? item.added)}>{seenWords(item.seen, item.added)}</span>, ...(removing ? [<State tone="working">Removing…</State>] : [])]}
-        end={
+        facts={[word, where, <span title={formatDateTime(item.seen ?? item.added)}>{seenWords(item.seen, item.added)}</span>]}
+        {...(removing ? { state: <State tone="working">Removing…</State> } : {})}
+        actions={
           <DropdownMenu>
-            <DropdownMenuTrigger aria-label={`${item.name}: more`} disabled={busy || removing} className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-muted-foreground hover:bg-accent hover:text-accent-foreground">
-              {removing ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden /> : <Ellipsis className="h-4 w-4" aria-hidden />}
+            <DropdownMenuTrigger aria-label={`${item.name}: more`} disabled={busy || removing} className={buttonVariants({ variant: 'ghost', size: 'icon-sm' })}>
+              {removing ? <Loader2 className="size-4 animate-spin" aria-hidden /> : <Ellipsis className="size-4" aria-hidden />}
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">
               {item.door && <DropdownMenuItem onClick={() => (setName(item.name), setRenaming(true))}>Rename</DropdownMenuItem>}
@@ -316,7 +322,11 @@ function PhoneRow({ d, item }: { d: Devices; item: PhoneItem }) {
           </DropdownMenu>
         }
       />
-      {error !== undefined && <Problem>{error}</Problem>}
+      {error !== undefined && (
+        <li className="px-3">
+          <Problem>{error}</Problem>
+        </li>
+      )}
       {renaming && item.door && (
         <Dialog open onOpenChange={open => !open && setRenaming(false)} title={`Rename ${item.name}`}>
           <form
@@ -360,25 +370,24 @@ function RemovePerson({ name, label, busy, onConfirm }: { name: string; label: s
   )
 }
 
-/** A device's lines in a person's list: its name, when it was seen, and what a computer of theirs is. */
+/** A device in a person's list: its name, when it was seen, and what a computer of theirs is. */
 function DoorDevice({ device, mine, busy, onRemove }: { device: DeviceRow; mine: boolean; busy: boolean; onRemove: () => void }) {
   const { icon: Icon } = device.line ? { icon: Monitor } : phoneKind(device.name)
+  const seen = device.seen !== undefined ? `Last seen ${formatRelative(device.seen)}, added ${formatRelative(device.added)}` : `Added ${formatRelative(device.added)}`
+  const line = device.line ? `${device.person !== undefined && !mine ? `A computer of ${device.person}` : 'A computer of yours'}: runs can be started on it from here. Remove it and it is no longer in "Run on".` : undefined
   return (
-    <li className="flex items-center justify-between gap-3 py-3">
-      <div className="flex min-w-0 items-center gap-3">
-        <Icon className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden />
-        <div className="min-w-0">
-          <p className="truncate text-sm">{device.name}</p>
-          <p className="text-xs text-muted-foreground" title={formatDateTime(device.seen ?? device.added)}>
-            {device.seen !== undefined ? `Last seen ${formatRelative(device.seen)}, added ${formatRelative(device.added)}` : `Added ${formatRelative(device.added)}`}
-          </p>
-          {device.line && <p className="text-xs text-muted-foreground">{`${device.person !== undefined && !mine ? `A computer of ${device.person}` : 'A computer of yours'}: runs can be started on it from here. Remove it and it is no longer in "Run on".`}</p>}
-        </div>
-      </div>
-      <Button variant="ghost" disabled={busy} aria-label={`Remove ${device.name}`} onClick={onRemove}>
-        Remove
-      </Button>
-    </li>
+    <Row
+      leading={<Icon className="size-4" aria-hidden />}
+      title={device.name}
+      detail={<span title={line ?? formatDateTime(device.seen ?? device.added)}>{line ?? seen}</span>}
+      {...(line !== undefined ? { meta: <span title={formatDateTime(device.seen ?? device.added)}>{seen}</span> } : {})}
+      stackOnPhone
+      actions={
+        <Button variant="ghost" size="sm" disabled={busy} aria-label={`Remove ${device.name}`} onClick={onRemove}>
+          Remove
+        </Button>
+      }
+    />
   )
 }
 
@@ -397,14 +406,14 @@ function DoorPeople({ d, persons, devices, lines }: { d: Devices; persons: Perso
     setBusy(false)
   }
   return (
-    <div className="space-y-1 pt-2">
+    <div className="space-y-6">
       {persons.map(person => {
         const theirs = devices.filter(device => (device.person ?? persons[0]!.name) === person.name)
         return (
-          <div key={person.name} className="pt-2">
-            <div className="flex items-center justify-between gap-3 pt-2">
+          <div key={person.name} className="space-y-1">
+            <div className="flex min-h-8 items-center justify-between gap-3">
               <p className="flex min-w-0 items-center gap-2 text-xs font-medium text-muted-foreground">
-                <UserRound className="h-3.5 w-3.5 shrink-0" aria-hidden />
+                <UserRound className="size-3.5 shrink-0" aria-hidden />
                 <span className="truncate">{person.owner ? `${person.name}, the owner` : person.name}</span>
               </p>
               {!person.owner && !(person.removed && !person.kept) && <RemovePerson name={person.name} label="Remove person" busy={busy} onConfirm={() => act(() => removePerson(host, person.name))} />}
@@ -414,32 +423,32 @@ function DoorPeople({ d, persons, devices, lines }: { d: Devices; persons: Perso
               lines
                 .filter(line => !line.refused)
                 .map(line => (
-                  <p key={line.url} className="pt-1 text-xs text-muted-foreground">
+                  <p key={line.url} className="text-xs text-muted-foreground">
                     {line.mode === 'watch' ? `${nameAt(line.url)} only sees this computer's runs.` : `Uses this computer through ${nameAt(line.url)}.`}
                   </p>
                 ))}
             {/* A person a server's line named here: where they come from, and whether that server still has them. */}
-            {person.from !== undefined && !(person.removed && !person.kept) && <p className="pt-1 text-xs text-muted-foreground">{person.removed ? `Removed from ${nameAt(person.from)}. Kept here, switched off.` : `Uses this computer through ${nameAt(person.from)}.`}</p>}
+            {person.from !== undefined && !(person.removed && !person.kept) && <p className="text-xs text-muted-foreground">{person.removed ? `Removed from ${nameAt(person.from)}. Kept here, switched off.` : `Uses this computer through ${nameAt(person.from)}.`}</p>}
             {person.from !== undefined && person.removed && !person.kept && (
-              <div role="group" aria-label={`${person.name} was removed from ${nameAt(person.from)}`} className="flex flex-wrap items-center justify-between gap-2 pt-1">
+              <div role="group" aria-label={`${person.name} was removed from ${nameAt(person.from)}`} className="flex flex-wrap items-center justify-between gap-2">
                 <p className="text-xs text-warning">{`Removed from ${nameAt(person.from)}.`}</p>
                 <div className="flex gap-2">
-                  <Button variant="outline" disabled={busy} onClick={() => void act(() => keepPerson(host, person.name))}>
+                  <Button variant="secondary" disabled={busy} onClick={() => void act(() => keepPerson(host, person.name))}>
                     Keep, switched off
                   </Button>
                   <RemovePerson name={person.name} label="Remove" busy={busy} onConfirm={() => act(() => removePerson(host, person.name))} />
                 </div>
               </div>
             )}
-            {person.working && <p className="pt-1 text-xs text-muted-foreground">{`Making ${person.name}'s own user on this computer, with their own OpenAgent. This takes a minute or two.`}</p>}
-            {person.problem !== undefined && !person.working && <p role="alert" className="pt-1 text-xs text-danger">{`${person.name}'s own user on this computer could not be made: ${person.problem.replace(/\.?$/, '.')} Add a device for them again to try again.`}</p>}
+            {person.working && <p className="text-xs text-muted-foreground">{`Making ${person.name}'s own user on this computer, with their own OpenAgent. This takes a minute or two.`}</p>}
+            {person.problem !== undefined && !person.working && <p role="alert" className="text-xs text-danger">{`${person.name}'s own user on this computer could not be made: ${person.problem.replace(/\.?$/, '.')} Add a device for them again to try again.`}</p>}
             {/* A person of a server has their devices at that server: none here is none missing. */}
-            {person.from === undefined && theirs.length === 0 && <p className="py-2 text-xs text-muted-foreground">No device yet.</p>}
-            <ul aria-label={`Devices of ${person.name}`} className="divide-y divide-border">
+            {person.from === undefined && theirs.length === 0 && <p className="text-xs text-muted-foreground">No device yet.</p>}
+            <Rows aria-label={`Devices of ${person.name}`}>
               {theirs.map(device => (
                 <DoorDevice key={device.id} device={device} mine={person.owner === true} busy={busy} onRemove={() => void act(() => removeDevice(host, device.id))} />
               ))}
-            </ul>
+            </Rows>
           </div>
         )
       })}
@@ -473,18 +482,17 @@ function PersonDevices({ person, everyMs }: { person: string; everyMs: number })
 
   const devices = mine?.devices ?? []
   return (
-    <div className="space-y-3">
-      <p className="text-sm text-muted-foreground">{`This computer is shared, and you are on it as ${person}. Your devices are in until you remove them. A new device gets in with a code from the computer's owner.`}</p>
+    <div className="space-y-8">
+      <p className="max-w-180 text-sm text-muted-foreground">{`This computer is shared, and you are on it as ${person}. Your devices are in until you remove them. A new device gets in with a code from the computer's owner.`}</p>
       {mine !== undefined && (
-        <div className="space-y-1">
-          <p className="text-sm">{devices.length > 0 ? `Your devices (${devices.length})` : 'Your devices'}</p>
-          {devices.length === 0 && <p className="text-xs text-muted-foreground">None.</p>}
-          <ul aria-label="Your devices" className="divide-y divide-border">
+        <Section title="Your devices" {...(devices.length > 0 ? { count: devices.length } : {})}>
+          {devices.length === 0 && <p className="text-sm text-muted-foreground">None.</p>}
+          <Rows aria-label="Your devices">
             {devices.map(device => (
               <DoorDevice key={device.id} device={device} mine busy={busy} onRemove={() => void remove(device.id)} />
             ))}
-          </ul>
-        </div>
+          </Rows>
+        </Section>
       )}
       {read !== undefined && !read.ok && <Problem>{`Your devices could not be read: ${read.error}`}</Problem>}
       {error !== undefined && <Problem>{error}</Problem>}

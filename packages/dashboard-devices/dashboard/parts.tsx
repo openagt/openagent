@@ -1,9 +1,9 @@
-import { useEffect, useRef, useState, type ComponentType, type FormEvent, type ReactNode, type RefObject } from 'react'
+import { Fragment, useEffect, useRef, useState, type ComponentType, type FormEvent, type ReactNode, type RefObject } from 'react'
 import { ChevronRight, Circle, CircleArrowUp, CircleCheck, CircleX, Loader2, Pencil } from 'lucide-react'
-import { Button, Input, Section, cn } from '@openagt/dashboard/module'
+import { Badge, Button, Input, Row, Section, cn } from '@openagt/dashboard/module'
 import type { StepState } from './servers.js'
 
-// The small pieces the pages of Settings › Devices share: a row of the list, the tabs of a
+// The small pieces the pages of Settings › Devices share: a device's row, the tabs of a
 // device's page, where a device is in a few words, and the lines of a server's steps and logins.
 
 /** A day, as a person reads it. */
@@ -33,62 +33,47 @@ export function olderThan(a: string, b: string): boolean {
   return false
 }
 
-/** Where a device is, in a few words with a mark. */
+/** Where a device is, in a few words with a dot of its colour. */
 export function State({ tone, children }: { tone: 'working' | 'good' | 'warn' | 'bad' | 'quiet'; children: ReactNode }) {
   return (
-    <span role="status" className={cn('inline-flex items-center gap-1.5', tone === 'bad' ? 'text-danger' : tone === 'warn' ? 'text-warning' : 'text-muted-foreground')}>
-      {tone === 'working' ? (
-        <Loader2 aria-hidden className="h-3 w-3 shrink-0 animate-spin text-primary" />
-      ) : tone === 'warn' ? (
-        <CircleArrowUp aria-hidden className="h-3 w-3 shrink-0" />
-      ) : tone === 'bad' ? (
-        <CircleX aria-hidden className="h-3 w-3 shrink-0" />
-      ) : (
-        <span aria-hidden className={cn('h-1.5 w-1.5 shrink-0 rounded-full', tone === 'good' ? 'bg-success' : 'bg-muted-foreground/40')} />
-      )}
+    <Badge role="status" tone={TONE[tone]}>
       {children}
-    </span>
+    </Badge>
   )
 }
 
-/** The words of a line under a name, apart: "Online · Computer · on this Wi-Fi". */
+const TONE = { working: 'info', good: 'success', warn: 'warning', bad: 'danger', quiet: 'neutral' } as const
+
+/** The words of a line under a name, apart: "Computer · on this Wi-Fi". */
 export function Facts({ children }: { children: ReactNode[] }) {
   const shown = children.filter(child => child !== undefined && child !== false && child !== null && child !== '')
-  return (
-    <p className="flex flex-wrap items-center gap-x-1.5 text-xs text-muted-foreground">
-      {shown.map((child, i) => (
-        <span key={i} className="inline-flex items-center gap-1.5">
-          {i > 0 && <span aria-hidden>·</span>}
-          {child}
-        </span>
-      ))}
-    </p>
-  )
+  return shown.map((child, i) => (
+    <Fragment key={i}>
+      {i > 0 && ' · '}
+      <span>{child}</span>
+    </Fragment>
+  ))
 }
 
-/** A device in the list: its icon, its name, the line under it, and what is at its end: a way into its page, or a menu. */
-export function Row({ icon: Icon, name, facts, end, onOpen }: { icon: ComponentType<{ className?: string; 'aria-hidden'?: boolean }>; name: string; facts: ReactNode[]; end?: ReactNode; onOpen?: () => void }) {
-  const body = (
-    <>
-      <Icon aria-hidden className="h-4 w-4 shrink-0 text-muted-foreground" />
-      <span className="min-w-0 flex-1 text-left">
-        <span className="block truncate text-sm">{name}</span>
-        <Facts>{facts}</Facts>
-      </span>
-    </>
-  )
+/** A device in a list: its icon, its name, the line under it, its state at the right, and its page or its own presses. */
+export function ListedDevice({ icon: Icon, name, facts, state, actions, onOpen }: { icon: ComponentType<{ className?: string; 'aria-hidden'?: boolean }>; name: string; facts: ReactNode[]; state?: ReactNode; actions?: ReactNode; onOpen?: () => void }) {
   return (
-    <li aria-label={name} className="flex items-center gap-3 py-3">
-      {onOpen ? (
-        <button type="button" className="flex min-w-0 flex-1 items-center gap-3 rounded outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-primary)]" onClick={onOpen}>
-          {body}
-          <ChevronRight aria-hidden className="h-4 w-4 shrink-0 text-muted-foreground" />
-        </button>
-      ) : (
-        <span className="flex min-w-0 flex-1 items-center gap-3">{body}</span>
-      )}
-      {end}
-    </li>
+    <Row
+      leading={<Icon aria-hidden className="size-4" />}
+      title={name}
+      detail={<Facts>{facts}</Facts>}
+      meta={
+        state !== undefined || onOpen !== undefined ? (
+          <>
+            {state}
+            {onOpen && <ChevronRight aria-hidden className="size-4" />}
+          </>
+        ) : undefined
+      }
+      actions={actions}
+      stackOnPhone
+      {...(onOpen ? { onClick: onOpen } : {})}
+    />
   )
 }
 
@@ -277,7 +262,9 @@ export function Head({ icon: Icon, name, badge, facts, rename }: { icon: Compone
               {badge !== undefined && <span className="shrink-0 rounded-full border border-border px-2 text-[11px] font-medium text-muted-foreground">{badge}</span>}
             </p>
           )}
-          <Facts>{facts}</Facts>
+          <p className="text-xs text-muted-foreground">
+            <Facts>{facts}</Facts>
+          </p>
         </div>
         {rename && !renaming && (
           <Button ref={press} variant="ghost" onClick={open}>
@@ -287,5 +274,14 @@ export function Head({ icon: Icon, name, badge, facts, rename }: { icon: Compone
         )}
       </div>
     </div>
+  )
+}
+
+/** A press that reads as a link in its sentence: blue, underlined under the pointer, with room around it for a finger. */
+export function LinkPress({ loading = false, onClick, children }: { loading?: boolean; onClick: () => void; children: ReactNode }) {
+  return (
+    <Button variant="link" loading={loading} onClick={onClick} className="relative h-auto px-0 text-xs font-normal whitespace-normal after:absolute after:inset-x-0 after:-inset-y-1.5 max-md:after:-inset-y-3.5">
+      {children}
+    </Button>
   )
 }
