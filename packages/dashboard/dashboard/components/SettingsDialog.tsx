@@ -1,6 +1,5 @@
 import { useCallback, useId, useRef, useState, type ComponentType, type ReactNode } from 'react'
 import { Dialog as BaseDialog } from '@base-ui/react/dialog'
-import { Select as SelectPrimitive } from '@base-ui/react/select'
 import { ArrowLeft, Bell, Bot, ChevronRight, ChevronsUpDown, Database, FolderGit2, Globe, Keyboard, Layers, Palette, Puzzle, UserRound, X, FolderSearch } from 'lucide-react'
 import { ACCENTS, DEFAULT_ACCENT_LABELS, accentOf, CODE_FONTS, DOCUMENT_FONTS, DRIVERS, DRIVER_LABELS, isDriverName, FONTS, PALETTES, PALETTE_LABELS, type Accent, type CodeFont, type DocumentFont, type Font, type Palette as ColourPalette } from '../../src/client.js'
 import { driverOptions, useModels } from '../lib/models.js'
@@ -34,7 +33,9 @@ import { Separator } from './ui/separator.js'
 import { RadioGroup, RadioGroupItem } from './ui/radio-group.js'
 import { ScrollArea } from './ui/scroll-area.js'
 import { InSection, Section } from './ui/section.js'
-import { Select, SelectContent, SelectItem, SelectValue } from './ui/select.js'
+import { Select, SelectContent, SelectItem, SelectTriggerBare, SelectValue } from './ui/select.js'
+import { MENU_TRIGGER_OPEN_CLASS } from './ui/dropdown-menu.js'
+import { navRowClass, PROJECT_ROW_CLASS } from './ui/nav-row.js'
 import { cn } from '../lib/utils.js'
 import { useProjectLabel } from '../lib/project-labels.js'
 import { SettingsFootContext, SettingsRow as Row, SettingsSection, SettingsSelectRow as SelectRow, type SettingsOption as SelectOption } from './SettingsRows.js'
@@ -156,14 +157,10 @@ export function SettingsDialog({
             // The entry shown, pressed again, goes nowhere: it asks nothing, and what it holds stays held.
             if (e !== current || listOnly) leave(() => onEntry(e.id))
           }}
-          className={cn(
-            // The sidebar's row: the picked one filled at 8%, one under the pointer at 4%, the weight never changing. On a
-            // phone the list is a page of its own: taller rows, and none marked, since no entry is open beside it.
-            'focus-ring flex w-full items-center gap-2 rounded-md px-1.5 text-left text-sm text-foreground transition-colors hover:bg-foreground/4 active:bg-foreground/8',
-            phone ? 'h-11' : 'h-8 aria-[current=page]:bg-foreground/8',
-          )}
+          // The sidebar's row. On a phone the list is a page of its own: none is marked, since no entry is open beside it.
+          className={cn(navRowClass(e === current && !phone), 'text-left')}
         >
-          <Icon className="size-4 shrink-0 text-muted-foreground" aria-hidden />
+          <Icon aria-hidden />
           <span className="truncate">{e.title}</span>
         </button>
       </li>
@@ -308,18 +305,15 @@ function ProjectSelect({ projects, value, onChange }: { projects: ProjectSummary
   const picked = projects.find(p => p.id === value)
   return (
     <Select items={items} value={value} onValueChange={next => onChange(String(next ?? ALL_PROJECTS))}>
-      <SelectPrimitive.Trigger
-        aria-label="Project"
-        className="focus-ring flex w-full items-center gap-2 rounded-md px-1.5 text-sm font-medium transition-colors hover:bg-foreground/4 active:bg-foreground/8 data-[popup-open]:bg-foreground/8 md:h-8 max-md:h-11"
-      >
+      <SelectTriggerBare aria-label="Project" className={cn(PROJECT_ROW_CLASS, MENU_TRIGGER_OPEN_CLASS)}>
         <span className="flex size-4 shrink-0 items-center justify-center">
           {picked ? <ProjectDot project={picked} /> : <Layers className="size-4 text-muted-foreground" aria-hidden />}
         </span>
         <span className="min-w-0 flex-1 truncate text-left">
           <SelectValue />
         </span>
-        <ChevronsUpDown className="size-4 shrink-0 text-muted-foreground" aria-hidden />
-      </SelectPrimitive.Trigger>
+        <ChevronsUpDown aria-hidden />
+      </SelectTriggerBare>
       <SelectContent>
         {items.map(i => (
           <SelectItem key={i.value} value={i.value}>

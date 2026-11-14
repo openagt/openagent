@@ -17,6 +17,7 @@ import { ScrollArea } from './ui/scroll-area.js'
 import { Skeleton, useSkeleton } from './ui/skeleton.js'
 import { Tooltip, TooltipTrigger, TooltipContent } from './ui/tooltip.js'
 import { MENU_ITEM_CLASS, MENU_POPUP_CLASS, MENU_TRIGGER_OPEN_CLASS } from './ui/dropdown-menu.js'
+import { PROJECT_ROW_CLASS } from './ui/nav-row.js'
 import { usePopupPlacement } from './ui/popup-placement.js'
 import { AddProjectPanel } from './AddProjectPanel.js'
 
@@ -260,14 +261,14 @@ export function ProjectPicker({
     ) : look === 'sidebar' ? (
       // A ghost row of the sidebar's, 32 high (44 on a phone) whatever it shows, so the rows under it never move: the
       // chevrons say it opens, the soft fill under the pointer that it is pressed.
-      <button type="button" className="focus-ring flex w-full items-center gap-2 rounded-md px-1.5 text-sm font-medium transition-colors hover:bg-foreground/4 active:bg-foreground/8 md:h-8 max-md:h-11">
+      <button type="button" className={PROJECT_ROW_CLASS}>
         <span className="flex size-4 shrink-0 items-center justify-center">
           {pending ? null : project ? <ProjectDot project={project} /> : <Layers className="size-4 text-muted-foreground" aria-hidden />}
         </span>
         {/* Until the projects are read, the project the address names is not known: a bar where its
             name goes, rather than "All projects" for a moment. */}
         {loading ? <Skeleton className="h-4 w-24" /> : <span className="flex-1 truncate text-left">{pending ? '' : shown}</span>}
-        <ChevronsUpDown className="ml-auto size-4 shrink-0 text-muted-foreground" aria-hidden />
+        <ChevronsUpDown className="ml-auto" aria-hidden />
       </button>
     ) : (
       <button type="button" className={cn(rowButtonClass, 'max-w-[16rem]!')}>

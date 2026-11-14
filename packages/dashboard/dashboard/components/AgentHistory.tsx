@@ -28,6 +28,7 @@ import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuGro
 import { SESSIONS_ID } from '../../src/project-address.js'
 import { Tooltip, TooltipTrigger, TooltipContent } from './ui/tooltip.js'
 import { ProjectPicker } from './ProjectPicker.js'
+import { navRowClass } from './ui/nav-row.js'
 import {
   Sidebar,
   SidebarContent,
@@ -480,18 +481,6 @@ export function AgentHistory({
         {!isMobile && <SidebarResizer />}
       </Sidebar>
     </PopupPlacementContext.Provider>
-  )
-}
-
-/**
- * A row of the sidebar's navigation: 32 high (44 on a phone), its icon on the sidebar's axis. The
- * picked row is filled with the text's colour at 8% and its icon is in the text's colour; a row under
- * the pointer at 4%, so the two are told apart at a glance; the weight never changes.
- */
-function navRowClass(active: boolean): string {
-  return cn(
-    'focus-ring flex w-full items-center gap-2 rounded-md px-1.5 text-sm font-normal text-foreground transition-colors md:h-8 max-md:h-11 [&>svg]:size-4 [&>svg]:shrink-0',
-    active ? 'bg-foreground/8 [&>svg]:text-foreground' : 'hover:bg-foreground/4 active:bg-foreground/8 [&>svg]:text-muted-foreground',
   )
 }
 

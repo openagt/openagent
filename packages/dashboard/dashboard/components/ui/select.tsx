@@ -41,6 +41,11 @@ export function SelectTrigger({ className, children, ...props }: ComponentProps<
   )
 }
 
+/** The trigger with no look of its own: for a caller that draws it as one of its own rows (Settings' project row). */
+export function SelectTriggerBare(props: ComponentProps<typeof SelectPrimitive.Trigger>) {
+  return <SelectPrimitive.Trigger data-slot="select-trigger" {...props} />
+}
+
 export function SelectContent({
   className,
   sideOffset = 4,
