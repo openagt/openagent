@@ -343,12 +343,12 @@ function Age({ at }: { at: string }) {
 /**
  * Under the agent's last message of a turn it finished: a button that copies it, and how long ago
  * it was said, as Claude Code on the web puts them under its messages. Shown while the pointer is
- * anywhere on the turn (`.turn-footer` in tailwind.css), or a key is in the footer; its line is
- * always there, so nothing moves when it shows.
+ * anywhere on the turn (`.turn-footer` in tailwind.css), or a key is in the footer, and always on
+ * a touch screen, which has no pointer to rest; its line is always there, so nothing moves when it shows.
  */
 function ReplyFooter({ text, at }: { text: string; at?: string | undefined }) {
   return (
-    <div className="turn-footer flex h-6 items-center gap-1 font-sans text-muted-foreground opacity-0 transition-opacity focus-within:opacity-100">
+    <div className="turn-footer flex h-6 items-center gap-1 font-sans text-muted-foreground opacity-0 transition-opacity focus-within:opacity-100 pointer-coarse:opacity-100">
       <CopyMessage text={text} />
       {at !== undefined && <Age at={at} />}
     </div>
@@ -406,10 +406,10 @@ function Prompt({ text, at, waiting, attached, fresh = false }: { text: string; 
   return (
     <div className={`group/prompt flex min-w-0 flex-1 flex-col items-end font-sans text-foreground ${fresh ? 'bubble-in' : ''}`}>
       {/* When it was sent and a copy of it, beside the box's foot where they take no line of their
-          own, shown while the pointer is on the message. A waiting one says so under the box instead. */}
+          own, shown while the pointer is on the message, and always to a finger. A waiting one says so under the box instead. */}
       <div className="flex w-full min-w-0 items-end justify-end gap-1">
         {!waiting && (
-          <div className="flex h-6 shrink-0 items-center gap-1 text-muted-foreground opacity-0 transition-opacity focus-within:opacity-100 group-hover/prompt:opacity-100">
+          <div className="flex h-6 shrink-0 items-center gap-1 text-muted-foreground opacity-0 transition-opacity focus-within:opacity-100 group-hover/prompt:opacity-100 pointer-coarse:opacity-100">
             {at !== undefined && <Age at={at} />}
             <CopyMessage text={text} />
           </div>
@@ -428,7 +428,7 @@ function Prompt({ text, at, waiting, attached, fresh = false }: { text: string; 
       {attached !== undefined && <Attached text={attached} />}
       {waiting && (
         <div className="mt-1 flex h-6 items-center gap-1 text-muted-foreground">
-          <div className="flex items-center gap-1 opacity-0 transition-opacity focus-within:opacity-100 group-hover/prompt:opacity-100">
+          <div className="flex items-center gap-1 opacity-0 transition-opacity focus-within:opacity-100 group-hover/prompt:opacity-100 pointer-coarse:opacity-100">
             <CopyMessage text={text} />
             {waiting.onEdit && (
               <button type="button" aria-label="Cancel and edit message" title="Cancel and edit message" onClick={waiting.onEdit} disabled={down} className="flex h-6 w-6 items-center justify-center rounded-md hover:bg-accent hover:text-accent-foreground disabled:opacity-50">
