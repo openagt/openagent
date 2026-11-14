@@ -400,7 +400,7 @@ export function AgentView({
             // A run another computer started, which is no saved machine, is only read here: a
             // message would continue it on this computer, under its id, with this computer's
             // logins and none of its conversation.
-            <div className="@container mx-auto w-full max-w-3xl px-4 py-2">
+            <div className="@container mx-auto w-full max-w-3xl px-4 pt-2 pb-4">
               {row}
               <p role="note" className="rounded-lg border border-border bg-muted/40 px-3 py-2.5 text-sm text-muted-foreground">
                 {`This run is on ${card.host}. Continue it there.`}

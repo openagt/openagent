@@ -260,7 +260,7 @@ export function AgentComposer({
 
   return (
     // The chat's column and its side padding (EventList), so the box and what is in the chat share both edges.
-    <div className="@container mx-auto w-full max-w-3xl px-4 py-2">
+    <div className="@container mx-auto w-full max-w-3xl px-4 pt-2 pb-4">
       {surfacedError && <p role="alert" className="mb-1 px-2 text-xs text-danger">{surfacedError}</p>}
       {notSent && <p role="status" className="mb-1 px-2 text-xs text-muted-foreground">Not sent: the session stopped first.</p>}
       <Composer
