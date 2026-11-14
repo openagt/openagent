@@ -145,6 +145,26 @@ section[id] {
   }
 }
 
+/* The three claims over the hero's title, each after the lists' check; on one line on a phone too. */
+.claims {
+  gap: 4px 20px;
+}
+.claims li {
+  gap: 6px;
+}
+@media (max-width: 480px) {
+  .claims {
+    gap: 4px 12px;
+  }
+  .claims li {
+    gap: 4px;
+  }
+  .claims svg {
+    width: 14px;
+    height: 14px;
+  }
+}
+
 /* The toggle under the logo and the big Dashboard button: only on a computer with OpenAgent installed (+Head.tsx, ViewToggle). */
 .view-toggle {
   display: none !important;

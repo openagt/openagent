@@ -1,5 +1,6 @@
 import type { ReactNode } from 'react'
 import { CommandBox, PmTabs } from './commands'
+import { CheckIcon } from './icons'
 import { BADGES, labelStyle, proseStyle, Screenshot, text } from './ui'
 import { switchInPlace, useDashboardHref } from './ViewToggle'
 
@@ -30,10 +31,13 @@ export function Hero() {
         gap: 16,
       }}
     >
-      <div
+      <ul
+        className="claims"
         style={{
+          margin: 0,
+          padding: 0,
+          listStyle: 'none',
           display: 'flex',
-          gap: '4px 16px',
           flexWrap: 'wrap',
           justifyContent: 'center',
           ...text('sm'),
@@ -41,9 +45,12 @@ export function Hero() {
         }}
       >
         {BADGES.map(([label]) => (
-          <span key={label}>{label}</span>
+          <li key={label} style={{ display: 'flex', alignItems: 'center', whiteSpace: 'nowrap' }}>
+            <CheckIcon />
+            {label}
+          </li>
         ))}
-      </div>
+      </ul>
 
       <h1
         style={{
