@@ -32,7 +32,7 @@ export default function Page() {
     <Subpage title="Press" lead="Logos, banners, and naming — everything you need to talk about OpenAgent.">
       <Step title="Logo">
         <p style={pStyle}>
-          The mark is the <i>hexknot</i> — six interlocking strands forming a hexagon. It works on dark and light
+          The mark is the <b style={{ color: 'var(--foreground)', fontWeight: 600 }}>hexknot</b> — six interlocking strands forming a hexagon. It works on dark and light
           backgrounds:
         </p>
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: 16 }}>
@@ -54,6 +54,8 @@ export default function Page() {
         <a href="/banner.jpg">
           <img
             src="/banner.jpg"
+            width={1200}
+            height={630}
             alt="OpenAgent banner"
             style={{ width: '100%', height: 'auto', display: 'block', outline: '1px solid var(--border)', borderRadius: 'var(--radius-lg)' }}
           />
