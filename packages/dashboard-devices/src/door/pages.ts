@@ -6,7 +6,7 @@
 
 /** The dashboard's palette (`tailwind.css`), light and dark, under the dashboard's own names. */
 const PALETTE = {
-  light: { '--background': '#fafbf9', '--foreground': '#3a4248', '--muted': '#f3f5f2', '--muted-foreground': '#66756c', '--logo-1': '#0a0a0a', '--logo-2': '#171717', '--logo-3': '#262626', '--logo-4': '#404040', '--logo-5': '#525252', '--logo-6': '#737373' },
+  light: { '--background': '#fafbf9', '--foreground': '#3a4248', '--muted': '#f3f5f2', '--muted-foreground': '#5f6e65', '--logo-1': '#0a0a0a', '--logo-2': '#171717', '--logo-3': '#262626', '--logo-4': '#404040', '--logo-5': '#525252', '--logo-6': '#737373' },
   dark: { '--background': '#171b1d', '--foreground': '#d3c6aa', '--muted': '#262d31', '--muted-foreground': '#9da9a0', '--logo-1': '#fafafa', '--logo-2': '#ededed', '--logo-3': '#d4d4d4', '--logo-4': '#a3a3a3', '--logo-5': '#8a8a8a', '--logo-6': '#737373' },
 }
 
