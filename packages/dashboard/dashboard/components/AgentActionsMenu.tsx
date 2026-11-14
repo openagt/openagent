@@ -128,7 +128,10 @@ export function AgentActionsMenu({
   // asked once more, and the question says what stays.
   const [confirmRemove, setConfirmRemove] = useState(false)
 
-  const { busy, error, run } = useAction()
+  // Per session, as in the composer: the page keeps this menu from one session to the next, and an answer is the session's it was pressed in.
+  const { busy, error, run } = useAction(agentId ?? '')
+  const shown = useRef(agentId)
+  shown.current = agentId
 
   // A landed Stop stays "Stopping…" until the run is no longer live, so it can't be re-fired; continued later, it can be stopped again.
   const [stopRequested, setStopRequested] = useState(false)
@@ -142,7 +145,8 @@ export function AgentActionsMenu({
   const openApp = (target: 'files' | 'editor') => run(() => sendOpenInApp(projectId, target, agentId ?? undefined), 'Failed to open.')
   const stopSession = () =>
     void run(() => sendStop(projectId, agentId ?? undefined), 'Could not stop the session.').then(outcome => {
-      if (outcome.ok) setStopRequested(true)
+      // A Stop that lands once another session is shown latches nothing there: that one still works.
+      if (outcome.ok && shown.current === agentId) setStopRequested(true)
     })
   const removeWorktree = () => {
     if (!agentId) return

@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest'
 import type { ReactElement } from 'react'
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 
 // The ⋮ menu holds the git host / folder / editor / Stop / Remove / Delete actions, so it pulls
 // their RPC + editor reads; stub them.
@@ -185,6 +185,21 @@ describe('the live-session action: Stop', () => {
     rerender(<AgentActionsMenu projectId="p1" agentId="run-1" events={[]} live onDeleted={vi.fn()} />)
     const stop = await screen.findByRole('menuitem', { name: 'Stop agent' })
     expect(stop.getAttribute('aria-disabled')).toBeNull()
+  })
+
+  test('a Stop for A, still out or landed once B is shown, leaves B stoppable', async () => {
+    let finish!: () => void
+    sendStop.mockReturnValueOnce(new Promise<void>(resolve => { finish = resolve }))
+    const ui = (agentId: string) => <AgentActionsMenu projectId="p1" agentId={agentId} events={[]} live onDeleted={vi.fn()} />
+    const { rerender } = render(ui('A'))
+    openMenu()
+    fireEvent.click(await screen.findByRole('menuitem', { name: 'Stop agent' }))
+    await waitFor(() => expect(sendStop).toHaveBeenCalledWith('p1', 'A'))
+    rerender(ui('B'))
+    openMenu()
+    expect((await screen.findByRole('menuitem', { name: 'Stop agent' })).getAttribute('aria-disabled')).toBeNull()
+    await act(async () => finish())
+    expect((await screen.findByRole('menuitem', { name: 'Stop agent' })).getAttribute('aria-disabled')).toBeNull()
   })
 
   test('while OpenAgent is not answering, Stop is off and sends nothing', async () => {
