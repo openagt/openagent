@@ -20,7 +20,7 @@ export function ContentView({ content, wrap = false, className }: { content: Fil
     <div className={cn('overflow-auto font-mono text-xs', className)}>
       {lines.map((line, i) => (
         <div key={i} className={cn('flex px-2 text-foreground', wrap ? 'whitespace-pre-wrap break-words' : 'whitespace-pre')}>
-          <span className="shrink-0 select-none pr-3 text-right text-faint-foreground" style={{ width }}>
+          <span className="shrink-0 select-none pr-3 text-right text-muted-foreground" style={{ width }}>
             {i + 1}
           </span>
           <span>{colored?.[i] ? <Pieces pieces={colored[i]} /> : line || ' '}</span>

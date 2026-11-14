@@ -111,7 +111,7 @@ export function DiffView({ diff, wrap, whole, onWhole, className }: { diff: File
           const kind = fresh ? 'same' : row.kind
           return (
             <div key={i} className="flex">
-              <span className="sticky left-0 shrink-0 select-none bg-card pr-2 pl-2 text-right text-faint-foreground" style={{ width }}>
+              <span className="sticky left-0 shrink-0 select-none bg-card pr-2 pl-2 text-right text-muted-foreground" style={{ width }}>
                 {row.number}
               </span>
               <span className={cn('flex min-w-0 flex-1 border-l-2', TINT[kind])}>
