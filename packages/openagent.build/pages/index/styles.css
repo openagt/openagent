@@ -364,8 +364,14 @@ html:not([data-pm]) .pm-tab-npm {
 
 /* --- Responsive --- */
 @media (max-width: 480px) {
+  /* Their words unseen, still their names for a screen reader. */
   .nav-btn span {
-    display: none;
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
   }
   /* Their icons alone, each a phone's whole target. */
   .nav-btn {
