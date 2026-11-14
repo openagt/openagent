@@ -40,11 +40,11 @@ describe('QuestionPanel', () => {
     expect(screen.getByRole('button', { name: 'Submit' })).toBeTruthy()
   })
 
-  test('Submit names its keys where there is a keyboard, never on a touch screen', () => {
+  test('Submit names its keys where there is a keyboard, never on a touch screen or at a phone\'s width, as the message box does', () => {
     render(panel({ active: true }))
     const keys = screen.getByRole('button', { name: 'Submit' }).querySelector('kbd')!.parentElement!
     // Each pointer's display by name: a plain `flex` would be put back by a module's own `.flex`, loaded after it.
-    expect(keys.className.split(' ')).toEqual(expect.arrayContaining(['not-pointer-coarse:flex', 'pointer-coarse:hidden']))
+    expect(keys.className.split(' ')).toEqual(expect.arrayContaining(['md:not-pointer-coarse:flex', 'pointer-coarse:hidden', 'max-md:hidden']))
     expect(keys.className.split(' ')).not.toContain('flex')
   })
 
