@@ -542,6 +542,34 @@ describe('TicketsPage queue plans for the shown set', () => {
     expect(screen.getByRole('button', { name: 'Add to queue: one ticket' })).toBeTruthy()
   })
 
+  test('every shown ticket on the queue already: the ticket add rests as Queued, and their plans are not offered beside it', async () => {
+    onAllTickets.mockResolvedValue([{ projectId: 'p1', projectName: 'Alpha', tickets: [ticket({ file: 'a.md', title: 'First' }), ticket({ file: 'b.md', title: 'Second' })] }])
+    const mounted = modules()
+    mounted.linkActions = [{ ...mounted.linkActions[0]!, done: async () => () => true }]
+    render(mounted)
+    await screen.findByRole('button', { name: 'Queued' })
+    expect(screen.queryByRole('button', { name: 'Add to queue: 2 plans' })).toBeNull()
+  })
+
+  test('the ticket add pressed: it rests as Queued, and the plan add beside it goes at once', async () => {
+    onAllTickets.mockResolvedValue([{ projectId: 'p1', projectName: 'Alpha', tickets: [ticket({ file: 'a.md', title: 'First' })] }])
+    await controls()
+    render()
+    fireEvent.click(await screen.findByRole('button', { name: 'Add to queue: one ticket' }))
+    await screen.findByRole('button', { name: 'Queued' })
+    expect(screen.queryByRole('button', { name: 'Add to queue: one plan' })).toBeNull()
+  })
+
+  test('one shown ticket not on the queue yet: both adds are offered', async () => {
+    onAllTickets.mockResolvedValue([{ projectId: 'p1', projectName: 'Alpha', tickets: [ticket({ file: 'a.md', title: 'First' }), ticket({ file: 'b.md', title: 'Second' })] }])
+    const mounted = modules()
+    mounted.linkActions = [{ ...mounted.linkActions[0]!, done: async () => link => link.href === 'tickets/a.md' }]
+    render(mounted)
+    await screen.findByText('First')
+    expect(await screen.findByRole('button', { name: 'Add to queue: 2 plans' })).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'Add to queue: 2 tickets' })).toBeTruthy()
+  })
+
   test('no module offering an action on links, no add buttons at all (#1774)', async () => {
     onAllTickets.mockResolvedValue([{ projectId: 'p1', projectName: 'Alpha', tickets: [ticket({ file: 'a.md', title: 'First' })] }])
     render(modules([]))

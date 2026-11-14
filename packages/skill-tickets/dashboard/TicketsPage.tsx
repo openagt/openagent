@@ -1,5 +1,5 @@
 import { Fragment, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
-import { Button, LinkActions, Page, RowShapes, Section, Slot, cn, usePolled, useAction, useModuleHost, type ProjectLinks, type ModuleLink, type ModuleProject } from '@openagt/dashboard/module'
+import { Button, LinkActions, Page, RowShapes, Section, Slot, cn, usePolled, useAction, useLinkActions, useModuleHost, type ProjectLinks, type ModuleLink, type ModuleProject } from '@openagt/dashboard/module'
 import { UPDATE_TICKETS_PROMPT, heldBack, holderAgent, planLink, ticketLink, withHolder } from '../src/module.js'
 import { holdingRun } from './lib/holding-run.js'
 import type { ProjectTickets, WorkspaceTicket } from './lib/types.js'
@@ -309,9 +309,9 @@ export function TicketsPage({ projects }: { projects: ModuleProject[] }) {
 /**
  * The selection's readout and its presses (the list idiom of issue trackers): the readout and the
  * selection's own presses, then the adds, the primary last. On a wide screen it floats at the
- * bottom of the list's column and takes no room; on a phone it is the list's last part, kept in
- * view at the window's foot, its adds a press each across its width. Either way ticking a row
- * moves nothing on the page.
+ * bottom of the list's column, at its right edge, and takes no room; on a phone it is the list's
+ * last part, kept in view at the window's foot, its adds a press each across its width. Either way
+ * ticking a row moves nothing on the page.
  */
 function SelectionBar({ leaving, count, onSelectAll, onClear, children }: { leaving: boolean; count: number; /** Ticks every shown ticket; none when all are ticked. */ onSelectAll: (() => void) | undefined; onClear: () => void; children: ReactNode }) {
   return (
@@ -321,7 +321,7 @@ function SelectionBar({ leaving, count, onSelectAll, onClear, children }: { leav
         aria-label="Selected tickets"
         className={cn(
           'pointer-events-auto flex flex-wrap items-center gap-2 menu-surface rounded-lg p-1 pl-3 text-sm shadow-lg ring-1 ring-foreground/10 backdrop-blur-xl',
-          'md:absolute md:inset-x-0 md:top-2 md:mx-auto md:w-fit md:max-w-full max-md:p-2 max-md:pl-4',
+          'md:absolute md:top-2 md:right-0 md:w-fit md:max-w-full max-md:p-2 max-md:pl-4',
           'transition-[opacity,translate] ease-out starting:translate-y-2 starting:opacity-0',
           leaving ? 'pointer-events-none translate-y-2 opacity-0 duration-120' : 'duration-180',
         )}
@@ -367,6 +367,12 @@ function QueueAdds({ rows, selection, disabled }: { rows: ReturnType<typeof flat
   const queueKey = targets.map(r => `${r.projectId}/${r.ticket.file}`).join('\n')
   const planKey = planTargets.map(r => `${r.projectId}/${r.ticket.file}`).join('\n')
   const projectsShown = [...new Set(rows.map(r => r.projectId))]
+  const ticketLinks = linksByProject(targets, ticketLink)
+  // Once every ticket of the set is on the queue, it is the next step there, and its plan is not
+  // asked for beside it: from the press here at once, or as the queue reads it.
+  const queuedAlready = useLinkActions(projectsShown, ticketLinks).actions
+  const [addedHere, setAddedHere] = useState<string | null>(null)
+  const ticketsQueued = addedHere === queueKey || (queuedAlready.length > 0 && queuedAlready.every(action => action.done))
   const which = selection ? 'selected' : 'shown'
   // Each renders only when it has something to add — "all 0 tickets" is not an offer, the list
   // already explains an empty set, and an all-claimed (or, for plans, all-planned) one has
@@ -374,7 +380,7 @@ function QueueAdds({ rows, selection, disabled }: { rows: ReturnType<typeof flat
   // will skip. Each is the object of the module's own verb: "Add to queue: 5 tickets".
   return (
     <>
-      {planTargets.length > 0 && (
+      {planTargets.length > 0 && !ticketsQueued && (
         <LinkActions
           projects={projectsShown}
           targets={linksByProject(planTargets, planLink)}
@@ -395,8 +401,9 @@ function QueueAdds({ rows, selection, disabled }: { rows: ReturnType<typeof flat
       {targets.length > 0 && (
         <LinkActions
           projects={projectsShown}
-          targets={linksByProject(targets, ticketLink)}
+          targets={ticketLinks}
           resetKey={`tickets\n${queueKey}`}
+          onDone={() => setAddedHere(queueKey)}
           label={action => `${action.label}: ${counted(targets.length, 'ticket')}`}
           variant={selection ? 'default' : 'ghost'}
           disabled={disabled}

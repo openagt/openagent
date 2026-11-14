@@ -121,6 +121,7 @@ export function LinkActions({
   disabled = false,
   size = 'default',
   variant = 'outline',
+  onDone,
 }: {
   /** The projects the links belong to: an action shows when its package is in at least one of them. */
   projects: readonly string[]
@@ -135,6 +136,8 @@ export function LinkActions({
   disabled?: boolean
   size?: ButtonProps['size']
   variant?: ButtonProps['variant']
+  /** An action pressed here did its work on every link. */
+  onDone?: ((action: LinkActionOffer) => void) | undefined
 }) {
   const { actions, run: runAction } = useLinkActions(projects, targets)
   const down = useContext(DaemonDown)
@@ -154,8 +157,9 @@ export function LinkActions({
     setError(null)
     const result = await runAction(action.key, targets)
     setRunning(null)
-    if (result.ok) setDone(prev => new Set(prev).add(action.key))
-    else setError(result.error)
+    if (!result.ok) return setError(result.error)
+    setDone(prev => new Set(prev).add(action.key))
+    onDone?.(action)
   }
 
   if (actions.length === 0) return null
