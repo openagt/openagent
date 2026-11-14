@@ -68,6 +68,11 @@ async function fromMenu(row: string, item: string): Promise<void> {
   fireEvent.click(await screen.findByRole('button', { name: `${row}: more` }))
   fireEvent.click(await screen.findByRole('menuitem', { name: item }))
 }
+/** Remove, from a row's menu, and yes to the question it asks first. */
+async function removeFromMenu(row: string): Promise<void> {
+  await fromMenu(row, 'Remove')
+  fireEvent.click(within(await screen.findByRole('alertdialog', { name: `Remove ${row}?` })).getByRole('button', { name: 'Remove' }))
+}
 /** What a row of a list is called: the first words in it. */
 const nameOfRow = (row: Element): string => [...row.querySelectorAll('*')].find(part => part.childElementCount === 0 && part.textContent)?.textContent ?? ''
 /** The rows of the lists shown that are called `name`. */
@@ -214,7 +219,7 @@ describe('Settings › Devices: this computer, and how devices reach it', () => 
     show({ ...host, runComputerCommand })
     await findRow('iPhone, Safari')
     await waitFor(() => expect(late).toBeDefined())
-    await fromMenu('iPhone, Safari', 'Remove')
+    await removeFromMenu('iPhone, Safari')
     await waitFor(() => expect(queryRow('iPhone, Safari')).toBeNull())
     await new Promise(resolve => setTimeout(resolve, 150))
     expect(queryRow('iPhone, Safari')).toBeNull()
@@ -341,6 +346,10 @@ describe('Settings › Devices: this computer, and how devices reach it', () => 
     expect(getRow('Mac, Chrome').textContent).toContain('Browser')
     expect(getRow('Mac, Chrome').textContent).toContain('added 3m ago')
     await fromMenu('Mac, Chrome', 'Remove')
+    // Asked first: nothing is taken out before the yes.
+    expect(within(await screen.findByRole('alertdialog')).getByText('Mac, Chrome is taken out, and gets in again only with a new code.')).toBeTruthy()
+    expect(runComputerCommand).not.toHaveBeenCalledWith(['remove', 'fff000fff000'])
+    fireEvent.click(within(screen.getByRole('alertdialog')).getByRole('button', { name: 'Remove' }))
     await waitFor(() => expect(runComputerCommand).toHaveBeenCalledWith(['remove', 'fff000fff000']))
     await waitFor(() => expect(queryRow('Mac, Chrome')).toBeNull())
     expect(getRow('iPhone, Safari')).toBeTruthy()
@@ -376,7 +385,7 @@ describe('Settings › Devices: this computer, and how devices reach it', () => 
       return ok(state)
     })
     show(host)
-    await fromMenu('iPhone, Safari', 'Remove')
+    await removeFromMenu('iPhone, Safari')
     const row = await findRow('iPhone, Safari')
     await waitFor(() => expect(row.textContent).toContain('Removing…'))
     expect(screen.getByRole('button', { name: 'iPhone, Safari: more' }).hasAttribute('disabled')).toBe(true)
@@ -402,7 +411,7 @@ describe('Settings › Devices: this computer, and how devices reach it', () => 
     const { host } = door(args => (args[0] === 'status' ? ok({ on: true, listening: false, problem: 'Port 4201 is taken by another program on this computer.', devices: [PHONE], persons: [] }) : { ok: false, error: 'no device has the id abc123def456' }))
     show(host)
     expect(await screen.findByText('Port 4201 is taken by another program on this computer.')).toBeTruthy()
-    await fromMenu('iPhone, Safari', 'Remove')
+    await removeFromMenu('iPhone, Safari')
     expect(await screen.findByText('no device has the id abc123def456')).toBeTruthy()
   })
 

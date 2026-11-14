@@ -275,6 +275,7 @@ function PhoneRow({ d, item }: { d: Devices; item: PhoneItem }) {
   const { host } = d
   const { icon, word } = phoneKind(item.name)
   const [renaming, setRenaming] = useState(false)
+  const [confirming, setConfirming] = useState(false)
   const [name, setName] = useState(item.name)
   const [busy, setBusy] = useState(false)
   // Being removed: said on the row from the press until the row is gone, which is the next read of its list; a removal that failed says why instead.
@@ -318,13 +319,15 @@ function PhoneRow({ d, item }: { d: Devices; item: PhoneItem }) {
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">
               {item.door && <DropdownMenuItem onClick={() => (setName(item.name), setRenaming(true))}>Rename</DropdownMenuItem>}
-              <DropdownMenuItem className="text-danger" disabled={down} onClick={() => (setRemoving(true), void act(remove))}>
+              <DropdownMenuItem className="text-danger" disabled={down} onClick={() => setConfirming(true)}>
                 Remove
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
         }
       />
+      {/* Asked first, as every removal is: a device taken out gets in again only with a new code. */}
+      <ConfirmDialog open={confirming} onOpenChange={setConfirming} title={`Remove ${item.name}?`} body={`${item.name} is taken out, and gets in again only with a new code.`} confirmLabel="Remove" onSuccess={() => (setRemoving(true), void act(remove))} />
       {error !== undefined && (
         <li className="px-3">
           <Problem>{error}</Problem>
