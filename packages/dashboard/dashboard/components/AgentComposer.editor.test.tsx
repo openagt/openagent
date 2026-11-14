@@ -80,3 +80,21 @@ test('a file picked while a message went keeps its Context once that message lan
   fireEvent.keyDown(box, { key: 'Enter' })
   await waitFor(() => expect(sendMessage).toHaveBeenLastCalledWith('p1', 'then #src/b.ts\n\nContext: src/b.ts', 'run-1'))
 })
+
+test('repicking the same file while sending keeps its Context', async () => {
+  let answer: (outcome: unknown) => void = () => {}
+  sendMessage.mockReturnValueOnce(new Promise(resolve => (answer = resolve)))
+  render(<Session />)
+  const box = (await screen.findByRole('textbox', { name: 'Message' })) as HTMLElement & { editor: Editor }
+  const pick = () => {
+    act(() => void box.editor.commands.insertContent([{ type: 'token', attrs: { kind: 'file', label: '#README.md', text: '#README.md' } }]))
+    act(() => context.add('README.md'))
+  }
+  pick()
+  fireEvent.keyDown(box, { key: 'Enter' })
+  await waitFor(() => expect(sendMessage).toHaveBeenCalledTimes(1))
+  pick()
+  await act(async () => answer({ ok: true }))
+  expect(box.querySelectorAll('[data-token]').length).toBe(1)
+  expect(screen.getByTestId('context').textContent).toBe('README.md')
+})

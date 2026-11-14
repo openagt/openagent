@@ -200,12 +200,13 @@ export function AgentComposer({
   const send = async (text: string, { later }: { later: boolean } = { later: false }): Promise<void> => {
     if (busy) return
     // The box is emptied as the message goes, so what is typed meanwhile stays; a message refused comes back to it
-    // as the same draft: its chips, and the Context it went with, which emptying the box took out with the chips.
+    // as the same draft: its chips, and the Context it went with.
     const sent = contextSet?.context
     const draft = composerRef.current?.clear()
+    // The Context goes with the message, out of the set as the box empties: what is picked while it goes, a path it
+    // went with picked again included, is the next message's, and its landing leaves the set alone.
+    for (const path of sent ?? []) contextSet?.remove(path)
     const went = await say(sent ? promptWithContext(text, sent) : text, later)
-    // Gone with the message, the Context it went with only: what was picked while it went is the next one's, with its chips.
-    if (went) for (const path of sent ?? []) contextSet?.remove(path)
     if (shown.current === agentId) {
       if (went) setNotSent(false)
       else {
