@@ -99,7 +99,10 @@ describe('the first steps on the Overview', () => {
     onDashboard.mockResolvedValue(EMPTY)
     logins.onGitHosts.mockResolvedValue(github([]))
     steps()
-    expect(await screen.findByRole('heading', { name: /^Good (morning|afternoon|evening), Ada$/ })).toBeTruthy()
+    // A part's heading like every other, the count beside it as every part's count stands.
+    const heading = await screen.findByRole('heading', { level: 2, name: /^Good (morning|afternoon|evening), Ada 0 of 3$/ })
+    expect(heading.className).toContain('text-base')
+    expect(within(heading).getByText('0 of 3').className).toContain('font-normal')
     expect(await screen.findByRole('list', { name: '0 of 3 done' })).toBeTruthy()
   })
 
@@ -230,7 +233,7 @@ describe('the first steps on the Overview', () => {
     onDashboard.mockResolvedValue({ ...WITH_PROJECT, projects: [{ projectId: 'p1', hasTickets: false, providesTickets: false }] } as DashboardData)
     const onSelectProject = vi.fn()
     steps({ projects: [SHOP], onSelectProject })
-    expect(await screen.findByRole('heading', { name: "You're all set, Ada" })).toBeTruthy()
+    expect(await screen.findByRole('region', { name: "You're all set, Ada" })).toBeTruthy()
     fireEvent.click(screen.getByRole('button', { name: 'Start your first session' }))
     expect(onSelectProject).toHaveBeenCalledWith('p1')
     expect(updatePreferences).toHaveBeenCalledWith({ onboardingDismissed: true })

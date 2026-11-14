@@ -1,4 +1,4 @@
-import { useContext, useId, useLayoutEffect, useRef, useState, type ReactNode } from 'react'
+import { useContext, useLayoutEffect, useRef, useState, type ReactNode } from 'react'
 import type { DashboardData, ProjectSummary } from '../../src/index.js'
 import { Check, Info, X } from 'lucide-react'
 import { onDashboard } from '../rpc/reads.js'
@@ -6,6 +6,7 @@ import { usePolled } from '../lib/use-async.js'
 import { usePerson } from '../lib/use-person.js'
 import { cn } from '../lib/utils.js'
 import { Button } from './ui/button.js'
+import { Section } from './ui/section.js'
 import { Skeleton } from './ui/skeleton.js'
 import { usePreferences, updatePreferences, notificationsEnabled } from '../lib/preferences.js'
 import { setBrowserNotifications, useNotificationPermission } from '../lib/notification-permission.js'
@@ -94,7 +95,6 @@ export function OnboardingChecklist({
   const { start, busy: starting, error: startError } = useStartAgent()
   const { person } = usePerson()
   const services = useContext(HostServicesContext) ?? INERT_HOST_SERVICES
-  const headingId = useId()
   // What runs need on this computer: the coding agent's login, and an account at each git host.
   const { missing, hosts, loaded: missingLoaded, reload: reloadMissing } = useMissing()
   // The steps shown once stay, done or not: the coding agent's is there only once it was missing.
@@ -243,14 +243,12 @@ export function OnboardingChecklist({
 
   const doneCount = steps.filter(step => step.done).length
   return (
-    <section aria-labelledby={headingId} className="min-w-0">
-      <div className="mb-3 flex items-center justify-between gap-3">
-        <div className="flex min-w-0 items-baseline gap-3">
-          <h2 id={headingId} className="min-w-0 text-xl font-semibold">{ready ? `You're all set${name}` : `${greeting(new Date().getHours())}${name}`}</h2>
-          {/* Where the steps stand, in words: the numbers below say which is which. */}
-          {!reading && <span className="shrink-0 text-sm tabular-nums text-muted-foreground">{`${doneCount} of ${steps.length}`}</span>}
-        </div>
-        <div className="flex shrink-0 items-center gap-2">
+    <Section
+      title={ready ? `You're all set${name}` : `${greeting(new Date().getHours())}${name}`}
+      // Where the steps stand, in words: the numbers below say which is which.
+      count={reading ? undefined : `${doneCount} of ${steps.length}`}
+      action={
+        <>
           {ready && targetProjectId && (
             <Button
               onClick={() => {
@@ -267,82 +265,83 @@ export function OnboardingChecklist({
             </TooltipTrigger>
             <TooltipContent>{HIDE}</TooltipContent>
           </Tooltip>
-        </div>
-      </div>
-        {reading ? (
-          <>
-            <p className="sr-only">Loading…</p>
-            {/* The steps' rows, with no state yet, the first one as the open step is laid out (its words, then its press and its command beside them or under), so the steps are about their size from the first frame. */}
-            <ol aria-hidden="true">
-              {steps.map((step, at) => (
-                <li key={step.key} className="flex items-start gap-3 py-2">
-                  <span className="mt-0.5 flex size-6 shrink-0 items-center justify-center rounded-full border border-border text-xs font-medium text-muted-foreground tabular-nums">{at + 1}</span>
-                  {at === 0 ? (
-                    <div className="flex min-w-0 flex-1 flex-wrap items-start gap-3">
-                      <div className="min-w-0 flex-[1_1_16rem] space-y-1">
-                        <span className="mt-1 block text-sm text-muted-foreground">{step.label}</span>
-                        <Skeleton className="h-4 w-full" />
-                        <Skeleton className="h-4 w-2/3" />
-                      </div>
-                      <div className="flex shrink-0 flex-wrap items-center gap-3">
-                        <Skeleton className="h-8 w-40" />
-                        <Skeleton className="h-6 w-72 max-w-full" />
-                      </div>
-                    </div>
-                  ) : (
-                    <span className="mt-1 text-sm text-muted-foreground">{step.label}</span>
-                  )}
-                </li>
-              ))}
-            </ol>
-          </>
-        ) : (
-          <ol aria-label={`${doneCount} of ${steps.length} done`}>
-            {steps.map((step, at) => {
-              const isOpen = step.key === open
-              return (
-                <li key={step.key} aria-label={step.label} aria-current={isOpen ? 'step' : undefined} className="flex items-start gap-3 py-2">
-                  {step.done ? (
-                    <span aria-label="Done" className="mt-0.5 flex size-6 shrink-0 items-center justify-center rounded-full bg-[var(--color-primary)] text-[var(--color-primary-foreground)]">
-                      <Check className="h-3.5 w-3.5" aria-hidden />
-                    </span>
-                  ) : (
-                    <span aria-hidden className={cn('mt-0.5 flex size-6 shrink-0 items-center justify-center rounded-full border text-xs font-medium tabular-nums', isOpen ? 'border-[var(--color-primary)] text-[var(--color-primary)]' : 'border-border text-muted-foreground')}>
-                      {at + 1}
-                    </span>
-                  )}
-                  {/* The action goes under the words until it fits beside them with the words 16rem wide or more; beside them, a command goes under its press where the two do not fit one line. */}
-                  <div className="@container flex min-w-0 flex-1 flex-wrap items-start gap-3">
+        </>
+      }
+    >
+      {reading ? (
+        <>
+          <p className="sr-only">Loading…</p>
+          {/* The steps' rows, with no state yet, the first one as the open step is laid out (its words, then its press and its command beside them or under), so the steps are about their size from the first frame. */}
+          <ol aria-hidden="true">
+            {steps.map((step, at) => (
+              <li key={step.key} className="flex items-start gap-3 py-2">
+                <span className="mt-0.5 flex size-6 shrink-0 items-center justify-center rounded-full border border-border text-xs font-medium text-muted-foreground tabular-nums">{at + 1}</span>
+                {at === 0 ? (
+                  <div className="flex min-w-0 flex-1 flex-wrap items-start gap-3">
                     <div className="min-w-0 flex-[1_1_16rem] space-y-1">
-                      <div className="mt-1 flex flex-wrap items-center gap-x-2">
-                        <button
-                          type="button"
-                          disabled={step.done || isOpen}
-                          onClick={() => setPicked(step.key)}
-                          className={cn('relative flex flex-wrap items-center gap-x-2 text-left text-sm after:absolute after:-inset-y-0.5 after:inset-x-0', step.done ? 'text-muted-foreground' : isOpen ? 'font-medium' : 'text-muted-foreground hover:text-foreground')}
-                        >
-                          <span>{step.label}</span>
-                          {step.done && step.doneNote && <span className="truncate text-xs text-muted-foreground">· {step.doneNote}</span>}
-                          {step.optional && !step.done && <span className="text-xs font-normal text-muted-foreground">Optional</span>}
-                        </button>
-                        {isOpen && step.info && (
-                          <Tooltip>
-                            <TooltipTrigger render={<button type="button" aria-label={`More on ${step.label}`} className="relative text-muted-foreground after:absolute after:-inset-1.5 hover:text-foreground" />}>
-                              <Info className="h-3.5 w-3.5" aria-hidden />
-                            </TooltipTrigger>
-                            <TooltipContent className="max-w-sm">{step.info}</TooltipContent>
-                          </Tooltip>
-                        )}
-                      </div>
-                      {isOpen && step.description && (typeof step.description === 'string' ? <p className="text-xs text-muted-foreground">{step.description}</p> : step.description)}
+                      <span className="mt-1 block text-sm text-muted-foreground">{step.label}</span>
+                      <Skeleton className="h-4 w-full" />
+                      <Skeleton className="h-4 w-2/3" />
                     </div>
-                    {isOpen && step.action && <div className="flex max-w-full shrink-0 @xl:max-w-[calc(100%-16.75rem)]">{step.action}</div>}
+                    <div className="flex shrink-0 flex-wrap items-center gap-3">
+                      <Skeleton className="h-8 w-40" />
+                      <Skeleton className="h-6 w-72 max-w-full" />
+                    </div>
                   </div>
-                </li>
-              )
-            })}
+                ) : (
+                  <span className="mt-1 text-sm text-muted-foreground">{step.label}</span>
+                )}
+              </li>
+            ))}
           </ol>
-        )}
-    </section>
+        </>
+      ) : (
+        <ol aria-label={`${doneCount} of ${steps.length} done`}>
+          {steps.map((step, at) => {
+            const isOpen = step.key === open
+            return (
+              <li key={step.key} aria-label={step.label} aria-current={isOpen ? 'step' : undefined} className="flex items-start gap-3 py-2">
+                {step.done ? (
+                  <span aria-label="Done" className="mt-0.5 flex size-6 shrink-0 items-center justify-center rounded-full bg-[var(--color-primary)] text-[var(--color-primary-foreground)]">
+                    <Check className="h-3.5 w-3.5" aria-hidden />
+                  </span>
+                ) : (
+                  <span aria-hidden className={cn('mt-0.5 flex size-6 shrink-0 items-center justify-center rounded-full border text-xs font-medium tabular-nums', isOpen ? 'border-[var(--color-primary)] text-[var(--color-primary)]' : 'border-border text-muted-foreground')}>
+                    {at + 1}
+                  </span>
+                )}
+                {/* The action goes under the words until it fits beside them with the words 16rem wide or more; beside them, a command goes under its press where the two do not fit one line. */}
+                <div className="@container flex min-w-0 flex-1 flex-wrap items-start gap-3">
+                  <div className="min-w-0 flex-[1_1_16rem] space-y-1">
+                    <div className="mt-1 flex flex-wrap items-center gap-x-2">
+                      <button
+                        type="button"
+                        disabled={step.done || isOpen}
+                        onClick={() => setPicked(step.key)}
+                        className={cn('relative flex flex-wrap items-center gap-x-2 text-left text-sm after:absolute after:-inset-y-0.5 after:inset-x-0', step.done ? 'text-muted-foreground' : isOpen ? 'font-medium' : 'text-muted-foreground hover:text-foreground')}
+                      >
+                        <span>{step.label}</span>
+                        {step.done && step.doneNote && <span className="truncate text-xs text-muted-foreground">· {step.doneNote}</span>}
+                        {step.optional && !step.done && <span className="text-xs font-normal text-muted-foreground">Optional</span>}
+                      </button>
+                      {isOpen && step.info && (
+                        <Tooltip>
+                          <TooltipTrigger render={<button type="button" aria-label={`More on ${step.label}`} className="relative text-muted-foreground after:absolute after:-inset-1.5 hover:text-foreground" />}>
+                            <Info className="h-3.5 w-3.5" aria-hidden />
+                          </TooltipTrigger>
+                          <TooltipContent className="max-w-sm">{step.info}</TooltipContent>
+                        </Tooltip>
+                      )}
+                    </div>
+                    {isOpen && step.description && (typeof step.description === 'string' ? <p className="text-xs text-muted-foreground">{step.description}</p> : step.description)}
+                  </div>
+                  {isOpen && step.action && <div className="flex max-w-full shrink-0 @xl:max-w-[calc(100%-16.75rem)]">{step.action}</div>}
+                </div>
+              </li>
+            )
+          })}
+        </ol>
+      )}
+    </Section>
   )
 }
