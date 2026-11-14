@@ -83,7 +83,7 @@ export function HandoffSummary({ handoff, subagent = false }: { handoff: AgentHa
 /** What the Commit button says to the agent: it commits its own work, in its own words. */
 const COMMIT_MESSAGE = 'Commit your work.'
 
-/** The next step's look: the one filled thing in the bar. Busy, a press stays focusable (`aria-disabled`): a disabled one drops the focus to the page. */
+/** The next step's look: the page's primary press, at the height of the box's Send. Busy, a press stays focusable (`aria-disabled`): a disabled one drops the focus to the page. */
 const NEXT_STEP = 'aria-disabled:pointer-events-none aria-disabled:opacity-50'
 
 /** The project's main branch by name, when the handoff was measured from it; a run measured from a commit only knows it as "the main branch". */
@@ -204,7 +204,6 @@ function NextStep({
         <Uncommitted paths={paths} committed={!handoff.empty} />
         <Button
           size="sm"
-          variant="secondary"
           className={NEXT_STEP}
           {...step}
           onClick={() => {
@@ -248,7 +247,7 @@ function NextStep({
       return (
         <>
           <Reason>not in the PR yet</Reason>
-          <Button size="sm" variant="secondary" className={NEXT_STEP} {...step} onClick={push}>
+          <Button size="sm" className={NEXT_STEP} {...step} onClick={push}>
             <Steady words={['Update PR', 'Updating PR…']} now={pending === 'push' ? 1 : 0} />
           </Button>
         </>
@@ -257,7 +256,6 @@ function NextStep({
     return (
       <Button
         size="sm"
-        variant="secondary"
         className={NEXT_STEP}
         {...step}
         onClick={() =>
@@ -295,7 +293,6 @@ function NextStep({
         <Reason>Not in {mainBranchName(handoff.base)} yet.</Reason>
         <Button
           size="sm"
-          variant="secondary"
           className={NEXT_STEP}
           {...step}
           onClick={() => press('merge-branch', () => sendMergeBranch(projectId, agentId), 'Could not merge the branch.')}
@@ -311,7 +308,7 @@ function NextStep({
     if (handoff.pushed) return null
     return (
       <>
-        <Button size="sm" variant="secondary" className={NEXT_STEP} {...step} onClick={push}>
+        <Button size="sm" className={NEXT_STEP} {...step} onClick={push}>
           <Steady words={['Publish branch', 'Publishing…']} now={pending === 'push' ? 1 : 0} />
         </Button>
       </>
@@ -334,23 +331,22 @@ function NextStep({
       <ButtonGroup>
         <Button
           size="sm"
-          variant="secondary"
           className={cn(NEXT_STEP, 'pr-1.5!')}
           {...step}
           onClick={() => openPr(false)}
         >
           <Steady words={['Open PR', 'Opening PR…', 'Publishing…']} now={pending === 'pr' ? 1 : pending === 'push' ? 2 : 0} />
         </Button>
-        <ButtonGroupSeparator className="bg-border opacity-100" />
+        <ButtonGroupSeparator className="bg-primary-foreground/30 opacity-100" />
         <DropdownMenu>
             <DropdownMenuTrigger
               type="button"
               aria-label="Other choices"
               {...step}
               className={cn(
-                buttonVariants({ size: 'sm', variant: 'secondary' }),
+                buttonVariants({ size: 'sm' }),
                 NEXT_STEP,
-                'px-1 data-[popup-open]:bg-foreground/10',
+                'px-1 data-[popup-open]:bg-primary-active',
               )}
             >
               <ChevronDown className="h-3.5 w-3.5" />
