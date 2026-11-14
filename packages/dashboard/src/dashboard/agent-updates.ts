@@ -24,6 +24,8 @@ export interface AgentUpdate {
   agent: DriverName
   installed: string
   latest: string
+  /** Its update is running now, pressed in any tab or on any computer: each says "Updating…". */
+  updating?: true
 }
 
 /** What an update did: the version now on this computer, or what the agent said when it failed. */
@@ -91,6 +93,7 @@ export function agentUpdates(opts: AgentUpdatesOptions): AgentUpdates {
   const latest = opts.latest ?? npmLatest
   const now = opts.now ?? Date.now
   let kept: { at: number; reading: Promise<AgentUpdate[]> } | undefined
+  const updating = new Set<DriverName>()
 
   const readOne = async (agent: DriverName): Promise<AgentUpdate | undefined> => {
     const { bin, pkg } = CLIS[agent]
@@ -101,15 +104,17 @@ export function agentUpdates(opts: AgentUpdatesOptions): AgentUpdates {
   return {
     read() {
       if (!kept || now() - kept.at >= KEEP_MS) kept = { at: now(), reading: Promise.all(DRIVERS.map(readOne)).then(found => found.filter(update => update !== undefined)) }
-      return kept.reading
+      return kept.reading.then(found => found.map(update => (updating.has(update.agent) ? { ...update, updating: true as const } : update)))
     },
     async update(agent) {
       const { bin } = CLIS[agent]
+      updating.add(agent)
       try {
         await run(bin, ['update'], UPDATE_TIMEOUT_MS)
       } catch (err) {
         return { ok: false, error: lastLine(err) }
       } finally {
+        updating.delete(agent)
         kept = undefined
       }
       opts.models.forget(agent)
