@@ -1,15 +1,33 @@
-import { afterEach, expect, test, vi } from 'vitest'
+import { afterEach, beforeEach, expect, test, vi } from 'vitest'
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 
-// The Overview's line for a coding agent with a newer version out, and its press.
+// The Overview's line for a coding agent with a newer version out, and its press; and OpenAgent's own, with its command.
 
-const models = vi.hoisted(() => ({ onAgentUpdates: vi.fn(), sendAgentUpdate: vi.fn(), onModels: vi.fn() }))
+const models = vi.hoisted(() => ({ onAgentUpdates: vi.fn(), sendAgentUpdate: vi.fn(), onModels: vi.fn(), onOpenAgentUpdate: vi.fn() }))
 vi.mock('../rpc/models.js', () => models)
 const { AgentUpdates } = await import('./AgentUpdates.js')
+
+beforeEach(() => {
+  models.onOpenAgentUpdate.mockResolvedValue(null)
+})
 
 afterEach(() => {
   cleanup()
   for (const fn of Object.values(models)) fn.mockReset()
+})
+
+test('a newer OpenAgent is said with both versions and the command that updates it; none, and nothing is said', async () => {
+  models.onAgentUpdates.mockResolvedValue([])
+  models.onOpenAgentUpdate.mockResolvedValue({ installed: '0.65.0', latest: '0.66.0', command: 'npx @openagt/install@latest' })
+  render(<AgentUpdates />)
+  expect(await screen.findByText('OpenAgent 0.66.0 is out. This computer runs 0.65.0.')).toBeTruthy()
+  expect(screen.getByText('npx @openagt/install@latest')).toBeTruthy()
+  expect(screen.getByRole('button', { name: 'Copy the command' })).toBeTruthy()
+  cleanup()
+  models.onOpenAgentUpdate.mockResolvedValue(null)
+  const { container } = render(<AgentUpdates />)
+  await waitFor(() => expect(models.onOpenAgentUpdate).toHaveBeenCalledTimes(2))
+  expect(container.textContent).toBe('')
 })
 
 test('an agent behind is said with both versions; its press runs the update, then the line goes and its models are asked again', async () => {

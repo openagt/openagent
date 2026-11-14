@@ -1,16 +1,18 @@
 import { useRef, useState } from 'react'
 import { ArrowUpCircle, CheckCircle2 } from 'lucide-react'
 import { DRIVER_LABELS, type DriverName } from '../../src/client.js'
-import { onAgentUpdates, onModels, sendAgentUpdate, type AgentUpdate } from '../rpc/models.js'
+import { onAgentUpdates, onModels, onOpenAgentUpdate, sendAgentUpdate, type AgentUpdate, type OpenAgentUpdate } from '../rpc/models.js'
 import { forgetRemembered, readAhead, usePolled } from '../lib/use-async.js'
 import { cn } from '../lib/utils.js'
 import { FocusHome } from '../lib/focus-home.js'
 import { Button } from './ui/button.js'
+import { CopyButton } from './ui/copy-button.js'
 import { useAction } from '../lib/use-action.js'
 
 // The Overview's line for a coding agent on this computer with a newer version out: the version it
 // has, the newest, and the press that runs the agent's own update. Nothing when every agent is up
-// to date. A new version can offer other models, so the page asks for them again after.
+// to date. A new version can offer other models, so the page asks for them again after. OpenAgent's
+// own newer version has a line too, with the command that updates it, which the person runs.
 
 /** How often the page asks again: the daemon itself asks npm twice a day. */
 const EVERY_MS = 60 * 60_000
@@ -26,6 +28,7 @@ const UPDATING_EVERY_MS = 5_000
 export function AgentUpdates() {
   const [running, setRunning] = useState(false)
   const { value: updates, reload } = usePolled(onAgentUpdates, NONE, running ? UPDATING_EVERY_MS : EVERY_MS, [])
+  const { value: own } = usePolled(onOpenAgentUpdate, null, EVERY_MS, [])
   const anyUpdating = updates.some(update => update.updating === true)
   if (anyUpdating !== running) setRunning(anyUpdating)
   // What a press here installed, said in place of its line while the page is open.
@@ -34,9 +37,10 @@ export function AgentUpdates() {
   const said = Object.entries(installed) as [DriverName, string][]
   // The line that says what a press installed takes the keyboard its press had: the newest, drawn last.
   const saidLast = useRef<HTMLParagraphElement>(null)
-  if (lines.length === 0 && said.length === 0) return null
+  if (own === null && lines.length === 0 && said.length === 0) return null
   return (
     <FocusHome className="space-y-2" landing={saidLast}>
+      {own !== null && <OpenAgentUpdateLine update={own} />}
       {said.map(([agent, version]) => (
         <p key={agent} ref={saidLast} role="status" tabIndex={-1} className="flex items-center gap-3 rounded-md border border-border px-3 py-2 text-sm outline-none">
           <CheckCircle2 className="h-4 w-4 shrink-0 text-success" aria-hidden />
@@ -54,6 +58,21 @@ export function AgentUpdates() {
         />
       ))}
     </FocusHome>
+  )
+}
+
+function OpenAgentUpdateLine({ update }: { update: OpenAgentUpdate }) {
+  return (
+    <div className="flex flex-wrap items-center gap-x-3 gap-y-1 rounded-md border border-border px-3 py-2 text-sm">
+      <ArrowUpCircle className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden />
+      <span className="flex-1">
+        OpenAgent {update.latest} is out. This computer runs {update.installed}.
+      </span>
+      <span className="flex min-w-0 items-center gap-1">
+        <code className="min-w-0 truncate font-mono text-xs text-muted-foreground">{update.command}</code>
+        <CopyButton text={update.command} label="Copy the command" className="justify-center md:size-6 max-md:size-11" />
+      </span>
+    </div>
   )
 }
 
