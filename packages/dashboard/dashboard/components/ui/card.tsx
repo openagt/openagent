@@ -2,7 +2,7 @@ import type { HTMLAttributes, ReactNode } from 'react'
 import { ArrowRight } from 'lucide-react'
 import { cn } from '../../lib/utils.js'
 import { inPlace } from '../../lib/in-place.js'
-import { Skeleton } from './skeleton.js'
+import { RowShapes } from './slot.js'
 
 // Minimal shadcn-style Card for the dashboard page (#471): a bordered surface with an
 // optional header. Just enough structure to keep the page's panels consistent.
@@ -48,12 +48,9 @@ export function RowsLoading({ rows = 2, label = 'Loading…' }: { rows?: number;
   return (
     <div role="status">
       <span className="sr-only">{label}</span>
-      {Array.from({ length: rows }, (_, at) => (
-        <div key={at} aria-hidden className="flex items-center gap-3 md:h-10 max-md:h-11">
-          <Skeleton className="size-4 shrink-0 rounded-full" />
-          <Skeleton className={cn('h-4', at % 2 === 0 ? 'w-2/3' : 'w-1/2')} />
-        </div>
-      ))}
+      <div aria-hidden>
+        <RowShapes rows={rows} />
+      </div>
     </div>
   )
 }

@@ -626,6 +626,7 @@ export { Button, buttonVariants, type ButtonProps } from '../components/ui/butto
 export { CopyButton } from '../components/ui/copy-button.js'
 export { Card, CardHeader, CardTitle, CardContent, PageLink, RowsLoading } from '../components/ui/card.js'
 export { Skeleton, useSkeleton } from '../components/ui/skeleton.js'
+export { Slot, RowShapes, type SlotRead } from '../components/ui/slot.js'
 export { Input } from '../components/ui/input.js'
 export { GaugeFace } from '../components/ui/gauge.js'
 export { ClaudeLogo, CodexLogo } from '../components/driver-logos.js'

@@ -14,6 +14,7 @@ import { OptionLabel } from '../components/ui/option-label.js'
 import { DisclosureToggle } from '../components/DisclosureToggle.js'
 import { Section } from '../components/ui/section.js'
 import { List, Row } from '../components/ui/list.js'
+import { RowShapes, Slot } from '../components/ui/slot.js'
 import { ChevronRight, Folder, Trash2 } from 'lucide-react'
 
 // The gallery's card registry (#DESIGN). Every entry renders the REAL component wherever the
@@ -440,6 +441,37 @@ function Overlays() {
 
 // ---------------------------------------------------------------- data display
 
+const RUNS = ['Add a login page', 'Fix the flaky upload test']
+
+function Slots() {
+  const runs = (names: string[]) => (
+    <List aria-label="Runs">
+      {names.map(name => (
+        <Row key={name} leading={<Folder className="size-4" aria-hidden />} title={name} meta="4h ago" />
+      ))}
+    </List>
+  )
+  return (
+    <div className="space-y-8">
+      <Section title="Waiting">
+        <Slot of={{ state: 'unknown', value: [] }} shape={<RowShapes />}>
+          {runs}
+        </Slot>
+      </Section>
+      <Section title="Answered" count="2">
+        <Slot of={{ state: 'fresh', value: RUNS }} shape={<RowShapes />}>
+          {runs}
+        </Slot>
+      </Section>
+      <Section title="Asked again, and failed" count="2">
+        <Slot of={{ state: 'fresh', value: RUNS, failing: true }} shape={<RowShapes />}>
+          {runs}
+        </Slot>
+      </Section>
+    </div>
+  )
+}
+
 function EmptyStates() {
   return (
     <div className="grid gap-4 sm:grid-cols-2">
@@ -619,6 +651,14 @@ export const PREVIEWS: Preview[] = [
     width: 900,
     replica: true,
     node: <Overlays />,
+  },
+  {
+    path: 'components/slot.html',
+    group: 'Components',
+    name: 'Slot',
+    subtitle: 'Where an answer is drawn: its shape while it is read (unseen for 200ms, then pulsing), the answer, a note when asking again failed. A kept answer fades after a second, and a held one dims: neither shows on a still page',
+    width: 900,
+    node: <Slots />,
   },
   {
     path: 'patterns/empty-states.html',
