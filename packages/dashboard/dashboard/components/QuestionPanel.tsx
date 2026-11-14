@@ -20,11 +20,11 @@ const OTHER = Symbol('other')
 // whole row is the control here, so the mark is only its picture.
 function Mark({ on, multi }: { on: boolean; multi: boolean | undefined }) {
   return multi ? (
-    <span className={cn('mt-1 flex size-4 shrink-0 items-center justify-center rounded-sm border transition-colors', on ? 'border-primary bg-primary text-primary-foreground' : 'border-border group-hover/choice:border-faint-foreground')} aria-hidden>
+    <span className={cn('mt-1 flex size-4 shrink-0 items-center justify-center rounded-sm border transition-colors', on ? 'border-primary bg-primary text-primary-foreground' : 'border-input group-hover/choice:border-input-hover')} aria-hidden>
       {on && <Check className="size-3" strokeWidth={3} />}
     </span>
   ) : (
-    <span className={cn('mt-1 flex size-4 shrink-0 items-center justify-center rounded-full border transition-colors', on ? 'border-primary' : 'border-border group-hover/choice:border-faint-foreground')} aria-hidden>
+    <span className={cn('mt-1 flex size-4 shrink-0 items-center justify-center rounded-full border transition-colors', on ? 'border-primary' : 'border-input group-hover/choice:border-input-hover')} aria-hidden>
       {on && <span className="size-2 rounded-full bg-primary" />}
     </span>
   )
@@ -195,7 +195,7 @@ export function QuestionPanel({
   if (sent) return null
   return (
     <section ref={card} role="region" aria-label={choice.title} className="flex w-full flex-col gap-1 rounded-lg border border-hairline bg-card p-1 font-sans text-sm">
-      <h2 id={titleId} className="px-3 pt-2 pb-1 font-medium">{choice.title}</h2>
+      <h2 id={titleId} className="px-3 pt-1 pb-1 font-medium">{choice.title}</h2>
       <Choices multi={choice.multi} labelledBy={titleId} picked={picked} onPick={setPicked} disabled={busy}>
         {choice.options.map(o => {
           const on = choice.multi ? checked.has(o.id) : picked === o.id
