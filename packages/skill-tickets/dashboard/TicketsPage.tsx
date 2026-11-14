@@ -79,7 +79,7 @@ export function TicketsPage({ projects }: { projects: ModuleProject[] }) {
     setViewState(next)
     if (typeof window !== 'undefined') {
       const qs = formatTicketsView(next, window.location.search)
-      window.history.replaceState(null, '', window.location.pathname + (qs ? `?${qs}` : ''))
+      window.history.replaceState(window.history.state, '', window.location.pathname + (qs ? `?${qs}` : ''))
     }
   }
   const clearFilters = () => setView({ ...view, filters: defaultView().filters })
