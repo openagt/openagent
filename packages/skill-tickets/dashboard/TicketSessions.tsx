@@ -1,5 +1,5 @@
 import { MessageSquare } from 'lucide-react'
-import { Button, Tooltip, TooltipContent, TooltipTrigger, formatAge, type ModuleAgent } from '@openagt/dashboard/module'
+import { Button, List, Row, Tooltip, TooltipContent, TooltipTrigger, formatAge, type ModuleAgent } from '@openagt/dashboard/module'
 import { holderAgent, planAgentFor, workAgentFor } from '../src/module.js'
 
 /** One kind of session on a ticket: the one that wrote its plan, or the one that worked it. */
@@ -32,30 +32,35 @@ const WORDS = {
 export function TicketSessions({ sessions, onOpen }: { sessions: readonly TicketSession[]; onOpen: (agentId: string) => void }) {
   if (sessions.length === 0) return null
   return (
-    <ul className="divide-y divide-border rounded-lg border border-border">
+    <List>
       {sessions.map(({ kind, agent }) => {
         const running = agent.status === 'running'
         const words = WORDS[kind]
         return (
-          <li key={kind} className="flex items-center gap-3 px-3 py-2 text-xs">
-            <span className="w-9 shrink-0 font-medium text-muted-foreground">{words.label}</span>
-            <span className="min-w-0 flex-1 truncate text-muted-foreground">
-              {running ? words.running : words.ended} <span className="font-medium text-foreground">{agent.title ?? agent.id}</span>
-              {` · ${running ? 'at work' : agent.status} · ${formatAge(agent.endedAt ?? agent.startedAt)}`}
-            </span>
-            <Tooltip>
-              <TooltipTrigger render={<Button variant="outline" size="sm" className="shrink-0 gap-1.5" onClick={() => onOpen(agent.id)} />}>
-                <MessageSquare className="h-3 w-3" aria-hidden /> Open session
-              </TooltipTrigger>
-              <TooltipContent className="max-w-72">
-                {running
-                  ? 'Opens the session, so you can watch it or step in.'
-                  : 'Opens the session. What you send there goes on with the same conversation: the ticket, the plan and the reasoning behind them are already in its context.'}
-              </TooltipContent>
-            </Tooltip>
-          </li>
+          <Row
+            key={kind}
+            leading={<span className="w-9 text-xs font-medium">{words.label}</span>}
+            title={
+              <>
+                <span className="font-normal text-muted-foreground">{running ? words.running : words.ended}</span> {agent.title ?? agent.id}
+              </>
+            }
+            meta={<span className="tabular-nums">{`${running ? 'at work' : agent.status} · ${formatAge(agent.endedAt ?? agent.startedAt)}`}</span>}
+            actions={
+              <Tooltip>
+                <TooltipTrigger render={<Button variant="ghost" size="sm" onClick={() => onOpen(agent.id)} />}>
+                  <MessageSquare className="size-4" aria-hidden /> Open session
+                </TooltipTrigger>
+                <TooltipContent className="max-w-72">
+                  {running
+                    ? 'Opens the session, so you can watch it or step in.'
+                    : 'Opens the session. What you send there goes on with the same conversation: the ticket, the plan and the reasoning behind them are already in its context.'}
+                </TooltipContent>
+              </Tooltip>
+            }
+          />
         )
       })}
-    </ul>
+    </List>
   )
 }

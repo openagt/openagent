@@ -128,8 +128,5 @@
   },
   "skill-scheduler/dashboard/CodeWords.tsx": {
     "rounded": 2
-  },
-  "skill-tickets/dashboard/TicketPageShell.tsx": {
-    "rounded": 1
   }
 }
