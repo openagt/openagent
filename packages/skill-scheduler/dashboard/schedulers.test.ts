@@ -247,7 +247,7 @@ describe('in words', () => {
     expect(paceArgs({ kind: 'every', count: '2', unit: 'd', at: '25:00' })).toBeUndefined()
     // A time field left half typed has no text: the draft says so, and it is no pace until finished or cleared.
     expect(paceArgs({ kind: 'every', count: '2', unit: 'd', at: '', atHalfTyped: true })).toBeUndefined()
-    expect(paceProblem({ kind: 'every', count: '2', unit: 'd', at: '', atHalfTyped: true })).toBe('Finish the time, like 10:00, or clear it.')
+    expect(paceProblem({ kind: 'every', count: '2', unit: 'd', at: '', atHalfTyped: true })).toBe('Finish the time of day, like 10:00, or clear it.')
     // Beside minutes or hours there is no time field, so a half-typed time left behind does not count.
     expect(paceArgs({ kind: 'every', count: '2', unit: 'h', at: '', atHalfTyped: true })).toEqual(['2h'])
     expect(paceProblem({ kind: 'every', count: '2', unit: 'd', at: '10:00' })).toBeUndefined()

@@ -27,7 +27,7 @@ import {
   type Schedule,
 } from '@openagt/dashboard/module'
 import type { PlacedEntry } from '../src/queue.js'
-import { DEFAULT_PRIORITY, PRIORITIES, QUEUE_COMMAND, addTextArgs, doneArgs, fanOutLabel, isPlacedEntry, isWorkingOn, priorityMeaning, readEntries, unclaimedEntries, workOnEntryPrompt } from '../src/module.js'
+import { DEFAULT_PRIORITY, PRIORITIES, QUEUE_COMMAND, addTextArgs, doneArgs, fanOutLabel, fanOutPress, isPlacedEntry, isWorkingOn, priorityMeaning, readEntries, unclaimedEntries, workOnEntryPrompt } from '../src/module.js'
 import { AgentOnEntry, EntryTitle, entryView } from './entry.js'
 import { useQueueStarts, type QueueStarts } from './starts.js'
 import { BatchCount } from './batch-count.js'
@@ -78,8 +78,7 @@ export function QueuePage({ projects }: ModulePageProps) {
   const key = projects.map(p => p.id).join(',')
   const {
     value: reads,
-    loaded,
-    stale,
+    state,
     reload,
   } = usePolled<ProjectRead[]>(
     () =>
@@ -106,13 +105,13 @@ export function QueuePage({ projects }: ModulePageProps) {
       title="Queue"
       description={`What agents will work on next, from the top${projects.length > 1 ? ', one list per project' : ''}. A higher priority is taken first: 10 is the most urgent, 0 is only if there is capacity.`}
     >
-      {!loaded && <p className="text-sm text-muted-foreground">Loading…</p>}
+      {state === 'unknown' && <p className="text-sm text-muted-foreground">Loading…</p>}
       {starts.error && (
         <p role="alert" className="mb-4 text-sm text-danger">
           {starts.error}
         </p>
       )}
-      <FadeWhileStale stale={stale} className="space-y-6">
+      <FadeWhileStale stale={state === 'kept'} className="space-y-6">
         {reads.map(read => (
           <ProjectQueue key={read.project.id} read={read} titled={projects.length > 1} schedule={schedule} names={names} starts={starts} reload={reload} />
         ))}
@@ -139,10 +138,10 @@ function ProjectQueue({ read, titled, schedule, names, starts, reload }: { read:
             {/* The project's batch act, as one control: how many, then the button the count qualifies.
                 The chevron sends the top entry alone: a launcher can only ever start one agent. */}
             <StartAgentButton
-              size="xs"
+              size="sm"
               leading={<BatchCount count={count} max={free.length} onChange={next => starts.setCount(project.id, next)} />}
               icon={<FastForward className="h-3.5 w-3.5" aria-hidden />}
-              label={count === 1 ? 'Start 1 agent' : `Start ${count} agents`}
+              label={fanOutPress(count)}
               menuAriaLabel={`Other ways to start agents on ${project.name}'s queue`}
               tooltip={fanOutLabel(count)}
               busy={starts.inFlight}
@@ -243,12 +242,12 @@ function EntryRow({ project, placed, agent, names, starts, reload }: { project: 
     await reload()
   }
   return (
-    <li className="flex items-center gap-3 px-3 py-2 text-sm max-md:gap-1.5 max-md:px-2">
+    <li className="flex items-center py-2 text-sm md:gap-3 md:px-3 max-md:gap-1.5 max-md:px-2">
       <span aria-hidden className="w-5 shrink-0 text-right text-xs tabular-nums text-muted-foreground">
         {place}.
       </span>
       <div className="min-w-0 flex-1">
-        <EntryTitle view={view} entry={entry} className={cn('block max-w-full truncate text-left max-md:line-clamp-2 max-md:whitespace-normal', (view.open ?? view.url) !== undefined && 'hover:underline')} />
+        <EntryTitle view={view} entry={entry} className={cn('block max-w-full text-left md:truncate max-md:line-clamp-2', (view.open ?? view.url) !== undefined && 'hover:underline')} />
         {/* The line as written, under a name that stands in for it: it is what an agent is handed. */}
         {view.renamed && <span className="block truncate font-mono text-xs text-muted-foreground">{entry}</span>}
       </div>
@@ -327,7 +326,7 @@ function AddEntry({ project, reload }: { project: ModuleProject; reload: () => P
       <div className="flex flex-wrap items-center gap-2">
         <Input ref={field} name="task" value={text} onChange={event => (setText(event.target.value), setFailed(undefined))} readOnly={adding} placeholder="Add a task: what an agent should do" aria-label="A task to add to the queue" className="h-8 min-w-48 flex-1 px-2" />
         <Select items={items} value={String(priority)} disabled={adding} onValueChange={next => setPriority(Number(next))}>
-          <SelectTrigger size="sm" aria-label="Priority of the new task" className="w-32">
+          <SelectTrigger aria-label="Priority of the new task" className="w-32">
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
@@ -339,7 +338,7 @@ function AddEntry({ project, reload }: { project: ModuleProject; reload: () => P
             ))}
           </SelectContent>
         </Select>
-        <Button type="submit" variant="outline" size="sm" disabled={text.trim() === '' || adding || down}>
+        <Button type="submit" variant="outline" disabled={text.trim() === '' || adding || down}>
           <Plus className="h-3.5 w-3.5" aria-hidden />
           {adding ? 'Adding…' : 'Add to queue'}
         </Button>

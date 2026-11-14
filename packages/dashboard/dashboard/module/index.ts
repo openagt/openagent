@@ -66,6 +66,8 @@ export interface ModuleCard {
   minWidth?: CardWidth
   /** Its place among every installed package's cards, lower first; 50 when unsaid, ties by package name. */
   order?: number
+  /** A part of the line under the Overview's title, a few words drawn with `LinePart`, not a card: it is not arranged. */
+  line?: boolean
   /** The card itself. */
   Card: ComponentType<ModuleCardProps>
 }
@@ -322,8 +324,6 @@ export interface ModuleRunSlots {
 export interface ModuleDefinition {
   /** The cards the module adds to the Overview. */
   cards?: ModuleCard[]
-  /** A stylesheet to load with the module, relative to the module's browser part's own URL. */
-  stylesheet?: string
   /** The pages the module adds, each with a sidebar row. */
   pages?: ModulePage[]
   /** The actions the module offers on the links dashboard pages show, wherever the link's project has the module's package. */
@@ -404,8 +404,8 @@ export interface ModuleHost {
    * takes the place of the current one, so Back steps over it: a pick the page keeps in its address.
    */
   openPage(segment: string, path?: string[], projectId?: string, options?: { replace?: boolean }): void
-  /** The address of a page a module adds, with the project picked in the dashboard: a link's `href`, for a link that also opens in a new tab. */
-  pageHref(segment: string): string
+  /** The address `openPage` with the same arguments goes to: a link's `href`, for a link that also opens in a new tab. */
+  pageHref(segment: string, path?: string[], projectId?: string): string
   /** Open an entry of Settings over the page, by its id: `openSettings('devices')`. */
   openSettings(entry: string): void
   /**
@@ -624,15 +624,16 @@ export function useOpenAgentDown(): boolean {
 // The dashboard's own building blocks, so a module looks like the rest of the page.
 export { Button, buttonVariants, type ButtonProps } from '../components/ui/button.js'
 export { CopyButton } from '../components/ui/copy-button.js'
-export { Card, CardHeader, CardTitle, CardTitleLink, CardContent } from '../components/ui/card.js'
-export { Skeleton } from '../components/ui/skeleton.js'
+export { Card, CardHeader, CardTitle, CardContent, PageLink, RowsLoading } from '../components/ui/card.js'
+export { Skeleton, useSkeleton } from '../components/ui/skeleton.js'
+export { Slot, RowShapes, type SlotRead } from '../components/ui/slot.js'
 export { Input } from '../components/ui/input.js'
 export { GaugeFace } from '../components/ui/gauge.js'
 export { ClaudeLogo, CodexLogo } from '../components/driver-logos.js'
 export { cn } from '../lib/utils.js'
 export { inPlace } from '../lib/in-place.js'
 export { STATUS_TONE, STATUS_DOT, STATUS_RING } from '../lib/status-tone.js'
-export { usePolled, useLoaded, forgetRemembered } from '../lib/use-async.js'
+export { usePolled, useLoaded, useAskOn, forgetRemembered, type ReadState } from '../lib/use-async.js'
 export { FadeWhileStale } from '../components/FadeWhileStale.js'
 export { Badge } from '../components/ui/badge.js'
 export { Checkbox } from '../components/ui/checkbox.js'
@@ -651,9 +652,11 @@ export { Tooltip, TooltipTrigger, TooltipContent } from '../components/ui/toolti
 export { DropdownMenu, DropdownMenuContent, DropdownMenuCheckboxItem, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuSub, DropdownMenuSubContent, DropdownMenuSubTrigger, DropdownMenuTrigger } from '../components/ui/dropdown-menu.js'
 export { ContextMenu, ContextMenuTrigger } from '../components/ui/context-menu.js'
 export { PaneTitle, PaneActions } from '../components/PaneHeader.js'
-export { Page } from '../components/Page.js'
+export { Page, type PageWidth } from '../components/Page.js'
+export { Section } from '../components/ui/section.js'
+export { List, Row } from '../components/ui/list.js'
 export { ShowSidebarButton } from '../components/SidebarToggle.js'
-export { StatTile } from '../components/StatTile.js'
+export { LinePart, counted } from '../components/LinePart.js'
 export { FilterChips, type FilterChip } from '../components/FilterChips.js'
 export { FileIcon } from '../components/FileIcon.js'
 export { Markdown, FileLinks } from '../components/Markdown.js'

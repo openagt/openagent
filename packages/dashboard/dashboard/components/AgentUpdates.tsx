@@ -20,8 +20,14 @@ const NONE: AgentUpdate[] = []
 /** The program each agent's update is run with, to run by hand where the press could not. */
 const UPDATE_COMMANDS: Record<DriverName, string> = { 'claude-code': 'claude update', codex: 'codex update' }
 
+/** How often the page asks again while an update runs, so a tab that did not press it sees it end. */
+const UPDATING_EVERY_MS = 5_000
+
 export function AgentUpdates() {
-  const { value: updates, reload } = usePolled(onAgentUpdates, NONE, EVERY_MS, [])
+  const [running, setRunning] = useState(false)
+  const { value: updates, reload } = usePolled(onAgentUpdates, NONE, running ? UPDATING_EVERY_MS : EVERY_MS, [])
+  const anyUpdating = updates.some(update => update.updating === true)
+  if (anyUpdating !== running) setRunning(anyUpdating)
   // What a press here installed, said in place of its line while the page is open.
   const [installed, setInstalled] = useState<Partial<Record<DriverName, string>>>({})
   const lines = updates.filter(update => installed[update.agent] === undefined)
@@ -50,7 +56,9 @@ export function AgentUpdates() {
 }
 
 function AgentUpdateLine({ update, onUpdated }: { update: AgentUpdate; onUpdated: (version: string) => Promise<void> }) {
-  const { busy, error, run } = useAction()
+  const { busy: pressed, error, run } = useAction()
+  // Pressed here, or running for another tab or computer, as the daemon's read says.
+  const busy = pressed || update.updating === true
   const label = DRIVER_LABELS[update.agent]
   const press = async (): Promise<void> => {
     const outcome = await run(() => sendAgentUpdate(update.agent), 'It ended without a word.')
@@ -67,7 +75,7 @@ function AgentUpdateLine({ update, onUpdated }: { update: AgentUpdate; onUpdated
           {label} {update.latest} is out. This computer has {update.installed}.
         </span>
         {/* Busy, it keeps the focus it was pressed with: a disabled press would drop it to the page. */}
-        <Button size="xs" variant="outline" aria-disabled={busy || undefined} className={cn(busy && 'opacity-50')} onClick={() => void (busy || press())}>
+        <Button size="sm" variant="outline" aria-disabled={busy || undefined} className={cn(busy && 'opacity-50')} onClick={() => void (busy || press())}>
           {busy ? 'Updating…' : `Update ${label}`}
         </Button>
       </div>

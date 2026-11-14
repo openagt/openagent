@@ -1,25 +1,14 @@
-import type { CSSProperties, MouseEvent } from 'react'
+import type { MouseEvent } from 'react'
 import { DiscordIcon, GitHubIcon } from './icons'
 import { DISCORD_URL, GITHUB_URL } from './ui'
 import { ViewToggle } from './ViewToggle'
-
-const navBtnStyle: CSSProperties = {
-  display: 'inline-flex',
-  alignItems: 'center',
-  gap: 8,
-  color: '#d3c6aa',
-  border: '1px solid #4f585e',
-  borderRadius: 8,
-  padding: '7px 14px',
-  fontWeight: 500,
-}
 
 // On the landing page the logo scrolls back up; on subpages it navigates home.
 function goHome(e: MouseEvent) {
   if (window.location.pathname !== '/') return
   e.preventDefault()
   history.replaceState(null, '', window.location.pathname + window.location.search)
-  window.scrollTo({ top: 0, behavior: 'smooth' })
+  window.scrollTo({ top: 0 })
 }
 
 /*
@@ -30,9 +19,13 @@ function goHome(e: MouseEvent) {
 export function TopNav() {
   return (
     <nav style={{ position: 'relative', minHeight: 94 }}>
+      <a href="#main" className="skip-link press press-primary press-small">
+        Skip to content
+      </a>
       {/* Right-clicking the logo opens the press page (logo downloads etc.). */}
       <a
         href="/"
+        className="brand"
         onClick={goHome}
         onContextMenu={(e) => {
           e.preventDefault()
@@ -46,7 +39,7 @@ export function TopNav() {
           display: 'flex',
           alignItems: 'center',
           gap: 12,
-          color: '#d3c6aa',
+          color: 'var(--foreground)',
           whiteSpace: 'nowrap',
           viewTransitionName: 'oa-brand',
         }}
@@ -64,15 +57,14 @@ export function TopNav() {
           right: 12,
           top: 8,
           display: 'flex',
-          gap: 'clamp(10px, 2.5vw, 20px)',
-          fontSize: 14.5,
+          gap: 12,
         }}
       >
-        <a href={DISCORD_URL} className="nav-btn" style={navBtnStyle}>
+        <a href={DISCORD_URL} className="press press-quiet press-small nav-btn">
           <DiscordIcon width={16} height={13} />
           <span>Discord</span>
         </a>
-        <a href={GITHUB_URL} className="nav-btn" style={navBtnStyle}>
+        <a href={GITHUB_URL} className="press press-quiet press-small nav-btn">
           <GitHubIcon size={16} />
           <span>GitHub</span>
         </a>

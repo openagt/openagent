@@ -1,7 +1,7 @@
 import { readFile } from 'node:fs/promises'
 import { hostname } from 'node:os'
 import { resolve } from 'node:path'
-import { Refused, UsageError, inRepo, nodeGitRunner, parseCommandArgs, runCommandLine, type Command } from '@openagt/agent-data'
+import { Refused, UsageError, inRepo, nodeGitRunner, parseCommandArgs, runCommandLine, helpRows, helpText, type Command } from '@openagt/agent-data'
 import { projectRoot } from '@openagt/skill-branches'
 import { isPidAlive, readyToRun, spawnRun, withdrawMarker, writeMarker } from '@openagt/agent-runner'
 import { parseSettings, readSettings, writeSettings } from './settings.js'
@@ -14,35 +14,23 @@ import { landSubagent, markTaskDone } from './land.js'
 
 export const USAGE = `usage: orchestration <command>
 
-  plan <file>       save the file as your plan; answers the \`tasks\` it was read as and the \`question\` to ask
-                    the person; refused when the file is no task list
-  plan              your saved plan, its tasks, its question, and whether the person approved it
-  start --task <id> start a subagent on that task of your plan, on a branch started from yours, on the coding
-                    agent and model the person set for the task's level; answers its id at once; refused until
-                    the person approved your saved plan, for a task of any uncertainty, for one whose \`Needs:\`
-                    tasks are not landed, and while as many of your subagents run as the person allows
-  next              every task of your plan and where it stands — landed, done by you, running, ended and not
-                    landed, waiting for another task, yours to do, or startable — and how many more subagents may
-                    run at once
-  retry <id> "<feedback>"
-                    another subagent on the task that one did, on a branch started from yours, told what to do
-                    differently; refused while that subagent is running, and by every rule start holds to
-  settings          the person's settings for subagents on this machine
-  settings <json>   save them whole: {"simple": {"driver", "model"}, "hard": {...}, "atOnce": <n>}, each optional
-  list              your subagents, newest first
-  read <id>         one subagent: how it stands, its branch, and its last reply as \`result\`
-  stop <id>         stop a subagent that is running
-  land <id>         merge an ended subagent's branch into yours, run the \`Check:\` line of the task it did, and
-                    the plan's own check when that was the last task, then delete that branch; a check that
-                    fails is refused with its output, and the merge and the branch stay
-  done <task>       mark a task of your plan that you did yourself as done, once your work on it is committed:
-                    runs its \`Check:\` line, and the plan's own check when that was the last task; a check that
-                    fails is refused with its output and marks nothing; refused for a task a subagent landed or
-                    runs
-  cleanup           remove what this package left in the project: the settings file, then .orchestration/ and the rule hiding it from git once it is empty;
-                    the command a dashboard asks for when a project is removed with its files
+${helpRows([
+  ['plan <file>', `save the file as your plan; answers the \`tasks\` it was read as and the \`question\` to ask the person; refused when the file is no task list`],
+  ['plan', 'your saved plan, its tasks, its question, and whether the person approved it'],
+  ['start --task <id>', `start a subagent on that task of your plan, on a branch started from yours, on the coding agent and model the person set for the task's level; answers its id at once; refused until the person approved your saved plan, for a task of any uncertainty, for one whose \`Needs:\` tasks are not landed, and while as many of your subagents run as the person allows`],
+  ['next', 'every task of your plan and where it stands — landed, done by you, running, ended and not landed, waiting for another task, yours to do, or startable — and how many more subagents may run at once'],
+  ['retry <id> "<feedback>"', 'another subagent on the task that one did, on a branch started from yours, told what to do differently; refused while that subagent is running, and by every rule start holds to'],
+  ['settings', `the person's settings for subagents on this machine`],
+  ['settings <json>', 'save them whole: {"simple": {"driver", "model"}, "hard": {...}, "atOnce": <n>}, each optional'],
+  ['list', 'your subagents, newest first'],
+  ['read <id>', `one subagent: how it stands, its branch, and its last reply as \`result\``],
+  ['stop <id>', 'stop a subagent that is running'],
+  ['land <id>', `merge an ended subagent's branch into yours, run the \`Check:\` line of the task it did, and the plan's own check when that was the last task, then delete that branch; a check that fails is refused with its output, and the merge and the branch stay`],
+  ['done <task>', `mark a task of your plan that you did yourself as done, once your work on it is committed: runs its \`Check:\` line, and the plan's own check when that was the last task; a check that fails is refused with its output and marks nothing; refused for a task a subagent landed or runs`],
+  ['cleanup', 'remove what this package left in the project: the settings file, then .orchestration/ and the rule hiding it from git once it is empty; the command a dashboard asks for when a project is removed with its files'],
+])}
 
-JSON on stdout. Exit code 1 for a refusal or a failure (\`reason\` in the JSON, why on stderr), 2 for a usage error.`
+${helpText(`JSON on stdout. Exit code 1 for a refusal or a failure (\`reason\` in the JSON, why on stderr), 2 for a usage error.`)}`
 
 export interface CliIo {
   cwd: string
@@ -53,7 +41,7 @@ export interface CliIo {
 
 export function runCli(argv: string[], io: CliIo, given: Partial<SubagentDeps> = {}): Promise<number> {
   const deps: SubagentDeps = { git: nodeGitRunner(), host: hostname(), isAlive: isPidAlive, stop: pid => void process.kill(pid, 'SIGTERM'), ready: readyToRun, now: () => new Date(), mark: writeMarker, unmark: withdrawMarker, spawn: spawnRun, run: runCommand, ...given }
-  return runCommandLine(argv, io, { usage: USAGE, commands: COMMANDS }, io, deps)
+  return runCommandLine(argv, io, { program: 'orchestration', usage: USAGE, commands: COMMANDS }, io, deps)
 }
 
 const COMMANDS: Record<string, Command<[CliIo, SubagentDeps]>> = {

@@ -88,7 +88,7 @@ export function BridgeSettings() {
           <code className="min-w-0 flex-1 truncate rounded bg-muted px-2 py-1 font-mono">
             {shown ? token : '•'.repeat(24)}
           </code>
-          <Button variant="outline" size="sm" onClick={() => setShown(v => !v)}>
+          <Button variant="outline" onClick={() => setShown(v => !v)}>
             {shown ? 'Hide' : 'Reveal'}
           </Button>
           <CopyButton text={token} label="Copy the bridge token" />

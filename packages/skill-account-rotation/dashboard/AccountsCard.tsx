@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type RefObject } from 'react'
-import { Check, ChevronDown, Copy, Info, KeyRound, MoreHorizontal, Plus } from 'lucide-react'
-import { Button, Card, CardContent, CardHeader, CardTitle, ClaudeLogo, CodexLogo, Dialog, DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, GaugeFace, Input, Skeleton, Tooltip, TooltipContent, TooltipTrigger, cn, useModuleHost, useOpenAgentDown, usePolled, type ModuleCardProps, type ModuleHost } from '@openagt/dashboard/module'
+import { Check, ChevronDown, Copy, Info, MoreHorizontal, Plus } from 'lucide-react'
+import { Button, useAskOn, ClaudeLogo, CodexLogo, Dialog, DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, GaugeFace, Input, Section, Skeleton, Tooltip, TooltipContent, TooltipTrigger, cn, useModuleHost, useOpenAgentDown, usePolled, type ModuleCardProps, type ModuleHost } from '@openagt/dashboard/module'
 
 // The accounts each coding agent's runs try, in order: how full each one is, whether it is at a
 // limit, adding one: the command's own sign-in, which goes on by itself while the card follows it,
@@ -153,8 +153,8 @@ function SigningIn({ agent, adding, noBrowser, onChanged }: { agent: (typeof AGE
       <div role="status" className="space-y-1.5 text-xs">
         <p className="text-muted-foreground">Type this code at the page below, signed in to the account to add. If it asks, first allow device code sign-in in ChatGPT's security settings.</p>
         <div className="flex flex-wrap items-center gap-2">
-          <code className="rounded bg-muted px-2 py-1 font-mono text-sm font-medium tracking-wider">{adding.code}</code>
-          <Button size="xs" variant="ghost" aria-label="Copy the code" onClick={() => copy(adding.code!)}>
+          <code className="rounded-sm bg-muted px-2 py-1 font-mono text-sm font-medium tracking-wider">{adding.code}</code>
+          <Button size="sm" variant="ghost" aria-label="Copy the code" onClick={() => copy(adding.code!)}>
             {copyIcon}
           </Button>
           <a href={adding.url} target="_blank" rel="noreferrer" className="text-[var(--color-primary)] underline-offset-2 hover:underline">
@@ -177,7 +177,7 @@ function SigningIn({ agent, adding, noBrowser, onChanged }: { agent: (typeof AGE
           }}
         >
           <Input name="login-code" aria-label="Code from Claude" placeholder="2. Paste the code it shows" value={code} onChange={event => setCode(event.target.value)} className="h-9 min-w-0 grow basis-40 text-sm" />
-          <Button size="sm" type="submit" disabled={code.trim() === '' || adding.checking === true || down}>
+          <Button type="submit" disabled={code.trim() === '' || adding.checking === true || down}>
             {adding.checking ? 'Checking…' : 'Done'}
           </Button>
         </form>
@@ -192,7 +192,7 @@ function SigningIn({ agent, adding, noBrowser, onChanged }: { agent: (typeof AGE
     <div role="status" className="flex flex-wrap items-center gap-x-2 gap-y-1">
       <p className="text-xs text-muted-foreground">{noBrowser ? `Adding ${adding.name}'s account: getting the page to sign in at…` : agent.adding(adding.name)}</p>
       {adding.url !== undefined && (
-        <Button size="xs" variant="ghost" onClick={() => copy(adding.url!)}>
+        <Button size="sm" variant="ghost" onClick={() => copy(adding.url!)}>
           {copyIcon}
           {copied ? 'Copied' : 'Copy link for a private window'}
         </Button>
@@ -245,7 +245,7 @@ function AddAccount({ agent, now, failed, from, field, onChanged, onClose }: { a
       ) : from !== undefined && !here ? (
         <>
           <p className="text-sm">{agent.easiest(from)}</p>
-          <Button size="sm" variant="outline" onClick={() => setHere(true)}>
+          <Button variant="outline" onClick={() => setHere(true)}>
             Sign in here instead
           </Button>
         </>
@@ -259,7 +259,7 @@ function AddAccount({ agent, now, failed, from, field, onChanged, onClose }: { a
             }}
           >
             <Input ref={field} autoFocus={opened} name="account-name" aria-label="Whose account" placeholder="Whose account, e.g. Dani" value={name} onChange={event => setName(event.target.value)} className="h-8 min-w-0 grow basis-32" />
-            <Button size="sm" type="submit" disabled={busy || down || name.trim() === ''}>
+            <Button type="submit" disabled={busy || down || name.trim() === ''}>
               {agent.logIn}
             </Button>
           </form>
@@ -272,7 +272,7 @@ function AddAccount({ agent, now, failed, from, field, onChanged, onClose }: { a
         </p>
       )}
       <div className="flex justify-end">
-        <Button size="sm" variant="ghost" onClick={onClose}>
+        <Button variant="ghost" onClick={onClose}>
           Cancel
         </Button>
       </div>
@@ -365,7 +365,7 @@ function AccountRow({
         aria-label={`Details of ${shown}`}
         aria-expanded={isOpen}
         onClick={() => onOpen(isOpen ? undefined : {})}
-        className="group -mx-2 flex w-[calc(100%+1rem)] min-w-0 items-center gap-2.5 rounded-md px-2 py-1 text-left transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-primary)]"
+        className="focus-ring group -mx-3 flex w-[calc(100%+1.5rem)] min-w-0 items-center gap-3 rounded-md px-3 py-1 text-left transition-colors hover:bg-accent active:bg-foreground/10 md:min-h-10 max-md:min-h-11"
       >
         <agent.Logo className="size-4 shrink-0 text-muted-foreground" />
         <span className="min-w-0 flex-1">
@@ -408,10 +408,10 @@ function AccountRow({
                 {open.asking === 'remove' && account.from !== undefined ? ` It stays off until you press Allow on ${account.from}.` : ''}
               </p>
               <div role="group" aria-label={open.asking === 'logout' ? `Log out ${shown}` : `Remove ${shown}'s account`} className="flex items-center gap-1">
-                <Button size="xs" variant="destructive" disabled={busy} onClick={() => onPress(open.asking === 'logout' ? ['logout', agent.id] : ['remove', agent.id, account.name])}>
+                <Button size="sm" variant="destructive" disabled={busy} onClick={() => onPress(open.asking === 'logout' ? ['logout', agent.id] : ['remove', agent.id, account.name])}>
                   {open.asking === 'logout' ? 'Log out' : 'Remove'}
                 </Button>
-                <Button size="xs" variant="ghost" disabled={busy} onClick={() => onOpen({})}>
+                <Button size="sm" variant="ghost" disabled={busy} onClick={() => onOpen({})}>
                   Cancel
                 </Button>
               </div>
@@ -421,18 +421,18 @@ function AccountRow({
               {more !== '' && <p className="text-xs text-muted-foreground">{more}</p>}
               <div className="-ml-2 flex items-center gap-1">
                 {!first && (
-                  <Button variant="ghost" size="xs" disabled={busy} aria-label={`Use ${shown} first`} onClick={() => onPress(['use-first', agent.id, account.name])}>
+                  <Button variant="ghost" size="sm" disabled={busy} aria-label={`Use ${shown} first`} onClick={() => onPress(['use-first', agent.id, account.name])}>
                     Use first
                   </Button>
                 )}
                 {account.own && (
-                  <Button variant="ghost" size="xs" className="hover:text-danger" disabled={busy} aria-label={`Log out ${shown}`} onClick={() => onOpen({ asking: 'logout' })}>
+                  <Button variant="ghost" size="sm" className="hover:text-danger" disabled={busy} aria-label={`Log out ${shown}`} onClick={() => onOpen({ asking: 'logout' })}>
                     Log out
                   </Button>
                 )}
                 {/* One a computer hands over as it is would be back within a minute: it is removed there. */}
                 {!account.own && !account.comesBack && (
-                  <Button variant="ghost" size="xs" className="hover:text-danger" disabled={busy} aria-label={`Remove ${shown}'s account`} onClick={() => onOpen({ asking: 'remove' })}>
+                  <Button variant="ghost" size="sm" className="hover:text-danger" disabled={busy} aria-label={`Remove ${shown}'s account`} onClick={() => onOpen({ asking: 'remove' })}>
                     Remove
                   </Button>
                 )}
@@ -447,20 +447,20 @@ function AccountRow({
 
 export function AccountsCard({ accountWhere }: ModuleCardProps) {
   const host = useModuleHost()
-  const { value: list, loaded, reload } = usePolled<Read<Account> | undefined>(() => read<Account>(host, 'list'), undefined, LIST_EVERY_MS, [], { remember: 'account-rotation:list', stored: true })
+  const { value: list, state, reload } = usePolled<Read<Account> | undefined>(() => read<Account>(host, 'list'), undefined, LIST_EVERY_MS, [], { remember: 'account-rotation:list', stored: true })
   const { value: usage, reload: reloadUsage } = usePolled<Read<Usage> | undefined>(() => read<Usage>(host, 'usage'), undefined, USAGE_EVERY_MS, [], { remember: 'account-rotation:usage', stored: true })
   // Followed closely from a press until the sign-in has ended, which the person may take minutes over.
   const [following, setFollowing] = useState(false)
-  const { value: adding, reload: reloadAdding } = usePolled<Partial<Record<AgentId, AddingNow>> | undefined>(
+  const { value: adding, reload: reloadAdding, refresh: refreshAdding } = usePolled<Partial<Record<AgentId, AddingNow>> | undefined>(
     async () => {
       const answer = await host.runComputerCommand(['adding'])
       return answer.ok ? (answer.output as Partial<Record<AgentId, AddingNow>>) : undefined
     },
     undefined,
     following ? ADDING_EVERY_MS : LIST_EVERY_MS,
-    [following],
-    'previous',
+    [],
   )
+  useAskOn(following, refreshAdding)
   // The agent an account is being added for: the dialog is open on it, from the press until the account is there or the dialog is closed.
   const [naming, setNaming] = useState<AgentId>()
   const nameField = useRef<HTMLInputElement>(null)
@@ -525,28 +525,23 @@ export function AccountsCard({ accountWhere }: ModuleCardProps) {
   const namingNow = (naming !== undefined ? adding?.[naming] : undefined) ?? {}
 
   return (
-    <Card>
-      <CardHeader>
-        <div className="flex items-center justify-between gap-2">
-          <CardTitle className="text-base">
-            <span className="inline-flex items-center gap-2">
-              <KeyRound className="h-4 w-4 text-muted-foreground" aria-hidden />
-              Coding agent accounts
-              {/* What this card's package does with them, said only where it does something: an agent with two accounts or more. */}
-              {rotates && (
-                <Tooltip>
-                  <TooltipTrigger render={<button type="button" aria-label="What happens at an account's limit" className="font-normal text-muted-foreground hover:text-foreground" />}>
-                    <Info className="h-3.5 w-3.5" aria-hidden />
-                  </TooltipTrigger>
-                  <TooltipContent className="max-w-xs">When an account hits its limit, the next free one of the same agent takes the run over where it stopped.</TooltipContent>
-                </Tooltip>
-              )}
-            </span>
-          </CardTitle>
-          {/* Another account, at the card's title: whose agent it is for, then its sign-in in a dialog. With none yet, the presses are in the card. */}
+    <Section
+      title="Coding agent accounts"
+      action={
+        <>
+          {/* What this card's package does with them, said only where it does something: an agent with two accounts or more. */}
+          {rotates && (
+            <Tooltip>
+              <TooltipTrigger render={<Button variant="ghost" size="icon-sm" aria-label="What happens at an account's limit" className="text-muted-foreground" />}>
+                <Info className="size-4" aria-hidden />
+              </TooltipTrigger>
+              <TooltipContent className="max-w-xs">When an account hits its limit, the next free one of the same agent takes the run over where it stopped.</TooltipContent>
+            </Tooltip>
+          )}
+          {/* Another account, at the heading: whose agent it is for, then its sign-in in a dialog. With none yet, the presses are under it. */}
           {list?.ok && !none && (
             <DropdownMenu>
-              <DropdownMenuTrigger ref={addPress} render={<Button size="sm" variant="outline" aria-label="Add an account" />}>
+              <DropdownMenuTrigger ref={addPress} render={<Button variant="outline" aria-label="Add an account" />}>
                 <Plus className="size-3.5" aria-hidden />
                 Add
                 <ChevronDown className="size-3 opacity-70" aria-hidden />
@@ -561,10 +556,11 @@ export function AccountsCard({ accountWhere }: ModuleCardProps) {
               </DropdownMenuContent>
             </DropdownMenu>
           )}
-        </div>
-      </CardHeader>
-      <CardContent className="flex flex-col gap-1">
-        {list === undefined && !loaded && <Skeleton className="h-16 w-full" />}
+        </>
+      }
+    >
+      <div className="flex flex-col gap-1">
+        {list === undefined && state === 'unknown' && <Skeleton className="h-16 w-full" />}
         {list?.ok === false && <p className="text-sm text-danger">{list.error}</p>}
         {list?.ok &&
           AGENTS.map(agent => (
@@ -597,7 +593,7 @@ export function AccountsCard({ accountWhere }: ModuleCardProps) {
             <p className="min-w-0 grow basis-48 text-sm text-muted-foreground">No account yet. Runs need one to start.</p>
             <div className="flex flex-wrap gap-2">
               {AGENTS.map(agent => (
-                <Button key={agent.id} size="sm" variant="outline" onClick={() => setNaming(agent.id)}>
+                <Button key={agent.id} variant="outline" onClick={() => setNaming(agent.id)}>
                   <agent.Logo className="size-3.5" />
                   Add a {agent.account} account
                 </Button>
@@ -605,7 +601,7 @@ export function AccountsCard({ accountWhere }: ModuleCardProps) {
             </div>
           </div>
         )}
-      </CardContent>
+      </div>
       <Dialog open={namingAgent !== undefined} onOpenChange={open => !open && close()} title={namingAgent ? `Add a ${namingAgent.account} account` : ''} initialFocus={nameField} finalFocus={addPress}>
         {namingAgent && (
           <AddAccount
@@ -620,6 +616,6 @@ export function AccountsCard({ accountWhere }: ModuleCardProps) {
           />
         )}
       </Dialog>
-    </Card>
+    </Section>
   )
 }

@@ -5,6 +5,7 @@ import { useLoaded } from '../lib/use-async.js'
 import { useAction } from '../lib/use-action.js'
 import { Button } from './ui/button.js'
 import { Input } from './ui/input.js'
+import { List, Row } from './ui/list.js'
 import { SettingsSection } from './SettingsRows.js'
 
 /** The Settings entry's id. */
@@ -40,16 +41,19 @@ export function RepoSourcesSettings() {
         <p className="text-sm">GitHub users and organizations</p>
         <p className="text-xs text-muted-foreground">Their repos are listed in the picker, read as the GitHub account runs use; picked, one is cloned. The same on each of your computers.</p>
         {sources.owners.length > 0 && (
-          <ul aria-label="GitHub users and organizations" className="space-y-1">
+          <List boxed aria-label="GitHub users and organizations">
             {sources.owners.map(name => (
-              <li key={name} className="flex items-center justify-between gap-2 rounded-md border border-border px-2 py-1 text-sm">
-                <span className="truncate">{name.replace(/^github\.com\//, '')}</span>
-                <Button variant="ghost" size="icon-sm" aria-label={`Remove ${name}`} disabled={busy} onClick={() => removeOwner(name)}>
-                  <X className="h-3.5 w-3.5" aria-hidden />
-                </Button>
-              </li>
+              <Row
+                key={name}
+                title={name.replace(/^github\.com\//, '')}
+                actions={
+                  <Button variant="ghost" size="icon-sm" aria-label={`Remove ${name}`} disabled={busy} onClick={() => removeOwner(name)}>
+                    <X className="h-3.5 w-3.5" aria-hidden />
+                  </Button>
+                }
+              />
             ))}
-          </ul>
+          </List>
         )}
         <form
           className="flex items-center gap-2"
@@ -70,7 +74,7 @@ export function RepoSourcesSettings() {
             }}
             className="h-8 max-w-xs"
           />
-          <Button type="submit" size="sm" variant="outline" disabled={busy || !owner.trim()}>
+          <Button type="submit" variant="outline" disabled={busy || !owner.trim()}>
             Add
           </Button>
         </form>
@@ -79,16 +83,19 @@ export function RepoSourcesSettings() {
         <p className="text-sm">Folders searched on this computer</p>
         <p className="text-xs text-muted-foreground">Your home folder, and the folders added with &ldquo;Search another folder&hellip;&rdquo; in the picker.</p>
         {sources.folders.length > 0 && (
-          <ul aria-label="Folders searched" className="space-y-1">
+          <List boxed aria-label="Folders searched">
             {sources.folders.map(folder => (
-              <li key={folder} className="flex items-center justify-between gap-2 rounded-md border border-border px-2 py-1 text-sm">
-                <span className="truncate">{folder}</span>
-                <Button variant="ghost" size="icon-sm" aria-label={`Remove ${folder}`} disabled={busy} onClick={() => removeFolder(folder)}>
-                  <X className="h-3.5 w-3.5" aria-hidden />
-                </Button>
-              </li>
+              <Row
+                key={folder}
+                title={folder}
+                actions={
+                  <Button variant="ghost" size="icon-sm" aria-label={`Remove ${folder}`} disabled={busy} onClick={() => removeFolder(folder)}>
+                    <X className="h-3.5 w-3.5" aria-hidden />
+                  </Button>
+                }
+              />
             ))}
-          </ul>
+          </List>
         )}
       </div>
       {error && <p className="text-xs text-danger">{error}</p>}

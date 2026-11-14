@@ -6,7 +6,8 @@ import { useQuota } from '../lib/quota.js'
 import { useModuleHost, type ModuleProject, type UsageLimitSaved } from '../module/index.js'
 import { useMountedModules, type MountedUsageLimit } from '../lib/use-modules.js'
 import { usePolled } from '../lib/use-async.js'
-import { Card, CardContent, CardHeader, CardTitle } from './ui/card.js'
+import { Section } from './ui/section.js'
+import { RowShapes, Slot } from './ui/slot.js'
 import { cn } from '../lib/utils.js'
 import { ModuleSlot, projectsHaving } from './ModulePageView.js'
 import { formatRelative, formatResetDay, formatResetTooltip, formatDuration, formatDurationLong } from '../lib/format-date.js'
@@ -166,7 +167,7 @@ function WeekBar({
   return (
     <div className="space-y-1.5">
       {/* One label per day, centred in its own share of the bar. */}
-      <div className="relative h-4 text-[10px] font-medium tracking-wide text-muted-foreground">
+      <div className="relative h-4 text-xs text-muted-foreground">
         {days.map(
           (day, i) =>
             day.label && (
@@ -305,7 +306,7 @@ function WeekBar({
       {/* The legend, and — on the same row (#960 Edit) — whether the knob has left any room to
           project. Grouped on the right since both describe the same knob: the warning first, since
           it explains why the state beside it might be worth a second look. */}
-      <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1 text-[11px] text-muted-foreground max-sm:text-xs">
+      <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1 text-xs text-muted-foreground">
         <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
           <LegendItem swatch={<span className={cn('h-2 w-2 rounded-sm', TONE_FILL[tone])} aria-hidden />}>Used</LegendItem>
           {limited && <LegendItem swatch={<span className={cn('h-2 w-2 rounded-sm opacity-35', TONE_FILL[tone])} aria-hidden />}>Budget for Autonomous AI</LegendItem>}
@@ -498,41 +499,42 @@ export function Quota({ projects }: { projects: ProjectSummary[] }) {
   const windows = view?.windows ?? []
 
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle className="text-base">Usage</CardTitle>
-      </CardHeader>
-      <CardContent className="space-y-4">
-        {!view && <p className="text-sm text-muted-foreground">Reading your usage…</p>}
+    <Section title="Usage">
+      <div className="space-y-4">
+        <Slot of={{ state: view ? 'fresh' : 'unknown', value: view }} shape={<RowShapes rows={1} />}>
+          {() => (
+            <div className="space-y-4">
+              {/* Without a placeable week there is no axis to draw. Say so, loudly — no fallback (Rom):
+                  this used to degrade to the week as a plain figure, which hid a real defect for weeks —
+                  a reset phrasing the parser didn't know just made the panel quietly plainer, and nothing
+                  anywhere said the boundary was gone. Quote the text that failed: it is the bug report. */}
+              {view?.boundary && week ? (
+                usageLimit ? (
+                  <ModuleSlot package={usageLimit.package} label="usage limit">
+                    <LimitedWeekBar limit={usageLimit} projects={projectsHaving(usageLimit.projects, projects)} boundary={view.boundary} percentUsed={week.percentUsed} others={windows} />
+                  </ModuleSlot>
+                ) : (
+                  <WeekBar boundary={view.boundary} percentUsed={week.percentUsed} others={windows} />
+                )
+              ) : view && view.windows.length ? (
+                <p role="alert" className="text-sm text-danger">
+                  {unplaceableWeek(week, windows)}
+                </p>
+              ) : null}
 
-        {/* Without a placeable week there is no axis to draw. Say so, loudly — no fallback (Rom):
-            this used to degrade to the week as a plain figure, which hid a real defect for weeks —
-            a reset phrasing the parser didn't know just made the panel quietly plainer, and nothing
-            anywhere said the boundary was gone. Quote the text that failed: it is the bug report. */}
-        {view?.boundary && week ? (
-          usageLimit ? (
-            <ModuleSlot package={usageLimit.package} label="usage limit">
-              <LimitedWeekBar limit={usageLimit} projects={projectsHaving(usageLimit.projects, projects)} boundary={view.boundary} percentUsed={week.percentUsed} others={windows} />
-            </ModuleSlot>
-          ) : (
-            <WeekBar boundary={view.boundary} percentUsed={week.percentUsed} others={windows} />
-          )
-        ) : view && view.windows.length ? (
-          <p role="alert" className="text-sm text-danger">
-            {unplaceableWeek(week, windows)}
-          </p>
-        ) : null}
-
-        {/* Normally these live behind the bar's own "show all limits" tooltip — but without a bar
-            to hide them in, they still have to show up somewhere; the windows Claude Code did
-            report are data, not a fallback, and stay regardless. */}
-        {!(view?.boundary && week) && windows.length ? (
-          <div className="space-y-1 border-t border-border pt-3">
-            {windows.map(w => (
-              <OtherWindow key={w.label} window={w} />
-            ))}
-          </div>
-        ) : null}
+              {/* Normally these live behind the bar's own "show all limits" tooltip — but without a bar
+                  to hide them in, they still have to show up somewhere; the windows Claude Code did
+                  report are data, not a fallback, and stay regardless. */}
+              {!(view?.boundary && week) && windows.length ? (
+                <div className="space-y-1 border-t border-border pt-3">
+                  {windows.map(w => (
+                    <OtherWindow key={w.label} window={w} />
+                  ))}
+                </div>
+              ) : null}
+            </div>
+          )}
+        </Slot>
 
         <AddedAccountsUsage />
 
@@ -542,7 +544,7 @@ export function Quota({ projects }: { projects: ProjectSummary[] }) {
             {staleAt !== undefined ? ` Last read ${formatRelative(new Date(staleAt).toISOString())}.` : ''}
           </p>
         ) : null}
-      </CardContent>
-    </Card>
+      </div>
+    </Section>
   )
 }

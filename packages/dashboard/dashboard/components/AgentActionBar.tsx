@@ -97,8 +97,11 @@ export function AgentActionBar({
             count is only useful if it is whole. */}
         {ready && <AgentErrorCount events={events} />}
         {/* A session with no project has no project's menu. */}
-        {projectId !== SESSIONS_ID && <ProjectMenu projectId={projectId} onProjectRemoved={onProjectRemoved} />}
-        <PaneToggles />
+        {/* The ⋮ and the panes' icons, one kind of button, 4px apart. */}
+        <div className="flex shrink-0 items-center gap-1">
+          {projectId !== SESSIONS_ID && <ProjectMenu projectId={projectId} onProjectRemoved={onProjectRemoved} />}
+          <PaneToggles />
+        </div>
       </div>
     </TopBar>
   )

@@ -1,9 +1,8 @@
-import type { ReactNode } from 'react'
+import { useEffect, type ReactNode } from 'react'
 import { Button } from '../components/ui/button.js'
-import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card.js'
+import { Card, CardContent, CardHeader, CardTitle, PageLink } from '../components/ui/card.js'
 import { Input } from '../components/ui/input.js'
 import { Badge } from '../components/ui/badge.js'
-import { CardTitleLink } from '../components/ui/card.js'
 import { Checkbox } from '../components/ui/checkbox.js'
 import { Label } from '../components/ui/label.js'
 import { RadioGroup, RadioGroupItem, RadioGroupOption } from '../components/ui/radio-group.js'
@@ -13,6 +12,13 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '.
 import { Textarea } from '../components/ui/textarea.js'
 import { OptionLabel } from '../components/ui/option-label.js'
 import { DisclosureToggle } from '../components/DisclosureToggle.js'
+import { Section } from '../components/ui/section.js'
+import { List, Row } from '../components/ui/list.js'
+import { RowShapes, Slot } from '../components/ui/slot.js'
+import { ChevronRight, Folder, Trash2 } from 'lucide-react'
+import { JumpPalette, openJump } from '../components/JumpPalette.js'
+import { ShortcutList } from '../components/ShortcutList.js'
+import type { AgentMeta } from '../../src/index.js'
 
 // The gallery's card registry (#DESIGN). Every entry renders the REAL component wherever the
 // component can stand alone, so a card cannot quietly drift from what ships. The few that cannot
@@ -32,12 +38,34 @@ export interface Preview {
 }
 
 /** A labelled row inside a card. */
-function Row({ label, children }: { label: string; children: ReactNode }) {
+function Labelled({ label, children }: { label: string; children: ReactNode }) {
   return (
     <div className="flex flex-col gap-2">
       <span className="text-xs font-medium uppercase tracking-wide text-muted-foreground">{label}</span>
       <div className="flex flex-wrap items-center gap-3">{children}</div>
     </div>
+  )
+}
+
+// ---------------------------------------------------------------- the jump
+
+const at = '2026-11-14T09:00:00Z'
+const jumpRun = (id: string, title: string, fields: Partial<AgentMeta> = {}) => ({ projectId: 'shop', projectName: 'shop', agent: { id, title, status: 'done', startedAt: at, updatedAt: at, ...fields } as AgentMeta })
+
+/** The jump as ⌘K opens it, over this card's page: its every-run read has no daemon here, so it lists what the page gave it. */
+function Jump() {
+  useEffect(openJump, [])
+  return (
+    <JumpPalette
+      waiting={[{ projectId: 'shop', projectName: 'shop', kind: 'awaiting', title: 'Ask which colour the login page should be', agentId: 'r1' }]}
+      runs={[jumpRun('r2', 'Move the cart to a page of its own', { pr: { number: 42, url: '' } }), jumpRun('r3', 'Commit a login page with session cookies'), { ...jumpRun('r4', 'Write the first post'), projectId: 'blog', projectName: 'blog' }]}
+      pages={[{ segment: 'tickets', label: 'Tickets' }, { segment: 'agents', label: 'Agents' }]}
+      projects={['shop', 'blog'].map(name => ({ id: name, path: `/${name}`, name, activated: true, gitHost: true }))}
+      scope={null}
+      here={{ projectId: null, agentId: null }}
+      hrefOf={() => '#'}
+      go={() => {}}
+    />
   )
 }
 
@@ -95,7 +123,7 @@ function StatusPalette() {
     <div className="space-y-4">
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
         {STATUS.map(([label, fill, value]) => (
-          <div key={label} className="flex items-center gap-2.5">
+          <div key={label} className="flex items-center gap-2">
             <span className={`h-8 w-8 shrink-0 rounded-md ${fill}`} />
             <div className="min-w-0">
               <div className="truncate text-xs font-medium">{label}</div>
@@ -112,45 +140,74 @@ function StatusPalette() {
   )
 }
 
+// The theme's closed scale (module/theme.css): these steps and no others.
 const TYPE = [
-  ['text-2xl font-semibold tabular-nums', 'KPI value', '24px / 600'],
-  ['text-xl font-semibold', 'Page title', '20px / 600'],
-  ['text-sm font-semibold', 'Card title', '14px / 600'],
-  ['text-sm', 'Body', '14px / 400'],
-  ['text-xs text-muted-foreground', 'Meta, captions', '12px / 400'],
-  ['text-xs font-medium uppercase tracking-wide text-muted-foreground', 'Tile label', '12px / 500 caps'],
+  ['text-xl font-semibold', 'Title', '20 / 28, 600: a page, a dialog'],
+  ['text-base font-semibold', 'Heading', '16 / 24, 600: a section, a card'],
+  ['text-base', 'Prose', '16 / 24, 400: the chat, a ticket, a document'],
+  ['text-sm font-medium', 'Body, a label', '14 / 20, 500: a row’s title, a control'],
+  ['text-sm', 'Body', '14 / 20, 400'],
+  ['text-xs text-muted-foreground', 'Meta 12:04 · 3 runs', '12 / 16, tabular figures'],
+  ['text-2xl font-semibold', 'Website', '24 / 32 and 30 / 36'],
+] as const
+
+const TEXT_COLOURS = [
+  ['text-foreground', 'Foreground: what is read'],
+  ['text-muted-foreground', 'Muted: what explains it'],
+  ['text-faint-foreground', 'Faint: a placeholder, what is disabled'],
 ] as const
 
 function TypeScale() {
   return (
-    <div className="space-y-3">
-      {TYPE.map(([cls, label, spec]) => (
-        <div key={label} className="flex items-baseline justify-between gap-4 border-b border-border pb-2 last:border-0">
-          <span className={cls}>{label}</span>
-          <span className="shrink-0 font-mono text-xs text-muted-foreground">{spec}</span>
-        </div>
-      ))}
+    <div className="space-y-4">
+      <div className="space-y-3">
+        {TYPE.map(([cls, label, spec]) => (
+          <div key={label} className="flex items-baseline justify-between gap-4 border-b border-hairline pb-2 last:border-0">
+            <span className={cls}>{label}</span>
+            <span className="shrink-0 font-mono text-xs text-muted-foreground">{spec}</span>
+          </div>
+        ))}
+      </div>
+      <div className="flex flex-wrap gap-6 text-sm">
+        {TEXT_COLOURS.map(([cls, label]) => (
+          <span key={cls} className={cls}>
+            {label}
+          </span>
+        ))}
+      </div>
     </div>
   )
 }
 
 function RadiusScale() {
   const radii = [
-    ['rounded-sm', 'Chart bars'],
-    ['rounded', 'Icon buttons'],
-    ['rounded-md', 'Buttons, inputs'],
-    ['rounded-lg', 'Cards'],
-    ['rounded-full', 'Pills, dots'],
+    ['rounded-sm', '4: inside a control'],
+    ['rounded-md', '6: a control, a menu item'],
+    ['rounded-lg', '8: a surface'],
+    ['rounded-full', 'A dot, an avatar, a count'],
   ] as const
   return (
-    <div className="flex flex-wrap gap-4">
+    <div className="flex flex-wrap gap-6">
       {radii.map(([cls, use]) => (
         <div key={cls} className="flex flex-col items-center gap-1.5">
-          <div className={`h-12 w-12 border border-border bg-muted ${cls}`} />
+          <div className={`h-12 w-12 border border-hairline bg-muted ${cls}`} />
           <span className="font-mono text-xs">{cls}</span>
           <span className="text-xs text-muted-foreground">{use}</span>
         </div>
       ))}
+    </div>
+  )
+}
+
+/** The page, a raised surface, the line and where the keyboard is. */
+function Depth() {
+  return (
+    <div className="flex flex-wrap items-start gap-8 bg-background p-6">
+      <div className="flex h-24 w-40 items-center justify-center rounded-lg border border-hairline bg-card text-sm">A card</div>
+      <div className="flex h-24 w-40 items-center justify-center rounded-lg border border-hairline bg-card text-sm shadow-lg">Raised</div>
+      <button type="button" className="focus-ring h-8 rounded-md bg-accent px-3 text-sm font-medium" autoFocus>
+        Focused
+      </button>
     </div>
   )
 }
@@ -160,28 +217,28 @@ function RadiusScale() {
 function Buttons() {
   return (
     <div className="space-y-5">
-      <Row label="Variants">
+      <Labelled label="Variants">
         <Button>Start agent</Button>
         <Button variant="outline">Outline</Button>
         <Button variant="ghost">Ghost</Button>
-      </Row>
-      <Row label="Sizes">
+      </Labelled>
+      <Labelled label="Sizes">
         <Button size="default">Default</Button>
-        <Button size="sm">Small</Button>
-        <Button size="xs">Extra small</Button>
+        <Button>Small</Button>
+        <Button size="sm">Extra small</Button>
         <Button size="icon" aria-label="Icon">
           <span className="text-xs">IC</span>
         </Button>
         <Button size="icon-sm" aria-label="Icon small">
-          <span className="text-[10px]">S</span>
+          <span className="text-xs">S</span>
         </Button>
-      </Row>
-      <Row label="States">
+      </Labelled>
+      <Labelled label="States">
         <Button disabled>Disabled</Button>
         <Button variant="outline" disabled>
           Disabled outline
         </Button>
-      </Row>
+      </Labelled>
       <p className="text-xs text-muted-foreground">
         There is no destructive variant, so every irreversible action in the app (remove worktree,
         delete preset, stop a run) is styled ad hoc at the call site.
@@ -193,21 +250,22 @@ function Buttons() {
 function Badges() {
   return (
     <div className="space-y-5">
-      <Row label="Event kinds">
-        <Badge>driver</Badge>
-        <Badge>tool</Badge>
-        <Badge>gate</Badge>
-        <Badge>end</Badge>
-      </Row>
-      <Row label="Status (as used today)">
-        <Badge className="border-transparent bg-success/15 text-success">DONE</Badge>
-        <Badge className="border-transparent bg-danger/15 text-danger">FAILED</Badge>
-        <Badge className="border-transparent bg-warning/15 text-warning">STOPPED</Badge>
-        <Badge className="border-transparent bg-primary/15 text-primary">RUNNING</Badge>
-      </Row>
+      <Labelled label="A count, a topic">
+        <Badge>3</Badge>
+        <Badge>12</Badge>
+        <Badge>dashboard</Badge>
+        <Badge>Effort: 2</Badge>
+      </Labelled>
+      <Labelled label="A status word">
+        <Badge tone="success">Done</Badge>
+        <Badge tone="danger">Failed</Badge>
+        <Badge tone="warning">Stopped</Badge>
+        <Badge tone="info">Not pushed</Badge>
+        <Badge tone="primary">Running</Badge>
+        <Badge tone="neutral">Queued</Badge>
+      </Labelled>
       <p className="text-xs text-muted-foreground">
-        The Badge primitive carries no variant prop, so status colouring is applied by hand at each
-        call site — the reason the same status reads differently in different rails.
+        Each in one size: a count or a topic is a pill on a soft fill; a status word is its colour in a dot and the text&apos;s colour in the word, so it reads at 4.5:1 on every surface.
       </p>
     </div>
   )
@@ -268,7 +326,15 @@ const UNITS = [
 function FormControls() {
   return (
     <div className="space-y-5">
-      <Row label="Radio group: one pick among a few that stay in view">
+      <Labelled label="Focus: a field's ring is its edge; a press's ring stands 2px off it">
+        <Input aria-label="A focused field" defaultValue="A field" className="w-48 outline-2 -outline-offset-1 outline-primary" />
+        <Button variant="secondary" className="outline-2 outline-offset-2 outline-primary">A press</Button>
+        <Checkbox aria-label="A focused checkbox" className="outline-2 outline-offset-2 outline-primary" />
+      </Labelled>
+      <p className="text-xs text-muted-foreground">
+        Every field, select and mark has the one edge, <code>--input</code>, at 3:1 or more on each surface it sits on (the page, a card, the sidebar, a hovered row): OpenAgent light 3.08–3.65:1, dark 3.18–3.94:1; Neutral light 3.52–3.84:1, dark 3.32–4.34:1. Under the pointer it goes a step further; ticked or on, it is the primary colour.
+      </p>
+      <Labelled label="Radio group: one pick among a few that stay in view">
         <RadioGroup aria-label="Wait after a start" defaultValue="skill">
           <RadioGroupOption value="skill">
             As the skill says <span className="text-xs text-muted-foreground">(6 hours)</span>
@@ -280,39 +346,39 @@ function FormControls() {
           </div>
           <RadioGroupOption value="work">No wait</RadioGroupOption>
         </RadioGroup>
-      </Row>
-      <Row label="Radio group, disabled">
+      </Labelled>
+      <Labelled label="Radio group, disabled">
         <RadioGroup aria-label="Disabled" defaultValue="a" disabled>
           <RadioGroupOption value="a">Picked</RadioGroupOption>
           <RadioGroupOption value="b">Not picked</RadioGroupOption>
         </RadioGroup>
-      </Row>
-      <Row label="Select: one pick from a list that opens (trigger shown; the list is a menu popup)">
+      </Labelled>
+      <Labelled label="Select: one pick from a list that opens (trigger shown; the list is a menu popup)">
         <Select items={UNITS} defaultValue="h">
           <SelectTrigger aria-label="Unit" className="w-36">
             <SelectValue />
           </SelectTrigger>
         </Select>
         <Select items={UNITS} defaultValue="d">
-          <SelectTrigger size="sm" aria-label="Unit, small" className="w-28">
+          <SelectTrigger aria-label="Unit, small" className="w-28">
             <SelectValue />
           </SelectTrigger>
         </Select>
         <Select items={UNITS} defaultValue="h" disabled>
-          <SelectTrigger size="sm" aria-label="Unit, disabled" className="w-28">
+          <SelectTrigger aria-label="Unit, disabled" className="w-28">
             <SelectValue />
           </SelectTrigger>
         </Select>
-      </Row>
-      <Row label="Switch: on or off, at once. Checkbox: one line of a form or a list">
+      </Labelled>
+      <Labelled label="Switch: on or off, at once. Checkbox: one line of a form or a list">
         <Switch aria-label="On" defaultChecked />
         <Switch aria-label="Off" />
         <Switch aria-label="Disabled" disabled />
         <Checkbox aria-label="Ticked" defaultChecked />
         <Checkbox aria-label="Not ticked" />
         <Checkbox aria-label="Disabled" disabled />
-      </Row>
-      <Row label="Label, input, textarea">
+      </Labelled>
+      <Labelled label="Label, input, textarea">
         <div className="w-full max-w-md space-y-2">
           <Label htmlFor="ds-name">
             A name <span className="text-xs text-muted-foreground">optional</span>
@@ -322,7 +388,7 @@ function FormControls() {
           <Textarea id="ds-prompt" rows={3} placeholder="Answer each new comment below." />
           <Input disabled placeholder="Disabled" />
         </div>
-      </Row>
+      </Labelled>
     </div>
   )
 }
@@ -355,17 +421,9 @@ function Tables() {
           </TableRow>
         </TableBody>
       </Table>
-      <Card className="max-w-sm">
-        <CardHeader>
-          <CardTitleLink segment="queue" onOpen={() => {}}>
-            A card whose title opens its page
-          </CardTitleLink>
-          <p className="text-xs text-muted-foreground">The arrow shows on hover and focus, and always on a phone.</p>
-        </CardHeader>
-        <CardContent>
-          <p className="text-sm text-muted-foreground">A summary; the whole is on the page.</p>
-        </CardContent>
-      </Card>
+      <Section title="A part of the Overview" count={3} action={<PageLink href="/queue" onOpen={() => {}}>Queue</PageLink>} className="max-w-sm">
+        <p className="text-sm text-muted-foreground">A summary; the whole is on the page its link opens.</p>
+      </Section>
     </div>
   )
 }
@@ -408,6 +466,37 @@ function Overlays() {
 
 // ---------------------------------------------------------------- data display
 
+const RUNS = ['Add a login page', 'Fix the flaky upload test']
+
+function Slots() {
+  const runs = (names: string[]) => (
+    <List aria-label="Runs">
+      {names.map(name => (
+        <Row key={name} leading={<Folder className="size-4" aria-hidden />} title={name} meta="4h ago" />
+      ))}
+    </List>
+  )
+  return (
+    <div className="space-y-8">
+      <Section title="Waiting">
+        <Slot of={{ state: 'unknown', value: [] }} shape={<RowShapes />}>
+          {runs}
+        </Slot>
+      </Section>
+      <Section title="Answered" count="2">
+        <Slot of={{ state: 'fresh', value: RUNS }} shape={<RowShapes />}>
+          {runs}
+        </Slot>
+      </Section>
+      <Section title="Asked again, and failed" count="2">
+        <Slot of={{ state: 'fresh', value: RUNS, failing: true }} shape={<RowShapes />}>
+          {runs}
+        </Slot>
+      </Section>
+    </div>
+  )
+}
+
 function EmptyStates() {
   return (
     <div className="grid gap-4 sm:grid-cols-2">
@@ -419,7 +508,7 @@ function EmptyStates() {
       <Card>
         <CardContent className="flex flex-col items-start gap-3">
           <p className="text-sm text-muted-foreground">Nothing on the agent queue.</p>
-          <Button size="sm" variant="outline">
+          <Button variant="outline">
             Add an entry
           </Button>
         </CardContent>
@@ -433,6 +522,46 @@ function EmptyStates() {
 }
 
 // ---------------------------------------------------------------- registry
+
+const LONG_TITLE = 'Move the release notes for every package into one page the website renders, and link each version from the changelog of its own'
+
+function Lists() {
+  const remove = (
+    <Button variant="ghost" size="icon-sm" aria-label="Remove">
+      <Trash2 className="size-4" aria-hidden />
+    </Button>
+  )
+  return (
+    <div className="space-y-8">
+      <Section title="Runs" count="4" action={<Button variant="secondary" size="sm">New run</Button>}>
+        <List aria-label="Runs">
+          <Row leading={<Folder className="size-4" aria-hidden />} title="A link: the whole row opens it, Ctrl+click in a new tab" meta="4h ago" href="#row" onClick={() => {}} actions={remove} />
+          <Row leading={<Folder className="size-4" aria-hidden />} title="A press: the whole row does it" meta={<ChevronRight className="size-4" aria-hidden />} onClick={() => {}} />
+          <Row title="Neither: only its own action, shown under the pointer" meta="12 files" actions={remove} />
+          <Row leading={<Folder className="size-4" aria-hidden />} title={LONG_TITLE} meta="$0.15 · 2d ago" href="#long" actions={remove} />
+        </List>
+      </Section>
+      <Section title="Boxed: in something with no edge of its own" count="2">
+        <List boxed aria-label="Boxed">
+          <Row leading={<Folder className="size-4" aria-hidden />} title="shop" meta={<ChevronRight className="size-4" aria-hidden />} onClick={() => {}} />
+          <Row leading={<Folder className="size-4" aria-hidden />} title="blog" meta={<ChevronRight className="size-4" aria-hidden />} onClick={() => {}} />
+        </List>
+      </Section>
+      <Section title="Two lines on a phone" count="2">
+        <List aria-label="Stacked on a phone">
+          <Row stackOnPhone title={LONG_TITLE} meta="shop · done · $0.15 · 12:04" href="#stacked" onClick={() => {}} />
+          <Row stackOnPhone title="A short one stays one line, 44 high" meta="12:01" href="#short" onClick={() => {}} />
+        </List>
+      </Section>
+      <Section title="Nothing in it" count="0">
+        <p className="text-sm text-muted-foreground">No run yet. Start one from the message box.</p>
+      </Section>
+      <Section title={LONG_TITLE} count="40" action={<Button variant="link" size="sm">All runs</Button>}>
+        <p className="text-sm text-muted-foreground">A long heading is cut; its count and its press stay.</p>
+      </Section>
+    </div>
+  )
+}
 
 export const PREVIEWS: Preview[] = [
   {
@@ -455,7 +584,7 @@ export const PREVIEWS: Preview[] = [
     path: 'foundations/typography.html',
     group: 'Foundations',
     name: 'Type scale',
-    subtitle: '6 roles from KPI value to caption',
+    subtitle: 'Five roles on six steps, three text colours',
     width: 900,
     node: <TypeScale />,
   },
@@ -463,9 +592,17 @@ export const PREVIEWS: Preview[] = [
     path: 'foundations/radius.html',
     group: 'Foundations',
     name: 'Radius scale',
-    subtitle: '5 steps, sm through full',
+    subtitle: 'Four steps, by role',
     width: 900,
     node: <RadiusScale />,
+  },
+  {
+    path: 'foundations/depth.html',
+    group: 'Foundations',
+    name: 'Depth, lines and focus',
+    subtitle: 'The hairline, the raised shadow, the focus ring',
+    width: 900,
+    node: <Depth />,
   },
   {
     path: 'components/button.html',
@@ -516,6 +653,14 @@ export const PREVIEWS: Preview[] = [
     node: <Tables />,
   },
   {
+    path: 'components/list.html',
+    group: 'Components',
+    name: 'Section + list',
+    subtitle: 'A heading with its count and press, then rows on the page or boxed, a link, a press, or holding their own action',
+    width: 900,
+    node: <Lists />,
+  },
+  {
     path: 'components/disclosure.html',
     group: 'Components',
     name: 'Disclosure + option label',
@@ -531,6 +676,31 @@ export const PREVIEWS: Preview[] = [
     width: 900,
     replica: true,
     node: <Overlays />,
+  },
+  {
+    path: 'components/slot.html',
+    group: 'Components',
+    name: 'Slot',
+    subtitle: 'Where an answer is drawn: its shape while it is read (unseen for 200ms, then pulsing), the answer, a note when asking again failed. A kept answer fades after a second, and a held one dims: neither shows on a still page',
+    width: 900,
+    node: <Slots />,
+  },
+  {
+    path: 'patterns/jump.html',
+    group: 'Patterns',
+    name: 'Jump',
+    subtitle: '⌘K or Ctrl+K: what waits on you, the recent runs, the pages, the projects',
+    width: 900,
+    height: 560,
+    node: <Jump />,
+  },
+  {
+    path: 'patterns/shortcuts.html',
+    group: 'Patterns',
+    name: 'Keyboard shortcuts',
+    subtitle: 'Every key, by where it works: ? and Settings show it',
+    width: 600,
+    node: <ShortcutList />,
   },
   {
     path: 'patterns/empty-states.html',

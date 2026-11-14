@@ -13,7 +13,6 @@ import { TicketsModulePage } from './TicketsModulePage.js'
 import { HotTicketsCard } from './HotTicketsCard.js'
 import { namesOf } from '../src/module.js'
 import { listTickets } from './lib/list.js'
-import './dashboard.css'
 
 export default defineModule({
   pages: [
@@ -30,5 +29,4 @@ export default defineModule({
     },
   ],
   cards: [{ id: 'hot', label: 'Hot tickets', order: 20, Card: HotTicketsCard }],
-  stylesheet: 'dashboard.css',
 })

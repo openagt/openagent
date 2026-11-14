@@ -57,7 +57,7 @@ export function SessionRow({
         <>
           <RowOff tip={projectName}>
             <button type="button" disabled className={rowButtonClass}>
-              <Folder className="h-3.5 w-3.5 shrink-0" aria-hidden />
+              <Folder className="size-4 shrink-0" aria-hidden />
               <span className="truncate">{projectName}</span>
             </button>
           </RowOff>

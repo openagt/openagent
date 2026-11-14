@@ -78,7 +78,8 @@ export {
   type ProjectDataDeps,
   type ProjectReader,
 } from './project-data.js'
-export { FAILED, GIT_FAILED, Refused, UsageError, commandReader, commandWrite, inRepo, parseCommandArgs, runCommandLine, type Command, type CommandLine, type CommandOutput, type Failure, type Refusal } from './command-line.js'
+export { HELP_WIDTH, helpRows, helpText, type HelpRow } from './help.js'
+export { FAILED, GIT_FAILED, Refused, UsageError, commandReader, commandWrite, inRepo, parseCommandArgs, runCommandLine, unknownWord, usageError, wrongArguments, type Command, type CommandLine, type CommandOutput, type Failure, type Refusal } from './command-line.js'
 export {
   SKILLS_DIRS,
   projectPackages,

@@ -15,6 +15,7 @@ const { NO_PICKS, SkillsMenu, SkillsOff, agentPicks, sessionSkills, skillPicksSa
 afterEach(() => {
   cleanup()
   forgetRemembered()
+  localStorage.clear()
   onProjectSkills.mockReset()
 })
 
@@ -33,6 +34,16 @@ function renderMenu(over: Partial<Parameters<typeof SkillsMenu>[0]> = {}) {
 const checked = (name: string) => screen.getByRole('menuitemcheckbox', { name }).getAttribute('aria-checked')
 
 describe('the Skills menu under the launcher\'s box', () => {
+  test('the button waits for the project\'s skills: it never draws the agent\'s count alone and then changes it', async () => {
+    let read: (v: unknown) => void = () => {}
+    onProjectSkills.mockReturnValue(new Promise(resolve => (read = resolve)))
+    renderMenu()
+    await new Promise(resolve => setTimeout(resolve, 20))
+    expect(screen.queryByRole('button', { name: /^Skills/ })).toBeNull()
+    read(PROJECT)
+    expect(await screen.findByRole('button', { name: 'Skills: 4' })).toBeTruthy()
+  })
+
   test('the button counts what the session gets: its agent\'s skills and the project\'s; the menu ticks the agent\'s, lists the project\'s, and opens its Skills page', async () => {
     onProjectSkills.mockResolvedValue(PROJECT)
     renderMenu()
@@ -113,6 +124,18 @@ describe('the Skills menu under the launcher\'s box', () => {
     expect(await screen.findByRole('button', { name: 'Skills: 3' })).toBeTruthy()
   })
 
+  test('a session opened again after a reload has its Skills from the first frame, so nothing after it in the row moves', async () => {
+    onProjectSkills.mockResolvedValue({ held: ['tickets'] })
+    render(<SkillsOff projectId="p1" agent="default" />)
+    await skillsSaid(4)
+    cleanup()
+    // The reload: the page's memory gone, this browser's store as the last load left it, the reads not answered yet.
+    forgetRemembered()
+    onProjectSkills.mockReturnValue(new Promise(() => {}))
+    render(<SkillsOff projectId="p1" agent="default" />)
+    expect(screen.getByText((_, el) => el?.getAttribute('tabindex') === '0' && el.textContent!.startsWith('Skills: 4.'))).toBeTruthy()
+  })
+
   test('a save on the Skills page is counted at once', async () => {
     onProjectSkills.mockResolvedValue(PROJECT)
     renderMenu()
@@ -155,33 +178,48 @@ vi.mock('./ui/tooltip.js', async () => {
   return { ...actual, __esModule: true }
 })
 
+/** The session's Skills words, found as the keyboard and a screen reader meet them: "Skills: ", the count, then why they stay. */
+const skillsSaid = (count: number) => screen.findByText((_, el) => el?.getAttribute('tabindex') === '0' && el.textContent!.startsWith(`Skills: ${count}.`))
+
 describe("the session page's Skills, as words", () => {
   test('words the keyboard stops on, counted as the launcher counts, their hover saying what the session got', async () => {
     onProjectSkills.mockResolvedValue({ held: ['tickets', 'queue'] })
     render(<SkillsOff projectId="p1" agent={undefined} skillsOff={['github']} projectSkills={['tickets']} />)
     // The default agent's three less github, and one of the project's two.
-    const said = (await screen.findByText('Skills: 3')).parentElement!
+    const said = await skillsSaid(3)
     expect(said.tabIndex).toBe(0)
     expect(screen.queryByRole('button')).toBeNull()
     expect((await hoverTooltip(said)).textContent).toBe("This session got its agent's skills without github, and the project skills tickets")
     cleanup()
     render(<SkillsOff projectId={undefined} agent="default" skillsOn={['plan']} />)
-    const alone = (await screen.findByText('Skills: 4')).parentElement!
+    const alone = await skillsSaid(4)
     expect((await hoverTooltip(alone)).textContent).toBe("This session got its agent's skills with plan, and no project skill")
   })
 
   test('a skill its agent has and the project holds too is counted once, as the launcher counts it', async () => {
     onProjectSkills.mockResolvedValue({ held: ['ask', 'tickets'] })
     render(<SkillsOff projectId="p1" agent="default" />)
-    expect(await screen.findByText('Skills: 4')).toBeTruthy()
+    expect(await skillsSaid(4)).toBeTruthy()
+  })
+
+  test('a session opened again after a reload has its Skills from the first frame, so nothing after it in the row moves', async () => {
+    onProjectSkills.mockResolvedValue({ held: ['tickets'] })
+    render(<SkillsOff projectId="p1" agent="default" />)
+    await skillsSaid(4)
+    cleanup()
+    // The reload: the page's memory gone, this browser's store as the last load left it, the reads not answered yet.
+    forgetRemembered()
+    onProjectSkills.mockReturnValue(new Promise(() => {}))
+    render(<SkillsOff projectId="p1" agent="default" />)
+    expect(screen.getByText((_, el) => el?.getAttribute('tabindex') === '0' && el.textContent!.startsWith('Skills: 4.'))).toBeTruthy()
   })
 
   test('a save on the Skills page is counted at once', async () => {
     onProjectSkills.mockResolvedValue({ held: ['tickets'] })
     render(<SkillsOff projectId="p1" agent="default" />)
-    await screen.findByText('Skills: 4')
+    await skillsSaid(4)
     onProjectSkills.mockResolvedValue({ held: ['tickets', 'queue'] })
     skillsSaved()
-    expect(await screen.findByText('Skills: 5')).toBeTruthy()
+    expect(await skillsSaid(5)).toBeTruthy()
   })
 })

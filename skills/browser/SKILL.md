@@ -30,7 +30,7 @@ Quote a `<text>` or `<script>` with spaces as one argument: `npx @openagt/skill-
 
 The browser belongs to the project the command runs in (its git root): run every command from inside the same project.
 
-A refusal exits 1 with the reason on stderr (no browser open, no such element, an address the server did not answer, a page that did not answer within 30 seconds; an error page such as a 404 prints like any page); a wrong command line exits 2 with the usage.
+A refusal exits 1 with the reason on stderr (no browser open, no such element, an address the server did not answer, a page that did not answer within 30 seconds; an error page such as a 404 prints like any page); a wrong command line exits 2 with what was wrong and a pointer to `--help`.
 
 A person watching your run sees this browser live, with its console, and can click, type and paste in it too: if the page is not what your last print showed, read it again.
 

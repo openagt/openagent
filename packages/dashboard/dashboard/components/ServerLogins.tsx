@@ -6,7 +6,7 @@ import { Button } from './ui/button.js'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from './ui/dropdown-menu.js'
 import { ClaudeLogo, CodexLogo } from './driver-logos.js'
 import { cn } from '../lib/utils.js'
-import { usePolled } from '../lib/use-async.js'
+import { useAskOn, usePolled } from '../lib/use-async.js'
 import { CopyButton } from './ui/copy-button.js'
 
 // The servers of the person's that use this computer's logins, on the Permissions page: under each
@@ -34,8 +34,8 @@ export function useServers(): Servers {
 /** The servers as read for the page, asked often while a press is under way. */
 export function ServersProvider({ children }: { children: ReactNode }) {
   const [often, setOften] = useState(false)
-  // The pace changes, the servers do not: what was read stays on the page until the next read.
-  const { value, reload } = usePolled<ServerLoginsView | undefined>(onServerLogins, undefined, often ? OFTEN_MS : SELDOM_MS, [often], 'previous')
+  const { value, reload, refresh } = usePolled<ServerLoginsView | undefined>(onServerLogins, undefined, often ? OFTEN_MS : SELDOM_MS, [])
+  useAskOn(often, refresh)
   const busy = value?.servers.some(server => server.allowing) ?? false
   useEffect(() => {
     if (busy !== often) setOften(busy)
@@ -84,10 +84,10 @@ function ServerAsk({ server, computer, onChanged }: { server: ServerLogins; comp
         <ul className="px-1">
           {server.left.map(login => (
             <LoginLine key={`left ${login.kind} ${login.host ?? ''} ${login.source}`} row={login} name={login.name} on={server.label} words={`On ${server.label}, no longer on ${computer}`}>
-              <Button size="xs" variant="ghost" disabled={pending} onClick={() => void settle(login, true)}>
+              <Button size="sm" variant="ghost" disabled={pending} onClick={() => void settle(login, true)}>
                 Keep it there
               </Button>
-              <Button size="xs" variant="ghost" className="text-muted-foreground" disabled={pending} onClick={() => void settle(login, false)}>
+              <Button size="sm" variant="ghost" className="text-muted-foreground" disabled={pending} onClick={() => void settle(login, false)}>
                 Take it off
               </Button>
             </LoginLine>
@@ -220,7 +220,7 @@ function useStanding(server: ServerLogins, computer: string, onChanged: () => Pr
       body: (
         <>
           <BarWords title={`Use your logins on ${server.label}?`} words={`Runs there use the accounts you're logged into on ${computer}, and its page follows your settings. The server gets logins of its own: nothing here is logged out.`} />
-          <Button size="sm" disabled={busy} onClick={() => void act(() => sendUseLoginsOn(server.machineId))}>
+          <Button disabled={busy} onClick={() => void act(() => sendUseLoginsOn(server.machineId))}>
             Use them
           </Button>
           <Failed error={failed} />
@@ -248,7 +248,7 @@ function useStanding(server: ServerLogins, computer: string, onChanged: () => Pr
       body: (
         <>
           <BarWords title={`${server.label} uses your logins: ${there} of ${server.logins.length} there`} words={`${wait.map(login => login.name).join(' and ')} ${wait.length === 1 ? 'needs' : 'need'} your yes once: your browser opens, you press Allow or Continue.`} />
-          <Button size="sm" disabled={busy} onClick={() => void act(() => sendAllowLogins(server.machineId))}>
+          <Button disabled={busy} onClick={() => void act(() => sendAllowLogins(server.machineId))}>
             {wait.length === 1 ? 'Allow 1 login' : `Allow ${wait.length} logins`}
           </Button>
           <Failed error={failed} />
@@ -297,7 +297,7 @@ function MachineStanding({ machineId, onAccounts }: { machineId: string; onAccou
   if (!view) return null
   if (!server) {
     return (
-      <Button size="sm" variant="outline" onClick={onAccounts}>
+      <Button variant="outline" onClick={onAccounts}>
         Open Accounts
       </Button>
     )

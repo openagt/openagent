@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react'
-import { CircleAlert } from 'lucide-react'
+import { flushSync } from 'react-dom'
+import { CircleAlert, TriangleAlert } from 'lucide-react'
 import type { ProjectSummary, StartFromPick } from '../../src/index.js'
 import { onCloneCheck, onStartBranches, onStartCheck } from '../rpc/projects.js'
 import { thisMachineName } from '../lib/this-machine.js'
@@ -274,7 +275,7 @@ export function StartAgentForm({
       // A remote agent (#1067) carries the machine label so the view can mark where it executes.
       // What this page says goes with it, for the run's page until the run's record says it.
       const started = startFrom ? (startFromPick?.kind === 'local' ? startFrom.local : startFromPick?.kind === 'published' ? startFromPick.branch : startFrom.main) : undefined
-      onAgentStarted?.(text, result.agentId, machine?.label, result.projectId, {
+      carryBox(() => onAgentStarted?.(text, result.agentId, machine?.label, result.projectId, {
         ...(started !== undefined ? { branch: started } : {}),
         ...(!noProject && remote && account !== undefined ? { gitAccount: account } : {}),
         ...(agentId !== undefined ? { agent: agentId } : {}),
@@ -285,7 +286,7 @@ export function StartAgentForm({
         ...(preferences.model ? { model: preferences.model } : {}),
         ...(preferences.effort ? { effort: preferences.effort } : {}),
         ...(noProject && !machine && repos.length > 0 ? { repos: repos.map(repo => ({ name: repo.name, from: repo.path })) } : {}),
-      }) // select the run we just started (#761)
+      })) // select the run we just started (#761)
       composerRef.current?.clear()
       setRepos([])
       setSkillPicks(agentPicks(onAgent))
@@ -300,7 +301,7 @@ export function StartAgentForm({
   return (
     // The width and the padding of an agent's message box (`AgentComposer.tsx`): the box is in the
     // same place on both pages.
-    <form onSubmit={e => e.preventDefault()} className="@container relative mx-auto w-full max-w-3xl p-2">
+    <form onSubmit={e => e.preventDefault()} className="@container relative mx-auto w-full max-w-3xl px-4 py-2">
       <Composer
         // A box of its own per project, so the prompt carried over from the picker lands in it (below).
         key={projectId}
@@ -360,7 +361,7 @@ export function StartAgentForm({
       />
 
       {/* Feedback right where the action is (#948): above the box, over the page, so the box never moves. */}
-      <div className="absolute inset-x-2 bottom-full flex flex-col gap-1.5 pb-1">
+      <div className="absolute inset-x-4 bottom-full flex flex-col gap-1.5 pb-1">
         {/* A start that hit what the check says, or the missing logins, says nothing the boxes below do not. */}
         {/* A refusal of this computer's hooks.yml: the project opens in the editor from here as from its menu. */}
         {error && missingThere.length === 0 && !readiness?.problems.length && <Refusal {...said(error)} {...(!machine && !clonedHere && error.includes('.openagent/hooks.yml') ? { actions: <OpenInEditor projectId={projectId} /> } : {})} />}
@@ -369,7 +370,7 @@ export function StartAgentForm({
             title={`Your ${missingThere.join(' and ')} ${missingThere.length === 1 ? 'login is' : 'logins are'} not on ${name} yet.`}
             detail={`Runs there use your own logins. Log ${missingThere.length === 1 ? 'it' : 'them'} in on its page, or start your first run there from your page on ${reachedThrough(machine.url) ?? 'its server'}, which copies yours.`}
             actions={
-              <Button type="button" size="xs" onClick={() => openSettings('devices', machine.id)}>
+              <Button type="button" size="sm" onClick={() => openSettings('devices', machine.id)}>
                 {`Log in on ${name}`}
               </Button>
             }
@@ -387,7 +388,7 @@ export function StartAgentForm({
                   title={`${agentName} is not installed on ${name}.`}
                   detail={`Update ${name} to get it.`}
                   actions={
-                    <Button type="button" size="xs" onClick={() => openSettings('devices', machine.id)}>
+                    <Button type="button" size="sm" onClick={() => openSettings('devices', machine.id)}>
                       {`Update ${name}`}
                     </Button>
                   }
@@ -396,7 +397,7 @@ export function StartAgentForm({
             ) : (
               <Refusal
                 key={problem}
-                {...(agent && !agent.ready ? { title: agentWords(agent), actions: <AgentFix state={agent} onChanged={() => void reloadAgent()} size="xs" /> } : said(problem))}
+                {...(agent && !agent.ready ? { title: agentWords(agent), actions: <AgentFix state={agent} onChanged={() => void reloadAgent()} size="sm" /> } : said(problem))}
               />
             )
           ) : (
@@ -404,7 +405,8 @@ export function StartAgentForm({
           ),
         )}
         {readiness?.warnings.map(warning => (
-          <p key={warning} role="alert" className="rounded-lg border border-warning/30 bg-[color-mix(in_oklab,var(--color-warning)_8%,var(--color-background))] px-3 py-1.5 text-xs text-warning">
+          <p key={warning} role="alert" className="flex items-start gap-2 rounded-lg bg-[color-mix(in_oklab,var(--color-warning)_8%,var(--color-background))] px-3 py-2 text-sm text-foreground">
+            <TriangleAlert className="mt-0.5 size-4 shrink-0 text-warning" aria-hidden />
             {warning}
           </p>
         ))}
@@ -422,15 +424,27 @@ export function StartAgentForm({
           // The chat's own first line (`SessionLine.tsx`), in its words and its look: the page that
           // opens a moment later goes on saying it. A machine that does not have the project yet
           // clones it first, which can take minutes: the line says so for as long as it does.
-          <p role="status" className="flex items-center gap-2 px-1.5 text-sm text-muted-foreground">
+          <p role="status" className="flex items-center gap-2 px-2 text-sm text-muted-foreground">
             <Dots />
             <span className="text-shimmer">{cloning && sentTo ? `Cloning ${projectName ?? 'this project'} on ${sentTo}, the first time only` : note}</span>
           </p>
         )}
-        {note !== STARTING && note && !error && <p role="status" className="px-1.5 text-xs text-muted-foreground">{note}</p>}
+        {note !== STARTING && note && !error && <p role="status" className="px-2 text-xs text-muted-foreground">{note}</p>}
       </div>
     </form>
   )
+}
+
+/**
+ * Starting a run carries the box from this page to its place on the run's page in one movement: the
+ * browser's own view transition, the box named the same on both (`composer`, Composer and
+ * tailwind.css). Under reduced motion, or where the browser has none, the page just changes.
+ */
+function carryBox(update: () => void): void {
+  if (typeof document.startViewTransition !== 'function' || matchMedia('(prefers-reduced-motion: reduce)').matches) return update()
+  const root = document.documentElement
+  root.classList.add('carrying-box')
+  void document.startViewTransition(() => flushSync(update)).finished.finally(() => root.classList.remove('carrying-box'))
 }
 
 /** This computer, in "Cloning … on …": by the name the page was reached at, or as this computer when it is open on it. */
@@ -445,7 +459,7 @@ function OpenInEditor({ projectId }: { projectId: string }) {
   const [opened, setOpened] = useState(false)
   return (
     <>
-      <Button type="button" size="xs" disabled={busy} onClick={() => void run(() => sendOpenInApp(projectId, 'editor'), 'Failed to open.').then(outcome => setOpened(outcome.ok))}>
+      <Button type="button" size="sm" disabled={busy} onClick={() => void run(() => sendOpenInApp(projectId, 'editor'), 'Failed to open.').then(outcome => setOpened(outcome.ok))}>
         Open in your editor
       </Button>
       {error ? (
@@ -459,18 +473,19 @@ function OpenInEditor({ projectId }: { projectId: string }) {
 
 /**
  * Why no run starts, or would not, above the message box: what is wrong in one line, then smaller
- * what to do about it, and the press that does it. Opaque under its tint, since it lies over the page.
+ * what to do about it, and the press that does it. The tint and the mark say it is wrong; the words are the
+ * text's own colour, which reads on the tint. Opaque, since it lies over the page.
  */
 function Refusal({ title, detail, actions }: { title: ReactNode; detail?: ReactNode | undefined; actions?: ReactNode | undefined }) {
   return (
-    <div role="alert" className="flex items-start gap-2.5 rounded-lg border border-danger/30 bg-[color-mix(in_oklab,var(--color-danger)_8%,var(--color-background))] px-3 py-2.5 shadow-sm">
-      <CircleAlert className="mt-0.5 h-4 w-4 shrink-0 text-danger" aria-hidden />
+    <div role="alert" className="flex items-start gap-2 rounded-lg bg-[color-mix(in_oklab,var(--color-danger)_8%,var(--color-background))] px-3 py-2 text-foreground">
+      <CircleAlert className="mt-0.5 size-4 shrink-0 text-danger" aria-hidden />
       <div className="min-w-0 flex-1 [overflow-wrap:anywhere]">
-        <p className="text-sm font-medium text-danger">{title}</p>
+        <p className="text-sm font-medium">{title}</p>
         {detail !== undefined && (
           <>
             {' '}
-            <p className="mt-0.5 text-xs text-muted-foreground">{detail}</p>
+            <p className="mt-0.5 text-xs">{detail}</p>
           </>
         )}
         {actions !== undefined && <div className="mt-2 flex flex-wrap items-center gap-2 text-foreground">{actions}</div>}

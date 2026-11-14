@@ -1,11 +1,3 @@
-/* The module's own utilities, and nothing else: no reset, no base styles, since the dashboard's page
-   already has them. The dashboard's theme file gives the utilities the page's tokens, so the
-   module's colours follow the dashboard's theme. */
-@import 'tailwindcss/theme' layer(theme);
-@import 'tailwindcss/utilities' layer(utilities);
-@import '../../dashboard/dashboard/module/theme.css';
-@source '.';
-
 /* The agent's own pointer on the picture (BrowserPanel.tsx): an arrow where it last clicked or
    typed, and a ring that opens once around that place as it arrives, so the move is seen and the
    page is not left pulsing. The animation is named, never a shorthand: a minifier reads a

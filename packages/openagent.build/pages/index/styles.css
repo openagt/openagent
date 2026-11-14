@@ -3,14 +3,112 @@
  * override inline base styles need `!important` (matching the runtime's
  * inline-level precedence). */
 
+/* The fonts ship with the site, served from its own origin; Vike preloads each file in the
+ * page's head. The site's own words are English, so the Latin files are all it uses. */
+@import '@fontsource/ibm-plex-sans/latin-400.css';
+@import '@fontsource/ibm-plex-sans/latin-500.css';
+@import '@fontsource/ibm-plex-sans/latin-600.css';
+@import '@fontsource/ibm-plex-mono/latin-400.css';
+@import '@fontsource/ibm-plex-mono/latin-500.css';
+@import '@fontsource/ibm-plex-mono/latin-600.css';
+
+/* OpenAgent's colours, the dashboard's own, so the page and the dashboard it switches with are one. */
+@import '../../../dashboard/dashboard/tokens.css';
+
+/* The site's scale, the dashboard's one step up (ui.tsx's `text`): seven sizes on whole pixels,
+ * nothing under 12, and the dashboard's spacing steps, corners and motion. */
+:root {
+  --text-xs: 12px;
+  --leading-xs: 16px;
+  --text-sm: 14px;
+  --leading-sm: 20px;
+  --text-base: 16px;
+  --leading-base: 26px;
+  --text-lg: 20px;
+  --leading-lg: 28px;
+  --text-xl: 28px;
+  --leading-xl: 36px;
+  --text-2xl: 40px;
+  --leading-2xl: 48px;
+  --text-3xl: 56px;
+  --leading-3xl: 64px;
+  /* Lines of prose hold 68 characters at most. */
+  --measure: 34em;
+
+  /* The page's one column, and its side margin. */
+  --container: 1120px;
+  --space-gutter: 32px;
+  /* Between sections; between a section's parts; between a section's heading and what it holds;
+   * between the things it holds; between columns. */
+  --space-section: 128px;
+  --space-part: 64px;
+  --space-head: 48px;
+  --space-items: 32px;
+  --space-columns: 48px;
+
+  /* A section's heading. */
+  --text-heading: var(--text-2xl);
+  --leading-heading: var(--leading-2xl);
+
+  /* The hero's title and the struck words over it. */
+  --text-hero: var(--text-3xl);
+  --leading-hero: var(--leading-3xl);
+  --text-struck: var(--text-xl);
+  --leading-struck: var(--leading-xl);
+
+  --radius-sm: 4px;
+  --radius-md: 6px;
+  --radius-lg: 8px;
+
+  --ease-out: cubic-bezier(0.2, 0, 0, 1);
+  /* Colour and opacity on hover; something entering. */
+  --duration-hover: 100ms;
+  --duration-enter: 140ms;
+  /* A word of the moment coming to full strength: the dashboard's step for a dialog entering. */
+  --duration-moment: 180ms;
+}
+/* A phone: the scale's smaller steps, and the hero's title on one line. */
+@media (max-width: 640px) {
+  :root {
+    --space-gutter: 16px;
+    --space-section: 64px;
+    --space-part: 48px;
+    --space-head: 24px;
+    --space-items: 24px;
+    --space-columns: 24px;
+    --text-hero: var(--text-2xl);
+    --leading-hero: var(--leading-2xl);
+    --text-heading: var(--text-xl);
+    --leading-heading: var(--leading-xl);
+    --text-struck: var(--text-lg);
+    --leading-struck: var(--leading-lg);
+  }
+}
 html {
   scroll-behavior: smooth;
 }
-* {
-  transition:
-    border-color 0.15s,
-    background-color 0.15s,
-    color 0.15s;
+/* Nothing scrolls the page sideways, whatever is too wide. */
+html,
+body {
+  overflow-x: clip;
+}
+/* The keyboard's first stop: past the top bar to the page's content, shown only while focused. */
+.skip-link {
+  position: absolute;
+  left: 12px;
+  top: 8px;
+  z-index: 100;
+  transform: translateY(-200%);
+}
+.skip-link:focus-visible {
+  transform: none;
+}
+a,
+button,
+[role='button'] {
+  transition-property: color, background-color, border-color, transform;
+  transition-duration: var(--duration-hover);
+  transition-timing-function: var(--ease-out);
 }
 h1,
 h2,
@@ -19,30 +117,23 @@ h3 {
 }
 body {
   margin: 0;
-  background: #2d353b;
-  color: #d3c6aa;
+  background: var(--background);
+  color: var(--foreground);
   font-family: 'IBM Plex Sans', sans-serif;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 }
 a {
-  color: #7fbbb3;
+  color: var(--primary);
   text-decoration: none;
 }
-a:hover {
-  color: #83c092;
-}
 ::selection {
-  background: #475258;
+  background: color-mix(in oklab, var(--primary) 35%, var(--background));
 }
 section[id] {
-  scroll-margin-top: 76px;
+  scroll-margin-top: 64px;
 }
 
-/* --- Hover states (from `style-hover`) --- */
-.nav-btn:hover {
-  border-color: #859289 !important;
-}
 /* The toggle under the logo and the big Dashboard button: only on a computer with OpenAgent installed (+Head.tsx, ViewToggle). */
 .view-toggle {
   display: none !important;
@@ -56,9 +147,6 @@ html[data-installed] .view-toggle {
 }
 html[data-installed] .dashboard-cta {
   display: inline-flex !important;
-}
-.view-toggle-off:hover {
-  color: #fdf6e3 !important;
 }
 
 /*
@@ -76,34 +164,81 @@ html[data-installed] .dashboard-cta {
     animation-timing-function: ease-in-out;
   }
 }
-.dashboard-cta:hover {
-  background: #b5cc92 !important;
+
+/* --- Presses ---
+ * Two styles: the primary, solid, for the one thing a part of the page is for, and the quiet one,
+ * a soft fill, for every other. Hover raises the contrast a step and pressing two, only where a
+ * pointer hovers; the keyboard's focus is the dashboard's ring, on everything that takes it. */
+:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
 }
-.nav-btn-primary:hover {
-  background: rgba(167, 192, 128, 0.08) !important;
-  border-color: #b5cc92 !important;
+.press {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  height: 40px;
+  padding: 0 20px;
+  border-radius: var(--radius-lg);
+  font-size: var(--text-base);
+  line-height: var(--leading-base);
+  font-weight: 500;
+  white-space: nowrap;
 }
-.pm-tab:hover {
-  color: #d3c6aa !important;
+.press-primary {
+  background: var(--primary);
+  color: var(--primary-foreground);
 }
-.copy-box:hover,
+.press-quiet {
+  background: var(--muted);
+  color: var(--foreground);
+}
+/* In the top bar, beside the logo: the dashboard's control height. */
+.press-small {
+  height: 32px;
+  padding: 0 12px;
+  font-size: var(--text-sm);
+  line-height: var(--leading-sm);
+}
+@media (hover: hover) {
+  a:hover {
+    color: color-mix(in oklab, var(--primary) 70%, var(--foreground));
+  }
+  .press-primary:hover {
+    color: var(--primary-foreground);
+    background: color-mix(in oklab, var(--primary) 85%, var(--foreground));
+  }
+  .press-quiet:hover {
+    color: var(--foreground);
+    background: color-mix(in oklab, var(--foreground) 14%, var(--background));
+  }
+  .view-toggle-off:hover,
+  .pm-tab:hover,
+  .section-link:hover,
+  .footer-link:hover {
+    color: var(--foreground) !important;
+  }
+  .copy-box:hover {
+    background: color-mix(in oklab, var(--primary) 6%, transparent);
+  }
+  /* Same hover tint as .copy-box, mixed into the chip's own fill since that fill is opaque. */
+  .install-chip:hover {
+    background: color-mix(in oklab, var(--primary) 6%, var(--card)) !important;
+  }
+}
+.press:active {
+  transform: translateY(1px);
+}
+.press-primary:active {
+  background: color-mix(in oklab, var(--primary) 70%, var(--foreground));
+}
+.press-quiet:active {
+  background: color-mix(in oklab, var(--foreground) 20%, var(--background));
+}
+/* Inside the try box, which clips what is outside it: the ring goes inside. */
 .copy-box:focus-visible {
-  background: rgba(167, 192, 128, 0.04) !important;
-}
-/* Same hover tint as .copy-box (#a7c080 = rgb(167, 192, 128) at 4%), pre-composited
- * over the chip's own #232a2e base since its background is opaque. */
-.install-chip:hover,
-.install-chip:focus-visible {
-  background: color-mix(in srgb, #a7c080 4%, #232a2e) !important;
-}
-.cta-primary:hover {
-  background: #b5cc92 !important;
-}
-.cta-secondary:hover {
-  border-color: #859289 !important;
-}
-.footer-link:hover {
-  color: #d3c6aa !important;
+  outline-offset: -2px;
 }
 
 /* --- Package-manager choice ---
@@ -128,17 +263,16 @@ html:not([data-pm]) .pm-only-npm {
 }
 .pm-tab {
   background: transparent;
-  border: 1px solid transparent;
-  color: #859289;
+  border: none;
+  color: var(--muted-foreground);
 }
 html[data-pm='npm'] .pm-tab-npm,
 html[data-pm='pnpm'] .pm-tab-pnpm,
 html[data-pm='bun'] .pm-tab-bun,
 html[data-pm='yarn'] .pm-tab-yarn,
 html:not([data-pm]) .pm-tab-npm {
-  background: #232a2e;
-  border-color: #475258;
-  color: #d3c6aa;
+  background: var(--muted);
+  color: var(--foreground);
 }
 
 /* --- Section nav --- */
@@ -146,15 +280,12 @@ html:not([data-pm]) .pm-tab-npm {
   display: none;
 }
 .section-link {
-  color: #9da9a0;
+  color: var(--muted-foreground);
   border-bottom: 2px solid transparent;
 }
 .section-link.active {
-  color: #a7c080;
-  border-bottom-color: #a7c080;
-}
-.section-link:hover {
-  color: #d3c6aa;
+  color: var(--foreground);
+  border-bottom-color: var(--primary);
 }
 /* The links fill the bar, which scrolls sideways and so clips anything outside it: the ring goes inside. */
 .section-link:focus-visible {
@@ -196,19 +327,30 @@ html:not([data-pm]) .pm-tab-npm {
   width: 106%;
   height: 4px;
   border-radius: 2px;
-  background: #e67e80;
+  background: var(--danger);
   opacity: 0.9;
   transform-origin: left center;
   transform: rotate(-5deg) scaleX(0.1);
   animation: strike 1.6s cubic-bezier(0.65, 0, 0.35, 1) 0.6s forwards;
 }
+/* Under reduced motion the strike is there from the start, and a jump on the page (a section, back
+ * to the top, which take this behaviour) is a cut. */
+@media (prefers-reduced-motion: reduce) {
+  .strike::after {
+    animation: none;
+    transform: rotate(-5deg);
+  }
+  html {
+    scroll-behavior: auto;
+  }
+}
 .try-badge::after {
   content: '';
   position: absolute;
   top: 100%;
-  right: 11px;
+  right: 12px;
   border: 5px solid transparent;
-  border-top-color: #14181b;
+  border-top-color: var(--foreground);
 }
 .copy-tip-side::after {
   content: '';
@@ -217,20 +359,43 @@ html:not([data-pm]) .pm-tab-npm {
   top: 50%;
   margin-top: -5px;
   border: 5px solid transparent;
-  border-right-color: #14181b;
+  border-right-color: var(--foreground);
 }
 
 /* --- Responsive --- */
 @media (max-width: 480px) {
-  .nav-btn span,
-  .nav-btn-primary span {
-    display: none;
+  /* Their words unseen, still their names for a screen reader. */
+  .nav-btn span {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
   }
+  /* Their icons alone, each a phone's whole target. */
   .nav-btn {
-    padding: 7px 10px !important;
+    width: 44px;
+    height: 44px;
+    padding: 0;
   }
-  .nav-btn-primary {
-    padding: 7px 9.5px !important;
+  .footer-link {
+    padding: 12px 0 !important;
+  }
+  /* A finger's 44px around the tabs, the install command and the logo, past their drawn edge. */
+  .press {
+    height: 44px;
+  }
+  .pm-tab,
+  .install-chip {
+    position: relative;
+  }
+  .pm-tab::before,
+  .install-chip::before,
+  .brand::before {
+    content: '';
+    position: absolute;
+    inset: -10px 0;
   }
   /* Stacked and centered footer. */
   .site-footer {
@@ -238,7 +403,7 @@ html:not([data-pm]) .pm-tab-npm {
     align-items: center;
     text-align: center;
     gap: 16px !important;
-    padding: 30px 16px 36px !important;
+    padding: 32px 0 !important;
   }
 }
 @media (max-width: 860px) {
@@ -246,17 +411,34 @@ html:not([data-pm]) .pm-tab-npm {
   .section-nav-wrap {
     display: none !important;
   }
-  .problem-card {
-    grid-template-columns: 1fr !important;
-    gap: 18px !important;
+}
+
+/* --- A section's split: a third for what names it, two for what it holds; one column on a phone --- */
+.split {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 2fr);
+  gap: var(--space-items) var(--space-columns);
+  align-items: start;
+}
+@media (max-width: 860px) {
+  .split {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 16px;
   }
+}
+/* A list of rows, a hairline between them; the first level with what stands beside or over it. */
+.rows > * + * {
+  border-top: 1px solid var(--border);
+}
+.rows > :first-child {
+  padding-top: 0 !important;
 }
 @media (max-width: 760px) {
   .copy-tip-side {
     left: auto !important;
     right: 0 !important;
     top: auto !important;
-    bottom: calc(100% + 9px) !important;
+    bottom: calc(100% + 8px) !important;
     transform: none !important;
   }
   .copy-tip-side::after {
@@ -268,4 +450,22 @@ html:not([data-pm]) .pm-tab-npm {
     grid-template-columns: 1fr !important;
     row-gap: 4px !important;
   }
+}
+/* A heading that stays in view beside its long list, under the section bar. */
+@media (min-width: 861px) {
+  .split-head {
+    position: sticky;
+    top: 96px;
+  }
+}
+
+/* The moment (YourFramework's Moment): armed only by its script, so without one, or under reduced
+ * motion, the sentence is whole. */
+.moment-armed span span {
+  opacity: 0.25;
+  transition: opacity var(--duration-moment) var(--ease-out);
+  transition-delay: calc(var(--i) * 90ms);
+}
+.moment-armed.moment-on span span {
+  opacity: 1;
 }

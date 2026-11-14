@@ -9,6 +9,7 @@ import { NotificationsSubmenu } from './NotificationsSubmenu.js'
 import { useMissing } from './Logins.js'
 import { useBackup } from '../lib/use-backup.js'
 import { AGENT_DATA_ENTRY } from './AgentDataSettings.js'
+import { cn } from '../lib/utils.js'
 
 // The foot of the sidebar: the person at this dashboard, their picture and first name, as one row
 // that opens their menu (his pick, over a row of three icons): the theme, the notifications, and
@@ -29,16 +30,17 @@ export function initials(name: string): string {
 }
 
 /** A person's picture, or their initials; `dot` says something runs need is missing. */
-export function Avatar({ person, dot = false, size = 'h-6 w-6 text-[10px]' }: { person: Person | null; dot?: boolean; size?: string }) {
+export function Avatar({ person, dot = false, size = 'size-5 text-xs', className }: { person: Person | null; dot?: boolean; size?: string; className?: string }) {
   // A picture that does not load leaves the initials, never a broken image.
   const [broken, setBroken] = useState(false)
   const picture = person?.avatar && !broken ? person.avatar : undefined
   return (
-    <span aria-hidden className="relative shrink-0">
+    <span aria-hidden className={cn('relative shrink-0', className)}>
       <span className={`flex ${size} items-center justify-center overflow-hidden rounded-full bg-muted-foreground/15 font-medium text-muted-foreground`}>
         {picture ? <img src={picture} alt="" referrerPolicy="no-referrer" className="h-full w-full object-cover" onError={() => setBroken(true)} /> : person ? initials(person.name) : null}
       </span>
-      {dot && <span data-testid="missing-dot" className="absolute -top-0.5 -right-0.5 size-2 rounded-full bg-warning ring-2 ring-sidebar" />}
+      {/* On the circle's edge, at its top right. */}
+      {dot && <span data-testid="missing-dot" className="absolute -top-px -right-px size-2 rounded-full bg-warning ring-2 ring-sidebar" />}
     </span>
   )
 }
@@ -53,19 +55,22 @@ export function PersonMenu({ onSettings }: { onSettings: (entry?: string) => voi
     <DropdownMenu>
       <DropdownMenuTrigger
         aria-label={`${person ? `${person.name}: settings` : 'Settings'}${needs ? ', something is missing' : ''}`}
-        className="flex w-full min-w-0 items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm outline-none hover:bg-sidebar-accent focus-visible:ring-2 focus-visible:ring-sidebar-ring data-[popup-open]:bg-sidebar-accent"
+        // A row of the sidebar's: 32 high (44 on a phone), the text's colour at 4% under the pointer, at 8% while its menu is open.
+        className="focus-ring flex w-full min-w-0 items-center gap-2 rounded-md px-1.5 text-left text-sm transition-colors hover:bg-foreground/4 active:bg-foreground/8 data-[popup-open]:bg-foreground/8 md:h-8 max-md:h-11"
       >
-        <Avatar person={person} dot={needs} />
+        {/* 20 wide, laid out as 16, so its centre is on the icons' axis and the name on their labels' edge. */}
+        <Avatar person={person} dot={needs} className="-mx-0.5" />
         <span className="min-w-0 flex-1 truncate">{person ? firstName(person.name) : ''}</span>
         <Settings className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden />
       </DropdownMenuTrigger>
-      <DropdownMenuContent align="start" className="min-w-[14rem]">
+      {/* As wide as its longest line, from the row's width up to 320: a longer line goes onto a second one, never cut. */}
+      <DropdownMenuContent align="start" className="w-max min-w-(--anchor-width) max-w-80">
         {person && (
           <>
             <DropdownMenuGroup>
-              <DropdownMenuLabel className="flex flex-col">
-                <span className="truncate text-foreground">{person.name}</span>
-                {person.github && <span className="truncate font-normal">@{person.github}</span>}
+              <DropdownMenuLabel className="flex flex-col font-normal">
+                <span className="font-medium text-foreground">{person.name}</span>
+                {person.github && <span className="font-normal">@{person.github}</span>}
               </DropdownMenuLabel>
             </DropdownMenuGroup>
             <DropdownMenuSeparator />
@@ -74,15 +79,15 @@ export function PersonMenu({ onSettings }: { onSettings: (entry?: string) => voi
         {needs && (
           <>
             {missing.map(item => (
-              <DropdownMenuItem key={item.key} onClick={openPermissions} className="text-warning">
-                <CircleAlert className="h-3.5 w-3.5 shrink-0" aria-hidden />
-                <span className="flex-1 truncate">{item.words}</span>
+              <DropdownMenuItem key={item.key} onClick={openPermissions}>
+                <CircleAlert className="size-4 shrink-0 text-warning" aria-hidden />
+                <span className="flex-1">{item.words}</span>
               </DropdownMenuItem>
             ))}
             {notBackedUp && (
-              <DropdownMenuItem onClick={() => onSettings(AGENT_DATA_ENTRY)} className="text-warning">
-                <CircleAlert className="h-3.5 w-3.5 shrink-0" aria-hidden />
-                <span className="flex-1 truncate">Agent data not backed up</span>
+              <DropdownMenuItem onClick={() => onSettings(AGENT_DATA_ENTRY)}>
+                <CircleAlert className="size-4 shrink-0 text-warning" aria-hidden />
+                <span className="flex-1">Agent data not backed up</span>
               </DropdownMenuItem>
             )}
             <DropdownMenuSeparator />
@@ -92,7 +97,7 @@ export function PersonMenu({ onSettings }: { onSettings: (entry?: string) => voi
         <NotificationsSubmenu />
         <DropdownMenuSeparator />
         <DropdownMenuItem onClick={() => onSettings()}>
-          <Settings className="h-3.5 w-3.5 shrink-0 opacity-70" aria-hidden />
+          <Settings className="size-4 shrink-0 text-muted-foreground" aria-hidden />
           Settings
         </DropdownMenuItem>
       </DropdownMenuContent>

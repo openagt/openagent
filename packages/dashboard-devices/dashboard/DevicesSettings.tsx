@@ -144,7 +144,7 @@ function Start({ d, onAdd }: { d: Devices; onAdd: (adding: Adding) => void }) {
       </p>
       <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
         <p className="text-xs text-muted-foreground">On Tailscale? From anywhere, with no server:</p>
-        <Button size="sm" variant="outline" disabled={turning} onClick={() => void onTailscale()}>
+        <Button variant="outline" disabled={turning} onClick={() => void onTailscale()}>
           Reach this computer on your Tailscale network
         </Button>
       </div>
@@ -159,7 +159,7 @@ function Tile({ icon: Icon, title, words, button, primary = false, onClick }: { 
       <Icon aria-hidden className="h-4 w-4 text-primary" />
       <p className="text-sm font-semibold">{title}</p>
       <p className="flex-1 text-xs text-muted-foreground">{words}</p>
-      <Button size="sm" variant={primary ? 'default' : 'outline'} className="h-auto min-h-8 self-start py-1.5" onClick={onClick}>
+      <Button variant={primary ? 'default' : 'outline'} className="h-auto min-h-8 self-start py-1.5" onClick={onClick}>
         {button}
       </Button>
     </div>
@@ -185,12 +185,12 @@ function List({ d, onOpen, onAdd }: { d: Devices; onOpen: (item: Item) => void; 
         <p className="text-sm font-medium">{items.length ? `Your devices (${items.length})` : 'Your devices'}</p>
         <div className="flex gap-2">
           {addsPersons && (
-            <Button size="sm" variant="outline" title="Someone else, by their name: they add this computer to their own OpenAgent with the code, and get a user of their own here." onClick={() => setAddingPerson(true)}>
+            <Button variant="outline" title="Someone else, by their name: they add this computer to their own OpenAgent with the code, and get a user of their own here." onClick={() => setAddingPerson(true)}>
               <UserPlus className="h-3.5 w-3.5" aria-hidden />
               Add person
             </Button>
           )}
-          <Button size="sm" variant="outline" onClick={onAdd}>
+          <Button variant="outline" onClick={onAdd}>
             <Plus className="h-3.5 w-3.5" aria-hidden />
             Add device
           </Button>
@@ -328,10 +328,10 @@ function PhoneRow({ d, item }: { d: Devices; item: PhoneItem }) {
           >
             <Input name="device-name" autoFocus aria-label="Name" value={name} maxLength={80} onChange={event => setName(event.target.value)} />
             <div className="flex justify-end gap-2">
-              <Button size="sm" type="button" variant="ghost" onClick={() => setRenaming(false)}>
+              <Button type="button" variant="ghost" onClick={() => setRenaming(false)}>
                 Cancel
               </Button>
-              <Button size="sm" type="submit" disabled={busy || !name.trim()}>
+              <Button type="submit" disabled={busy || !name.trim()}>
                 Save
               </Button>
             </div>
@@ -347,7 +347,7 @@ function RemovePerson({ name, label, busy, onConfirm }: { name: string; label: s
   return (
     <ConfirmDialog
       trigger={
-        <Button size="sm" variant="ghost" disabled={busy} aria-label={`Remove ${name}`}>
+        <Button variant="ghost" disabled={busy} aria-label={`Remove ${name}`}>
           {label}
         </Button>
       }
@@ -375,7 +375,7 @@ function DoorDevice({ device, mine, busy, onRemove }: { device: DeviceRow; mine:
           {device.line && <p className="text-xs text-muted-foreground">{`${device.person !== undefined && !mine ? `A computer of ${device.person}` : 'A computer of yours'}: runs can be started on it from here. Remove it and it is no longer in "Run on".`}</p>}
         </div>
       </div>
-      <Button size="sm" variant="ghost" disabled={busy} aria-label={`Remove ${device.name}`} onClick={onRemove}>
+      <Button variant="ghost" disabled={busy} aria-label={`Remove ${device.name}`} onClick={onRemove}>
         Remove
       </Button>
     </li>
@@ -424,7 +424,7 @@ function DoorPeople({ d, persons, devices, lines }: { d: Devices; persons: Perso
               <div role="group" aria-label={`${person.name} was removed from ${nameAt(person.from)}`} className="flex flex-wrap items-center justify-between gap-2 pt-1">
                 <p className="text-xs text-warning">{`Removed from ${nameAt(person.from)}.`}</p>
                 <div className="flex gap-2">
-                  <Button size="sm" variant="outline" disabled={busy} onClick={() => void act(() => keepPerson(host, person.name))}>
+                  <Button variant="outline" disabled={busy} onClick={() => void act(() => keepPerson(host, person.name))}>
                     Keep, switched off
                   </Button>
                   <RemovePerson name={person.name} label="Remove" busy={busy} onConfirm={() => act(() => removePerson(host, person.name))} />

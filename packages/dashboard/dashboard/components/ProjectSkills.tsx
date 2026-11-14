@@ -7,7 +7,7 @@ import { useSettingsHold } from '../lib/settings-hold.js'
 import { cn } from '../lib/utils.js'
 import { Button, buttonVariants } from './ui/button.js'
 import { Checkbox } from './ui/checkbox.js'
-import { Skeleton } from './ui/skeleton.js'
+import { Skeleton, useSkeleton } from './ui/skeleton.js'
 
 // A project's skills (#2023). The "Skills" menu under the box (SkillsMenu.tsx) opens Settings on
 // the project's Skills page: a card with a tick for each skill a project picks beyond the ones
@@ -57,8 +57,8 @@ const NOTES: Partial<Record<ProjectSkill['standing'], string>> = {
 export const sendWord = (skills: ProjectSkills): string => (skills.remote ? `Send to ${skills.remote}` : 'Commit')
 
 export function ProjectSkillsLine({ projectId, onChanged }: { projectId: string; onChanged?: (() => void) | undefined }) {
-  // A read that fails answers like a project unknown here: no skills to show.
-  const { value: skills, reload } = usePolled<ProjectSkills | null>(() => onProjectSkills(projectId).catch(() => null), null, 15_000, [projectId], 'previous')
+  // Nothing to show until the skills are read, and a read that fails keeps what the last one said.
+  const { value: skills, reload } = usePolled<ProjectSkills | null>(() => onProjectSkills(projectId), null, 15_000, [projectId])
   const [pending, setPending] = useState<'update' | 'send' | null>(null)
   const { error, run } = useAction()
   // Saved on the Skills page, over this page: said here at once, not at the next read.
@@ -91,7 +91,7 @@ export function ProjectSkillsLine({ projectId, onChanged }: { projectId: string;
           <span>
             <Subject names={newer} /> {newer.length === 1 ? 'has a newer version' : 'have newer versions'}.
           </span>
-          <Button type="button" variant="outline" size="xs" className="shrink-0" disabled={pending !== null} onClick={() => void update()}>
+          <Button type="button" variant="outline" size="sm" className="shrink-0" disabled={pending !== null} onClick={() => void update()}>
             {pending === 'update' ? 'Updating…' : 'Update'}
           </Button>
         </span>
@@ -102,7 +102,7 @@ export function ProjectSkillsLine({ projectId, onChanged }: { projectId: string;
             <Subject names={here} /> {is(here)} {skills.remote ? 'on this computer only' : 'not committed'}, so your agents do not have {it(here)} yet.
             {skills.local && skills.remote && ' Or pick My local branch when you start an agent.'}
           </span>
-          <Button type="button" variant="outline" size="xs" className="shrink-0" disabled={pending !== null} onClick={() => void send()}>
+          <Button type="button" variant="outline" size="sm" className="shrink-0" disabled={pending !== null} onClick={() => void send()}>
             {pending === 'send' ? 'Sending…' : sendWord(skills)}
           </Button>
         </span>
@@ -112,7 +112,7 @@ export function ProjectSkillsLine({ projectId, onChanged }: { projectId: string;
           <span>
             <Subject names={waiting} /> {is(waiting)} in pull request #{skills.request!.number}. Your agents get {it(waiting)} once it is merged.
           </span>
-          <a href={skills.request!.url} target="_blank" rel="noreferrer" className={buttonVariants({ variant: 'outline', size: 'xs', className: 'shrink-0' })}>
+          <a href={skills.request!.url} target="_blank" rel="noreferrer" className={buttonVariants({ variant: 'outline', size: 'sm', className: 'shrink-0' })}>
             Open #{skills.request!.number}
           </a>
         </span>
@@ -171,7 +171,8 @@ export function SkillsSettings({ projectId }: { projectId: string }) {
   const [visit, setVisit] = useState(0)
   // `undefined` is not read yet; a read that fails answers like a project unknown here.
   const skills = useLoaded<ProjectSkills | null | undefined>(() => onProjectSkills(projectId).catch(() => null), undefined, [projectId, visit])
-  if (skills === undefined) {
+  const reading = useSkeleton(skills === undefined)
+  if (skills === undefined || reading) {
     return (
       <div aria-label="Reading the skills" className="grid grid-cols-2 gap-3 max-sm:grid-cols-1">
         {Array.from({ length: 6 }, (_, index) => (
@@ -276,11 +277,11 @@ function SkillCards({ projectId, skills, onDone }: { projectId: string; skills: 
         {error && <p className="text-danger">{saved.written.length + saved.removed.length > 0 ? `Saved in the project's folder, not sent: ${error}` : error}</p>}
         <div className="flex justify-end gap-2 pt-1">
           {error && saved.written.length + saved.removed.length > 0 && skills.git && (
-            <Button type="button" size="sm" disabled={busy} onClick={() => void send([...saved.written, ...saved.removed])}>
+            <Button type="button" disabled={busy} onClick={() => void send([...saved.written, ...saved.removed])}>
               {busy ? 'Sending…' : 'Send again'}
             </Button>
           )}
-          <Button type="button" variant="outline" size="sm" disabled={busy} onClick={onDone}>
+          <Button type="button" variant="outline" disabled={busy} onClick={onDone}>
             Done
           </Button>
         </div>
@@ -320,10 +321,10 @@ function SkillCards({ projectId, skills, onDone }: { projectId: string; skills: 
           <span className="mr-auto text-xs text-muted-foreground">
             {nothing ? 'Nothing to change.' : [write.length > 0 ? `${count(write.length, 'skill', 'skills')} to write` : '', remove.length > 0 ? `${count(remove.length, 'skill', 'skills')} to delete` : ''].filter(Boolean).join(', ') + '.'}
           </span>
-          <Button type="button" variant="outline" size="sm" disabled={busy || nothing} onClick={cancel}>
+          <Button type="button" variant="outline" disabled={busy || nothing} onClick={cancel}>
             Cancel
           </Button>
-          <Button type="button" size="sm" disabled={busy || nothing} onClick={() => void save()}>
+          <Button type="button" disabled={busy || nothing} onClick={() => void save()}>
             {busy ? 'Saving…' : saveWord}
           </Button>
         </div>

@@ -25,8 +25,8 @@ export interface RangeBucket {
   max: number
 }
 
-// The priority buckets follow priorityTone's thresholds (red ≥8, amber ≥5), so the filter's idea
-// of "critical" is the same one the rows already colour.
+// The priority buckets follow priorityTone's threshold (red ≥8), so the filter's idea of
+// "critical" is the same one the rows colour.
 export const PRIORITY_BUCKETS: readonly RangeBucket[] = [
   { id: 'critical', label: 'Critical', min: 8, max: 10 },
   { id: 'medium', label: 'Medium', min: 5, max: 7 },

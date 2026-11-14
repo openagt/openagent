@@ -1,8 +1,8 @@
-import { useContext, type HTMLAttributes, type ReactNode } from 'react'
+import type { HTMLAttributes, ReactNode } from 'react'
 import { ArrowRight } from 'lucide-react'
 import { cn } from '../../lib/utils.js'
-import { HostServicesContext, INERT_HOST_SERVICES } from '../../lib/host-services.js'
 import { inPlace } from '../../lib/in-place.js'
+import { RowShapes } from './slot.js'
 
 // Minimal shadcn-style Card for the dashboard page (#471): a bordered surface with an
 // optional header. Just enough structure to keep the page's panels consistent.
@@ -22,27 +22,35 @@ export function CardContent({ className, ...props }: HTMLAttributes<HTMLDivEleme
   return <div className={cn('p-4', className)} {...props} />
 }
 
+/**
+ * The way from a part of the Overview to its own page, at its heading's right: the page's name and an
+ * arrow. A real link, so it also opens in a new tab; a plain click goes through `onOpen`, the
+ * dashboard's own navigation.
+ */
+export function PageLink({ children, href, onOpen }: { children: ReactNode; href: string; onOpen: () => void }) {
+  return (
+    <a
+      href={href}
+      onClick={inPlace(onOpen)}
+      className="focus-ring -mr-2 inline-flex items-center gap-1 rounded-md px-2 text-sm text-muted-foreground transition-colors hover:bg-accent hover:text-foreground active:bg-foreground/10 md:h-7 max-md:h-11"
+    >
+      {children}
+      <ArrowRight className="size-3.5" aria-hidden />
+    </a>
+  )
+}
 
 /**
- * A card's title that opens the card's own page, named by its `segment`. A card on the Overview
- * is a summary: its title is the way to the whole. A real link, so it also opens in a new tab,
- * with the project the dashboard is showing; a plain click goes through `onOpen`, the dashboard's
- * own navigation. The arrow shows on hover and focus, and always on a
- * phone, where nothing hovers.
+ * The rows of a part of the page while they are read, in the rows' own shape and height, so nothing
+ * moves when they come; drawn while `useSkeleton` says so. Said in words to a screen reader.
  */
-export function CardTitleLink({ icon, children, segment, onOpen, className }: { icon?: ReactNode; children: ReactNode; /** The page the title opens, by its segment. */ segment: string; onOpen: () => void; className?: string }) {
-  const services = useContext(HostServicesContext) ?? INERT_HOST_SERVICES
+export function RowsLoading({ rows = 2, label = 'Loading…' }: { rows?: number; label?: string }) {
   return (
-    <CardTitle className={cn('text-base', className)}>
-      <a
-        href={services.pageHref(segment)}
-        onClick={inPlace(onOpen)}
-        className="group -mx-1 inline-flex items-center gap-2 rounded px-1 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-primary)]"
-      >
-        {icon}
-        {children}
-        <ArrowRight className="h-3.5 w-3.5 text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100 group-focus-visible:opacity-100 max-md:opacity-100" aria-hidden />
-      </a>
-    </CardTitle>
+    <div role="status">
+      <span className="sr-only">{label}</span>
+      <div aria-hidden>
+        <RowShapes rows={rows} />
+      </div>
+    </div>
   )
 }

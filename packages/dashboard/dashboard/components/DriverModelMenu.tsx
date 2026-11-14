@@ -1,9 +1,9 @@
 import type { ReactNode } from 'react'
-import { ChevronDown, Check } from 'lucide-react'
+import { Check } from 'lucide-react'
 import { cn } from '../lib/utils.js'
 import { NO_MODEL_PINNED } from '../lib/agent-settings.js'
 import { effortLabel } from '../lib/effort.js'
-import { rowButtonClass } from './ui/row-item.js'
+import { rowButtonClass, RowChevron } from './ui/row-item.js'
 import { Tooltip, TooltipTrigger, TooltipContent } from './ui/tooltip.js'
 import {
   DropdownMenu,
@@ -116,13 +116,13 @@ export function DriverModelMenu({
           }
         >
           {current?.icon ? (
-            <span className="flex h-3.5 w-3.5 items-center justify-center [&>svg]:size-3.5">{current.icon}</span>
+            <span className="flex size-4 items-center justify-center [&>svg]:size-4">{current.icon}</span>
           ) : (
             current?.label
           )}
           {currentModelLabel}
           {level && <span className="text-muted-foreground">{level}</span>}
-          <ChevronDown className="h-3 w-3 shrink-0 opacity-70" />
+          <RowChevron />
         </TooltipTrigger>
         <TooltipContent>{said}</TooltipContent>
       </Tooltip>

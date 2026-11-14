@@ -1,6 +1,6 @@
 import { useCallback, useId, useRef, useState, type ComponentType, type ReactNode } from 'react'
 import { Dialog as BaseDialog } from '@base-ui/react/dialog'
-import { ArrowLeft, Bell, Bot, ChevronRight, Database, FolderGit2, Globe, Palette, Puzzle, UserRound, X, FolderSearch } from 'lucide-react'
+import { ArrowLeft, Bell, Bot, ChevronRight, Database, FolderGit2, Globe, Keyboard, Palette, Puzzle, UserRound, X, FolderSearch } from 'lucide-react'
 import { ACCENTS, DEFAULT_ACCENT_LABELS, accentOf, CODE_FONTS, DOCUMENT_FONTS, DRIVERS, DRIVER_LABELS, isDriverName, FONTS, PALETTES, PALETTE_LABELS, type Accent, type CodeFont, type DocumentFont, type Font, type Palette as ColourPalette } from '../../src/client.js'
 import { driverOptions, useModels } from '../lib/models.js'
 import type { DriverOption } from './DriverModelMenu.js'
@@ -17,6 +17,7 @@ import { HUMAN_QUEUE_ABOUT, NEW_ACTIVITY_ABOUT, browserHint, kindHint } from '..
 import { BridgeSettings } from './BridgeSettings.js'
 import { AGENT_DATA_ENTRY, AgentDataSettings } from './AgentDataSettings.js'
 import { PROFILE_ENTRY, ProfileSettings } from './ProfileSettings.js'
+import { SHORTCUTS_ENTRY, ShortcutList } from './ShortcutList.js'
 import { REPO_SOURCES_ENTRY, RepoSourcesSettings } from './RepoSourcesSettings.js'
 import { SKILLS_ENTRY, SkillsSettings } from './ProjectSkills.js'
 import { PickProject } from './PickProject.js'
@@ -170,7 +171,7 @@ export function SettingsDialog({
           initialFocus={popup}
           className={cn(
             'fixed z-50 flex overflow-hidden bg-background text-foreground outline-none',
-            phone ? 'inset-0' : 'top-1/2 left-1/2 h-[min(40rem,calc(100dvh-2rem))] w-[min(56rem,calc(100vw-2rem))] -translate-x-1/2 -translate-y-1/2 rounded-xl border border-border shadow-lg',
+            phone ? 'inset-0' : 'top-1/2 left-1/2 h-[min(40rem,calc(100dvh-2rem))] w-[min(56rem,calc(100vw-2rem))] -translate-x-1/2 -translate-y-1/2 rounded-lg border border-border shadow-lg',
           )}
         >
           {/* On a phone the list is the whole dialog until an entry is picked, and an entry the whole dialog after. */}
@@ -288,7 +289,7 @@ function ProjectSelect({ projects, value, onChange }: { projects: ProjectSummary
   const items = [{ value: ALL_PROJECTS, label: 'All projects' }, ...projects.map(p => ({ value: p.id, label: label(p.id, p.name) }))]
   return (
     <Select items={items} value={value} onValueChange={next => onChange(String(next ?? ALL_PROJECTS))}>
-      <SelectTrigger size="sm" aria-label="Project" className="h-6 min-w-0 flex-1 border-transparent bg-transparent px-1.5 text-xs shadow-none">
+      <SelectTrigger aria-label="Project" className="h-6 min-w-0 flex-1 border-transparent bg-transparent px-1.5 text-xs shadow-none">
         <SelectValue />
       </SelectTrigger>
       <SelectContent>
@@ -302,7 +303,7 @@ function ProjectSelect({ projects, value, onChange }: { projects: ProjectSummary
   )
 }
 
-/** The dashboard's own entries, the first of the list: who you are, how it looks, what it tells you, which agent runs, on which accounts, Claude web. */
+/** The dashboard's own entries, the first of the list: who you are, how it looks, what it tells you, which agent runs, on which accounts, Claude web, the keys. */
 function useOwnEntries(): Entry[] {
   const preferences = usePreferences()
   const editors = useDetectedEditors()
@@ -488,9 +489,9 @@ function useOwnEntries(): Entry[] {
       title: 'Claude web',
       icon: Globe,
       body: (
-        <Section description="A Claude web agent hands off and ends, so the questions its session asks never reach this dashboard. The browser bridge carries them back and types your answers into the session.">
+        <Section description="A Claude web agent hands off and ends, so the questions its session asks never reach this dashboard. The Claude web bridge carries them back and types your answers into the session.">
           <ToggleRow
-            label="Browser bridge"
+            label="Claude web bridge"
             description="Carry claude.ai questions into this dashboard and type your answers back. A browser signed in to claude.ai does the work, through the bridge extension."
             checked={preferences.bridge ?? false}
             onChange={next => updatePreferences({ bridge: next })}
@@ -506,6 +507,12 @@ function useOwnEntries(): Entry[] {
           )}
         </Section>
       ),
+    },
+    {
+      id: SHORTCUTS_ENTRY,
+      title: 'Keyboard shortcuts',
+      icon: Keyboard,
+      body: <ShortcutList />,
     },
   ]
 }

@@ -24,7 +24,6 @@ export function DocsPanel({ docs, loaded }: { docs: WorkspaceDoc[]; loaded: bool
           <Button
             key={d.name}
             variant="ghost"
-            size="sm"
             className={cn('h-7 text-xs', i === active && 'bg-accent text-accent-foreground')}
             onClick={() => setActive(i)}
           >

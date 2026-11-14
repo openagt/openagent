@@ -117,14 +117,14 @@ describe('Quota (#960)', () => {
   test('says it is reading rather than drawing an empty week', async () => {
     await show()
     // An empty track would read as "nothing used", which is the opposite of "we do not know yet".
-    expect(screen.getByText(/Reading your usage/)).toBeTruthy()
+    expect(screen.getByText('Loading…')).toBeTruthy()
     expect(screen.queryByRole('img')).toBeNull()
   })
 
   test('a read that failed with no reading before it says so, not that it is reading', async () => {
     view = { windows: [], unavailable: 'fetch-failed' }
     await show()
-    expect(screen.queryByText(/Reading your usage/)).toBeNull()
+    expect(screen.queryByText('Loading…')).toBeNull()
     expect(screen.getByText(/could not read your usage/)).toBeTruthy()
   })
 

@@ -1,4 +1,5 @@
 import { createContext, useContext, useEffect, useState, type ComponentType } from 'react'
+import { flushSync } from 'react-dom'
 import { onModules, type DashboardModule } from '../rpc/modules.js'
 import type { LinkAction, ModuleCard, ModuleDefinition, ModulePage, ModulePanel, ModuleRunSlots, ModuleSchedule, ModuleSettings, ModuleUsageLimit } from '../module/index.js'
 import { usePolled } from './use-async.js'
@@ -78,13 +79,6 @@ function load(url: string): Promise<ModuleDefinition | undefined> {
       (loaded: { default?: ModuleDefinition }) => {
         const definition = loaded.default
         if (!definition || typeof definition !== 'object') return undefined
-        // The module's stylesheet sits beside its module; it is linked once, like the module.
-        if (definition.stylesheet) {
-          const link = document.createElement('link')
-          link.rel = 'stylesheet'
-          link.href = new URL(definition.stylesheet, new URL(url, window.location.href)).href
-          document.head.appendChild(link)
-        }
         return definition
       },
       (error: unknown) => {
@@ -96,6 +90,48 @@ function load(url: string): Promise<ModuleDefinition | undefined> {
     void loading.then(definition => void importedBy.set(url, definition))
   }
   return loading
+}
+
+/**
+ * Where the page's one sheet of classes is served for a set of modules: the dashboard's own and
+ * every listed module's, compiled together by the daemon (src/dashboard/page-styles.ts), so
+ * Tailwind alone orders every class on the page. The address names the dashboard's build and each
+ * module's version, so a browser keeps each set's sheet for good.
+ */
+function pageSheetUrl(modules: readonly DashboardModule[]): string {
+  const asked = new URLSearchParams({ v: String(import.meta.env.OPENAGENT_CLASSES ?? '') })
+  for (const module of modules) asked.append('m', module.url)
+  return `/_styles/page.css?${asked}`
+}
+
+/** The page sheets fetched this page load, by address; one that fails to load is left out, with a warning. */
+const sheets = new Map<string, Promise<CSSStyleSheet | undefined>>()
+/** The same, once fetched (or left out). */
+const sheetBy = new Map<string, CSSStyleSheet | undefined>()
+
+function pageSheet(url: string): Promise<CSSStyleSheet | undefined> {
+  let loading = sheets.get(url)
+  if (!loading) {
+    loading = fetch(url)
+      .then(async response => {
+        if (!response.ok) throw new Error(`${response.status} ${await response.text()}`)
+        return new CSSStyleSheet().replace(await response.text())
+      })
+      .catch((error: unknown) => {
+        console.warn(`[openagent] the page sheet at ${url} did not load:`, error)
+        return undefined
+      })
+    sheets.set(url, loading)
+    void loading.then(sheet => void sheetBy.set(url, sheet))
+  }
+  return loading
+}
+
+/** Adopts `sheet` as the page sheet, after the dashboard's own, in place of the one before. */
+function adopt(sheet: CSSStyleSheet | undefined): void {
+  if (!sheet || document.adoptedStyleSheets.includes(sheet)) return
+  const pageSheets = new Set(sheetBy.values())
+  document.adoptedStyleSheets = [...document.adoptedStyleSheets.filter(each => !pageSheets.has(each)), sheet]
 }
 
 const NO_MODULES: DashboardModule[] = []
@@ -116,24 +152,41 @@ export function byMountOrder(a: { order?: number; package: string }, b: { order?
  * opened again imports the modules at once.
  */
 export function useModules(reloadKey = 0): MountedModules {
-  const { value: modules, loaded: listed } = usePolled(onModules, NO_MODULES, 30_000, [reloadKey], { remember: 'modules', stored: true })
+  const { value: modules, state: listState } = usePolled(onModules, NO_MODULES, 30_000, [reloadKey], { remember: 'modules', stored: true })
+  const listed = listState !== 'unknown'
   const [state, setState] = useState<MountedModules>(NOTHING_MOUNTED)
   useEffect(() => {
     if (!listed) return
+    // No module, no sheet of theirs to wait for.
+    const sheetUrl = modules.length > 0 ? pageSheetUrl(modules) : undefined
     // Read again with every module imported already (the list is polled): mounted at once, in one go.
-    if (modules.every(module => importedBy.has(module.url))) {
+    if (modules.every(module => importedBy.has(module.url)) && (!sheetUrl || sheetBy.has(sheetUrl))) {
+      if (sheetUrl) adopt(sheetBy.get(sheetUrl))
       setState(mount(modules.map(module => ({ module, definition: importedBy.get(module.url) })), true))
       return
     }
     let live = true
+    let sheetIn = !sheetUrl
     const definitions = new Map<DashboardModule, ModuleDefinition | undefined>()
+    // A module is drawn once its code and the sheet with its classes are both in, never before its classes are.
+    const show = () => {
+      if (!live || !sheetIn || definitions.size === 0) return
+      // In the list's order, whichever came first: a package's place never depends on how fast its code came.
+      const imported = modules.filter(each => definitions.has(each)).map(each => ({ module: each, definition: definitions.get(each) }))
+      // In the task of the commit that draws the modules, so no frame shows them without it.
+      if (sheetUrl) adopt(sheetBy.get(sheetUrl))
+      flushSync(() => setState(mount(imported, imported.length === modules.length)))
+    }
+    if (sheetUrl)
+      void pageSheet(sheetUrl).then(() => {
+        sheetIn = true
+        show()
+      })
     for (const module of modules) {
       void load(module.url).then(definition => {
         if (!live) return
         definitions.set(module, definition)
-        // In the list's order, whichever came first: a package's place never depends on how fast its code came.
-        const imported = modules.filter(each => definitions.has(each)).map(each => ({ module: each, definition: definitions.get(each) }))
-        setState(mount(imported, imported.length === modules.length))
+        show()
       })
     }
     return () => {
@@ -197,8 +250,11 @@ const LISTED_PAGES_KEY = 'openagent:listed-pages'
 /** A module's page as the sidebar lists it: before its module is imported, without its icon. */
 export type ListedPage = Pick<MountedPage, 'segment' | 'label' | 'projects'> & Partial<Pick<MountedPage, 'icon'>>
 
-/** The pages the sidebar lists: the imported ones, and until every module is, those of the last load. */
-export function useListedPages({ pages, loaded }: MountedModules): readonly ListedPage[] {
+/**
+ * The pages the sidebar lists: the imported ones, and until every module is, those of the last load;
+ * null until then in a browser that kept none, where the pages are not known yet.
+ */
+export function useListedPages({ pages, loaded }: MountedModules): readonly ListedPage[] | null {
   const [last] = useState(readListedPages)
   useEffect(() => {
     if (!loaded) return
@@ -211,11 +267,13 @@ export function useListedPages({ pages, loaded }: MountedModules): readonly List
   return loaded ? pages : last
 }
 
-function readListedPages(): ListedPage[] {
+function readListedPages(): ListedPage[] | null {
   try {
-    const listed: unknown = JSON.parse(globalThis.localStorage?.getItem(LISTED_PAGES_KEY) ?? '[]')
-    return Array.isArray(listed) ? listed.filter((page): page is ListedPage => typeof page?.segment === 'string' && typeof page.label === 'string' && Array.isArray(page.projects)) : []
+    const kept = globalThis.localStorage?.getItem(LISTED_PAGES_KEY)
+    if (kept == null) return null
+    const listed: unknown = JSON.parse(kept)
+    return Array.isArray(listed) ? listed.filter((page): page is ListedPage => typeof page?.segment === 'string' && typeof page.label === 'string' && Array.isArray(page.projects)) : null
   } catch {
-    return []
+    return null
   }
 }

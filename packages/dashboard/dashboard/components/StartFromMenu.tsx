@@ -1,12 +1,12 @@
 import { useMemo, useState, type ComponentProps } from 'react'
 import { Combobox } from '@base-ui/react/combobox'
-import { Check, ChevronDown, GitBranch, Search } from 'lucide-react'
+import { Check, GitBranch, Search } from 'lucide-react'
 import type { StartFromPick } from '../../src/index.js'
 import { publishedBase } from '../../src/client.js'
 import { onStartBranches, type StartBranches } from '../rpc/projects.js'
 import { useLoaded } from '../lib/use-async.js'
 import { cn } from '../lib/utils.js'
-import { rowButtonClass } from './ui/row-item.js'
+import { rowButtonClass, RowChevron } from './ui/row-item.js'
 import { OptionLabel } from './ui/option-label.js'
 import { ScrollArea } from './ui/scroll-area.js'
 import { Tooltip, TooltipTrigger, TooltipContent } from './ui/tooltip.js'
@@ -51,9 +51,9 @@ export function prTargetBranch(pick: StartFromPick | undefined, main: string, lo
 export function BranchButton({ label, className, ...props }: { label: string } & ComponentProps<'button'>) {
   return (
     <button type="button" {...props} className={cn(rowButtonClass, 'max-w-[16rem]!', className)}>
-      <GitBranch className="h-3.5 w-3.5 shrink-0" aria-hidden />
+      <GitBranch className="size-4 shrink-0" aria-hidden />
       <span className="truncate">{label}</span>
-      <ChevronDown className="h-3 w-3 shrink-0 opacity-70" aria-hidden />
+      <RowChevron />
     </button>
   )
 }

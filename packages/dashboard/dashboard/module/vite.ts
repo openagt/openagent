@@ -1,8 +1,11 @@
+import { readFile } from 'node:fs/promises'
+import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import tailwindcss from '@tailwindcss/vite'
+import { Scanner } from '@tailwindcss/oxide'
 import react from '@vitejs/plugin-react'
-import { defineConfig as defineBuild, type UserConfig } from 'vite'
+import { defineConfig as defineBuild, type Plugin, type UserConfig } from 'vite'
 import { defineConfig as defineTests, type ViteUserConfig } from 'vitest/config'
+import { compileStyles, type ModuleRules } from '../../src/dashboard/page-styles.ts'
 
 // How a module package builds and tests its dashboard part, the same for every module: its
 // `dashboard/vite.config.ts` is `export default moduleBuild(import.meta.url)`, its
@@ -10,15 +13,16 @@ import { defineConfig as defineTests, type ViteUserConfig } from 'vitest/config'
 // the module's `dashboard/` folder.
 
 /**
- * The module's build: one browser module, `dist/dashboard/dashboard.js`, plus its stylesheet. React
- * and `@openagt/dashboard/module` stay bare imports: the dashboard's import map supplies its own
- * running copies, so the module shares the page's React and components instead of bundling them.
+ * The module's build: one browser module, `dist/dashboard/dashboard.js`, plus its class list
+ * ({@link classList}), from which the dashboard draws its classes in the page's one sheet. React and
+ * `@openagt/dashboard/module` stay bare imports: the dashboard's import map supplies its own running
+ * copies, so the module shares the page's React and components instead of bundling them.
  */
 export function moduleBuild(configUrl: string): UserConfig {
   const at = (path: string) => fileURLToPath(new URL(path, configUrl))
   return defineBuild({
     root: at('.'),
-    plugins: [tailwindcss()],
+    plugins: [classList(at('.'))],
     build: {
       outDir: at('../dist/dashboard'),
       emptyOutDir: true,
@@ -26,13 +30,49 @@ export function moduleBuild(configUrl: string): UserConfig {
         entry: at('./index.tsx'),
         formats: ['es'],
         fileName: () => 'dashboard.js',
-        cssFileName: 'dashboard',
       },
       rollupOptions: {
         external: ['react', 'react/jsx-runtime', 'react-dom', 'react-dom/client', '@openagt/dashboard/module'],
       },
     },
   })
+}
+
+/** The dashboard's vocabulary: the one theme every compile of its classes reads. */
+const VOCABULARY = fileURLToPath(new URL('./theme.css', import.meta.url))
+
+/**
+ * The class names the source under `dir` draws with: what Tailwind's scanner finds there that the
+ * vocabulary, or the build's own `rules`, gives a rule, sorted. A custom property's name is kept
+ * too: it draws no rule of its own, but brings the theme's value with it.
+ */
+export async function scanClasses(dir: string, rules: readonly ModuleRules[] = []): Promise<string[]> {
+  const candidates = new Scanner({ sources: [{ base: dir, pattern: '**/*', negated: false }] }).scan()
+  const drawn = classNamesIn(await compileStyles(await readFile(VOCABULARY, 'utf8'), rules, candidates))
+  return candidates.filter(name => name.startsWith('--') || drawn.has(name)).sort()
+}
+
+/** Every class a selector of `css` names, unescaped. */
+function classNamesIn(css: string): Set<string> {
+  const unescape = (name: string) => name.replace(/\\([0-9a-fA-F]{1,6}) ?|\\(.)/g, (_, hex: string | undefined, char: string) => (hex ? String.fromCodePoint(parseInt(hex, 16)) : char))
+  return new Set([...css.matchAll(/\.((?:\\[0-9a-fA-F]{1,6} ?|\\.|[\w-]|[^\x00-\x7f])+)/g)].map(match => unescape(match[1]!)))
+}
+
+/**
+ * Writes the build's class list, `classes.txt`, one name per line beside its JS; and its own rules,
+ * `styles.css` in the folder it builds, beside them when it has some.
+ */
+function classList(dir: string): Plugin {
+  return {
+    name: 'openagent:class-list',
+    apply: 'build',
+    async generateBundle() {
+      const css = await readFile(join(dir, 'styles.css'), 'utf8').catch(() => undefined)
+      const rules = css === undefined ? [] : [{ module: dir, css }]
+      this.emitFile({ type: 'asset', fileName: 'classes.txt', source: `${(await scanClasses(dir, rules)).join('\n')}\n` })
+      if (css !== undefined) this.emitFile({ type: 'asset', fileName: 'styles.css', source: css })
+    },
+  }
 }
 
 /**

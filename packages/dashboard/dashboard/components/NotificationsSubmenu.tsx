@@ -32,7 +32,7 @@ export function NotificationsSubmenu() {
   return (
     <DropdownMenuSub>
       <DropdownMenuSubTrigger>
-        {active ? <Bell className="h-3.5 w-3.5 shrink-0 opacity-70" aria-hidden /> : <BellOff className="h-3.5 w-3.5 shrink-0 opacity-70" aria-hidden />}
+        {active ? <Bell className="size-4 shrink-0 text-muted-foreground" aria-hidden /> : <BellOff className="size-4 shrink-0 text-muted-foreground" aria-hidden />}
         <span className="flex-1">Notifications</span>
         <span className="text-muted-foreground">{active ? 'On' : 'Off'}</span>
       </DropdownMenuSubTrigger>

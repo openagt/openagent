@@ -1,3 +1,4 @@
+import { unknownWord, usageError, wrongArguments, helpRows, helpText } from '@openagt/agent-data'
 import { clearWebhook, invalidWebhook, postMessage, resolveWebhook, saveWebhook, WEBHOOK_ENV } from './webhook.js'
 
 /**
@@ -8,12 +9,14 @@ import { clearWebhook, invalidWebhook, postMessage, resolveWebhook, saveWebhook,
 
 export const USAGE = `usage: discord <command>
 
-  send <message>          post the message to this machine's Discord webhook
-  setup <webhook>         save the webhook for this machine (${WEBHOOK_ENV} in the environment wins over it)
-  setup --clear           forget this machine's webhook
-  status                  whether a webhook is set here, and where it comes from (never the URL)
+${helpRows([
+  ['send <message>', `post the message to this machine's Discord webhook`],
+  ['setup <webhook>', `save the webhook for this machine (${WEBHOOK_ENV} in the environment wins over it)`],
+  ['setup --clear', `forget this machine's webhook`],
+  ['status', 'whether a webhook is set here, and where it comes from (never the URL)'],
+])}
 
-JSON on stdout. Exit code 1 for a refusal or a failure (the reason on stderr), 2 for a usage error.`
+${helpText('JSON on stdout. Exit code 1 for a refusal or a failure (the reason on stderr), 2 for a usage error.')}`
 
 export interface CliIo {
   env: NodeJS.ProcessEnv
@@ -30,7 +33,7 @@ export async function runCli(argv: string[], io: CliIo): Promise<number> {
     return result['ok'] === true ? 0 : 1
   }
   const usage = (): number => {
-    io.stderr(USAGE)
+    io.stderr(command === undefined ? USAGE : usageError('discord', ['send', 'setup', 'status'].includes(command) ? wrongArguments(command, args) : unknownWord(command)))
     return 2
   }
 

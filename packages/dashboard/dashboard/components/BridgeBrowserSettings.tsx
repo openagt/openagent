@@ -45,7 +45,7 @@ export function BridgeBrowserSettings() {
       {status.state === 'stopped' && (
         <p className="text-danger">
           The bridge browser is not running: {status.detail}.{' '}
-          <Button variant="outline" size="sm" onClick={() => act('restart')}>
+          <Button variant="outline" onClick={() => act('restart')}>
             Restart
           </Button>
         </p>
@@ -58,15 +58,15 @@ export function BridgeBrowserSettings() {
           </p>
           <div className="flex flex-wrap items-center gap-2">
             {status.visible ? (
-              <Button variant="outline" size="sm" onClick={() => act('hide')}>
+              <Button variant="outline" onClick={() => act('hide')}>
                 Hide the window
               </Button>
             ) : (
-              <Button variant="outline" size="sm" onClick={() => act('show')}>
+              <Button variant="outline" onClick={() => act('show')}>
                 {status.signIn ? 'Show the window to sign in' : 'Show the window'}
               </Button>
             )}
-            <Button variant="outline" size="sm" onClick={() => act('restart')}>
+            <Button variant="outline" onClick={() => act('restart')}>
               Restart
             </Button>
           </div>

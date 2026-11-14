@@ -90,7 +90,7 @@ export function TicketHeader({
   return (
     <div>
       <div className="flex flex-wrap items-start justify-between gap-x-3 gap-y-2">
-        <h1 ref={title} tabIndex={-1} className="min-w-0 text-lg font-semibold outline-none" title={ticket.file}>
+        <h1 ref={title} tabIndex={-1} className="min-w-0 text-xl font-semibold outline-none" title={ticket.file}>
           {ticket.title}
         </h1>
         <div className="flex shrink-0 items-center gap-1.5">
@@ -106,19 +106,23 @@ export function TicketHeader({
               onConfigure={prompt => host.configureRun(projectId, prompt)}
             />
           )}
-          {more.length > 0 && (
+          {/* The rarer actions behind "More". Its place is kept where it has none (the plan's tab),
+              so the next step stands at one x on both of the ticket's pages. */}
+          {more.length > 0 ? (
             <DropdownMenu>
-              <DropdownMenuTrigger aria-label="More" className="inline-flex size-8 items-center justify-center rounded-md text-muted-foreground hover:bg-accent hover:text-foreground">
-                <MoreHorizontal className="h-4 w-4" aria-hidden />
+              <DropdownMenuTrigger render={<Button variant="ghost" size="icon" aria-label="More" className="text-muted-foreground" />}>
+                <MoreHorizontal className="size-4" aria-hidden />
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end">
                 {more.map(item => (
-                  <DropdownMenuItem key={item.label} onClick={item.onSelect} disabled={busy || down} className="gap-2">
-                    <item.Icon className="h-3.5 w-3.5" aria-hidden /> {item.label}
+                  <DropdownMenuItem key={item.label} onClick={item.onSelect} disabled={busy || down}>
+                    <item.Icon className="size-4 text-muted-foreground" aria-hidden /> {item.label}
                   </DropdownMenuItem>
                 ))}
               </DropdownMenuContent>
             </DropdownMenu>
+          ) : (
+            offered && <span aria-hidden className="size-8" />
           )}
         </div>
       </div>
@@ -137,9 +141,9 @@ export function TicketHeader({
         fallbackError="The claim could not be lifted."
       />
       <TicketFacts ticket={ticket} claimed={claimed} holder={holder} holderStatus={holderStatus} onOpenAgent={agentId => host.openAgent(projectId, agentId)} />
-      {error && <p className="mt-2 text-xs text-danger">{error}</p>}
+      {error && <p role="alert" className="mt-2 text-xs text-danger">{error}</p>}
       {/* The ticket's two pages, as tabs: what it asks, and how it will be done. */}
-      <div role="tablist" className="mt-4 flex gap-4 border-b border-border text-sm">
+      <div role="tablist" className="mt-6 flex gap-6 border-b border-hairline text-sm">
         {(['ticket', 'plan'] as const).map(name => (
           <button
             key={name}
@@ -147,15 +151,15 @@ export function TicketHeader({
             role="tab"
             aria-selected={tab === name}
             onClick={() => tab !== name && open(name === 'ticket' ? [ticket.file] : [ticket.file, 'plan'])}
-            className={cn('-mb-px border-b-2 px-0.5 pb-2 font-medium', tab === name ? 'border-foreground text-foreground' : 'border-transparent text-muted-foreground hover:text-foreground')}
+            className={cn('focus-ring -mb-px flex h-9 items-center rounded-t-sm border-b-2 font-medium transition-colors', tab === name ? 'border-foreground text-foreground' : 'border-transparent text-muted-foreground hover:text-foreground')}
           >
             {name === 'ticket' ? 'Ticket' : 'Plan'}
-            {name === 'plan' && !ticket.planned && <span className="ml-1.5 text-xs font-normal text-muted-foreground">none yet</span>}
+            {name === 'plan' && !ticket.planned && <span className="ml-2 text-xs font-normal text-muted-foreground">none yet</span>}
           </button>
         ))}
       </div>
       {sessions.length > 0 && (
-        <div className="mt-4">
+        <div className="mt-6">
           <TicketSessions sessions={sessions} onOpen={agentId => host.openAgent(projectId, agentId)} />
         </div>
       )}
@@ -182,17 +186,17 @@ function TicketFacts({
 }) {
   const dot = <span aria-hidden>·</span>
   return (
-    <div className="mt-1.5 flex flex-wrap items-center gap-x-1.5 gap-y-1 text-xs text-muted-foreground">
+    <div className="mt-2 flex flex-wrap items-center gap-x-1.5 gap-y-1 text-xs text-muted-foreground">
       {ticket.issue && (
         <>
-          <a href={ticket.issue.url} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 hover:text-foreground hover:underline">
+          <a href={ticket.issue.url} target="_blank" rel="noreferrer" className="focus-ring inline-flex items-center gap-1 rounded-sm hover:text-foreground hover:underline">
             <ExternalLink className="h-3.5 w-3.5" aria-hidden />
             {ticket.issue.label}
           </a>
           {dot}
         </>
       )}
-      <span title={formatDateTime(ticket.date)}>{formatAge(ticket.date)}</span>
+      <span className="tabular-nums" title={formatDateTime(ticket.date)}>{formatAge(ticket.date)}</span>
       {ticket.priority && (
         <>
           {dot}
@@ -202,7 +206,7 @@ function TicketFacts({
       {ticket.pr && (
         <>
           {dot}
-          <a href={ticket.pr.url} target="_blank" rel="noreferrer" className="text-info hover:underline">
+          <a href={ticket.pr.url} target="_blank" rel="noreferrer" className="focus-ring rounded-sm text-info hover:underline">
             In review · {ticket.pr.label}
           </a>
         </>
@@ -224,7 +228,7 @@ function TicketFacts({
               (ticket.lockedByAgent ? (
                 <>
                   {' · '}
-                  <button type="button" className="hover:underline" onClick={() => onOpenAgent(ticket.lockedByAgent!.id)}>
+                  <button type="button" className="focus-ring rounded-sm hover:underline" onClick={() => onOpenAgent(ticket.lockedByAgent!.id)}>
                     {holder}
                   </button>
                   {holderStatus !== undefined && ` · ${standing(holderStatus)}`}
@@ -256,7 +260,7 @@ function TicketFacts({
       {ticket.topics && ticket.topics.length > 0 && (
         <span className="ml-1 flex flex-wrap gap-1">
           {ticket.topics.map(topic => (
-            <Badge key={topic} className="border-border px-1.5 text-[10px] text-muted-foreground">
+            <Badge key={topic}>
               {topic}
             </Badge>
           ))}

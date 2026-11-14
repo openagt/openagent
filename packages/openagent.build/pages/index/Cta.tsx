@@ -1,68 +1,36 @@
 import { DiscordIcon, GitHubIcon } from './icons'
-import { DISCORD_URL, Emoji, GITHUB_URL } from './ui'
+import { BicepsFlexed, Bot } from 'lucide-react'
+import { DISCORD_URL, GITHUB_URL, h2Style } from './ui'
 
 export function Cta() {
   return (
     <section
       style={{
-        maxWidth: 880,
-        margin: '0 auto',
-        padding: 'clamp(96px, 16vw, 200px) clamp(14px, 4vw, 24px) clamp(104px, 16vw, 220px)',
+        maxWidth: 'var(--container)',
+        margin: 'var(--space-section) auto 0',
+        padding: '0 var(--space-gutter) var(--space-part)',
         textAlign: 'center',
         display: 'flex',
         flexDirection: 'column',
         alignItems: 'center',
-        gap: 22,
+        gap: 24,
       }}
     >
       <img src="/assets/logo.svg" alt="" style={{ width: 52, height: 59 }} />
-      <h2
-        style={{
-          margin: 0,
-          fontSize: 'clamp(26px, 6vw, 36px)',
-          fontWeight: 700,
-          letterSpacing: '-0.015em',
-          textWrap: 'pretty',
-        }}
-      >
-        Join our community of agentic developers <Emoji e="💪" />
-        <Emoji e="🦾" />
+      <h2 style={h2Style}>
+        Join our community of agentic developers{' '}
+        <span style={{ display: 'inline-flex', gap: 4, verticalAlign: '-0.1em', color: 'var(--muted-foreground)' }}>
+          <BicepsFlexed size="0.8em" role="img" aria-label="flexed biceps" />
+          <Bot size="0.8em" role="img" aria-label="robot" />
+        </span>
       </h2>
-      <div style={{ display: 'flex', gap: 14, flexWrap: 'wrap', justifyContent: 'center' }}>
-        <a
-          href={DISCORD_URL}
-          className="cta-primary"
-          style={{
-            display: 'inline-flex',
-            alignItems: 'center',
-            gap: 10,
-            background: '#a7c080',
-            color: '#2d353b',
-            fontWeight: 600,
-            fontSize: 16,
-            borderRadius: 10,
-            padding: '13px 26px',
-          }}
-        >
-          <DiscordIcon width={19} height={15} />
+      <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', justifyContent: 'center' }}>
+        <a href={DISCORD_URL} className="press press-primary">
+          <DiscordIcon width={20} height={16} />
           Join us on Discord
         </a>
-        <a
-          href={GITHUB_URL}
-          className="cta-secondary"
-          style={{
-            display: 'inline-flex',
-            alignItems: 'center',
-            gap: 10,
-            border: '1px solid #4f585e',
-            color: '#d3c6aa',
-            fontWeight: 500,
-            fontSize: 16,
-            borderRadius: 10,
-            padding: '13px 26px',
-          }}
-        >
-          <GitHubIcon size={17} />
+        <a href={GITHUB_URL} className="press press-quiet">
+          <GitHubIcon size={16} />
           Star on GitHub
         </a>
       </div>

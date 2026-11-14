@@ -9,6 +9,7 @@ import type { AgentMeta, AgentStatus, RecentAgent, ProjectSummary } from '../../
 import type { ModuleHostPerson } from '../module/index.js'
 import { DRIVER_LABELS, driverFromImpl, cloudRunState, type CloudRunState, type MachineKind } from '../../src/client.js'
 import { buttonVariants } from './ui/button.js'
+import { Badge } from './ui/badge.js'
 import { inPlace } from '../lib/in-place.js'
 import { formatRoute, type Route } from '../lib/route.js'
 import { NO_PROJECTS } from '../../src/project-address.js'
@@ -41,6 +42,8 @@ import {
 } from './ui/sidebar.js'
 import { needsWord } from './HumanQueueList.js'
 import { ScrollArea } from './ui/scroll-area.js'
+import { Skeleton } from './ui/skeleton.js'
+import { Slot } from './ui/slot.js'
 import { PopupPlacementContext } from './ui/popup-placement.js'
 // Global chrome relocated off the removed top navbar (#772 follow-up): the sidebar is the app's
 // chrome now, so the workspace keeps the full width.
@@ -49,6 +52,7 @@ import { ViewToggle } from './ViewToggle.js'
 import { PersonMenu } from './PersonMenu.js'
 import { SidebarResizer } from './SidebarResizer.js'
 import { HideSidebarButton } from './SidebarToggle.js'
+import { JumpButton } from './JumpPalette.js'
 import { readAgentLogAhead } from '../lib/agent-log.js'
 import { onGitHostPeople } from '../rpc/people.js'
 import { personSaid, useGitHostPeople } from '../lib/use-git-host-people.js'
@@ -129,8 +133,11 @@ export function AgentHistory({
   onDashboard?: () => void
   /** Open Settings, from the person's menu at the sidebar's foot. */
   onSettings?: (entry?: string) => void
-  /** The pages the installed modules add (#1774), the picked project's only when one is picked, one nav row each, below Overview. */
-  pages?: readonly { segment: string; label: string; icon?: ComponentType<{ className?: string; 'aria-hidden'?: boolean }> }[]
+  /**
+   * The pages the installed modules add (#1774), the picked project's only when one is picked, one nav row each, below Overview;
+   * null while they are not known, when what stands under them waits so that nothing moves.
+   */
+  pages?: readonly { segment: string; label: string; icon?: ComponentType<{ className?: string; 'aria-hidden'?: boolean }> }[] | null
   /** The module page that is the current view, by its segment, or null. */
   activePage?: string | null
   /** Open a module's page by its segment. */
@@ -161,6 +168,9 @@ export function AgentHistory({
   // On a phone the rail is a sheet over the page, opened from the page's top left corner
   // (MenuButton): going somewhere from it closes it.
   const { isMobile, open, setOpenMobile } = useSidebar()
+  // What stands under the modules' rows waits while their pages are not known, and comes in at its
+  // place once they are; drawn with the first frame wherever they were known from the start.
+  const modulePages = { state: pages === null ? 'unknown' : 'fresh', value: pages ?? [] } as const
   const leave =
     <A extends unknown[]>(go: (...args: A) => void) =>
     (...args: A) => {
@@ -252,6 +262,10 @@ export function AgentHistory({
   // belongs to the Overview item instead, so the two are never active at once.
   const atProjectLauncher = projectId !== null && selectedAgentId === null
 
+  // Whose run, which coding agent and which project are marked only where the listed rows differ in them.
+  const differ = (of: (row: Row) => string | undefined) => new Set(rows.map(of)).size > 1
+  const telling: Telling = { person: differ(row => row.agent.person?.toLowerCase()), driver: differ(row => driverFromImpl(row.agent.driver)), project: differ(row => row.project) }
+
   // The rows as a tree: a run started for another run in the list sits under it, as its subagent.
   const tree = nestRows(rows)
   // Which lists of subagents the reader opened or folded by hand, by the main agent's row.
@@ -270,6 +284,7 @@ export function AgentHistory({
   const renderRow = (row: Row, subagent: boolean, status: AgentStatus = row.agent.status, fold?: SubagentsFold) => (
     <AgentHistoryRow
       status={status}
+      telling={telling}
       fold={fold}
       // A main agent shown as still going is not shown as saving too: one dot, one word.
       saving={row.agent.saving === true && status === row.agent.status}
@@ -321,24 +336,28 @@ export function AgentHistory({
     // it is placed against the window too, or each scroll carries it off and pulls it back a frame later.
     <PopupPlacementContext.Provider value={pinned || isMobile ? 'fixed' : 'absolute'}>
       {pinned && <div aria-hidden className="w-(--sidebar-width) shrink-0" />}
-      <Sidebar collapsible={isMobile ? 'offcanvas' : 'none'} className={cn('relative w-(--sidebar-width) border-r border-sidebar-border', pinned && 'fixed top-(--top-banner,0px) left-0 z-20 h-[calc(100dvh-var(--top-banner,0px))]')}>
+      <Sidebar className={cn('relative w-(--sidebar-width)', pinned && 'fixed top-(--top-banner,0px) left-0 z-20 h-[calc(100dvh-var(--top-banner,0px))]')}>
         {/* The brand and the project select (#1513): the project picked here is the one every page
             under it shows. No rule under it: the room around it sets it apart. */}
         <SidebarHeader className="gap-4 pb-2">
           {/* The mark + wordmark, the way home (#909), now that there is no navbar to hold them. */}
-          <div className="flex items-center justify-between gap-2 px-1 pt-1">
+          <div className="flex items-center justify-between gap-2 pt-1 pl-1">
             <BrandLink working={working} href={homeHref} onNavigate={leave(onDashboard)} />
-            <HideSidebarButton />
+            {/* The jump's press, for a screen with no keyboard, beside the sidebar's own. */}
+            <span className="flex items-center gap-1">
+              <JumpButton />
+              <HideSidebarButton />
+            </span>
           </div>
           <ViewToggle />
           <ProjectPicker look="sidebar" none={{ label: 'All projects' }} picked={scope ?? null} pending={scopePending} projects={projects} onPick={onScope} onProjectAdded={onProjectAdded ?? (() => {})} />
         </SidebarHeader>
-        {/* New/Overview/the modules' pages stack tight as one nav group (gap-0.5), close under the
+        {/* New/Overview/the modules' pages stack as one nav group, row against row, close under the
             project select (no top padding: the select's own section has its room below it), with a
             little space below the group (pb-2) before the session list. The `!` because a module's
             stylesheet, loaded after the dashboard's, redefines the header's own `p-2`, which would
             otherwise win over a plain `pt-0`. */}
-        <SidebarHeader className="gap-0.5 pt-0! pb-2">
+        <SidebarHeader className="gap-0 pt-0! pb-2">
           {/* "New" starts a session — but where depends on what exists: with no project it prompts to
               add one first, with one project it starts there, with several it opens a picker. With
               one project picked at the top, it starts there. */}
@@ -355,94 +374,106 @@ export function AgentHistory({
           {/* The modules' pages the shell hands over (#1774), the picked project's only when one is
               picked: destinations with no project selected, like the Overview, named by the module,
               never by the dashboard — the tickets' page among them, when a package brings one. */}
-          {pages.map(page => (
-            <NavRow key={page.segment} icon={page.icon ?? Blocks} label={page.label} active={activePage === page.segment} href={pageHref(page.segment)} onClick={leave(() => onPage(page.segment))} />
-          ))}
-          {/* The agents (Rom): each a name, skills and accounts, on a page of the dashboard's own; then the accounts they work with. */}
-          <NavRow icon={Bot} label="Agents" active={activePage === AGENTS_PAGE} href={pageHref(AGENTS_PAGE)} onClick={leave(() => onPage(AGENTS_PAGE))} />
-          <NavRow icon={KeyRound} label="Permissions" active={activePage === PERMISSIONS_PAGE} href={pageHref(PERMISSIONS_PAGE)} onClick={leave(() => onPage(PERMISSIONS_PAGE))} />
+          <Slot of={modulePages} shape={<NavShapes />} className="flex flex-col">
+            {known => (
+              <>
+                {known.map(page => (
+                  <NavRow key={page.segment} icon={page.icon ?? Blocks} label={page.label} active={activePage === page.segment} href={pageHref(page.segment)} onClick={leave(() => onPage(page.segment))} />
+                ))}
+                {/* The agents (Rom): each a name, skills and accounts, on a page of the dashboard's own; then the accounts they work with. */}
+                <NavRow icon={Bot} label="Agents" active={activePage === AGENTS_PAGE} href={pageHref(AGENTS_PAGE)} onClick={leave(() => onPage(AGENTS_PAGE))} />
+                <NavRow icon={KeyRound} label="Permissions" active={activePage === PERMISSIONS_PAGE} href={pageHref(PERMISSIONS_PAGE)} onClick={leave(() => onPage(PERMISSIONS_PAGE))} />
+              </>
+            )}
+          </Slot>
         </SidebarHeader>
         {/* The themed ScrollArea (#913) instead of the sidebar's native overflow bar, matching the
             Overview: suppress SidebarContent's own `overflow-auto` and let the ScrollArea own it. */}
-        <SidebarContent className="overflow-hidden">
-          <ScrollArea className="min-h-0 flex-1">
-            {/* pr-3 keeps the rows (and the active card) clear of the overlaid scrollbar (w-2.5). The `!`, as on the
-                nav above: a module's stylesheet has the group's own `p-2`, which would otherwise win on its page. */}
-            <SidebarGroup className="pt-3! pr-3!">
-              {/* The label sticks to the top of the scroll; the gradient strip under it (also sticky)
-                  fades the rows into the background as they scroll up beneath the label. Shown even
-                  when the list is empty (#1147): the heading is what makes "No sessions yet." read as
-                  the state of this list rather than a lonely line in the sidebar. */}
-              <div className="sticky top-0 z-10">
-                <SidebarGroupLabel className="rounded-none bg-sidebar font-normal tracking-wide text-muted-foreground">
-                  Log
-                  <RecentsSortMenu order={order} />
-                </SidebarGroupLabel>
-                {/* Absolute (hanging just below the label) so it does not push the first row down; it
-                    still overlays the rows scrolling up under it. `rail-fade` keeps it invisible at
-                    the top of the scroll (so it never dims the first row) and fades it in on scroll. */}
-                <div aria-hidden className="rail-fade pointer-events-none absolute inset-x-0 top-full h-4 bg-gradient-to-b from-sidebar to-transparent" />
-              </div>
-              <SidebarGroupContent>
-                <SidebarMenu className="gap-0.5">
-                  {/* A just-started run, before its run.json exists — highlighted while following it. */}
-                  {showOptimistic && (
-                    <SidebarMenuItem>
-                      {/* Drawn as the run's own row will be a few seconds on (the same logo, not
-                          dimmed), so that row taking its place changes nothing on screen. With naming
-                          on that row will carry a name, so this one holds the place rather than
-                          printing the prompt and having it swapped a second later. */}
-                      <AgentHistoryRow
-                        status="running"
-                        {...(preferences.nameRuns === false ? { intent: optimistic?.intent ?? undefined } : startTitle !== undefined ? { intent: startTitle } : { intent: undefined, naming: true })}
-                        {...(crossProject && startProjectName ? { project: startProjectName } : {})}
-                        subtitle="just now"
-                        driver={preferences.driver}
-                        active={starting}
-                        standIn
-                        onClick={leave(() => onSelect(null))}
-                      />
-                    </SidebarMenuItem>
-                  )}
-                  {tree.map(({ row, subagents }) => {
-                    // Open while a subagent is not over, or is the page being read; folded to a count once
-                    // all have ended. A click on the count is the reader's own choice and wins.
-                    const open = folds[row.key] ?? subagents.some(sub => isOpenSubagent(sub.agent) || sub.active)
-                    const working = subagents.filter(sub => sub.agent.status === 'running').length
-                    // A main agent whose own turn is over while its job waits on a subagent is still going.
-                    const now = Date.now()
-                    const going = row.agent.status === 'done' && subagents.some(sub => holdsMainAgent(sub.agent, now))
-                    return (
-                      <SidebarMenuItem key={row.key}>
-                        {renderRow(
-                          row,
-                          false,
-                          going ? 'running' : row.agent.status,
-                          subagents.length > 0 ? { count: subagents.length, working, open, onToggle: () => setFolds(f => ({ ...f, [row.key]: !open })) } : undefined,
-                        )}
-                        {subagents.length > 0 && open && (
-                          // The indented sub-list, with the rule the Projects list draws down its group.
-                          <div className="mt-0.5 ml-4 flex flex-col gap-0.5 border-l border-sidebar-border pl-2">
-                            {subagents.map(sub => (
-                              <div key={sub.key}>{renderRow(sub, true)}</div>
-                            ))}
-                          </div>
-                        )}
-                      </SidebarMenuItem>
-                    )
-                  })}
-                </SidebarMenu>
-                {/* Nothing while the list is read: it takes a moment, and "No sessions yet." would not be true yet. */}
-                {!hasRecents && listLoaded && (
-                  <p className="whitespace-nowrap px-2 py-1 text-sm text-muted-foreground">No sessions yet.</p>
-                )}
-              </SidebarGroupContent>
-            </SidebarGroup>
-          </ScrollArea>
-        </SidebarContent>
+        <Slot of={modulePages} shape={null} className="flex min-h-0 flex-1 flex-col">
+          {() => (
+            <SidebarContent className="overflow-hidden">
+              <ScrollArea className="min-h-0 flex-1">
+                {/* The rows keep the nav's edges, the scrollbar laid over their right padding while it shows. The `!`, as on the
+                    nav above: a module's stylesheet has the group's own `p-2`, which would otherwise win on its page. */}
+                <SidebarGroup className="pt-3!">
+                  {/* The label sticks to the top of the scroll; the gradient strip under it (also sticky)
+                      fades the rows into the background as they scroll up beneath the label. Shown even
+                      when the list is empty (#1147): the heading is what makes "No sessions yet." read as
+                      the state of this list rather than a lonely line in the sidebar. */}
+                  <div className="sticky top-0 z-10">
+                    <SidebarGroupLabel className="rounded-none bg-sidebar px-1.5">
+                      Log
+                      <RecentsSortMenu order={order} />
+                    </SidebarGroupLabel>
+                    {/* Absolute (hanging just below the label) so it does not push the first row down; it
+                        still overlays the rows scrolling up under it. `rail-fade` keeps it invisible at
+                        the top of the scroll (so it never dims the first row) and fades it in on scroll. */}
+                    <div aria-hidden className="rail-fade pointer-events-none absolute inset-x-0 top-full h-4 bg-gradient-to-b from-sidebar to-transparent" />
+                  </div>
+                  <SidebarGroupContent>
+                    <SidebarMenu className="gap-0.5">
+                      {/* A just-started run, before its run.json exists — highlighted while following it. */}
+                      {showOptimistic && (
+                        <SidebarMenuItem>
+                          {/* Drawn as the run's own row will be a few seconds on (the same logo, not
+                              dimmed), so that row taking its place changes nothing on screen. With naming
+                              on that row will carry a name, so this one holds the place rather than
+                              printing the prompt and having it swapped a second later. */}
+                          <AgentHistoryRow
+                            status="running"
+                            {...(preferences.nameRuns === false ? { intent: optimistic?.intent ?? undefined } : startTitle !== undefined ? { intent: startTitle } : { intent: undefined, naming: true })}
+                            {...(crossProject && startProjectName ? { project: startProjectName } : {})}
+                            subtitle="just now"
+                            telling={telling}
+                            driver={preferences.driver}
+                            active={starting}
+                            standIn
+                            onClick={leave(() => onSelect(null))}
+                          />
+                        </SidebarMenuItem>
+                      )}
+                      {tree.map(({ row, subagents }) => {
+                        // Open while a subagent is not over, or is the page being read; folded to a count once
+                        // all have ended. A click on the count is the reader's own choice and wins.
+                        const open = folds[row.key] ?? subagents.some(sub => isOpenSubagent(sub.agent) || sub.active)
+                        const working = subagents.filter(sub => sub.agent.status === 'running').length
+                        // A main agent whose own turn is over while its job waits on a subagent is still going.
+                        const now = Date.now()
+                        const going = row.agent.status === 'done' && subagents.some(sub => holdsMainAgent(sub.agent, now))
+                        return (
+                          <SidebarMenuItem key={row.key}>
+                            {renderRow(
+                              row,
+                              false,
+                              going ? 'running' : row.agent.status,
+                              subagents.length > 0 ? { count: subagents.length, working, open, onToggle: () => setFolds(f => ({ ...f, [row.key]: !open })) } : undefined,
+                            )}
+                            {subagents.length > 0 && open && (
+                              // The indented sub-list, with the rule the Projects list draws down its group.
+                              <div className="mt-0.5 ml-4 flex flex-col gap-0.5 border-l border-sidebar-border pl-2">
+                                {subagents.map(sub => (
+                                  <div key={sub.key}>{renderRow(sub, true)}</div>
+                                ))}
+                              </div>
+                            )}
+                          </SidebarMenuItem>
+                        )
+                      })}
+                    </SidebarMenu>
+                    {/* Nothing while the list is read: it takes a moment, and "No sessions yet." would not be true yet. */}
+                    {!hasRecents && listLoaded && (
+                      <p className="whitespace-nowrap px-2 py-1 text-sm text-muted-foreground">No sessions yet.</p>
+                    )}
+                  </SidebarGroupContent>
+                </SidebarGroup>
+              </ScrollArea>
+            </SidebarContent>
+          )}
+        </Slot>
         {/* The person at this dashboard, as one row that opens their menu: the theme, the
             notifications and Settings (PersonMenu). */}
-        <SidebarFooter className="border-t border-sidebar-border">
+        {/* At the bottom, the Log there or not yet. */}
+        <SidebarFooter className="mt-auto">
           <PersonMenu onSettings={leave(onSettings)} />
         </SidebarFooter>
         {/* Its right edge, dragged to set its width; a phone's sheet has none. */}
@@ -452,8 +483,29 @@ export function AgentHistory({
   )
 }
 
-// One rail destination — Overview, a module's page. Same box as New (px-2 py-1.5 gap-2) so every row's
-// icon and label line up exactly, and only the current view carries the active fill.
+/**
+ * A row of the sidebar's navigation: 32 high (44 on a phone), its icon on the sidebar's axis. The
+ * picked row is filled with the text's colour at 8% and its icon is in the text's colour; a row under
+ * the pointer at 4%, so the two are told apart at a glance; the weight never changes.
+ */
+function navRowClass(active: boolean): string {
+  return cn(
+    'focus-ring flex w-full items-center gap-2 rounded-md px-1.5 text-sm font-normal text-foreground transition-colors md:h-8 max-md:h-11 [&>svg]:size-4 [&>svg]:shrink-0',
+    active ? 'bg-foreground/8 [&>svg]:text-foreground' : 'hover:bg-foreground/4 active:bg-foreground/8 [&>svg]:text-muted-foreground',
+  )
+}
+
+// One rail destination — Overview, a module's page — in the row every destination of the sidebar has.
+/** Two of the rows below while they are read, in their own shape and height: a {@link Slot}'s `shape`. */
+function NavShapes() {
+  return Array.from({ length: 2 }, (_, at) => (
+    <div key={at} className="flex items-center gap-2 px-1.5 md:h-8 max-md:h-11">
+      <Skeleton className="size-4 shrink-0 rounded-sm" />
+      <Skeleton className={cn('h-3.5', at === 0 ? 'w-20' : 'w-24')} />
+    </div>
+  ))
+}
+
 function NavRow({
   icon: Icon,
   label,
@@ -471,17 +523,9 @@ function NavRow({
   children?: ReactNode
 }) {
   return (
-    <a
-      href={href}
-      onClick={inPlace(onClick)}
-      aria-current={active ? 'page' : undefined}
-      className={cn(
-        'flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-primary)]',
-        active ? 'bg-sidebar-accent text-sidebar-accent-foreground' : 'text-foreground hover:bg-sidebar-accent/60',
-      )}
-    >
-      <Icon className="h-4 w-4 shrink-0" aria-hidden />
-      <span className="flex-1 text-left">{label}</span>
+    <a href={href} onClick={inPlace(onClick)} aria-current={active ? 'page' : undefined} className={navRowClass(active)}>
+      <Icon aria-hidden />
+      <span className="flex-1 truncate text-left">{label}</span>
       {children}
     </a>
   )
@@ -496,9 +540,8 @@ function OverviewButton({ active, count, href, onClick }: { active: boolean; cou
       {count > 0 && (
         <Tooltip>
           <TooltipTrigger
-            render={
-              <span className="min-w-5 rounded-full bg-primary px-1.5 text-center text-xs font-semibold text-primary-foreground tabular-nums" />
-            }
+            // The one filled pill of the sidebar: a count that needs the person.
+            render={<Badge className="bg-foreground/10 text-foreground" />}
           >
             {count}
           </TooltipTrigger>
@@ -530,18 +573,13 @@ function NewButton({
   onNewAgentInProject?: ((projectId: string) => void) | undefined
   onSelect: (agentId: string | null) => void
 }) {
-  // Same box as the Overview row (px-2 py-1.5 gap-2) so their icons and labels align; h-auto/px-2/
-  // py-1.5 override the button size's default h-9/px-4/py-2. The active fill (same tokens as
-  // Overview) only on this project's launcher; otherwise plain, since New is an action, not a place.
-  const cls = cn(
-    'h-auto w-full justify-start gap-2 px-2 py-1.5 font-normal',
-    active && 'bg-sidebar-accent text-sidebar-accent-foreground',
-  )
+  // The row every destination has, so its icon and label line up; the picked fill only on this
+  // project's launcher, since New is an action, not a place.
   const target = scope ?? SESSIONS_ID
   return (
-    <a href={href} className={cn(buttonVariants({ variant: 'ghost' }), cls)} onClick={inPlace(() => (onNewAgentInProject ? onNewAgentInProject(target) : onSelect(null)))}>
-      <Plus className="h-4 w-4 shrink-0" />
-      <span className="whitespace-nowrap">New agent session</span>
+    <a href={href} aria-current={active ? 'page' : undefined} className={navRowClass(active)} onClick={inPlace(() => (onNewAgentInProject ? onNewAgentInProject(target) : onSelect(null)))}>
+      <Plus aria-hidden />
+      <span className="truncate">New agent session</span>
     </a>
   )
 }
@@ -560,22 +598,23 @@ function RecentsSortMenu({ order }: { order: RecentsSort }) {
             <DropdownMenuTrigger
               type="button"
               aria-label="Sort agents"
-              className="relative ml-auto flex h-5 w-5 items-center justify-center rounded-sm text-muted-foreground transition-colors after:absolute after:-inset-0.5 hover:bg-accent hover:text-accent-foreground"
+              // A ghost press of 24 (a finger's 48 on a phone), its glyph on the rows' right edge.
+              className={cn(buttonVariants({ variant: 'ghost', size: 'icon-sm' }), 'relative -mr-1 ml-auto size-6 text-muted-foreground max-md:after:absolute max-md:after:-inset-3')}
             />
           }
         >
-          <ArrowDownUp className="h-3.5 w-3.5" aria-hidden />
+          <ArrowDownUp className="size-4 shrink-0" aria-hidden />
         </TooltipTrigger>
         <TooltipContent>Sort by: {RECENTS_SORT_LABELS[order]}</TooltipContent>
       </Tooltip>
-      <DropdownMenuContent align="end" className="min-w-40">
+      <DropdownMenuContent side="top" align="end" className="min-w-40">
         <DropdownMenuGroup>
           <DropdownMenuLabel className="font-normal">Sort by</DropdownMenuLabel>
           <DropdownMenuRadioGroup value={order} onValueChange={(pick: RecentsSort) => updatePreferences({ recentsSort: pick })}>
             {(Object.keys(RECENTS_SORT_LABELS) as RecentsSort[]).map(pick => (
               <DropdownMenuRadioItem key={pick} value={pick}>
-                <Check className={cn('h-3.5 w-3.5 shrink-0', pick === order ? 'opacity-100' : 'opacity-0')} aria-hidden />
                 {RECENTS_SORT_LABELS[pick]}
+                <Check className={cn('ml-auto size-4 shrink-0', pick === order ? 'opacity-100' : 'opacity-0')} aria-hidden />
               </DropdownMenuRadioItem>
             ))}
           </DropdownMenuRadioGroup>
@@ -586,7 +625,10 @@ function RecentsSortMenu({ order }: { order: RecentsSort }) {
 }
 
 /** A person's mark on a row, beside its smaller marks. */
-const PERSON_MARK = 'size-3.5 text-[7px]'
+const PERSON_MARK = 'size-5 text-xs font-medium'
+
+/** Which of the marks that tell runs apart a list draws: one only where its rows differ in it, else it would say the same on every row. */
+type Telling = { person: boolean; driver: boolean; project: boolean }
 
 /** A main agent's list of subagents, as its row folds it: how many, how many work, and the fold. */
 type SubagentsFold = { count: number; working: number; open: boolean; onToggle: () => void }
@@ -598,6 +640,7 @@ type SubagentsFold = { count: number; working: number; open: boolean; onToggle: 
 // whether it is filled) and the row's hover, which says all of it in a sentence.
 function AgentHistoryRow({
   status,
+  telling,
   intent,
   naming = false,
   project,
@@ -627,6 +670,8 @@ function AgentHistoryRow({
   picture,
 }: {
   status: AgentStatus
+  /** Which of the marks that tell runs apart its list draws; the row's hover and its name say them all. */
+  telling: Telling
   /** The row's subagents, folded or open under it: a count at the row's end, so a row with subagents is no taller than one without. */
   fold?: SubagentsFold | undefined
   intent: string | undefined
@@ -694,33 +739,11 @@ function AgentHistoryRow({
   // "In cloud" outranks "saving…": a web agent's local half is over either way, and the cloud
   // side owns its own push/PR, so the cloud word is the truer one for that row.
   const savingNow = saving && !cloud
-  // The title only fades, and shows whole when pointed at, when it actually overflows the
-  // fixed-width rail; a short one shows plainly. Measured here since CSS cannot tell. Measured again once the page's
-  // font has loaded, and whenever the title's room changes: read before the font, a long title
-  // measured short, and kept no fade until the next reload.
-  const titleRef = useRef<HTMLSpanElement>(null)
-  const [overflowing, setOverflowing] = useState(false)
-  useEffect(() => {
-    const el = titleRef.current
-    if (!el) return
-    let gone = false
-    const measure = () => {
-      if (!gone) setOverflowing(el.scrollWidth > el.clientWidth + 1)
-    }
-    measure()
-    void document.fonts?.ready.then(measure)
-    const observer = typeof ResizeObserver === 'undefined' ? undefined : new ResizeObserver(measure)
-    observer?.observe(el)
-    return () => {
-      gone = true
-      observer?.disconnect()
-    }
-  }, [intent, naming])
   const titleText = naming ? '' : intent || 'New agent session'
   // A name that comes to a row that waited for it comes in as a new session's does.
   const waitedForName = useRef(false)
   if (naming) waitedForName.current = true
-  const titleClass = cn('rail-title min-w-0 flex-1 text-sm font-normal', overflowing && 'is-overflowing')
+  const titleClass = 'rail-title min-w-0 flex-1 truncate text-sm font-normal'
   // What the row says in a word, the one the status badge used to print: it names the circle, and
   // opens the sentence the row's hover says.
   const word = parked ? 'waiting' : inCloud ? 'in cloud' : cloudWord ? cloudWord : savingNow ? 'saving…' : status === 'unknown' ? 'status unknown' : status
@@ -765,23 +788,19 @@ function AgentHistoryRow({
     <>
       {/* The circle stands where the status word stood, and carries that word for a reader who
           cannot see a colour. */}
-      <span
-        role="img"
-        aria-label={word}
-        className={cn(
-          'inline-block h-2 w-2 shrink-0 rounded-full',
-          dotTone ?? cn('border', ringTone),
-          working && 'animate-pulse',
-        )}
-      />
-      <Tooltip disabled={!overflowing}>
-        <TooltipTrigger render={<span ref={titleRef} className={titleClass} />}>
+      <span className="flex size-4 shrink-0 items-center justify-center">
+        <span role="img" aria-label={word} className={cn('size-2 rounded-full', dotTone ?? cn('border', ringTone), working && 'animate-pulse')} />
+      </span>
+      <Tooltip>
+        <TooltipTrigger render={<span className={titleClass} />}>
           {/* Nothing yet, and something coming: a bar where the name goes, rather than a blank row or
               the prompt it is about to replace. */}
-          {naming ? <span aria-hidden className="block h-3.5 w-2/3 animate-pulse rounded bg-muted-foreground/20" /> : <RevealedTitle text={titleText} start={standIn || waitedForName.current} />}
+          {naming ? <span aria-hidden className="block h-3.5 w-2/3 animate-pulse rounded-sm bg-muted-foreground/20" /> : <RevealedTitle text={titleText} start={standIn || waitedForName.current} />}
         </TooltipTrigger>
-        <TooltipContent side="right" className="max-w-96 whitespace-pre-wrap break-words text-sm">
-          {titleText}
+        {/* The whole title, and under it what the marks the list leaves out would say. */}
+        <TooltipContent side="right" className="max-w-96">
+          <span className="block whitespace-pre-wrap break-words">{titleText}</span>
+          <span className="block text-xs text-muted-foreground">{said}</span>
         </TooltipContent>
       </Tooltip>
       {/* What is unusual about where the run is, kept on the row as one small glyph: another
@@ -789,24 +808,24 @@ function AgentHistoryRow({
           name nearly always. */}
       {startedOn && (
         <RowMark said={`Started on ${startedOn}`}>
-          <Laptop className="h-3 w-3 text-muted-foreground" />
+          <Laptop className="size-3.5 text-muted-foreground" />
         </RowMark>
       )}
       {remote && (
         <RowMark said={offline ?? (remoteLabel ? `Runs on ${remoteLabel}` : 'Runs on another machine')}>
-          <MachineIcon className="h-3 w-3 text-muted-foreground" />
+          <MachineIcon className="size-3.5 text-muted-foreground" />
         </RowMark>
       )}
       {cloud && (
         <RowMark said="Runs as a Claude Code cloud session">
-          <Cloud className="h-3 w-3 text-muted-foreground" />
+          <Cloud className="size-3.5 text-muted-foreground" />
         </RowMark>
       )}
       {/* Where the sessions of several projects are listed together, the project is what tells one
           row from the next, so it stays on the row: small, after the marks, and the first to give
           up width: a long name never takes the row's title. A project's own rail knows its project
           and shows none. */}
-      {project && <span className="max-w-[35%] min-w-0 shrink truncate text-xs text-muted-foreground">{project}</span>}
+      {project && telling.project && <span className="max-w-[35%] min-w-0 shrink truncate text-xs text-muted-foreground">{project}</span>}
       {/* The row's subagents: how many, and the fold of their list. A control, so it stays on the
           row rather than moving into the hover. Inside the row's own link, so it is a span that
           takes the click for itself. */}
@@ -828,10 +847,10 @@ function AgentHistoryRow({
             e.stopPropagation()
             fold.onToggle()
           }}
-          className="flex shrink-0 items-center gap-0.5 rounded-sm px-1 text-[11px] font-normal tabular-nums text-muted-foreground transition-colors hover:bg-background hover:text-foreground"
+          className="focus-ring relative flex shrink-0 items-center gap-0.5 rounded-sm px-1 text-xs font-normal text-muted-foreground transition-colors after:absolute after:-inset-y-1 after:inset-x-0 hover:bg-background hover:text-foreground"
         >
-          <ChevronDown className={cn('h-3 w-3 shrink-0 transition-transform', fold.open || '-rotate-90')} aria-hidden />
-          <Bot className="h-3 w-3 shrink-0" aria-hidden />
+          <ChevronDown className={cn('size-3.5 shrink-0 transition-transform', fold.open || '-rotate-90')} aria-hidden />
+          <Bot className="size-3.5 shrink-0" aria-hidden />
           {fold.count}
         </span>
       )}
@@ -839,30 +858,31 @@ function AgentHistoryRow({
           column too. */}
       {prMark && prSaid && (
         <RowMark said={prSaid}>
-          <prMark.Icon className={cn('h-3 w-3', prMark.tone)} />
+          <prMark.Icon className={cn('size-3.5', prMark.tone)} />
         </RowMark>
       )}
       {left && (
         <RowMark said={left.said}>
-          <left.Icon className="h-3 w-3 text-muted-foreground" />
+          <left.Icon className="size-3.5 text-muted-foreground" />
         </RowMark>
       )}
       {/* Whose run it is, beside which coding agent ran it. The row of a run just started holds its
           place with an empty circle, so its title has the same room when the run's own row lands. */}
-      {personWords ? (
-        <RowMark said={personWords}>
-          <PersonMark email={person} picture={account?.avatar ?? picture} className={PERSON_MARK} />
-        </RowMark>
-      ) : (
-        standIn && <PersonMark className={PERSON_MARK} />
-      )}
+      {telling.person &&
+        (personWords ? (
+          <RowMark said={personWords}>
+            <PersonMark email={person} picture={account?.avatar ?? picture} className={PERSON_MARK} />
+          </RowMark>
+        ) : (
+          standIn && <PersonMark className={PERSON_MARK} />
+        ))}
       {/* Which coding agent ran it, as its own mark at the very end of the row (his pick): a
           session is told from the next by its agent as much as by its words, and a logo reads
           faster than a word. Last, after every other mark, so the logos of all rows stand in one
           column. Pointed at, it says the model too. */}
-      {picked && agentSaid && (
+      {picked && agentSaid && telling.driver && (
         <RowMark said={agentSaid}>
-          <DriverLogo driver={picked} className="h-3 w-3 text-muted-foreground" />
+          <DriverLogo driver={picked} className="size-3.5 text-muted-foreground" />
         </RowMark>
       )}
     </>
@@ -870,7 +890,8 @@ function AgentHistoryRow({
   const row = {
     'aria-label': `${naming ? 'Naming this session' : titleText} · ${said}`,
     'aria-current': active ? ('page' as const) : undefined,
-    className: cn(buttonVariants({ variant: 'ghost' }), 'rail-row h-8 w-full items-center gap-2 px-2 text-left', active && 'bg-accent text-accent-foreground'),
+    // The navigation's row: 32 high (44 on a phone), the picked one filled, the one under the pointer half filled.
+    className: cn('focus-ring rail-row flex w-full items-center gap-2 rounded-md px-1.5 text-left text-sm text-foreground transition-colors md:h-8 max-md:h-11', active ? 'bg-foreground/8' : 'hover:bg-foreground/4 active:bg-foreground/8'),
     ...(standIn ? { 'data-stand-in': '' } : {}),
     onPointerEnter: onNear,
     onFocus: onNear,

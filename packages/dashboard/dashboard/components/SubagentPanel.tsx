@@ -60,7 +60,7 @@ function Shown({ row, projectId, events, onOpenAgent }: { row: SubagentRow; proj
   // A run's own log, read often while it works. Remembered by the run, so the pane opened again,
   // and the read that goes on when the subagent ends, show what was read from the first frame:
   // without that the pane said it had nothing to show until the read answered.
-  const { value: ownLog, loaded } = usePolled<OpenAgentEvent[]>(
+  const { value: ownLog, state } = usePolled<OpenAgentEvent[]>(
     runId ? () => onAgent(projectId, runId) : null,
     NO_EVENTS,
     row.working ? TRANSCRIPT_EVERY_MS : ENDED_EVERY_MS,
@@ -74,11 +74,11 @@ function Shown({ row, projectId, events, onOpenAgent }: { row: SubagentRow; proj
   return (
     <div className="flex min-h-0 flex-1 flex-col">
       <PaneTitle>
-        <h2 className="min-w-0 flex-1 truncate pl-2 text-xs font-medium text-foreground">{row.name}</h2>
+        <h2 className="min-w-0 flex-1 truncate pl-2 text-sm font-medium text-foreground">{row.name}</h2>
       </PaneTitle>
       {runId && onOpenAgent && (
         <PaneActions>
-          <Button variant="ghost" size="sm" className="h-7 text-xs text-muted-foreground" onClick={() => onOpenAgent(runId)}>
+          <Button variant="ghost" size="sm" className="text-muted-foreground" onClick={() => onOpenAgent(runId)}>
             Open its page
           </Button>
         </PaneActions>
@@ -92,7 +92,7 @@ function Shown({ row, projectId, events, onOpenAgent }: { row: SubagentRow; proj
           head={<PaneHead row={row} />}
           tail={!row.working && transcript.length > 0 ? <PaneFoot row={row} calls={calls} /> : undefined}
         />
-        {transcript.length === 0 && !(runId && !loaded) && <p className="px-3 text-sm text-muted-foreground">{row.working ? 'Nothing said or done yet.' : 'It left nothing to show.'}</p>}
+        {transcript.length === 0 && !(runId && state === 'unknown') && <p className="px-3 text-sm text-muted-foreground">{row.working ? 'Nothing said or done yet.' : 'It left nothing to show.'}</p>}
       </div>
     </div>
   )
@@ -104,7 +104,7 @@ function PaneHead({ row }: { row: SubagentRow }) {
   return (
     <div className="flex flex-col gap-4 pb-3 font-sans text-sm">
       {row.prompt && (
-        <section aria-label="Its prompt" className="max-h-64 overflow-auto rounded-xl bg-muted px-3.5 py-2.5 break-words whitespace-pre-wrap text-foreground">
+        <section aria-label="Its prompt" className="max-h-64 overflow-auto rounded-lg bg-muted px-3 py-2 break-words whitespace-pre-wrap text-foreground">
           {row.prompt}
         </section>
       )}

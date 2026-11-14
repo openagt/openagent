@@ -58,7 +58,7 @@ export function FileView({ page, projectId, agentId, path, wrap, source, files, 
   onOpen: (path: string, keep: boolean) => void
 }) {
   const host = useModuleHost()
-  const { value, loaded } = usePolled<FileContent | null>(() => readContent(host, projectId, path, agentId), null, 5_000, [projectId, agentId, path], { remember: contentKey(projectId, agentId, path) })
+  const { value, state } = usePolled<FileContent | null>(() => readContent(host, projectId, path, agentId), null, 5_000, [projectId, agentId, path], { remember: contentKey(projectId, agentId, path) })
   const markdown = isMarkdown(path)
   const rendered = markdown && !source
   const parts = path.split('/')
@@ -101,7 +101,7 @@ export function FileView({ page, projectId, agentId, path, wrap, source, files, 
         )}
       </div>
       <div className="min-h-0 flex-auto overflow-auto">
-        {!loaded ? (
+        {state === 'unknown' ? (
           <Waiting className="p-3">Reading the file…</Waiting>
         ) : !value ? (
           <p className="p-3 text-xs text-muted-foreground">This file is not here: it was deleted or moved, or it cannot be read.</p>

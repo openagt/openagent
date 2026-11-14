@@ -59,7 +59,7 @@ test('status reads the state; model and offset write it; stop turns it off; ever
   }
 })
 
-test('usage errors exit 2 with the usage on stderr and nothing on stdout; outside a repository is a refusal', async () => {
+test('usage errors exit 2 with what was wrong and where the usage is on stderr, nothing on stdout; outside a repository is a refusal', async () => {
   const repo = await testRepo()
   const elsewhere = await mkdtemp(join(tmpdir(), 'not-a-repo-'))
   try {
@@ -67,7 +67,7 @@ test('usage errors exit 2 with the usage on stderr and nothing on stdout; outsid
       const bad = await run(repo, ...argv)
       assert.equal(bad.code, 2, argv.join(' '))
       assert.equal(bad.out, undefined)
-      assert.match(bad.err, /usage: scheduler/)
+      assert.match(bad.err, argv.length ? /\nRun `scheduler --help` for usage\.$/ : /^usage: scheduler/)
     }
     const outside = await run(elsewhere, 'status')
     assert.equal(outside.code, 1)

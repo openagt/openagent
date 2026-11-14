@@ -1,6 +1,6 @@
 import type { ActiveAgent, Overview } from '../../src/index.js'
 import { onOverview } from '../rpc/reads.js'
-import { usePolled } from './use-async.js'
+import { usePolled, type ReadState } from './use-async.js'
 import { runsAgain, useRunsPace } from './runs-changed.js'
 
 // Is an agent working right now (#875)? Cross-project on purpose: the mark answers "is the AI
@@ -15,8 +15,8 @@ import { runsAgain, useRunsPace } from './runs-changed.js'
 /** Stable initial, so the poll does not churn on every render. */
 const IDLE: Overview = { active: [], queueOpen: 0, recent: [] }
 
-/** Every agent going right now, across the projects; `stale` while that is only what an earlier visit read, `loaded` once anything was. */
-export function useActiveAgents(): { active: ActiveAgent[]; stale: boolean; loaded: boolean } {
-  const { value, stale, loaded } = usePolled<Overview>(onOverview, IDLE, useRunsPace(5000), [], { remember: 'overview', stored: true }, runsAgain(undefined))
-  return { active: value.active, stale, loaded }
+/** Every agent going right now, across the projects, and what is known of it. */
+export function useActiveAgents(): { active: ActiveAgent[]; state: ReadState } {
+  const { value, state } = usePolled<Overview>(onOverview, IDLE, useRunsPace(5000), [], { remember: 'overview', stored: true }, runsAgain(undefined))
+  return { active: value.active, state }
 }

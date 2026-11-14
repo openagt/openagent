@@ -15,15 +15,15 @@ export function Switch({ className, disabled = false, ...props }: SwitchProps) {
     <SwitchPrimitive.Root
       disabled={disabled}
       className={cn(
-        'relative inline-flex h-5 w-9 shrink-0 items-center rounded-full border border-border bg-muted p-0.5 after:absolute after:-inset-y-1 after:inset-x-0 hover:not-data-[checked]:border-foreground/40',
-        'transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-primary)] focus-visible:ring-offset-2 focus-visible:ring-offset-background',
-        'data-[checked]:border-primary data-[checked]:bg-primary data-[checked]:hover:opacity-90',
+        // A 16px track in a 24px hit area.
+        'focus-ring relative inline-flex h-4 w-7 shrink-0 items-center rounded-full border border-input bg-muted p-0.5 after:absolute after:-inset-y-1 after:inset-x-0 hover:not-data-[checked]:border-input-hover',
+        'transition-colors data-[checked]:border-primary data-[checked]:bg-primary data-[checked]:hover:border-primary-hover data-[checked]:hover:bg-primary-hover',
         'data-[disabled]:pointer-events-none data-[disabled]:opacity-50',
         className,
       )}
       {...props}
     >
-      <SwitchPrimitive.Thumb className="block h-3.5 w-3.5 rounded-full bg-foreground/70 transition-transform data-[checked]:translate-x-4 data-[checked]:bg-primary-foreground" />
+      <SwitchPrimitive.Thumb className="block size-2.5 rounded-full bg-foreground/70 transition-transform data-[checked]:translate-x-3 data-[checked]:bg-primary-foreground" />
     </SwitchPrimitive.Root>
   )
 }

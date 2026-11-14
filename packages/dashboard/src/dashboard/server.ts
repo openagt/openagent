@@ -6,7 +6,7 @@ import { makeRpcMount, RPC_PREFIX, isSameOriginRequest, isExpectedHost, isJsonRe
 import type { DashboardContext } from '../dashboard-rpc/context.js'
 import { handleViewRequest, keepView, serveWebsite, VIEW_PREFIX } from './website.js'
 import { requestPathname } from '../request-path.js'
-import { BROUGHT_MODULES_PREFIX, COMPUTER_MODULES_PREFIX, MODULES_PREFIX, serveBroughtModuleFile, serveComputerModuleFile, serveModuleFile } from './module-serve.js'
+import { BROUGHT_MODULES_PREFIX, COMPUTER_MODULES_PREFIX, MODULES_PREFIX, PAGE_SHEET_PATH, serveModuleFile, servePageSheet } from './module-serve.js'
 import { handleRelayRequest, RELAY_PREFIX, type RelayHandlers } from './relay-endpoints.js'
 import { noteOwnersName, OWNERS_NAME_HEADER } from './machine-call.js'
 import { handleScreenRequest, kept, SCREEN_PREFIX, type ScreenHandlers } from './screen.js'
@@ -209,12 +209,17 @@ export async function startDashboard(opts: DashboardOptions): Promise<Dashboard>
     // A project's dashboard modules (#1774): only the files of a package the project brings as a module.
     // The computer's modules are no project's, and are served by their package alone.
     // So are the ones OpenAgent brings to projects, from its own copy, for another computer's project.
-    const ofComputer = pathname.startsWith(`${COMPUTER_MODULES_PREFIX}/`)
-    const brought = pathname.startsWith(`${BROUGHT_MODULES_PREFIX}/`)
-    if (ofComputer || brought || pathname.startsWith(`${MODULES_PREFIX}/`)) {
+    if ([COMPUTER_MODULES_PREFIX, BROUGHT_MODULES_PREFIX, MODULES_PREFIX].some(prefix => pathname.startsWith(`${prefix}/`))) {
       // Void-dispatched like the bundle: a throw here must answer, not take the daemon down (#938).
-      void (ofComputer ? serveComputerModuleFile : brought ? serveBroughtModuleFile : serveModuleFile)(req, res, pathname).catch(() => {
+      void serveModuleFile(req, res, pathname).catch(() => {
         if (!res.headersSent) res.writeHead(500, { 'content-type': 'text/plain' }).end('module file unreadable')
+      })
+      return
+    }
+    // The page's one sheet of classes, the dashboard's and its modules' (page-styles.ts).
+    if (pathname === PAGE_SHEET_PATH) {
+      void servePageSheet(req, res, clientBundleDir).catch(() => {
+        if (!res.headersSent) res.writeHead(500, { 'content-type': 'text/plain' }).end('page sheet unreadable')
       })
       return
     }
@@ -249,7 +254,7 @@ export async function startDashboard(opts: DashboardOptions): Promise<Dashboard>
     return { ...dashboard, secureUrl: secureUrlOf(opts.secure.name, await listen(secureServer, opts.secure.port)) }
   } catch (err) {
     // A secure address that cannot start leaves the dashboard on its plain address, as without one.
-    console.log(`the secure address ${opts.secure.name} could not start (${err instanceof Error ? err.message : String(err)}): the dashboard answers on ${dashboard.url} only`)
+    console.log(`[openagent] the secure address ${opts.secure.name} could not start (${err instanceof Error ? err.message : String(err)}): the dashboard answers on ${dashboard.url} only`)
     return dashboard
   }
 }

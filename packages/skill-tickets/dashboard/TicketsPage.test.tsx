@@ -81,7 +81,7 @@ describe('TicketsPage (#1144)', () => {
     await screen.findByText('Do the thing')
     const title = screen.getByRole('heading', { level: 1 })
     expect(title.textContent).toBe('Tickets 2/2')
-    expect(title.className).toBe('text-lg font-semibold')
+    expect(title.className).toBe('text-xl font-semibold')
     const line = title.nextElementSibling!
     expect(line.textContent).toBe('Every project\u2019s tickets/ backlog: what agents plan from.')
     expect(line.className).toBe('mt-1 text-sm text-muted-foreground')
@@ -113,6 +113,7 @@ describe('TicketsPage (#1144)', () => {
     fireEvent.click(await screen.findByText('Do the thing'))
     // The module's own page for that ticket: where the dashboard's link convention sends a link to it.
     expect(host.openPage).toHaveBeenCalledWith('tickets', ['t.md'], 'p1')
+    expect(screen.getByRole('link', { name: 'Do the thing' }).getAttribute('href')).toBe('/p1/tickets/t.md')
   })
 
   test("a ticket's page opened from the list goes back to the list as it was, every project's or one's: the browser's Back, after Forward or a reload too", async () => {
@@ -163,8 +164,7 @@ describe('TicketsPage (#1144)', () => {
   test('a project with no tickets still offers its own update, not a dead end', async () => {
     onAllTickets.mockResolvedValue([{ projectId: 'p1', projectName: 'Alpha', tickets: [] }])
     render()
-    expect(await screen.findByText('Alpha')).toBeTruthy()
-    expect(screen.getByRole('button', { name: 'Update tickets' })).toBeTruthy()
+    expect(await screen.findByRole('button', { name: 'Update tickets' })).toBeTruthy()
   })
 
   test('no project with the package says so rather than an empty page', async () => {
@@ -219,7 +219,7 @@ describe('TicketsPage sort (#1144/#1265)', () => {
     twoByPriority()
     render()
     await screen.findByText('Low priority')
-    const titles = screen.getAllByRole('button').map(b => b.textContent)
+    const titles = screen.getAllByRole('link').map(b => b.textContent)
     // 'low.md' is first in the fixture, standing in for "whatever order the server sent" — the
     // default sort must not have reordered it.
     expect(titles.findIndex(t => t?.includes('Low priority'))).toBeLessThan(titles.findIndex(t => t?.includes('High priority')))
@@ -230,8 +230,8 @@ describe('TicketsPage sort (#1144/#1265)', () => {
     render()
     await screen.findByText('Low priority')
     fireEvent.click(screen.getByRole('button', { name: /sort: date/i }))
-    fireEvent.click(await screen.findByRole('menuitem', { name: 'Priority' }))
-    const titles = (await screen.findAllByRole('button')).map(b => b.textContent)
+    fireEvent.click(await screen.findByRole('menuitemcheckbox', { name: 'Priority' }))
+    const titles = (await screen.findAllByRole('link')).map(b => b.textContent)
     expect(titles.findIndex(t => t?.includes('High priority'))).toBeLessThan(titles.findIndex(t => t?.includes('Low priority')))
     expect(window.location.search).toBe('?sort=priority')
   })
@@ -251,8 +251,8 @@ describe('TicketsPage sort (#1144/#1265)', () => {
     render()
     await screen.findByText('Newer')
     fireEvent.click(screen.getByRole('button', { name: /sort: date/i }))
-    fireEvent.click(await screen.findByRole('menuitem', { name: 'Priority' }))
-    const titles = (await screen.findAllByRole('button')).map(b => b.textContent)
+    fireEvent.click(await screen.findByRole('menuitemcheckbox', { name: 'Priority' }))
+    const titles = (await screen.findAllByRole('link')).map(b => b.textContent)
     expect(titles.findIndex(t => t?.includes('Newer'))).toBeLessThan(titles.findIndex(t => t?.includes('Older')))
   })
 })
@@ -346,7 +346,7 @@ describe('TicketsPage grouping (#1144)', () => {
     expect(screen.getByText('Alpha')).toBeTruthy()
     expect(screen.getByText('Beta')).toBeTruthy()
     // Cross-project priority order: Beta's 9 above Alpha's 2.
-    const titles = (await screen.findAllByRole('button')).map(b => b.textContent)
+    const titles = (await screen.findAllByRole('link')).map(b => b.textContent)
     expect(titles.findIndex(t => t?.includes('Beta ticket'))).toBeLessThan(titles.findIndex(t => t?.includes('Alpha ticket')))
     // No per-project Update bars in the flat list.
     expect(screen.queryByRole('button', { name: 'Update tickets' })).toBeNull()
@@ -607,8 +607,20 @@ describe('TicketsPage selection scopes the queue buttons', () => {
     fireEvent.click(screen.getByRole('checkbox', { name: 'Select First' }))
     expect(screen.getByRole('button', { name: 'Add to queue: one ticket' })).toBeTruthy()
     fireEvent.click(screen.getByRole('button', { name: 'Clear selection' }))
-    expect(screen.queryByText(/selected/)).toBeNull()
+    // The bar leaves in 120ms.
+    await waitFor(() => expect(screen.queryByText(/selected/)).toBeNull())
     expect(screen.getByRole('button', { name: 'Add to queue: 3 tickets' })).toBeTruthy()
+  })
+
+  test('Escape clears the selection, as Clear selection does', async () => {
+    threeTickets()
+    render()
+    await screen.findByText('First')
+    fireEvent.click(screen.getByRole('checkbox', { name: 'Select First' }))
+    expect(screen.getByText('1 selected')).toBeTruthy()
+    fireEvent.keyDown(window, { key: 'Escape' })
+    await waitFor(() => expect(screen.queryByText(/selected/)).toBeNull())
+    expect(screen.getByRole('checkbox', { name: 'Select First' }).getAttribute('data-checked')).toBeNull()
   })
 
   test('a claimed ticket in the selection is still skipped, and the label counts without it', async () => {
@@ -642,7 +654,7 @@ describe('TicketsPage selection scopes the queue buttons', () => {
     // shown set again and the selection readout goes quiet.
     fireEvent.change(screen.getByRole('textbox', { name: /search tickets/i }), { target: { value: 'First' } })
     await waitFor(() => expect(screen.queryByText('Second')).toBeNull())
-    expect(screen.queryByText('1 selected')).toBeNull()
+    await waitFor(() => expect(screen.queryByText('1 selected')).toBeNull())
     fireEvent.click(screen.getByRole('button', { name: 'Add to queue: one ticket' }))
     await screen.findByRole('button', { name: 'Queued' })
     expect(handed('p1')).toEqual([[link('First', 'a.md', 7)]])

@@ -69,7 +69,7 @@ test('runCli --help prints usage and exits 0', async () => {
 test('runCli usage error exits 2', async () => {
   const { io, err } = capture()
   assert.equal(await runCli(['--bogus'], io), 2)
-  assert.ok(err.includes('Run `openagent --help` for usage.'))
+  assert.deepEqual(err, ['unknown option: --bogus\nRun `openagent --help` for usage.'])
 })
 
 // The CLI is foreground-only, so there is no `--daemon`, no `stop`, and no background dashboard

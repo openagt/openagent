@@ -4,6 +4,8 @@ import { rpc } from './rpc.js'
 
 /** How often the liveness probe asks, healthy or not. */
 const PROBE_MS = 5000
+/** How soon a refused probe is asked again before the page says so. */
+const ASK_AGAIN_MS = 1000
 /** A probe not answered by then counts as not answered: longer than the longest read that waits for a change (25 s), which the browser may queue the probe behind. */
 const LONGER_THAN_A_WAITING_READ_MS = 30_000
 
@@ -21,6 +23,8 @@ export function useDaemonHealth(): Daemon {
     let timer: ReturnType<typeof setTimeout> | undefined
     // The probe in flight, the one whose answer counts: one given up on is aborted, and its answer, late or not, changes nothing.
     let asking: AbortController | undefined
+    // A refusal after an answer is asked again before it is said: a busy computer drops a probe now and then.
+    let refusedOnce = false
     const probe = () => {
       if (document.visibilityState === 'hidden') {
         timer = setTimeout(probe, PROBE_MS)
@@ -32,18 +36,23 @@ export function useDaemonHealth(): Daemon {
         if (asking !== ask) return
         asking = undefined
         clearTimeout(timer)
+        if (answered === 'answering') refusedOnce = false
         setDaemon(answered)
         timer = setTimeout(probe, PROBE_MS)
+      }
+      const refused = () => {
+        if (asking !== ask || refusedOnce) return settle(navigator.onLine ? 'stopped' : 'silent')
+        refusedOnce = true
+        asking = undefined
+        clearTimeout(timer)
+        timer = setTimeout(probe, ASK_AGAIN_MS)
       }
       timer = setTimeout(() => {
         settle('silent')
         ask.abort()
       }, LONGER_THAN_A_WAITING_READ_MS)
       // Refused at once, by a computer that is online: nothing serves the page's address.
-      rpc<typeof impl.onProjects>('onProjects', { signal: ask.signal })().then(
-        () => settle('answering'),
-        () => settle(navigator.onLine ? 'stopped' : 'silent'),
-      )
+      rpc<typeof impl.onProjects>('onProjects', { signal: ask.signal })().then(() => settle('answering'), refused)
     }
     timer = setTimeout(probe, PROBE_MS)
     return () => {

@@ -16,7 +16,7 @@ import { SkillsOff } from './SkillsMenu.js'
 import { isPublishPick, offeredPublishPicks, type PublishPick } from '../../src/client.js'
 import { useProjectLauncher } from '../lib/use-project-launcher.js'
 import { promptWithContext, type ContextSet } from '../lib/use-context-set.js'
-import { shortcut } from '../lib/shortcut.js'
+import { pressed, shortcut } from '../lib/shortcut.js'
 import { useIsMobile } from '../lib/use-mobile.js'
 
 /** A message sent to a working agent that it has not read yet: shown waiting until it lands. */
@@ -211,31 +211,30 @@ export function AgentComposer({
   useEffect(() => {
     if (!live) return
     const onKey = (event: KeyboardEvent) => {
-      if (event.key !== 'Escape' || stopping || down || document.querySelector('[role="dialog"], [role="menu"], [role="listbox"], .ProseMirror[aria-expanded="true"]')) return
+      if (!pressed(event, 'stop') || stopping || down || document.querySelector('[role="dialog"], [role="menu"], [role="listbox"], .ProseMirror[aria-expanded="true"]')) return
       stopSession()
     }
     window.addEventListener('keydown', onKey, true)
     return () => window.removeEventListener('keydown', onKey, true)
   })
 
-  // The empty box's slot control while the agent works: Stop, as Claude Code's, a square and no button around it.
+  // The empty box's slot control while the agent works: Stop, as Claude Code's, a square in the box's one primary press.
   const idleControl = live ? (
     <Tooltip>
       <TooltipTrigger
         render={
           <Button
             type="button"
-            variant="ghost"
             size="icon-sm"
             onClick={stopSession}
             disabled={stopping || down}
             aria-label="Stop agent"
             // Stopping draws its spinner in full; off while OpenAgent is not answering, Stop is dimmed as any button off.
-            className={stopping ? 'h-8 w-8 shrink-0 disabled:opacity-100' : 'h-8 w-8 shrink-0'}
+            className={stopping ? 'shrink-0 disabled:opacity-100' : 'shrink-0'}
           />
         }
       >
-        {stopping ? <Loader2 className="h-4 w-4 animate-spin" /> : <Square className="h-3.5 w-3.5 rounded-[3px] fill-current" />}
+        {stopping ? <Loader2 className="h-4 w-4 animate-spin" /> : <Square className="size-3 fill-current" />}
       </TooltipTrigger>
       <TooltipContent className="flex items-center gap-1.5">
         {stopping ? (
@@ -243,7 +242,7 @@ export function AgentComposer({
         ) : (
           <>
             Stop
-            <kbd className="flex h-[17px] items-center justify-center rounded border border-background/20 px-1 font-sans text-[11px]">Esc</kbd>
+            <kbd className="flex h-5 items-center justify-center rounded-sm border border-hairline px-1 font-sans text-xs">Esc</kbd>
           </>
         )}
       </TooltipContent>
@@ -253,7 +252,8 @@ export function AgentComposer({
   const surfacedError = error ?? stopError
 
   return (
-    <div className="@container mx-auto w-full max-w-3xl p-2">
+    // The chat's column and its side padding (EventList), so the box and what is in the chat share both edges.
+    <div className="@container mx-auto w-full max-w-3xl px-4 py-2">
       {surfacedError && <p role="alert" className="mb-1 px-2 text-xs text-danger">{surfacedError}</p>}
       {notSent && <p role="status" className="mb-1 px-2 text-xs text-muted-foreground">Not sent: the session stopped first.</p>}
       <Composer

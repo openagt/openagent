@@ -14,3 +14,10 @@ export const PopupPlacementContext = createContext<PopupPlacement>('absolute')
 export function usePopupPlacement(): PopupPlacement {
   return useContext(PopupPlacementContext)
 }
+
+/**
+ * How a menu, a popover or a tooltip comes and goes: it grows out of its trigger's edge in 140ms and
+ * fades in 90ms; opened or closed from the keyboard (Base UI's `data-instant`) it is there at once.
+ */
+export const POPUP_MOTION_CLASS =
+  'origin-(--transform-origin) transition-[opacity,scale] duration-140 data-[ending-style]:duration-90 data-[starting-style]:scale-97 data-[starting-style]:opacity-0 data-[ending-style]:scale-97 data-[ending-style]:opacity-0 data-instant:transition-none'

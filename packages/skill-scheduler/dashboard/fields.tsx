@@ -94,7 +94,7 @@ export function SaidFields({ project, said, agent, autoFocus, onChange }: { proj
         className="bg-background"
       />
       <div className="flex flex-wrap items-center gap-3">
-        <Button variant="outline" size="sm" disabled={words === '' || written === 'writing'} onClick={() => void writeIt()}>
+        <Button variant="outline" disabled={words === '' || written === 'writing'} onClick={() => void writeIt()}>
           {written === 'writing' ? 'Writing…' : 'Write the line'}
         </Button>
         <span className={hint}>Asks {AGENT_LABELS[agent]} once for a shell line from these words, and puts it below; costs a fraction of a cent. Nothing is run or saved.</span>
@@ -125,7 +125,7 @@ export function SaidFields({ project, said, agent, autoFocus, onChange }: { proj
         <span className="font-mono">$LAST_RUN</span> is the time the row last started an agent, or was switched on when that is later.
       </p>
       <div className="flex flex-wrap items-center gap-3">
-        <Button variant="outline" size="sm" disabled={line === '' || tried === 'trying'} onClick={() => void tryIt()}>
+        <Button variant="outline" disabled={line === '' || tried === 'trying'} onClick={() => void tryIt()}>
           {tried === 'trying' ? 'Trying…' : 'Try it'}
         </Button>
         <span className={hint}>Runs the line once, now, on this machine, for 20 seconds at most. Nothing is saved and no agent starts.</span>
@@ -224,7 +224,7 @@ export function PaceFields({
     <div className={cn('flex flex-wrap items-center gap-2 text-sm', !own && 'opacity-60')}>
       <Input type="number" name="every" min={1} max={MAX_COUNT} value={typed.count} disabled={disabled} onChange={e => onChange(wait({ count: e.target.value }))} aria-label="How long" className="h-8 w-20 bg-background px-2" />
       <Select items={PACE_UNITS.map(unit => ({ value: unit, label: unitWord(unit, typed.count) }))} value={typed.unit} disabled={disabled} onValueChange={unit => onChange(wait({ unit: unit as PaceUnit }))}>
-        <SelectTrigger size="sm" aria-label="Unit" className="w-28">
+        <SelectTrigger aria-label="Unit" className="w-28">
           <SelectValue />
         </SelectTrigger>
         <SelectContent>
@@ -348,7 +348,7 @@ export function PublishField({ gitHost, own, pick, disabled, onChange }: { gitHo
   const choices = publishChoices(gitHost, pick).map(choice => ({ value: choice, label: publishLabel(choice, own) }))
   return (
     <Select items={choices} value={pick} disabled={disabled} onValueChange={next => onChange(next as PublishPick)}>
-      <SelectTrigger size="sm" aria-label="What its runs publish" className="w-56">
+      <SelectTrigger aria-label="What its runs publish" className="w-56">
         <SelectValue />
       </SelectTrigger>
       <SelectContent>
@@ -404,7 +404,7 @@ export function RunsOnFields({
           Agent
         </Label>
         <Select items={AGENTS.map(a => ({ value: a, label: AGENT_LABELS[a] }))} value={agent} disabled={disabled} onValueChange={next => onChange({ agent: next as AgentName, model: 'skill' })}>
-          <SelectTrigger id="automation-agent" size="sm" className="w-44">
+          <SelectTrigger id="automation-agent" className="w-44">
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
@@ -421,7 +421,7 @@ export function RunsOnFields({
           Model
         </Label>
         <Select items={models} value={model} disabled={disabled} onValueChange={next => onChange({ agent, model: next as ModelDraft })}>
-          <SelectTrigger id="automation-model" size="sm" className="w-72">
+          <SelectTrigger id="automation-model" className="w-72">
             <SelectValue />
           </SelectTrigger>
           <SelectContent>

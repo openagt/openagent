@@ -26,11 +26,11 @@ export interface Placed {
 // the base class again would win over the refinement.
 const FULL = '@max-2xl:basis-full'
 const FLEX: Record<CardWidth, string> = {
-  '1/4': `${FULL} grow-[3] @2xl:basis-[calc(33.333%_-_0.667rem)] @4xl:basis-[calc(25%_-_0.75rem)]`,
-  '1/3': `${FULL} grow-[4] @2xl:basis-[calc(50%_-_0.5rem)] @5xl:basis-[calc(33.333%_-_0.667rem)]`,
-  '1/2': `${FULL} grow-[6] @2xl:basis-[calc(50%_-_0.5rem)]`,
-  '2/3': `${FULL} grow-[8] @2xl:basis-[calc(50%_-_0.5rem)] @5xl:basis-[calc(66.667%_-_0.334rem)]`,
-  '3/4': `${FULL} grow-[9] @2xl:basis-[calc(50%_-_0.5rem)] @5xl:basis-[calc(75%_-_0.25rem)]`,
+  '1/4': `${FULL} grow-[3] @2xl:basis-[calc(33.333%_-_1.333rem)] @4xl:basis-[calc(25%_-_1.5rem)]`,
+  '1/3': `${FULL} grow-[4] @2xl:basis-[calc(50%_-_1rem)] @5xl:basis-[calc(33.333%_-_1.333rem)]`,
+  '1/2': `${FULL} grow-[6] @2xl:basis-[calc(50%_-_1rem)]`,
+  '2/3': `${FULL} grow-[8] @2xl:basis-[calc(50%_-_1rem)] @5xl:basis-[calc(66.667%_-_0.667rem)]`,
+  '3/4': `${FULL} grow-[9] @2xl:basis-[calc(50%_-_1rem)] @5xl:basis-[calc(75%_-_0.5rem)]`,
   '1': 'basis-full grow-[12]',
 }
 
@@ -61,7 +61,8 @@ function CardCell({ card, className }: { card: OverviewCard; className: string }
 function Grid({ children, onDragOver, onDrop }: { children: ReactNode; onDragOver?: (event: DragEvent) => void; onDrop?: (event: DragEvent) => void }) {
   return (
     <div className="@container">
-      <div className="flex flex-wrap gap-4" onDragOver={onDragOver} onDrop={onDrop}>
+      {/* 40 down between the rows of parts, 32 across: space, not lines, sets them apart. */}
+      <div className="flex flex-wrap gap-x-8 gap-y-10" onDragOver={onDragOver} onDrop={onDrop}>
         {children}
       </div>
     </div>
@@ -83,7 +84,7 @@ const transitionName = (id: string): string => `card-${id.replace(/[^a-zA-Z0-9_-
 
 /** The bar in the gap beside a card where a dragged card lands. */
 function DropBar({ side }: { side: 'before' | 'after' }) {
-  return <span data-drop={side} aria-hidden className={cn('pointer-events-none absolute inset-y-0 z-20 w-1 rounded-full bg-primary', side === 'before' ? '-left-2.5' : '-right-2.5')} />
+  return <span data-drop={side} aria-hidden className={cn('pointer-events-none absolute inset-y-0 z-20 w-1 rounded-full bg-primary', side === 'before' ? '-left-4.5' : '-right-4.5')} />
 }
 
 /**
@@ -98,7 +99,7 @@ function DropBar({ side }: { side: 'before' | 'after' }) {
  * new places: this page's (the picked project's, or the one of every project, which also lays out a
  * project never arranged on its own).
  */
-export function EditOverview({ arranged, layouts, layoutKey }: { arranged: Placed[]; layouts: OverviewLayouts | undefined; layoutKey: string }) {
+export function EditOverview({ arranged, layouts, layoutKey, notice }: { arranged: Placed[]; layouts: OverviewLayouts | undefined; layoutKey: string; /** What arranging does, said above the tray. */ notice: ReactNode }) {
   const [dragging, setDragging] = useState<Dragging | null>(null)
   // Where the card being dragged lands: beside one card (before or after it, by which half of it the
   // pointer is over), or at the end, over the page's empty room. It is drawn as a bar in the gap,
@@ -165,51 +166,7 @@ export function EditOverview({ arranged, layouts, layoutKey }: { arranged: Place
   const last = shown.at(-1)?.card.id
 
   return (
-    <div className="space-y-4">
-      {/* The tray: the cards not on the page. A card dragged here leaves the page. */}
-      <section
-        aria-label="Cards not on the page"
-        onDragOver={event => dragging?.from === 'page' && event.preventDefault()}
-        onDrop={event => {
-          event.preventDefault()
-          if (dragging?.from === 'page') change(dragging.id, { hidden: true })
-          endDrag()
-        }}
-        className={cn('rounded-lg border border-dashed border-border px-3 py-2.5', dragging?.from === 'page' && 'border-primary bg-accent/40')}
-      >
-        <p className="mb-2 text-xs text-muted-foreground">
-          {tray.length === 0 ? (
-            <>
-              Every card is on the page. Drag one here, or press its <TakeOffMark />, to take it off.
-            </>
-          ) : (
-            'Not on the page: drag one onto a card to put it there, or press + to add it at the end.'
-          )}
-        </p>
-        {tray.length > 0 && (
-          <ul className="flex flex-wrap gap-2">
-            {tray.map(({ card }) => (
-              <li
-                key={card.id}
-                aria-label={card.label}
-                draggable
-                onDragStart={event => {
-                  event.dataTransfer.effectAllowed = 'move'
-                  setDragging({ id: card.id, from: 'tray' })
-                }}
-                onDragEnd={endDrag}
-                className="flex cursor-grab items-center gap-1 rounded-md border border-border bg-card py-0.5 pr-0.5 pl-2 text-sm"
-              >
-                <GripVertical className="h-3.5 w-3.5 text-muted-foreground" aria-hidden />
-                {card.label}
-                <button type="button" aria-label={`Add ${card.label}`} onClick={() => place(card.id, undefined, false)} className="flex size-6 items-center justify-center rounded text-muted-foreground hover:bg-accent hover:text-foreground">
-                  <Plus className="h-3.5 w-3.5" aria-hidden />
-                </button>
-              </li>
-            ))}
-          </ul>
-        )}
-      </section>
+    <div className="space-y-10">
       <Grid
         onDragOver={event => {
           if (dragging === null) return
@@ -255,7 +212,7 @@ export function EditOverview({ arranged, layouts, layoutKey }: { arranged: Place
             onDrop={drop}
             onDragEnd={endDrag}
             // The card being moved stays where it was, faded, until it is dropped where the bar shows.
-            className={cn('relative flex min-w-0 cursor-grab flex-col rounded-lg outline-1 outline-offset-2 outline-border outline-dashed', FLEX[width], dragging?.id === card.id && 'opacity-40')}
+            className={cn('group/cell relative flex min-w-0 cursor-grab flex-col rounded-lg outline-1 outline-offset-8 outline-hairline outline-dashed', FLEX[width], dragging?.id === card.id && 'opacity-40')}
             style={{ viewTransitionName: transitionName(card.id) }}
           >
             {/* Where the dragged card lands: a bar in the gap at this card's edge, laid over the page. */}
@@ -277,6 +234,53 @@ export function EditOverview({ arranged, layouts, layoutKey }: { arranged: Place
           </div>
         ))}
       </Grid>
+      {/* Under the parts, so arranging moves none of them: what it does, and the tray of the cards not on the page. A card dragged here leaves the page. */}
+      <section
+        aria-label="Cards not on the page"
+        onDragOver={event => dragging?.from === 'page' && event.preventDefault()}
+        onDrop={event => {
+          event.preventDefault()
+          if (dragging?.from === 'page') change(dragging.id, { hidden: true })
+          endDrag()
+        }}
+        className={cn('rounded-lg border border-dashed border-border px-3 py-3', dragging?.from === 'page' && 'border-primary bg-accent/40')}
+      >
+        <p role="status" className="mb-2 text-sm text-muted-foreground">
+          {notice}
+        </p>
+        <p className="mb-2 text-sm text-muted-foreground">
+          {tray.length === 0 ? (
+            <>
+              Every card is on the page. Drag one here, or press its <TakeOffMark />, to take it off.
+            </>
+          ) : (
+            'Not on the page: drag one onto a card to put it there, or press + to add it at the end.'
+          )}
+        </p>
+        {tray.length > 0 && (
+          <ul className="flex flex-wrap gap-2">
+            {tray.map(({ card }) => (
+              <li
+                key={card.id}
+                aria-label={card.label}
+                draggable
+                onDragStart={event => {
+                  event.dataTransfer.effectAllowed = 'move'
+                  setDragging({ id: card.id, from: 'tray' })
+                }}
+                onDragEnd={endDrag}
+                className="flex cursor-grab items-center gap-1 rounded-md border border-border bg-card py-0.5 pr-0.5 pl-2 text-sm"
+              >
+                <GripVertical className="h-3.5 w-3.5 text-muted-foreground" aria-hidden />
+                {card.label}
+                <button type="button" aria-label={`Add ${card.label}`} onClick={() => place(card.id, undefined, false)} className="focus-ring flex size-6 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-foreground">
+                  <Plus className="h-3.5 w-3.5" aria-hidden />
+                </button>
+              </li>
+            ))}
+          </ul>
+        )}
+      </section>
     </div>
   )
 }
@@ -289,7 +293,8 @@ export function TakeOffMark() {
 /** The bar above a card while the page is arranged, so it covers none of the card: its handle, its widths, and ✕. */
 function CardBar({ label, widths, width, first, last, onStep, onWidth, onHide }: { label: string; widths: CardWidth[]; width: CardWidth; first: boolean; last: boolean; onStep: (by: -1 | 1) => void; onWidth: (width: CardWidth) => void; onHide: () => void }) {
   return (
-    <div role="toolbar" aria-label={label} className="mb-1.5 flex items-center gap-1 self-end rounded-md border border-border bg-popover p-0.5 text-popover-foreground shadow-sm">
+    // On the heading's line, over its link (asleep while arranging), so the part keeps its place.
+    <div role="toolbar" aria-label={label} className="absolute top-0 right-0 z-10 flex h-8 items-center gap-1 bg-background pl-2">
       <button
         type="button"
         aria-label={`Move ${label}: arrow keys`}
@@ -299,12 +304,12 @@ function CardBar({ label, widths, width, first, last, onStep, onWidth, onHide }:
           event.preventDefault()
           onStep(by)
         }}
-        className="flex size-6 cursor-grab items-center justify-center rounded text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-primary)] pointer-coarse:hidden"
+        className="focus-ring not-pointer-coarse:flex size-7 cursor-grab items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-foreground pointer-coarse:hidden"
       >
         <GripVertical className="h-4 w-4" aria-hidden />
       </button>
       {/* A touch screen drags nothing: there a card moves by a press. */}
-      <span className="hidden pointer-coarse:flex">
+      <span className="not-pointer-coarse:hidden pointer-coarse:flex">
         <BarButton label={`Move ${label} earlier`} disabled={first} onClick={() => onStep(-1)}>
           <ChevronLeft className="h-4 w-4" aria-hidden />
         </BarButton>
@@ -313,14 +318,15 @@ function CardBar({ label, widths, width, first, last, onStep, onWidth, onHide }:
         </BarButton>
       </span>
       {widths.length > 1 && (
-        <div role="group" aria-label={`Width of ${label}`} className="flex overflow-hidden rounded border border-border text-xs">
+        // Not in a narrow column, where every part is full width; under a pointer, on the part it rests on or the keyboard is in.
+        <div role="group" aria-label={`Width of ${label}`} className="items-center text-xs @max-2xl:hidden @2xl:pointer-coarse:flex @2xl:pointer-fine:hidden @2xl:pointer-fine:group-hover/cell:flex @2xl:pointer-fine:group-focus-within/cell:flex">
           {widths.map(option => (
             <button
               key={option}
               type="button"
               aria-pressed={option === width}
               onClick={() => onWidth(option)}
-              className={cn('min-w-7 px-1.5 py-1 tabular-nums transition-colors', option === width ? 'bg-accent text-accent-foreground' : 'text-muted-foreground hover:text-foreground')}
+              className={cn('focus-ring h-7 min-w-7 rounded-md px-1.5 tabular-nums transition-colors', option === width ? 'bg-accent text-accent-foreground' : 'text-muted-foreground hover:bg-accent hover:text-foreground')}
             >
               {WIDTH_WORDS[option]}
             </button>
@@ -328,7 +334,7 @@ function CardBar({ label, widths, width, first, last, onStep, onWidth, onHide }:
         </div>
       )}
       <BarButton label={`Take ${label} off the page`} onClick={onHide}>
-        <X className="h-3.5 w-3.5" aria-hidden />
+        <X className="size-4" aria-hidden />
       </BarButton>
     </div>
   )
@@ -336,7 +342,7 @@ function CardBar({ label, widths, width, first, last, onStep, onWidth, onHide }:
 
 function BarButton({ label, disabled = false, onClick, children }: { label: string; disabled?: boolean; onClick: () => void; children: ReactNode }) {
   return (
-    <button type="button" aria-label={label} title={label} disabled={disabled} onClick={onClick} className="flex size-6 items-center justify-center rounded text-muted-foreground hover:bg-accent hover:text-foreground disabled:opacity-40">
+    <button type="button" aria-label={label} title={label} disabled={disabled} onClick={onClick} className="focus-ring flex items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-foreground disabled:opacity-50 pointer-fine:size-7 pointer-coarse:size-11">
       {children}
     </button>
   )

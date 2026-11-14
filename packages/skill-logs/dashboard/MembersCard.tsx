@@ -1,5 +1,4 @@
-import { Users } from 'lucide-react'
-import { Card, CardContent, CardHeader, CardTitleLink, PersonMark, STATUS_DOT, STATUS_TONE, Tooltip, TooltipContent, TooltipTrigger, cn, formatAge, formatDateTime, personName, personSaid, useModuleHost, usePolled, type ModuleCardProps, type ModuleHostPerson } from '@openagt/dashboard/module'
+import { PageLink, PersonMark, RowShapes, Section, Slot, STATUS_DOT, STATUS_TONE, Tooltip, TooltipContent, TooltipTrigger, cn, formatAge, formatDateTime, personName, personSaid, useModuleHost, usePolled, type ModuleCardProps, type ModuleHostPerson } from '@openagt/dashboard/module'
 import { membersOf, peopleWithRuns, type Member, type PersonActivity } from '../src/people.js'
 
 // The Overview's Members card: who worked in the projects shown in the last 30 days, from `logs
@@ -31,7 +30,7 @@ function didWords(member: Member): string {
 export function MembersCard({ projects }: ModuleCardProps) {
   const host = useModuleHost()
   const key = projects.map(project => project.id).join(',')
-  const { value: members, loaded } = usePolled<Shown[]>(
+  const { value: members, state } = usePolled<Shown[]>(
     async () => {
       const reads = await Promise.all(
         projects.map(async project => {
@@ -60,22 +59,15 @@ export function MembersCard({ projects }: ModuleCardProps) {
     { remember: `skill-logs:members:${key}`, stored: true },
   )
   return (
-    <Card>
-      <CardHeader>
-        <CardTitleLink icon={<Users className="h-4 w-4 text-muted-foreground" aria-hidden />} segment="logs" onOpen={() => host.openPage('logs')}>
-          Members
-        </CardTitleLink>
-        <p className="text-xs text-muted-foreground">Who worked here in the last 30 days: agents started, commits</p>
-      </CardHeader>
-      <CardContent>
-        {!loaded ? (
-          <p className="text-sm text-muted-foreground">Loading…</p>
-        ) : members.length === 0 ? (
+    <Section title="Members" count={state !== 'unknown' && members.length > 0 ? members.length : undefined} action={<PageLink href={host.pageHref('logs')} onOpen={() => host.openPage('logs')}>Logs</PageLink>}>
+      <p className="-mt-1 mb-3 text-xs text-muted-foreground">Who worked here in the last 30 days: agents started, commits</p>
+      <Slot of={{ state, value: members }} shape={<RowShapes />}>
+        {() => members.length === 0 ? (
           <p className="text-sm text-muted-foreground">No one has started an agent here yet.</p>
         ) : (
-          <ul className="space-y-2.5">
+          <ul className="space-y-1">
             {members.map(member => (
-              <li key={member.person} aria-label={personName(member.person, member.name)} className="flex min-w-0 items-center gap-2.5">
+              <li key={member.person} aria-label={personName(member.person, member.name)} className="flex min-w-0 items-center gap-3 md:min-h-10 max-md:min-h-11">
                 <PersonMark email={member.person} name={member.name} picture={member.account?.avatar} you={member.you} />
                 <div className="min-w-0 flex-1">
                   <p className="flex min-w-0 items-center gap-1.5 text-sm">
@@ -103,7 +95,7 @@ export function MembersCard({ projects }: ModuleCardProps) {
             ))}
           </ul>
         )}
-      </CardContent>
-    </Card>
+      </Slot>
+    </Section>
   )
 }

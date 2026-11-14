@@ -65,7 +65,7 @@ function ScrollBar({ className, ...props }: ComponentProps<typeof ScrollAreaPrim
       orientation="vertical"
       // On a touch screen the phone shows its own bar while a finger scrolls: a drawn one there
       // reads as a box scrolling inside the page.
-      className={cn('flex h-full w-2.5 touch-none select-none border-l border-l-transparent p-px pointer-coarse:hidden', className)}
+      className={cn('h-full w-2.5 touch-none select-none border-l border-l-transparent p-px not-pointer-coarse:flex pointer-coarse:hidden', className)}
       {...props}
     >
       <ScrollAreaPrimitive.Thumb

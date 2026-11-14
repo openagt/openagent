@@ -93,8 +93,8 @@ already made, and lists it in its pull request; for anything else it proposes an
 
 ## The command
 - Every command prints one JSON document on stdout: the result or the refusal. A refusal
-  adds one line for a person on stderr and exits 1. A malformed command line: the usage on
-  stderr, exit 2. The same contract as the other skills' commands, but for `watch`: it
+  adds one line for a person on stderr and exits 1. A malformed command line: what was
+  wrong and a pointer to `--help` on stderr, exit 2. The same contract as the other skills' commands, but for `watch`: it
   logs one line per read on stderr and exits 0 whatever its outcome, `ok` only when it
   merged.
 - `create` makes the project's repository on GitHub, for a project with no `origin`: private,

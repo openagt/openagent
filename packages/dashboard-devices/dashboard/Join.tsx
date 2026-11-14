@@ -132,11 +132,11 @@ export function JoinDialog({ d, onClose, onJoined }: { d: Devices; onClose: () =
         )}
         {error !== undefined && <Problem>{error}</Problem>}
         <div className="flex justify-end gap-2">
-          <Button size="sm" type="button" variant="ghost" onClick={onClose}>
+          <Button type="button" variant="ghost" onClick={onClose}>
             {error?.startsWith('Joined.') ? 'Done' : 'Cancel'}
           </Button>
           {!error?.startsWith('Joined.') && (
-            <Button size="sm" type="submit" disabled={joining || link === undefined}>
+            <Button type="submit" disabled={joining || link === undefined}>
               {joining && <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden />}
               Join
             </Button>

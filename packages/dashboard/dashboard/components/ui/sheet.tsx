@@ -2,6 +2,7 @@
 import { Dialog as BaseDialog } from '@base-ui/react/dialog'
 import type { ComponentProps } from 'react'
 import { cn } from '../../lib/utils.js'
+import { BACKDROP_CLASS } from './dialog.js'
 
 // A shadcn "sheet" on Base UI's Dialog (no Radix): an edge-anchored drawer. The sidebar uses it as
 // its mobile presentation (off-canvas), the same job Radix's Sheet does upstream. Controlled by the
@@ -19,11 +20,14 @@ function SheetContent({
 }: ComponentProps<typeof BaseDialog.Popup> & { side?: 'left' | 'right' }) {
   return (
     <BaseDialog.Portal>
-      <BaseDialog.Backdrop className="fixed inset-0 z-50 bg-black/40 backdrop-blur-[1px]" />
+      <BaseDialog.Backdrop className={BACKDROP_CLASS} />
       <BaseDialog.Popup
         className={cn(
-          'fixed inset-y-0 z-50 flex h-full w-3/4 max-w-sm flex-col bg-card text-card-foreground shadow-lg outline-none',
-          side === 'left' ? 'left-0 border-r border-border' : 'right-0 border-l border-border',
+          // In from its edge in 180ms, out in 120ms.
+          'fixed inset-y-0 z-50 flex h-full w-3/4 max-w-sm flex-col bg-card text-card-foreground shadow-lg outline-none transition-transform duration-180 data-[ending-style]:duration-120',
+          side === 'left'
+            ? 'left-0 border-r border-hairline data-[starting-style]:-translate-x-full data-[ending-style]:-translate-x-full'
+            : 'right-0 border-l border-hairline data-[starting-style]:translate-x-full data-[ending-style]:translate-x-full',
           className,
         )}
         {...props}
@@ -39,7 +43,7 @@ function SheetHeader({ className, ...props }: ComponentProps<'div'>) {
 }
 
 function SheetTitle({ className, ...props }: ComponentProps<typeof BaseDialog.Title>) {
-  return <BaseDialog.Title className={cn('text-sm font-semibold', className)} {...props} />
+  return <BaseDialog.Title className={cn('text-base font-semibold', className)} {...props} />
 }
 
 function SheetDescription({ className, ...props }: ComponentProps<typeof BaseDialog.Description>) {

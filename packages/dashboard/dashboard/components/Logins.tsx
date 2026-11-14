@@ -1,7 +1,7 @@
 import { useEffect, useState, type ReactNode } from 'react'
 import { DRIVER_LABELS, type DriverName } from '../../src/client.js'
 import { onAgentState, onGitHosts, sendAgentFix, type AgentState, type GitHostRow, type GitHostsView } from '../rpc/logins.js'
-import { usePolled } from '../lib/use-async.js'
+import { useAskOn, usePolled } from '../lib/use-async.js'
 import { cn } from '../lib/utils.js'
 import { Button } from './ui/button.js'
 import { CopyButton } from './ui/copy-button.js'
@@ -20,13 +20,14 @@ const MISSING_MS = 8_000
 const SELDOM_MS = 30_000
 
 /**
- * A read asked again at the pace its last answer calls for. Its answer is kept under `key` for the
- * page's life: a place that opens later (the person's menu) shows it from its first frame, never
- * empty while the same question, asked a moment ago, is asked again.
+ * A read asked again at the pace its last answer calls for. Its answer is kept under `key`, in this
+ * browser too: a place that opens later (the person's menu, the next load's Permissions) shows it
+ * from its first frame, never empty while the same question is asked again.
  */
 function usePaced<T>(key: string, load: (() => Promise<T>) | null, pace: (value: T | undefined) => number, deps: unknown[]): { value: T | undefined; reload: () => Promise<void> } {
   const [every, setEvery] = useState(SELDOM_MS)
-  const { value, reload } = usePolled<T | undefined>(load, undefined, every, [...deps, every], { remember: key })
+  const { value, reload, refresh } = usePolled<T | undefined>(load, undefined, every, deps, { remember: key, stored: true })
+  useAskOn(every, refresh)
   const next = pace(value)
   useEffect(() => {
     if (next !== every) setEvery(next)
@@ -97,14 +98,14 @@ function CommandLine({ command }: { command: string }) {
   const [whole, setWhole] = useState(false)
   const long = command.length > LONG
   return (
-    <div className="flex min-w-0 items-start gap-1">
-      <code className={cn('min-w-0 font-mono text-[11px] text-muted-foreground', long && !whole ? 'truncate' : 'wrap-anywhere')}>{command}</code>
+    <div className="flex min-w-0 items-center gap-1 rounded-md bg-muted py-0.5 pr-0.5 pl-2">
+      <code className={cn('min-w-0 font-mono text-xs text-muted-foreground', long && !whole ? 'truncate' : 'wrap-anywhere')}>{command}</code>
       {long && (
-        <button type="button" className="shrink-0 text-[11px] text-muted-foreground underline-offset-2 hover:text-foreground hover:underline" onClick={() => setWhole(!whole)}>
+        <button type="button" className="focus-ring shrink-0 rounded-sm text-xs text-muted-foreground underline-offset-2 hover:text-foreground hover:underline" onClick={() => setWhole(!whole)}>
           {whole ? 'Less' : 'Show all'}
         </button>
       )}
-      <CopyButton text={command} label="Copy the command" />
+      <CopyButton text={command} label="Copy the command" className="justify-center md:size-6 max-md:size-11" />
     </div>
   )
 }
@@ -127,7 +128,7 @@ export function hostWords(row: GitHostRow): string {
 }
 
 /** A press that fixes one thing: its button, what it is doing while it does, the command it runs, why it failed. */
-export function FixAction({ label, busy, busyWords, command, failed, onPress, size = 'sm', variant }: { label: string; busy: boolean; busyWords: string; command?: string; failed?: string; onPress: () => void; size?: 'sm' | 'xs' | undefined; variant?: 'outline' | undefined }) {
+export function FixAction({ label, busy, busyWords, command, failed, onPress, size = 'default', variant }: { label: string; busy: boolean; busyWords: string; command?: string; failed?: string; onPress: () => void; size?: 'default' | 'sm' | undefined; variant?: 'outline' | undefined }) {
   return (
     <div className="min-w-0 space-y-1">
       {/* Busy, the press stays with the focus it was pressed with, and says it is waiting beside it. */}
@@ -169,7 +170,7 @@ function agentBusyWords(state: AgentState): string {
 }
 
 /** The agent's fix as one press: [Install Claude Code] or [Log this computer in to Claude Code], with the command; the command alone where it is typed; nothing when nothing fixes it. */
-export function AgentFix({ state, onChanged, size, variant }: { state: AgentState; onChanged: () => void; size?: 'sm' | 'xs' | undefined; variant?: 'outline' | undefined }) {
+export function AgentFix({ state, onChanged, size, variant }: { state: AgentState; onChanged: () => void; size?: 'default' | 'sm' | undefined; variant?: 'outline' | undefined }) {
   const [error, setError] = useState<string | undefined>()
   if (state.ready || !state.fix) return null
   if (state.typed)

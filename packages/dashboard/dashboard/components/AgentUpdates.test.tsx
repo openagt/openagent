@@ -101,3 +101,11 @@ test('nothing when every agent is up to date', async () => {
   await waitFor(() => expect(models.onAgentUpdates).toHaveBeenCalled())
   expect(container.textContent).toBe('')
 })
+
+test('an update another tab or computer started says "Updating…" here too, and takes no second press', async () => {
+  models.onAgentUpdates.mockResolvedValue([{ agent: 'codex', installed: '0.144.4', latest: '0.166.0', updating: true }])
+  render(<AgentUpdates />)
+  const press = await screen.findByRole('button', { name: 'Updating…' })
+  fireEvent.click(press)
+  expect(models.sendAgentUpdate).not.toHaveBeenCalled()
+})

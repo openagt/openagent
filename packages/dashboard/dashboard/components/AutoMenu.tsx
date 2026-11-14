@@ -1,7 +1,7 @@
-import { Check, ChevronDown } from 'lucide-react'
+import { Check } from 'lucide-react'
 import { PUBLISH_LABELS, type PublishPick } from '../../src/client.js'
 import { cn } from '../lib/utils.js'
-import { rowButtonClass } from './ui/row-item.js'
+import { rowButtonClass, RowChevron } from './ui/row-item.js'
 import { OptionLabel } from './ui/option-label.js'
 import { Tooltip, TooltipTrigger, TooltipContent } from './ui/tooltip.js'
 import {
@@ -67,7 +67,7 @@ export function AutoMenu({
           }
         >
           <span className="truncate">{`Auto: ${PUBLISH_LABELS[publish]}${into ? ` → ${into.into}` : ''}`}</span>
-          <ChevronDown className="h-3 w-3 shrink-0 opacity-70" aria-hidden />
+          <RowChevron />
         </TooltipTrigger>
         <TooltipContent>{`What the agent does by itself when it finishes.${into ? ` The pull request goes into ${into.into}.` : ''}`}</TooltipContent>
       </Tooltip>

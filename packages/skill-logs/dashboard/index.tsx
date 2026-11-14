@@ -7,10 +7,8 @@ import { ScrollText } from 'lucide-react'
 import { defineModule } from '@openagt/dashboard/module'
 import { LogsPage } from './LogsPage.js'
 import { MembersCard } from './MembersCard.js'
-import './dashboard.css'
 
 export default defineModule({
   pages: [{ segment: 'logs', label: 'Logs', icon: ScrollText, Page: LogsPage }],
   cards: [{ id: 'members', label: 'Members', order: 45, width: '1/3', minWidth: '1/4', Card: MembersCard }],
-  stylesheet: 'dashboard.css',
 })

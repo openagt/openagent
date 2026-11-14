@@ -46,7 +46,8 @@ already made, and lists it in its pull request; for anything else it proposes an
 - Every command that runs prints one JSON document, the result or the refusal. A refusal
   also puts one line on stderr and exits 1. A malformed command line (an unknown flag, the
   wrong argument count, an empty `queue add` text, a `--priority` off the 0-10 scale) is
-  rejected first: the usage on stderr, nothing on stdout, exit 2. Anything a command
+  rejected first: what was wrong and a pointer to `--help` on stderr, nothing on stdout,
+  exit 2. Anything a command
   throws refuses with `git-failed`. Outside a repository a command refuses `not-a-repo`;
   only git's own "not a git repository" reads as that.
 - A bare `queue` answers with a JSON array of strings; with `--full`, of objects, each

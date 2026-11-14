@@ -7,24 +7,25 @@ import { useAction } from '../lib/use-action.js'
 import { DaemonDown } from '../lib/use-daemon-health.js'
 import { cn } from '../lib/utils.js'
 import { RadioGroup } from './ui/radio-group.js'
+import { Button } from './ui/button.js'
 import { answerPrompt, skipPrompt } from '../lib/answered-question.js'
-import { MOD_KEY } from '../lib/shortcut.js'
+import { MOD_KEY, pressed, typedInto } from '../lib/shortcut.js'
 import { isMobileScreen } from '../lib/use-mobile.js'
 
 /** The pick that is no option: the person's own words, typed in the "Other" row. */
 const OTHER = Symbol('other')
 
 
-// A pick's mark, as Claude Code on the web draws one: a ring, filled with a dot when picked; a
-// box with a tick where several may be picked.
+// A pick's mark, drawn as the shared radio and checkbox are (ui/radio-group, ui/checkbox): the
+// whole row is the control here, so the mark is only its picture.
 function Mark({ on, multi }: { on: boolean; multi: boolean | undefined }) {
   return multi ? (
-    <span className={cn('mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded border', on ? 'border-primary bg-primary text-primary-foreground' : 'border-foreground/20')} aria-hidden>
-      {on && <Check className="h-3 w-3" />}
+    <span className={cn('mt-1 flex size-4 shrink-0 items-center justify-center rounded-sm border transition-colors', on ? 'border-primary bg-primary text-primary-foreground' : 'border-border group-hover/choice:border-faint-foreground')} aria-hidden>
+      {on && <Check className="size-3" strokeWidth={3} />}
     </span>
   ) : (
-    <span className={cn('mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded-full', on ? 'bg-primary' : 'border border-foreground/20')} aria-hidden>
-      {on && <span className="h-1.5 w-1.5 rounded-full bg-primary-foreground" />}
+    <span className={cn('mt-1 flex size-4 shrink-0 items-center justify-center rounded-full border transition-colors', on ? 'border-primary' : 'border-border group-hover/choice:border-faint-foreground')} aria-hidden>
+      {on && <span className="size-2 rounded-full bg-primary" />}
     </span>
   )
 }
@@ -41,10 +42,10 @@ function Choices({ multi, labelledBy, picked, onPick, disabled, children }: { mu
   )
 }
 
-// A choice's row: the radio group's radio, or a box the row toggles. Rows are parted by a line, as
-// Claude Code on the web parts them; none is filled but the one under the pointer.
+// A choice's row: the radio group's radio, or a box the row toggles. Rows are 40 high and parted by
+// nothing but their padding; none is filled but the one under the pointer.
 function Choice({ multi, value, on, disabled, onPick, children }: { multi: boolean | undefined; value: string | typeof OTHER; on: boolean; disabled: boolean; onPick: () => void; children: ReactNode }) {
-  const row = 'flex w-full items-start gap-3 p-4 text-left enabled:hover:bg-foreground/[0.03] dark:enabled:hover:bg-foreground/[0.07] disabled:opacity-60'
+  const row = 'group/choice focus-ring flex min-h-10 w-full items-start gap-3 rounded-md px-3 py-2 text-left transition-colors enabled:hover:bg-accent enabled:active:bg-foreground/10 disabled:opacity-60'
   return multi ? (
     <button type="button" role="checkbox" aria-checked={on} disabled={disabled} onClick={onPick} className={row}>
       {children}
@@ -57,7 +58,7 @@ function Choice({ multi, value, on, disabled, onPick, children }: { multi: boole
 }
 
 // The question an agent's turn ended on, in the chat under what the agent said, the way Claude
-// Code on the web asks: a card with the title on a grey band, one row per option (a ring, its
+// Code on the web asks: the one card in the chat, its title, one row per option (a ring, its
 // label, its description), an "Other" row to answer in one's own words, and Skip / Submit. The
 // number keys pick, as before, with no number drawn. An option's pick goes over the control RPC,
 // which hands the chosen labels to the agent; "Other" and Skip go as a message in the same
@@ -164,15 +165,13 @@ export function QuestionPanel({
     if (!active || sent) return
     const onKey = (e: KeyboardEvent) => {
       // Keys typed into a text field are that field's, except this card's own "Other" row.
-      const target = e.target as HTMLElement | null
-      const typing = target !== null && (target.isContentEditable || target.tagName === 'INPUT' || target.tagName === 'TEXTAREA')
-      if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
-        if (typing && target !== otherInput.current) return
+      if (pressed(e, 'answer')) {
+        if (typedInto(e.target) && e.target !== otherInput.current) return
         e.preventDefault()
         keys.current.submit()
         return
       }
-      if (typing || e.ctrlKey || e.metaKey || e.altKey || !/^[1-9]$/.test(e.key)) return
+      if (!pressed(e, 'pick')) return
       const n = Number(e.key)
       const option = choice.options[n - 1]
       if (option) keys.current.pick(option.id)
@@ -195,16 +194,16 @@ export function QuestionPanel({
 
   if (sent) return null
   return (
-    <section ref={card} role="region" aria-label={choice.title} className="flex w-full max-w-[480px] flex-col overflow-clip rounded-xl font-sans text-sm ring-1 ring-border">
-      <h2 id={titleId} className="bg-foreground/5 px-4 py-3 font-normal">{choice.title}</h2>
+    <section ref={card} role="region" aria-label={choice.title} className="flex w-full flex-col gap-1 rounded-lg border border-hairline bg-card p-1 font-sans text-sm">
+      <h2 id={titleId} className="px-3 pt-2 pb-1 font-medium">{choice.title}</h2>
       <Choices multi={choice.multi} labelledBy={titleId} picked={picked} onPick={setPicked} disabled={busy}>
         {choice.options.map(o => {
           const on = choice.multi ? checked.has(o.id) : picked === o.id
           return (
-            <li key={o.id} className="border-t border-border first:border-t-0">
+            <li key={o.id}>
               <Choice multi={choice.multi} value={o.id} on={on} disabled={busy} onPick={() => pick(o.id)}>
                 <Mark on={on} multi={choice.multi} />
-                <span className="flex min-w-0 flex-1 flex-col gap-2">
+                <span className="flex min-w-0 flex-1 flex-col gap-0.5 py-0.5">
                   <span>
                     {o.label}
                     {/* A box of its own, which a screen reader reads as a word apart from the label. */}
@@ -217,10 +216,10 @@ export function QuestionPanel({
           )
         })}
         {!send && (
-          <li className="flex flex-col border-t border-border">
+          <li className="flex flex-col">
             <Choice multi={choice.multi} value={OTHER} on={otherPicked} disabled={busy} onPick={pickOther}>
               <Mark on={otherPicked} multi={choice.multi} />
-              <span className="min-w-0 flex-1">Other</span>
+              <span className="min-w-0 flex-1 py-0.5">Other</span>
             </Choice>
             {otherPicked && (
               <input
@@ -229,36 +228,36 @@ export function QuestionPanel({
                 disabled={busy}
                 onChange={e => setOther(e.target.value)}
                 onKeyDown={e => {
-                  if (e.key === 'Enter' && !e.ctrlKey && !e.metaKey) submit()
+                  if (e.key === 'Enter' && !pressed(e, 'answer')) submit()
                 }}
                 name="own-answer"
                 placeholder="Type your own answer here"
                 aria-label="Your own answer"
-                className="mx-4 mb-2 ml-11 rounded-md border border-border bg-transparent px-2.5 py-1.5 outline-none placeholder:text-muted-foreground focus:border-primary"
+                className="mr-3 mb-2 ml-10 h-8 rounded-md border border-border bg-transparent px-3 outline-none placeholder:text-faint-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
               />
             )}
           </li>
         )}
       </Choices>
-      <div className="flex items-center gap-2 px-4 pt-2 pb-4">
+      <div className="flex items-center gap-2 px-2 pt-1 pb-2">
         {/* One line in every state, so the buttons never move: what went wrong, or that it is on its way. */}
         <span role={error ? 'alert' : busy ? 'status' : undefined} className={cn('min-w-0 flex-1 truncate text-xs', error ? 'text-danger' : 'text-muted-foreground')}>
           {error ?? (busy ? 'Sending your answer…' : '')}
         </span>
         {!send && (
-          <button type="button" disabled={busy || down} onClick={() => say(skipPrompt(choice.title))} className="h-6 rounded-md bg-foreground/10 px-2 text-[13px] hover:bg-foreground/15 disabled:opacity-60">
+          <Button variant="ghost" disabled={busy || down} onClick={() => say(skipPrompt(choice.title))}>
             Skip
-          </button>
+          </Button>
         )}
-        <button type="button" disabled={busy || down || !ready} onClick={submit} className="flex h-6 items-center gap-1.5 rounded-md bg-foreground px-2 text-[13px] font-medium text-background hover:bg-foreground/90 disabled:opacity-60">
+        <Button disabled={busy || down || !ready} onClick={submit}>
           Submit
           {active && (
-            <span className="flex gap-0.5 pointer-coarse:hidden" aria-hidden>
-              <kbd className="flex h-[17px] min-w-[17px] items-center justify-center rounded border border-background/20 px-0.5 font-sans text-[11px]">{MOD_KEY}</kbd>
-              <kbd className="flex h-[17px] min-w-[17px] items-center justify-center rounded border border-background/20 px-0.5 font-sans text-[11px]">Enter</kbd>
+            <span className="gap-0.5 not-pointer-coarse:flex pointer-coarse:hidden" aria-hidden>
+              <kbd className="flex h-5 min-w-5 items-center justify-center rounded-sm border border-primary-foreground/30 px-1 font-sans text-xs font-normal">{MOD_KEY}</kbd>
+              <kbd className="flex h-5 min-w-5 items-center justify-center rounded-sm border border-primary-foreground/30 px-1 font-sans text-xs font-normal">Enter</kbd>
             </span>
           )}
-        </button>
+        </Button>
       </div>
     </section>
   )

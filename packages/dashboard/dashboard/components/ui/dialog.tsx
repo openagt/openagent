@@ -3,6 +3,7 @@ import { Dialog as BaseDialog } from '@base-ui/react/dialog'
 import { X } from 'lucide-react'
 import type { ReactNode, RefObject } from 'react'
 import { cn } from '../../lib/utils.js'
+import { buttonVariants } from './button.js'
 
 // The shadcn "base" dialog (Base UI, not Radix) — a centered modal shell for a small form (#1025).
 // Unlike ConfirmDialog (AlertDialog, focus-trapped and no light-dismiss, for the one irreversible
@@ -16,6 +17,26 @@ import { cn } from '../../lib/utils.js'
 //
 // A field the dialog opens on is `initialFocus`, never `autoFocus`: React focuses an `autoFocus`
 // field before Base UI notes the press that opened the dialog, which it gives the focus back to.
+
+/** The dim behind a dialog, which fades in and out with it. */
+export const BACKDROP_CLASS =
+  'fixed inset-0 z-50 bg-black/40 backdrop-blur-[1px] transition-opacity duration-180 data-[ending-style]:duration-120 data-[starting-style]:opacity-0 data-[ending-style]:opacity-0'
+
+/**
+ * Where a dialog stands: in the window's middle, grown in 180ms and gone in 120ms; on a phone, a
+ * sheet from the bottom edge, as wide as the screen, so a long form and the keyboard leave its
+ * presses within the thumb's reach.
+ */
+export const DIALOG_POPUP_CLASS = cn(
+  'fixed z-50 flex flex-col border border-hairline bg-card text-card-foreground shadow-lg outline-none',
+  'md:left-1/2 md:top-1/2 md:max-h-[calc(100dvh-2rem)] md:-translate-x-1/2 md:-translate-y-1/2 md:rounded-lg md:p-5',
+  'max-md:inset-x-0 max-md:bottom-0 max-md:max-h-[calc(100dvh-1rem)] max-md:rounded-t-lg max-md:px-4 max-md:pt-4 max-md:pb-[max(1rem,env(safe-area-inset-bottom))]',
+  'transition-[opacity,scale,translate] duration-180 data-[ending-style]:duration-120 data-[starting-style]:opacity-0 data-[ending-style]:opacity-0',
+  'md:data-[starting-style]:scale-97 md:data-[ending-style]:scale-97 max-md:data-[starting-style]:translate-y-8 max-md:data-[ending-style]:translate-y-8',
+)
+
+/** Around a dialog's presses: 44 high on a phone, under the thumb. */
+export const DIALOG_PRESSES_CLASS = 'max-md:[&_button]:h-11'
 
 export function Dialog({
   open,
@@ -47,27 +68,24 @@ export function Dialog({
     <BaseDialog.Root open={open} onOpenChange={onOpenChange} disablePointerDismissal={keepOnOutsidePress}>
       <BaseDialog.Portal>
         {/* Drawn over another dialog too (Settings), which Base UI leaves undimmed unless told. */}
-        <BaseDialog.Backdrop forceRender className="fixed inset-0 z-50 bg-black/40 backdrop-blur-[1px]" />
+        <BaseDialog.Backdrop forceRender className={BACKDROP_CLASS} />
         <BaseDialog.Popup
           initialFocus={initialFocus && (() => (initialFocus.current?.matches(':enabled') ? initialFocus.current : true))}
           {...(finalFocus ? { finalFocus } : {})}
-          className={cn(
-            'fixed left-1/2 top-1/2 z-50 flex max-h-[calc(100dvh-2rem)] -translate-x-1/2 -translate-y-1/2 flex-col rounded-lg border border-border bg-card p-4 text-card-foreground shadow-lg outline-none',
-            wide ? 'w-[min(46rem,calc(100vw-2rem))]' : 'w-[min(34rem,calc(100vw-2rem))]',
-          )}
+          className={cn(DIALOG_POPUP_CLASS, wide ? 'md:w-[min(46rem,calc(100vw-2rem))]' : 'md:w-[min(34rem,calc(100vw-2rem))]')}
         >
-          <div className="mb-3 flex shrink-0 items-center justify-between">
-            <BaseDialog.Title className="text-sm font-semibold">{title}</BaseDialog.Title>
+          <div className="mb-4 flex shrink-0 items-center justify-between gap-3">
+            <BaseDialog.Title className="text-base font-semibold">{title}</BaseDialog.Title>
             <BaseDialog.Close
               aria-label="Close"
-              className="-m-0.5 rounded p-1 text-muted-foreground outline-none hover:text-foreground focus-visible:ring-2 focus-visible:ring-[var(--color-primary)]"
+              className={cn(buttonVariants({ variant: 'ghost', size: 'icon-sm' }), '-my-1 -mr-1 text-muted-foreground hover:text-foreground')}
             >
-              <X className="h-4 w-4" aria-hidden />
+              <X className="size-4" aria-hidden />
             </BaseDialog.Close>
           </div>
           {/* What scrolls when the form is taller than the window; the room at its sides keeps a field's focus ring whole. */}
           <div className="-mx-1 min-h-0 flex-1 overflow-y-auto px-1">{children}</div>
-          {footer !== undefined && <div className="shrink-0 border-t border-border pt-3">{footer}</div>}
+          {footer !== undefined && <div className={cn('mt-4 shrink-0 border-t border-hairline pt-4', DIALOG_PRESSES_CLASS)}>{footer}</div>}
         </BaseDialog.Popup>
       </BaseDialog.Portal>
     </BaseDialog.Root>

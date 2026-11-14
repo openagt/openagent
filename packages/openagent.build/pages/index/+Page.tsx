@@ -14,14 +14,16 @@ export default function Page() {
   return (
     <>
       <TopNav />
-      <Hero />
-      <SectionNav />
-      <StopBabysitting />
-      <AutonomousAi />
-      <HowItWorks />
-      <Features />
-      <YourFramework />
-      <Cta />
+      <main id="main">
+        <Hero />
+        <SectionNav />
+        <StopBabysitting />
+        <AutonomousAi />
+        <HowItWorks />
+        <Features />
+        <YourFramework />
+        <Cta />
+      </main>
       <Footer />
     </>
   )

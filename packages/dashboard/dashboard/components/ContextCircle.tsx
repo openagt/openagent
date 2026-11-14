@@ -29,7 +29,7 @@ export function ContextCircle({ used, size }: { used: number; size: number }) {
   return (
     <Tooltip>
       <TooltipTrigger render={<span className="flex shrink-0 items-center px-1" role="img" aria-label={said} />}>
-        <svg viewBox="0 0 14 14" className="h-3.5 w-3.5" aria-hidden>
+        <svg viewBox="0 0 14 14" className="size-4" aria-hidden>
           <circle cx="7" cy="7" r={r} fill="none" strokeWidth="2" className="stroke-muted-foreground/30" />
           <circle
             cx="7"
@@ -39,7 +39,7 @@ export function ContextCircle({ used, size }: { used: number; size: number }) {
             strokeWidth="2"
             strokeDasharray={`${circumference * part} ${circumference}`}
             transform="rotate(-90 7 7)"
-            className={cn('transition-[stroke-dasharray] duration-500', part >= 0.9 ? 'stroke-danger' : part >= 0.75 ? 'stroke-warning' : 'stroke-muted-foreground')}
+            className={cn('transition-[stroke-dasharray] duration-180', part >= 0.9 ? 'stroke-danger' : part >= 0.75 ? 'stroke-warning' : 'stroke-muted-foreground')}
           />
         </svg>
       </TooltipTrigger>

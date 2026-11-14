@@ -1,38 +1,44 @@
 import type { ReactElement, ReactNode } from 'react'
+import { ChevronDown } from 'lucide-react'
 import { cn } from '../../lib/utils.js'
 import { Tooltip, TooltipContent, TooltipTrigger } from './tooltip.js'
 
 // The look of what stands in the rows above and under the message box, as in Claude Code's: plain
-// words with an icon, no border, every one the same height and size, a little smaller than the
-// box's own text, muted until pointed at. A class as well as a component, so a menu's button is
-// drawn the same way as a word that is only said.
-// min-w-0 and overflow-hidden: in a full row an item gives way, and its label is cut short. In a
-// narrow box (a phone, a chat beside panes) the row is too narrow for every item cut short to say
-// anything: there each keeps its whole width, and the row scrolls sideways (Composer). Narrow is the
-// box's own width, its callers' `@container`, not the screen's. Each width's size is said for its
-// own widths only: a module's stylesheet, loaded later, has its own copy of a plain class, which would win.
-export const rowItemClass = 'inline-flex h-7 min-w-0 @xl:max-w-full items-center gap-1.5 overflow-hidden rounded-md px-2 text-[13px] font-normal text-muted-foreground @max-xl:max-w-none @max-xl:shrink-0'
+// words with an icon, no border, every one the same height and size, muted until pointed at. A class
+// as well as a component, so a menu's button is drawn the same way as a word that is only said.
+// min-w-0 and overflow-hidden: in a full row an item gives way, and its label is cut short. A narrow
+// box (a phone, a chat beside panes) says less instead: no chevrons, and the longer labels left to
+// their icon (`rowWideClass`). Narrow is the box's own width, its callers' `@container`, not the
+// screen's. Each width's size is said for its own widths only: a module's stylesheet, loaded later,
+// has its own copy of a plain class, which would win.
+export const rowItemClass = 'inline-flex h-7 min-w-0 @xl:max-w-full items-center gap-1.5 overflow-hidden rounded-md px-2 text-sm font-normal text-muted-foreground'
 
 /** A row item that is a button: it lights up under the pointer and shows the keyboard's focus. */
-export const rowButtonClass = cn(
-  rowItemClass,
-  'transition-colors hover:bg-accent hover:text-accent-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary disabled:pointer-events-none disabled:opacity-50',
-)
+export const rowButtonClass = cn(rowItemClass, 'focus-ring transition-colors hover:bg-accent hover:text-accent-foreground disabled:pointer-events-none disabled:opacity-50')
+
+/** Words of an item that a narrow box leaves to its icon: still in its accessible name, as its tooltip still says them. */
+export const rowWideClass = '@max-xl:sr-only'
+
+/** The chevron of an item that opens a menu: quiet, and left out in a narrow box, where the row has no room for it. */
+export function RowChevron() {
+  return <ChevronDown className="size-3 shrink-0 text-faint-foreground @max-xl:hidden" aria-hidden />
+}
 
 /** A row of items above or under the box: one line of a fixed height, no wrap. */
 export const rowClass = 'flex h-8 items-center gap-2'
-/** Its left side, which gives way: each item cut short, and in a narrow box, where cut short they would say nothing, scrolled sideways under a faded edge. */
-export const rowLeftClass = 'flex min-w-0 flex-1 items-center gap-0.5 @max-xl:overflow-x-auto @max-xl:[scrollbar-width:none] @max-xl:[mask-image:linear-gradient(to_right,#000_85%,transparent)]'
+/** Its left side, the one that gives way: each item cut short. */
+export const rowLeftClass = 'flex min-w-0 flex-1 items-center gap-0.5'
 
 /**
  * The row above the box, on both pages: where the agent starts, or where it started. A fixed height
  * and no wrap, so a name that lands late moves nothing; the later items give way first, each cut
- * short, and in a narrow box the row scrolls sideways, its right edge faded to say so.
+ * short, and in a narrow box, where a folder's or a branch's name cut short would say nothing, the
+ * row scrolls sideways, its right edge faded to say so.
  */
 export function RowAboveBox({ children }: { children: ReactNode }) {
   return (
     <div className={cn('mb-1', rowClass)}>
-      <div className={rowLeftClass}>{children}</div>
+      <div className={cn(rowLeftClass, '@max-xl:overflow-x-auto @max-xl:[scrollbar-width:none] @max-xl:[mask-image:linear-gradient(to_right,#000_85%,transparent)] @max-xl:*:shrink-0')}>{children}</div>
     </div>
   )
 }
@@ -44,7 +50,7 @@ export function RowAboveBox({ children }: { children: ReactNode }) {
 export function RowSaid({ tip, children }: { tip: string; children: ReactNode }) {
   return (
     <Tooltip>
-      <TooltipTrigger render={<span tabIndex={0} className={cn(rowItemClass, 'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary')} />}>
+      <TooltipTrigger render={<span tabIndex={0} className={cn(rowItemClass, 'focus-ring')} />}>
         {children}
         <span className="sr-only">{`. ${tip}`}</span>
       </TooltipTrigger>
@@ -60,7 +66,7 @@ export function RowSaid({ tip, children }: { tip: string; children: ReactNode })
 export function RowOff({ tip, children }: { tip: string; children: ReactElement }) {
   return (
     <Tooltip>
-      <TooltipTrigger render={<span className="inline-flex min-w-0 @xl:max-w-full @max-xl:max-w-none @max-xl:shrink-0" />}>{children}</TooltipTrigger>
+      <TooltipTrigger render={<span className="inline-flex min-w-0 @xl:max-w-full" />}>{children}</TooltipTrigger>
       <TooltipContent>{tip}</TooltipContent>
     </Tooltip>
   )

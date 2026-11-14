@@ -119,7 +119,7 @@ export function LinkActions({
   label,
   tooltip,
   disabled = false,
-  size = 'sm',
+  size = 'default',
   variant = 'outline',
 }: {
   /** The projects the links belong to: an action shows when its package is in at least one of them. */

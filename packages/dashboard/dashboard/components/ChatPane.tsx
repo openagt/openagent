@@ -11,10 +11,11 @@ import { useLayoutEffect, useRef, type ReactNode } from 'react'
 // and under the bar it went behind it. It is written straight to the element as the bar changes its size,
 // with no render in between: the chat moves in the same frame as the bar. The bar's height is read
 // to the part of a pixel, so its fade starts where it ends. The bar stops short of the scroll bar
-// (`--chat-scroll-bar`): its width is read off a probe styled as the chat's scroller is. A scroll
-// bar that lies over the content (a Mac's) takes none, and the bar went over its end: the bar stops
-// at least a strip short of the edge, and pads its left as much more, so the message box stays
-// centered under the chat. On a touch screen the chat ends above the bar and needs no strip.
+// (`--chat-scroll-bar`): its width is read off a probe styled as the chat's scroller is, so the
+// bar's sides are the chat's and what is in the chat and the box share both edges. A scroll bar
+// that lies over the content (a Mac's) takes none, and the bar went over its end: there the bar
+// stops a strip short of the edge (`--chat-edge`), and pads its left as much more, so the message
+// box stays centered under the chat. On a touch screen the chat ends above the bar and needs no strip.
 //
 // The chat's room is a layer of its own (`isolate`): what the dashboard opens over the page (a
 // file's preview, from the Files pane) stays over the message box's bar. And what lies over the
@@ -31,7 +32,10 @@ export function ChatPane({ top, bottom, children }: { top: ReactNode; bottom: Re
       const bar = bottomBar.current!.getBoundingClientRect().height
       style.setProperty('--chat-bar', `${bar}px`)
       style.setProperty('--chat-bottom', touch ? '0px' : `${bar}px`)
-      style.setProperty('--chat-scroll-bar', `${probe.current!.offsetWidth - probe.current!.clientWidth}px`)
+      const scrollBar = probe.current!.offsetWidth - probe.current!.clientWidth
+      style.setProperty('--chat-scroll-bar', `${scrollBar}px`)
+      // A scroll bar with room of its own is stopped short of exactly; one over the content gets a strip.
+      style.setProperty('--chat-edge', `${scrollBar || 12}px`)
     }
     read()
     if (typeof ResizeObserver === 'undefined') return
@@ -45,17 +49,18 @@ export function ChatPane({ top, bottom, children }: { top: ReactNode; bottom: Re
         {top}
       </div>
       <div className="relative isolate flex min-h-0 flex-1 flex-col overflow-hidden pointer-coarse:pb-(--chat-bar)">
-        <div ref={probe} className="scrollbar-thin invisible absolute h-0 w-8 overflow-y-scroll" aria-hidden />
+        {/* Styled as the chat's scroller is (MessageScrollerViewport): a gutter kept, a thin bar. */}
+        <div ref={probe} className="scrollbar-thin scrollbar-gutter-stable invisible absolute h-0 w-8 overflow-y-auto" aria-hidden />
         {children}
         {/* On a window too short for a tall question, the bar scrolls inside itself. */}
-        <div ref={bottomBar} data-testid="chat-bottom" className="absolute right-[max(var(--chat-scroll-bar),0.75rem)] bottom-0 left-0 z-10 max-h-full overflow-y-auto bg-background pl-[calc(max(var(--chat-scroll-bar),0.75rem)_-_var(--chat-scroll-bar))] pointer-coarse:right-(--chat-scroll-bar) pointer-coarse:pl-0">
+        <div ref={bottomBar} data-testid="chat-bottom" className="absolute right-(--chat-edge) bottom-0 left-0 z-10 max-h-full overflow-y-auto bg-background pl-[calc(var(--chat-edge)_-_var(--chat-scroll-bar))] pointer-coarse:right-(--chat-scroll-bar) pointer-coarse:pl-0">
           {bottom}
         </div>
         {/* A short fade at each end, so a row passing out of view is not cut by a straight line. They
             stop short of the scroll bar, and of a strip as wide as one where the scroll bar lies over
             the content and takes no room (a Mac's): there the bar would show up faded at either end. */}
-        <div className="pointer-events-none absolute top-0 right-[max(var(--chat-scroll-bar),0.75rem)] left-0 z-10 h-4 bg-gradient-to-b from-background to-transparent" aria-hidden />
-        <div className="pointer-events-none absolute right-[max(var(--chat-scroll-bar),0.75rem)] bottom-(--chat-bar) left-0 z-10 h-4 bg-gradient-to-t from-background to-transparent" aria-hidden />
+        <div className="pointer-events-none absolute top-0 right-(--chat-edge) left-0 z-10 h-4 bg-gradient-to-b from-background to-transparent" aria-hidden />
+        <div className="pointer-events-none absolute right-(--chat-edge) bottom-(--chat-bar) left-0 z-10 h-4 bg-gradient-to-t from-background to-transparent" aria-hidden />
       </div>
     </div>
   )

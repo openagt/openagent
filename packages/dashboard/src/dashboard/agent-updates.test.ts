@@ -80,3 +80,15 @@ test('the owner is told of an update and runs it; a person the owner invited is 
   assert.deepEqual(await asCaller('Dani', () => sendAgentUpdate('codex')), { ok: false, error: "Only this computer's owner updates its coding agents." })
   assert.deepEqual(ran, ['codex'])
 })
+
+test('while an update runs, every read says so, whoever pressed it; once it ends, none does', async () => {
+  let finish: (said: string) => void = () => {}
+  const run: RunProgram = async (bin, args) => (args[0] === 'update' ? new Promise(resolve => (finish = resolve)) : bin === 'codex' ? 'codex-cli 0.144.4' : Promise.reject(new Error('ENOENT')))
+  const updates = agentUpdates({ models, run, latest: async pkg => NPM[pkg]! })
+  assert.deepEqual(await updates.read(), [{ agent: 'codex', installed: '0.144.4', latest: '0.166.0' }])
+  const pressed = updates.update('codex')
+  assert.deepEqual(await updates.read(), [{ agent: 'codex', installed: '0.144.4', latest: '0.166.0', updating: true }])
+  finish('updated')
+  await pressed
+  assert.equal((await updates.read())[0]?.updating, undefined)
+})

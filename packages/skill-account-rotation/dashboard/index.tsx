@@ -2,9 +2,7 @@
 // command, so it shows on the dashboard's Overview what an agent sees through the same command.
 import { defineModule } from '@openagt/dashboard/module'
 import { AccountsCard } from './AccountsCard.js'
-import './dashboard.css'
 
 export default defineModule({
   cards: [{ id: 'accounts', label: 'Coding agent accounts', order: 45, width: '1/3', minWidth: '1/4', Card: AccountsCard }],
-  stylesheet: 'dashboard.css',
 })

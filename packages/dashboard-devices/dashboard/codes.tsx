@@ -72,7 +72,7 @@ export function CopyButton({ text, label, children }: { text: string; label: str
     return () => clearTimeout(timer)
   }, [copied])
   return (
-    <Button size="sm" type="button" variant="outline" aria-label={label} className="shrink-0" onClick={() => void navigator.clipboard?.writeText(text).then(() => setCopied(true))}>
+    <Button type="button" variant="outline" aria-label={label} className="shrink-0" onClick={() => void navigator.clipboard?.writeText(text).then(() => setCopied(true))}>
       {copied ? <Check className="h-3.5 w-3.5 text-success" aria-hidden /> : <Copy className="h-3.5 w-3.5" aria-hidden />}
       {copied ? 'Copied' : children}
     </Button>
@@ -89,7 +89,7 @@ export function CodeCard({ where, code }: { where: string; code: string }) {
       <div className="flex items-end justify-between gap-3">
         <div className="min-w-0">
           <p className="text-xs text-muted-foreground">Where</p>
-          <p className="truncate font-mono text-lg">{where}</p>
+          <p className="truncate font-mono text-xl">{where}</p>
         </div>
         <CopyButton text={where} label="Copy where">
           Copy
@@ -218,7 +218,7 @@ export function PhoneCode({
         ) : expired ? (
           <RanOut />
         ) : (
-          <div className="flex items-start gap-5 max-sm:flex-col max-sm:items-center">
+          <div className="flex gap-5 sm:items-start max-sm:flex-col max-sm:items-center">
             <div className="shrink-0">
               <QrCode text={link!} label="The code a new device scans" />
             </div>
@@ -260,16 +260,20 @@ export function PhoneCode({
             </div>
           </div>
         )}
+        {/* Cancel before the other press; once joined, Done is the press the dialog ends on, last. */}
         <div className="flex justify-end gap-2">
+          {joined === undefined && (
+            <Button variant="ghost" onClick={onClose}>
+              Cancel
+            </Button>
+          )}
           {!asking && (joined !== undefined || expired || error !== undefined || !code) && (
-            <Button size="sm" variant="outline" onClick={() => void again()}>
+            <Button variant="outline" onClick={() => void again()}>
               <RotateCw className="h-3.5 w-3.5" aria-hidden />
               {joined !== undefined ? 'Add another' : 'New code'}
             </Button>
           )}
-          <Button size="sm" variant={joined !== undefined ? 'default' : 'ghost'} onClick={onClose}>
-            {joined !== undefined ? 'Done' : 'Cancel'}
-          </Button>
+          {joined !== undefined && <Button onClick={onClose}>Done</Button>}
         </div>
       </div>
     </Dialog>
@@ -351,10 +355,10 @@ export function WhoAreYou({ title, naming, onType, onConfirm, onClose }: { title
         </div>
         {naming.error !== undefined && <Problem>{naming.error}</Problem>}
         <div className="flex justify-end gap-2">
-          <Button size="sm" variant="outline" type="button" onClick={onClose}>
+          <Button variant="outline" type="button" onClick={onClose}>
             Cancel
           </Button>
-          <Button size="sm" type="submit" disabled={naming.busy || name === undefined}>
+          <Button type="submit" disabled={naming.busy || name === undefined}>
             {naming.busy && <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden />}
             Continue
           </Button>
@@ -426,7 +430,7 @@ export function Invite({
           <div className="flex gap-2">
             <Input id="invite-name" ref={field} placeholder="Their name" value={typed} onChange={event => setTyped(event.target.value)} className="h-8 min-w-0 flex-1 bg-background px-2 text-sm" />
             {(person === undefined || name !== person) && (
-              <Button size="sm" type="submit" disabled={name === undefined || own || asking}>
+              <Button type="submit" disabled={name === undefined || own || asking}>
                 Make the code
               </Button>
             )}
@@ -475,12 +479,12 @@ export function Invite({
         )}
         <div className="flex justify-end gap-2">
           {person !== undefined && !asking && (joined !== undefined || expired || error !== undefined) && (
-            <Button size="sm" variant="outline" onClick={() => void again(person)}>
+            <Button variant="outline" onClick={() => void again(person)}>
               <RotateCw className="h-3.5 w-3.5" aria-hidden />
               New code
             </Button>
           )}
-          <Button size="sm" onClick={onClose}>
+          <Button onClick={onClose}>
             Done
           </Button>
         </div>

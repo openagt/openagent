@@ -88,7 +88,7 @@ export function RemoveProjectDialog({
                 </AlertDialog.Description>
               )}
               <div className="mt-4 flex justify-end">
-                <Button size="sm" autoFocus onClick={finish}>
+                <Button autoFocus onClick={finish}>
                   Done
                 </Button>
               </div>
@@ -141,12 +141,12 @@ export function RemoveProjectDialog({
                 <AlertDialog.Close
                   ref={cancel}
                   render={
-                    <Button variant="outline" size="sm" disabled={busy}>
+                    <Button variant="outline" disabled={busy}>
                       Cancel
                     </Button>
                   }
                 />
-                <Button variant="destructive" size="sm" disabled={busy} onClick={remove} className={cn(busy && 'cursor-progress')}>
+                <Button variant="destructive" disabled={busy} onClick={remove} className={cn(busy && 'cursor-progress')}>
                   {busy ? 'Removing…' : files ? 'Remove and delete' : 'Remove'}
                 </Button>
               </div>

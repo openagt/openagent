@@ -11,6 +11,7 @@ import type { SuggestionItem } from './prompt-editor/SuggestionList.js'
 // The same entry the Commands button renders: the `/` menu is the other face of that one list,
 // so it reads the shape rather than restating it structurally.
 import type { CommandEntry } from './CommandsMenu.js'
+import { pressed } from '../lib/shortcut.js'
 
 // The rich prompt editor (#470): a Tiptap surface that replaces the plain textarea. `/` opens
 // the project's commands and the saved prompts, `@` the registered projects, `#` the project's
@@ -281,7 +282,7 @@ export const PromptEditor = forwardRef<PromptEditorHandle, PromptEditorProps>(fu
         'aria-placeholder': placeholder,
       },
       handleKeyDown: (view, event) => {
-        if ((event.metaKey || event.ctrlKey) && event.key === 'Enter') {
+        if (pressed(event, 'sendLater')) {
           event.preventDefault()
           onSubmitRef.current(true)
           return true
@@ -290,7 +291,7 @@ export const PromptEditor = forwardRef<PromptEditorHandle, PromptEditorProps>(fu
         // direct prop outranks the plugins' handlers, so it must step aside where Enter already
         // means something: picking from an open suggestion menu (aria-expanded mirrors its
         // visibility), typing a newline in a code block, or confirming an IME composition.
-        if (event.key === 'Enter' && !event.shiftKey && !event.altKey && !event.isComposing) {
+        if (pressed(event, 'send')) {
           if (view.dom.getAttribute('aria-expanded') === 'true') return false
           if (view.state.selection.$from.parent.type.name === 'codeBlock') return false
           event.preventDefault()
@@ -343,7 +344,7 @@ export const PromptEditor = forwardRef<PromptEditorHandle, PromptEditorProps>(fu
     loadTemplateInto(editor, initialText, initialFocus)
   }, [editor, initialText])
 
-  // The placeholder is absolutely positioned, so it must share the editor's padding (`px-3 py-2.5`)
+  // The placeholder is absolutely positioned, so it must share the editor's padding (`px-3 py-2`)
   // to sit exactly where the first typed character will (#721). The composer's box is one line tall
   // when empty, as tall as the submit beside it. One line too: on a phone a long one is cut short,
   // where a second line would hang out of the box.
@@ -357,12 +358,12 @@ export const PromptEditor = forwardRef<PromptEditorHandle, PromptEditorProps>(fu
       <ScrollArea
         // The height cap goes on the viewport (the scroller), not the Root — a Root max-h cannot be
         // resolved by the viewport's height, so the editor would grow instead of scrolling.
-        viewportClassName="max-h-64 min-h-10"
+        viewportClassName="max-h-64 min-h-9"
       >
-        <EditorContent editor={editor} className="w-full bg-transparent text-sm pointer-coarse:text-base px-3 py-2.5" />
+        <EditorContent editor={editor} className="w-full bg-transparent not-pointer-coarse:text-sm pointer-coarse:text-base px-3 py-2" />
       </ScrollArea>
       {isEmpty && (
-        <span className="pointer-events-none absolute truncate text-sm text-muted-foreground pointer-coarse:text-base inset-x-3 top-2.5">
+        <span className="pointer-events-none absolute truncate not-pointer-coarse:text-sm text-faint-foreground pointer-coarse:text-base inset-x-3 top-2">
           {placeholder}
         </span>
       )}

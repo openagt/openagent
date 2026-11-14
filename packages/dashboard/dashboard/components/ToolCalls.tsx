@@ -72,7 +72,7 @@ function firstWords(text: string): string {
 
 // What an opened call shows, in the page's code font: what it was given scrolls, as does what it
 // printed, once taller than their limit.
-const CODE = 'max-h-64 overflow-auto whitespace-pre-wrap break-all font-mono text-[13px] leading-[19px]'
+const CODE = 'max-h-64 overflow-auto whitespace-pre-wrap break-all font-mono text-chat-code'
 
 /** The calls that start a subagent: their detail is the task the agent wrote for it. */
 const SUBAGENT_CALLS = new Set(['Agent', 'Task'])
@@ -220,18 +220,18 @@ function ReadDetail({ path, read }: { path: string; read: FileLines }) {
   // The widest number, and the room after it.
   const width = `${String(read.lines.at(-1)!.number).length}ch`
   return (
-    <div className="mt-1.5 flex flex-col gap-2.5">
+    <div className="mt-1.5 flex flex-col gap-2">
       {openFile ? (
-        <button type="button" title={`Open ${path}`} onClick={() => openFile(path)} className="min-w-0 truncate text-left text-[13px] text-foreground hover:underline hover:underline-offset-2">
+        <button type="button" title={`Open ${path}`} onClick={() => openFile(path)} className="min-w-0 truncate text-left text-chat-code text-foreground hover:underline hover:underline-offset-2">
           {path}
         </button>
       ) : (
-        <div className="min-w-0 truncate text-[13px] text-foreground">{path}</div>
+        <div className="min-w-0 truncate text-chat-code text-foreground">{path}</div>
       )}
-      <div aria-label="File" className="max-h-[400px] overflow-auto rounded-lg border border-border py-1.5 font-mono text-[13px] leading-[19px]">
+      <div aria-label="File" className="max-h-[400px] overflow-auto rounded-lg border border-border py-1.5 font-mono text-chat-code">
         {read.lines.map((line, i) => (
           <div key={line.number} className="flex w-max min-w-full whitespace-pre text-foreground">
-            <span className="shrink-0 select-none pr-4 pl-3 text-right tabular-nums text-muted-foreground/60" style={{ width: `calc(${width} + 1.75rem)` }}>
+            <span className="shrink-0 select-none pr-4 pl-3 text-right tabular-nums text-faint-foreground" style={{ width: `calc(${width} + 1.75rem)` }}>
               {line.number}
             </span>
             <span className="pr-3">{coloured?.[i] ? <ColouredLine pieces={coloured[i]} /> : line.text || ' '}</span>
@@ -253,7 +253,7 @@ function GivenDetail({ label, call, whole, output, card }: { label: string; call
   const command = call.kind === 'command' && given !== undefined
   const coloured = useHighlightedIn(command ? given : '', command ? 'shellscript' : undefined)
   return (
-    <div className={cn('mt-1.5 flex flex-col gap-1.5', card && 'rounded-xl border border-border px-3 py-3')}>
+    <div className={cn('mt-1.5 flex flex-col gap-1.5', card && 'rounded-lg border border-border px-3 py-3')}>
       {card && <div className="text-sm text-muted-foreground">{label}</div>}
       {given !== undefined && (
         <div className="relative rounded-lg border border-border">
@@ -427,11 +427,11 @@ export function ToolCalls({ steps, lead, live }: { steps: readonly ToolStep[]; l
       <span className="min-w-0 truncate text-left">
         {summary.parts.map((part, at) => (
           <Fragment key={at}>
-            <span className="group-hover/status:text-foreground/80 group-has-focus-visible/status:text-foreground/80">
+            <span className="group-hover/status:text-foreground group-has-focus-visible/status:text-foreground">
               {at > 0 && ', '}
               {part.words}
             </span>
-            {part.target !== undefined && <span className="text-foreground/80 group-hover/status:text-foreground group-has-focus-visible/status:text-foreground"> {part.target}</span>}
+            {part.target !== undefined && <span className="text-foreground"> {part.target}</span>}
           </Fragment>
         ))}
       </span>

@@ -128,7 +128,7 @@ export function SessionRepoPicks({
                 className={MENU_TRIGGER_OPEN_CLASS}
                 render={
                   <button type="button" className={cn(rowButtonClass, 'shrink-0')}>
-                    <Plus className="h-3.5 w-3.5 shrink-0" aria-hidden />
+                    <Plus className="size-4 shrink-0" aria-hidden />
                     <span className="truncate">Add repo</span>
                   </button>
                 }
@@ -190,7 +190,7 @@ export function RepoChip({ repo, tip, onRemove }: { repo: { name: string }; tip:
     return (
       <RowOff tip={tip}>
         <span className={rowItemClass}>
-          <FolderGit2 className="h-3.5 w-3.5 shrink-0" aria-hidden />
+          <FolderGit2 className="size-4 shrink-0" aria-hidden />
           <span className="truncate">{repo.name}</span>
         </span>
       </RowOff>
@@ -199,7 +199,7 @@ export function RepoChip({ repo, tip, onRemove }: { repo: { name: string }; tip:
   return (
     <Tooltip>
       <TooltipTrigger render={<span className={cn(rowItemClass, 'gap-1 pr-1')} />}>
-        <FolderGit2 className="h-3.5 w-3.5 shrink-0" aria-hidden />
+        <FolderGit2 className="size-4 shrink-0" aria-hidden />
         <span className="truncate">{repo.name}</span>
         <button type="button" aria-label={`Remove ${repo.name}`} onClick={onRemove} className="rounded-sm p-0.5 hover:bg-accent hover:text-accent-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary">
           <X className="h-3 w-3" aria-hidden />

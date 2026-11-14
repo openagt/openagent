@@ -1,0 +1,132 @@
+{
+  "dashboard-changes/dashboard/ChangesPanel.tsx": {
+    "leading-[19px]": 2,
+    "ml-2.5": 1,
+    "text-[13px]": 7
+  },
+  "dashboard-changes/dashboard/DiffView.tsx": {
+    "leading-[17px]": 1,
+    "text-[10px]": 1
+  },
+  "dashboard-devices/dashboard/AddDevice.tsx": {
+    "py-2.5": 1,
+    "text-[10px]": 1
+  },
+  "dashboard-devices/dashboard/ConnectServer.tsx": {
+    "rounded": 1,
+    "text-[11px]": 1
+  },
+  "dashboard-devices/dashboard/DevicesSettings.tsx": {
+    "text-[10px]": 1
+  },
+  "dashboard-devices/dashboard/ServerPage.tsx": {
+    "text-[11px]": 1
+  },
+  "dashboard-devices/dashboard/codes.tsx": {
+    "text-[11px]": 1
+  },
+  "dashboard-devices/dashboard/parts.tsx": {
+    "rounded": 1,
+    "text-[11px]": 1,
+    "text-muted-foreground/50": 1
+  },
+  "dashboard-files/dashboard/ContentView.tsx": {
+    "leading-[17px]": 1,
+    "text-[10px]": 1,
+    "text-muted-foreground/60": 1
+  },
+  "dashboard-files/dashboard/FileTree.tsx": {
+    "leading-[19px]": 1,
+    "text-[10px]": 2,
+    "text-[13px]": 2
+  },
+  "dashboard-files/dashboard/FileView.tsx": {
+    "text-[13px]": 1
+  },
+  "dashboard-files/dashboard/FilesPane.tsx": {
+    "text-[13px]": 2
+  },
+  "dashboard/dashboard/components/AddProjectEffects.tsx": {
+    "rounded": 1
+  },
+  "dashboard/dashboard/components/AddProjectPanel.tsx": {
+    "rounded": 3
+  },
+  "dashboard/dashboard/components/AgentDetails.tsx": {
+    "text-muted-foreground/70": 4
+  },
+  "dashboard/dashboard/components/AgentView.tsx": {
+    "py-2.5": 1
+  },
+  "dashboard/dashboard/components/AgentsPage.tsx": {
+    "gap-2.5": 2
+  },
+  "dashboard/dashboard/components/BridgeSettings.tsx": {
+    "rounded": 1
+  },
+  "dashboard/dashboard/components/ChangedFiles.tsx": {
+    "rounded": 1,
+    "text-[10px]": 1,
+    "text-[13px]": 3
+  },
+  "dashboard/dashboard/components/ContextFiles.tsx": {
+    "rounded": 1
+  },
+  "dashboard/dashboard/components/DiffStat.tsx": {
+    "text-[10px]": 1
+  },
+  "dashboard/dashboard/components/FadeWhileStale.tsx": {
+    "duration-300": 1
+  },
+  "dashboard/dashboard/components/FilterChips.tsx": {
+    "px-2.5": 1
+  },
+  "dashboard/dashboard/components/GitHosts.tsx": {
+    "gap-2.5": 1,
+    "px-2.5": 1,
+    "py-2.5": 1
+  },
+  "dashboard/dashboard/components/Markdown.tsx": {
+    "leading-[22px]": 1,
+    "space-y-2.5": 2,
+    "text-[0.9em]": 2,
+    "text-[15px]": 1
+  },
+  "dashboard/dashboard/components/ProjectSkills.tsx": {
+    "gap-2.5": 1,
+    "rounded": 4
+  },
+  "dashboard/dashboard/components/ServerLogins.tsx": {
+    "gap-x-2.5": 1,
+    "py-2.5": 1
+  },
+  "dashboard/dashboard/components/SettingsDialog.tsx": {
+    "rounded": 5
+  },
+  "dashboard/dashboard/components/ToolCalls.tsx": {
+    "max-h-[400px]": 1
+  },
+  "dashboard/dashboard/components/prompt-editor/SuggestionList.tsx": {
+    "rounded": 1,
+    "text-[10px]": 1,
+    "text-muted-foreground/70": 1
+  },
+  "dashboard/dashboard/components/ui/gauge.tsx": {
+    "duration-500": 1,
+    "text-[9px]": 2
+  },
+  "dashboard/dashboard/components/ui/resizable.tsx": {
+    "group-aria-[orientation=horizontal]/handle:h-[3px]": 1
+  },
+  "skill-browser/dashboard/BrowserPanel.tsx": {
+    "text-[10px]": 1,
+    "text-[11px]": 1
+  },
+  "skill-logs/dashboard/LogsPage.tsx": {
+    "gap-2.5": 2,
+    "text-[9px]": 1
+  },
+  "skill-scheduler/dashboard/CodeWords.tsx": {
+    "rounded": 2
+  }
+}

@@ -5,7 +5,7 @@ import type { AddressInfo } from 'node:net'
 import { mkdir, mkdtemp, realpath, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { broughtModuleUrl, serveBroughtModuleFile, serveComputerModuleFile, serveModuleFile, computerModuleUrl, moduleUrl, versionedModuleUrl, BROUGHT_MODULES_PREFIX, COMPUTER_MODULES_PREFIX, MODULES_PREFIX } from './module-serve.js'
+import { broughtModuleUrl, serveModuleFile, computerModuleUrl, moduleUrl, versionedModuleUrl, BROUGHT_MODULES_PREFIX, COMPUTER_MODULES_PREFIX, MODULES_PREFIX } from './module-serve.js'
 import type { ProjectsProvider } from './projects.js'
 
 test('module files are served per project and package, and nothing outside the module\'s own directory', async () => {
@@ -93,7 +93,7 @@ test('a module file goes gzipped with its own tag, and a browser that holds it i
 })
 
 test('the computer\'s module files are served by their package alone, with no project, and no other package\'s are', async () => {
-  const server = createServer((req, res) => void serveComputerModuleFile(req, res, new URL(req.url ?? '/', 'http://x').pathname))
+  const server = createServer((req, res) => void serveModuleFile(req, res, new URL(req.url ?? '/', 'http://x').pathname))
   await new Promise<void>(resolve => server.listen(0, '127.0.0.1', resolve))
   const base = `http://127.0.0.1:${(server.address() as AddressInfo).port}`
   try {
@@ -103,7 +103,7 @@ test('the computer\'s module files are served by their package alone, with no pr
     assert.equal(response.status, 200)
     assert.match(response.headers.get('content-type') ?? '', /javascript/)
     assert.equal(response.headers.get('cache-control'), 'no-cache')
-    assert.equal((await fetch(`${base}${COMPUTER_MODULES_PREFIX}/%40openagt%2Fdashboard-devices/dashboard.css`)).status, 200)
+    assert.equal((await fetch(`${base}${COMPUTER_MODULES_PREFIX}/%40openagt%2Fdashboard-devices/classes.txt`)).status, 200)
 
     for (const path of [
       `${COMPUTER_MODULES_PREFIX}/%40openagt%2Fdashboard-files/dashboard.js`, // every project's, not the computer's
@@ -120,7 +120,7 @@ test('the computer\'s module files are served by their package alone, with no pr
 })
 
 test("the files of a module OpenAgent brings to projects are served from its own copy, by package alone, and no other package's are", async () => {
-  const server = createServer((req, res) => void serveBroughtModuleFile(req, res, new URL(req.url ?? '/', 'http://x').pathname))
+  const server = createServer((req, res) => void serveModuleFile(req, res, new URL(req.url ?? '/', 'http://x').pathname))
   await new Promise<void>(resolve => server.listen(0, '127.0.0.1', resolve))
   const base = `http://127.0.0.1:${(server.address() as AddressInfo).port}`
   try {

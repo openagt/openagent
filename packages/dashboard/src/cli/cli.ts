@@ -6,6 +6,7 @@ import { handDownSkills } from './skills.js'
 import { repositoryOf } from './project.js'
 import { openInBrowser } from './browser.js'
 import { openagentVersion } from '../version.js'
+import { helpRows, helpText, unknownWord, usageError } from '@openagt/agent-data'
 
 /** Where the CLI writes. Injectable so tests capture output. */
 export interface CliIO {
@@ -20,22 +21,18 @@ const defaultIO: CliIO = {
 
 const HELP = `OpenAgent — turnkey AI orchestration that wraps a coding agent (Claude Code or Codex).
 
-Usage:
-  openagent              Serve the dashboard in the foreground. Ctrl+C closes it; the server
-                         logs stream to this terminal. Typed inside a Git repository, it adds
-                         that repository to the dashboard's projects and opens its page. With
-                         the dashboard running already, it hands the repository to that one.
+${helpRows([
+  'Usage:',
+  ['openagent', "Serve the dashboard in the foreground. Ctrl+C closes it; the server logs stream to this terminal. Typed inside a Git repository, it adds that repository to the dashboard's projects and opens its page. With the dashboard running already, it hands the repository to that one."],
+  'Options:',
+  ['--port <n>', 'Dashboard port (default: 4200).'],
+  ['-h, --help', 'Show this help.'],
+  ['-v, --version', 'Print the version.'],
+])}
 
-Options:
-  --port <n>             Dashboard port (default: 4200).
-  -h, --help             Show this help.
-  -v, --version          Print the version.
+${helpText("The dashboard listens on this computer only. A phone, or another computer's OpenAgent, gets in from Settings › Devices.")}
 
-The dashboard listens on this computer only. A phone, or another computer's OpenAgent, gets in
-from Settings › Devices.
-
-Everything else is the dashboard: it shows a project's runs from their files, and starts one
-through the project's own start hook (.openagent/hooks.yml), which names the tool that runs it.`
+${helpText("Everything else is the dashboard: it shows a project's runs from their files, and starts one through the project's own start hook (.openagent/hooks.yml), which names the tool that runs it.")}`
 
 /** What the CLI itself accepts: three options, no verbs (D4). */
 export interface CliArgs {
@@ -75,7 +72,7 @@ export function parseArgs(argv: string[]): CliArgs {
       }
       default:
         // The first thing that could not be read is the one told: what follows an unknown option is its value, not a command.
-        opts.error ??= arg.startsWith('-') ? `unknown option: ${arg}` : `unknown command: ${arg}`
+        opts.error ??= unknownWord(arg)
     }
   }
   return opts
@@ -90,8 +87,7 @@ export function portOf(value: string | undefined): number | undefined {
 export async function runCli(argv: string[], io: CliIO = defaultIO): Promise<number> {
   const args = parseArgs(argv)
   if (args.error) {
-    io.err(args.error)
-    io.err('Run `openagent --help` for usage.')
+    io.err(usageError('openagent', args.error))
     return 2
   }
   if (args.help) {

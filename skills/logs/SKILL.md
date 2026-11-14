@@ -8,7 +8,7 @@ package: "@openagt/skill-logs@0.1"
 
 Every run an agent made on this project leaves a record in the project's agent data, never on a code branch; your checkout does not contain it. A run is two files under `agents/<who>/`: the card, `<id>.json` — what was asked, the branch, the pull request, how it ended, what it cost — and the diary, `<id>.jsonl` — what the agent said along the way, its result.
 
-Read them with the `logs` command, always run by its full name: `npx @openagt/skill-logs@0.1`. You only read: the program that ran an agent records its run, at its end. The command's `delete` and `patch`, and its `--local` and `--full` flags, are for the dashboard that shows the runs; never use them. A refusal exits 1 with a line on stderr; a wrong command line exits 2 with the usage.
+Read them with the `logs` command, always run by its full name: `npx @openagt/skill-logs@0.1`. You only read: the program that ran an agent records its run, at its end. The command's `delete` and `patch`, and its `--local` and `--full` flags, are for the dashboard that shows the runs; never use them. A refusal exits 1 with a line on stderr; a wrong command line exits 2 with what was wrong and a pointer to `--help`.
 
 ## Read
 

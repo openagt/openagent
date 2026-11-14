@@ -5,6 +5,7 @@ import { cn } from '../lib/utils.js'
 import { buttonVariants } from './ui/button.js'
 import { OptionLabel } from './ui/option-label.js'
 import { Tooltip, TooltipTrigger, TooltipContent } from './ui/tooltip.js'
+import { pressed } from '../lib/shortcut.js'
 import {
   DropdownMenu,
   DropdownMenuTrigger,
@@ -39,7 +40,7 @@ function SavedPresetRow({
       disabled={busy}
       onClick={() => onLoad(preset.prompt, preset.label)}
       onKeyDown={e => {
-        if (e.key !== 'Delete' && e.key !== 'Backspace') return
+        if (!pressed(e, 'deletePrompt')) return
         e.preventDefault()
         onDelete(preset.id)
       }}
@@ -59,7 +60,7 @@ function SavedPresetRow({
                 onDelete(preset.id)
               }}
               aria-label={`Delete saved prompt ${preset.label}`}
-              className="flex size-6 shrink-0 items-center justify-center rounded text-[var(--color-muted-foreground)] hover:text-danger"
+              className="flex size-6 shrink-0 items-center justify-center rounded-sm text-muted-foreground hover:text-danger"
             />
           }
         >
@@ -104,7 +105,7 @@ export function CommandsMenu({
               type="button"
               disabled={busy}
               aria-label="Commands"
-              className={cn(buttonVariants({ variant: 'ghost', size: 'icon-sm' }), 'h-8 w-8')}
+              className={cn(buttonVariants({ variant: 'ghost', size: 'icon-sm' }), 'text-muted-foreground data-[popup-open]:bg-accent')}
             />
           }
         >

@@ -1,4 +1,4 @@
-import { Refused, UsageError, inRepo, nodeGitRunner, parseCommandArgs, runCommandLine, type Command, type GitRunner } from '@openagt/agent-data'
+import { Refused, UsageError, inRepo, nodeGitRunner, parseCommandArgs, runCommandLine, helpRows, helpText, type Command, type GitRunner } from '@openagt/agent-data'
 import { projectRoot } from '@openagt/skill-branches'
 import { driverFor } from '@openagt/agent-runner'
 import { runNow, schedulerStatus, startScheduler, stopScheduler, tickProject } from './scheduler.js'
@@ -21,68 +21,31 @@ import { lineContext, writeLine } from './write-line.js'
 
 const USAGE = `usage: scheduler <command>
 
-  tick                          pull agent-data, sweep, read the commands the project's skills schedule, start what is due, each a run of agent-runner
-  init                          this tool's lines in the dashboard's .openagent/hooks.yml, so it runs while the dashboard is open; a line already there is kept
-  start [--keep-alive]          the scheduler on, ticking every minute in its own process
-  stop [--unless-keep-alive]    the scheduler off; runs in flight go to the end; with the flag a keep-alive scheduler is left running
-  status                        the state file, whether the scheduler's process is alive, and the schedule as the project's files say it now
-  model <id>                    the model a scheduled run on Claude Code starts on, where neither its command's skill nor you name another (this user)
-  model <command> <id|skill>    the model this machine's runs of a scheduled command start on, by the id its coding agent knows it by, the command quoted
-                                when it has a word after it; kept with the agent the command runs on here, and holding only while it runs on that agent;
-                                skill for the model its skill names again, else the scheduler's own on Claude Code and the agent's own default on Codex,
-                                taken for any name
-  agent <command> <claude-code|codex|skill>
-                                the coding agent this machine's runs of a scheduled command are on; refused for an agent whose own skills folder does not
-                                hold the command's skill (.claude/skills for Claude Code, .agents/skills for Codex); skill for the agent its skill is made
-                                for again, taken for any name; the command quoted when it has a word after it. The model picked for the command
-                                goes with either: a model is one agent's.
-                                Only Claude's quota can be read: a run on Codex starts without that question
-  offset <points>               how far past the spend boundary a run may still start (this user)
-  switch <command> <on|off>     whether a scheduled command runs on this machine, the command as status names it (quoted when it has a word after it); every one starts off, and off is taken for any name
-  publish <command> <nothing|commit|branch|pr|merge>
-                                how far this machine's runs of a scheduled command publish; commit until picked.
-                                Of a row that also resumes runs, as its agent and model, only for the runs it starts: one it resumes goes on with its own
-  pace <command> <skill|work|N<m|h|d|w|mo>> [HH:MM]
-                                how often at most a scheduled command starts on this machine: an interval (15m, 6h, 2d, 2w, 1mo; 1 to 9999), with a time of day
-                                for days, weeks or months (2d 10:00, this machine's time); work for whenever its check finds work; skill for the skill's own pace again, taken for any name
-  agents <command> <skill|N>    how many runs of a scheduled command may be in flight at once: this machine starts another only while fewer than N are in flight
-                                on any machine; a whole number from 1 to ${MAX_AGENTS}; skill for the skill's own number again, taken for any name
-  add <name> --prompt <text> [--every <N<m|h|d|w|mo>>] [--when <shell line>] [--waits-for <line>] [--private]
-                                a person's own automation, saved as a command skill of the project: the prompt is the skill's text, and its schedule a pace (--every),
-                                a check (--when, a shell line that prints what is new; it may read $LAST_RUN), or both; --waits-for says in one plain line what the check
-                                waits for. The file is yours to commit: its command starts no run before it is on the commit a run's checkout starts from.
-                                With --private it is kept on this machine alone, in this tool's own folder: nothing to commit, nobody else gets the row, and it
-                                can start at once: a run is named by the automation's name and handed the prompt. The prompt is in each run's record, which
-                                is shared where the project shares its records.
-                                Refused for a name a skill of the project, or an automation kept on this machine, already has
-  show <name>                   an automation saved with add, as it stands: its prompt, its pace, its check, its file, whether it is kept on this machine alone,
-                                and its version, a name for what the file says now.
-                                Refused, like edit and remove, for anything whose file does not read as add writes one: a skill of the project,
-                                or an automation changed by hand since; those are edited and removed by hand
-  edit <name> [--prompt <text>] [--every <N<m|h|d|w|mo>>] [--when <shell line>] [--waits-for <line>] [--was <version>]
-                                save an automation again under its name: what is given takes the place of what its file said, what is left out stays,
-                                and --every, --when or --waits-for given empty (--when=) takes that part out; what a check waits for goes out with the check.
-                                Its past runs, its switch and your picks for it stay. A shared one is a change of yours to commit: a run is told the new
-                                prompt only once the change is on the commit a run's checkout starts from. With --was, the version show answered, it is
-                                refused when the file was changed since: a form opened a while ago writes over no change made by hand
-  remove <name>                 delete an automation's file, and what this machine held for it: its switch, its pace, its number of agents, its coding agent, its model, its publish pick.
-                                Nothing is committed: the deletion of a shared one is yours to commit, and everyone else keeps the command until it reaches them.
-                                What was never committed cannot be brought back: all of one kept on this machine, and a shared one's file or its last changes.
-                                The records of its past runs stay
-  now <command>                 start one run of a scheduled command now, whatever its switch, its pace and the quota left: a person asked for it. A command with a check
-                                starts only when the check finds work (it has 10 seconds); how many at once, where a run's checkout starts and whether the
-                                coding agent can start hold as on a tick. It needs no scheduler running. Not ready within 20 seconds, it starts nothing
-  try --when <shell line>       run a check once, as a tick would, asking what is new since a day ago: what it printed and whether an agent would start; nothing is saved or started;
-                                it has 20 seconds, less than a tick gives a check
-  write-line --words <plain words> [--agent <claude-code|codex>]
-                                a shell line for --when, written from what it waits for said in plain words, by one session of the coding agent (Claude Code
-                                unless named) with no tools: a fraction of a cent. The line is only printed, as {line}, or {none} with why no line can do it;
-                                nothing is run or saved. It has ${WRITE_LINE_TIMEOUT_MS / 1000} seconds
-  cleanup                       remove what this tool left in the project: the state file and the scheduler's log, then .scheduler/ and the rule hiding it from git once it is empty
-                                (the automations kept on this machine are your own writing and stay);
-                                refused while the state names a scheduler that is alive; the command a dashboard asks for when a project is removed with its files
+${helpRows([
+  ['tick', `pull agent-data, sweep, read the commands the project's skills schedule, start what is due, each a run of agent-runner`],
+  ['init', `this tool's lines in the dashboard's .openagent/hooks.yml, so it runs while the dashboard is open; a line already there is kept`],
+  ['start [--keep-alive]', 'the scheduler on, ticking every minute in its own process'],
+  ['stop [--unless-keep-alive]', 'the scheduler off; runs in flight go to the end; with the flag a keep-alive scheduler is left running'],
+  ['status', `the state file, whether the scheduler's process is alive, and the schedule as the project's files say it now`],
+  ['model <id>', `the model a scheduled run on Claude Code starts on, where neither its command's skill nor you name another (this user)`],
+  ['model <command> <id|skill>', `the model this machine's runs of a scheduled command start on, by the id its coding agent knows it by, the command quoted when it has a word after it; kept with the agent the command runs on here, and holding only while it runs on that agent; skill for the model its skill names again, else the scheduler's own on Claude Code and the agent's own default on Codex, taken for any name`],
+  ['agent <command> <claude-code|codex|skill>', `the coding agent this machine's runs of a scheduled command are on; refused for an agent whose own skills folder does not hold the command's skill (.claude/skills for Claude Code, .agents/skills for Codex); skill for the agent its skill is made for again, taken for any name; the command quoted when it has a word after it. The model picked for the command goes with either: a model is one agent's. Only Claude's quota can be read: a run on Codex starts without that question`],
+  ['offset <points>', 'how far past the spend boundary a run may still start (this user)'],
+  ['switch <command> <on|off>', 'whether a scheduled command runs on this machine, the command as status names it (quoted when it has a word after it); every one starts off, and off is taken for any name'],
+  ['publish <command> <nothing|commit|branch|pr|merge>', `how far this machine's runs of a scheduled command publish; commit until picked. Of a row that also resumes runs, as its agent and model, only for the runs it starts: one it resumes goes on with its own`],
+  ['pace <command> <skill|work|N<m|h|d|w|mo>> [HH:MM]', `how often at most a scheduled command starts on this machine: an interval (15m, 6h, 2d, 2w, 1mo; 1 to 9999), with a time of day for days, weeks or months (2d 10:00, this machine's time); work for whenever its check finds work; skill for the skill's own pace again, taken for any name`],
+  ['agents <command> <skill|N>', `how many runs of a scheduled command may be in flight at once: this machine starts another only while fewer than N are in flight on any machine; a whole number from 1 to ${MAX_AGENTS}; skill for the skill's own number again, taken for any name`],
+  ['add <name> --prompt <text> [--every <N<m|h|d|w|mo>>] [--when <shell line>] [--waits-for <line>] [--private]', `a person's own automation, saved as a command skill of the project: the prompt is the skill's text, and its schedule a pace (--every), a check (--when, a shell line that prints what is new; it may read $LAST_RUN), or both; --waits-for says in one plain line what the check waits for. The file is yours to commit: its command starts no run before it is on the commit a run's checkout starts from. With --private it is kept on this machine alone, in this tool's own folder: nothing to commit, nobody else gets the row, and it can start at once: a run is named by the automation's name and handed the prompt. The prompt is in each run's record, which is shared where the project shares its records. Refused for a name a skill of the project, or an automation kept on this machine, already has`],
+  ['show <name>', 'an automation saved with add, as it stands: its prompt, its pace, its check, its file, whether it is kept on this machine alone, and its version, a name for what the file says now. Refused, like edit and remove, for anything whose file does not read as add writes one: a skill of the project, or an automation changed by hand since; those are edited and removed by hand'],
+  ['edit <name> [--prompt <text>] [--every <N<m|h|d|w|mo>>] [--when <shell line>] [--waits-for <line>] [--was <version>]', `save an automation again under its name: what is given takes the place of what its file said, what is left out stays, and --every, --when or --waits-for given empty (--when=) takes that part out; what a check waits for goes out with the check. Its past runs, its switch and your picks for it stay. A shared one is a change of yours to commit: a run is told the new prompt only once the change is on the commit a run's checkout starts from. With --was, the version show answered, it is refused when the file was changed since: a form opened a while ago writes over no change made by hand`],
+  ['remove <name>', `delete an automation's file, and what this machine held for it: its switch, its pace, its number of agents, its coding agent, its model, its publish pick. Nothing is committed: the deletion of a shared one is yours to commit, and everyone else keeps the command until it reaches them. What was never committed cannot be brought back: all of one kept on this machine, and a shared one's file or its last changes. The records of its past runs stay`],
+  ['now <command>', `start one run of a scheduled command now, whatever its switch, its pace and the quota left: a person asked for it. A command with a check starts only when the check finds work (it has 10 seconds); how many at once, where a run's checkout starts and whether the coding agent can start hold as on a tick. It needs no scheduler running. Not ready within 20 seconds, it starts nothing`],
+  ['try --when <shell line>', 'run a check once, as a tick would, asking what is new since a day ago: what it printed and whether an agent would start; nothing is saved or started; it has 20 seconds, less than a tick gives a check'],
+  ['write-line --words <plain words> [--agent <claude-code|codex>]', `a shell line for --when, written from what it waits for said in plain words, by one session of the coding agent (Claude Code unless named) with no tools: a fraction of a cent. The line is only printed, as {line}, or {none} with why no line can do it; nothing is run or saved. It has ${WRITE_LINE_TIMEOUT_MS / 1000} seconds`],
+  ['cleanup', `remove what this tool left in the project: the state file and the scheduler's log, then .scheduler/ and the rule hiding it from git once it is empty (the automations kept on this machine are your own writing and stay); refused while the state names a scheduler that is alive; the command a dashboard asks for when a project is removed with its files`],
+])}
 
-JSON on stdout. Exit code 1 for a refusal or a failure (the reason on stderr), 2 for a usage error.`
+${helpText('JSON on stdout. Exit code 1 for a refusal or a failure (the reason on stderr), 2 for a usage error.')}`
 
 export interface CliIo {
   cwd: string
@@ -91,7 +54,7 @@ export interface CliIo {
 }
 
 export function runCli(argv: string[], io: CliIo, git: GitRunner = nodeGitRunner()): Promise<number> {
-  return runCommandLine(argv, io, { usage: USAGE, commands: COMMANDS }, io, git)
+  return runCommandLine(argv, io, { program: 'scheduler', usage: USAGE, commands: COMMANDS }, io, git)
 }
 
 const COMMANDS: Record<string, Command<[CliIo, GitRunner]>> = {

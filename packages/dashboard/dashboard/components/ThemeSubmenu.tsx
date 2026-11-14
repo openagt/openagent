@@ -25,7 +25,7 @@ export function ThemeSubmenu() {
   return (
     <DropdownMenuSub>
       <DropdownMenuSubTrigger>
-        <Current className="h-3.5 w-3.5 shrink-0 opacity-70" aria-hidden />
+        <Current className="size-4 shrink-0 text-muted-foreground" aria-hidden />
         <span className="flex-1">Theme</span>
         <span className="text-muted-foreground">{current.label}</span>
       </DropdownMenuSubTrigger>
@@ -39,9 +39,9 @@ export function ThemeSubmenu() {
               closeOnClick={false}
               onClick={() => updatePreferences({ theme: t.value })}
             >
-              <Check className={cn('h-3.5 w-3.5 shrink-0', t.value === theme ? 'opacity-100' : 'opacity-0')} />
-              <Icon className="h-3.5 w-3.5 shrink-0 opacity-70" />
+              <Icon className="size-4 shrink-0 text-muted-foreground" />
               {t.label}
+              <Check className={cn('ml-auto size-4 shrink-0', t.value === theme ? 'opacity-100' : 'opacity-0')} />
             </DropdownMenuItem>
           )
         })}

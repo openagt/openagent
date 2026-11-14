@@ -14,7 +14,7 @@ import { Input } from './ui/input.js'
 import { Label } from './ui/label.js'
 import { Page } from './Page.js'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select.js'
-import { Skeleton } from './ui/skeleton.js'
+import { Skeleton, useSkeleton } from './ui/skeleton.js'
 
 // The Agents page (Rom's design): an agent is a name, a set of skills and a set of accounts, made
 // once and used in any project or none. One card per agent, the default first, each edited in
@@ -26,9 +26,13 @@ import { Skeleton } from './ui/skeleton.js'
 /** How often the agents are read again while the page is open. */
 const SELDOM_MS = 30_000
 
-/** The agents (a name, skills and accounts each) as the dashboard reads them, remembered across pages so a menu lands whole. */
+/**
+ * The agents (a name, skills and accounts each) as the dashboard reads them, remembered across
+ * pages and loads so a menu lands whole and the box's rows, which name the agent and count its
+ * skills, are drawn from the first frame.
+ */
 export function useAgentsList(): { view: AgentsView | undefined; reload: () => Promise<void> } {
-  const { value, reload } = usePolled<AgentsView | undefined>(onAgentsList, undefined, SELDOM_MS, [], { remember: 'agents' })
+  const { value, reload } = usePolled<AgentsView | undefined>(onAgentsList, undefined, SELDOM_MS, [], { remember: 'agents', stored: true })
   return { view: value, reload }
 }
 
@@ -72,6 +76,7 @@ function sameDraft(a: Draft, b: Draft): boolean {
 /** The Agents page. */
 export function AgentsPage() {
   const { view, reload } = useAgentsList()
+  const reading = useSkeleton(!view)
   const { devices, reload: reloadDevices } = useAgentLogins()
   const [adding, setAdding] = useState(false)
   const newAgent = useRef<HTMLButtonElement>(null)
@@ -91,13 +96,13 @@ export function AgentsPage() {
       title="Agents"
       description="An agent is a name, a set of skills and a set of accounts. Pick one under the message box; it works in any project, or in none."
       actions={
-        <Button ref={newAgent} size="sm" disabled={!view || adding} onClick={() => setAdding(true)}>
+        <Button ref={newAgent} disabled={!view || adding} onClick={() => setAdding(true)}>
           <Plus className="size-3.5" aria-hidden />
           New agent
         </Button>
       }
     >
-      {!view ? (
+      {!view || reading ? (
         <Skeleton className="h-32 w-full" />
       ) : (
         <div className="space-y-4">
@@ -126,14 +131,14 @@ function AgentCard({ agent, view, devices, onChanged, onRemoved }: { agent: Agen
         <div className="flex items-center gap-2">
           <Bot className="size-4 shrink-0 text-muted-foreground" aria-hidden />
           <CardTitle className="min-w-0 flex-1 truncate text-base">{agent.name}</CardTitle>
-          <Button size="xs" variant="ghost" aria-label={`Edit ${agent.name}`} onClick={() => setEditing(true)}>
+          <Button size="sm" variant="ghost" aria-label={`Edit ${agent.name}`} onClick={() => setEditing(true)}>
             <Pencil className="size-3.5" aria-hidden />
             Edit
           </Button>
           {!isDefault && (
             <ConfirmDialog
               trigger={
-                <Button size="xs" variant="ghost" className="hover:text-danger" aria-label={`Remove ${agent.name}`}>
+                <Button size="sm" variant="ghost" className="hover:text-danger" aria-label={`Remove ${agent.name}`}>
                   <Trash2 className="size-3.5" aria-hidden />
                   Remove
                 </Button>
@@ -219,7 +224,7 @@ function OnDevices({ login, devices, onCopied }: { login: string; devices: Agent
       })}
       {failed && (
         <li>
-          <Button size="xs" variant="ghost" className="-ml-2 font-normal" disabled={copying} onClick={() => void copy()}>
+          <Button size="sm" variant="ghost" className="-ml-2 font-normal" disabled={copying} onClick={() => void copy()}>
             {copying ? <Loader2 className="size-3 animate-spin" aria-hidden /> : <RefreshCw className="size-3" aria-hidden />}
             {copying ? 'Copying…' : 'Copy again'}
           </Button>
@@ -312,10 +317,10 @@ function AgentEditor({ agent, view, onAccounts, onDone }: { agent?: AgentRecord;
             </p>
           )}
           <div className="flex items-center justify-end gap-2">
-            <Button size="sm" variant="ghost" disabled={busy} onClick={() => void onDone(false)}>
+            <Button variant="ghost" disabled={busy} onClick={() => void onDone(false)}>
               Cancel
             </Button>
-            <Button type="submit" form={formId} size="sm" disabled={busy}>
+            <Button type="submit" form={formId} disabled={busy}>
               {busy && <Loader2 className="size-3.5 animate-spin" aria-hidden />}
               {busy ? 'Saving…' : 'Save'}
             </Button>
@@ -395,7 +400,7 @@ function AgentEditor({ agent, view, onAccounts, onDone }: { agent?: AgentRecord;
             <Label htmlFor="agent-github">GitHub</Label>
             <div className="flex flex-wrap items-center gap-2">
               <Select items={githubItems} value={draft.github ?? COMPUTERS} onValueChange={next => setDraft(d => ({ ...d, ...(next ? { github: String(next) } : {}), ...(next ? {} : { github: undefined }) }))} disabled={busy}>
-                <SelectTrigger id="agent-github" size="sm" aria-label="GitHub account" className="min-w-0 max-w-sm grow basis-48">
+                <SelectTrigger id="agent-github" aria-label="GitHub account" className="min-w-0 max-w-sm grow basis-48">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -407,7 +412,7 @@ function AgentEditor({ agent, view, onAccounts, onDone }: { agent?: AgentRecord;
                 </SelectContent>
               </Select>
               {view.github && (
-                <Button type="button" size="sm" variant="outline" disabled={busy} onClick={() => addingAccount.add(view.github!.host)}>
+                <Button type="button" variant="outline" disabled={busy} onClick={() => addingAccount.add(view.github!.host)}>
                   <Plus className="size-3.5" aria-hidden />
                   Add account
                 </Button>
@@ -425,7 +430,7 @@ function AgentEditor({ agent, view, onAccounts, onDone }: { agent?: AgentRecord;
 }
 
 /**
- * A coding agent's accounts to pick from: "All", ticked while none is picked, is every one of this computer's; one or more ticked, those alone, where the computer has them.
+ * A coding agent's accounts to pick from: "Every account, also new ones", ticked while none is picked, is every one of this computer's, also one added later; one or more ticked, those alone, where the computer has them.
  * This computer's own login, logged out, is offered only while it is picked, and says so.
  */
 function AccountPicks({ label, accounts: all, picked, busy, onTick, onAll }: { label: string; accounts: readonly AgentAccountChoice[]; picked: Set<string>; busy: boolean; onTick: (id: string, on: boolean) => void; onAll: () => void }) {
@@ -437,8 +442,8 @@ function AccountPicks({ label, accounts: all, picked, busy, onTick, onAll }: { l
       <div className="flex flex-wrap gap-3">
         {/* Left by ticking an account, as a radio is left by picking another. */}
         <label className="flex cursor-pointer items-center gap-2 text-sm">
-          <Checkbox checked={picked.size === 0} onCheckedChange={checked => checked === true && onAll()} disabled={busy} aria-label={`All ${label} accounts`} />
-          All
+          <Checkbox checked={picked.size === 0} onCheckedChange={checked => checked === true && onAll()} disabled={busy} aria-label={`Every ${label} account, also new ones`} />
+          Every account, also new ones
         </label>
         {accounts.map(account => {
           const name = account.loggedOut ? `${account.name}, not logged in` : account.name

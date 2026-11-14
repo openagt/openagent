@@ -77,7 +77,7 @@ export function ComputerPage({ d, item, onBack, onSetUp }: { d: Devices; item: C
               <span>{`On ${item.name}, open Settings › Devices › Add device › Computer › Give it this computer's link, and paste that link here:`}</span>
               <Input name="computer-link" autoFocus aria-label={`${item.name}'s link`} value={link} onChange={event => setLink(event.target.value)} />
             </label>
-            <Button size="sm" type="submit" disabled={busy || !link.trim()}>
+            <Button type="submit" disabled={busy || !link.trim()}>
               Save
             </Button>
           </form>
@@ -95,7 +95,7 @@ export function ComputerPage({ d, item, onBack, onSetUp }: { d: Devices; item: C
         <Part title="Who can use it">
           <p className="text-sm">Only you.</p>
           <p className="text-xs text-muted-foreground">{`Other people cannot start runs on ${item.name}: on a personal computer they would run as you, with your logins. To share it, set it up as a server: each person then gets a user of their own on it. Linux for now.`}</p>
-          <Button size="sm" variant="outline" onClick={onSetUp}>
+          <Button variant="outline" onClick={onSetUp}>
             <Server className="h-3.5 w-3.5" aria-hidden />
             Set it up as a server
           </Button>
@@ -104,7 +104,7 @@ export function ComputerPage({ d, item, onBack, onSetUp }: { d: Devices; item: C
       <div className="space-y-1 pt-4">
         <ConfirmDialog
           trigger={
-            <Button size="sm" variant="outline" className="text-danger" disabled={busy}>
+            <Button variant="outline" className="text-danger" disabled={busy}>
               {`Remove ${item.name}`}
             </Button>
           }

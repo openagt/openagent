@@ -5,7 +5,7 @@ import { join } from 'node:path'
 import { test } from 'node:test'
 import { runAdding, type AddingNow } from './adding.js'
 import { accountsPath, addAccount, copiedPath, markLimited, nameOwnAccount, readAccounts } from './accounts.js'
-import { runCli } from './cli.js'
+import { runCli, USAGE } from './cli.js'
 import { loginWiring, type LoginWiring } from './wiring.js'
 
 interface Run {
@@ -385,12 +385,19 @@ test('add-cancel stops the sign-in under way and forgets it, keeping nothing', (
     assert.deepEqual(readAccounts(accountsPath('claude', env)).map(a => a.name), ['This computer'])
   }))
 
-test('a command that cannot be read says the usage and exits 2', () =>
+test('--help is the usage on stdout, exit 0', () =>
+  inDir(async env => {
+    for (const help of ['--help', '-h']) assert.deepEqual(await run([help], env), { code: 0, out: [USAGE], err: [] })
+  }))
+
+test('a command that cannot be read says what was wrong and where the usage is, and exits 2; no command at all, the usage', () =>
   inDir(async env => {
     for (const argv of [[], ['nope'], ['list', 'claude'], ['add'], ['add', 'claude'], ['add', 'gemini', 'Rom'], ['add', 'claude', 'Rom', 'extra'], ['adding', 'claude'], ['add-code'], ['add-cancel', 'gemini']]) {
       const wrong = await run(argv, env)
       assert.equal(wrong.code, 2, argv.join(' '))
-      assert.match(wrong.err.join('\n'), /usage: account-rotation/)
+      assert.match(wrong.err.join('\n'), argv.length ? /\nRun `account-rotation --help` for usage\.$/ : /^usage: account-rotation/)
     }
+    assert.deepEqual((await run(['nope'], env)).err, ['unknown command: nope\nRun `account-rotation --help` for usage.'])
+    assert.deepEqual((await run(['add', 'gemini', 'Rom'], env)).err, ['wrong arguments for add: gemini Rom\nRun `account-rotation --help` for usage.'])
     assert.deepEqual(await readFile(accountsPath('claude', env), 'utf8').catch(() => 'no file'), 'no file')
   }))

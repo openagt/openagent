@@ -1,4 +1,4 @@
-import { useContext, useRef, useState, type ReactNode } from 'react'
+import { useContext, useId, useRef, useState, type ReactNode } from 'react'
 import type { DashboardData, ProjectSummary } from '../../src/index.js'
 import { Check, Info, X } from 'lucide-react'
 import { onDashboard } from '../rpc/reads.js'
@@ -6,7 +6,7 @@ import { usePolled } from '../lib/use-async.js'
 import { usePerson } from '../lib/use-person.js'
 import { cn } from '../lib/utils.js'
 import { Button } from './ui/button.js'
-import { Card, CardContent, CardHeader } from './ui/card.js'
+import { Skeleton } from './ui/skeleton.js'
 import { usePreferences, updatePreferences, notificationsEnabled } from '../lib/preferences.js'
 import { setBrowserNotifications, useNotificationPermission } from '../lib/notification-permission.js'
 import { startPicks, useStartAgent } from '../lib/use-start-agent.js'
@@ -84,12 +84,14 @@ export function OnboardingChecklist({
 }) {
   // Slower than the Overview's own 5s poll: these change at human speed, and this read fans out
   // over every project to answer the tickets question.
-  const { value: data, reload, loaded } = usePolled<DashboardData | null>(onDashboard, null, 10_000, [])
+  // Kept for the next visit: the steps open where they stood, not as titles that then grow.
+  const { value: data, reload, state } = usePolled<DashboardData | null>(onDashboard, null, 10_000, [], { remember: 'onboarding:dashboard', stored: true })
   const preferences = usePreferences()
   const permission = useNotificationPermission()
   const { start, busy: starting, error: startError } = useStartAgent()
   const { person } = usePerson()
   const services = useContext(HostServicesContext) ?? INERT_HOST_SERVICES
+  const headingId = useId()
   // What runs need on this computer: the coding agent's login, and an account at each git host.
   const { missing, hosts, loaded: missingLoaded, reload: reloadMissing } = useMissing()
   // The steps shown once stay, done or not: the coding agent's is there only once it was missing.
@@ -131,7 +133,7 @@ export function OnboardingChecklist({
         description: p.installed && p.accounts.length === 0 ? `OpenAgent pushes and opens ${p.requestWord}s with an account of its own, never your own login.` : hostWords(row),
         done,
         ...(runs ? { doneNote: `@${runs}` } : {}),
-        action: <HostFix row={row} onChanged={reloadMissing} size="sm" />,
+        action: <HostFix row={row} onChanged={reloadMissing} size="default" />,
       },
     ]
   })
@@ -171,7 +173,7 @@ export function OnboardingChecklist({
             description: 'The agent queue: each entry is work the agent picks up on its own, so a filled queue is what lets it keep going without you.',
             done: (data?.totals.openTodos ?? 0) > 0,
             action: (
-              <Button size="sm" variant="outline" onClick={() => services.openPage('queue')}>
+              <Button variant="outline" onClick={() => services.openPage('queue')}>
                 Open the Queue
               </Button>
             ),
@@ -187,7 +189,7 @@ export function OnboardingChecklist({
             label: 'Populate the tickets',
             description: (
               <p className="text-xs text-muted-foreground">
-                <code className="rounded bg-muted px-1">tickets/</code> holds the bigger things to work on, in the repo. The agent researches and plans them, and they are the input the queue is filled from.
+                <code className="rounded-sm bg-muted px-1">tickets/</code> holds the bigger things to work on, in the repo. The agent researches and plans them, and they are the input the queue is filled from.
               </p>
             ),
             done: hasTickets,
@@ -220,7 +222,7 @@ export function OnboardingChecklist({
         ) : permission === 'unsupported' ? (
           <span className="text-xs text-muted-foreground">Not supported by this browser</span>
         ) : (
-          <Button size="sm" variant="outline" onClick={enableBrowserNotifications}>
+          <Button variant="outline" onClick={enableBrowserNotifications}>
             Turn on
           </Button>
         ),
@@ -228,27 +230,23 @@ export function OnboardingChecklist({
   ]
 
   // No step before its reads have said where it stands: an unread project count is not "no project".
-  const reading = !loaded || !missingLoaded
+  const reading = state === 'unknown' || !missingLoaded
   const open = picked !== undefined && steps.some(step => step.key === picked && !step.done) ? picked : steps.find(step => !step.done)?.key
   const ready = !reading && steps.every(step => step.done || step.optional)
   const name = person ? `, ${firstName(person.name)}` : ''
 
+  const doneCount = steps.filter(step => step.done).length
   return (
-    <Card>
-      <CardHeader className="flex flex-row items-center justify-between gap-3">
-        <h2 className="min-w-0 text-lg font-semibold tracking-tight">{ready ? `You're all set${name}` : `${greeting(new Date().getHours())}${name}`}</h2>
-        <div className="flex shrink-0 items-center gap-3">
-          {/* Where the steps stand, one dash each: the numbers below say which is which. Not on a phone, where the greeting needs the room and the steps' own ticks say it. */}
-          {!reading && (
-            <ol aria-label={`${steps.filter(step => step.done).length} of ${steps.length} done`} className="items-center gap-1.5 sm:flex max-sm:hidden">
-              {steps.map(step => (
-                <li key={step.key} aria-hidden className={cn('h-1.5 w-6 rounded-full', step.done ? 'bg-[var(--color-primary)]' : step.key === open ? 'bg-[var(--color-primary)]/40' : 'bg-muted-foreground/20')} />
-              ))}
-            </ol>
-          )}
+    <section aria-labelledby={headingId} className="min-w-0">
+      <div className="mb-3 flex items-center justify-between gap-3">
+        <div className="flex min-w-0 items-baseline gap-3">
+          <h2 id={headingId} className="min-w-0 text-xl font-semibold">{ready ? `You're all set${name}` : `${greeting(new Date().getHours())}${name}`}</h2>
+          {/* Where the steps stand, in words: the numbers below say which is which. */}
+          {!reading && <span className="shrink-0 text-sm tabular-nums text-muted-foreground">{`${doneCount} of ${steps.length}`}</span>}
+        </div>
+        <div className="flex shrink-0 items-center gap-2">
           {ready && targetProjectId && (
             <Button
-              size="sm"
               onClick={() => {
                 updatePreferences({ onboardingDismissed: true })
                 onSelectProject(targetProjectId)
@@ -258,33 +256,46 @@ export function OnboardingChecklist({
             </Button>
           )}
           <Tooltip>
-            <TooltipTrigger render={<Button variant="ghost" size="sm" onClick={() => updatePreferences({ onboardingDismissed: true })} aria-label={HIDE} />}>
+            <TooltipTrigger render={<Button variant="ghost" size="icon" onClick={() => updatePreferences({ onboardingDismissed: true })} aria-label={HIDE} className="text-muted-foreground" />}>
               <X className="h-4 w-4" aria-hidden />
             </TooltipTrigger>
             <TooltipContent>{HIDE}</TooltipContent>
           </Tooltip>
         </div>
-      </CardHeader>
-      <CardContent>
+      </div>
         {reading ? (
           <>
             <p className="sr-only">Loading…</p>
-            {/* The steps' rows, with no state yet, so the card is about its size from the first frame. */}
-            <ol aria-hidden="true" className="divide-y divide-border">
+            {/* The steps' rows, with no state yet, the first one as the open step is laid out (its words, then its press beside them or under), so the steps are about their size from the first frame. */}
+            <ol aria-hidden="true">
               {steps.map((step, at) => (
-                <li key={step.key} className="flex items-start gap-3 py-3 first:pt-0 last:pb-0">
+                <li key={step.key} className="flex items-start gap-3 py-2">
                   <span className="mt-0.5 flex size-6 shrink-0 items-center justify-center rounded-full border border-border text-xs font-medium text-muted-foreground tabular-nums">{at + 1}</span>
-                  <span className="mt-1 text-sm text-muted-foreground">{step.label}</span>
+                  {at === 0 ? (
+                    <div className="flex min-w-0 flex-1 flex-wrap items-start gap-3">
+                      <div className="min-w-0 flex-[1_1_16rem] space-y-1">
+                        <span className="mt-1 block text-sm text-muted-foreground">{step.label}</span>
+                        <Skeleton className="h-4 w-full" />
+                        <Skeleton className="h-4 w-2/3" />
+                      </div>
+                      <div className="flex shrink-0 flex-col gap-1">
+                        <Skeleton className="h-8 w-40" />
+                        <Skeleton className="h-6 w-72 max-w-full" />
+                      </div>
+                    </div>
+                  ) : (
+                    <span className="mt-1 text-sm text-muted-foreground">{step.label}</span>
+                  )}
                 </li>
               ))}
             </ol>
           </>
         ) : (
-          <ol className="divide-y divide-border">
+          <ol aria-label={`${doneCount} of ${steps.length} done`}>
             {steps.map((step, at) => {
               const isOpen = step.key === open
               return (
-                <li key={step.key} aria-label={step.label} aria-current={isOpen ? 'step' : undefined} className="flex items-start gap-3 py-3 first:pt-0 last:pb-0">
+                <li key={step.key} aria-label={step.label} aria-current={isOpen ? 'step' : undefined} className="flex items-start gap-3 py-2">
                   {step.done ? (
                     <span aria-label="Done" className="mt-0.5 flex size-6 shrink-0 items-center justify-center rounded-full bg-[var(--color-primary)] text-[var(--color-primary-foreground)]">
                       <Check className="h-3.5 w-3.5" aria-hidden />
@@ -306,7 +317,7 @@ export function OnboardingChecklist({
                         >
                           <span>{step.label}</span>
                           {step.done && step.doneNote && <span className="truncate text-xs text-muted-foreground">· {step.doneNote}</span>}
-                          {step.optional && !step.done && <span className="rounded-full border border-border px-1.5 py-0.5 text-[10px] font-normal uppercase tracking-wide text-muted-foreground">Optional</span>}
+                          {step.optional && !step.done && <span className="text-xs font-normal text-muted-foreground">Optional</span>}
                         </button>
                         {isOpen && step.info && (
                           <Tooltip>
@@ -326,7 +337,6 @@ export function OnboardingChecklist({
             })}
           </ol>
         )}
-      </CardContent>
-    </Card>
+    </section>
   )
 }

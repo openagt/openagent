@@ -73,22 +73,22 @@ export function ViewToggle({ style }: { style?: CSSProperties }) {
         ...style,
         gap: 2,
         padding: 2,
-        border: '1px solid #4f585e',
+        border: '1px solid var(--border)',
         borderRadius: 8,
-        background: '#232a2e',
+        background: 'var(--card)',
         viewTransitionName: 'oa-toggle',
       }}
     >
       <span
         aria-hidden
-        style={{ position: 'absolute', top: 2, left: 2, width: 96, height: 24, borderRadius: 6, background: '#a7c080', viewTransitionName: 'oa-toggle-thumb' }}
+        style={{ position: 'absolute', top: 2, left: 2, width: 96, height: 24, borderRadius: 6, background: 'var(--primary)', viewTransitionName: 'oa-toggle-thumb' }}
       />
       {/* The labels after the thumb, and named apart from it: the switch draws them above the thumb as it slides. */}
       <span style={{ position: 'relative', display: 'inline-flex', gap: 2, viewTransitionName: 'oa-toggle-labels' }}>
-        <span aria-current="page" style={{ ...pillStyle, width: 96, color: '#232a2e' }}>
+        <span aria-current="page" style={{ ...pillStyle, width: 96, color: 'var(--primary-foreground)' }}>
           Landing page
         </span>
-        <a href={dashboardHref} onClick={switchInPlace} className="view-toggle-off" style={{ ...pillStyle, width: 84, color: '#d3c6aa' }}>
+        <a href={dashboardHref} onClick={switchInPlace} className="view-toggle-off" style={{ ...pillStyle, width: 84, color: 'var(--foreground)' }}>
           Dashboard
         </a>
       </span>

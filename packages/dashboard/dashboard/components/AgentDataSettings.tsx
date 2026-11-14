@@ -97,12 +97,12 @@ export function AgentDataSettings() {
           }
           control={
             personal.remote ? (
-              <Button variant="outline" size="sm" disabled={busy} onClick={stop}>
+              <Button variant="outline" disabled={busy} onClick={stop}>
                 Stop syncing
               </Button>
             ) : (
               !asking && (
-                <Button variant="outline" size="sm" onClick={() => setAsking(true)}>
+                <Button variant="outline" onClick={() => setAsking(true)}>
                   Sync with a repository
                 </Button>
               )
@@ -140,13 +140,12 @@ export function AgentDataSettings() {
                 }}
                 className="h-8"
               />
-              <Button type="submit" size="sm" disabled={busy || address.trim() === '' || (typedAt !== undefined && sendAs === undefined)}>
+              <Button type="submit" disabled={busy || address.trim() === '' || (typedAt !== undefined && sendAs === undefined)}>
                 {busy ? 'Syncing…' : 'Sync'}
               </Button>
               <Button
                 type="button"
                 variant="ghost"
-                size="sm"
                 disabled={busy}
                 onClick={() => {
                   setAsking(false)
@@ -162,7 +161,7 @@ export function AgentDataSettings() {
                 // No account of OpenAgent's there: one is added here, in its dialog.
                 <div className="space-y-1.5">
                   <p className="text-xs text-muted-foreground">{`OpenAgent backs up to ${typedRow.provider?.name ?? typedAt.host} with an account of its own, never your own login. It has none there yet.`}</p>
-                  <HostFix row={typedRow} onChanged={reloadGitHosts} size="xs" />
+                  <HostFix row={typedRow} onChanged={reloadGitHosts} size="sm" />
                 </div>
               ) : (
                 <SendAs host={typedAt} value={sendAs} onChange={setPicked} disabled={busy} label="Back up as" />

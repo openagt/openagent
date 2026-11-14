@@ -140,8 +140,9 @@ already made, and lists it in its pull request; for anything else it proposes an
   shadcn offers them; a switch of colours starts on the new one's default; the usage bar under
   pace is in it) and three fonts: the
   page's (IBM Plex Sans, the website's own), code's (JetBrains Mono) and a Markdown file's
-  in the Files pane (Source Serif 4, as Claude Code reads one in a serif). Fonts load from
-  Google Fonts. The page's was picked over Figtree, close to Claude Code's sans, so the
+  in the Files pane (Source Serif 4, as Claude Code reads one in a serif). Fonts are the
+  package's own files, loaded from the page's address. The page's was picked over Figtree,
+  close to Claude Code's sans, so the
   dashboard and the website it switches with are one; and over Satoshi, whose licence forbids
   shipping it in a public package. The wordmark is IBM Plex Sans, medium.
 - The chat is set at Claude Code's sizes: text 15px on 21px lines, code 13px.

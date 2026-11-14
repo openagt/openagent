@@ -103,7 +103,8 @@ already made, and lists it in its pull request; for anything else it proposes an
   writes are refused there, so nobody else can have moved it.
 - Every command that runs prints one JSON document, the result or the refusal. A refusal
   also puts one line on stderr and exits 1. A malformed command line (an unknown flag, the
-  wrong argument count) is rejected first: the usage on stderr, nothing on stdout, exit 2.
+  wrong argument count) is rejected first: what was wrong and a pointer to `--help` on
+  stderr, nothing on stdout, exit 2.
   A file no command may touch refuses with `invalid-path`. Anything a command throws
   refuses with `git-failed`. Outside a repository a command refuses `not-a-repo`; only
   git's own "not a git repository" reads as that.

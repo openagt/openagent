@@ -1,25 +1,19 @@
+import { List } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
-import type { MouseEvent, ReactNode } from 'react'
-import { mono } from './ui'
+import type { MouseEvent } from 'react'
+import { text } from './ui'
 
-const SECTIONS: { id: string; title: ReactNode }[] = [
+const SECTIONS: { id: string; title: string }[] = [
   { id: 'stop-babysitting', title: 'Stop babysitting' },
   { id: 'autonomous-ai', title: 'Autonomous AI' },
   { id: 'how-it-works', title: 'How it works' },
   { id: 'features', title: 'Features' },
-  {
-    id: 'your-framework',
-    title: (
-      <>
-        <em style={{ fontStyle: 'italic' }}>Your</em> framework
-      </>
-    ),
-  },
+  { id: 'your-framework', title: 'Your framework' },
 ]
 
 function scrollTop(e: MouseEvent) {
   e.preventDefault()
-  window.scrollTo({ top: 0, behavior: 'smooth' })
+  window.scrollTo({ top: 0 })
 }
 
 // Scroll-spy nav. The design export faked `position: sticky` with a spacer +
@@ -36,7 +30,7 @@ export function SectionNav() {
       // A section claims the highlight once its content crosses just below the
       // viewport's midpoint — eager enough to follow the reader, without
       // flipping while the title still hugs the bottom edge. Nav clicks land
-      // content at y=76, within the line.
+      // content at y=64, within the line.
       const spyLine = Math.max(130, window.innerHeight * 0.55)
       let a = ''
       for (const s of SECTIONS) {
@@ -67,33 +61,14 @@ export function SectionNav() {
           justifyContent: 'center',
           alignItems: 'center',
           gap: 8,
-          padding: '96px clamp(14px, 4vw, 24px) 8px',
-          color: '#a7c080',
-          fontFamily: mono,
-          fontSize: 11.5,
-          letterSpacing: '0.12em',
-          textTransform: 'uppercase',
+          padding: 'var(--space-part) var(--space-gutter) 8px',
+          color: 'var(--muted-foreground)',
+          ...text('sm'),
+          fontWeight: 500,
           userSelect: 'none',
         }}
       >
-        <svg
-          width="13"
-          height="13"
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="currentColor"
-          strokeWidth="2.2"
-          strokeLinecap="round"
-          aria-hidden="true"
-          style={{ flex: 'none' }}
-        >
-          <line x1="9" y1="6" x2="20" y2="6" />
-          <line x1="9" y1="12" x2="20" y2="12" />
-          <line x1="9" y1="18" x2="20" y2="18" />
-          <circle cx="4.5" cy="6" r="1.3" fill="currentColor" stroke="none" />
-          <circle cx="4.5" cy="12" r="1.3" fill="currentColor" stroke="none" />
-          <circle cx="4.5" cy="18" r="1.3" fill="currentColor" stroke="none" />
-        </svg>
+        <List size={16} aria-hidden style={{ flex: 'none' }} />
         On this page
       </div>
 
@@ -104,27 +79,27 @@ export function SectionNav() {
           position: 'sticky',
           top: 0,
           zIndex: 50,
-          background: stuck ? 'rgba(35, 42, 46, 0.92)' : '#232a2e',
-          backdropFilter: 'blur(10px)',
-          WebkitBackdropFilter: 'blur(10px)',
-          borderTop: stuck ? 'none' : '1px solid #3d484d',
-          borderBottom: '1px solid #3d484d',
+          // Once stuck, a strip the page shows through, blurred.
+          background: stuck ? 'color-mix(in oklab, var(--background) 72%, transparent)' : 'var(--card)',
+          backdropFilter: 'blur(12px) saturate(1.4)',
+          WebkitBackdropFilter: 'blur(12px) saturate(1.4)',
+          borderTop: stuck ? 'none' : '1px solid var(--border)',
+          borderBottom: '1px solid var(--border)',
         }}
       >
         <div
           className="section-nav"
           style={{
-            maxWidth: 1120,
+            maxWidth: 'var(--container)',
             margin: '0 auto',
-            padding: '0 clamp(14px, 4vw, 24px)',
+            padding: '0 var(--space-gutter)',
             display: 'flex',
             justifyContent: 'flex-start',
             alignItems: 'center',
-            gap: 'clamp(18px, 3vw, 30px)',
+            gap: 24,
             overflowX: 'auto',
             scrollbarWidth: 'none',
-            fontFamily: mono,
-            fontSize: 13,
+            ...text('sm'),
             whiteSpace: 'nowrap',
           }}
         >
@@ -140,9 +115,9 @@ export function SectionNav() {
               flex: 'none',
               display: 'flex',
               alignItems: 'center',
-              padding: '11px 2px',
+              padding: '12px 2px',
               opacity: stuck ? 1 : 0,
-              transition: 'opacity 0.35s ease',
+              transition: 'opacity var(--duration-enter) var(--ease-out)',
               pointerEvents: stuck ? 'auto' : 'none',
             }}
           >
@@ -158,7 +133,7 @@ export function SectionNav() {
               key={s.id}
               href={'#' + s.id}
               className={'section-link' + (active === s.id ? ' active' : '')}
-              style={{ flex: 'none', padding: '17px 2px 15px' }}
+              style={{ flex: 'none', padding: '12px 2px' }}
             >
               {s.title}
             </a>

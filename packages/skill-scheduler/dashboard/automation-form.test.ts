@@ -26,7 +26,7 @@ describe('a new automation', () => {
     expect(draftProblem(draft({ pace: WORK, when: CHECK }))).toBeUndefined()
     // A time of day goes with days or more, and one left half typed is no pace yet.
     expect(draftProblem(draft({ pace: every('2', 'd', '10:00') }))).toBeUndefined()
-    expect(draftProblem(draft({ pace: { ...every('2'), atHalfTyped: true } }))).toBe('Finish the time, like 10:00, or clear it.')
+    expect(draftProblem(draft({ pace: { ...every('2'), atHalfTyped: true } }))).toBe('Finish the time of day, like 10:00, or clear it.')
     expect(draftProblem(draft())).toBeUndefined()
     expect(draftProblem(draft({ name: '  answer-comments  ' }))).toBeUndefined()
     // A text longer than the dashboard hands a command is said before Save, not refused after it.
@@ -41,7 +41,7 @@ describe('a new automation', () => {
   test("what else keeps a draft from being saved, its name aside: said while the name typed cannot be one, which is said under its own field", () => {
     const badName = (over: Partial<AutomationDraft> = {}): AutomationDraft => draft({ name: 'Answer comments', ...over })
     expect(whatAndWhenProblem(badName({ pace: every('') }))).toBe('Type a whole number, from 1 to 9999.')
-    expect(whatAndWhenProblem(badName({ pace: { ...every('2'), atHalfTyped: true } }))).toBe('Finish the time, like 10:00, or clear it.')
+    expect(whatAndWhenProblem(badName({ pace: { ...every('2'), atHalfTyped: true } }))).toBe('Finish the time of day, like 10:00, or clear it.')
     expect(whatAndWhenProblem(badName({ pace: WORK }))).toBe('Say when it runs: on a pace, by a shell line, or both.')
     expect(whatAndWhenProblem(badName({ prompt: '' }))).toBe('Write what the agent is told.')
     expect(whatAndWhenProblem(badName())).toBeUndefined()

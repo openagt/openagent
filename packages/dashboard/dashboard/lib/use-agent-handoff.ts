@@ -1,14 +1,14 @@
 import { useEffect, useRef, useState } from 'react'
 import type { AgentHandoff } from '../../src/index.js'
 import { onAgentHandoff } from '../rpc/reads.js'
-import { forgetRemembered, usePolled } from './use-async.js'
+import { forgetRemembered, useAskOn, usePolled, type ReadState } from './use-async.js'
 import { useAction } from './use-action.js'
 
 /** What the agent view knows about the session's branch, and how it acts on it. */
 export type AgentHandoffState = {
   handoff: AgentHandoff | null
-  /** True once the read has answered, so an empty state isn't flashed before then. */
-  loaded: boolean
+  /** What is known of the branch: an empty state isn't flashed while it is unknown. */
+  state: ReadState
   busy: boolean
   error: string | null
   /** Which button is in flight, so it can say "Opening PR…" rather than silently greying (#948). */
@@ -49,6 +49,28 @@ export const SETTLING_MS = 10_000
 export const SETTLING_EVERY_MS = 1_000
 
 /**
+ * Whether a run's turn has just ended, so what it leaves is read every {@link SETTLING_EVERY_MS}:
+ * from `working` going false, for {@link SETTLING_MS}, or until `settled` says it has landed.
+ */
+export function useSettling(working: boolean, settled = false): boolean {
+  const [settling, setSettling] = useState(false)
+  const wasWorking = useRef(working)
+  useEffect(() => {
+    if (wasWorking.current && !working) setSettling(true)
+    wasWorking.current = working
+  }, [working])
+  useEffect(() => {
+    if (!settling) return
+    const timer = setTimeout(() => setSettling(false), SETTLING_MS)
+    return () => clearTimeout(timer)
+  }, [settling])
+  useEffect(() => {
+    if (settling && settled) setSettling(false)
+  }, [settling, settled])
+  return settling
+}
+
+/**
  * Whether a run's branch gives the bar above the message box something to say: work it holds
  * (commits, changed files, files left uncommitted), work that was landed, or a branch that is gone
  * with work on it. A run that changed nothing has nothing said, and so no bar.
@@ -77,38 +99,26 @@ export function useAgentHandoff(projectId: string, agentId: string | null | unde
   useEffect(() => {
     if (working && key !== undefined) forgetRemembered(key)
   }, [working, key])
-  // The run's turn has just ended: its branch is read again every second until it has something to
-  // say, since the run's own last commit lands moments after its turn does ({@link SETTLING_MS}).
-  const [settling, setSettling] = useState(false)
-  const wasWorking = useRef(working)
-  useEffect(() => {
-    if (wasWorking.current && !working) setSettling(true)
-    wasWorking.current = working
-  }, [working])
-  useEffect(() => {
-    if (!settling) return
-    const timer = setTimeout(() => setSettling(false), SETTLING_MS)
-    return () => clearTimeout(timer)
-  }, [settling])
   // How often to ask: every second while the branch is still settling, straight away again while
-  // the pull request lookup is out, every fifteen seconds at rest. A cadence change reads at once,
-  // which is how the read the moment a run ends is taken at all.
+  // the pull request lookup is out, every fifteen seconds at rest.
   const [everyMs, setEveryMs] = useState(REST_MS)
-  const { value: handoff, reload, loaded } = usePolled<AgentHandoff | null>(
+  const { value: handoff, reload, refresh, state } = usePolled<AgentHandoff | null>(
     enabled && agentId ? () => onAgentHandoff(projectId, agentId) : null,
     null,
     everyMs,
-    [projectId, agentId, enabled, everyMs, saving],
-    // Remembered per run: going back to a run shows its last answer at once while it is read
-    // again, and a cadence flip (prPending 15s↔1s) keeps the answer rather than blanking the
-    // summary for a beat. Another run's answer is never shown.
-    key !== undefined ? { remember: key } : undefined,
+    [projectId, agentId, enabled],
+    // Remembered per run, in this browser too: going back to a run, or loading it again, shows its
+    // last answer at once while it is read again. Another run's answer is never shown.
+    key !== undefined ? { remember: key, stored: true } : undefined,
   )
+  // The run's turn has just ended: its branch is read every second until it has something to say,
+  // since the run's own last commit lands moments after its turn does ({@link SETTLING_MS}).
+  const settling = useSettling(working, handoffSays(handoff))
   useEffect(() => setEveryMs(handoff?.prPending ? PR_PENDING_MS : settling ? SETTLING_EVERY_MS : REST_MS), [handoff?.prPending, settling])
-  // Once the branch has something to say, the run's work is on it: back to the resting pace.
-  useEffect(() => {
-    if (settling && handoffSays(handoff)) setSettling(false)
-  }, [settling, handoff])
+  // A quicker pace reads at once, which is how the read the moment a run ends is taken at all; and
+  // the clean-up done (`saving` over) may have deleted the branch or pushed it.
+  useAskOn(everyMs, refresh)
+  useAskOn(saving, reload)
   const { busy, error, run } = useAction()
   const [pending, setPending] = useState<Press | null>(null)
   const [failed, setFailed] = useState<string | null>(null)
@@ -144,5 +154,5 @@ export function useAgentHandoff(projectId: string, agentId: string | null | unde
   }, [answer, handoff, stands])
   const shown = stands ? { ...handoff, ...answer.with, ...(answer.with.pr ? { prPending: false } : {}) } : handoff
   const said = error === null || failed === null || error === failed ? error : `${failed}\n${error}`
-  return { handoff: shown, loaded, busy, error: said, pending, act }
+  return { handoff: shown, state, busy, error: said, pending, act }
 }

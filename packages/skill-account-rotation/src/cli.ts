@@ -4,6 +4,7 @@ import { addingNow, beginAdding, bringCode, cancelAdding, runAdding } from './ad
 import { comesBackFrom, logOut, ownLoginThere, ownName, removeAdded } from './login.js'
 import { loginWiring, type LoginWiring } from './wiring.js'
 import { readUsage } from './usage.js'
+import { unknownWord, usageError, wrongArguments, helpRows } from '@openagt/agent-data'
 
 /**
  * The command line: a result is one JSON document on stdout; a refusal is one line for a person on
@@ -13,16 +14,17 @@ import { readUsage } from './usage.js'
 
 export const USAGE = `usage: account-rotation <command>
 
-  list                          the accounts of each agent in the order runs try them, never a login
-  usage                         how full each account is, read now where it can be
-  add <claude|codex> <name>     start adding a new account under <name>: the person signs in, and this answers at once
-  adding                        how adding stands for each agent: where to sign in, and why the last one did not go through
-  add-code <claude|codex>       hand the sign-in the code its page showed, on standard input
-  add-cancel <claude|codex>     stop adding
-  remove <claude|codex> <name>  take an added account off the list
-  logout <claude|codex>         log the person's own login out, their terminal too
-  use-first <claude|codex> <name>
-                                the account runs try first from now on`
+${helpRows([
+  ['list', 'the accounts of each agent in the order runs try them, never a login'],
+  ['usage', 'how full each account is, read now where it can be'],
+  ['add <claude|codex> <name>', 'start adding a new account under <name>: the person signs in, and this answers at once'],
+  ['adding', 'how adding stands for each agent: where to sign in, and why the last one did not go through'],
+  ['add-code <claude|codex>', 'hand the sign-in the code its page showed, on standard input'],
+  ['add-cancel <claude|codex>', 'stop adding'],
+  ['remove <claude|codex> <name>', 'take an added account off the list'],
+  ['logout <claude|codex>', `log the person's own login out, their terminal too`],
+  ['use-first <claude|codex> <name>', 'the account runs try first from now on'],
+])}`
 
 export interface CliIo {
   stdout: (line: string) => void
@@ -43,6 +45,9 @@ async function readStdin(): Promise<string> {
 }
 
 const isAgent = (value: string | undefined): value is AccountsAgent => value === 'claude' || value === 'codex'
+
+/** Every command, `add`'s own sign-in process included. */
+const COMMANDS = new Set(['list', 'usage', 'add', 'adding', 'add-code', 'add-cancel', 'remove', 'logout', 'use-first', 'add-worker'])
 
 /**
  * An agent's accounts as `list` says them. The person's own says the computer it is a login on, who
@@ -76,15 +81,20 @@ export async function runCli(argv: readonly string[], io: CliIo): Promise<number
     io.stdout(JSON.stringify(value))
     return 0
   }
+  const misread = (): number => {
+    io.stderr(command === undefined ? USAGE : usageError('account-rotation', COMMANDS.has(command) ? wrongArguments(command, argv.slice(1)) : unknownWord(command)))
+    return 2
+  }
+  if ((command === '--help' || command === '-h') && argv.length === 1) {
+    io.stdout(USAGE)
+    return 0
+  }
   if (command === 'list' && argv.length === 1) {
     return answer({ claude: await listed('claude', wiring), codex: await listed('codex', wiring) })
   }
   if (command === 'usage' && argv.length === 1) return answer(await readUsage(wiring))
   if (command === 'adding' && argv.length === 1) return answer({ claude: addingNow('claude', wiring), codex: addingNow('codex', wiring) })
-  if (!isAgent(agent)) {
-    io.stderr(USAGE)
-    return 2
-  }
+  if (!isAgent(agent)) return misread()
   if (command === 'add-code' && argv.length === 2) {
     const brought = bringCode(agent, await (io.stdin ?? readStdin)(), wiring)
     return brought.ok ? answer(addingNow(agent, wiring)) : refuse(brought.error)
@@ -97,10 +107,7 @@ export async function runCli(argv: readonly string[], io: CliIo): Promise<number
     const failed = await logOut(agent, wiring)
     return failed === undefined ? answer(await listed(agent, wiring)) : refuse(failed)
   }
-  if (name === undefined || argv.length !== 3) {
-    io.stderr(USAGE)
-    return 2
-  }
+  if (name === undefined || argv.length !== 3) return misread()
   if (command === 'add') {
     const begun = await beginAdding(agent, name, wiring)
     return begun.ok ? answer(addingNow(agent, wiring)) : refuse(begun.error)
@@ -123,6 +130,5 @@ export async function runCli(argv: readonly string[], io: CliIo): Promise<number
     if (!gone) return refuse(`There is no added ${agent} account named ${name}.`)
     return answer(shownAccounts(readAccounts(wiring.path(agent))))
   }
-  io.stderr(USAGE)
-  return 2
+  return misread()
 }

@@ -8,7 +8,7 @@ import { ModuleSlot } from './ModulePageView.js'
 import { PaneHeaderContext } from './PaneHeader.js'
 import { useMountedModules, type MountedPanel } from '../lib/use-modules.js'
 import type { ModuleContext, ModulePanelProps } from '../module/index.js'
-import { Button } from './ui/button.js'
+import { Button, buttonVariants } from './ui/button.js'
 import { cn } from '../lib/utils.js'
 import { usePolled } from '../lib/use-async.js'
 import { DropdownMenu, DropdownMenuCheckboxItem, DropdownMenuContent, DropdownMenuTrigger } from './ui/dropdown-menu.js'
@@ -24,8 +24,9 @@ import { isMobileScreen, useIsMobile } from '../lib/use-mobile.js'
 // the end of the page's top bar. An icon opens its pane and closes it again, and an open pane's
 // icon is lit. The open panes are cards in one column beside the chat, in the order they were
 // opened; the line between the chat and the column, and the line between two panes, is dragged to
-// share the room. A pane's card has its name, a button that lets it fill the page and one that
-// closes it. Which panes are open and how the room is shared is remembered for each page
+// share the room; a line is drawn only under the pointer and while it is dragged, the cards' own
+// edges part them at rest. A pane's card has its name, a button that lets it fill the page and one
+// that closes it. Which panes are open and how the room is shared is remembered for each page
 // (`lib/panes.ts`). A closed pane renders nothing, so nothing in it reads anything.
 //
 // On a phone there is no room beside the chat: the column of cards lies over the chat's right two
@@ -78,9 +79,30 @@ interface PanesValue {
   docsLoaded: boolean
   /** What the Subagent pane shows. */
   subagent: ReactNode
+  /** How many icons to hold room for until the modules and the docs are read: as many as this project had when they last were. */
+  held: number
 }
 
-const NO_PANES: PanesValue = { page: '', enabled: false, panes: [], open: [], expanded: undefined, panelProps: undefined, reveal: undefined, show: undefined, docs: [], docsLoaded: false, subagent: null }
+const NO_PANES: PanesValue = { page: '', enabled: false, panes: [], open: [], expanded: undefined, panelProps: undefined, reveal: undefined, show: undefined, docs: [], docsLoaded: false, subagent: null, held: 0 }
+
+/** localStorage key prefix of how many pane icons each project's top bar had once its panes were all known. */
+const ICONS_KEY = 'oa.pane-icons:'
+
+function keptIcons(projectId: string): number {
+  try {
+    return Number(globalThis.localStorage?.getItem(ICONS_KEY + projectId)) || 0
+  } catch {
+    return 0
+  }
+}
+
+function keepIcons(projectId: string, count: number): void {
+  try {
+    globalThis.localStorage?.setItem(ICONS_KEY + projectId, String(count))
+  } catch {
+    // Kept for this page's life only.
+  }
+}
 const PanesContext = createContext<PanesValue>(NO_PANES)
 
 /** The last ask from the chat the panes moved for. */
@@ -134,18 +156,19 @@ export function PanesProvider({
   // Read here and not in the pane: the top bar has to know whether there is a document before it
   // offers the icon (#1146). Remembered per project: a project seen before says whether it has
   // documents from the first frame, so its icon neither comes late nor shows and goes.
-  const { value: docs, loaded: docsLoaded } = usePolled<WorkspaceDoc[]>(
+  const { value: docs, state: docsState } = usePolled<WorkspaceDoc[]>(
     shown ? () => onDocs(shown) : null,
     [],
     4000,
     [shown],
     shown ? { remember: `docs:${shown}` } : undefined,
   )
+  const docsLoaded = docsState !== 'unknown'
 
   // The modules' panes for this project: every one is offered, since the top bar cannot tell a
   // module's pane is empty without rendering it; an empty one says so inside. The dashboard's own
   // Docs pane is earned by content (#1146): one that can only say "nothing yet" is not offered.
-  const { panels: mounted } = useMountedModules()
+  const { panels: mounted, loaded: modulesLoaded } = useMountedModules()
   const page = panesPage(shown ?? '', agentId)
   // The Subagent pane is there once a row asked for a subagent on this page.
   const subagentAsked = useRevealedSubagent(page)
@@ -159,6 +182,15 @@ export function PanesProvider({
     ]
     return [...ofModules, ...own]
   }, [mounted, shown, docs.length, showsSubagent])
+
+  // A module's icon is its own component, so it cannot be drawn before the module is loaded: until
+  // then the bar holds the room the icons took last time, and the ⋮ before them stays where it is.
+  const settled = modulesLoaded && docsLoaded
+  const iconCount = panes.filter(pane => !pane.hidden).length
+  useEffect(() => {
+    if (shown && settled) keepIcons(shown, iconCount)
+  }, [shown, settled, iconCount])
+  const held = shown && !settled ? keptIcons(shown) : 0
 
   const openIds = useOpenPanes(page)
   const open = useMemo(() => openIds.flatMap(id => panes.find(pane => pane.id === id) ?? []), [openIds, panes])
@@ -195,8 +227,8 @@ export function PanesProvider({
   )
 
   const value = useMemo<PanesValue>(
-    () => ({ page, enabled: shown !== null, panes, open, expanded: open.some(pane => pane.id === expanded) ? expanded : undefined, panelProps, reveal, show, docs, docsLoaded, subagent: subagent ?? null }),
-    [page, shown, panes, open, expanded, panelProps, reveal, show, docs, docsLoaded, subagent],
+    () => ({ page, enabled: shown !== null, panes, open, expanded: open.some(pane => pane.id === expanded) ? expanded : undefined, panelProps, reveal, show, docs, docsLoaded, subagent: subagent ?? null, held }),
+    [page, shown, panes, open, expanded, panelProps, reveal, show, docs, docsLoaded, subagent, held],
   )
   return <PanesContext.Provider value={value}>{children}</PanesContext.Provider>
 }
@@ -204,10 +236,15 @@ export function PanesProvider({
 /** The row over the page and its panes that the page's top bar is drawn in (PaneLayout); none on a phone, or on a page with no panes. */
 const TopBarRow = createContext<HTMLElement | null>(null)
 
-/** A page's top bar: in the row over the page and its panes where there is one, else where it stands. */
+/**
+ * A page's top bar: in the row over the page and its panes where there is one, else where it
+ * stands. It draws a line under itself only while the chat is scrolled under it (`top-bar-line`,
+ * tailwind.css).
+ */
 export function TopBar({ children }: { children: ReactNode }) {
   const row = useContext(TopBarRow)
-  return row ? createPortal(children, row) : children
+  const bar = <div className="top-bar-line">{children}</div>
+  return row ? createPortal(bar, row) : bar
 }
 
 /** On a phone with a pane open the column of panes lies over the icons' end of the top bar: they are one menu at its start. */
@@ -218,11 +255,14 @@ function useFolded(): boolean {
 
 /** The panes' icons, for the end of a page's top bar: one per pane, lit while its pane is open. */
 export function PaneToggles() {
-  const { page, panes, open } = useContext(PanesContext)
+  const { page, panes, open, held } = useContext(PanesContext)
   const offered = panes.filter(pane => !pane.hidden)
-  if (useFolded() || offered.length === 0) return null
+  if (useFolded() || (offered.length === 0 && held === 0)) return null
   return (
-    <div role="group" aria-label="Panes" className="flex shrink-0 items-center gap-0.5">
+    <div role="group" aria-label="Panes" className="flex shrink-0 items-center gap-1">
+      {Array.from({ length: held - offered.length }, (_, at) => (
+        <span key={`held-${at}`} className="size-7 shrink-0" aria-hidden />
+      ))}
       {offered.map(pane => {
         const isOpen = open.includes(pane)
         return (
@@ -232,7 +272,7 @@ export function PaneToggles() {
                 <Button
                   variant="ghost"
                   size="icon-sm"
-                  className={cn('shrink-0 text-muted-foreground', isOpen && 'bg-accent text-accent-foreground')}
+                  className={cn('relative shrink-0 text-muted-foreground max-md:after:absolute max-md:after:-inset-2', isOpen && 'bg-accent text-accent-foreground')}
                   aria-label={pane.label}
                   aria-pressed={isOpen}
                   onClick={() => setPaneOpen(page, pane.id, !isOpen)}
@@ -256,7 +296,7 @@ export function PaneMenu() {
   if (!useFolded()) return null
   return (
     <DropdownMenu>
-      <DropdownMenuTrigger aria-label="Panes" className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-muted-foreground hover:bg-accent hover:text-accent-foreground">
+      <DropdownMenuTrigger aria-label="Panes" className={cn(buttonVariants({ variant: 'ghost', size: 'icon-sm' }), 'relative shrink-0 text-muted-foreground data-[popup-open]:bg-accent max-md:after:absolute max-md:after:-inset-2')}>
         <MoreVertical className="h-4 w-4" aria-hidden />
       </DropdownMenuTrigger>
       <DropdownMenuContent align="start" className="min-w-[12rem]">
@@ -284,14 +324,14 @@ function PaneCard({ pane }: { pane: Pane }) {
   return (
     // A pane that fills the page is laid over the whole of it, where it is: its contents are not
     // drawn anew, so what was opened and scrolled in it stays.
-    <div className={fills ? 'absolute inset-0 z-30 flex bg-background' : 'flex h-full min-h-0 min-w-0'}>
-      <section aria-label={pane.label} className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden bg-background">
-        {/* As tall as the page's top bar, and lined under. */}
-        <header className="flex h-11 shrink-0 items-center gap-0.5 border-b border-border pr-2 pl-2">
+    <div className={fills ? 'absolute inset-0 z-30 flex bg-background p-2' : 'flex h-full min-h-0 min-w-0'}>
+      {/* A card: the surface with the hairline, its header 40 high and lined under. */}
+      <section aria-label={pane.label} className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden rounded-lg border border-hairline bg-card">
+        <header className="flex h-10 shrink-0 items-center gap-1 border-b border-hairline px-1">
           {/* The pane's name stands until the pane puts its own title here. */}
-          <div ref={setTitle} className="peer flex min-w-0 flex-1 items-center gap-0.5 empty:hidden" />
-          <h2 className="min-w-0 flex-1 truncate pl-2 text-[13px] text-muted-foreground peer-[:not(:empty)]:hidden">{pane.label}</h2>
-          <div ref={setActions} className="flex shrink-0 items-center gap-0.5 empty:hidden" />
+          <div ref={setTitle} className="peer flex min-w-0 flex-1 items-center gap-1 empty:hidden" />
+          <h2 className="min-w-0 flex-1 truncate pl-2 text-sm font-medium peer-[:not(:empty)]:hidden">{pane.label}</h2>
+          <div ref={setActions} className="flex shrink-0 items-center gap-1 empty:hidden" />
           <Tooltip>
             <TooltipTrigger
               render={
@@ -305,7 +345,7 @@ function PaneCard({ pane }: { pane: Pane }) {
                 />
               }
             >
-              {fills ? <Minimize2 className="h-3.5 w-3.5" /> : <Maximize2 className="h-3.5 w-3.5" />}
+              {fills ? <Minimize2 className="size-4" /> : <Maximize2 className="size-4" />}
             </TooltipTrigger>
             <TooltipContent>{fills ? 'Back to its place' : 'Fill the page'}</TooltipContent>
           </Tooltip>
@@ -354,10 +394,12 @@ function PaneStack() {
   }
   return (
     // No line is dragged under a pane that fills the page.
-    <ResizablePanelGroup orientation="vertical" disabled={expanded !== undefined} onLayoutChanged={remember}>
+    // The cards stand 8px apart and 8px in from the column's edges; the line between two is drawn
+    // only under the pointer and while it is dragged.
+    <ResizablePanelGroup orientation="vertical" disabled={expanded !== undefined} onLayoutChanged={remember} className="py-1 pr-2">
       {open.flatMap((pane, at) => [
-        ...(at > 0 ? [<ResizableHandle key={`above-${pane.id}`} aria-label={`The height of ${open[at - 1]!.label} and ${pane.label}`} />] : []),
-        <ResizablePanel key={pane.id} id={named(pane)} defaultSize={`${shares?.[pane.id] ?? 100 / open.length}%`} minSize={96} style={{ overflow: 'hidden' }}>
+        ...(at > 0 ? [<ResizableHandle key={`above-${pane.id}`} className="bg-transparent" aria-label={`The height of ${open[at - 1]!.label} and ${pane.label}`} />] : []),
+        <ResizablePanel key={pane.id} id={named(pane)} defaultSize={`${shares?.[pane.id] ?? 100 / open.length}%`} minSize={96} className="py-1" style={{ overflow: 'hidden' }}>
           <PaneCard pane={pane} />
         </ResizablePanel>,
       ])}
@@ -387,7 +429,8 @@ export function PaneLayout({ children }: { children: ReactNode }) {
   }
   return (
     // `relative`: a pane that fills the page is laid over all of this.
-    <div className="relative flex min-w-0 flex-1 flex-col">
+    // `chat-scope`: the top bar, in the row over the chat or in the chat's own top, sees how far the chat is scrolled.
+    <div className="chat-scope relative flex min-w-0 flex-1 flex-col">
       {!isMobile && <div ref={setRow} className="shrink-0" />}
       <TopBarRow.Provider value={row}>
         {/* No line is dragged under a pane that fills the page. */}
@@ -395,7 +438,7 @@ export function PaneLayout({ children }: { children: ReactNode }) {
           <ResizablePanel id={CHAT} minSize={320} className="flex min-w-0 flex-col" style={{ overflow: 'hidden' }}>
             {children}
           </ResizablePanel>
-          {beside && <ResizableHandle aria-label="The width of the chat and the panes" />}
+          {beside && <ResizableHandle className="bg-transparent" aria-label="The width of the chat and the panes" />}
           {beside && (
             <ResizablePanel id={columnId} defaultSize={`${column}%`} minSize={288} style={{ overflow: 'hidden' }}>
               <PaneStack />
@@ -405,7 +448,7 @@ export function PaneLayout({ children }: { children: ReactNode }) {
       </TopBarRow.Provider>
       {isMobile && open.length > 0 && (
         // Over the chat's right two thirds, as Claude Code's are; all of the page while one pane fills it.
-        <div className={cn('absolute inset-y-0 right-0 z-20 flex flex-col divide-y divide-border border-l border-border bg-background', expanded ? 'left-0' : 'w-2/3 min-w-64 max-w-full')}>
+        <div className={cn('absolute inset-y-0 right-0 z-20 flex flex-col gap-2 border-l border-hairline bg-background p-2', expanded ? 'left-0' : 'w-2/3 min-w-64 max-w-full')}>
           {open.map(pane => (
             <div key={pane.id} className="min-h-0 flex-1">
               <PaneCard pane={pane} />

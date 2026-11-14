@@ -1,4 +1,4 @@
-import { GIT_FAILED, Refused, UsageError, inRepo, nodeBranchFileFs, nodeGitRunner, openProjectReader, parseCommandArgs, runCommandLine, runsRootOf, type Command, type GitRunner } from '@openagt/agent-data'
+import { GIT_FAILED, Refused, UsageError, inRepo, nodeBranchFileFs, nodeGitRunner, openProjectReader, parseCommandArgs, runCommandLine, runsRootOf, helpRows, helpText, type Command, type GitRunner } from '@openagt/agent-data'
 import { RUNS_DIR } from './names.js'
 import { agentLines, isRunId, publicCard, type ListedRun, type RunCard, type RunPatch } from './run.js'
 import { deleteRun, patchRun, runFiles, runsPath } from './store.js'
@@ -31,29 +31,19 @@ export const DEFAULT_LIMIT = 20
 
 export const USAGE = `usage: logs [command]
 
-  (no command) [--branch <name>] [--limit N]
-                                     the runs, newest first (the newest ${DEFAULT_LIMIT} unless --limit says
-                                     otherwise), each with the person it is kept under; --branch keeps
-                                     the runs on one branch
-  show <id>                          one run: its card, and what the agent said, its result,
-                                     how it ended, what it cost
+${helpRows([
+  ['(no command) [--branch <name>] [--limit N]', `the runs, newest first (the newest ${DEFAULT_LIMIT} unless --limit says otherwise), each with the person it is kept under; --branch keeps the runs on one branch`],
+  ['show <id>', 'one run: its card, and what the agent said, its result, how it ended, what it cost'],
+  'For a dashboard that shows the runs, not for an agent:',
+  ['--local', `with either read: read this machine's copy, no fetch from origin`],
+  ['--full', `with either read: the whole card (with the writer's caller key) and, for show, every diary line`],
+  ['people [--days N]', 'who works here: each person who started runs (by the folder their runs are kept in) or committed to the main branch, with their runs of the last N days (30 unless said), what they cost, how many are going now, their commits, the name git knows them by, and when they last did either'],
+  ['skills [--days N]', 'which skills the agents used in the last N days (30 unless said): for each, how many times it was loaded or a run started with its command, in how many runs, and when last'],
+  ['delete <id>', 'remove a run, card and diary, as one commit'],
+  ['patch <id> [--branch <name>] [--pr <number> --pr-url <url>] [--landed <commit> --from <commit>]', 'set the branch the work landed on, and its pull request'],
+])}
 
-  For a dashboard that shows the runs, not for an agent:
-  --local                            with either read: read this machine's copy, no fetch from origin
-  --full                             with either read: the whole card (with the writer's caller key)
-                                     and, for show, every diary line
-  people [--days N]                  who works here: each person who started runs (by the folder their
-                                     runs are kept in) or committed to the main branch, with their runs
-                                     of the last N days (30 unless said), what they cost, how many are
-                                     going now, their commits, the name git knows them by, and when
-                                     they last did either
-  skills [--days N]                  which skills the agents used in the last N days (30 unless said): for each, how many
-                                     times it was loaded or a run started with its command, in how many runs, and when last
-  delete <id>                        remove a run, card and diary, as one commit
-  patch <id> [--branch <name>] [--pr <number> --pr-url <url>] [--landed <commit> --from <commit>]
-                                     set the branch the work landed on, and its pull request
-
-JSON on stdout. Exit code 1 for a refusal or a git failure (the reason on stderr), 2 for a usage error.`
+${helpText('JSON on stdout. Exit code 1 for a refusal or a git failure (the reason on stderr), 2 for a usage error.')}`
 
 /** The streams and the working directory a run of the CLI sees. */
 export interface CliIo {
@@ -64,7 +54,7 @@ export interface CliIo {
 
 /** Run the CLI: `argv` is everything after the program name. Resolves to the exit code. */
 export function runCli(argv: string[], io: CliIo, git: GitRunner = nodeGitRunner()): Promise<number> {
-  return runCommandLine(argv, io, { usage: USAGE, commands: COMMANDS, bare: list, failure: GIT_FAILED }, io, git)
+  return runCommandLine(argv, io, { program: 'logs', usage: USAGE, commands: COMMANDS, bare: list, failure: GIT_FAILED }, io, git)
 }
 
 /** The bare command: the runs, newest first, filtered and capped. */

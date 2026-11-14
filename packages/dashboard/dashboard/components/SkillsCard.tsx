@@ -1,14 +1,16 @@
 import { useEffect, useState } from 'react'
-import { CircleCheck, Puzzle } from 'lucide-react'
+import { CircleCheck } from 'lucide-react'
 import type { ProjectSummary } from '../../src/index.js'
 import { onProjectSkills, sendProjectSkills, type ProjectSkills } from '../rpc/skills.js'
 import { runModuleCommand } from '../rpc/modules.js'
 import { onSkillsSaved } from '../lib/skills-saved.js'
+import { inPlace } from '../lib/in-place.js'
 import { usePolled } from '../lib/use-async.js'
 import { openSettings } from '../lib/use-route.js'
 import { cn } from '../lib/utils.js'
 import { Button } from './ui/button.js'
-import { Card, CardContent, CardHeader, CardTitle } from './ui/card.js'
+import { Section } from './ui/section.js'
+import { RowShapes, Slot } from './ui/slot.js'
 import { useAction } from '../lib/use-action.js'
 import { SKILLS_ENTRY, sendWord, skillsSay, updateSkills } from './ProjectSkills.js'
 
@@ -58,9 +60,9 @@ function usedOver(reads: readonly Pick<Read, 'used'>[]): SkillUse[] {
 
 const NONE: Read[] = []
 
-export function SkillsCard({ projects, onSelectProject }: { projects: ProjectSummary[]; onSelectProject: (id: string) => void }) {
+export function SkillsCard({ projects, onSelectProject, projectHref }: { projects: ProjectSummary[]; onSelectProject: (id: string) => void; projectHref: (id: string) => string }) {
   const key = projects.map(project => project.id).join(',')
-  const { value: reads, loaded, reload } = usePolled<Read[]>(
+  const { value: reads, state, reload } = usePolled<Read[]>(
     () =>
       Promise.all(
         projects.map(async (project): Promise<Read> => {
@@ -101,40 +103,36 @@ export function SkillsCard({ projects, onSelectProject }: { projects: ProjectSum
     }
   }
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle className="flex items-center gap-2 text-base">
-          <Puzzle className="h-4 w-4 text-muted-foreground" aria-hidden />
-          Skills
-          {updatable.length > 1 && (
-            <Button variant="outline" size="xs" className="ml-auto font-normal" disabled={updatingAll} onClick={() => void updateAll()} title={`Take the newer versions in ${updatable.map(read => read.project.name).join(', ')}`}>
-              {updatingAll ? 'Updating…' : `Update all (${updatable.length})`}
-            </Button>
-          )}
-        </CardTitle>
-        <p className="text-xs text-muted-foreground">What each project adds to its agents, and what is new</p>
-      </CardHeader>
-      <CardContent>
-        {!loaded ? (
-          <p className="text-sm text-muted-foreground">Loading…</p>
-        ) : (
+    <Section
+      title="Skills"
+      action={
+        updatable.length > 1 ? (
+          <Button variant="outline" size="sm" disabled={updatingAll} onClick={() => void updateAll()} title={`Take the newer versions in ${updatable.map(read => read.project.name).join(', ')}`}>
+            {updatingAll ? 'Updating…' : `Update all (${updatable.length})`}
+          </Button>
+        ) : undefined
+      }
+    >
+      <p className="-mt-1 mb-3 text-xs text-muted-foreground">What each project adds to its agents, and what is new</p>
+      <Slot of={{ state, value: reads }} shape={<RowShapes rows={projects.length || 1} />}>
+        {() => (
           <>
-            <ul className="space-y-2">
+            <ul>
               {reads.map(read => (
-                <Row key={read.project.id} read={read} reload={reload} onOpen={() => onSelectProject(read.project.id)} />
+                <Row key={read.project.id} read={read} reload={reload} href={projectHref(read.project.id)} onOpen={() => onSelectProject(read.project.id)} />
               ))}
             </ul>
             {all.error && <p className="mt-2 text-xs text-danger">{all.error}</p>}
             <Usage used={used} unused={unused} />
           </>
         )}
-      </CardContent>
-    </Card>
+      </Slot>
+    </Section>
   )
 }
 
 /** One project: its name and how many skills it holds, then what is to be done, with its press, or that all is well. */
-function Row({ read, reload, onOpen }: { read: Read; reload: () => Promise<void>; onOpen: () => void }) {
+function Row({ read, reload, href, onOpen }: { read: Read; reload: () => Promise<void>; href: string; onOpen: () => void }) {
   const { project, skills } = read
   const [pending, setPending] = useState(false)
   const { error, run } = useAction()
@@ -149,10 +147,10 @@ function Row({ read, reload, onOpen }: { read: Read; reload: () => Promise<void>
   const says = skills ? skillsSay(skills) : undefined
   return (
     <li aria-label={project.name} className="min-w-0">
-      <div className="flex min-w-0 items-center gap-2 text-sm">
-        <button type="button" onClick={onOpen} className="min-w-0 truncate font-medium hover:underline">
+      <div className="flex min-w-0 items-center gap-2 text-sm md:min-h-10 max-md:min-h-11">
+        <a href={href} onClick={inPlace(onOpen)} className="min-w-0 truncate font-medium hover:underline">
           {project.name}
-        </button>
+        </a>
         {says && says.held > 0 && <span className="shrink-0 text-xs text-muted-foreground tabular-nums">{says.held === 1 ? '1 project skill' : `${says.held} project skills`}</span>}
         <span className="ml-auto flex shrink-0 items-center gap-1.5">
           {!skills || !says ? (
@@ -161,16 +159,16 @@ function Row({ read, reload, onOpen }: { read: Read; reload: () => Promise<void>
             // None yet: nothing is up to date, there is nothing. Add opens the Skills page to pick them.
             <>
               <span className="text-xs text-muted-foreground">no skills yet</span>
-              <Button variant="outline" size="xs" onClick={() => openSettings(SKILLS_ENTRY, project.id)} title="Open the project's Skills page">
+              <Button variant="outline" size="sm" onClick={() => openSettings(SKILLS_ENTRY, project.id)} title="Open the project's Skills page">
                 Add
               </Button>
             </>
           ) : says.newer.length > 0 ? (
-            <Button variant="outline" size="xs" disabled={pending} onClick={() => void act(() => updateSkills(project.id, skills, run))} title={`Newer versions: ${says.newer.join(', ')}`}>
+            <Button variant="outline" size="sm" disabled={pending} onClick={() => void act(() => updateSkills(project.id, skills, run))} title={`Newer versions: ${says.newer.join(', ')}`}>
               {pending ? 'Updating…' : `Update ${says.newer.length}`}
             </Button>
           ) : says.sending ? (
-            <Button variant="outline" size="xs" disabled={pending} onClick={() => void act(() => run(() => sendProjectSkills(project.id), 'Could not send the skills.'))} title={`Not where agents start from yet: ${says.here.join(', ')}`}>
+            <Button variant="outline" size="sm" disabled={pending} onClick={() => void act(() => run(() => sendProjectSkills(project.id), 'Could not send the skills.'))} title={`Not where agents start from yet: ${says.here.join(', ')}`}>
               {pending ? 'Sending…' : sendWord(skills)}
             </Button>
           ) : says.inRequest ? (
@@ -214,8 +212,8 @@ function Usage({ used, unused }: { used: SkillUse[]; unused: string[] }) {
   const most = used[0]!.uses
   const more = used.length - TOP
   return (
-    <section aria-label="Most used" className="mt-3 border-t border-border pt-3">
-      <h4 className="mb-1.5 text-xs font-medium text-muted-foreground">Most used, last 30 days</h4>
+    <section aria-label="Most used" className="mt-4">
+      <h3 className="mb-1.5 text-xs font-medium text-muted-foreground">Most used, last 30 days</h3>
       <ul className="space-y-1">
         {used.slice(0, TOP).map(use => (
           <li key={use.skill} aria-label={use.skill} className="flex items-center gap-2 text-xs" title={`Used ${use.uses} times in ${use.runs === 1 ? '1 run' : `${use.runs} runs`}`}>
@@ -230,7 +228,7 @@ function Usage({ used, unused }: { used: SkillUse[]; unused: string[] }) {
       {more > 0 && <p className="mt-1 text-xs text-muted-foreground">and {more === 1 ? '1 more' : `${more} more`}</p>}
       {unused.length > 0 && (
         <p className="mt-2 text-xs text-muted-foreground" title={unused.join(', ')}>
-          <span className="text-foreground/80">Not used:</span> {unused.slice(0, 4).join(', ')}
+          <span className="text-foreground">Not used:</span> {unused.slice(0, 4).join(', ')}
           {unused.length > 4 ? ` and ${unused.length - 4} more` : ''}
         </p>
       )}

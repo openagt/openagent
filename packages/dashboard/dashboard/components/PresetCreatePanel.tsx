@@ -4,6 +4,7 @@ import { Button } from './ui/button.js'
 import { Input } from './ui/input.js'
 import { Textarea } from './ui/textarea.js'
 import { Dialog } from './ui/dialog.js'
+import { pressed } from '../lib/shortcut.js'
 
 // The "Save prompt" dialog (#649/#626): a modal over the composer rather than a panel that
 // pushed the controls down. Prefills the prompt from the editor's current text — the common "save
@@ -52,7 +53,7 @@ export function PresetCreatePanel({
 
   // ⌘/Ctrl+Enter saves, matching the composer (#948); Esc closes via the Dialog itself.
   const onKeyDown = (e: KeyboardEvent<HTMLFormElement>) => {
-    if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') {
+    if (pressed(e, 'savePrompt')) {
       e.preventDefault()
       save()
     }
@@ -122,10 +123,10 @@ export function PresetCreatePanel({
         </div>
       )}
       <div className="mt-1 flex items-center justify-end gap-2">
-        <Button type="button" variant="ghost" size="sm" onClick={onCancel}>
+        <Button type="button" variant="ghost" onClick={onCancel}>
           Cancel
         </Button>
-        <Button type="submit" size="sm" disabled={busy || !trimmedLabel || !trimmedPrompt}>
+        <Button type="submit" disabled={busy || !trimmedLabel || !trimmedPrompt}>
           Save prompt
         </Button>
       </div>

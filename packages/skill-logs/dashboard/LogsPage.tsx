@@ -1,4 +1,4 @@
-import { FadeWhileStale, FilterChips, Page, PersonMark, STATUS_DOT, STATUS_RING, Table, TableBody, TableCell, TableHead, TableHeader, TableRow, cn, formatDateTime, formatDuration, inPlace, personSaid, runName, useGitHostPeople, useModuleHost, usePolled, type ModuleAgent, type ModuleHostPerson, type ModulePageProps, type ModuleProject } from '@openagt/dashboard/module'
+import { FadeWhileStale, FilterChips, Page, PersonMark, STATUS_DOT, Section, STATUS_RING, Table, TableBody, TableCell, TableHead, TableHeader, TableRow, cn, formatDateTime, formatDuration, inPlace, personSaid, runName, useGitHostPeople, useModuleHost, usePolled, type ModuleAgent, type ModuleHostPerson, type ModulePageProps, type ModuleProject } from '@openagt/dashboard/module'
 import type { RunCard } from '../src/run.js'
 
 /** How many runs each project lists: the command's own default page is 20; the page shows more. */
@@ -72,12 +72,15 @@ const NOTHING_READ: Read = { rows: [], failed: [] }
 /** The statuses a chip picks, in this order: what is going, then how runs ended, then the runs whose computer does not answer. */
 const STATUSES = ['running', 'waiting', 'done', 'stopped', 'failed', 'unknown']
 
+/** A status as the rest of the dashboard says it: a live run is "working". */
+const wordOf = (status: string): string => (status === 'running' ? 'working' : status)
+
 /** A run's status as a dot in the dashboard's colors and its word: the dot filled while something is going on, a ring once nothing is. One whose computer does not answer says which, pointed at. */
 function Status({ status, offline }: { status: string; offline?: string | undefined }) {
   return (
     <span className="inline-flex items-center gap-1.5" {...(offline ? { title: offline } : {})}>
       <span aria-hidden className={cn('size-1.5 shrink-0 rounded-full', STATUS_DOT[status] ?? cn('border', STATUS_RING[status] ?? STATUS_RING['done']))} />
-      {status === 'unknown' ? 'status unknown' : status}
+      {status === 'unknown' ? 'status unknown' : wordOf(status)}
     </span>
   )
 }
@@ -132,14 +135,14 @@ function dollars(cost: number): string {
 export function LogsPage({ projects, path }: ModulePageProps) {
   const host = useModuleHost()
   const key = projects.map(p => p.id).join(',')
-  const { value: live, stale: liveStale } = usePolled<LiveRuns[]>(
+  const { value: live, state: liveState } = usePolled<LiveRuns[]>(
     () => Promise.all(projects.map(async project => ({ project, runs: await host.agents(project.id).catch((): ModuleAgent[] => []) }))),
     [],
     10_000,
     [key],
     { remember: `skill-logs:live:${key}`, stored: true },
   )
-  const { value: recorded, loaded, stale: recordedStale } = usePolled<Read>(
+  const { value: recorded, state: recordedState } = usePolled<Read>(
     async () => {
       const results = await Promise.all(projects.map(async project => ({ project, result: await host.runCommand(project.id, ['--limit', String(LIMIT)]) })))
       const rows: Row[] = []
@@ -160,13 +163,13 @@ export function LogsPage({ projects, path }: ModulePageProps) {
     { remember: `skill-logs:runs:${key}`, stored: true },
   )
   const read = { ...recorded, rows: withLiveRuns(recorded.rows, live) }
-  const stale = liveStale || recordedStale
+  const stale = liveState === 'kept' || recordedState === 'kept'
   const accountOf = useGitHostPeople(read.rows.map(({ project, card }) => ({ projectId: project.id, person: card.person })), host.gitHostPeople, 'skill-logs:people')
 
   // Which status the list shows: every one, until a chip picks one, kept in the address (`/logs/waiting`) so a
   // reload or Back from a run shows the list the person left. One no run has any more goes back to all.
   const picked = path[0] ?? null
-  const counts = STATUSES.map(value => ({ value, label: value[0]!.toUpperCase() + value.slice(1), count: read.rows.filter(row => row.card.status === value).length })).filter(c => c.count > 0)
+  const counts = STATUSES.map(value => ({ value, label: wordOf(value)[0]!.toUpperCase() + wordOf(value).slice(1), count: read.rows.filter(row => row.card.status === value).length })).filter(c => c.count > 0)
   const status = counts.some(c => c.value === picked) ? picked : null
   const shown = status === null ? read.rows : read.rows.filter(row => row.card.status === status)
   const days = byDay(shown)
@@ -185,8 +188,8 @@ export function LogsPage({ projects, path }: ModulePageProps) {
           Could not read the runs of {project.name}: {error}
         </p>
       ))}
-      {!loaded && read.rows.length === 0 && <p className="text-sm text-muted-foreground">Loading…</p>}
-      {loaded && read.rows.length === 0 && read.failed.length === 0 && <p className="text-sm text-muted-foreground">No runs recorded yet.</p>}
+      {recordedState === 'unknown' && read.rows.length === 0 && <p className="text-sm text-muted-foreground">Loading…</p>}
+      {recordedState !== 'unknown' && read.rows.length === 0 && read.failed.length === 0 && <p className="text-sm text-muted-foreground">No runs recorded yet.</p>}
       {/* The table or the list by the page column's own width, which the sidebar takes from the screen's. */}
       <div className="@container">
         {days.length > 0 && (
@@ -208,7 +211,7 @@ export function LogsPage({ projects, path }: ModulePageProps) {
               <TableBody>
                 {days.map(({ day, rows, cost }) => [
                   <TableRow key={day} className="hover:bg-transparent">
-                    <TableCell colSpan={many ? 7 : 6} className="pt-5 pb-1.5">
+                    <TableCell colSpan={many ? 7 : 6} className="pt-5! pb-1.5!">
                       <DayHeading day={day} runs={rows.length} cost={cost} />
                     </TableCell>
                   </TableRow>,
@@ -259,9 +262,8 @@ export function LogsPage({ projects, path }: ModulePageProps) {
             run is two lines, its name and then the rest, and its branch is left to its own page. */}
         <FadeWhileStale stale={stale} className="space-y-5 @4xl:hidden">
           {days.map(({ day, rows, cost }) => (
-            <section key={day} aria-label={day}>
-              <DayHeading day={day} runs={rows.length} cost={cost} />
-              <ul className="mt-1 text-sm">
+            <Section key={day} title={day} count={runsSaid(rows.length, cost)}>
+              <ul className="text-sm">
                 {rows.map(({ project, card }) => (
                   <li key={`${project.id}/${card.id}`} onClick={() => host.openAgent(project.id, card.id)} className="flex cursor-pointer items-center gap-2.5 border-b border-border py-2 hover:bg-accent">
                     <RunPerson person={card.person} account={accountOf(project.id, card.person)} />
@@ -282,7 +284,7 @@ export function LogsPage({ projects, path }: ModulePageProps) {
                   </li>
                 ))}
               </ul>
-            </section>
+            </Section>
           ))}
         </FadeWhileStale>
       </div>
@@ -321,10 +323,12 @@ function DayHeading({ day, runs, cost }: { day: string; runs: number; cost: numb
   return (
     <h2 className="flex items-baseline gap-2 text-sm font-semibold text-foreground">
       {day}
-      <span className="text-xs font-normal text-muted-foreground tabular-nums">
-        {runs === 1 ? '1 run' : `${runs} runs`}
-        {cost > 0 && ` · ${dollars(cost)}`}
-      </span>
+      <span className="text-xs font-normal text-muted-foreground tabular-nums">{runsSaid(runs, cost)}</span>
     </h2>
   )
+}
+
+/** How many runs a day had and what they cost together. */
+function runsSaid(runs: number, cost: number): string {
+  return `${runs === 1 ? '1 run' : `${runs} runs`}${cost > 0 ? ` · ${dollars(cost)}` : ''}`
 }

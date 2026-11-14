@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Card, CardContent, CardHeader, CardTitle } from './ui/card.js'
 import { ClaudeLogo, CodexLogo } from './driver-logos.js'
-import { Skeleton } from './ui/skeleton.js'
+import { Skeleton, useSkeleton } from './ui/skeleton.js'
 import type { DriverName } from '../../src/client.js'
 import { takeLostFocus } from '../lib/lost-focus.js'
 import { useMountedModules } from '../lib/use-modules.js'
@@ -52,10 +52,11 @@ export function AccountsList() {
 function RotationCard() {
   const { cards, loaded } = useMountedModules()
   const card = cards.find(each => each.package === ACCOUNT_ROTATION && each.id === 'accounts')
-  if (!card)
-    return loaded ? (
+  const reading = useSkeleton(!card && !loaded)
+  if (!card || reading)
+    return loaded && !reading ? (
       <Card>
-        <CardContent className="pt-6 text-sm text-muted-foreground">The accounts card did not load.</CardContent>
+        <CardContent className="pt-6! text-sm text-muted-foreground">The accounts card did not load.</CardContent>
       </Card>
     ) : (
       <Skeleton className="h-32 w-full" />
@@ -106,7 +107,7 @@ function FromLine() {
   const from = useAgentAccounts('claude').view?.from
   if (from === undefined) return null
   return (
-    <div className="rounded-lg bg-muted px-3 py-2.5">
+    <div className="rounded-lg bg-muted px-3 py-3">
       <p className="text-sm font-medium">{`Your logins and settings from ${from}`}</p>
       <p className="text-xs text-muted-foreground">Log in or out there, or change a setting, and this server follows.</p>
     </div>

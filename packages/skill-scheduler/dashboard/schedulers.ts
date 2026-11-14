@@ -411,7 +411,7 @@ export function paceArgs(draft: PaceDraft): string[] | undefined {
 export function paceProblem(draft: PaceDraft): string | undefined {
   if (paceArgs(draft)) return undefined
   if (draft.kind === 'every' && !(/^\d+$/.test(draft.count.trim()) && parseInterval(`${draft.count.trim()}${draft.unit}`))) return `Type a whole number, from 1 to ${MAX_COUNT}.`
-  return 'Finish the time, like 10:00, or clear it.'
+  return 'Finish the time of day, like 10:00, or clear it.'
 }
 
 /** A command as it would read with a draft saved: what the Edit box's sentence describes. The command as it is while the draft is no pace yet. */

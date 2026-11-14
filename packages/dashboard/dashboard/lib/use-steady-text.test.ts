@@ -1,5 +1,6 @@
-import { expect, test } from 'vitest'
-import { pastWholeBlocks, toWordEnd } from './use-steady-text.js'
+import { afterEach, expect, test, vi } from 'vitest'
+import { act, renderHook } from '@testing-library/react'
+import { pastWholeBlocks, toWordEnd, useSteadyText } from './use-steady-text.js'
 
 test('the text shows on to the end of the word its pace reached, never half a word', () => {
   expect(toWordEnd('The sea is wide', 5)).toBe(7)
@@ -38,4 +39,23 @@ test('a code block comes in whole too, and one with no closing fence yet waits',
   expect(pastWholeBlocks(code, start + 4, false).at).toBe(code.indexOf('\nDone.') + 1)
   const open = 'Run:\n\n```sh\nls'
   expect(pastWholeBlocks(open, open.length, false)).toEqual({ at: start, limit: start })
+})
+
+const matchMedia = window.matchMedia
+afterEach(() => {
+  window.matchMedia = matchMedia
+  vi.useRealTimers()
+})
+
+test('a message that ends in a code block still open shows whole once it is final, with the same text', async () => {
+  window.matchMedia = (query: string) => ({ matches: false, media: query, addEventListener: () => {}, removeEventListener: () => {}, onchange: null, addListener: () => {}, removeListener: () => {}, dispatchEvent: () => false }) as MediaQueryList
+  // One clock for the frames and for the pace they are measured by.
+  vi.useFakeTimers({ toFake: ['requestAnimationFrame', 'cancelAnimationFrame', 'performance'] })
+  const text = 'Run this in the project:\n\n```sh\nls -la'
+  const { result, rerender } = renderHook(({ final }) => useSteadyText(text, true, final), { initialProps: { final: false } })
+  await act(() => vi.advanceTimersByTimeAsync(2000))
+  expect(result.current.shown).toBe('Run this in the project:\n\n')
+  rerender({ final: true })
+  await act(() => vi.advanceTimersByTimeAsync(2000))
+  expect(result.current.shown).toBe(text)
 })

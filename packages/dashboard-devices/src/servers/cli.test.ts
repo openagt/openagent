@@ -20,6 +20,15 @@ async function run(env: NodeJS.ProcessEnv, args: string[], over: Partial<CliIO> 
 
 const serversOf = (ran: Ran): Status['servers'] => (ran.out as Status).servers
 
+test('--help is the usage on stdout, exit 0', async () => {
+  for (const help of ['--help', '-h']) {
+    const out: string[] = []
+    const err: string[] = []
+    assert.equal(await runCli([help], { env: {}, stdout: line => out.push(line), stderr: line => err.push(line) }), 0)
+    assert.deepEqual([out, err], [[USAGE], []])
+  }
+})
+
 test('no server until one is connected; what is no address, user or version is refused in words, and nothing is started', async () => {
   const home = await testHome()
   try {
@@ -42,10 +51,12 @@ test('no server until one is connected; what is no address, user or version is r
     }
     assert.deepEqual(started, [])
     assert.deepEqual((await readStore(home.env)).servers, [])
-    for (const args of [[], ['nonsense'], ['connect', '203.0.113.5'], ['connect', '203.0.113.5', 'root', '1.2.3', 'github'], ['status', 'more'], ['forget']]) {
+    assert.deepEqual((await run(home.env, [])).err, [USAGE])
+    assert.deepEqual((await run(home.env, ['nonsense'])).err, ['unknown command: nonsense\nRun `devices server --help` for usage.'])
+    for (const args of [['connect', '203.0.113.5'], ['connect', '203.0.113.5', 'root', '1.2.3', 'github'], ['status', 'more'], ['forget']]) {
       const unread = await run(home.env, args)
       assert.equal(unread.code, 2)
-      assert.deepEqual(unread.err, [USAGE])
+      assert.deepEqual(unread.err, [`wrong arguments for ${args[0]}: ${args.slice(1).join(' ') || 'none'}\nRun \`devices server --help\` for usage.`])
     }
   } finally {
     await home.remove()

@@ -60,7 +60,7 @@ export function StartAgentButton({
   starting = false,
   disabled = false,
   variant = 'outline',
-  size = 'xs',
+  size = 'sm',
   className,
 }: {
   /** The primary half's icon; swapped for a spinner while this button's own start is in flight. */
@@ -104,7 +104,7 @@ export function StartAgentButton({
   /** There is nothing to act on at all (no project picked): both halves are out. */
   disabled?: boolean | undefined
   variant?: 'default' | 'outline' | 'ghost' | undefined
-  size?: 'xs' | 'sm' | 'icon-sm' | undefined
+  size?: 'sm' | 'default' | 'icon-sm' | undefined
   /** Styling the two halves share, so the pair reads as one control rather than two buttons. */
   className?: string | undefined
 }) {

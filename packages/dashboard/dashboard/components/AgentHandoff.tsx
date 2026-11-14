@@ -56,7 +56,7 @@ export function HandoffSummary({ handoff, subagent = false }: { handoff: AgentHa
   const held = [commits, files, ...(!subagent && handoff.pushed && !handoff.pr ? ['pushed'] : [])].join(' · ')
   return (
     <span className="flex shrink-0 items-center whitespace-nowrap" title={held} aria-label={held}>
-      <DiffStat added={handoff.insertions} removed={handoff.deletions} zeros className="text-[11px] font-medium" />
+      <DiffStat added={handoff.insertions} removed={handoff.deletions} zeros className="text-xs font-medium" />
     </span>
   )
 }
@@ -84,7 +84,7 @@ export function HandoffSummary({ handoff, subagent = false }: { handoff: AgentHa
 const COMMIT_MESSAGE = 'Commit your work.'
 
 /** The next step's look: the one filled thing in the bar. Busy, a press stays focusable (`aria-disabled`): a disabled one drops the focus to the page. */
-const NEXT_STEP = 'bg-background/60 hover:bg-background aria-disabled:pointer-events-none aria-disabled:opacity-50'
+const NEXT_STEP = 'aria-disabled:pointer-events-none aria-disabled:opacity-50'
 
 /** The project's main branch by name, when the handoff was measured from it; a run measured from a commit only knows it as "the main branch". */
 function mainBranchName(base: string | undefined): string {
@@ -203,8 +203,8 @@ function NextStep({
       <>
         <Uncommitted paths={paths} committed={!handoff.empty} />
         <Button
-          size="xs"
-          variant="ghost"
+          size="sm"
+          variant="secondary"
           className={NEXT_STEP}
           {...step}
           onClick={() => {
@@ -248,7 +248,7 @@ function NextStep({
       return (
         <>
           <Reason>not in the PR yet</Reason>
-          <Button size="xs" variant="ghost" className={NEXT_STEP} {...step} onClick={push}>
+          <Button size="sm" variant="secondary" className={NEXT_STEP} {...step} onClick={push}>
             <Steady words={['Update PR', 'Updating PR…']} now={pending === 'push' ? 1 : 0} />
           </Button>
         </>
@@ -256,8 +256,8 @@ function NextStep({
     }
     return (
       <Button
-        size="xs"
-        variant="ghost"
+        size="sm"
+        variant="secondary"
         className={NEXT_STEP}
         {...step}
         onClick={() =>
@@ -294,8 +294,8 @@ function NextStep({
       <>
         <Reason>Not in {mainBranchName(handoff.base)} yet.</Reason>
         <Button
-          size="xs"
-          variant="ghost"
+          size="sm"
+          variant="secondary"
           className={NEXT_STEP}
           {...step}
           onClick={() => press('merge-branch', () => sendMergeBranch(projectId, agentId), 'Could not merge the branch.')}
@@ -311,7 +311,7 @@ function NextStep({
     if (handoff.pushed) return null
     return (
       <>
-        <Button size="xs" variant="ghost" className={NEXT_STEP} {...step} onClick={push}>
+        <Button size="sm" variant="secondary" className={NEXT_STEP} {...step} onClick={push}>
           <Steady words={['Publish branch', 'Publishing…']} now={pending === 'push' ? 1 : 0} />
         </Button>
       </>
@@ -333,9 +333,9 @@ function NextStep({
       {handoff.carries && <Carries carries={handoff.carries} />}
       <ButtonGroup>
         <Button
-          size="xs"
-          variant="ghost"
-          className={cn(NEXT_STEP, 'pr-1.5')}
+          size="sm"
+          variant="secondary"
+          className={cn(NEXT_STEP, 'pr-1.5!')}
           {...step}
           onClick={() => openPr(false)}
         >
@@ -348,10 +348,9 @@ function NextStep({
               aria-label="Other choices"
               {...step}
               className={cn(
-                buttonVariants({ size: 'xs', variant: 'ghost' }),
+                buttonVariants({ size: 'sm', variant: 'secondary' }),
                 NEXT_STEP,
-                // Open, it looks hovered: the menus' own open color is the bar's, and the arrow would vanish into it.
-                'px-1 text-muted-foreground data-[popup-open]:bg-background data-[popup-open]:text-foreground',
+                'px-1 data-[popup-open]:bg-foreground/10',
               )}
             >
               <ChevronDown className="h-3.5 w-3.5" />

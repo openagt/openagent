@@ -126,19 +126,19 @@ export function Connecting({ d, computer, canBoth, onBack, onClose }: { d: Devic
         )}
         <div className="flex justify-end gap-2">
           {phase.at === 'done' ? (
-            <Button size="sm" onClick={onClose}>
+            <Button onClick={onClose}>
               Done
             </Button>
           ) : (
             <>
+              <Button variant="ghost" disabled={phase.at === 'saving'} onClick={onBack}>
+                {phase.at === 'waiting' || phase.at === 'asking' ? 'Cancel' : 'Back'}
+              </Button>
               {(phase.at === 'gone' || phase.at === 'failed') && (
-                <Button size="sm" variant="outline" onClick={() => setRound(round + 1)}>
+                <Button variant="outline" onClick={() => setRound(round + 1)}>
                   Try again
                 </Button>
               )}
-              <Button size="sm" variant="ghost" disabled={phase.at === 'saving'} onClick={onBack}>
-                {phase.at === 'waiting' || phase.at === 'asking' ? 'Cancel' : 'Back'}
-              </Button>
             </>
           )}
         </div>
@@ -233,10 +233,10 @@ export function AskPopup() {
         </p>
         {error !== undefined && <Problem>{error}</Problem>}
         <div className="flex justify-end gap-2">
-          <Button size="sm" variant="outline" disabled={busy || down} onClick={() => void answer(false)}>
+          <Button variant="outline" disabled={busy || down} onClick={() => void answer(false)}>
             Deny
           </Button>
-          <Button size="sm" disabled={busy || down} onClick={() => void answer(true)}>
+          <Button disabled={busy || down} onClick={() => void answer(true)}>
             {busy && <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden />}
             Allow
           </Button>

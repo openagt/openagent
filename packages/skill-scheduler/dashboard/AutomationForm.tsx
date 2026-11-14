@@ -83,7 +83,7 @@ export function AutomationForm({
         )}
         <p className="mt-2 text-muted-foreground">Its row is in the list now, switched off.</p>
         <div className="mt-3 flex justify-end">
-          <Button size="sm" autoFocus onClick={onClose}>
+          <Button autoFocus onClick={onClose}>
             Done
           </Button>
         </div>
@@ -163,10 +163,10 @@ export function AutomationForm({
       <div className="flex flex-wrap items-center justify-between gap-3">
         <p className="min-w-0 flex-1 text-xs text-muted-foreground">{whereHint(draft, schedulerRuns)}</p>
         <div className="flex gap-2">
-          <Button variant="outline" size="sm" disabled={saving} onClick={onClose}>
+          <Button variant="outline" disabled={saving} onClick={onClose}>
             Cancel
           </Button>
-          <Button size="sm" disabled={saving || down || problem !== undefined} onClick={() => void save()}>
+          <Button disabled={saving || down || problem !== undefined} onClick={() => void save()}>
             Save
           </Button>
         </div>

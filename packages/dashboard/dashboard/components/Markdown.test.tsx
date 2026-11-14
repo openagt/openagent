@@ -79,7 +79,7 @@ describe('Markdown compact', () => {
     expect(screen.getByText('Section').className).toContain('text-sm')
     unmount()
     render(<Markdown text={'# Section'} />)
-    expect(screen.getByText('Section').className).toContain('text-[17px]')
+    expect(screen.getByText('Section').className).toContain('text-base')
   })
 
   test("in a reply, headings are medium, not bold, and a nested bullet list is circles; a done task is struck through", () => {
@@ -174,7 +174,7 @@ describe('Markdown lists', () => {
   test('in a dashboard page a document keeps the page\'s font, its headings under the page\'s title, its code wrapped; a file keeps its own look', () => {
     render(<Markdown text={'## Plan\n\n```css\nfooter { position: fixed; }\n```'} page />)
     expect(document.querySelector('[data-markdown]')!.className).not.toContain('font-serif')
-    expect(screen.getByRole('heading', { name: 'Plan' }).className).toContain('text-[15px]')
+    expect(screen.getByRole('heading', { name: 'Plan' }).className).toContain('text-base')
     expect(screen.getByText('css')).toBeTruthy()
     expect(document.querySelector('pre')!.className).toContain('whitespace-pre-wrap')
     cleanup()

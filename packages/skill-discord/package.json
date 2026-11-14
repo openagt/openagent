@@ -38,6 +38,9 @@
     "test": "tsc -p tsconfig.test.json && node ../../scripts/test-node.mjs",
     "clean": "rm -rf dist dist-test SKILL.md"
   },
+  "dependencies": {
+    "@openagt/agent-data": "workspace:*"
+  },
   "devDependencies": {
     "@types/node": "^20.0.0",
     "typescript": "^7.0.2"
