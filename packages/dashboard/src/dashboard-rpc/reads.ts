@@ -10,7 +10,7 @@ import { projectGitHost, type GitHostHome } from '../store/git-host.js'
 import { repositoryOffer, type RepositoryOffer } from '../store/repository.js'
 import { readDocs, type WorkspaceDoc } from '../dashboard/docs.js'
 import { collectQueue, type ProjectQueue } from '../dashboard/queue.js'
-import { buildOverview, buildRecentAgents, type Overview, type RecentAgent } from '../dashboard/overview.js'
+import { buildOverview, buildRecentAgents, type FoundAgent, type Overview, type RecentAgent } from '../dashboard/overview.js'
 import { buildInterventions, type Intervention } from '../dashboard/interventions.js'
 import { withMachinesQueue, type MachinesQueue } from '../dashboard/machine-interventions.js'
 import type { ProjectionRead, ProjectSummary } from '../dashboard/projects.js'
@@ -269,15 +269,32 @@ export async function onOverview(): Promise<Overview> {
 
 /** Recent sessions pooled across every project and the sessions with no project (#shared-shell), newest first, for the home rail. */
 export async function onRecentAgents(): Promise<RecentAgent[]> {
-  // Each project's runs as its own list shows them, the projects only the person's other computers have too.
+  return pooledRuns()
+}
+
+/** Every run of every project and the sessions with no project, newest first, each in the few fields the jump finds it by. */
+export async function onAllAgents(): Promise<FoundAgent[]> {
+  return (await pooledRuns(Infinity)).map(({ projectId, projectName, agent: { id, title, intent, branch, pr, startedAt } }) => ({
+    projectId,
+    projectName,
+    agent: { id, startedAt, ...(title !== undefined ? { title } : {}), ...(intent !== undefined ? { intent } : {}), ...(branch !== undefined ? { branch } : {}), ...(pr !== undefined ? { pr } : {}) },
+  }))
+}
+
+/** The runs of every project, as each project's own list shows them, the projects only the person's other computers have too: the newest `limit`. */
+async function pooledRuns(limit?: number): Promise<RecentAgent[]> {
   const elsewhere = await contextRemote()
     .elsewhere()
     .catch((): ProjectSummary[] => [])
   return withProjects(projects =>
-    buildRecentAgents([...projects, ...elsewhere], {
-      agents: project => runRows(project.id, project.machine === undefined ? project.path : undefined),
-      sessions: async () => runRows(SESSIONS_ID, await resolveProjectPath(SESSIONS_ID)),
-    }),
+    buildRecentAgents(
+      [...projects, ...elsewhere],
+      {
+        agents: project => runRows(project.id, project.machine === undefined ? project.path : undefined),
+        sessions: async () => runRows(SESSIONS_ID, await resolveProjectPath(SESSIONS_ID)),
+      },
+      limit,
+    ),
   )
 }
 

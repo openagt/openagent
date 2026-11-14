@@ -1,4 +1,4 @@
-import type { ReactNode } from 'react'
+import { useEffect, type ReactNode } from 'react'
 import { Button } from '../components/ui/button.js'
 import { Card, CardContent, CardHeader, CardTitle, PageLink } from '../components/ui/card.js'
 import { Input } from '../components/ui/input.js'
@@ -16,7 +16,9 @@ import { Section } from '../components/ui/section.js'
 import { List, Row } from '../components/ui/list.js'
 import { RowShapes, Slot } from '../components/ui/slot.js'
 import { ChevronRight, Folder, Trash2 } from 'lucide-react'
+import { JumpPalette, openJump } from '../components/JumpPalette.js'
 import { ShortcutList } from '../components/ShortcutList.js'
+import type { AgentMeta } from '../../src/index.js'
 
 // The gallery's card registry (#DESIGN). Every entry renders the REAL component wherever the
 // component can stand alone, so a card cannot quietly drift from what ships. The few that cannot
@@ -42,6 +44,28 @@ function Labelled({ label, children }: { label: string; children: ReactNode }) {
       <span className="text-xs font-medium uppercase tracking-wide text-muted-foreground">{label}</span>
       <div className="flex flex-wrap items-center gap-3">{children}</div>
     </div>
+  )
+}
+
+// ---------------------------------------------------------------- the jump
+
+const at = '2026-11-14T09:00:00Z'
+const jumpRun = (id: string, title: string, fields: Partial<AgentMeta> = {}) => ({ projectId: 'shop', projectName: 'shop', agent: { id, title, status: 'done', startedAt: at, updatedAt: at, ...fields } as AgentMeta })
+
+/** The jump as ⌘K opens it, over this card's page: its every-run read has no daemon here, so it lists what the page gave it. */
+function Jump() {
+  useEffect(openJump, [])
+  return (
+    <JumpPalette
+      waiting={[{ projectId: 'shop', projectName: 'shop', kind: 'awaiting', title: 'Ask which colour the login page should be', agentId: 'r1' }]}
+      runs={[jumpRun('r2', 'Move the cart to a page of its own', { pr: { number: 42, url: '' } }), jumpRun('r3', 'Commit a login page with session cookies'), { ...jumpRun('r4', 'Write the first post'), projectId: 'blog', projectName: 'blog' }]}
+      pages={[{ segment: 'tickets', label: 'Tickets' }, { segment: 'agents', label: 'Agents' }]}
+      projects={['shop', 'blog'].map(name => ({ id: name, path: `/${name}`, name, activated: true, gitHost: true }))}
+      scope={null}
+      here={{ projectId: null, agentId: null }}
+      hrefOf={() => '#'}
+      go={() => {}}
+    />
   )
 }
 
@@ -660,6 +684,15 @@ export const PREVIEWS: Preview[] = [
     subtitle: 'Where an answer is drawn: its shape while it is read (unseen for 200ms, then pulsing), the answer, a note when asking again failed. A kept answer fades after a second, and a held one dims: neither shows on a still page',
     width: 900,
     node: <Slots />,
+  },
+  {
+    path: 'patterns/jump.html',
+    group: 'Patterns',
+    name: 'Jump',
+    subtitle: '⌘K or Ctrl+K: what waits on you, the recent runs, the pages, the projects',
+    width: 900,
+    height: 560,
+    node: <Jump />,
   },
   {
     path: 'patterns/shortcuts.html',

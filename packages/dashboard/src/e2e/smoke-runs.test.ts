@@ -59,3 +59,25 @@ test('a start the project refuses says why, and keeps the prompt for another try
     assert.equal((await runs()).find(agent => agent.intent === 'refuse this one'), undefined, 'no run began')
   })
 })
+
+test('Ctrl+K, a few letters and Enter land on a run from the launcher, and nothing behind the jump moves', needsChrome, async () => {
+  await flow('jump', async page => {
+    await start(page, 'ask about the jump colour')
+    await page.getByRole('region', { name: 'Which way?' }).waitFor()
+    // Back to the launcher as a person goes, by the sidebar: no reload redraws the lists under the jump.
+    await page.getByRole('link', { name: 'New agent session' }).click()
+    // The launcher at rest, as a person sees it before reaching for the keys: a second with nothing moving.
+    await page.evaluate("window.shifts = []; window.lastShift = performance.now(); new PerformanceObserver(list => { for (const shift of list.getEntries()) { window.lastShift = performance.now(); window.shifts.push(shift.sources.map(source => source.node?.getAttribute?.('aria-label') ?? source.node?.textContent?.slice(0, 40))) } }).observe({ type: 'layout-shift' })")
+    await page.waitForFunction('performance.now() - window.lastShift > 1000')
+    await page.evaluate('window.shifts = []')
+    await page.getByRole('textbox', { name: 'Prompt' }).click()
+    await page.keyboard.press('Control+k')
+    await page.getByRole('combobox', { name: 'Jump to' }).waitFor()
+    await page.keyboard.type('jum')
+    await page.getByRole('option', { name: /ask about the jump colour/ }).waitFor()
+    await page.keyboard.press('Enter')
+    await page.getByRole('region', { name: 'Which way?' }).waitFor()
+    assert.equal(await page.getByRole('combobox', { name: 'Jump to' }).count(), 0)
+    assert.deepEqual(await page.evaluate('window.shifts'), [])
+  })
+})

@@ -47,6 +47,7 @@ import { TriangleAlert } from 'lucide-react'
 import type { StartPicks } from './lib/started-from.js'
 import { useShortcut } from './lib/shortcut.js'
 import { SHORTCUTS_ENTRY } from './components/ShortcutList.js'
+import { JumpPalette } from './components/JumpPalette.js'
 
 /** Stable, so `files` keeps one identity while no project is selected. */
 const EMPTY_FILES: string[] = []
@@ -276,6 +277,8 @@ export function App() {
   // project's sessions here.
   const allShow = scope === null && !scopePending
   const { recentAgents, reload: reloadRecent, state: recentState } = useRecentAgents(allShow, agentStart)
+  // The runs this page has read, which the jump finds at once: the picked project's own list, and every project's newest.
+  const pageRuns = useMemo(() => [...(agentsOf !== null ? agents.map(agent => ({ projectId: agentsOf, projectName: labels.get(agentsOf) ?? '', agent })) : []), ...recentAgents], [agents, agentsOf, recentAgents, labels])
 
   // An agent just started in `inProject`, which is not always the selected one: the onboarding
   // checklist starts one from the Overview, where nothing is selected (#1169).
@@ -707,6 +710,16 @@ export function App() {
           <EveryPage />
         </ModuleSlot>
       ))}
+      <JumpPalette
+        waiting={interventions}
+        runs={pageRuns}
+        pages={[...shownPages, ...[...OWN_PAGES].map(([segment, label]) => ({ segment, label }))]}
+        projects={projects}
+        scope={scope}
+        here={route}
+        hrefOf={hrefOf}
+        go={go}
+      />
       {/* Once what the address names is read: the project its "Project" group opens on, and the entries the projects and their packages add. */}
       {route.settings !== undefined && addressesRead && <SettingsDialog entry={route.settings} openItem={route.settingsItem} onEntry={showSettingsEntry} onClose={closeSettings} scope={scope} projects={projects} />}
     </SidebarProvider>

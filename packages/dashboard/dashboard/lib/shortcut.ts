@@ -12,7 +12,7 @@ export function shortcut(key: string): string {
 }
 
 /** Where a shortcut works, in the order the list of shortcuts shows them. */
-export const SHORTCUT_PLACES = ['Anywhere', 'The message box', 'A working agent', 'A question', 'Saved prompts'] as const
+export const SHORTCUT_PLACES = ['Anywhere', 'Jump', 'The message box', 'A working agent', 'A question', 'Saved prompts'] as const
 
 interface Shortcut {
   /** The keys that take it, exactly as `KeyboardEvent.key` names them (`k`, not `K`); `1-9` is any of those digits. The first is the one the list shows. */
@@ -29,8 +29,10 @@ interface Shortcut {
 
 /** Every key the dashboard takes, read by the handlers that take them and by the list of shortcuts alike. */
 export const SHORTCUTS = {
+  jump: { keys: ['k'], mod: true, where: 'Anywhere', does: 'Jump to a run, a project or a page' },
   shortcuts: { keys: ['?'], outsideFields: true, where: 'Anywhere', does: 'Show the keyboard shortcuts' },
   sidebar: { keys: ['b'], mod: true, where: 'Anywhere', does: 'Hide or show the sidebar' },
+  newTab: { keys: ['Enter'], mod: true, where: 'Jump', does: 'Open the marked place in a new tab' },
   send: { keys: ['Enter'], where: 'The message box', does: 'Send' },
   newLine: { keys: ['Enter'], shift: true, where: 'The message box', does: 'Start a new line' },
   sendLater: { keys: ['Enter'], mod: true, where: 'The message box', does: 'Send, read by a working agent after its turn' },
