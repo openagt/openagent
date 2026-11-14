@@ -95,6 +95,7 @@ export function AgentsPage() {
   return (
     <Page
       title="Agents"
+      count={view && !reading ? view.agents.length : undefined}
       description="An agent is a name, a set of skills and a set of accounts. Pick one under the message box; it works in any project, or in none."
       actions={
         <Button ref={newAgent} disabled={!view || adding} onClick={() => setAdding(true)}>
