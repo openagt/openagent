@@ -39,13 +39,13 @@ export function BridgeBrowserSettings() {
   if (!status) return null
   const act = (action: 'show' | 'hide' | 'restart') => void sendBridgeBrowser(action).catch(() => {})
   return (
-    <div className="mt-2 space-y-2 rounded-md border border-border bg-muted/30 p-3 text-xs">
+    <div className="mt-3 space-y-2 text-xs">
       {status.state === 'off' && <p className="text-muted-foreground">The bridge browser is off.</p>}
       {status.state === 'starting' && <p className="text-muted-foreground">Starting the bridge browser: {status.detail}.</p>}
       {status.state === 'stopped' && (
         <p className="text-danger">
           The bridge browser is not running: {status.detail}.{' '}
-          <Button variant="outline" onClick={() => act('restart')}>
+          <Button variant="secondary" onClick={() => act('restart')}>
             Restart
           </Button>
         </p>
@@ -58,15 +58,15 @@ export function BridgeBrowserSettings() {
           </p>
           <div className="flex flex-wrap items-center gap-2">
             {status.visible ? (
-              <Button variant="outline" onClick={() => act('hide')}>
+              <Button variant="secondary" onClick={() => act('hide')}>
                 Hide the window
               </Button>
             ) : (
-              <Button variant="outline" onClick={() => act('show')}>
+              <Button variant="secondary" onClick={() => act('show')}>
                 {status.signIn ? 'Show the window to sign in' : 'Show the window'}
               </Button>
             )}
-            <Button variant="outline" onClick={() => act('restart')}>
+            <Button variant="secondary" onClick={() => act('restart')}>
               Restart
             </Button>
           </div>

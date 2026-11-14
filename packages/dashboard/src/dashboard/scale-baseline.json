@@ -33,9 +33,6 @@
   "dashboard/dashboard/components/AgentView.tsx": {
     "py-2.5": 1
   },
-  "dashboard/dashboard/components/BridgeSettings.tsx": {
-    "rounded": 1
-  },
   "dashboard/dashboard/components/ContextFiles.tsx": {
     "rounded": 1
   },
