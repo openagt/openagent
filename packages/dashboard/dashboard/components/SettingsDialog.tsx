@@ -32,6 +32,7 @@ import { BACKDROP_CLASS, DIALOG_PRESSES_CLASS } from './ui/dialog.js'
 import { Switch } from './ui/switch.js'
 import { RadioGroup, RadioGroupItem } from './ui/radio-group.js'
 import { ScrollArea } from './ui/scroll-area.js'
+import { InSection } from './ui/section.js'
 import { Select, SelectContent, SelectItem, SelectValue } from './ui/select.js'
 import { cn } from '../lib/utils.js'
 import { useProjectLabel } from '../lib/project-labels.js'
@@ -267,7 +268,10 @@ export function SettingsDialog({
                   <div key={`${current.id}/${project?.id ?? ALL_PROJECTS}`}>
                     <SettingsCrumbContext.Provider value={setCrumb}>
                       <SettingsHoldContext.Provider value={setHeld}>
-                        <SettingsFootContext.Provider value={foot}>{current.body}</SettingsFootContext.Provider>
+                        <SettingsFootContext.Provider value={foot}>
+                          {/* Under the entry's title, a section is a group of it. */}
+                          <InSection>{current.body}</InSection>
+                        </SettingsFootContext.Provider>
                       </SettingsHoldContext.Provider>
                     </SettingsCrumbContext.Provider>
                   </div>

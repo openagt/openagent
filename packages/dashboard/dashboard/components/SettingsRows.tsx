@@ -10,7 +10,7 @@ import { DaemonDown } from '../lib/use-daemon-health.js'
 
 /**
  * An entry's settings: what they are about as a whole (`description`) and what the entry offers as
- * a whole (`action`, a button) over its rows, a line between each. No card around them: the dialog
+ * a whole (`action`, a button) over its rows, 16 apart. No card and no line between them: the dialog
  * is their frame. The entry's title is Settings' own, over it.
  */
 export function SettingsSection({ description, action, children }: { description?: ReactNode; action?: ReactNode; children: ReactNode }) {
@@ -19,11 +19,11 @@ export function SettingsSection({ description, action, children }: { description
       {(description !== undefined || action !== undefined) && (
         // On a phone the action goes under the words: beside them it squeezes them to a word a line.
         <div className="flex items-start justify-between gap-3 max-sm:flex-col">
-          {description !== undefined && <p className="text-sm text-muted-foreground">{description}</p>}
+          {description !== undefined && <p className="max-w-180 text-sm text-muted-foreground">{description}</p>}
           {action !== undefined && <div className="shrink-0 sm:ml-auto">{action}</div>}
         </div>
       )}
-      <div className="divide-y divide-border">{children}</div>
+      <div className="flex flex-col gap-4">{children}</div>
     </div>
   )
 }
@@ -37,7 +37,7 @@ export function SettingsFoot({ children }: { children: ReactNode }) {
   return foot ? createPortal(children, foot) : children
 }
 
-/** One setting: what it is and what it does on the left, its control on the right. */
+/** One setting: what it is and what it does on the left, its control on the right; on a phone, the control under it. */
 export function SettingsRow({
   label,
   description,
@@ -53,9 +53,10 @@ export function SettingsRow({
   /** The control's `id`: a click on the label works the control. */
   labelFor?: string
 }) {
-  const named = cn('text-sm', dimmed && 'text-muted-foreground')
+  const named = cn('text-sm font-medium', dimmed && 'text-muted-foreground')
   return (
-    <div className="flex items-start justify-between gap-4 py-3 first:pt-0 last:pb-0">
+    // A switch is narrow: it stays beside its label on a phone too.
+    <div className="flex items-start justify-between gap-x-6 gap-y-2 max-md:flex-col max-md:items-stretch max-md:has-[[role=switch]]:flex-row">
       <div className="min-w-0">
         {labelFor === undefined ? (
           <p className={named}>{label}</p>
@@ -64,7 +65,7 @@ export function SettingsRow({
             {label}
           </label>
         )}
-        <p className="text-xs text-muted-foreground">{description}</p>
+        <p className="mt-0.5 text-xs text-muted-foreground">{description}</p>
       </div>
       <div className="shrink-0">{control}</div>
     </div>
@@ -120,7 +121,7 @@ export function SettingsSelectRow({
       description={description}
       control={
         <Select items={items} value={value === '' ? NO_VALUE : value} onValueChange={picked} disabled={down}>
-          <SelectTrigger aria-label={label} className="max-w-[min(16rem,45vw)]">
+          <SelectTrigger aria-label={label} className="w-60 max-md:w-full">
             <SelectValue />
           </SelectTrigger>
           <SelectContent align="end">
