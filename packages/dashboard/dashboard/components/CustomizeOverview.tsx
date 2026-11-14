@@ -299,12 +299,12 @@ function CardBar({ label, widths, width, first, last, onStep, onWidth, onHide }:
           event.preventDefault()
           onStep(by)
         }}
-        className="flex size-6 cursor-grab items-center justify-center rounded text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-primary)] pointer-coarse:hidden"
+        className="not-pointer-coarse:flex size-6 cursor-grab items-center justify-center rounded text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-primary)] pointer-coarse:hidden"
       >
         <GripVertical className="h-4 w-4" aria-hidden />
       </button>
       {/* A touch screen drags nothing: there a card moves by a press. */}
-      <span className="hidden pointer-coarse:flex">
+      <span className="not-pointer-coarse:hidden pointer-coarse:flex">
         <BarButton label={`Move ${label} earlier`} disabled={first} onClick={() => onStep(-1)}>
           <ChevronLeft className="h-4 w-4" aria-hidden />
         </BarButton>

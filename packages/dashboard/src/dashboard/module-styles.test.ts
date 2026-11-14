@@ -8,8 +8,8 @@ import { twMerge } from 'tailwind-merge'
 // A module's stylesheet loads after the dashboard's, and in no set order with the other modules'.
 // Each one carries its own copy of the utilities its own code uses, in the same `utilities` layer.
 // So where one element has two utilities that set the same property, the one Tailwind orders to win
-// (a longhand over its shorthand, `pl-7` over `px-3`; a width variant over the plain class, `max-md:pl-11`
-// over `pl-4`) loses on any page whose module carries the other alone, as a later copy. Reads the
+// (a longhand over its shorthand, `pl-7` over `px-3`; a width's or a pointer's variant over the plain class,
+// `max-md:pl-11` over `pl-4`, `pointer-coarse:hidden` over `flex`) loses on any page whose module carries the other alone, as a later copy. Reads the
 // builds: `pnpm build` first.
 
 const PACKAGES = fileURLToPath(new URL('../../../', import.meta.url))
@@ -187,7 +187,7 @@ test("no module's stylesheet carries a utility alone that, on an element, anothe
 
   const rules = new Map<string, Rule[]>()
   for (const sheet of sheets.values()) for (const [name, rule] of sheet) if (!rules.has(name)) rules.set(name, rule)
-  /** `winner` is ordered after `loser` where both are written, and must stay so: it sets part of what `loser` sets, or sets it for one width. */
+  /** `winner` is ordered after `loser` where both are written, and must stay so: it sets part of what `loser` sets, or sets it for one width or one pointer. */
   const beats = (winner: string, loser: string) =>
     rules.get(winner)!.some(w =>
       rules.get(loser)!.some(
@@ -196,7 +196,7 @@ test("no module's stylesheet carries a utility alone that, on an element, anothe
           w.sets.size > 0 &&
           [...w.sets.keys()].every(side => l.sets.has(side)) &&
           [...w.sets].some(([side, value]) => l.sets.get(side) !== value) &&
-          ((w.at === l.at && w.sets.size < l.sets.size) || (w.at.includes('width') && l.at === '')),
+          ((w.at === l.at && w.sets.size < l.sets.size) || (/width|pointer/.test(w.at) && l.at === '')),
       ),
     )
 
