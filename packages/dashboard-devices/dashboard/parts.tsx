@@ -1,6 +1,7 @@
 import { Fragment, useEffect, useRef, useState, type ComponentType, type FormEvent, type ReactNode, type RefObject } from 'react'
 import { ChevronRight, Circle, CircleArrowUp, CircleCheck, CircleX, Loader2, Pencil } from 'lucide-react'
-import { Badge, Button, Input, Row, Section, cn } from '@openagt/dashboard/module'
+import { Badge, Button, Input, Row, Section, cn, formatDateTime, formatRelative } from '@openagt/dashboard/module'
+import type { DeviceRow as Listed } from './devices.js'
 import type { StepState } from './servers.js'
 
 // The small pieces the pages of Settings › Devices share: a device's row, the tabs of a
@@ -80,7 +81,7 @@ export function ListedDevice({ icon: Icon, name, facts, state, actions, onOpen }
 /** The tabs of a device's page: each a word, the picked one underlined. */
 export function Tabs<T extends string>({ tabs, value, onChange, label }: { tabs: readonly { id: T; title: string }[]; value: T; onChange: (id: T) => void; label: string }) {
   return (
-    <div role="tablist" aria-label={label} className="flex gap-1 border-b border-border">
+    <div role="tablist" aria-label={label} className="mt-4 flex gap-1 border-b border-hairline">
       {tabs.map(tab => (
         <button
           key={tab.id}
@@ -88,7 +89,7 @@ export function Tabs<T extends string>({ tabs, value, onChange, label }: { tabs:
           role="tab"
           aria-selected={tab.id === value}
           onClick={() => onChange(tab.id)}
-          className={cn('-mb-px border-b-2 px-3 py-2 text-sm outline-none', tab.id === value ? 'border-[var(--color-primary)] font-medium' : 'border-transparent text-muted-foreground hover:text-foreground')}
+          className={cn('focus-ring -mb-px rounded-t-md border-b-2 px-3 py-2 text-sm font-medium transition-colors', tab.id === value ? 'border-primary text-foreground' : 'border-transparent text-muted-foreground hover:text-foreground')}
         >
           {tab.title}
         </button>
@@ -99,14 +100,13 @@ export function Tabs<T extends string>({ tabs, value, onChange, label }: { tabs:
 
 /** A part of a device's page, with its heading. */
 export function Part({ title, children }: { title?: string; children: ReactNode }) {
-  const look = 'border-b border-border py-4 last:border-b-0'
   if (title !== undefined)
     return (
-      <Section title={title} className={look}>
+      <Section title={title} className="pt-6">
         <div className="space-y-3">{children}</div>
       </Section>
     )
-  return <section className={cn('space-y-3', look)}>{children}</section>
+  return <section className="space-y-3 pt-6">{children}</section>
 }
 
 /** A switch row of a page: what it is, what it means now, and the switch. */
@@ -136,7 +136,7 @@ export function LoginLine({ label, words, said, children }: { label: string; wor
 /** What a server or a command said, as it said it. */
 export function Said({ children }: { children: ReactNode }) {
   return (
-    <pre role="alert" className="overflow-x-auto whitespace-pre-wrap rounded-md border border-border bg-background p-2 font-mono text-xs text-foreground">
+    <pre role="alert" className="overflow-x-auto whitespace-pre-wrap rounded-md bg-muted px-3 py-2 font-mono text-xs text-foreground">
       {children}
     </pre>
   )
@@ -233,8 +233,7 @@ export function RenameForm({ name, rename, onClose }: { name: string; rename: Re
     <div className="space-y-1">
       <form className="flex flex-wrap items-center gap-2" onSubmit={event => void save(event)}>
         <Input name="device-name" autoFocus aria-label="Name" value={picked} maxLength={60} onChange={event => setPicked(event.target.value)} className="h-8 w-56" />
-        <Button type="submit" disabled={busy || !picked.trim()}>
-          {busy && <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden />}
+        <Button type="submit" loading={busy} disabled={!picked.trim()}>
           Save
         </Button>
         <Button type="button" variant="ghost" onClick={onClose}>
@@ -250,16 +249,15 @@ export function RenameForm({ name, rename, onClose }: { name: string; rename: Re
 export function Head({ icon: Icon, name, badge, facts, rename }: { icon: ComponentType<{ className?: string; 'aria-hidden'?: boolean }>; name: string; badge?: string; facts: ReactNode[]; rename?: Rename }) {
   const { renaming, open, close, press } = useRenaming()
   return (
-    <div className="space-y-1 py-2">
-      <div className="flex items-center gap-3">
-        <Icon aria-hidden className="h-5 w-5 shrink-0 text-muted-foreground" />
+    <div className="flex min-h-12 items-center gap-3">
+        <Icon aria-hidden className="size-5 shrink-0 text-muted-foreground" />
         <div className="min-w-0 flex-1">
           {renaming && rename ? (
             <RenameForm name={name} rename={rename} onClose={close} />
           ) : (
             <p className="flex min-w-0 items-center gap-2 text-base font-semibold">
               <span className="truncate">{name}</span>
-              {badge !== undefined && <span className="shrink-0 rounded-full border border-border px-2 text-[11px] font-medium text-muted-foreground">{badge}</span>}
+              {badge !== undefined && <Badge>{badge}</Badge>}
             </p>
           )}
           <p className="text-xs text-muted-foreground">
@@ -267,12 +265,11 @@ export function Head({ icon: Icon, name, badge, facts, rename }: { icon: Compone
           </p>
         </div>
         {rename && !renaming && (
-          <Button ref={press} variant="ghost" onClick={open}>
-            <Pencil className="h-3.5 w-3.5" aria-hidden />
+          <Button ref={press} variant="ghost" size="sm" onClick={open}>
+            <Pencil className="size-4" aria-hidden />
             Rename
           </Button>
         )}
-      </div>
     </div>
   )
 }
@@ -283,5 +280,23 @@ export function LinkPress({ loading = false, onClick, children }: { loading?: bo
     <Button variant="link" loading={loading} onClick={onClick} className="relative h-auto px-0 text-xs font-normal whitespace-normal after:absolute after:inset-x-0 after:-inset-y-1.5 max-md:after:-inset-y-3.5">
       {children}
     </Button>
+  )
+}
+
+/** When a device that is in got in and was last seen, and what it is when that needs saying. */
+export function Seen({ device, note }: { device: Listed; note?: string | undefined }) {
+  return (
+    <>
+      <span title={formatDateTime(device.seen ?? device.added)}>
+        {`Added ${formatRelative(device.added)}`}
+        {device.seen !== undefined ? `, last seen ${formatRelative(device.seen)}` : ''}
+      </span>
+      {note !== undefined && (
+        <>
+          {' · '}
+          <span title={note}>{note}</span>
+        </>
+      )}
+    </>
   )
 }

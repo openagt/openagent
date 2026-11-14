@@ -95,8 +95,8 @@ export function ComputerPage({ d, item, onBack, onSetUp }: { d: Devices; item: C
         <Part title="Who can use it">
           <p className="text-sm">Only you.</p>
           <p className="text-xs text-muted-foreground">{`Other people cannot start runs on ${item.name}: on a personal computer they would run as you, with your logins. To share it, set it up as a server: each person then gets a user of their own on it. Linux for now.`}</p>
-          <Button variant="outline" onClick={onSetUp}>
-            <Server className="h-3.5 w-3.5" aria-hidden />
+          <Button variant="secondary" onClick={onSetUp}>
+            <Server className="size-4" aria-hidden />
             Set it up as a server
           </Button>
         </Part>
@@ -104,7 +104,7 @@ export function ComputerPage({ d, item, onBack, onSetUp }: { d: Devices; item: C
       <div className="space-y-1 pt-4">
         <ConfirmDialog
           trigger={
-            <Button variant="outline" className="text-danger" disabled={busy}>
+            <Button variant="secondary" className="text-danger" disabled={busy}>
               {`Remove ${item.name}`}
             </Button>
           }
