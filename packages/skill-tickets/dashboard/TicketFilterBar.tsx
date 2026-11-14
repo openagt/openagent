@@ -264,8 +264,9 @@ export function TicketFilterBar({
   const filtered = hasAnyFilter(f)
 
   return (
-    // On a phone the search, the filters and the sort are one row, scrolled sideways, so the list starts near the top.
-    <div className="flex items-center gap-1 sm:flex-wrap max-sm:-m-0.5 max-sm:overflow-x-auto max-sm:p-0.5">
+    // On a phone the search, the filters and the sort are one row, scrolled sideways, so the list starts near the top:
+    // its right end fades, which says there is more, and the room after the sort lets it come clear of the fade.
+    <div className="flex items-center gap-1 sm:flex-wrap max-sm:-m-0.5 max-sm:overflow-x-auto max-sm:p-0.5 max-sm:pe-12 max-sm:[scrollbar-width:none] max-sm:[mask-image:linear-gradient(to_right,#000_calc(100%_-_3rem),transparent)]">
       <div className="relative mr-1 shrink-0 max-sm:w-44">
         <Search className="pointer-events-none absolute top-1/2 left-2.5 size-4 -translate-y-1/2 text-muted-foreground" aria-hidden />
         <Input
