@@ -14,7 +14,7 @@ export function LinesChanged({ added, removed }: { added: number; removed: numbe
 // names in a line: one small pill, the added half green and the removed half red.
 export function LinesPill({ added, removed }: { added: number; removed: number }) {
   return (
-    <span className="flex h-4 shrink-0 overflow-hidden rounded text-[10px] font-medium tabular-nums">
+    <span className="flex h-4 shrink-0 items-center overflow-hidden rounded-sm text-xs font-medium">
       <span className="bg-success/20 px-1 text-success" aria-hidden>
         +{added}
       </span>
@@ -37,11 +37,11 @@ export function ChangedFiles({ files, onOpen }: { files: readonly ChangedFile[];
   const many = files.length > 1
   const look = 'flex h-7 w-full min-w-0 items-center gap-1.5 rounded-md px-2'
   return (
-    <div className="flex min-w-0 flex-1 flex-col rounded-[10px] p-1 font-sans ring-1 ring-border">
+    <div className="flex min-w-0 flex-1 flex-col rounded-lg p-1 font-sans ring-1 ring-hairline">
       {many && (
         <>
-          <div className="flex h-7 items-center px-2 text-[13px] text-foreground">Edited {files.length} files</div>
-          <div aria-hidden className="-mx-1 my-1 h-px bg-border" />
+          <div className="flex h-7 items-center px-2 text-sm text-foreground">Edited {files.length} files</div>
+          <div aria-hidden className="-mx-1 my-1 h-px bg-hairline" />
         </>
       )}
       <ul aria-label="Files changed" className="flex min-w-0 flex-col">
@@ -49,7 +49,7 @@ export function ChangedFiles({ files, onOpen }: { files: readonly ChangedFile[];
           const row = (
             <>
               <FileText className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden />
-              <span className="min-w-0 flex-1 truncate text-left text-[13px] text-foreground" title={file.path}>
+              <span className="min-w-0 flex-1 truncate text-left text-sm text-foreground" title={file.path}>
                 {file.name}
               </span>
               <span className="text-xs">
@@ -60,7 +60,7 @@ export function ChangedFiles({ files, onOpen }: { files: readonly ChangedFile[];
           return (
             <li key={file.path} className="min-w-0">
               {onOpen ? (
-                <button type="button" onClick={() => onOpen(file.path)} aria-label={`Show the change to ${file.name}`} className={`${look} hover:bg-foreground/5`}>
+                <button type="button" onClick={() => onOpen(file.path)} aria-label={`Show the change to ${file.name}`} className={`${look} focus-ring hover:bg-accent active:bg-foreground/10`}>
                   {row}
                 </button>
               ) : (
@@ -71,8 +71,8 @@ export function ChangedFiles({ files, onOpen }: { files: readonly ChangedFile[];
         })}
       </ul>
       {many && onOpen && (
-        <button type="button" onClick={() => onOpen()} className={`${look} hover:bg-foreground/5`}>
-          <span className="flex-1 text-left text-[13px] text-foreground">See all</span>
+        <button type="button" onClick={() => onOpen()} className={`${look} focus-ring hover:bg-accent active:bg-foreground/10`}>
+          <span className="flex-1 text-left text-sm text-foreground">See all</span>
           <span className="text-xs">
             <LinesChanged added={files.reduce((sum, file) => sum + file.added, 0)} removed={files.reduce((sum, file) => sum + file.removed, 0)} />
           </span>

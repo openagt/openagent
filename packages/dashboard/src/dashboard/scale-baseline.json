@@ -1,8 +1,6 @@
 {
   "dashboard-changes/dashboard/ChangesPanel.tsx": {
-    "leading-[19px]": 2,
-    "ml-2.5": 1,
-    "text-[13px]": 7
+    "text-[13px]": 2
   },
   "dashboard-devices/dashboard/AddDevice.tsx": {
     "py-2.5": 1,
@@ -31,11 +29,6 @@
     "text-[10px]": 1,
     "text-muted-foreground/60": 1
   },
-  "dashboard-files/dashboard/FileTree.tsx": {
-    "leading-[19px]": 1,
-    "text-[10px]": 2,
-    "text-[13px]": 2
-  },
   "dashboard-files/dashboard/FileView.tsx": {
     "text-[13px]": 1
   },
@@ -57,16 +50,8 @@
   "dashboard/dashboard/components/BridgeSettings.tsx": {
     "rounded": 1
   },
-  "dashboard/dashboard/components/ChangedFiles.tsx": {
-    "rounded": 1,
-    "text-[10px]": 1,
-    "text-[13px]": 3
-  },
   "dashboard/dashboard/components/ContextFiles.tsx": {
     "rounded": 1
-  },
-  "dashboard/dashboard/components/DiffStat.tsx": {
-    "text-[10px]": 1
   },
   "dashboard/dashboard/components/FadeWhileStale.tsx": {
     "duration-300": 1

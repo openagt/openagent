@@ -10,6 +10,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
   FileIcon,
+  MiddleCut,
   Input,
   PaneActions,
   PaneTitle,
@@ -72,8 +73,14 @@ function Counts({ mark, className }: { mark: FileMark; className?: string }) {
 /** Narrower than this, the pane has room for the list or the diffs, not both. */
 const NARROW = 520
 
-/** A changed file in the list: its icon, its name (or its path, ungrouped), its counts, and a ring while it is only on disk. */
-function ChangeRow({ path, mark, label, picked, onPick }: { path: string; mark: FileMark; label: string; picked: boolean; onPick: () => void }) {
+/** A row of the list, as a list's row is drawn, 28 high (44 on a phone): a folder's or a file's. */
+const ROW = 'flex h-7 w-full items-center gap-2 rounded-md px-2 text-left text-sm outline-none hover:bg-accent active:bg-foreground/10 focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-primary max-md:h-11'
+
+/**
+ * A changed file in the list: its icon, its name (or its path, ungrouped), its counts, and a ring
+ * while it is only on disk, where the list holds both (`rings`).
+ */
+function ChangeRow({ path, mark, label, picked, rings, onPick }: { path: string; mark: FileMark; label: string; picked: boolean; rings: boolean; onPick: () => void }) {
   return (
     <li>
       <button
@@ -81,11 +88,13 @@ function ChangeRow({ path, mark, label, picked, onPick }: { path: string; mark: 
         onClick={onPick}
         aria-pressed={picked}
         title={`${path} · ${mark.status === 'untracked' || mark.status === 'added' ? 'new' : mark.status}${mark.committed ? '' : ', not committed'}`}
-        className={cn('flex h-6 w-full items-center gap-1.5 rounded-md px-2 text-left text-[13px] leading-[19px] hover:bg-accent', picked && 'bg-accent')}
+        className={cn(ROW, picked && 'bg-accent')}
       >
-        <FileIcon path={path} className="size-3" />
-        <span className={cn('min-w-0 flex-1 truncate', mark.status === 'deleted' && 'line-through')}>{label}</span>
-        {!mark.committed && <span aria-label="not committed" className="size-1.5 shrink-0 rounded-full border border-current text-muted-foreground" />}
+        <FileIcon path={path} />
+        <span className={cn('flex min-w-0 flex-1', mark.status === 'deleted' && 'line-through')}>
+          <MiddleCut text={label} />
+        </span>
+        {rings && !mark.committed && <span aria-label="not committed" className="size-1.5 shrink-0 rounded-full border border-current text-muted-foreground" />}
         <Counts mark={mark} />
       </button>
     </li>
@@ -114,8 +123,8 @@ function foldersOf(paths: string[]): Folder {
 function CommitRow({ label, detail, title, picked, onPick }: { label: string; detail?: string; title?: string; picked: boolean; onPick: () => void }) {
   return (
     <li>
-      <button type="button" onClick={onPick} aria-pressed={picked} title={title} className={cn('flex w-full flex-col rounded-md px-2 py-1.5 text-left hover:bg-accent', picked && 'bg-accent')}>
-        <span className="w-full truncate text-[13px] leading-[19px]">{label}</span>
+      <button type="button" onClick={onPick} aria-pressed={picked} title={title} className={cn('flex w-full flex-col rounded-md px-2 py-1.5 text-left outline-none hover:bg-accent active:bg-foreground/10 focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-primary', picked && 'bg-accent')}>
+        <span className="w-full truncate text-sm">{label}</span>
         {detail !== undefined && <span className="w-full truncate text-xs text-muted-foreground">{detail}</span>}
       </button>
     </li>
@@ -336,8 +345,8 @@ function ChangesHeader({ between, merged, page, paths, changes, listShown, onPic
 }
 
 /** The changed files, in folders or each by its whole path, the one picked lit. */
-function ChangeList({ paths, changes, group, picked, onPick }: { paths: string[]; changes: Record<string, FileMark>; group: boolean; picked: string | undefined; onPick: (path: string) => void }) {
-  const rowOf = (path: string, label: string) => <ChangeRow key={path} path={path} mark={changes[path]!} label={label} picked={path === picked} onPick={() => onPick(path)} />
+function ChangeList({ paths, changes, group, picked, rings, onPick }: { paths: string[]; changes: Record<string, FileMark>; group: boolean; picked: string | undefined; rings: boolean; onPick: (path: string) => void }) {
+  const rowOf = (path: string, label: string) => <ChangeRow key={path} path={path} mark={changes[path]!} label={label} picked={path === picked} rings={rings} onPick={() => onPick(path)} />
   const folderOf = (node: Folder): ReactNode => (
     <>
       {[...node.dirs.values()]
@@ -345,11 +354,11 @@ function ChangeList({ paths, changes, group, picked, onPick }: { paths: string[]
         .map(dir => (
           <li key={dir.path}>
             <details open className="group">
-              <summary className="flex h-6 cursor-pointer list-none items-center gap-1.5 rounded-md px-2 text-[13px] text-muted-foreground hover:bg-accent">
-                <ChevronRight aria-hidden className="size-3 shrink-0 group-open:rotate-90" />
+              <summary className={cn(ROW, 'cursor-pointer list-none text-muted-foreground')}>
+                <ChevronRight aria-hidden className="size-4 shrink-0 group-open:rotate-90" />
                 <span className="truncate">{dir.name}</span>
               </summary>
-              <ul className="ml-2.5">{folderOf(dir)}</ul>
+              <ul className="ml-3">{folderOf(dir)}</ul>
             </details>
           </li>
         ))}
@@ -357,7 +366,7 @@ function ChangeList({ paths, changes, group, picked, onPick }: { paths: string[]
     </>
   )
   return (
-    <ul aria-label="Changed files" className="min-h-0 flex-auto space-y-0.5 overflow-y-auto p-1">
+    <ul aria-label="Changed files" className="min-h-0 flex-auto overflow-y-auto p-1">
       {group ? folderOf(foldersOf(paths)) : paths.map(path => rowOf(path, path))}
     </ul>
   )
@@ -366,10 +375,10 @@ function ChangeList({ paths, changes, group, picked, onPick }: { paths: string[]
 /** The run's commits, newest first, with "All changes" above them, under a heading that folds them away. */
 function CommitList({ commits, picked, open, onOpen, onPick }: { commits: AgentCommit[]; picked: string | undefined; open: boolean; onOpen: (open: boolean) => void; onPick: (sha: string | undefined) => void }) {
   return (
-    <section aria-label="Commits" className={cn('flex shrink-0 flex-col border-t border-border', open && 'max-h-[45%]')}>
+    <section aria-label="Commits" className={cn('flex shrink-0 flex-col border-t border-hairline', open && 'max-h-1/2')}>
       <h3>
-        <button type="button" aria-expanded={open} onClick={() => onOpen(!open)} className="mt-1 flex h-6 w-full items-center gap-1.5 px-3 text-[13px] text-muted-foreground hover:text-foreground">
-          <ChevronRight aria-hidden className={cn('size-3 shrink-0', open && 'rotate-90')} />
+        <button type="button" aria-expanded={open} onClick={() => onOpen(!open)} className="mt-1 flex h-7 w-full items-center gap-2 px-3 text-sm text-muted-foreground outline-none hover:text-foreground focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-primary">
+          <ChevronRight aria-hidden className={cn('size-4 shrink-0', open && 'rotate-90')} />
           <span className="flex-1 text-start">Commits</span>
           <span className="text-xs">{commits.length}</span>
         </button>
@@ -520,17 +529,17 @@ export function ChangesPanel({ projectId, agentId, activity, reveal }: ModulePan
     <>
       {header}
       {/* Beside each other while the pane is wide enough; on a narrow pane, one or the other. */}
-      <div ref={setBody} className="flex min-h-0 min-w-0 flex-auto border-t border-border">
+      <div ref={setBody} className="flex min-h-0 min-w-0 flex-auto">
         {listShown && (
-          <div className={cn('flex min-h-0 flex-col', narrow ? 'w-full' : 'w-1/3 max-w-72 min-w-40 shrink-0 border-r border-border')}>
-            <ChangeList paths={paths} changes={changes} group={settings.group} picked={picked} onPick={pick} />
+          <div className={cn('flex min-h-0 flex-col', narrow ? 'w-full' : 'w-1/2 max-w-72 min-w-48 shrink-0 border-r border-hairline')}>
+            <ChangeList paths={paths} changes={changes} group={settings.group} picked={picked} rings={agentId !== undefined} onPick={pick} />
             {agentId && commits.length > 0 && <CommitList commits={commits} picked={sha} open={commitsOpen} onOpen={setCommitsOpen} onPick={chosen => setCommitClick(chosen === undefined ? null : { agentId, sha: chosen })} />}
           </div>
         )}
         {!(narrow && listShown) && (
           <div ref={setDiffsElement} aria-label="Diffs" className="flex min-h-0 min-w-0 flex-auto flex-col overflow-y-auto">
             {caption && (
-              <p className="shrink-0 truncate border-b border-border px-3 py-1.5 text-xs text-muted-foreground" title={caption}>
+              <p className="shrink-0 truncate border-b border-hairline px-3 py-2 text-xs text-muted-foreground" title={caption}>
                 {caption}
               </p>
             )}
@@ -547,18 +556,20 @@ export function ChangesPanel({ projectId, agentId, activity, reveal }: ModulePan
                     if (node) sections.current.set(path, node)
                     else sections.current.delete(path)
                   }}
-                  className="border-b border-border"
+                  className="border-b border-hairline"
                 >
                   <button
                     type="button"
                     aria-expanded={!isFolded}
                     onClick={() => foldDiff(page, path, !isFolded)}
-                    className={cn('sticky top-0 z-10 flex h-8 w-full items-center gap-1.5 bg-muted px-2 text-start text-[13px] text-muted-foreground hover:bg-accent', path === picked && 'text-foreground')}
+                    className={cn('sticky top-0 z-10 flex h-8 w-full items-center gap-2 bg-muted px-2 text-start text-sm text-muted-foreground outline-none hover:bg-accent focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-primary', path === picked && 'text-foreground')}
                   >
-                    <ChevronRight aria-hidden className={cn('size-3.5 shrink-0', !isFolded && 'rotate-90')} />
-                    <FileIcon path={path} className="size-3" />
-                    <span className={cn('min-w-0 truncate', mark.status === 'deleted' && 'line-through')}>{path}</span>
-                    {isNewFile(mark.status) && mark.added !== undefined ? <span className="shrink-0 text-xs">{`new file, ${mark.added} ${mark.added === 1 ? 'line' : 'lines'}`}</span> : <Counts mark={mark} />}
+                    <ChevronRight aria-hidden className={cn('size-4 shrink-0', !isFolded && 'rotate-90')} />
+                    <FileIcon path={path} />
+                    <span className={cn('flex min-w-0', mark.status === 'deleted' && 'line-through')}>
+                      <MiddleCut text={path} />
+                    </span>
+                    {isNewFile(mark.status) && mark.added !== undefined && <span className="shrink-0 text-xs">{`new file, ${mark.added} ${mark.added === 1 ? 'line' : 'lines'}`}</span>}
                   </button>
                   {!isFolded && (
                     <LazyDiff

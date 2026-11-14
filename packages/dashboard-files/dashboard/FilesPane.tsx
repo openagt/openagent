@@ -269,7 +269,7 @@ export function FilesPane({ projectId, agentId, activity, show, context }: Modul
       {/* Beside each other while the pane is wide enough; on a narrow pane, one or the other. */}
       <div ref={setBody} className="flex min-h-0 min-w-0 flex-auto">
         {tree && (
-          <div className={cn('flex min-h-0 flex-col', narrow ? 'w-full' : 'w-2/5 max-w-72 min-w-40 shrink-0 border-r border-border')}>
+          <div className={cn('flex min-h-0 flex-col', narrow ? 'w-full' : 'w-1/2 max-w-72 min-w-48 shrink-0 border-r border-hairline')}>
             <FileTree files={files} caption={runTree ? sourceCaption(runTree) : undefined} shown={active} context={context} filter={filter} onOpen={open} />
           </div>
         )}
