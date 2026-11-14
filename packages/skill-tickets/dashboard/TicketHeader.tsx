@@ -89,8 +89,10 @@ export function TicketHeader({
 
   return (
     <div>
-      <div className="flex flex-wrap items-start justify-between gap-x-3 gap-y-2">
-        <h1 ref={title} tabIndex={-1} className="min-w-0 text-xl font-semibold outline-none" title={ticket.file}>
+      {/* The title, then its presses at its right: from a tablet up a long title wraps in its own room
+          and the presses stay on its first line; on a phone they go under a title too long to share one. */}
+      <div className="flex items-start justify-between gap-x-3 gap-y-2 max-md:flex-wrap">
+        <h1 ref={title} tabIndex={-1} className="min-w-0 text-xl font-semibold outline-none md:flex-1 md:py-0.5" title={ticket.file}>
           {ticket.title}
         </h1>
         <div className="flex shrink-0 items-center gap-1.5">
