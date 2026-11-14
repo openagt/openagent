@@ -79,8 +79,9 @@ export function ProjectHome({
       {/* The page is for the box: from 768px up it stands where the eye lands, its top at about 38% of
           the page, and what waits for the person is under it, scrolling under it and never pushing
           it. On a phone the box stays at the bottom, in the thumb's reach, with what waits above it,
-          as an agent's page has its chat. */}
-      <div className="flex min-h-0 flex-1 flex-col">
+          as an agent's page has its chat. The column keeps a scroll bar's room at its right, as the
+          chat's does (ChatPane), so the box stands on a session's box's edges and is carried without a sideways step. */}
+      <div className="scrollbar-thin scrollbar-gutter-stable flex min-h-0 flex-1 flex-col overflow-y-auto">
         <div className="shrink-0 max-md:hidden md:basis-[38%]" aria-hidden />
         <div className="shrink-0 max-md:order-last">
           <StartAgentForm
