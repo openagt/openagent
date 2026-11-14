@@ -503,36 +503,38 @@ describe('the Settings list', () => {
     }
     await back()
     const asked = await screen.findByRole('alertdialog', { name: 'Leave without saving?' })
-    expect(window.location.search).toBe('?settings=skills')
+    await waitFor(() => expect(window.location.search).toBe('?settings=skills'))
     fireEvent.click(within(asked).getByRole('button', { name: 'Cancel' }))
     await waitFor(() => expect(screen.queryByRole('alertdialog')).toBeNull())
     expect(screen.getByRole('checkbox', { name: 'skill-of-p1' }).getAttribute('aria-checked')).toBe('false')
     await back()
-    const popped = new Promise(resolve => window.addEventListener('popstate', resolve, { once: true }))
     fireEvent.click(within(await screen.findByRole('alertdialog')).getByRole('button', { name: 'Leave' }))
-    await act(async () => void (await popped))
-    expect(window.location.pathname + window.location.search).toBe('/page')
+    await waitFor(() => expect(window.location.pathname + window.location.search).toBe('/page'))
   })
 
-  test('Forward with a tick on Skills not saved asks as Back does, and the address stays on Settings: Leave goes on to the later page', async () => {
+  test("Forward with a tick on Skills not saved asks as Back does, and the tab's list stays as it was: Cancel keeps Settings, Leave goes on to the later page, and Back from there reaches Settings once", async () => {
     window.history.replaceState(null, '', '/page?settings=skills')
     window.history.pushState(null, '', '/later')
     const Routed = () => (useRoute(NO_PROJECTS), null)
     render(<Routed />)
-    const step = async (go: () => void) => {
-      const popped = new Promise(resolve => window.addEventListener('popstate', resolve, { once: true }))
-      go()
-      await act(async () => void (await popped))
-    }
-    await step(() => window.history.back())
-    expect(window.location.search).toBe('?settings=skills')
+    const entries = window.history.length
+    /** The tab is at `address`, its list as long as it was. */
+    const at = (address: string) => waitFor(() => expect([window.location.pathname + window.location.search, window.history.length]).toEqual([address, entries]))
+    window.history.back()
+    await at('/page?settings=skills')
     show('skills', 'p1')
     fireEvent.click(await screen.findByRole('checkbox', { name: 'skill-of-p1' }))
-    await step(() => window.history.forward())
+    window.history.forward()
     const asked = await screen.findByRole('alertdialog', { name: 'Leave without saving?' })
-    expect(window.location.pathname + window.location.search).toBe('/page?settings=skills')
-    await step(() => fireEvent.click(within(asked).getByRole('button', { name: 'Leave' })))
-    expect(window.location.pathname).toBe('/later')
+    await at('/page?settings=skills')
+    fireEvent.click(within(asked).getByRole('button', { name: 'Cancel' }))
+    await waitFor(() => expect(screen.queryByRole('alertdialog')).toBeNull())
+    await at('/page?settings=skills')
+    window.history.forward()
+    fireEvent.click(within(await screen.findByRole('alertdialog')).getByRole('button', { name: 'Leave' }))
+    await at('/later')
+    window.history.back()
+    await at('/page?settings=skills')
   })
 
   test('Skills with no project given follows the sidebar\'s pick', async () => {

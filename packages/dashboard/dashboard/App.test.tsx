@@ -549,7 +549,7 @@ describe('the project select (#1513)', () => {
     expect(url()).toBe('/site/logs?settings=agent')
     fireEvent.click(screen.getByRole('button', { name: 'shut the dialog' }))
     await waitFor(() => expect(url()).toBe('/site/logs'))
-    expect(window.history.state).toEqual({ written: 'by the page' })
+    expect(window.history.state).toMatchObject({ written: 'by the page' })
     window.history.back()
     await waitFor(() => expect(url()).toBe('/site/overview'))
     expect(screen.queryByText(/the settings dialog/)).toBeNull()
