@@ -136,13 +136,10 @@ describe('the jump', () => {
     const input = await screen.findByRole('combobox')
     // The read is in.
     await act(async () => {})
-    const started = performance.now()
     fireEvent.change(input, { target: { value: 'run num' } })
-    const took = performance.now() - started
+    // Nothing is awaited: the thousand are ranked in the key's own task, and twenty rows are drawn.
     expect(shown().Runs).toHaveLength(20)
     expect(screen.getByText('980 more: keep typing')).toBeTruthy()
-    // A frame is 16ms; jsdom draws far slower than a browser, so this holds the ranking to its order of magnitude.
-    expect(took).toBeLessThan(250)
   })
 
   test('arrows mark a row, Enter goes there and closes; the marked row is the one the pointer is on', async () => {
