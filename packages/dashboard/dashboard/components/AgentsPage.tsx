@@ -6,6 +6,7 @@ import { usePolled } from '../lib/use-async.js'
 import { useAddGitAccount } from './AddGitAccount.js'
 import { Button } from './ui/button.js'
 import { List, Row } from './ui/list.js'
+import { Section } from './ui/section.js'
 import { Checkbox } from './ui/checkbox.js'
 import { SKILL_TICKS_CLASS, SkillTick } from './ProjectSkills.js'
 import { ConfirmDialog } from './ui/confirm-dialog.js'
@@ -365,18 +366,17 @@ function AgentEditor({ agent, view, onAccounts, onDone }: { agent?: AgentRecord;
         </div>
         <div className="space-y-4">
           <div>
-            <p className="text-sm font-medium">Skills</p>
+            <p className="text-sm font-semibold">Skills</p>
             <p className="text-xs text-muted-foreground">In a project, every run also gets the branches skill: where its work goes.</p>
           </div>
           {view.skills.map(group => (
-            <section key={group.title} aria-label={group.title}>
-              <h4 className="mb-3 text-xs font-medium text-muted-foreground">{group.title}</h4>
+            <Section key={group.title} title={group.title}>
               <div className={SKILL_TICKS_CLASS}>
                 {group.skills.map(skill => (
                   <SkillTick key={skill.name} name={skill.name} description={skill.description} checked={draft.skills.has(skill.name)} onChange={on => tick('skills', skill.name, on)} disabled={busy} />
                 ))}
               </div>
-            </section>
+            </Section>
           ))}
           {/* Rom's first level: an agent set to never pick up the project's own skills. A session can still pick them. */}
           <SkillTick
@@ -388,7 +388,7 @@ function AgentEditor({ agent, view, onAccounts, onDone }: { agent?: AgentRecord;
           />
         </div>
         <div className="space-y-3">
-          <p className="text-sm font-medium">Accounts</p>
+          <p className="text-sm font-semibold">Accounts</p>
           <div className="space-y-1.5">
             <Label htmlFor="agent-github">GitHub</Label>
             <div className="flex flex-wrap items-center gap-2">

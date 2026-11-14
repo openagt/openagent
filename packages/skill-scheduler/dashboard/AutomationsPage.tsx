@@ -249,8 +249,7 @@ export function AutomationsPage({ projects }: ModulePageProps) {
                 {groups.map(
                   ([group, commands]) =>
                     commands.length > 0 && (
-                      <div key={group} role="group" aria-label={group} className="not-first:mt-4">
-                        <h3 className="mb-1 text-xs font-medium text-muted-foreground">{group}</h3>
+                      <Section key={group} title={group} className="not-first:mt-4">
                         <List>
                           {commands.map(scheduled => {
                             const id = `${row.project.id}/${scheduled.command}`
@@ -350,7 +349,7 @@ export function AutomationsPage({ projects }: ModulePageProps) {
                             )
                           })}
                         </List>
-                      </div>
+                      </Section>
                     ),
                 )}
                 {row.error === undefined && !row.on && (

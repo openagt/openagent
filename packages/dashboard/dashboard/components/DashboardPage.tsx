@@ -260,15 +260,13 @@ function HumanQueue({
           // One group per kind, under a quiet heading with how many: a few questions are not lost
           // among many checkouts left to commit. Each group shows its first rows and offers the rest.
           // Pulled out by the rows' own inset, so their text starts where the heading does.
-          <div className="-mx-3 space-y-3">
+          <div className="space-y-3">
             {groups.map(group => (
-              <section key={group.value} aria-label={group.label}>
-                <h3 className="flex items-baseline gap-1.5 px-3 pb-0.5 text-xs font-medium text-muted-foreground">
-                  {group.label}
-                  <span className="tabular-nums">{group.items.length}</span>
-                </h3>
-                <HumanQueueList grouped items={group.items} onOpenAgent={onSelectAgent} onOpenProject={onSelectProject} />
-              </section>
+              <Section key={group.value} title={group.label} count={group.items.length}>
+                <div className="-mx-3">
+                  <HumanQueueList grouped items={group.items} onOpenAgent={onSelectAgent} onOpenProject={onSelectProject} />
+                </div>
+              </Section>
             ))}
           </div>
         )}

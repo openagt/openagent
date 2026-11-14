@@ -4,6 +4,7 @@ import { X } from 'lucide-react'
 import type { ReactNode, RefObject } from 'react'
 import { cn } from '../../lib/utils.js'
 import { buttonVariants } from './button.js'
+import { InSection } from './section.js'
 
 // The shadcn "base" dialog (Base UI, not Radix) — a centered modal shell for a small form (#1025).
 // Unlike ConfirmDialog (AlertDialog, focus-trapped and no light-dismiss, for the one irreversible
@@ -84,7 +85,10 @@ export function Dialog({
             </BaseDialog.Close>
           </div>
           {/* What scrolls when the form is taller than the window; the room at its sides keeps a field's focus ring whole. */}
-          <div className="-mx-1 min-h-0 flex-1 overflow-y-auto px-1">{children}</div>
+          <div className="-mx-1 min-h-0 flex-1 overflow-y-auto px-1">
+            {/* Under the dialog's title, a section is a group of it. */}
+            <InSection>{children}</InSection>
+          </div>
           {footer !== undefined && <div className={cn('mt-4 shrink-0 border-t border-hairline pt-4', DIALOG_PRESSES_CLASS)}>{footer}</div>}
         </BaseDialog.Popup>
       </BaseDialog.Portal>

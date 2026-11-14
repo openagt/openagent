@@ -423,6 +423,9 @@ function Tables() {
       </Table>
       <Section title="A part of the Overview" count={3} action={<PageLink href="/queue" onOpen={() => {}}>Queue</PageLink>} className="max-w-sm">
         <p className="text-sm text-muted-foreground">A summary; the whole is on the page its link opens.</p>
+        <Section title="A group of it" count={1} className="mt-4">
+          <p className="text-sm text-muted-foreground">A section inside a section, or in a dialog: 14 / 600. A label of a field or a column is the third and last level, 12 / 500 in muted.</p>
+        </Section>
       </Section>
     </div>
   )

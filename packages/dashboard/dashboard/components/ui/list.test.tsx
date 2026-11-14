@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, test, vi } from 'vitest'
 import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { List, Row } from './list.js'
-import { Section } from './section.js'
+import { InSection, Section } from './section.js'
 
 afterEach(cleanup)
 
@@ -91,5 +91,16 @@ describe('Section', () => {
     )
     expect(screen.getByRole('heading', { name: 'shop', level: 2 })).toBeTruthy()
     expect(screen.getByRole('heading', { name: 'Priority 8', level: 3 })).toBeTruthy()
+  })
+
+  test('under a heading said elsewhere (a dialog\'s title), a section is a group: one level down and a size smaller', () => {
+    render(
+      <InSection>
+        <Section title="Every agent starts with">
+          <p>skills</p>
+        </Section>
+      </InSection>,
+    )
+    expect(screen.getByRole('heading', { name: 'Every agent starts with', level: 3 }).className).toContain('text-sm')
   })
 })

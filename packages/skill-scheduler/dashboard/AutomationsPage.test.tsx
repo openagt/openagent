@@ -96,7 +96,7 @@ describe('the Automations page: its rows', () => {
     // The scheduler's model, named as the rows name it.
     expect(await within(gemstack).findByText('Model: Opus 5.5')).toBeTruthy()
     // Nobody made a row of their own here: one group, the skills'.
-    expect(within(gemstack).getAllByRole('group').map(g => g.getAttribute('aria-label'))).toEqual(["From the project's skills"])
+    expect(within(gemstack).getAllByRole('region').map(g => document.getElementById(g.getAttribute('aria-labelledby')!)!.textContent)).toEqual(["From the project's skills"])
 
     const cleanupRow = row('/post-merge-cleanup')
     expect(within(cleanupRow).getByText('Write up merged pull requests.')).toBeTruthy()
@@ -121,9 +121,9 @@ describe('the Automations page: its rows', () => {
     const { host, runCommand } = hostAnswering((_, args) => (args[0] === 'status' ? { ok: true, output: picked } : { ok: true, output: { ok: true } }))
     show(host)
     const gemstack = await screen.findByRole('region', { name: 'gemstack' })
-    expect(within(gemstack).getAllByRole('group').map(g => g.getAttribute('aria-label'))).toEqual(['Your automations', "From the project's skills"])
-    const yours = within(gemstack).getByRole('group', { name: 'Your automations' })
-    const skills = within(gemstack).getByRole('group', { name: "From the project's skills" })
+    expect(within(gemstack).getAllByRole('region').map(g => document.getElementById(g.getAttribute('aria-labelledby')!)!.textContent)).toEqual(['Your automations', "From the project's skills"])
+    const yours = within(gemstack).getByRole('region', { name: 'Your automations' })
+    const skills = within(gemstack).getByRole('region', { name: "From the project's skills" })
     expect(within(yours).getByRole('heading', { name: 'Your automations' })).toBeTruthy()
     expect(within(skills).getByRole('heading', { name: "From the project's skills" })).toBeTruthy()
     expect(within(yours).getAllByRole('listitem').map(li => li.getAttribute('aria-label'))).toEqual(['/answer-comments', 'tidy'])
@@ -157,7 +157,7 @@ describe('the Automations page: its rows', () => {
     const { host } = hostAnswering((_, args) => (args[0] === 'status' ? { ok: true, output: own } : { ok: true, output: { ok: true } }))
     show(host)
     const gemstack = await screen.findByRole('region', { name: 'gemstack' })
-    expect(within(gemstack).getAllByRole('group').map(g => g.getAttribute('aria-label'))).toEqual(['Your automations'])
+    expect(within(gemstack).getAllByRole('region').map(g => document.getElementById(g.getAttribute('aria-labelledby')!)!.textContent)).toEqual(['Your automations'])
   })
 
   test('where a row stands, in its line: never ran, when it last ran, or that its last run failed, which opens that run; and what the scheduler last decided for it while it is on, in plain words', async () => {
@@ -1423,7 +1423,7 @@ describe('the Edit panel of a row a person made', () => {
     show(host)
     await screen.findByRole('region', { name: 'gemstack' })
     // Still a row of the person's own: in their group, named without a slash.
-    expect(within(screen.getByRole('group', { name: 'Your automations' })).getByRole('listitem', { name: 'watch-competitor' })).toBeTruthy()
+    expect(within(screen.getByRole('region', { name: 'Your automations' })).getByRole('listitem', { name: 'watch-competitor' })).toBeTruthy()
     const box = await edit('watch-competitor')
     expect(runCommand.mock.calls.some(([, args]) => args[0] === 'show')).toBe(false)
     expect(within(box).getAllByText('As it was saved').length).toBe(2)
@@ -2218,12 +2218,12 @@ describe("the rows are the project's files as they stand", () => {
     })
     show(host)
     fireEvent.click(await screen.findByRole('button', { name: 'New automation in gemstack' }))
-    expect(screen.queryByRole('group', { name: 'Your automations' })).toBeNull()
+    expect(screen.queryByRole('region', { name: 'Your automations' })).toBeNull()
     const form = screen.getByRole('group', { name: 'New automation' })
     fireEvent.change(within(form).getByRole('textbox', { name: 'Name' }), { target: { value: 'answer-replies' } })
     fireEvent.change(within(form).getByLabelText('What the agent is told'), { target: { value: 'Answer each new reply.' } })
     fireEvent.click(within(form).getByRole('button', { name: 'Save' }))
-    const yours = await screen.findByRole('group', { name: 'Your automations' })
+    const yours = await screen.findByRole('region', { name: 'Your automations' })
     const shown = within(yours).getByRole('listitem', { name: '/answer-replies' })
     expect(within(shown).getByText('Answer each new reply.')).toBeTruthy()
     expect(within(shown).getByRole('switch').getAttribute('aria-checked')).toBe('false')
@@ -2269,8 +2269,8 @@ describe("the rows are the project's files as they stand", () => {
     expect(within(gemstack).getByText('Scheduler not readable')).toBeTruthy()
     expect(runCommand).toHaveBeenCalledWith('p1', ['switch', 'work-queue', 'on'])
     // The rows stay, in their groups, and so does the panel with what was typed in it.
-    expect(within(screen.getByRole('group', { name: 'Your automations' })).getByRole('listitem', { name: 'tidy' })).toBeTruthy()
-    expect(within(screen.getByRole('group', { name: "From the project's skills" })).getByRole('listitem', { name: '/work-queue' })).toBeTruthy()
+    expect(within(screen.getByRole('region', { name: 'Your automations' })).getByRole('listitem', { name: 'tidy' })).toBeTruthy()
+    expect(within(screen.getByRole('region', { name: "From the project's skills" })).getByRole('listitem', { name: '/work-queue' })).toBeTruthy()
     expect((within(editing('tidy')).getByLabelText('What the agent is told') as HTMLTextAreaElement).value).toBe('Tidy up, and say what moved.')
     expect(disabled(within(editing('tidy')).getByRole('button', { name: 'Save' }))).toBe(false)
     // Read again, and it goes through: the line goes, and nothing typed went with it.

@@ -4,6 +4,11 @@ import { cn } from '../../lib/utils.js'
 /** Whether a section stands inside another. */
 const Inside = createContext(false)
 
+/** What it holds stands inside a section of its own, whose heading is said elsewhere (a dialog's title): a section in it is a group. */
+export function InSection({ children }: { children: ReactNode }) {
+  return <Inside.Provider value>{children}</Inside.Provider>
+}
+
 /**
  * A part of a page: its heading, how many it holds, a press or a link at the heading's right, then
  * what it holds. No box: the heading and the space before it set it apart. Inside another section

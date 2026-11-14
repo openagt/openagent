@@ -290,7 +290,7 @@ describe('the Overview', () => {
     ]
     render(<DashboardPage onProjectAdded={() => {}} onSelectProject={() => {}} projectHref={id => `/${id}`} onSelectAgent={onSelectAgent} onAgentStarted={() => {}} interventions={interventions} interventionsState="fresh" active={{ active: [], state: 'fresh' }} projects={[]} scope={null} />)
     // Grouped by kind, each under its heading, in the order that holds a run up most; a row says its kind on its icon's hover.
-    expect(within(screen.getByRole('region', { name: 'Human Queue' })).getAllByRole('region').map(group => group.getAttribute('aria-label'))).toEqual(['Pull requests', 'To commit'])
+    expect(within(screen.getByRole('region', { name: 'Human Queue' })).getAllByRole('region').map(group => document.getElementById(group.getAttribute('aria-labelledby')!)!.textContent)).toEqual(['Pull requests', 'To commit'])
     expect(screen.getByTitle('Needs commit')).toBeTruthy()
     expect(screen.getByText('1 file')).toBeTruthy()
     fireEvent.click(screen.getByText('Create test.md'))
