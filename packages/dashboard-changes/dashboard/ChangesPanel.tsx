@@ -151,9 +151,9 @@ interface DiffProps {
 }
 
 /**
- * The rows a file's diff will draw, from its counts: a new or deleted file's every line, a changed
- * file's changed lines and the unchanged ones git puts on each side of a change. Its room is held
- * from the first frame, so a diff read late moves nothing under it.
+ * About how many rows a file's diff will draw, from its counts: a new or deleted file's every line, a
+ * changed file's changed lines and the unchanged ones git puts around one change. The room held for
+ * a diff before it is read; a diff of several changes far apart, or with wrapped lines, is taller.
  */
 function rowsExpected(mark: FileMark): number {
   const changed = (mark.added ?? 0) + (mark.removed ?? 0)
