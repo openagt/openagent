@@ -5,6 +5,7 @@ import { Quota } from './Quota.js'
 import { Section } from './ui/section.js'
 import { Slot } from './ui/slot.js'
 import { SentenceShape } from './SentenceShape.js'
+import { PartDescription } from './PartDescription.js'
 import { Button } from './ui/button.js'
 import { HumanQueueList } from './HumanQueueList.js'
 import { updatePreferences, usePreferences, usePreferencesLoaded } from '../lib/preferences.js'
@@ -214,7 +215,7 @@ export function DashboardPage({
         )
       }
     >
-      {/* Arranging moves nothing: the first steps and the updates stay, each part keeps its place, and what arranging adds comes after the parts. */}
+      {/* Arranging keeps the parts in their order: the first steps and the updates stay, each part gains the sentence that says what it is, and what arranging adds comes after the parts. */}
       <div className="space-y-10">
         {!layoutRead ? null : editing ? (
           <EditOverview
@@ -267,7 +268,7 @@ function HumanQueue({
   const groups = KINDS.map(kind => ({ ...kind, items: items.filter(item => item.kind === kind.value) })).filter(group => group.items.length > 0)
   return (
     <Section title="Human Queue" count={items.length > 0 ? items.length : undefined}>
-      <p className="-mt-1 mb-3 text-xs text-muted-foreground">Agents awaiting your approval, review, or input</p>
+      <PartDescription>Agents awaiting your approval, review, or input</PartDescription>
       <Slot of={{ state, value: items }} shape={<SentenceShape />}>
         {() => items.length === 0 ? (
           <p className="text-sm text-muted-foreground">AI doesn&apos;t need you.</p>

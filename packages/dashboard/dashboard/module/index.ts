@@ -642,6 +642,7 @@ export { Card, CardHeader, CardTitle, CardContent, PageLink } from '../component
 export { Skeleton, useSkeleton } from '../components/ui/skeleton.js'
 export { Slot, RowShapes, type SlotRead } from '../components/ui/slot.js'
 export { SentenceShape } from '../components/SentenceShape.js'
+export { PartDescription } from '../components/PartDescription.js'
 export { Input } from '../components/ui/input.js'
 export { GaugeFace } from '../components/ui/gauge.js'
 export { ClaudeLogo, CodexLogo } from '../components/driver-logos.js'

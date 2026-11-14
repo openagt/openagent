@@ -1,4 +1,4 @@
-import { PageLink, PersonMark, Section, SentenceShape, Slot, STATUS_DOT, STATUS_TONE, Tooltip, TooltipContent, TooltipTrigger, cn, formatAge, formatDateTime, personName, personSaid, useModuleHost, usePolled, type ModuleCardProps, type ModuleHostPerson } from '@openagt/dashboard/module'
+import { PageLink, PartDescription, PersonMark, Section, SentenceShape, Slot, STATUS_DOT, STATUS_TONE, Tooltip, TooltipContent, TooltipTrigger, cn, formatAge, formatDateTime, personName, personSaid, useModuleHost, usePolled, type ModuleCardProps, type ModuleHostPerson } from '@openagt/dashboard/module'
 import { membersOf, peopleWithRuns, type Member, type PersonActivity } from '../src/people.js'
 
 // The Overview's Members card: who worked in the projects shown in the last 30 days, from `logs
@@ -60,7 +60,7 @@ export function MembersCard({ projects }: ModuleCardProps) {
   )
   return (
     <Section title="Members" count={state !== 'unknown' && members.length > 0 ? members.length : undefined} action={<PageLink href={host.pageHref('logs')} onOpen={() => host.openPage('logs')}>Logs</PageLink>}>
-      <p className="-mt-1 mb-3 text-xs text-muted-foreground">Who worked here in the last 30 days: agents started, commits</p>
+      <PartDescription>Who worked here in the last 30 days: agents started, commits</PartDescription>
       <Slot of={{ state, value: members }} shape={<SentenceShape />}>
         {() => members.length === 0 ? (
           <p className="text-sm text-muted-foreground">No one has started an agent here yet.</p>

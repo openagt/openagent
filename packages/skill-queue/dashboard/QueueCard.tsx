@@ -1,5 +1,5 @@
 import { FastForward, Play } from 'lucide-react'
-import { List, PageLink, Row, Section, SentenceShape, Slot, StartAgentButton, cn, pathsIn, useFileNames, useModuleHost, type ModuleCardProps } from '@openagt/dashboard/module'
+import { List, PageLink, PartDescription, Row, Section, SentenceShape, Slot, StartAgentButton, cn, pathsIn, useFileNames, useModuleHost, type ModuleCardProps } from '@openagt/dashboard/module'
 import { fanOutLabel, fanOutPress, isWorkingOn, unclaimedEntries, workOnEntryPrompt } from '../src/module.js'
 import { AgentOnEntry, EntryTitle, entryView } from './entry.js'
 import { useQueueStarts } from './starts.js'
@@ -30,7 +30,7 @@ export function QueueCard({ projects }: ModuleCardProps) {
   const total = reads.reduce((sum, read) => sum + read.entries.length, 0)
   return (
     <Section title="AI Queue" count={state !== 'unknown' && total > 0 ? total : undefined} action={<PageLink href={host.pageHref('queue')} onOpen={() => host.openPage('queue')}>Queue</PageLink>}>
-      {shown.length === 0 && !error ? null : <p className="-mt-1 mb-3 text-xs text-muted-foreground">Tasks AI will work on next</p>}
+      <PartDescription>Tasks AI will work on next</PartDescription>
       <Slot of={{ state, value: shown }} shape={<SentenceShape />}>
         {() => shown.length === 0 ? (
           <p className="text-sm text-muted-foreground">Nothing queued.</p>

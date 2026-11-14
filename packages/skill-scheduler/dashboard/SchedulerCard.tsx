@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Button, PageLink, RowShapes, Section, Slot, Tooltip, TooltipContent, TooltipTrigger, cn, formatAge, inPlace, formatDateTime, useModuleHost, useOpenAgentDown, usePolled, type ModuleCardProps, type ModuleProject } from '@openagt/dashboard/module'
+import { Button, PageLink, PartDescription, RowShapes, Section, Slot, Tooltip, TooltipContent, TooltipTrigger, cn, formatAge, inPlace, formatDateTime, useModuleHost, useOpenAgentDown, usePolled, type ModuleCardProps, type ModuleProject } from '@openagt/dashboard/module'
 import { CodeWords } from './CodeWords.js'
 import { cannotRun, notAsked, readSchedulers, schedulersKey, rowTitle, schedulerStatus, schedulerStopped, startedNow, startsNext, unlistedWords, type Answered, type SchedulerCommand, type SchedulerRow } from './schedulers.js'
 
@@ -43,7 +43,7 @@ export function SchedulerCard({ projects }: ModuleCardProps) {
   )
   return (
     <Section title="Automations" action={<PageLink href={host.pageHref('automations')} onOpen={open}>Automations</PageLink>}>
-      <p className="-mt-1 mb-3 text-xs text-muted-foreground">What starts by itself while nobody is at the keyboard</p>
+      <PartDescription>What starts by itself while nobody is at the keyboard</PartDescription>
       <Slot of={{ state, value: rows }} shape={<RowShapes rows={projects.length || 1} />}>
         {() => (
           <ul className="space-y-4">

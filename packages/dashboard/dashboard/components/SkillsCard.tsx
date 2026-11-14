@@ -11,6 +11,7 @@ import { cn } from '../lib/utils.js'
 import { Button } from './ui/button.js'
 import { Section } from './ui/section.js'
 import { RowShapes, Slot } from './ui/slot.js'
+import { PartDescription } from './PartDescription.js'
 import { useAction } from '../lib/use-action.js'
 import { SKILLS_ENTRY, sendWord, skillsSay, updateSkills } from './ProjectSkills.js'
 
@@ -113,7 +114,7 @@ export function SkillsCard({ projects, onSelectProject, projectHref }: { project
         ) : undefined
       }
     >
-      <p className="-mt-1 mb-3 text-xs text-muted-foreground">What each project adds to its agents, and what is new</p>
+      <PartDescription>What each project adds to its agents, and what is new</PartDescription>
       <Slot of={{ state, value: reads }} shape={<RowShapes rows={projects.length || 1} />}>
         {() => (
           <>

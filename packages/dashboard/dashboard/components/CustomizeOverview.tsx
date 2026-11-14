@@ -246,8 +246,8 @@ export function EditOverview({ arranged, under, layouts, layoutKey, notice }: { 
               onWidth={picked => write(changed(card.id, { width: picked }))}
               onHide={() => write(changed(card.id, { hidden: true }))}
             />
-            {/* The card as it stands, its own buttons asleep while it is being arranged. */}
-            <div inert className="flex flex-1 select-none flex-col *:flex-1">
+            {/* The card as it stands, its own buttons asleep while it is being arranged, with the sentence that says what it is. */}
+            <div inert className="flex flex-1 select-none flex-col *:flex-1 [&_[data-part-description]]:not-sr-only">
               {card.node}
             </div>
           </div>
