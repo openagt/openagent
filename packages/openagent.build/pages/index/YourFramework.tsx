@@ -1,4 +1,5 @@
 import type { ReactNode } from 'react'
+import { CheckIcon } from './icons'
 import { CodeChip, columnsStyle, columnStyle, Emoji, SectionHead, sectionStyle, text, WipBadge } from './ui'
 
 function Card({ title, children }: { title: string; children: ReactNode }) {
@@ -27,7 +28,7 @@ function Item({ children, marker }: { children: ReactNode; marker?: ReactNode })
   return (
     <li style={{ display: 'flex', gap: 8 }}>
       {/* Fixed marker width: every row's text (and its wrapped lines) starts in the same column. */}
-      <span style={{ color: 'var(--success)', flex: 'none', width: 20 }}>{marker ?? '✓'}</span>
+      <span style={{ color: 'var(--muted-foreground)', flex: 'none', width: 20 }}>{marker ?? <CheckIcon />}</span>
       <span>{children}</span>
     </li>
   )
@@ -39,7 +40,7 @@ export function YourFramework() {
       <SectionHead
         title={
           <>
-            <span style={{ color: 'var(--success)' }}>Your</span> framework
+            <em>Your</em> framework
           </>
         }
         sub="It isn't our framework. It's yours."

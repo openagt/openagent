@@ -15,7 +15,7 @@ export const text = (step: 'xs' | 'sm' | 'base' | 'lg' | 'xl' | '2xl' | '3xl'): 
 /** Prose: the body size, in lines of 68 characters at most. */
 export const proseStyle: CSSProperties = { margin: 0, ...text('base'), maxWidth: 'var(--measure)', textWrap: 'pretty' }
 
-/** The three claims under the hero's title, each in its color; the banner says them too. */
+/** The three claims under the hero's title; the banner says them too, each in its colour. */
 export const BADGES = [
   ['100% Open Source', 'var(--success)'],
   ['100% Free', 'var(--warning)'],
@@ -64,7 +64,7 @@ export const kickerStyle: CSSProperties = {
   ...text('xs'),
   letterSpacing: '0.08em',
   textTransform: 'uppercase',
-  color: 'var(--success)',
+  color: 'var(--muted-foreground)',
 }
 
 // Centered chapter break: the one centered element on a left-anchored page, so
@@ -131,8 +131,8 @@ export function WipBadge() {
         fontFamily: mono,
         ...text('xs'),
         fontWeight: 600,
-        color: 'var(--warning)',
-        border: '1px solid color-mix(in oklab, var(--warning) 40%, transparent)',
+        color: 'var(--muted-foreground)',
+        border: '1px solid var(--border)',
         borderRadius: 'var(--radius-sm)',
         padding: '0 6px',
         whiteSpace: 'nowrap',
@@ -181,7 +181,7 @@ export function CodeChip({ children }: { children: string }) {
         border: '1px solid var(--border)',
         borderRadius: 'var(--radius-sm)',
         padding: '0 4px',
-        color: 'var(--warning)',
+        color: 'var(--foreground)',
       }}
     >
       {children}

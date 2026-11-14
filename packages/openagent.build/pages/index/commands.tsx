@@ -64,7 +64,7 @@ export function PmTabs() {
   )
 }
 
-const dollarStyle: CSSProperties = { userSelect: 'none', color: 'var(--success)' }
+const dollarStyle: CSSProperties = { userSelect: 'none', color: 'var(--muted-foreground)' }
 /** A command with words after it: they follow the command, under it once the line is too narrow, and the `$` stays beside it. */
 const followedLineStyle: CSSProperties = { display: 'flex', alignItems: 'baseline' }
 const followedStyle: CSSProperties = { display: 'inline-flex', flexWrap: 'wrap', gap: '2px 16px' }

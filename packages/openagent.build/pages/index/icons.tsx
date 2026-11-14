@@ -21,3 +21,12 @@ export function NpmIcon({ size }: { size: number }) {
     </svg>
   )
 }
+
+/** A list's ✓, drawn rather than typed: not every computer has a font with the glyph. */
+export function CheckIcon() {
+  return (
+    <svg width={16} height={16} viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth={1.75} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" style={{ verticalAlign: '-0.125em' }}>
+      <path d="M3 8.5l3.5 3.5L13 4.5" />
+    </svg>
+  )
+}

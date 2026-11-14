@@ -51,29 +51,16 @@ export function Hero() {
       <div
         style={{
           display: 'flex',
-          gap: 8,
+          gap: '4px 16px',
           flexWrap: 'wrap',
           justifyContent: 'center',
           ...text('xs'),
           fontFamily: mono,
+          color: 'var(--muted-foreground)',
         }}
       >
-        {BADGES.map(([label, color]) => (
-          <span
-            key={label}
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: 6,
-              border: '1px solid var(--border)',
-              borderRadius: 999,
-              padding: '4px 12px',
-              color,
-            }}
-          >
-            <span style={{ width: 6, height: 6, borderRadius: '50%', background: color }} />
-            {label}
-          </span>
+        {BADGES.map(([label]) => (
+          <span key={label}>{label}</span>
         ))}
       </div>
 
@@ -122,8 +109,8 @@ export function Hero() {
           alignItems: 'center',
           gap: 8,
           marginTop: 8,
-          background: 'var(--success)',
-          color: 'var(--background)',
+          background: 'var(--primary)',
+          color: 'var(--primary-foreground)',
           borderRadius: 'var(--radius-lg)',
           padding: '12px 24px',
           ...text('base'),
@@ -151,8 +138,7 @@ export function Hero() {
               maxWidth: '100%',
               boxSizing: 'border-box',
               background: 'var(--card)',
-              border: '1px solid var(--success)',
-              boxShadow: '0 0 0 4px color-mix(in oklab, var(--success) 12%, transparent)',
+              border: '1px solid var(--border)',
               borderRadius: 'var(--radius-lg)',
               overflow: 'hidden',
               textAlign: 'left',

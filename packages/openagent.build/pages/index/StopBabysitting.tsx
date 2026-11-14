@@ -2,15 +2,13 @@ import type { ReactNode } from 'react'
 import type { EmojiChar } from './ui'
 import { CodeChip, Emoji, mono, proseStyle, SectionHead, sectionStyle, text } from './ui'
 
-const LABEL_COLORS = { bad: 'var(--muted-foreground)', good: 'var(--success)' } as const
 
-// Inline arrows in the mono font and accent green: the sans-serif glyphs are
-// thin and vanish in the muted body text.
+// Inline arrows in the mono font: the sans-serif glyphs are thin and vanish in the text.
 function Arrow({ glyph }: { glyph: '→' | '↔' }) {
   return <span style={{ fontFamily: mono, fontWeight: 500 }}>{glyph}</span>
 }
 
-type Row = { kind: keyof typeof LABEL_COLORS; emoji: EmojiChar; label: string; body: ReactNode }
+type Row = { kind: 'bad' | 'good'; emoji: EmojiChar; label: string; body: ReactNode }
 const bad = (body: ReactNode): Row => ({ kind: 'bad', emoji: '😕', label: 'Bad fix', body })
 const good = (body: ReactNode): Row => ({ kind: 'good', emoji: '🚀', label: 'Solution', body })
 
@@ -102,7 +100,7 @@ export function StopBabysitting() {
             }}
           >
             <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-              <span style={{ ...text('sm'), fontWeight: 500, color: 'var(--danger)' }}>Problem</span>
+              <span style={{ ...text('sm'), fontWeight: 500, color: 'var(--muted-foreground)' }}>Problem</span>
               <h3 style={{ margin: 0, ...text('lg'), fontWeight: 600 }}>{p.title}</h3>
               {p.desc && <p style={{ margin: '4px 0 0', ...text('sm'), color: 'var(--muted-foreground)' }}>{p.desc}</p>}
             </div>
@@ -113,7 +111,7 @@ export function StopBabysitting() {
                   className="solution-row"
                   style={{ display: 'grid', gridTemplateColumns: '120px 1fr', gap: 16, alignItems: 'baseline' }}
                 >
-                  <span style={{ ...text('sm'), color: LABEL_COLORS[r.kind], whiteSpace: 'nowrap' }}>
+                  <span style={{ ...text('sm'), color: 'var(--muted-foreground)', whiteSpace: 'nowrap' }}>
                     <span style={{ marginRight: 6 }}>
                       <Emoji e={r.emoji} />
                     </span>

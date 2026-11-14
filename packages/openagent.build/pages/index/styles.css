@@ -131,26 +131,22 @@ html[data-installed] .dashboard-cta {
   }
 }
 .dashboard-cta:hover {
-  background: color-mix(in oklab, var(--success) 85%, var(--foreground)) !important;
-}
-.nav-btn-primary:hover {
-  background: color-mix(in oklab, var(--success) 8%, transparent) !important;
-  border-color: color-mix(in oklab, var(--success) 85%, var(--foreground)) !important;
+  background: color-mix(in oklab, var(--primary) 85%, var(--foreground)) !important;
 }
 .pm-tab:hover {
   color: var(--foreground) !important;
 }
 .copy-box:hover,
 .copy-box:focus-visible {
-  background: color-mix(in oklab, var(--success) 4%, transparent) !important;
+  background: color-mix(in oklab, var(--primary) 6%, transparent) !important;
 }
 /* Same hover tint as .copy-box, mixed into the chip's own fill since that fill is opaque. */
 .install-chip:hover,
 .install-chip:focus-visible {
-  background: color-mix(in oklab, var(--success) 4%, var(--card)) !important;
+  background: color-mix(in oklab, var(--primary) 6%, var(--card)) !important;
 }
 .cta-primary:hover {
-  background: color-mix(in oklab, var(--success) 85%, var(--foreground)) !important;
+  background: color-mix(in oklab, var(--primary) 85%, var(--foreground)) !important;
 }
 .cta-secondary:hover {
   border-color: var(--muted-foreground) !important;
@@ -203,8 +199,8 @@ html:not([data-pm]) .pm-tab-npm {
   border-bottom: 2px solid transparent;
 }
 .section-link.active {
-  color: var(--success);
-  border-bottom-color: var(--success);
+  color: var(--foreground);
+  border-bottom-color: var(--primary);
 }
 .section-link:hover {
   color: var(--foreground);

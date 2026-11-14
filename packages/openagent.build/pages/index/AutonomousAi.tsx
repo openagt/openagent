@@ -1,10 +1,13 @@
 import type { ReactNode } from 'react'
+import { CheckIcon } from './icons'
 import { CodeChip, columnsStyle, columnStyle, Note, SectionHead, sectionStyle, text } from './ui'
 
 function Item({ children }: { children: ReactNode }) {
   return (
     <li style={{ display: 'flex', gap: 8 }}>
-      <span style={{ color: 'var(--success)' }}>✓</span>
+      <span style={{ color: 'var(--muted-foreground)' }}>
+        <CheckIcon />
+      </span>
       {children}
     </li>
   )

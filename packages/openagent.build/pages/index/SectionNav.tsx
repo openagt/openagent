@@ -68,7 +68,7 @@ export function SectionNav() {
           alignItems: 'center',
           gap: 8,
           padding: '64px var(--space-gutter) 8px',
-          color: 'var(--success)',
+          color: 'var(--muted-foreground)',
           fontFamily: mono,
           ...text('xs'),
           letterSpacing: '0.08em',
