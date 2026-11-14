@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import { Button, Input, Label, Textarea, useModuleHost } from '@openagt/dashboard/module'
 import { newTicketFile, topicsIn, writeTicketFile, type TicketFields } from '../src/ticket-file.js'
 import { listTickets, ticketsChanged } from './lib/list.js'
@@ -47,7 +47,11 @@ export function TicketEditor({
   const [error, setError] = useState<string | null>(null)
 
   const priorityOk = priority.trim() === '' || (/^\d+$/.test(priority.trim()) && Number(priority) <= 10)
-  const ready = title.trim() !== '' && priorityOk && !saving
+  const untitled = title.trim() === ''
+  // Pressed without a title: the field says it needs one, until it has one.
+  const [askedTitle, setAskedTitle] = useState(false)
+  const titleField = useRef<HTMLInputElement>(null)
+  const priorityField = useRef<HTMLInputElement>(null)
 
   const save = async () => {
     setSaving(true)
@@ -77,7 +81,13 @@ export function TicketEditor({
       className="max-w-180 space-y-4"
       onSubmit={event => {
         event.preventDefault()
-        if (ready) void save()
+        if (saving) return
+        // What stops the save is said where it is, and the keyboard is taken there.
+        if (untitled) {
+          setAskedTitle(true)
+          titleField.current?.focus()
+        } else if (!priorityOk) priorityField.current?.focus()
+        else void save()
       }}
     >
       {issueLabel && (
@@ -87,12 +97,26 @@ export function TicketEditor({
       )}
       <div className="space-y-2">
         <Label htmlFor="ticket-title">Title</Label>
-        <Input id="ticket-title" value={title} onChange={event => setTitle(event.target.value)} placeholder="What should be done, in a few words" autoFocus />
+        <Input
+          ref={titleField}
+          id="ticket-title"
+          value={title}
+          onChange={event => setTitle(event.target.value)}
+          placeholder="What should be done, in a few words"
+          aria-invalid={askedTitle && untitled}
+          aria-describedby={askedTitle && untitled ? 'ticket-title-missing' : undefined}
+          autoFocus
+        />
+        {askedTitle && untitled && (
+          <p id="ticket-title-missing" className="text-xs text-danger">
+            Give the ticket a title.
+          </p>
+        )}
       </div>
       <div className="flex gap-4 max-sm:flex-col">
         <div className="space-y-2 sm:w-32">
           <Label htmlFor="ticket-priority">Priority</Label>
-          <Input id="ticket-priority" value={priority} onChange={event => setPriority(event.target.value)} inputMode="numeric" placeholder="0–10" aria-invalid={!priorityOk} />
+          <Input ref={priorityField} id="ticket-priority" value={priority} onChange={event => setPriority(event.target.value)} inputMode="numeric" placeholder="0–10" aria-invalid={!priorityOk} />
         </div>
         <div className="flex-1 space-y-2">
           <Label htmlFor="ticket-topics">Topics</Label>
@@ -121,7 +145,7 @@ export function TicketEditor({
         <Button type="button" variant="ghost" size="lg" onClick={onCancel} disabled={saving}>
           Cancel
         </Button>
-        <Button type="submit" size="lg" disabled={!ready}>
+        <Button type="submit" size="lg" loading={saving}>
           {saving ? 'Saving…' : file === undefined ? 'Create ticket' : 'Save'}
         </Button>
       </div>
