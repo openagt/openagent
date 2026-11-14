@@ -58,7 +58,7 @@ const DRIVER_UI: Record<DriverName, { icon: DriverOption['icon'] }> = {
  * it is on screen, so focus is its own edge in the primary colour and nothing more: the caret says the
  * rest. The edge stays while the keyboard is on one of its items or in a menu one of them opened.
  */
-const SURFACE = '[view-transition-name:composer] flex flex-col rounded-lg border border-hairline bg-card p-1 shadow-lg transition-colors focus-within:border-primary has-[[aria-expanded=true]]:border-primary'
+const SURFACE = '[view-transition-name:composer] flex flex-col rounded-box border border-hairline bg-card p-1 shadow-lg transition-colors focus-within:border-primary has-[[aria-expanded=true]]:border-primary'
 
 export interface ComposerHandle {
   clear: () => void

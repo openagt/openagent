@@ -46,7 +46,7 @@ export function AgentWorkBar({
           In the dark theme the hover fill is the bar's own colour, so its buttons get Everforest's
           next step up (both names: `bg-accent` reads the first, the Button's variants the second). */}
       {/* Focusable by script only: a press that leaves nothing to press next leaves the focus here. */}
-      <div role="group" aria-label="This session's work" tabIndex={-1} className="overflow-hidden rounded-t-lg border-x border-t border-hairline bg-muted px-2 pb-2 text-sm outline-none dark:[--accent:#374145] dark:[--color-accent:#374145]">
+      <div role="group" aria-label="This session's work" tabIndex={-1} className="overflow-hidden rounded-t-box border-x border-t border-hairline bg-muted px-2 pb-2 text-sm outline-none dark:[--accent:#374145] dark:[--color-accent:#374145]">
         <div className="flex h-10 items-center gap-2">
           {/* The branch is the one part that gives up width: it takes what the rest leaves, cut
               short, its whole name in its tooltip. No icon beside it: the name says what it is, and

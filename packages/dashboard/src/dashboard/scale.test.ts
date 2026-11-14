@@ -17,7 +17,7 @@ const OFF_SCALE: { off: RegExp; use: string }[] = [
   { off: /^leading-\[[^\]]*\]$/, use: "the type step's own line height" },
   { off: /^(h|min-h|max-h)-\[\d+px\]$/, use: 'a control height, `h-7`, `h-8` or `h-9`, or a step of the spacing scale' },
   { off: /^gap(-x|-y)?-\[[^\]]*\]$/, use: 'a step of the spacing scale: 2, 4, 6, 8, 12, 16, 20, 24, 32, 40, 48, 64 px' },
-  { off: /^rounded(-[trblse]{1,2})?(-(xl|2xl|3xl|4xl))?$/, use: '`rounded-sm` inside a control, `rounded-md` a control, `rounded-lg` a surface, `rounded-full` a dot or a count' },
+  { off: /^rounded(-[trblse]{1,2})?(-(xl|2xl|3xl|4xl|box))?$/, use: '`rounded-sm` inside a control, `rounded-md` a control, `rounded-lg` a surface, `rounded-full` a dot or a count' },
   { off: /^-?(p[xytrblse]?|m[xytrblse]?|gap(-x|-y)?|space-[xy])-(2\.5|3\.5)$/, use: 'a step of the spacing scale: 2, 4, 6, 8, 12, 16, 20, 24, 32, 40, 48, 64 px' },
   { off: /^transition(-all)?$/, use: 'a transition that names what moves: `transition-colors`, `transition-opacity`, `transition-transform`' },
   { off: /^duration-(?!(90|100|120|140|180)$)/, use: 'a motion step: `duration-100` hover, `duration-140` a popover, `duration-180` a dialog, exits at `duration-90` and `duration-120`' },
@@ -26,6 +26,8 @@ const OFF_SCALE: { off: RegExp; use: string }[] = [
 
 /** Classes off the scale on purpose, with the reason. */
 const ALLOWED: Record<string, string> = {
+  'rounded-box': "the message box's corner (Composer.tsx), a step rounder than a card's: DECISIONS.md picks \"a filled box with rounder corners\"",
+  'rounded-t-box': "the work bar's top (AgentWorkBar.tsx), joined to the message box: the box's corner",
   'text-[17px]': "BrandLink's wordmark: the website draws the same mark at the same size in the same place, and the switch between the two (the `oa-brand` view transition) keeps it still",
 }
 
