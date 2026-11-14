@@ -274,10 +274,10 @@ export async function onRecentAgents(): Promise<RecentAgent[]> {
 
 /** Every run of every project and the sessions with no project, newest first, each in the few fields the jump finds it by. */
 export async function onAllAgents(): Promise<FoundAgent[]> {
-  return (await pooledRuns(Infinity)).map(({ projectId, projectName, agent: { id, title, intent, branch, pr, startedAt } }) => ({
+  return (await pooledRuns(Infinity)).map(({ projectId, projectName, agent: { id, title, intent, branch, pr, prTitle, startedAt } }) => ({
     projectId,
     projectName,
-    agent: { id, startedAt, ...(title !== undefined ? { title } : {}), ...(intent !== undefined ? { intent } : {}), ...(branch !== undefined ? { branch } : {}), ...(pr !== undefined ? { pr } : {}) },
+    agent: { id, startedAt, ...(title !== undefined ? { title } : {}), ...(intent !== undefined ? { intent } : {}), ...(branch !== undefined ? { branch } : {}), ...(pr !== undefined ? { pr } : {}), ...(prTitle !== undefined ? { prTitle } : {}) },
   }))
 }
 

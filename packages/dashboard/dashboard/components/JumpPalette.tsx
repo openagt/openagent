@@ -130,7 +130,7 @@ export function JumpPalette({ waiting, runs, pages, projects, scope, here, hrefO
     return {
       key: runKey(projectId, agent.id),
       name: agentLabel(agent),
-      also: [agent.branch, pr].filter((text): text is string => text !== undefined),
+      also: [agent.branch, pr, agent.prTitle].filter((text): text is string => text !== undefined),
       meta: [scope === null && projectName ? label(projectId, projectName) : undefined, pr].filter(Boolean).join(' · '),
       to: { projectId, agentId: agent.id },
     }

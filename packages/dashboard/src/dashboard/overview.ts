@@ -80,7 +80,7 @@ const RECENT_RUNS_LIMIT = 30
 export interface FoundAgent {
   projectId: string
   projectName: string
-  agent: Pick<AgentMeta, 'id' | 'title' | 'intent' | 'branch' | 'pr' | 'startedAt'>
+  agent: Pick<AgentMeta, 'id' | 'title' | 'intent' | 'branch' | 'pr' | 'prTitle' | 'startedAt'>
 }
 
 /** Injectable reader so {@link buildRecentAgents} is unit-testable off disk. */

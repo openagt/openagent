@@ -27,7 +27,7 @@ function draw(props: Partial<Parameters<typeof JumpPalette>[0]> = {}) {
     <JumpPalette
       waiting={[WAITING]}
       runs={[
-        { projectId: 'shop', projectName: 'shop', agent: run('r-cart', { title: 'Cart page', branch: 'feat/cart', pr: { number: 12, url: 'https://git.example/pr/12' } }) },
+        { projectId: 'shop', projectName: 'shop', agent: run('r-cart', { title: 'Cart page', branch: 'feat/cart', pr: { number: 12, url: 'https://git.example/pr/12' }, prTitle: 'Keep the basket between visits' }) },
         { projectId: 'shop', projectName: 'shop', agent: run('r-ask', { title: 'Pick a colour' }) },
         { projectId: 'blog', projectName: 'blog', agent: run('r-post', { title: 'First post' }) },
       ]}
@@ -96,7 +96,7 @@ describe('the jump', () => {
     expect(shown().Recent).toEqual(['First post', 'Pick a colour'])
   })
 
-  test('typed into, a run is found by its title, its branch and its pull request’s number, the best match first', async () => {
+  test('typed into, a run is found by its title, its branch, its pull request’s number and title, the best match first', async () => {
     draw()
     act(() => openJump())
     const input = await screen.findByRole('combobox')
@@ -105,6 +105,8 @@ describe('the jump', () => {
     fireEvent.change(input, { target: { value: 'feat/' } })
     expect(shown()).toEqual({ Recent: ['Cart page'] })
     fireEvent.change(input, { target: { value: '#12' } })
+    expect(shown()).toEqual({ Recent: ['Cart page'] })
+    fireEvent.change(input, { target: { value: 'basket' } })
     expect(shown()).toEqual({ Recent: ['Cart page'] })
     fireEvent.change(input, { target: { value: 'p' } })
     // "Pick a colour" starts with it, "Cart page" has it at a word's start, "First post" too, "shop" inside a word.
