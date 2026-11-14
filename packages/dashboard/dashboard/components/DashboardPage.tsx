@@ -76,7 +76,7 @@ export function DashboardPage({
   const shownProjects = scope === null ? projects : projects.filter(project => project.id === scope)
   // Every card the Overview can show here, each with the widths it stands at; the person's layout
   // for this page (the picked project's, else all projects') orders them, sizes them, and hides some.
-  const moduleCards = useModuleCards(shownProjects)
+  const { cards: moduleCards, mounted: modulesMounted } = useModuleCards(shownProjects)
   // What the number counts, kind by kind: "1 question, 1 to publish".
   const waiting = KINDS.map(kind => ({ kind, count: interventions.filter(item => item.kind === kind.value).length })).filter(({ count }) => count > 0)
   const cards: OverviewCard[] = [
@@ -158,8 +158,9 @@ export function DashboardPage({
   const layoutKey = scope ?? ALL_PROJECTS
   const layouts = usePreferences().overviewLayouts
   // The cards are drawn once the person's layout is read: a card they took off is never drawn, and
-  // so never reads anything, not even for the moment before the layout is known.
-  const layoutRead = usePreferencesLoaded()
+  // so never reads anything, not even for the moment before the layout is known. And once the modules
+  // are mounted: a package's card is never put in among the drawn ones, pushing them aside.
+  const layoutRead = usePreferencesLoaded() && modulesMounted
   const arranged = arrangeCards(cards, layouts, layoutKey)
   // Arranging the page, on its cards themselves: the layout of this page (the picked project's, else
   // all projects'), changed at once as the person moves, sizes and hides the cards.

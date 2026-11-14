@@ -22,11 +22,12 @@ export interface OverviewCard {
  * then package). A project's card is listed only when one of the projects handed in has its
  * package: with one project picked, the cards of the packages that project does not have are not,
  * and before the projects are first read none is. A card of this computer's (its devices) is
- * always listed. Each is known by its package and its own id.
+ * always listed. Each is known by its package and its own id. `mounted`: the modules are, so the
+ * list is whole.
  */
-export function useModuleCards(projects: ProjectSummary[]): OverviewCard[] {
-  const { cards } = useMountedModules()
-  return cards.flatMap(card => {
+export function useModuleCards(projects: ProjectSummary[]): { cards: OverviewCard[]; mounted: boolean } {
+  const { cards, loaded } = useMountedModules()
+  const listed = cards.flatMap(card => {
     const Card = card.Card
     // A card of this computer's is about the computer: it is on every Overview, given every project shown.
     const having = card.computer ? projectsHaving(projects.map(project => project.id), projects) : projectsHaving(card.projects, projects)
@@ -46,4 +47,5 @@ export function useModuleCards(projects: ProjectSummary[]): OverviewCard[] {
       },
     ]
   })
+  return { cards: listed, mounted: loaded }
 }

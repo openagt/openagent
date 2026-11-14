@@ -10,7 +10,7 @@ vi.mock('./OnboardingChecklist.js', () => ({ OnboardingChecklist: () => <div>onb
 vi.mock('./SkillsCard.js', () => ({ SkillsCard: () => <div>skills</div> }))
 vi.mock('./YourAgentsTile.js', () => ({ YourAgentsTile: () => <div>your agents</div> }))
 vi.mock('./ModuleCards.js', () => ({
-  useModuleCards: () => [{ id: '@x/tickets/hot', label: 'Hot tickets', width: '1/2', minWidth: '1/3', present: true, node: <div>a package's card</div> }],
+  useModuleCards: () => ({ cards: [{ id: '@x/tickets/hot', label: 'Hot tickets', width: '1/2', minWidth: '1/3', present: true, node: <div>a package's card</div> }], mounted: true }),
 }))
 const prefs = vi.hoisted(() => ({ value: { onboardingDismissed: true } as Record<string, unknown>, loaded: true, updatePreferences: vi.fn() }))
 vi.mock('../lib/preferences.js', () => ({ usePreferences: () => prefs.value, usePreferencesLoaded: () => prefs.loaded, updatePreferences: prefs.updatePreferences }))

@@ -6,6 +6,7 @@ import { usePolled } from '../lib/use-async.js'
 import { usePerson } from '../lib/use-person.js'
 import { cn } from '../lib/utils.js'
 import { Button } from './ui/button.js'
+import { Skeleton } from './ui/skeleton.js'
 import { usePreferences, updatePreferences, notificationsEnabled } from '../lib/preferences.js'
 import { setBrowserNotifications, useNotificationPermission } from '../lib/notification-permission.js'
 import { startPicks, useStartAgent } from '../lib/use-start-agent.js'
@@ -83,7 +84,8 @@ export function OnboardingChecklist({
 }) {
   // Slower than the Overview's own 5s poll: these change at human speed, and this read fans out
   // over every project to answer the tickets question.
-  const { value: data, reload, loaded } = usePolled<DashboardData | null>(onDashboard, null, 10_000, [])
+  // Kept for the next visit: the steps open where they stood, not as titles that then grow.
+  const { value: data, reload, loaded } = usePolled<DashboardData | null>(onDashboard, null, 10_000, [], { remember: 'onboarding:dashboard', stored: true })
   const preferences = usePreferences()
   const permission = useNotificationPermission()
   const { start, busy: starting, error: startError } = useStartAgent()
@@ -264,12 +266,26 @@ export function OnboardingChecklist({
         {reading ? (
           <>
             <p className="sr-only">Loading…</p>
-            {/* The steps' rows, with no state yet, so the card is about its size from the first frame. */}
+            {/* The steps' rows, with no state yet, the first one as the open step is laid out (its words, then its press beside them or under), so the steps are about their size from the first frame. */}
             <ol aria-hidden="true">
               {steps.map((step, at) => (
                 <li key={step.key} className="flex items-start gap-3 py-2">
                   <span className="mt-0.5 flex size-6 shrink-0 items-center justify-center rounded-full border border-border text-xs font-medium text-muted-foreground tabular-nums">{at + 1}</span>
-                  <span className="mt-1 text-sm text-muted-foreground">{step.label}</span>
+                  {at === 0 ? (
+                    <div className="flex min-w-0 flex-1 flex-wrap items-start gap-3">
+                      <div className="min-w-0 flex-[1_1_16rem] space-y-1">
+                        <span className="mt-1 block text-sm text-muted-foreground">{step.label}</span>
+                        <Skeleton className="h-4 w-full" />
+                        <Skeleton className="h-4 w-2/3" />
+                      </div>
+                      <div className="flex shrink-0 flex-col gap-1">
+                        <Skeleton className="h-8 w-40" />
+                        <Skeleton className="h-6 w-72 max-w-full" />
+                      </div>
+                    </div>
+                  ) : (
+                    <span className="mt-1 text-sm text-muted-foreground">{step.label}</span>
+                  )}
                 </li>
               ))}
             </ol>
