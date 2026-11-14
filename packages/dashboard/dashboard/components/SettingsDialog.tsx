@@ -555,8 +555,8 @@ function useOwnEntries(): Entry[] {
 }
 
 /**
- * Which browser does the bridge's work (#1332): one the daemon runs — recommended, since web runs
- * then work with the user's own Chrome closed — or the user's own Chrome with the extension set up
+ * Which browser does the bridge's work (#1332): one the daemon runs, with which web runs work with
+ * the user's own Chrome closed, or the user's own Chrome with the extension set up
  * by hand. Each option carries what it needs right under it: the daemon's browser its status and
  * window controls, the user's Chrome the token to paste. Both can technically serve at once
  * (answers are claimed on read), but a person decides one, so it is presented as one.
@@ -582,7 +582,7 @@ function BridgeBrowserChoice({ daemonBrowser, onChange }: { daemonBrowser: boole
       <RadioGroup aria-labelledby={question} value={daemonBrowser ? 'daemon' : 'own'} onValueChange={next => onChange(next === 'daemon')}>
         {option(
           true,
-          'A browser the daemon runs — recommended',
+          'A browser the daemon runs',
           'Chrome for Testing, downloaded once, signed in once, kept minimized. Web runs work with your own Chrome closed.',
           <BridgeBrowserSettings />,
         )}

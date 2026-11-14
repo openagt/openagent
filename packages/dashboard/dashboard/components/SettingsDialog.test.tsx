@@ -328,7 +328,7 @@ describe('Settings › Claude web (#1332)', () => {
     // The status of the daemon's browser goes with its option.
     expect(screen.queryByText(/The bridge browser is off/)).toBeNull()
     // The words are the radio's label: a click on them picks it too.
-    fireEvent.click(screen.getByText('A browser the daemon runs — recommended'))
+    fireEvent.click(screen.getByText('A browser the daemon runs'))
     expect(saves()).toEqual([{ bridgeBrowser: false }, { bridgeBrowser: true }])
     expect(checked(screen.getByRole('radio', { name: /A browser the daemon runs/ }))).toBe(true)
   })
