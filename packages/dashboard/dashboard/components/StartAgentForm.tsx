@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type ReactNode } from 'react'
+import { useEffect, useRef, useState, type ReactNode, useContext } from 'react'
 import { flushSync } from 'react-dom'
 import { CircleAlert, TriangleAlert } from 'lucide-react'
 import type { ProjectSummary, StartFromPick } from '../../src/index.js'
@@ -16,7 +16,8 @@ import { useLoaded, usePolled } from '../lib/use-async.js'
 import { useAction } from '../lib/use-action.js'
 import { sendOpenInApp } from '../rpc/control.js'
 import { Button } from './ui/button.js'
-import { openPermissions, openSettings } from '../lib/use-route.js'
+import { PERMISSIONS_PAGE } from '../lib/use-route.js'
+import { HostServicesContext, INERT_HOST_SERVICES } from '../lib/host-services.js'
 import { promptWithContext } from '../lib/use-context-set.js'
 import { stashPendingDraft } from '../lib/draft-handoff.js'
 import { AutoMenu } from './AutoMenu.js'
@@ -124,6 +125,7 @@ export function StartAgentForm({
   /** Toggle a path in the Context (a project's checkbox, a file's cross). */
   toggleContext: (path: string) => void
 }) {
+  const services = useContext(HostServicesContext) ?? INERT_HOST_SERVICES
   const [note, setNote] = useState<string | null>(null)
   const [startingSaid, setStartingSaid] = useState(false)
   useEffect(() => {
@@ -341,7 +343,7 @@ export function StartAgentForm({
         controlsEnd={
           !noProject && (
             <>
-              {remote && <GitAccountMenu address={address} machineId={machine?.id} on={name} busy={busy} picked={pickedAccount} onPick={setPickedAccount} onAddThere={() => machine && openSettings('devices', machine.id)} />}
+              {remote && <GitAccountMenu address={address} machineId={machine?.id} on={name} busy={busy} picked={pickedAccount} onPick={setPickedAccount} onAddThere={() => machine && services.openSettings('devices', machine.id)} />}
               <AutoMenu publish={publishPick} picks={offeredPublishPicks(gitHost, remote)} onPublish={pick => updatePreferences({ publish: pick })} target={prTarget} busy={busy} />
             </>
           )
@@ -370,7 +372,7 @@ export function StartAgentForm({
             title={`Your ${missingThere.join(' and ')} ${missingThere.length === 1 ? 'login is' : 'logins are'} not on ${name} yet.`}
             detail={`Runs there use your own logins. Log ${missingThere.length === 1 ? 'it' : 'them'} in on its page, or start your first run there from your page on ${reachedThrough(machine.url) ?? 'its server'}, which copies yours.`}
             actions={
-              <Button type="button" size="sm" onClick={() => openSettings('devices', machine.id)}>
+              <Button type="button" size="sm" onClick={() => services.openSettings('devices', machine.id)}>
                 {`Log in on ${name}`}
               </Button>
             }
@@ -380,7 +382,7 @@ export function StartAgentForm({
           problem === readiness.fix?.problem ? (
             machine ? (
               readiness.fix.kind === 'log-in' ? (
-                <Refusal key={problem} title={`${agentName} is not logged in on ${name}.`} actions={<MachineLogins machineId={machine.id} onAccounts={openPermissions} />} />
+                <Refusal key={problem} title={`${agentName} is not logged in on ${name}.`} actions={<MachineLogins machineId={machine.id} onAccounts={() => services.openPage(PERMISSIONS_PAGE)} />} />
               ) : (
                 // The install brings every coding agent, and an update brings one added since.
                 <Refusal
@@ -388,7 +390,7 @@ export function StartAgentForm({
                   title={`${agentName} is not installed on ${name}.`}
                   detail={`Update ${name} to get it.`}
                   actions={
-                    <Button type="button" size="sm" onClick={() => openSettings('devices', machine.id)}>
+                    <Button type="button" size="sm" onClick={() => services.openSettings('devices', machine.id)}>
                       {`Update ${name}`}
                     </Button>
                   }

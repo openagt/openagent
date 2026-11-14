@@ -4,7 +4,8 @@ import { createElement, useContext, useRef, useState } from 'react'
 import { openMenu, phoneScreen } from './test-utils.js'
 import { useModuleHost, useOpenAgentDown, type ModuleCardProps, type ModuleDefinition, type ModulePageProps } from './module/index.js'
 import { forgetRemembered } from './lib/use-async.js'
-import { holdEntry, openSettings } from './lib/use-route.js'
+import { holdEntry } from './lib/use-route.js'
+import { HostServicesContext } from './lib/host-services.js'
 import { skillsSaved } from './lib/skills-saved.js'
 
 // The whole transport, stubbed at its one seam: every RPC stub is `rpc(name)`, so a map by name
@@ -29,6 +30,7 @@ vi.mock('./components/SettingsDialog.js', async () => {
       // A change held as an entry holds one, and the question it asks before a step leaves it.
       const [asked, setAsked] = useState<(() => void) | undefined>()
       const release = useRef<() => void>(() => {})
+      const host = useContext(HostServicesContext)
       return createElement(
         'div',
         null,
@@ -37,6 +39,7 @@ vi.mock('./components/SettingsDialog.js', async () => {
         createElement('p', null, `its saves: ${useContext(DaemonDown) ? 'off' : 'on'}`),
         createElement('button', { onClick: () => onEntry('agent') }, 'to Agent'),
         createElement('button', { onClick: onClose }, 'shut the dialog'),
+        createElement('button', { onClick: () => host?.openSettings('agent') }, 'a link to Agent'),
         createElement('button', { onClick: () => (release.current = holdEntry(step => setAsked(() => step))) }, 'hold a change'),
         asked &&
           createElement(
@@ -90,6 +93,46 @@ afterEach(() => {
 })
 
 describe('module pages in the shell (#1774)', () => {
+  test("a module opens the dashboard's own pages in the project the address picks, every project where none is, and the page it is on adds no entry", async () => {
+    function Opens() {
+      const host = useModuleHost()
+      return createElement('div', null, createElement('button', { onClick: () => host.openPage('permissions') }, 'open Permissions'), createElement('button', { onClick: () => host.openPage('agents') }, 'open Agents'))
+    }
+    answerShell([{ package: '@acme/door', url: moduleModule('__doorOpensPages', { everyPage: Opens }), projects: [], computer: true }])
+    window.history.replaceState(null, '', '/app/overview')
+    render(<App />)
+    fireEvent.click(await screen.findByRole('button', { name: 'open Permissions' }))
+    expect(window.location.pathname).toBe('/app/permissions')
+    const entries = window.history.length
+    fireEvent.click(screen.getByRole('button', { name: 'open Permissions' }))
+    expect(window.history.length).toBe(entries)
+    fireEvent.click(screen.getByRole('button', { name: 'open Agents' }))
+    expect(window.location.pathname).toBe('/app/agents')
+    cleanup()
+    window.history.replaceState(null, '', '/')
+    render(<App />)
+    fireEvent.click(await screen.findByRole('button', { name: 'open Agents' }))
+    expect(window.location.pathname).toBe('/agents')
+  })
+
+  test('a module opens a Settings entry over the page it is on, its own query kept, as a step Back undoes; from inside Settings, in place', async () => {
+    function Opens() {
+      const host = useModuleHost()
+      return createElement('button', { onClick: () => host.openSettings('devices', 'd3') }, 'open Devices')
+    }
+    answerShell([{ package: '@acme/door', url: moduleModule('__doorOpensSettings', { everyPage: Opens }), projects: [], computer: true }])
+    window.history.replaceState(null, '', '/?view=wide')
+    render(<App />)
+    const entries = window.history.length
+    fireEvent.click(await screen.findByRole('button', { name: 'open Devices' }))
+    expect([window.location.pathname + window.location.search, window.history.length]).toEqual(['/?view=wide&settings=devices&item=d3', entries + 1])
+    fireEvent.click(await screen.findByRole('button', { name: 'to Agent' }))
+    fireEvent.click(screen.getByRole('button', { name: 'open Devices' }))
+    expect([window.location.pathname + window.location.search, window.history.length]).toEqual(['/?view=wide&settings=devices&item=d3', entries + 1])
+    fireEvent.click(screen.getByRole('button', { name: 'shut the dialog' }))
+    await waitFor(() => expect(window.location.pathname + window.location.search).toBe('/?view=wide'))
+  })
+
   test("a run a module opens while Settings holds a change asks first: Cancel keeps the change and Settings' address, Leave goes", async () => {
     function OpensRun() {
       const host = useModuleHost()
@@ -567,7 +610,7 @@ describe('the project select (#1513)', () => {
 
   test.each([
     ["the dialog's own list", async () => fireEvent.click(await screen.findByRole('button', { name: 'to Agent' }))],
-    ['a link inside an entry', async () => act(() => openSettings('agent'))],
+    ['a link inside an entry', async () => fireEvent.click(await screen.findByRole('button', { name: 'a link to Agent' }))],
   ])('Settings opened over a page, moved to another entry by %s, and closed leaves that page as its history entry was: Back goes on to the page before, not into Settings again', async (_by, moveToAgent) => {
     answerTwo()
     window.history.replaceState(null, '', '/site/overview')

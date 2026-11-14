@@ -21,7 +21,8 @@ import { PresetCreatePanel } from './PresetCreatePanel.js'
 import { CommandsMenu } from './CommandsMenu.js'
 import { DriverModelMenu, type DriverOption } from './DriverModelMenu.js'
 import { RunOnMenu } from './RunOnMenu.js'
-import { openPermissions, openSettings } from '../lib/use-route.js'
+import { PERMISSIONS_PAGE } from '../lib/use-route.js'
+import { HostServicesContext, INERT_HOST_SERVICES } from '../lib/host-services.js'
 import { useMachines, useMachinesRead, tellMachine, type Machine } from '../lib/machines.js'
 import { restoreRunOn, runTarget, useRunOnFallback, useSelectedMachineId, selectMachine } from '../lib/remote-target.js'
 import { thisMachineName } from '../lib/this-machine.js'
@@ -130,6 +131,7 @@ export const Composer = forwardRef<ComposerHandle, {
   { files, addContext, removeContext, startsAt, controls, controlsEnd, sessionModel, sessionContext, onSubmit, onPromptChange, onPreset, busy, submitLabel, submitBusyLabel, placeholder, inAgent = false, sessionRow, canSubmit = true, idleControl, home, draftKey, autoFocus = false },
   ref,
 ) {
+  const services = useContext(HostServicesContext) ?? INERT_HOST_SERVICES
   const [prompt, setPrompt] = useState('')
   const [addingPreset, setAddingPreset] = useState(false)
   const editorRef = useRef<PromptEditorHandle>(null)
@@ -194,7 +196,7 @@ export const Composer = forwardRef<ComposerHandle, {
     const on = selectedMachine ? machineName(selectedMachine) : undefined
     return {
       account: firstAccount(view),
-      accounts: <AgentAccountItems view={view} on={on} onPick={account => void pick(account)} onAdd={() => (selectedMachine ? openSettings('devices', selectedMachine.id) : openPermissions())} />,
+      accounts: <AgentAccountItems view={view} on={on} onPick={account => void pick(account)} onAdd={() => (selectedMachine ? services.openSettings('devices', selectedMachine.id) : services.openPage(PERMISSIONS_PAGE))} />,
     }
   }
   // #1073: block Start when the target machine is known-offline; an absent/unknown status must not block.
@@ -338,7 +340,7 @@ export const Composer = forwardRef<ComposerHandle, {
         onSelect: (m: Machine) => selectMachine(m.id),
         onSelectLocal: () => selectMachine(null),
         // A machine is added where every device is: Settings › Devices.
-        onAddMachine: () => openSettings('devices'),
+        onAddMachine: () => services.openSettings('devices'),
         status: machineStatus,
       }}
     />

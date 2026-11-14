@@ -8,7 +8,10 @@ const onProjectSkills = vi.hoisted(() => vi.fn())
 vi.mock('../rpc/skills.js', () => ({ onProjectSkills }))
 vi.mock('../rpc/agents.js', () => ({ onAgentsList: async () => ({ agents: [{ id: 'default', name: 'Default', skills: ['ask', 'github', 'readability'], accounts: {}, projectSkills: true }], skills: [], claude: [], codex: [] }) }))
 const openSettings = vi.hoisted(() => vi.fn())
-vi.mock('../lib/use-route.js', () => ({ openSettings }))
+vi.mock('../lib/host-services.js', async importOriginal => {
+  const actual = await importOriginal<typeof import('../lib/host-services.js')>()
+  return { ...actual, INERT_HOST_SERVICES: { ...actual.INERT_HOST_SERVICES, openSettings } }
+})
 
 const { NO_PICKS, SkillsMenu, SkillsOff, agentPicks, sessionSkills, skillPicksSaid } = await import('./SkillsMenu.js')
 

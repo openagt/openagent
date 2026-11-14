@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useContext } from 'react'
 import { CircleCheck } from 'lucide-react'
 import type { ProjectSummary } from '../../src/index.js'
 import { onProjectSkills, sendProjectSkills, type ProjectSkills } from '../rpc/skills.js'
@@ -6,7 +6,7 @@ import { runModuleCommand } from '../rpc/modules.js'
 import { onSkillsSaved } from '../lib/skills-saved.js'
 import { inPlace } from '../lib/in-place.js'
 import { usePolled } from '../lib/use-async.js'
-import { openSettings } from '../lib/use-route.js'
+import { HostServicesContext, INERT_HOST_SERVICES } from '../lib/host-services.js'
 import { cn } from '../lib/utils.js'
 import { Button } from './ui/button.js'
 import { Section } from './ui/section.js'
@@ -133,6 +133,7 @@ export function SkillsCard({ projects, onSelectProject, projectHref }: { project
 
 /** One project: its name and how many skills it holds, then what is to be done, with its press, or that all is well. */
 function Row({ read, reload, href, onOpen }: { read: Read; reload: () => Promise<void>; href: string; onOpen: () => void }) {
+  const services = useContext(HostServicesContext) ?? INERT_HOST_SERVICES
   const { project, skills } = read
   const [pending, setPending] = useState(false)
   const { error, run } = useAction()
@@ -159,7 +160,7 @@ function Row({ read, reload, href, onOpen }: { read: Read; reload: () => Promise
             // None yet: nothing is up to date, there is nothing. Add opens the Skills page to pick them.
             <>
               <span className="text-xs text-muted-foreground">no skills yet</span>
-              <Button variant="outline" size="sm" onClick={() => openSettings(SKILLS_ENTRY, project.id)} title="Open the project's Skills page">
+              <Button variant="outline" size="sm" onClick={() => services.openSettings(SKILLS_ENTRY, project.id)} title="Open the project's Skills page">
                 Add
               </Button>
             </>

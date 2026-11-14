@@ -10,8 +10,11 @@ const skills = vi.hoisted(() => ({ onProjectSkills: vi.fn(), sendProjectSkills: 
 vi.mock('../rpc/skills.js', () => skills)
 const modules = vi.hoisted(() => ({ runModuleCommand: vi.fn() }))
 vi.mock('../rpc/modules.js', () => modules)
-const openSettings = vi.fn()
-vi.mock('../lib/use-route.js', async () => ({ ...(await vi.importActual<typeof import('../lib/use-route.js')>('../lib/use-route.js')), openSettings }))
+const openSettings = vi.hoisted(() => vi.fn())
+vi.mock('../lib/host-services.js', async importOriginal => {
+  const actual = await importOriginal<typeof import('../lib/host-services.js')>()
+  return { ...actual, INERT_HOST_SERVICES: { ...actual.INERT_HOST_SERVICES, openSettings } }
+})
 const { SkillsCard } = await import('./SkillsCard.js')
 
 const skill = (name: string, over: Record<string, unknown> = {}) => ({ name, description: '', standing: 'current', waiting: false, ...over })

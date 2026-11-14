@@ -1,6 +1,6 @@
 import { useSyncExternalStore } from 'react'
-import { SETTINGS_ITEM_PARAM, SETTINGS_PARAM, parseRoute, formatRoute, keepPageQuery, type Route } from './route.js'
-import { NO_PROJECTS, type ProjectAddresses } from '../../src/project-address.js'
+import { parseRoute, formatRoute, keepPageQuery, type Route } from './route.js'
+import type { ProjectAddresses } from '../../src/project-address.js'
 
 // The route as state (#784): read the current one, go to another. Back/Forward are free, and a
 // session is a link you can paste, reload, and open twice.
@@ -52,7 +52,7 @@ export function holdEntry(ask: (leave: () => void) => void): () => void {
 }
 
 /** Take `step`, a move off the entry shown: now, or once the person says to leave what the entry holds. */
-function leaving(step: () => void): void {
+export function leaving(step: () => void): void {
   if (held) held.ask(step)
   else step()
 }
@@ -142,9 +142,6 @@ const currentUrl = (): string => window.location.pathname + window.location.sear
 /** The address shown: while an entry is held, its own, also in the moment the tab is on the way back to it. */
 const shownUrl = (): string => held?.url ?? currentUrl()
 
-/** The projects the route was last read with, which name them for a part of the page that has no route to hand. */
-let addresses: ProjectAddresses = NO_PROJECTS
-
 /** Marks a history entry as Settings this tab opened over the page under it. */
 const OVER_PAGE = 'openagent:settings-over-page'
 const OVER_PAGE_STATE = { [OVER_PAGE]: true }
@@ -164,7 +161,6 @@ export function useRoute(projects: ProjectAddresses): {
    *  Settings opened over the page when `overPage` is set ({@link settingsOverPage}). */
   go: (next: Route, options?: { replace?: boolean; keepQuery?: boolean; overPage?: boolean }) => void
 } {
-  addresses = projects
   const current = useSyncExternalStore(subscribe, shownUrl, () => '/')
   const route = parseRoute(current, projects)
 
@@ -192,38 +188,3 @@ export const PERMISSIONS_PAGE = 'permissions'
 
 /** The dashboard's own page of the agents, each a name, skills and accounts, at `/agents`. */
 export const AGENTS_PAGE = 'agents'
-
-/** Go to the Agents page, from a part of the page that has no route to hand. */
-export function openAgents(): void {
-  openOwnPage(AGENTS_PAGE)
-}
-
-/** Go to the Permissions page, from a part of the page that has no route to hand. */
-export function openPermissions(): void {
-  openOwnPage(PERMISSIONS_PAGE)
-}
-
-/** Go to one of the dashboard's own pages with the project the address picks, as the sidebar's press does. */
-function openOwnPage(page: string): void {
-  leaving(() => {
-    const { scope } = parseRoute(currentUrl(), addresses)
-    keepScroll()
-    push(formatRoute({ projectId: null, agentId: null, page, ...(scope ? { scope } : {}) }, addresses))
-    notify()
-  })
-}
-
-/** Open Settings at `entry` over the page you are on, from a part of the page that has no route to hand; with `item`, at that page inside it.
- *  From inside Settings, it moves to that entry in place, as the dialog's own list does: Back and closing still go to the page under it. */
-export function openSettings(entry: string, item?: string): void {
-  leaving(() => {
-    const url = new URL(window.location.href)
-    const open = url.searchParams.has(SETTINGS_PARAM)
-    url.searchParams.set(SETTINGS_PARAM, entry)
-    if (item) url.searchParams.set(SETTINGS_ITEM_PARAM, item)
-    else url.searchParams.delete(SETTINGS_ITEM_PARAM)
-    if (open) window.history.replaceState(window.history.state, '', url.pathname + url.search)
-    else push(url.pathname + url.search, OVER_PAGE_STATE)
-    notify()
-  })
-}

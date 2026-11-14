@@ -1,9 +1,10 @@
+import { useContext } from 'react'
 import { Check, Puzzle, Settings2 } from 'lucide-react'
 import type { AgentRecord, AgentsView } from '../rpc/agents.js'
 import { onProjectSkills } from '../rpc/skills.js'
 import { skillsAgain } from '../lib/skills-saved.js'
 import { useLoaded } from '../lib/use-async.js'
-import { openSettings } from '../lib/use-route.js'
+import { HostServicesContext, INERT_HOST_SERVICES } from '../lib/host-services.js'
 import { cn } from '../lib/utils.js'
 import { SKILLS_ENTRY } from './ProjectSkills.js'
 import { RowChevron, RowSaid, rowButtonClass, rowWideClass } from './ui/row-item.js'
@@ -101,6 +102,7 @@ export function SkillsMenu({
   onChange: (picks: SkillPicks) => void
   busy: boolean
 }) {
+  const services = useContext(HostServicesContext) ?? INERT_HOST_SERVICES
   const project = useProjectSkills(projectId)
   const held = project?.held ?? []
   // Counted only once the project's skills are read: a count of the agent's alone would be drawn, then change.
@@ -197,7 +199,7 @@ export function SkillsMenu({
               )}
             </DropdownMenuGroup>
             <DropdownMenuSeparator />
-            <DropdownMenuItem onClick={() => openSettings(SKILLS_ENTRY, projectId)}>
+            <DropdownMenuItem onClick={() => services.openSettings(SKILLS_ENTRY, projectId)}>
               <Settings2 className="h-3.5 w-3.5 shrink-0 opacity-70" aria-hidden />
               Manage project skills…
             </DropdownMenuItem>

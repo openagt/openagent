@@ -32,7 +32,7 @@ import { stashPendingDraft } from './lib/draft-handoff.js'
 import { useLiveEvents } from './lib/use-live-events.js'
 import { useAgents, useRecentAgents } from './lib/use-agents.js'
 import { runsAgain } from './lib/runs-changed.js'
-import { AGENTS_PAGE, PERMISSIONS_PAGE, settingsOverPage, useRoute } from './lib/use-route.js'
+import { AGENTS_PAGE, PERMISSIONS_PAGE, leaving, settingsOverPage, useRoute } from './lib/use-route.js'
 import { formatRoute, type Route } from './lib/route.js'
 import { projectAddresses, SESSIONS_ID } from '../src/project-address.js'
 import { useActivityNotifications, useInterventionNotifications } from './lib/use-notifications.js'
@@ -345,15 +345,15 @@ export function App() {
     go({ projectId: null, agentId: null })
   }
 
-  // Settings (#958): a dialog over the page you are on, which stays under it, its own query too.
-  // Moving between its entries replaces the address, so Back closes it rather than stepping through them.
+  // Settings (#958): a dialog over the page you are on, which stays under it, its own query too;
+  // with `item`, at that page inside the entry. Moving between its entries, from its list or from a
+  // link inside one, replaces the address, so Back closes it rather than stepping through them.
   // Opened over the page here, it closes by Back too: the page's own entry is there again, as the page left it.
-  const showSettings = (entry = '') => {
-    navigate({ ...route, settings: entry }, { keepQuery: true, overPage: route.settings === undefined })
-  }
-  const showSettingsEntry = (entry: string) => {
+  const showSettings = (entry = '', item?: string) => {
     const { settingsItem: _item, ...rest } = route
-    navigate({ ...rest, settings: entry }, { keepQuery: true, replace: true })
+    const next = { ...rest, settings: entry, ...(item ? { settingsItem: item } : {}) }
+    if (route.settings === undefined) navigate(next, { keepQuery: true, overPage: true })
+    else leaving(() => navigate(next, { keepQuery: true, replace: true }))
   }
   useShortcut('shortcuts', () => showSettings(SHORTCUTS_ENTRY))
   const closeSettings = () => {
@@ -377,7 +377,7 @@ export function App() {
     agentHref: (inProject, id) => hrefOf({ projectId: inProject, agentId: id }),
     openPage: (segment, path, inProject, options) => go(pageRoute(segment, path, inProject), options),
     pageHref: (segment, path, inProject) => hrefOf(pageRoute(segment, path, inProject)),
-    openSettings: entry => showSettings(entry),
+    openSettings: (entry, item) => showSettings(entry, item),
     startRun: async (inProject, prompt, opts) => {
       const result = await sendStart(inProject, prompt, startPicks(preferences))
       if (!result.ok) return result
@@ -722,7 +722,7 @@ export function App() {
         go={go}
       />
       {/* Once what the address names is read: the project its "Project" group opens on, and the entries the projects and their packages add. */}
-      {route.settings !== undefined && addressesRead && <SettingsDialog entry={route.settings} openItem={route.settingsItem} onEntry={showSettingsEntry} onClose={closeSettings} scope={scope} projects={projects} />}
+      {route.settings !== undefined && addressesRead && <SettingsDialog entry={route.settings} openItem={route.settingsItem} onEntry={showSettings} onClose={closeSettings} scope={scope} projects={projects} />}
     </SidebarProvider>
     </DaemonDown.Provider>
     </ProjectLabelsContext.Provider>

@@ -1,5 +1,6 @@
-import { openPermissions } from '../lib/use-route.js'
-import { useState } from 'react'
+import { PERMISSIONS_PAGE } from '../lib/use-route.js'
+import { HostServicesContext, INERT_HOST_SERVICES } from '../lib/host-services.js'
+import { useState, useContext } from 'react'
 import { CircleAlert, Settings } from 'lucide-react'
 import type { Person } from '../rpc/person.js'
 import { usePerson } from '../lib/use-person.js'
@@ -46,6 +47,7 @@ export function Avatar({ person, dot = false, size = 'size-5 text-xs', className
 }
 
 export function PersonMenu({ onSettings }: { onSettings: (entry?: string) => void }) {
+  const services = useContext(HostServicesContext) ?? INERT_HOST_SERVICES
   const { person } = usePerson()
   const { missing } = useMissing()
   const { view: backup } = useBackup()
@@ -79,7 +81,7 @@ export function PersonMenu({ onSettings }: { onSettings: (entry?: string) => voi
         {needs && (
           <>
             {missing.map(item => (
-              <DropdownMenuItem key={item.key} onClick={openPermissions}>
+              <DropdownMenuItem key={item.key} onClick={() => services.openPage(PERMISSIONS_PAGE)}>
                 <CircleAlert className="size-4 shrink-0 text-warning" aria-hidden />
                 <span className="flex-1">{item.words}</span>
               </DropdownMenuItem>

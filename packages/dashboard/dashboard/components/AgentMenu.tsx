@@ -1,7 +1,9 @@
+import { useContext } from 'react'
 import { Bot, Check, Settings2 } from 'lucide-react'
 import type { AgentRecord } from '../rpc/agents.js'
 import { DEFAULT_AGENT } from '../../src/client.js'
-import { openAgents } from '../lib/use-route.js'
+import { AGENTS_PAGE } from '../lib/use-route.js'
+import { HostServicesContext, INERT_HOST_SERVICES } from '../lib/host-services.js'
 import { cn } from '../lib/utils.js'
 import { RowSaid, rowButtonClass, RowChevron } from './ui/row-item.js'
 import { useAgentName } from './AgentsPage.js'
@@ -15,6 +17,7 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuGroup, DropdownMenuItem,
  * so the name lands whole.
  */
 export function AgentMenu({ agents, picked, busy, onPick }: { agents: readonly AgentRecord[] | undefined; picked: string | undefined; busy: boolean; onPick: (id: string) => void }) {
+  const services = useContext(HostServicesContext) ?? INERT_HOST_SERVICES
   if (!agents) return null
   const on = agents.find(agent => agent.id === picked) ?? agents[0]
   if (!on) return null
@@ -42,7 +45,7 @@ export function AgentMenu({ agents, picked, busy, onPick }: { agents: readonly A
           ))}
         </DropdownMenuGroup>
         <DropdownMenuSeparator />
-        <DropdownMenuItem onClick={openAgents}>
+        <DropdownMenuItem onClick={() => services.openPage(AGENTS_PAGE)}>
           <Settings2 className="h-3.5 w-3.5 shrink-0 opacity-70" aria-hidden />
           Manage agents…
         </DropdownMenuItem>

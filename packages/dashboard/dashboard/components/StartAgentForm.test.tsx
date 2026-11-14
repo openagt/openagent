@@ -60,8 +60,11 @@ vi.mock('../rpc/server-logins.js', () => serverLogins)
 const sendOpenInApp = vi.hoisted(() => vi.fn())
 vi.mock('../rpc/control.js', () => ({ sendOpenInApp }))
 const openSettings = vi.hoisted(() => vi.fn())
-const openPermissions = vi.hoisted(() => vi.fn())
-vi.mock('../lib/use-route.js', async () => ({ ...(await vi.importActual<typeof import('../lib/use-route.js')>('../lib/use-route.js')), openSettings, openPermissions }))
+const openPage = vi.hoisted(() => vi.fn())
+vi.mock('../lib/host-services.js', async importOriginal => {
+  const actual = await importOriginal<typeof import('../lib/host-services.js')>()
+  return { ...actual, INERT_HOST_SERVICES: { ...actual.INERT_HOST_SERVICES, openSettings, openPage } }
+})
 
 const start = vi.hoisted(() => vi.fn())
 // What the start says of itself beside its answer: that the machine is cloning the project, or why there is no run.
@@ -628,7 +631,7 @@ describe('StartAgentForm (#1774)', () => {
     fireEvent.click(await screen.findByRole('button', { name: 'Open Accounts' }))
     expect(screen.getByRole('alert').textContent).toContain('Codex is not logged in on Dani\'s PC.')
     expect(onMachineStartCheck).toHaveBeenCalledWith('p1', 'd2', 'codex')
-    expect(openPermissions).toHaveBeenCalled()
+    expect(openPage).toHaveBeenCalledWith('permissions')
   })
 
   test('a machine without the picked agent says so in words naming it, and the press opens its page, where an update brings it', async () => {

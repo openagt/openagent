@@ -1,9 +1,9 @@
-import { useState } from 'react'
+import { useState, useContext } from 'react'
 import { onProjectAgentData, sendProjectDataAs, type KeptData, type ProjectAgentData } from '../rpc/project-agent-data.js'
 import { sendShareRecords } from '../rpc/projects.js'
 import { usePolled } from '../lib/use-async.js'
 import { useAction } from '../lib/use-action.js'
-import { openSettings } from '../lib/use-route.js'
+import { HostServicesContext, INERT_HOST_SERVICES } from '../lib/host-services.js'
 import { ConfirmDialog } from './ui/confirm-dialog.js'
 import { SettingsSection, SettingsSelectRow, SettingsRow } from './SettingsRows.js'
 import { AGENT_DATA_ENTRY } from './AgentDataSettings.js'
@@ -29,6 +29,7 @@ const KIND_WORDS: Record<KeptData['kind'], (n: number) => string> = {
  * never as the person's own login.
  */
 export function ProjectAgentDataSettings({ projectId }: { projectId: string }) {
+  const services = useContext(HostServicesContext) ?? INERT_HOST_SERVICES
   const { value: data, state, reload } = usePolled<ProjectAgentData | null>(() => onProjectAgentData(projectId), null, EVERY_MS, [projectId])
   const [confirmShare, setConfirmShare] = useState(false)
   const [picked, setPicked] = useState<string | undefined>()
@@ -39,7 +40,7 @@ export function ProjectAgentDataSettings({ projectId }: { projectId: string }) {
   const folder = (
     <>
       your folder{' '}
-      <button type="button" className="underline underline-offset-2 hover:text-foreground" onClick={() => openSettings(AGENT_DATA_ENTRY)}>
+      <button type="button" className="underline underline-offset-2 hover:text-foreground" onClick={() => services.openSettings(AGENT_DATA_ENTRY)}>
         {data.folder.path}
       </button>
       {data.folder.remote ? (

@@ -7,8 +7,11 @@ const rpc = vi.hoisted(() => ({ onAgentsList: vi.fn(), sendSaveAgent: vi.fn(), s
 vi.mock('../rpc/agents.js', () => rpc)
 const logins = vi.hoisted(() => ({ onGitHosts: vi.fn(), sendGitHostLogin: vi.fn(), sendStopGitHostLogin: vi.fn(), sendGitHostInstall: vi.fn(), onAgentState: vi.fn(), sendAgentFix: vi.fn() }))
 vi.mock('../rpc/logins.js', () => logins)
-const route = vi.hoisted(() => ({ openAgents: vi.fn() }))
-vi.mock('../lib/use-route.js', () => route)
+const route = vi.hoisted(() => ({ openPage: vi.fn() }))
+vi.mock('../lib/host-services.js', async importOriginal => {
+  const actual = await importOriginal<typeof import('../lib/host-services.js')>()
+  return { ...actual, INERT_HOST_SERVICES: { ...actual.INERT_HOST_SERVICES, ...route } }
+})
 // The tooltip's words are on the page.
 vi.mock('./ui/tooltip.js', async () => {
   const { cloneElement } = await import('react')
@@ -47,7 +50,7 @@ afterEach(() => {
   cleanup()
   forgetRemembered()
   for (const fn of [...Object.values(rpc), ...Object.values(logins)]) fn.mockReset()
-  route.openAgents.mockReset()
+  route.openPage.mockReset()
 })
 
 /** "New agent", once the agents are read: before, it is there and takes no press. */
@@ -285,6 +288,6 @@ describe('the Agent menu under the box', () => {
     expect(onPick).toHaveBeenCalledWith('default')
     fireEvent.click(trigger)
     fireEvent.click(screen.getByRole('menuitem', { name: 'Manage agents…' }))
-    expect(route.openAgents).toHaveBeenCalled()
+    expect(route.openPage).toHaveBeenCalledWith('agents')
   })
 })
