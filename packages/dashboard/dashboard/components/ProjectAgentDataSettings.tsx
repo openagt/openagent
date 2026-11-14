@@ -6,6 +6,7 @@ import { useAction } from '../lib/use-action.js'
 import { HostServicesContext, INERT_HOST_SERVICES } from '../lib/host-services.js'
 import { ConfirmDialog } from './ui/confirm-dialog.js'
 import { SettingsSection, SettingsSelectRow, SettingsRow } from './SettingsRows.js'
+import { PathStrip } from './PathStrip.js'
 import { AGENT_DATA_ENTRY } from './AgentDataSettings.js'
 import { SendAs, firstSendAs } from './SendAs.js'
 
@@ -40,14 +41,14 @@ export function ProjectAgentDataSettings({ projectId }: { projectId: string }) {
   const folder = (
     <>
       your folder{' '}
-      <button type="button" className="underline underline-offset-2 hover:text-foreground" onClick={() => services.openSettings(AGENT_DATA_ENTRY)}>
-        {data.folder.path}
+      <button type="button" className="focus-ring rounded-sm align-bottom hover:underline" onClick={() => services.openSettings(AGENT_DATA_ENTRY)}>
+        <PathStrip path={data.folder.path} className="text-primary" />
       </button>
       {data.folder.remote ? (
         <>
           , synced with{' '}
           {data.folder.remoteUrl ? (
-            <a href={data.folder.remoteUrl} target="_blank" rel="noreferrer" className="underline underline-offset-2 hover:text-foreground">
+            <a href={data.folder.remoteUrl} target="_blank" rel="noreferrer" className="text-primary hover:underline">
               {data.folder.remote}
             </a>
           ) : (
@@ -91,11 +92,11 @@ export function ProjectAgentDataSettings({ projectId }: { projectId: string }) {
         onChange={pick}
       />
       {data.place === 'repository' && data.accounts && (
-        <div className="pb-3">
+        <div>
           <SendAs host={data.accounts} value={data.account} disabled={busy} onChange={login => void run(() => sendProjectDataAs(projectId, login), 'Could not change the account.').then(() => reload())} />
         </div>
       )}
-      {error && <p className="py-3 text-xs text-danger">{error}</p>}
+      {error && <p className="text-xs text-danger">{error}</p>}
       <SettingsRow
         label="What is kept"
         description={kept.length > 0 ? kept.map(k => `${KIND_WORDS[k.kind](k.count)} (${k.skill})`).join(' · ') : 'Nothing yet.'}

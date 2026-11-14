@@ -6,6 +6,7 @@ import { useAction } from '../lib/use-action.js'
 import { Button } from './ui/button.js'
 import { Input } from './ui/input.js'
 import { SettingsRow, SettingsSection } from './SettingsRows.js'
+import { PathStrip } from './PathStrip.js'
 import { SendAs, firstSendAs } from './SendAs.js'
 import { BackupNotice, accountsAt } from './BackupNotice.js'
 import { HostFix } from './AddGitAccount.js'
@@ -64,7 +65,7 @@ export function AgentDataSettings() {
   // At a git host with no account named: the notice above says so, with the fix.
   const unnamed = remoteHost !== undefined && !personal.account
   const remote = personal.remoteUrl ? (
-    <a href={personal.remoteUrl} target="_blank" rel="noreferrer" className="underline underline-offset-2 hover:text-foreground">
+    <a href={personal.remoteUrl} target="_blank" rel="noreferrer" className="text-primary hover:underline">
       {personal.remote}
     </a>
   ) : (
@@ -86,23 +87,23 @@ export function AgentDataSettings() {
   return (
     <SettingsSection description="Everything your agents keep: what each was asked and answered, the tickets, the queue and plans.">
       <BackupNotice onChanged={() => void reload()} />
-      <div className="py-3 first:pt-0 last:pb-0">
+      <div>
         <SettingsRow
           label="Your folder"
           description={
             <>
-              {personal.path}
+              <PathStrip path={personal.path} />
               {holds}. {where}
             </>
           }
           control={
             personal.remote ? (
-              <Button variant="outline" disabled={busy} onClick={stop}>
+              <Button variant="secondary" loading={busy} onClick={stop}>
                 Stop syncing
               </Button>
             ) : (
               !asking && (
-                <Button variant="outline" onClick={() => setAsking(true)}>
+                <Button variant="secondary" onClick={() => setAsking(true)}>
                   Sync with a repository
                 </Button>
               )
@@ -138,9 +139,9 @@ export function AgentDataSettings() {
                   setAddress(event.target.value)
                   reset()
                 }}
-                className="h-8"
+                className="min-w-0 flex-1"
               />
-              <Button type="submit" disabled={busy || address.trim() === '' || (typedAt !== undefined && sendAs === undefined)}>
+              <Button type="submit" disabled={address.trim() === '' || (typedAt !== undefined && sendAs === undefined)} loading={busy}>
                 {busy ? 'Syncing…' : 'Sync'}
               </Button>
               <Button
