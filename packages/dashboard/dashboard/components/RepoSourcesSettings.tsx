@@ -6,6 +6,9 @@ import { useAction } from '../lib/use-action.js'
 import { Button } from './ui/button.js'
 import { Input } from './ui/input.js'
 import { List, Row } from './ui/list.js'
+import { Section } from './ui/section.js'
+import { Separator } from './ui/separator.js'
+import { PathStrip } from './PathStrip.js'
 import { SettingsSection } from './SettingsRows.js'
 
 /** The Settings entry's id. */
@@ -37,66 +40,73 @@ export function RepoSourcesSettings() {
 
   return (
     <SettingsSection description="Where the project picker finds repos, besides your projects. OpenAgent's own GitHub accounts list their repos there too.">
-      <div className="space-y-2 py-3 first:pt-0">
-        <p className="text-sm">GitHub users and organizations</p>
-        <p className="text-xs text-muted-foreground">Their repos are listed in the picker, read as the GitHub account runs use; picked, one is cloned. The same on each of your computers.</p>
-        {sources.owners.length > 0 && (
-          <List boxed aria-label="GitHub users and organizations">
-            {sources.owners.map(name => (
-              <Row
-                key={name}
-                title={name.replace(/^github\.com\//, '')}
-                actions={
-                  <Button variant="ghost" size="icon-sm" aria-label={`Remove ${name}`} disabled={busy} onClick={() => removeOwner(name)}>
-                    <X className="h-3.5 w-3.5" aria-hidden />
-                  </Button>
-                }
+      <div className="flex flex-col gap-6">
+        <Section title="GitHub users and organizations">
+          <div className="space-y-3">
+            <p className="text-xs text-muted-foreground">Their repos are listed in the picker, read as the GitHub account runs use; picked, one is cloned. The same on each of your computers.</p>
+            {sources.owners.length > 0 && (
+              <List boxed aria-label="GitHub users and organizations">
+                {sources.owners.map(name => (
+                  <Row
+                    key={name}
+                    title={name.replace(/^github\.com\//, '')}
+                    actions={
+                      <Button variant="ghost" size="icon-sm" aria-label={`Remove ${name}`} disabled={busy} onClick={() => removeOwner(name)}>
+                        <X className="size-4" aria-hidden />
+                      </Button>
+                    }
+                  />
+                ))}
+              </List>
+            )}
+            <form
+              className="flex items-center gap-2"
+              onSubmit={event => {
+                event.preventDefault()
+                if (owner.trim()) add()
+              }}
+            >
+              <Input
+                name="github-owner"
+                aria-label="GitHub user or organization"
+                placeholder="user or organization"
+                value={owner}
+                disabled={busy}
+                onChange={event => {
+                  setOwner(event.target.value)
+                  reset()
+                }}
+                className="w-60 max-md:flex-1"
               />
-            ))}
-          </List>
-        )}
-        <form
-          className="flex items-center gap-2"
-          onSubmit={event => {
-            event.preventDefault()
-            if (owner.trim()) add()
-          }}
-        >
-          <Input
-            name="github-owner"
-            aria-label="GitHub user or organization"
-            placeholder="user or organization"
-            value={owner}
-            disabled={busy}
-            onChange={event => {
-              setOwner(event.target.value)
-              reset()
-            }}
-            className="h-8 max-w-xs"
-          />
-          <Button type="submit" variant="outline" disabled={busy || !owner.trim()}>
-            Add
-          </Button>
-        </form>
-      </div>
-      <div className="space-y-2 py-3 last:pb-0">
-        <p className="text-sm">Folders searched on this computer</p>
-        <p className="text-xs text-muted-foreground">Your home folder, and the folders added with &ldquo;Search another folder&hellip;&rdquo; in the picker.</p>
-        {sources.folders.length > 0 && (
-          <List boxed aria-label="Folders searched">
-            {sources.folders.map(folder => (
-              <Row
-                key={folder}
-                title={folder}
-                actions={
-                  <Button variant="ghost" size="icon-sm" aria-label={`Remove ${folder}`} disabled={busy} onClick={() => removeFolder(folder)}>
-                    <X className="h-3.5 w-3.5" aria-hidden />
-                  </Button>
-                }
-              />
-            ))}
-          </List>
-        )}
+              <Button type="submit" variant="secondary" disabled={!owner.trim()} loading={busy}>
+                Add
+              </Button>
+            </form>
+          </div>
+        </Section>
+        <Separator className="bg-hairline" />
+        <Section title="Folders searched on this computer">
+          <div className="space-y-3">
+            <p className="text-xs text-muted-foreground">Your home folder, and the folders added with &ldquo;Search another folder&hellip;&rdquo; in the picker.</p>
+            {sources.folders.length > 0 ? (
+              <List boxed aria-label="Folders searched">
+                {sources.folders.map(folder => (
+                  <Row
+                    key={folder}
+                    title={<PathStrip path={folder} />}
+                    actions={
+                      <Button variant="ghost" size="icon-sm" aria-label={`Remove ${folder}`} disabled={busy} onClick={() => removeFolder(folder)}>
+                        <X className="size-4" aria-hidden />
+                      </Button>
+                    }
+                  />
+                ))}
+              </List>
+            ) : (
+              <p className="text-sm text-muted-foreground">No folder added yet: only your home folder is searched.</p>
+            )}
+          </div>
+        </Section>
       </div>
       {error && <p className="text-xs text-danger">{error}</p>}
     </SettingsSection>
