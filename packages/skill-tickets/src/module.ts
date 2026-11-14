@@ -161,16 +161,17 @@ export interface NamedPath {
   title: string
   /** The path opened for it, when it is not the path itself. */
   href?: string
-  /** The ask for what it names, once it is there already: a plan already written, whose ask to write it is left over. */
-  done?: string
+  /** The ask for what it names, once it is there already, and what an entry asking just that is called: a plan already written, whose ask to write it is left over. */
+  done?: { ask: string; title: string }
 }
 
 /**
  * What each of `paths` is called, by the tickets as listed: a ticket's file is its title; a
  * ticket's plan file (`tickets/<stem>.plan.md`) is "Plan: " and the ticket's title, and opens the
  * ticket, since an entry that names a plan is often the ask to write it. A plan the ticket already
- * has, and not outdated, says so, and its ask ({@link planTicketPrompt}) is done: an entry asking
- * it again is left over, while any other entry naming the plan is still work. A path that is no
+ * has, and not outdated, has its ask ({@link planTicketPrompt}) done: an entry asking it again is
+ * left over, and only that one says the plan is written already; any other entry naming the plan is
+ * still work, and is called the plan's plain name. A path that is no
  * ticket's, or whose ticket is not listed (closed, deleted), has no name.
  */
 export function namesOf(paths: readonly string[], tickets: readonly { file: string; title: string; planned?: boolean; outdated?: true }[]): Record<string, NamedPath> {
@@ -188,7 +189,8 @@ export function namesOf(paths: readonly string[], tickets: readonly { file: stri
     const planned = ticket === undefined ? undefined : byFile.get(ticket)
     if (ticket !== undefined && planned !== undefined) {
       const written = planned.planned === true && planned.outdated !== true
-      named[path] = { title: `Plan: ${planned.title}${written ? ' · already written' : ''}`, href: `${TICKETS_DIR}/${ticket}`, ...(written ? { done: planTicketPrompt(ticket) } : {}) }
+      const title = `Plan: ${planned.title}`
+      named[path] = { title, href: `${TICKETS_DIR}/${ticket}`, ...(written ? { done: { ask: planTicketPrompt(ticket), title: `${title} · already written` } } : {}) }
     }
   }
   return named

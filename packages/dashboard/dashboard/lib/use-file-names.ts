@@ -16,8 +16,8 @@ export interface NamedFile {
   title: string
   /** Open the page that shows it. */
   open(): void
-  /** The ask for what it names, word for word, once it is there already: an entry saying just this is left over. */
-  done?: string
+  /** The ask for what it names, word for word, once it is there already: an entry saying just this is left over, and reads as this `title`. */
+  done?: { ask: string; title: string }
 }
 
 /** The name of a path into a project's files; `undefined` for one no installed page names. */
@@ -38,7 +38,7 @@ export function pathsIn(text: string): string[] {
 interface ReadName {
   title: string
   href: string
-  done?: string
+  done?: { ask: string; title: string }
 }
 
 const NOTHING: Record<string, ReadName> = {}
@@ -67,8 +67,9 @@ export function useFileNames(asked: readonly { projectId: string; paths: readonl
               if (own.length === 0) return
               const answer = await page.names!(moduleHost({ ...services, package: page.package }), projectId, own).catch(() => ({}))
               for (const path of own) {
-                const name = (answer as Record<string, { title?: unknown; href?: unknown; done?: unknown } | undefined>)[path]
-                if (name && typeof name.title === 'string' && name.title.trim() !== '') named[`${projectId}\n${path}`] = { title: name.title, href: typeof name.href === 'string' ? name.href : path, ...(typeof name.done === 'string' ? { done: name.done } : {}) }
+                const name = (answer as Record<string, { title?: unknown; href?: unknown; done?: { ask?: unknown; title?: unknown } | null } | undefined>)[path]
+                const done = name?.done
+                if (name && typeof name.title === 'string' && name.title.trim() !== '') named[`${projectId}\n${path}`] = { title: name.title, href: typeof name.href === 'string' ? name.href : path, ...(typeof done?.ask === 'string' && typeof done.title === 'string' ? { done: { ask: done.ask, title: done.title } } : {}) }
               }
             }),
         ),

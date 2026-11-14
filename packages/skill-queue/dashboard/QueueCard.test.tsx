@@ -165,7 +165,7 @@ describe('QueueCard', () => {
 
   test('an entry whose file is there already (a plan already written) offers no start, and the fan-out leaves it out', async () => {
     host = fakeHost({ p1: { '--local': ['Create tickets/2026-08-01_login-page.plan.md', 'Tidy the loader'] }, p2: { '--local': [] } })
-    const modules: MountedModules = { ...NO_MODULES, pages: [{ segment: 'tickets', label: 'Tickets', Page: () => null, package: 'a-tickets', projects: ['p1'], names: async () => ({ 'tickets/2026-08-01_login-page.plan.md': { title: 'Plan: Login page · already written', href: 'tickets/2026-08-01_login-page.md', done: 'Create tickets/2026-08-01_login-page.plan.md' } }) }] }
+    const modules: MountedModules = { ...NO_MODULES, pages: [{ segment: 'tickets', label: 'Tickets', Page: () => null, package: 'a-tickets', projects: ['p1'], names: async () => ({ 'tickets/2026-08-01_login-page.plan.md': { title: 'Plan: Login page', href: 'tickets/2026-08-01_login-page.md', done: { ask: 'Create tickets/2026-08-01_login-page.plan.md', title: 'Plan: Login page · already written' } } }) }] }
     renderWithHost(<QueueCard projects={[alpha, beta]} />, host, modules)
     await screen.findByRole('button', { name: 'Plan: Login page · already written' })
     expect(screen.getAllByRole('button', { name: 'Start an agent working on this entry' })).toHaveLength(1)
@@ -176,9 +176,10 @@ describe('QueueCard', () => {
   test('an entry that names a plan already written but asks something else of it is work: it offers a start, and the fan-out takes it', async () => {
     const review = 'Review tickets/2026-08-01_login-page.plan.md for accessibility issues'
     host = fakeHost({ p1: { '--local': [review] }, p2: { '--local': [] } })
-    const modules: MountedModules = { ...NO_MODULES, pages: [{ segment: 'tickets', label: 'Tickets', Page: () => null, package: 'a-tickets', projects: ['p1'], names: async () => ({ 'tickets/2026-08-01_login-page.plan.md': { title: 'Plan: Login page · already written', href: 'tickets/2026-08-01_login-page.md', done: 'Create tickets/2026-08-01_login-page.plan.md' } }) }] }
+    const modules: MountedModules = { ...NO_MODULES, pages: [{ segment: 'tickets', label: 'Tickets', Page: () => null, package: 'a-tickets', projects: ['p1'], names: async () => ({ 'tickets/2026-08-01_login-page.plan.md': { title: 'Plan: Login page', href: 'tickets/2026-08-01_login-page.md', done: { ask: 'Create tickets/2026-08-01_login-page.plan.md', title: 'Plan: Login page · already written' } } }) }] }
     renderWithHost(<QueueCard projects={[alpha, beta]} />, host, modules)
-    await screen.findByRole('button', { name: 'Plan: Login page · already written' })
+    // Named as the plan it asks about: "already written" would say it is done.
+    await screen.findByRole('button', { name: 'Plan: Login page' })
     expect(screen.getAllByRole('button', { name: 'Start an agent working on this entry' })).toHaveLength(1)
     fireEvent.click(screen.getByRole('button', { name: 'Start 1' }))
     await waitFor(() => expect(started()).toEqual([['p1', workOnEntryPrompt(review), { land: false }]]))

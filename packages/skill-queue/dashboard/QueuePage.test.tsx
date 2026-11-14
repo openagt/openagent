@@ -370,7 +370,7 @@ describe('QueuePage', () => {
     })
 
     test('an entry whose file is there already (a plan already written) is left over: its row offers no start, only its removal, and the batch leaves it out', async () => {
-      const names = async () => ({ 'tickets/2026-08-01_login-page.plan.md': { title: 'Plan: Login page · already written', href: 'tickets/2026-08-01_login-page.md', done: PLAN } })
+      const names = async () => ({ 'tickets/2026-08-01_login-page.plan.md': { title: 'Plan: Login page', href: 'tickets/2026-08-01_login-page.md', done: { ask: PLAN, title: 'Plan: Login page · already written' } } })
       show([{ entry: PLAN, priority: 8 }, { entry: 'Urgent', priority: 8 }, { entry: 'Later', priority: 3 }], naming(names))
       await screen.findByRole('button', { name: 'Plan: Login page · already written' })
       expect(screen.queryByRole('button', { name: 'Start an agent on entry 1' })).toBeNull()
@@ -387,9 +387,10 @@ describe('QueuePage', () => {
 
     test('an entry that names a plan already written but asks something else of it is work: its row offers a start, and the batch takes it', async () => {
       const review = 'Review tickets/2026-08-01_login-page.plan.md for accessibility issues'
-      const names = async () => ({ 'tickets/2026-08-01_login-page.plan.md': { title: 'Plan: Login page · already written', href: 'tickets/2026-08-01_login-page.md', done: PLAN } })
+      const names = async () => ({ 'tickets/2026-08-01_login-page.plan.md': { title: 'Plan: Login page', href: 'tickets/2026-08-01_login-page.md', done: { ask: PLAN, title: 'Plan: Login page · already written' } } })
       show([{ entry: review, priority: 8 }], naming(names))
-      await screen.findByRole('button', { name: 'Plan: Login page · already written' })
+      // Named as the plan it asks about: "already written" would say it is done.
+      await screen.findByRole('button', { name: 'Plan: Login page' })
       expect(screen.getByRole('button', { name: 'Start an agent on entry 1' })).toBeTruthy()
       fireEvent.click(screen.getByRole('button', { name: 'Start 1 agent' }))
       await waitFor(() => expect(host.startRun.mock.calls).toEqual([['p1', workOnEntryPrompt(review), { land: false }]]))

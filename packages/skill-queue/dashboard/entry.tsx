@@ -28,10 +28,12 @@ export function entryView(projectId: string, entry: string, names: FileNames): E
   const named = pathsIn(entry)
     .map(path => names(projectId, path))
     .find(name => name !== undefined)
-  const done = named?.done === entry.trim()
+  // Only the entry that is left over is called by what is there already ("already written"): any other naming the path is still work.
+  const leftOver = named?.done?.ask === entry.trim() ? named.done : undefined
+  const done = leftOver !== undefined
   if (label.url !== undefined) return { title: label.text, url: label.url, renamed: false, done }
   if (linked) return { title: label.text, ...(named ? { open: named.open } : {}), renamed: false, done }
-  if (named) return { title: named.title, open: named.open, renamed: true, done }
+  if (named) return { title: leftOver?.title ?? named.title, open: named.open, renamed: true, done }
   return { title: label.text, renamed: false, done }
 }
 

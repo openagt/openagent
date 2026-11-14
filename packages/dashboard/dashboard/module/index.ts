@@ -114,8 +114,12 @@ export interface ModuleFileName {
   title: string
   /** The path that is opened for it, when it is not the path asked about: a plan still to be written opens its ticket. */
   href?: string
-  /** The ask for what the path names, word for word, once it is there already: an entry saying just this is left over (`Create tickets/<stem>.plan.md`, a plan already written). */
-  done?: string
+  /**
+   * The ask for what the path names, word for word, once it is there already: an entry saying just
+   * this is left over (`Create tickets/<stem>.plan.md`, a plan already written), and is called
+   * `title` ("Plan: Login page · already written"). Any other entry naming the path is still work.
+   */
+  done?: { ask: string; title: string }
 }
 
 /**
