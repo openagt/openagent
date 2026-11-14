@@ -61,7 +61,7 @@ export function FileView({ page, projectId, agentId, path, wrap, source, files, 
   const { value, state } = usePolled<FileContent | null>(() => readContent(host, projectId, path, agentId), null, 5_000, [projectId, agentId, path], { remember: contentKey(projectId, agentId, path) })
   const markdown = isMarkdown(path)
   const rendered = markdown && !source
-  const parts = path.split('/')
+  const folder = path.includes('/') ? path.slice(0, path.lastIndexOf('/') + 1) : ''
   const opens = useMemo(
     () => (name: string) => {
       const file = linkedFile(files, path, name)
@@ -72,14 +72,11 @@ export function FileView({ page, projectId, agentId, path, wrap, source, files, 
 
   return (
     <div className="flex min-h-0 min-w-0 flex-auto flex-col">
-      <div className="flex h-8 shrink-0 items-center gap-2 border-b border-border pr-1 pl-3">
-        <p className="min-w-0 flex-1 truncate text-[13px] text-muted-foreground" title={path}>
-          {parts.map((part, i) => (
-            <span key={i}>
-              {i > 0 && <span className="px-1">/</span>}
-              <span className={i === parts.length - 1 ? 'text-foreground' : undefined}>{part}</span>
-            </span>
-          ))}
+      {/* One line: the folders cut short first, so the file's name stays. */}
+      <div className="flex h-9 shrink-0 items-center gap-2 border-b border-hairline pr-1 pl-3">
+        <p className="flex min-w-0 flex-1 text-sm" title={path}>
+          <span className="min-w-0 truncate text-muted-foreground">{folder}</span>
+          <span className="shrink-0">{path.slice(folder.length)}</span>
         </p>
         {markdown && (
           <Tooltip>
@@ -94,7 +91,7 @@ export function FileView({ page, projectId, agentId, path, wrap, source, files, 
                 />
               }
             >
-              {rendered ? <Code className="size-3.5" /> : <Eye className="size-3.5" />}
+              {rendered ? <Code className="size-4" /> : <Eye className="size-4" />}
             </TooltipTrigger>
             <TooltipContent>{rendered ? 'Source' : 'Rendered'}</TooltipContent>
           </Tooltip>
@@ -106,7 +103,7 @@ export function FileView({ page, projectId, agentId, path, wrap, source, files, 
         ) : !value ? (
           <p className="p-3 text-xs text-muted-foreground">This file is not here: it was deleted or moved, or it cannot be read.</p>
         ) : rendered && !value.binary && value.text ? (
-          <div className="px-5 py-4">
+          <div className="max-w-prose px-5 py-4">
             <FileLinks.Provider value={opens}>
               <Markdown text={value.text} document />
             </FileLinks.Provider>

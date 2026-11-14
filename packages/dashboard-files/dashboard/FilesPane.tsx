@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { ListTree, MoreVertical, Search, X } from 'lucide-react'
 import {
   Button,
+  buttonVariants,
   DropdownMenu,
   DropdownMenuCheckboxItem,
   DropdownMenuContent,
@@ -71,13 +72,13 @@ export function fileAt(files: readonly string[], path: string): string | undefin
 /** One opened file's tab: a click shows it, a double click keeps a preview, the cross closes it. */
 function Tab({ tab, shown, onShow, onKeep, onClose }: { tab: OpenTab; shown: boolean; onShow: () => void; onKeep: () => void; onClose: () => void }) {
   return (
-    <div role="tab" aria-selected={shown} className={cn('flex h-6 shrink-0 items-center rounded-md text-[13px] text-muted-foreground hover:bg-accent', shown && 'bg-accent text-foreground')}>
-      <button type="button" title={tab.path} onClick={onShow} onDoubleClick={onKeep} className="flex h-full items-center gap-1.5 pl-2">
-        <FileIcon path={tab.path} className="size-3" />
+    <div role="tab" aria-selected={shown} className={cn('flex h-7 shrink-0 items-center rounded-md text-sm text-muted-foreground hover:bg-accent', shown && 'bg-accent text-foreground')}>
+      <button type="button" title={tab.path} onClick={onShow} onDoubleClick={onKeep} className="flex h-full items-center gap-2 rounded-md pl-2 outline-none focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-primary">
+        <FileIcon path={tab.path} />
         <span className={cn('max-w-40 truncate', !tab.kept && 'italic')}>{nameOf(tab.path)}</span>
       </button>
-      <button type="button" aria-label={`Close ${nameOf(tab.path)}`} onClick={onClose} className="flex h-full items-center px-1.5 hover:text-foreground">
-        <X aria-hidden className="size-3" />
+      <button type="button" aria-label={`Close ${nameOf(tab.path)}`} onClick={onClose} className="flex h-full items-center rounded-md px-1.5 outline-none hover:text-foreground focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-primary">
+        <X aria-hidden className="size-3.5" />
       </button>
     </div>
   )
@@ -107,7 +108,7 @@ function FilesHeader({ page, tabs, active, tree, onOpen, onSearch, onShowTree }:
     <>
       <PaneTitle>
         {tabs.length === 0 ? (
-          <h2 className="truncate pl-2 text-[13px] text-muted-foreground">Files</h2>
+          <h2 className="truncate pl-2 text-sm font-medium">Files</h2>
         ) : (
           <div ref={tablist} role="tablist" aria-label="Open files" className="flex min-w-0 items-center gap-0.5 overflow-x-auto [scrollbar-width:none]">
             {tabs.map(tab => (
@@ -119,7 +120,7 @@ function FilesHeader({ page, tabs, active, tree, onOpen, onSearch, onShowTree }:
       <PaneActions>
         <Tooltip>
           <TooltipTrigger render={<Button variant="ghost" size="icon-sm" className="shrink-0 text-muted-foreground" aria-label="Search files" onClick={onSearch} />}>
-            <Search className="size-3.5" />
+            <Search className="size-4" />
           </TooltipTrigger>
           <TooltipContent>Search files</TooltipContent>
         </Tooltip>
@@ -141,7 +142,7 @@ function FilesHeader({ page, tabs, active, tree, onOpen, onSearch, onShowTree }:
           <TooltipContent>{tree ? 'Hide the file tree' : 'Show the file tree'}</TooltipContent>
         </Tooltip>
         <DropdownMenu>
-          <DropdownMenuTrigger aria-label="The pane’s settings" className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-muted-foreground hover:bg-accent hover:text-accent-foreground">
+          <DropdownMenuTrigger aria-label="The pane’s settings" className={cn(buttonVariants({ variant: 'ghost', size: 'icon-sm' }), 'shrink-0 text-muted-foreground data-[popup-open]:bg-accent')}>
             <MoreVertical aria-hidden className="size-4" />
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end" className="min-w-[11rem]">

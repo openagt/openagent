@@ -24,17 +24,6 @@
     "text-[11px]": 1,
     "text-muted-foreground/50": 1
   },
-  "dashboard-files/dashboard/ContentView.tsx": {
-    "leading-[17px]": 1,
-    "text-[10px]": 1,
-    "text-muted-foreground/60": 1
-  },
-  "dashboard-files/dashboard/FileView.tsx": {
-    "text-[13px]": 1
-  },
-  "dashboard-files/dashboard/FilesPane.tsx": {
-    "text-[13px]": 2
-  },
   "dashboard/dashboard/components/AddProjectEffects.tsx": {
     "rounded": 1
   },
@@ -58,9 +47,8 @@
   },
   "dashboard/dashboard/components/Markdown.tsx": {
     "leading-[22px]": 1,
-    "space-y-2.5": 2,
-    "text-[0.9em]": 2,
-    "text-[15px]": 1
+    "space-y-2.5": 1,
+    "text-[0.9em]": 2
   },
   "dashboard/dashboard/components/SettingsDialog.tsx": {
     "rounded": 5

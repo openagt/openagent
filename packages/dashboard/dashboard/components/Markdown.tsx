@@ -45,7 +45,7 @@ export function Markdown({
   return (
     <div
       data-markdown
-      className={compact ? 'space-y-1.5 text-xs leading-relaxed' : page ? 'space-y-2.5 text-sm leading-[22px]' : document ? 'space-y-2.5 font-serif text-[15px] leading-6' : 'space-y-2 text-chat'}
+      className={compact ? 'space-y-1.5 text-xs leading-relaxed' : page ? 'space-y-2.5 text-sm leading-[22px]' : document ? 'space-y-3 font-serif text-base' : 'space-y-2 text-chat'}
     >
       {fade ? wordsIn(blocks, { at: 0 }, drawnAt, text) : blocks}
     </div>
