@@ -58,12 +58,10 @@ export const columnsStyle = (min: number): CSSProperties => ({
 /** A column's title, then its sentences: a section's part, on the page itself. */
 export const columnStyle: CSSProperties = { display: 'flex', flexDirection: 'column', gap: 8 }
 
-// Small mono uppercase label, for the few labels that earn it ("Try:", "What is it?", "Any software").
-export const kickerStyle: CSSProperties = {
-  fontFamily: mono,
-  ...text('xs'),
-  letterSpacing: '0.08em',
-  textTransform: 'uppercase',
+/** A label over what it names ("Try:", "What is it?", "Any software"): the body face a step smaller, as written. */
+export const labelStyle: CSSProperties = {
+  ...text('sm'),
+  fontWeight: 500,
   color: 'var(--muted-foreground)',
 }
 
@@ -89,13 +87,11 @@ export function SectionHead({ title, sub }: { title: ReactNode; sub?: string }) 
 }
 
 // The note look, shared with note-shaped blocks that can't be a <p> (e.g. the
-// prompts band, whose chip row needs a block container): one quiet rule at its left, around NoteText.
+// prompts band, whose chip row needs a block container): muted text, around NoteText.
 export const noteContainerStyle: CSSProperties = {
   margin: 0,
   ...text('sm'),
   color: 'var(--muted-foreground)',
-  borderLeft: '2px solid var(--border)',
-  padding: '0 0 0 16px',
 }
 
 const noteLabelStyle: CSSProperties = {
@@ -104,12 +100,11 @@ const noteLabelStyle: CSSProperties = {
   marginRight: 8,
 }
 
-/** A note's words: its "Note" label, then the note in italics. */
+/** A note's words: its "Note" label, then the note. */
 export function NoteText({ children }: { children: ReactNode }) {
   return (
     <>
-      <span style={noteLabelStyle}>Note</span>{' '}
-      <span style={{ fontStyle: 'italic' }}>{children}</span>
+      <span style={noteLabelStyle}>Note</span> {children}
     </>
   )
 }
@@ -127,8 +122,6 @@ export function WipBadge() {
   return (
     <span
       style={{
-        fontStyle: 'normal',
-        fontFamily: mono,
         ...text('xs'),
         fontWeight: 600,
         color: 'var(--muted-foreground)',
@@ -171,8 +164,6 @@ export function CodeChip({ children }: { children: string }) {
         overflowWrap: 'anywhere',
         boxDecorationBreak: 'clone',
         WebkitBoxDecorationBreak: 'clone',
-        // Upright even inside italic contexts (notes).
-        fontStyle: 'normal',
         fontFamily: mono,
         fontSize: 'calc(1em - 2px)',
         background: 'var(--card)',

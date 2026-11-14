@@ -38,11 +38,7 @@ export function YourFramework() {
   return (
     <section id="your-framework" style={sectionStyle}>
       <SectionHead
-        title={
-          <>
-            <em>Your</em> framework
-          </>
-        }
+        title="Your framework"
         sub="It isn't our framework. It's yours."
       />
       <div style={columnsStyle(260)}>

@@ -1,7 +1,7 @@
 import type { CSSProperties } from 'react'
 import { CommandChip, CommandLine, PmTabs, usePickedCommand } from './commands'
 import { CopiedStatus, copyPress, useCopy } from './copy'
-import { BADGES, kickerStyle, mono, proseStyle, text } from './ui'
+import { BADGES, labelStyle, mono, proseStyle, text } from './ui'
 import { switchInPlace, useDashboardHref } from './ViewToggle'
 
 const commentStyle: CSSProperties = { color: 'var(--muted-foreground)' }
@@ -54,8 +54,7 @@ export function Hero() {
           gap: '4px 16px',
           flexWrap: 'wrap',
           justifyContent: 'center',
-          ...text('xs'),
-          fontFamily: mono,
+          ...text('sm'),
           color: 'var(--muted-foreground)',
         }}
       >
@@ -122,7 +121,7 @@ export function Hero() {
         }}
       >
         <div style={{ display: 'flex', flexDirection: 'column', gap: 8, alignItems: 'center', maxWidth: '100%' }}>
-          <span style={kickerStyle}>Try:</span>
+          <span style={labelStyle}>Try:</span>
           <div
             className="try-box"
             style={{
@@ -198,14 +197,14 @@ export function Hero() {
         }}
       >
         <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-          <span style={kickerStyle}>What is it?</span>
+          <span style={labelStyle}>What is it?</span>
           <p style={{ ...proseStyle, color: 'var(--muted-foreground)' }}>
             It turns AI agents into autonomous teammates that handle work end-to-end — while you stay in control of key
             decisions.
           </p>
         </div>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-          <span style={kickerStyle}>Any software</span>
+          <span style={labelStyle}>Any software</span>
           <p style={{ ...proseStyle, color: 'var(--muted-foreground)' }}>
             (Semi-)autonomously build anything from simple web apps to complex software.
           </p>
