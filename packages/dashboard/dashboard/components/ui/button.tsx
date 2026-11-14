@@ -1,6 +1,5 @@
 import { cva, type VariantProps } from 'class-variance-authority'
-import { Loader2 } from 'lucide-react'
-import type { ComponentProps } from 'react'
+import type { ComponentProps, MouseEvent } from 'react'
 import { cn } from '../../lib/utils.js'
 
 // The presses (module/theme.css's scale): `default` is the primary, solid, one a view at most;
@@ -34,23 +33,15 @@ const buttonVariants = cva(
 )
 
 export interface ButtonProps extends ComponentProps<'button'>, VariantProps<typeof buttonVariants> {
-  /** Working on the press: the label stays, so the button keeps its width, under a spinner, and it takes no second press. */
+  /** Its press is under way: it keeps the keyboard, takes no second press and is drawn dimmed; its words are the caller's. Never `disabled`, which would drop the keyboard to the page. */
   loading?: boolean | undefined
 }
 
-export function Button({ className, variant, size, loading = false, disabled, children, ...props }: ButtonProps) {
-  return (
-    <button className={cn(buttonVariants({ variant, size }), className)} disabled={disabled || loading} aria-busy={loading || undefined} {...props}>
-      {loading ? (
-        <span className="relative inline-flex items-center justify-center" style={{ gap: 'inherit' }}>
-          <span className="invisible contents">{children}</span>
-          <Loader2 className="absolute size-4 animate-spin" aria-hidden />
-        </span>
-      ) : (
-        children
-      )}
-    </button>
-  )
+/** A press under way: still the keyboard's, refusing presses. */
+const WAITING = { 'aria-disabled': true, 'aria-busy': true, onClick: (event: MouseEvent) => event.preventDefault() } as const
+
+export function Button({ className, variant, size, loading = false, ...props }: ButtonProps) {
+  return <button className={cn(buttonVariants({ variant, size }), loading && 'cursor-progress opacity-50', className)} {...props} {...(loading && WAITING)} />
 }
 
 export { buttonVariants }

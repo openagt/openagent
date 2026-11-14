@@ -331,7 +331,7 @@ function PhoneRow({ d, item }: { d: Devices; item: PhoneItem }) {
               <Button type="button" variant="ghost" onClick={() => setRenaming(false)}>
                 Cancel
               </Button>
-              <Button type="submit" disabled={busy || !name.trim()}>
+              <Button type="submit" loading={busy} disabled={!name.trim()}>
                 Save
               </Button>
             </div>

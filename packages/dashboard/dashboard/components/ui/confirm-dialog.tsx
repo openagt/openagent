@@ -64,7 +64,6 @@ export function ConfirmDialog({
     queueMicrotask(() => onSuccess?.())
   }
   const confirm = (): void => {
-    if (busy) return
     if (!onConfirm) return close()
     void run(onConfirm, fallbackError).then(outcome => {
       if (outcome.ok) close()
@@ -99,14 +98,7 @@ export function ConfirmDialog({
                 </Button>
               }
             />
-            {/* Busy, it stays focusable: a disabled button drops the focus to the page behind the dialog. */}
-            <Button
-              variant={destructive ? 'destructive' : 'default'}
-              disabled={(down && onConfirm !== undefined) || confirmDisabled}
-              aria-disabled={busy || undefined}
-              onClick={confirm}
-              className={cn(busy && 'cursor-progress opacity-50')}
-            >
+            <Button variant={destructive ? 'destructive' : 'default'} disabled={(down && onConfirm !== undefined) || confirmDisabled} loading={busy} onClick={confirm}>
               {busy ? confirmBusyLabel : confirmLabel}
             </Button>
           </div>

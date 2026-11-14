@@ -184,7 +184,7 @@ export function AddProjectPanel({
               <Button type="button" variant="ghost" onClick={onClose}>
                 Cancel
               </Button>
-              <Button type="submit" disabled={busy || !typed.trim()}>
+              <Button type="submit" loading={busy} disabled={!typed.trim()}>
                 Next
               </Button>
             </div>
@@ -228,7 +228,7 @@ export function AddProjectPanel({
                 type="button"
                 variant="ghost"
                 autoFocus
-                disabled={busy}
+                loading={busy}
                 onClick={() => {
                   reset()
                   if (target) setTarget(null)
@@ -238,7 +238,7 @@ export function AddProjectPanel({
               >
                 {target ? 'Change the address' : folder ? 'Cancel' : 'Choose again'}
               </Button>
-              <Button type="button" disabled={busy} onClick={() => void confirmAdd()}>
+              <Button type="button" loading={busy} onClick={() => void confirmAdd()}>
                 {busy ? (target ? 'Cloning…' : 'Adding…') : target ? 'I trust it, clone and add it' : 'I trust it, add it'}
               </Button>
             </div>

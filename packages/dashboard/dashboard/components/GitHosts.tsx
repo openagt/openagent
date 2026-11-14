@@ -162,7 +162,7 @@ function HostAccounts({ row, onChanged }: { row: GitHostRow; onChanged: () => Pr
                           ? `Runs use @${account.login}. Without it they have no ${p.name} account until you add one.`
                           : `OpenAgent forgets @${account.login}. The login goes on working wherever else it is.`}
                       </p>
-                      <Button size="sm" variant="destructive" disabled={busy} onClick={() => void act(account.login, 'remove', () => sendForgetGitHostAccount(row.host, account.login))}>
+                      <Button size="sm" variant="destructive" loading={busy} onClick={() => void act(account.login, 'remove', () => sendForgetGitHostAccount(row.host, account.login))}>
                         {busy ? 'Removing…' : 'Remove'}
                       </Button>
                       <Button size="sm" variant="ghost" disabled={busy} onClick={() => setRemoving(undefined)}>

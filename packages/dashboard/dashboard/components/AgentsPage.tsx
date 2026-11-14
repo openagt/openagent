@@ -321,7 +321,7 @@ function AgentEditor({ agent, view, onAccounts, onDone }: { agent?: AgentRecord;
             <Button variant="secondary" disabled={busy} onClick={() => void onDone(false)}>
               Cancel
             </Button>
-            <Button type="submit" form={formId} disabled={busy}>
+            <Button type="submit" form={formId} loading={busy}>
               {busy && <Loader2 className="size-4 animate-spin" aria-hidden />}
               {busy ? 'Saving…' : 'Save'}
             </Button>

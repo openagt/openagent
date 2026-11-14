@@ -149,7 +149,7 @@ export function RemoveProjectDialog({
                     </Button>
                   }
                 />
-                <Button variant="destructive" disabled={busy} onClick={remove} className={cn(busy && 'cursor-progress')}>
+                <Button variant="destructive" loading={busy} onClick={remove}>
                   {busy ? 'Removing…' : files ? 'Remove and delete' : 'Remove'}
                 </Button>
               </div>
