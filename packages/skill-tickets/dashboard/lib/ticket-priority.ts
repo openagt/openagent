@@ -9,7 +9,7 @@ export function parsePriority(priority: string | undefined): number | undefined 
   return Number.isNaN(n) ? undefined : n
 }
 
-/** How a priority reads: a critical one (8 and up, the filter's "Critical") red, every other in the text's colour. */
+/** How a priority reads: 10, which the queue calls critical, to act on immediately, red; every other in the text's colour. */
 export function priorityTone(priority: string | undefined): string {
-  return (parsePriority(priority) ?? 0) >= 8 ? 'text-danger' : 'text-foreground'
+  return parsePriority(priority) === 10 ? 'text-danger' : 'text-foreground'
 }
