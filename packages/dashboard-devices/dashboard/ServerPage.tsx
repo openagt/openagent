@@ -304,19 +304,21 @@ type Way = 'ask' | 'pick' | 'code'
  * is reached through, picked by name with no code; or someone at its own door, with a code.
  */
 function AddPersonWay({ label, at, codeWay, onWay, onClose }: { label: string; at: string; /** The second way, by where the door is: on Tailscale, or anywhere. */ codeWay: string; onWay: (way: 'pick' | 'code') => void; onClose: () => void }) {
-  const choice = 'w-full rounded-md border border-border p-3 text-left hover:bg-muted'
+  const choice = 'focus-ring w-full rounded-md px-3 py-2 text-left transition-colors hover:bg-accent active:bg-foreground/10'
   return (
     <Dialog open onOpenChange={open => !open && onClose()} title={`Add person to ${label}`}>
       <div className="space-y-3 text-sm">
         <p>Who is it?</p>
+        <div className="-mx-3">
         <button type="button" className={choice} onClick={() => onWay('pick')}>
-          <span className="block">{`Someone on ${at}`}</span>
+          <span className="block font-medium">{`Someone on ${at}`}</span>
           <span className="block text-xs text-muted-foreground">{`Picked by name. No code: they reach ${label} through ${at}.`}</span>
         </button>
         <button type="button" className={choice} onClick={() => onWay('code')}>
-          <span className="block">{codeWay}</span>
+          <span className="block font-medium">{codeWay}</span>
           <span className="block text-xs text-muted-foreground">You type their name and send them a code; they add it in their own OpenAgent.</span>
         </button>
+        </div>
         <div className="flex justify-end">
           <Button variant="ghost" onClick={onClose}>
             Cancel
@@ -383,8 +385,7 @@ export function PickPeople({ host, server, label, onChange, onClose }: { host: M
             Cancel
           </Button>
           {choices.length > 0 && (
-            <Button disabled={picked.length === 0 || adding} onClick={() => void add()}>
-              {adding && <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden />}
+            <Button loading={adding} disabled={picked.length === 0} onClick={() => void add()}>
               {picked.length > 1 ? `Add ${picked.length} people` : 'Add person'}
             </Button>
           )}

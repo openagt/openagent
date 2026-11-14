@@ -90,7 +90,7 @@ export function Connecting({ d, computer, canBoth, onBack, onClose }: { d: Devic
       <div className="space-y-4">
         {phase.at === 'asking' || phase.at === 'saving' ? (
           <div role="status" className="flex items-center justify-center gap-2 py-10 text-sm text-muted-foreground">
-            <Loader2 className="h-4 w-4 shrink-0 animate-spin text-primary" aria-hidden />
+            <Loader2 className="size-4 shrink-0 animate-spin text-primary" aria-hidden />
             {phase.at === 'asking' ? `Asking ${name}…` : `${name} let you in. Saving it…`}
           </div>
         ) : phase.at === 'waiting' ? (
@@ -135,7 +135,7 @@ export function Connecting({ d, computer, canBoth, onBack, onClose }: { d: Devic
                 {phase.at === 'waiting' || phase.at === 'asking' ? 'Cancel' : 'Back'}
               </Button>
               {(phase.at === 'gone' || phase.at === 'failed') && (
-                <Button variant="outline" onClick={() => setRound(round + 1)}>
+                <Button variant="secondary" onClick={() => setRound(round + 1)}>
                   Try again
                 </Button>
               )}
@@ -222,7 +222,7 @@ export function AskPopup() {
     <Dialog open onOpenChange={open => !open && setClosed(new Set([...closed, ask.id]))} title="A computer wants to connect">
       <div className="space-y-4">
         <p className="flex items-start gap-2 text-sm">
-          <Laptop className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" aria-hidden />
+          <Laptop className="mt-0.5 size-4 shrink-0 text-muted-foreground" aria-hidden />
           <span>
             <span className="font-medium">{ask.name}</span> asks to start runs on this computer.
           </span>
@@ -233,11 +233,11 @@ export function AskPopup() {
         </p>
         {error !== undefined && <Problem>{error}</Problem>}
         <div className="flex justify-end gap-2">
-          <Button variant="outline" disabled={busy || down} onClick={() => void answer(false)}>
+          <Button variant="secondary" disabled={busy || down} onClick={() => void answer(false)}>
             Deny
           </Button>
           <Button disabled={busy || down} onClick={() => void answer(true)}>
-            {busy && <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden />}
+            {busy && <Loader2 className="size-4 animate-spin" aria-hidden />}
             Allow
           </Button>
         </div>

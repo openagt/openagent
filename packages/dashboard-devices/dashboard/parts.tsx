@@ -1,6 +1,6 @@
 import { Fragment, useEffect, useRef, useState, type ComponentType, type FormEvent, type ReactNode, type RefObject } from 'react'
 import { ChevronRight, Circle, CircleArrowUp, CircleCheck, CircleX, Loader2, Pencil } from 'lucide-react'
-import { Badge, Button, Input, Row, Section, cn, formatDateTime, formatRelative } from '@openagt/dashboard/module'
+import { Badge, Button, Input, RadioGroupOption, Row, Section, cn, formatDateTime, formatRelative } from '@openagt/dashboard/module'
 import type { DeviceRow as Listed } from './devices.js'
 import type { StepState } from './servers.js'
 
@@ -150,7 +150,7 @@ export function StepMark({ state }: { state: StepState }) {
   if (state === 'running') return <Loader2 aria-hidden className={cn(className, 'animate-spin text-primary')} />
   if (state === 'done') return <CircleCheck aria-hidden className={cn(className, 'text-success')} />
   if (state === 'failed') return <CircleX aria-hidden className={cn(className, 'text-danger')} />
-  return <Circle aria-hidden className={cn(className, 'text-muted-foreground/50')} />
+  return <Circle aria-hidden className={cn(className, 'text-faint-foreground')} />
 }
 
 /** One line of the steps: its mark, its name, and what the server said when it failed. */
@@ -298,5 +298,34 @@ export function Seen({ device, note }: { device: Listed; note?: string | undefin
         </>
       )}
     </>
+  )
+}
+
+/** One of a dialog's choices: its radio, its title and what it means, filled under the pointer; `children` under the words. */
+export function Choice({ value, disabled, title, words, badge, children }: { value: string; disabled?: boolean | undefined; title: string; words: string; badge?: string | undefined; children?: ReactNode }) {
+  return (
+    <RadioGroupOption value={value} disabled={disabled} className="flex-nowrap items-start gap-x-3 rounded-md px-3 py-2 transition-colors hover:bg-accent has-[[data-disabled]]:hover:bg-transparent [&>[data-slot=radio-group-item]]:mt-0.5">
+      <span className="min-w-0 flex-1">
+        <span className="flex items-center gap-2 font-medium">
+          {title}
+          {badge !== undefined && <Badge>{badge}</Badge>}
+        </span>
+        <span className="block text-xs text-muted-foreground">{words}</span>
+        {children}
+      </span>
+    </RadioGroupOption>
+  )
+}
+
+/** A code or an address to type somewhere else, in mono on a muted strip, with its copy press; `big` for one read from across a room. */
+export function CodeStrip({ label, text, big = false, copy }: { label: string; text: string; big?: boolean; copy: ReactNode }) {
+  return (
+    <div className="space-y-1">
+      <p className="text-xs text-muted-foreground">{label}</p>
+      <div className="flex items-center gap-2 rounded-md bg-muted py-1 pr-1 pl-3">
+        <span className={cn('min-w-0 flex-1 truncate font-mono', big ? 'text-xl font-semibold tracking-wider' : 'text-sm')}>{text}</span>
+        {copy}
+      </div>
+    </div>
   )
 }

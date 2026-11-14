@@ -2,7 +2,7 @@ import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { Check, CircleCheck, Copy, ExternalLink, Loader2, RotateCw } from 'lucide-react'
 import { Button, Dialog, Input, QrCode } from '@openagt/dashboard/module'
 import { failed, type Answer, type Given } from './devices.js'
-import { Problem } from './parts.js'
+import { CodeStrip, LinkPress, Problem } from './parts.js'
 
 // A code a new device gets in with, the ways it is shown: as a QR code a phone's camera opens, and
 // as where and a code typed on another computer. It is asked for as its dialog opens, works once,
@@ -72,8 +72,8 @@ export function CopyButton({ text, label, children }: { text: string; label: str
     return () => clearTimeout(timer)
   }, [copied])
   return (
-    <Button type="button" variant="outline" aria-label={label} className="shrink-0" onClick={() => void navigator.clipboard?.writeText(text).then(() => setCopied(true))}>
-      {copied ? <Check className="h-3.5 w-3.5 text-success" aria-hidden /> : <Copy className="h-3.5 w-3.5" aria-hidden />}
+    <Button type="button" variant="ghost" size="sm" aria-label={label} onClick={() => void navigator.clipboard?.writeText(text).then(() => setCopied(true))}>
+      {copied ? <Check className="size-4 text-success" aria-hidden /> : <Copy className="size-4" aria-hidden />}
       {copied ? 'Copied' : children}
     </Button>
   )
@@ -85,25 +85,26 @@ export const bothOf = (where: string, code: string): string => `Where: ${where}\
 /** Where and the code, to type on another computer. */
 export function CodeCard({ where, code }: { where: string; code: string }) {
   return (
-    <div role="group" aria-label="The code" className="space-y-3 rounded-lg border border-border p-4">
-      <div className="flex items-end justify-between gap-3">
-        <div className="min-w-0">
-          <p className="text-xs text-muted-foreground">Where</p>
-          <p className="truncate font-mono text-xl">{where}</p>
-        </div>
-        <CopyButton text={where} label="Copy where">
-          Copy
-        </CopyButton>
-      </div>
-      <div className="flex items-end justify-between gap-3">
-        <div className="min-w-0">
-          <p className="text-xs text-muted-foreground">Code</p>
-          <p className="font-mono text-2xl font-semibold tracking-wider">{code}</p>
-        </div>
-        <CopyButton text={bothOf(where, code)} label="Copy both">
-          Copy both
-        </CopyButton>
-      </div>
+    <div role="group" aria-label="The code" className="space-y-3">
+      <CodeStrip
+        label="Where"
+        text={where}
+        copy={
+          <CopyButton text={where} label="Copy where">
+            Copy
+          </CopyButton>
+        }
+      />
+      <CodeStrip
+        label="Code"
+        text={code}
+        big
+        copy={
+          <CopyButton text={bothOf(where, code)} label="Copy both">
+            Copy both
+          </CopyButton>
+        }
+      />
     </div>
   )
 }
@@ -112,7 +113,7 @@ export function CodeCard({ where, code }: { where: string; code: string }) {
 export function Waiting({ children }: { children: ReactNode }) {
   return (
     <p role="status" className="flex items-center gap-2 text-xs text-muted-foreground">
-      <Loader2 className="h-3.5 w-3.5 shrink-0 animate-spin text-primary" aria-hidden />
+      <Loader2 className="size-3.5 shrink-0 animate-spin text-primary" aria-hidden />
       <span role="timer">{children}</span>
     </p>
   )
@@ -122,7 +123,7 @@ export function Waiting({ children }: { children: ReactNode }) {
 export function Joined({ children, words = 'It stays in until it is removed. The code is spent.' }: { children: ReactNode; words?: string }) {
   return (
     <div role="status" className="flex flex-col items-center gap-2 py-6 text-center">
-      <CircleCheck className="h-8 w-8 text-success" aria-hidden />
+      <CircleCheck className="size-8 text-success" aria-hidden />
       <p className="text-sm font-medium">{children}</p>
       <p className="text-xs text-muted-foreground">{words}</p>
     </div>
@@ -134,7 +135,7 @@ export function NoCodeYet({ asking, error }: { asking: boolean; error: string | 
   if (asking)
     return (
       <div role="status" className="flex items-center gap-2 py-10 text-sm text-muted-foreground">
-        <Loader2 className="h-4 w-4 shrink-0 animate-spin text-primary" aria-hidden />
+        <Loader2 className="size-4 shrink-0 animate-spin text-primary" aria-hidden />
         Asking for a code…
       </div>
     )
@@ -218,28 +219,24 @@ export function PhoneCode({
         ) : expired ? (
           <RanOut />
         ) : (
-          <div className="flex gap-5 sm:items-start max-sm:flex-col max-sm:items-center">
-            <div className="shrink-0">
-              <QrCode text={link!} label="The code a new device scans" />
-            </div>
+          <div className="flex gap-6 sm:items-start max-sm:flex-col max-sm:items-center">
+            <QrOnWhite text={link!} />
             <div className="w-full min-w-0 space-y-3">
-              <ol className="space-y-3 text-sm">
-                {steps.map((step, at) => (
-                  <Step key={step} n={at + 1}>
-                    {step}
-                  </Step>
+              <ol className="list-decimal space-y-2 pl-5 text-sm marker:text-muted-foreground">
+                {steps.map(step => (
+                  <li key={step}>{step}</li>
                 ))}
               </ol>
               {hint !== undefined && <p className="text-xs text-muted-foreground">{hint}</p>}
               {code.wifiUrl !== undefined && !byWifi && (
-                <button type="button" className="relative mr-3 text-xs underline after:absolute after:-inset-y-1 after:inset-x-0" onClick={() => setByWifi(true)}>
-                  Not on Tailscale? Use this Wi-Fi.
-                </button>
+                <p className="text-xs">
+                  <LinkPress onClick={() => setByWifi(true)}>Not on Tailscale? Use this Wi-Fi.</LinkPress>
+                </p>
               )}
               {code.numberUrl !== undefined && !byNumber && (
-                <button type="button" className="relative text-xs underline after:absolute after:-inset-y-1 after:inset-x-0" onClick={() => setByNumber(true)}>
-                  Phone does not open it? Use the number.
-                </button>
+                <p className="text-xs">
+                  <LinkPress onClick={() => setByNumber(true)}>Phone does not open it? Use the number.</LinkPress>
+                </p>
               )}
               <p className="text-xs text-muted-foreground">
                 {camera ? 'No camera? ' : ''}
@@ -249,9 +246,9 @@ export function PhoneCode({
                   <>
                     {' '}
                     {/* The code is spent by the tab it opens: it leaves the page with the press. */}
-                    <a href={link} target="_blank" rel="noreferrer" className="inline-flex items-center gap-0.5 underline" onClick={onClose}>
+                    <a href={link} target="_blank" rel="noreferrer" className="focus-ring inline-flex items-center gap-1 rounded-sm text-primary hover:underline" onClick={onClose}>
                       Let this browser in instead
-                      <ExternalLink className="h-3 w-3" aria-hidden />
+                      <ExternalLink className="size-3.5" aria-hidden />
                     </a>
                   </>
                 )}
@@ -268,8 +265,8 @@ export function PhoneCode({
             </Button>
           )}
           {!asking && (joined !== undefined || expired || error !== undefined || !code) && (
-            <Button variant="outline" onClick={() => void again()}>
-              <RotateCw className="h-3.5 w-3.5" aria-hidden />
+            <Button variant="secondary" onClick={() => void again()}>
+              <RotateCw className="size-4" aria-hidden />
               {joined !== undefined ? 'Add another' : 'New code'}
             </Button>
           )}
@@ -280,15 +277,12 @@ export function PhoneCode({
   )
 }
 
-/** One numbered step. */
-function Step({ n, children }: { n: number; children: ReactNode }) {
+/** The QR code on white with room around it, in either theme: a camera finds a code by its quiet edge. */
+function QrOnWhite({ text }: { text: string }) {
   return (
-    <li className="flex gap-2">
-      <span aria-hidden className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-[var(--color-primary)] text-[11px] font-semibold text-primary-foreground">
-        {n}
-      </span>
-      <span>{children}</span>
-    </li>
+    <div className="shrink-0 rounded-lg bg-white p-4">
+      <QrCode text={text} label="The code a new device scans" />
+    </div>
   )
 }
 
@@ -296,9 +290,7 @@ function Step({ n, children }: { n: number; children: ReactNode }) {
 function CopyLink({ text }: { text: string }) {
   const [copied, setCopied] = useState(false)
   return (
-    <button type="button" className="underline" onClick={() => void navigator.clipboard?.writeText(text).then(() => setCopied(true))}>
-      {copied ? 'Copied the link' : 'Copy the link'}
-    </button>
+    <LinkPress onClick={() => void navigator.clipboard?.writeText(text).then(() => setCopied(true))}>{copied ? 'Copied the link' : 'Copy the link'}</LinkPress>
   )
 }
 
@@ -346,20 +338,19 @@ export function WhoAreYou({ title, naming, onType, onConfirm, onClose }: { title
         }}
       >
         <div className="space-y-1">
-          <label htmlFor="owner-name" className="text-sm">
+          <label htmlFor="owner-name" className="block text-sm font-medium">
             First, your name?
           </label>
-          <Input id="owner-name" ref={field} disabled={naming.busy} value={naming.typed} onChange={event => onType(event.target.value)} className="h-8 bg-background px-2 text-sm" />
+          <Input id="owner-name" ref={field} disabled={naming.busy} value={naming.typed} onChange={event => onType(event.target.value)} />
           <p className="text-xs text-muted-foreground">You are the owner, the one who invites. The devices already in are yours.</p>
           {naming.typed.trim() !== '' && name === undefined && <p className="text-xs text-danger">{NOT_A_NAME}</p>}
         </div>
         {naming.error !== undefined && <Problem>{naming.error}</Problem>}
         <div className="flex justify-end gap-2">
-          <Button variant="outline" type="button" onClick={onClose}>
+          <Button variant="ghost" type="button" onClick={onClose}>
             Cancel
           </Button>
-          <Button type="submit" disabled={naming.busy || name === undefined}>
-            {naming.busy && <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden />}
+          <Button type="submit" loading={naming.busy} disabled={name === undefined}>
             Continue
           </Button>
         </div>
@@ -424,11 +415,11 @@ export function Invite({
             make()
           }}
         >
-          <label htmlFor="invite-name" className="text-xs text-muted-foreground">
+          <label htmlFor="invite-name" className="block text-sm font-medium">
             Their name
           </label>
           <div className="flex gap-2">
-            <Input id="invite-name" ref={field} placeholder="Their name" value={typed} onChange={event => setTyped(event.target.value)} className="h-8 min-w-0 flex-1 bg-background px-2 text-sm" />
+            <Input id="invite-name" ref={field} placeholder="Their name" value={typed} onChange={event => setTyped(event.target.value)} className="min-w-0 flex-1" />
             {(person === undefined || name !== person) && (
               <Button type="submit" disabled={name === undefined || own || asking}>
                 Make the code
@@ -450,7 +441,7 @@ export function Invite({
             {tailscale && <p className="text-xs">{`${label} is on your Tailscale network: ${person} reaches it only once you share it with them in Tailscale (its machine in the Tailscale admin › Share), with Tailscale on their device.`}</p>}
             {qr ? (
               <div className="flex justify-center">
-                <QrCode text={code.url} label="The code a new device scans" />
+                <QrOnWhite text={code.url} />
               </div>
             ) : (
               <CodeCard where={code.where} code={code.code} />
@@ -459,17 +450,13 @@ export function Invite({
               {qr ? (
                 <>
                   {`On their phone: open the camera and point it at the code; OpenAgent on ${label} opens, as them. On their computer: `}
-                  <button type="button" className="underline" onClick={() => setQr(false)}>
-                    show where and the code
-                  </button>
+                  <LinkPress onClick={() => setQr(false)}>show where and the code</LinkPress>
                   {' instead.'}
                 </>
               ) : (
                 <>
                   On their computer: <span className="font-medium">Settings › Devices › Add device › I have a code</span>. {label} is then in their own OpenAgent, as yours, shared with them. On a phone with no computer:{' '}
-                  <button type="button" className="underline" onClick={() => setQr(true)}>
-                    show a QR code
-                  </button>{' '}
+                  <LinkPress onClick={() => setQr(true)}>show a QR code</LinkPress>{' '}
                   instead.
                 </>
               )}
@@ -479,12 +466,13 @@ export function Invite({
         )}
         <div className="flex justify-end gap-2">
           {person !== undefined && !asking && (joined !== undefined || expired || error !== undefined) && (
-            <Button variant="outline" onClick={() => void again(person)}>
-              <RotateCw className="h-3.5 w-3.5" aria-hidden />
+            <Button variant="secondary" onClick={() => void again(person)}>
+              <RotateCw className="size-4" aria-hidden />
               New code
             </Button>
           )}
-          <Button onClick={onClose}>
+          {/* Until the code is made, Make the code is the press the dialog is for. */}
+          <Button variant={person === undefined || name !== person ? 'secondary' : 'default'} onClick={onClose}>
             Done
           </Button>
         </div>

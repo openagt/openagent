@@ -1,5 +1,4 @@
 import { useState, type ClipboardEvent, type FormEvent } from 'react'
-import { Loader2 } from 'lucide-react'
 import { Button, Checkbox, Dialog, Input } from '@openagt/dashboard/module'
 import { hasDoor } from './model.js'
 import { Problem } from './parts.js'
@@ -109,16 +108,16 @@ export function JoinDialog({ d, onClose, onJoined }: { d: Devices; onClose: () =
   return (
     <Dialog open onOpenChange={open => !open && onClose()} title="Join with a code">
       <form className="space-y-4" onSubmit={event => void join(event)}>
-        <p className="text-xs text-muted-foreground">Type what the other device shows.</p>
+        <p className="text-sm text-muted-foreground">Type what the other device shows.</p>
         <label className="block space-y-1">
-          <span className="text-xs text-muted-foreground">Where</span>
-          <Input name="pairing-address" autoFocus aria-label="Where" placeholder="203.0.113.10" value={where} onPaste={paste} onChange={event => setWhere(event.target.value)} className="bg-background font-mono" />
+          <span className="block text-sm font-medium">Where</span>
+          <Input name="pairing-address" autoFocus aria-label="Where" placeholder="203.0.113.10" value={where} onPaste={paste} onChange={event => setWhere(event.target.value)} className="font-mono" />
           <span className="block text-xs text-muted-foreground">An address, or the whole link the other device gave.</span>
         </label>
         {!isLink(where) && (
           <label className="block space-y-1">
-            <span className="text-xs text-muted-foreground">Code</span>
-            <Input name="pairing-code" aria-label="Code" placeholder="K7P4-QX9M" autoCapitalize="characters" autoComplete="off" spellCheck={false} value={code} onPaste={paste} onChange={event => setCode(event.target.value)} className="bg-background font-mono uppercase" />
+            <span className="block text-sm font-medium">Code</span>
+            <Input name="pairing-code" aria-label="Code" placeholder="K7P4-QX9M" autoCapitalize="characters" autoComplete="off" spellCheck={false} value={code} onPaste={paste} onChange={event => setCode(event.target.value)} className="font-mono uppercase placeholder:normal-case" />
           </label>
         )}
         {server && (
@@ -136,8 +135,7 @@ export function JoinDialog({ d, onClose, onJoined }: { d: Devices; onClose: () =
             {error?.startsWith('Joined.') ? 'Done' : 'Cancel'}
           </Button>
           {!error?.startsWith('Joined.') && (
-            <Button type="submit" disabled={joining || link === undefined}>
-              {joining && <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden />}
+            <Button type="submit" loading={joining} disabled={link === undefined}>
               Join
             </Button>
           )}

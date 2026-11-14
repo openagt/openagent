@@ -1,18 +1,4 @@
 {
-  "dashboard-devices/dashboard/AddDevice.tsx": {
-    "py-2.5": 1,
-    "text-[10px]": 1
-  },
-  "dashboard-devices/dashboard/ConnectServer.tsx": {
-    "rounded": 1,
-    "text-[11px]": 1
-  },
-  "dashboard-devices/dashboard/codes.tsx": {
-    "text-[11px]": 1
-  },
-  "dashboard-devices/dashboard/parts.tsx": {
-    "text-muted-foreground/50": 1
-  },
   "dashboard/dashboard/components/AgentDetails.tsx": {
     "text-muted-foreground/70": 4
   },

@@ -1,6 +1,6 @@
-import { useEffect, useRef, useState, type ComponentType } from 'react'
-import { Globe, Loader2, Monitor, Server, Smartphone, Ticket, Waypoints, Wifi } from 'lucide-react'
-import { Button, Dialog, buttonVariants, cn, type ModuleMachine } from '@openagt/dashboard/module'
+import { useEffect, useRef, useState } from 'react'
+import { Monitor, Ticket } from 'lucide-react'
+import { Button, Dialog, List, RadioGroup, Row, buttonVariants, type ModuleMachine } from '@openagt/dashboard/module'
 import { addDevice, findComputers, readPersonThere, setSwitch, type Answer, type FoundComputer, type Given } from './devices.js'
 import { askLink, installDone } from './servers.js'
 import { CodeCard, Joined, NoCodeYet, PhoneCode, RanOut, Waiting, clock, useCode } from './codes.js'
@@ -8,7 +8,7 @@ import { ConnectServer } from './ConnectServer.js'
 import { JoinDialog } from './Join.js'
 import { Connecting } from './Pairing.js'
 import { computerName, hasDoor, isComputer } from './model.js'
-import { Problem, hostOf } from './parts.js'
+import { Choice, Problem, hostOf } from './parts.js'
 import { WARNING } from './ThisComputer.js'
 import type { Devices } from './use-devices.js'
 
@@ -21,11 +21,11 @@ import type { Devices } from './use-devices.js'
 
 export type Adding = 'choose' | 'phone' | 'computer' | 'server' | 'code'
 
-const KINDS: readonly { id: Exclude<Adding, 'choose'>; icon: ComponentType<{ className?: string; 'aria-hidden'?: boolean }>; title: string; words: string }[] = [
-  { id: 'phone', icon: Smartphone, title: 'Phone or tablet', words: 'Scan a code with its camera.' },
-  { id: 'computer', icon: Monitor, title: 'Computer', words: 'Another computer that runs OpenAgent.' },
-  { id: 'server', icon: Server, title: 'Server', words: 'Install OpenAgent on a VPS, or on a PC that stays on.' },
-  { id: 'code', icon: Ticket, title: 'I have a code', words: 'Join a server of yours, or a computer someone shared with you.' },
+const KINDS: readonly { id: Exclude<Adding, 'choose'>; title: string; words: string }[] = [
+  { id: 'phone', title: 'Phone or tablet', words: 'Scan a code with its camera.' },
+  { id: 'computer', title: 'Computer', words: 'Another computer that runs OpenAgent.' },
+  { id: 'server', title: 'Server', words: 'Install OpenAgent on a VPS, or on a PC that stays on.' },
+  { id: 'code', title: 'I have a code', words: 'Join a server of yours, or a computer someone shared with you.' },
 ]
 
 /** A Tailscale address is reached the first time only once its certificate is fetched, which Safari may sit out as a black page. */
@@ -75,25 +75,13 @@ function Choose({ kinds, onPicked, onClose }: { kinds: typeof KINDS; onPicked: (
     <Dialog open onOpenChange={open => !open && onClose()} title="Add a device">
       <div className="space-y-4">
         <p className="text-sm">What are you adding?</p>
-        <div role="radiogroup" aria-label="What are you adding?" className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-          {kinds.map(({ id, icon: Icon, title, words }) => (
-            <button
-              key={id}
-              type="button"
-              role="radio"
-              aria-checked={picked === id}
-              onClick={() => setPicked(id)}
-              onDoubleClick={() => onPicked(id)}
-              className={cn('flex gap-3 rounded-lg border p-3 text-left outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-primary)]', picked === id ? 'border-[var(--color-primary)]' : 'border-border')}
-            >
-              <Icon aria-hidden className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
-              <span>
-                <span className="block text-sm font-medium">{title}</span>
-                <span className="block text-xs text-muted-foreground">{words}</span>
-              </span>
-            </button>
+        <RadioGroup aria-label="What are you adding?" value={picked} onValueChange={next => setPicked(next as Exclude<Adding, 'choose'>)} className="-mx-3 gap-0">
+          {kinds.map(({ id, title, words }) => (
+            <div key={id} onDoubleClick={() => onPicked(id)}>
+              <Choice value={id} title={title} words={words} />
+            </div>
           ))}
-        </div>
+        </RadioGroup>
         <div className="flex justify-end gap-2">
           <Button variant="ghost" onClick={onClose}>
             Cancel
@@ -166,20 +154,20 @@ function AddPhone({ d, onClose }: { d: Devices; onClose: () => void }) {
       <Dialog open onOpenChange={open => !open && onClose()} title="Add phone">
         <div className="space-y-4">
           <p className="text-sm">Where should it work?</p>
-          <div role="radiogroup" aria-label="Where should it work?" className="space-y-2">
+          <RadioGroup aria-label="Where should it work?" value={picked} onValueChange={next => setPicked(next as string)} className="-mx-3 gap-0">
             {places.map(place =>
               place.tailscale !== undefined ? (
-                <Choice key={place.id} on={picked === place.id} icon={Waypoints} title={`On your Tailscale network, through ${place.label}`} words={`It opens ${place.label} at https://${place.tailscale}, with a lock, wherever it is. Tailscale must run on it, signed in as on ${place.label}.`} onPick={() => setPicked(place.id)} />
+                <Choice key={place.id} value={place.id} title={`On your Tailscale network, through ${place.label}`} words={`It opens ${place.label} at https://${place.tailscale}, with a lock, wherever it is. Tailscale must run on it, signed in as on ${place.label}.`} />
               ) : (
-                <Choice key={place.id} on={picked === place.id} icon={Globe} title={`Anywhere, through ${place.label}`} recommended={place.id === places[0]!.id} words={`It opens ${place.label}, with a lock. From there it starts runs on this computer and on all your devices that are on.`} onPick={() => setPicked(place.id)} />
+                <Choice key={place.id} value={place.id} title={`Anywhere, through ${place.label}`} badge={place.id === places[0]!.id ? 'Recommended' : undefined} words={`It opens ${place.label}, with a lock. From there it starts runs on this computer and on all your devices that are on.`} />
               ),
             )}
             {status?.tailscale ? (
-              <Choice on={picked === ''} icon={Waypoints} title="On your Tailscale network" words={`It opens this computer at https://${status.tailscale.address}, with a lock, wherever it is. Tailscale must run on it, signed in as on this computer.`} onPick={() => setPicked('')} />
+              <Choice value="" title="On your Tailscale network" words={`It opens this computer at https://${status.tailscale.address}, with a lock, wherever it is. Tailscale must run on it, signed in as on this computer.`} />
             ) : (
-              <Choice on={picked === ''} icon={Wifi} title="Only on this Wi-Fi" words="It opens this computer directly. No lock on the link: someone on the same Wi-Fi could listen. Use it at home." onPick={() => setPicked('')} />
+              <Choice value="" title="Only on this Wi-Fi" words="It opens this computer directly. No lock on the link: someone on the same Wi-Fi could listen. Use it at home." />
             )}
-          </div>
+          </RadioGroup>
           <div className="flex justify-end gap-2">
             <Button variant="ghost" onClick={onClose}>
               Back
@@ -226,7 +214,8 @@ function AddPhone({ d, onClose }: { d: Devices; onClose: () => void }) {
             </Button>
             {!status?.on && (
               <Button
-                disabled={turning || !status}
+                loading={turning}
+                disabled={!status}
                 onClick={() => {
                   setTurning(true)
                   void setSwitch(host, true).then(async answer => {
@@ -236,7 +225,6 @@ function AddPhone({ d, onClose }: { d: Devices; onClose: () => void }) {
                   })
                 }}
               >
-                {turning && <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden />}
                 Turn on and show the code
               </Button>
             )}
@@ -256,25 +244,6 @@ function AddPhone({ d, onClose }: { d: Devices; onClose: () => void }) {
       onCode={setCode}
       onClose={onClose}
     />
-  )
-}
-
-/** One of a dialog's choices, as a card to pick. */
-function Choice({ on, icon: Icon, title, words, recommended = false, onPick }: { on: boolean; icon: ComponentType<{ className?: string; 'aria-hidden'?: boolean }>; title: string; words: string; recommended?: boolean; onPick: () => void }) {
-  return (
-    <button type="button" role="radio" aria-checked={on} onClick={onPick} className={cn('flex w-full gap-3 rounded-lg border p-3 text-left outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-primary)]', on ? 'border-[var(--color-primary)]' : 'border-border')}>
-      <span aria-hidden className={cn('mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded-full border', on ? 'border-[var(--color-primary)]' : 'border-muted-foreground/50')}>
-        {on && <span className="h-2 w-2 rounded-full bg-[var(--color-primary)]" />}
-      </span>
-      <Icon aria-hidden className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
-      <span>
-        <span className="flex items-center gap-2 text-sm font-medium">
-          {title}
-          {recommended && <span className="rounded-full border border-border px-1.5 text-[10px] text-muted-foreground">Recommended</span>}
-        </span>
-        <span className="block text-xs text-muted-foreground">{words}</span>
-      </span>
-    </button>
   )
 }
 
@@ -331,29 +300,30 @@ function AddComputer({ d, onClose }: { d: Devices; onClose: () => void }) {
         <Waiting>{noneYet && !found?.length ? 'No computer found on this Wi-Fi yet. Still looking…' : 'Looking on this Wi-Fi…'}</Waiting>
         {error !== undefined && <Problem>{error}</Problem>}
         {found !== undefined && found.length > 0 && (
-          <ul aria-label="On this Wi-Fi" className="divide-y divide-border border-y border-border">
+          <List aria-label="On this Wi-Fi">
             {found.map((computer, at) => (
-              <li key={computer.url} className="flex items-center gap-3 py-2.5">
-                <Monitor className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden />
-                <span className="min-w-0 flex-1">
-                  <span className="block truncate text-sm">{computer.name}</span>
-                  {computer.version !== undefined && <span className="block text-xs text-muted-foreground">{`OpenAgent ${computer.version}`}</span>}
-                </span>
-                <Button variant={at === 0 ? 'default' : 'outline'} aria-label={`Connect ${computer.name}`} onClick={() => setConnecting(computer)}>
-                  Connect
-                </Button>
-              </li>
+              <Row
+                key={computer.url}
+                leading={<Monitor className="size-4" aria-hidden />}
+                title={computer.name}
+                {...(computer.version !== undefined ? { detail: `OpenAgent ${computer.version}` } : {})}
+                meta={
+                  <Button variant={at === 0 ? 'default' : 'secondary'} aria-label={`Connect ${computer.name}`} onClick={() => setConnecting(computer)}>
+                    Connect
+                  </Button>
+                }
+              />
             ))}
-          </ul>
+          </List>
         )}
         <p className="text-xs text-muted-foreground">Don't see it? Open OpenAgent on it, on the same Wi-Fi, with "On this Wi-Fi" on there.</p>
-        <div className="flex flex-wrap items-center justify-between gap-3 border-t border-border pt-3">
-          <span className="text-sm">
+        <div className="flex flex-wrap items-center justify-between gap-3 pt-3">
+          <span className="text-sm font-medium">
             Somewhere else?
-            <span className="block text-xs text-muted-foreground">{server ? `At the office, at a friend's: it joins through ${server.label}.` : "At the office, at a friend's: it joins through a server. Add a server first."}</span>
+            <span className="block text-xs font-normal text-muted-foreground">{server ? `At the office, at a friend's: it joins through ${server.label}.` : "At the office, at a friend's: it joins through a server. Add a server first."}</span>
           </span>
-          <Button type="button" variant="outline" disabled={!server} onClick={() => setGiving(true)}>
-            <Ticket className="h-3.5 w-3.5" aria-hidden />
+          <Button type="button" variant="secondary" disabled={!server} onClick={() => setGiving(true)}>
+            <Ticket className="size-4" aria-hidden />
             Give it a code
           </Button>
         </div>
@@ -440,7 +410,7 @@ export function GiveCode({ d, server, onClose }: { d: Devices; server: ModuleMac
             {done ? 'Done' : 'Cancel'}
           </Button>
           {!asking && !done && (expired || error !== undefined || !code) && joined === undefined && (
-            <Button variant="outline" onClick={() => void again()}>
+            <Button variant="secondary" onClick={() => void again()}>
               New code
             </Button>
           )}

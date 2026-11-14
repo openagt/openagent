@@ -1228,7 +1228,7 @@ describe('Settings › Devices: Set up a server, in steps', () => {
     await openConnect()
     expect(now()).toBe('Where: now')
     // A PC at home goes through a cloud server: with none, it cannot be picked yet.
-    expect((screen.getByRole('radio', { name: /A PC at home/ }) as HTMLButtonElement).disabled).toBe(true)
+    expect(screen.getByRole('radio', { name: /A PC at home/ }).hasAttribute('data-disabled')).toBe(true)
     expect(screen.getByText('Set up a cloud server first.')).toBeTruthy()
     fireEvent.click(button('Continue'))
     expect(await screen.findByText('Its address')).toBeTruthy()
