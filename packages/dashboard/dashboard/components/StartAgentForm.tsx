@@ -461,7 +461,7 @@ function OpenInEditor({ projectId }: { projectId: string }) {
   const [opened, setOpened] = useState(false)
   return (
     <>
-      <Button type="button" size="sm" disabled={busy} onClick={() => void run(() => sendOpenInApp(projectId, 'editor'), 'Failed to open.').then(outcome => setOpened(outcome.ok))}>
+      <Button type="button" size="sm" loading={busy} onClick={() => void run(() => sendOpenInApp(projectId, 'editor'), 'Failed to open.').then(outcome => setOpened(outcome.ok))}>
         Open in your editor
       </Button>
       {error ? (
