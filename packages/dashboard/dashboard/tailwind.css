@@ -1,8 +1,8 @@
 @import 'tailwindcss';
 
 /* The theme's Tailwind half — the dark variant, the fonts, the utilities — lives in
-   module/theme.css, which a module's own stylesheet imports too, so its utilities read the same
-   tokens (#1774). The token values are the page's (tokens.css, below): it defines them once, for
+   module/theme.css, which the modules' classes are compiled with too, so they read the same tokens
+   (#1774). The token values are the page's (tokens.css, below): it defines them once, for
    everything on it. */
 @import './module/theme.css';
 

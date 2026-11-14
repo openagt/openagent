@@ -324,8 +324,6 @@ export interface ModuleRunSlots {
 export interface ModuleDefinition {
   /** The cards the module adds to the Overview. */
   cards?: ModuleCard[]
-  /** A stylesheet to load with the module, relative to the module's browser part's own URL. */
-  stylesheet?: string
   /** The pages the module adds, each with a sidebar row. */
   pages?: ModulePage[]
   /** The actions the module offers on the links dashboard pages show, wherever the link's project has the module's package. */

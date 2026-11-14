@@ -61,8 +61,8 @@ function openagentDevDaemon(): Plugin {
       // request waits on `ready` when it arrives before the daemon has come up.
       server.middlewares.use((req, res, next) => {
         const url = req.originalUrl ?? req.url ?? ''
-        // The modules' files (#1774) are the daemon's too: it finds them in the projects' packages, and the computer's in its own.
-        if (!url.startsWith('/_rpc') && !url.startsWith('/_modules/') && !url.startsWith('/_computer-modules/')) return next()
+        // The modules' files (#1774) are the daemon's too: it finds them in the projects' packages, and the computer's in its own; and so is the page sheet it compiles from them.
+        if (!url.startsWith('/_rpc') && !url.startsWith('/_modules/') && !url.startsWith('/_computer-modules/') && !url.startsWith('/_styles/')) return next()
         const forward = (dest: { hostname: string; port: string }): void => {
           // Host header left as the browser sent it (localhost:<devport>), so the daemon's same-origin
           // guard passes; the SSE stream just rides the piped response.

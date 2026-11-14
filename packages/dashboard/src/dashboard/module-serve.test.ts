@@ -103,7 +103,7 @@ test('the computer\'s module files are served by their package alone, with no pr
     assert.equal(response.status, 200)
     assert.match(response.headers.get('content-type') ?? '', /javascript/)
     assert.equal(response.headers.get('cache-control'), 'no-cache')
-    assert.equal((await fetch(`${base}${COMPUTER_MODULES_PREFIX}/%40openagt%2Fdashboard-devices/dashboard.css`)).status, 200)
+    assert.equal((await fetch(`${base}${COMPUTER_MODULES_PREFIX}/%40openagt%2Fdashboard-devices/classes.txt`)).status, 200)
 
     for (const path of [
       `${COMPUTER_MODULES_PREFIX}/%40openagt%2Fdashboard-files/dashboard.js`, // every project's, not the computer's

@@ -6,7 +6,6 @@
 import { defineModule } from '@openagt/dashboard/module'
 import { FolderIcon } from 'lucide-react'
 import { FilesPane } from './FilesPane.js'
-import './dashboard.css'
 
 export default defineModule({
   panels: [
@@ -18,5 +17,4 @@ export default defineModule({
       Panel: FilesPane,
     },
   ],
-  stylesheet: 'dashboard.css',
 })

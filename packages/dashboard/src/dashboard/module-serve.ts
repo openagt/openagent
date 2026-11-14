@@ -64,7 +64,7 @@ function decode(segment: string): string | undefined {
  * 404, never a fallback: a module URL is asked for by the dashboard's loader, not typed by a person.
  * Asked for with the file's own version ({@link versionedModuleUrl}), it is kept for good: a page
  * opened again does not ask for it at all. Otherwise it is served as `no-cache`, since a module is
- * rebuilt in place under the same name (its stylesheet, a file another of its files imports, a URL
+ * rebuilt in place under the same name (its class list, a file another of its files imports, a URL
  * naming a version gone since), with a tag of the file's own: a page opened again asks with it and
  * is answered "not changed", with no body. Sent gzipped, a module's code being a page's largest file.
  */

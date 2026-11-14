@@ -10,7 +10,6 @@ import { QueuePage } from './QueuePage.js'
 import { QueueCard } from './QueueCard.js'
 import { QueuePart } from './QueuePart.js'
 import { ADD_TO_QUEUE } from './add-to-queue.js'
-import './dashboard.css'
 
 export default defineModule({
   pages: [{ segment: 'queue', label: 'Queue', icon: ListTodo, Page: QueuePage }],
@@ -19,5 +18,4 @@ export default defineModule({
     { id: 'queue', label: 'AI Queue', order: 10, Card: QueueCard },
   ],
   linkActions: [ADD_TO_QUEUE],
-  stylesheet: 'dashboard.css',
 })

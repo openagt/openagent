@@ -2,7 +2,6 @@ import { readFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { Scanner } from '@tailwindcss/oxide'
-import tailwindcss from '@tailwindcss/vite'
 import react from '@vitejs/plugin-react'
 import { defineConfig as defineBuild, type Plugin, type UserConfig } from 'vite'
 import { defineConfig as defineTests, type ViteUserConfig } from 'vitest/config'
@@ -14,16 +13,16 @@ import { compileStyles, type ModuleRules } from '../../src/dashboard/page-styles
 // the module's `dashboard/` folder.
 
 /**
- * The module's build: one browser module, `dist/dashboard/dashboard.js`, plus its stylesheet and
- * its class list ({@link classList}). React and `@openagt/dashboard/module` stay bare imports: the
- * dashboard's import map supplies its own running copies, so the module shares the page's React
- * and components instead of bundling them.
+ * The module's build: one browser module, `dist/dashboard/dashboard.js`, plus its class list
+ * ({@link classList}), from which the dashboard draws its classes in the page's one sheet. React and
+ * `@openagt/dashboard/module` stay bare imports: the dashboard's import map supplies its own running
+ * copies, so the module shares the page's React and components instead of bundling them.
  */
 export function moduleBuild(configUrl: string): UserConfig {
   const at = (path: string) => fileURLToPath(new URL(path, configUrl))
   return defineBuild({
     root: at('.'),
-    plugins: [tailwindcss(), classList(at('.'))],
+    plugins: [classList(at('.'))],
     build: {
       outDir: at('../dist/dashboard'),
       emptyOutDir: true,
@@ -31,7 +30,6 @@ export function moduleBuild(configUrl: string): UserConfig {
         entry: at('./index.tsx'),
         formats: ['es'],
         fileName: () => 'dashboard.js',
-        cssFileName: 'dashboard',
       },
       rollupOptions: {
         external: ['react', 'react/jsx-runtime', 'react-dom', 'react-dom/client', '@openagt/dashboard/module'],
