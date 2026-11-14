@@ -8,12 +8,14 @@ import type { Route } from '../lib/route.js'
 import { jumpGroups, type JumpRow } from '../lib/jump.js'
 import { agentLabel } from '../lib/agent-label.js'
 import { inPlace } from '../lib/in-place.js'
-import { pressed, shortcutKeys, useShortcut } from '../lib/shortcut.js'
+import { pressed, shortcut, shortcutKeys, useShortcut } from '../lib/shortcut.js'
 import { useProjectLabel } from '../lib/project-labels.js'
 import { cn } from '../lib/utils.js'
 import { needsWord } from './HumanQueueList.js'
 import { KeyCaps } from './ShortcutList.js'
 import { BACKDROP_CLASS } from './ui/dialog.js'
+import { Button } from './ui/button.js'
+import { Tooltip, TooltipContent, TooltipTrigger } from './ui/tooltip.js'
 
 // The jump: ⌘K or Ctrl+K from anywhere, a few letters, and Enter is on the run, the page or the
 // project meant. What this page has read already is searched in the frame of the key; every run
@@ -51,9 +53,24 @@ function keepOpened(key: string): void {
 /** Who opens the jump when its button is pressed: the one mounted. */
 const openers = new Set<() => void>()
 
-/** Opens the jump, as ⌘K or Ctrl+K does: for a press on a screen with no keyboard. */
+/** Opens the jump, as ⌘K or Ctrl+K does. */
 export function openJump(): void {
   for (const open of openers) open()
+}
+
+/** The jump's press, for a screen with no keyboard: it says its shortcut under a pointer. */
+export function JumpButton() {
+  return (
+    <Tooltip>
+      {/* A press of 28 whose hit area is 44 on a phone. */}
+      <TooltipTrigger render={<Button variant="ghost" size="icon-sm" className="relative shrink-0 text-muted-foreground max-md:after:absolute max-md:after:-inset-2" aria-label="Jump to" onClick={openJump} />}>
+        <Search className="size-4" aria-hidden />
+      </TooltipTrigger>
+      <TooltipContent>
+        Jump to <span className="text-muted-foreground">{shortcut('K')}</span>
+      </TooltipContent>
+    </Tooltip>
+  )
 }
 
 const runKey = (projectId: string, agentId: string): string => `${projectId}/${agentId}`

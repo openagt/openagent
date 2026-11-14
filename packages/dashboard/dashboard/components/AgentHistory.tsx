@@ -52,6 +52,7 @@ import { ViewToggle } from './ViewToggle.js'
 import { PersonMenu } from './PersonMenu.js'
 import { SidebarResizer } from './SidebarResizer.js'
 import { HideSidebarButton } from './SidebarToggle.js'
+import { JumpButton } from './JumpPalette.js'
 import { readAgentLogAhead } from '../lib/agent-log.js'
 import { onGitHostPeople } from '../rpc/people.js'
 import { personSaid, useGitHostPeople } from '../lib/use-git-host-people.js'
@@ -342,7 +343,11 @@ export function AgentHistory({
           {/* The mark + wordmark, the way home (#909), now that there is no navbar to hold them. */}
           <div className="flex items-center justify-between gap-2 pt-1 pl-1">
             <BrandLink working={working} href={homeHref} onNavigate={leave(onDashboard)} />
-            <HideSidebarButton />
+            {/* The jump's press, for a screen with no keyboard, beside the sidebar's own. */}
+            <span className="flex items-center gap-1">
+              <JumpButton />
+              <HideSidebarButton />
+            </span>
           </div>
           <ViewToggle />
           <ProjectPicker look="sidebar" none={{ label: 'All projects' }} picked={scope ?? null} pending={scopePending} projects={projects} onPick={onScope} onProjectAdded={onProjectAdded ?? (() => {})} />
