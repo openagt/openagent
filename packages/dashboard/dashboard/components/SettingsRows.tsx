@@ -1,4 +1,5 @@
-import { useContext, type ReactNode } from 'react'
+import { createContext, useContext, type ReactNode } from 'react'
+import { createPortal } from 'react-dom'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select.js'
 import { cn } from '../lib/utils.js'
 import { DaemonDown } from '../lib/use-daemon-health.js'
@@ -25,6 +26,15 @@ export function SettingsSection({ description, action, children }: { description
       <div className="divide-y divide-border">{children}</div>
     </div>
   )
+}
+
+/** Where Settings keeps an entry's presses: under what scrolls, in sight however long the entry is. */
+export const SettingsFootContext = createContext<HTMLElement | null>(null)
+
+/** An entry's presses (what is not saved yet, Cancel, Save), at the foot of Settings; elsewhere, where it stands. */
+export function SettingsFoot({ children }: { children: ReactNode }) {
+  const foot = useContext(SettingsFootContext)
+  return foot ? createPortal(children, foot) : children
 }
 
 /** One setting: what it is and what it does on the left, its control on the right. */

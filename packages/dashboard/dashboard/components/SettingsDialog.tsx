@@ -1,6 +1,7 @@
 import { useCallback, useId, useRef, useState, type ComponentType, type ReactNode } from 'react'
 import { Dialog as BaseDialog } from '@base-ui/react/dialog'
-import { ArrowLeft, Bell, Bot, ChevronRight, Database, FolderGit2, Globe, Keyboard, Palette, Puzzle, UserRound, X, FolderSearch } from 'lucide-react'
+import { Select as SelectPrimitive } from '@base-ui/react/select'
+import { ArrowLeft, Bell, Bot, ChevronRight, ChevronsUpDown, Database, FolderGit2, Globe, Keyboard, Layers, Palette, Puzzle, UserRound, X, FolderSearch } from 'lucide-react'
 import { ACCENTS, DEFAULT_ACCENT_LABELS, accentOf, CODE_FONTS, DOCUMENT_FONTS, DRIVERS, DRIVER_LABELS, isDriverName, FONTS, PALETTES, PALETTE_LABELS, type Accent, type CodeFont, type DocumentFont, type Font, type Palette as ColourPalette } from '../../src/client.js'
 import { driverOptions, useModels } from '../lib/models.js'
 import type { DriverOption } from './DriverModelMenu.js'
@@ -21,17 +22,20 @@ import { SHORTCUTS_ENTRY, ShortcutList } from './ShortcutList.js'
 import { REPO_SOURCES_ENTRY, RepoSourcesSettings } from './RepoSourcesSettings.js'
 import { SKILLS_ENTRY, SkillsSettings } from './ProjectSkills.js'
 import { PickProject } from './PickProject.js'
+import { ProjectDot } from './ProjectPicker.js'
 import { PROJECT_AGENT_DATA_ENTRY, ProjectAgentDataSettings } from './ProjectAgentDataSettings.js'
 import { BridgeBrowserSettings } from './BridgeBrowserSettings.js'
 import { ModuleSlot, projectsHaving } from './ModulePageView.js'
 import { ConfirmDialog } from './ui/confirm-dialog.js'
+import { buttonVariants } from './ui/button.js'
+import { BACKDROP_CLASS, DIALOG_PRESSES_CLASS } from './ui/dialog.js'
 import { Switch } from './ui/switch.js'
 import { RadioGroup, RadioGroupItem } from './ui/radio-group.js'
 import { ScrollArea } from './ui/scroll-area.js'
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select.js'
+import { Select, SelectContent, SelectItem, SelectValue } from './ui/select.js'
 import { cn } from '../lib/utils.js'
 import { useProjectLabel } from '../lib/project-labels.js'
-import { SettingsRow as Row, SettingsSection as Section, SettingsSelectRow as SelectRow, type SettingsOption as SelectOption } from './SettingsRows.js'
+import { SettingsFootContext, SettingsRow as Row, SettingsSection as Section, SettingsSelectRow as SelectRow, type SettingsOption as SelectOption } from './SettingsRows.js'
 
 // Settings (#958): a dialog over the page you are on, a list of entries on the left and the
 // picked entry's settings on the right. It opens from the person's menu and closes back to the
@@ -93,6 +97,8 @@ export function SettingsDialog({
   const own = useOwnEntries()
   // A page inside the entry shown, which the entry says it opened: its title in the header, and the back arrow to the entry.
   const [crumb, setCrumb] = useState<SettingsCrumb | undefined>()
+  // Where an entry's presses go (`SettingsFoot`): under what scrolls, so they hold their place.
+  const [foot, setFoot] = useState<HTMLDivElement | null>(null)
   // A change the entry holds and has not saved: leaving it, by Back too, asks first, and the step asked about waits here.
   const [leaving, setLeaving] = useState<(() => void) | undefined>()
   const held = useRef<(() => void) | null>(null)
@@ -149,10 +155,10 @@ export function SettingsDialog({
             if (e !== current || listOnly) leave(() => onEntry(e.id))
           }}
           className={cn(
-            'flex w-full items-center gap-2 rounded-md px-2 text-left text-sm outline-none hover:bg-sidebar-accent/50 hover:text-sidebar-accent-foreground focus-visible:ring-2 focus-visible:ring-[var(--color-primary)]',
-            // A hovered row is a lighter shade than the picked one, so the two never read alike. On a
+            // The sidebar's row: the picked one filled at 8%, one under the pointer at 4%, the weight never changing. On a
             // phone the list is a page of its own: taller rows, and none marked, since no entry is open beside it.
-            phone ? 'h-10' : 'h-8 aria-[current=page]:bg-sidebar-accent aria-[current=page]:font-medium',
+            'focus-ring flex w-full items-center gap-2 rounded-md px-1.5 text-left text-sm text-foreground transition-colors hover:bg-foreground/4 active:bg-foreground/8',
+            phone ? 'h-11' : 'h-8 aria-[current=page]:bg-foreground/8',
           )}
         >
           <Icon className="size-4 shrink-0 text-muted-foreground" aria-hidden />
@@ -161,97 +167,97 @@ export function SettingsDialog({
       </li>
     )
   }
+  const iconPress = cn(buttonVariants({ variant: 'ghost', size: 'icon-sm' }), 'text-muted-foreground hover:text-foreground max-md:size-11')
 
   return (
     <BaseDialog.Root open onOpenChange={open => !open && leave(onClose)}>
       <BaseDialog.Portal>
-        <BaseDialog.Backdrop className="fixed inset-0 z-50 bg-black/40 backdrop-blur-[1px]" />
+        <BaseDialog.Backdrop className={BACKDROP_CLASS} />
         <BaseDialog.Popup
           data-overlay="dialog"
           ref={popup}
           initialFocus={popup}
           className={cn(
             'fixed z-50 flex overflow-hidden bg-background text-foreground outline-none',
-            phone ? 'inset-0' : 'top-1/2 left-1/2 h-[min(40rem,calc(100dvh-2rem))] w-[min(56rem,calc(100vw-2rem))] -translate-x-1/2 -translate-y-1/2 rounded-lg border border-border shadow-lg',
+            // It arrives as every dialog does: grown in over 180ms, gone in 120ms; on a phone, up from below.
+            'transition-[opacity,scale,translate] duration-180 data-[ending-style]:duration-120 data-[starting-style]:opacity-0 data-[ending-style]:opacity-0',
+            phone
+              ? 'inset-0 data-[starting-style]:translate-y-8 data-[ending-style]:translate-y-8'
+              : 'top-1/2 left-1/2 h-[min(42.5rem,calc(100dvh-3rem))] w-[min(60rem,calc(100vw-3rem))] -translate-x-1/2 -translate-y-1/2 rounded-lg border border-hairline shadow-lg data-[starting-style]:scale-97 data-[ending-style]:scale-97',
           )}
         >
           {/* On a phone the list is the whole dialog until an entry is picked, and an entry the whole dialog after. */}
           {(!phone || listOnly) && (
-            <nav aria-label="Settings" className={cn('flex shrink-0 flex-col gap-4 overflow-y-auto bg-sidebar p-2', phone ? 'w-full' : 'w-56 border-r border-border')}>
+            <nav aria-label="Settings" className={cn('flex shrink-0 flex-col gap-4 overflow-y-auto bg-sidebar p-2', phone ? 'w-full' : 'w-56 border-r border-hairline')}>
               {phone && (
-                <div className="flex h-10 items-center justify-between px-2">
+                <div className="flex h-11 items-center justify-between pl-1.5">
                   <BaseDialog.Title className="text-base font-semibold">Settings</BaseDialog.Title>
-                  <BaseDialog.Close aria-label="Close settings" className="rounded p-1 text-muted-foreground outline-none hover:text-foreground focus-visible:ring-2 focus-visible:ring-[var(--color-primary)]">
+                  <BaseDialog.Close aria-label="Close settings" className={iconPress}>
                     <X className="size-4" aria-hidden />
                   </BaseDialog.Close>
                 </div>
               )}
               {/* Named for a screen reader only: the list starts with them, and needs no title over it. */}
               <section aria-label="You and this computer">
-                <ul className="flex flex-col gap-1">{yours.map(item)}</ul>
+                <ul className="flex flex-col gap-px">{yours.map(item)}</ul>
               </section>
               <section aria-label="Project">
-                <div className="flex items-center gap-2 px-2 pb-1">
-                  <p className="text-xs font-medium text-muted-foreground">Project</p>
-                  <ProjectSelect projects={projects} value={project?.id ?? ALL_PROJECTS} onChange={id => leave(() => setPicked(id))} />
-                </div>
+                <p className="flex h-8 items-center px-1.5 text-xs font-medium text-muted-foreground">Project</p>
+                <ProjectSelect projects={projects} value={project?.id ?? ALL_PROJECTS} onChange={id => leave(() => setPicked(id))} />
                 {projectEntries.length > 0 ? (
-                  <ul className="flex flex-col gap-1">{projectEntries.map(item)}</ul>
+                  <ul className="mt-px flex flex-col gap-px">{projectEntries.map(item)}</ul>
                 ) : (
-                  <p className="px-2 text-xs text-muted-foreground">Nothing to set for your projects.</p>
+                  <p className="px-1.5 pt-2 text-xs text-muted-foreground">Nothing to set for your projects.</p>
                 )}
               </section>
             </nav>
           )}
           {!listOnly && (
             <div className="flex min-w-0 flex-1 flex-col">
-              <div className="flex h-12 shrink-0 items-center gap-2 px-4">
+              <div className="flex h-14 shrink-0 items-center gap-2 px-6 max-md:px-2">
                 {crumb ? (
-                  <button type="button" aria-label={`Back to ${current.title}`} onClick={crumb.back} className="-ml-1 rounded p-1 text-muted-foreground outline-none hover:text-foreground">
+                  <button type="button" aria-label={`Back to ${current.title}`} onClick={crumb.back} className={iconPress}>
                     <ArrowLeft className="size-4" aria-hidden />
                   </button>
                 ) : (
                   phone && (
-                    <button type="button" aria-label="All settings" onClick={() => leave(() => onEntry(''))} className="-ml-1 rounded p-1 text-muted-foreground outline-none hover:text-foreground">
+                    <button type="button" aria-label="All settings" onClick={() => leave(() => onEntry(''))} className={iconPress}>
                       <ArrowLeft className="size-4" aria-hidden />
                     </button>
                   )
                 )}
-                <BaseDialog.Title className="flex min-w-0 flex-1 items-center gap-1.5 text-sm font-normal">
-                  {!phone && (
-                    <>
-                      <span className="text-muted-foreground">Settings</span>
-                      <ChevronRight className="size-3.5 shrink-0 text-muted-foreground" aria-hidden />
-                    </>
-                  )}
+                {/* The entry's title leads; where it is (the project, the entry a page is in) quieter before it. */}
+                <BaseDialog.Title className="flex min-w-0 flex-1 items-center gap-1.5 text-base font-semibold">
+                  <span className="sr-only">Settings</span>
                   {inProject && (
                     <>
-                      <span className="truncate text-muted-foreground">{project ? label(project.id, project.name) : 'All projects'}</span>
-                      <ChevronRight className="size-3.5 shrink-0 text-muted-foreground" aria-hidden />
+                      <span className="truncate font-normal text-muted-foreground">{project ? label(project.id, project.name) : 'All projects'}</span>
+                      <ChevronRight className="size-4 shrink-0 text-muted-foreground" aria-hidden />
                     </>
                   )}
                   {crumb ? (
                     <>
                       {!phone && (
                         <>
-                          <button type="button" onClick={crumb.back} className="truncate rounded text-muted-foreground outline-none hover:text-foreground">
+                          <button type="button" onClick={crumb.back} className="focus-ring truncate rounded-sm font-normal text-muted-foreground hover:text-foreground">
                             {current.title}
                           </button>
-                          <ChevronRight className="size-3.5 shrink-0 text-muted-foreground" aria-hidden />
+                          <ChevronRight className="size-4 shrink-0 text-muted-foreground" aria-hidden />
                         </>
                       )}
-                      <span className="truncate font-medium">{crumb.title}</span>
+                      <span className="truncate">{crumb.title}</span>
                     </>
                   ) : (
-                    <span className="truncate font-medium">{current.title}</span>
+                    <span className="truncate">{current.title}</span>
                   )}
                 </BaseDialog.Title>
-                <BaseDialog.Close aria-label="Close settings" className="rounded p-1 text-muted-foreground outline-none hover:text-foreground focus-visible:ring-2 focus-visible:ring-[var(--color-primary)]">
+                <BaseDialog.Close aria-label="Close settings" className={iconPress}>
                   <X className="size-4" aria-hidden />
                 </BaseDialog.Close>
               </div>
-              <ScrollArea className="min-h-0 flex-1">
-                <div className="mx-auto max-w-2xl space-y-3 px-4 pb-6">
+              {/* `peer/entry`: the foot under it shows its line only while the entry scrolls on under it. */}
+              <ScrollArea className="peer/entry min-h-0 flex-1">
+                <div className="space-y-4 px-6 pb-6 max-md:px-4">
                   {savedTo.length > 0 && (
                     <p className="text-xs text-muted-foreground">
                       Saved to {savedTo.length === 1 ? 'one project' : `${savedTo.length} projects`}: {savedTo.map(p => label(p.id, p.name)).join(', ')}.
@@ -260,11 +266,17 @@ export function SettingsDialog({
                   {/* Keyed by the projects too: an entry's reads and picks are of the projects it was drawn for. */}
                   <div key={`${current.id}/${project?.id ?? ALL_PROJECTS}`}>
                     <SettingsCrumbContext.Provider value={setCrumb}>
-                      <SettingsHoldContext.Provider value={setHeld}>{current.body}</SettingsHoldContext.Provider>
+                      <SettingsHoldContext.Provider value={setHeld}>
+                        <SettingsFootContext.Provider value={foot}>{current.body}</SettingsFootContext.Provider>
+                      </SettingsHoldContext.Provider>
                     </SettingsCrumbContext.Provider>
                   </div>
                 </div>
               </ScrollArea>
+              <div
+                ref={setFoot}
+                className={cn('shrink-0 border-t border-transparent px-6 py-3 empty:hidden max-md:px-4 max-md:pb-[max(0.75rem,env(safe-area-inset-bottom))]', 'peer-data-[overflow-y-end]/entry:border-hairline', DIALOG_PRESSES_CLASS)}
+              />
             </div>
           )}
           <ConfirmDialog
@@ -284,15 +296,25 @@ export function SettingsDialog({
   )
 }
 
-/** The "Project" group's select: every project, or one. */
+/** The "Project" group's select, drawn as the sidebar's: every project, or one. */
 function ProjectSelect({ projects, value, onChange }: { projects: ProjectSummary[]; value: string; onChange: (id: string) => void }) {
   const label = useProjectLabel()
   const items = [{ value: ALL_PROJECTS, label: 'All projects' }, ...projects.map(p => ({ value: p.id, label: label(p.id, p.name) }))]
+  const picked = projects.find(p => p.id === value)
   return (
     <Select items={items} value={value} onValueChange={next => onChange(String(next ?? ALL_PROJECTS))}>
-      <SelectTrigger aria-label="Project" className="h-6 min-w-0 flex-1 border-transparent bg-transparent px-1.5 text-xs shadow-none">
-        <SelectValue />
-      </SelectTrigger>
+      <SelectPrimitive.Trigger
+        aria-label="Project"
+        className="focus-ring flex w-full items-center gap-2 rounded-md px-1.5 text-sm font-medium transition-colors hover:bg-foreground/4 active:bg-foreground/8 data-[popup-open]:bg-foreground/8 md:h-8 max-md:h-11"
+      >
+        <span className="flex size-4 shrink-0 items-center justify-center">
+          {picked ? <ProjectDot project={picked} /> : <Layers className="size-4 text-muted-foreground" aria-hidden />}
+        </span>
+        <span className="min-w-0 flex-1 truncate text-left">
+          <SelectValue />
+        </span>
+        <ChevronsUpDown className="size-4 shrink-0 text-muted-foreground" aria-hidden />
+      </SelectPrimitive.Trigger>
       <SelectContent>
         {items.map(i => (
           <SelectItem key={i.value} value={i.value}>

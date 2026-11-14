@@ -7,6 +7,7 @@ import { useSettingsHold } from '../lib/settings-hold.js'
 import { Button, buttonVariants } from './ui/button.js'
 import { Checkbox } from './ui/checkbox.js'
 import { Skeleton, useSkeleton } from './ui/skeleton.js'
+import { SettingsFoot } from './SettingsRows.js'
 
 // A project's skills (#2023). The "Skills" menu under the box (SkillsMenu.tsx) opens Settings on
 // the project's Skills page: a card with a tick for each skill a project picks beyond the ones
@@ -306,8 +307,8 @@ function SkillCards({ projectId, skills, onDone }: { projectId: string; skills: 
           </div>
         </fieldset>
       ))}
-      {/* In sight while the cards scroll under it: a tick at the top of the page has its Save at hand. */}
-      <div className="sticky bottom-0 -mx-4 -mb-6 border-t border-border bg-background px-4 py-3">
+      {/* In sight while the skills scroll under it: a tick at the top of the page has its Save at hand. */}
+      <SettingsFoot>
         {error && <p role="alert" className="mb-2 text-xs text-danger">{error}</p>}
         <div className="flex flex-wrap items-center justify-end gap-2">
           <span className="mr-auto text-xs text-muted-foreground">
@@ -320,7 +321,7 @@ function SkillCards({ projectId, skills, onDone }: { projectId: string; skills: 
             {busy ? 'Saving…' : saveWord}
           </Button>
         </div>
-      </div>
+      </SettingsFoot>
     </div>
   )
 }

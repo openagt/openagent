@@ -92,7 +92,7 @@ function pickerGroups(none: Row | undefined, projects: readonly Row[], repos: re
 }
 
 /** A project's state as a dot: red when the daemon recorded an error for it (#1500), else whether it is activated. */
-function ProjectDot({ project }: { project: ProjectSummary }) {
+export function ProjectDot({ project }: { project: ProjectSummary }) {
   return <span aria-hidden className={cn('h-2 w-2 shrink-0 rounded-full', project.errors?.length ? 'bg-danger' : project.activated ? 'bg-primary' : 'bg-muted-foreground')} />
 }
 

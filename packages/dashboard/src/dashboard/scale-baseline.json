@@ -47,9 +47,6 @@
     "space-y-2.5": 1,
     "text-[0.9em]": 2
   },
-  "dashboard/dashboard/components/SettingsDialog.tsx": {
-    "rounded": 5
-  },
   "dashboard/dashboard/components/ToolCalls.tsx": {
     "max-h-[400px]": 1
   },
