@@ -7,7 +7,7 @@ const BLANK = { priority: '', topics: [], title: '', body: '', kept: [] }
 /** A ticket written by hand in one project: once created, its own page. */
 export function NewTicketPage({ projectId }: { projectId: string }) {
   const host = useModuleHost()
-  const back = () => host.openPage('tickets')
+  const back = () => host.backToPage('tickets')
   return (
     <TicketPageShell onBack={back} crumbs={[{ label: 'New ticket' }]}>
       <h1 className="mb-6 text-xl font-semibold">New ticket</h1>

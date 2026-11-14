@@ -20,6 +20,8 @@ function notify(): void {
 
 /** Where an entry the dashboard writes keeps its place in the tab's list: how far a Back or Forward went. */
 const STEP = 'openagent:step'
+/** Where an entry the dashboard writes keeps the address it was entered from: what a return goes back to. */
+const BEHIND = 'openagent:behind'
 
 /** The place in the tab's list of the entry shown. */
 let shown = 0
@@ -30,10 +32,17 @@ function stepOf(state: unknown): number {
   return typeof step === 'number' ? step : shown - 1
 }
 
-/** A new entry after the one shown, at `url`, with `state` beside its place. */
-function push(url: string, state?: Record<string, unknown>): void {
-  window.history.pushState({ ...state, [STEP]: shown + 1 }, '', url)
+/** A new entry after the one shown, at `url`. */
+function push(url: string): void {
+  window.history.pushState({ [STEP]: shown + 1, [BEHIND]: currentUrl() }, '', url)
   shown += 1
+}
+
+/** Go back to the place the entry shown was entered from: by Back when `isBehind` says the address it was entered from is that place, else by `otherwise`, a move. */
+export function back(isBehind: (address: string) => boolean, otherwise: () => void): void {
+  const behind: unknown = window.history.state?.[BEHIND]
+  if (typeof behind === 'string' && isBehind(behind)) leaving(() => window.history.back())
+  else otherwise()
 }
 
 /** The entry shown while it holds what leaving it would lose, and what asks before it goes. */
@@ -142,29 +151,19 @@ const currentUrl = (): string => window.location.pathname + window.location.sear
 /** The address shown: while an entry is held, its own, also in the moment the tab is on the way back to it. */
 const shownUrl = (): string => held?.url ?? currentUrl()
 
-/** Marks a history entry as Settings this tab opened over the page under it. */
-const OVER_PAGE = 'openagent:settings-over-page'
-const OVER_PAGE_STATE = { [OVER_PAGE]: true }
-
-/** Settings is open over the page this tab showed before it: Back closes it onto that page's own entry, with what the page wrote to it. */
-export function settingsOverPage(): boolean {
-  return window.history.state?.[OVER_PAGE] === true
-}
-
 /** The route, with its projects named by `projects`: what the address names changes when they do. */
 export function useRoute(projects: ProjectAddresses): {
   route: Route
   /** Navigate to `next`. Replaces the current history entry, keeping what the page wrote to it,
    *  when `replace` is set — for a correction, not a step you should be able to go Back to. Keeps
    *  what the page mirrored into the query when `keepQuery` is set — for a change of the picked
-   *  project alone (#1513), or Settings opening or closing over the page. Marks the entry as
-   *  Settings opened over the page when `overPage` is set ({@link settingsOverPage}). */
-  go: (next: Route, options?: { replace?: boolean; keepQuery?: boolean; overPage?: boolean }) => void
+   *  project alone (#1513), or Settings opening or closing over the page. */
+  go: (next: Route, options?: { replace?: boolean; keepQuery?: boolean }) => void
 } {
   const current = useSyncExternalStore(subscribe, shownUrl, () => '/')
   const route = parseRoute(current, projects)
 
-  const go = (next: Route, options?: { replace?: boolean; keepQuery?: boolean; overPage?: boolean }) => {
+  const go = (next: Route, options?: { replace?: boolean; keepQuery?: boolean }) => {
     const url = options?.keepQuery ? keepPageQuery(formatRoute(next, projects), window.location.search) : formatRoute(next, projects)
     // Going where you already are is not a history entry.
     if (url === current) return
@@ -173,9 +172,8 @@ export function useRoute(projects: ProjectAddresses): {
       return notify()
     }
     leaving(() => {
-      // Settings over the page leaves the page mounted, scrolled where it was.
-      if (!options?.overPage) keepScroll()
-      push(url, options?.overPage ? OVER_PAGE_STATE : undefined)
+      keepScroll()
+      push(url)
       notify()
     })
   }

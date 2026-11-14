@@ -407,6 +407,12 @@ export interface ModuleHost {
   /** The address `openPage` with the same arguments goes to: a link's `href`, for a link that also opens in a new tab. */
   pageHref(segment: string, path?: string[], projectId?: string): string
   /**
+   * Go back to a page at a sub-path, in any project: by the browser's Back when the page shown was
+   * opened from it, so it is as it was left (its filters, its scroll); else `openPage` with the same
+   * arguments. A list's way back from one of its items: `backToPage('tickets')`.
+   */
+  backToPage(segment: string, path?: string[], projectId?: string): void
+  /**
    * Open an entry of Settings over the page, by its id: `openSettings('devices')`; with `item`, at
    * that page inside it. From inside Settings, it moves to that entry in place: Back and closing
    * still go to the page under it.

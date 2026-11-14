@@ -133,6 +133,29 @@ describe('module pages in the shell (#1774)', () => {
     await waitFor(() => expect(window.location.pathname + window.location.search).toBe('/?view=wide'))
   })
 
+  test("a module's page goes back to the list it was opened from as that list was left, by Back; reached another way, it opens the list", async () => {
+    function ListPage({ path }: ModulePageProps) {
+      const host = useModuleHost()
+      return path.length === 0
+        ? createElement('button', { onClick: () => host.openPage('list', ['a'], PROJECT.id) }, 'open item a')
+        : createElement('button', { onClick: () => host.backToPage('list') }, 'back to the list')
+    }
+    answerShell([{ package: '@acme/list', url: moduleModule('__listModule', { pages: [{ segment: 'list', label: 'List', Page: ListPage }] }), projects: [PROJECT.id] }])
+    window.history.replaceState(null, '', '/list?sort=new')
+    render(<App />)
+    fireEvent.click(await screen.findByRole('button', { name: 'open item a' }))
+    expect(window.location.pathname).toBe('/app/list/a')
+    const entries = window.history.length
+    fireEvent.click(await screen.findByRole('button', { name: 'back to the list' }))
+    await waitFor(() => expect(window.location.pathname + window.location.search).toBe('/list?sort=new'))
+    expect(window.history.length).toBe(entries)
+    cleanup()
+    window.history.replaceState(null, '', '/app/list/a')
+    render(<App />)
+    fireEvent.click(await screen.findByRole('button', { name: 'back to the list' }))
+    expect(window.location.pathname + window.location.search).toBe('/app/list')
+  })
+
   test("a run a module opens while Settings holds a change asks first: Cancel keeps the change and Settings' address, Leave goes", async () => {
     function OpensRun() {
       const host = useModuleHost()

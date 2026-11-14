@@ -5,7 +5,6 @@ import { readTicketFile } from '../src/ticket-file.js'
 import { TicketPageShell, TicketPageNote, TicketPageShape } from './TicketPageShell.js'
 import { TicketHeader } from './TicketHeader.js'
 import { TicketEditor } from './TicketEditor.js'
-import { useBackToList } from './lib/back-to-list.js'
 import { useTicket } from './lib/use-ticket.js'
 
 // One ticket's own page: its whole text, not just the head the list row reads, under the head it
@@ -22,7 +21,7 @@ export function TicketDetailPage({
   const host = useModuleHost()
   const { read, state, reload } = useTicket(projectId, slug)
   const ticket = read && 'ticket' in read ? read.ticket : null
-  const onBack = useBackToList(host, [slug])
+  const onBack = () => host.backToPage('tickets')
   // The ticket written by hand in place of its text, until saved or left.
   const [editing, setEditing] = useState(false)
 

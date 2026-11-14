@@ -70,6 +70,6 @@ describe('TicketPlanPage (#685)', () => {
   test('Back returns to the list, the module\'s own page', async () => {
     const host = render(PLAN)
     fireEvent.click(await screen.findByRole('button', { name: /tickets/i }))
-    expect(host.openPage).toHaveBeenCalledWith('tickets')
+    expect(host.backToPage).toHaveBeenCalledWith('tickets')
   })
 })

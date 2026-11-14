@@ -4,7 +4,6 @@ import { UPDATE_TICKETS_PROMPT, heldBack, holderAgent, planLink, ticketLink, wit
 import { holdingRun } from './lib/holding-run.js'
 import type { ProjectTickets, WorkspaceTicket } from './lib/types.js'
 import { listTickets } from './lib/list.js'
-import { openFromList } from './lib/back-to-list.js'
 import {
   defaultView,
   filterRows,
@@ -65,10 +64,7 @@ export function TicketsPage({ projects }: { projects: ModuleProject[] }) {
     { remember: `skill-tickets:page:${key}`, stored: true },
   )
   const [view, setViewState] = useState<TicketsView>(initialView)
-  const open = (projectId: string, path: string[]) => {
-    openFromList(path)
-    host.openPage('tickets', path, projectId)
-  }
+  const open = (projectId: string, path: string[]) => host.openPage('tickets', path, projectId)
   const onOpenTicket = (projectId: string, file: string) => open(projectId, [file])
   const onOpenTicketPlan = (projectId: string, file: string) => open(projectId, [file, 'plan'])
   const onOpenAgent = (projectId: string, agentId: string) => host.openAgent(projectId, agentId)

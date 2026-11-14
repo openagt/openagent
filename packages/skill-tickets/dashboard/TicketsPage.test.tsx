@@ -120,26 +120,16 @@ describe('TicketsPage (#1144)', () => {
     expect(screen.getByRole('link', { name: 'Do the thing' }).getAttribute('href')).toBe('/p1/tickets/t.md')
   })
 
-  test("a ticket's page opened from the list goes back to the list as it was, every project's or one's: the browser's Back, after Forward or a reload too", async () => {
+  test("a ticket's page opened from the list goes back to it by the dashboard's return, which is the browser's Back when the list is the entry behind", async () => {
     onAllTickets.mockResolvedValue([{ projectId: 'p1', projectName: 'Alpha', tickets: [ticket()] }])
     render()
-    // The dashboard's address for a module page: the page's segment and path, under its project.
-    const openPage = (segment: string, path?: string[], inProject?: string) => window.history.pushState(null, '', `/${[inProject ?? 'p1', segment, ...(path ?? [])].join('/')}`)
-    host.openPage.mockImplementation(openPage)
     fireEvent.click(await screen.findByText('Do the thing'))
-    expect(window.location.pathname).toBe('/p1/tickets/t.md')
+    expect(host.openPage).toHaveBeenCalledWith('tickets', ['t.md'], 'p1')
+    cleanup()
     const page = fakeHost({ p1: { 'show t.md --local': { ok: true, ticket: { ...ticket(), content: '# Do the thing' } } } })
-    page.openPage.mockImplementation(openPage)
-    // The ticket's page drawn on its history entry: opened from the list, then again after Forward. A reload is the browser story's (smoke-pages).
-    for (const reached of ['opened', 'forward']) {
-      cleanup()
-      renderWithHost(<TicketDetailPage projectId="p1" slug="t.md" />, page, modules())
-      fireEvent.click(await screen.findByRole('button', { name: /tickets/i }))
-      await waitFor(() => expect([reached, window.location.pathname]).toEqual([reached, '/tickets']))
-      window.history.forward()
-      await waitFor(() => expect(window.location.pathname).toBe('/p1/tickets/t.md'))
-    }
-    window.history.replaceState(null, '')
+    renderWithHost(<TicketDetailPage projectId="p1" slug="t.md" />, page, modules())
+    fireEvent.click(await screen.findByRole('button', { name: /tickets/i }))
+    expect(page.backToPage).toHaveBeenCalledWith('tickets')
   })
 
   test('a second visit opens with the last list at once, faded once its fresh read has been out a second', async () => {

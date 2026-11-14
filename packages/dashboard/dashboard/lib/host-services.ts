@@ -17,6 +17,7 @@ export const INERT_HOST_SERVICES: HostServices = {
   agentHref: (projectId, agentId) => `/${projectId}/${agentId}`,
   openPage() {},
   pageHref: (segment, path = [], projectId) => `/${[projectId, segment, ...path].filter(Boolean).join('/')}`,
+  backToPage() {},
   openSettings() {},
   async gitHostPeople() {
     return []

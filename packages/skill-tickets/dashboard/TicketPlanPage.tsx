@@ -2,7 +2,6 @@ import { Markdown, Slot, useModuleHost } from '@openagt/dashboard/module'
 import { planBody } from '../src/module.js'
 import { TicketPageShell, TicketPageNote, TicketPageShape } from './TicketPageShell.js'
 import { TicketHeader } from './TicketHeader.js'
-import { useBackToList } from './lib/back-to-list.js'
 import { useTicket } from './lib/use-ticket.js'
 
 // One ticket's plan, its second tab: under the head it shares with the ticket's page, the plan set
@@ -20,7 +19,7 @@ export function TicketPlanPage({
   const host = useModuleHost()
   const { read, state, reload } = useTicket(projectId, slug)
   const ticket = read && 'ticket' in read ? read.ticket : null
-  const onBack = useBackToList(host, [slug, 'plan'])
+  const onBack = () => host.backToPage('tickets')
 
   return (
     <TicketPageShell onBack={onBack} crumbs={ticket ? [{ label: ticket.title, onOpen: () => host.openPage('tickets', [ticket.file], projectId) }, { label: 'Plan' }] : []}>

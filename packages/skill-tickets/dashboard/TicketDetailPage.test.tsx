@@ -263,7 +263,7 @@ describe('TicketDetailPage (#1144)', () => {
     onTicket.mockResolvedValue(ticket())
     render(<TicketDetailPage projectId="p1" slug="2026-07-20_do-the-thing.md" />)
     fireEvent.click(await screen.findByRole('button', { name: /tickets/i }))
-    expect(host.openPage).toHaveBeenCalledWith('tickets')
+    expect(host.backToPage).toHaveBeenCalledWith('tickets')
   })
 
   test('a claim naming one of the project\'s runs reads as its session name and opens the run (#1748)', async () => {

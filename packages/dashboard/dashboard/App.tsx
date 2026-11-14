@@ -32,8 +32,8 @@ import { stashPendingDraft } from './lib/draft-handoff.js'
 import { useLiveEvents } from './lib/use-live-events.js'
 import { useAgents, useRecentAgents } from './lib/use-agents.js'
 import { runsAgain } from './lib/runs-changed.js'
-import { AGENTS_PAGE, PERMISSIONS_PAGE, leaving, settingsOverPage, useRoute } from './lib/use-route.js'
-import { formatRoute, type Route } from './lib/route.js'
+import { AGENTS_PAGE, PERMISSIONS_PAGE, back, leaving, useRoute } from './lib/use-route.js'
+import { formatRoute, keepPageQuery, parseRoute, type Route } from './lib/route.js'
 import { projectAddresses, SESSIONS_ID } from '../src/project-address.js'
 import { useActivityNotifications, useInterventionNotifications } from './lib/use-notifications.js'
 import { usePreferences, notificationsEnabled, newActivityEnabled, humanInterventionEnabled, OpenProjectContext } from './lib/preferences.js'
@@ -163,6 +163,9 @@ export function App() {
   const modulePage = pageSegment ? shownPages.find(page => page.segment === pageSegment) : undefined
   // The sidebar's rows of them, there from the first frame: the last load's until the modules are imported.
   const listedPages = useListedPages(modules)
+
+  /** An address as the shell writes it once the projects are read: an id is its project's name. */
+  const readAs = (address: string) => keepPageQuery(formatRoute(parseRoute(address, addresses), addresses), address.split('?')[1] ?? '')
 
   // Every navigation keeps the picked project, and one into another project's page, or into a
   // page in a named project, picks that project: the pages never show a project the select does not name.
@@ -352,14 +355,14 @@ export function App() {
   const showSettings = (entry = '', item?: string) => {
     const { settingsItem: _item, ...rest } = route
     const next = { ...rest, settings: entry, ...(item ? { settingsItem: item } : {}) }
-    if (route.settings === undefined) navigate(next, { keepQuery: true, overPage: true })
+    if (route.settings === undefined) navigate(next, { keepQuery: true })
     else leaving(() => navigate(next, { keepQuery: true, replace: true }))
   }
   useShortcut('shortcuts', () => showSettings(SHORTCUTS_ENTRY))
   const closeSettings = () => {
-    if (settingsOverPage()) return window.history.back()
     const { settings: _settings, settingsItem: _item, ...under } = route
-    navigate(under, { keepQuery: true })
+    const page = keepPageQuery(formatRoute(under, addresses), window.location.search)
+    back(address => readAs(address) === page, () => navigate(under, { keepQuery: true }))
   }
 
   // A module's page (#1774): its own segment, in the picked project, like the Overview.
@@ -377,6 +380,14 @@ export function App() {
     agentHref: (inProject, id) => hrefOf({ projectId: inProject, agentId: id }),
     openPage: (segment, path, inProject, options) => go(pageRoute(segment, path, inProject), options),
     pageHref: (segment, path, inProject) => hrefOf(pageRoute(segment, path, inProject)),
+    backToPage: (segment, path = [], inProject) =>
+      back(
+        address => {
+          const behind = parseRoute(address, addresses)
+          return behind.page === segment && (behind.pagePath ?? []).join('/') === path.join('/')
+        },
+        () => go(pageRoute(segment, path, inProject)),
+      ),
     openSettings: (entry, item) => showSettings(entry, item),
     startRun: async (inProject, prompt, opts) => {
       const result = await sendStart(inProject, prompt, startPicks(preferences))
