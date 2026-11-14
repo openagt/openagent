@@ -276,8 +276,9 @@ export function App() {
     // is not named again.
     const continued = startedId === agentId && inProject === projectId
     setAgentStart(prev => ({ tick: continued ? prev.tick : prev.tick + 1, intent, id: startedId, projectId: inProject, at: Date.now(), ...(runsOn ? { runsOn } : {}), ...(picks ? { picks } : {}) }))
-    // The picked Context went with that run; the next launch starts from a clean focus (#948).
-    resetContext()
+    // The picked Context went with that run; the next launch starts from a clean focus (#948). A continued run's went
+    // as its message did (AgentComposer): what is picked while it goes is the next message's, with its chips.
+    if (!continued) resetContext()
     // Go to the run we just started — a real history entry, so Back returns to where you launched
     // from. Its row does not exist yet; the main pane shows it live on the strength of the id.
     go({ projectId: inProject, agentId: startedId })

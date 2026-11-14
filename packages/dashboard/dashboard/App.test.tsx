@@ -46,6 +46,13 @@ vi.mock('./components/ProjectActions.js', async importOriginal => ({
   ProjectMenu: ({ onProjectRemoved }: { onProjectRemoved?: () => void }) => (onProjectRemoved ? createElement('button', { onClick: onProjectRemoved }, 'remove the project from its menu') : null),
 }))
 
+// A session's page, as itself unless a test stands in for it: the stand-in gets what the shell hands the page.
+const agentView = vi.hoisted(() => ({ standIn: null as null | ((props: Record<string, unknown>) => unknown) }))
+vi.mock('./components/AgentView.js', async importOriginal => {
+  const real = await importOriginal<typeof import('./components/AgentView.js')>()
+  return { ...real, AgentView: (props: Parameters<typeof real.AgentView>[0]) => (agentView.standIn ? agentView.standIn(props as Record<string, unknown>) : createElement(real.AgentView, props)) }
+})
+
 const { App } = await import('./App.js')
 
 const PROJECT = { id: 'app-abc', path: '/work/app', name: 'app', activated: true }
@@ -72,6 +79,7 @@ function answerShell(modules: unknown[]): void {
 
 afterEach(() => {
   cleanup()
+  agentView.standIn = null
   window.history.replaceState(null, '', '/')
   calls.length = 0
 })
@@ -823,6 +831,44 @@ describe('the project select (#1513)', () => {
     window.history.replaceState(null, '', '/gone')
     render(<App />)
     expect(await screen.findByText('No project has the address "/gone", and no installed package adds a page there.')).toBeTruthy()
+  })
+})
+
+describe('the Context of a session continued from its box', () => {
+  // The session's page as the shell drives it: it picks into the shell's Context as `#` does, and says a message
+  // landed as its box does, for the session shown (a continuation) or for another run (a launch).
+  function SessionPage({ agentId, contextSet, onAgentStarted }: { agentId: string; contextSet: { context: Set<string>; add: (path: string) => void }; onAgentStarted: (intent: string, id: string) => void }) {
+    return createElement(
+      'div',
+      null,
+      createElement('p', null, `Context: ${[...contextSet.context].join(', ')}`),
+      createElement('button', { onClick: () => contextSet.add('README.md') }, 'pick README.md'),
+      createElement('button', { onClick: () => onAgentStarted('go on', agentId) }, 'the continuation lands'),
+      createElement('button', { onClick: () => onAgentStarted('another', '8-n') }, 'a new run starts'),
+    )
+  }
+
+  test('a file picked while an ended run\'s continuation went keeps its Context once it lands; a new run starts with none', async () => {
+    agentView.standIn = props => createElement(SessionPage, props as unknown as Parameters<typeof SessionPage>[0])
+    answerShell([])
+    answers.set('onDocs', () => [])
+    answers.set('onProjectFiles', () => [])
+    answers.set('onAgentChanges', () => [])
+    answers.set('onRetainedWorktrees', () => [])
+    answers.set('onAgents', () => [{ id: '7-e', status: 'done', startedAt: '2026-07-19T16:05:44.756Z', updatedAt: '2026-07-19T16:06:21.000Z', intent: 'app ran' }])
+    window.history.replaceState(null, '', '/app/7-e')
+    render(<App />)
+    // The session is known: the shell's own fresh start for it is behind.
+    await waitFor(() => expect(calls.some(call => call.name === 'onAgents' && call.args[0] === PROJECT.id)).toBe(true))
+    fireEvent.click(await screen.findByRole('button', { name: 'pick README.md' }))
+    expect(await screen.findByText('Context: README.md')).toBeTruthy()
+    fireEvent.click(screen.getByRole('button', { name: 'the continuation lands' }))
+    expect(window.location.pathname).toBe('/app/7-e')
+    expect(screen.getByText('Context: README.md')).toBeTruthy()
+    // A launch: the picked Context went with that run (#948).
+    fireEvent.click(screen.getByRole('button', { name: 'a new run starts' }))
+    await waitFor(() => expect(window.location.pathname).toBe('/app/8-n'))
+    await waitFor(() => expect(screen.getByText(/^Context:/).textContent).toBe('Context: '))
   })
 })
 
