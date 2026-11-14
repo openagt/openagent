@@ -2,7 +2,6 @@ import type { HTMLAttributes, ReactNode } from 'react'
 import { ArrowRight } from 'lucide-react'
 import { cn } from '../../lib/utils.js'
 import { inPlace } from '../../lib/in-place.js'
-import { RowShapes } from './slot.js'
 
 // Minimal shadcn-style Card for the dashboard page (#471): a bordered surface with an
 // optional header. Just enough structure to keep the page's panels consistent.
@@ -37,20 +36,5 @@ export function PageLink({ children, href, onOpen }: { children: ReactNode; href
       {children}
       <ArrowRight className="size-3.5" aria-hidden />
     </a>
-  )
-}
-
-/**
- * The rows of a part of the page while they are read, in the rows' own shape and height, so nothing
- * moves when they come; drawn while `useSkeleton` says so. Said in words to a screen reader.
- */
-export function RowsLoading({ rows = 2, label = 'Loading…' }: { rows?: number; label?: string }) {
-  return (
-    <div role="status">
-      <span className="sr-only">{label}</span>
-      <div aria-hidden>
-        <RowShapes rows={rows} />
-      </div>
-    </div>
   )
 }
