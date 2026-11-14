@@ -5,6 +5,7 @@ import { sendForgetGitHostAccount, sendUseGitHostAccount, type GitHostRow, type 
 import { onMachineGitHosts } from '../rpc/machines.js'
 import { readAhead, usePolled } from '../lib/use-async.js'
 import { cn } from '../lib/utils.js'
+import { FocusHome } from '../lib/focus-home.js'
 import { Button } from './ui/button.js'
 import { List } from './ui/list.js'
 import { Section } from './ui/section.js'
@@ -111,7 +112,7 @@ function HostAccounts({ row, onChanged }: { row: GitHostRow; onChanged: () => Pr
   }
   const empty = !p.installed || p.accounts.length === 0
   return (
-    <section aria-label={p.name} className="space-y-2">
+    <FocusHome as="section" aria-label={p.name} className="space-y-2">
       <header className="flex min-w-0 items-center gap-2">
         <PackageLogo svg={p.logo} />
         <h3 className="text-sm font-medium">{p.name}</h3>
@@ -192,7 +193,7 @@ function HostAccounts({ row, onChanged }: { row: GitHostRow; onChanged: () => Pr
           {error}
         </p>
       )}
-    </section>
+    </FocusHome>
   )
 }
 

@@ -94,3 +94,25 @@ test('Escape in a question over a working run closes the question and stops noth
     await runIn('hold the escape', ['running'])
   })
 })
+
+test("a git account forgotten from its row leaves the keyboard in its host's section", needsChrome, async () => {
+  await flow('forget-account', async page => {
+    let forgotten = false
+    const account = (login: string) => ({ login, ok: true })
+    await page.route('**/_rpc/onGitHosts', route =>
+      route.fulfill({
+        contentType: 'application/json',
+        body: JSON.stringify({ ret: { hosts: [{ host: 'github.com', projects: ['shop'], provider: { name: 'GitHub', requestWord: 'pull request', tool: 'gh', installed: true, install: 'gh', accounts: forgotten ? [account('alice')] : [account('alice'), account('bob')] } }] } }),
+      }),
+    )
+    await page.route('**/_rpc/sendForgetGitHostAccount', route => ((forgotten = true), route.fulfill({ contentType: 'application/json', body: JSON.stringify({ ret: { ok: true } }) })))
+    await page.reload()
+    await page.getByRole('link', { name: 'Permissions', exact: true }).click()
+    await page.getByRole('button', { name: 'More for @bob' }).click()
+    await page.getByRole('menuitem', { name: 'Remove' }).click()
+    await page.getByRole('group', { name: 'Remove @bob' }).getByRole('button', { name: 'Remove' }).click()
+    await page.getByRole('listitem', { name: '@bob' }).waitFor({ state: 'detached' })
+    await page.waitForTimeout(300)
+    assert.ok(await page.evaluate(`!!document.activeElement?.closest('[aria-label="GitHub"]')`), `the keyboard is in GitHub's section, not on ${await focused(page)}`)
+  })
+})

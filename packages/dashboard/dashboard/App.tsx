@@ -46,6 +46,7 @@ import { useContextSet } from './lib/use-context-set.js'
 import { TriangleAlert } from 'lucide-react'
 import type { StartPicks } from './lib/started-from.js'
 import { useShortcut } from './lib/shortcut.js'
+import { FocusHome } from './lib/focus-home.js'
 import { SHORTCUTS_ENTRY } from './components/ShortcutList.js'
 import { JumpPalette } from './components/JumpPalette.js'
 
@@ -697,10 +698,10 @@ export function App() {
           subagent={projectId && agentId ? <SubagentPanel projectId={projectId} agentId={agentId} events={events} subagents={subagents} live={selectedAgent?.status === 'running'} onOpenAgent={selectAgent} /> : undefined}
         >
           <PaneLayout>
-            <main className="flex min-h-0 min-w-0 flex-1 flex-col">
+            <FocusHome as="main" className="flex min-h-0 min-w-0 flex-1 flex-col">
               {isMobile && phoneTitle !== null && <PhoneBar title={phoneTitle} />}
               {renderMain()}
-            </main>
+            </FocusHome>
           </PaneLayout>
         </PanesProvider>
       </div>
