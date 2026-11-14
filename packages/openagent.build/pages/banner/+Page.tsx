@@ -6,7 +6,9 @@ import { BADGES, mono } from '../index/ui'
 // cards) with >=64px safe margins all around.
 export default function Page() {
   return (
+    // Dark whatever the visitor's computer asks for: it is the picture other sites show.
     <div
+      className="dark"
       style={{
         position: 'relative',
         width: 1200,

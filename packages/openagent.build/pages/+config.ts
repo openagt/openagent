@@ -4,7 +4,7 @@ import type { Config } from 'vike/types'
 export default {
   extends: vikeReact,
   prerender: true,
-  // The site is drawn in the dark theme of OpenAgent's palette (tokens.css).
+  // OpenAgent's palette (tokens.css), dark; light for a visitor who asks for it (+Head.tsx).
   htmlAttributes: { class: 'dark' },
   title: 'OpenAgent',
   description:

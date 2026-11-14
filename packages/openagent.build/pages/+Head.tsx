@@ -8,6 +8,14 @@ export default function Head() {
             "try{var p=localStorage.getItem('pm');document.documentElement.dataset.pm=p==='pnpm'||p==='bun'||p==='yarn'?p:'npm'}catch(e){document.documentElement.dataset.pm='npm'}",
         }}
       />
+      {/* Before first paint: the light theme for a visitor whose computer asks for it, and again
+          whenever it changes; without the script the page stays dark. */}
+      <script
+        dangerouslySetInnerHTML={{
+          __html:
+            "try{var m=matchMedia('(prefers-color-scheme: light)'),t=function(){document.documentElement.classList.toggle('dark',!m.matches)};t();m.addEventListener('change',t)}catch(e){}",
+        }}
+      />
       {/* Before first paint: on a computer with OpenAgent installed, this page is the dashboard's
           own copy, whose server keeps the view cookie; there the toggle under the logo is shown,
           from the first frame (#1919). A cookie left over from an uninstall is undone by
