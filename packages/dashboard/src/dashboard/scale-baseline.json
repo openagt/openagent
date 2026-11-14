@@ -115,9 +115,6 @@
     "rounded": 1,
     "text-[10px]": 1
   },
-  "dashboard/dashboard/components/PersonMark.tsx": {
-    "text-[10px]": 1
-  },
   "dashboard/dashboard/components/ProjectSkills.tsx": {
     "gap-2.5": 1,
     "rounded": 4

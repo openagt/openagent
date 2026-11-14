@@ -43,7 +43,7 @@ export function PersonMark({ email, name, picture, you = false, said, className 
   return (
     <span
       {...(said ? { role: 'img', 'aria-label': said, title: said } : { 'aria-hidden': true })}
-      className={cn('relative flex size-7 shrink-0 items-center justify-center overflow-hidden rounded-full text-[10px] font-semibold', you ? 'bg-primary/15 text-primary' : 'bg-muted-foreground/15 text-muted-foreground', you && went?.landed && 'ring-2 ring-primary/40', className)}
+      className={cn('relative flex size-7 shrink-0 items-center justify-center overflow-hidden rounded-full text-xs font-semibold', you ? 'bg-primary/15 text-primary' : 'bg-muted-foreground/15 text-muted-foreground', you && went?.landed && 'ring-2 ring-primary/40', className)}
     >
       {email && !went?.landed && personLetters(personName(email, name))}
       {picture && went?.landed !== false && <img src={picture} alt="" referrerPolicy="no-referrer" onLoad={() => setSettled({ picture, landed: true })} onError={() => setSettled({ picture, landed: false })} className="absolute inset-0 size-full object-cover" />}
