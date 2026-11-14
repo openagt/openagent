@@ -34,7 +34,7 @@ import { driverOptions, modelEfforts, readMachineModelsAhead, useModelsOn } from
 import { readyCommands, useProjectLauncher } from '../lib/use-project-launcher.js'
 import { AgentAccountItems, firstAccount, readMachineAccountsAhead, useAccountsOn } from './AgentAccounts.js'
 import { readMachineGitHostsAhead } from './GitHosts.js'
-import { Tooltip, TooltipTrigger, TooltipContent } from './ui/tooltip.js'
+import { Tooltip, TooltipTrigger, TooltipContent, TooltipsPastBox } from './ui/tooltip.js'
 import { RowAboveBox, rowClass, rowItemClass, rowLeftClass } from './ui/row-item.js'
 import { Skeleton } from './ui/skeleton.js'
 import { Slot } from './ui/slot.js'
@@ -150,6 +150,8 @@ export const Composer = forwardRef<ComposerHandle, {
   const [prompt, setPrompt] = useState('')
   const [addingPreset, setAddingPreset] = useState(false)
   const editorRef = useRef<PromptEditorHandle>(null)
+  // The box's edge, which the tooltips of its last line's items open past.
+  const surface = useRef<HTMLDivElement>(null)
   // The machines saved on this dashboard's own machine (#1052).
   const machines = useMachines()
   const machineStatus = useMachineStatus(machines) // #1072: online/offline per saved machine
@@ -440,7 +442,7 @@ export const Composer = forwardRef<ComposerHandle, {
 
   return (
     <>
-      <div className={SURFACE}>
+      <div ref={surface} className={SURFACE}>
         {/* Where the agent starts, the box's first line (his pick, above the text): the machine, the
             project and the branch, drawn as the last line draws its items. A session has its own words
             in the same place. */}
@@ -468,18 +470,20 @@ export const Composer = forwardRef<ComposerHandle, {
         {/* How it runs, the box's last line: the caller's controls at the left, the model at the right. The
             left side is the one that gives way: a longer label there never moves the model or the
             page below. */}
-        <div className={cn('mt-1', rowClass)}>
-          <div className={rowLeftClass}>{controls}</div>
-          <div className="flex shrink-0 items-center gap-0.5">
-            {controlsEnd}
-            {driverModelEl || (
-              <span className="flex items-center">
-                {sessionModel !== undefined && <span className={rowItemClass}>{sessionModel}</span>}
-                {sessionContext}
-              </span>
-            )}
+        <TooltipsPastBox value={surface}>
+          <div className={cn('mt-1', rowClass)}>
+            <div className={rowLeftClass}>{controls}</div>
+            <div className="flex shrink-0 items-center gap-0.5">
+              {controlsEnd}
+              {driverModelEl || (
+                <span className="flex items-center">
+                  {sessionModel !== undefined && <span className={rowItemClass}>{sessionModel}</span>}
+                  {sessionContext}
+                </span>
+              )}
+            </div>
           </div>
-        </div>
+        </TooltipsPastBox>
       </div>
 
       {offlineNote}
