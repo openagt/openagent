@@ -25,7 +25,7 @@ vi.mock('./GitHosts.js', () => ({ GitHostOff: ({ home, account }: { home: { name
 
 // The Composer is exercised by its own tests; here it only has to hand back a submit and report
 // the props this component sets on it.
-const box = vi.hoisted(() => ({ clear: vi.fn(), focus: vi.fn(), edit: vi.fn(), append: vi.fn() }))
+const box = vi.hoisted(() => ({ clear: vi.fn((): unknown => ({ type: 'doc', content: [{ type: 'paragraph', content: [{ type: 'text', text: 'hello' }] }] })), restore: vi.fn(), focus: vi.fn(), edit: vi.fn(), append: vi.fn() }))
 vi.mock('./Composer.js', async () => {
   const { forwardRef, useImperativeHandle } = await import('react')
   const Composer = forwardRef((props: any, ref: any) => {
@@ -275,12 +275,13 @@ describe('AgentComposer, live (#714)', () => {
     let answer: (outcome: unknown) => void = () => {}
     sendMessage.mockReturnValue(new Promise(resolve => (answer = resolve)))
     box.clear.mockClear()
-    box.append.mockClear()
+    box.restore.mockClear()
     renderComposer()
     fireEvent.click(screen.getByText('submit'))
     expect(box.clear).toHaveBeenCalledTimes(1)
     act(() => answer({ ok: false, error: 'unknown session' }))
-    await waitFor(() => expect(box.append).toHaveBeenCalledWith('hello'))
+    // What the box held, as it handed it over (AgentComposer.editor.test.tsx: its chips and Context too).
+    await waitFor(() => expect(box.restore).toHaveBeenCalledWith(box.clear.mock.results[0]!.value))
     expect(box.clear).toHaveBeenCalledTimes(1)
   })
 
@@ -329,9 +330,10 @@ describe('AgentComposer, another session picked', () => {
     keepDraft('p1:run-1', 'and one more thing')
     page.rerender(composer('run-2'))
     box.append.mockClear()
+    box.restore.mockClear()
     box.focus.mockClear()
     await act(async () => answer({ ok: false, error: 'session A refused it' }))
-    expect([box.append.mock.calls, box.focus.mock.calls]).toEqual([[], []])
+    expect([box.append.mock.calls, box.restore.mock.calls, box.focus.mock.calls]).toEqual([[], [], []])
     page.rerender(composer('run-1'))
     // What run-1's box opens with (Composer's own test).
     expect(keptDraft('p1:run-1')).toBe('and one more thing\n\nhello')

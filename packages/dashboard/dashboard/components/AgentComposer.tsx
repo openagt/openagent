@@ -199,13 +199,18 @@ export function AgentComposer({
 
   const send = async (text: string, { later }: { later: boolean } = { later: false }): Promise<void> => {
     if (busy) return
-    // The box is emptied as the message goes, so what is typed meanwhile stays; a message refused comes back to it.
-    composerRef.current?.clear()
-    const went = await say(contextSet ? promptWithContext(text, contextSet.context) : text, later)
+    // The box is emptied as the message goes, so what is typed meanwhile stays; a message refused comes back to it
+    // as the same draft: its chips, and the Context it went with, which emptying the box took out with the chips.
+    const sent = contextSet?.context
+    const draft = composerRef.current?.clear()
+    const went = await say(sent ? promptWithContext(text, sent) : text, later)
     if (went) contextSet?.reset()
     if (shown.current === agentId) {
       if (went) setNotSent(false)
-      else composerRef.current?.append(text)
+      else {
+        if (draft) composerRef.current?.restore(draft)
+        for (const path of sent ?? []) contextSet?.add(path)
+      }
       composerRef.current?.focus()
     } else if (!went) {
       // Another session's box is shown by now: the words go back to the one they were written in, after what it holds, as its append puts them.
