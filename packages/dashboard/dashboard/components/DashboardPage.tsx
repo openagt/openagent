@@ -59,16 +59,18 @@ export function DashboardPage({
   active: { active: ActiveAgent[]; stale: boolean; loaded: boolean }
   /** Every registered project. The usage bar is given all of them: usage is the account's, not a project's. */
   projects: ProjectSummary[]
-  /** The one project the page shows (#1513), or null for all: the agents at work and the packages' cards show only its, and a card of a package it does not have is not drawn. */
-  scope: string | null
+  /** The projects the page shows (#1513), or null for all: the agents at work and the packages' cards show only theirs, and a card of a package none of them has is not drawn. */
+  scope: readonly string[] | null
   /** A project was added from the first steps: the app reads its projects again. */
   onProjectAdded: () => void
 }) {
   // Its ✕ hides it (#958), and a switch in Settings › Appearance shows it again.
   const onboardingDismissed = usePreferences().onboardingDismissed ?? false
   const namesRuns = usePreferences().nameRuns !== false
-  const working = active.active.filter(agent => scope === null || agent.projectId === scope)
-  const shownProjects = scope === null ? projects : projects.filter(project => project.id === scope)
+  const working = active.active.filter(agent => scope === null || scope.includes(agent.projectId))
+  const shownProjects = scope === null ? projects : projects.filter(project => scope.includes(project.id))
+  // A project arranges its own layout; several picked, or none, arrange the all-projects one.
+  const onlyProject = scope?.length === 1 ? scope[0]! : null
   // Every card the Overview can show here, each with the widths it stands at; the person's layout
   // for this page (the picked project's, else all projects') orders them, sizes them, and hides some.
   const moduleCards = useModuleCards(shownProjects)
@@ -150,7 +152,7 @@ export function DashboardPage({
   ]
   // Until a layout names them, the cards stand by their order: the tiles first, then the cards.
   cards.sort((a, b) => a.order - b.order)
-  const layoutKey = scope ?? ALL_PROJECTS
+  const layoutKey = onlyProject ?? ALL_PROJECTS
   const layouts = usePreferences().overviewLayouts
   // The cards are drawn once the person's layout is read: a card they took off is never drawn, and
   // so never reads anything, not even for the moment before the layout is known.
@@ -159,7 +161,7 @@ export function DashboardPage({
   // Arranging the page, on its cards themselves: the layout of this page (the picked project's, else
   // all projects'), changed at once as the person moves, sizes and hides the cards.
   const [editing, setEditing] = useState(false)
-  const scopeName = scope === null ? undefined : projects.find(project => project.id === scope)?.name
+  const scopeName = onlyProject === null ? undefined : projects.find(project => project.id === onlyProject)?.name
   const own = layouts?.[layoutKey] !== undefined
   const reset = (): void => {
     const { [layoutKey]: _dropped, ...rest } = layouts ?? {}

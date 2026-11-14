@@ -3,7 +3,9 @@
 // `/gemstack` its "New agent session" page, `/gemstack/overview` its Overview, `/gemstack/logs` a module's
 // page with that project picked, `/gemstack/<agentId>` one agent. The project in the address is the
 // one every page shows (#1513), the pick of the sidebar's select; a project's agent and "New agent session"
-// pages show every project instead with `?all`. The URL is the selection — what used to be three
+// pages show every project instead with `?all`. Several projects picked are `?project=<address>`, once
+// each: `/overview?project=a&project=b`, `/logs?project=a&project=b`, and on a project's own pages the
+// others than the address's own, `/a/<agentId>?project=b`. The URL is the selection — what used to be three
 // pieces of React state guessing at each other, which is where the #761/#766/#768/#774 bugs came from.
 //
 // A session with no project has the address `/session/<agentId>`, and `/session` is the "New agent
@@ -43,15 +45,18 @@ export interface Route {
   /** The segments after a module page's own, decoded: `/logs/a` carries `['a']`. */
   pagePath?: string[]
   /**
-   * The one project every page shows (#1513), by id; absent when every project shows. It is the
-   * project the address starts with. On a project's agent and "New agent session" pages it is that
-   * project, or absent when `?all` is there: never another one.
+   * The projects every page shows (#1513), by id, never empty; absent when every project shows.
+   * One is the project the address starts with, several are `?project=`. On a project's agent and
+   * "New agent session" pages it holds that project, or is absent when `?all` is there.
    */
-  scope?: string
+  scope?: readonly string[]
 }
 
 /** The query parameter, with no value, that says every project shows on a project's own pages. */
 const ALL_PARAM = 'all'
+
+/** The query parameter, once per project, that names the projects picked beside the address's own. */
+const PROJECT_PARAM = 'project'
 
 /** The query parameter that carries {@link Route.settings}. */
 export const SETTINGS_PARAM = 'settings'
@@ -69,24 +74,36 @@ export function parseRoute(url: string, projects: ProjectAddresses): Route {
   const item = params.get(SETTINGS_ITEM_PARAM)
   const settings = entry !== null ? { settings: entry, ...(item ? { settingsItem: item } : {}) } : {}
   const [first, ...rest] = pathname.split('/').filter(Boolean).map(decodeSegment)
+  const named = (address: string) => projects.projectOf(address) ?? address
+  // The projects named beside the address's own, each once.
+  const others = params.getAll(PROJECT_PARAM).filter(Boolean).map(named)
+  const scopeOf = (own: string[]): { scope?: string[] } => {
+    const picked = [...new Set([...own, ...others])]
+    return picked.length ? { scope: picked } : {}
+  }
   // The old page's address, `/settings/<entry>` included: the dialog over the Overview.
   if (first === SETTINGS_SEGMENT) return { projectId: null, agentId: null, settings: entry ?? rest[0] ?? '' }
-  if (!first || first === OVERVIEW_SEGMENT) return { projectId: null, agentId: null, ...settings }
-  const named = projects.projectOf(first)
-  if (named === undefined && isPageSegment(first)) return { projectId: null, agentId: null, page: first, pagePath: rest, ...settings }
-  const projectId = named ?? first
+  if (!first || first === OVERVIEW_SEGMENT) return { projectId: null, agentId: null, ...scopeOf([]), ...settings }
+  if (projects.projectOf(first) === undefined && isPageSegment(first)) return { projectId: null, agentId: null, page: first, pagePath: rest, ...scopeOf([]), ...settings }
+  const projectId = named(first)
   const [second, ...after] = rest
-  if (second === OVERVIEW_SEGMENT) return { projectId: null, agentId: null, scope: projectId, ...settings }
-  if (second !== undefined && isPageSegment(second)) return { projectId: null, agentId: null, page: second, pagePath: after, scope: projectId, ...settings }
+  if (second === OVERVIEW_SEGMENT) return { projectId: null, agentId: null, ...scopeOf([projectId]), ...settings }
+  if (second !== undefined && isPageSegment(second)) return { projectId: null, agentId: null, page: second, pagePath: after, ...scopeOf([projectId]), ...settings }
   // The sessions with no project are no project to show alone: every project shows beside them.
-  return { projectId, agentId: second ?? null, ...(params.has(ALL_PARAM) || projectId === SESSIONS_ID ? {} : { scope: projectId }), ...settings }
+  return { projectId, agentId: second ?? null, ...(params.has(ALL_PARAM) || projectId === SESSIONS_ID ? {} : scopeOf([projectId])), ...settings }
 }
 
 /** The URL for a route, its path and its query — the inverse of {@link parseRoute}. */
 export function formatRoute(route: Route, projects: ProjectAddresses): string {
-  const all = !route.page && route.projectId && route.projectId !== SESSIONS_ID && !route.scope ? [ALL_PARAM] : []
+  const ownPage = !route.page && route.projectId !== null
+  const all = ownPage && route.projectId !== SESSIONS_ID && !route.scope ? [ALL_PARAM] : []
+  // The projects picked that the path does not name: on a project's own page every one but it, on
+  // any other page every one when several are. A session with no project shows every project.
+  const inPath = ownPage ? route.projectId : route.scope?.length === 1 ? route.scope[0] : null
+  const others = ownPage && route.projectId === SESSIONS_ID ? [] : (route.scope ?? []).filter(id => id !== inPath)
+  const named = others.map(id => `${PROJECT_PARAM}=${encodeURIComponent(projects.addressOf(id))}`)
   const settings = route.settings !== undefined ? [`${SETTINGS_PARAM}=${encodeURIComponent(route.settings)}`, ...(route.settingsItem ? [`${SETTINGS_ITEM_PARAM}=${encodeURIComponent(route.settingsItem)}`] : [])] : []
-  const query = [...all, ...settings].join('&')
+  const query = [...all, ...named, ...settings].join('&')
   return formatPath(route, projects) + (query ? `?${query}` : '')
 }
 
@@ -98,14 +115,14 @@ export function formatRoute(route: Route, projects: ProjectAddresses): string {
 export function keepPageQuery(url: string, search: string): string {
   const [path = '', own = ''] = url.split('?')
   const params = new URLSearchParams(search)
-  for (const name of [ALL_PARAM, SETTINGS_PARAM, SETTINGS_ITEM_PARAM, ...new URLSearchParams(own).keys()]) params.delete(name)
+  for (const name of [ALL_PARAM, PROJECT_PARAM, SETTINGS_PARAM, SETTINGS_ITEM_PARAM, ...new URLSearchParams(own).keys()]) params.delete(name)
   const query = [params.toString(), own].filter(Boolean).join('&')
   return query ? `${path}?${query}` : path
 }
 
 function formatPath({ projectId, agentId, page, pagePath, scope }: Route, projects: ProjectAddresses): string {
-  // A project's own page starts with its project, any other page with the picked one, if any.
-  const project = !page && projectId ? projectId : scope
+  // A project's own page starts with its project, any other page with the one picked, if only one is.
+  const project = !page && projectId ? projectId : scope?.length === 1 ? scope[0] : undefined
   const head = project ? [projects.addressOf(project)] : []
   const tail = page ? [page, ...(pagePath ?? [])] : projectId ? (agentId ? [agentId] : []) : project ? [OVERVIEW_SEGMENT] : []
   return '/' + [...head, ...tail].map(encodeURIComponent).join('/')

@@ -81,6 +81,7 @@ export function AgentHistory({
   scopePending = false,
   listLoaded = true,
   onScope = () => {},
+  onToggleScope = () => {},
   homeHref = '/',
   agents,
   selectedAgentId,
@@ -108,17 +109,19 @@ export function AgentHistory({
   pageScrolls?: boolean
   /** The project of the page being shown, its launcher or one of its agents; null on every other page. */
   projectId: string | null
-  /** The one project every page shows (#1513), picked at the top of the rail; null when all show. */
-  scope?: string | null
+  /** The projects every page shows (#1513), picked at the top of the rail; null when all show. */
+  scope?: readonly string[] | null
   /** The address names a project that is not read yet: the select names none, and nothing says all show. */
   scopePending?: boolean
   /** Whether the list of agents shown is read: until it is, an empty list is not "No sessions yet." */
   listLoaded?: boolean
-  /** Pick the one project every page shows, or null for all of them. */
-  onScope?: (projectId: string | null) => void
+  /** Pick the projects every page shows, or null for all of them. */
+  onScope?: (projectIds: string[] | null) => void
+  /** Add a project to the ones every page shows, or take it off them. */
+  onToggleScope?: (projectId: string) => void
   /** The Overview's address, which keeps the picked project: where the brand links to. */
   homeHref?: string
-  /** The picked project's agents; unused when all projects show, where `recentAgents` is the list. */
+  /** The picked project's agents; unused when all projects or several show, where `recentAgents` is the list. */
   agents: AgentMeta[]
   selectedAgentId: string | null
   onSelect: (agentId: string | null) => void
@@ -177,10 +180,12 @@ export function AgentHistory({
     if (startTick > 0) setOptimistic({ intent: startIntent, id: startId })
   }, [startTick]) // eslint-disable-line react-hooks/exhaustive-deps
 
-  // All projects show: the rail pools every project's sessions. One project: just its own.
-  const crossProject = scope === null && recentAgents !== undefined
+  // The one project picked, if only one is.
+  const onlyProject = scope?.length === 1 ? scope[0]! : null
+  // All projects or several show: the rail pools their sessions. One project: just its own.
+  const crossProject = onlyProject === null && recentAgents !== undefined
   // Whose `agents` are: the page's project, else the picked one.
-  const listOf = projectId ?? scope ?? null
+  const listOf = projectId ?? onlyProject
   const listed = crossProject ? recentAgents!.map(recent => recent.agent) : agents
 
   const hasRunning = listed.some(agent => agent.status === 'running')
@@ -201,9 +206,10 @@ export function AgentHistory({
   useEffect(() => {
     if (landed) setOptimistic(null)
   }, [landed])
+  const scopeKey = scope?.join('\n')
   useEffect(() => {
     setOptimistic(null)
-  }, [scope])
+  }, [scopeKey])
   // A start that never produces an agent at all has nothing to hand over to either, so without a
   // deadline the row said "starting…" forever (#948). The Start form surfaces the actual error;
   // this just stops the rail pretending. Still the backstop, not the usual path: `landed` above
@@ -331,7 +337,16 @@ export function AgentHistory({
             <HideSidebarButton />
           </div>
           <ViewToggle />
-          <ProjectPicker look="sidebar" none={{ label: 'All projects' }} picked={scope ?? null} pending={scopePending} projects={projects} onPick={onScope} onProjectAdded={onProjectAdded ?? (() => {})} />
+          <ProjectPicker
+            look="sidebar"
+            none={{ label: 'All projects' }}
+            picked={onlyProject}
+            multi={{ picked: scope ?? [], onToggle: onToggleScope }}
+            pending={scopePending}
+            projects={projects}
+            onPick={id => onScope(id === null ? null : [id])}
+            onProjectAdded={onProjectAdded ?? (() => {})}
+          />
         </SidebarHeader>
         {/* New/Overview/the modules' pages stack tight as one nav group (gap-0.5), close under the
             project select (no top padding: the select's own section has its room below it), with a
@@ -343,8 +358,8 @@ export function AgentHistory({
               add one first, with one project it starts there, with several it opens a picker. With
               one project picked at the top, it starts there. */}
           <NewButton
-            scope={scope}
-            href={hrefOf({ projectId: scope ?? SESSIONS_ID, agentId: null })}
+            scope={onlyProject}
+            href={hrefOf({ projectId: onlyProject ?? SESSIONS_ID, agentId: null })}
             active={atProjectLauncher}
             onNewAgentInProject={onNewAgentInProject && leave(onNewAgentInProject)}
             onSelect={leave(onSelect)}
@@ -512,7 +527,7 @@ function OverviewButton({ active, count, href, onClick }: { active: boolean; cou
 }
 
 // The "New" launcher: one click to the "New agent session" page, of the project picked at the top of
-// the rail, or with all of them showing, of no project. Where the session works is picked on that
+// the rail, or with all of them or several showing, of no project. Where the session works is picked on that
 // page, in the row above the box (ProjectPicker), not here.
 function NewButton({
   scope,

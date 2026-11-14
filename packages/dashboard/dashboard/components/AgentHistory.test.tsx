@@ -64,7 +64,7 @@ describe('AgentHistory (#785)', () => {
   test('a row and a nav item are links to their pages: a plain click goes there in place, a Ctrl+click is the browser\'s, for a new tab', () => {
     const onSelect = vi.fn()
     const onPage = vi.fn()
-    renderRail(<AgentHistory projectId="p1" scope="p1" agents={[agent({ status: 'done' })]} selectedAgentId={null} onSelect={onSelect} pages={[{ segment: 'logs', label: 'Logs' }]} onPage={onPage} hrefOf={route => `/${route.scope ?? route.projectId}/${route.page ?? route.agentId}`} />)
+    renderRail(<AgentHistory projectId="p1" scope={["p1"]} agents={[agent({ status: 'done' })]} selectedAgentId={null} onSelect={onSelect} pages={[{ segment: 'logs', label: 'Logs' }]} onPage={onPage} hrefOf={route => `/${route.scope ?? route.projectId}/${route.page ?? route.agentId}`} />)
     const row = screen.getByRole('link', { name: /Welcome/ })
     const logs = screen.getByRole('link', { name: 'Logs' })
     expect([row.getAttribute('href'), logs.getAttribute('href')]).toEqual(['/p1/run-1', '/p1/logs'])
@@ -77,7 +77,7 @@ describe('AgentHistory (#785)', () => {
   })
 
   test('a failed run\'s circle is a red ring: nothing is going on in it, as the dots\' rule says', () => {
-    renderRail(<AgentHistory projectId="p1" scope="p1" agents={[agent({ status: 'failed' })]} selectedAgentId={null} onSelect={() => {}} />)
+    renderRail(<AgentHistory projectId="p1" scope={["p1"]} agents={[agent({ status: 'failed' })]} selectedAgentId={null} onSelect={() => {}} />)
     const dot = screen.getByLabelText('failed')
     expect(dot.className).toContain('border-danger')
     expect(dot.className).not.toContain('bg-danger')
@@ -85,19 +85,19 @@ describe('AgentHistory (#785)', () => {
 
   test('a working run reads as running and animates', () => {
     // One line: the circle says what the row used to print as a word, and the row's name says it too.
-    const { container } = renderRail(<AgentHistory projectId="p1" scope="p1" agents={[agent()]} selectedAgentId={null} onSelect={() => {}} />)
+    const { container } = renderRail(<AgentHistory projectId="p1" scope={["p1"]} agents={[agent()]} selectedAgentId={null} onSelect={() => {}} />)
     expect(screen.getByLabelText('running')).toBeTruthy()
     expect(screen.getByRole('link', { name: /· running ·/ })).toBeTruthy()
     expect(container.querySelector('.animate-pulse')).toBeTruthy()
   })
 
   test("the agent that ran it is a logo at the row's end", () => {
-    renderRail(<AgentHistory projectId="p1" scope="p1" agents={[agent({ driver: 'codex' })]} selectedAgentId={null} onSelect={() => {}} />)
+    renderRail(<AgentHistory projectId="p1" scope={["p1"]} agents={[agent({ driver: 'codex' })]} selectedAgentId={null} onSelect={() => {}} />)
     expect(screen.getByLabelText('Codex')).toBeTruthy()
   })
 
   test('a named run reads by its name, not by the words the person typed', () => {
-    renderRail(<AgentHistory projectId="p1" scope="p1" agents={[agent({ title: 'Welcome message' })]} selectedAgentId={null} onSelect={() => {}} />)
+    renderRail(<AgentHistory projectId="p1" scope={["p1"]} agents={[agent({ title: 'Welcome message' })]} selectedAgentId={null} onSelect={() => {}} />)
     expect(screen.getByText('Welcome message')).toBeTruthy()
     expect(screen.queryByText("replace 'Hello, world!' with 'Welcome!'")).toBeNull()
   })
@@ -105,7 +105,7 @@ describe('AgentHistory (#785)', () => {
   test('a run that ended on its question reads as waiting, with the still dot', () => {
     // It asked and waits for the answer: its dot stays, still, where a working run's pulses.
     const { container } = renderRail(
-      <AgentHistory projectId="p1" scope="p1" agents={[agent({ status: 'waiting' })]} selectedAgentId={null} onSelect={() => {}} />,
+      <AgentHistory projectId="p1" scope={["p1"]} agents={[agent({ status: 'waiting' })]} selectedAgentId={null} onSelect={() => {}} />,
     )
     expect(screen.getByLabelText('waiting')).toBeTruthy()
     expect(screen.queryByLabelText('running')).toBeNull()
@@ -115,7 +115,7 @@ describe('AgentHistory (#785)', () => {
 
   test('an ended run the daemon marks saving reads as saving… (#1455)', () => {
     const { container } = renderRail(
-      <AgentHistory projectId="p1" scope="p1" agents={[agent({ status: 'done', saving: true })]} selectedAgentId={null} onSelect={() => {}} />,
+      <AgentHistory projectId="p1" scope={["p1"]} agents={[agent({ status: 'done', saving: true })]} selectedAgentId={null} onSelect={() => {}} />,
     )
     expect(screen.getByLabelText('saving…')).toBeTruthy()
     expect(screen.queryByLabelText('done')).toBeNull()
@@ -123,7 +123,7 @@ describe('AgentHistory (#785)', () => {
   })
 
   test('an ended run without the mark reads as plain done (#1455)', () => {
-    renderRail(<AgentHistory projectId="p1" scope="p1" agents={[agent({ status: 'done' })]} selectedAgentId={null} onSelect={() => {}} />)
+    renderRail(<AgentHistory projectId="p1" scope={["p1"]} agents={[agent({ status: 'done' })]} selectedAgentId={null} onSelect={() => {}} />)
     expect(screen.queryByLabelText('saving…')).toBeNull()
     expect(screen.getByLabelText('done')).toBeTruthy()
   })
@@ -132,11 +132,11 @@ describe('AgentHistory (#785)', () => {
     // Start navigates to the run's id right away; its card, and so its row, arrives a beat
     // later. The highlight belongs on the optimistic row standing in for it, not on the home row.
     const { container, rerender } = renderRail(
-      <AgentHistory projectId="p1" scope="p1" agents={[]} selectedAgentId={null} onSelect={() => {}} startTick={0} startIntent="" />,
+      <AgentHistory projectId="p1" scope={["p1"]} agents={[]} selectedAgentId={null} onSelect={() => {}} startTick={0} startIntent="" />,
     )
     rerender(
       <SidebarProvider>
-        <AgentHistory projectId="p1" scope="p1" agents={[]} selectedAgentId="run-2" onSelect={() => {}} startTick={1} startIntent="add dark mode" />
+        <AgentHistory projectId="p1" scope={["p1"]} agents={[]} selectedAgentId="run-2" onSelect={() => {}} startTick={1} startIntent="add dark mode" />
       </SidebarProvider>,
     )
     const rows = [...container.querySelectorAll('a, button')]
@@ -167,11 +167,11 @@ describe('AgentHistory (#785)', () => {
 
   test('with one project picked the stand-in row says the time alone, as a real row does there', () => {
     const { container, rerender } = renderRail(
-      <AgentHistory projectId="p1" scope="p1" agents={[]} selectedAgentId={null} onSelect={() => {}} startTick={0} startIntent="" />,
+      <AgentHistory projectId="p1" scope={["p1"]} agents={[]} selectedAgentId={null} onSelect={() => {}} startTick={0} startIntent="" />,
     )
     rerender(
       <SidebarProvider>
-        <AgentHistory projectId="p1" scope="p1" agents={[]} selectedAgentId="run-3" onSelect={() => {}} startTick={1} startIntent="add a footer" startId="run-3" startProjectName="alpha" />
+        <AgentHistory projectId="p1" scope={["p1"]} agents={[]} selectedAgentId="run-3" onSelect={() => {}} startTick={1} startIntent="add a footer" startId="run-3" startProjectName="alpha" />
       </SidebarProvider>,
     )
     const standInRow = [...container.querySelectorAll('a, button')].find(row => row.hasAttribute('data-stand-in'))!
@@ -181,11 +181,11 @@ describe('AgentHistory (#785)', () => {
 
   test('the name, once the daemon has it, comes into the stand-in row letter by letter, before the run\u2019s own row is in', () => {
     const { container, rerender } = renderRail(
-      <AgentHistory projectId="p1" scope="p1" agents={[]} selectedAgentId={null} onSelect={() => {}} startTick={0} startIntent="" />,
+      <AgentHistory projectId="p1" scope={["p1"]} agents={[]} selectedAgentId={null} onSelect={() => {}} startTick={0} startIntent="" />,
     )
     const started = (startTitle?: string) => (
       <SidebarProvider>
-        <AgentHistory projectId="p1" scope="p1" agents={[]} selectedAgentId="run-5" onSelect={() => {}} startTick={1} startIntent="fix the flaky login test" startId="run-5" {...(startTitle !== undefined ? { startTitle } : {})} />
+        <AgentHistory projectId="p1" scope={["p1"]} agents={[]} selectedAgentId="run-5" onSelect={() => {}} startTick={1} startIntent="fix the flaky login test" startId="run-5" {...(startTitle !== undefined ? { startTitle } : {})} />
       </SidebarProvider>
     )
     rerender(started())
@@ -200,11 +200,11 @@ describe('AgentHistory (#785)', () => {
   test('with naming turned off the stand-in row prints the prompt: no name is coming to replace it', () => {
     preferences.current = { nameRuns: false }
     const { container, rerender } = renderRail(
-      <AgentHistory projectId="p1" scope="p1" agents={[]} selectedAgentId={null} onSelect={() => {}} startTick={0} startIntent="" />,
+      <AgentHistory projectId="p1" scope={["p1"]} agents={[]} selectedAgentId={null} onSelect={() => {}} startTick={0} startIntent="" />,
     )
     rerender(
       <SidebarProvider>
-        <AgentHistory projectId="p1" scope="p1" agents={[]} selectedAgentId="run-4" onSelect={() => {}} startTick={1} startIntent="add a footer" startId="run-4" />
+        <AgentHistory projectId="p1" scope={["p1"]} agents={[]} selectedAgentId="run-4" onSelect={() => {}} startTick={1} startIntent="add a footer" startId="run-4" />
       </SidebarProvider>,
     )
     const row = [...container.querySelectorAll('a, button')].find(row => row.hasAttribute('data-stand-in'))!
@@ -218,11 +218,11 @@ describe('AgentHistory (#785)', () => {
     // sat beside the finished session's own row claiming a second session was starting, until a
     // 20s deadline swept it. Landing is the handover, whatever status the agent landed in.
     const { container, rerender } = renderRail(
-      <AgentHistory projectId="p1" scope="p1" agents={[]} selectedAgentId={null} onSelect={() => {}} startTick={0} startIntent="" />,
+      <AgentHistory projectId="p1" scope={["p1"]} agents={[]} selectedAgentId={null} onSelect={() => {}} startTick={0} startIntent="" />,
     )
     rerender(
       <SidebarProvider>
-        <AgentHistory projectId="p1" scope="p1" agents={[]} selectedAgentId={null} onSelect={() => {}} startTick={1} startIntent="hi" startId="run-9" />
+        <AgentHistory projectId="p1" scope={["p1"]} agents={[]} selectedAgentId={null} onSelect={() => {}} startTick={1} startIntent="hi" startId="run-9" />
       </SidebarProvider>,
     )
     expect([...container.querySelectorAll('a, button')].some(row => row.hasAttribute('data-stand-in'))).toBe(true)
@@ -231,7 +231,7 @@ describe('AgentHistory (#785)', () => {
     rerender(
       <SidebarProvider>
         <AgentHistory
-          projectId="p1" scope="p1"
+          projectId="p1" scope={["p1"]}
           agents={[agent({ id: 'run-9', status: 'failed', intent: 'hi' })]}
           selectedAgentId={null}
           onSelect={() => {}}
@@ -251,11 +251,11 @@ describe('AgentHistory (#785)', () => {
     // is not the one being waited for, so its presence must not count as the handover.
     const older = agent({ id: 'run-old', status: 'done', intent: 'earlier work' })
     const { container, rerender } = renderRail(
-      <AgentHistory projectId="p1" scope="p1" agents={[older]} selectedAgentId={null} onSelect={() => {}} startTick={0} startIntent="" />,
+      <AgentHistory projectId="p1" scope={["p1"]} agents={[older]} selectedAgentId={null} onSelect={() => {}} startTick={0} startIntent="" />,
     )
     rerender(
       <SidebarProvider>
-        <AgentHistory projectId="p1" scope="p1" agents={[older]} selectedAgentId={null} onSelect={() => {}} startTick={1} startIntent="hi" startId="run-new" />
+        <AgentHistory projectId="p1" scope={["p1"]} agents={[older]} selectedAgentId={null} onSelect={() => {}} startTick={1} startIntent="hi" startId="run-new" />
       </SidebarProvider>,
     )
     expect([...container.querySelectorAll('a, button')].some(row => row.hasAttribute('data-stand-in'))).toBe(true)
@@ -266,18 +266,18 @@ describe('AgentHistory (#785)', () => {
     // before the start reports its id. That row is the run; a stand-in beside it would be a second one.
     const running = agent({ id: 'run-7', status: 'running', intent: 'hi' })
     const { container, rerender } = renderRail(
-      <AgentHistory projectId="p1" scope="p1" agents={[running]} selectedAgentId={null} onSelect={() => {}} startTick={0} startIntent="" />,
+      <AgentHistory projectId="p1" scope={["p1"]} agents={[running]} selectedAgentId={null} onSelect={() => {}} startTick={0} startIntent="" />,
     )
     const standIn = () => [...container.querySelectorAll('a, button')].some(row => row.hasAttribute('data-stand-in'))
     rerender(
       <SidebarProvider>
-        <AgentHistory projectId="p1" scope="p1" agents={[running]} selectedAgentId="run-7" onSelect={() => {}} startTick={1} startIntent="hi" startId="run-7" />
+        <AgentHistory projectId="p1" scope={["p1"]} agents={[running]} selectedAgentId="run-7" onSelect={() => {}} startTick={1} startIntent="hi" startId="run-7" />
       </SidebarProvider>,
     )
     expect(standIn()).toBe(false)
     rerender(
       <SidebarProvider>
-        <AgentHistory projectId="p1" scope="p1" agents={[{ ...running, status: 'done' }]} selectedAgentId="run-7" onSelect={() => {}} startTick={1} startIntent="hi" startId="run-7" />
+        <AgentHistory projectId="p1" scope={["p1"]} agents={[{ ...running, status: 'done' }]} selectedAgentId="run-7" onSelect={() => {}} startTick={1} startIntent="hi" startId="run-7" />
       </SidebarProvider>,
     )
     expect(standIn()).toBe(false)
@@ -289,14 +289,14 @@ describe('AgentHistory (#785)', () => {
 // the old prop, so those strip/float tests are retired with it.
 describe('AgentHistory rows', () => {
   test('a run on a saved machine shows a machine glyph naming the machine (#1067)', () => {
-    renderRail(<AgentHistory projectId="p1" scope="p1" agents={[agent({ target: 'remote', remoteLabel: 'my-laptop' })]} selectedAgentId={null} onSelect={() => {}} />)
+    renderRail(<AgentHistory projectId="p1" scope={["p1"]} agents={[agent({ target: 'remote', remoteLabel: 'my-laptop' })]} selectedAgentId={null} onSelect={() => {}} />)
     expect(screen.getByLabelText('Runs on my-laptop')).toBeTruthy()
   })
 
   test('the coding agent\'s logo is the last mark of every row, after the machine glyph and the subagents\' count, so the logos stand in one column', () => {
     const main = agent({ id: 'main', target: 'remote', remoteLabel: 'my-laptop', driver: 'codex' })
     const sub = agent({ id: 'sub', parent: 'main', status: 'done', driver: 'codex' })
-    renderRail(<AgentHistory projectId="p1" scope="p1" agents={[main, sub]} selectedAgentId={null} onSelect={() => {}} />)
+    renderRail(<AgentHistory projectId="p1" scope={["p1"]} agents={[main, sub]} selectedAgentId={null} onSelect={() => {}} />)
     const row = screen.getByLabelText('Runs on my-laptop').closest('a')!
     const marks = [...row.querySelectorAll('[aria-label]')].map(mark => mark.getAttribute('aria-label'))
     expect(marks.at(-1)).toBe('Codex')
@@ -312,7 +312,7 @@ describe('AgentHistory rows', () => {
       agent({ id: 'at-home', target: 'remote', remoteLabel: 'experiment', remoteKind: 'home' }),
       agent({ id: 'on-server', target: 'remote', remoteLabel: 'Server' }),
     ]
-    renderRail(<AgentHistory projectId="p1" scope="p1" agents={agents} selectedAgentId={null} onSelect={() => {}} />)
+    renderRail(<AgentHistory projectId="p1" scope={["p1"]} agents={agents} selectedAgentId={null} onSelect={() => {}} />)
     expect(screen.getByLabelText('Runs on MacBook').querySelector('svg')!.getAttribute('class')).toContain('lucide-laptop')
     expect(screen.getByLabelText('Runs on experiment').querySelector('svg')!.getAttribute('class')).toContain('lucide-house')
     expect(screen.getByLabelText('Runs on Server').querySelector('svg')!.getAttribute('class')).toContain('lucide-server')
@@ -320,7 +320,7 @@ describe('AgentHistory rows', () => {
 
   test('a run whose computer does not answer says its status is unknown, which computer is offline and when it was last seen, and does not pulse', () => {
     const seenAt = new Date(Date.now() - 12 * 60_000).toISOString()
-    renderRail(<AgentHistory projectId="p1" scope="p1" agents={[agent({ status: 'unknown', target: 'remote', remoteLabel: 'MacBook', remoteKind: 'computer', seenAt })]} selectedAgentId={null} onSelect={() => {}} />)
+    renderRail(<AgentHistory projectId="p1" scope={["p1"]} agents={[agent({ status: 'unknown', target: 'remote', remoteLabel: 'MacBook', remoteKind: 'computer', seenAt })]} selectedAgentId={null} onSelect={() => {}} />)
     expect(screen.getByLabelText('MacBook offline · last seen 12m ago')).toBeTruthy()
     const dot = screen.getByRole('img', { name: 'status unknown' })
     expect(dot.getAttribute('class')).toContain('border-dashed')
@@ -345,7 +345,7 @@ describe('AgentHistory rows', () => {
       agent({ id: 'left', status: 'done', uncommitted: 1, unpublished: 3 }),
       agent({ id: 'none', status: 'done' }),
     ]
-    renderRail(<AgentHistory projectId="p1" scope="p1" agents={agents} selectedAgentId={null} onSelect={() => {}} />)
+    renderRail(<AgentHistory projectId="p1" scope={["p1"]} agents={agents} selectedAgentId={null} onSelect={() => {}} />)
     const glyph = screen.getByLabelText('Needs PR · 2 commits').querySelector('svg')!.getAttribute('class')
     expect(glyph).toContain('lucide-git-branch')
     expect(glyph).toContain('text-muted-foreground')
@@ -362,7 +362,7 @@ describe('AgentHistory rows', () => {
 
   test('on a page of no project, the picked project\'s rows say what its git host allows, as on its own pages', () => {
     const shop: ProjectSummary = { id: 'p1', path: '/p1', name: 'shop', activated: true, gitHost: false }
-    renderRail(<AgentHistory projectId={null} scope="p1" projects={[shop]} agents={[agent({ id: 'one', status: 'done', unpublished: 1 })]} selectedAgentId={null} onSelect={() => {}} />)
+    renderRail(<AgentHistory projectId={null} scope={["p1"]} projects={[shop]} agents={[agent({ id: 'one', status: 'done', unpublished: 1 })]} selectedAgentId={null} onSelect={() => {}} />)
     expect(screen.getByLabelText('Needs push · 1 commit')).toBeTruthy()
   })
 
@@ -375,7 +375,7 @@ describe('AgentHistory rows', () => {
       agent({ id: 'unread', status: 'done', pr: { number: 16, url: 'u' } }),
       agent({ id: 'none', status: 'done' }),
     ]
-    renderRail(<AgentHistory projectId="p1" scope="p1" agents={agents} selectedAgentId={null} onSelect={() => {}} />)
+    renderRail(<AgentHistory projectId="p1" scope={["p1"]} agents={agents} selectedAgentId={null} onSelect={() => {}} />)
     const glyph = (label: string) => screen.getByLabelText(label).querySelector('svg')!.getAttribute('class')
     expect(glyph('PR #12 open')).toContain('lucide-git-pull-request')
     expect(glyph('PR #12 open')).toContain('text-success')
@@ -395,7 +395,7 @@ describe('AgentHistory rows', () => {
   })
 
   test('a local run has no machine glyph (#1067)', () => {
-    renderRail(<AgentHistory projectId="p1" scope="p1" agents={[agent()]} selectedAgentId={null} onSelect={() => {}} />)
+    renderRail(<AgentHistory projectId="p1" scope={["p1"]} agents={[agent()]} selectedAgentId={null} onSelect={() => {}} />)
     expect(screen.queryByLabelText(/Runs on/)).toBeNull()
   })
 
@@ -448,7 +448,7 @@ describe('whose run a row is', () => {
     renderRail(
       <AgentHistory
         projectId="p1"
-        scope="p1"
+        scope={["p1"]}
         agents={[agent({ id: 'r1', title: 'Hers', person: 'ada@x.dev', driver: 'codex' }), agent({ id: 'r2', title: 'His', person: 'rom@y.dev' })]}
         selectedAgentId={null}
         onSelect={() => {}}
@@ -469,7 +469,7 @@ describe('whose run a row is', () => {
   test("your own run where no git host answers, a session with no project say: your own picture, as the sidebar's foot shows it", async () => {
     onPerson.mockResolvedValue({ name: 'Ada Lovelace', email: 'ada@x.dev', avatar: 'https://avatars.githubusercontent.com/u/9' })
     try {
-      renderRail(<AgentHistory projectId="session" scope="session" agents={[agent({ id: 'r1', title: 'Hi five', person: 'Ada@x.dev' }), agent({ id: 'r2', title: 'His', person: 'rom@y.dev' })]} selectedAgentId={null} onSelect={() => {}} />)
+      renderRail(<AgentHistory projectId="session" scope={["session"]} agents={[agent({ id: 'r1', title: 'Hi five', person: 'Ada@x.dev' }), agent({ id: 'r2', title: 'His', person: 'rom@y.dev' })]} selectedAgentId={null} onSelect={() => {}} />)
       await waitFor(() => expect(row(/^Hi five/).querySelector('img')?.getAttribute('src')).toBe('https://avatars.githubusercontent.com/u/9'))
       expect(row(/^His/).querySelector('img')).toBeNull()
     } finally {
@@ -478,7 +478,7 @@ describe('whose run a row is', () => {
   })
 
   test('a run that names nobody has no mark', () => {
-    renderRail(<AgentHistory projectId="p1" scope="p1" agents={[agent({ title: 'Very old' })]} selectedAgentId={null} onSelect={() => {}} />)
+    renderRail(<AgentHistory projectId="p1" scope={["p1"]} agents={[agent({ title: 'Very old' })]} selectedAgentId={null} onSelect={() => {}} />)
     expect(row(/^Very old/).querySelector('[class*="rounded-full"][class*="size-3.5"]')).toBeNull()
     expect(onGitHostPeople).not.toHaveBeenCalled()
   })
@@ -503,7 +503,7 @@ describe('whose run a row is', () => {
 
   test("a row of the picked project's list on a page of no project still asks that project", async () => {
     onGitHostPeople.mockResolvedValue([ada])
-    renderRail(<AgentHistory projectId={null} scope="p1" agents={[agent({ title: 'Hers', person: 'ada@x.dev' })]} selectedAgentId={null} onSelect={() => {}} />)
+    renderRail(<AgentHistory projectId={null} scope={["p1"]} agents={[agent({ title: 'Hers', person: 'ada@x.dev' })]} selectedAgentId={null} onSelect={() => {}} />)
     await waitFor(() => expect(row(/^Hers/).querySelector('img')).toBeTruthy())
     expect(onGitHostPeople).toHaveBeenCalledWith('p1', ['ada@x.dev'])
   })
@@ -512,7 +512,7 @@ describe('whose run a row is', () => {
     renderRail(
       <AgentHistory
         projectId="p1"
-        scope="p1"
+        scope={["p1"]}
         agents={[agent({ id: 'main', title: 'Main', person: 'ada@x.dev' }), agent({ id: 'sub', title: 'Sub', person: 'ada@x.dev', parent: 'main' })]}
         selectedAgentId={null}
         onSelect={() => {}}
@@ -523,7 +523,7 @@ describe('whose run a row is', () => {
   })
 
   test("the row of a run just started holds the mark's place, with no one in it yet", () => {
-    const rail = (startTick: number) => <AgentHistory projectId="p1" scope="p1" agents={[]} selectedAgentId="r1" onSelect={() => {}} startTick={startTick} startIntent="add dark mode" startId="r1" />
+    const rail = (startTick: number) => <AgentHistory projectId="p1" scope={["p1"]} agents={[]} selectedAgentId="r1" onSelect={() => {}} startTick={startTick} startIntent="add dark mode" startId="r1" />
     const { container, rerender } = render(<SidebarProvider>{rail(0)}</SidebarProvider>)
     rerender(<SidebarProvider>{rail(1)}</SidebarProvider>)
     const standIn = container.querySelector('[data-stand-in]')!
@@ -537,7 +537,7 @@ describe('subagents on the rail', () => {
   const sub = (id: string, over: Partial<AgentMeta> = {}) => agent({ id, parent: 'main', status: 'done', intent: `task ${id}\n\nYou are a subagent: another agent started you.`, ...over })
 
   test('while a subagent works the list is open under its main agent, each row named by its task', () => {
-    renderRail(<AgentHistory projectId="p1" scope="p1" agents={[sub('c2', { status: 'running' }), sub('c1'), main]} selectedAgentId={null} onSelect={() => {}} />)
+    renderRail(<AgentHistory projectId="p1" scope={["p1"]} agents={[sub('c2', { status: 'running' }), sub('c1'), main]} selectedAgentId={null} onSelect={() => {}} />)
     const fold = screen.getByRole('button', { name: /2 agents · 1 running/ })
     expect(fold.getAttribute('aria-expanded')).toBe('true')
     expect(screen.getByText('task c1')).toBeTruthy()
@@ -549,28 +549,28 @@ describe('subagents on the rail', () => {
   })
 
   test('a main agent whose own turn is over reads as running while a subagent works, and as done once none does', () => {
-    const { container, rerender } = renderRail(<AgentHistory projectId="p1" scope="p1" agents={[sub('c1', { status: 'running' }), { ...main, saving: true }]} selectedAgentId={null} onSelect={() => {}} />)
+    const { container, rerender } = renderRail(<AgentHistory projectId="p1" scope={["p1"]} agents={[sub('c1', { status: 'running' }), { ...main, saving: true }]} selectedAgentId={null} onSelect={() => {}} />)
     expect(screen.getAllByLabelText('running')).toHaveLength(2)
     expect(screen.queryByLabelText('done')).toBeNull()
     // One circle and one word: not "saving…" as well.
     expect(screen.queryByLabelText('saving…')).toBeNull()
     expect(container.querySelectorAll('.animate-pulse')).toHaveLength(2)
-    rerender(<SidebarProvider><AgentHistory projectId="p1" scope="p1" agents={[sub('c1', { status: 'waiting' }), main]} selectedAgentId={null} onSelect={() => {}} /></SidebarProvider>)
+    rerender(<SidebarProvider><AgentHistory projectId="p1" scope={["p1"]} agents={[sub('c1', { status: 'waiting' }), main]} selectedAgentId={null} onSelect={() => {}} /></SidebarProvider>)
     expect(screen.queryByLabelText('running')).toBeNull()
     expect(screen.getByLabelText('done')).toBeTruthy()
   })
 
   test('a main agent reads as running for the moment after a subagent ended: it is about to go on', () => {
-    renderRail(<AgentHistory projectId="p1" scope="p1" agents={[sub('c1', { endedAt: new Date().toISOString() }), main]} selectedAgentId={null} onSelect={() => {}} />)
+    renderRail(<AgentHistory projectId="p1" scope={["p1"]} agents={[sub('c1', { endedAt: new Date().toISOString() }), main]} selectedAgentId={null} onSelect={() => {}} />)
     expect(screen.getByLabelText('running')).toBeTruthy()
     cleanup()
-    renderRail(<AgentHistory projectId="p1" scope="p1" agents={[sub('c1', { endedAt: '2026-07-19T16:10:00.000Z' }), main]} selectedAgentId={null} onSelect={() => {}} />)
+    renderRail(<AgentHistory projectId="p1" scope={["p1"]} agents={[sub('c1', { endedAt: '2026-07-19T16:10:00.000Z' }), main]} selectedAgentId={null} onSelect={() => {}} />)
     expect(screen.queryByLabelText('running')).toBeNull()
   })
 
   test("the count of subagents is on the main agent's own row, and a click on it folds the list without opening the agent", () => {
     let picked: string | null = null
-    renderRail(<AgentHistory projectId="p1" scope="p1" agents={[sub('c2'), sub('c1'), main]} selectedAgentId={null} onSelect={id => (picked = id)} />)
+    renderRail(<AgentHistory projectId="p1" scope={["p1"]} agents={[sub('c2'), sub('c1'), main]} selectedAgentId={null} onSelect={id => (picked = id)} />)
     const fold = screen.getByRole('button', { name: '2 agents' })
     expect(fold.closest('a')?.textContent).toContain('split the login work')
     fireEvent.click(fold)
@@ -582,18 +582,18 @@ describe('subagents on the rail', () => {
   })
 
   test('a main agent that failed or was stopped keeps its own word while a subagent works', () => {
-    renderRail(<AgentHistory projectId="p1" scope="p1" agents={[sub('c1', { status: 'running' }), { ...main, status: 'failed' }]} selectedAgentId={null} onSelect={() => {}} />)
+    renderRail(<AgentHistory projectId="p1" scope={["p1"]} agents={[sub('c1', { status: 'running' }), { ...main, status: 'failed' }]} selectedAgentId={null} onSelect={() => {}} />)
     expect(screen.getByLabelText('failed')).toBeTruthy()
     expect(screen.getAllByLabelText('running')).toHaveLength(1)
   })
 
   test('a subagent stopped on a question keeps the list open too', () => {
-    renderRail(<AgentHistory projectId="p1" scope="p1" agents={[sub('c1', { status: 'waiting' }), main]} selectedAgentId={null} onSelect={() => {}} />)
+    renderRail(<AgentHistory projectId="p1" scope={["p1"]} agents={[sub('c1', { status: 'waiting' }), main]} selectedAgentId={null} onSelect={() => {}} />)
     expect(screen.getByRole('button', { name: '1 agent' }).getAttribute('aria-expanded')).toBe('true')
   })
 
   test('once every subagent has ended the list folds to its count, and a click opens it and folds it again', () => {
-    renderRail(<AgentHistory projectId="p1" scope="p1" agents={[sub('c2'), sub('c1'), main]} selectedAgentId={null} onSelect={() => {}} />)
+    renderRail(<AgentHistory projectId="p1" scope={["p1"]} agents={[sub('c2'), sub('c1'), main]} selectedAgentId={null} onSelect={() => {}} />)
     const fold = screen.getByRole('button', { name: '2 agents' })
     expect(fold.getAttribute('aria-expanded')).toBe('false')
     expect(screen.queryByText('task c1')).toBeNull()
@@ -604,21 +604,21 @@ describe('subagents on the rail', () => {
   })
 
   test('the reader folding the list of a working subagent wins over it being open by itself', () => {
-    renderRail(<AgentHistory projectId="p1" scope="p1" agents={[sub('c1', { status: 'running' }), main]} selectedAgentId={null} onSelect={() => {}} />)
+    renderRail(<AgentHistory projectId="p1" scope={["p1"]} agents={[sub('c1', { status: 'running' }), main]} selectedAgentId={null} onSelect={() => {}} />)
     fireEvent.click(screen.getByRole('button', { name: /1 agent · 1 running/ }))
     expect(screen.queryByText('task c1')).toBeNull()
   })
 
   test('the list of an ended subagent whose page is open is open, and a click on a subagent selects it', () => {
     let picked: string | null = null
-    renderRail(<AgentHistory projectId="p1" scope="p1" agents={[sub('c2'), sub('c1'), main]} selectedAgentId="c1" onSelect={id => (picked = id)} />)
+    renderRail(<AgentHistory projectId="p1" scope={["p1"]} agents={[sub('c2'), sub('c1'), main]} selectedAgentId="c1" onSelect={id => (picked = id)} />)
     expect(screen.getByRole('button', { name: '2 agents' }).getAttribute('aria-expanded')).toBe('true')
     fireEvent.click(screen.getByText('task c2'))
     expect(picked).toBe('c2')
   })
 
   test('a subagent whose main agent is not in the list, and a run with no subagents, are plain rows', () => {
-    renderRail(<AgentHistory projectId="p1" scope="p1" agents={[agent({ id: 'c9', parent: 'gone', intent: 'orphan task' }), agent({ id: 'solo', intent: 'alone' })]} selectedAgentId={null} onSelect={() => {}} />)
+    renderRail(<AgentHistory projectId="p1" scope={["p1"]} agents={[agent({ id: 'c9', parent: 'gone', intent: 'orphan task' }), agent({ id: 'solo', intent: 'alone' })]} selectedAgentId={null} onSelect={() => {}} />)
     expect(screen.getByText('orphan task')).toBeTruthy()
     expect(screen.queryByRole('button', { name: /^\d+ agents?/ })).toBeNull()
   })
@@ -681,7 +681,7 @@ describe('AgentHistory New button (#new-button)', () => {
     let started: string | null = null
     renderRail(
       <AgentHistory
-        projectId="p9" scope="p9"
+        projectId="p9" scope={["p9"]}
         agents={[]}
         projects={[proj('p1', 'alpha'), proj('p9', 'nine')]}
         onNewAgentInProject={id => (started = id)}
@@ -699,7 +699,7 @@ describe('cloud sessions on the rail (#1263/#1264)', () => {
   test('a finished web run reads as in cloud, not done: the session is still working over there', () => {
     renderRail(
       <AgentHistory
-        projectId="p1" scope="p1"
+        projectId="p1" scope={["p1"]}
         agents={[agent({ status: 'done', target: 'web', driver: 'claude-web', startedAt: new Date().toISOString() })]}
         selectedAgentId={null}
         onSelect={() => {}}
@@ -712,7 +712,7 @@ describe('cloud sessions on the rail (#1263/#1264)', () => {
   test('a web run stopped early is just stopped: nothing is working anywhere', () => {
     renderRail(
       <AgentHistory
-        projectId="p1" scope="p1"
+        projectId="p1" scope={["p1"]}
         agents={[agent({ status: 'stopped', target: 'web', driver: 'claude-web' })]}
         selectedAgentId={null}
         onSelect={() => {}}
@@ -725,7 +725,7 @@ describe('cloud sessions on the rail (#1263/#1264)', () => {
   test('a web run parked on a question the bridge reported reads as waiting (#1668)', () => {
     renderRail(
       <AgentHistory
-        projectId="p1" scope="p1"
+        projectId="p1" scope={["p1"]}
         agents={[agent({ status: 'done', target: 'web', driver: 'claude-web', startedAt: new Date().toISOString(), cloudWaiting: true })]}
         selectedAgentId={null}
         onSelect={() => {}}
@@ -740,7 +740,7 @@ describe('cloud sessions on the rail (#1263/#1264)', () => {
     const old = new Date(Date.now() - 3 * 24 * 60 * 60 * 1000).toISOString()
     renderRail(
       <AgentHistory
-        projectId="p1" scope="p1"
+        projectId="p1" scope={["p1"]}
         agents={[
           agent({ id: 'pr', status: 'done', target: 'web', driver: 'claude-web', startedAt: fresh, pr: { number: 1, url: 'u' } }),
           agent({ id: 'merged', status: 'done', target: 'web', driver: 'claude-web', startedAt: old, pr: { number: 2, url: 'u' }, mergeOutcome: 'merged' }),
@@ -758,7 +758,7 @@ describe('cloud sessions on the rail (#1263/#1264)', () => {
   test('a web run shows the cloud glyph and still names its agent (#1263)', () => {
     renderRail(
       <AgentHistory
-        projectId="p1" scope="p1"
+        projectId="p1" scope={["p1"]}
         agents={[agent({ status: 'done', target: 'web', driver: 'claude-web' })]}
         selectedAgentId={null}
         onSelect={() => {}}
@@ -771,7 +771,7 @@ describe('cloud sessions on the rail (#1263/#1264)', () => {
 
   test('a local finished run keeps its plain done badge and gets no cloud glyph', () => {
     renderRail(
-      <AgentHistory projectId="p1" scope="p1" agents={[agent({ status: 'done', driver: 'claude-code' })]} selectedAgentId={null} onSelect={() => {}} />,
+      <AgentHistory projectId="p1" scope={["p1"]} agents={[agent({ status: 'done', driver: 'claude-code' })]} selectedAgentId={null} onSelect={() => {}} />,
     )
     expect(screen.getByLabelText('done')).toBeTruthy()
     expect(screen.queryByLabelText('Runs as a Claude Code cloud session')).toBeNull()
@@ -786,7 +786,7 @@ describe('AgentHistory row hover', () => {
     const scrollSpy = vi.spyOn(Element.prototype, 'scrollWidth', 'get').mockReturnValue(240)
     const clientSpy = vi.spyOn(Element.prototype, 'clientWidth', 'get').mockReturnValue(120)
     try {
-      renderRail(<AgentHistory projectId="p1" scope="p1" agents={[agent({ intent: long })]} selectedAgentId={null} onSelect={() => {}} />)
+      renderRail(<AgentHistory projectId="p1" scope={["p1"]} agents={[agent({ intent: long })]} selectedAgentId={null} onSelect={() => {}} />)
       const title = (await screen.findByText(long)).closest('.rail-title')!
       const tip = await hoverTooltip(title as HTMLElement)
       expect(tip.textContent).toBe(long)
@@ -797,7 +797,7 @@ describe('AgentHistory row hover', () => {
   })
 
   test('a title that fits has no hover; each mark at the row\'s end says what it is', async () => {
-    renderRail(<AgentHistory projectId="p1" scope="p1" agents={[agent({ status: 'done', driver: 'claude-code', pr: { number: 5, url: 'https://x/pull/5' }, prState: 'open' })]} selectedAgentId={null} onSelect={() => {}} />)
+    renderRail(<AgentHistory projectId="p1" scope={["p1"]} agents={[agent({ status: 'done', driver: 'claude-code', pr: { number: 5, url: 'https://x/pull/5' }, prState: 'open' })]} selectedAgentId={null} onSelect={() => {}} />)
     const title = screen.getByText("replace 'Hello, world!' with 'Welcome!'").closest('.rail-title') as HTMLElement
     fireEvent.mouseEnter(title)
     fireEvent.mouseMove(title)
@@ -808,7 +808,7 @@ describe('AgentHistory row hover', () => {
   })
 
   test('the coding agent\'s logo says the agent and the model it ran on', async () => {
-    renderRail(<AgentHistory projectId="p1" scope="p1" agents={[agent({ status: 'done', driver: 'claude-code', model: 'claude-opus-5-5' })]} selectedAgentId={null} onSelect={() => {}} />)
+    renderRail(<AgentHistory projectId="p1" scope={["p1"]} agents={[agent({ status: 'done', driver: 'claude-code', model: 'claude-opus-5-5' })]} selectedAgentId={null} onSelect={() => {}} />)
     // No list of models read here: the model is said by its id.
     expect((await hoverTooltip(screen.getByLabelText('Claude Code · claude-opus-5-5'))).textContent).toBe('Claude Code · claude-opus-5-5')
   })
@@ -826,7 +826,7 @@ describe('the project select (#1513)', () => {
   const idle: ProjectSummary = { id: 'p2', path: '/repos/p2', name: 'beta', activated: false, gitHost: false }
 
   test('it names the picked project, or "All projects" when none is picked', () => {
-    const { unmount } = renderRail(<AgentHistory projectId={null} scope="p2" agents={[]} selectedAgentId={null} onSelect={() => {}} projects={[stranded, idle]} />)
+    const { unmount } = renderRail(<AgentHistory projectId={null} scope={["p2"]} agents={[]} selectedAgentId={null} onSelect={() => {}} projects={[stranded, idle]} />)
     expect(screen.getByRole('combobox', { name: 'Project: beta' })).toBeTruthy()
     unmount()
     renderRail(<AgentHistory projectId={null} agents={[]} recentAgents={[]} selectedAgentId={null} onSelect={() => {}} projects={[stranded, idle]} />)
@@ -840,7 +840,7 @@ describe('the project select (#1513)', () => {
     const recentAgents = [{ projectId: 'shop-2', projectName: 'shop', agent: agent({ id: 'b1', status: 'done', intent: 'second' }) }]
     const rail = (scope: string | null) => (
       <ProjectLabelsContext.Provider value={projectLabels(projects)}>
-        <AgentHistory projectId={null} scope={scope} agents={[]} recentAgents={recentAgents} selectedAgentId={null} onSelect={() => {}} projects={projects} />
+        <AgentHistory projectId={null} scope={scope === null ? null : [scope]} agents={[]} recentAgents={recentAgents} selectedAgentId={null} onSelect={() => {}} projects={projects} />
       </ProjectLabelsContext.Provider>
     )
     const { unmount } = renderRail(rail('shop-1'))
@@ -864,9 +864,9 @@ describe('the project select (#1513)', () => {
   })
 
   test('picking a project, or all of them, reports the pick and marks the current one', async () => {
-    const picks: (string | null)[] = []
+    const picks: (string[] | null)[] = []
     renderRail(
-      <AgentHistory projectId={null} scope="p1" onScope={id => picks.push(id)} agents={[]} selectedAgentId={null} onSelect={() => {}} projects={[stranded, idle]} />,
+      <AgentHistory projectId={null} scope={["p1"]} onScope={id => picks.push(id)} agents={[]} selectedAgentId={null} onSelect={() => {}} projects={[stranded, idle]} />,
     )
     await openMenu(screen.getByRole('combobox', { name: 'Project: alpha' }))
     expect(screen.getByRole('option', { name: /alpha/ }).getAttribute('aria-selected')).toBe('true')
@@ -874,7 +874,63 @@ describe('the project select (#1513)', () => {
     fireEvent.click(screen.getByRole('option', { name: /beta/ }))
     await openMenu(screen.getByRole('combobox', { name: 'Project: alpha' }))
     fireEvent.click(screen.getByRole('option', { name: /All projects/ }))
-    expect(picks).toEqual(['p2', null])
+    expect(picks).toEqual([['p2'], null])
+  })
+
+  test("a project's box ticks it or unticks it and keeps the menu open; a click on the line shows it alone", async () => {
+    const picks: (string[] | null)[] = []
+    const toggles: string[] = []
+    renderRail(
+      <AgentHistory projectId={null} scope={['p1']} onScope={ids => picks.push(ids)} onToggleScope={id => toggles.push(id)} agents={[]} selectedAgentId={null} onSelect={() => {}} projects={[stranded, idle]} />,
+    )
+    await openMenu(screen.getByRole('combobox', { name: 'Project: alpha' }))
+    const beta = screen.getByRole('option', { name: /beta/ })
+    const box = within(beta).getByRole('checkbox')
+    expect(box.getAttribute('aria-checked')).toBe('false')
+    expect(box.getAttribute('title')).toBe('Add to the projects shown')
+    expect(beta.getAttribute('title')).toBe('Show only beta')
+    expect(within(screen.getByRole('option', { name: /alpha/ })).getByRole('checkbox').getAttribute('aria-checked')).toBe('true')
+    fireEvent.click(box)
+    expect(toggles).toEqual(['p2'])
+    expect(picks).toEqual([])
+    // Still open.
+    expect(screen.getByRole('listbox')).toBeTruthy()
+    // "All projects" is ticked only while every project shows; its box shows them all.
+    const all = within(screen.getByRole('option', { name: /All projects/ })).getByRole('checkbox')
+    expect(all.getAttribute('aria-checked')).toBe('false')
+    fireEvent.click(all)
+    expect(picks).toEqual([null])
+    expect(screen.getByRole('listbox')).toBeTruthy()
+  })
+
+  test('Shift+Enter ticks the row highlighted, Enter shows it alone', async () => {
+    const picks: (string[] | null)[] = []
+    const toggles: string[] = []
+    renderRail(
+      <AgentHistory projectId={null} scope={['p1']} onScope={ids => picks.push(ids)} onToggleScope={id => toggles.push(id)} agents={[]} selectedAgentId={null} onSelect={() => {}} projects={[stranded, idle]} />,
+    )
+    await openMenu(screen.getByRole('combobox', { name: 'Project: alpha' }))
+    const search = screen.getByRole('combobox', { name: 'Search projects and repos' })
+    // Typed, as a person types: the combobox highlights the first match.
+    fireEvent.input(search, { target: { value: 'beta' }, inputType: 'insertText' })
+    fireEvent.keyDown(search, { key: 'Enter', shiftKey: true })
+    expect(toggles).toEqual(['p2'])
+    expect(picks).toEqual([])
+    fireEvent.keyDown(search, { key: 'Enter' })
+    expect(picks).toEqual([['p2']])
+  })
+
+  test('several projects picked: the button names them all, and the menu lists them first, each ticked', async () => {
+    const third: ProjectSummary = { id: 'p3', path: '/repos/p3', name: 'gamma', activated: true, gitHost: false }
+    renderRail(<AgentHistory projectId={null} scope={['p2', 'p3']} agents={[]} recentAgents={[]} selectedAgentId={null} onSelect={() => {}} projects={[stranded, idle, third]} />)
+    const button = screen.getByRole('combobox', { name: 'Projects: beta, gamma' })
+    expect(within(button).getByText('beta, gamma').getAttribute('title')).toBe('beta, gamma')
+    await openMenu(button)
+    const rows = screen.getAllByRole('option').map(row => row.textContent ?? '')
+    expect(rows.findIndex(row => row.includes('beta'))).toBeLessThan(rows.findIndex(row => row.includes('alpha')))
+    expect(rows.findIndex(row => row.includes('gamma'))).toBeLessThan(rows.findIndex(row => row.includes('alpha')))
+    expect(within(screen.getByRole('option', { name: /gamma/ })).getByRole('checkbox').getAttribute('aria-checked')).toBe('true')
+    expect(within(screen.getByRole('option', { name: /alpha/ })).getByRole('checkbox').getAttribute('aria-checked')).toBe('false')
   })
 
   test('pinned to the window beside a page that scrolls, its project menu is placed against the window too, and does not jump as the page scrolls', async () => {
@@ -955,7 +1011,7 @@ describe('the rail marks the page that is open', () => {
     const { unmount } = renderRail(<AgentHistory projectId={null} agents={[]} recentAgents={[]} selectedAgentId={null} onSelect={() => {}} pages={PAGES} activePage="logs" />)
     expect(current()).toEqual(['Logs'])
     unmount()
-    renderRail(<AgentHistory projectId="p1" scope="p1" agents={[]} selectedAgentId={null} onSelect={() => {}} pages={PAGES} />)
+    renderRail(<AgentHistory projectId="p1" scope={["p1"]} agents={[]} selectedAgentId={null} onSelect={() => {}} pages={PAGES} />)
     expect(current()).toEqual([])
   })
 
@@ -976,7 +1032,7 @@ describe('AgentHistory reads a log ahead', () => {
   })
 
   test('the pointer reaching an ended agent\'s row reads its log before any click, once', () => {
-    renderRail(<AgentHistory projectId="p1" scope="p1" agents={[agent({ status: 'done' })]} selectedAgentId={null} onSelect={() => {}} />)
+    renderRail(<AgentHistory projectId="p1" scope={["p1"]} agents={[agent({ status: 'done' })]} selectedAgentId={null} onSelect={() => {}} />)
     const row = screen.getByText("replace 'Hello, world!' with 'Welcome!'").closest('a')!
     expect(onAgent).not.toHaveBeenCalled()
     fireEvent.pointerEnter(row)
@@ -985,13 +1041,13 @@ describe('AgentHistory reads a log ahead', () => {
   })
 
   test('the keyboard reaching the row reads it too', () => {
-    renderRail(<AgentHistory projectId="p1" scope="p1" agents={[agent({ status: 'failed' })]} selectedAgentId={null} onSelect={() => {}} />)
+    renderRail(<AgentHistory projectId="p1" scope={["p1"]} agents={[agent({ status: 'failed' })]} selectedAgentId={null} onSelect={() => {}} />)
     fireEvent.focus(screen.getByText("replace 'Hello, world!' with 'Welcome!'").closest('a')!)
     expect(onAgent.mock.calls).toEqual([['p1', 'run-1']])
   })
 
   test('a working agent\'s row reads nothing: its page shows the live feed, not a saved log', () => {
-    renderRail(<AgentHistory projectId="p1" scope="p1" agents={[agent()]} selectedAgentId={null} onSelect={() => {}} />)
+    renderRail(<AgentHistory projectId="p1" scope={["p1"]} agents={[agent()]} selectedAgentId={null} onSelect={() => {}} />)
     fireEvent.pointerEnter(screen.getByText("replace 'Hello, world!' with 'Welcome!'").closest('a')!)
     expect(onAgent).not.toHaveBeenCalled()
   })
@@ -1037,7 +1093,7 @@ describe('AgentHistory on a phone', () => {
       const ui = (
         <SidebarProvider>
           <MenuButton />
-          <AgentHistory projectId={null} scope="p1" agents={[agent({ status: 'done' })]} selectedAgentId={null} onSelect={onSelect} pages={[{ segment: 'logs', label: 'Logs' }]} onPage={onPage} />
+          <AgentHistory projectId={null} scope={["p1"]} agents={[agent({ status: 'done' })]} selectedAgentId={null} onSelect={onSelect} pages={[{ segment: 'logs', label: 'Logs' }]} onPage={onPage} />
         </SidebarProvider>
       )
       render(ui)
@@ -1059,7 +1115,7 @@ describe('AgentHistory on a phone', () => {
   })
 
   test('on a wide screen the rail is a column, always there', () => {
-    renderRail(<AgentHistory projectId={null} scope="p1" agents={[]} selectedAgentId={null} onSelect={() => {}} pages={[{ segment: 'logs', label: 'Logs' }]} />)
+    renderRail(<AgentHistory projectId={null} scope={["p1"]} agents={[]} selectedAgentId={null} onSelect={() => {}} pages={[{ segment: 'logs', label: 'Logs' }]} />)
     expect(screen.getByRole('link', { name: 'Logs' })).toBeTruthy()
   })
 
@@ -1070,11 +1126,11 @@ describe('AgentHistory on a phone', () => {
       agent({ id: 'new', status: 'done', startedAt: '2026-10-20T08:00:00Z', updatedAt: '2026-10-20T08:01:00Z', title: 'New work' }),
     ]
     const names = () => screen.getAllByRole('link', { name: / · / }).map(row => row.getAttribute('aria-label')!.split(' · ')[0])
-    renderRail(<AgentHistory projectId="p1" scope="p1" agents={agents} selectedAgentId={null} onSelect={() => {}} />)
+    renderRail(<AgentHistory projectId="p1" scope={["p1"]} agents={agents} selectedAgentId={null} onSelect={() => {}} />)
     expect(names()).toEqual(['New work', 'Old question'])
     cleanup()
     preferences.current = { recentsSort: 'updated' }
-    renderRail(<AgentHistory projectId="p1" scope="p1" agents={agents} selectedAgentId={null} onSelect={() => {}} />)
+    renderRail(<AgentHistory projectId="p1" scope={["p1"]} agents={agents} selectedAgentId={null} onSelect={() => {}} />)
     expect(names()).toEqual(['Old question', 'New work'])
     await openMenu(screen.getByRole('button', { name: 'Sort agents' }))
     // The pick is said as a radio's, checked or not, not only drawn.

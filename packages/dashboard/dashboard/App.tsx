@@ -103,10 +103,11 @@ const NO_RUN_STARTED: StartedRun = { tick: 0, intent: '', id: null, projectId: n
 // bookmark it, open two side by side. A refresh returns to the same project for free, which is
 // what the remembered-project state (#475) was for.
 //
-// The project select at the top of the sidebar (#1513) is in the URL too: the one project every page
+// The project select at the top of the sidebar (#1513) is in the URL too: the projects every page
 // shows, or none for all of them. It filters what the pages show; it is not a page of its own, so it
-// rides along on every navigation as the address's first segment (`/{project}/overview`,
-// `/{project}/logs`). A project's own pages pick their project unless `?all` is there.
+// rides along on every navigation: one project as the address's first segment (`/{project}/overview`,
+// `/{project}/logs`), several as `?project=` once each. A project's own pages pick their project
+// unless `?all` is there.
 export function App() {
   // The registered projects, for the browser-tab title (#695/U3) — the selected project's name
   // plus the needs-you count drive `document.title` so a backgrounded tab tells you which project
@@ -145,44 +146,59 @@ export function App() {
     // The route is what the address says; only what names projects changes it here.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [addressesRead, addresses])
-  // The one project every page shows (#1513), or null for all of them. A project that is not
-  // registered (removed, or a link from another machine) picks nothing.
-  const scope = route.scope && projects.some(p => p.id === route.scope) ? route.scope : null
+  // The projects every page shows (#1513), in the order they are registered, or null for all of
+  // them. A project that is not registered (removed, or a link from another machine) is not one of
+  // them; with none left, every project shows.
+  const pickedIds = route.scope ? projects.filter(p => route.scope!.includes(p.id)).map(p => p.id).join('\n') : ''
+  const scope = useMemo(() => (pickedIds ? pickedIds.split('\n') : null), [pickedIds])
+  // The one project picked, for what shows one project only: its agents, its layout, its page's project.
+  const onlyProject = scope?.length === 1 ? scope[0]! : null
   // The address may name a project, and what it names is not read yet: until it is, the address's
   // word is no project's id, so nothing is read for it, and nothing says every project shows either.
   // A page's word counts: before the projects are read, a project's name reads as one.
   const scopePending = scope === null && (route.scope !== undefined || pageSegment !== null) && !addressesRead
-  const scopedProjects = useMemo(() => (scope ? projects.filter(p => p.id === scope) : projects), [projects, scope])
-  // The modules' pages the dashboard has: every one, or with a project picked only the pages of the
-  // packages that project has. The sidebar lists these, and a URL names a page only among these.
-  const shownPages = useMemo(() => (scope ? modulePages.filter(page => page.projects.includes(scope)) : modulePages), [modulePages, scope])
+  const scopedProjects = useMemo(() => (scope ? projects.filter(p => scope.includes(p.id)) : projects), [projects, scope])
+  // The modules' pages the dashboard has: every one, or with projects picked only the pages of the
+  // packages one of them has. The sidebar lists these, and a URL names a page only among these.
+  const shownPages = useMemo(() => (scope ? modulePages.filter(page => page.projects.some(id => scope.includes(id))) : modulePages), [modulePages, scope])
   const modulePage = pageSegment ? shownPages.find(page => page.segment === pageSegment) : undefined
   // The sidebar's rows of them, there from the first frame: the last load's until the modules are imported.
   const listedPages = useListedPages(modules)
-  const sidebarPages = useMemo(() => (scope ? listedPages.filter(page => page.projects.includes(scope)) : listedPages), [listedPages, scope])
+  const sidebarPages = useMemo(() => (scope ? listedPages.filter(page => page.projects.some(id => scope.includes(id))) : listedPages), [listedPages, scope])
 
-  // Every navigation keeps the picked project, and one into another project's page, or into a
-  // page in a named project, picks that project: the pages never show a project the select does not name.
-  const scoped = (next: Route): Route => ({ ...next, ...(scope ? { scope: next.scope ?? next.projectId ?? scope } : {}) })
+  // Every navigation keeps the picked projects, and one into another project's page, or into a
+  // page in a named project, picks that project alone: the pages never show a project the select does not name.
+  const scoped = (next: Route): Route => {
+    if (!scope || next.scope) return next
+    return { ...next, scope: next.projectId === null || scope.includes(next.projectId) ? scope : [next.projectId] }
+  }
   const go = (next: Route, options?: { replace?: boolean }) => navigate(scoped(next), options)
   /** Where `go` would take the page: a link's address. */
   const hrefOf = (next: Route) => formatRoute(scoped(next), addresses)
 
-  // Pick the one project every page shows, or all of them. The page stays, with what it mirrored
-  // into the query (a list's filters), unless it is another project's: its launcher becomes the
-  // picked project's, and its agent's page the Overview. A module's page drops what follows its
-  // segment, which is the project just left's (a ticket of it), and one the picked project does
-  // not have becomes the Overview.
-  const selectScope = (next: string | null) => {
+  // Pick the projects every page shows, or all of them. The page stays, with what it mirrored
+  // into the query (a list's filters), unless it is a project's that is not picked: its launcher
+  // becomes the first picked project's, and its agent's page the Overview. A module's page drops
+  // what follows its segment, which may be a project's just left (a ticket of it), and one no
+  // picked project has becomes the Overview.
+  const selectScope = (picked: string[] | null) => {
+    const next = picked?.length ? picked : null
     const { scope: _scope, ...here } = route
     if (here.projectId !== null) {
       if (next === null) return navigate(here, { keepQuery: true })
-      if (here.projectId !== next) return navigate(here.agentId === null ? { projectId: next, agentId: null, scope: next } : { projectId: null, agentId: null, scope: next })
+      if (!next.includes(here.projectId)) return navigate(here.agentId === null ? { projectId: next[0]!, agentId: null, scope: next } : { projectId: null, agentId: null, scope: next })
+      return navigate({ ...here, scope: next }, { keepQuery: true })
     }
     const mounted = modulePages.find(page => page.segment === here.page)
-    if (next !== null && mounted && !mounted.projects.includes(next)) return navigate({ projectId: null, agentId: null, scope: next })
+    if (next !== null && mounted && !mounted.projects.some(id => next.includes(id))) return navigate({ projectId: null, agentId: null, scope: next })
     const { pagePath, ...page } = here
     navigate({ ...page, ...(next !== null ? { scope: next } : {}) }, { keepQuery: !pagePath?.length })
+  }
+  // A project ticked or unticked in the select, beside the ones picked: in the order they are registered.
+  const toggleScope = (id: string) => {
+    const now = scope ?? []
+    const next = now.includes(id) ? now.filter(picked => picked !== id) : projects.map(p => p.id).filter(picked => picked === id || now.includes(picked))
+    selectScope(next)
   }
 
   // A just-started run: the Sessions rail shows an optimistic "starting…" row with the typed prompt
@@ -193,7 +209,7 @@ export function App() {
   // the project by its address, not by its id.
   // Every two seconds on the project's own pages, where a run's status is watched; every ten beside
   // the Overview or a module's page, whose rail only lists them (as every project's rail does).
-  const agentsOf = projectsLoaded ? (projectId ?? scope) : null
+  const agentsOf = projectsLoaded ? (projectId ?? onlyProject) : null
   const { agents, reload, loaded: agentsLoaded } = useAgents(agentsOf, agentStart.id !== null && agentStart.projectId === agentsOf ? agentStart.id : null, projectId !== null ? 2000 : 10_000)
   useEffect(() => {
     const startedId = agentStart.id
@@ -240,9 +256,9 @@ export function App() {
 
   const project = projectId ? projects.find(p => p.id === projectId) : undefined
   const projectName = project ? (labels.get(project.id) ?? project.name) : null
-  // The Human Queue as the pages show it: the picked project's items, or every project's.
-  const interventions = scope ? interventionsRead.items.filter(item => item.projectId === scope) : interventionsRead.items
-  useDocumentTitle(interventions.length, projectName ?? (scope ? (labels.get(scope) ?? null) : null))
+  // The Human Queue as the pages show it: the picked projects' items, or every project's.
+  const interventions = scope ? interventionsRead.items.filter(item => scope.includes(item.projectId)) : interventionsRead.items
+  useDocumentTitle(interventions.length, projectName ?? (onlyProject ? (labels.get(onlyProject) ?? null) : scope ? `${scope.length} projects` : null))
   // A URL naming a project that is not registered (renamed, removed, mistyped). A non-empty list
   // is the answer, so this never fires while the first read is still out.
   const unknownProject = projectId !== null && !noProject && projects.length > 0 && !projects.some(p => p.id === projectId)
@@ -263,10 +279,11 @@ export function App() {
   const { value: activity } = usePolled<ProjectionRead<Activity>>(browserActivity ? onActivity : null, EMPTY_ACTIVITY, 15000, [browserActivity], undefined, runsAgain(undefined))
   useActivityNotifications(activity, browserActivity, (inProject, id) => selectAgentInProject(inProject, id))
 
-  // The shared sidebar's recents when all projects show (#shared-shell): the rail pools every
-  // project's sessions here.
-  const allShow = scope === null && !scopePending
-  const { recentAgents, reload: reloadRecent, loaded: recentLoaded } = useRecentAgents(allShow, agentStart)
+  // The shared sidebar's recents when all projects show (#shared-shell), or several: the rail pools
+  // every project's sessions here, the picked projects' only when several are.
+  const crossProject = onlyProject === null && !scopePending
+  const { recentAgents, reload: reloadRecent, loaded: recentLoaded } = useRecentAgents(crossProject, agentStart)
+  const shownRecents = useMemo(() => (scope ? recentAgents.filter(recent => scope.includes(recent.projectId)) : recentAgents), [recentAgents, scope])
 
   // An agent just started in `inProject`, which is not always the selected one: the onboarding
   // checklist starts one from the Overview, where nothing is selected (#1169).
@@ -361,7 +378,7 @@ export function App() {
     ...DAEMON_SERVICES,
     openAgent: selectAgentInProject,
     agentHref: (inProject, id) => hrefOf({ projectId: inProject, agentId: id }),
-    openPage: (segment, path, inProject, options) => go({ projectId: null, agentId: null, page: segment, ...(path && path.length ? { pagePath: path } : {}), ...(inProject ? { scope: inProject } : {}) }, options),
+    openPage: (segment, path, inProject, options) => go({ projectId: null, agentId: null, page: segment, ...(path && path.length ? { pagePath: path } : {}), ...(inProject ? { scope: [inProject] } : {}) }, options),
     pageHref: segment => formatRoute({ projectId: null, agentId: null, page: segment, ...(scope ? { scope } : {}) }, addresses),
     openSettings: entry => showSettings(entry),
     startRun: async (inProject, prompt, opts) => {
@@ -434,7 +451,7 @@ export function App() {
     if (pageSegment === AGENTS_PAGE) return <AgentsPage />
     if (pageSegment) {
       if (modulePage)
-        return <ModulePageView page={modulePage} projects={scopedProjects} projectId={scope} path={route.pagePath ?? []} />
+        return <ModulePageView page={modulePage} projects={scopedProjects} projectId={onlyProject} path={route.pagePath ?? []} />
       // Not read yet is not "no such page": the modules are imported after the first read, and
       // until the projects are read too a project's name reads as a page's word.
       if (!addressesRead) return null
@@ -445,7 +462,9 @@ export function App() {
           title="No such page"
           detail={
             elsewhere
-              ? `The project "${projects.find(p => p.id === scope)?.name ?? scope}" has no package that adds a page at "${pageSegment}".`
+              ? onlyProject
+                ? `The project "${projects.find(p => p.id === onlyProject)?.name ?? onlyProject}" has no package that adds a page at "${pageSegment}".`
+                : `None of the projects picked has a package that adds a page at "${pageSegment}".`
               : route.scope === undefined
                 ? `No project has the address "/${pageSegment}", and no installed package adds a page there.`
                 : `No installed package adds a page at "${pageSegment}".`
@@ -624,14 +643,15 @@ export function App() {
           projectId={projectId}
           scope={scope}
           scopePending={scopePending}
-          listLoaded={scope === null ? recentLoaded : agentsLoaded}
+          listLoaded={crossProject ? recentLoaded : agentsLoaded}
           onScope={selectScope}
+          onToggleScope={toggleScope}
           homeHref={formatRoute({ projectId: null, agentId: null, ...(scope ? { scope } : {}) }, addresses)}
           agents={agents}
           selectedAgentId={agentId}
           // A row of the picked project's list opens in that project, whichever page is showing.
-          onSelect={id => go({ projectId: scope ?? projectId, agentId: id })}
-          recentAgents={recentAgents}
+          onSelect={id => go({ projectId: onlyProject ?? projectId, agentId: id })}
+          recentAgents={shownRecents}
           onSelectRecent={selectAgentInProject}
           projects={projects}
           onNewAgentInProject={newAgentInProject}
@@ -687,7 +707,7 @@ export function App() {
         </ModuleSlot>
       ))}
       {/* Once what the address names is read: the project its "Project" group opens on, and the entries the projects and their packages add. */}
-      {route.settings !== undefined && addressesRead && <SettingsDialog entry={route.settings} openItem={route.settingsItem} onEntry={showSettingsEntry} onClose={closeSettings} scope={scope} projects={projects} />}
+      {route.settings !== undefined && addressesRead && <SettingsDialog entry={route.settings} openItem={route.settingsItem} onEntry={showSettingsEntry} onClose={closeSettings} scope={onlyProject} projects={projects} />}
     </SidebarProvider>
     </DaemonDown.Provider>
     </ProjectLabelsContext.Provider>

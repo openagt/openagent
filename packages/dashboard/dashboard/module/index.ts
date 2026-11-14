@@ -81,9 +81,9 @@ export interface ModuleCard {
  * own segment is where every such link in the dashboard lands, and the dashboard names no page.
  */
 export interface ModulePageProps {
-  /** The registered projects whose dependencies include the module's package, in the registry's order: only the picked one when one is. */
+  /** The registered projects whose dependencies include the module's package, in the registry's order: only the picked ones when some are. */
   projects: ModuleProject[]
-  /** The project the address starts with (`/<project>/<segment>`), picked in the sidebar; null when every project shows. */
+  /** The project the address starts with (`/<project>/<segment>`), picked alone in the sidebar; null when every project shows, or several. */
   projectId: string | null
   /** The URL's segments after the page's own, decoded: `/logs/a` gives `['a']`. */
   path: string[]
@@ -398,13 +398,13 @@ export interface ModuleHost {
   /** The address of one agent's page: a link's `href`, for a link that also opens in a new tab. */
   agentHref(projectId: string, agentId: string): string
   /**
-   * Open a page a module adds (this one's or another's), at a sub-path, in the project picked in
-   * the dashboard, or in `projectId`, which is then the one picked: `openPage('tickets', [file], projectId)`.
-   * A page the picked project's packages do not add shows "No such page". With `replace`, the address
+   * Open a page a module adds (this one's or another's), at a sub-path, with the projects picked in
+   * the dashboard, or in `projectId`, which is then the one picked alone: `openPage('tickets', [file], projectId)`.
+   * A page none of the picked projects' packages adds shows "No such page". With `replace`, the address
    * takes the place of the current one, so Back steps over it: a pick the page keeps in its address.
    */
   openPage(segment: string, path?: string[], projectId?: string, options?: { replace?: boolean }): void
-  /** The address of a page a module adds, with the project picked in the dashboard: a link's `href`, for a link that also opens in a new tab. */
+  /** The address of a page a module adds, with the projects picked in the dashboard: a link's `href`, for a link that also opens in a new tab. */
   pageHref(segment: string): string
   /** Open an entry of Settings over the page, by its id: `openSettings('devices')`. */
   openSettings(entry: string): void
