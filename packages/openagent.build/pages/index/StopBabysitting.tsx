@@ -3,9 +3,15 @@ import { Frown, Rocket, type LucideIcon } from 'lucide-react'
 import { CodeChip, mono, proseStyle, SectionHead, sectionStyle, text } from './ui'
 
 
-// Inline arrows in the mono font: the sans-serif glyphs are thin and vanish in the text.
+// Inline arrows in the mono font: the sans-serif glyphs are thin and vanish in the text. Each stays on the
+// line of the word before it, so no line starts with one.
 function Arrow({ glyph }: { glyph: '→' | '↔' }) {
-  return <span style={{ fontFamily: mono, fontWeight: 500 }}>{glyph}</span>
+  return (
+    <>
+      {'\u00a0'}
+      <span style={{ fontFamily: mono, fontWeight: 500 }}>{glyph}</span>
+    </>
+  )
 }
 
 type Row = { kind: 'bad' | 'good'; Icon: LucideIcon; label: string; body: ReactNode }
@@ -18,7 +24,7 @@ const PROBLEMS: { title: string; desc?: string; rows: Row[] }[] = [
     rows: [
       bad(
         <>
-          Appending "DON'T BE LAZY" to your prompts <Arrow glyph="→" /> minimal improvement.
+          Appending "DON'T BE LAZY" to your prompts<Arrow glyph="→" /> minimal improvement.
         </>,
       ),
       good(
@@ -39,7 +45,7 @@ const PROBLEMS: { title: string; desc?: string; rows: Row[] }[] = [
       bad('Explicitly tell AI to deep dive important aspects.'),
       good(
         <>
-          Automatic loop of critical feedback <Arrow glyph="↔" /> research <Arrow glyph="↔" /> confidence <Arrow glyph="↔" /> implementation.
+          Automatic loop of critical feedback<Arrow glyph="↔" /> research<Arrow glyph="↔" /> confidence<Arrow glyph="↔" /> implementation.
         </>,
       ),
     ],
@@ -50,7 +56,7 @@ const PROBLEMS: { title: string; desc?: string; rows: Row[] }[] = [
     rows: [
       bad(
         <>
-          Appending "WRITE CLEAN CODE" to your prompts <Arrow glyph="→" /> minimal improvement.
+          Appending "WRITE CLEAN CODE" to your prompts<Arrow glyph="→" /> minimal improvement.
         </>,
       ),
       good(<>When an agent makes complex changes, the agent adds <b>post-merge refactoring</b> prompts to the AI Queue (with low priority).</>),
@@ -107,7 +113,8 @@ export function StopBabysitting() {
                     </span>
                     {r.label}
                   </span>
-                  <p style={{ ...proseStyle, color: 'var(--foreground)' }}>{r.body}</p>
+                  {/* As wide as its place: each row's lines end on the same edge. */}
+                  <p style={{ ...proseStyle, maxWidth: 'none', color: 'var(--foreground)' }}>{r.body}</p>
                 </div>
               ))}
             </div>
