@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { Combobox } from '@base-ui/react/combobox'
 import { addressOfRemote } from '@openagt/agent-data/repository-address'
-import { Cloud, Check, ChevronDown, ChevronsUpDown, Folder, FolderGit2, FolderPlus, FolderSearch, Layers, Plus, Search } from 'lucide-react'
+import { Cloud, Check, ChevronsUpDown, Folder, FolderGit2, FolderPlus, FolderSearch, Layers, Plus, Search } from 'lucide-react'
 import type { ProjectSummary } from '../../src/index.js'
 import { machineKind, machineName, typedRepository } from '../../src/client.js'
 import { onRepos, sendAddRepoFolder, type ReposRead } from '../rpc/projects.js'
@@ -11,7 +11,7 @@ import { useProjectLabel } from '../lib/project-labels.js'
 import { cn } from '../lib/utils.js'
 import { MACHINE_ICONS } from './MachineMark.js'
 import { projectErrorTitle } from './ProjectErrorBanner.js'
-import { rowButtonClass } from './ui/row-item.js'
+import { rowButtonClass, RowChevron } from './ui/row-item.js'
 import { buttonVariants } from './ui/button.js'
 import { ScrollArea } from './ui/scroll-area.js'
 import { Skeleton, useSkeleton } from './ui/skeleton.js'
@@ -273,7 +273,7 @@ export function ProjectPicker({
       <button type="button" className={cn(rowButtonClass, 'max-w-[16rem]!')}>
         <Folder className="h-3.5 w-3.5 shrink-0" aria-hidden />
         <span className="truncate">{shown}</span>
-        <ChevronDown className="h-3 w-3 shrink-0 opacity-70" aria-hidden />
+        <RowChevron />
       </button>
     )
   const trigger = <Combobox.Trigger ref={triggerRef} disabled={busy || pending} aria-label={name} className={MENU_TRIGGER_OPEN_CLASS} render={button} {...(look === 'sidebar' ? { 'data-project-picker': '' } : {})} />
