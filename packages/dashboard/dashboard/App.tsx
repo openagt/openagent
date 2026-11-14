@@ -453,6 +453,7 @@ export function App() {
                 : `No installed package adds a page at "${pageSegment}".`
           }
           actionLabel="Go to the Overview"
+          href={hrefOf({ projectId: null, agentId: null })}
           onAction={showDashboard}
         />
       )
@@ -482,6 +483,7 @@ export function App() {
           title="No such project"
           detail={`No project is registered as "${projectId}". It may have been removed, or the link may be from another machine.`}
           actionLabel="Go to the Overview"
+          href={hrefOf({ projectId: null, agentId: null })}
           onAction={showDashboard}
         />
       )
@@ -539,6 +541,7 @@ export function App() {
           title="No such session"
           detail="No session of this project has this address. It may have been deleted, or the link may be from another machine."
           actionLabel="Back to the project"
+          href={hrefOf({ projectId, agentId: null })}
           onAction={() => selectAgent(null)}
         />
       )
@@ -603,8 +606,9 @@ export function App() {
       {!healthy && (
         // Kept at the top of a page that scrolls, over an opaque ground, as the pinned sidebar is under it.
         <div role="alert" className={cn('h-(--top-banner) shrink-0 bg-background', pageScrolls && 'sticky top-0 z-30')}>
-          <div className="flex h-full items-center gap-2 border-b border-border bg-warning/10 px-4 text-xs text-warning">
-            <TriangleAlert className="h-3.5 w-3.5 shrink-0" aria-hidden />
+          {/* The banners' strip: a tinted fill with no edge, its mark in the warning's colour, its words in the text's. */}
+          <div className="flex h-full items-center gap-2 bg-warning/10 px-4 text-sm">
+            <TriangleAlert className="size-4 shrink-0 text-warning" aria-hidden />
             {daemon === 'stopped' ? (
               <span>OpenAgent has stopped. Start it again with <code className="font-mono">openagent</code> in a terminal; {INSTALLED_RESTARTS}.</span>
             ) : (
