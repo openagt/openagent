@@ -9,6 +9,7 @@ import { useAction } from '../lib/use-action.js'
 import { cn } from '../lib/utils.js'
 import { Button } from './ui/button.js'
 import { Checkbox } from './ui/checkbox.js'
+import { BACKDROP_CLASS, DIALOG_POPUP_CLASS, DIALOG_PRESSES_CLASS } from './ui/dialog.js'
 
 const name = 'font-medium text-foreground'
 
@@ -70,15 +71,15 @@ export function RemoveProjectDialog({
       }}
     >
       <AlertDialog.Portal>
-        <AlertDialog.Backdrop className="fixed inset-0 z-50 bg-black/40 backdrop-blur-[1px]" />
+        <AlertDialog.Backdrop className={BACKDROP_CLASS} />
         {/* Gone with the project, the menu that opened it takes no focus back: the project picker, where the next project is picked, does. */}
-        <AlertDialog.Popup data-overlay="question" initialFocus={cancel} finalFocus={() => (removed ? document.querySelector<HTMLElement>('[data-project-picker]') : true)} className="fixed left-1/2 top-1/2 z-50 max-h-[calc(100vh-2rem)] w-[min(28rem,calc(100vw-2rem))] -translate-x-1/2 -translate-y-1/2 overflow-y-auto rounded-lg border border-border bg-card p-5 text-card-foreground shadow-lg">
+        <AlertDialog.Popup data-overlay="question" initialFocus={cancel} finalFocus={() => (removed ? document.querySelector<HTMLElement>('[data-project-picker]') : true)} className={cn(DIALOG_POPUP_CLASS, 'overflow-y-auto md:w-[min(28rem,calc(100vw-2rem))]')}>
           {removed ? (
             <>
-              <AlertDialog.Title className="text-sm font-semibold">Project removed</AlertDialog.Title>
+              <AlertDialog.Title className="text-base font-semibold">Project removed</AlertDialog.Title>
               {removed.report ? (
                 <>
-                  <AlertDialog.Description className="mt-2 text-xs leading-relaxed text-muted-foreground">
+                  <AlertDialog.Description className="mt-2 text-sm text-muted-foreground">
                     It left the dashboard&rsquo;s list. This is what happened to OpenAgent&rsquo;s files in the folder.
                   </AlertDialog.Description>
                   <ReportList title="Deleted" empty="Nothing: there was nothing of OpenAgent&rsquo;s to delete." lines={removed.report.removed} />
@@ -86,11 +87,11 @@ export function RemoveProjectDialog({
                   {removed.report.failed.length > 0 && <ReportList title="Could not be cleaned" lines={removed.report.failed} danger />}
                 </>
               ) : (
-                <AlertDialog.Description className="mt-2 text-xs leading-relaxed text-muted-foreground">
+                <AlertDialog.Description className="mt-2 text-sm text-muted-foreground">
                   It left the dashboard&rsquo;s list, and nothing in the folder was deleted. Add the folder again to bring the project back.
                 </AlertDialog.Description>
               )}
-              <div className="mt-4 flex justify-end">
+              <div className={cn('mt-5 flex justify-end', DIALOG_PRESSES_CLASS)}>
                 <Button autoFocus onClick={finish}>
                   Done
                 </Button>
@@ -98,8 +99,8 @@ export function RemoveProjectDialog({
             </>
           ) : (
             <>
-              <AlertDialog.Title className="text-sm font-semibold">{label ? `Remove the project ${label}?` : 'Remove this project?'}</AlertDialog.Title>
-              <AlertDialog.Description className="mt-2 text-xs leading-relaxed text-muted-foreground">
+              <AlertDialog.Title className="text-base font-semibold">{label ? `Remove the project ${label}?` : 'Remove this project?'}</AlertDialog.Title>
+              <AlertDialog.Description className="mt-2 text-sm text-muted-foreground">
                 It leaves the dashboard&rsquo;s list{scheduled && <>, and its scheduler stops unless you set it to keep running</>}.{' '}
                 {files ? (
                   <>Your files and your commits stay.</>
@@ -113,12 +114,12 @@ export function RemoveProjectDialog({
                 )}{' '}
                 Add the folder again to bring the project back.
               </AlertDialog.Description>
-              <label className="mt-3 flex cursor-pointer items-start gap-2 text-xs text-foreground">
+              <label className="mt-4 flex cursor-pointer items-start gap-2 text-sm text-foreground">
                 <Checkbox checked={files} onCheckedChange={checked => setFiles(checked === true)} disabled={busy} className="mt-0.5" />
                 <span>Also delete OpenAgent&rsquo;s files in this folder</span>
               </label>
               {files && (
-                <div className="mt-2 rounded-md border border-border p-3 text-xs leading-relaxed text-muted-foreground">
+                <div className="mt-3 rounded-md border border-hairline p-3 text-sm text-muted-foreground">
                   <p>
                     This deletes, on this machine: the agents&rsquo; checkouts in <span className={name}>.branches</span>, the folders{' '}
                     <span className={name}>.openagent</span> (with <span className={name}>hooks.yml</span>, the project&rsquo;s start lines) and{' '}
@@ -139,12 +140,12 @@ export function RemoveProjectDialog({
                   </p>
                 </div>
               )}
-              {error && <p className="mt-2 text-xs text-danger">{error}</p>}
-              <div className="mt-4 flex justify-end gap-2">
+              {error && <p className="mt-3 text-sm text-danger">{error}</p>}
+              <div className={cn('mt-5 flex justify-end gap-2', DIALOG_PRESSES_CLASS)}>
                 <AlertDialog.Close
                   ref={cancel}
                   render={
-                    <Button variant="outline" disabled={busy}>
+                    <Button variant="secondary" disabled={busy}>
                       Cancel
                     </Button>
                   }
@@ -163,12 +164,12 @@ export function RemoveProjectDialog({
 
 function ReportList({ title, lines, empty, danger = false }: { title: string; lines: string[]; empty?: string; danger?: boolean }) {
   return (
-    <div className="mt-3 text-xs">
+    <div className="mt-4 text-sm">
       <p className={cn('font-medium', danger ? 'text-danger' : 'text-foreground')}>{title}</p>
       {lines.length === 0 ? (
         <p className="mt-1 text-muted-foreground">{empty}</p>
       ) : (
-        <ul className="mt-1 space-y-0.5 text-muted-foreground">
+        <ul className="mt-1 space-y-1 font-mono text-xs text-muted-foreground">
           {lines.map(line => (
             <li key={line} className="break-words">
               {line}
