@@ -1,37 +1,19 @@
-import type { CSSProperties } from 'react'
-import { CommandChip, CommandLine, PmTabs, usePickedCommand } from './commands'
-import { CopiedStatus, copyPress, useCopy } from './copy'
-import { BADGES, labelStyle, mono, proseStyle, Screenshot, text } from './ui'
+import type { ReactNode } from 'react'
+import { CommandBox, PmTabs } from './commands'
+import { BADGES, labelStyle, proseStyle, Screenshot, text } from './ui'
 import { switchInPlace, useDashboardHref } from './ViewToggle'
 
-const commentStyle: CSSProperties = { color: 'var(--muted-foreground)' }
-
-function Badge({ label, copied }: { label: string; copied: boolean }) {
+/** A label beside its command; on a phone, over it. */
+function Labelled({ label, children }: { label: string; children: ReactNode }) {
   return (
-    <span
-      className={'try-badge' + (copied ? ' copied' : '')}
-      style={{
-        marginLeft: 'auto',
-        position: 'relative',
-        background: 'var(--foreground)',
-        color: 'var(--background)',
-        fontWeight: 600,
-        ...text('xs'),
-        borderRadius: 'var(--radius-sm)',
-        padding: '2px 8px',
-        transition: 'opacity var(--duration-hover) var(--ease-out)',
-        pointerEvents: 'none',
-        userSelect: 'none',
-      }}
-    >
-      {label}
+    <span className="labelled" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px 12px', maxWidth: '100%' }}>
+      <span style={labelStyle}>{label}</span>
+      {children}
     </span>
   )
 }
 
 export function Hero() {
-  const tryCopy = useCopy()
-  const tryCommand = usePickedCommand('try')
   const dashboardHref = useDashboardHref()
 
   return (
@@ -110,78 +92,16 @@ export function Hero() {
         Dashboard <span aria-hidden>→</span>
       </a>
 
-      <div
-        style={{
-          display: 'flex',
-          flexDirection: 'column',
-          gap: 16,
-          alignItems: 'center',
-          marginTop: 16,
-          maxWidth: '100%',
-        }}
-      >
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 8, alignItems: 'center', maxWidth: '100%' }}>
-          <span style={labelStyle}>Try:</span>
-          <div
-            className="try-box"
-            style={{
-              maxWidth: '100%',
-              boxSizing: 'border-box',
-              background: 'var(--card)',
-              border: '1px solid var(--border)',
-              borderRadius: 'var(--radius-lg)',
-              overflow: 'hidden',
-              textAlign: 'left',
-            }}
-          >
-            <div
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: 4,
-                padding: '6px 8px',
-                background: 'var(--background)',
-                borderBottom: '1px solid var(--border)',
-              }}
-            >
-              <PmTabs />
-              <Badge label={tryCopy.copied ? 'copied!' : 'copy'} copied={tryCopy.copied} />
-            </div>
-            <div
-              className="copy-box"
-              {...copyPress(`Copy ${tryCommand}`, (e) => tryCopy.copy(tryCommand, e))}
-              style={{
-                position: 'relative',
-                cursor: 'pointer',
-                display: 'flex',
-                flexDirection: 'column',
-                gap: 8,
-                padding: '12px 16px',
-                fontFamily: mono,
-                ...text('sm'),
-              }}
-            >
-              <CommandLine command="try" after={<span style={commentStyle}># One-shot (no install)</span>} />
-            </div>
-            <CopiedStatus copied={tryCopy.copied} />
-          </div>
+      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8, marginTop: 16, maxWidth: '100%' }}>
+        <PmTabs />
+        <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'center', gap: '8px 32px', maxWidth: '100%' }}>
+          <Labelled label="Try:">
+            <CommandBox command="try" size="large" after={<span style={{ color: 'var(--muted-foreground)' }}># One-shot (no install)</span>} />
+          </Labelled>
+          <Labelled label="Or install:">
+            <CommandBox command="install" size="small" />
+          </Labelled>
         </div>
-        <p
-          style={{
-            margin: 0,
-            ...text('sm'),
-            color: 'var(--muted-foreground)',
-            display: 'flex',
-            alignItems: 'center',
-            gap: 8,
-            flexWrap: 'wrap',
-            justifyContent: 'center',
-            maxWidth: '100%',
-          }}
-        >
-          Or install:
-          <CommandChip command="install" />
-        </p>
       </div>
 
       <div style={{ width: '100%', marginTop: 32 }}>
