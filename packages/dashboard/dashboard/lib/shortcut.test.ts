@@ -22,6 +22,19 @@ describe('a shortcut as the keyboard in front of the person names it', () => {
     expect(MOD_KEY).toBe(key)
     expect(shortcut('B')).toBe(withB)
   })
+
+  test.each([
+    ['MacIntel', 'sidebar', ['⌘', 'B']],
+    ['Linux x86_64', 'sidebar', ['Ctrl', 'B']],
+    ['MacIntel', 'newLine', ['⇧', 'Enter']],
+    ['Win32', 'newLine', ['Shift', 'Enter']],
+    ['Win32', 'pick', ['1–9']],
+    ['Win32', 'stop', ['Esc']],
+    ['Win32', 'shortcuts', ['?']],
+  ] as const)('on %s, %s is written %j', async (platform, id, keys) => {
+    const { shortcutKeys } = await onPlatform(platform)
+    expect(shortcutKeys(id)).toEqual(keys)
+  })
 })
 
 /** A key pressed on `target`, the body unless said. */
@@ -54,8 +67,13 @@ describe('which key press is which shortcut', () => {
     expect(pressed(press({ key: 'b', ctrlKey: true, isComposing: true }), 'sidebar')).toBe(false)
   })
 
-  test('a digit typed into a field is the field’s; outside one it picks', () => {
+  test('? and a digit typed into a field are the field’s; outside one they are shortcuts', () => {
     const field = document.createElement('textarea')
+    // The message box's editor, as a browser has it (jsdom knows no `isContentEditable`).
+    const editor = Object.defineProperty(document.createElement('div'), 'isContentEditable', { value: true })
+    expect(pressed(press({ key: '?', shiftKey: true }), 'shortcuts')).toBe(true)
+    expect(pressed(press({ key: '?', shiftKey: true }, field), 'shortcuts')).toBe(false)
+    expect(pressed(press({ key: '?', shiftKey: true }, editor), 'shortcuts')).toBe(false)
     expect(pressed(press({ key: '3' }), 'pick')).toBe(true)
     expect(pressed(press({ key: '0' }), 'pick')).toBe(false)
     expect(pressed(press({ key: '3' }, field), 'pick')).toBe(false)

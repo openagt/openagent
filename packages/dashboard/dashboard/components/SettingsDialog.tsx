@@ -1,6 +1,6 @@
 import { useCallback, useId, useRef, useState, type ComponentType, type ReactNode } from 'react'
 import { Dialog as BaseDialog } from '@base-ui/react/dialog'
-import { ArrowLeft, Bell, Bot, ChevronRight, Database, FolderGit2, Globe, Palette, Puzzle, UserRound, X, FolderSearch } from 'lucide-react'
+import { ArrowLeft, Bell, Bot, ChevronRight, Database, FolderGit2, Globe, Keyboard, Palette, Puzzle, UserRound, X, FolderSearch } from 'lucide-react'
 import { ACCENTS, DEFAULT_ACCENT_LABELS, accentOf, CODE_FONTS, DOCUMENT_FONTS, DRIVERS, DRIVER_LABELS, isDriverName, FONTS, PALETTES, PALETTE_LABELS, type Accent, type CodeFont, type DocumentFont, type Font, type Palette as ColourPalette } from '../../src/client.js'
 import { driverOptions, useModels } from '../lib/models.js'
 import type { DriverOption } from './DriverModelMenu.js'
@@ -17,6 +17,7 @@ import { HUMAN_QUEUE_ABOUT, NEW_ACTIVITY_ABOUT, browserHint, kindHint } from '..
 import { BridgeSettings } from './BridgeSettings.js'
 import { AGENT_DATA_ENTRY, AgentDataSettings } from './AgentDataSettings.js'
 import { PROFILE_ENTRY, ProfileSettings } from './ProfileSettings.js'
+import { SHORTCUTS_ENTRY, ShortcutList } from './ShortcutList.js'
 import { REPO_SOURCES_ENTRY, RepoSourcesSettings } from './RepoSourcesSettings.js'
 import { SKILLS_ENTRY, SkillsSettings } from './ProjectSkills.js'
 import { PickProject } from './PickProject.js'
@@ -302,7 +303,7 @@ function ProjectSelect({ projects, value, onChange }: { projects: ProjectSummary
   )
 }
 
-/** The dashboard's own entries, the first of the list: who you are, how it looks, what it tells you, which agent runs, on which accounts, Claude web. */
+/** The dashboard's own entries, the first of the list: who you are, how it looks, what it tells you, which agent runs, on which accounts, Claude web, the keys. */
 function useOwnEntries(): Entry[] {
   const preferences = usePreferences()
   const editors = useDetectedEditors()
@@ -506,6 +507,12 @@ function useOwnEntries(): Entry[] {
           )}
         </Section>
       ),
+    },
+    {
+      id: SHORTCUTS_ENTRY,
+      title: 'Keyboard shortcuts',
+      icon: Keyboard,
+      body: <ShortcutList />,
     },
   ]
 }

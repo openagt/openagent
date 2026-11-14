@@ -390,7 +390,7 @@ describe('the Settings list', () => {
 
   test("two groups: yours and this computer's, the computer's packages among them; then the picked project's packages", () => {
     show('', 'p1')
-    expect(entries('You and this computer')).toEqual(['Profile', 'Appearance', 'Notifications', 'Coding agent', 'Your agent data', 'Repos', 'Claude web', 'Devices'])
+    expect(entries('You and this computer')).toEqual(['Profile', 'Appearance', 'Notifications', 'Coding agent', 'Your agent data', 'Repos', 'Claude web', 'Keyboard shortcuts', 'Devices'])
     // gemstack has orchestration and no scheduler; every project has its skills.
     expect(entries('Project')).toEqual(['Skills', 'Project agent data', 'Orchestration'])
     expect(showing(select('Project'))).toBe('gemstack')

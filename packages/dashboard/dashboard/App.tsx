@@ -45,6 +45,8 @@ import { DaemonDown, INSTALLED_RESTARTS, useDaemonHealth } from './lib/use-daemo
 import { useContextSet } from './lib/use-context-set.js'
 import { TriangleAlert } from 'lucide-react'
 import type { StartPicks } from './lib/started-from.js'
+import { useShortcut } from './lib/shortcut.js'
+import { SHORTCUTS_ENTRY } from './components/ShortcutList.js'
 
 /** Stable, so `files` keeps one identity while no project is selected. */
 const EMPTY_FILES: string[] = []
@@ -349,6 +351,7 @@ export function App() {
     const { settingsItem: _item, ...rest } = route
     navigate({ ...rest, settings: entry }, { keepQuery: true, replace: true })
   }
+  useShortcut('shortcuts', () => showSettings(SHORTCUTS_ENTRY))
   const closeSettings = () => {
     if (settingsOverPage()) return window.history.back()
     const { settings: _settings, settingsItem: _item, ...under } = route

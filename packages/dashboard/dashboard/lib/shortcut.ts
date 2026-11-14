@@ -1,3 +1,5 @@
+import { useEffect, useRef } from 'react'
+
 /** Whether the keyboard in front of the person is a Mac's, whose shortcuts are pressed with ⌘. */
 const MAC = typeof navigator !== 'undefined' && /Mac|iPhone|iPad/.test(navigator.platform)
 
@@ -27,6 +29,7 @@ interface Shortcut {
 
 /** Every key the dashboard takes, read by the handlers that take them and by the list of shortcuts alike. */
 export const SHORTCUTS = {
+  shortcuts: { keys: ['?'], outsideFields: true, where: 'Anywhere', does: 'Show the keyboard shortcuts' },
   sidebar: { keys: ['b'], mod: true, where: 'Anywhere', does: 'Hide or show the sidebar' },
   send: { keys: ['Enter'], where: 'The message box', does: 'Send' },
   newLine: { keys: ['Enter'], shift: true, where: 'The message box', does: 'Start a new line' },
@@ -58,4 +61,30 @@ export function pressed(event: KeyPress, id: ShortcutId): boolean {
   // A named key says Shift apart; a character's Shift is how it is typed.
   if (event.key.length > 1 && event.shiftKey !== (shortcut.shift ?? false)) return false
   return !event.metaKey && !event.ctrlKey && !event.altKey
+}
+
+/** The keys of a shortcut as this keyboard writes them, one cap each: ⌘ K on a Mac, Ctrl K elsewhere. */
+export function shortcutKeys(id: ShortcutId): string[] {
+  const shortcut: Shortcut = SHORTCUTS[id]
+  const first = shortcut.keys[0]!
+  const key = first === '1-9' ? '1–9' : first === 'Escape' ? 'Esc' : first.length === 1 ? first.toUpperCase() : first
+  return [...(shortcut.mod ? [MOD_KEY] : []), ...(shortcut.shift ? [MAC ? '⇧' : 'Shift'] : []), key]
+}
+
+/**
+ * Run `run` at the shortcut `id`, pressed anywhere on the page: not while a dialog is open, nor
+ * when what has the focus took the key itself.
+ */
+export function useShortcut(id: ShortcutId, run: () => void): void {
+  const latest = useRef(run)
+  latest.current = run
+  useEffect(() => {
+    const onKey = (event: KeyboardEvent) => {
+      if (event.defaultPrevented || !pressed(event, id) || document.querySelector('[role="dialog"], [role="alertdialog"]')) return
+      event.preventDefault()
+      latest.current()
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [id])
 }

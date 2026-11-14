@@ -16,6 +16,7 @@ import { Section } from '../components/ui/section.js'
 import { List, Row } from '../components/ui/list.js'
 import { RowShapes, Slot } from '../components/ui/slot.js'
 import { ChevronRight, Folder, Trash2 } from 'lucide-react'
+import { ShortcutList } from '../components/ShortcutList.js'
 
 // The gallery's card registry (#DESIGN). Every entry renders the REAL component wherever the
 // component can stand alone, so a card cannot quietly drift from what ships. The few that cannot
@@ -659,6 +660,14 @@ export const PREVIEWS: Preview[] = [
     subtitle: 'Where an answer is drawn: its shape while it is read (unseen for 200ms, then pulsing), the answer, a note when asking again failed. A kept answer fades after a second, and a held one dims: neither shows on a still page',
     width: 900,
     node: <Slots />,
+  },
+  {
+    path: 'patterns/shortcuts.html',
+    group: 'Patterns',
+    name: 'Keyboard shortcuts',
+    subtitle: 'Every key, by where it works: ? and Settings show it',
+    width: 600,
+    node: <ShortcutList />,
   },
   {
     path: 'patterns/empty-states.html',

@@ -937,3 +937,21 @@ describe('the shell on a phone', () => {
     expect(screen.getAllByText('Overview')).toHaveLength(2)
   })
 })
+
+describe('the keyboard shortcuts', () => {
+  test('? outside a text field opens their list in Settings; typed into a field, or over a dialog, it is only a character', async () => {
+    answerShell([])
+    render(<App />)
+    await screen.findByRole('heading', { name: 'Overview' })
+    const field = document.body.appendChild(document.createElement('input'))
+    fireEvent.keyDown(field, { key: '?', shiftKey: true })
+    const dialog = document.body.appendChild(document.createElement('div'))
+    dialog.setAttribute('role', 'dialog')
+    fireEvent.keyDown(document.body, { key: '?', shiftKey: true })
+    expect(screen.queryByText(/the settings dialog/)).toBeNull()
+    dialog.remove()
+    field.remove()
+    fireEvent.keyDown(document.body, { key: '?', shiftKey: true })
+    expect(await screen.findByText("the settings dialog on 'shortcuts'")).toBeTruthy()
+  })
+})
