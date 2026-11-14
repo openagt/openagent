@@ -70,16 +70,31 @@ function OptionRow({
   )
 }
 
-/** A facet's trigger: its name, and how many of its clauses are active. The PopoverTrigger clones
+/** A ghost chip of the filter row: filled while what it says is applied. */
+const CHIP_ON = 'bg-accent text-accent-foreground'
+
+/** A facet's trigger: its name, and once set, what it is set to. The PopoverTrigger clones
  *  this with its own handlers via `render`, so everything unknown is forwarded to the Button. */
-function FacetTrigger({ label, active, ...props }: { label: string; active: number } & React.ComponentProps<typeof Button>) {
+function FacetTrigger({ label, value, ...props }: { label: string; value: string | undefined } & React.ComponentProps<typeof Button>) {
   return (
-    <Button variant="outline" size="sm" {...props} className={cn('gap-1', active > 0 && 'border-[var(--color-primary)]/50')}>
+    <Button variant="ghost" {...props} className={cn('gap-1.5', value !== undefined && CHIP_ON)}>
       {label}
-      {active > 0 && <span className="rounded bg-primary/15 px-1 text-[10px] text-primary">{active}</span>}
-      <ChevronDown className="h-3 w-3 opacity-60" aria-hidden />
+      {value !== undefined && <span className="max-w-40 truncate font-normal">{value}</span>}
+      <ChevronDown className="size-3.5 text-muted-foreground" aria-hidden />
     </Button>
   )
+}
+
+/** What a set facet says on its chip: the picked options, or the count of them past two. */
+function picked(labels: readonly string[]): string | undefined {
+  if (labels.length === 0) return undefined
+  return labels.length > 2 ? `${labels.length}` : labels.join(', ')
+}
+
+/** What a set numeric facet says on its chip: its range, or its picked buckets, and "none". */
+function rangeValue(filter: RangeFilter, buckets: readonly RangeBucket[], noneLabel: string): string | undefined {
+  const parts = filter.range ? [`${filter.range[0]}–${filter.range[1]}`] : buckets.filter(bucket => filter.buckets.includes(bucket.id)).map(bucket => bucket.label)
+  return picked(filter.none ? [...parts, noneLabel] : parts)
 }
 
 /**
@@ -104,7 +119,7 @@ function RangeFacet({
 }) {
   return (
     <Popover>
-      <PopoverTrigger render={<FacetTrigger label={label} active={rangeClauses(filter)} />} />
+      <PopoverTrigger render={<FacetTrigger label={label} value={rangeValue(filter, buckets, noneLabel)} />} />
       <PopoverContent className="w-56">
         <div className="space-y-0.5">
           {buckets.map(bucket => (
@@ -182,16 +197,17 @@ function RangeRow({
 /** A plain checkbox-list facet (topics, stage, project): options with counts, nothing more. */
 function CheckFacet({
   label,
-  active,
+  value,
   children,
 }: {
   label: string
-  active: number
+  /** What the facet is set to, as its chip says it; none while it is not set. */
+  value: string | undefined
   children: React.ReactNode
 }) {
   return (
     <Popover>
-      <PopoverTrigger render={<FacetTrigger label={label} active={active} />} />
+      <PopoverTrigger render={<FacetTrigger label={label} value={value} />} />
       <PopoverContent className="w-56">
         <div className="space-y-0.5">{children}</div>
       </PopoverContent>
@@ -248,9 +264,9 @@ export function TicketFilterBar({
   const filtered = hasAnyFilter(f)
 
   return (
-    <div className="flex flex-wrap items-center gap-2">
-      <div className="relative">
-        <Search className="pointer-events-none absolute left-2 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" aria-hidden />
+    <div className="flex flex-wrap items-center gap-1">
+      <div className="relative mr-1 max-sm:mr-0 max-sm:mb-1 max-sm:w-full">
+        <Search className="pointer-events-none absolute top-1/2 left-2.5 size-4 -translate-y-1/2 text-muted-foreground" aria-hidden />
         <Input
           name="search-tickets"
           ref={searchRef}
@@ -260,11 +276,10 @@ export function TicketFilterBar({
           onBlur={() => setSearchFocused(false)}
           placeholder="Search tickets…"
           aria-label="Search tickets"
-          // The `!` because another module's stylesheet, loaded after this one, has the field's own `px-3`, which would otherwise win.
-          className="h-7 w-56 pl-7! pr-6! text-xs"
+          className="pr-8 pl-8 sm:w-56"
         />
         {!searchFocused && f.q === '' && (
-          <kbd className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 rounded border border-border bg-muted/60 px-1 font-mono text-[10px] text-muted-foreground">
+          <kbd className="pointer-events-none absolute top-1/2 right-2 -translate-y-1/2 rounded-sm border border-hairline px-1.5 font-mono text-xs text-muted-foreground">
             /
           </kbd>
         )}
@@ -280,7 +295,7 @@ export function TicketFilterBar({
       />
 
       {(topicFacet.topics.length > 0 || topicFacet.none > 0) && (
-        <CheckFacet label="Topics" active={f.topics.length + (f.topicsNone ? 1 : 0)}>
+        <CheckFacet label="Topics" value={picked(f.topicsNone ? [...f.topics, 'No topics'] : f.topics)}>
           {topicFacet.topics.map(([topic, count]) => (
             <OptionRow
               key={topic}
@@ -299,7 +314,7 @@ export function TicketFilterBar({
         </CheckFacet>
       )}
 
-      <CheckFacet label="Stage" active={f.stage.length}>
+      <CheckFacet label="Stage" value={picked(STAGES.filter(stage => f.stage.includes(stage.id)).map(stage => stage.label))}>
         {STAGES.map(stage => (
           <OptionRow
             key={stage.id}
@@ -335,19 +350,19 @@ export function TicketFilterBar({
 
       {(notLinked > 0 || f.unlinked) && (
         <Button
-          variant="outline"
-          size="sm"
+          variant="ghost"
           onClick={() => set({ unlinked: !f.unlinked })}
-          className={cn(f.unlinked && 'border-[var(--color-primary)]/50 bg-primary/10')}
+          className={cn(f.unlinked && CHIP_ON)}
           aria-pressed={f.unlinked}
+          title={`${notLinked} not linked to an issue`}
         >
-          Not linked <span className="text-[10px] text-muted-foreground">{notLinked}</span>
+          Not linked
         </Button>
       )}
 
       {filtered && (
-        <Button variant="ghost" size="sm" onClick={() => onChange({ ...view, filters: defaultView().filters })}>
-          <X className="h-3 w-3" aria-hidden /> Clear
+        <Button variant="ghost" className="text-muted-foreground" onClick={() => onChange({ ...view, filters: defaultView().filters })}>
+          <X className="size-4" aria-hidden /> Clear
         </Button>
       )}
 
@@ -356,10 +371,10 @@ export function TicketFilterBar({
         <DropdownMenu>
           <DropdownMenuTrigger
             render={
-              <Button variant="outline" size="sm" className="gap-1">
+              <Button variant="ghost" className="gap-1.5">
                 Sort: {SORT_LABELS[view.sort.key]}
-                {view.sort.dir === 'desc' ? <ArrowDown className="h-3 w-3" aria-hidden /> : <ArrowUp className="h-3 w-3" aria-hidden />}
-                <ChevronDown className="h-3 w-3 opacity-60" aria-hidden />
+                {view.sort.dir === 'desc' ? <ArrowDown className="size-3.5" aria-hidden /> : <ArrowUp className="size-3.5" aria-hidden />}
+                <ChevronDown className="size-3.5 text-muted-foreground" aria-hidden />
               </Button>
             }
           />
