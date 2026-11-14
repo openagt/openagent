@@ -421,7 +421,7 @@ function useOwnEntries(): Entry[] {
           {/* The Overview's checklist hides with its own ✕, and comes back here. */}
           <ToggleRow
             label="Onboarding on the Overview"
-            description="The checklist of what a new install needs, at the top of the Overview."
+            description="The checklist of what a new install needs, on the Overview, under what needs you."
             checked={!(preferences.onboardingDismissed ?? false)}
             onChange={next => updatePreferences({ onboardingDismissed: !next })}
           />
