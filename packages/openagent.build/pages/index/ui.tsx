@@ -34,11 +34,13 @@ export const sectionStyle: CSSProperties = {
   gap: 'var(--space-head)',
 }
 
+/** A section's heading: the scale's 40, tighter (28 on a phone, styles.css). */
 export const h2Style: CSSProperties = {
   margin: 0,
-  ...text('xl'),
+  fontSize: 'var(--text-heading)',
+  lineHeight: 'var(--leading-heading)',
   fontWeight: 600,
-  letterSpacing: '-0.01em',
+  letterSpacing: '-0.02em',
 }
 
 // Subsection heading (the "How it works" children).
@@ -65,23 +67,12 @@ export const labelStyle: CSSProperties = {
   color: 'var(--muted-foreground)',
 }
 
-// Centered chapter break: the one centered element on a left-anchored page, so
-// the eye finds section boundaries instantly.
+/** A section's opening: its heading on the column's left edge, its lead under it. */
 export function SectionHead({ title, sub }: { title: ReactNode; sub?: string }) {
   return (
-    <div
-      style={{
-        display: 'flex',
-        flexDirection: 'column',
-        alignItems: 'center',
-        textAlign: 'center',
-        gap: 8,
-        maxWidth: 'var(--measure)',
-        margin: '0 auto',
-      }}
-    >
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 12, maxWidth: 'var(--measure)' }}>
       <h2 style={h2Style}>{title}</h2>
-      {sub && <p style={{ margin: 0, ...text('base'), color: 'var(--muted-foreground)' }}>{sub}</p>}
+      {sub && <p style={{ margin: 0, ...text('lg'), color: 'var(--muted-foreground)', textWrap: 'balance' }}>{sub}</p>}
     </div>
   )
 }

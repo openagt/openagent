@@ -42,6 +42,10 @@
   --space-items: 32px;
   --space-gutter: 32px;
 
+  /* A section's heading. */
+  --text-heading: var(--text-2xl);
+  --leading-heading: var(--leading-2xl);
+
   /* The hero's title and the struck words over it. */
   --text-hero: var(--text-3xl);
   --leading-hero: var(--leading-3xl);
@@ -66,6 +70,8 @@
     --space-gutter: 16px;
     --text-hero: var(--text-2xl);
     --leading-hero: var(--leading-2xl);
+    --text-heading: var(--text-xl);
+    --leading-heading: var(--leading-xl);
     --text-struck: var(--text-lg);
     --leading-struck: var(--leading-lg);
   }

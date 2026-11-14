@@ -1,5 +1,5 @@
 import { DiscordIcon, GitHubIcon } from './icons'
-import { DISCORD_URL, Emoji, GITHUB_URL, text } from './ui'
+import { DISCORD_URL, Emoji, GITHUB_URL, h2Style } from './ui'
 
 export function Cta() {
   return (
@@ -16,15 +16,7 @@ export function Cta() {
       }}
     >
       <img src="/assets/logo.svg" alt="" style={{ width: 52, height: 59 }} />
-      <h2
-        style={{
-          margin: 0,
-          ...text('xl'),
-          fontWeight: 600,
-          letterSpacing: '-0.01em',
-          textWrap: 'pretty',
-        }}
-      >
+      <h2 style={h2Style}>
         Join our community of agentic developers <Emoji e="💪" />
         <Emoji e="🦾" />
       </h2>
