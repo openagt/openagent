@@ -89,18 +89,21 @@ describe('usePolled', () => {
     expect(load).toHaveBeenCalledTimes(1)
   })
 
-  test('a rejected read keeps the last value and polling survives it', async () => {
+  test('a rejected read keeps the last value and says it is failing, and polling survives it', async () => {
     const load = vi.fn().mockResolvedValue(1)
     const { result } = renderHook(() => usePolled(load, 0, 5000, []))
     await settle()
+    expect(result.current.failing).toBe(false)
 
     load.mockRejectedValue(new Error('daemon restarted'))
     await settle(5000)
     expect(result.current.value).toBe(1) // kept, not blanked
+    expect(result.current.failing).toBe(true)
 
     load.mockResolvedValue(3)
     await settle(5000)
     expect(result.current.value).toBe(3) // the next tick recovers
+    expect(result.current.failing).toBe(false)
   })
 
   test('reload reads immediately, without waiting for the next tick', async () => {
