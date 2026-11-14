@@ -9,6 +9,7 @@ import type { AgentMeta, AgentStatus, RecentAgent, ProjectSummary } from '../../
 import type { ModuleHostPerson } from '../module/index.js'
 import { DRIVER_LABELS, driverFromImpl, cloudRunState, type CloudRunState, type MachineKind } from '../../src/client.js'
 import { buttonVariants } from './ui/button.js'
+import { Badge } from './ui/badge.js'
 import { inPlace } from '../lib/in-place.js'
 import { formatRoute, type Route } from '../lib/route.js'
 import { NO_PROJECTS } from '../../src/project-address.js'
@@ -333,12 +334,12 @@ export function AgentHistory({
           <ViewToggle />
           <ProjectPicker look="sidebar" none={{ label: 'All projects' }} picked={scope ?? null} pending={scopePending} projects={projects} onPick={onScope} onProjectAdded={onProjectAdded ?? (() => {})} />
         </SidebarHeader>
-        {/* New/Overview/the modules' pages stack tight as one nav group (gap-0.5), close under the
+        {/* New/Overview/the modules' pages stack as one nav group, row against row, close under the
             project select (no top padding: the select's own section has its room below it), with a
             little space below the group (pb-2) before the session list. The `!` because a module's
             stylesheet, loaded after the dashboard's, redefines the header's own `p-2`, which would
             otherwise win over a plain `pt-0`. */}
-        <SidebarHeader className="gap-0.5 pt-0! pb-2">
+        <SidebarHeader className="gap-0 pt-0! pb-2">
           {/* "New" starts a session — but where depends on what exists: with no project it prompts to
               add one first, with one project it starts there, with several it opens a picker. With
               one project picked at the top, it starts there. */}
@@ -452,8 +453,19 @@ export function AgentHistory({
   )
 }
 
-// One rail destination — Overview, a module's page. Same box as New (px-2 py-1.5 gap-2) so every row's
-// icon and label line up exactly, and only the current view carries the active fill.
+/**
+ * A row of the sidebar's navigation: 32 high (44 on a phone), its icon on the sidebar's axis. The
+ * picked row has the accent fill and its icon in the text's colour; a row under the pointer has half
+ * that fill, so the two are told apart at a glance; the weight never changes.
+ */
+function navRowClass(active: boolean): string {
+  return cn(
+    'focus-ring flex w-full items-center gap-2 rounded-md px-1.5 text-sm font-normal text-foreground transition-colors md:h-8 max-md:h-11 [&>svg]:size-4 [&>svg]:shrink-0',
+    active ? 'bg-sidebar-accent [&>svg]:text-foreground' : 'hover:bg-sidebar-accent/50 active:bg-sidebar-accent [&>svg]:text-muted-foreground',
+  )
+}
+
+// One rail destination — Overview, a module's page — in the row every destination of the sidebar has.
 function NavRow({
   icon: Icon,
   label,
@@ -471,17 +483,9 @@ function NavRow({
   children?: ReactNode
 }) {
   return (
-    <a
-      href={href}
-      onClick={inPlace(onClick)}
-      aria-current={active ? 'page' : undefined}
-      className={cn(
-        'flex w-full items-center gap-2 rounded-md px-1.5 py-1.5 text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-primary)]',
-        active ? 'bg-sidebar-accent text-sidebar-accent-foreground' : 'text-foreground hover:bg-sidebar-accent/60',
-      )}
-    >
-      <Icon className="h-4 w-4 shrink-0" aria-hidden />
-      <span className="flex-1 text-left">{label}</span>
+    <a href={href} onClick={inPlace(onClick)} aria-current={active ? 'page' : undefined} className={navRowClass(active)}>
+      <Icon aria-hidden />
+      <span className="flex-1 truncate text-left">{label}</span>
       {children}
     </a>
   )
@@ -496,9 +500,8 @@ function OverviewButton({ active, count, href, onClick }: { active: boolean; cou
       {count > 0 && (
         <Tooltip>
           <TooltipTrigger
-            render={
-              <span className="min-w-5 rounded-full bg-primary px-1.5 text-center text-xs font-semibold text-primary-foreground tabular-nums" />
-            }
+            // The one filled pill of the sidebar: a count that needs the person.
+            render={<Badge className="bg-foreground/10 text-foreground" />}
           >
             {count}
           </TooltipTrigger>
@@ -530,18 +533,13 @@ function NewButton({
   onNewAgentInProject?: ((projectId: string) => void) | undefined
   onSelect: (agentId: string | null) => void
 }) {
-  // Same box as the Overview row (px-2 py-1.5 gap-2) so their icons and labels align; h-auto/px-2/
-  // py-1.5 override the button size's default h-9/px-4/py-2. The active fill (same tokens as
-  // Overview) only on this project's launcher; otherwise plain, since New is an action, not a place.
-  const cls = cn(
-    'h-auto w-full justify-start gap-2 px-1.5 py-1.5 font-normal',
-    active && 'bg-sidebar-accent text-sidebar-accent-foreground',
-  )
+  // The row every destination has, so its icon and label line up; the picked fill only on this
+  // project's launcher, since New is an action, not a place.
   const target = scope ?? SESSIONS_ID
   return (
-    <a href={href} className={cn(buttonVariants({ variant: 'ghost' }), cls)} onClick={inPlace(() => (onNewAgentInProject ? onNewAgentInProject(target) : onSelect(null)))}>
-      <Plus className="h-4 w-4 shrink-0" />
-      <span className="whitespace-nowrap">New agent session</span>
+    <a href={href} aria-current={active ? 'page' : undefined} className={navRowClass(active)} onClick={inPlace(() => (onNewAgentInProject ? onNewAgentInProject(target) : onSelect(null)))}>
+      <Plus aria-hidden />
+      <span className="truncate">New agent session</span>
     </a>
   )
 }
