@@ -607,8 +607,20 @@ describe('TicketsPage selection scopes the queue buttons', () => {
     fireEvent.click(screen.getByRole('checkbox', { name: 'Select First' }))
     expect(screen.getByRole('button', { name: 'Add to queue: one ticket' })).toBeTruthy()
     fireEvent.click(screen.getByRole('button', { name: 'Clear selection' }))
-    expect(screen.queryByText(/selected/)).toBeNull()
+    // The bar leaves in 120ms.
+    await waitFor(() => expect(screen.queryByText(/selected/)).toBeNull())
     expect(screen.getByRole('button', { name: 'Add to queue: 3 tickets' })).toBeTruthy()
+  })
+
+  test('Escape clears the selection, as Clear selection does', async () => {
+    threeTickets()
+    render()
+    await screen.findByText('First')
+    fireEvent.click(screen.getByRole('checkbox', { name: 'Select First' }))
+    expect(screen.getByText('1 selected')).toBeTruthy()
+    fireEvent.keyDown(window, { key: 'Escape' })
+    await waitFor(() => expect(screen.queryByText(/selected/)).toBeNull())
+    expect(screen.getByRole('checkbox', { name: 'Select First' }).getAttribute('data-checked')).toBeNull()
   })
 
   test('a claimed ticket in the selection is still skipped, and the label counts without it', async () => {
@@ -642,7 +654,7 @@ describe('TicketsPage selection scopes the queue buttons', () => {
     // shown set again and the selection readout goes quiet.
     fireEvent.change(screen.getByRole('textbox', { name: /search tickets/i }), { target: { value: 'First' } })
     await waitFor(() => expect(screen.queryByText('Second')).toBeNull())
-    expect(screen.queryByText('1 selected')).toBeNull()
+    await waitFor(() => expect(screen.queryByText('1 selected')).toBeNull())
     fireEvent.click(screen.getByRole('button', { name: 'Add to queue: one ticket' }))
     await screen.findByRole('button', { name: 'Queued' })
     expect(handed('p1')).toEqual([[link('First', 'a.md', 7)]])
