@@ -103,7 +103,8 @@ export function SkillsMenu({
 }) {
   const project = useProjectSkills(projectId)
   const held = project?.held ?? []
-  if (!agent || !groups) return null
+  // Counted only once the project's skills are read: a count of the agent's alone would be drawn, then change.
+  if (!agent || !groups || (projectId !== undefined && project === null)) return null
   const own = agent.skills
   const ofAgent = sessionSkills(agent, picks)
   const listed = [...own, ...picks.on.filter(name => !own.includes(name))]
