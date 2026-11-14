@@ -129,12 +129,19 @@ describe('the first steps on the Overview', () => {
     expect(screen.queryByText('Loading…')).toBeNull()
   })
 
-  test('while it reads, the card draws a row per step it knows of, so what is below it does not move when they land', async () => {
+  test('while it reads, the card draws a row per step it knows of once the coding agent and the git hosts are read, so no row is pushed by a step they add', async () => {
     onDashboard.mockImplementation(() => new Promise(() => {}))
+    let agent: (value: unknown) => void = () => {}
+    logins.onAgentState.mockImplementation(() => new Promise(resolve => (agent = resolve)))
     steps()
     await screen.findByText('Loading…')
+    expect(document.querySelector('ol')).toBeNull()
+    await act(async () => agent({ driver: 'claude-code', ready: false, installed: false }))
+    await screen.findByText('Loading…')
     const frame = document.querySelector('ol[aria-hidden="true"]')
-    expect([...(frame?.children ?? [])].map(item => item.lastElementChild?.textContent)).toContain('Add your first project')
+    const rows = [...(frame?.children ?? [])].map(item => item.querySelector('span.text-sm')?.textContent)
+    expect(rows[0]).toBe('Set up Claude Code')
+    expect(rows).toContain('Add your first project')
   })
 
   test('what adding a project does is behind an ⓘ beside the open step, not in its way', async () => {

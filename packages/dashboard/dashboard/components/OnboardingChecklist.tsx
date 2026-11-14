@@ -271,8 +271,8 @@ export function OnboardingChecklist({
       {reading ? (
         <>
           <p className="sr-only">Loading…</p>
-          {/* The steps' rows, with no state yet, the first one as the open step is laid out (its words, then its press and its command beside them or under), so the steps are about their size from the first frame. */}
-          <ol aria-hidden="true">
+          {/* The steps' rows, with no state yet, the first one as the open step is laid out (its words, then its press and its command beside them or under), so the steps are about their size before they are read. Only once the coding agent and the git hosts are read: each can add a step at the top, which would push the rows drawn. */}
+          {missingLoaded && <ol aria-hidden="true">
             {steps.map((step, at) => (
               <li key={step.key} className="flex items-start gap-3 py-2">
                 <span className="mt-0.5 flex size-6 shrink-0 items-center justify-center rounded-full border border-border text-xs font-medium text-muted-foreground tabular-nums">{at + 1}</span>
@@ -293,7 +293,7 @@ export function OnboardingChecklist({
                 )}
               </li>
             ))}
-          </ol>
+          </ol>}
         </>
       ) : (
         <ol aria-label={`${doneCount} of ${steps.length} done`}>
