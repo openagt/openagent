@@ -68,7 +68,8 @@ export function SettingsRow({
         )}
         <p className="mt-0.5 text-xs text-muted-foreground">{description}</p>
       </div>
-      <div className="shrink-0">{control}</div>
+      {/* On a phone a press or a field in it is 44 high, under the thumb. */}
+      <div className="shrink-0 max-md:[&_button]:h-11 max-md:[&_input]:h-11">{control}</div>
     </div>
   )
 }
