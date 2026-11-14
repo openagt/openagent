@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react'
-import type { EmojiChar } from './ui'
-import { CodeChip, Emoji, mono, proseStyle, SectionHead, sectionStyle, text } from './ui'
+import { Frown, Rocket, type LucideIcon } from 'lucide-react'
+import { CodeChip, mono, proseStyle, SectionHead, sectionStyle, text } from './ui'
 
 
 // Inline arrows in the mono font: the sans-serif glyphs are thin and vanish in the text.
@@ -8,9 +8,9 @@ function Arrow({ glyph }: { glyph: '→' | '↔' }) {
   return <span style={{ fontFamily: mono, fontWeight: 500 }}>{glyph}</span>
 }
 
-type Row = { kind: 'bad' | 'good'; emoji: EmojiChar; label: string; body: ReactNode }
-const bad = (body: ReactNode): Row => ({ kind: 'bad', emoji: '😕', label: 'Bad fix', body })
-const good = (body: ReactNode): Row => ({ kind: 'good', emoji: '🚀', label: 'Solution', body })
+type Row = { kind: 'bad' | 'good'; Icon: LucideIcon; label: string; body: ReactNode }
+const bad = (body: ReactNode): Row => ({ kind: 'bad', Icon: Frown, label: 'Bad fix', body })
+const good = (body: ReactNode): Row => ({ kind: 'good', Icon: Rocket, label: 'Solution', body })
 
 const PROBLEMS: { title: string; desc?: string; rows: Row[] }[] = [
   {
@@ -103,7 +103,7 @@ export function StopBabysitting() {
                 >
                   <span style={{ ...text('sm'), color: 'var(--muted-foreground)', whiteSpace: 'nowrap' }}>
                     <span style={{ marginRight: 6 }}>
-                      <Emoji e={r.emoji} />
+                      <r.Icon size={16} aria-hidden style={{ verticalAlign: '-0.125em' }} />
                     </span>
                     {r.label}
                   </span>

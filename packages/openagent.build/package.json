@@ -11,6 +11,7 @@
     "pictures": "node pictures.mjs"
   },
   "dependencies": {
+    "lucide-react": "^0.469.0",
     "react": "^19.2.0",
     "react-dom": "^19.2.0",
     "vike": "^0.4.235",

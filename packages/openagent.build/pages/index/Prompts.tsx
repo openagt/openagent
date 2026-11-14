@@ -1,3 +1,4 @@
+import { Plus } from 'lucide-react'
 import type { CSSProperties } from 'react'
 import { noteContainerStyle, NoteText, text } from './ui'
 
@@ -29,7 +30,8 @@ export function Prompts() {
             </span>
           ))}
           <span style={{ ...chipStyle, color: 'var(--muted-foreground)' }}>
-            ＋ Add yours
+            <Plus size={14} aria-hidden style={{ verticalAlign: '-0.125em', marginRight: 4 }} />
+            Add yours
           </span>
         </div>
       </div>

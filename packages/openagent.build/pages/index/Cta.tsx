@@ -1,5 +1,6 @@
 import { DiscordIcon, GitHubIcon } from './icons'
-import { DISCORD_URL, Emoji, GITHUB_URL, h2Style } from './ui'
+import { BicepsFlexed, Bot } from 'lucide-react'
+import { DISCORD_URL, GITHUB_URL, h2Style } from './ui'
 
 export function Cta() {
   return (
@@ -17,8 +18,11 @@ export function Cta() {
     >
       <img src="/assets/logo.svg" alt="" style={{ width: 52, height: 59 }} />
       <h2 style={h2Style}>
-        Join our community of agentic developers <Emoji e="💪" />
-        <Emoji e="🦾" />
+        Join our community of agentic developers{' '}
+        <span style={{ display: 'inline-flex', gap: 4, verticalAlign: '-0.1em', color: 'var(--muted-foreground)' }}>
+          <BicepsFlexed size="0.8em" role="img" aria-label="flexed biceps" />
+          <Bot size="0.8em" role="img" aria-label="robot" />
+        </span>
       </h2>
       <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', justifyContent: 'center' }}>
         <a href={DISCORD_URL} className="press press-primary">

@@ -1,6 +1,7 @@
 import type { ReactNode } from 'react'
 import { CheckIcon } from './icons'
-import { CodeChip, Emoji, h2Style, sectionStyle, text, WipBadge } from './ui'
+import { Construction } from 'lucide-react'
+import { CodeChip, h2Style, sectionStyle, text, WipBadge } from './ui'
 
 /** One of the framework's three promises: its name in the split's third, its points beside it. */
 function Pillar({ title, children }: { title: string; children: ReactNode }) {
@@ -48,7 +49,7 @@ export function YourFramework() {
       <div className="rows">
         <Pillar title="Flexible">
           <Item>OpenAgent doesn't force anything — pick only the features you need</Item>
-          <Item marker={<Emoji e="🚧" />}>
+          <Item marker={<Construction size={16} aria-hidden style={{ verticalAlign: '-0.125em' }} />}>
             <WipBadge /> Customize anything to fit your needs
           </Item>
         </Pillar>
