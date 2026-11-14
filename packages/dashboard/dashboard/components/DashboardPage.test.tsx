@@ -47,11 +47,12 @@ describe('the Overview', () => {
     await screen.findByText('Human Queue')
     expect(drawn().map(card => card.id)).toEqual(['human-queue', 'usage', 'working', 'skills', '@x/tickets/hot'])
     expect(screen.getByText('No agent is at work.')).toBeTruthy()
-    // Full width is the whole row at every size; a third is a half once the column has the room, a
-    // third once it is wide; a row's cards fill it.
+    // Full width is the whole row at every size; a half is a half once the column has the room, at
+    // every width past that; a row's cards fill it.
     expect(drawn()[0]!.spans).toContain('basis-full')
     expect(drawn()[0]!.spans).not.toMatch(/@\w+:basis-/)
-    expect(drawn()[3]!.spans).toContain('@4xl:basis-[calc(33.333%_-_1.333rem)]')
+    expect(drawn()[3]!.spans).toContain('@2xl:basis-[calc(50%_-_1rem)]')
+    expect(drawn()[3]!.spans).not.toContain('@4xl:')
     expect(drawn()[4]!.spans).toContain('@2xl:basis-[calc(50%_-_1rem)]')
     expect(drawn()[4]!.spans).toContain('grow-[6]')
     cleanup()

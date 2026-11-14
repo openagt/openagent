@@ -144,8 +144,9 @@ export function DashboardPage({
         </div>
       ),
     },
-    // How each project's skills stand: a newer version to take, skills not yet where agents start from.
-    { id: 'skills', label: 'Skills', order: 8, width: '1/3', minWidth: '1/4', node: <SkillsCard projects={shownProjects} onSelectProject={onSelectProject} projectHref={projectHref} /> },
+    // How each project's skills stand: a newer version to take, skills not yet where agents start from. A half beside
+    // the agents at work, so the two split on the halves' line: a half beside a third splits on no line of the rows below.
+    { id: 'skills', label: 'Skills', order: 8, width: '1/2', minWidth: '1/4', node: <SkillsCard projects={shownProjects} onSelectProject={onSelectProject} projectHref={projectHref} /> },
     // The cards the installed packages declare (#1818): a package's own summary of its data, only
     // when one of the projects shown (every registered one, or the picked one alone) has the package.
     ...moduleCards,
