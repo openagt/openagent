@@ -21,12 +21,6 @@
     "text-[11px]": 1,
     "text-muted-foreground/50": 1
   },
-  "dashboard/dashboard/components/AddProjectEffects.tsx": {
-    "rounded": 1
-  },
-  "dashboard/dashboard/components/AddProjectPanel.tsx": {
-    "rounded": 3
-  },
   "dashboard/dashboard/components/AgentDetails.tsx": {
     "text-muted-foreground/70": 4
   },
