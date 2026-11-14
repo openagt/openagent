@@ -300,9 +300,9 @@ function PaneCard({ pane, over = false }: { pane: Pane; /** Laid over the chat: 
     // A pane that fills the page is laid over the whole of it, where it is: its contents are not
     // drawn anew, so what was opened and scrolled in it stays.
     <div className={fills ? 'absolute inset-0 z-30 flex bg-background p-2' : 'flex h-full min-h-0 min-w-0'}>
-      {/* A card: the surface with the hairline, its header 40 high and lined under. Over the chat, the whole room with a line at its top. */}
+      {/* A card: the surface with the hairline, its header as high as the page's top bar, 44, and lined under. Over the chat, the whole room with a line at its top. */}
       <section aria-label={pane.label} className={cn('flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden bg-card', over ? 'border-t border-hairline' : 'rounded-lg border border-hairline')}>
-        <header className="flex h-10 shrink-0 items-center gap-1 border-b border-hairline px-1">
+        <header className="flex h-11 shrink-0 items-center gap-1 border-b border-hairline px-1">
           {over && (
             <Tooltip>
               <TooltipTrigger
