@@ -14,10 +14,6 @@ export function UpdateTicketsButton({
   onStart,
   onConfigure,
   lastImportedAt,
-  disabled,
-  variant,
-  size = 'default',
-  className,
 }: {
   busy: boolean
   /** This update is the start in flight: the button spins, not the one beside it that started something else. */
@@ -27,18 +23,14 @@ export function UpdateTicketsButton({
   onConfigure: () => void
   /** When tickets last came across, so the tooltip can promise the incremental update (#1265). */
   lastImportedAt?: string | undefined
-  disabled?: boolean | undefined
-  variant?: 'default' | 'outline' | undefined
-  size?: 'sm' | 'default' | undefined
-  className?: string | undefined
 }) {
   return (
+    // A secondary press beside the list's primary: the start button's ghost pair on the secondary's soft fill.
     <StartAgentButton
-      {...(variant ? { variant } : {})}
-      size={size}
-      {...(disabled !== undefined ? { disabled } : {})}
-      {...(className ? { className } : {})}
-      icon={<RefreshCw className="h-3.5 w-3.5" aria-hidden />}
+      variant="ghost"
+      size="default"
+      className="bg-accent hover:bg-foreground/10 active:bg-foreground/15"
+      icon={<RefreshCw className="size-4" aria-hidden />}
       label="Update tickets"
       menuAriaLabel="Other ways to update the tickets"
       tooltip={

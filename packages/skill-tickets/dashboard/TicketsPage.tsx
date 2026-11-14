@@ -1,5 +1,5 @@
-import { useMemo, useState } from 'react'
-import { Button, FadeWhileStale, LinkActions, Page, usePolled, useAction, useModuleHost, type ProjectLinks, type ModuleLink, type ModuleProject } from '@openagt/dashboard/module'
+import { Fragment, useMemo, useState } from 'react'
+import { Button, FadeWhileStale, LinkActions, Page, Section, usePolled, useAction, useModuleHost, type ProjectLinks, type ModuleLink, type ModuleProject } from '@openagt/dashboard/module'
 import { heldBack, holderAgent, planLink, ticketLink, withHolder } from '../src/module.js'
 import { holdingRun } from './lib/holding-run.js'
 import type { ProjectTickets, WorkspaceTicket } from './lib/types.js'
@@ -170,7 +170,7 @@ export function TicketsPage({ projects }: { projects: ModuleProject[] }) {
       count={state !== 'unknown' && rows.length > 0 ? `${visible.length}/${rows.length}` : undefined}
       description={
         <>
-          {projects.length === 1 ? 'This project\u2019s' : 'Every project\u2019s'} <code className="rounded bg-muted px-1">tickets/</code> backlog: what agents plan from.
+          {projects.length === 1 ? 'This project\u2019s' : 'Every project\u2019s'} <code className="rounded-sm bg-muted px-1 font-mono text-xs">tickets/</code> backlog: what agents plan from.
         </>
       }
       // The whole shown set onto the queue — or, with rows ticked, just the selected ones: the detail
@@ -199,6 +199,7 @@ export function TicketsPage({ projects }: { projects: ModuleProject[] }) {
               targets={linksByProject(planTargets, planLink)}
               resetKey={`plans\n${planKey}`}
               label={action => `${action.label}: ${planObject}`}
+              variant="ghost"
               disabled={busy}
               tooltip={
                 <>
@@ -216,6 +217,7 @@ export function TicketsPage({ projects }: { projects: ModuleProject[] }) {
               targets={linksByProject(targets, ticketLink)}
               resetKey={`tickets\n${queueKey}`}
               label={action => `${action.label}: ${queueObject}`}
+              variant="ghost"
               disabled={busy}
               tooltip={
                 <>
@@ -298,11 +300,10 @@ export function TicketsPage({ projects }: { projects: ModuleProject[] }) {
           {groups.map(g => {
             const groupRows = visible.filter(r => r.projectId === g.projectId)
             const sorted = sortRows(groupRows, view.sort)
-            return (
-              <section key={g.projectId} className="min-w-0 space-y-2">
-                <h2 className="truncate text-sm font-semibold">{g.projectName}</h2>
+            const panel = (
+              <>
                 {g.error !== undefined && (
-                  <p role="alert" className="text-xs text-danger">
+                  <p role="alert" className="mb-2 text-sm text-danger">
                     Could not read the tickets of {g.projectName}: {g.error}
                   </p>
                 )}
@@ -310,6 +311,7 @@ export function TicketsPage({ projects }: { projects: ModuleProject[] }) {
                   projectId={g.projectId}
                   tickets={sorted.map(r => r.ticket)}
                   loaded
+                  lead={groups.length === 1}
                   hiddenByFilter={g.tickets.length - groupRows.length}
                   isSelected={file => selected.has(`${g.projectId}/${file}`)}
                   onToggleSelect={file => toggleSelected(`${g.projectId}/${file}`)}
@@ -320,7 +322,13 @@ export function TicketsPage({ projects }: { projects: ModuleProject[] }) {
                   onOpenAgent={agentId => onOpenAgent(g.projectId, agentId)}
                   onClearFilters={filtered ? clearFilters : undefined}
                 />
-              </section>
+              </>
+            )
+            return (
+              <Fragment key={g.projectId}>
+                {/* One project's page needs no heading naming it: the sidebar does. */}
+                {groups.length === 1 ? panel : <Section title={g.projectName}>{panel}</Section>}
+              </Fragment>
             )
           })}
         </FadeWhileStale>

@@ -139,9 +139,6 @@
   "skill-tickets/dashboard/TicketStartActions.tsx": {
     "text-[10px]": 2
   },
-  "skill-tickets/dashboard/TicketsPage.tsx": {
-    "rounded": 1
-  },
   "skill-tickets/dashboard/TicketsPanel.tsx": {
     "hover:text-info/80": 1,
     "rounded": 1,

@@ -265,6 +265,7 @@ export function TicketsPanel({
   onClaimedClick,
   onOpenAgent,
   onClearFilters,
+  lead = false,
 }: {
   projectId: string | null
   tickets: WorkspaceTicket[]
@@ -292,6 +293,8 @@ export function TicketsPanel({
   /** Lets the "N hidden by filters" state clear them right there instead of pointing back up
    *  at the toolbar. */
   onClearFilters?: (() => void) | undefined
+  /** The page shows this project alone: its New ticket is the page's one primary press. */
+  lead?: boolean | undefined
 }) {
   const { busy, error, run } = useAction()
   // Which start is in flight, by its prompt: one `busy` holds every start back, and only this one spins.
@@ -348,21 +351,19 @@ export function TicketsPanel({
         {error && <p className="text-xs text-danger">{error}</p>}
         <div className="flex flex-wrap items-center gap-2">
           <UpdateTicketsButton busy={busy} starting={starting === UPDATE_TICKETS_PROMPT} onStart={() => void updateTickets()} onConfigure={() => configure(UPDATE_TICKETS_PROMPT)} />
-          <NewTicketButton onClick={newTicket} />
+          <NewTicketButton onClick={newTicket} primary={lead} />
         </div>
       </div>
     )
   }
 
   return (
-    <div className="overflow-hidden rounded-lg border border-border">
-      {error && <p className="border-b border-border p-2 text-xs text-danger">{error}</p>}
+    <div className="space-y-2">
       {/* The same update as the empty state's button (#1501): one command covers both, its empty
-          branch being the first import. Here it sits beside the stamp it acts on. */}
-      <div className="flex items-center gap-2 border-b border-border bg-muted/40 px-2 py-1.5">
-        {/* The stamp and its action side by side (#1265) — the button used to sit flush right,
-            a whole panel-width away from the line it acts on. */}
-        <span className="min-w-0 truncate text-xs text-muted-foreground">
+          branch being the first import. Here it sits beside the stamp it acts on (#1265), and the
+          ticket written by hand is the list's one primary press. */}
+      <div className="flex flex-wrap items-center gap-2">
+        <span className="min-w-0 flex-1 truncate text-xs text-muted-foreground">
           {meta.lastImportedAt
             ? `Updated from the tracker ${formatRelative(meta.lastImportedAt)}`
             : 'No record of an import yet'}
@@ -373,10 +374,11 @@ export function TicketsPanel({
           onStart={() => void updateTickets()}
           onConfigure={() => configure(UPDATE_TICKETS_PROMPT)}
           lastImportedAt={meta.lastImportedAt}
-          className="h-6 gap-1 px-2 text-xs"
         />
-        <NewTicketButton onClick={newTicket} className="ml-auto h-6 gap-1 px-2 text-xs" />
+        <NewTicketButton onClick={newTicket} primary={lead} />
+        {error && <p role="alert" className="basis-full text-xs text-danger">{error}</p>}
       </div>
+      <div className="overflow-hidden rounded-lg border border-border">
       <ul className="divide-y divide-border">
         {tickets.map(ticket => (
           <TicketRow
@@ -397,15 +399,16 @@ export function TicketsPanel({
           />
         ))}
       </ul>
+      </div>
     </div>
   )
 }
 
 /** A ticket written by hand, beside the ones imported from the tracker. */
-function NewTicketButton({ onClick, className }: { onClick: () => void; className?: string | undefined }) {
+function NewTicketButton({ onClick, primary = false }: { onClick: () => void; primary?: boolean }) {
   return (
-    <Button variant="outline" onClick={onClick} className={className ?? 'gap-1.5'}>
-      <Plus className="h-3.5 w-3.5" aria-hidden /> New ticket
+    <Button variant={primary ? 'default' : 'secondary'} onClick={onClick}>
+      <Plus className="size-4" aria-hidden /> New ticket
     </Button>
   )
 }

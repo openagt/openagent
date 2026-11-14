@@ -164,8 +164,7 @@ describe('TicketsPage (#1144)', () => {
   test('a project with no tickets still offers its own update, not a dead end', async () => {
     onAllTickets.mockResolvedValue([{ projectId: 'p1', projectName: 'Alpha', tickets: [] }])
     render()
-    expect(await screen.findByText('Alpha')).toBeTruthy()
-    expect(screen.getByRole('button', { name: 'Update tickets' })).toBeTruthy()
+    expect(await screen.findByRole('button', { name: 'Update tickets' })).toBeTruthy()
   })
 
   test('no project with the package says so rather than an empty page', async () => {
