@@ -211,7 +211,7 @@ function Row({ hot, showProject, reload }: { hot: HotTicket; showProject: boolea
           {mark}
         </span>
       )}
-      <a href={host.pageHref('tickets', [ticket.file], project.id)} onClick={inPlace(() => host.openPage('tickets', [ticket.file], project.id))} className="focus-ring min-w-0 flex-1 truncate rounded-sm text-left font-medium text-foreground">
+      <a href={host.pageHref('tickets', [ticket.file], project.id)} onClick={inPlace(() => host.openPage('tickets', [ticket.file], project.id))} className="focus-ring min-w-0 flex-1 truncate rounded-sm text-left text-foreground">
         {ticket.title}
       </a>
       {failed && <span className="shrink-0 text-xs text-danger">{failed}</span>}

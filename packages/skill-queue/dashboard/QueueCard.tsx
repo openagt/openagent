@@ -1,5 +1,5 @@
 import { FastForward, Play } from 'lucide-react'
-import { PageLink, Section, SentenceShape, Slot, StartAgentButton, cn, pathsIn, useFileNames, useModuleHost, type ModuleCardProps } from '@openagt/dashboard/module'
+import { List, PageLink, Row, Section, SentenceShape, Slot, StartAgentButton, cn, pathsIn, useFileNames, useModuleHost, type ModuleCardProps } from '@openagt/dashboard/module'
 import { fanOutLabel, fanOutPress, isWorkingOn, unclaimedEntries, workOnEntryPrompt } from '../src/module.js'
 import { AgentOnEntry, EntryTitle, entryView } from './entry.js'
 import { useQueueStarts } from './starts.js'
@@ -73,22 +73,19 @@ export function QueueCard({ projects }: ModuleCardProps) {
                       Could not read the queue of {project.name}: {read.error}
                     </p>
                   )}
-                  <ul className="mt-1">
+                  <List className="mt-1">
                     {entries.map((entry, i) => {
                       // A queued link reads as its text, a named file as its name; the whole line stays in the tooltip.
                       const view = entryView(project.id, entry, names)
                       const agent = read.working.find(working => isWorkingOn(working.ask, entry))
                       return (
-                        <li key={i} className="group/row -mx-3 flex items-center gap-3 rounded-md px-3 text-sm transition-colors hover:bg-accent md:h-10 max-md:min-h-11">
-                          <span aria-hidden className="w-4 shrink-0 text-right text-xs tabular-nums text-muted-foreground">
-                            {i + 1}.
-                          </span>
-                          <EntryTitle view={view} entry={entry} className={cn('min-w-0 flex-1 truncate text-left font-medium max-sm:line-clamp-2 max-sm:whitespace-normal!', (view.open ?? view.url) !== undefined && 'hover:underline')} />
-                          {/* The agent on the entry, else its start: under the pointer, or with the keyboard on it; a touch screen has no hover, and there it always shows. */}
-                          {agent ? (
-                            <AgentOnEntry projectId={project.id} agent={agent} />
-                          ) : (
-                            <div className="shrink-0 transition-opacity pointer-fine:opacity-0 pointer-fine:group-hover/row:opacity-100 pointer-fine:focus-within:opacity-100 pointer-fine:has-[[aria-expanded=true]]:opacity-100">
+                        <Row
+                          key={i}
+                          leading={<span className="w-4 text-right text-xs tabular-nums">{i + 1}.</span>}
+                          title={<EntryTitle view={view} entry={entry} className={cn('block max-w-full truncate text-left max-sm:line-clamp-2 max-sm:whitespace-normal', (view.open ?? view.url) !== undefined && 'hover:underline')} />}
+                          meta={agent && <AgentOnEntry projectId={project.id} agent={agent} />}
+                          actions={
+                            agent ? undefined : (
                               <StartAgentButton
                                 variant="ghost"
                                 size="icon-sm"
@@ -104,12 +101,12 @@ export function QueueCard({ projects }: ModuleCardProps) {
                                 configureDescription="Opens the launcher with this entry's prompt, so you can set the model and where it runs."
                                 className="text-muted-foreground hover:text-foreground"
                               />
-                            </div>
-                          )}
-                        </li>
+                            )
+                          }
+                        />
                       )
                     })}
-                  </ul>
+                  </List>
                 </li>
               )
             })}
