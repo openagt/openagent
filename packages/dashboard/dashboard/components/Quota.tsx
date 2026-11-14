@@ -7,8 +7,7 @@ import { useModuleHost, type ModuleProject, type UsageLimitSaved } from '../modu
 import { useMountedModules, type MountedUsageLimit } from '../lib/use-modules.js'
 import { usePolled } from '../lib/use-async.js'
 import { Section } from './ui/section.js'
-import { RowsLoading } from './ui/card.js'
-import { useSkeleton } from './ui/skeleton.js'
+import { RowShapes, Slot } from './ui/slot.js'
 import { cn } from '../lib/utils.js'
 import { ModuleSlot, projectsHaving } from './ModulePageView.js'
 import { formatRelative, formatResetDay, formatResetTooltip, formatDuration, formatDurationLong } from '../lib/format-date.js'
@@ -498,41 +497,44 @@ export function Quota({ projects }: { projects: ProjectSummary[] }) {
   // Every window, in the order Claude Code reports them — the session, the account's own week
   // (also drawn as the bar above, but worth its own line here too), and a model's own week.
   const windows = view?.windows ?? []
-  const reading = useSkeleton(!view)
 
   return (
     <Section title="Usage">
       <div className="space-y-4">
-        {reading && <RowsLoading rows={1} label="Reading your usage…" />}
+        <Slot of={{ state: view ? 'fresh' : 'unknown', value: view }} shape={<RowShapes rows={1} />}>
+          {() => (
+            <div className="space-y-4">
+              {/* Without a placeable week there is no axis to draw. Say so, loudly — no fallback (Rom):
+                  this used to degrade to the week as a plain figure, which hid a real defect for weeks —
+                  a reset phrasing the parser didn't know just made the panel quietly plainer, and nothing
+                  anywhere said the boundary was gone. Quote the text that failed: it is the bug report. */}
+              {view?.boundary && week ? (
+                usageLimit ? (
+                  <ModuleSlot package={usageLimit.package} label="usage limit">
+                    <LimitedWeekBar limit={usageLimit} projects={projectsHaving(usageLimit.projects, projects)} boundary={view.boundary} percentUsed={week.percentUsed} others={windows} />
+                  </ModuleSlot>
+                ) : (
+                  <WeekBar boundary={view.boundary} percentUsed={week.percentUsed} others={windows} />
+                )
+              ) : view && view.windows.length ? (
+                <p role="alert" className="text-sm text-danger">
+                  {unplaceableWeek(week, windows)}
+                </p>
+              ) : null}
 
-        {/* Without a placeable week there is no axis to draw. Say so, loudly — no fallback (Rom):
-            this used to degrade to the week as a plain figure, which hid a real defect for weeks —
-            a reset phrasing the parser didn't know just made the panel quietly plainer, and nothing
-            anywhere said the boundary was gone. Quote the text that failed: it is the bug report. */}
-        {view?.boundary && week ? (
-          usageLimit ? (
-            <ModuleSlot package={usageLimit.package} label="usage limit">
-              <LimitedWeekBar limit={usageLimit} projects={projectsHaving(usageLimit.projects, projects)} boundary={view.boundary} percentUsed={week.percentUsed} others={windows} />
-            </ModuleSlot>
-          ) : (
-            <WeekBar boundary={view.boundary} percentUsed={week.percentUsed} others={windows} />
-          )
-        ) : view && view.windows.length ? (
-          <p role="alert" className="text-sm text-danger">
-            {unplaceableWeek(week, windows)}
-          </p>
-        ) : null}
-
-        {/* Normally these live behind the bar's own "show all limits" tooltip — but without a bar
-            to hide them in, they still have to show up somewhere; the windows Claude Code did
-            report are data, not a fallback, and stay regardless. */}
-        {!(view?.boundary && week) && windows.length ? (
-          <div className="space-y-1 border-t border-border pt-3">
-            {windows.map(w => (
-              <OtherWindow key={w.label} window={w} />
-            ))}
-          </div>
-        ) : null}
+              {/* Normally these live behind the bar's own "show all limits" tooltip — but without a bar
+                  to hide them in, they still have to show up somewhere; the windows Claude Code did
+                  report are data, not a fallback, and stay regardless. */}
+              {!(view?.boundary && week) && windows.length ? (
+                <div className="space-y-1 border-t border-border pt-3">
+                  {windows.map(w => (
+                    <OtherWindow key={w.label} window={w} />
+                  ))}
+                </div>
+              ) : null}
+            </div>
+          )}
+        </Slot>
 
         <AddedAccountsUsage />
 

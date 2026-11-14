@@ -3,8 +3,7 @@ import { Fragment, useState, type ReactNode } from 'react'
 import { SlidersHorizontal } from 'lucide-react'
 import { Quota } from './Quota.js'
 import { Section } from './ui/section.js'
-import { RowsLoading } from './ui/card.js'
-import { useSkeleton } from './ui/skeleton.js'
+import { RowShapes, Slot } from './ui/slot.js'
 import { Button } from './ui/button.js'
 import { HumanQueueList } from './HumanQueueList.js'
 import { updatePreferences, usePreferences, usePreferencesLoaded } from '../lib/preferences.js'
@@ -118,7 +117,7 @@ export function DashboardPage({
       minWidth: '1/2',
       node: (
         <div id={NEEDS_YOU_ID} className="flex scroll-mt-6 flex-col *:flex-1">
-          <HumanQueue items={interventions} loaded={interventionsState !== 'unknown'} onSelectProject={onSelectProject} onSelectAgent={onSelectAgent} />
+          <HumanQueue items={interventions} state={interventionsState} onSelectProject={onSelectProject} onSelectAgent={onSelectAgent} />
         </div>
       ),
     },
@@ -131,7 +130,7 @@ export function DashboardPage({
       minWidth: '1/3',
       node: (
         <div id={WORKING_ID} className="flex scroll-mt-6 flex-col *:flex-1">
-          <Agents working={working} loaded={active.state !== 'unknown'} namesRuns={namesRuns} onSelectAgent={onSelectAgent} />
+          <Agents working={working} state={active.state} namesRuns={namesRuns} onSelectAgent={onSelectAgent} />
         </div>
       ),
     },
@@ -233,41 +232,40 @@ export function DashboardPage({
 // work a finished session left uncommitted or unpushed. #627 notifications fire off the same set.
 function HumanQueue({
   items,
-  loaded,
+  state,
   onSelectProject,
   onSelectAgent,
 }: {
   items: Intervention[]
-  /** The items were read, by this visit or an earlier one: until then the card says it is loading, not that nothing waits. */
-  loaded: boolean
+  /** What is known of the items: until they are read, by this visit or an earlier one, the card says it is loading, not that nothing waits. */
+  state: ReadState
   onSelectProject: (id: string) => void
   onSelectAgent: (projectId: string, agentId: string) => void
 }) {
   const groups = KINDS.map(kind => ({ ...kind, items: items.filter(item => item.kind === kind.value) })).filter(group => group.items.length > 0)
-  const reading = useSkeleton(!loaded)
   return (
     <Section title="Human Queue" count={items.length > 0 ? items.length : undefined}>
       <p className="-mt-1 mb-3 text-xs text-muted-foreground">Agents awaiting your approval, review, or input</p>
-      {reading ? (
-        <RowsLoading />
-      ) : items.length === 0 ? (
-        <p className="text-sm text-muted-foreground">AI doesn&apos;t need you.</p>
-      ) : (
-        // One group per kind, under a quiet heading with how many: a few questions are not lost
-        // among many checkouts left to commit. Each group shows its first rows and offers the rest.
-        // Pulled out by the rows' own inset, so their text starts where the heading does.
-        <div className="-mx-3 space-y-3">
-          {groups.map(group => (
-            <section key={group.value} aria-label={group.label}>
-              <h3 className="flex items-baseline gap-1.5 px-3 pb-0.5 text-xs font-medium text-muted-foreground">
-                {group.label}
-                <span className="tabular-nums">{group.items.length}</span>
-              </h3>
-              <HumanQueueList grouped items={group.items} onOpenAgent={onSelectAgent} onOpenProject={onSelectProject} />
-            </section>
-          ))}
-        </div>
-      )}
+      <Slot of={{ state, value: items }} shape={<RowShapes />}>
+        {() => items.length === 0 ? (
+          <p className="text-sm text-muted-foreground">AI doesn&apos;t need you.</p>
+        ) : (
+          // One group per kind, under a quiet heading with how many: a few questions are not lost
+          // among many checkouts left to commit. Each group shows its first rows and offers the rest.
+          // Pulled out by the rows' own inset, so their text starts where the heading does.
+          <div className="-mx-3 space-y-3">
+            {groups.map(group => (
+              <section key={group.value} aria-label={group.label}>
+                <h3 className="flex items-baseline gap-1.5 px-3 pb-0.5 text-xs font-medium text-muted-foreground">
+                  {group.label}
+                  <span className="tabular-nums">{group.items.length}</span>
+                </h3>
+                <HumanQueueList grouped items={group.items} onOpenAgent={onSelectAgent} onOpenProject={onSelectProject} />
+              </section>
+            ))}
+          </div>
+        )}
+      </Slot>
     </Section>
   )
 }

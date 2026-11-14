@@ -1,4 +1,4 @@
-import { PageLink, PersonMark, RowsLoading, Section, useSkeleton, STATUS_DOT, STATUS_TONE, Tooltip, TooltipContent, TooltipTrigger, cn, formatAge, formatDateTime, personName, personSaid, useModuleHost, usePolled, type ModuleCardProps, type ModuleHostPerson } from '@openagt/dashboard/module'
+import { PageLink, PersonMark, RowShapes, Section, Slot, STATUS_DOT, STATUS_TONE, Tooltip, TooltipContent, TooltipTrigger, cn, formatAge, formatDateTime, personName, personSaid, useModuleHost, usePolled, type ModuleCardProps, type ModuleHostPerson } from '@openagt/dashboard/module'
 import { membersOf, peopleWithRuns, type Member, type PersonActivity } from '../src/people.js'
 
 // The Overview's Members card: who worked in the projects shown in the last 30 days, from `logs
@@ -58,45 +58,44 @@ export function MembersCard({ projects }: ModuleCardProps) {
     // Kept for the next visit: the page opens with the last members, faded until they are read again.
     { remember: `skill-logs:members:${key}`, stored: true },
   )
-  const reading = useSkeleton(state === 'unknown')
   return (
     <Section title="Members" count={state !== 'unknown' && members.length > 0 ? members.length : undefined} action={<PageLink href={host.pageHref('logs')} onOpen={() => host.openPage('logs')}>Logs</PageLink>}>
       <p className="-mt-1 mb-3 text-xs text-muted-foreground">Who worked here in the last 30 days: agents started, commits</p>
-      {reading ? (
-        <RowsLoading />
-      ) : members.length === 0 ? (
-        <p className="text-sm text-muted-foreground">No one has started an agent here yet.</p>
-      ) : (
-        <ul className="space-y-1">
-          {members.map(member => (
-            <li key={member.person} aria-label={personName(member.person, member.name)} className="flex min-w-0 items-center gap-3 md:min-h-10 max-md:min-h-11">
-              <PersonMark email={member.person} name={member.name} picture={member.account?.avatar} you={member.you} />
-              <div className="min-w-0 flex-1">
-                <p className="flex min-w-0 items-center gap-1.5 text-sm">
-                  <span className="min-w-0 truncate font-medium" title={personSaid(member.person, member.account)}>
-                    {personName(member.person, member.name)}
+      <Slot of={{ state, value: members }} shape={<RowShapes />}>
+        {() => members.length === 0 ? (
+          <p className="text-sm text-muted-foreground">No one has started an agent here yet.</p>
+        ) : (
+          <ul className="space-y-1">
+            {members.map(member => (
+              <li key={member.person} aria-label={personName(member.person, member.name)} className="flex min-w-0 items-center gap-3 md:min-h-10 max-md:min-h-11">
+                <PersonMark email={member.person} name={member.name} picture={member.account?.avatar} you={member.you} />
+                <div className="min-w-0 flex-1">
+                  <p className="flex min-w-0 items-center gap-1.5 text-sm">
+                    <span className="min-w-0 truncate font-medium" title={personSaid(member.person, member.account)}>
+                      {personName(member.person, member.name)}
+                    </span>
+                    {member.you && <span className="shrink-0 text-xs text-muted-foreground">you</span>}
+                  </p>
+                  <p className="truncate text-xs text-muted-foreground tabular-nums" title={projects.length > 1 ? `In ${member.projects.join(', ')}` : undefined}>
+                    {didWords(member)}
+                  </p>
+                </div>
+                {member.running > 0 ? (
+                  <span className={cn('flex shrink-0 items-center gap-1.5 text-xs', STATUS_TONE['running'])}>
+                    <span aria-hidden className={cn('size-1.5 rounded-full', STATUS_DOT['running'])} />
+                    {member.running === 1 ? 'working' : `${member.running} working`}
                   </span>
-                  {member.you && <span className="shrink-0 text-xs text-muted-foreground">you</span>}
-                </p>
-                <p className="truncate text-xs text-muted-foreground tabular-nums" title={projects.length > 1 ? `In ${member.projects.join(', ')}` : undefined}>
-                  {didWords(member)}
-                </p>
-              </div>
-              {member.running > 0 ? (
-                <span className={cn('flex shrink-0 items-center gap-1.5 text-xs', STATUS_TONE['running'])}>
-                  <span aria-hidden className={cn('size-1.5 rounded-full', STATUS_DOT['running'])} />
-                  {member.running === 1 ? 'working' : `${member.running} working`}
-                </span>
-              ) : (
-                <Tooltip>
-                  <TooltipTrigger render={<span className="shrink-0 text-xs text-muted-foreground tabular-nums" />}>{formatAge(member.lastAt)}</TooltipTrigger>
-                  <TooltipContent>Last active {formatDateTime(member.lastAt)}</TooltipContent>
-                </Tooltip>
-              )}
-            </li>
-          ))}
-        </ul>
-      )}
+                ) : (
+                  <Tooltip>
+                    <TooltipTrigger render={<span className="shrink-0 text-xs text-muted-foreground tabular-nums" />}>{formatAge(member.lastAt)}</TooltipTrigger>
+                    <TooltipContent>Last active {formatDateTime(member.lastAt)}</TooltipContent>
+                  </Tooltip>
+                )}
+              </li>
+            ))}
+          </ul>
+        )}
+      </Slot>
     </Section>
   )
 }

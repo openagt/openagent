@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Button, PageLink, RowsLoading, Section, Tooltip, useSkeleton, TooltipContent, TooltipTrigger, cn, formatAge, inPlace, formatDateTime, useModuleHost, useOpenAgentDown, usePolled, type ModuleCardProps, type ModuleProject } from '@openagt/dashboard/module'
+import { Button, PageLink, RowShapes, Section, Slot, Tooltip, TooltipContent, TooltipTrigger, cn, formatAge, inPlace, formatDateTime, useModuleHost, useOpenAgentDown, usePolled, type ModuleCardProps, type ModuleProject } from '@openagt/dashboard/module'
 import { CodeWords } from './CodeWords.js'
 import { cannotRun, notAsked, readSchedulers, schedulersKey, rowTitle, schedulerStatus, schedulerStopped, startedNow, startsNext, unlistedWords, type Answered, type SchedulerCommand, type SchedulerRow } from './schedulers.js'
 
@@ -31,7 +31,6 @@ export function SchedulerCard({ projects }: ModuleCardProps) {
   // One read with the Automations page and Settings under the same key, kept for the next visit.
   const { value: rows, state, reload } = usePolled(() => readSchedulers(host, projects), EMPTY, 10_000, [key], { remember: schedulersKey(key), stored: true })
   const open = (): void => host.openPage('automations')
-  const reading = useSkeleton(state === 'unknown')
   /** A link to the Automations page, which also opens in a new tab. */
   const toPage = (words: string) => (
     <a
@@ -45,58 +44,58 @@ export function SchedulerCard({ projects }: ModuleCardProps) {
   return (
     <Section title="Automations" action={<PageLink href={host.pageHref('automations')} onOpen={open}>Automations</PageLink>}>
       <p className="-mt-1 mb-3 text-xs text-muted-foreground">What starts by itself while nobody is at the keyboard</p>
-      {reading ? (
-        <RowsLoading />
-      ) : (
-        <ul className="space-y-4">
-          {rows.map(row => {
-            const status = schedulerStatus(row)
-            const stopped = schedulerStopped(row)
-            const on = row.commands.filter(command => command.on)
-            const off = offWords(row.commands.length - on.length, on.length)
-            return (
-              <li key={row.project.id} aria-label={row.project.name}>
-                <div className="flex items-center gap-2">
-                  {projects.length > 1 && <span className="truncate text-sm font-medium">{row.project.name}</span>}
-                  <span className={cn('shrink-0 text-xs font-medium', status.tone)}>Scheduler {status.label}</span>
-                  {row.keepAlive && <span className="shrink-0 rounded-full bg-muted px-2 py-0.5 text-xs text-muted-foreground">keep-alive</span>}
-                  {row.lastTick && (
-                    <span className="ml-auto shrink-0 text-xs text-muted-foreground">
-                      looked{' '}
-                      <Tooltip>
-                        <TooltipTrigger render={<span className="tabular-nums" />}>{formatAge(row.lastTick.at)}</TooltipTrigger>
-                        <TooltipContent>The scheduler last looked {formatDateTime(row.lastTick.at)}</TooltipContent>
-                      </Tooltip>
-                    </span>
+      <Slot of={{ state, value: rows }} shape={<RowShapes />}>
+        {() => (
+          <ul className="space-y-4">
+            {rows.map(row => {
+              const status = schedulerStatus(row)
+              const stopped = schedulerStopped(row)
+              const on = row.commands.filter(command => command.on)
+              const off = offWords(row.commands.length - on.length, on.length)
+              return (
+                <li key={row.project.id} aria-label={row.project.name}>
+                  <div className="flex items-center gap-2">
+                    {projects.length > 1 && <span className="truncate text-sm font-medium">{row.project.name}</span>}
+                    <span className={cn('shrink-0 text-xs font-medium', status.tone)}>Scheduler {status.label}</span>
+                    {row.keepAlive && <span className="shrink-0 rounded-full bg-muted px-2 py-0.5 text-xs text-muted-foreground">keep-alive</span>}
+                    {row.lastTick && (
+                      <span className="ml-auto shrink-0 text-xs text-muted-foreground">
+                        looked{' '}
+                        <Tooltip>
+                          <TooltipTrigger render={<span className="tabular-nums" />}>{formatAge(row.lastTick.at)}</TooltipTrigger>
+                          <TooltipContent>The scheduler last looked {formatDateTime(row.lastTick.at)}</TooltipContent>
+                        </Tooltip>
+                      </span>
+                    )}
+                  </div>
+                  {row.error !== undefined && <p className="mt-1 text-xs text-muted-foreground">{row.error}</p>}
+                  {/* Why the last look decided nothing; a scheduler that is stopped says that itself, above. */}
+                  {row.lastTick?.note && stopped === undefined && <p className="mt-1 text-xs text-muted-foreground">Its last look: {row.lastTick.note}</p>}
+                  {stopped !== undefined && row.error === undefined && on.length > 0 && <p className="mt-1 text-xs text-warning">Nothing starts by itself. {toPage('How to start it')}</p>}
+                  {row.error === undefined && row.commands.length === 0 && row.unreadable.length === 0 && <p className="mt-1 text-xs text-muted-foreground">Nothing is scheduled here. {toPage('New automation')}</p>}
+                  {on.length > 0 && (
+                    <ul className="mt-2 space-y-0.5">
+                      {on.map(command => (
+                        <OnRow key={command.command} project={row.project} command={command} stopped={stopped !== undefined} lookedAt={row.lastTick?.at} onOpenRun={run => host.openAgent(row.project.id, run)} reload={reload} />
+                      ))}
+                    </ul>
                   )}
-                </div>
-                {row.error !== undefined && <p className="mt-1 text-xs text-muted-foreground">{row.error}</p>}
-                {/* Why the last look decided nothing; a scheduler that is stopped says that itself, above. */}
-                {row.lastTick?.note && stopped === undefined && <p className="mt-1 text-xs text-muted-foreground">Its last look: {row.lastTick.note}</p>}
-                {stopped !== undefined && row.error === undefined && on.length > 0 && <p className="mt-1 text-xs text-warning">Nothing starts by itself. {toPage('How to start it')}</p>}
-                {row.error === undefined && row.commands.length === 0 && row.unreadable.length === 0 && <p className="mt-1 text-xs text-muted-foreground">Nothing is scheduled here. {toPage('New automation')}</p>}
-                {on.length > 0 && (
-                  <ul className="mt-2 space-y-0.5">
-                    {on.map(command => (
-                      <OnRow key={command.command} project={row.project} command={command} stopped={stopped !== undefined} lookedAt={row.lastTick?.at} onOpenRun={run => host.openAgent(row.project.id, run)} reload={reload} />
-                    ))}
-                  </ul>
-                )}
-                {row.unreadable.map(unreadable => (
-                  <p key={unreadable.skill} className="mt-1.5 text-xs text-warning">
-                    {unlistedWords(unreadable)}
-                  </p>
-                ))}
-                {off !== undefined && (
-                  <p className="mt-2 text-xs text-muted-foreground">
-                    {off}. {on.length === 0 && toPage('Switch one on')}
-                  </p>
-                )}
-              </li>
-            )
-          })}
-        </ul>
-      )}
+                  {row.unreadable.map(unreadable => (
+                    <p key={unreadable.skill} className="mt-1.5 text-xs text-warning">
+                      {unlistedWords(unreadable)}
+                    </p>
+                  ))}
+                  {off !== undefined && (
+                    <p className="mt-2 text-xs text-muted-foreground">
+                      {off}. {on.length === 0 && toPage('Switch one on')}
+                    </p>
+                  )}
+                </li>
+              )
+            })}
+          </ul>
+        )}
+      </Slot>
     </Section>
   )
 }

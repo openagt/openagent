@@ -1,4 +1,4 @@
-import { GaugeFace, PageLink, RowsLoading, Section, useSkeleton, MachineMark, Tooltip, TooltipContent, TooltipTrigger, formatAge, machineKind, machineName, usePolled, useModuleHost, type Health, type MachineKind, type ModuleCardProps, type ModuleMachines } from '@openagt/dashboard/module'
+import { GaugeFace, PageLink, RowShapes, Section, Slot, MachineMark, Tooltip, TooltipContent, TooltipTrigger, formatAge, machineKind, machineName, usePolled, useModuleHost, type Health, type MachineKind, type ModuleCardProps, type ModuleMachines } from '@openagt/dashboard/module'
 import { loadStatus, type Answer, type DoorStatus } from './devices.js'
 import { isComputer } from './model.js'
 import { olderThan } from './parts.js'
@@ -21,7 +21,6 @@ export function DevicesCard(_props: ModuleCardProps) {
   const { value: door } = usePolled<Answer<DoorStatus> | undefined>(() => loadStatus(host), undefined, EVERY_MS, [], { remember: 'devices:door', stored: true })
   const phones = door?.ok ? door.value.devices.filter(device => !isComputer(device)) : []
   const lastSeen = phones.map(phone => phone.seen ?? '').sort().at(-1)
-  const reading = useSkeleton(state === 'unknown' || !machines)
   return (
     <Section
       title="Devices"
@@ -29,24 +28,24 @@ export function DevicesCard(_props: ModuleCardProps) {
       action={<PageLink href="?settings=devices" onOpen={() => host.openSettings('devices')}>Settings</PageLink>}
       className="space-y-2"
   >
-      {reading || !machines ? (
-        <RowsLoading rows={1} />
-      ) : (
-        <ul className="space-y-1">
-          <Row kind="computer" name={machines.name ?? 'This computer'} note="this computer" online health={machines.health} />
-          {machines.machines.map(machine => (
-            <Row
-              key={machine.id}
-              kind={machineKind(machine).kind}
-              name={machineName(machine)}
-              note={machineKind(machine).place}
-              online={machine.version !== undefined}
-              health={machine.health}
-              behind={machine.version !== undefined && olderThan(machine.version, machines.version) ? machine.version : undefined}
-            />
-          ))}
-        </ul>
-      )}
+      <Slot of={{ state: machines === undefined ? 'unknown' : state, value: machines }} shape={<RowShapes rows={1} />}>
+        {() => machines && (
+          <ul className="space-y-1">
+            <Row kind="computer" name={machines.name ?? 'This computer'} note="this computer" online health={machines.health} />
+            {machines.machines.map(machine => (
+              <Row
+                key={machine.id}
+                kind={machineKind(machine).kind}
+                name={machineName(machine)}
+                note={machineKind(machine).place}
+                online={machine.version !== undefined}
+                health={machine.health}
+                behind={machine.version !== undefined && olderThan(machine.version, machines.version) ? machine.version : undefined}
+              />
+            ))}
+          </ul>
+        )}
+      </Slot>
       {phones.length > 0 && (
         <button type="button" onClick={() => host.openSettings('devices')} className="relative block text-left text-xs text-muted-foreground after:absolute after:-inset-y-1 after:inset-x-0 hover:text-foreground hover:underline">
           {phones.length === 1 ? '1 phone or browser' : `${phones.length} phones and browsers`} in

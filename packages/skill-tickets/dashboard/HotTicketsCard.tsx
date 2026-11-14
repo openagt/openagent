@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { ArrowUp, Bot, CirclePause, Clock, WifiOff, type LucideIcon } from 'lucide-react'
-import { Button, LinkActions, PageLink, RowsLoading, Section, useSkeleton, cn, formatDateTime, inPlace, usePolled, useModuleHost, useOpenAgentDown, type ModuleCardProps, type ModuleProject, type ReadState } from '@openagt/dashboard/module'
+import { Button, LinkActions, PageLink, RowShapes, Section, Slot, cn, formatDateTime, inPlace, usePolled, useModuleHost, useOpenAgentDown, type ModuleCardProps, type ModuleProject, type ReadState } from '@openagt/dashboard/module'
 import { claimState, heldBack, holderAgent, hotLane, ticketLink, withHolder, type ClaimState, type HotLane } from '../src/module.js'
 import { holdingRun } from './lib/holding-run.js'
 import { listTickets } from './lib/list.js'
@@ -108,7 +108,6 @@ export function HotTicketsCard({ projects }: ModuleCardProps) {
  */
 function HotList({ hot, errors, state, showProject, reload }: { hot: HotTicket[]; errors: Read['errors']; state: ReadState; showProject: boolean; reload: () => Promise<void> }) {
   const groups = LANES.map(lane => ({ lane, tickets: hot.filter(t => t.lane === lane.key) })).filter(group => group.tickets.length > 0)
-  const reading = useSkeleton(state === 'unknown')
   return (
     <>
       {/* Under the heading, with the way out: the read again, at once rather than at the next poll. */}
@@ -122,27 +121,27 @@ function HotList({ hot, errors, state, showProject, reload }: { hot: HotTicket[]
           </Button>
         </div>
       ))}
-      {reading ? (
-        <RowsLoading />
-      ) : (
-        // Every ticket, never a "+N more": the list is the shortlist. Pulled out by the rows' own
-        // inset, so their text starts where the heading does.
-        <div className="-mx-3 space-y-3">
-          {groups.map(({ lane, tickets }) => (
-            <section key={lane.key} aria-label={lane.heading}>
-              <h3 className="flex items-baseline gap-1.5 px-3 pb-0.5 text-xs font-medium text-muted-foreground">
-                {lane.heading}
-                <span className="tabular-nums">{tickets.length}</span>
-              </h3>
-              <ul>
-                {tickets.map(t => (
-                  <Row key={`${t.project.id}:${t.ticket.file}`} hot={t} showProject={showProject} reload={reload} />
-                ))}
-              </ul>
-            </section>
-          ))}
-        </div>
-      )}
+      <Slot of={{ state, value: hot }} shape={<RowShapes />}>
+        {() => (
+          // Every ticket, never a "+N more": the list is the shortlist. Pulled out by the rows' own
+          // inset, so their text starts where the heading does.
+          <div className="-mx-3 space-y-3">
+            {groups.map(({ lane, tickets }) => (
+              <section key={lane.key} aria-label={lane.heading}>
+                <h3 className="flex items-baseline gap-1.5 px-3 pb-0.5 text-xs font-medium text-muted-foreground">
+                  {lane.heading}
+                  <span className="tabular-nums">{tickets.length}</span>
+                </h3>
+                <ul>
+                  {tickets.map(t => (
+                    <Row key={`${t.project.id}:${t.ticket.file}`} hot={t} showProject={showProject} reload={reload} />
+                  ))}
+                </ul>
+              </section>
+            ))}
+          </div>
+        )}
+      </Slot>
     </>
   )
 }

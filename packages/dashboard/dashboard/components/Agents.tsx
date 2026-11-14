@@ -2,8 +2,9 @@ import { useContext } from 'react'
 import type { ActiveAgent } from '../../src/index.js'
 import { Section } from './ui/section.js'
 import { List, Row } from './ui/list.js'
-import { Skeleton, useSkeleton } from './ui/skeleton.js'
-import { RowsLoading } from './ui/card.js'
+import { Skeleton } from './ui/skeleton.js'
+import { RowShapes, Slot } from './ui/slot.js'
+import type { ReadState } from '../lib/use-async.js'
 import { Tooltip, TooltipTrigger, TooltipContent } from './ui/tooltip.js'
 import { formatAge, formatDateTime } from '../lib/format-date.js'
 import { OnComputer } from './MachineMark.js'
@@ -25,44 +26,43 @@ import { HostServicesContext, INERT_HOST_SERVICES } from '../lib/host-services.j
 
 export function Agents({
   working,
-  loaded,
+  state,
   namesRuns,
   onSelectAgent,
 }: {
   /** The agents at work; none says so in one line. */
   working: ActiveAgent[]
-  /** The agents were read: until then the card says it is loading, not that none is at work. */
-  loaded: boolean
+  /** What is known of the agents: until they are read the card says it is loading, not that none is at work. */
+  state: ReadState
   /** Whether runs are given a short name, which a row waits for as the sidebar's does. */
   namesRuns: boolean
   onSelectAgent: (projectId: string, agentId: string) => void
 }) {
   const services = useContext(HostServicesContext) ?? INERT_HOST_SERVICES
-  const reading = useSkeleton(!loaded)
   return (
-    <Section title="Agents at work" count={loaded && working.length > 0 ? working.length : undefined}>
+    <Section title="Agents at work" count={state !== 'unknown' && working.length > 0 ? working.length : undefined}>
       <p className="-mt-1 mb-3 text-xs text-muted-foreground">Agents currently working</p>
-      {reading ? (
-        <RowsLoading rows={1} />
-      ) : working.length === 0 ? (
-        <p className="text-sm text-muted-foreground">No agent is at work.</p>
-      ) : (
-        <List>
-          {working.map(a => (
-            <AgentRow
-              key={`${a.projectId}:${a.agentId}`}
-              label={activeLabel(a)}
-              naming={awaitingName(a, namesRuns)}
-              cloud={a.cloud}
-              computer={a.computer}
-              at={a.updatedAt}
-              projectName={a.projectName}
-              href={services.agentHref(a.projectId, a.agentId)}
-              onOpen={() => onSelectAgent(a.projectId, a.agentId)}
-            />
-          ))}
-        </List>
-      )}
+      <Slot of={{ state, value: working }} shape={<RowShapes rows={1} />}>
+        {() => working.length === 0 ? (
+          <p className="text-sm text-muted-foreground">No agent is at work.</p>
+        ) : (
+          <List>
+            {working.map(a => (
+              <AgentRow
+                key={`${a.projectId}:${a.agentId}`}
+                label={activeLabel(a)}
+                naming={awaitingName(a, namesRuns)}
+                cloud={a.cloud}
+                computer={a.computer}
+                at={a.updatedAt}
+                projectName={a.projectName}
+                href={services.agentHref(a.projectId, a.agentId)}
+                onOpen={() => onSelectAgent(a.projectId, a.agentId)}
+              />
+            ))}
+          </List>
+        )}
+      </Slot>
     </Section>
   )
 }

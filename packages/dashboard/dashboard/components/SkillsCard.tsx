@@ -10,8 +10,7 @@ import { openSettings } from '../lib/use-route.js'
 import { cn } from '../lib/utils.js'
 import { Button } from './ui/button.js'
 import { Section } from './ui/section.js'
-import { RowsLoading } from './ui/card.js'
-import { useSkeleton } from './ui/skeleton.js'
+import { RowShapes, Slot } from './ui/slot.js'
 import { useAction } from '../lib/use-action.js'
 import { SKILLS_ENTRY, sendWord, skillsSay, updateSkills } from './ProjectSkills.js'
 
@@ -92,7 +91,6 @@ export function SkillsCard({ projects, onSelectProject, projectHref }: { project
   const unused = [...new Set(reads.flatMap(read => (read.skills ? skillsSay(read.skills).heldNames : [])))].filter(name => !usedNames.has(name)).sort()
   const updatable = reads.filter(read => read.skills && skillsSay(read.skills).newer.length > 0)
   const [updatingAll, setUpdatingAll] = useState(false)
-  const reading = useSkeleton(state === 'unknown')
   const all = useAction()
   const updateAll = async (): Promise<void> => {
     setUpdatingAll(true)
@@ -116,19 +114,19 @@ export function SkillsCard({ projects, onSelectProject, projectHref }: { project
       }
     >
       <p className="-mt-1 mb-3 text-xs text-muted-foreground">What each project adds to its agents, and what is new</p>
-      {reading ? (
-        <RowsLoading rows={projects.length || 1} />
-      ) : (
-        <>
-          <ul>
-            {reads.map(read => (
-              <Row key={read.project.id} read={read} reload={reload} href={projectHref(read.project.id)} onOpen={() => onSelectProject(read.project.id)} />
-            ))}
-          </ul>
-          {all.error && <p className="mt-2 text-xs text-danger">{all.error}</p>}
-          <Usage used={used} unused={unused} />
-        </>
-      )}
+      <Slot of={{ state, value: reads }} shape={<RowShapes rows={projects.length || 1} />}>
+        {() => (
+          <>
+            <ul>
+              {reads.map(read => (
+                <Row key={read.project.id} read={read} reload={reload} href={projectHref(read.project.id)} onOpen={() => onSelectProject(read.project.id)} />
+              ))}
+            </ul>
+            {all.error && <p className="mt-2 text-xs text-danger">{all.error}</p>}
+            <Usage used={used} unused={unused} />
+          </>
+        )}
+      </Slot>
     </Section>
   )
 }
