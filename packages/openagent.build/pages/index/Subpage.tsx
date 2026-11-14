@@ -7,7 +7,13 @@ import { h2Style, h3Style, proseStyle } from './ui'
 export const pStyle: CSSProperties = { ...proseStyle, color: 'var(--muted-foreground)' }
 
 /** A page beside the landing page (/press, /go-to-dashboard): the site's nav and footer around one column, its title and lead first. */
-export function Subpage({ title, lead, children }: { title: string; lead: string; children: ReactNode }) {
+export function Subpage({ title, lead, under, children }: {
+  title: string
+  lead: string
+  /** What belongs to the title and its lead, close under them: the page's one press, or a choice for all it holds. */
+  under?: ReactNode
+  children?: ReactNode
+}) {
   return (
     // At least the window's height, so a short page's footer sits at its bottom.
     <div style={{ display: 'flex', flexDirection: 'column', minHeight: '100dvh' }}>
@@ -26,6 +32,7 @@ export function Subpage({ title, lead, children }: { title: string; lead: string
             <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
               <h1 style={h2Style}>{title}</h1>
               <p style={pStyle}>{lead}</p>
+              {under && <div style={{ marginTop: 16 }}>{under}</div>}
             </div>
             {children}
           </div>

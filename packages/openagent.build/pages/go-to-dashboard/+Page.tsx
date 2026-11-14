@@ -4,9 +4,8 @@ import { pStyle, Step, Subpage } from '../index/Subpage'
 
 export default function Page() {
   return (
-    <Subpage title="Go to dashboard" lead="The dashboard runs 100% locally, on your computer.">
-      {/* One choice of package manager, for both commands. */}
-      <PmTabs />
+    // One choice of package manager, for both commands.
+    <Subpage title="Go to dashboard" lead="The dashboard runs 100% locally, on your computer." under={<PmTabs />}>
       <Step title="Install">
         <p style={pStyle}>
           Install it, and from then on openagent.build opens your dashboard on this computer. It starts when you log in. macOS and Linux for now:

@@ -9,12 +9,11 @@ export default function Page() {
     <Subpage
       title={is404 ? 'Page not found' : 'Something went wrong'}
       lead={is404 ? 'There is no page at this address.' : 'This page could not be shown.'}
-    >
-      <p style={{ margin: 0 }}>
+      under={
         <a href="/" className="press press-primary">
           Go to the home page
         </a>
-      </p>
-    </Subpage>
+      }
+    />
   )
 }
