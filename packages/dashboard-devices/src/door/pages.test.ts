@@ -20,7 +20,7 @@ test("a server behind Tailscale names the command its people run there, with who
 })
 
 test('a command is drawn as code, and what HTML would read as a tag is shown as written', () => {
-  assert.ok(notInPage('tailscale-server').includes('run <code>openagent-devices add --for &lt;your name&gt; --qr</code>, and scan'))
+  assert.ok(notInPage('tailscale-server').includes('run <code>openagent-devices add --for &lt;your name&gt; --qr</code> then scan'))
   assert.ok(notInPage('tailscale').includes('<code>npx @openagt/dashboard-devices add --qr</code>'))
   // The answer a spent code gets is drawn by the page's script, the same way.
   assert.ok(enterPage('/_door/enter', 'n0nce', 'tailscale-server').includes(JSON.stringify('<code>openagent-devices add --for &lt;your name&gt; --qr</code>').slice(1, -1)))

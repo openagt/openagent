@@ -28,14 +28,14 @@ const STYLE = `
   :root { color-scheme: light dark; ${vars(PALETTE.light)} }
   @media (prefers-color-scheme: dark) { :root { ${vars(PALETTE.dark)} } }
   body { margin: 0; min-height: 100vh; min-height: 100dvh; box-sizing: border-box; padding: 24px 16px; display: grid; place-items: center; font: 16px/24px system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif; background: var(--background); color: var(--foreground); -webkit-text-size-adjust: 100%; }
-  main { width: 100%; max-width: 22rem; text-align: center; }
-  svg { display: block; width: 40px; height: 45px; margin: 0 auto 16px; }
+  main { width: 100%; max-width: 22rem; }
+  svg { display: block; width: 40px; height: 45px; margin: 0 0 16px; }
   h1 { margin: 0 0 8px; font-size: 20px; line-height: 28px; font-weight: 600; overflow-wrap: anywhere; }
-  p { margin: 0; color: var(--muted-foreground); white-space: pre-line; overflow-wrap: anywhere; }
-  code { font: 14px/20px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; color: var(--foreground); background: var(--muted); border-radius: 6px; padding: 2px 6px; -webkit-box-decoration-break: clone; box-decoration-break: clone; }
+  p { margin: 0; color: var(--muted-foreground); overflow-wrap: anywhere; }
+  code { display: block; margin: 8px 0; font: 14px/20px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; color: var(--foreground); background: var(--muted); border-radius: 6px; padding: 8px 12px; }
 `
 
-/** `text` as HTML: what HTML would read as markup escaped, and a command between backticks drawn as code. */
+/** `text` as HTML: what HTML would read as markup escaped, and a command between backticks drawn as code, on a line of its own. */
 function withCodes(text: string): string {
   const escaped = text.replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;').replaceAll('"', '&quot;')
   return escaped.replace(/`([^`]+)`/g, '<code>$1</code>')
@@ -74,9 +74,9 @@ export function howToGetIn(kind: DoorKind): string {
     return "This computer is a server. On the computer it was connected from, open OpenAgent's Settings › Devices › Add device › Phone or tablet, pick Anywhere, through this server, and scan the code with this device. A device that is already in can also make a code: its Settings › Devices › Add device."
   // A server's door is its owner's: a code made there for nobody would let the device in as them, so the command asks whose it is.
   if (kind === 'tailscale-server')
-    return 'This computer is a server on your Tailscale network. Log in to it, run `openagent-devices add --for <your name> --qr`, and scan the code with this device. A device that is already in can also make a code: its Settings › Devices › Add device.'
+    return 'This computer is a server on your Tailscale network. Log in to it and run `openagent-devices add --for <your name> --qr` then scan the code with this device. A device that is already in can also make a code: its Settings › Devices › Add device.'
   if (kind === 'tailscale')
-    return 'This computer is on your Tailscale network. On it, open OpenAgent\'s Settings › Devices, press Add phone (or Add device › Phone or tablet), and scan the code with this device. On a computer with no screen, run\n\n`npx @openagt/dashboard-devices add --qr`\n\nA device that is already in can also make a code: its Settings › Devices › Add device.'
+    return 'This computer is on your Tailscale network. On it, open OpenAgent\'s Settings › Devices, press Add phone (or Add device › Phone or tablet), and scan the code with this device. On a computer with no screen, run `npx @openagt/dashboard-devices add --qr` A device that is already in can also make a code: its Settings › Devices › Add device.'
   return 'On the computer that runs OpenAgent, open Settings › Devices, press Add phone (or Add device › Phone or tablet), and scan the code with this device.'
 }
 
