@@ -69,14 +69,11 @@ export function TicketsPage({ projects }: { projects: ModuleProject[] }) {
   const onOpenTicketPlan = (projectId: string, file: string) => open(projectId, [file, 'plan'])
   const onOpenAgent = (projectId: string, agentId: string) => host.openAgent(projectId, agentId)
 
-  // Every view change mirrors into the query string — replaceState, not a navigation: filters are
+  // Every view change mirrors into the query string — an adjust, not a navigation: filters are
   // page state the Back button should step over, not through, and the address stays shareable.
   const setView = (next: TicketsView) => {
     setViewState(next)
-    if (typeof window !== 'undefined') {
-      const qs = formatTicketsView(next, window.location.search)
-      window.history.replaceState(window.history.state, '', window.location.pathname + (qs ? `?${qs}` : ''))
-    }
+    if (typeof window !== 'undefined') host.adjustPage(undefined, formatTicketsView(next, window.location.search))
   }
   const clearFilters = () => setView({ ...view, filters: defaultView().filters })
   // Click-to-filter (#1144): a row's topic badge adds its topic, the claim marker narrows to

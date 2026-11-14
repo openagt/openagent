@@ -52,12 +52,12 @@ test('the runs cut by day, each day with its runs and their cost; a run by its n
   expect(screen.getAllByText('yesterday work')[0]!.closest('li')!.textContent).toContain('2m')
   // A word per status the runs have, each with its count; its pick is kept in the page's address, in the place of the last one, so Back leaves the page.
   fireEvent.click(screen.getByRole('button', { name: /^Failed/ }))
-  expect(host.openPage).toHaveBeenLastCalledWith('logs', ['failed'], undefined, { replace: true })
+  expect(host.adjustPage).toHaveBeenLastCalledWith(['failed'])
   rerender(page(['failed']))
   expect(screen.queryAllByText('Login page')).toHaveLength(0)
   expect(screen.getAllByText('break it').length).toBeGreaterThan(0)
   fireEvent.click(screen.getByRole('button', { name: /^All/ }))
-  expect(host.openPage).toHaveBeenLastCalledWith('logs', [], undefined, { replace: true })
+  expect(host.adjustPage).toHaveBeenLastCalledWith([])
   rerender(page([]))
   expect(screen.getAllByText('Login page').length).toBeGreaterThan(0)
   // A status no run has any more shows them all.

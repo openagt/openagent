@@ -133,6 +133,20 @@ describe('module pages in the shell (#1774)', () => {
     await waitFor(() => expect(window.location.pathname + window.location.search).toBe('/?view=wide'))
   })
 
+  test("a pick a module's page keeps in its address takes the place of the address it had: the page reads it, and Back steps over it", async () => {
+    function ListPage({ path }: ModulePageProps) {
+      const host = useModuleHost()
+      return createElement('button', { onClick: () => host.adjustPage(['failed'], 'sort=new') }, `the list at ${path.join('/') || 'all'}`)
+    }
+    answerShell([{ package: '@acme/list', url: moduleModule('__listAdjusted', { pages: [{ segment: 'list', label: 'List', Page: ListPage }] }), projects: [PROJECT.id] }])
+    window.history.replaceState(null, '', '/list')
+    render(<App />)
+    const entries = window.history.length
+    fireEvent.click(await screen.findByRole('button', { name: 'the list at all' }))
+    expect(screen.getByRole('button', { name: 'the list at failed' })).toBeTruthy()
+    expect([window.location.pathname + window.location.search, window.history.length]).toEqual(['/list/failed?sort=new', entries])
+  })
+
   test("a module's page goes back to the list it was opened from as that list was left, by Back; reached another way, it opens the list", async () => {
     function ListPage({ path }: ModulePageProps) {
       const host = useModuleHost()

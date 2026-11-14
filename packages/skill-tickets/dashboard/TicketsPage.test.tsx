@@ -227,7 +227,7 @@ describe('TicketsPage sort (#1144/#1265)', () => {
     fireEvent.click(await screen.findByRole('menuitemcheckbox', { name: 'Priority' }))
     const titles = (await screen.findAllByRole('link')).map(b => b.textContent)
     expect(titles.findIndex(t => t?.includes('High priority'))).toBeLessThan(titles.findIndex(t => t?.includes('Low priority')))
-    expect(window.location.search).toBe('?sort=priority')
+    expect(host.adjustPage).toHaveBeenLastCalledWith(undefined, 'sort=priority')
   })
 
   test('a priority tie falls back to newest first, not an arbitrary order', async () => {
@@ -270,7 +270,7 @@ describe('TicketsPage filters (#1144)', () => {
     await waitFor(() => expect(screen.queryByText('Something else')).toBeNull())
     expect(screen.getByText('Improve the lock')).toBeTruthy()
     expect(screen.getByText('1/2')).toBeTruthy()
-    expect(window.location.search).toBe('?q=lock')
+    expect(host.adjustPage).toHaveBeenLastCalledWith(undefined, 'q=lock')
   })
 
   test('the URL is the initial state: mounting under ?q= starts filtered', async () => {
@@ -287,7 +287,7 @@ describe('TicketsPage filters (#1144)', () => {
     await screen.findByText('Improve the lock')
     fireEvent.click(screen.getByRole('button', { name: 'dx' }))
     await waitFor(() => expect(screen.queryByText('Something else')).toBeNull())
-    expect(window.location.search).toBe('?topics=dx')
+    expect(host.adjustPage).toHaveBeenLastCalledWith(undefined, 'topics=dx')
   })
 
   test('a badge whose topic is capitalised filters by it just the same', async () => {
@@ -299,7 +299,7 @@ describe('TicketsPage filters (#1144)', () => {
     fireEvent.click(screen.getByRole('button', { name: 'UX' }))
     await waitFor(() => expect(screen.queryByText('Something else')).toBeNull())
     expect(screen.getByText('Polish the rail')).toBeTruthy()
-    expect(window.location.search).toBe('?topics=ux')
+    expect(host.adjustPage).toHaveBeenLastCalledWith(undefined, 'topics=ux')
   })
 
   test('clicking the claim marker narrows to claimed tickets', async () => {
@@ -309,7 +309,7 @@ describe('TicketsPage filters (#1144)', () => {
     fireEvent.click(screen.getByText('agent-1'))
     await waitFor(() => expect(screen.queryByText('Improve the lock')).toBeNull())
     expect(screen.getByText('Something else')).toBeTruthy()
-    expect(window.location.search).toBe('?stage=claimed')
+    expect(host.adjustPage).toHaveBeenLastCalledWith(undefined, 'stage=claimed')
   })
 
   test('a project filtered to nothing says so and clears from right there', async () => {
@@ -321,7 +321,7 @@ describe('TicketsPage filters (#1144)', () => {
     expect(screen.getAllByRole('button', { name: 'Update tickets' }).every(button => button.closest('header'))).toBe(true)
     fireEvent.click(screen.getByRole('button', { name: /clear filters/i }))
     expect(await screen.findByText('Improve the lock')).toBeTruthy()
-    expect(window.location.search).toBe('')
+    expect(host.adjustPage).toHaveBeenLastCalledWith(undefined, '')
   })
 })
 

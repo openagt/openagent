@@ -136,7 +136,7 @@ export function App() {
   const addressesRead = projectsState !== 'unknown' && modulesLoaded
   // How each project is named where it is listed: two clones called `shop` say which folder each is in.
   const labels = useMemo(() => projectLabels(projects), [projects])
-  const { route, go: navigate } = useRoute(addresses)
+  const { route, go: navigate, adjust } = useRoute(addresses)
   const { projectId, agentId } = route
   // A session with no project, or the "New agent session" page with none: in place of a project, the sessions' own id.
   const noProject = projectId === SESSIONS_ID
@@ -145,7 +145,7 @@ export function App() {
   // The address written as the route reads, once it can be read: a project named by its id, as
   // `npx @openagt/dashboard` opens it, shows its name, in place of the entry rather than as a new one.
   useEffect(() => {
-    if (addressesRead) navigate(route, { replace: true, keepQuery: true })
+    if (addressesRead) adjust(route)
     // The route is what the address says; only what names projects changes it here.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [addressesRead, addresses])
@@ -170,7 +170,7 @@ export function App() {
   // Every navigation keeps the picked project, and one into another project's page, or into a
   // page in a named project, picks that project: the pages never show a project the select does not name.
   const scoped = (next: Route): Route => ({ ...next, ...(scope ? { scope: next.scope ?? next.projectId ?? scope } : {}) })
-  const go = (next: Route, options?: { replace?: boolean }) => navigate(scoped(next), options)
+  const go = (next: Route) => navigate(scoped(next))
   /** Where `go` would take the page: a link's address. */
   const hrefOf = (next: Route) => formatRoute(scoped(next), addresses)
   /** A module's page, at a sub-path, in `inProject` or the picked project. */
@@ -356,7 +356,7 @@ export function App() {
     const { settingsItem: _item, ...rest } = route
     const next = { ...rest, settings: entry, ...(item ? { settingsItem: item } : {}) }
     if (route.settings === undefined) navigate(next, { keepQuery: true })
-    else leaving(() => navigate(next, { keepQuery: true, replace: true }))
+    else leaving(() => adjust(next))
   }
   useShortcut('shortcuts', () => showSettings(SHORTCUTS_ENTRY))
   const closeSettings = () => {
@@ -378,7 +378,8 @@ export function App() {
     ...DAEMON_SERVICES,
     openAgent: selectAgentInProject,
     agentHref: (inProject, id) => hrefOf({ projectId: inProject, agentId: id }),
-    openPage: (segment, path, inProject, options) => go(pageRoute(segment, path, inProject), options),
+    openPage: (segment, path, inProject) => go(pageRoute(segment, path, inProject)),
+    adjustPage: (path, query) => adjust(path ? { ...route, pagePath: path } : route, query),
     pageHref: (segment, path, inProject) => hrefOf(pageRoute(segment, path, inProject)),
     backToPage: (segment, path = [], inProject) =>
       back(

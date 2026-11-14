@@ -36,11 +36,11 @@ describe('useRoute', () => {
     expect(window.location.pathname).toBe('/my-repo/1-run')
   })
 
-  it('replaces the history entry when asked, rather than adding one', () => {
+  it('an adjust replaces the history entry, rather than adding one', () => {
     const { result } = renderHook(() => useRoute(projects))
     act(() => result.current.go({ projectId: 'my-repo-a1', agentId: '1-run', scope: 'my-repo-a1' }))
     const entries = window.history.length
-    act(() => result.current.go({ projectId: 'my-repo-a1', agentId: null, scope: 'my-repo-a1' }, { replace: true }))
+    act(() => result.current.adjust({ projectId: 'my-repo-a1', agentId: null, scope: 'my-repo-a1' }))
     expect(window.location.pathname).toBe('/my-repo')
     expect(window.history.length).toBe(entries)
   })

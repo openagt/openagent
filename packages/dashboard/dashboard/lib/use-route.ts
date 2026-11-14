@@ -154,23 +154,22 @@ const shownUrl = (): string => held?.url ?? currentUrl()
 /** The route, with its projects named by `projects`: what the address names changes when they do. */
 export function useRoute(projects: ProjectAddresses): {
   route: Route
-  /** Navigate to `next`. Replaces the current history entry, keeping what the page wrote to it,
-   *  when `replace` is set — for a correction, not a step you should be able to go Back to. Keeps
-   *  what the page mirrored into the query when `keepQuery` is set — for a change of the picked
-   *  project alone (#1513), or Settings opening or closing over the page. */
-  go: (next: Route, options?: { replace?: boolean; keepQuery?: boolean }) => void
+  /** Navigate to `next`, a new history entry. Keeps what the page mirrored into the query when
+   *  `keepQuery` is set — for a change of the picked project alone (#1513), or Settings opening or
+   *  closing over the page. */
+  go: (next: Route, options?: { keepQuery?: boolean }) => void
+  /** Write `next` in place of the current history entry, keeping what the page wrote to it: a
+   *  correction or a pick the page keeps, not a step to go Back to. With `query`, that is the page's
+   *  own query; without, the one it has stays. */
+  adjust: (next: Route, query?: string) => void
 } {
   const current = useSyncExternalStore(subscribe, shownUrl, () => '/')
   const route = parseRoute(current, projects)
 
-  const go = (next: Route, options?: { replace?: boolean; keepQuery?: boolean }) => {
+  const go = (next: Route, options?: { keepQuery?: boolean }) => {
     const url = options?.keepQuery ? keepPageQuery(formatRoute(next, projects), window.location.search) : formatRoute(next, projects)
     // Going where you already are is not a history entry.
     if (url === current) return
-    if (options?.replace) {
-      window.history.replaceState(window.history.state, '', url)
-      return notify()
-    }
     leaving(() => {
       keepScroll()
       push(url)
@@ -178,7 +177,14 @@ export function useRoute(projects: ProjectAddresses): {
     })
   }
 
-  return { route, go }
+  const adjust = (next: Route, query = window.location.search) => {
+    const url = keepPageQuery(formatRoute(next, projects), query)
+    if (url === current) return
+    window.history.replaceState(window.history.state, '', url)
+    notify()
+  }
+
+  return { route, go, adjust }
 }
 
 /** The dashboard's own page of every account OpenAgent works with, at `/permissions`. */
