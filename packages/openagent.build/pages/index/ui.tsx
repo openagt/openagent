@@ -58,7 +58,7 @@ export const columnsStyle = (min: number): CSSProperties => ({
 /** A column's title, then its sentences: a section's part, on the page itself. */
 export const columnStyle: CSSProperties = { display: 'flex', flexDirection: 'column', gap: 8 }
 
-// Small mono uppercase label (e.g. "Try", "What is it?", "Problem").
+// Small mono uppercase label, for the few labels that earn it ("Try:", "What is it?", "Any software").
 export const kickerStyle: CSSProperties = {
   fontFamily: mono,
   ...text('xs'),
