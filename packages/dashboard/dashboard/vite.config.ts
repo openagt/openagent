@@ -1,3 +1,4 @@
+import { readFile } from 'node:fs/promises'
 import http from 'node:http'
 import { createRequire } from 'node:module'
 import { fileURLToPath } from 'node:url'
@@ -5,7 +6,8 @@ import react from '@vitejs/plugin-react'
 import tailwindcss from '@tailwindcss/vite'
 import { defineConfig, type Plugin, type UserConfig } from 'vite'
 import { fontLicenses } from '../../../scripts/font-licenses.mjs'
-import { classList } from './module/vite.ts'
+import { scanClasses } from './module/vite.ts'
+import { dashboardStylesVersion } from '../src/dashboard/page-styles.ts'
 
 // Opt-in (`pnpm dev:daemon`, i.e. OPENAGENT_DEV_DAEMON=1): let the dev server actually start runs.
 //
@@ -186,6 +188,29 @@ function openagentPreloadFont(): Plugin {
   }
 }
 
+/**
+ * What the daemon compiles the page sheet from (src/dashboard/page-styles.ts), written into the
+ * bundle: the dashboard's class list, `classes.txt`, and the vocabulary it was drawn with,
+ * `vocabulary.css`; and the version of the two, which the page names its sheet by
+ * (`import.meta.env.OPENAGENT_CLASSES`).
+ */
+function openagentClassList(): Plugin {
+  let vocabulary = ''
+  let classes = ''
+  return {
+    name: 'openagent:class-list',
+    async config() {
+      vocabulary = await readFile(new URL('./module/theme.css', import.meta.url), 'utf8')
+      classes = `${(await scanClasses(fileURLToPath(new URL('.', import.meta.url)))).join('\n')}\n`
+      return { define: { 'import.meta.env.OPENAGENT_CLASSES': JSON.stringify(dashboardStylesVersion(vocabulary, classes)) } }
+    },
+    generateBundle() {
+      this.emitFile({ type: 'asset', fileName: 'classes.txt', source: classes })
+      this.emitFile({ type: 'asset', fileName: 'vocabulary.css', source: vocabulary })
+    },
+  }
+}
+
 // Dashboard (#405): a plain Vite SPA — React + Tailwind v4 + shadcn, talking to the daemon over
 // plain HTTP (`POST /_rpc/<name>`, plus an SSE stream for the live feed). `index.html` beside this
 // file is the whole entry; the daemon serves the built output as static files with an SPA fallback.
@@ -194,7 +219,7 @@ export default defineConfig({
   // (A7), so `root` is pinned to this file's directory instead of inherited from the cwd — the
   // scripts that run it live one level up.
   root: fileURLToPath(new URL('.', import.meta.url)),
-  plugins: [openagentDevDaemon(), openagentHostModules(), openagentRenderBlocking(), openagentPreloadFont(), fontLicenses(), react(), tailwindcss(), classList(fileURLToPath(new URL('.', import.meta.url)))],
+  plugins: [openagentDevDaemon(), openagentHostModules(), openagentRenderBlocking(), openagentPreloadFont(), fontLicenses(), react(), tailwindcss(), openagentClassList()],
   build: {
     // Straight into the package's own dist, where the daemon serves it from. There used to be a
     // copy step between the two — a whole turbo task — because the bundle was built in a

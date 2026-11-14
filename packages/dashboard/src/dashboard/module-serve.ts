@@ -1,8 +1,10 @@
 import { readFile, stat } from 'node:fs/promises'
 import type { IncomingMessage, ServerResponse } from 'node:http'
-import { join } from 'node:path'
+import { createHash } from 'node:crypto'
+import { dirname, join, relative } from 'node:path'
 import { fileTag, fileVersion, sendBody } from './compress.js'
 import { contentTypeFor } from './content-type.js'
+import { compilePageSheet, dashboardStylesVersion, type SheetPart } from './page-styles.js'
 import { defaultProjectsProvider, type ProjectsProvider } from './projects.js'
 import { findBroughtModule, findComputerModule, findProjectModule, moduleFile, type ProjectModule } from '../project-modules.js'
 
@@ -14,6 +16,12 @@ export const COMPUTER_MODULES_PREFIX = '/_computer-modules'
 
 /** Where the files of the modules OpenAgent brings to projects are served from its own copy: `/_brought-modules/<package>/<file>`. */
 export const BROUGHT_MODULES_PREFIX = '/_brought-modules'
+
+/**
+ * Where the page sheet is served: `/_styles/page.css?v=<the dashboard's version>&m=<module URL>…`,
+ * the dashboard's own classes and the listed modules' compiled as one sheet (page-styles.ts).
+ */
+export const PAGE_SHEET_PATH = '/_styles/page.css'
 
 const encoded = (path: string): string => path.split('/').map(encodeURIComponent).join('/')
 
@@ -51,7 +59,8 @@ function decode(segment: string): string | undefined {
 
 /**
  * Serve one module file (#1774): the project must be registered, the package must be a module of
- * that project, and the file must sit inside the module's browser part's own directory. Anything else is a
+ * that project (or, under its own prefix, the computer's, or one OpenAgent brings to projects, from
+ * its own copy), and the file must sit inside the module's browser part's own directory. Anything else is a
  * 404, never a fallback: a module URL is asked for by the dashboard's loader, not typed by a person.
  * Asked for with the file's own version ({@link versionedModuleUrl}), it is kept for good: a page
  * opened again does not ask for it at all. Otherwise it is served as `no-cache`, since a module is
@@ -65,33 +74,41 @@ export async function serveModuleFile(
   pathname: string,
   projects: ProjectsProvider = defaultProjectsProvider(),
 ): Promise<void> {
-  const [projectSegment, ...rest] = pathname.slice(MODULES_PREFIX.length + 1).split('/')
+  return serveFileOf(req, res, () => moduleFileAt(pathname, projects))
+}
+
+/**
+ * The file a module URL's path names, by the prefix it is served under: `<package>/<file>` of the
+ * module that package is to that project, to the computer, or of OpenAgent's own copy.
+ */
+async function moduleFileAt(pathname: string, projects: ProjectsProvider): Promise<{ module: ProjectModule; file: string } | undefined> {
+  const after = (prefix: string) => pathname.slice(prefix.length + 1).split('/')
+  if (pathname.startsWith(`${COMPUTER_MODULES_PREFIX}/`)) return fileOf(after(COMPUTER_MODULES_PREFIX), findComputerModule)
+  if (pathname.startsWith(`${BROUGHT_MODULES_PREFIX}/`)) return fileOf(after(BROUGHT_MODULES_PREFIX), findBroughtModule)
+  if (!pathname.startsWith(`${MODULES_PREFIX}/`)) return undefined
+  const [projectSegment, ...rest] = after(MODULES_PREFIX)
   const projectId = projectSegment !== undefined ? decode(projectSegment) : undefined
-  return serveFileOf(req, res, rest, async pkg => {
+  return fileOf(rest, async pkg => {
     const root = projectId ? await projects.resolvePath(projectId) : undefined
     return root ? findProjectModule(root, pkg) : undefined
   })
 }
 
-/** Serve one file of a module that is the computer's: as {@link serveModuleFile}, with no project to be registered. */
-export async function serveComputerModuleFile(req: IncomingMessage, res: ServerResponse, pathname: string): Promise<void> {
-  return serveFileOf(req, res, pathname.slice(COMPUTER_MODULES_PREFIX.length + 1).split('/'), findComputerModule)
-}
-
-/** Serve one file of a module OpenAgent brings to projects, from its own copy: as {@link serveComputerModuleFile}. */
-export async function serveBroughtModuleFile(req: IncomingMessage, res: ServerResponse, pathname: string): Promise<void> {
-  return serveFileOf(req, res, pathname.slice(BROUGHT_MODULES_PREFIX.length + 1).split('/'), findBroughtModule)
-}
-
-/** Answer the file `<package>/<file>` names, of the module `find` knows the package as. */
-async function serveFileOf(req: IncomingMessage, res: ServerResponse, [packageSegment, ...rest]: string[], find: (pkg: string) => Promise<ProjectModule | undefined>): Promise<void> {
-  const notFound = () => void res.writeHead(404, { 'content-type': 'text/plain' }).end('no such module file')
-  if (req.method !== 'GET' && req.method !== 'HEAD') return void res.writeHead(405, { allow: 'GET, HEAD' }).end()
+/** The file `<package>/<file>` names, of the module `find` knows the package as. */
+async function fileOf([packageSegment, ...rest]: string[], find: (pkg: string) => Promise<ProjectModule | undefined>): Promise<{ module: ProjectModule; file: string } | undefined> {
   const pkg = packageSegment !== undefined ? decode(packageSegment) : undefined
   const rel = rest.map(decode)
-  if (!pkg || rel.length === 0 || rel.some(part => part === undefined)) return notFound()
+  if (!pkg || rel.length === 0 || rel.some(part => part === undefined)) return undefined
   const module = await find(pkg).catch(() => undefined)
   const file = module ? await moduleFile(module, rel.join('/')) : undefined
+  return module && file ? { module, file } : undefined
+}
+
+/** Answer the module file `found` finds. */
+async function serveFileOf(req: IncomingMessage, res: ServerResponse, found: () => Promise<{ file: string } | undefined>): Promise<void> {
+  const notFound = () => void res.writeHead(404, { 'content-type': 'text/plain' }).end('no such module file')
+  if (req.method !== 'GET' && req.method !== 'HEAD') return void res.writeHead(405, { allow: 'GET, HEAD' }).end()
+  const file = (await found())?.file
   const facts = file ? await stat(file).catch(() => undefined) : undefined
   const body = file && facts ? await readFile(file).catch(() => undefined) : undefined
   if (!file || !facts || body === undefined) return notFound()
@@ -100,4 +117,39 @@ async function serveFileOf(req: IncomingMessage, res: ServerResponse, [packageSe
   const headers = { 'content-type': contentTypeFor(file), 'cache-control': cacheControl, etag: fileTag(facts) }
   if (req.method === 'HEAD') return void res.writeHead(200, headers).end()
   await sendBody(req, res, 200, headers, body, `${file} ${facts.mtimeMs} ${facts.size}`)
+}
+
+/**
+ * Serve the page sheet (#1774): the dashboard's class list (`classes.txt` in its bundle, with the
+ * vocabulary it was built against) and every listed module's, beside its browser module, compiled
+ * as one sheet. Asked for with the dashboard's version and every module's (in its URL's `v`), it is
+ * kept for good, as a module file is; a module no longer there is left out, and the sheet is then
+ * `no-cache`. A module whose own rules would change the vocabulary is refused, by name.
+ */
+export async function servePageSheet(req: IncomingMessage, res: ServerResponse, bundleDir: string, projects: ProjectsProvider = defaultProjectsProvider()): Promise<void> {
+  if (req.method !== 'GET' && req.method !== 'HEAD') return void res.writeHead(405, { allow: 'GET, HEAD' }).end()
+  const asked = new URL(req.url ?? '/', 'http://x').searchParams
+  const [vocabulary, classes] = await Promise.all([readFile(join(bundleDir, 'vocabulary.css'), 'utf8'), readFile(join(bundleDir, 'classes.txt'), 'utf8')])
+  let kept = asked.get('v') === dashboardStylesVersion(vocabulary, classes)
+  const parts: SheetPart[] = [{ module: '@openagt/dashboard', classes }]
+  for (const url of asked.getAll('m')) {
+    const at = new URL(url, 'http://x')
+    const found = await moduleFileAt(at.pathname, projects)
+    const facts = found ? await stat(found.file).catch(() => undefined) : undefined
+    kept &&= facts !== undefined && at.searchParams.get('v') === fileVersion(facts)
+    if (!found) continue
+    const beside = (name: string) => moduleFile(found.module, join(dirname(relative(found.module.dir, found.file)), name)).then(file => (file ? readFile(file, 'utf8') : undefined))
+    const [list, rules] = await Promise.all([beside('classes.txt'), beside('styles.css')])
+    parts.push({ module: found.module.package, classes: list ?? '', ...(rules !== undefined ? { rules } : {}) })
+  }
+  let sheet: string
+  try {
+    sheet = await compilePageSheet(vocabulary, parts)
+  } catch (error) {
+    return void res.writeHead(500, { 'content-type': 'text/plain' }).end(error instanceof Error ? error.message : String(error))
+  }
+  const etag = `"${createHash('sha256').update(sheet).digest('base64url').slice(0, 16)}"`
+  const headers = { 'content-type': 'text/css; charset=utf-8', 'cache-control': kept ? 'public, max-age=31536000, immutable' : 'no-cache', etag }
+  if (req.method === 'HEAD') return void res.writeHead(200, headers).end()
+  await sendBody(req, res, 200, headers, sheet, etag)
 }

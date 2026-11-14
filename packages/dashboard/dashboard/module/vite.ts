@@ -64,7 +64,7 @@ function classNamesIn(css: string): Set<string> {
  * Writes the build's class list, `classes.txt`, one name per line beside its JS; and its own rules,
  * `styles.css` in the folder it builds, beside them when it has some.
  */
-export function classList(dir: string): Plugin {
+function classList(dir: string): Plugin {
   return {
     name: 'openagent:class-list',
     apply: 'build',
