@@ -184,7 +184,8 @@ export function TicketsPage({ projects }: { projects: ModuleProject[] }) {
       actions={
         <>
           {state !== 'unknown' && (
-            <span className={cn('contents', hasSelection && '[&>*]:invisible')} aria-hidden={hasSelection || undefined} inert={hasSelection || undefined}>
+            // On a phone the head holds the project's own presses alone: there the queue's adds are the selection bar's.
+            <span className={cn('contents max-md:hidden', hasSelection && '[&>*]:invisible')} aria-hidden={hasSelection || undefined} inert={hasSelection || undefined}>
               <QueueAdds rows={flatRows} selection={false} disabled={busy} />
             </span>
           )}

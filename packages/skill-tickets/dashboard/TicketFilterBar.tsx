@@ -264,8 +264,9 @@ export function TicketFilterBar({
   const filtered = hasAnyFilter(f)
 
   return (
-    <div className="flex flex-wrap items-center gap-1">
-      <div className="relative mr-1 max-sm:mr-0 max-sm:mb-1 max-sm:w-full">
+    // On a phone the search, the filters and the sort are one row, scrolled sideways, so the list starts near the top.
+    <div className="flex items-center gap-1 sm:flex-wrap max-sm:-m-0.5 max-sm:overflow-x-auto max-sm:p-0.5">
+      <div className="relative mr-1 shrink-0 max-sm:w-44">
         <Search className="pointer-events-none absolute top-1/2 left-2.5 size-4 -translate-y-1/2 text-muted-foreground" aria-hidden />
         <Input
           name="search-tickets"
