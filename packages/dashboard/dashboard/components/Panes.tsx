@@ -1,6 +1,6 @@
 import { createContext, useContext, useEffect, useMemo, useState, type ComponentType, type ReactNode } from 'react'
 import { createPortal } from 'react-dom'
-import { Bot, FileText, Maximize2, Minimize2, MoreVertical, X } from 'lucide-react'
+import { ArrowLeft, Bot, FileText, Maximize2, Minimize2, X } from 'lucide-react'
 import type { Layout } from 'react-resizable-panels'
 import type { WorkspaceDoc } from '../../src/index.js'
 import { DocsPanel } from './DocsPanel.js'
@@ -8,16 +8,16 @@ import { ModuleSlot } from './ModulePageView.js'
 import { PaneHeaderContext } from './PaneHeader.js'
 import { useMountedModules, type MountedPanel } from '../lib/use-modules.js'
 import type { ModuleContext, ModulePanelProps } from '../module/index.js'
-import { Button, buttonVariants } from './ui/button.js'
+import { Button } from './ui/button.js'
 import { cn } from '../lib/utils.js'
 import { usePolled } from '../lib/use-async.js'
-import { DropdownMenu, DropdownMenuCheckboxItem, DropdownMenuContent, DropdownMenuTrigger } from './ui/dropdown-menu.js'
 import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from './ui/resizable.js'
 import { Tooltip, TooltipTrigger, TooltipContent } from './ui/tooltip.js'
 import { onDocs } from '../rpc/reads.js'
 import { closePanes, paneSizes, paneSizesOwner, panesPage, setExpandedPane, setPaneOpen, setPaneSizes, useExpandedPane, useOpenPanes } from '../lib/panes.js'
 import { useRevealedChange, useRevealedFile, useRevealedScreen, useRevealedSubagent, type RevealedChange, type RevealedFile } from '../lib/reveal-change.js'
 import { isMobileScreen, useIsMobile } from '../lib/use-mobile.js'
+import { useNarrow } from '../lib/use-narrow.js'
 
 // The panes beside the chat, as Claude Code on the web has them: what the installed modules add
 // (Changes, Files, the Browser) and the project's surfaced docs (PLAN/TODO), each with an icon at
@@ -29,13 +29,14 @@ import { isMobileScreen, useIsMobile } from '../lib/use-mobile.js'
 // that closes it. Which panes are open and how the room is shared is remembered for each page
 // (`lib/panes.ts`). A closed pane renders nothing, so nothing in it reads anything.
 //
-// On a phone there is no room beside the chat: the column of cards lies over the chat's right two
-// thirds, and the icons, which it covers, are one ⋮ menu at the start of the top bar.
+// Where there is no room beside the chat (a phone, or a chat and a pane that would each be cut under
+// their least width), the open pane lies over the chat, under the top bar, which keeps its icons, and
+// its header's arrow goes back to the chat.
 //
 // One pane has no icon: the subagent a row of the chat opened, which only such a row opens.
 //
 // The pieces: the provider knows the page's panes (PanesProvider, around the page and the panes),
-// the top bar draws their icons (PaneToggles, PaneMenu), and the layout puts the column beside the
+// the top bar draws their icons (PaneToggles), and the layout puts the column beside the
 // page (PaneLayout). On a desktop the top bar is a row over the page and its column (TopBar), so an
 // icon stays where it was pressed as a pane opens, and pressed again there closes it.
 
@@ -247,17 +248,11 @@ export function TopBar({ children }: { children: ReactNode }) {
   return row ? createPortal(bar, row) : bar
 }
 
-/** On a phone with a pane open the column of panes lies over the icons' end of the top bar: they are one menu at its start. */
-function useFolded(): boolean {
-  const { open } = useContext(PanesContext)
-  return useIsMobile() && open.length > 0
-}
-
 /** The panes' icons, for the end of a page's top bar: one per pane, lit while its pane is open. */
 export function PaneToggles() {
   const { page, panes, open, held } = useContext(PanesContext)
   const offered = panes.filter(pane => !pane.hidden)
-  if (useFolded() || (offered.length === 0 && held === 0)) return null
+  if (offered.length === 0 && held === 0) return null
   return (
     <div role="group" aria-label="Panes" className="flex shrink-0 items-center gap-1">
       {Array.from({ length: held - offered.length }, (_, at) => (
@@ -290,34 +285,14 @@ export function PaneToggles() {
   )
 }
 
-/** The panes as one ⋮ menu, for the start of a page's top bar: on a phone while a pane is open, each open pane checked. */
-export function PaneMenu() {
-  const { page, panes, open } = useContext(PanesContext)
-  if (!useFolded()) return null
-  return (
-    <DropdownMenu>
-      <DropdownMenuTrigger aria-label="Panes" className={cn(buttonVariants({ variant: 'ghost', size: 'icon-sm' }), 'relative shrink-0 text-muted-foreground data-[popup-open]:bg-accent max-md:after:absolute max-md:after:-inset-2')}>
-        <MoreVertical className="h-4 w-4" aria-hidden />
-      </DropdownMenuTrigger>
-      <DropdownMenuContent align="start" className="min-w-[12rem]">
-        {panes.filter(pane => !pane.hidden || open.includes(pane)).map(pane => (
-          <DropdownMenuCheckboxItem key={pane.id} closeOnClick checked={open.includes(pane)} onCheckedChange={checked => setPaneOpen(page, pane.id, checked)}>
-            <pane.icon className="h-3.5 w-3.5 shrink-0" aria-hidden /> {pane.label}
-          </DropdownMenuCheckboxItem>
-        ))}
-      </DropdownMenuContent>
-    </DropdownMenu>
-  )
-}
-
 /**
  * One open pane, flush with its neighbours: a header with its name, the button that lets it fill
- * the page and the one that closes it, over what it shows. A module's pane may put its own things
+ * the page and the one that closes it (over the chat, an arrow back to the chat), over what it shows. A module's pane may put its own things
  * in place of its name and before those buttons (`PaneTitle`, `PaneActions`).
  */
-function PaneCard({ pane }: { pane: Pane }) {
+function PaneCard({ pane, over = false }: { pane: Pane; /** Laid over the chat: flush, its way out an arrow back to the chat. */ over?: boolean }) {
   const { page, expanded, panelProps, reveal, show, docs, docsLoaded, subagent } = useContext(PanesContext)
-  const fills = expanded === pane.id
+  const fills = !over && expanded === pane.id
   const [title, setTitle] = useState<HTMLElement | null>(null)
   const [actions, setActions] = useState<HTMLElement | null>(null)
   const slots = useMemo(() => ({ title, actions }), [title, actions])
@@ -325,36 +300,50 @@ function PaneCard({ pane }: { pane: Pane }) {
     // A pane that fills the page is laid over the whole of it, where it is: its contents are not
     // drawn anew, so what was opened and scrolled in it stays.
     <div className={fills ? 'absolute inset-0 z-30 flex bg-background p-2' : 'flex h-full min-h-0 min-w-0'}>
-      {/* A card: the surface with the hairline, its header 40 high and lined under. */}
-      <section aria-label={pane.label} className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden rounded-lg border border-hairline bg-card">
+      {/* A card: the surface with the hairline, its header 40 high and lined under. Over the chat, the whole room with a line at its top. */}
+      <section aria-label={pane.label} className={cn('flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden bg-card', over ? 'border-t border-hairline' : 'rounded-lg border border-hairline')}>
         <header className="flex h-10 shrink-0 items-center gap-1 border-b border-hairline px-1">
+          {over && (
+            <Tooltip>
+              <TooltipTrigger
+                render={<Button variant="ghost" size="icon-sm" className="relative shrink-0 text-muted-foreground max-md:after:absolute max-md:after:-inset-2" aria-label="Back to the chat" onClick={() => setPaneOpen(page, pane.id, false)} />}
+              >
+                <ArrowLeft className="size-4" />
+              </TooltipTrigger>
+              <TooltipContent>Back to the chat</TooltipContent>
+            </Tooltip>
+          )}
           {/* The pane's name stands until the pane puts its own title here. */}
           <div ref={setTitle} className="peer flex min-w-0 flex-1 items-center gap-1 empty:hidden" />
           <h2 className="min-w-0 flex-1 truncate pl-2 text-sm font-medium peer-[:not(:empty)]:hidden">{pane.label}</h2>
           <div ref={setActions} className="flex shrink-0 items-center gap-1 empty:hidden" />
-          <Tooltip>
-            <TooltipTrigger
-              render={
-                <Button
-                  variant="ghost"
-                  size="icon-sm"
-                  className="shrink-0 text-muted-foreground"
-                  aria-label={fills ? `Bring ${pane.label} back to its place` : `Let ${pane.label} fill the page`}
-                  aria-pressed={fills}
-                  onClick={() => setExpandedPane(page, fills ? undefined : pane.id)}
-                />
-              }
-            >
-              {fills ? <Minimize2 className="size-4" /> : <Maximize2 className="size-4" />}
-            </TooltipTrigger>
-            <TooltipContent>{fills ? 'Back to its place' : 'Fill the page'}</TooltipContent>
-          </Tooltip>
-          <Tooltip>
-            <TooltipTrigger render={<Button variant="ghost" size="icon-sm" className="shrink-0 text-muted-foreground" aria-label={`Close ${pane.label}`} onClick={() => setPaneOpen(page, pane.id, false)} />}>
-              <X className="h-4 w-4" />
-            </TooltipTrigger>
-            <TooltipContent>Close</TooltipContent>
-          </Tooltip>
+          {!over && (
+            <>
+              <Tooltip>
+                <TooltipTrigger
+                  render={
+                    <Button
+                      variant="ghost"
+                      size="icon-sm"
+                      className="shrink-0 text-muted-foreground"
+                      aria-label={fills ? `Bring ${pane.label} back to its place` : `Let ${pane.label} fill the page`}
+                      aria-pressed={fills}
+                      onClick={() => setExpandedPane(page, fills ? undefined : pane.id)}
+                    />
+                  }
+                >
+                  {fills ? <Minimize2 className="size-4" /> : <Maximize2 className="size-4" />}
+                </TooltipTrigger>
+                <TooltipContent>{fills ? 'Back to its place' : 'Fill the page'}</TooltipContent>
+              </Tooltip>
+              <Tooltip>
+                <TooltipTrigger render={<Button variant="ghost" size="icon-sm" className="shrink-0 text-muted-foreground" aria-label={`Close ${pane.label}`} onClick={() => setPaneOpen(page, pane.id, false)} />}>
+                  <X className="h-4 w-4" />
+                </TooltipTrigger>
+                <TooltipContent>Close</TooltipContent>
+              </Tooltip>
+            </>
+          )}
         </header>
         {/* The pane fills what is left of its height, and scrolls inside itself. */}
         <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
@@ -407,16 +396,23 @@ function PaneStack() {
   )
 }
 
+/** The least widths of the chat and of the column of panes, in px: a room narrower than both and the line between lays the pane over the chat. */
+const CHAT_LEAST = 320
+const COLUMN_LEAST = 288
+
 /**
  * A page and its panes: the page's top bar over both, the page (the chat) at the start, and at its
- * end the column of open panes, the line between them dragged to share the width. On a phone the
- * top bar is the page's own and the column lies over the page. A page with no panes is drawn as it is.
+ * end the column of open panes, the line between them dragged to share the width. Where the room
+ * holds less than both at their least (a phone; a window at 768 with the sidebar open), the open
+ * pane lies over the page under its top bar instead. A page with no panes is drawn as it is.
  */
 export function PaneLayout({ children }: { children: ReactNode }) {
   const { page, enabled, open, expanded } = useContext(PanesContext)
   const isMobile = useIsMobile()
   const [row, setRow] = useState<HTMLElement | null>(null)
-  const beside = open.length > 0 && !isMobile
+  const [room, setRoom] = useState<HTMLElement | null>(null)
+  const over = useNarrow(room, CHAT_LEAST + COLUMN_LEAST + 8) || isMobile
+  const beside = open.length > 0 && !over
   if (!enabled) return children
   // The column has the share it was last given on this page; on a page that was never sized, the
   // share last given on any. The group remembers a layout by its panels' names, so the column is
@@ -433,29 +429,31 @@ export function PaneLayout({ children }: { children: ReactNode }) {
     <div className="chat-scope relative flex min-w-0 flex-1 flex-col">
       {!isMobile && <div ref={setRow} className="shrink-0" />}
       <TopBarRow.Provider value={row}>
-        {/* No line is dragged under a pane that fills the page. */}
-        <ResizablePanelGroup orientation="horizontal" disabled={expanded !== undefined} onLayoutChanged={remember} className="min-h-0 flex-1">
-          <ResizablePanel id={CHAT} minSize={320} className="flex min-w-0 flex-col" style={{ overflow: 'hidden' }}>
-            {children}
-          </ResizablePanel>
-          {beside && <ResizableHandle className="bg-transparent" aria-label="The width of the chat and the panes" />}
-          {beside && (
-            <ResizablePanel id={columnId} defaultSize={`${column}%`} minSize={288} style={{ overflow: 'hidden' }}>
-              <PaneStack />
+        <div ref={setRoom} className="relative flex min-h-0 flex-1">
+          {/* No line is dragged under a pane that fills the page. */}
+          <ResizablePanelGroup orientation="horizontal" disabled={expanded !== undefined} onLayoutChanged={remember} className="min-h-0 flex-1">
+            <ResizablePanel id={CHAT} minSize={CHAT_LEAST} className="flex min-w-0 flex-col" style={{ overflow: 'hidden' }}>
+              {children}
             </ResizablePanel>
-          )}
-        </ResizablePanelGroup>
-      </TopBarRow.Provider>
-      {isMobile && open.length > 0 && (
-        // Over the chat's right two thirds, as Claude Code's are; all of the page while one pane fills it.
-        <div className={cn('absolute inset-y-0 right-0 z-20 flex flex-col gap-2 border-l border-hairline bg-background p-2', expanded ? 'left-0' : 'w-2/3 min-w-64 max-w-full')}>
-          {open.map(pane => (
-            <div key={pane.id} className="min-h-0 flex-1">
-              <PaneCard pane={pane} />
+            {beside && <ResizableHandle className="bg-transparent" aria-label="The width of the chat and the panes" />}
+            {beside && (
+              <ResizablePanel id={columnId} defaultSize={`${column}%`} minSize={COLUMN_LEAST} style={{ overflow: 'hidden' }}>
+                <PaneStack />
+              </ResizablePanel>
+            )}
+          </ResizablePanelGroup>
+          {over && open.length > 0 && (
+            // The whole room under the top bar, which on a phone is the page's own, 44 high.
+            <div className="absolute inset-x-0 top-0 bottom-0 z-20 flex flex-col bg-background max-md:top-11">
+              {open.map(pane => (
+                <div key={pane.id} className="min-h-0 flex-1">
+                  <PaneCard pane={pane} over />
+                </div>
+              ))}
             </div>
-          ))}
+          )}
         </div>
-      )}
+      </TopBarRow.Provider>
     </div>
   )
 }

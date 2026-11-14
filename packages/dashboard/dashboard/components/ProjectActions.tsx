@@ -1,6 +1,6 @@
 import type { OpenAgentEvent } from '../../src/index.js'
 import { AgentActionsMenu } from './AgentActionsMenu.js'
-import { PaneMenu, PaneToggles, TopBar } from './Panes.js'
+import { PaneToggles, TopBar } from './Panes.js'
 import { ShowSidebarButton } from './SidebarToggle.js'
 import { SESSIONS_ID } from '../../src/project-address.js'
 
@@ -29,7 +29,6 @@ export function ProjectActions({
     <TopBar>
       <div className="flex h-11 shrink-0 items-center gap-2 overflow-hidden pr-2 md:pl-4 max-md:pl-11">
         <ShowSidebarButton />
-        <PaneMenu />
         {/* The page's name, as the sidebar's row says it, where a session's page has its name. */}
         <h1 className="min-w-0 truncate px-2 text-sm font-medium">New agent session</h1>
         <div className="grow shrink-0" />
