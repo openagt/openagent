@@ -13,22 +13,22 @@ export function Subpage({ title, lead, children }: { title: string; lead: string
     <div style={{ display: 'flex', flexDirection: 'column', minHeight: '100dvh' }}>
       <TopNav />
       <div style={{ flexGrow: 1 }}>
+        {/* On the home's column, its left edge with the home's sections and the footer; read in lines of the measure. */}
         <main
           id="main"
           style={{
-            maxWidth: 720,
+            maxWidth: 'var(--container)',
             margin: '0 auto',
             padding: 'var(--space-part) var(--space-gutter)',
-            display: 'flex',
-            flexDirection: 'column',
-            gap: 'var(--space-part)',
           }}
         >
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-            <h1 style={h2Style}>{title}</h1>
-            <p style={pStyle}>{lead}</p>
+          <div style={{ maxWidth: 'var(--measure)', display: 'flex', flexDirection: 'column', gap: 'var(--space-part)' }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+              <h1 style={h2Style}>{title}</h1>
+              <p style={pStyle}>{lead}</p>
+            </div>
+            {children}
           </div>
-          {children}
         </main>
       </div>
       {/* A block, not a flex item: as one, the footer's auto margins shrink it to its words. */}
