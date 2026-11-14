@@ -1,11 +1,8 @@
 import type { ReactNode } from 'react'
 import type { EmojiChar } from './ui'
-import { cardStyle, CodeChip, Emoji, mono, SectionHead, sectionStyle, text } from './ui'
+import { CodeChip, Emoji, mono, proseStyle, SectionHead, sectionStyle, text } from './ui'
 
-const ROW_STYLES = {
-  bad: { bg: 'var(--background)', border: 'var(--border)', labelColor: 'var(--muted-foreground)' },
-  good: { bg: 'var(--card)', border: 'var(--border)', labelColor: 'var(--success)' },
-} as const
+const LABEL_COLORS = { bad: 'var(--muted-foreground)', good: 'var(--success)' } as const
 
 // Inline arrows in the mono font and accent green: the sans-serif glyphs are
 // thin and vanish in the muted body text.
@@ -13,7 +10,7 @@ function Arrow({ glyph }: { glyph: '→' | '↔' }) {
   return <span style={{ fontFamily: mono, fontWeight: 500 }}>{glyph}</span>
 }
 
-type Row = { kind: keyof typeof ROW_STYLES; emoji: EmojiChar; label: string; body: ReactNode }
+type Row = { kind: keyof typeof LABEL_COLORS; emoji: EmojiChar; label: string; body: ReactNode }
 const bad = (body: ReactNode): Row => ({ kind: 'bad', emoji: '😕', label: 'Bad fix', body })
 const good = (body: ReactNode): Row => ({ kind: 'good', emoji: '🚀', label: 'Solution', body })
 
@@ -91,62 +88,40 @@ export function StopBabysitting() {
   return (
     <section id="stop-babysitting" style={sectionStyle}>
       <SectionHead title="Stop babysitting" />
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-        {PROBLEMS.map((p) => (
+      <div>
+        {PROBLEMS.map((p, i) => (
           <div
             key={p.title}
-            className="problem-card"
+            className="problem-row"
             style={{
-              ...cardStyle,
-              padding: 24,
               display: 'grid',
               gridTemplateColumns: '280px 1fr',
               gap: 32,
+              padding: 'var(--space-items) 0',
+              borderTop: i === 0 ? undefined : '1px solid var(--border)',
             }}
           >
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-              <span
-                style={{
-                  fontFamily: mono,
-                  ...text('xs'),
-                  letterSpacing: '0.08em',
-                  textTransform: 'uppercase',
-                  color: 'var(--danger)',
-                }}
-              >
-                Problem
-              </span>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+              <span style={{ ...text('sm'), fontWeight: 500, color: 'var(--danger)' }}>Problem</span>
               <h3 style={{ margin: 0, ...text('lg'), fontWeight: 600 }}>{p.title}</h3>
-              {p.desc && <p style={{ margin: 0, ...text('sm'), color: 'var(--muted-foreground)' }}>{p.desc}</p>}
+              {p.desc && <p style={{ margin: '4px 0 0', ...text('sm'), color: 'var(--muted-foreground)' }}>{p.desc}</p>}
             </div>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-              {p.rows.map((r, i) => {
-                const s = ROW_STYLES[r.kind]
-                return (
-                  <div
-                    key={i}
-                    className="solution-row"
-                    style={{
-                      display: 'grid',
-                      gridTemplateColumns: '118px 1fr',
-                      gap: 12,
-                      alignItems: 'baseline',
-                      padding: '12px 16px',
-                      borderRadius: 'var(--radius-lg)',
-                      background: s.bg,
-                      border: `1px solid ${s.border}`,
-                    }}
-                  >
-                    <span style={{ fontFamily: mono, ...text('xs'), color: s.labelColor, whiteSpace: 'nowrap' }}>
-                      <span style={{ fontSize: 16, verticalAlign: -2, marginRight: 4 }}>
-                        <Emoji e={r.emoji} />
-                      </span>
-                      {r.label}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+              {p.rows.map((r, i) => (
+                <div
+                  key={i}
+                  className="solution-row"
+                  style={{ display: 'grid', gridTemplateColumns: '120px 1fr', gap: 16, alignItems: 'baseline' }}
+                >
+                  <span style={{ ...text('sm'), color: LABEL_COLORS[r.kind], whiteSpace: 'nowrap' }}>
+                    <span style={{ marginRight: 6 }}>
+                      <Emoji e={r.emoji} />
                     </span>
-                    <p style={{ margin: 0, ...text('sm'), color: 'var(--foreground)' }}>{r.body}</p>
-                  </div>
-                )
-              })}
+                    {r.label}
+                  </span>
+                  <p style={{ ...proseStyle, color: 'var(--foreground)' }}>{r.body}</p>
+                </div>
+              ))}
             </div>
           </div>
         ))}

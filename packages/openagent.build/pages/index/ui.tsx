@@ -48,11 +48,15 @@ export const h3Style: CSSProperties = {
   fontWeight: 600,
 }
 
-export const cardStyle: CSSProperties = {
-  background: 'var(--raised)',
-  border: '1px solid var(--border)',
-  borderRadius: 'var(--radius-lg)',
-}
+/** Side by side where there is room, each at least `min` wide: a section's columns. */
+export const columnsStyle = (min: number): CSSProperties => ({
+  display: 'grid',
+  gridTemplateColumns: `repeat(auto-fit, minmax(min(${min}px, 100%), 1fr))`,
+  gap: 'var(--space-items)',
+})
+
+/** A column's title, then its sentences: a section's part, on the page itself. */
+export const columnStyle: CSSProperties = { display: 'flex', flexDirection: 'column', gap: 8 }
 
 // Small mono uppercase label (e.g. "Try", "What is it?", "Problem").
 export const kickerStyle: CSSProperties = {
@@ -64,8 +68,7 @@ export const kickerStyle: CSSProperties = {
 }
 
 // Centered chapter break: the one centered element on a left-anchored page, so
-// the eye finds section boundaries instantly. The accent bar is straight — at
-// this size a tilt reads as misalignment, not as a hero-strike echo.
+// the eye finds section boundaries instantly.
 export function SectionHead({ title, sub }: { title: ReactNode; sub?: string }) {
   return (
     <div
@@ -74,37 +77,30 @@ export function SectionHead({ title, sub }: { title: ReactNode; sub?: string }) 
         flexDirection: 'column',
         alignItems: 'center',
         textAlign: 'center',
-        gap: 12,
+        gap: 8,
         maxWidth: 'var(--measure)',
         margin: '0 auto',
       }}
     >
       <h2 style={h2Style}>{title}</h2>
-      <span aria-hidden style={{ width: 68, height: 4, borderRadius: 2, background: 'var(--success)' }} />
       {sub && <p style={{ margin: 0, ...text('base'), color: 'var(--muted-foreground)' }}>{sub}</p>}
     </div>
   )
 }
 
 // The note look, shared with note-shaped blocks that can't be a <p> (e.g. the
-// prompts band, whose chip row needs a block container): this box, around NoteText.
+// prompts band, whose chip row needs a block container): one quiet rule at its left, around NoteText.
 export const noteContainerStyle: CSSProperties = {
   margin: 0,
   ...text('sm'),
   color: 'var(--muted-foreground)',
-  background: 'color-mix(in oklab, var(--warning) 7%, transparent)',
-  borderLeft: '3px solid var(--warning)',
-  borderRadius: '0 var(--radius-lg) var(--radius-lg) 0',
-  padding: '12px 16px',
+  borderLeft: '2px solid var(--border)',
+  padding: '0 0 0 16px',
 }
 
 const noteLabelStyle: CSSProperties = {
-  fontFamily: mono,
-  ...text('xs'),
   fontWeight: 600,
-  letterSpacing: '0.08em',
-  textTransform: 'uppercase',
-  color: 'var(--warning)',
+  color: 'var(--foreground)',
   marginRight: 8,
 }
 

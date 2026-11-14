@@ -299,7 +299,7 @@ html:not([data-pm]) .pm-tab-npm {
   .section-nav-wrap {
     display: none !important;
   }
-  .problem-card {
+  .problem-row {
     grid-template-columns: 1fr !important;
     gap: 16px !important;
   }

@@ -1,5 +1,5 @@
 import type { CSSProperties } from 'react'
-import { cardStyle, noteContainerStyle, NoteText, text } from './ui'
+import { noteContainerStyle, NoteText, text } from './ui'
 
 const PACKS = ['Security audit', 'Code quality', 'Research', 'Product Management']
 
@@ -24,11 +24,11 @@ export function Prompts() {
         </p>
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
           {PACKS.map((title) => (
-            <span key={title} style={{ ...cardStyle, ...chipStyle }}>
+            <span key={title} style={{ ...chipStyle, background: 'var(--muted)' }}>
               {title}
             </span>
           ))}
-          <span style={{ ...chipStyle, background: 'transparent', border: '1px dashed var(--border)', color: 'var(--success)' }}>
+          <span style={{ ...chipStyle, color: 'var(--muted-foreground)' }}>
             ＋ Add yours
           </span>
         </div>

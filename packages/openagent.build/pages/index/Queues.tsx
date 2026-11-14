@@ -1,18 +1,16 @@
 import type { CSSProperties, ReactNode } from 'react'
 import type { EmojiChar } from './ui'
-import { cardStyle, CodeChip, Emoji, h3Style, text } from './ui'
+import { CodeChip, columnsStyle, columnStyle, Emoji, h3Style, text } from './ui'
 
 const leadStyle = { color: 'var(--foreground)', fontWeight: 500 } as const
 
 function P({ children }: { children: ReactNode }) {
-  return <p style={{ margin: 0, ...text('sm'), color: 'var(--muted-foreground)' }}>{children}</p>
+  return <p style={{ margin: 0, ...text('base'), maxWidth: 'var(--measure)', color: 'var(--muted-foreground)' }}>{children}</p>
 }
 
 function QueueCard({ title, icon, iconStyle, children }: { title: string; icon: EmojiChar; iconStyle: CSSProperties; children: ReactNode }) {
   return (
-    <div
-      style={{ ...cardStyle, padding: 24, display: 'flex', flexDirection: 'column', gap: 8 }}
-    >
+    <div style={columnStyle}>
       <h4 style={{ margin: 0, ...text('base'), fontWeight: 600 }}>
         {title}{' '}
         <span aria-hidden style={{ marginLeft: 4, ...iconStyle }}>
@@ -28,13 +26,7 @@ export function Queues() {
   return (
     <section id="queues" style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
       <h3 style={h3Style}>Queues</h3>
-      <div
-        style={{
-          display: 'grid',
-          gridTemplateColumns: 'repeat(auto-fit, minmax(min(280px, 100%), 1fr))',
-          gap: 16,
-        }}
-      >
+      <div style={columnsStyle(280)}>
         <QueueCard title="AI Queue" icon="🤖" iconStyle={{ verticalAlign: 1 }}>
           <P>
             Queue of upcoming AI tasks — tasks are added by humans, or by{' '}

@@ -1,17 +1,9 @@
 import type { ReactNode } from 'react'
-import { cardStyle, CodeChip, Emoji, SectionHead, sectionStyle, text, WipBadge } from './ui'
+import { CodeChip, columnsStyle, columnStyle, Emoji, SectionHead, sectionStyle, text, WipBadge } from './ui'
 
 function Card({ title, children }: { title: string; children: ReactNode }) {
   return (
-    <div
-      style={{
-        ...cardStyle,
-        padding: 24,
-        display: 'flex',
-        flexDirection: 'column',
-        gap: 12,
-      }}
-    >
+    <div style={columnStyle}>
       <h3 style={{ margin: 0, ...text('lg'), fontWeight: 600 }}>{title}</h3>
       <ul
         style={{
@@ -21,7 +13,7 @@ function Card({ title, children }: { title: string; children: ReactNode }) {
           display: 'flex',
           flexDirection: 'column',
           gap: 8,
-          ...text('sm'),
+          ...text('base'),
           color: 'var(--muted-foreground)',
         }}
       >
@@ -52,13 +44,7 @@ export function YourFramework() {
         }
         sub="It isn't our framework. It's yours."
       />
-      <div
-        style={{
-          display: 'grid',
-          gridTemplateColumns: 'repeat(auto-fit, minmax(min(260px, 100%), 1fr))',
-          gap: 16,
-        }}
-      >
+      <div style={columnsStyle(260)}>
         <Card title="Flexible">
           <Item>OpenAgent doesn't force anything — pick only the features you need</Item>
           <Item marker={<Emoji e="🚧" />}>

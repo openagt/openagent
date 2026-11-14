@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react'
-import { cardStyle, CodeChip, Note, SectionHead, sectionStyle, text } from './ui'
+import { CodeChip, columnsStyle, columnStyle, Note, SectionHead, sectionStyle, text } from './ui'
 
 function Item({ children }: { children: ReactNode }) {
   return (
@@ -12,15 +12,7 @@ function Item({ children }: { children: ReactNode }) {
 
 function Card({ title, lead, children }: { title: string; lead: string; children: ReactNode }) {
   return (
-    <div
-      style={{
-        ...cardStyle,
-        padding: 24,
-        display: 'flex',
-        flexDirection: 'column',
-        gap: 16,
-      }}
-    >
+    <div style={columnStyle}>
       <h3 style={{ margin: 0, ...text('lg'), fontWeight: 600 }}>{title}</h3>
       <p style={{ margin: 0, ...text('sm'), color: 'var(--muted-foreground)' }}>{lead}</p>
       <ul
@@ -31,6 +23,7 @@ function Card({ title, lead, children }: { title: string; lead: string; children
           display: 'flex',
           flexDirection: 'column',
           gap: 8,
+          marginTop: 8,
           ...text('base'),
         }}
       >
@@ -46,13 +39,7 @@ export function AutonomousAi() {
   return (
     <section id="autonomous-ai" style={sectionStyle}>
       <SectionHead title="Autonomous AI" sub="Focus on what matters, let AI do the rest." />
-      <div
-        style={{
-          display: 'grid',
-          gridTemplateColumns: 'repeat(auto-fit, minmax(min(300px, 100%), 1fr))',
-          gap: 16,
-        }}
-      >
+      <div style={columnsStyle(300)}>
         <Card title="Autonomous Product Management" lead="Let AI autonomously:">
           <Item>Test &amp; review</Item>
           <Item>Research, plan, and prioritize your tickets</Item>
@@ -71,7 +58,7 @@ export function AutonomousAi() {
           <Item>Consensual work</Item>
         </Card>
       </div>
-      <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap' }}>
+      <div style={{ display: 'flex', gap: 'var(--space-items)', flexWrap: 'wrap' }}>
         <Note style={noteFlexStyle}>Agents still ask for your confirmation for non-obvious decisions.</Note>
         <Note style={noteFlexStyle}>You're still in control — only pick the autonomicity that works for you.</Note>
       </div>

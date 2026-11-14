@@ -1,19 +1,12 @@
 import type { ReactNode } from 'react'
-import { cardStyle, SectionHead, sectionStyle, text } from './ui'
+import { columnsStyle, columnStyle, SectionHead, sectionStyle, text } from './ui'
 
-const featureCardStyle = {
-  ...cardStyle,
-  padding: 24,
-  display: 'flex',
-  flexDirection: 'column',
-} as const
-
-/** One feature's card: its name, then what it does. */
+/** One feature: its name, then what it does. */
 function Feature({ title, children }: { title: string; children: ReactNode }) {
   return (
-    <div style={{ ...featureCardStyle, gap: 8 }}>
+    <div style={columnStyle}>
       <h3 style={{ margin: 0, ...text('base'), fontWeight: 600 }}>{title}</h3>
-      <p style={{ margin: 0, ...text('sm'), color: 'var(--muted-foreground)' }}>{children}</p>
+      <p style={{ margin: 0, ...text('base'), color: 'var(--muted-foreground)' }}>{children}</p>
     </div>
   )
 }
@@ -22,13 +15,7 @@ export function Features() {
   return (
     <section id="features" style={sectionStyle}>
       <SectionHead title="Features" />
-      <div
-        style={{
-          display: 'grid',
-          gridTemplateColumns: 'repeat(auto-fit, minmax(min(300px, 100%), 1fr))',
-          gap: 16,
-        }}
-      >
+      <div style={columnsStyle(300)}>
         <Feature title="Bring your own subscription">
           Use your AI subscription — OpenAgent orchestrates agents via your Claude Code / Codex
           installation, like humans do.
