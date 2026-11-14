@@ -75,10 +75,6 @@
   "dashboard/dashboard/components/ContextFiles.tsx": {
     "rounded": 1
   },
-  "dashboard/dashboard/components/CustomizeOverview.tsx": {
-    "py-2.5": 1,
-    "rounded": 4
-  },
   "dashboard/dashboard/components/DiffStat.tsx": {
     "text-[10px]": 1
   },

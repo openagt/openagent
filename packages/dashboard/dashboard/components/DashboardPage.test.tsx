@@ -179,12 +179,12 @@ describe('the Overview', () => {
     expect(order.slice(0, 5)).toEqual(['working-now', 'your-agents', 'usage', 'needs-you', 'human-queue'])
   })
 
-  test('with every card off the page, the page says so, and Customize gives a room to drop the first one into', async () => {
+  test('with every card off the page, the page says so beside the press that brings them back, which gives a room to drop the first one into', async () => {
     working = []
     prefs.value = { onboardingDismissed: true, overviewLayouts: { '*': ['needs-you', 'working-now', 'your-agents', 'usage', 'human-queue', 'working', 'skills', '@x/tickets/hot'].map(id => ({ id, hidden: true })) } }
     show()
-    expect(await screen.findByText(/Every card is off the Overview/)).toBeTruthy()
-    fireEvent.click(screen.getByRole('button', { name: 'Customize' }))
+    const said = await screen.findByText(/Every card is off the Overview/)
+    fireEvent.click(within(said.parentElement!).getByRole('button', { name: 'Customize' }))
     const transfer = { dataTransfer: { effectAllowed: '', setData: () => {} } }
     fireEvent.dragStart(within(screen.getByRole('region', { name: 'Cards not on the page' })).getByRole('listitem', { name: 'Usage' }), transfer)
     const room = document.querySelector('[data-empty]')!

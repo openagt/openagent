@@ -197,24 +197,32 @@ export function DashboardPage({
           </Button>
         )
       }
-      bar={
-        editing && (
-          <p role="status" className="rounded-md bg-accent/60 px-3 py-2 text-xs text-muted-foreground">
-            <span className="font-medium text-foreground">{scopeName !== undefined ? `Arranging the layout for ${scopeName}.` : 'Arranging the layout for all projects.'}</span>{' '}
-            {scopeName !== undefined ? 'Each project keeps its own; a project you never arranged uses the all-projects one.' : 'A project you never arranged on its own uses it too.'} Drag a card by its handle, pick its width, or take it off with <TakeOffMark />. On a phone every card is full width.
-          </p>
-        )
-      }
     >
-      <div className="space-y-4">
-        {!onboardingDismissed && !editing && (
-          <OnboardingChecklist projects={projects} onAgentStarted={onAgentStarted} onSelectProject={onSelectProject} onProjectAdded={onProjectAdded} />
-        )}
-        {!editing && <AgentUpdates />}
-        {!layoutRead ? null : editing ? <EditOverview arranged={arranged} layouts={layouts} layoutKey={layoutKey} /> : arranged.some(({ hidden }) => !hidden) ? (
+      {/* Arranging moves nothing: the first steps and the updates stay, each part keeps its place, and what arranging adds comes after the parts. */}
+      <div className="space-y-10">
+        {!onboardingDismissed && <OnboardingChecklist projects={projects} onAgentStarted={onAgentStarted} onSelectProject={onSelectProject} onProjectAdded={onProjectAdded} />}
+        <AgentUpdates />
+        {!layoutRead ? null : editing ? (
+          <EditOverview
+            arranged={arranged}
+            layouts={layouts}
+            layoutKey={layoutKey}
+            notice={
+              <>
+                <span className="font-medium text-foreground">{scopeName !== undefined ? `Arranging the layout for ${scopeName}.` : 'Arranging the layout for all projects.'}</span>{' '}
+                {scopeName !== undefined ? 'Each project keeps its own; a project you never arranged uses the all-projects one.' : 'A project you never arranged on its own uses it too.'} Drag a card by its handle, pick its width, or take it off with <TakeOffMark />. On a phone every card is full width.
+              </>
+            }
+          />
+        ) : arranged.some(({ hidden }) => !hidden) ? (
           <CardGrid cards={arranged.filter(({ hidden }) => !hidden)} />
         ) : (
-          <p className="rounded-lg border border-dashed border-border px-4 py-10 text-center text-sm text-muted-foreground">Every card is off the Overview. Press Customize to put some back.</p>
+          <div className="flex flex-wrap items-center gap-3">
+            <p className="text-sm text-muted-foreground">Every card is off the Overview. Press Customize to put some back.</p>
+            <Button variant="secondary" onClick={() => setEditing(true)}>
+              Customize
+            </Button>
+          </div>
         )}
       </div>
     </Page>
