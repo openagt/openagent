@@ -5,6 +5,7 @@ import { useRender } from '@base-ui/react/use-render'
 import { cn } from '../../lib/utils.js'
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from './sheet.js'
 import { useIsMobile } from '../../lib/use-mobile.js'
+import { pressed } from '../../lib/shortcut.js'
 
 // shadcn's "base" (Base UI, not Radix) Sidebar, ported to this repo (#314 rail, shared shell), and
 // kept to the parts the shell draws: a column of the page from md up, a sheet on a phone. The mobile
@@ -13,7 +14,6 @@ import { useIsMobile } from '../../lib/use-mobile.js'
 
 const SIDEBAR_WIDTH = '16rem'
 const SIDEBAR_WIDTH_MOBILE = '18rem'
-const SIDEBAR_KEYBOARD_SHORTCUT = 'b'
 
 type SidebarContextProps = {
   state: 'expanded' | 'collapsed'
@@ -78,7 +78,7 @@ function SidebarProvider({
   // Cmd/Ctrl+B toggles the sidebar.
   React.useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.key === SIDEBAR_KEYBOARD_SHORTCUT && (event.metaKey || event.ctrlKey)) {
+      if (pressed(event, 'sidebar')) {
         event.preventDefault()
         toggleSidebar()
       }

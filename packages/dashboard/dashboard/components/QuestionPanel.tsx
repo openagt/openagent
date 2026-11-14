@@ -9,7 +9,7 @@ import { cn } from '../lib/utils.js'
 import { RadioGroup } from './ui/radio-group.js'
 import { Button } from './ui/button.js'
 import { answerPrompt, skipPrompt } from '../lib/answered-question.js'
-import { MOD_KEY } from '../lib/shortcut.js'
+import { MOD_KEY, pressed, typedInto } from '../lib/shortcut.js'
 import { isMobileScreen } from '../lib/use-mobile.js'
 
 /** The pick that is no option: the person's own words, typed in the "Other" row. */
@@ -165,15 +165,13 @@ export function QuestionPanel({
     if (!active || sent) return
     const onKey = (e: KeyboardEvent) => {
       // Keys typed into a text field are that field's, except this card's own "Other" row.
-      const target = e.target as HTMLElement | null
-      const typing = target !== null && (target.isContentEditable || target.tagName === 'INPUT' || target.tagName === 'TEXTAREA')
-      if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
-        if (typing && target !== otherInput.current) return
+      if (pressed(e, 'answer')) {
+        if (typedInto(e.target) && e.target !== otherInput.current) return
         e.preventDefault()
         keys.current.submit()
         return
       }
-      if (typing || e.ctrlKey || e.metaKey || e.altKey || !/^[1-9]$/.test(e.key)) return
+      if (!pressed(e, 'pick')) return
       const n = Number(e.key)
       const option = choice.options[n - 1]
       if (option) keys.current.pick(option.id)
@@ -230,7 +228,7 @@ export function QuestionPanel({
                 disabled={busy}
                 onChange={e => setOther(e.target.value)}
                 onKeyDown={e => {
-                  if (e.key === 'Enter' && !e.ctrlKey && !e.metaKey) submit()
+                  if (e.key === 'Enter' && !pressed(e, 'answer')) submit()
                 }}
                 name="own-answer"
                 placeholder="Type your own answer here"

@@ -16,7 +16,7 @@ import { SkillsOff } from './SkillsMenu.js'
 import { isPublishPick, offeredPublishPicks, type PublishPick } from '../../src/client.js'
 import { useProjectLauncher } from '../lib/use-project-launcher.js'
 import { promptWithContext, type ContextSet } from '../lib/use-context-set.js'
-import { shortcut } from '../lib/shortcut.js'
+import { pressed, shortcut } from '../lib/shortcut.js'
 import { useIsMobile } from '../lib/use-mobile.js'
 
 /** A message sent to a working agent that it has not read yet: shown waiting until it lands. */
@@ -211,7 +211,7 @@ export function AgentComposer({
   useEffect(() => {
     if (!live) return
     const onKey = (event: KeyboardEvent) => {
-      if (event.key !== 'Escape' || stopping || down || document.querySelector('[role="dialog"], [role="menu"], [role="listbox"], .ProseMirror[aria-expanded="true"]')) return
+      if (!pressed(event, 'stop') || stopping || down || document.querySelector('[role="dialog"], [role="menu"], [role="listbox"], .ProseMirror[aria-expanded="true"]')) return
       stopSession()
     }
     window.addEventListener('keydown', onKey, true)

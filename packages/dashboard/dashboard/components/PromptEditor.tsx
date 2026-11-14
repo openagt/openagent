@@ -11,6 +11,7 @@ import type { SuggestionItem } from './prompt-editor/SuggestionList.js'
 // The same entry the Commands button renders: the `/` menu is the other face of that one list,
 // so it reads the shape rather than restating it structurally.
 import type { CommandEntry } from './CommandsMenu.js'
+import { pressed } from '../lib/shortcut.js'
 
 // The rich prompt editor (#470): a Tiptap surface that replaces the plain textarea. `/` opens
 // the project's commands and the saved prompts, `@` the registered projects, `#` the project's
@@ -281,7 +282,7 @@ export const PromptEditor = forwardRef<PromptEditorHandle, PromptEditorProps>(fu
         'aria-placeholder': placeholder,
       },
       handleKeyDown: (view, event) => {
-        if ((event.metaKey || event.ctrlKey) && event.key === 'Enter') {
+        if (pressed(event, 'sendLater')) {
           event.preventDefault()
           onSubmitRef.current(true)
           return true
@@ -290,7 +291,7 @@ export const PromptEditor = forwardRef<PromptEditorHandle, PromptEditorProps>(fu
         // direct prop outranks the plugins' handlers, so it must step aside where Enter already
         // means something: picking from an open suggestion menu (aria-expanded mirrors its
         // visibility), typing a newline in a code block, or confirming an IME composition.
-        if (event.key === 'Enter' && !event.shiftKey && !event.altKey && !event.isComposing) {
+        if (pressed(event, 'send')) {
           if (view.dom.getAttribute('aria-expanded') === 'true') return false
           if (view.state.selection.$from.parent.type.name === 'codeBlock') return false
           event.preventDefault()

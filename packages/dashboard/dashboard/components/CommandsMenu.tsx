@@ -5,6 +5,7 @@ import { cn } from '../lib/utils.js'
 import { buttonVariants } from './ui/button.js'
 import { OptionLabel } from './ui/option-label.js'
 import { Tooltip, TooltipTrigger, TooltipContent } from './ui/tooltip.js'
+import { pressed } from '../lib/shortcut.js'
 import {
   DropdownMenu,
   DropdownMenuTrigger,
@@ -39,7 +40,7 @@ function SavedPresetRow({
       disabled={busy}
       onClick={() => onLoad(preset.prompt, preset.label)}
       onKeyDown={e => {
-        if (e.key !== 'Delete' && e.key !== 'Backspace') return
+        if (!pressed(e, 'deletePrompt')) return
         e.preventDefault()
         onDelete(preset.id)
       }}
