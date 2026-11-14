@@ -307,31 +307,35 @@ export function TicketsPage({ projects }: { projects: ModuleProject[] }) {
   )
 }
 /**
- * The selection's readout and its presses (the list idiom of issue trackers), floating at the
- * bottom of the list's column: it takes no room, so ticking a row moves nothing on the page.
+ * The selection's readout and its presses (the list idiom of issue trackers): the readout and the
+ * selection's own presses, then the adds, the primary last. On a wide screen it floats at the
+ * bottom of the list's column and takes no room; on a phone it is the list's last part, kept in
+ * view at the window's foot, its adds a press each across its width. Either way ticking a row
+ * moves nothing on the page.
  */
 function SelectionBar({ leaving, count, onSelectAll, onClear, children }: { leaving: boolean; count: number; /** Ticks every shown ticket; none when all are ticked. */ onSelectAll: (() => void) | undefined; onClear: () => void; children: ReactNode }) {
   return (
-    <div className="pointer-events-none sticky bottom-16 z-10 h-0">
+    <div className="pointer-events-none sticky z-10 md:bottom-16 md:h-0 max-md:bottom-4 max-md:pt-4">
       <div
         role="region"
         aria-label="Selected tickets"
         className={cn(
-          'pointer-events-auto absolute inset-x-0 top-2 mx-auto flex w-fit max-w-full flex-wrap items-center gap-2 menu-surface rounded-lg p-1 pl-3 text-sm shadow-lg ring-1 ring-foreground/10',
+          'pointer-events-auto flex flex-wrap items-center gap-2 menu-surface rounded-lg p-1 pl-3 text-sm shadow-lg ring-1 ring-foreground/10 backdrop-blur-xl',
+          'md:absolute md:inset-x-0 md:top-2 md:mx-auto md:w-fit md:max-w-full max-md:p-2 max-md:pl-4',
           'transition-[opacity,translate] ease-out starting:translate-y-2 starting:opacity-0',
           leaving ? 'pointer-events-none translate-y-2 opacity-0 duration-120' : 'duration-180',
         )}
       >
         <span className="tabular-nums">{count} selected</span>
         {onSelectAll && (
-          <Button variant="ghost" onClick={onSelectAll}>
+          <Button variant="ghost" onClick={onSelectAll} className="max-md:h-11">
             Select all
           </Button>
         )}
-        {children}
-        <Button variant="ghost" onClick={onClear}>
+        <Button variant="ghost" onClick={onClear} className="max-md:ml-auto max-md:h-11">
           Clear selection
         </Button>
+        <div className="contents max-md:flex max-md:basis-full max-md:flex-col max-md:gap-2 max-md:*:h-11 max-md:*:w-full">{children}</div>
       </div>
     </div>
   )
