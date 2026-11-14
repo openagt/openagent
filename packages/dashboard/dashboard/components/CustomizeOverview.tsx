@@ -140,26 +140,31 @@ export function EditOverview({ arranged, under, layouts, layoutKey, notice }: { 
   const aim = (to: Aim): void => {
     if (aimed === undefined || !sameAim(aimed, to)) setAimed(to)
   }
-  /** The layout changed: by a press or a key, the cards stand in their new places at once. */
-  const write = (next: Placed[]): void =>
+  /** The layout changed: by a press or a key, the cards stand in their new places at once. None (the card moved is gone): nothing is written. */
+  const write = (next: Placed[] | undefined): void => {
+    if (next === undefined) return
     updatePreferences({
       overviewLayouts: {
         ...layouts,
         [layoutKey]: next.map(({ card, width, hidden }) => ({ id: card.id, ...(hidden ? { hidden: true as const } : {}), ...(width !== card.width ? { width } : {}) })),
       },
     })
+  }
   /**
    * The layout changed by a drag: the cards slide to where they now stand, the browser's own view
    * transition, each card named for itself; under reduced motion, or where the browser has none, they just stand there.
    */
-  const slide = (next: Placed[]): void => {
+  const slide = (next: Placed[] | undefined): void => {
+    if (next === undefined) return
     const apply = (): void => flushSync(() => write(next))
     if (typeof document.startViewTransition === 'function' && !matchMedia('(prefers-reduced-motion: reduce)').matches) document.startViewTransition(apply)
     else apply()
   }
-  /** The layout with the card `id` put where `before` stands (the end, when none), shown or not. */
-  const moved = (id: string, before: string | undefined, hidden: boolean): Placed[] => {
-    const moving = arranged.find(placed => placed.card.id === id)!
+  /** The layout with the card `id` put where `before` stands (the end, when none), shown or not; none when the card is gone. */
+  const moved = (id: string, before: string | undefined, hidden: boolean): Placed[] | undefined => {
+    const moving = arranged.find(placed => placed.card.id === id)
+    // A package's card can leave the page while it is held (its package removed, a project picked on another tab).
+    if (!moving) return undefined
     const rest = arranged.filter(placed => placed.card.id !== id)
     const at = before === undefined ? rest.length : rest.findIndex(placed => placed.card.id === before)
     rest.splice(at < 0 ? rest.length : at, 0, { ...moving, hidden })

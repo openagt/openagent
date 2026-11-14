@@ -20,7 +20,7 @@ vi.mock('./OnboardingChecklist.js', async () => {
 })
 vi.mock('./SkillsCard.js', () => ({ SkillsCard: () => <div>skills</div> }))
 vi.mock('./YourAgentsPart.js', () => ({ YourAgentsPart: () => <span>your agents</span> }))
-const modules = vi.hoisted(() => ({ loaded: true, line: [] as { id: string; order: number; node: unknown }[] }))
+const modules = vi.hoisted(() => ({ loaded: true, gone: false, line: [] as { id: string; order: number; node: unknown }[] }))
 vi.mock('./ModuleCards.js', async () => {
   const { Section } = await import('./ui/section.js')
   // A package's card as packages draw them: a part with a link to its page at its heading's right.
@@ -29,7 +29,7 @@ vi.mock('./ModuleCards.js', async () => {
       <div>a package's card</div>
     </Section>
   )
-  return { useModuleCards: () => ({ cards: [{ id: '@x/tickets/hot', label: 'Hot tickets', width: '1/2', minWidth: '1/3', present: true, node }], line: modules.line, loaded: modules.loaded }) }
+  return { useModuleCards: () => ({ cards: modules.gone ? [] : [{ id: '@x/tickets/hot', label: 'Hot tickets', width: '1/2', minWidth: '1/3', present: true, node }], line: modules.line, loaded: modules.loaded }) }
 })
 const prefs = vi.hoisted(() => ({ value: { onboardingDismissed: true } as Record<string, unknown>, loaded: true, updatePreferences: vi.fn() }))
 vi.mock('../lib/preferences.js', () => ({ usePreferences: () => prefs.value, usePreferencesLoaded: () => prefs.loaded, updatePreferences: prefs.updatePreferences }))
@@ -55,6 +55,7 @@ beforeEach(() => {
   prefs.updatePreferences.mockReset()
   modules.loaded = true
   modules.line = []
+  modules.gone = false
   firstSteps.read = true
 })
 afterEach(cleanup)
@@ -206,6 +207,30 @@ describe('the Overview', () => {
     fireEvent.dragStart(chip, transfer)
     fireEvent.dragOver(usage.parentElement!, transfer)
     expect(document.querySelector('[data-card]:last-child [data-drop="after"]')).toBeTruthy()
+  })
+
+  test('a card that leaves the page while it is dragged (its package removed) is dropped on nothing: no layout is written', async () => {
+    working = []
+    const { rerender } = show()
+    fireEvent.click(await screen.findByRole('button', { name: 'Customize' }))
+    const transfer = { dataTransfer: { effectAllowed: '', setData: () => {} } }
+    fireEvent.dragStart(document.querySelector('[data-card="@x/tickets/hot"]')!, transfer)
+    modules.gone = true
+    rerender(overview())
+    const usage = document.querySelector('[data-card="usage"]')!
+    // What a press's handler throws reaches the window, not the test.
+    const thrown: unknown[] = []
+    const caught = (event: ErrorEvent): void => {
+      thrown.push(event.error)
+      event.preventDefault()
+    }
+    window.addEventListener('error', caught)
+    fireEvent.dragOver(usage, { ...transfer, clientX: 0 })
+    fireEvent.drop(usage, transfer)
+    window.removeEventListener('error', caught)
+    expect(thrown).toEqual([])
+    expect(prefs.updatePreferences).not.toHaveBeenCalled()
+    expect(drawn().map(card => card.id)).toEqual(['human-queue', 'usage', 'working', 'skills'])
   })
 
   test('a card dragged on the page leaves the page still, shows where it lands, and moves only when dropped', async () => {
