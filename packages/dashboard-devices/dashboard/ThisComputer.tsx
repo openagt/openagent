@@ -95,7 +95,7 @@ export function ThisComputer({ d, start }: { d: Devices; /** The start page: not
       action={
         // Its owner names it, and everyone sees that name: a person the owner invited has no Rename.
         !renaming && d.machines?.renames === true ? (
-          <Button ref={renamePress} variant="ghost" size="sm" onClick={rename}>
+          <Button ref={renamePress} variant="ghost" size="sm" className="max-md:h-11" onClick={rename}>
             <Pencil className="size-4" aria-hidden />
             Rename
           </Button>

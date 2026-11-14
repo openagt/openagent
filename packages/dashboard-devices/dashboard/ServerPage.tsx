@@ -323,7 +323,7 @@ function AddPersonWay({ label, at, codeWay, onWay, onClose }: { label: string; a
           <span className="block text-xs text-muted-foreground">You type their name and send them a code; they add it in their own OpenAgent.</span>
         </button>
         </div>
-        <div className="flex justify-end">
+        <div className="flex justify-end max-md:[&_button]:h-11">
           <Button variant="ghost" onClick={onClose}>
             Cancel
           </Button>
@@ -387,7 +387,7 @@ export function PickPeople({ host, server, label, onChange, onClose }: { host: M
             </ul>
           </>
         )}
-        <div className="flex justify-end gap-2">
+        <div className="flex justify-end gap-2 max-md:[&_button]:h-11">
           <Button variant="ghost" onClick={onClose}>
             Cancel
           </Button>

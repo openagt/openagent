@@ -125,7 +125,7 @@ export function Connecting({ d, computer, canBoth, onBack, onClose }: { d: Devic
         ) : (
           <Problem>{phase.error}</Problem>
         )}
-        <div className="flex justify-end gap-2">
+        <div className="flex justify-end gap-2 max-md:[&_button]:h-11">
           {phase.at === 'done' ? (
             <Button onClick={onClose}>
               Done
@@ -233,7 +233,7 @@ export function AskPopup() {
           {shownNumber(ask.number)}
         </p>
         {error !== undefined && <Problem>{error}</Problem>}
-        <div className="flex justify-end gap-2">
+        <div className="flex justify-end gap-2 max-md:[&_button]:h-11">
           <Button variant="secondary" loading={busy} disabled={down} onClick={() => void answer(false)}>
             Deny
           </Button>

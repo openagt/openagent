@@ -82,7 +82,7 @@ function Choose({ kinds, onPicked, onClose }: { kinds: typeof KINDS; onPicked: (
             </div>
           ))}
         </RadioGroup>
-        <div className="flex justify-end gap-2">
+        <div className="flex justify-end gap-2 max-md:[&_button]:h-11">
           <Button variant="ghost" onClick={onClose}>
             Cancel
           </Button>
@@ -169,7 +169,7 @@ function AddPhone({ d, onClose }: { d: Devices; onClose: () => void }) {
               <Choice value="" title="Only on this Wi-Fi" words="It opens this computer directly. No lock on the link: someone on the same Wi-Fi could listen. Use it at home." />
             )}
           </RadioGroup>
-          <div className="flex justify-end gap-2">
+          <div className="flex justify-end gap-2 max-md:[&_button]:h-11">
             <Button variant="ghost" onClick={onClose}>
               Back
             </Button>
@@ -187,7 +187,7 @@ function AddPhone({ d, onClose }: { d: Devices; onClose: () => void }) {
       <Dialog open onOpenChange={open => !open && onClose()} title="Add phone">
         <div className="space-y-4 text-sm">
           <p>{status.problem ?? 'The door on your Tailscale network is opening. One moment.'}</p>
-          <div className="flex justify-end gap-2">
+          <div className="flex justify-end gap-2 max-md:[&_button]:h-11">
             <Button variant="ghost" onClick={onClose}>
               Cancel
             </Button>
@@ -209,7 +209,7 @@ function AddPhone({ d, onClose }: { d: Devices; onClose: () => void }) {
           <p>{status?.on ? 'The door on this Wi-Fi is opening. One moment.' : 'Turning this on opens this computer to the phones on this Wi-Fi.'}</p>
           {!status?.on && <p className="text-xs text-muted-foreground">{WARNING}</p>}
           {error !== undefined && <Problem>{error}</Problem>}
-          <div className="flex justify-end gap-2">
+          <div className="flex justify-end gap-2 max-md:[&_button]:h-11">
             <Button variant="ghost" onClick={onClose}>
               Cancel
             </Button>
@@ -408,7 +408,7 @@ export function GiveCode({ d, server, onClose }: { d: Devices; server: ModuleMac
             )}
           </>
         )}
-        <div className="flex justify-end gap-2">
+        <div className="flex justify-end gap-2 max-md:[&_button]:h-11">
           <Button variant={done ? 'default' : 'ghost'} onClick={onClose}>
             {done ? 'Done' : 'Cancel'}
           </Button>

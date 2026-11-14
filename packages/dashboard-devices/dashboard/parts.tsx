@@ -266,7 +266,7 @@ export function Head({ icon: Icon, name, badge, facts, rename }: { icon: Compone
           </p>
         </div>
         {rename && !renaming && (
-          <Button ref={press} variant="ghost" size="sm" onClick={open}>
+          <Button ref={press} variant="ghost" size="sm" className="max-md:h-11" onClick={open}>
             <Pencil className="size-4" aria-hidden />
             Rename
           </Button>

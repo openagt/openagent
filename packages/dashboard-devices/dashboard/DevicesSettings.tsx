@@ -343,7 +343,7 @@ function PhoneRow({ d, item }: { d: Devices; item: PhoneItem }) {
             }}
           >
             <Input name="device-name" autoFocus aria-label="Name" value={name} maxLength={80} onChange={event => setName(event.target.value)} />
-            <div className="flex justify-end gap-2">
+            <div className="flex justify-end gap-2 max-md:[&_button]:h-11">
               <Button type="button" variant="ghost" onClick={() => setRenaming(false)}>
                 Cancel
               </Button>

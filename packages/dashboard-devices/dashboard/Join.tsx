@@ -131,7 +131,7 @@ export function JoinDialog({ d, onClose, onJoined }: { d: Devices; onClose: () =
           </label>
         )}
         {error !== undefined && <Problem>{error}</Problem>}
-        <div className="flex justify-end gap-2">
+        <div className="flex justify-end gap-2 max-md:[&_button]:h-11">
           <Button type="button" variant="ghost" onClick={onClose}>
             {error?.startsWith('Joined.') ? 'Done' : 'Cancel'}
           </Button>

@@ -281,7 +281,7 @@ export function PhoneCode({
           </div>
         )}
         {/* Cancel before the other press; once joined, Done is the press the dialog ends on, last. */}
-        <div className="flex justify-end gap-2">
+        <div className="flex justify-end gap-2 max-md:[&_button]:h-11">
           {joined === undefined && (
             <Button variant="ghost" onClick={onClose}>
               Cancel
@@ -370,7 +370,7 @@ export function WhoAreYou({ title, naming, onType, onConfirm, onClose }: { title
           {naming.typed.trim() !== '' && name === undefined && <p className="text-xs text-danger">{NOT_A_NAME}</p>}
         </div>
         {naming.error !== undefined && <Problem>{naming.error}</Problem>}
-        <div className="flex justify-end gap-2">
+        <div className="flex justify-end gap-2 max-md:[&_button]:h-11">
           <Button variant="ghost" type="button" onClick={onClose}>
             Cancel
           </Button>
@@ -489,7 +489,7 @@ export function Invite({
             <p role="timer" className="text-xs text-muted-foreground">{`Works once, for ${clock(left)} more.`}</p>
           </>
         )}
-        <div className="flex justify-end gap-2">
+        <div className="flex justify-end gap-2 max-md:[&_button]:h-11">
           {person !== undefined && !asking && (joined !== undefined || expired || error !== undefined) && (
             <Button variant="secondary" disabled={down} onClick={() => void again(person)}>
               <RotateCw className="size-4" aria-hidden />
