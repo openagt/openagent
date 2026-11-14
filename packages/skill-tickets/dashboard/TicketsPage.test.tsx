@@ -604,6 +604,18 @@ describe('TicketsPage selection scopes the queue buttons', () => {
     expect(handed('p1')).toEqual([[plan('b.md')]])
   })
 
+  test('after one tick, Select all ticks every shown ticket, and is gone once they all are', async () => {
+    threeTickets()
+    await controls()
+    render()
+    await screen.findByText('First')
+    fireEvent.click(screen.getByRole('checkbox', { name: 'Select Second' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Select all' }))
+    expect(screen.getByText('3 selected')).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'Add to queue: 3 tickets' })).toBeTruthy()
+    expect(screen.queryByRole('button', { name: 'Select all' })).toBeNull()
+  })
+
   test('clearing the selection hands the buttons back to the whole shown set', async () => {
     threeTickets()
     render()

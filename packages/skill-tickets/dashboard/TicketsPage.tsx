@@ -300,7 +300,13 @@ export function TicketsPage({ projects }: { projects: ModuleProject[] }) {
         }
       </Slot>
       {barRows.length > 0 && (
-        <SelectionBar leaving={!hasSelection} count={barRows.length} onClear={() => setSelected(new Set())}>
+        <SelectionBar
+          leaving={!hasSelection}
+          count={barRows.length}
+          // From one tick to every shown ticket: how the whole shown set is acted on where the head's own presses are not shown (a phone).
+          onSelectAll={barRows.length < flatRows.length ? () => setSelected(new Set([...selected, ...flatRows.map(r => `${r.projectId}/${r.ticket.file}`)])) : undefined}
+          onClear={() => setSelected(new Set())}
+        >
           <QueueAdds rows={barRows} selection disabled={busy || !hasSelection} />
         </SelectionBar>
       )}
@@ -311,7 +317,7 @@ export function TicketsPage({ projects }: { projects: ModuleProject[] }) {
  * The selection's readout and its presses (the list idiom of issue trackers), floating at the
  * bottom of the list's column: it takes no room, so ticking a row moves nothing on the page.
  */
-function SelectionBar({ leaving, count, onClear, children }: { leaving: boolean; count: number; onClear: () => void; children: ReactNode }) {
+function SelectionBar({ leaving, count, onSelectAll, onClear, children }: { leaving: boolean; count: number; /** Ticks every shown ticket; none when all are ticked. */ onSelectAll: (() => void) | undefined; onClear: () => void; children: ReactNode }) {
   return (
     <div className="pointer-events-none sticky bottom-16 z-10 h-0">
       <div
@@ -324,6 +330,11 @@ function SelectionBar({ leaving, count, onClear, children }: { leaving: boolean;
         )}
       >
         <span className="tabular-nums">{count} selected</span>
+        {onSelectAll && (
+          <Button variant="ghost" onClick={onSelectAll}>
+            Select all
+          </Button>
+        )}
         {children}
         <Button variant="ghost" onClick={onClear}>
           Clear selection
