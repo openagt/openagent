@@ -36,6 +36,8 @@ import { AgentAccountItems, firstAccount, readMachineAccountsAhead, useAccountsO
 import { readMachineGitHostsAhead } from './GitHosts.js'
 import { Tooltip, TooltipTrigger, TooltipContent } from './ui/tooltip.js'
 import { RowAboveBox, rowClass, rowItemClass, rowLeftClass } from './ui/row-item.js'
+import { Skeleton } from './ui/skeleton.js'
+import { Slot } from './ui/slot.js'
 
 // The driver + model tree (#650/#656/#658): each driver lists ONLY its own models, since the
 // model passes straight through to that coding agent. Picking a model in a driver's submenu sets both, so an
@@ -59,6 +61,18 @@ const DRIVER_UI: Record<DriverName, { icon: DriverOption['icon'] }> = {
  * rest. The edge stays while the keyboard is on one of its items or in a menu one of them opened.
  */
 const SURFACE = '[view-transition-name:composer] flex flex-col rounded-box border border-hairline bg-card p-1 shadow-lg transition-colors focus-within:border-primary has-[[aria-expanded=true]]:border-primary'
+
+/**
+ * The box while the page it stands on is read: a {@link Slot}'s shape at the box's size and corner,
+ * its three rows' heights and nothing in them, so the box takes its place without moving anything.
+ */
+export function ComposerShape() {
+  return (
+    <Slot of={{ value: null, state: 'unknown' }} shape={<Skeleton className="rounded-box border border-transparent p-1"><div className="mb-1 h-8" /><div className="h-9" /><div className="mt-1 h-8" /></Skeleton>}>
+      {() => null}
+    </Slot>
+  )
+}
 
 export interface ComposerHandle {
   clear: () => void

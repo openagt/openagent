@@ -1,4 +1,6 @@
 import { useLayoutEffect, useRef, type ReactNode } from 'react'
+import { ComposerShape } from './Composer.js'
+import { TopBar } from './Panes.js'
 
 // An agent's page, laid out as Claude Code on the web lays out a session: the top bar and the
 // notices under it (`top`) are the page's first row, and the chat fills the rest, its scroll bar
@@ -69,4 +71,22 @@ export function ChatPane({ top, bottom, children }: { top: ReactNode; bottom: Re
 /** A line in the middle of the room the message box leaves: what an agent's page says while it has no chat to show. */
 export function ChatNote({ children }: { children: ReactNode }) {
   return <div className="grid flex-1 place-items-center pb-(--chat-bottom) text-sm text-muted-foreground">{children}</div>
+}
+
+/** A session's page while the projects are read: its top bar's row, the chat's room, and the box's shape at its foot. */
+export function ChatShape() {
+  return (
+    <ChatPane
+      top={
+        <TopBar>
+          <div className="h-11" />
+        </TopBar>
+      }
+      bottom={
+        <div className="mx-auto w-full max-w-3xl px-4 pt-2 pb-4">
+          <ComposerShape />
+        </div>
+      }
+    />
+  )
 }

@@ -52,7 +52,8 @@ vi.mock('./components/SettingsDialog.js', async () => {
     },
   }
 })
-vi.mock('./components/ProjectHome.js', () => ({
+vi.mock('./components/ProjectHome.js', async importOriginal => ({
+  ProjectHomeShape: (await importOriginal<typeof import('./components/ProjectHome.js')>()).ProjectHomeShape,
   ProjectHome: ({ projectName, onProjectRemoved }: { projectName?: string; onProjectRemoved?: () => void }) =>
     createElement('p', null, `the launcher of ${projectName}`, createElement('button', { onClick: onProjectRemoved }, 'remove the project')),
 }))
@@ -262,8 +263,8 @@ describe('module pages in the shell (#1774)', () => {
     try {
       window.history.replaceState(null, '', '/nothing')
       render(<App />)
-      const bar = (await screen.findByRole('button', { name: 'Open the menu' })).parentElement!
-      await waitFor(() => expect(bar.textContent).toBe('Not found'))
+      // Until the projects are read the word may be a project's, whose page waits as its shape: the bar comes once it is known.
+      await waitFor(() => expect(screen.getByRole('button', { name: 'Open the menu' }).parentElement!.textContent).toBe('Not found'))
     } finally {
       wide()
     }
@@ -290,6 +291,64 @@ describe('module pages in the shell (#1774)', () => {
     render(<App />)
     fireEvent.click(await screen.findByText('read'))
     await waitFor(() => expect(calls).toContainEqual({ name: 'runModuleCommand', args: [PROJECT.id, '@acme/logs', ['--limit', '5'], undefined, false] }))
+  })
+})
+
+describe('a first visit, the projects not read yet', () => {
+  /** The projects' read, held until `answer` is called, in a fresh browser: one that kept no list of them. */
+  function holdProjects(): () => void {
+    localStorage.clear()
+    forgetRemembered()
+    answerShell([])
+    // A session's page reads its files and its changes.
+    answers.set('onProjectFiles', () => [])
+    answers.set('onAgentChanges', () => [])
+    answers.set('onDocs', () => [])
+    let answer = () => {}
+    answers.set('onProjects', () => new Promise(resolve => (answer = () => resolve([PROJECT]))))
+    return () => act(answer)
+  }
+
+  test("a project's launcher waits as its box's shape, where the box will stand, and the launcher replaces it", async () => {
+    const answer = holdProjects()
+    window.history.replaceState(null, '', `/${PROJECT.name}`)
+    render(<App />)
+    const shape = await within(await screen.findByRole('main')).findByRole('status', {}, { timeout: 2000 })
+    expect(shape.closest('.max-w-3xl')).not.toBeNull()
+    // A project's page has its own top row: no phone bar names the word as a page while it waits.
+    expect(document.querySelector('main')!.textContent).toBe('Loading…')
+    answer()
+    expect(await screen.findByText('the launcher of app')).toBeTruthy()
+    expect(within(document.querySelector('main')!).queryByRole('status')).toBeNull()
+  })
+
+  test("a session waits as the chat's column with the box's shape at its foot, and the session's box replaces it", async () => {
+    const answer = holdProjects()
+    const id = '2026-11-14T23-05-03-506Z'
+    answers.set('onAgents', () => [{ id, status: 'done', startedAt: '2026-11-14T23:05:03.506Z', updatedAt: '2026-11-14T23:06:00.000Z', intent: 'tidy up' }])
+    answers.set('onRetainedWorktrees', () => [])
+    window.history.replaceState(null, '', `/${PROJECT.name}/${id}`)
+    render(<App />)
+    const foot = await screen.findByTestId('chat-bottom')
+    expect(await within(foot).findByRole('status', {}, { timeout: 2000 })).toBeTruthy()
+    answer()
+    await waitFor(() => expect(within(screen.getByTestId('chat-bottom')).getByRole('textbox')).toBeTruthy())
+  })
+
+  test("a page's word this browser listed waits as nothing: it is no project's", async () => {
+    const answer = holdProjects()
+    // The modules not read either: the pages this browser listed on its last visit are what is known.
+    answers.set('onModules', () => new Promise(() => {}))
+    localStorage.setItem('openagent:listed-pages', JSON.stringify([{ segment: 'logs', label: 'Logs', projects: [] }]))
+    try {
+      window.history.replaceState(null, '', '/logs')
+      render(<App />)
+      await new Promise(resolve => setTimeout(resolve, 500))
+      expect(within(await screen.findByRole('main')).queryByRole('status')).toBeNull()
+      answer()
+    } finally {
+      localStorage.removeItem('openagent:listed-pages')
+    }
   })
 })
 

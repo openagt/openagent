@@ -1,6 +1,8 @@
 import type { Intervention, ProjectError, ProjectSummary } from '../../src/index.js'
 import { StartAgentForm } from './StartAgentForm.js'
 import { ProjectActions } from './ProjectActions.js'
+import { ComposerShape } from './Composer.js'
+import { TopBar } from './Panes.js'
 import { ProjectErrorBanner } from './ProjectErrorBanner.js'
 import { ProjectSkillsLine } from './ProjectSkills.js'
 import { HumanQueueList } from './HumanQueueList.js'
@@ -117,6 +119,27 @@ export function ProjectHome({
             {!noProject && <ProjectSkillsLine key={projectId} projectId={projectId} onChanged={onSkillsChanged} />}
           </div>
         </ScrollArea>
+      </div>
+    </>
+  )
+}
+
+/**
+ * The launcher while the projects are read, so the address cannot yet say which project it is: its
+ * top bar's row, and its box's shape where the box will stand.
+ */
+export function ProjectHomeShape() {
+  return (
+    <>
+      <TopBar>
+        <div className="h-11" />
+      </TopBar>
+      <div className="scrollbar-thin scrollbar-gutter-stable flex min-h-0 flex-1 flex-col overflow-y-auto">
+        <div className="shrink-0 max-md:hidden md:basis-[38%]" aria-hidden />
+        <div className="mx-auto w-full max-w-3xl shrink-0 px-4 pt-2 pb-4 max-md:order-last">
+          <ComposerShape />
+        </div>
+        <div className="min-h-0 flex-1" />
       </div>
     </>
   )
