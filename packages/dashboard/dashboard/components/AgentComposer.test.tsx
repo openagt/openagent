@@ -145,6 +145,17 @@ describe('AgentComposer box', () => {
       window.matchMedia = matchMedia
     }
   })
+
+  test("on a phone's width the box names no keys either: they would not fit", () => {
+    const matchMedia = window.matchMedia
+    window.matchMedia = (query: string) => ({ ...matchMedia(query), matches: query === '(width < 48rem)' || matchMedia(query).matches })
+    try {
+      renderComposer()
+      expect(props().placeholder).toBe('Message the agent…')
+    } finally {
+      window.matchMedia = matchMedia
+    }
+  })
 })
 
 describe('AgentComposer slot control (#1455)', () => {
