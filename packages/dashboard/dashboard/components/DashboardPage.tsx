@@ -20,6 +20,13 @@ import { Page } from './Page.js'
 import { LinePart, NEEDS_YOU_ID, WORKING_ID, counted, scrollToPart } from './LinePart.js'
 import { YourAgentsPart } from './YourAgentsPart.js'
 
+/**
+ * The place in the line under the title that the Overview leaves for the packages' parts: its own
+ * stand at 1, 2 and from 4 on. A package's part that names another order still stands there; this is
+ * only where the line waits for them.
+ */
+const PACKAGES_PLACE = 3
+
 // The Overview landing page (#1139): a focused at-a-glance board — usage first, then what needs a
 // human (Human Queue) beside the agents working now, then the cards the installed packages
 // declare, in two columns (#1818: the queue package's AI Queue, the tickets package's hot tickets,
@@ -103,7 +110,7 @@ export function DashboardPage({
     },
     // Until the packages' code is in, one part waits in their place: a part that came after the line
     // was drawn would lengthen it, and on a phone push the Customize press and the page under it.
-    ...(modulesLoaded || moduleLine.length > 0 ? moduleLine : [{ id: 'packages', order: 3, node: <LinePart reading>{null}</LinePart> }]),
+    ...(modulesLoaded || moduleLine.length > 0 ? moduleLine : [{ id: 'packages', order: PACKAGES_PLACE, node: <LinePart reading>{null}</LinePart> }]),
     // The person's agents (Rom's design: an agent is a name, skills and accounts): how many, by name, a press from their page.
     { id: 'your-agents', order: 4, node: <YourAgentsPart /> },
   ].sort((one, other) => one.order - other.order)
