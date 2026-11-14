@@ -66,6 +66,8 @@ export interface ModuleCard {
   minWidth?: CardWidth
   /** Its place among every installed package's cards, lower first; 50 when unsaid, ties by package name. */
   order?: number
+  /** A part of the line under the Overview's title, a few words drawn with `LinePart`, not a card: it is not arranged. */
+  line?: boolean
   /** The card itself. */
   Card: ComponentType<ModuleCardProps>
 }
@@ -655,7 +657,7 @@ export { Page, type PageWidth } from '../components/Page.js'
 export { Section } from '../components/ui/section.js'
 export { List, Row } from '../components/ui/list.js'
 export { ShowSidebarButton } from '../components/SidebarToggle.js'
-export { StatTile } from '../components/StatTile.js'
+export { LinePart, counted } from '../components/LinePart.js'
 export { FilterChips, type FilterChip } from '../components/FilterChips.js'
 export { FileIcon } from '../components/FileIcon.js'
 export { Markdown, FileLinks } from '../components/Markdown.js'

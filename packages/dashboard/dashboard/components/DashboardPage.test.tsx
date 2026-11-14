@@ -8,9 +8,9 @@ import type { ActiveAgent, Intervention } from '../../src/index.js'
 vi.mock('./Quota.js', () => ({ Quota: () => <div>usage</div> }))
 vi.mock('./OnboardingChecklist.js', () => ({ OnboardingChecklist: () => <div>onboarding</div> }))
 vi.mock('./SkillsCard.js', () => ({ SkillsCard: () => <div>skills</div> }))
-vi.mock('./YourAgentsTile.js', () => ({ YourAgentsTile: () => <div>your agents</div> }))
+vi.mock('./YourAgentsPart.js', () => ({ YourAgentsPart: () => <span>your agents</span> }))
 vi.mock('./ModuleCards.js', () => ({
-  useModuleCards: () => ({ cards: [{ id: '@x/tickets/hot', label: 'Hot tickets', width: '1/2', minWidth: '1/3', present: true, node: <div>a package's card</div> }], mounted: true }),
+  useModuleCards: () => ({ cards: [{ id: '@x/tickets/hot', label: 'Hot tickets', width: '1/2', minWidth: '1/3', present: true, node: <div>a package's card</div> }], line: [] }),
 }))
 const prefs = vi.hoisted(() => ({ value: { onboardingDismissed: true } as Record<string, unknown>, loaded: true, updatePreferences: vi.fn() }))
 vi.mock('../lib/preferences.js', () => ({ usePreferences: () => prefs.value, usePreferencesLoaded: () => prefs.loaded, updatePreferences: prefs.updatePreferences }))
@@ -36,24 +36,24 @@ beforeEach(() => {
 afterEach(cleanup)
 
 describe('the Overview', () => {
-  test('with no layout picked, the cards stand in their own order and widths, the tiles first; the agents at work show even while none works', async () => {
+  test('with no layout picked, the cards stand in their own order and widths; the agents at work show even while none works', async () => {
     working = []
     show()
     await screen.findByText('Human Queue')
-    expect(drawn().map(card => card.id)).toEqual(['needs-you', 'working-now', 'your-agents', 'usage', 'human-queue', 'working', 'skills', '@x/tickets/hot'])
+    expect(drawn().map(card => card.id)).toEqual(['usage', 'human-queue', 'working', 'skills', '@x/tickets/hot'])
     expect(screen.getByText('No agent is at work.')).toBeTruthy()
     // Full width is the whole row at every size; a third is a half once the column has the room, a
-    // third once it is wide; a quarter (the number tiles) a third, then a quarter; a row's cards fill it.
-    expect(drawn()[0]!.spans).toContain('@4xl:basis-[calc(25%_-_1.5rem)]')
-    expect(drawn()[4]!.spans).toContain('basis-full')
-    expect(drawn()[4]!.spans).not.toMatch(/@\w+:basis-/)
-    expect(drawn()[7]!.spans).toContain('@2xl:basis-[calc(50%_-_1rem)]')
-    expect(drawn()[7]!.spans).toContain('grow-[6]')
+    // third once it is wide; a row's cards fill it.
+    expect(drawn()[0]!.spans).toContain('basis-full')
+    expect(drawn()[0]!.spans).not.toMatch(/@\w+:basis-/)
+    expect(drawn()[3]!.spans).toContain('@5xl:basis-[calc(33.333%_-_1.333rem)]')
+    expect(drawn()[4]!.spans).toContain('@2xl:basis-[calc(50%_-_1rem)]')
+    expect(drawn()[4]!.spans).toContain('grow-[6]')
     cleanup()
     working = [active('r1', 'p1')]
     show()
     expect(await screen.findByText('working on r1')).toBeTruthy()
-    expect(drawn().map(card => card.id)).toEqual(['needs-you', 'working-now', 'your-agents', 'usage', 'human-queue', 'working', 'skills', '@x/tickets/hot'])
+    expect(drawn().map(card => card.id)).toEqual(['usage', 'human-queue', 'working', 'skills', '@x/tickets/hot'])
     cleanup()
     // With a project picked, only that project's agents count.
     show('p2')
@@ -65,11 +65,11 @@ describe('the Overview', () => {
     working = []
     prefs.value = {
       onboardingDismissed: true,
-      overviewLayouts: { '*': [{ id: '@x/tickets/hot', width: '1/3' }, { id: 'usage', hidden: true }, { id: 'human-queue', width: '1/4' }, { id: 'gone' }, { id: 'needs-you', width: '1/4' }] },
+      overviewLayouts: { '*': [{ id: '@x/tickets/hot', width: '1/3' }, { id: 'usage', hidden: true }, { id: 'human-queue', width: '1/4' }, { id: 'gone' }, { id: 'skills', width: '1/4' }] },
     }
     show()
     await screen.findByText('Human Queue')
-    expect(drawn().map(card => card.id)).toEqual(['@x/tickets/hot', 'human-queue', 'needs-you', 'working-now', 'your-agents', 'working', 'skills'])
+    expect(drawn().map(card => card.id)).toEqual(['@x/tickets/hot', 'human-queue', 'skills', 'working'])
     expect(screen.queryByText('usage')).toBeNull()
     expect(drawn()[0]!.spans).toContain('@5xl:basis-[calc(33.333%_-_1.333rem)]')
     // The Human Queue fits half at the narrowest: a quarter is passed over for its own width, the whole row.
@@ -91,15 +91,15 @@ describe('the Overview', () => {
 
   test('Customize arranges the page on its cards: a width, ✕ to the tray, + back from it, the arrow keys to move; each change is this page\'s layout at once', async () => {
     working = []
-    prefs.value = { onboardingDismissed: true, overviewLayouts: { '*': [{ id: 'usage' }], p1: [{ id: 'usage' }, { id: 'needs-you', hidden: true }] } }
+    prefs.value = { onboardingDismissed: true, overviewLayouts: { '*': [{ id: 'usage' }], p1: [{ id: 'usage' }, { id: 'skills', hidden: true }] } }
     show('p1')
     fireEvent.click(await screen.findByRole('button', { name: 'Customize' }))
     expect(screen.getByRole('status').textContent).toMatch(/Arranging the layout for alpha/)
     // Every shown card has its bar; the agents at work, though none works, are there to be placed.
-    expect(screen.getAllByRole('toolbar').map(bar => bar.getAttribute('aria-label'))).toEqual(['Usage', 'Working now', 'Your agents', 'Human Queue', 'Agents at work', 'Skills', 'Hot tickets'])
+    expect(screen.getAllByRole('toolbar').map(bar => bar.getAttribute('aria-label'))).toEqual(['Usage', 'Human Queue', 'Agents at work', 'Hot tickets'])
     // The card hidden waits in the tray.
     const tray = within(screen.getByRole('region', { name: 'Cards not on the page' }))
-    expect(tray.getAllByRole('listitem').map(item => item.getAttribute('aria-label'))).toEqual(['Needs you'])
+    expect(tray.getAllByRole('listitem').map(item => item.getAttribute('aria-label'))).toEqual(['Skills'])
     const saved = () => (prefs.updatePreferences.mock.lastCall![0] as { overviewLayouts: Record<string, { id: string; hidden?: true; width?: string }[]> }).overviewLayouts
     // A width: only the ones it fits are offered.
     const widths = within(screen.getByRole('group', { name: 'Width of Hot tickets' }))
@@ -110,13 +110,13 @@ describe('the Overview', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Take Human Queue off the page' }))
     expect(saved()['p1']!.find(place => place.id === 'human-queue')).toEqual({ id: 'human-queue', hidden: true })
     // + brings one back, at the end.
-    fireEvent.click(tray.getByRole('button', { name: 'Add Needs you' }))
-    expect(saved()['p1']!.map(place => place.id).at(-1)).toBe('needs-you')
-    expect(saved()['p1']!.at(-1)).toEqual({ id: 'needs-you' })
-    // The arrow keys on a card's handle move it among the cards on the page: Usage passes Working now.
+    fireEvent.click(tray.getByRole('button', { name: 'Add Skills' }))
+    expect(saved()['p1']!.map(place => place.id).at(-1)).toBe('skills')
+    expect(saved()['p1']!.at(-1)).toEqual({ id: 'skills' })
+    // The arrow keys on a card's handle move it among the cards on the page: Usage passes the Human Queue.
     // (Each press here is read against the layout the page started with: the stand-in preferences do not change.)
     fireEvent.keyDown(screen.getByRole('button', { name: 'Move Usage: arrow keys' }), { key: 'ArrowRight' })
-    expect(saved()['p1']!.map(place => place.id)).toEqual(['needs-you', 'working-now', 'usage', 'your-agents', 'human-queue', 'working', 'skills', '@x/tickets/hot'])
+    expect(saved()['p1']!.map(place => place.id)).toEqual(['skills', 'human-queue', 'usage', 'working', '@x/tickets/hot'])
     // Back to the all-projects layout: the project's own is forgotten, and the other layouts stay.
     fireEvent.click(screen.getByRole('button', { name: 'Use the all-projects layout' }))
     expect(saved()).toEqual({ '*': [{ id: 'usage' }] })
@@ -136,10 +136,10 @@ describe('the Overview', () => {
 
   test('a card dragged from the tray shows where it lands, a bar beside the card under the pointer or at the end, and lands there', async () => {
     working = []
-    prefs.value = { onboardingDismissed: true, overviewLayouts: { '*': [{ id: 'needs-you', hidden: true }] } }
+    prefs.value = { onboardingDismissed: true, overviewLayouts: { '*': [{ id: 'skills', hidden: true }] } }
     show()
     fireEvent.click(await screen.findByRole('button', { name: 'Customize' }))
-    const chip = within(screen.getByRole('region', { name: 'Cards not on the page' })).getByRole('listitem', { name: 'Needs you' })
+    const chip = within(screen.getByRole('region', { name: 'Cards not on the page' })).getByRole('listitem', { name: 'Skills' })
     const transfer = { dataTransfer: { effectAllowed: '', setData: () => {} } }
     fireEvent.dragStart(chip, transfer)
     expect(document.querySelector('[data-drop]')).toBeNull()
@@ -153,8 +153,8 @@ describe('the Overview', () => {
     fireEvent.drop(usage, transfer)
     const saved = (prefs.updatePreferences.mock.lastCall![0] as { overviewLayouts: Record<string, { id: string }[]> }).overviewLayouts
     const order = saved['*']!.map(place => place.id)
-    expect(order.indexOf('needs-you')).toBe(order.indexOf('usage') - 1)
-    expect(saved['*']!.find(place => place.id === 'needs-you')).toEqual({ id: 'needs-you' })
+    expect(order.indexOf('skills')).toBe(order.indexOf('usage') - 1)
+    expect(saved['*']!.find(place => place.id === 'skills')).toEqual({ id: 'skills' })
     expect(document.querySelector('[data-drop]')).toBeNull()
     // Over the page's empty room: at the end, the bar after the last card.
     fireEvent.dragStart(chip, transfer)
@@ -168,7 +168,7 @@ describe('the Overview', () => {
     fireEvent.click(await screen.findByRole('button', { name: 'Customize' }))
     const transfer = { dataTransfer: { effectAllowed: '', setData: () => {} } }
     const before = drawn().map(card => card.id)
-    fireEvent.dragStart(document.querySelector('[data-card="needs-you"]')!, transfer)
+    fireEvent.dragStart(document.querySelector('[data-card="skills"]')!, transfer)
     fireEvent.dragOver(document.querySelector('[data-card="human-queue"]')!, { ...transfer, clientX: 0 })
     // Nothing has moved; the bar says where it goes.
     expect(drawn().map(card => card.id)).toEqual(before)
@@ -176,12 +176,12 @@ describe('the Overview', () => {
     expect(prefs.updatePreferences).not.toHaveBeenCalled()
     fireEvent.drop(document.querySelector('[data-card="human-queue"]')!, transfer)
     const order = (prefs.updatePreferences.mock.lastCall![0] as { overviewLayouts: Record<string, { id: string }[]> }).overviewLayouts['*']!.map(place => place.id)
-    expect(order.slice(0, 5)).toEqual(['working-now', 'your-agents', 'usage', 'needs-you', 'human-queue'])
+    expect(order).toEqual(['usage', 'skills', 'human-queue', 'working', '@x/tickets/hot'])
   })
 
   test('with every card off the page, the page says so beside the press that brings them back, which gives a room to drop the first one into', async () => {
     working = []
-    prefs.value = { onboardingDismissed: true, overviewLayouts: { '*': ['needs-you', 'working-now', 'your-agents', 'usage', 'human-queue', 'working', 'skills', '@x/tickets/hot'].map(id => ({ id, hidden: true })) } }
+    prefs.value = { onboardingDismissed: true, overviewLayouts: { '*': ['usage', 'human-queue', 'working', 'skills', '@x/tickets/hot'].map(id => ({ id, hidden: true })) } }
     show()
     const said = await screen.findByText(/Every card is off the Overview/)
     fireEvent.click(within(said.parentElement!).getByRole('button', { name: 'Customize' }))
@@ -204,13 +204,13 @@ describe('the Overview', () => {
       // A read that answers within the second never fades its card: no flicker on every load.
       expect(faded()).toEqual([])
       act(() => vi.advanceTimersByTime(FADE_AFTER_MS))
-      expect(faded()).toEqual(['needs-you', 'human-queue'])
-      expect(document.querySelector('[data-card="needs-you"]')!.className).toContain('opacity-60')
+      expect(faded()).toEqual(['human-queue'])
+      expect(document.querySelector('[data-card="human-queue"]')!.className).toContain('opacity-60')
       cleanup()
       show(null, { interventions: false, active: true })
       await screen.findByText('working on r1')
       act(() => vi.advanceTimersByTime(FADE_AFTER_MS))
-      expect(faded()).toEqual(['working-now', 'working'])
+      expect(faded()).toEqual(['working'])
       cleanup()
       show()
       await screen.findByText('working on r1')
@@ -228,9 +228,15 @@ describe('the Overview', () => {
     expect(drawn()).toEqual([])
   })
 
-  test('the Needs you and Working now tiles show no count before their reads', async () => {
+  test('the line under the title says no count before its reads, and a nothing in words after', async () => {
     show(null, { interventions: false, active: false }, false)
-    for (const label of ['Needs you', 'Working now']) expect((await screen.findByText(label)).parentElement!.textContent).toBe(`${label}\u00a0Loading…`)
+    await screen.findByText('Human Queue')
+    expect(screen.queryByRole('button', { name: /needs? you/ })).toBeNull()
+    expect(screen.queryByText(/^(no agent|\d+) working$/)).toBeNull()
+    cleanup()
+    show()
+    expect(await screen.findByRole('button', { name: 'nothing needs you' })).toBeTruthy()
+    expect(screen.getByText('no agent working')).toBeTruthy()
   })
 
   test('the Human Queue says it is loading before its read, not that nothing waits', async () => {
@@ -240,15 +246,15 @@ describe('the Overview', () => {
     expect(card.textContent).not.toContain('AI doesn’t need you.')
   })
 
-  test("the Needs you tile: how many things wait, and how many of each kind; it takes the page to the Human Queue", async () => {
+  test("the line's first part: how many things wait, and how many of each kind on its hover; it takes the page to the Human Queue", async () => {
     working = []
     const item = (kind: Intervention['kind'], n: number): Intervention => ({ projectId: 'p1', projectName: 'alpha', kind, title: `t${n}`, agentId: `r${n}` })
     const scrolled = vi.fn()
     Element.prototype.scrollIntoView = scrolled
     render(<DashboardPage onProjectAdded={() => {}} onSelectProject={() => {}} projectHref={id => `/${id}`} onSelectAgent={() => {}} onAgentStarted={() => {}} interventions={[item('awaiting', 1), item('awaiting', 2), item('pr', 3)]} interventionsStale={false} interventionsLoaded active={{ active: [], stale: false, loaded: true }} projects={projects} scope={null} />)
-    const tile = (await screen.findByText('Needs you')).closest('button')!
-    expect(tile.textContent).toBe('Needs you32 questions, 1 pull request')
-    fireEvent.click(tile)
+    const part = await screen.findByRole('button', { name: '3 need you' })
+    expect(part.getAttribute('title')).toBe('2 questions, 1 pull request')
+    fireEvent.click(part)
     expect(scrolled).toHaveBeenCalled()
     expect(scrolled.mock.contexts[0]).toBe(document.getElementById('needs-you'))
   })

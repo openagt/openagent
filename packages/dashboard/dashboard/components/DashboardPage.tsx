@@ -1,5 +1,5 @@
 import type { ActiveAgent, Intervention } from '../../src/index.js'
-import { useState } from 'react'
+import { Fragment, useState, type ReactNode } from 'react'
 import { SlidersHorizontal } from 'lucide-react'
 import { Quota } from './Quota.js'
 import { Section } from './ui/section.js'
@@ -17,8 +17,8 @@ import { CardGrid, EditOverview, TakeOffMark } from './CustomizeOverview.js'
 import { ALL_PROJECTS, arrangeCards } from '../../src/client.js'
 import type { ProjectSummary } from '../../src/index.js'
 import { Page } from './Page.js'
-import { NEEDS_YOU_ID, StatTile, WORKING_ID, scrollToPart } from './StatTile.js'
-import { YourAgentsTile } from './YourAgentsTile.js'
+import { LinePart, NEEDS_YOU_ID, WORKING_ID, counted, scrollToPart } from './LinePart.js'
+import { YourAgentsPart } from './YourAgentsPart.js'
 
 // The Overview landing page (#1139): a focused at-a-glance board — usage first, then what needs a
 // human (Human Queue) beside the agents working now, then the cards the installed packages
@@ -76,49 +76,39 @@ export function DashboardPage({
   const shownProjects = scope === null ? projects : projects.filter(project => project.id === scope)
   // Every card the Overview can show here, each with the widths it stands at; the person's layout
   // for this page (the picked project's, else all projects') orders them, sizes them, and hides some.
-  const { cards: moduleCards, mounted: modulesMounted } = useModuleCards(shownProjects)
+  const { cards: moduleCards, line: moduleLine } = useModuleCards(shownProjects)
   // What the number counts, kind by kind: "1 question, 1 to publish".
   const waiting = KINDS.map(kind => ({ kind, count: interventions.filter(item => item.kind === kind.value).length })).filter(({ count }) => count > 0)
-  const cards: OverviewCard[] = [
-    // How things stand, a number each: what needs the person, and who is at work. The queue's own
-    // tile (what waits its turn) is its package's card, beside them by its order.
+  // How things stand, in one line under the title, each part a link to where it is: what needs the
+  // person, who is at work, the queue's own part (its package's, by its order) and the person's agents.
+  const line: { id: string; order: number; node: ReactNode }[] = [
     {
       id: 'needs-you',
-      stale: interventionsStale,
-      label: 'Needs you',
       order: 1,
-      width: '1/4',
-      minWidth: '1/4',
       node: (
-        <StatTile
-          label="Needs you"
-          value={interventionsLoaded ? interventions.length : undefined}
-          tone="text-warning"
-          note={!interventionsLoaded ? 'Loading…' : waiting.length === 0 ? 'Nothing waits on you' : waiting.map(({ kind, count }) => kind.counted(count)).join(', ')}
+        <LinePart
+          reading={!interventionsLoaded}
+          note={waiting.length === 0 ? 'Nothing waits on you' : waiting.map(({ kind, count }) => kind.counted(count)).join(', ')}
           onClick={() => scrollToPart(NEEDS_YOU_ID)}
-        />
+        >
+          {interventions.length === 0 ? 'nothing needs you' : interventions.length === 1 ? '1 needs you' : `${interventions.length} need you`}
+        </LinePart>
       ),
     },
     {
       id: 'working-now',
-      stale: active.stale,
-      label: 'Working now',
       order: 2,
-      width: '1/4',
-      minWidth: '1/4',
       node: (
-        <StatTile
-          label="Working now"
-          value={active.loaded ? working.length : undefined}
-          live={working.length > 0}
-          note={!active.loaded ? 'Loading…' : working.length === 0 ? 'No agent is at work' : working.length === 1 ? '1 agent at work' : `${working.length} agents at work`}
-          {...(working.length > 0 ? { onClick: () => scrollToPart(WORKING_ID) } : {})}
-        />
+        <LinePart reading={!active.loaded} live={working.length > 0} note={counted(working.length, 'agent at work', 'agents at work', 'No agent is at work')} {...(working.length > 0 ? { onClick: () => scrollToPart(WORKING_ID) } : {})}>
+          {working.length === 0 ? 'no agent working' : `${working.length} working`}
+        </LinePart>
       ),
     },
-    // The person's agents (Rom's design: an agent is a name, skills and accounts): how many, by name,
-    // a press from their page. A quarter, as the other tiles: four of them fill one row.
-    { id: 'your-agents', label: 'Your agents', order: 4, width: '1/4', minWidth: '1/4', node: <YourAgentsTile /> },
+    ...moduleLine,
+    // The person's agents (Rom's design: an agent is a name, skills and accounts): how many, by name, a press from their page.
+    { id: 'your-agents', order: 4, node: <YourAgentsPart /> },
+  ].sort((one, other) => one.order - other.order)
+  const cards: OverviewCard[] = [
     // Usage (#1139): the one figure that governs everything the agent may do next.
     { id: 'usage', label: 'Usage', order: 5, width: '1', minWidth: '1/2', node: <Quota projects={projects} /> },
     {
@@ -153,14 +143,14 @@ export function DashboardPage({
     // when one of the projects shown (every registered one, or the picked one alone) has the package.
     ...moduleCards,
   ]
-  // Until a layout names them, the cards stand by their order: the tiles first, then the cards.
+  // Until a layout names them, the cards stand by their order.
   cards.sort((a, b) => a.order - b.order)
   const layoutKey = scope ?? ALL_PROJECTS
   const layouts = usePreferences().overviewLayouts
   // The cards are drawn once the person's layout is read: a card they took off is never drawn, and
-  // so never reads anything, not even for the moment before the layout is known. And once the modules
-  // are mounted: a package's card is never put in among the drawn ones, pushing them aside.
-  const layoutRead = usePreferencesLoaded() && modulesMounted
+  // so never reads anything, not even for the moment before the layout is known. A package's card,
+  // mounted later, comes after the Overview's own (by its order), so it pushes none of them aside.
+  const layoutRead = usePreferencesLoaded()
   const arranged = arrangeCards(cards, layouts, layoutKey)
   // Arranging the page, on its cards themselves: the layout of this page (the picked project's, else
   // all projects'), changed at once as the person moves, sizes and hides the cards.
@@ -176,7 +166,15 @@ export function DashboardPage({
     <Page
       title="Overview"
       width="wide"
-      description="What needs you, the agents at work, and what comes next."
+      description={
+        // In the sentence's place, wrapping as text on a phone.
+        line.map((part, at) => (
+          <Fragment key={part.id}>
+            {at > 0 && <span aria-hidden className="mx-1.5">·</span>}
+            {part.node}
+          </Fragment>
+        ))
+      }
       actions={
         editing ? (
           <>

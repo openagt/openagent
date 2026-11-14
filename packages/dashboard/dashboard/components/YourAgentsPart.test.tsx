@@ -5,7 +5,7 @@ import { forgetRemembered } from '../lib/use-async.js'
 const onAgentsList = vi.hoisted(() => vi.fn())
 vi.mock('../rpc/agents.js', () => ({ onAgentsList }))
 
-const { YourAgentsTile } = await import('./YourAgentsTile.js')
+const { YourAgentsPart } = await import('./YourAgentsPart.js')
 
 afterEach(() => {
   cleanup()
@@ -13,20 +13,21 @@ afterEach(() => {
   window.history.pushState(null, '', '/')
 })
 
-describe('the Your agents tile', () => {
-  test('how many agents, by name, and their page a press away', async () => {
+describe('the Overview line\'s part on the person\'s agents', () => {
+  test('how many agents, by name on its hover, and their page a press away', async () => {
     onAgentsList.mockResolvedValue({ agents: [{ id: 'default', name: 'Default' }, { id: 'reviewer', name: 'Reviewer' }], skills: [], claude: [], codex: [] })
-    render(<YourAgentsTile />)
-    expect(await screen.findByText('Default, Reviewer')).toBeTruthy()
-    expect(screen.getByText('2')).toBeTruthy()
-    expect(screen.getByRole('link', { name: /Your agents/ }).getAttribute('href')).toBe('/agents')
-    fireEvent.click(screen.getByRole('link', { name: /Your agents/ }))
+    render(<YourAgentsPart />)
+    const part = await screen.findByRole('link', { name: '2 agents' })
+    expect(part.getAttribute('title')).toBe('Default, Reviewer')
+    expect(part.getAttribute('href')).toBe('/agents')
+    fireEvent.click(part)
     expect(window.location.pathname).toBe('/agents')
   })
 
   test('no count before the list is read', async () => {
     onAgentsList.mockReturnValue(new Promise(() => {}))
-    render(<YourAgentsTile />)
-    expect(screen.getByRole('link', { name: /Your agents/ }).textContent).toBe('Your agents\u00a0Loading…')
+    render(<YourAgentsPart />)
+    expect(screen.queryByRole('link')).toBeNull()
+    expect(screen.getByText('Loading…')).toBeTruthy()
   })
 })

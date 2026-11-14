@@ -8,14 +8,14 @@ import { ListTodo } from 'lucide-react'
 import { defineModule } from '@openagt/dashboard/module'
 import { QueuePage } from './QueuePage.js'
 import { QueueCard } from './QueueCard.js'
-import { QueueTile } from './QueueTile.js'
+import { QueuePart } from './QueuePart.js'
 import { ADD_TO_QUEUE } from './add-to-queue.js'
 import './dashboard.css'
 
 export default defineModule({
   pages: [{ segment: 'queue', label: 'Queue', icon: ListTodo, Page: QueuePage }],
   cards: [
-    { id: 'queued', label: 'In the queue', order: 3, width: '1/4', minWidth: '1/4', Card: QueueTile },
+    { id: 'queued', label: 'In the queue', order: 3, line: true, Card: QueuePart },
     { id: 'queue', label: 'AI Queue', order: 10, Card: QueueCard },
   ],
   linkActions: [ADD_TO_QUEUE],
