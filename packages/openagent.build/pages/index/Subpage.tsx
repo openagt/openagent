@@ -14,6 +14,7 @@ export function Subpage({ title, lead, children }: { title: string; lead: string
       <TopNav />
       <div style={{ flexGrow: 1 }}>
         <main
+          id="main"
           style={{
             maxWidth: 720,
             margin: '0 auto',

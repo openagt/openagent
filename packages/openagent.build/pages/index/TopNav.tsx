@@ -19,6 +19,9 @@ function goHome(e: MouseEvent) {
 export function TopNav() {
   return (
     <nav style={{ position: 'relative', minHeight: 94 }}>
+      <a href="#main" className="skip-link press press-primary press-small">
+        Skip to content
+      </a>
       {/* Right-clicking the logo opens the press page (logo downloads etc.). */}
       <a
         href="/"

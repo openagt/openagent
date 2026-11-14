@@ -87,6 +87,22 @@
 html {
   scroll-behavior: smooth;
 }
+/* Nothing scrolls the page sideways, whatever is too wide. */
+html,
+body {
+  overflow-x: clip;
+}
+/* The keyboard's first stop: past the top bar to the page's content, shown only while focused. */
+.skip-link {
+  position: absolute;
+  left: 12px;
+  top: 8px;
+  z-index: 100;
+  transform: translateY(-200%);
+}
+.skip-link:focus-visible {
+  transform: none;
+}
 a,
 button,
 [role='button'] {
@@ -381,7 +397,7 @@ html:not([data-pm]) .pm-tab-npm {
     align-items: center;
     text-align: center;
     gap: 16px !important;
-    padding: 32px 16px !important;
+    padding: 32px 0 !important;
   }
 }
 @media (max-width: 860px) {
