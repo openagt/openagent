@@ -1,7 +1,9 @@
-import { Markdown, Slot, useModuleHost } from '@openagt/dashboard/module'
-import { planBody } from '../src/module.js'
+import { ClipboardPlus } from 'lucide-react'
+import { Button, Markdown, Slot, useAction, useModuleHost } from '@openagt/dashboard/module'
+import { heldBack, planBody, planTicketPrompt } from '../src/module.js'
 import { TicketPageShell, TicketPageNote, TicketPageShape } from './TicketPageShell.js'
 import { TicketHeader } from './TicketHeader.js'
+import type { WorkspaceTicketDetail } from './lib/types.js'
 import { useTicket } from './lib/use-ticket.js'
 
 // One ticket's plan, its second tab: under the head it shares with the ticket's page, the plan set
@@ -36,8 +38,8 @@ export function TicketPlanPage({
               <TicketHeader projectId={projectId} ticket={ticket} holderStatus={read.holderStatus} sessions={read.sessions} tab="plan" onChanged={() => void reload()} />
               <div className="mt-6 max-w-180">
                 {read.plan === null ? (
-                  // No `.plan.md` beside the ticket — never written, or removed since: the head's button writes one.
-                  <TicketPageNote>This ticket has no plan yet. Plan now has an agent write one; its menu queues it instead.</TicketPageNote>
+                  // No `.plan.md` beside the ticket: never written, or removed since.
+                  <NoPlan projectId={projectId} ticket={ticket} />
                 ) : (
                   <Markdown text={planBody(read.plan)} page />
                 )}
@@ -47,5 +49,23 @@ export function TicketPlanPage({
         }
       </Slot>
     </TicketPageShell>
+  )
+}
+
+/** The tab of a ticket with no plan: one line, and the press that has an agent write it, where an agent may be handed the ticket. */
+function NoPlan({ projectId, ticket }: { projectId: string; ticket: WorkspaceTicketDetail }) {
+  const host = useModuleHost()
+  const { busy, error, run } = useAction()
+  const offered = !heldBack(ticket) && !ticket.locked
+  return (
+    <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
+      <TicketPageNote>No plan yet.</TicketPageNote>
+      {offered && (
+        <Button variant="secondary" loading={busy} onClick={() => void run(() => host.startRun(projectId, planTicketPrompt(ticket.file)), 'The planning agent could not be started.')}>
+          <ClipboardPlus className="size-4" aria-hidden /> Plan now
+        </Button>
+      )}
+      {error && <p role="alert" className="basis-full text-xs text-danger">{error}</p>}
+    </div>
   )
 }
