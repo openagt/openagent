@@ -119,7 +119,7 @@ export function App() {
   // A skill saved in Settings gives or takes a page too.
   useEffect(() => onSkillsSaved(reloadProjects), [reloadProjects])
   // Kept for the next visit too: the Overview's cards are drawn for the projects before they are read again.
-  const { value: projects, loaded: projectsLoaded } = usePolled<ProjectSummary[]>(onProjects, EMPTY_PROJECTS, 30_000, [projectsKey], { remember: 'projects', stored: true })
+  const { value: projects, loaded: projectsLoaded, stale: projectsStale } = usePolled<ProjectSummary[]>(onProjects, EMPTY_PROJECTS, 30_000, [projectsKey], { remember: 'projects', stored: true })
   // Read again when a project is added from the sidebar or removed from its project home: which
   // project has which module changes then.
   const modules = useModules(projectsKey)
@@ -244,9 +244,15 @@ export function App() {
   // The Human Queue as the pages show it: the picked project's items, or every project's.
   const interventions = scope ? interventionsRead.items.filter(item => item.projectId === scope) : interventionsRead.items
   useDocumentTitle(interventions.length, projectName ?? (scope ? (labels.get(scope) ?? null) : null))
-  // A URL naming a project that is not registered (renamed, removed, mistyped). A non-empty list
-  // is the answer, so this never fires while the first read is still out.
-  const unknownProject = projectId !== null && !noProject && projects.length > 0 && !projects.some(p => p.id === projectId)
+  // A URL naming a project that is not registered (renamed, removed, mistyped). Only this load's
+  // read, and a non-empty one, is the answer: the list this browser kept from its last load may lack
+  // a project added since. Until that read, a project the kept list has is drawn from the first
+  // frame and any other address waits, so "No such project" never replaces a project's page.
+  const projectsRead = projectsLoaded && !projectsStale
+  const projectAddress = projectId !== null && !noProject
+  const listedProject = projectAddress && projects.some(p => p.id === projectId)
+  const unknownProject = projectAddress && projectsRead && projects.length > 0 && !listedProject
+  const projectPending = projectAddress && !projectsRead && !listedProject
 
   // Fire a browser notification when a new item lands on the "needs you" queue (#627). Rides the
   // one interventions poll above (the poll stays unconditional — it also feeds the sidebar badge
@@ -482,6 +488,7 @@ export function App() {
         />
       )
     }
+    if (projectPending) return null
     if (unknownProject)
       return (
         <NotFound

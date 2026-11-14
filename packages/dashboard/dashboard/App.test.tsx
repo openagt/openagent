@@ -569,6 +569,35 @@ describe('the project select (#1513)', () => {
     expect(screen.getByText(`its project: ${OTHER.id}`)).toBeTruthy()
   })
 
+  test("a project the browser kept from its last load is drawn at once; any other project's address waits for the projects' read, so no such project never replaces a launcher", async () => {
+    const visit = async (address: string): Promise<(projects: unknown) => void> => {
+      cleanup()
+      forgetRemembered()
+      localStorage.clear()
+      localStorage.setItem('openagent:read:projects', JSON.stringify([PROJECT]))
+      answerTwo()
+      const held: ((projects: unknown) => void)[] = []
+      answers.set('onProjects', () => new Promise(resolve => held.push(resolve)))
+      window.history.replaceState(null, '', address)
+      render(<App />)
+      await waitFor(() => expect(held.length).toBeGreaterThan(0))
+      return projects => held.forEach(answer => answer(projects))
+    }
+    await visit(`/${PROJECT.id}`)
+    expect(screen.getByText('the launcher of app')).toBeTruthy()
+
+    const answerSite = await visit(`/${OTHER.id}`)
+    expect([screen.queryByText(/the launcher of/), screen.queryByText('No such project')]).toEqual([null, null])
+    answerSite([PROJECT, OTHER])
+    expect(await screen.findByText('the launcher of site')).toBeTruthy()
+
+    const answerNothing = await visit('/nothing-here')
+    expect([screen.queryByText(/the launcher of/), screen.queryByText('No such project')]).toEqual([null, null])
+    answerNothing([PROJECT, OTHER])
+    expect(await screen.findByText('No such project')).toBeTruthy()
+    expect(screen.queryByText(/the launcher of/)).toBeNull()
+  })
+
   test("a jump to another project's agent names it at once, before that project's agents are read", async () => {
     answerTwo()
     // The other project's list never answers: the row clicked is all the page has.
