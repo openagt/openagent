@@ -69,8 +69,8 @@ const WITH_PROJECT: DashboardData = {
 
 const SHOP: ProjectSummary = { id: 'p1', path: '/home/ada/shop', name: 'shop', activated: true, gitHost: true }
 
-const steps = ({ projects = [] as ProjectSummary[], onAgentStarted = vi.fn(), onSelectProject = vi.fn() } = {}) =>
-  render(<OnboardingChecklist projects={projects} onAgentStarted={onAgentStarted} onSelectProject={onSelectProject} onProjectAdded={vi.fn()} />)
+const steps = ({ projects = [] as ProjectSummary[], onAgentStarted = vi.fn(), onSelectProject = vi.fn(), onRead = vi.fn() } = {}) =>
+  render(<OnboardingChecklist projects={projects} onAgentStarted={onAgentStarted} onSelectProject={onSelectProject} onProjectAdded={vi.fn()} onRead={onRead} />)
 
 /** A step's row, by its title. */
 const row = (label: string) => screen.getByRole('listitem', { name: label })
@@ -103,14 +103,15 @@ describe('the first steps on the Overview', () => {
     expect(await screen.findByRole('list', { name: '0 of 3 done' })).toBeTruthy()
   })
 
-  test.each(['dashboard', 'agent', 'hosts'])('says "Loading…" and no step until the projects, the coding agent and the git hosts are read: %s answers last', async last => {
+  test.each(['dashboard', 'agent', 'hosts'])('says "Loading…" and no step until the projects, the coding agent and the git hosts are read, and tells the page only then: %s answers last', async last => {
     const answers: Record<string, (value: unknown) => void> = {}
     const held = (name: string) => () => new Promise(resolve => (answers[name] = resolve))
     onDashboard.mockImplementation(held('dashboard'))
     logins.onAgentState.mockImplementation(held('agent'))
     logins.onGitHosts.mockImplementation(held('hosts'))
     const values: Record<string, unknown> = { dashboard: WITH_PROJECT, agent: { driver: 'claude-code', ready: true }, hosts: CONNECTED }
-    steps()
+    const onRead = vi.fn()
+    steps({ onRead })
     expect(await screen.findByText('Loading…')).toBeTruthy()
     expect(screen.queryAllByRole('listitem')).toEqual([])
     await act(async () => {
@@ -118,8 +119,10 @@ describe('the first steps on the Overview', () => {
     })
     expect(screen.getByText('Loading…')).toBeTruthy()
     expect(screen.queryAllByRole('listitem')).toEqual([])
+    expect(onRead).not.toHaveBeenCalled()
     await act(async () => answers[last]!(values[last]))
     expect(within(row('Add your first project')).getByLabelText('Done')).toBeTruthy()
+    expect(onRead).toHaveBeenCalled()
     expect(screen.queryByText('Loading…')).toBeNull()
   })
 
@@ -207,7 +210,7 @@ describe('the first steps on the Overview', () => {
     const openPage = vi.fn()
     render(
       <HostServicesContext.Provider value={{ ...INERT_HOST_SERVICES, openPage }}>
-        <OnboardingChecklist projects={[SHOP]} onAgentStarted={vi.fn()} onSelectProject={vi.fn()} onProjectAdded={vi.fn()} />
+        <OnboardingChecklist projects={[SHOP]} onAgentStarted={vi.fn()} onSelectProject={vi.fn()} onProjectAdded={vi.fn()} onRead={vi.fn()} />
       </HostServicesContext.Provider>,
     )
     await openStep('Populate the queue of AI tasks')

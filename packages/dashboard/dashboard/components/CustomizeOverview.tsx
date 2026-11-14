@@ -1,4 +1,4 @@
-import { useEffect, useState, type DragEvent, type ReactNode } from 'react'
+import { isValidElement, useEffect, useState, type DragEvent, type ReactNode } from 'react'
 import { flushSync } from 'react-dom'
 import { ChevronLeft, ChevronRight, GripVertical, Plus, X } from 'lucide-react'
 import { widthsFor, type CardWidth, type OverviewLayouts } from '../../src/client.js'
@@ -45,11 +45,14 @@ export function UnderCards({ under }: { under: Under }) {
   return <div className="min-w-0 basis-full space-y-10 empty:hidden">{under.node}</div>
 }
 
+/** The key of {@link Under} among the cards: what `CardGrid`'s `until` names to stop after it. */
+export const UNDER = 'under'
+
 /** The cards with `under` drawn after the card it names, or before them all. */
 function withUnder<T extends { card: OverviewCard }>(cards: T[], under: Under, draw: (placed: T, at: number) => ReactNode): ReactNode[] {
   const after = cards.findIndex(({ card }) => card.id === under.card)
   const drawn = cards.map(draw)
-  drawn.splice(after + 1, 0, <UnderCards key="under" under={under} />)
+  drawn.splice(after + 1, 0, <UnderCards key={UNDER} under={under} />)
   return drawn
 }
 
@@ -58,14 +61,19 @@ function withUnder<T extends { card: OverviewCard }>(cards: T[], under: Under, d
  * The cards of one row are as tall as its tallest, their content at the top: three bottoms at
  * three heights read as unfinished.
  */
-export function CardGrid({ cards, under }: { cards: Placed[]; under: Under }) {
-  return (
-    <Grid>
-      {withUnder(cards, under, ({ card, width }) => (
-        <CardCell key={card.id} card={card} className={cn('flex min-w-0 flex-col *:flex-1', FLEX[width])} />
-      ))}
-    </Grid>
-  )
+export function CardGrid({
+  cards,
+  under,
+  until,
+}: {
+  cards: Placed[]
+  under: Under
+  /** A part whose first answer is still out and can outgrow its waiting room (a card's id, or {@link UNDER}): nothing after it is drawn yet, so nothing is pushed when it answers. */
+  until?: string | undefined
+}) {
+  const drawn = withUnder(cards, under, ({ card, width }) => <CardCell key={card.id} card={card} className={cn('flex min-w-0 flex-col *:flex-1', FLEX[width])} />)
+  const last = drawn.findIndex(node => isValidElement(node) && node.key === until)
+  return <Grid>{last < 0 ? drawn : drawn.slice(0, last + 1)}</Grid>
 }
 
 /** One card in its cell, faded while it shows only what an earlier visit read ({@link FadeWhileStale}). */

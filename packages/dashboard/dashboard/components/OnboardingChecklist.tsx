@@ -1,4 +1,4 @@
-import { useContext, useId, useRef, useState, type ReactNode } from 'react'
+import { useContext, useId, useLayoutEffect, useRef, useState, type ReactNode } from 'react'
 import type { DashboardData, ProjectSummary } from '../../src/index.js'
 import { Check, Info, X } from 'lucide-react'
 import { onDashboard } from '../rpc/reads.js'
@@ -69,6 +69,7 @@ export function OnboardingChecklist({
   onAgentStarted,
   onSelectProject,
   onProjectAdded,
+  onRead,
 }: {
   /** The projects as the app read them: the picker sees one it added land, and closes on it. */
   projects: readonly ProjectSummary[]
@@ -81,6 +82,8 @@ export function OnboardingChecklist({
   onSelectProject: (id: string) => void
   /** A project was added here: the app reads its projects again. */
   onProjectAdded: () => void
+  /** Told once the steps stand where their reads say, before that frame is drawn: what the page holds back under them can come. */
+  onRead: () => void
 }) {
   // Slower than the Overview's own 5s poll: these change at human speed, and this read fans out
   // over every project to answer the tickets question.
@@ -231,6 +234,9 @@ export function OnboardingChecklist({
 
   // No step before its reads have said where it stands: an unread project count is not "no project".
   const reading = state === 'unknown' || !missingLoaded
+  useLayoutEffect(() => {
+    if (!reading) onRead()
+  }, [reading, onRead])
   const open = picked !== undefined && steps.some(step => step.key === picked && !step.done) ? picked : steps.find(step => !step.done)?.key
   const ready = !reading && steps.every(step => step.done || step.optional)
   const name = person ? `, ${firstName(person.name)}` : ''

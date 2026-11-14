@@ -1,5 +1,5 @@
 import type { ActiveAgent, Intervention } from '../../src/index.js'
-import { Fragment, useState, type ReactNode } from 'react'
+import { Fragment, useCallback, useState, type ReactNode } from 'react'
 import { SlidersHorizontal } from 'lucide-react'
 import { Quota } from './Quota.js'
 import { Section } from './ui/section.js'
@@ -14,7 +14,7 @@ import { AgentUpdates } from './AgentUpdates.js'
 import { Agents } from './Agents.js'
 import { useModuleCards, type OverviewCard } from './ModuleCards.js'
 import { SkillsCard } from './SkillsCard.js'
-import { CardGrid, EditOverview, TakeOffMark, UnderCards, type Under } from './CustomizeOverview.js'
+import { CardGrid, EditOverview, TakeOffMark, UNDER, UnderCards, type Under } from './CustomizeOverview.js'
 import { ALL_PROJECTS, arrangeCards } from '../../src/client.js'
 import type { ProjectSummary } from '../../src/index.js'
 import type { ReadState } from '../lib/use-async.js'
@@ -172,11 +172,13 @@ export function DashboardPage({
   }
 
   // What needs the person leads; what a new install still has to do comes right under it, wherever the layout puts it.
+  const [firstStepsRead, setFirstStepsRead] = useState(false)
+  const firstStepsHaveRead = useCallback(() => setFirstStepsRead(true), [])
   const firstSteps: Under = {
     card: 'human-queue',
     node: (
       <>
-        {!onboardingDismissed && <OnboardingChecklist projects={projects} onAgentStarted={onAgentStarted} onSelectProject={onSelectProject} onProjectAdded={onProjectAdded} />}
+        {!onboardingDismissed && <OnboardingChecklist projects={projects} onAgentStarted={onAgentStarted} onSelectProject={onSelectProject} onProjectAdded={onProjectAdded} onRead={firstStepsHaveRead} />}
         <AgentUpdates />
       </>
     ),
@@ -231,7 +233,8 @@ export function DashboardPage({
             }
           />
         ) : arranged.some(({ hidden }) => !hidden) ? (
-          <CardGrid cards={arranged.filter(({ hidden }) => !hidden)} under={firstSteps} />
+          // On a first visit the parts come in from the top: none is drawn under the Human Queue or the first steps until they have answered, as either grows from its waiting room by more than a line.
+          <CardGrid cards={arranged.filter(({ hidden }) => !hidden)} under={firstSteps} until={interventionsState === 'unknown' ? 'human-queue' : !onboardingDismissed && !firstStepsRead ? UNDER : undefined} />
         ) : (
           <>
             <UnderCards under={firstSteps} />

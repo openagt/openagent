@@ -6,7 +6,18 @@ import type { ActiveAgent, Intervention } from '../../src/index.js'
 // for the page (#overview layouts). The cards are tested on their own; here they are stand-ins, the
 // agents at work are handed in as the shell reads them, and the preferences are a plain object a write changes.
 vi.mock('./Quota.js', () => ({ Quota: () => <div>usage</div> }))
-vi.mock('./OnboardingChecklist.js', () => ({ OnboardingChecklist: () => <div>onboarding</div> }))
+const firstSteps = vi.hoisted(() => ({ read: true }))
+vi.mock('./OnboardingChecklist.js', async () => {
+  const { useLayoutEffect } = await import('react')
+  return {
+    OnboardingChecklist: ({ onRead }: { onRead: () => void }) => {
+      useLayoutEffect(() => {
+        if (firstSteps.read) onRead()
+      })
+      return <div>onboarding</div>
+    },
+  }
+})
 vi.mock('./SkillsCard.js', () => ({ SkillsCard: () => <div>skills</div> }))
 vi.mock('./YourAgentsPart.js', () => ({ YourAgentsPart: () => <span>your agents</span> }))
 const modules = vi.hoisted(() => ({ loaded: true, line: [] as { id: string; order: number; node: unknown }[] }))
@@ -37,6 +48,7 @@ beforeEach(() => {
   prefs.updatePreferences.mockReset()
   modules.loaded = true
   modules.line = []
+  firstSteps.read = true
 })
 afterEach(cleanup)
 
@@ -272,6 +284,28 @@ describe('the Overview', () => {
     } finally {
       vi.useRealTimers()
     }
+  })
+
+  test('on a first visit nothing is drawn under the Human Queue or the first steps until they have answered, so nothing is pushed when they do', async () => {
+    prefs.value = {}
+    firstSteps.read = false
+    const { rerender } = show(null, { interventions: false, active: false }, false)
+    await screen.findByText('Human Queue')
+    expect(drawn().map(card => card.id)).toEqual(['human-queue'])
+    expect(screen.queryByText('onboarding')).toBeNull()
+    rerender(overview())
+    expect(await screen.findByText('onboarding')).toBeTruthy()
+    expect(drawn().map(card => card.id)).toEqual(['human-queue'])
+    firstSteps.read = true
+    rerender(overview())
+    expect(drawn().map(card => card.id)).toEqual(['human-queue', 'usage', 'working', 'skills', '@x/tickets/hot'])
+    cleanup()
+    // With the first steps put away, only the Human Queue is waited for.
+    prefs.value = { onboardingDismissed: true }
+    firstSteps.read = false
+    show()
+    await screen.findByText('Human Queue')
+    expect(drawn().map(card => card.id)).toEqual(['human-queue', 'usage', 'working', 'skills', '@x/tickets/hot'])
   })
 
   test('no card is drawn before the layout is read: a card taken off never reads anything', async () => {
