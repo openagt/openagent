@@ -58,10 +58,6 @@
     "text-[10px]": 1,
     "text-muted-foreground/70": 1
   },
-  "dashboard/dashboard/components/ui/gauge.tsx": {
-    "duration-500": 1,
-    "text-[9px]": 2
-  },
   "dashboard/dashboard/components/ui/resizable.tsx": {
     "group-aria-[orientation=horizontal]/handle:h-[3px]": 1
   }
