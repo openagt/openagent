@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { ArrowDown, ArrowDownWideNarrow, ArrowUp, ArrowUpNarrowWide, Check, ChevronDown, Search, X } from 'lucide-react'
+import { ArrowDown, ArrowUp, ChevronDown, Search, X } from 'lucide-react'
 import {
   EFFORT_BUCKETS,
   PRIORITY_BUCKETS,
@@ -38,7 +38,6 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuCheckboxItem,
-  DropdownMenuItem,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@openagt/dashboard/module'
@@ -62,10 +61,11 @@ function OptionRow({
   tone?: string | undefined
 }) {
   return (
-    <label className="flex cursor-pointer select-none items-center gap-2 rounded-sm px-1 py-1 text-sm hover:bg-accent/60">
+    // The whole row is the target: 32 high, 44 on a phone, as a menu's items are.
+    <label className="flex min-h-8 cursor-pointer items-center gap-2 rounded-md px-2 text-sm select-none transition-colors hover:bg-accent max-md:min-h-11">
       <Checkbox checked={checked} onCheckedChange={next => onChange(next === true)} aria-label={label} />
       <span className={cn('min-w-0 flex-1 truncate', tone)}>{label}</span>
-      <span className="shrink-0 text-xs text-muted-foreground">{count}</span>
+      <span className="shrink-0 text-xs tabular-nums text-muted-foreground">{count}</span>
     </label>
   )
 }
@@ -121,7 +121,7 @@ function RangeFacet({
     <Popover>
       <PopoverTrigger render={<FacetTrigger label={label} value={rangeValue(filter, buckets, noneLabel)} />} />
       <PopoverContent className="w-56">
-        <div className="space-y-0.5">
+        <div>
           {buckets.map(bucket => (
             <OptionRow
               key={bucket.id}
@@ -132,11 +132,11 @@ function RangeFacet({
             />
           ))}
         </div>
-        <Separator className="my-2" />
+        <Separator className="my-1" />
         <RangeRow label={label} buckets={buckets} filter={filter} onChange={onChange} />
         {(counts.none > 0 || filter.none) && (
           <>
-            <Separator className="my-2" />
+            <Separator className="my-1" />
             <OptionRow label={noneLabel} count={counts.none} checked={filter.none} onChange={next => onChange(withNone(filter, next))} />
           </>
         )}
@@ -168,7 +168,7 @@ function RangeRow({
   const displayed = filter.range ?? union
   return (
     <div
-      className={cn('px-1', dimmed && 'opacity-40')}
+      className={cn('px-2 py-1', dimmed && 'opacity-40')}
       data-dimmed={dimmed || undefined}
       title={dimmed ? 'The selected buckets skip a middle span — dragging the range replaces them' : undefined}
     >
@@ -179,9 +179,9 @@ function RangeRow({
             type="button"
             aria-label={`Clear the ${label.toLowerCase()} range`}
             onClick={() => onChange(withRange(filter, null))}
-            className="text-muted-foreground hover:text-foreground"
+            className="focus-ring relative rounded-sm text-muted-foreground after:absolute after:-inset-1 hover:text-foreground"
           >
-            <X className="h-3 w-3" aria-hidden />
+            <X className="size-3.5" aria-hidden />
           </button>
         )}
       </div>
@@ -209,7 +209,7 @@ function CheckFacet({
     <Popover>
       <PopoverTrigger render={<FacetTrigger label={label} value={value} />} />
       <PopoverContent className="w-56">
-        <div className="space-y-0.5">{children}</div>
+        <div>{children}</div>
       </PopoverContent>
     </Popover>
   )
@@ -307,7 +307,7 @@ export function TicketFilterBar({
           ))}
           {(topicFacet.none > 0 || f.topicsNone) && (
             <>
-              <Separator className="my-2" />
+              <Separator className="my-1" />
               <OptionRow label="No topics" count={topicFacet.none} checked={f.topicsNone} onChange={topicsNone => set({ topicsNone })} />
             </>
           )}
@@ -379,48 +379,31 @@ export function TicketFilterBar({
             }
           />
           <DropdownMenuContent>
+            {/* A key starts at its natural direction; the direction is the pair under the keys, each
+                saying what it means for the key ("descending" says nothing until you know the key). */}
             {(Object.keys(SORT_LABELS) as SortKey[]).map(key => (
-              // Picking a key starts it at its natural direction; direction changes are the
-              // explicit pair below, not a hidden re-click.
-              <DropdownMenuItem
+              <DropdownMenuCheckboxItem
                 key={key}
                 closeOnClick={false}
-                onClick={() => {
+                checked={view.sort.key === key}
+                onCheckedChange={() => {
                   if (view.sort.key !== key) onChange({ ...view, sort: sortByKey(key) })
                 }}
               >
-                <span className="flex h-3.5 w-3.5 items-center justify-center">
-                  {view.sort.key === key && <Check className="h-3.5 w-3.5" aria-hidden />}
-                </span>
                 {SORT_LABELS[key]}
-              </DropdownMenuItem>
+              </DropdownMenuCheckboxItem>
             ))}
             <DropdownMenuSeparator />
-            {/* The asc/desc pair (#1144 follow-up): two icon buttons, the applied one carrying
-                the menu's own highlight tokens, with the current meaning spelled out beside them
-                — "descending" says nothing until you know the key. */}
-            <div className="flex items-center gap-1 px-2 py-1.5">
-              {(['asc', 'desc'] as const).map(dir => (
-                <button
-                  key={dir}
-                  type="button"
-                  aria-label={DIR_LABELS[view.sort.key][dir]}
-                  aria-pressed={view.sort.dir === dir}
-                  onClick={() => onChange({ ...view, sort: { ...view.sort, dir } })}
-                  className={cn(
-                    'flex h-6 w-7 items-center justify-center rounded-sm hover:bg-[var(--color-accent)] hover:text-[var(--color-accent-foreground)]',
-                    view.sort.dir === dir && 'bg-[var(--color-accent)] text-[var(--color-accent-foreground)]',
-                  )}
-                >
-                  {dir === 'asc' ? (
-                    <ArrowUpNarrowWide className="h-3.5 w-3.5" aria-hidden />
-                  ) : (
-                    <ArrowDownWideNarrow className="h-3.5 w-3.5" aria-hidden />
-                  )}
-                </button>
-              ))}
-              <span className="ml-1 text-xs text-muted-foreground">{DIR_LABELS[view.sort.key][view.sort.dir]}</span>
-            </div>
+            {(['desc', 'asc'] as const).map(dir => (
+              <DropdownMenuCheckboxItem
+                key={dir}
+                closeOnClick={false}
+                checked={view.sort.dir === dir}
+                onCheckedChange={() => onChange({ ...view, sort: { ...view.sort, dir } })}
+              >
+                {DIR_LABELS[view.sort.key][dir]}
+              </DropdownMenuCheckboxItem>
+            ))}
             <DropdownMenuSeparator />
             <DropdownMenuCheckboxItem
               checked={view.group === 'project'}
