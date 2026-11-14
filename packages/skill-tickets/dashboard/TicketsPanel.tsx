@@ -20,9 +20,9 @@ export function TicketList({ children }: { children: ReactNode }) {
 }
 
 /**
- * One ticket as a row (#697/#1144): the checkbox, the title, then its facts in columns that hold
- * their place from row to row (project in the flat list, topics, claim, effort and uncertainty,
- * priority, age, the plan, the issue), and its next step at the row's right edge.
+ * One ticket as a row (#697/#1144): the checkbox, the title, its next step, then its facts in
+ * columns that hold their place from row to row (project in the flat list, topics, claim, effort
+ * and uncertainty, priority, age, the plan, the issue), the last at the row's right edge.
  *
  * The facts are *siblings* of the title's link, not children: the topic badges and the claim
  * marker filter on click (#1144), and an interactive control nested in a link is invalid HTML.
@@ -83,7 +83,7 @@ export function TicketRow({
   return (
     <li
       className={cn(
-        'group/row relative flex flex-wrap items-center gap-x-3 rounded-md px-3 text-sm transition-colors hover:bg-accent has-[[data-cover]:active]:bg-foreground/10',
+        'group/row relative flex flex-wrap items-center gap-x-3 rounded-md px-3 text-sm transition-colors hover:bg-accent has-[:focus-visible]:bg-accent has-[[data-popup-open]]:bg-accent has-[[data-cover]:active]:bg-foreground/10',
         'py-1.5 @2xl:h-10 @2xl:flex-nowrap @2xl:py-0',
         selected && 'bg-accent',
       )}
@@ -102,6 +102,18 @@ export function TicketRow({
       >
         {ticket.title}
       </a>
+      {/* The next step (TicketStartActions): Plan with no plan, Start with one; queueing it and
+          setting it up first are in its menu. Shown under the pointer and the keyboard (and while
+          its menu is open), always on touch. In a narrow list it ends the title's line, in a room of
+          its own; in a wide one it takes none: it shows beside the facts, over the title's end, so
+          the facts stand at the row's right edge and nothing moves. */}
+      <span className="relative flex shrink-0 items-center justify-end @max-2xl:w-28 @2xl:w-0 pointer-fine:opacity-0 pointer-fine:group-hover/row:opacity-100 pointer-fine:group-focus-within/row:opacity-100 pointer-fine:has-[[data-popup-open]]:opacity-100">
+        {offered && (
+          <span className="flex items-center gap-1.5 @2xl:absolute @2xl:right-0 @2xl:rounded-md @2xl:bg-accent">
+            <TicketStartActions compact projectId={projectId} ticket={ticket} busy={busy} starting={starting} onStart={onStart} onConfigure={onConfigure} />
+          </span>
+        )}
+      </span>
       {/* The facts: under the title in a narrow list, in columns beside it in a wide one. */}
       <span className={cn('relative order-last flex min-h-6 basis-full items-center gap-x-3 text-xs text-muted-foreground @2xl:order-none @2xl:basis-auto', onToggleSelect && 'pl-7 @2xl:pl-0')}>
         {projectName && <span className="shrink-0">{projectName}</span>}
@@ -188,12 +200,6 @@ export function TicketRow({
             </a>
           )}
         </span>
-      </span>
-      {/* The next step (TicketStartActions): Plan with no plan, Start with one; queueing it and
-          setting it up first are in its menu. On the row's right edge, shown under the pointer and
-          the keyboard (and while its menu is open), always on touch; a fixed width keeps the columns lined up. */}
-      <span className="relative flex w-28 shrink-0 items-center justify-end gap-1.5 pointer-fine:opacity-0 pointer-fine:group-hover/row:opacity-100 pointer-fine:group-focus-within/row:opacity-100 pointer-fine:has-[[data-popup-open]]:opacity-100">
-        {offered && <TicketStartActions compact projectId={projectId} ticket={ticket} busy={busy} starting={starting} onStart={onStart} onConfigure={onConfigure} />}
       </span>
     </li>
   )
