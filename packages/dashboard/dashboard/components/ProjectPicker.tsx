@@ -14,6 +14,7 @@ import { projectErrorTitle } from './ProjectErrorBanner.js'
 import { rowButtonClass } from './ui/row-item.js'
 import { buttonVariants } from './ui/button.js'
 import { ScrollArea } from './ui/scroll-area.js'
+import { Skeleton, useSkeleton } from './ui/skeleton.js'
 import { Tooltip, TooltipTrigger, TooltipContent } from './ui/tooltip.js'
 import { MENU_ITEM_CLASS, MENU_POPUP_CLASS, MENU_TRIGGER_OPEN_CLASS } from './ui/dropdown-menu.js'
 import { usePopupPlacement } from './ui/popup-placement.js'
@@ -237,6 +238,7 @@ export function ProjectPicker({
   const groups = pickerGroups(look === 'add' ? undefined : NONE, projectRows, repoRows, typed)
   const current = picked === null ? NONE : (projectRows.find(row => row.value === `project:${picked}`) ?? { value: `project:${picked}`, label: pickedName ?? '', pick: { kind: 'none' }, search: '' })
   const shown = current.label
+  const loading = useSkeleton(pending)
   // No project word until the name is known, never a wrong one.
   if (!shown && !pending) return null
   const project = current.pick.kind === 'project' ? current.pick.project : undefined
@@ -256,23 +258,16 @@ export function ProjectPicker({
         {none.label}
       </button>
     ) : look === 'sidebar' ? (
-      <button type="button" className="flex w-full items-center gap-2 rounded-md border border-sidebar-border bg-background px-2 py-1.5 text-sm font-medium transition-colors hover:bg-sidebar-accent/60">
+      // A ghost row of the sidebar's, 32 high whatever it shows, so the rows under it never move: the
+      // chevrons say it opens, the soft fill under the pointer that it is pressed.
+      <button type="button" className="focus-ring flex h-8 w-full items-center gap-2 rounded-md px-1.5 text-sm font-medium transition-colors hover:bg-sidebar-accent/50 active:bg-sidebar-accent">
+        <span className="flex size-4 shrink-0 items-center justify-center">
+          {pending ? null : project ? <ProjectDot project={project} /> : <Layers className="size-4 text-muted-foreground" aria-hidden />}
+        </span>
         {/* Until the projects are read, the project the address names is not known: a bar where its
             name goes, rather than "All projects" for a moment. */}
-        {pending ? (
-          <>
-            <span aria-hidden className="h-2 w-2 shrink-0 rounded-full bg-muted" />
-            <span className="flex-1">
-              <span aria-hidden className="block h-3.5 w-24 animate-pulse rounded bg-muted" />
-            </span>
-          </>
-        ) : (
-          <>
-            {project ? <ProjectDot project={project} /> : <Layers className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden />}
-            <span className="flex-1 truncate text-left">{shown}</span>
-          </>
-        )}
-        <ChevronsUpDown className="h-3.5 w-3.5 shrink-0 opacity-70" aria-hidden />
+        {loading ? <Skeleton className="h-4 w-24" /> : <span className="flex-1 truncate text-left">{pending ? '' : shown}</span>}
+        <ChevronsUpDown className="ml-auto size-4 shrink-0 text-muted-foreground" aria-hidden />
       </button>
     ) : (
       <button type="button" className={cn(rowButtonClass, 'max-w-[16rem]!')}>
