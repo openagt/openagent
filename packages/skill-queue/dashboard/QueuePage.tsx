@@ -70,7 +70,7 @@ function sections(entries: PlacedEntry[]): { priority: number | undefined; entri
 /**
  * The Queue page: every project's open entries, in the order agents will take them, numbered,
  * under the priority section each sits in, from `queue --local --full` in each project. A place
- * to act: a line on top says whether anything takes from the queue by itself; an entry is started
+ * to act: a line under them says whether anything takes from the queue by itself; an entry is started
  * here, alone or as a batch from the top, as on the Overview's card; an entry is removed, and a
  * new one added, through the same `queue done` and `queue add` an agent runs. An entry that names
  * a file another page opens reads as that page's name for it. A project whose command fails is
@@ -165,7 +165,7 @@ function BatchStart({ read, primary, starts }: { read: ProjectRead; primary: boo
   )
 }
 
-/** One project's queue: who takes from it, its entries by priority, and the field that adds one. */
+/** One project's queue: its entries by priority, who takes from it, and the field that adds one. */
 function ProjectQueue({ read, schedule, names, starts, reload }: { read: ProjectRead; schedule: Schedule; names: FileNames; starts: QueueStarts; reload: () => Promise<void> }) {
   const { project, entries, error, working } = read
   if (error !== undefined)
@@ -176,7 +176,6 @@ function ProjectQueue({ read, schedule, names, starts, reload }: { read: Project
     )
   return (
     <div className="space-y-6">
-      <TakerLine schedule={schedule} projectId={project.id} />
       {entries!.length === 0 ? (
         <p className="text-sm text-muted-foreground">Nothing queued.</p>
       ) : (
@@ -190,6 +189,7 @@ function ProjectQueue({ read, schedule, names, starts, reload }: { read: Project
           </Section>
         ))
       )}
+      <TakerLine schedule={schedule} projectId={project.id} />
       <AddEntry project={project} reload={reload} />
     </div>
   )
