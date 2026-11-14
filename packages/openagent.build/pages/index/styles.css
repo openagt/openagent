@@ -15,11 +15,6 @@
 /* OpenAgent's colours, the dashboard's own, so the page and the dashboard it switches with are one. */
 @import '../../../dashboard/dashboard/tokens.css';
 
-/* The level of a card on the page, which the dashboard's palette has no name for. */
-:root {
-  --raised: color-mix(in oklab, var(--foreground) 6%, var(--background));
-}
-
 /* The site's scale, the dashboard's one step up (ui.tsx's `text`): seven sizes on whole pixels,
  * nothing under 12, and the dashboard's spacing steps, corners and motion. */
 :root {
