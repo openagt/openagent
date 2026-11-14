@@ -74,7 +74,7 @@ export function TicketEditor({
 
   return (
     <form
-      className="space-y-4"
+      className="max-w-180 space-y-4"
       onSubmit={event => {
         event.preventDefault()
         if (ready) void save()

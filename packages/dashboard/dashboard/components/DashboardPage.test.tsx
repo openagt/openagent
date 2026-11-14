@@ -51,7 +51,7 @@ describe('the Overview', () => {
     // third once it is wide; a row's cards fill it.
     expect(drawn()[0]!.spans).toContain('basis-full')
     expect(drawn()[0]!.spans).not.toMatch(/@\w+:basis-/)
-    expect(drawn()[3]!.spans).toContain('@5xl:basis-[calc(33.333%_-_1.333rem)]')
+    expect(drawn()[3]!.spans).toContain('@4xl:basis-[calc(33.333%_-_1.333rem)]')
     expect(drawn()[4]!.spans).toContain('@2xl:basis-[calc(50%_-_1rem)]')
     expect(drawn()[4]!.spans).toContain('grow-[6]')
     cleanup()
@@ -76,7 +76,7 @@ describe('the Overview', () => {
     await screen.findByText('Human Queue')
     expect(drawn().map(card => card.id)).toEqual(['@x/tickets/hot', 'human-queue', 'skills', 'working'])
     expect(screen.queryByText('usage')).toBeNull()
-    expect(drawn()[0]!.spans).toContain('@5xl:basis-[calc(33.333%_-_1.333rem)]')
+    expect(drawn()[0]!.spans).toContain('@4xl:basis-[calc(33.333%_-_1.333rem)]')
     // The Human Queue fits half at the narrowest: a quarter is passed over for its own width, the whole row.
     expect(drawn()[1]!.spans).not.toMatch(/@\w+:basis-/)
     expect(drawn()[2]!.spans).toContain('@4xl:basis-[calc(25%_-_1.5rem)]')

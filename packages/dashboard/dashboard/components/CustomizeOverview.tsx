@@ -27,10 +27,10 @@ export interface Placed {
 const FULL = '@max-2xl:basis-full'
 const FLEX: Record<CardWidth, string> = {
   '1/4': `${FULL} grow-[3] @2xl:basis-[calc(33.333%_-_1.333rem)] @4xl:basis-[calc(25%_-_1.5rem)]`,
-  '1/3': `${FULL} grow-[4] @2xl:basis-[calc(50%_-_1rem)] @5xl:basis-[calc(33.333%_-_1.333rem)]`,
+  '1/3': `${FULL} grow-[4] @2xl:basis-[calc(50%_-_1rem)] @4xl:basis-[calc(33.333%_-_1.333rem)]`,
   '1/2': `${FULL} grow-[6] @2xl:basis-[calc(50%_-_1rem)]`,
-  '2/3': `${FULL} grow-[8] @2xl:basis-[calc(50%_-_1rem)] @5xl:basis-[calc(66.667%_-_0.667rem)]`,
-  '3/4': `${FULL} grow-[9] @2xl:basis-[calc(50%_-_1rem)] @5xl:basis-[calc(75%_-_0.5rem)]`,
+  '2/3': `${FULL} grow-[8] @2xl:basis-[calc(50%_-_1rem)] @4xl:basis-[calc(66.667%_-_0.667rem)]`,
+  '3/4': `${FULL} grow-[9] @2xl:basis-[calc(50%_-_1rem)] @4xl:basis-[calc(75%_-_0.5rem)]`,
   '1': 'basis-full grow-[12]',
 }
 

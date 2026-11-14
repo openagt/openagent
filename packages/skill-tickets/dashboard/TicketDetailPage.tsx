@@ -63,7 +63,7 @@ export function TicketDetailPage({
                 onEdit={() => setEditing(true)}
                 onChanged={() => void reload()}
               />
-              <div className="mt-6">
+              <div className="mt-6 max-w-180">
                 <Markdown text={ticketBody(ticket.content)} page />
               </div>
             </>

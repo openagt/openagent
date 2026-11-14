@@ -171,7 +171,6 @@ export function DashboardPage({
   return (
     <Page
       title="Overview"
-      width="wide"
       description={
         // In the sentence's place, wrapping as text on a phone.
         line.map((part, at) => (

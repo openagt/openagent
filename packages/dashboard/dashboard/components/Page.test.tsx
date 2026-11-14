@@ -22,20 +22,12 @@ test('the name, its count, the line under it and the page\'s buttons in a header
   expect(header.textContent).toContain("Every project's backlog")
   expect(header.textContent).toContain('Add to queue')
   expect(header.textContent).toContain('filters')
-  // What the page shows comes after its header, in the same column.
+  // What the page shows comes after its header, in the same column: 960 at most, on every page.
   const column = header.parentElement!
-  // A list's column, 960 at most, unless the page asks for another.
   expect(column.className.split(' ')).toEqual(expect.arrayContaining(['mx-auto', 'max-w-240']))
   expect(column.lastElementChild!.textContent).toBe('the list')
   // Drawn alone, with no sidebar around it, it offers none to show.
   expect(screen.queryByRole('button', { name: 'Show the sidebar' })).toBeNull()
-})
-
-test('a page asks for the Overview\'s width, or a reading column, in place of a list\'s', () => {
-  const { rerender } = render(<Page title="Overview" width="wide"><p>cards</p></Page>)
-  expect(screen.getByRole('heading', { level: 1 }).closest('header')!.parentElement!.className.split(' ')).toContain('max-w-280')
-  rerender(<Page title="Ticket" width="reading"><p>text</p></Page>)
-  expect(screen.getByRole('heading', { level: 1 }).closest('header')!.parentElement!.className.split(' ')).toContain('max-w-180')
 })
 
 test("the buttons' row gives up width at every width, so its buttons go under each other when the column is narrower than them", () => {

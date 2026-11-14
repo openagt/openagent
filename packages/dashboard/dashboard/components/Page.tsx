@@ -1,18 +1,21 @@
 import type { ReactNode } from 'react'
 import { ShowSidebarButton } from './SidebarToggle.js'
-import { cn } from '../lib/utils.js'
 
 // A page of the dashboard that is no chat (the Overview, and a module's page: Logs, Queue, Tickets,
 // Automations): its name, a line saying what it shows, and the page's own buttons at the end of
-// that row; under them, what the page shows. Every page is a column centred in what the sidebar
-// leaves: 960 for a list or a settings page, 720 for reading, 1120 for the Overview. The page
-// scrolls as a page (App), its header going up with the rest. A phone's bar names the page already
-// (PhoneBar): there the name is said to a screen reader only.
+// that row; under them, what the page shows. The page scrolls as a page (App), its header going up
+// with the rest. A phone's bar names the page already (PhoneBar): there the name is said to a
+// screen reader only.
 
-/** How wide a page's column is at most: `list` 960, `reading` 720, `wide` 1120. */
-export type PageWidth = 'list' | 'reading' | 'wide'
-
-const WIDTHS: Record<PageWidth, string> = { list: 'max-w-240', reading: 'max-w-180', wide: 'max-w-280' }
+/**
+ * The one column every page that is no chat stands in, 960 at most, centred in what the sidebar
+ * leaves: a page's title starts at the same x on every page. What is read in it (a ticket's text)
+ * is 720 at most, from its left edge.
+ */
+export function PageColumn({ children }: { children: ReactNode }) {
+  // 32 around it on a wide screen, 24 on a tablet, 16 on a phone.
+  return <div className="mx-auto w-full max-w-240 lg:p-8 md:max-lg:p-6 max-md:p-4">{children}</div>
+}
 
 export function Page({
   title,
@@ -20,7 +23,6 @@ export function Page({
   description,
   actions,
   bar,
-  width = 'list',
   children,
 }: {
   title: string
@@ -31,13 +33,10 @@ export function Page({
   actions?: ReactNode
   /** Under the header: a bar of the page's own (the Tickets' filters). */
   bar?: ReactNode
-  /** How wide its column is at most; a list's, 960, unless said. */
-  width?: PageWidth | undefined
   children: ReactNode
 }) {
   return (
-    // 32 around it on a wide screen, 24 on a tablet, 16 on a phone.
-    <div className={cn('mx-auto w-full lg:p-8 md:max-lg:p-6 max-md:p-4', WIDTHS[width])}>
+    <PageColumn>
       <header className="mb-6 space-y-3">
         <div className="flex flex-wrap items-start justify-between gap-x-4 gap-y-2">
           <div className="flex min-w-0 items-start gap-2">
@@ -64,6 +63,6 @@ export function Page({
         {bar}
       </header>
       {children}
-    </div>
+    </PageColumn>
   )
 }

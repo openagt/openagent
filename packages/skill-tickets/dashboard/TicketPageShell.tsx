@@ -1,11 +1,11 @@
 import { Fragment, type ReactNode } from 'react'
 import { ChevronRight } from 'lucide-react'
-import { ShowSidebarButton, Skeleton } from '@openagt/dashboard/module'
+import { PageColumn, ShowSidebarButton, Skeleton } from '@openagt/dashboard/module'
 
 // The frame every page under the tickets list sits in (#1144, #685): the breadcrumb back to the
-// list, then the page's own content in one column. A page under a list needs the same way
-// out and the same measure wherever it goes, and the two were written out separately — so a change
-// to one left the other reading as a different kind of page.
+// list, then the page's own content, in the column every page has. A page under a list needs the
+// same way out and the same measure wherever it goes, and the two were written out separately — so
+// a change to one left the other reading as a different kind of page.
 
 /** What a ticket page shows while its read is in flight, and when there is nothing to show. */
 export function TicketPageNote({ children }: { children: ReactNode }) {
@@ -47,8 +47,7 @@ export function TicketPageShell({
 }) {
   const step = 'focus-ring min-w-0 truncate rounded-sm hover:text-foreground hover:underline'
   return (
-    // A page read rather than scanned: the narrow column of a page (`Page`'s reading width), with 32 around it on a wide screen.
-    <div className="mx-auto w-full max-w-180 lg:p-8 md:max-lg:p-6 max-md:p-4">
+    <PageColumn>
       {/* While the sidebar is hidden, the button that shows it again stands first. */}
       <nav aria-label="Breadcrumb" className="mb-3 flex min-h-7 items-center gap-1.5 text-xs text-muted-foreground">
         <ShowSidebarButton />
@@ -71,6 +70,6 @@ export function TicketPageShell({
         ))}
       </nav>
       {children}
-    </div>
+    </PageColumn>
   )
 }

@@ -35,7 +35,7 @@ export function TicketPlanPage({
           ) : (
             <>
               <TicketHeader projectId={projectId} ticket={ticket} holderStatus={read.holderStatus} sessions={read.sessions} tab="plan" onChanged={() => void reload()} />
-              <div className="mt-6">
+              <div className="mt-6 max-w-180">
                 {read.plan === null ? (
                   // No `.plan.md` beside the ticket — never written, or removed since: the head's button writes one.
                   <TicketPageNote>This ticket has no plan yet. Plan now has an agent write one; its menu queues it instead.</TicketPageNote>
