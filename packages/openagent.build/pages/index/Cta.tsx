@@ -5,9 +5,9 @@ export function Cta() {
   return (
     <section
       style={{
-        maxWidth: 880,
-        margin: '0 auto',
-        padding: 'var(--space-section) var(--space-gutter)',
+        maxWidth: 'var(--container)',
+        margin: 'var(--space-section) auto 0',
+        padding: '0 var(--space-gutter) var(--space-part)',
         textAlign: 'center',
         display: 'flex',
         flexDirection: 'column',

@@ -38,7 +38,7 @@ export function Hero() {
     <header
       id="top"
       style={{
-        maxWidth: 1120,
+        maxWidth: 'var(--container)',
         margin: '0 auto',
         padding: 'var(--space-head) var(--space-gutter) 32px',
         textAlign: 'center',
@@ -188,11 +188,11 @@ export function Hero() {
         style={{
           marginTop: 24,
           width: '100%',
-          maxWidth: 1120,
+          maxWidth: 'var(--container)',
           boxSizing: 'border-box',
           display: 'grid',
           gridTemplateColumns: 'repeat(auto-fit, minmax(min(300px, 100%), 1fr))',
-          gap: 'var(--space-items) 48px',
+          gap: 'var(--space-items) var(--space-columns)',
           textAlign: 'left',
         }}
       >

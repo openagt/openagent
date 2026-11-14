@@ -35,12 +35,16 @@
   /* Lines of prose hold 68 characters at most. */
   --measure: 34em;
 
-  /* Between sections, between a section's heading and what it holds, between the things it
-   * holds, and the page's side margin. */
-  --space-section: 64px;
-  --space-head: 32px;
-  --space-items: 32px;
+  /* The page's one column, and its side margin. */
+  --container: 1120px;
   --space-gutter: 32px;
+  /* Between sections; between a section's parts; between a section's heading and what it holds;
+   * between the things it holds; between columns. */
+  --space-section: 128px;
+  --space-part: 64px;
+  --space-head: 48px;
+  --space-items: 32px;
+  --space-columns: 48px;
 
   /* A section's heading. */
   --text-heading: var(--text-2xl);
@@ -64,10 +68,12 @@
 /* A phone: the scale's smaller steps, and the hero's title on one line. */
 @media (max-width: 640px) {
   :root {
-    --space-section: 48px;
+    --space-gutter: 16px;
+    --space-section: 64px;
+    --space-part: 48px;
     --space-head: 24px;
     --space-items: 24px;
-    --space-gutter: 16px;
+    --space-columns: 24px;
     --text-hero: var(--text-2xl);
     --leading-hero: var(--leading-2xl);
     --text-heading: var(--text-xl);
@@ -378,10 +384,27 @@ html:not([data-pm]) .pm-tab-npm {
   .section-nav-wrap {
     display: none !important;
   }
-  .problem-row {
-    grid-template-columns: 1fr !important;
-    gap: 16px !important;
+}
+
+/* --- A section's split: a third for what names it, two for what it holds; one column on a phone --- */
+.split {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 2fr);
+  gap: var(--space-items) var(--space-columns);
+  align-items: start;
+}
+@media (max-width: 860px) {
+  .split {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 16px;
   }
+}
+/* A list of rows, a hairline between them; the first level with what stands beside or over it. */
+.rows > * + * {
+  border-top: 1px solid var(--border);
+}
+.rows > :first-child {
+  padding-top: 0 !important;
 }
 @media (max-width: 760px) {
   .copy-tip-side {
@@ -399,5 +422,12 @@ html:not([data-pm]) .pm-tab-npm {
   .solution-row {
     grid-template-columns: 1fr !important;
     row-gap: 4px !important;
+  }
+}
+/* A heading that stays in view beside its long list, under the section bar. */
+@media (min-width: 861px) {
+  .split-head {
+    position: sticky;
+    top: 96px;
   }
 }

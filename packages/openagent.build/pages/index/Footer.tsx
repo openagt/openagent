@@ -11,7 +11,7 @@ export function Footer() {
       style={{
         borderTop: '1px solid var(--border)',
         padding: '24px var(--space-gutter)',
-        maxWidth: 1120,
+        maxWidth: 'var(--container)',
         margin: '0 auto',
         boxSizing: 'border-box',
         display: 'flex',

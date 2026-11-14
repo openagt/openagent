@@ -1,10 +1,11 @@
 import type { ReactNode } from 'react'
 import { CheckIcon } from './icons'
-import { CodeChip, columnsStyle, columnStyle, Emoji, SectionHead, sectionStyle, text, WipBadge } from './ui'
+import { CodeChip, Emoji, h2Style, sectionStyle, text, WipBadge } from './ui'
 
-function Card({ title, children }: { title: string; children: ReactNode }) {
+/** One of the framework's three promises: its name in the split's third, its points beside it. */
+function Pillar({ title, children }: { title: string; children: ReactNode }) {
   return (
-    <div style={columnStyle}>
+    <div className="split" style={{ padding: 'var(--space-items) 0' }}>
       <h3 style={{ margin: 0, ...text('lg'), fontWeight: 600 }}>{title}</h3>
       <ul
         style={{
@@ -37,18 +38,21 @@ function Item({ children, marker }: { children: ReactNode; marker?: ReactNode })
 export function YourFramework() {
   return (
     <section id="your-framework" style={sectionStyle}>
-      <SectionHead
-        title="Your framework"
-        sub="It isn't our framework. It's yours."
-      />
-      <div style={columnsStyle(260)}>
-        <Card title="Flexible">
+      <h2 style={h2Style}>Your framework</h2>
+      <p
+        className="moment"
+        style={{ margin: 0, fontSize: 'var(--text-hero)', lineHeight: 'var(--leading-hero)', fontWeight: 600, letterSpacing: '-0.02em', textWrap: 'balance' }}
+      >
+        It isn't our framework. It's yours.
+      </p>
+      <div className="rows">
+        <Pillar title="Flexible">
           <Item>OpenAgent doesn't force anything — pick only the features you need</Item>
           <Item marker={<Emoji e="🚧" />}>
             <WipBadge /> Customize anything to fit your needs
           </Item>
-        </Card>
-        <Card title="100% Local">
+        </Pillar>
+        <Pillar title="100% Local">
           <Item>Runs locally on your machine, like a desktop app</Item>
           <Item>No backdoors, no tracking</Item>
           <Item>
@@ -57,14 +61,14 @@ export function YourFramework() {
             </span>
           </Item>
           <Item>Data is fully yours</Item>
-        </Card>
-        <Card title="100% Open Source">
+        </Pillar>
+        <Pillar title="100% Open Source">
           <Item>Transparent — no hidden code</Item>
           <Item>
             Something's not working for you? Ask your favorite AI to make a Pull Request — we welcome agentic
             contributions!
           </Item>
-        </Card>
+        </Pillar>
       </div>
     </section>
   )

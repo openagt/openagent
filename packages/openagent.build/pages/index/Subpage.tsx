@@ -17,10 +17,10 @@ export function Subpage({ title, lead, children }: { title: string; lead: string
           style={{
             maxWidth: 720,
             margin: '0 auto',
-            padding: 'var(--space-section) var(--space-gutter)',
+            padding: 'var(--space-part) var(--space-gutter)',
             display: 'flex',
             flexDirection: 'column',
-            gap: 'var(--space-section)',
+            gap: 'var(--space-part)',
           }}
         >
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>

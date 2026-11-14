@@ -26,7 +26,7 @@ export const BADGES = [
 // rhythm is a MARGIN, not padding: anchors target the border box, so nav
 // clicks land on the section's content instead of a screen of padding.
 export const sectionStyle: CSSProperties = {
-  maxWidth: 1120,
+  maxWidth: 'var(--container)',
   margin: 'var(--space-section) auto 0',
   padding: '0 var(--space-gutter)',
   display: 'flex',
@@ -54,7 +54,7 @@ export const h3Style: CSSProperties = {
 export const columnsStyle = (min: number): CSSProperties => ({
   display: 'grid',
   gridTemplateColumns: `repeat(auto-fit, minmax(min(${min}px, 100%), 1fr))`,
-  gap: 'var(--space-items)',
+  gap: 'var(--space-items) var(--space-columns)',
 })
 
 /** A column's title, then its sentences: a section's part, on the page itself. */

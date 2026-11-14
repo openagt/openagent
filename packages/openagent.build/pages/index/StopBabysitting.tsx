@@ -86,19 +86,9 @@ export function StopBabysitting() {
   return (
     <section id="stop-babysitting" style={sectionStyle}>
       <SectionHead title="Stop babysitting" />
-      <div>
-        {PROBLEMS.map((p, i) => (
-          <div
-            key={p.title}
-            className="problem-row"
-            style={{
-              display: 'grid',
-              gridTemplateColumns: '280px 1fr',
-              gap: 32,
-              padding: 'var(--space-items) 0',
-              borderTop: i === 0 ? undefined : '1px solid var(--border)',
-            }}
-          >
+      <div className="rows">
+        {PROBLEMS.map((p) => (
+          <div key={p.title} className="split" style={{ padding: 'var(--space-items) 0' }}>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
               <span style={{ ...text('sm'), fontWeight: 500, color: 'var(--muted-foreground)' }}>Problem</span>
               <h3 style={{ margin: 0, ...text('lg'), fontWeight: 600 }}>{p.title}</h3>

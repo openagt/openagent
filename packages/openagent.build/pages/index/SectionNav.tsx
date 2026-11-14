@@ -60,7 +60,7 @@ export function SectionNav() {
           justifyContent: 'center',
           alignItems: 'center',
           gap: 8,
-          padding: 'var(--space-section) var(--space-gutter) 8px',
+          padding: 'var(--space-part) var(--space-gutter) 8px',
           color: 'var(--muted-foreground)',
           ...text('sm'),
           fontWeight: 500,
@@ -105,7 +105,7 @@ export function SectionNav() {
         <div
           className="section-nav"
           style={{
-            maxWidth: 1120,
+            maxWidth: 'var(--container)',
             margin: '0 auto',
             padding: '0 var(--space-gutter)',
             display: 'flex',
