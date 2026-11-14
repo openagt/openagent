@@ -30,13 +30,14 @@ import { ConfirmDialog } from './ui/confirm-dialog.js'
 import { buttonVariants } from './ui/button.js'
 import { BACKDROP_CLASS, DIALOG_PRESSES_CLASS } from './ui/dialog.js'
 import { Switch } from './ui/switch.js'
+import { Separator } from './ui/separator.js'
 import { RadioGroup, RadioGroupItem } from './ui/radio-group.js'
 import { ScrollArea } from './ui/scroll-area.js'
-import { InSection } from './ui/section.js'
+import { InSection, Section } from './ui/section.js'
 import { Select, SelectContent, SelectItem, SelectValue } from './ui/select.js'
 import { cn } from '../lib/utils.js'
 import { useProjectLabel } from '../lib/project-labels.js'
-import { SettingsFootContext, SettingsRow as Row, SettingsSection as Section, SettingsSelectRow as SelectRow, type SettingsOption as SelectOption } from './SettingsRows.js'
+import { SettingsFootContext, SettingsRow as Row, SettingsSection, SettingsSelectRow as SelectRow, type SettingsOption as SelectOption } from './SettingsRows.js'
 
 // Settings (#958): a dialog over the page you are on, a list of entries on the left and the
 // picked entry's settings on the right. It opens from the person's menu and closes back to the
@@ -347,6 +348,8 @@ function useOwnEntries(): Entry[] {
   // will not happen.
   const permission = useNotificationPermission()
   const browserBlocked = permission === 'denied'
+  // While the browser delivers nothing, the kinds wait on it: their rows are greyed, and still switch.
+  const delivered = permission === 'unsupported' || ((preferences.notifyBrowser ?? true) && permission === 'granted')
 
   const palette = preferences.palette ?? 'openagent'
 
@@ -362,7 +365,7 @@ function useOwnEntries(): Entry[] {
       title: 'Appearance',
       icon: Palette,
       body: (
-        <Section>
+        <SettingsSection>
           <SelectRow
             label="Theme"
             description="Follow the system, or pin light or dark."
@@ -428,7 +431,7 @@ function useOwnEntries(): Entry[] {
             checked={!(preferences.onboardingDismissed ?? false)}
             onChange={next => updatePreferences({ onboardingDismissed: !next })}
           />
-        </Section>
+        </SettingsSection>
       ),
     },
     {
@@ -436,7 +439,7 @@ function useOwnEntries(): Entry[] {
       title: 'Notifications',
       icon: Bell,
       body: (
-        <div className="space-y-6">
+        <div className="flex flex-col gap-6">
           <HeadedSection heading="Deliver to">
             <ToggleRow
               label="Browser"
@@ -446,16 +449,19 @@ function useOwnEntries(): Entry[] {
               onChange={setBrowserNotifications}
             />
           </HeadedSection>
+          <Separator className="bg-hairline" />
           <HeadedSection heading="Notify me about">
             <ToggleRow
               label="Human Queue"
               description={kindHint(HUMAN_QUEUE_ABOUT, permission, preferences.notifyBrowser ?? true)}
               checked={preferences.notifyHumanIntervention ?? true}
+              dimmed={!delivered}
               onChange={next => updatePreferences({ notifyHumanIntervention: next })}
             />
             <ToggleRow
               label="New activity"
               description={kindHint(NEW_ACTIVITY_ABOUT, permission, preferences.notifyBrowser ?? true)}
+              dimmed={!delivered}
               checked={preferences.notifyNewActivity ?? false}
               onChange={next => updatePreferences({ notifyNewActivity: next })}
             />
@@ -468,7 +474,7 @@ function useOwnEntries(): Entry[] {
       title: 'Coding agent',
       icon: Bot,
       body: (
-        <Section>
+        <SettingsSection>
           <SelectRow
             label="Coding agent"
             description={`Which coding agent runs the work.${missingDriver !== undefined ? ` ${missingDriver} is not installed on this computer.` : ''}`}
@@ -496,7 +502,7 @@ function useOwnEntries(): Entry[] {
             checked={preferences.showThinking ?? false}
             onChange={next => updatePreferences({ showThinking: next })}
           />
-        </Section>
+        </SettingsSection>
       ),
     },
     {
@@ -516,7 +522,7 @@ function useOwnEntries(): Entry[] {
       title: 'Claude web',
       icon: Globe,
       body: (
-        <Section description="A Claude web agent hands off and ends, so the questions its session asks never reach this dashboard. The Claude web bridge carries them back and types your answers into the session.">
+        <SettingsSection description="A Claude web agent hands off and ends, so the questions its session asks never reach this dashboard. The Claude web bridge carries them back and types your answers into the session.">
           <ToggleRow
             label="Claude web bridge"
             description="Carry claude.ai questions into this dashboard and type your answers back. A browser signed in to claude.ai does the work, through the bridge extension."
@@ -532,7 +538,7 @@ function useOwnEntries(): Entry[] {
               onChange={next => updatePreferences({ bridgeBrowser: next })}
             />
           )}
-        </Section>
+        </SettingsSection>
       ),
     },
     {
@@ -589,14 +595,10 @@ function BridgeBrowserChoice({ daemonBrowser, onChange }: { daemonBrowser: boole
 
 /** A group of rows under a heading of its own. */
 function HeadedSection({ heading, children }: { heading: string; children: ReactNode }) {
-  const id = useId()
   return (
-    <section aria-labelledby={id} className="space-y-2">
-      <h3 id={id} className="text-xs font-semibold text-muted-foreground">
-        {heading}
-      </h3>
-      <Section>{children}</Section>
-    </section>
+    <Section title={heading}>
+      <SettingsSection>{children}</SettingsSection>
+    </Section>
   )
 }
 
@@ -607,6 +609,7 @@ function ToggleRow({
   checked,
   onChange,
   disabled = false,
+  dimmed = disabled,
 }: {
   label: string
   description: string
@@ -614,13 +617,15 @@ function ToggleRow({
   onChange: (next: boolean) => void
   /** A capability the daemon or browser withholds, e.g. notifications the browser has blocked. */
   disabled?: boolean
+  /** Greyed while what it needs is off, and still to be switched. */
+  dimmed?: boolean
 }) {
   const id = useId()
   return (
     <Row
       label={label}
       description={description}
-      dimmed={disabled}
+      dimmed={dimmed}
       labelFor={id}
       control={
         <Switch
