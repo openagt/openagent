@@ -18,7 +18,7 @@ function goHome(e: MouseEvent) {
 
 export function TopNav() {
   return (
-    <nav style={{ position: 'relative', minHeight: 94 }}>
+    <nav className="top-nav">
       <a href="#main" className="skip-link press press-primary press-small">
         Skip to content
       </a>

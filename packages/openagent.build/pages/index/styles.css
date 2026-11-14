@@ -134,6 +134,28 @@ section[id] {
   scroll-margin-top: 64px;
 }
 
+/* The top bar holds the toggle's place under the logo where the toggle shows (#1919). On a wide screen nothing
+ * of the hero's centred column meets it, so the hero starts right under the logo's row. */
+.top-nav {
+  position: relative;
+  min-height: 60px;
+}
+html[data-installed] .top-nav {
+  min-height: 94px;
+}
+.hero {
+  padding-top: var(--space-head);
+}
+@media (min-width: 861px) {
+  .top-nav,
+  html[data-installed] .top-nav {
+    min-height: 48px;
+  }
+  .hero {
+    padding-top: 4px;
+  }
+}
+
 /* On a phone a command's label stands over it, and the command is the column's width. */
 @media (max-width: 480px) {
   .labelled {

@@ -20,15 +20,18 @@ export function Hero() {
   return (
     <header
       id="top"
+      className="hero"
       style={{
         maxWidth: 'var(--container)',
         margin: '0 auto',
-        padding: 'var(--space-head) var(--space-gutter) 32px',
+        // Its top in styles.css: on a wide screen it starts right under the logo's row.
+        paddingInline: 'var(--space-gutter)',
+        paddingBottom: 32,
         textAlign: 'center',
         display: 'flex',
         flexDirection: 'column',
         alignItems: 'center',
-        gap: 16,
+        gap: 12,
       }}
     >
       <ul
@@ -94,12 +97,12 @@ export function Hero() {
         href={dashboardHref}
         onClick={switchInPlace}
         className="press press-primary dashboard-cta"
-        style={{ marginTop: 8 }}
+        style={{ marginTop: 4 }}
       >
         Dashboard <span aria-hidden>→</span>
       </a>
 
-      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8, marginTop: 16, maxWidth: '100%' }}>
+      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8, marginTop: 12, maxWidth: '100%' }}>
         <PmTabs />
         <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'center', gap: '8px 32px', maxWidth: '100%' }}>
           <Labelled label="Try:">
@@ -111,7 +114,7 @@ export function Hero() {
         </div>
       </div>
 
-      <div style={{ width: '100%', marginTop: 32 }}>
+      <div style={{ width: '100%', marginTop: 12 }}>
         <Screenshot
           name="run"
           first
