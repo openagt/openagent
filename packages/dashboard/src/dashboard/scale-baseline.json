@@ -4,10 +4,6 @@
     "ml-2.5": 1,
     "text-[13px]": 7
   },
-  "dashboard-changes/dashboard/DiffView.tsx": {
-    "leading-[17px]": 1,
-    "text-[10px]": 1
-  },
   "dashboard-devices/dashboard/AddDevice.tsx": {
     "py-2.5": 1,
     "text-[10px]": 1

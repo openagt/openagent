@@ -42,7 +42,7 @@ const findRow = async (name: RegExp) => within(await screen.findByRole('list', {
 const queryRow = (name: RegExp) => screen.queryByRole('list', { name: 'Changed files' }) && within(list()).queryByRole('button', { name })
 const NOT_MERGED = 'main → agent-x'
 /** A diff's lines as they read, number, sign and text: the text is in pieces once it is coloured. */
-const diffLines = (root: HTMLElement = document.body) => [...root.querySelectorAll('.font-mono > div')].map(line => line.textContent)
+const diffLines = (root: HTMLElement = document.body) => [...root.querySelectorAll('.font-mono > div > div')].map(line => line.textContent)
 
 describe('ChangesPanel', () => {
   test('a run’s page lists only the files the run changed, grouped by folder, and its header says between which branches and that they are not merged yet', async () => {

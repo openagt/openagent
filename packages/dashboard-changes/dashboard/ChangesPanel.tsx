@@ -33,7 +33,7 @@ import type { RunChanges } from '../src/server.js'
 import type { FileDiff } from '../src/diff.js'
 import { commitKey, commitsKey, diffKey, projectKey, runKey } from './keys.js'
 import { readCommit, readCommits, readDiff, readProject, readRun } from './reads.js'
-import { DiffShape, DiffView } from './DiffView.js'
+import { DiffShape, DiffView, isNewFile } from './DiffView.js'
 import { CONTEXT_LINES, MAX_PREVIEW_LINES } from '../src/confined.js'
 import { foldAll, foldDiff, setChangesSetting, showWhole, useChangesSettings, usePageDiffs, wholeKey } from './settings.js'
 
@@ -147,7 +147,7 @@ interface DiffProps {
  */
 function rowsExpected(mark: FileMark): number {
   const changed = (mark.added ?? 0) + (mark.removed ?? 0)
-  const whole = mark.status === 'untracked' || mark.status === 'added' || mark.status === 'deleted'
+  const whole = isNewFile(mark.status) || mark.status === 'deleted'
   return Math.max(1, Math.min(changed + (whole ? 0 : 2 * CONTEXT_LINES), MAX_PREVIEW_LINES))
 }
 
@@ -558,7 +558,7 @@ export function ChangesPanel({ projectId, agentId, activity, reveal }: ModulePan
                     <ChevronRight aria-hidden className={cn('size-3.5 shrink-0', !isFolded && 'rotate-90')} />
                     <FileIcon path={path} className="size-3" />
                     <span className={cn('min-w-0 truncate', mark.status === 'deleted' && 'line-through')}>{path}</span>
-                    <Counts mark={mark} />
+                    {isNewFile(mark.status) && mark.added !== undefined ? <span className="shrink-0 text-xs">{`new file, ${mark.added} ${mark.added === 1 ? 'line' : 'lines'}`}</span> : <Counts mark={mark} />}
                   </button>
                   {!isFolded && (
                     <LazyDiff
