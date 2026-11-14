@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select.js'
 import { cn } from '../lib/utils.js'
 import { DaemonDown } from '../lib/use-daemon-health.js'
+import { Skeleton } from './ui/skeleton.js'
 
 // Settings' building blocks (#958): an entry's settings, a row, a row picked from a list. The
 // dashboard's own entries are made of them, and so is an entry a module brings (`@openagt/dashboard/module`
@@ -68,6 +69,23 @@ export function SettingsRow({
         <p className="mt-0.5 text-xs text-muted-foreground">{description}</p>
       </div>
       <div className="shrink-0">{control}</div>
+    </div>
+  )
+}
+
+/** Settings rows while they are read, in their own shape: a {@link Slot}'s `shape`. */
+export function SettingsRowShapes({ rows = 2 }: { rows?: number }) {
+  return (
+    <div className="flex flex-col gap-4">
+      {Array.from({ length: rows }, (_, at) => (
+        <div key={at} className="flex items-start justify-between gap-x-6 gap-y-2 max-md:flex-col max-md:items-stretch">
+          <div className="min-w-0 flex-1 space-y-2 pt-0.5">
+            <Skeleton className="h-4 w-32" />
+            <Skeleton className="h-3 w-2/3" />
+          </div>
+          <Skeleton className="h-8 w-60 max-md:w-full" />
+        </div>
+      ))}
     </div>
   )
 }

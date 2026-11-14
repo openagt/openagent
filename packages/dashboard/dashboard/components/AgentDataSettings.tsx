@@ -5,7 +5,8 @@ import { usePolled } from '../lib/use-async.js'
 import { useAction } from '../lib/use-action.js'
 import { Button } from './ui/button.js'
 import { Input } from './ui/input.js'
-import { SettingsRow, SettingsSection } from './SettingsRows.js'
+import { SettingsRow, SettingsRowShapes, SettingsSection } from './SettingsRows.js'
+import { Slot } from './ui/slot.js'
 import { PathStrip } from './PathStrip.js'
 import { SendAs, firstSendAs } from './SendAs.js'
 import { BackupNotice, accountsAt } from './BackupNotice.js'
@@ -26,14 +27,22 @@ const EVERY_MS = 10_000
  * person's own login.
  */
 export function AgentDataSettings() {
-  const { value: view, reload } = usePolled<PersonalFolderView | null>(onPersonalFolder, null, EVERY_MS, [])
+  const read = usePolled<PersonalFolderView | null>(onPersonalFolder, null, EVERY_MS, [])
+  return (
+    <Slot of={read} shape={<SettingsRowShapes rows={1} />}>
+      {view => view && <PersonalFolder view={view} reload={read.reload} />}
+    </Slot>
+  )
+}
+
+/** Where your agent data is, and the presses that move it. */
+function PersonalFolder({ view, reload }: { view: PersonalFolderView; reload: () => Promise<void> }) {
   const [asking, setAsking] = useState(false)
   const [address, setAddress] = useState('')
   const [picked, setPicked] = useState<string | undefined>()
   const { busy, error, reset, run } = useAction()
   // OpenAgent's accounts, read live: one added here is offered at once.
   const { view: gitHosts, reload: reloadGitHosts } = useGitHosts()
-  if (!view) return null
   const personal = view
 
   // The host the typed address is on, and OpenAgent's accounts there; a folder on this disk asks no login.

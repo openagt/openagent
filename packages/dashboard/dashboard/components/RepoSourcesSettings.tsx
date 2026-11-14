@@ -9,7 +9,8 @@ import { List, Row } from './ui/list.js'
 import { Section } from './ui/section.js'
 import { Separator } from './ui/separator.js'
 import { PathStrip } from './PathStrip.js'
-import { SettingsSection } from './SettingsRows.js'
+import { SettingsRowShapes, SettingsSection } from './SettingsRows.js'
+import { Slot } from './ui/slot.js'
 
 /** The Settings entry's id. */
 export const REPO_SOURCES_ENTRY = 'repos'
@@ -22,12 +23,29 @@ export const REPO_SOURCES_ENTRY = 'repos'
  */
 export function RepoSourcesSettings() {
   const [read, setRead] = useState(0)
-  const sources = useLoaded<RepoSources | null>(() => onRepoSources().catch(() => null), null, [read])
+  // `undefined` is not read yet; a read that fails is `null`. A read again after a change keeps the lists in place.
+  const sources = useLoaded<RepoSources | null | undefined>(() => onRepoSources().catch(() => null), undefined, [read], 'previous')
+  return (
+    <Slot of={{ value: sources, state: sources === undefined ? 'unknown' : 'fresh' }} shape={<SettingsRowShapes />}>
+      {sources =>
+        sources ? (
+          <Sources sources={sources} onChanged={() => setRead(k => k + 1)} />
+        ) : (
+          <p role="alert" className="text-sm text-danger">
+            Where the picker looks could not be read.
+          </p>
+        )
+      }
+    </Slot>
+  )
+}
+
+/** The users and organizations named, and the folders added, with the presses that change them. */
+function Sources({ sources, onChanged }: { sources: RepoSources; onChanged: () => void }) {
   const [owner, setOwner] = useState('')
   const { busy, error, reset, run } = useAction()
-  if (!sources) return null
   const again = (outcome: { ok: boolean }) => {
-    if (outcome.ok) setRead(k => k + 1)
+    if (outcome.ok) onChanged()
     return outcome
   }
 

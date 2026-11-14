@@ -5,7 +5,8 @@ import { usePolled } from '../lib/use-async.js'
 import { useAction } from '../lib/use-action.js'
 import { HostServicesContext, INERT_HOST_SERVICES } from '../lib/host-services.js'
 import { ConfirmDialog } from './ui/confirm-dialog.js'
-import { SettingsSection, SettingsSelectRow, SettingsRow } from './SettingsRows.js'
+import { SettingsRowShapes, SettingsSection, SettingsSelectRow, SettingsRow } from './SettingsRows.js'
+import { Slot } from './ui/slot.js'
 import { PathStrip } from './PathStrip.js'
 import { AGENT_DATA_ENTRY } from './AgentDataSettings.js'
 import { SendAs, firstSendAs } from './SendAs.js'
@@ -30,13 +31,26 @@ const KIND_WORDS: Record<KeptData['kind'], (n: number) => string> = {
  * never as the person's own login.
  */
 export function ProjectAgentDataSettings({ projectId }: { projectId: string }) {
+  const read = usePolled<ProjectAgentData | null>(() => onProjectAgentData(projectId), null, EVERY_MS, [projectId])
+  return (
+    <Slot of={read} shape={<SettingsRowShapes />}>
+      {data =>
+        data ? (
+          <ProjectData projectId={projectId} data={data} reload={read.reload} />
+        ) : (
+          <p className="text-sm text-muted-foreground">This project&rsquo;s agent data is on the computer the project is on.</p>
+        )
+      }
+    </Slot>
+  )
+}
+
+/** Where one project's agent data is, the pick that moves it, and what is kept there. */
+function ProjectData({ projectId, data, reload }: { projectId: string; data: ProjectAgentData; reload: () => Promise<void> }) {
   const services = useContext(HostServicesContext) ?? INERT_HOST_SERVICES
-  const { value: data, state, reload } = usePolled<ProjectAgentData | null>(() => onProjectAgentData(projectId), null, EVERY_MS, [projectId])
   const [confirmShare, setConfirmShare] = useState(false)
   const [picked, setPicked] = useState<string | undefined>()
   const { busy, error, run } = useAction()
-  if (state === 'unknown') return null
-  if (!data) return <p className="text-sm text-muted-foreground">This project&rsquo;s agent data is on the computer the project is on.</p>
 
   const folder = (
     <>

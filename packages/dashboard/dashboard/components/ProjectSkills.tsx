@@ -6,7 +6,8 @@ import { onSkillsSaved, skillsSaved } from '../lib/skills-saved.js'
 import { useSettingsHold } from '../lib/settings-hold.js'
 import { Button, buttonVariants } from './ui/button.js'
 import { Checkbox } from './ui/checkbox.js'
-import { Skeleton, useSkeleton } from './ui/skeleton.js'
+import { Skeleton } from './ui/skeleton.js'
+import { Slot } from './ui/slot.js'
 import { SettingsFoot } from './SettingsRows.js'
 
 // A project's skills (#2023). The "Skills" menu under the box (SkillsMenu.tsx) opens Settings on
@@ -171,24 +172,36 @@ export function SkillsSettings({ projectId }: { projectId: string }) {
   const [visit, setVisit] = useState(0)
   // `undefined` is not read yet; a read that fails answers like a project unknown here.
   const skills = useLoaded<ProjectSkills | null | undefined>(() => onProjectSkills(projectId).catch(() => null), undefined, [projectId, visit])
-  const reading = useSkeleton(skills === undefined)
-  if (skills === undefined || reading) {
-    return (
-      <div aria-label="Reading the skills" className="grid grid-cols-2 gap-3 max-sm:grid-cols-1">
-        {Array.from({ length: 6 }, (_, index) => (
-          <Skeleton key={index} className="h-20 rounded-lg" />
-        ))}
-      </div>
-    )
-  }
-  if (skills === null) {
-    return (
-      <p role="alert" className="rounded-lg border border-border px-3 py-2 text-sm text-danger">
-        This project&rsquo;s skills could not be read.
-      </p>
-    )
-  }
-  return <SkillCards key={visit} projectId={projectId} skills={skills} onDone={() => setVisit(next => next + 1)} />
+  return (
+    <Slot of={{ value: skills, state: skills === undefined ? 'unknown' : 'fresh' }} shape={<SkillShapes />}>
+      {skills =>
+        skills ? (
+          <SkillCards key={visit} projectId={projectId} skills={skills} onDone={() => setVisit(next => next + 1)} />
+        ) : (
+          <p role="alert" className="text-sm text-danger">
+            This project&rsquo;s skills could not be read.
+          </p>
+        )
+      }
+    </Slot>
+  )
+}
+
+/** Skills while they are read, in the shape of their ticks. */
+function SkillShapes() {
+  return (
+    <div className={SKILL_TICKS_CLASS}>
+      {Array.from({ length: 6 }, (_, at) => (
+        <div key={at} className="flex items-start gap-3">
+          <Skeleton className="mt-0.5 size-4 shrink-0 rounded-sm" />
+          <div className="min-w-0 flex-1 space-y-2 pt-0.5">
+            <Skeleton className="h-4 w-24" />
+            <Skeleton className="h-3 w-4/5" />
+          </div>
+        </div>
+      ))}
+    </div>
+  )
 }
 
 function SkillCards({ projectId, skills, onDone }: { projectId: string; skills: ProjectSkills; onDone: () => void }) {
