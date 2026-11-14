@@ -18,7 +18,8 @@ const viewport = () => {
 
 // Read from the dashboard root, which is vitest's cwd (the package's `test` script cds here for
 // exactly this reason); `import.meta.url` is not a file URL under jsdom.
-const tailwind = readFileSync('tailwind.css', 'utf8')
+// The dashboard's own utilities are defined in its theme file, which tailwind.css imports.
+const theme = readFileSync('module/theme.css', 'utf8')
 
 // #914: the port dropped upstream's viewport styling because those utilities came from a plugin we
 // do not have. They are local now, so the pairing is what needs pinning: a class the stylesheet
@@ -38,6 +39,6 @@ describe('MessageScrollerViewport', () => {
       .map(token => token.split(':').at(-1) ?? '')
       .filter(token => token.startsWith('scrollbar-'))
     expect(asked.length).toBeGreaterThan(0)
-    for (const utility of asked) expect(tailwind, utility).toContain(`@utility ${utility} {`)
+    for (const utility of asked) expect(theme, utility).toContain(`@utility ${utility} {`)
   })
 })

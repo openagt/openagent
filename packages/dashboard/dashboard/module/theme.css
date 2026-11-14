@@ -1,5 +1,6 @@
-/* The dashboard's theme as Tailwind sees it (#1774): the dark variant, the fonts, and the utilities
-   (`bg-card`, `text-muted-foreground`, …) that read the page's own tokens. The dashboard imports
+/* The dashboard's theme as Tailwind sees it (#1774): the dark variant, the fonts, the utilities
+   (`bg-card`, `text-muted-foreground`, …) that read the page's own tokens, and the dashboard's own
+   (`scrollbar-thin`, `text-chat`, `top-bar-line`, …). The dashboard imports
    it, and so does a module's stylesheet, so a module's classes read the tokens the page defines in
    tailwind.css — its colours follow the theme and the theme toggle without a copy of either. */
 
@@ -133,5 +134,59 @@
   &:focus-visible {
     outline: 2px solid var(--primary);
     outline-offset: -1px;
+  }
+}
+
+/* The chat log's scrollbar (#914). shadcn's message-scroller styles its viewport with
+   `scrollbar-thin` / `scrollbar-thumb-*`, which are not in their repo at all — they come from the
+   tailwind-scrollbar plugin. Standard `scrollbar-width` + `scrollbar-color` says the same thing in
+   four lines and needs no plugin, and it is not a `::-webkit-scrollbar` rule, so #710's reasoning
+   (let the browser paint, themed by color-scheme) still holds: this only tones what it paints. */
+@utility scrollbar-thin {
+  scrollbar-width: thin;
+  scrollbar-color: color-mix(in oklab, var(--muted-foreground) 40%, transparent) transparent;
+}
+
+/* The log is following the live edge, so the bar would be a twitching distraction. */
+@utility scrollbar-quiet {
+  scrollbar-color: transparent transparent;
+}
+
+/* Reserve the bar's width always, so arriving output does not shift the text sideways. */
+@utility scrollbar-gutter-stable {
+  scrollbar-gutter: stable;
+}
+
+/* The chat's type, set here and nowhere else: the text of the chat and of a reply on the scale's
+   prose step (`text-base`, 16px on 24px lines), and its code, in a reply and in what a tool shows,
+   a step under it (14px on 20px). */
+@utility text-chat {
+  font-size: var(--text-base);
+  line-height: var(--text-base--line-height);
+}
+@utility text-chat-code {
+  font-size: var(--text-sm);
+  line-height: var(--text-sm--line-height);
+}
+
+/* A page's top bar draws its line only while the chat is scrolled under it: the chat's scroller
+   names its scroll (`chat-scroll`), the room around the bar and the chat shares the name
+   (`chat-scope`), and the line comes in over the first pixels scrolled. A browser with no scroll
+   timeline draws the line always. */
+@utility chat-scroll {
+  scroll-timeline: --chat-scroll y;
+}
+@utility chat-scope {
+  timeline-scope: --chat-scroll;
+}
+@utility top-bar-line {
+  box-shadow: inset 0 -1px 0 transparent;
+  animation: top-bar-line linear both;
+  animation-timeline: --chat-scroll;
+  animation-range: 0 8px;
+}
+@keyframes top-bar-line {
+  to {
+    box-shadow: inset 0 -1px 0 var(--color-hairline);
   }
 }
