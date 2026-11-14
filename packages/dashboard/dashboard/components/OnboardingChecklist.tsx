@@ -283,7 +283,7 @@ export function OnboardingChecklist({
                       <Skeleton className="h-4 w-full" />
                       <Skeleton className="h-4 w-2/3" />
                     </div>
-                    <div className="flex shrink-0 flex-wrap items-center gap-3">
+                    <div className="flex max-w-full shrink-0 flex-wrap items-center gap-3">
                       <Skeleton className="h-8 w-40" />
                       <Skeleton className="h-6 w-72 max-w-full" />
                     </div>
