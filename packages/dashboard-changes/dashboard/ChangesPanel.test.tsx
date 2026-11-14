@@ -442,7 +442,7 @@ describe('ChangesPanel, as Claude Code on the web draws it', () => {
     await say({ ...base, status: 'untracked', patch: '' }, 'Empty file.')
     await say({ ...base, patch: '@@ -1 +1 @@\n-a\n+b', truncated: true }, 'Cut here. The rest is in the worktree.')
     await say(null, 'No change to show.')
-    await say(new Error('daemon restarted'), 'Reading the diff…')
+    await say(new Error('daemon restarted'), 'Loading…')
   })
 
   test('a file longer than a diff may be offers no whole view: it would be cut before the change', async () => {

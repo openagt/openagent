@@ -1,5 +1,5 @@
 import { ChevronsUpDown } from 'lucide-react'
-import { Pieces, cn, useHighlighted } from '@openagt/dashboard/module'
+import { Pieces, Skeleton, cn, useHighlighted } from '@openagt/dashboard/module'
 import type { FileDiff } from '../src/diff.js'
 import { MAX_PREVIEW_LINES } from '../src/confined.js'
 
@@ -60,6 +60,20 @@ function read(patch: string): { rows: Row[]; shown: number } {
 const TONE = { add: 'border-success bg-success/10', del: 'border-danger bg-danger/10', same: 'border-transparent' } as const
 const MARK = { add: 'text-success', del: 'text-danger', same: 'text-muted-foreground' } as const
 const SIGN = { add: '+', del: '−', same: ' ' } as const
+
+/** One row's height in px: a line of code, a gap's row, "Show more lines". */
+const ROW = 17
+
+/** The room a diff of `rows` rows takes with its padding, held for it while it is read, a line or two of it pulsing. */
+export function DiffShape({ rows }: { rows: number }) {
+  return (
+    <div style={{ height: rows * ROW + 8 }} className="flex flex-col gap-1 overflow-hidden px-3 py-1">
+      {Array.from({ length: Math.min(rows, 2) }, (_, at) => (
+        <Skeleton key={at} className={cn('h-3 shrink-0', at === 0 ? 'w-2/3' : 'w-1/2')} />
+      ))}
+    </div>
+  )
+}
 
 function More({ children, onClick }: { children: string; onClick: (() => void) | undefined }) {
   return (

@@ -16,6 +16,7 @@ import {
   Popover,
   PopoverContent,
   PopoverTrigger,
+  Slot,
   Tooltip,
   TooltipContent,
   TooltipTrigger,
@@ -32,7 +33,8 @@ import type { RunChanges } from '../src/server.js'
 import type { FileDiff } from '../src/diff.js'
 import { commitKey, commitsKey, diffKey, projectKey, runKey } from './keys.js'
 import { readCommit, readCommits, readDiff, readProject, readRun } from './reads.js'
-import { DiffView } from './DiffView.js'
+import { DiffShape, DiffView } from './DiffView.js'
+import { CONTEXT_LINES, MAX_PREVIEW_LINES } from '../src/confined.js'
 import { foldAll, foldDiff, setChangesSetting, showWhole, useChangesSettings, usePageDiffs, wholeKey } from './settings.js'
 
 // The Changes pane, as Claude Code on the web draws it: in its header a button that hides the list,
@@ -139,10 +141,21 @@ interface DiffProps {
 }
 
 /**
+ * The rows a file's diff will draw, from its counts: a new or deleted file's every line, a changed
+ * file's changed lines and the unchanged ones git puts on each side of a change. Its room is held
+ * from the first frame, so a diff read late moves nothing under it.
+ */
+function rowsExpected(mark: FileMark): number {
+  const changed = (mark.added ?? 0) + (mark.removed ?? 0)
+  const whole = mark.status === 'untracked' || mark.status === 'added' || mark.status === 'deleted'
+  return Math.max(1, Math.min(changed + (whole ? 0 : 2 * CONTEXT_LINES), MAX_PREVIEW_LINES))
+}
+
+/**
  * One file's diff, read once it comes near the view of the diffs (`root`): a change of two hundred
  * files reads the diffs it is scrolled to, not all of them at once.
  */
-function LazyDiff({ root, ...props }: DiffProps & { root: HTMLElement | null }) {
+function LazyDiff({ root, rows, ...props }: DiffProps & { root: HTMLElement | null; rows: number }) {
   const spot = useRef<HTMLDivElement>(null)
   const [near, setNear] = useState(typeof IntersectionObserver === 'undefined')
   useEffect(() => {
@@ -151,25 +164,29 @@ function LazyDiff({ root, ...props }: DiffProps & { root: HTMLElement | null }) 
     watch.observe(spot.current)
     return () => watch.disconnect()
   }, [near, root])
-  if (!near) return <div ref={spot} className="h-16" />
-  return <DiffBody {...props} />
+  if (!near)
+    return (
+      <div ref={spot}>
+        <DiffShape rows={rows} />
+      </div>
+    )
+  return <DiffBody {...props} rows={rows} />
 }
 
 /** A diff that is never read again on its own: what the list says of the file, or "Refresh", reads it again. */
 const NO_POLL = 3_600_000
 
-function DiffBody({ projectId, agentId, path, commit, whole, wrap, version, poll, onWhole }: DiffProps) {
+function DiffBody({ projectId, agentId, path, commit, whole, wrap, version, poll, onWhole, rows }: DiffProps & { rows: number }) {
   const host = useModuleHost()
-  const { value, state } = usePolled<FileDiff | null>(() => readDiff(host, projectId, path, agentId, commit, whole), null, poll ? 8_000 : NO_POLL, [projectId, agentId, path, commit, whole, version], {
+  const read = usePolled<FileDiff | null>(() => readDiff(host, projectId, path, agentId, commit, whole), null, poll ? 8_000 : NO_POLL, [projectId, agentId, path, commit, whole, version], {
     remember: diffKey(projectId, agentId, path, commit, whole),
   })
-  // Asked for whole, the diff shown so far stays until the whole file answers: the place clicked is not lost to a "Reading…" line.
-  const shown = useRef<FileDiff | null>(null)
-  if (state !== 'unknown') shown.current = value
-  const diff = state !== 'unknown' ? value : shown.current
-  if (!diff && state === 'unknown') return <Waiting className="px-3 py-2">Reading the diff…</Waiting>
-  if (!diff) return <p className="px-3 py-2 text-xs text-muted-foreground">No change to show.</p>
-  return <DiffView diff={diff} wrap={wrap} whole={whole} onWhole={onWhole} className="py-1" />
+  return (
+    // Asked for whole, the diff shown so far stays until the whole file answers: the place clicked is not lost.
+    <Slot of={read} shape={<DiffShape rows={rows} />} hold>
+      {diff => (diff ? <DiffView diff={diff} wrap={wrap} whole={whole} onWhole={onWhole} className="py-1" /> : <p className="px-3 py-2 text-xs text-muted-foreground">No change to show.</p>)}
+    </Slot>
+  )
 }
 
 /** The files in the order the list shows them: folder by folder, folders first, when grouped. */
@@ -546,6 +563,7 @@ export function ChangesPanel({ projectId, agentId, activity, reveal }: ModulePan
                   {!isFolded && (
                     <LazyDiff
                       root={diffsElement}
+                      rows={rowsExpected(mark)}
                       projectId={projectId}
                       agentId={agentId}
                       path={path}
