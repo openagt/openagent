@@ -197,8 +197,11 @@ const LISTED_PAGES_KEY = 'openagent:listed-pages'
 /** A module's page as the sidebar lists it: before its module is imported, without its icon. */
 export type ListedPage = Pick<MountedPage, 'segment' | 'label' | 'projects'> & Partial<Pick<MountedPage, 'icon'>>
 
-/** The pages the sidebar lists: the imported ones, and until every module is, those of the last load. */
-export function useListedPages({ pages, loaded }: MountedModules): readonly ListedPage[] {
+/**
+ * The pages the sidebar lists: the imported ones, and until every module is, those of the last load;
+ * null until then in a browser that kept none, where the pages are not known yet.
+ */
+export function useListedPages({ pages, loaded }: MountedModules): readonly ListedPage[] | null {
   const [last] = useState(readListedPages)
   useEffect(() => {
     if (!loaded) return
@@ -211,11 +214,13 @@ export function useListedPages({ pages, loaded }: MountedModules): readonly List
   return loaded ? pages : last
 }
 
-function readListedPages(): ListedPage[] {
+function readListedPages(): ListedPage[] | null {
   try {
-    const listed: unknown = JSON.parse(globalThis.localStorage?.getItem(LISTED_PAGES_KEY) ?? '[]')
-    return Array.isArray(listed) ? listed.filter((page): page is ListedPage => typeof page?.segment === 'string' && typeof page.label === 'string' && Array.isArray(page.projects)) : []
+    const kept = globalThis.localStorage?.getItem(LISTED_PAGES_KEY)
+    if (kept == null) return null
+    const listed: unknown = JSON.parse(kept)
+    return Array.isArray(listed) ? listed.filter((page): page is ListedPage => typeof page?.segment === 'string' && typeof page.label === 'string' && Array.isArray(page.projects)) : null
   } catch {
-    return []
+    return null
   }
 }

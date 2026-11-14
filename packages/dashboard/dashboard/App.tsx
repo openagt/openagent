@@ -159,7 +159,6 @@ export function App() {
   const modulePage = pageSegment ? shownPages.find(page => page.segment === pageSegment) : undefined
   // The sidebar's rows of them, there from the first frame: the last load's until the modules are imported.
   const listedPages = useListedPages(modules)
-  const sidebarPages = useMemo(() => (scope ? listedPages.filter(page => page.projects.includes(scope)) : listedPages), [listedPages, scope])
 
   // Every navigation keeps the picked project, and one into another project's page, or into a
   // page in a named project, picks that project: the pages never show a project the select does not name.
@@ -407,6 +406,12 @@ export function App() {
   // under it would only repeat one part, so a run's view is told the stream is lost only then.
   const daemon = useDaemonHealth()
   const healthy = daemon === 'answering'
+  // In a browser that kept no list, the sidebar holds back what stands under the modules' rows until
+  // they are known, so nothing moves; with the daemon not answering it draws the rest without them.
+  const sidebarPages = useMemo(() => {
+    const known = listedPages ?? (healthy ? null : [])
+    return known && scope ? known.filter(page => page.projects.includes(scope)) : known
+  }, [listedPages, healthy, scope])
 
   // Route the main pane: the Overview dashboard when no project is selected (#471); else the
   // project home/launcher, a running agent's live output, or a finished agent's replay. Each live
