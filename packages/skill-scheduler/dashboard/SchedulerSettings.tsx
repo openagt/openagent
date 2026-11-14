@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { Input, MAX_SPEND_OFFSET, inPlace, SettingsRow, SettingsSection, useModuleHost, useOpenAgentDown, usePolled, type ModuleSettingsProps } from '@openagt/dashboard/module'
+import { Input, MAX_SPEND_OFFSET, inPlace, SettingsRow, SettingsRowShapes, SettingsSection, Slot, useModuleHost, useOpenAgentDown, usePolled, type ModuleSettingsProps } from '@openagt/dashboard/module'
 import { loosestSpendOffset, notAsked, offsetsThatDiffer, readSchedulers, schedulersKey, saveSpendOffset, typedOffset, type SchedulerRow } from './schedulers.js'
 
 // Settings › Scheduler: how far past the quota boundary scheduled work may still start. Each
@@ -15,7 +15,8 @@ const OFFSET_SAVE_DELAY_MS = 500
 export function SchedulerSettings({ projects }: ModuleSettingsProps) {
   const host = useModuleHost()
   const key = projects.map(p => p.id).join(',')
-  const { value: rows, state, reload } = usePolled(() => readSchedulers(host, projects), EMPTY, 10_000, [key], { remember: schedulersKey(key) })
+  const schedulers = usePolled(() => readSchedulers(host, projects), EMPTY, 10_000, [key], { remember: schedulersKey(key) })
+  const { value: rows, reload } = schedulers
   const [error, setError] = useState<string | undefined>()
   const down = useOpenAgentDown()
   // The offset just saved, said until it is changed again.
@@ -62,7 +63,7 @@ export function SchedulerSettings({ projects }: ModuleSettingsProps) {
           <a
             href={host.pageHref('automations')}
             onClick={inPlace(() => host.openPage('automations'))}
-            className="underline hover:text-foreground"
+            className="text-primary hover:underline"
           >
             Automations page
           </a>
@@ -70,45 +71,48 @@ export function SchedulerSettings({ projects }: ModuleSettingsProps) {
         </>
       }
     >
-      {state === 'unknown' && <p className="py-2 text-sm text-muted-foreground">Loading…</p>}
-      {offset !== undefined && (
-        <SettingsRow
-          label="Spend offset"
-          description={`How far the scheduler may start work past the quota boundary, in percentage points (max ${MAX_SPEND_OFFSET}). Negative holds it back; positive lets it borrow from the days ahead. The handle on the usage bar moves the same number.${differing.length > 0 ? ` Shown: the loosest. ${differing.map(d => `${d.name} is at ${d.offset}`).join(', ')}; saving sets each of them to the same number.` : ''}`}
-          control={
-            <Input
-              type="number"
-              name="spend-offset"
-              // The text as typed while the field has the focus, so a number can be typed through a state that is none yet ("-").
-              value={text ?? String(Math.round(offset * 10) / 10)}
-              min={-MAX_SPEND_OFFSET}
-              max={MAX_SPEND_OFFSET}
-              disabled={down}
-              step={0.1}
-              onChange={e => {
-                const raw = e.target.value
-                setText(raw)
-                // Held to the handle's reach here as well as on the input: `min`/`max` only constrain the spinner.
-                const points = typedOffset(raw)
-                if (points !== undefined) setOffset(points)
-              }}
-              onBlur={() => setText(undefined)}
-              aria-label="Spend offset"
-              className="h-8 w-24 bg-background px-2"
+      <Slot of={schedulers} shape={<SettingsRowShapes rows={1} />}>
+        {() =>
+          offset !== undefined && (
+            <SettingsRow
+              label="Spend offset"
+              description={`How far the scheduler may start work past the quota boundary, in percentage points (max ${MAX_SPEND_OFFSET}). Negative holds it back; positive lets it borrow from the days ahead. The handle on the usage bar moves the same number.${differing.length > 0 ? ` Shown: the loosest. ${differing.map(d => `${d.name} is at ${d.offset}`).join(', ')}; saving sets each of them to the same number.` : ''}`}
+              control={
+                <Input
+                  type="number"
+                  name="spend-offset"
+                  // The text as typed while the field has the focus, so a number can be typed through a state that is none yet ("-").
+                  value={text ?? String(Math.round(offset * 10) / 10)}
+                  min={-MAX_SPEND_OFFSET}
+                  max={MAX_SPEND_OFFSET}
+                  disabled={down}
+                  step={0.1}
+                  onChange={e => {
+                    const raw = e.target.value
+                    setText(raw)
+                    // Held to the handle's reach here as well as on the input: `min`/`max` only constrain the spinner.
+                    const points = typedOffset(raw)
+                    if (points !== undefined) setOffset(points)
+                  }}
+                  onBlur={() => setText(undefined)}
+                  aria-label="Spend offset"
+                  className="w-60 max-md:w-full"
+                />
+              }
             />
-          }
-        />
-      )}
+          )
+        }
+      </Slot>
       {offsetSaved && (
-        <p role="status" className="py-2 text-xs text-muted-foreground">
+        <p role="status" className="text-xs text-muted-foreground">
           Saved.
         </p>
       )}
       {unread.map(row => (
-        <p key={row.project.id} role="alert" className="py-2 text-xs text-danger">{`The scheduler of ${row.project.name} could not be read: ${row.error}`}</p>
+        <p key={row.project.id} role="alert" className="text-xs text-danger">{`The scheduler of ${row.project.name} could not be read: ${row.error}`}</p>
       ))}
       {error !== undefined && (
-        <p role="alert" className="py-2 text-xs text-danger">
+        <p role="alert" className="text-xs text-danger">
           {error}
         </p>
       )}
