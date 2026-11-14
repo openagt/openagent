@@ -265,7 +265,7 @@ export function AutomationsPage({ projects }: ModulePageProps) {
                               <li key={id} aria-label={title} className={cn('rounded-md px-3 py-2', saving && 'opacity-60')}>
                                 <div className="flex items-center gap-3 max-md:flex-wrap">
                                   <p className="min-w-0 flex-1 truncate text-sm max-md:basis-full">
-                                    <span className="font-medium">{title}</span>
+                                    {title}
                                     {isOwn(scheduled) && <span className="text-xs text-muted-foreground"> {scheduled.onThisMachine ? 'only on this machine' : 'shared with the project'}</span>}
                                     {/* What it says it does, after its name and quieter: cut with it at the row's end, and whole in its panel. */}
                                     {scheduled.description && <span className="text-muted-foreground"> {scheduled.description}</span>}

@@ -145,8 +145,8 @@ const TYPE = [
   ['text-xl font-semibold', 'Title', '20 / 28, 600: a page, a dialog'],
   ['text-base font-semibold', 'Heading', '16 / 24, 600: a section, a card'],
   ['text-base', 'Prose', '16 / 24, 400: the chat, a ticket, a document'],
-  ['text-sm font-medium', 'Body, a label', '14 / 20, 500: a row’s title, a control'],
-  ['text-sm', 'Body', '14 / 20, 400'],
+  ['text-sm font-medium', 'Body, a label', '14 / 20, 500: a control’s label'],
+  ['text-sm', 'Body', '14 / 20, 400: a row’s title, what is read'],
   ['text-xs text-muted-foreground', 'Meta 12:04 · 3 runs', '12 / 16, tabular figures'],
   ['text-2xl font-semibold', 'Website', '24 / 32 and 30 / 36'],
 ] as const

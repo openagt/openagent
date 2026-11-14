@@ -36,7 +36,7 @@ export function Row({ leading, title, meta, actions, href, onClick, stackOnPhone
   const pressable = href !== undefined || onClick !== undefined
   // Stacked on a phone, the title is a line of its own: it takes the row's width, not its height. Each
   // width's layout is said for its own widths only: a module's stylesheet, loaded later, has its own copy of a plain class.
-  const titleClass = cn('min-w-0 truncate text-left font-medium', stackOnPhone ? 'md:flex-1' : 'flex-1')
+  const titleClass = cn('min-w-0 truncate text-left', stackOnPhone ? 'md:flex-1' : 'flex-1')
   return (
     <li
       className={cn(
