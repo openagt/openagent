@@ -254,8 +254,8 @@ export function EditOverview({ arranged, under, layouts, layoutKey, notice }: { 
               onWidth={picked => write(changed(card.id, { width: picked }))}
               onHide={() => write(changed(card.id, { hidden: true }))}
             />
-            {/* The card as it stands, its own buttons asleep while it is being arranged, with the sentence that says what it is. */}
-            <div inert className="flex flex-1 select-none flex-col *:flex-1 [&_[data-part-description]]:not-sr-only">
+            {/* The card as it stands, its own buttons asleep while it is being arranged, with the sentence that says what it is. Its heading's link to its page is not drawn, its room kept: the bar stands there, on every card, however long the link's words. */}
+            <div inert className="flex flex-1 select-none flex-col *:flex-1 [&_[data-part-description]]:not-sr-only [&_section>div:first-child>h2~*]:invisible">
               {card.node}
             </div>
           </div>
@@ -320,7 +320,7 @@ export function TakeOffMark() {
 /** The bar above a card while the page is arranged, so it covers none of the card: its handle, its widths, and ✕. */
 function CardBar({ label, widths, width, first, last, onStep, onWidth, onHide }: { label: string; widths: CardWidth[]; width: CardWidth; first: boolean; last: boolean; onStep: (by: -1 | 1) => void; onWidth: (width: CardWidth) => void; onHide: () => void }) {
   return (
-    // On the heading's line, over its link (asleep while arranging), so the part keeps its place.
+    // On the heading's line, where its link stood (not drawn while arranging), so the part keeps its place.
     <div role="toolbar" aria-label={label} className="absolute top-0 right-0 z-10 flex h-8 items-center gap-1 bg-background pl-2">
       <button
         type="button"

@@ -21,9 +21,16 @@ vi.mock('./OnboardingChecklist.js', async () => {
 vi.mock('./SkillsCard.js', () => ({ SkillsCard: () => <div>skills</div> }))
 vi.mock('./YourAgentsPart.js', () => ({ YourAgentsPart: () => <span>your agents</span> }))
 const modules = vi.hoisted(() => ({ loaded: true, line: [] as { id: string; order: number; node: unknown }[] }))
-vi.mock('./ModuleCards.js', () => ({
-  useModuleCards: () => ({ cards: [{ id: '@x/tickets/hot', label: 'Hot tickets', width: '1/2', minWidth: '1/3', present: true, node: <div>a package's card</div> }], line: modules.line, loaded: modules.loaded }),
-}))
+vi.mock('./ModuleCards.js', async () => {
+  const { Section } = await import('./ui/section.js')
+  // A package's card as packages draw them: a part with a link to its page at its heading's right.
+  const node = (
+    <Section title="Hot" action={<a href="/tickets">Every ticket of the project</a>}>
+      <div>a package's card</div>
+    </Section>
+  )
+  return { useModuleCards: () => ({ cards: [{ id: '@x/tickets/hot', label: 'Hot tickets', width: '1/2', minWidth: '1/3', present: true, node }], line: modules.line, loaded: modules.loaded }) }
+})
 const prefs = vi.hoisted(() => ({ value: { onboardingDismissed: true } as Record<string, unknown>, loaded: true, updatePreferences: vi.fn() }))
 vi.mock('../lib/preferences.js', () => ({ usePreferences: () => prefs.value, usePreferencesLoaded: () => prefs.loaded, updatePreferences: prefs.updatePreferences }))
 
@@ -164,7 +171,11 @@ describe('the Overview', () => {
     fireEvent.click(await screen.findByRole('button', { name: 'Customize' }))
     // The press that took Customize away hands the keyboard to Done, not to the page.
     expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Done' }))
-    expect(screen.getByText("a package's card").closest('[inert]')).not.toBeNull()
+    const asleep = screen.getByText("a package's card").closest<HTMLElement>('[inert]')!
+    // Its heading's link is not drawn, however long its words: the card's bar stands in its place, on every card.
+    const link = screen.getByRole('link', { name: 'Every ticket of the project' }).parentElement!
+    expect([...asleep.querySelectorAll('section>div:first-child>h2~*')]).toEqual([link])
+    expect(asleep.className.split(' ')).toContain('[&_section>div:first-child>h2~*]:invisible')
     fireEvent.click(screen.getByRole('button', { name: 'Done' }))
     expect(screen.getByText("a package's card").closest('[inert]')).toBeNull()
   })
