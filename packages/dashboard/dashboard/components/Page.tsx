@@ -38,9 +38,9 @@ export function Page({
 }) {
   return (
     <PageColumn>
-      <header className="mb-6 space-y-3">
-        {/* A phone's bar names the page: there this block shows only the count and the buttons, and is said alone when it has neither. */}
-        <div className={cn(count === undefined && actions === undefined && 'max-md:sr-only')}>
+      <header className="mb-6 max-md:mb-4">
+        {/* A phone's bar names the page: there this block shows only the count and the buttons, and is said alone when it has neither, taking no room. */}
+        <div className={cn(bar !== undefined && 'mb-3', count === undefined && actions === undefined && 'max-md:sr-only max-md:mb-0')}>
           {/* One row at every width: the name with its count, then the page's buttons at its right. */}
           <div className="flex items-center justify-between gap-4 md:min-h-8">
             {/* A page's name and its count never give up width: the buttons do. */}
