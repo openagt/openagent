@@ -247,6 +247,10 @@ html[data-installed] .dashboard-cta {
   background: var(--muted);
   color: var(--foreground);
 }
+/* In light the soft fill is a step from the page only: an edge of the dashboard's controls makes it a press. */
+html:not(.dark) .press-quiet {
+  box-shadow: inset 0 0 0 1px var(--input);
+}
 /* In the top bar, beside the logo: the dashboard's control height. */
 .press-small {
   height: 32px;
