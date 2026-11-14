@@ -189,7 +189,7 @@ export function Hero() {
         style={{
           marginTop: 24,
           width: '100%',
-          maxWidth: 1056,
+          maxWidth: 1120,
           boxSizing: 'border-box',
           display: 'grid',
           gridTemplateColumns: 'repeat(auto-fit, minmax(min(300px, 100%), 1fr))',
