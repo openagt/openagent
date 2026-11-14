@@ -1,10 +1,10 @@
 import { afterEach, describe, expect, test, vi } from 'vitest'
-import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
-import { createElement, useContext } from 'react'
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
+import { createElement, useContext, useRef, useState } from 'react'
 import { openMenu, phoneScreen } from './test-utils.js'
 import { useModuleHost, useOpenAgentDown, type ModuleCardProps, type ModuleDefinition, type ModulePageProps } from './module/index.js'
 import { forgetRemembered } from './lib/use-async.js'
-import { openSettings } from './lib/use-route.js'
+import { holdEntry, openSettings } from './lib/use-route.js'
 import { skillsSaved } from './lib/skills-saved.js'
 
 // The whole transport, stubbed at its one seam: every RPC stub is `rpc(name)`, so a map by name
@@ -25,8 +25,11 @@ vi.mock('./lib/rpc.js', () => ({
 vi.mock('./components/SettingsDialog.js', async () => {
   const { DaemonDown } = await import('./lib/use-daemon-health.js')
   return {
-    SettingsDialog: ({ entry, scope, onEntry, onClose }: { entry: string; scope: string | null; onEntry: (id: string) => void; onClose: () => void }) =>
-      createElement(
+    SettingsDialog: ({ entry, scope, onEntry, onClose }: { entry: string; scope: string | null; onEntry: (id: string) => void; onClose: () => void }) => {
+      // A change held as an entry holds one, and the question it asks before a step leaves it.
+      const [asked, setAsked] = useState<(() => void) | undefined>()
+      const release = useRef<() => void>(() => {})
+      return createElement(
         'div',
         null,
         createElement('p', null, `the settings dialog on '${entry}'`),
@@ -34,7 +37,16 @@ vi.mock('./components/SettingsDialog.js', async () => {
         createElement('p', null, `its saves: ${useContext(DaemonDown) ? 'off' : 'on'}`),
         createElement('button', { onClick: () => onEntry('agent') }, 'to Agent'),
         createElement('button', { onClick: onClose }, 'shut the dialog'),
-      ),
+        createElement('button', { onClick: () => (release.current = holdEntry(step => setAsked(() => step))) }, 'hold a change'),
+        asked &&
+          createElement(
+            'div',
+            { role: 'alertdialog', 'aria-label': 'Leave without saving?' },
+            createElement('button', { onClick: () => setAsked(undefined) }, 'Cancel'),
+            createElement('button', { onClick: () => (release.current(), setAsked(undefined), asked()) }, 'Leave'),
+          ),
+      )
+    },
   }
 })
 vi.mock('./components/ProjectHome.js', () => ({
@@ -78,6 +90,26 @@ afterEach(() => {
 })
 
 describe('module pages in the shell (#1774)', () => {
+  test("a run a module opens while Settings holds a change asks first: Cancel keeps the change and Settings' address, Leave goes", async () => {
+    function OpensRun() {
+      const host = useModuleHost()
+      return createElement('button', { onClick: () => host.openAgent(PROJECT.id, '3-a') }, 'open a run')
+    }
+    answerShell([{ package: '@acme/door', url: moduleModule('__doorOpensRun', { everyPage: OpensRun }), projects: [], computer: true }])
+    window.history.replaceState(null, '', '/?settings=')
+    render(<App />)
+    fireEvent.click(await screen.findByRole('button', { name: 'hold a change' }))
+    fireEvent.click(await screen.findByRole('button', { name: 'open a run' }))
+    const asked = await screen.findByRole('alertdialog', { name: 'Leave without saving?' })
+    expect(window.location.pathname + window.location.search).toBe('/?settings=')
+    fireEvent.click(within(asked).getByRole('button', { name: 'Cancel' }))
+    expect(window.location.pathname + window.location.search).toBe('/?settings=')
+    // Still held: the next move asks again.
+    fireEvent.click(screen.getByRole('button', { name: 'open a run' }))
+    fireEvent.click(within(await screen.findByRole('alertdialog')).getByRole('button', { name: 'Leave' }))
+    expect(window.location.pathname).toBe('/app/3-a')
+  })
+
   test('a module\'s page gets a sidebar row and its own URL, where no project is selected', async () => {
     function LogsPage({ projects }: ModulePageProps) {
       return createElement('p', null, `runs of ${projects.map(p => p.name).join(', ')}`)

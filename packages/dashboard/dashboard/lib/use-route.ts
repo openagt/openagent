@@ -51,6 +51,12 @@ export function holdEntry(ask: (leave: () => void) => void): () => void {
   }
 }
 
+/** Take `step`, a move off the entry shown: now, or once the person says to leave what the entry holds. */
+function leaving(step: () => void): void {
+  if (held) held.ask(step)
+  else step()
+}
+
 /** Back past the dashboard's first entry, a reload or the tab closed, while an entry is held: the browser asks in its own words. */
 function askBeforeUnload(event: BeforeUnloadEvent): void {
   event.preventDefault()
@@ -166,13 +172,16 @@ export function useRoute(projects: ProjectAddresses): {
     const url = options?.keepQuery ? keepPageQuery(formatRoute(next, projects), window.location.search) : formatRoute(next, projects)
     // Going where you already are is not a history entry.
     if (url === current) return
-    if (options?.replace) window.history.replaceState(window.history.state, '', url)
-    else {
+    if (options?.replace) {
+      window.history.replaceState(window.history.state, '', url)
+      return notify()
+    }
+    leaving(() => {
       // Settings over the page leaves the page mounted, scrolled where it was.
       if (!options?.overPage) keepScroll()
       push(url, options?.overPage ? OVER_PAGE_STATE : undefined)
-    }
-    notify()
+      notify()
+    })
   }
 
   return { route, go }
@@ -196,21 +205,25 @@ export function openPermissions(): void {
 
 /** Go to one of the dashboard's own pages with the project the address picks, as the sidebar's press does. */
 function openOwnPage(page: string): void {
-  const { scope } = parseRoute(currentUrl(), addresses)
-  keepScroll()
-  push(formatRoute({ projectId: null, agentId: null, page, ...(scope ? { scope } : {}) }, addresses))
-  notify()
+  leaving(() => {
+    const { scope } = parseRoute(currentUrl(), addresses)
+    keepScroll()
+    push(formatRoute({ projectId: null, agentId: null, page, ...(scope ? { scope } : {}) }, addresses))
+    notify()
+  })
 }
 
 /** Open Settings at `entry` over the page you are on, from a part of the page that has no route to hand; with `item`, at that page inside it.
  *  From inside Settings, it moves to that entry in place, as the dialog's own list does: Back and closing still go to the page under it. */
 export function openSettings(entry: string, item?: string): void {
-  const url = new URL(window.location.href)
-  const open = url.searchParams.has(SETTINGS_PARAM)
-  url.searchParams.set(SETTINGS_PARAM, entry)
-  if (item) url.searchParams.set(SETTINGS_ITEM_PARAM, item)
-  else url.searchParams.delete(SETTINGS_ITEM_PARAM)
-  if (open) window.history.replaceState(window.history.state, '', url.pathname + url.search)
-  else push(url.pathname + url.search, OVER_PAGE_STATE)
-  notify()
+  leaving(() => {
+    const url = new URL(window.location.href)
+    const open = url.searchParams.has(SETTINGS_PARAM)
+    url.searchParams.set(SETTINGS_PARAM, entry)
+    if (item) url.searchParams.set(SETTINGS_ITEM_PARAM, item)
+    else url.searchParams.delete(SETTINGS_ITEM_PARAM)
+    if (open) window.history.replaceState(window.history.state, '', url.pathname + url.search)
+    else push(url.pathname + url.search, OVER_PAGE_STATE)
+    notify()
+  })
 }
