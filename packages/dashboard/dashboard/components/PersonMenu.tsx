@@ -55,19 +55,21 @@ export function PersonMenu({ onSettings }: { onSettings: (entry?: string) => voi
     <DropdownMenu>
       <DropdownMenuTrigger
         aria-label={`${person ? `${person.name}: settings` : 'Settings'}${needs ? ', something is missing' : ''}`}
-        className="flex w-full min-w-0 items-center gap-2 rounded-md px-1.5 py-1.5 text-left text-sm outline-none hover:bg-sidebar-accent focus-visible:ring-2 focus-visible:ring-sidebar-ring data-[popup-open]:bg-sidebar-accent"
+        // A row of the sidebar's: 32 high (44 on a phone), half the accent fill under the pointer, the whole while its menu is open.
+        className="focus-ring flex w-full min-w-0 items-center gap-2 rounded-md px-1.5 text-left text-sm transition-colors hover:bg-sidebar-accent/50 active:bg-sidebar-accent data-[popup-open]:bg-sidebar-accent md:h-8 max-md:h-11"
       >
         {/* 20 wide, laid out as 16, so its centre is on the icons' axis and the name on their labels' edge. */}
         <Avatar person={person} dot={needs} className="-mx-0.5" />
         <span className="min-w-0 flex-1 truncate">{person ? firstName(person.name) : ''}</span>
         <Settings className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden />
       </DropdownMenuTrigger>
-      <DropdownMenuContent align="start" className="min-w-[14rem]">
+      {/* As wide as the row it opens from: a long line is cut, and said whole on its own page. */}
+      <DropdownMenuContent align="start" className="w-(--anchor-width)">
         {person && (
           <>
             <DropdownMenuGroup>
-              <DropdownMenuLabel className="flex flex-col">
-                <span className="truncate text-foreground">{person.name}</span>
+              <DropdownMenuLabel className="flex flex-col font-normal">
+                <span className="truncate font-medium text-foreground">{person.name}</span>
                 {person.github && <span className="truncate font-normal">@{person.github}</span>}
               </DropdownMenuLabel>
             </DropdownMenuGroup>
@@ -77,14 +79,14 @@ export function PersonMenu({ onSettings }: { onSettings: (entry?: string) => voi
         {needs && (
           <>
             {missing.map(item => (
-              <DropdownMenuItem key={item.key} onClick={openPermissions} className="text-warning">
-                <CircleAlert className="h-3.5 w-3.5 shrink-0" aria-hidden />
+              <DropdownMenuItem key={item.key} onClick={openPermissions}>
+                <CircleAlert className="size-4 shrink-0 text-warning" aria-hidden />
                 <span className="flex-1 truncate">{item.words}</span>
               </DropdownMenuItem>
             ))}
             {notBackedUp && (
-              <DropdownMenuItem onClick={() => onSettings(AGENT_DATA_ENTRY)} className="text-warning">
-                <CircleAlert className="h-3.5 w-3.5 shrink-0" aria-hidden />
+              <DropdownMenuItem onClick={() => onSettings(AGENT_DATA_ENTRY)}>
+                <CircleAlert className="size-4 shrink-0 text-warning" aria-hidden />
                 <span className="flex-1 truncate">Agent data not backed up</span>
               </DropdownMenuItem>
             )}
@@ -95,7 +97,7 @@ export function PersonMenu({ onSettings }: { onSettings: (entry?: string) => voi
         <NotificationsSubmenu />
         <DropdownMenuSeparator />
         <DropdownMenuItem onClick={() => onSettings()}>
-          <Settings className="h-3.5 w-3.5 shrink-0 opacity-70" aria-hidden />
+          <Settings className="size-4 shrink-0 text-muted-foreground" aria-hidden />
           Settings
         </DropdownMenuItem>
       </DropdownMenuContent>
