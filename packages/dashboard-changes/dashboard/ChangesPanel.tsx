@@ -12,6 +12,7 @@ import {
   DropdownMenuTrigger,
   FileIcon,
   MiddleCut,
+  treeRow,
   Input,
   PaneActions,
   PaneNote,
@@ -29,6 +30,7 @@ import {
   useModuleHost,
   useNarrow,
   usePolled,
+  Waiting,
   type ModulePanelProps,
 } from '@openagt/dashboard/module'
 import type { AgentCommit, FileMark } from '../src/run.js'
@@ -58,15 +60,8 @@ import { foldAll, foldDiff, setChangesSetting, showWhole, useChangesSettings, us
 const NO_COMMITS: AgentCommit[] = []
 const NO_CHANGES: Record<string, FileMark> = {}
 
-/** A read not answered yet, for a {@link Slot} that only waits: the pane's answer is drawn beside it once it comes. */
-const UNKNOWN = { value: null, state: 'unknown' } as const
-
-/** The pane while its list is read: rows in a row's shape, unseen for the first 200ms. */
-const Reading = () => (
-  <Slot of={UNKNOWN} shape={<RowShapes rows={3} />} className="px-3 py-1">
-    {() => null}
-  </Slot>
-)
+/** The pane while its list is read: rows in a row's shape. */
+const Reading = () => <Waiting shape={<RowShapes rows={3} />} className="px-3 py-1" />
 
 /** The last ask from the chat that was taken: a pane opened again later does not take it a second time. */
 let revealTaken = 0
@@ -81,9 +76,6 @@ function Counts({ mark, className }: { mark: FileMark; className?: string }) {
 /** Narrower than this, the pane has room for the list or the diffs, not both. */
 const NARROW = 520
 
-/** A row of the list, as a list's row is drawn, 28 high (44 on a phone): a folder's or a file's. */
-const ROW = 'flex h-7 w-full items-center gap-2 rounded-md px-2 text-left text-sm outline-none hover:bg-accent active:bg-foreground/10 focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-primary max-md:h-11'
-
 /**
  * A changed file in the list: its icon, its name (or its path, ungrouped), its counts, and a ring
  * while it is only on disk, where the list holds both (`rings`).
@@ -96,7 +88,7 @@ function ChangeRow({ path, mark, label, picked, rings, onPick }: { path: string;
         onClick={onPick}
         aria-pressed={picked}
         title={`${path} · ${mark.status === 'untracked' || mark.status === 'added' ? 'new' : mark.status}${mark.committed ? '' : ', not committed'}`}
-        className={cn(ROW, picked && 'bg-accent')}
+        className={cn(treeRow, picked && 'bg-accent')}
       >
         <FileIcon path={path} />
         <span className={cn('flex min-w-0 flex-1', mark.status === 'deleted' && 'line-through')}>
@@ -131,7 +123,7 @@ function foldersOf(paths: string[]): Folder {
 function CommitRow({ label, detail, title, picked, onPick }: { label: string; detail?: string; title?: string; picked: boolean; onPick: () => void }) {
   return (
     <li>
-      <button type="button" onClick={onPick} aria-pressed={picked} title={title} className={cn('flex w-full flex-col rounded-md px-2 py-1.5 text-left outline-none hover:bg-accent active:bg-foreground/10 focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-primary', picked && 'bg-accent')}>
+      <button type="button" onClick={onPick} aria-pressed={picked} title={title} className={cn('flex w-full flex-col rounded-md px-2 py-1.5 text-left hover:bg-accent active:bg-foreground/10 focus-ring-inset', picked && 'bg-accent')}>
         <span className="w-full truncate text-sm">{label}</span>
         {detail !== undefined && <span className="w-full truncate text-xs text-muted-foreground">{detail}</span>}
       </button>
@@ -362,7 +354,7 @@ function ChangeList({ paths, changes, group, picked, rings, onPick }: { paths: s
         .map(dir => (
           <li key={dir.path}>
             <details open className="group">
-              <summary className={cn(ROW, 'cursor-pointer list-none text-muted-foreground')}>
+              <summary className={cn(treeRow, 'cursor-pointer list-none text-muted-foreground')}>
                 <ChevronRight aria-hidden className="size-4 shrink-0 group-open:rotate-90" />
                 <span className="truncate">{dir.name}</span>
               </summary>
@@ -385,7 +377,7 @@ function CommitList({ commits, picked, open, onOpen, onPick }: { commits: AgentC
   return (
     <section aria-label="Commits" className={cn('flex shrink-0 flex-col border-t border-hairline', open && 'max-h-1/2')}>
       <h3>
-        <button type="button" aria-expanded={open} onClick={() => onOpen(!open)} className="mt-1 flex h-7 w-full items-center gap-2 px-3 text-sm text-muted-foreground outline-none hover:text-foreground focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-primary">
+        <button type="button" aria-expanded={open} onClick={() => onOpen(!open)} className="mt-1 flex h-7 w-full items-center gap-2 px-3 text-sm text-muted-foreground hover:text-foreground focus-ring-inset">
           <ChevronRight aria-hidden className={cn('size-4 shrink-0', open && 'rotate-90')} />
           <span className="flex-1 text-start">Commits</span>
           <span className="text-xs">{commits.length}</span>
@@ -570,7 +562,7 @@ export function ChangesPanel({ projectId, agentId, activity, reveal }: ModulePan
                     type="button"
                     aria-expanded={!isFolded}
                     onClick={() => foldDiff(page, path, !isFolded)}
-                    className={cn('sticky top-0 z-10 flex h-8 w-full items-center gap-2 bg-muted px-2 text-start text-sm text-muted-foreground outline-none hover:bg-accent focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-primary', path === picked && 'text-foreground')}
+                    className={cn('sticky top-0 z-10 flex h-8 w-full items-center gap-2 bg-muted px-2 text-start text-sm text-muted-foreground hover:bg-accent focus-ring-inset', path === picked && 'text-foreground')}
                   >
                     <ChevronRight aria-hidden className={cn('size-4 shrink-0', !isFolded && 'rotate-90')} />
                     <FileIcon path={path} />

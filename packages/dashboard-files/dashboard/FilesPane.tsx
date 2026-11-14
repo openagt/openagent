@@ -11,7 +11,6 @@ import {
   PaneActions,
   PaneNote,
   RowShapes,
-  Slot,
   PaneTitle,
   Tooltip,
   TooltipContent,
@@ -20,6 +19,7 @@ import {
   useModuleHost,
   useNarrow,
   usePolled,
+  Waiting,
   type ModulePanelProps,
 } from '@openagt/dashboard/module'
 import type { AgentTree } from '../src/tree.js'
@@ -42,8 +42,6 @@ import { closeFile, openFile, setFilesSetting, showFile, useFilesSettings, useOp
 // changed is another pane's to list. It is a viewer, not an editor.
 
 const EMPTY_FILES: string[] = []
-/** A read not answered yet, for a {@link Slot} that only waits: the pane's answer is drawn in its place once it comes. */
-const UNKNOWN = { value: null, state: 'unknown' } as const
 
 /** Where a run's tree was read from, in the words the caption says it. */
 function sourceCaption(tree: AgentTree): string | undefined {
@@ -77,11 +75,11 @@ export function fileAt(files: readonly string[], path: string): string | undefin
 function Tab({ tab, shown, onShow, onKeep, onClose }: { tab: OpenTab; shown: boolean; onShow: () => void; onKeep: () => void; onClose: () => void }) {
   return (
     <div role="tab" aria-selected={shown} className={cn('flex h-7 shrink-0 items-center rounded-md text-sm text-muted-foreground hover:bg-accent', shown && 'bg-accent text-foreground')}>
-      <button type="button" title={tab.path} onClick={onShow} onDoubleClick={onKeep} className="flex h-full items-center gap-2 rounded-md pl-2 outline-none focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-primary">
+      <button type="button" title={tab.path} onClick={onShow} onDoubleClick={onKeep} className="flex h-full items-center gap-2 rounded-md pl-2 focus-ring-inset">
         <FileIcon path={tab.path} />
         <span className={cn('max-w-40 truncate', !tab.kept && 'italic')}>{nameOf(tab.path)}</span>
       </button>
-      <button type="button" aria-label={`Close ${nameOf(tab.path)}`} onClick={onClose} className="flex h-full items-center rounded-md px-1.5 outline-none hover:text-foreground focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-primary">
+      <button type="button" aria-label={`Close ${nameOf(tab.path)}`} onClick={onClose} className="flex h-full items-center rounded-md px-1.5 hover:text-foreground focus-ring-inset">
         <X aria-hidden className="size-3.5" />
       </button>
     </div>
@@ -259,9 +257,7 @@ export function FilesPane({ projectId, agentId, activity, show, context }: Modul
   const waiting = (
     <>
       {header}
-      <Slot of={UNKNOWN} shape={<RowShapes rows={3} />} className="px-3 py-1">
-        {() => null}
-      </Slot>
+      <Waiting shape={<RowShapes rows={3} />} className="px-3 py-1" />
     </>
   )
   if (agentId && (treeState === 'unknown' || runTree?.source === 'pending')) return waiting

@@ -6,7 +6,7 @@ import { Markdown } from './Markdown.js'
 import { ScrollArea } from './ui/scroll-area.js'
 import { PaneNote } from './PaneNote.js'
 import { Skeleton } from './ui/skeleton.js'
-import { Slot } from './ui/slot.js'
+import { Waiting } from './Waiting.js'
 
 // The surfaced documents (#319/#328): the PLAN/TODO the agent writes, rendered beside the agent.
 // The read lives in the rail (#1146), which needs to know whether there are any docs before it
@@ -18,9 +18,7 @@ export function DocsPanel({ docs, loaded }: { docs: WorkspaceDoc[]; loaded: bool
   // flashed "No PLAN/TODO docs yet." on every open while the first read was still out.
   if (!loaded)
     return (
-      <Slot of={UNKNOWN} shape={<Lines />} className="px-5 py-4">
-        {() => null}
-      </Slot>
+      <Waiting shape={<Lines />} className="px-5 py-4" />
     )
   if (docs.length === 0) return <PaneNote>No PLAN/TODO docs yet.</PaneNote>
 
@@ -48,9 +46,6 @@ export function DocsPanel({ docs, loaded }: { docs: WorkspaceDoc[]; loaded: bool
     </div>
   )
 }
-
-/** The docs not read yet, for a {@link Slot} that only waits. */
-const UNKNOWN = { value: null, state: 'unknown' } as const
 
 /** A document's first lines while it is read, in their shape. */
 function Lines() {

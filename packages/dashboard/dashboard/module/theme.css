@@ -129,6 +129,15 @@
   }
 }
 
+/* The focus of a row inside a box that scrolls, which would cut a ring drawn outside the row: the
+   same 2px of the primary colour drawn inside its edge. */
+@utility focus-ring-inset {
+  &:focus-visible {
+    outline: 2px solid var(--primary);
+    outline-offset: -2px;
+  }
+}
+
 /* The focus of a field, a text box or a select, which have an edge of their own: the same 2px of
    the primary colour drawn over that edge, so a focused field has one edge, not an edge and a ring. */
 @utility focus-ring-field {

@@ -26,7 +26,7 @@ export interface SlotRead<T> {
  * An answer that comes after a wait fades in at its place, and a slot that draws nothing takes no
  * room. One element: `className` lays it out where it stands (a column's `flex-1`).
  */
-export function Slot<T>({ of, shape, hold = false, className, children }: { of: SlotRead<T>; shape: ReactNode; hold?: boolean; className?: string; children: (answer: T) => ReactNode }) {
+export function Slot<T>({ of, shape, hold = false, className, children }: { of: SlotRead<T>; shape: ReactNode; hold?: boolean; className?: string | undefined; children: (answer: T) => ReactNode }) {
   const unknown = of.state === 'unknown'
   const last = useRef<{ answer: T } | undefined>(undefined)
   const waited = useRef(false)

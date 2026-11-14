@@ -1,6 +1,6 @@
 import { useMemo, useState, type KeyboardEvent, type ReactNode, type RefObject } from 'react'
 import { Check, ChevronRight, Search } from 'lucide-react'
-import { ContextMenu, ContextMenuTrigger, DropdownMenuContent, FileIcon, MiddleCut, DropdownMenuItem, DropdownMenuSub, DropdownMenuSubContent, DropdownMenuSubTrigger, Input, cn, type ModuleContext } from '@openagt/dashboard/module'
+import { ContextMenu, ContextMenuTrigger, DropdownMenuContent, FileIcon, MiddleCut, DropdownMenuItem, DropdownMenuSub, DropdownMenuSubContent, DropdownMenuSubTrigger, Input, cn, treeRow, type ModuleContext } from '@openagt/dashboard/module'
 
 // The Files pane's tree (#492): a lazy, collapsible tree built from the flat list of paths, with
 // "Filter files…" over it. As in Claude Code on the web: one click on a file opens it as a
@@ -39,8 +39,6 @@ function buildTree(paths: string[]): TreeNode {
 }
 
 const byName = (a: { name: string }, b: { name: string }) => a.name.localeCompare(b.name)
-/** A row of the tree, as a list's row is drawn, 28 high (44 on a phone): a folder's or a file's. */
-const ROW = 'flex h-7 w-full items-center gap-2 rounded-md px-2 text-start text-sm outline-none hover:bg-accent active:bg-foreground/10 focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-primary max-md:h-11'
 
 /**
  * A folder row. Its contents are built only while it is open: a closed folder costs one row however
@@ -51,7 +49,7 @@ function Folder({ name, children }: { name: string; children: () => ReactNode })
   const [open, setOpen] = useState(false)
   return (
     <details className="group" onToggle={e => setOpen(e.currentTarget.open)}>
-      <summary className={cn(ROW, 'cursor-pointer list-none')}>
+      <summary className={cn(treeRow, 'cursor-pointer list-none')}>
         <ChevronRight aria-hidden className="size-4 shrink-0 text-muted-foreground group-open:rotate-90" />
         <span className="truncate">{name}</span>
       </summary>
@@ -93,7 +91,7 @@ function FileRow({ path, shown, attached, onOpen, onAttach }: {
             onClick={() => onOpen(path, false)}
             onDoubleClick={() => onOpen(path, true)}
             onKeyDown={openMenuByKey}
-            className={cn(ROW, shown && 'bg-accent')}
+            className={cn(treeRow, shown && 'bg-accent')}
           />
         }
       >
