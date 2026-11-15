@@ -46,7 +46,7 @@ export function useGitHosts(): { view: GitHostsView | undefined; state: ReadStat
   return { view: value, state, reload }
 }
 
-/** A card's state: green when there is nothing to do, amber for a step to take, grey for a tool that is not here. */
+/** A login's state, said by its colour: green when there is nothing to do, amber for a step to take, grey for a tool that is not here. */
 export type LoginState = 'connected' | 'step' | 'not-installed'
 
 export function agentLoginState(state: AgentState | undefined): LoginState | undefined {
