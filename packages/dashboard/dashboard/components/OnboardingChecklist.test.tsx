@@ -3,6 +3,8 @@ import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-li
 import { forgetRemembered } from '../lib/use-async.js'
 import type { DashboardData, ProjectSummary } from '../../src/index.js'
 import { configureFirst } from '../test-utils.js'
+import { ModulesContext, type MountedModules } from '../lib/use-modules.js'
+import { HostServicesContext, INERT_HOST_SERVICES } from '../lib/host-services.js'
 
 // The first steps read their state over several RPC stubs and hooks; stub them all so nothing
 // reaches for a daemon and each step's "done" comes from a fixture instead.
@@ -161,12 +163,31 @@ describe('the first steps on the Overview', () => {
   })
 
   test('the steps nothing breaks without are marked optional, and the essentials are not', async () => {
-    onDashboard.mockResolvedValue({ ...WITH_PROJECT, queue: [{ projectId: 'p1', projectName: 'shop', entries: [] }] } as unknown as DashboardData)
+    onDashboard.mockResolvedValue({ ...WITH_PROJECT, queue: [{ projectId: 'p1', projectName: 'shop', package: '@acme/queue', entries: [] }] } as unknown as DashboardData)
     steps({ projects: [SHOP] })
     await waitFor(() => expect(row('Populate tickets/')).toBeTruthy())
     expect(within(row('Populate tickets/')).getByText('Optional')).toBeTruthy()
     expect(within(row('Turn on notifications')).getByText('Optional')).toBeTruthy()
     expect(within(row('Populate the queue of AI tasks')).queryByText('Optional')).toBeNull()
+  })
+
+  test("the queue step's press opens the page of the package that keeps the queue, where a task is added to it", async () => {
+    onDashboard.mockResolvedValue({ ...WITH_PROJECT, queue: [{ projectId: 'p1', projectName: 'shop', package: '@acme/queue', entries: [] }] } as unknown as DashboardData)
+    const openPage = vi.fn()
+    const modules: MountedModules = { pages: [{ segment: 'todo', label: 'Queue', package: '@acme/queue', projects: ['p1'], Page: () => null }], cards: [], linkActions: [], panels: [], runSlots: [], settings: [], everyPage: [], loaded: true }
+    render(
+      <ModulesContext.Provider value={modules}>
+        <HostServicesContext.Provider value={{ ...INERT_HOST_SERVICES, openPage, pageHref: segment => `/shop/${segment}` }}>
+          <OnboardingChecklist projects={[SHOP]} onAgentStarted={vi.fn()} onSelectProject={vi.fn()} onProjectAdded={vi.fn()} />
+        </HostServicesContext.Provider>
+      </ModulesContext.Provider>,
+    )
+    await openStep('Populate the queue of AI tasks')
+    // A link, so it opens in a new tab too; a plain click goes through the dashboard's own navigation.
+    const open = within(row('Populate the queue of AI tasks')).getByRole('link', { name: 'Open Queue' })
+    expect(open.getAttribute('href')).toBe('/shop/todo')
+    fireEvent.click(open)
+    expect(openPage).toHaveBeenCalledWith('todo')
   })
 
   test('the queue step is there only while some project has a queue at all, the tickets step only while some project provides tickets (#1774)', async () => {

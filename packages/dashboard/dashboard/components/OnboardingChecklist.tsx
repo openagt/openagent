@@ -1,11 +1,13 @@
-import { useRef, useState, type ReactNode } from 'react'
+import { useContext, useRef, useState, type ReactNode } from 'react'
 import type { DashboardData, ProjectSummary } from '../../src/index.js'
 import { Check, Info, X } from 'lucide-react'
 import { onDashboard } from '../rpc/reads.js'
 import { usePolled } from '../lib/use-async.js'
 import { usePerson } from '../lib/use-person.js'
+import { useMountedModules } from '../lib/use-modules.js'
+import { HostServicesContext, INERT_HOST_SERVICES } from '../lib/host-services.js'
 import { cn } from '../lib/utils.js'
-import { Button } from './ui/button.js'
+import { Button, buttonVariants } from './ui/button.js'
 import { Card, CardContent, CardHeader } from './ui/card.js'
 import { usePreferences, updatePreferences, notificationsEnabled } from '../lib/preferences.js'
 import { useNotificationPermission } from '../lib/notification-permission.js'
@@ -93,6 +95,11 @@ export function OnboardingChecklist({
   const seen = useRef(new Set<string>())
   // The step the person opened; by default, the first one not done.
   const [picked, setPicked] = useState<string | undefined>()
+  // The page of the package that keeps the queue, where a task is added to it: the queue step's
+  // press opens it, as every other step's does what the step asks. OpenAgent names no queue page.
+  const services = useContext(HostServicesContext) ?? INERT_HOST_SERVICES
+  const { pages } = useMountedModules()
+  const queuePage = pages.find(page => data?.queue.some(queue => queue.package === page.package))
 
   // The project the steps act on: the only/most recent one. A first-session flow rarely has a second.
   const targetProjectId = data?.projects[0]?.projectId ?? null
@@ -171,6 +178,24 @@ export function OnboardingChecklist({
             label: 'Populate the queue of AI tasks',
             description: 'The agent queue: each entry is work the agent picks up on its own, so a filled queue is what lets it keep going without you.',
             done: (data?.totals.openTodos ?? 0) > 0,
+            ...(queuePage
+              ? {
+                  action: (
+                    <a
+                      href={services.pageHref(queuePage.segment)}
+                      onClick={event => {
+                        // A modified click is the browser's to handle: a new tab, a new window.
+                        if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey || event.button !== 0) return
+                        event.preventDefault()
+                        services.openPage(queuePage.segment)
+                      }}
+                      className={buttonVariants({ size: 'sm' })}
+                    >
+                      {`Open ${queuePage.label}`}
+                    </a>
+                  ),
+                }
+              : {}),
           },
         ]
       : []),

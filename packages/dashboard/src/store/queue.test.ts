@@ -43,6 +43,8 @@ test('a project with no queue provider has no queue; one with a provider is read
     assert.ok(queue)
     assert.deepEqual(await queue.list(), ['- one', 'two'])
     assert.deepEqual(await calls(root, 'queue'), ['--local'])
+    // Which package provides it: the dashboard opens that package's own page to fill it.
+    assert.equal(queue.package, 'queue')
   } finally {
     await rm(none, { recursive: true, force: true })
     await rm(root, { recursive: true, force: true })

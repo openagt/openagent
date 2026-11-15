@@ -41,8 +41,8 @@ test('buildOverview sums the open queue and lists recent projects newest-first (
     project(`p${i}`, `/p${i}`, `2026-07-${String(10 + i).padStart(2, '0')}T00:00:00Z`),
   )
   const queues: ProjectQueue[] = [
-    { projectId: 'p0', projectName: 'p0', entries: ['a', 'b', 'c'] },
-    { projectId: 'p1', projectName: 'p1', entries: ['d', 'e'] },
+    { projectId: 'p0', projectName: 'p0', package: 'q', entries: ['a', 'b', 'c'] },
+    { projectId: 'p1', projectName: 'p1', package: 'q', entries: ['d', 'e'] },
   ]
   const overview = await buildOverview(projects, { liveAgents: async () => [], queue: async () => queues })
   assert.equal(overview.active.length, 0)
