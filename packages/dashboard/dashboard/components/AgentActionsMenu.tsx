@@ -326,7 +326,8 @@ export function AgentActionsMenu({
         <ConfirmDialog
           open={confirmDelete}
           onOpenChange={setConfirmDelete}
-          title="Delete this agent?"
+          // Named as the item that opens it names it, and as the Log lists it: a session.
+          title="Delete this session?"
           body={
             <>
               Deleting <span className="font-medium text-foreground">{name}</span> removes it from the dashboard for good — its
@@ -335,7 +336,7 @@ export function AgentActionsMenu({
           }
           confirmLabel="Delete"
           confirmBusyLabel="Deleting…"
-          fallbackError="Could not delete the agent."
+          fallbackError="Could not delete the session."
           onConfirm={() => sendDeleteAgent(projectId, agentId)}
           onSuccess={onDeleted}
         />
