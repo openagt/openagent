@@ -100,13 +100,14 @@ export function Tabs<T extends string>({ tabs, value, onChange, label }: { tabs:
 
 /** A part of a device's page, with its heading. */
 export function Part({ title, children }: { title?: string; children: ReactNode }) {
+  // A part's own paragraphs keep the spec's measure, 72 characters a line, however wide Settings is.
   if (title !== undefined)
     return (
       <Section title={title} className="pt-6">
-        <div className="space-y-3">{children}</div>
+        <div className="space-y-3 [&>p]:max-w-[72ch]">{children}</div>
       </Section>
     )
-  return <section className="space-y-3 pt-6">{children}</section>
+  return <section className="space-y-3 pt-6 [&>p]:max-w-[72ch]">{children}</section>
 }
 
 /** The press that removes the device a page is about: a group of its own at the page's end, under a hairline, with what it does said under it. */
