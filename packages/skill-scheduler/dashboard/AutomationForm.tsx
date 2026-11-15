@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Button, Input, RadioGroup, RadioGroupOption, useKeptDraft, useOpenAgentDown, type ModuleCommandResult, type ModuleProject } from '@openagt/dashboard/module'
 import { EMPTY_DRAFT, addArgs, draftProblem, draftSentence, isUntouched, nameProblem, ownPaceArgs, whatAndWhenProblem, savedFile, savedWords, whereHint, type AutomationDraft, type OwnPace } from './automation-form.js'
-import { PaceFields, SaidFields, SaveWords, Section } from './fields.js'
+import { FormFoot, PaceFields, SaidFields, SaveWords, Section } from './fields.js'
 import { DEFAULT_AGENT } from '../src/names.js'
 
 // The "New automation" form of the Automations page: a person's own prompt, saved as a command of
@@ -161,26 +161,21 @@ export function AutomationForm({
           {failed}
         </p>
       )}
-      {/* The presses stay in view at the window's foot while the form is longer than the window. */}
-      <div className="sticky bottom-0 -mx-3 flex flex-wrap items-center justify-between gap-3 bg-background px-3 py-3">
-        {/* Beside the presses where both fit, else over them, at the full width. */}
-        <p className="min-w-0 grow basis-60 text-xs text-muted-foreground">{whereHint(draft, schedulerRuns)}</p>
-        <div className="ml-auto flex gap-2">
-          <Button
-            variant="secondary"
-            disabled={saving}
-            onClick={() => {
-              forget()
-              onClose()
-            }}
-          >
-            Cancel
-          </Button>
-          <Button disabled={saving || down || problem !== undefined} onClick={() => void save()}>
-            <SaveWords saving={saving} />
-          </Button>
-        </div>
-      </div>
+      <FormFoot where={whereHint(draft, schedulerRuns)}>
+        <Button
+          variant="secondary"
+          disabled={saving}
+          onClick={() => {
+            forget()
+            onClose()
+          }}
+        >
+          Cancel
+        </Button>
+        <Button disabled={saving || down || problem !== undefined} onClick={() => void save()}>
+          <SaveWords saving={saving} />
+        </Button>
+      </FormFoot>
     </div>
   )
 }

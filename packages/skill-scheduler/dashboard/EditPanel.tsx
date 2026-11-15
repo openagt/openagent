@@ -4,7 +4,7 @@ import type { PublishPick } from '../src/state.js'
 import { MAX_AGENTS, OWN_AUTOMATIONS_DIR, type AgentName } from '../src/names.js'
 import { parseInterval, parseTimeOfDay } from '../src/pace.js'
 import { atRowsPace, draftProblem, draftRow, editArgs, editedWords, keptWhereHint, ownPaceArgs, removeWarning, removedWords, savedFile, saysTheSame, type AutomationDraft, type OpenedAutomation, type OwnPace } from './automation-form.js'
-import { AgentsFields, PaceFields, PublishField, RunsOnFields, SaidFields, SaidShown, SaveWords, Section, type ModelDraft } from './fields.js'
+import { AgentsFields, FormFoot, PaceFields, PublishField, RunsOnFields, SaidFields, SaidShown, SaveWords, Section, type ModelDraft } from './fields.js'
 import { EACH_KEEPS_OWN, agentOf, agentsArgs, agentsDraftOf, atOnce, atOnceWords, draftOf, isOwn, pace, runsOnWords, paceArgs, paceProblem, publishes, rowTitle, saysAtOnce, spelled, stopped, withDraft, type AgentModels, type AgentsDraft, type PaceDraft, type SchedulerCommand } from './schedulers.js'
 
 // The Edit panel of the Automations page: one panel, with the same parts in the same order, for
@@ -322,25 +322,20 @@ export function EditPanel({
           {failed}
         </p>
       )}
-      {/* The presses stay in view at the window's foot while the panel is longer than the window. */}
-      <div className="sticky bottom-0 -mx-3 flex flex-wrap items-center justify-between gap-3 bg-background px-3 py-3">
-        {/* Beside the presses where both fit, else over them, at the full width. */}
-        <p className="min-w-0 grow basis-60 text-xs text-muted-foreground">{keptWhereHint(opened)}</p>
-        <div className="ml-auto flex gap-2">
-          {/* Only what the tool wrote is the tool's to delete. */}
-          {scheduled.editable && opened && (
-            <Button variant="ghost" disabled={saving} onClick={() => (setAsking(true), setFailed(undefined))} className="text-danger">
-              Remove
-            </Button>
-          )}
-          <Button variant="secondary" disabled={saving} onClick={onClose}>
-            Cancel
+      <FormFoot where={keptWhereHint(opened)}>
+        {/* Only what the tool wrote is the tool's to delete. */}
+        {scheduled.editable && opened && (
+          <Button variant="ghost" disabled={saving} onClick={() => (setAsking(true), setFailed(undefined))} className="text-danger">
+            Remove
           </Button>
-          <Button disabled={saving || down || problem !== undefined || !dirty} onClick={() => void save()}>
-            <SaveWords saving={saving} />
-          </Button>
-        </div>
-      </div>
+        )}
+        <Button variant="secondary" disabled={saving} onClick={onClose}>
+          Cancel
+        </Button>
+        <Button disabled={saving || down || problem !== undefined || !dirty} onClick={() => void save()}>
+          <SaveWords saving={saving} />
+        </Button>
+      </FormFoot>
     </div>
   )
 }
