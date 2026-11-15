@@ -1,6 +1,5 @@
-import { useMemo, useState } from 'react'
 import { afterEach, describe, expect, test, vi } from 'vitest'
-import { Profiler, useLayoutEffect, useState } from 'react'
+import { Profiler, useLayoutEffect, useMemo, useState } from 'react'
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { ModuleHostContext, type MachineAdded, type MachineRemoved, type ModuleCommandResult, type ModuleComputersThrough, type ModuleAccountsAgent, type ModuleHost, type ModuleMachineAccount, type ModuleMachinePerson, type ModuleMachines } from '@openagt/dashboard/module'
 import { fakeHost } from '@openagt/dashboard/module/testing'
