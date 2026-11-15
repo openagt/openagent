@@ -50,6 +50,20 @@ describe('QueuePage', () => {
     expect(shown()).toEqual(['No priority 1 entry', '1. Hand-written on top', 'Priority 8 2 entries', '2. Urgent', '3. Also urgent', 'Priority 3 1 entry', '4. Later'])
   })
 
+  test("while the queue is first read, its rows' shapes stand where the entries will, and the entries take their place", async () => {
+    // A browser that kept no list from an earlier visit.
+    localStorage.clear()
+    host = fakeHost({ p1: { '--local --full': FULL } })
+    let answer = () => {}
+    host.runCommand.mockImplementationOnce(() => new Promise(resolve => (answer = () => resolve({ ok: true, output: FULL }))))
+    renderWithHost(<QueuePage projects={[alpha]} projectId={null} path={[]} />, host, NO_MODULES)
+    expect(screen.getByRole('status').textContent).toBe('Loading…')
+    expect(screen.queryByText('Nothing queued.')).toBeNull()
+    answer()
+    await screen.findByText('Hand-written on top')
+    expect(screen.queryByText('Loading…')).toBeNull()
+  })
+
   test('says what the two ends of the scale mean: on the page, and on a section at either end', async () => {
     show([{ entry: 'Now', priority: 10 }, { entry: 'Some day', priority: 0 }])
     await screen.findByText('Now')

@@ -4,16 +4,17 @@ import {
   Button,
   ConfirmDialog,
   Input,
-  FadeWhileStale,
   List,
   Page,
   Row,
+  RowShapes,
   Section,
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
+  Slot,
   StartAgentButton,
   cn,
   inPlace,
@@ -82,6 +83,7 @@ export function QueuePage({ projects }: ModulePageProps) {
   const {
     value: reads,
     state,
+    failing,
     reload,
   } = usePolled<ProjectRead[]>(
     () =>
@@ -114,23 +116,24 @@ export function QueuePage({ projects }: ModulePageProps) {
       description={`What agents will work on next, from the top${projects.length > 1 ? ', one list per project' : ''}. A higher priority is taken first: 10 is the most urgent, 0 is only if there is capacity.`}
       actions={only && <BatchStart read={only} primary starts={starts} />}
     >
-      {state === 'unknown' && <p className="text-sm text-muted-foreground">Loading…</p>}
       {starts.error && (
         <p role="alert" className="mb-4 text-sm text-danger">
           {starts.error}
         </p>
       )}
-      <FadeWhileStale stale={state === 'kept'} className="space-y-8">
-        {reads.map(read =>
-          only ? (
-            <ProjectQueue key={read.project.id} read={read} schedule={schedule} names={names} starts={starts} reload={reload} />
-          ) : (
-            <Section key={read.project.id} title={read.project.name} count={read.entries?.length || undefined} action={<BatchStart read={read} primary={false} starts={starts} />}>
-              <ProjectQueue read={read} schedule={schedule} names={names} starts={starts} reload={reload} />
-            </Section>
-          ),
-        )}
-      </FadeWhileStale>
+      <Slot of={{ state, value: reads, failing }} shape={<RowShapes rows={3} />} className="space-y-8">
+        {reads =>
+          reads.map(read =>
+            only ? (
+              <ProjectQueue key={read.project.id} read={read} schedule={schedule} names={names} starts={starts} reload={reload} />
+            ) : (
+              <Section key={read.project.id} title={read.project.name} count={read.entries?.length || undefined} action={<BatchStart read={read} primary={false} starts={starts} />}>
+                <ProjectQueue read={read} schedule={schedule} names={names} starts={starts} reload={reload} />
+              </Section>
+            ),
+          )
+        }
+      </Slot>
     </Page>
   )
 }

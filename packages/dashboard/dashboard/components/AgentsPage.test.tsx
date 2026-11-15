@@ -67,6 +67,16 @@ async function agentRows(hidden = false): Promise<HTMLElement[]> {
 }
 
 describe('the Agents page', () => {
+  test("while the agents are first read, rows' shapes stand where the agents will, and the agents take their place", async () => {
+    let answer = () => {}
+    rpc.onAgentsList.mockImplementationOnce(() => new Promise(resolve => (answer = () => resolve(VIEW))))
+    render(<AgentsPage />)
+    expect(screen.getByRole('status').textContent).toBe('Loading…')
+    answer()
+    expect(await agentRows()).toHaveLength(2)
+    expect(screen.queryByText('Loading…')).toBeNull()
+  })
+
   test('one row per agent, the default first and marked; each with its skills and the accounts it works as, the computer’s where it names none', async () => {
     render(<AgentsPage />)
     const rows = await agentRows()

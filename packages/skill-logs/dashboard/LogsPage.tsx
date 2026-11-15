@@ -1,4 +1,4 @@
-import { FadeWhileStale, FilterChips, List, Page, PersonMark, Row, STATUS_DOT, Section, STATUS_RING, cn, formatDateTime, formatDuration, personSaid, runName, useGitHostPeople, useModuleHost, usePolled, type ModuleAgent, type ModuleHostPerson, type ModulePageProps, type ModuleProject } from '@openagt/dashboard/module'
+import { FilterChips, List, Page, PersonMark, Row, RowShapes, STATUS_DOT, Section, STATUS_RING, Slot, cn, formatDateTime, formatDuration, personSaid, runName, useGitHostPeople, useModuleHost, usePolled, type ModuleAgent, type ModuleHostPerson, type ModulePageProps, type ModuleProject, type ReadState } from '@openagt/dashboard/module'
 import type { RunCard } from '../src/run.js'
 
 /** How many runs each project lists: the command's own default page is 20; the page shows more. */
@@ -146,7 +146,7 @@ export function LogsPage({ projects, path }: ModulePageProps) {
     [key],
     { remember: `skill-logs:live:${key}`, stored: true },
   )
-  const { value: recorded, state: recordedState } = usePolled<Read>(
+  const { value: recorded, state: recordedState, failing } = usePolled<Read>(
     async () => {
       const results = await Promise.all(projects.map(async project => ({ project, result: await host.runCommand(project.id, ['--limit', String(LIMIT)]) })))
       const rows: RunRow[] = []
@@ -167,7 +167,8 @@ export function LogsPage({ projects, path }: ModulePageProps) {
     { remember: `skill-logs:runs:${key}`, stored: true },
   )
   const read = { ...recorded, rows: withLiveRuns(recorded.rows, live) }
-  const stale = liveState === 'kept' || recordedState === 'kept'
+  // The runs the dashboard lists show while the records are read; with none of those, the list waits for the records.
+  const state: ReadState = recordedState === 'unknown' ? (read.rows.length > 0 ? liveState : 'unknown') : liveState === 'kept' ? 'kept' : recordedState
   const accountOf = useGitHostPeople(read.rows.map(({ project, card }) => ({ projectId: project.id, person: card.person })), host.gitHostPeople, 'skill-logs:people')
 
   // Which status the list shows: every one, until a chip picks one, kept in the address (`/logs/waiting`) so a
@@ -191,62 +192,65 @@ export function LogsPage({ projects, path }: ModulePageProps) {
     <Page
       title="Logs"
       description={capped ? `The last ${LIMIT} runs recorded in ${many ? 'each of these projects' : 'this project'}, newest first.` : `Every run recorded in ${many ? 'these projects' : 'this project'}, newest first.`}
-      bar={<FilterChips chips={counts} total={read.rows.length} picked={status} onPick={value => host.adjustPage(value === null ? [] : [value])} />}
+      bar={state === 'unknown' ? undefined : <FilterChips chips={counts} total={read.rows.length} picked={status} onPick={value => host.adjustPage(value === null ? [] : [value])} />}
     >
-      {read.failed.map(({ project, error }) => (
-        <p key={project.id} role="alert" className="mb-3 text-sm text-danger">
-          Could not read the runs of {project.name}: {error}
-        </p>
-      ))}
-      {recordedState === 'unknown' && read.rows.length === 0 && <p className="text-sm text-muted-foreground">Loading…</p>}
-      {recordedState !== 'unknown' && read.rows.length === 0 && read.failed.length === 0 && <p className="text-sm text-muted-foreground">No runs recorded yet.</p>}
-      {/* Each run is a row: its name, then what is said of it in columns that stand in one place down the
-          page and whatever the chip picks; a column no run has a value for is not drawn. Columns give way
-          to the name as the page's column narrows, and on a phone they go under it. */}
-      <FadeWhileStale stale={stale} className="@container space-y-6">
-        {days.map(({ day, rows, cost }) => (
-          <Section key={day} title={day} count={runsSaid(rows.length, cost)}>
-            <List>
-              {rows.map(({ project, card }) => (
-                <Row
-                  key={`${project.id}/${card.id}`}
-                  stackOnPhone
-                  // As every list names a run, over what it was asked; a run with none of those goes by its id.
-                  title={runName(card) ?? card.id}
-                  detail={card.title?.trim() && card.intent?.trim() ? card.intent : undefined}
-                  href={host.agentHref(project.id, card.id)}
-                  onClick={() => host.openAgent(project.id, card.id)}
-                  meta={
-                    <>
-                      {/* Its state said once: the dot beside its word. */}
-                      <span className="flex items-center gap-1 md:w-28">
-                        <StatusDot status={card.status} />
-                        <StatusWord status={card.status} offline={card.offline} />
-                      </span>
-                      {columns.who && <RunPerson person={card.person} account={accountOf(project.id, card.person)} />}
-                      {many && <span className="truncate md:w-24">{project.name}</span>}
-                      {card.pr ? (
-                        <a href={card.pr.url} target="_blank" rel="noreferrer" className="relative text-primary hover:underline md:w-40 @max-3xl:md:w-auto">
-                          #{card.pr.number}
-                        </a>
-                      ) : (
-                        <span className="truncate font-mono max-md:hidden md:w-40 @max-3xl:hidden" title={card.branch}>
-                          {card.branch}
-                        </span>
-                      )}
-                      {columns.took && <span className="text-right tabular-nums md:w-12 @max-2xl:hidden">{took(card) !== undefined && <><span className="sr-only">took </span>{took(card)}</>}</span>}
-                      {columns.cost && <span className="text-right tabular-nums md:w-14">{card.cost !== undefined && dollars(card.cost)}</span>}
-                      <span className="whitespace-nowrap text-right tabular-nums md:w-16" title={formatDateTime(card.startedAt)}>
-                        {clock(card.startedAt)}
-                      </span>
-                    </>
-                  }
-                />
-              ))}
-            </List>
-          </Section>
-        ))}
-      </FadeWhileStale>
+      <Slot of={{ state, value: read, failing }} shape={<RowShapes rows={3} />} className="@container space-y-6">
+        {() => (
+          <>
+            {read.failed.map(({ project, error }) => (
+              <p key={project.id} role="alert" className="text-sm text-danger">
+                Could not read the runs of {project.name}: {error}
+              </p>
+            ))}
+            {read.rows.length === 0 && read.failed.length === 0 && <p className="text-sm text-muted-foreground">No runs recorded yet.</p>}
+            {/* Each run is a row: its name, then what is said of it in columns that stand in one place down the
+                page and whatever the chip picks; a column no run has a value for is not drawn. Columns give way
+                to the name as the page's column narrows, and on a phone they go under it. */}
+            {days.map(({ day, rows, cost }) => (
+              <Section key={day} title={day} count={runsSaid(rows.length, cost)}>
+                <List>
+                  {rows.map(({ project, card }) => (
+                    <Row
+                      key={`${project.id}/${card.id}`}
+                      stackOnPhone
+                      // As every list names a run, over what it was asked; a run with none of those goes by its id.
+                      title={runName(card) ?? card.id}
+                      detail={card.title?.trim() && card.intent?.trim() ? card.intent : undefined}
+                      href={host.agentHref(project.id, card.id)}
+                      onClick={() => host.openAgent(project.id, card.id)}
+                      meta={
+                        <>
+                          {/* Its state said once: the dot beside its word. */}
+                          <span className="flex items-center gap-1 md:w-28">
+                            <StatusDot status={card.status} />
+                            <StatusWord status={card.status} offline={card.offline} />
+                          </span>
+                          {columns.who && <RunPerson person={card.person} account={accountOf(project.id, card.person)} />}
+                          {many && <span className="truncate md:w-24">{project.name}</span>}
+                          {card.pr ? (
+                            <a href={card.pr.url} target="_blank" rel="noreferrer" className="relative text-primary hover:underline md:w-40 @max-3xl:md:w-auto">
+                              #{card.pr.number}
+                            </a>
+                          ) : (
+                            <span className="truncate font-mono max-md:hidden md:w-40 @max-3xl:hidden" title={card.branch}>
+                              {card.branch}
+                            </span>
+                          )}
+                          {columns.took && <span className="text-right tabular-nums md:w-12 @max-2xl:hidden">{took(card) !== undefined && <><span className="sr-only">took </span>{took(card)}</>}</span>}
+                          {columns.cost && <span className="text-right tabular-nums md:w-14">{card.cost !== undefined && dollars(card.cost)}</span>}
+                          <span className="whitespace-nowrap text-right tabular-nums md:w-16" title={formatDateTime(card.startedAt)}>
+                            {clock(card.startedAt)}
+                          </span>
+                        </>
+                      }
+                    />
+                  ))}
+                </List>
+              </Section>
+            ))}
+          </>
+        )}
+      </Slot>
     </Page>
   )
 }

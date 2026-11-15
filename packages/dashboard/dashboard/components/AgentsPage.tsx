@@ -2,7 +2,7 @@ import { useEffect, useId, useRef, useState, type FormEvent } from 'react'
 import { Bot, Check, Loader2, Pencil, Plus, RefreshCw, Trash2 } from 'lucide-react'
 import { onAgentLogins, onAgentsList, sendCopyAgentLogins, sendRemoveAgent, sendSaveAgent, type AgentAccountChoice, type AgentLoginsOn, type AgentRecord, type AgentsView } from '../rpc/agents.js'
 import { DEFAULT_AGENT } from '../../src/client.js'
-import { usePolled } from '../lib/use-async.js'
+import { usePolled, type ReadState } from '../lib/use-async.js'
 import { useAddGitAccount } from './AddGitAccount.js'
 import { Button } from './ui/button.js'
 import { List, Row } from './ui/list.js'
@@ -15,7 +15,7 @@ import { Input } from './ui/input.js'
 import { Label } from './ui/label.js'
 import { Page } from './Page.js'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select.js'
-import { Skeleton, useSkeleton } from './ui/skeleton.js'
+import { RowShapes, Slot } from './ui/slot.js'
 
 // The Agents page (Rom's design): an agent is a name, a set of skills and a set of accounts, made
 // once and used in any project or none. One row per agent, the default first, each edited in a
@@ -32,9 +32,9 @@ const SELDOM_MS = 30_000
  * pages and loads so a menu lands whole and the box's rows, which name the agent and count its
  * skills, are drawn from the first frame.
  */
-export function useAgentsList(): { view: AgentsView | undefined; reload: () => Promise<void> } {
-  const { value, reload } = usePolled<AgentsView | undefined>(onAgentsList, undefined, SELDOM_MS, [], { remember: 'agents', stored: true })
-  return { view: value, reload }
+export function useAgentsList(): { view: AgentsView | undefined; state: ReadState; failing: boolean; reload: () => Promise<void> } {
+  const { value, state, failing, reload } = usePolled<AgentsView | undefined>(onAgentsList, undefined, SELDOM_MS, [], { remember: 'agents', stored: true })
+  return { view: value, state, failing, reload }
 }
 
 /** How often the devices are asked how the agents' GitHub accounts stand there. */
@@ -76,8 +76,7 @@ function sameDraft(a: Draft, b: Draft): boolean {
 
 /** The Agents page. */
 export function AgentsPage() {
-  const { view, reload } = useAgentsList()
-  const reading = useSkeleton(!view)
+  const { view, state, failing, reload } = useAgentsList()
   const { devices, reload: reloadDevices } = useAgentLogins()
   const [adding, setAdding] = useState(false)
   const newAgent = useRef<HTMLButtonElement>(null)
@@ -95,7 +94,7 @@ export function AgentsPage() {
   return (
     <Page
       title="Agents"
-      count={view && !reading ? view.agents.length : undefined}
+      count={view && state !== 'unknown' ? view.agents.length : undefined}
       description="An agent is a name, a set of skills and a set of accounts. Pick one under the message box; it works in any project, or in none."
       actions={
         <Button ref={newAgent} disabled={!view || adding} onClick={() => setAdding(true)}>
@@ -104,16 +103,18 @@ export function AgentsPage() {
         </Button>
       }
     >
-      {!view || reading ? (
-        <Skeleton className="h-32 w-full" />
-      ) : (
-        <List aria-label="Agents">
-          {view.agents.map(agent => (
-            <AgentRow key={agent.id} agent={agent} view={view} devices={devices} onChanged={changed} onRemoved={() => void (removed.current = agent.id)} />
-          ))}
-        </List>
-      )}
-      {/* Over the page, so it opens at the press even while the list's skeleton still holds. */}
+      <Slot of={{ state, value: view, failing }} shape={<RowShapes />}>
+        {view =>
+          view && (
+            <List aria-label="Agents">
+              {view.agents.map(agent => (
+                <AgentRow key={agent.id} agent={agent} view={view} devices={devices} onChanged={changed} onRemoved={() => void (removed.current = agent.id)} />
+              ))}
+            </List>
+          )
+        }
+      </Slot>
+      {/* Over the page, so it opens at the press even while the list's shape still holds. */}
       {adding && view && <AgentEditor view={view} onAccounts={reload} onDone={async saved => (setAdding(false), saved ? changed() : undefined)} />}
     </Page>
   )
