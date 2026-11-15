@@ -10,7 +10,6 @@ import {
   DropdownMenuTrigger,
   PriorityBadge,
   cn,
-  runSaid,
   useAction,
   useModuleHost,
   useOpenAgentDown,
@@ -21,7 +20,7 @@ import type { WorkspaceTicketDetail } from './lib/types.js'
 import { releaseClaim } from './lib/release.js'
 import { parsePriority } from './lib/ticket-priority.js'
 import { ticketAge, ticketDay } from './lib/ticket-date.js'
-import { STAGE_LABEL, ticketStage } from './lib/ticket-stage.js'
+import { STAGE_LABEL, claimStanding, ticketStage } from './lib/ticket-stage.js'
 import { TicketStartActions } from './TicketStartActions.js'
 import { TicketSessions, type TicketSession } from './TicketSessions.js'
 import { StageWord } from './TicketsPanel.js'
@@ -229,7 +228,7 @@ export function TicketFacts({
               <span className="min-w-0 truncate">{holder}</span>
             )}
             {/* A run at it is said by the stage's turning mark; one that ended is said here. */}
-            {holderStatus !== undefined && claimState(holderStatus) !== 'working' && <span className="text-faint-foreground">{standing(holderStatus)}</span>}
+            {holderStatus !== undefined && claimState(holderStatus) !== 'working' && <span className="text-faint-foreground">{claimStanding(holderStatus)}</span>}
           </Fact>
         )}
         {ticket.pr && (
@@ -294,9 +293,4 @@ function Fact({ name, wide = false, children }: { name: string; wide?: boolean; 
       <dd className="flex min-w-0 flex-wrap items-baseline gap-1">{children}</dd>
     </div>
   )
-}
-
-/** How the run holding the claim stands, said after its name. */
-function standing(holderStatus: string): string {
-  return claimState(holderStatus) === 'stale' ? `run ${holderStatus}` : runSaid(holderStatus)
 }

@@ -23,7 +23,7 @@ import { NEW_TICKET, UPDATE_TICKETS_PROMPT, heldBack, readMeta, type TicketsMeta
 import { QueuedMark, TicketStartActions, useQueuedAsk } from './TicketStartActions.js'
 import type { WorkspaceTicket } from './lib/types.js'
 import { parsePriority } from './lib/ticket-priority.js'
-import { STAGE_LABEL, STAGE_ORDER, claimWorking, ticketStage, type TicketStageId } from './lib/ticket-stage.js'
+import { STAGE_LABEL, STAGE_ORDER, claimStanding, claimWorking, ticketStage, type TicketStageId } from './lib/ticket-stage.js'
 import { ticketAge, ticketDay } from './lib/ticket-date.js'
 
 /** Captured once: `useLoaded` treats a fresh `{}` literal as a new value on every render. */
@@ -93,10 +93,11 @@ function TicketRow({ listed, priorities, showStage, busy, starting, isSelected, 
   const selected = isSelected?.(listed) ?? false
   // A ticket in review, waiting or claimed is not handed to an agent: its row offers no next step, only what is queued for it.
   const offered = !heldBack(ticket) && !ticket.locked
-  const stage = <StageWord ticket={ticket} />
+  const stage = <StageWord ticket={ticket} standing />
   const holder = ticket.lockedByAgent?.name ?? ticket.lockedBy
   // Its next step on the queue: said beside a held row's stage, and on a phone, where no row offers its menu, on every row.
   const queued = useQueuedAsk(projectId, ticket)
+  const said = claimSaid(ticket)
   // A claim by one of the project's runs opens that run (#1748); any other narrows the list to claimed (#1144).
   const run = ticket.lockedByAgent
   const claimPress = ticket.locked ? (run ? () => host.openAgent(projectId, run.id) : onClaimed) : undefined
@@ -146,11 +147,11 @@ function TicketRow({ listed, priorities, showStage, busy, starting, isSelected, 
             {/* A ticket no agent is handed now offers no next step, only what is queued for it. */}
             {!offered && queued && <QueuedMark />}
             {showStage && (
-              <span className="flex w-26">
+              <span className="flex w-36">
                 {claimPress ? (
                   <button
                     type="button"
-                    aria-label={holder ? `Claimed by ${holder}` : 'Claimed'}
+                    aria-label={holder ? `Claimed by ${holder}${said !== holder ? `: ${said.toLowerCase()}` : ''}` : 'Claimed'}
                     title={run ? `Claimed by ${holder}: open its run` : `Claimed${holder ? ` by ${holder}` : ''}: show the claimed tickets`}
                     onClick={claimPress}
                     className={cn(QUIET_PRESS, '-mx-1 px-1')}
@@ -195,18 +196,34 @@ function Priority({ value }: { value: string | undefined }) {
 /** A press inside a row: above its link, quiet until a fine pointer is on it. */
 const QUIET_PRESS = 'focus-ring relative z-10 rounded-sm pointer-fine:hover:*:text-foreground'
 
-/** Where a ticket stands, in a word of one size: a claim and a wait differ by their mark and colour, what it waits on in a tooltip. */
-export function StageWord({ ticket }: { ticket: WorkspaceTicket }) {
+/**
+ * Where a ticket stands, in a word of one size, what it waits on in a tooltip. A claim's mark is
+ * its run's, and with `standing` (a list's row, where "Claimed" is the group's name or the filter's)
+ * its word says how the claim stands too, never by the mark's colour alone ({@link claimSaid}).
+ */
+export function StageWord({ ticket, standing = false }: { ticket: WorkspaceTicket; standing?: boolean }) {
   const stage: TicketStageId = ticketStage(ticket)
   const holder = ticket.lockedByAgent?.name ?? ticket.lockedBy
   const title = stage === 'claimed' ? (holder ? `Claimed by ${holder}` : undefined) : stage === 'waiting' ? `Waiting: ${ticket.waiting}` : stage === 'in-review' && ticket.pr ? `In review: ${ticket.pr.label}` : undefined
   return (
-    <span className={cn('flex items-center gap-1', stage === 'claimed' && claimWorking(ticket) && 'text-info')} title={title}>
+    <span className={cn('flex min-w-0 items-center gap-1', stage === 'claimed' && claimWorking(ticket) && 'text-info')} title={title}>
       {stage === 'claimed' && <ClaimMark ticket={ticket} />}
       {stage === 'waiting' && <StateCell state="waiting" className="size-3" />}
-      <span>{STAGE_LABEL[stage]}</span>
+      <span className="min-w-0 truncate">{stage === 'claimed' && standing ? claimSaid(ticket) : STAGE_LABEL[stage]}</span>
     </span>
   )
+}
+
+/**
+ * How a claim stands, as the ticket's page says it: its run at work or waiting on the person, its
+ * computer offline, or the run ended ("Run done"); a claim held by anything but one of the
+ * project's runs, a person or another machine, by its holder's name.
+ */
+function claimSaid(ticket: WorkspaceTicket): string {
+  const holder = ticket.lockedByAgent?.name ?? ticket.lockedBy
+  if (!ticket.lockedByAgent || ticket.holderStatus === undefined) return holder ?? STAGE_LABEL.claimed
+  const said = claimStanding(ticket.holderStatus)
+  return said.charAt(0).toUpperCase() + said.slice(1)
 }
 
 /** A claim's mark: the holding run's own while one of the project's runs holds it, a still one for any other holder. */

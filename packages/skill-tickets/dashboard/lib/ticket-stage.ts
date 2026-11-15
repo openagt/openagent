@@ -1,4 +1,5 @@
-import { heldBack } from '../../src/module.js'
+import { runSaid } from '@openagt/dashboard/module'
+import { claimState, heldBack } from '../../src/module.js'
 import type { WorkspaceTicket } from './types.js'
 
 /** Where a ticket stands, as a list says it: the first that holds of claimed, in review, waiting, planned. */
@@ -23,4 +24,9 @@ export function ticketStage(ticket: Pick<WorkspaceTicket, 'locked' | 'pr' | 'wai
 /** Whether the run holding a claim is at work right now: its mark pulses and the claim is said in colour. */
 export function claimWorking(ticket: Pick<WorkspaceTicket, 'holderStatus'>): boolean {
   return ticket.holderStatus === 'running'
+}
+
+/** How the run holding a claim stands, said after its name: "working", "waits on your answer", "run done". */
+export function claimStanding(holderStatus: string): string {
+  return claimState(holderStatus) === 'stale' ? `run ${holderStatus}` : runSaid(holderStatus)
 }

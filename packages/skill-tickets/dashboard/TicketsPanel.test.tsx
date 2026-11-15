@@ -75,10 +75,10 @@ beforeEach(() => {
 afterEach(cleanup)
 
 describe('the tickets list', () => {
-  test('lists the tickets one a line, saying where each stands, and an agent holding one by its name under the pointer', async () => {
+  test('lists the tickets one a line, saying where each stands, and a claim held by none of the runs by its holder\'s name', async () => {
     render(<Rows tickets={[ticket({ priority: '8', locked: true, lockedBy: 'agent-1' })]} />)
     expect(await screen.findByText('Do the thing')).toBeTruthy()
-    expect(screen.getByText('Claimed').closest('[title]')?.getAttribute('title')).toBe('Claimed by agent-1')
+    expect(screen.getByText('agent-1').closest('[title]')?.getAttribute('title')).toBe('Claimed by agent-1')
     // The summary is the ticket's page's; the list row is one line.
     expect(screen.queryByText('The thing is not done.')).toBeNull()
   })
@@ -140,32 +140,35 @@ describe('the tickets list', () => {
 
   test('a claimed ticket offers no start and no plan: an agent is on it', async () => {
     render(<Rows tickets={[ticket({ locked: true, lockedBy: 'agent-1' })]} />)
-    expect(await screen.findByText('Claimed')).toBeTruthy()
+    expect(await screen.findByText('agent-1')).toBeTruthy()
     expect(screen.queryByRole('button', { name: /^(start|plan)$/i })).toBeNull()
     expect(screen.queryByRole('button', { name: /other ways to (work on|plan) do the thing/i })).toBeNull()
   })
 
-  test("a claim's mark is its run's own: pulsing and said in colour while the run works, its own still mark while it waits or once it ended; any other holder's is still", async () => {
-    render(<Rows tickets={[ticket({ locked: true, lockedBy: 'r1', lockedByAgent: { id: 'r1', name: 'login-page' }, holderStatus: 'running' })]} />)
-    const working = (await screen.findByText('Claimed')).closest('[title]')!
+  test("a claim says how it stands, beside its run's own mark: working, pulsing and in colour; waiting on you; the run ended; any other holder by name, its mark still", async () => {
+    const run = (holderStatus: string) => ticket({ locked: true, lockedBy: 'r1', lockedByAgent: { id: 'r1', name: 'login-page' }, holderStatus })
+    render(<Rows tickets={[run('running')]} />)
+    const working = (await screen.findByText('Working')).closest('[title]')!
     expect(working.getAttribute('title')).toBe('Claimed by login-page')
     expect(working.querySelector('.bg-info')?.className).toContain('animate-pulse')
     expect(working.className).toContain('text-info')
     cleanup()
-    render(<Rows tickets={[ticket({ locked: true, lockedBy: 'r1', lockedByAgent: { id: 'r1', name: 'login-page' }, holderStatus: 'waiting' })]} />)
-    const asking = (await screen.findByText('Claimed')).closest('[title]')!
+    render(<Rows tickets={[run('waiting')]} />)
+    const asking = (await screen.findByText('Waits on your answer')).closest('[title]')!
     expect(asking.querySelector('.bg-warning')?.className).not.toContain('animate')
     expect(asking.className).not.toContain('text-info')
     cleanup()
-    render(<Rows tickets={[ticket({ locked: true, lockedBy: 'r1', lockedByAgent: { id: 'r1', name: 'login-page' }, holderStatus: 'done' })]} />)
-    const ended = (await screen.findByText('Claimed')).closest('[title]')!
+    render(<Rows tickets={[run('done')]} />)
+    const ended = (await screen.findByText('Run done')).closest('[title]')!
     expect(ended.querySelector('[class*="animate"]')).toBeNull()
     expect(ended.querySelector('.bg-info')).toBeNull()
     cleanup()
-    render(<Rows tickets={[ticket({ locked: true, lockedBy: 'alice-laptop' })]} />)
-    const other = (await screen.findByText('Claimed')).closest('[title]')!
+    render(<Rows tickets={[ticket({ locked: true, lockedBy: 'alice-laptop' })]} onClaimed={() => {}} />)
+    const other = (await screen.findByText('alice-laptop')).closest('[title]')!
     expect(other.querySelector('svg')).not.toBeNull()
     expect(other.querySelector('[class*="animate"]')).toBeNull()
+    // Said to a screen reader as well as shown.
+    expect(screen.getByRole('button', { name: 'Claimed by alice-laptop' })).toBeTruthy()
   })
 
   test('topic badges filter on click when the page passes a handler, without opening the row (#1144)', async () => {
@@ -188,7 +191,7 @@ describe('the tickets list', () => {
     expect(onOpen).not.toHaveBeenCalled()
     cleanup()
     render(<Rows tickets={[ticket({ locked: true, lockedBy: 'r1', lockedByAgent: { id: 'r1', name: 'login-page' }, holderStatus: 'running' })]} onClaimed={onClaimed} />)
-    fireEvent.click(await screen.findByRole('button', { name: 'Claimed by login-page' }))
+    fireEvent.click(await screen.findByRole('button', { name: 'Claimed by login-page: working' }))
     expect(host.openAgent).toHaveBeenCalledWith('p1', 'r1')
     expect(onClaimed).toHaveBeenCalledTimes(1)
   })
@@ -258,9 +261,10 @@ describe('the tickets list', () => {
     // A part's name says its rows' stage: they do not say it again.
     const planned = screen.getByRole('region', { name: 'Planned' })
     expect(within(planned).queryByText('Planned', { selector: 'li *' })).toBeNull()
-    // A claim's mark keeps its word, in its own group too.
-    const claimed = within(screen.getByRole('region', { name: 'Claimed' })).getByText('Claimed', { selector: 'li *' })
-    expect(claimed.parentElement!.querySelector('svg')).not.toBeNull()
+    // A claim's mark keeps its word, in its own group too: how it stands, never the group's own name.
+    const claimed = within(screen.getByRole('region', { name: 'Claimed' }))
+    expect(claimed.getByText('agent-1', { selector: 'li *' }).parentElement!.querySelector('svg')).not.toBeNull()
+    expect(claimed.queryByText('Claimed', { selector: 'li *' })).toBeNull()
     cleanup()
     render(<Rows tickets={many.slice(0, GROUP_BY_STAGE_FROM - 1)} />)
     await screen.findByText('Ticket 0')
@@ -303,7 +307,7 @@ describe('the tickets list', () => {
       render(<Rows tickets={[ticket({ locked: true, lockedBy: 'agent-1' }), ticket({ file: 'b.md', title: 'Offered' }), ticket({ file: 'c.md', title: 'Not queued' })]} />, mounted)
       await waitFor(() => expect(screen.getAllByText('Queued')).toHaveLength(2))
       const line = (title: string) => screen.getByText(title).closest('li')!.textContent
-      expect(line('Do the thing')).toMatch(/Claimed·\s*Queued$/)
+      expect(line('Do the thing')).toMatch(/agent-1·\s*Queued$/)
       expect(line('Offered')).toMatch(/Unplanned·\s*Queued$/)
       expect(line('Not queued')).not.toContain('Queued')
     } finally {

@@ -199,7 +199,8 @@ describe('TicketsPage (#1144)', () => {
     const run = { id: '2026-08-30T10-00-00-000Z', name: 'login-page', status: 'running' as const, startedAt: '2026-08-30T10:00:00.000Z' }
     host = fakeHost({ p1: { 'list --local': [ticket({ locked: true, lockedBy: run.id })], 'meta --local': {} } }, { p1: [run] })
     renderWithHost(<TicketsPage projects={[{ id: 'p1', name: 'Alpha', gitHost: true }]} />, host, modules())
-    fireEvent.click(await screen.findByRole('button', { name: 'Claimed by login-page' }))
+    // Named as its run, and how that run stands.
+    fireEvent.click(await screen.findByRole('button', { name: 'Claimed by login-page: working' }))
     expect(host.openAgent).toHaveBeenCalledWith('p1', run.id)
   })
 })
