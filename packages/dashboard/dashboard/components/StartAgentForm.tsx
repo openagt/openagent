@@ -256,7 +256,6 @@ export function StartAgentForm({
   const account = useSessionAccount(address, machine?.id, pickedAccount ?? onAgent?.accounts.github)
 
   const submit = async (text: string) => {
-    if (busy) return
     setNote(STARTING)
     setSentTo(machine ? machineName(machine) : clonedHere ? hereName() : null)
     const { publish: _publish, ...unpublished } = startPicks(preferences)

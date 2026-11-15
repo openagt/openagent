@@ -194,7 +194,6 @@ export function AgentComposer({
   }
 
   const send = async (text: string, { later }: { later: boolean } = { later: false }): Promise<void> => {
-    if (busy) return
     if (await say(contextSet ? promptWithContext(text, contextSet.context) : text, later)) {
       composerRef.current?.clear()
       contextSet?.reset()
