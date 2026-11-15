@@ -2,8 +2,8 @@ import { strict as assert } from 'node:assert'
 import { test } from 'node:test'
 import { needsChrome, smoke } from './smoke.js'
 
-// The project's pages, in a real browser (smoke.ts): a page a project's package brings, and adding
-// a project from the picker.
+// The project's pages, in a real browser (smoke.ts): a page a project's package brings, adding
+// a project from the picker, and the list of files the message box opens, on a phone.
 
 const { demo, flow } = smoke()
 
@@ -45,6 +45,35 @@ test("a ticket opened from every project's list goes back to that list from its 
     await page.getByRole('main').getByRole('button', { name: 'Tickets', exact: true }).click()
     await page.waitForURL(url => !url.pathname.endsWith('.md'))
     assert.equal(new URL(page.url()).pathname, '/tickets')
+  })
+})
+
+test("the files a # lists stay on a phone's screen, each with its name whole", needsChrome, async () => {
+  await flow('files-on-a-phone', async page => {
+    await page.setViewportSize({ width: 390, height: 800 })
+    await page.getByLabel('Prompt').click()
+    // A few words first: the caret is then in the right half of the screen, where the list used to start.
+    await page.keyboard.type('please have a look at the file #skills')
+    const list = page.getByRole('listbox', { name: 'Suggestions' })
+    await list.getByRole('option').first().waitFor()
+    // Where the list is, and each row's name and hint: whole, the name before the hint.
+    const seen = (await page.evaluate(`(() => {
+      const listbox = document.querySelector('[role=listbox][aria-label=Suggestions]')
+      const cut = part => part.scrollWidth > part.clientWidth
+      return {
+        screen: document.documentElement.clientWidth,
+        left: listbox.getBoundingClientRect().left,
+        right: listbox.getBoundingClientRect().right,
+        rows: [...listbox.querySelectorAll('[role=option]')].map(row => {
+          const [name, hint] = [row.firstElementChild.lastElementChild, row.lastElementChild]
+          return { name: name.textContent, nameCut: cut(name) || name.getBoundingClientRect().right > hint.getBoundingClientRect().left, hint: hint.textContent, hintCut: cut(hint) }
+        }),
+      }
+    })()`)) as { screen: number; left: number; right: number; rows: Array<{ name: string; nameCut: boolean; hint: string; hintCut: boolean }> }
+    assert.ok(seen.left >= 0 && seen.right <= seen.screen, `the list is on the screen: ${seen.left} to ${seen.right} of ${seen.screen}`)
+    assert.ok(seen.rows.length > 1, 'the project has several files under skills')
+    for (const row of seen.rows) assert.deepEqual(row, { name: 'SKILL.md', nameCut: false, hint: 'file', hintCut: false })
+    await page.keyboard.press('Escape')
   })
 })
 

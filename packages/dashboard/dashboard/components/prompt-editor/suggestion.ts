@@ -24,11 +24,26 @@ export interface TriggerConfig {
   emptyNote?: string
 }
 
+/** How wide the menu is: room for a file's folders before its name, and a phone's screen less a margin where that is narrower. */
+const MENU_WIDTH = 'min(20rem, calc(100vw - 1rem))'
+
+/** The gap kept between the menu and the screen's edge, in pixels. */
+const EDGE = 8
+
+/**
+ * Where a menu `width` wide starts, for a caret at `caret`, on a screen `screen` wide: at the
+ * caret, or as far left of it as keeps the whole menu on the screen. A caret near the right edge,
+ * as any is on a phone after a few words, would put most of the menu past it.
+ */
+export function menuLeft(caret: number, width: number, screen: number): number {
+  return Math.max(EDGE, Math.min(caret, screen - width - EDGE))
+}
+
 /** Position a fixed portal just below the caret rect, flipping up near the viewport bottom. */
 function place(el: HTMLElement, rect: DOMRect | null): void {
   if (!rect) return
   const below = window.innerHeight - rect.bottom
-  el.style.left = `${rect.left}px`
+  el.style.left = `${menuLeft(rect.left, el.offsetWidth, document.documentElement.clientWidth)}px`
   if (below < 320) {
     el.style.top = ''
     el.style.bottom = `${window.innerHeight - rect.top + 4}px`
@@ -101,6 +116,8 @@ function makeRender(config: TriggerConfig) {
       el = document.createElement('div')
       el.style.position = 'fixed'
       el.style.zIndex = '50'
+      // Its own width, known before the list is drawn into it: what keeps it on the screen from its first frame.
+      el.style.width = MENU_WIDTH
       document.body.appendChild(el)
       root = createRoot(el)
       getRect = props.clientRect ?? null
