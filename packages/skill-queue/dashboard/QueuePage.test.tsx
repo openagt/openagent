@@ -18,7 +18,9 @@ const FULL = [{ entry: 'Hand-written on top' }, { entry: 'Urgent', priority: 8 }
 
 afterEach(() => {
   cleanup()
+  // The answers kept for the next visit too: one test's is never another's first frame.
   forgetRemembered()
+  localStorage.clear()
 })
 
 let host: FakeHost
@@ -119,6 +121,18 @@ describe('QueuePage', () => {
       expect(taker()).toContain('/work-queue is on')
     })
 
+    test('opening the page again, the line stands from the first frame, also while the installed modules are not known yet', async () => {
+      show(FULL, scheduling([{ command: 'work-queue', on: true }]))
+      await waitFor(() => expect(taker()).toContain('/work-queue is on'))
+      cleanup()
+      forgetRemembered()
+      show(FULL, { ...NO_MODULES, loaded: false })
+      expect(taker()).toContain('/work-queue is on')
+      await waitFor(() => expect(host.runCommand).toHaveBeenCalled())
+      await new Promise(resolve => setTimeout(resolve, 20))
+      expect(taker()).toContain('/work-queue is on')
+    })
+
     test('a project whose scheduled commands hold none that works the queue has nothing taking from it', async () => {
       show(FULL, scheduling([{ command: 'plan-tickets', on: true }]))
       await screen.findByText('Urgent')
@@ -153,6 +167,13 @@ describe('QueuePage', () => {
       await screen.findByText('Only one')
       const box = screen.getByRole('spinbutton', { name: 'How many agents to start' }) as HTMLInputElement
       expect([box.value, box.max]).toEqual(['1', '1'])
+      // Its name is said once: by the box, not again by a group around it.
+      expect(screen.getAllByLabelText('How many agents to start')).toEqual([box])
+      // A count typed past the entries snaps back, and the box says why while it is in use.
+      fireEvent.focus(box)
+      fireEvent.change(box, { target: { value: '9' } })
+      expect(box.value).toBe('1')
+      expect((await screen.findByRole('tooltip')).textContent).toBe('How many agents to start: one per entry, from the top of the queue, so at most 1.')
       expect(screen.getByRole('button', { name: 'Start 1 agent' })).toBeTruthy()
     })
 
@@ -233,6 +254,27 @@ describe('QueuePage', () => {
       fireEvent.click(within(dialog).getByRole('button', { name: 'Remove' }))
       await waitFor(() => expect(host.act).toHaveBeenCalledWith('p1', ['done', '--', 'Urgent']))
       await waitFor(() => expect(host.runCommand.mock.calls.length).toBeGreaterThan(reads))
+    })
+
+    test('after a removal the focus is on the entry now in its place, else on the one before it, else on the field that adds one', async () => {
+      let entries = [{ entry: 'First' }, { entry: 'Second' }, { entry: 'Third' }]
+      host = fakeHost()
+      host.runCommand.mockImplementation(async () => ({ ok: true, output: entries }))
+      host.act.mockImplementation(async (_projectId: string, args: string[]) => {
+        entries = entries.filter(placed => placed.entry !== args[2])
+        return { ok: true, output: { ok: true } }
+      })
+      renderWithHost(<QueuePage projects={[alpha]} projectId={null} path={[]} />, host, NO_MODULES)
+      const remove = async (place: number, focused: string) => {
+        fireEvent.click(await screen.findByRole('button', { name: `Remove entry ${place} from the queue` }))
+        fireEvent.click(within(await screen.findByRole('alertdialog')).getByRole('button', { name: 'Remove' }))
+        await waitFor(() => expect(document.activeElement?.getAttribute('aria-label')).toBe(focused))
+      }
+      await screen.findByText('Third')
+      await remove(3, 'Remove entry 2 from the queue')
+      await remove(1, 'Remove entry 1 from the queue')
+      expect(document.activeElement?.closest('li')?.textContent).toContain('Second')
+      await remove(1, 'A task to add to the queue')
     })
 
     test('"Cancel" removes nothing', async () => {
@@ -341,10 +383,40 @@ describe('QueuePage', () => {
       // What an agent is started with is still the line as written.
       fireEvent.click(screen.getByRole('button', { name: 'Start an agent on entry 1' }))
       await waitFor(() => expect(host.startRun.mock.calls).toEqual([['p1', workOnEntryPrompt(PLAN)]]))
-      // And what is removed is the line as written: the queue knows no other name for it.
+      // The question names it as the row does, with the line as written; what is removed is that line: the queue knows no other name for it.
       fireEvent.click(screen.getByRole('button', { name: 'Remove entry 1 from the queue' }))
-      fireEvent.click(within(await screen.findByRole('alertdialog')).getByRole('button', { name: 'Remove' }))
+      const dialog = await screen.findByRole('alertdialog')
+      expect(within(dialog).getByText('Plan: Login page')).toBeTruthy()
+      expect(within(dialog).getByText(PLAN)).toBeTruthy()
+      fireEvent.click(within(dialog).getByRole('button', { name: 'Remove' }))
       await waitFor(() => expect(host.act).toHaveBeenCalledWith('p1', ['done', '--', PLAN]))
+    })
+
+    test('an entry whose file is there already (a plan already written) is left over: its row offers no start, only its removal, and the batch leaves it out', async () => {
+      const names = async () => ({ 'tickets/2026-08-01_login-page.plan.md': { title: 'Plan: Login page', href: 'tickets/2026-08-01_login-page.md', done: { ask: PLAN, title: 'Plan: Login page · already written' } } })
+      show([{ entry: PLAN, priority: 8 }, { entry: 'Urgent', priority: 8 }, { entry: 'Later', priority: 3 }], naming(names))
+      await screen.findByRole('button', { name: 'Plan: Login page · already written' })
+      expect(screen.queryByRole('button', { name: 'Start an agent on entry 1' })).toBeNull()
+      expect(screen.getByRole('button', { name: 'Remove entry 1 from the queue' })).toBeTruthy()
+      expect((screen.getByRole('spinbutton', { name: 'How many agents to start' }) as HTMLInputElement).max).toBe('2')
+      fireEvent.click(screen.getByRole('button', { name: 'Start 2 agents' }))
+      await waitFor(() =>
+        expect(host.startRun.mock.calls).toEqual([
+          ['p1', workOnEntryPrompt('Urgent'), { land: false }],
+          ['p1', workOnEntryPrompt('Later'), { land: false }],
+        ]),
+      )
+    })
+
+    test('an entry that names a plan already written but asks something else of it is work: its row offers a start, and the batch takes it', async () => {
+      const review = 'Review tickets/2026-08-01_login-page.plan.md for accessibility issues'
+      const names = async () => ({ 'tickets/2026-08-01_login-page.plan.md': { title: 'Plan: Login page', href: 'tickets/2026-08-01_login-page.md', done: { ask: PLAN, title: 'Plan: Login page · already written' } } })
+      show([{ entry: review, priority: 8 }], naming(names))
+      // Named as the plan it asks about: "already written" would say it is done.
+      await screen.findByRole('button', { name: 'Plan: Login page' })
+      expect(screen.getByRole('button', { name: 'Start an agent on entry 1' })).toBeTruthy()
+      fireEvent.click(screen.getByRole('button', { name: 'Start 1 agent' }))
+      await waitFor(() => expect(host.startRun.mock.calls).toEqual([['p1', workOnEntryPrompt(review), { land: false }]]))
     })
 
     test('a queued link reads as its text; to a web address it opens there, into the project it opens the page that names its target', async () => {
@@ -381,6 +453,24 @@ describe('QueuePage', () => {
       cleanup()
       forgetRemembered()
     }
+  })
+
+  test('a second visit names the entries from the first frame: the names read last time stand until the fresh read lands, or until the page that names them is in', async () => {
+    const named = { 'tickets/2026-08-01_login-page.plan.md': { title: 'Plan: Login page', href: 'tickets/2026-08-01_login-page.md' } }
+    const tickets = (names: () => Promise<typeof named>): MountedModules => ({ ...NO_MODULES, pages: [{ segment: 'tickets', label: 'Tickets', Page: () => null, package: 'a-tickets', projects: ['p1'], names }] })
+    show([{ entry: PLAN, priority: 5 }], tickets(async () => named))
+    await screen.findByRole('button', { name: 'Plan: Login page' })
+    cleanup()
+    forgetRemembered()
+    show([{ entry: PLAN, priority: 5 }], tickets(() => new Promise(() => {})))
+    expect(screen.getByRole('button', { name: 'Plan: Login page' })).toBeTruthy()
+    // Nor while the page that names it is not in yet: no answer is no name.
+    cleanup()
+    forgetRemembered()
+    show([{ entry: PLAN, priority: 5 }], { ...NO_MODULES, loaded: false })
+    await waitFor(() => expect(host.runCommand).toHaveBeenCalled())
+    await new Promise(resolve => setTimeout(resolve, 20))
+    expect(screen.getByRole('button', { name: 'Plan: Login page' })).toBeTruthy()
   })
 
   test('a project whose command fails is named with the reason, and has no field to add to', async () => {

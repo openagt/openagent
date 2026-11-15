@@ -12,7 +12,7 @@ export function shortcut(key: string): string {
 }
 
 /** Where a shortcut works, in the order the list of shortcuts shows them. */
-export const SHORTCUT_PLACES = ['Anywhere', 'Jump', 'The message box', 'A working agent', 'A question', 'Saved prompts'] as const
+export const SHORTCUT_PLACES = ['Anywhere', 'Jump', 'The message box', 'A working agent', 'A question', 'Saved prompts', 'Customizing the Overview'] as const
 
 interface Shortcut {
   /** The keys that take it, exactly as `KeyboardEvent.key` names them (`k`, not `K`); `1-9` is any of those digits. The first is the one the list shows. */
@@ -41,6 +41,7 @@ export const SHORTCUTS = {
   answer: { keys: ['Enter'], mod: true, where: 'A question', does: 'Send the answer' },
   deletePrompt: { keys: ['Delete', 'Backspace'], where: 'Saved prompts', does: 'Delete the marked prompt' },
   savePrompt: { keys: ['Enter'], mod: true, where: 'Saved prompts', does: 'Save the prompt being written' },
+  leaveCustomize: { keys: ['Escape'], where: 'Customizing the Overview', does: 'Leave Customize, as Done does' },
 } as const satisfies Record<string, Shortcut>
 
 export type ShortcutId = keyof typeof SHORTCUTS

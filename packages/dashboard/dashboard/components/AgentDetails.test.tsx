@@ -45,6 +45,11 @@ describe('AgentDetails', () => {
     expect(screen.queryByText('Model')).toBeNull()
   })
 
+  test('when the run started, off its card', () => {
+    render(<AgentDetails events={[]} card={{ driver: 'claude-code', startedAt: new Date(2026, 10, 13, 12, 9, 57, 484).toISOString() }} />)
+    expect(shown('Started')).toMatch(/^Nov 13, 12:09/)
+  })
+
   test('before the card is listed, no agent or model is named', () => {
     render(<AgentDetails events={[]} />)
     expect(screen.queryByText('Coding agent')).toBeNull()

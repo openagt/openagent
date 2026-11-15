@@ -4,6 +4,7 @@ import { useAction } from '../lib/use-action.js'
 import { useLoaded, usePolled } from '../lib/use-async.js'
 import { onSkillsSaved, skillsSaved } from '../lib/skills-saved.js'
 import { useSettingsHold } from '../lib/settings-hold.js'
+import { takeLostFocus } from '../lib/lost-focus.js'
 import { Button, buttonVariants } from './ui/button.js'
 import { Checkbox } from './ui/checkbox.js'
 import { Skeleton } from './ui/skeleton.js'
@@ -247,7 +248,8 @@ function SkillCards({ projectId, skills, onDone }: { projectId: string; skills: 
 
   if (saved) {
     return (
-      <div className="space-y-2 text-sm text-muted-foreground">
+      // What the save did takes the focus its gone press had.
+      <div ref={takeLostFocus} tabIndex={-1} className="space-y-2 text-sm text-muted-foreground outline-none">
         {saved.written.length > 0 && (
           <p>
             Wrote {count(saved.written.length, 'skill', 'skills')} in <code className="rounded-sm bg-muted px-1">.agents/skills</code>, linked in{' '}

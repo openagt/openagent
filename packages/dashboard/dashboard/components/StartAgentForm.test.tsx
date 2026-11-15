@@ -804,6 +804,22 @@ describe('StartAgentForm (#1774)', () => {
     expect(onCommands).toHaveBeenCalledWith('p1', { kind: 'published', branch: 'feature-x' })
   })
 
+  test('typing after a failed start drops the red line, unless it is about the project\'s start line, which no prompt changes', () => {
+    onCommands.mockResolvedValue({ commands: [], startHook: true, gitHost: true })
+    startReset.mockClear()
+    startSays.error = 'Could not start: the prompt is empty.'
+    const { unmount } = render(<StartAgentForm {...props} />)
+    act(() => (composerProps.current.onPromptChange as (value: string) => void)('a'))
+    expect(startReset).toHaveBeenCalledTimes(1)
+    unmount()
+    startReset.mockClear()
+    startSays.error = "This project's start line, in .openagent/hooks.yml, failed. It said: “the project has no such command”"
+    render(<StartAgentForm {...props} />)
+    act(() => (composerProps.current.onPromptChange as (value: string) => void)('a'))
+    expect(startReset).not.toHaveBeenCalled()
+    startSays.error = null
+  })
+
   test('picking another branch drops the red line a Start left about the last one', async () => {
     onCommands.mockResolvedValue(WITH_BRANCHES)
     startReset.mockClear()

@@ -1,6 +1,6 @@
 import { access, mkdir, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
-import { EMPTY_TREE, errorMessage, isGitRepo, nodeGitRunner, type GitRunner } from './git.js'
+import { EMPTY_TREE, errorMessage, isGitRepo, missingIdentity, nodeGitRunner, type GitRunner } from './git.js'
 import { OPENAGENT_DIR } from './names.js'
 import { openagentGitignore, gitignorePath } from './openagent-gitignore.js'
 
@@ -63,10 +63,13 @@ export async function installProject(cwd: string, deps: InstallDeps = {}): Promi
     // A repository with no commit cannot give an agent's branch a start. Its first commit is
     // made empty, straight from the empty tree: the index is not read, so a file the person has
     // staged stays staged and none of theirs is committed. Before the marker below, so a commit
-    // that fails leaves a folder the next add tries again.
+    // that fails leaves a folder the next add tries again. It is made by the author and committer
+    // git names; where git cannot name them, OpenAgent's name or email fills what git's config lacks.
     const hasCommit = await git(['rev-parse', '--verify', '--quiet', 'HEAD'], cwd).then(() => true, () => false)
     if (!hasCommit) {
-      const first = (await git(['commit-tree', EMPTY_TREE, '-m', FIRST_COMMIT_MESSAGE], cwd)).trim()
+      const named = await Promise.all(['GIT_AUTHOR_IDENT', 'GIT_COMMITTER_IDENT'].map(ident => git(['var', ident], cwd).then(() => true, () => false)))
+      const identity = named.every(Boolean) ? [] : (await missingIdentity(cwd, git)).flatMap(([key, value]) => ['-c', `${key}=${value}`])
+      const first = (await git([...identity, 'commit-tree', EMPTY_TREE, '-m', FIRST_COMMIT_MESSAGE], cwd)).trim()
       await git(['update-ref', 'HEAD', first], cwd)
     }
 

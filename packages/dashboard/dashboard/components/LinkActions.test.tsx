@@ -157,13 +157,13 @@ describe('LinkActions', () => {
     const run = vi.fn().mockResolvedValue({ ok: true })
     const page = (key: string) => (
       <ModulesContext.Provider value={modules([mounted(run)])}>
-        <LinkActions projects={['p1']} targets={[{ projectId: 'p1', links: [LINK] }]} resetKey={key} label={a => `${a.label}: all 3 tickets`} />
+        <LinkActions projects={['p1']} targets={[{ projectId: 'p1', links: [LINK] }]} resetKey={key} label={(a, done) => `${done ? a.doneLabel : a.label}: ${a.left} of 3 tickets`} />
       </ModulesContext.Provider>
     )
     const { rerender } = render(page('a'))
-    fireEvent.click(screen.getByRole('button', { name: 'Add to queue: all 3 tickets' }))
-    await screen.findByRole('button', { name: 'Queued' })
+    fireEvent.click(screen.getByRole('button', { name: 'Add to queue: 1 of 3 tickets' }))
+    await screen.findByRole('button', { name: 'Queued: 1 of 3 tickets' })
     rerender(page('b'))
-    expect(await screen.findByRole('button', { name: 'Add to queue: all 3 tickets' })).toBeTruthy()
+    expect(await screen.findByRole('button', { name: 'Add to queue: 1 of 3 tickets' })).toBeTruthy()
   })
 })

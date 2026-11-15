@@ -25,9 +25,12 @@ vi.mock('./GitHosts.js', () => ({ GitHostOff: ({ home, account }: { home: { name
 
 // The Composer is exercised by its own tests; here it only has to hand back a submit and report
 // the props this component sets on it.
+const box = vi.hoisted(() => ({ clear: vi.fn((): unknown => ({ type: 'doc', content: [{ type: 'paragraph', content: [{ type: 'text', text: 'hello' }] }] })), restore: vi.fn(), focus: vi.fn(), edit: vi.fn(), append: vi.fn() }))
 vi.mock('./Composer.js', async () => {
-  const { forwardRef } = await import('react')
-  const Composer = forwardRef((props: any, _ref: any) => (
+  const { forwardRef, useImperativeHandle } = await import('react')
+  const Composer = forwardRef((props: any, ref: any) => {
+    useImperativeHandle(ref, () => box)
+    return (
     <div>
       <button type="button" disabled={props.busy} onClick={() => props.onSubmit('hello', { later: false })}>
         submit
@@ -44,11 +47,13 @@ vi.mock('./Composer.js', async () => {
       <span data-testid="composer-controls-end">{props.controlsEnd}</span>
       {props.sessionRow}
     </div>
-  ))
+    )
+  })
   return { Composer }
 })
 
 const { AgentComposer } = await import('./AgentComposer.js')
+const { keepDraft, keptDraft } = await import('../lib/draft-handoff.js')
 const { ConfirmDialog } = await import('./ui/confirm-dialog.js')
 
 function renderComposer(over: Partial<Parameters<typeof AgentComposer>[0]> = {}) {
@@ -133,6 +138,10 @@ describe('AgentComposer box', () => {
     cleanup()
     renderComposer({ live: false })
     expect(props().placeholder).toBe('Message the agent to continue it…')
+    cleanup()
+    // Ended on a question its card asks: a message answers it.
+    renderComposer({ live: false, asked: true })
+    expect(props().placeholder).toBe('Or answer in your own words…')
   })
 
   test('on a touch screen the box names no keys', () => {
@@ -181,6 +190,16 @@ describe('AgentComposer slot control (#1455)', () => {
     rerender(ui(false)) // the end lands: the run is no longer live
     rerender(ui(true)) // the resume brings the same run back
     expect((screen.getByRole('button', { name: 'Stop agent' }) as HTMLButtonElement).disabled).toBe(false)
+  })
+
+  test('a Stop that failed says so and can be pressed again, by the button or by Esc', async () => {
+    sendStop.mockRejectedValueOnce('offline').mockResolvedValue(undefined)
+    renderComposer()
+    fireEvent.click(screen.getByRole('button', { name: 'Stop agent' }))
+    await waitFor(() => expect(screen.getByRole('alert').textContent).toBe('Could not stop the agent.'))
+    expect((screen.getByRole('button', { name: 'Stop agent' }) as HTMLButtonElement).disabled).toBe(false)
+    fireEvent.keyDown(window, { key: 'Escape' })
+    await waitFor(() => expect(sendStop).toHaveBeenCalledTimes(2))
   })
 
   test('while OpenAgent is not answering, Stop is off, and Esc stops nothing', async () => {
@@ -273,6 +292,20 @@ describe('AgentComposer, live (#714)', () => {
     await waitFor(() => expect(onQueued).toHaveBeenCalledWith(expect.objectContaining({ text: 'hello', later: true })))
   })
 
+  test('the box is emptied as the message goes, so what is typed meanwhile stays; a refused one comes back to it', async () => {
+    let answer: (outcome: unknown) => void = () => {}
+    sendMessage.mockReturnValue(new Promise(resolve => (answer = resolve)))
+    box.clear.mockClear()
+    box.restore.mockClear()
+    renderComposer()
+    fireEvent.click(screen.getByText('submit'))
+    expect(box.clear).toHaveBeenCalledTimes(1)
+    act(() => answer({ ok: false, error: 'unknown session' }))
+    // What the box held, as it handed it over (AgentComposer.editor.test.tsx: its chips and Context too).
+    await waitFor(() => expect(box.restore).toHaveBeenCalledWith(box.clear.mock.results[0]!.value))
+    expect(box.clear).toHaveBeenCalledTimes(1)
+  })
+
   test('a refused message shows why, and is not reported as queued', async () => {
     sendMessage.mockResolvedValue({ ok: false, error: 'unknown session' })
     const onQueued = vi.fn()
@@ -280,6 +313,63 @@ describe('AgentComposer, live (#714)', () => {
     fireEvent.click(screen.getByText('submit'))
     await waitFor(() => expect(screen.getByRole('alert').textContent).toBe('unknown session'))
     expect(onQueued).not.toHaveBeenCalled()
+  })
+})
+
+describe('AgentComposer, another session picked', () => {
+  const composer = (agentId: string) => <AgentComposer projectId="p1" agentId={agentId} live files={[]} />
+
+  test('a send going and its refusal are its own session’s, the refusal said there however late it comes back', async () => {
+    let answer: (outcome: unknown) => void = () => {}
+    sendMessage.mockReturnValueOnce(new Promise(resolve => (answer = resolve)))
+    const page = render(composer('run-1'))
+    fireEvent.click(screen.getByText('submit'))
+    expect((screen.getByText('submit') as HTMLButtonElement).disabled).toBe(true)
+    page.rerender(composer('run-2'))
+    expect((screen.getByText('submit') as HTMLButtonElement).disabled).toBe(false)
+    await act(async () => answer({ ok: false, error: 'session A refused it' }))
+    expect(screen.queryByRole('alert')).toBeNull()
+    page.rerender(composer('run-1'))
+    expect(screen.getByRole('alert').textContent).toBe('session A refused it')
+  })
+
+  test('a Stop that failed is said in its own session, not in the next one picked', async () => {
+    sendStop.mockRejectedValueOnce(new Error('session A could not be stopped'))
+    const page = render(composer('run-1'))
+    fireEvent.click(screen.getByRole('button', { name: 'Stop agent' }))
+    await waitFor(() => expect(screen.getByRole('alert').textContent).toBe('session A could not be stopped'))
+    page.rerender(composer('run-2'))
+    expect(screen.queryByRole('alert')).toBeNull()
+  })
+
+  test('a send refused once another session is shown gives its words back to its own session’s box, after what it holds, and leaves the shown box and its focus alone', async () => {
+    let answer: (outcome: unknown) => void = () => {}
+    sendMessage.mockReturnValueOnce(new Promise(resolve => (answer = resolve)))
+    const page = render(composer('run-1'))
+    fireEvent.click(screen.getByText('submit'))
+    // Typed in run-1's box while the message went.
+    keepDraft('p1:run-1', 'and one more thing')
+    page.rerender(composer('run-2'))
+    box.append.mockClear()
+    box.restore.mockClear()
+    box.focus.mockClear()
+    await act(async () => answer({ ok: false, error: 'session A refused it' }))
+    expect([box.append.mock.calls, box.restore.mock.calls, box.focus.mock.calls]).toEqual([[], [], []])
+    page.rerender(composer('run-1'))
+    // What run-1's box opens with (Composer's own test).
+    expect(keptDraft('p1:run-1')).toBe('and one more thing\n\nhello')
+  })
+
+  test('a late successful Stop for A leaves B stoppable', async () => {
+    let finish!: () => void
+    sendStop.mockReturnValueOnce(new Promise<void>(resolve => { finish = resolve }))
+    const ui = (agentId: string) => <AgentComposer projectId="p1" agentId={agentId} live files={[]} />
+    const page = render(ui('A'))
+    fireEvent.click(screen.getByRole('button', { name: 'Stop agent' }))
+    page.rerender(ui('B'))
+    expect((screen.getByRole('button', { name: 'Stop agent' }) as HTMLButtonElement).disabled).toBe(false)
+    await act(async () => finish())
+    expect((screen.getByRole('button', { name: 'Stop agent' }) as HTMLButtonElement).disabled).toBe(false)
   })
 })
 
@@ -367,12 +457,13 @@ describe('AgentComposer sending to an ended run', () => {
 
   test('the Context picked goes with the next message, at its end, and is cleared once it went (his pick)', async () => {
     sendMessage.mockResolvedValue({ ok: true })
-    const reset = vi.fn()
-    const contextSet = { context: new Set(['src/app.ts']), add: vi.fn(), remove: vi.fn(), toggle: vi.fn(), reset }
+    const remove = vi.fn()
+    const contextSet = { context: new Set(['src/app.ts']), add: vi.fn(), remove, toggle: vi.fn(), reset: vi.fn() }
     renderComposer({ contextSet })
     expect(screen.getByText('Context · src/app.ts')).toBeTruthy()
     fireEvent.click(screen.getByText('submit'))
-    await waitFor(() => expect(reset).toHaveBeenCalled())
+    // Cleared of what it went with, which is all of it here (AgentComposer.editor.test.tsx: what was picked meanwhile stays).
+    await waitFor(() => expect(remove).toHaveBeenCalledWith('src/app.ts'))
     expect(sendMessage).toHaveBeenCalledWith('p1', 'hello\n\nContext: src/app.ts', 'run-1', null, { id: expect.any(String) })
   })
 

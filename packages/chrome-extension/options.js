@@ -2,6 +2,8 @@
 // claude.ai can read the secret that talks to the daemon.
 
 const DEFAULT_DAEMON = 'http://localhost:4200'
+// The dashboard addresses the manifest's host permissions name, on any port and in any case: Chrome lets the extension reach no other.
+const REACHABLE = /^http:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/i
 const daemonEl = document.getElementById('daemon')
 const tokenEl = document.getElementById('token')
 const statusEl = document.getElementById('status')
@@ -67,6 +69,12 @@ document.getElementById('save').addEventListener('click', async () => {
   // Save then prove it: a token that is merely stored tells the user nothing, and the two ways
   // this goes wrong (bridge off, wrong token) are worth telling apart before they need it.
   say('Saved. Testing…')
+  if (!REACHABLE.test(daemonUrl)) {
+    return say(
+      `The extension reaches the dashboard only at http://localhost or http://127.0.0.1 and its port, on an installed computer too: ${DEFAULT_DAEMON}, or the port OpenAgent was started with.`,
+      true,
+    )
+  }
   const missing = await missingHosts(daemonUrl)
   if (missing.length) {
     return say(

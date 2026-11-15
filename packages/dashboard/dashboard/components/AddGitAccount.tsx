@@ -5,7 +5,7 @@ import { cn } from '../lib/utils.js'
 import { Button } from './ui/button.js'
 import { CopyButton } from './ui/copy-button.js'
 import { DIALOG_PRESSES_CLASS, Dialog } from './ui/dialog.js'
-import { FixAction, hostWords, useGitHosts, type FixVariant } from './Logins.js'
+import { FixAction, Linked, hostWords, useGitHosts, type FixVariant } from './Logins.js'
 
 // Adding an account of OpenAgent's at a git host, the same dialog wherever one is added (his pick
 // over a code shown in each place's own layout): the Permissions page, the Overview's first steps,
@@ -71,6 +71,13 @@ function Adding({ host, onClose }: { host: string; onClose: (added?: string) => 
     if (p?.loggingIn) setSeen(true)
   }, [p?.loggingIn])
 
+  // The code shown: the link to open takes the focus the dialog opened with, on its ✕, but none the person put on a press here.
+  const body = useRef<HTMLDivElement>(null)
+  const openLink = useRef<HTMLAnchorElement>(null)
+  useEffect(() => {
+    if (openLink.current && !body.current?.contains(document.activeElement)) openLink.current.focus()
+  }, [underWay?.code])
+
   // Followed closely while open, whatever the page's own pace is: the person may sign in at any moment.
   const follow = useRef(reload)
   follow.current = reload
@@ -130,22 +137,24 @@ function Adding({ host, onClose }: { host: string; onClose: (added?: string) => 
       </div>
     )
   return (
-    <div className="space-y-3">
+    <div ref={body} className="space-y-3">
       {underWay ? (
-        <div role="status" className="space-y-3">
-          <p className="text-sm">
-            {'Open '}
-            <a href={underWay.url} target="_blank" rel="noreferrer" className="focus-ring rounded-sm font-medium text-primary underline-offset-2 hover:underline">
-              {underWay.url.replace(/^https:\/\//, '')}
-            </a>
-            {' and enter this code:'}
-          </p>
-          <div className="flex items-center gap-2">
-            <code className="rounded-md bg-muted px-3 py-1.5 font-mono text-xl font-medium tracking-widest">{underWay.code}</code>
-            <CopyButton text={underWay.code} label="Copy the code" />
+        <>
+          <div role="status" className="space-y-3">
+            <p className="text-sm">
+              {'Open '}
+              <a ref={openLink} href={underWay.url} target="_blank" rel="noreferrer" className="focus-ring rounded-sm font-medium text-primary underline-offset-2 hover:underline">
+                {underWay.url.replace(/^https:\/\//, '')}
+              </a>
+              {' and enter this code:'}
+            </p>
+            <div className="flex items-center gap-2">
+              <code className="rounded-md bg-muted px-3 py-1.5 font-mono text-xl font-medium tracking-widest">{underWay.code}</code>
+              <CopyButton text={underWay.code} label="Copy the code" />
+            </div>
           </div>
           <Waiting words={`Waiting for you at ${p.name}…`} />
-        </div>
+        </>
       ) : ended ? (
         <p className="text-sm text-muted-foreground">{`No account was added: the login was given up at ${p.name}, its code ran out, or OpenAgent has that account already.`}</p>
       ) : error === undefined ? (
@@ -154,14 +163,20 @@ function Adding({ host, onClose }: { host: string; onClose: (added?: string) => 
       {error !== undefined && (
         <p role="alert" className="flex items-start gap-2 whitespace-pre-line text-sm text-danger">
           <CircleAlert className="mt-0.5 size-4 shrink-0" aria-hidden />
-          <span className="min-w-0">{error}</span>
+          <span className="min-w-0">
+            {`Could not get a code from ${p.name}:\n`}
+            <Linked text={error} />
+          </span>
         </p>
       )}
-      <div className="space-y-1 text-sm text-muted-foreground">
-        <p>Sign in there as the account OpenAgent should use. Your own logins stay as they are.</p>
-        {/* Rom's advice, where the account is chosen: an agent's own account limits what a run can reach. */}
-        <p>An account of its own for your agents, with access to only what they need, is safer: name it like you-agent.</p>
-      </div>
+      {/* Said while there is a place to sign in at. */}
+      {underWay && (
+        <div className="space-y-1 text-sm text-muted-foreground">
+          <p>Sign in there as the account OpenAgent should use. Your own logins stay as they are.</p>
+          {/* Rom's advice, where the account is chosen: an agent's own account limits what a run can reach. */}
+          <p>An account of its own for your agents, with access to only what they need, is safer: name it like you-agent.</p>
+        </div>
+      )}
       {/* The presses at the right, the primary last, as every dialog has them. */}
       <div className={cn('flex items-center justify-end gap-2', DIALOG_PRESSES_CLASS)}>
         <Button variant="secondary" onClick={() => onClose()}>
@@ -169,7 +184,7 @@ function Adding({ host, onClose }: { host: string; onClose: (added?: string) => 
         </Button>
         {(ended || error !== undefined) && (
           <Button disabled={asking} onClick={() => void start()}>
-            Get a new code
+            {ended ? 'Get a new code' : 'Try again'}
           </Button>
         )}
       </div>

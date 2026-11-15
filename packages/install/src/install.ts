@@ -69,17 +69,17 @@ async function lastingDashboard(manifest: string, app: string, io: InstallIO): P
   return join(app, 'node_modules', '@openagt', 'dashboard', 'dist', 'cli', 'bin.js')
 }
 
-/** The certificate for {@link ADDRESS}, made on this computer when there is none for it. */
-async function ensureCertificate(env: NodeJS.ProcessEnv): Promise<string> {
+/** The certificate for {@link ADDRESS}, and whether this run made it: one is made on this computer when there is none for it. */
+async function ensureCertificate(env: NodeJS.ProcessEnv): Promise<{ cert: string; made: boolean }> {
   const kept = await readSecureAddress(env).catch(() => undefined)
-  if (kept?.name === ADDRESS) return kept.cert
+  if (kept?.name === ADDRESS) return { cert: kept.cert, made: false }
   const dir = secureAddressDir(env)
   await mkdir(dir, { recursive: true, mode: 0o700 })
   const config = join(dir, 'openssl.cnf')
   await writeFile(config, CERTIFICATE_CONFIG)
   await run('openssl', ['req', '-x509', '-newkey', 'rsa:2048', '-nodes', '-keyout', join(dir, KEY_FILE), '-out', join(dir, CERTIFICATE_FILE), '-days', String(CERTIFICATE_DAYS), '-config', config, '-extensions', 'ext'])
   await rm(config)
-  return readFile(join(dir, CERTIFICATE_FILE), 'utf8')
+  return { cert: await readFile(join(dir, CERTIFICATE_FILE), 'utf8'), made: true }
 }
 
 /** Whether the secure address answers with the dashboard, as a browser reaches it. */
@@ -148,10 +148,12 @@ export async function install(io: InstallIO = defaultIO, env: NodeJS.ProcessEnv 
     return 1
   }
   let administered = false
+  let madeCertificate = false
   try {
     const dashboard = await lastingDashboard(manifest, platform.appDir(env), io)
     await platform.prepare(io, env)
-    const cert = await ensureCertificate(env)
+    const { cert, made } = await ensureCertificate(env)
+    madeCertificate = made
     const certFile = join(secureAddressDir(env), CERTIFICATE_FILE)
     await asAdmin(platform.adminInstall(certFile), io)
     administered = true
@@ -169,6 +171,8 @@ export async function install(io: InstallIO = defaultIO, env: NodeJS.ProcessEnv 
   } catch (err) {
     io.err(`OpenAgent could not be installed: ${err instanceof Error ? err.message : String(err)}`)
     if (administered) io.err('  `npx @openagt/uninstall` takes off what was put on this computer so far.')
+    // Every dashboard started here announces the address of a certificate it finds, which this computer answers only after the password step.
+    else if (madeCertificate) await rm(secureAddressDir(env), { recursive: true, force: true })
     return 1
   }
 }

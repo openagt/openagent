@@ -27,6 +27,9 @@ export interface ModuleAgent {
   machine?: string
   /** While its status is `unknown`: when its computer was last seen, ISO, if it was. */
   seenAt?: string
+  /** Its work that never left this machine: files its checkout left uncommitted, and commits never pushed. */
+  uncommitted?: number
+  unpublished?: number
 }
 
 /**
@@ -56,6 +59,8 @@ export function moduleAgentOf(agent: AgentMeta): ModuleAgent {
     ...(agent.model ? { model: agent.model } : {}),
     ...(agent.remoteLabel ? { machine: agent.remoteLabel } : {}),
     ...(agent.seenAt ? { seenAt: agent.seenAt } : {}),
+    ...(agent.uncommitted ? { uncommitted: agent.uncommitted } : {}),
+    ...(agent.unpublished ? { unpublished: agent.unpublished } : {}),
   }
 }
 

@@ -14,12 +14,15 @@ export type TicketRead =
   | { ticket: WorkspaceTicketDetail | null; plan: string | null; holderStatus?: string; sessions: TicketSession[] }
   | { error: string }
 
-/** The ticket `slug` of a project, read by identity (`tickets show <file> --local`) and again every 10 s. */
+/**
+ * The ticket `slug` of a project, read by identity (`tickets show <file> --local`) and again every
+ * 10 s. The last read is kept, in this browser too, so both its tabs open on it at once.
+ */
 export function useTicket(projectId: string, slug: string): { read: TicketRead | null; state: ReadState; reload: () => Promise<void> } {
   const host = useModuleHost()
   const { value: read, state, reload } = usePolled<TicketRead | null>(
     async () => {
-      const [shown, agents] = await Promise.all([host.runCommand(projectId, ['show', slug, '--local']).then(readShown), host.agents(projectId).catch(() => [])])
+      const [shown, agents] = await Promise.all([host.runCommand(projectId, ['show', slug, '--local']).then(result => readShown(result, slug)), host.agents(projectId).catch(() => [])])
       if ('error' in shown) return shown
       if (!shown.shown) return { ticket: null, plan: null, sessions: [] }
       const holder = holderAgent(agents, shown.shown.ticket.lockedBy)
@@ -33,6 +36,7 @@ export function useTicket(projectId: string, slug: string): { read: TicketRead |
     null,
     10_000,
     [projectId, slug],
+    { remember: `skill-tickets:ticket:${projectId}/${slug}`, stored: true },
   )
   return { read, state, reload }
 }

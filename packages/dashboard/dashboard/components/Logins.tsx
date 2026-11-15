@@ -70,7 +70,7 @@ export function PackageLogo({ svg, className }: { svg: string | undefined; class
 }
 
 /** The command a press runs, under its button, so the person sees what is done on their computer: one line, which scrolls sideways when it is longer than its room. */
-function CommandLine({ command }: { command: string }) {
+export function CommandLine({ command }: { command: string }) {
   return (
     <div className="flex min-w-0 items-center gap-1 rounded-md bg-muted py-0.5 pr-0.5 pl-2">
       <code className="min-w-0 flex-1 overflow-x-auto py-1 font-mono text-xs whitespace-nowrap text-muted-foreground">{command}</code>
@@ -153,7 +153,7 @@ export function FixAction({ label, busy, busyWords, command, failed, onPress, wo
 }
 
 /** A program's words, each address in them a link: a sign-in page it names is opened from here. */
-function Linked({ text }: { text: string }) {
+export function Linked({ text }: { text: string }) {
   return text.split(/(https?:\/\/[^\s<>"]+)/).map((part, at) =>
     at % 2 === 1 ? (
       <a key={at} href={part} target="_blank" rel="noreferrer" className="underline underline-offset-2">
@@ -215,6 +215,8 @@ export interface Missing {
   name: string
   /** What is missing, in words. */
   words: string
+  /** What fixes it, as a menu item that leads there says it: "Install Claude Code…". */
+  action: string
   /** The press that fixes it, for the coding agent: a git host's account is added in its dialog (`AddGitAccount.tsx`). */
   fix?: ReactNode
 }
@@ -233,6 +235,7 @@ export function useMissing(): { missing: Missing[]; loaded: boolean; reload: () 
       key: 'agent',
       name,
       words: agentWords(state),
+      action: agentLoginState(state) === 'not-installed' ? `Install ${name}…` : loggedOut(state) ? `Log ${name} in…` : `Set up ${name}…`,
       fix: <AgentFix state={state} onChanged={() => void reloadAgent()} />,
     })
   }
@@ -243,6 +246,7 @@ export function useMissing(): { missing: Missing[]; loaded: boolean; reload: () 
       key: `host:${row.host}`,
       name: p.name,
       words: hostWords(row),
+      action: !p.installed ? `Install ${p.tool}…` : p.accounts.length === 0 ? `Add a ${p.name} account…` : `Add your ${p.name} account again…`,
     })
   }
   return { missing, loaded: state !== undefined && view !== undefined, reload, hosts: view }

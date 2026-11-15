@@ -230,6 +230,9 @@ export function quotaBoundaryStatus(input: {
   return { boundary, limit, windows, reached: windows.find(w => w.reached) ?? null }
 }
 
+/** Why a run does not start when the one Claude Code login's usage cannot be read. */
+export const QUOTA_UNREAD = 'the quota could not be read, so there is no way to tell what is spare'
+
 /** Whether a run may start against the boundary, and the one line that says why not. */
 export type QuotaDecision = { start: true } | { start: false; reason: string }
 
@@ -239,7 +242,7 @@ export type QuotaDecision = { start: true } | { start: false; reason: string }
  * line it stopped at, the offset included, so a stand-down reads as a setting and not as a bug.
  */
 export function quotaHeadroom(quota: QuotaBoundaryStatus | undefined): QuotaDecision {
-  if (!quota) return { start: false, reason: 'the quota could not be read, so there is no way to tell what is spare' }
+  if (!quota) return { start: false, reason: QUOTA_UNREAD }
   const reached = quota.reached
   if (!reached) return { start: true }
   const { limit, boundary } = quota

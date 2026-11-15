@@ -22,7 +22,7 @@ export function ViewToggle() {
   // In the website's font whatever the page's is (Settings › Appearance), so the two toggles are one.
   const pill = "relative flex h-6 items-center justify-center rounded-md font-['IBM_Plex_Sans',ui-sans-serif,sans-serif] text-xs font-medium whitespace-nowrap"
   return (
-    <div className="relative inline-flex gap-0.5 self-start rounded-lg border border-sidebar-border p-0.5 [view-transition-name:oa-toggle]">
+    <div role="group" aria-label="View" className="relative inline-flex gap-0.5 self-start rounded-lg border border-sidebar-border p-0.5 [view-transition-name:oa-toggle]">
       <span aria-hidden className="absolute top-0.5 left-[calc(0.125rem+96px+0.125rem)] h-6 w-[84px] rounded-md bg-primary [view-transition-name:oa-toggle-thumb]" />
       {/* The labels after the thumb, and named apart from it: the switch draws them above the thumb as it slides. */}
       <span className="relative inline-flex gap-0.5 [view-transition-name:oa-toggle-labels]">
@@ -40,6 +40,7 @@ export function ViewToggle() {
 
 /**
  * The switch takes the place of the page it leaves in the history: both views are at `/`, so Back
- * could only show the view just left. A click with a modifier, or another button, is the browser's.
+ * could only show the view just left. It names that page, which the landing page's "Dashboard"
+ * opens again. A click with a modifier, or another button, is the browser's.
  */
-const switchInPlace = inPlace<HTMLAnchorElement>(event => location.replace(event.currentTarget.href))
+const switchInPlace = inPlace<HTMLAnchorElement>(event => location.replace(`${event.currentTarget.href}?back=${encodeURIComponent(`${location.pathname}${location.search}`)}`))

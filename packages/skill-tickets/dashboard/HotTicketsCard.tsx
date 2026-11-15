@@ -6,6 +6,7 @@ import { holdingRun } from './lib/holding-run.js'
 import { listTickets } from './lib/list.js'
 import type { WorkspaceTicket } from './lib/types.js'
 import { releaseClaim } from './lib/release.js'
+import { priorityTone } from './lib/ticket-priority.js'
 
 // The Overview's hot-tickets card: a cross-project glance at what agents hold, what is flagged
 // high priority, and what waits on a person, nothing else. Its data is `tickets list --local` in each project, the list an
@@ -156,7 +157,7 @@ function stateOf(hot: HotTicket): { Icon: LucideIcon; says: string; tone: string
     return { Icon: WifiOff, says: `${hot.holder?.machine ?? 'Its computer'} is offline${seen}: how its run stands is unknown${by}`, tone: 'text-muted-foreground' }
   }
   if (hot.lane === 'stale') return { Icon: CirclePause, says: `${hot.holder ? (ENDED[hot.holder.status] ?? 'Run stopped') : 'No run holds it any more'}${by}`, tone: 'text-warning' }
-  if (hot.lane === 'high-priority') return { Icon: ArrowUp, says: `Priority ${hot.ticket.priority ?? ''}`.trim(), tone: 'text-info' }
+  if (hot.lane === 'high-priority') return { Icon: ArrowUp, says: `Priority ${hot.ticket.priority ?? ''}`.trim(), tone: priorityTone(hot.ticket.priority) }
   return { Icon: Clock, says: `Waiting${hot.ticket.waiting ? ` on ${hot.ticket.waiting}` : ''}`, tone: 'text-muted-foreground' }
 }
 
@@ -198,7 +199,7 @@ function Row({ hot, showProject, reload }: { hot: HotTicket; showProject: boolea
   ) : null
   const { Icon, says, tone } = stateOf(hot)
   // The short fact at the row's end, in grey.
-  const fact = lane === 'waiting' ? ticket.waiting : lane === 'high-priority' && ticket.priority ? `P${ticket.priority}` : undefined
+  const fact = lane === 'waiting' ? ticket.waiting : lane === 'high-priority' && ticket.priority ? `Priority ${ticket.priority}` : undefined
   const mark = <Icon className="h-3.5 w-3.5" aria-hidden />
   return (
     <li className="group/row relative flex items-center gap-3 rounded-md px-3 text-sm transition-colors hover:bg-accent md:h-10 max-md:h-11">

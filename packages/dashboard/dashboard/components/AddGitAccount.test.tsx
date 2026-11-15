@@ -37,6 +37,7 @@ describe('the dialog that adds an account at a git host', () => {
     logins.onGitHosts.mockResolvedValue(hosts({ loggingIn: CODE }))
     expect(await within(dialog).findByText('ABCD-1234')).toBeTruthy()
     expect(within(dialog).getByRole('button', { name: 'Copy the code' })).toBeTruthy()
+    expect(within(dialog).getByText('Sign in there as the account OpenAgent should use. Your own logins stay as they are.')).toBeTruthy()
     expect(onClose).not.toHaveBeenCalled()
     // The person signed in at the host: its package now lists one account more.
     logins.onGitHosts.mockResolvedValue(hosts({ accounts: [{ login: 'octo', runs: true, ok: true }, { login: 'octo-agent', runs: false, ok: true }] }))
@@ -44,6 +45,14 @@ describe('the dialog that adds an account at a git host', () => {
     await waitFor(() => expect(onClose).toHaveBeenCalledWith('octo-agent'), { timeout: 3000 })
     // Nothing to give up: the login ended by itself.
     expect(logins.sendStopGitHostLogin).not.toHaveBeenCalled()
+  })
+
+  test('once the code is shown, the link to open has the focus, and each of the dialog\u2019s live lines is said on its own', async () => {
+    render(<AddGitAccountDialog host="github.com" onClose={vi.fn()} />)
+    const dialog = await screen.findByRole('dialog', { name: 'Add a GitHub account' })
+    const link = await within(dialog).findByRole('link', { name: 'github.com/login/device' })
+    await waitFor(() => expect(document.activeElement).toBe(link))
+    expect(within(dialog).getAllByRole('status').map(line => line.textContent)).toEqual(['Open github.com/login/device and enter this code:ABCD-1234', 'Waiting for you at GitHub…'])
   })
 
   test('a login the host no longer took, added again, is the account it added', async () => {
@@ -72,17 +81,22 @@ describe('the dialog that adds an account at a git host', () => {
     await waitFor(() => expect(logins.sendStopGitHostLogin).toHaveBeenCalledWith('github.com'))
   })
 
-  test('a login that ended with no account more says so, and a press asks for a new code; a code the package refused says why', async () => {
+  test('a login that ended with no account more says so, and a press asks for a new code; a code the package refused says why, its address a link, and the press tries again', async () => {
     logins.onGitHosts.mockResolvedValue(hosts({ loggingIn: CODE }))
     render(<AddGitAccountDialog host="github.com" onClose={vi.fn()} />)
     const dialog = await screen.findByRole('dialog')
     expect(await within(dialog).findByText('ABCD-1234')).toBeTruthy()
     logins.onGitHosts.mockResolvedValue(hosts())
     expect(await within(dialog).findByText(/No account was added/, undefined, { timeout: 4000 })).toBeTruthy()
-    logins.sendGitHostLogin.mockResolvedValue({ ok: false, error: 'gh could not reach github.com.' })
+    expect(within(dialog).queryByText(/Sign in there/)).toBeNull()
+    logins.sendGitHostLogin.mockResolvedValue({ ok: false, error: 'error connecting to github.com; check your internet connection or https://githubstatus.com' })
     fireEvent.click(within(dialog).getByRole('button', { name: 'Get a new code' }))
-    expect((await within(dialog).findByRole('alert')).textContent).toBe('gh could not reach github.com.')
-    expect(within(dialog).getByRole('button', { name: 'Get a new code' })).toBeTruthy()
+    const alert = await within(dialog).findByRole('alert')
+    expect(alert.textContent).toBe('Could not get a code from GitHub:\nerror connecting to github.com; check your internet connection or https://githubstatus.com')
+    expect(within(alert).getByRole('link', { name: 'https://githubstatus.com' }).getAttribute('href')).toBe('https://githubstatus.com')
+    // No code was shown this time: the press asks again, it gets no "new" code, and nothing says to sign in "there".
+    expect(within(dialog).getByRole('button', { name: 'Try again' })).toBeTruthy()
+    expect(within(dialog).queryByText(/Sign in there/)).toBeNull()
   })
 
   test('the tool not here: its install first, with the command; once it is here the code is asked for by itself', async () => {

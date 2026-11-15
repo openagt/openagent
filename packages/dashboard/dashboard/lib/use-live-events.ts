@@ -20,6 +20,8 @@ export interface LiveEvents {
   lost: boolean
   /** The message the agent is writing, as far as it has got; empty when it is writing none. Never in `events`. */
   writing: string
+  /** What the daemon held of the run when the feed was opened has all come: what comes after is new. */
+  replayed: boolean
 }
 
 /** Retry delays for a lost stream: quick first, then settle at a slow poll. */
@@ -31,9 +33,8 @@ function retryDelay(attempt: number): number {
 
 /**
  * How long a reconnect waits for the server's end-of-replay marker before swapping anyway
- * (#1383). The on-disk tail sends `stream-sync` the moment its replay is delivered, so this
- * deadline only fires for the in-memory sources (relay #426, relayed machine runs #1067),
- * which have no replay boundary to report — their buffered history streams in well under it.
+ * (#1383). Every source sends `stream-sync` the moment its replay is delivered, so this
+ * deadline fires only for a replay slower than it.
  */
 const SYNC_GRACE_MS = 1500
 
@@ -41,6 +42,7 @@ export function useLiveEvents(projectId: string | null, agentId?: string | null)
   const [events, setEvents] = useState<OpenAgentEvent[]>([])
   const [lost, setLost] = useState(false)
   const [writing, setWriting] = useState('')
+  const [replayedFor, setReplayedFor] = useState<string | null>(null)
 
   // Another run, or one just started, is a feed of its own: it starts empty, and the live tail
   // streams the run in as soon as its diary exists.
@@ -48,6 +50,7 @@ export function useLiveEvents(projectId: string | null, agentId?: string | null)
     setEvents([])
     setLost(false)
     setWriting('')
+    setReplayedFor(null)
     if (!projectId || !agentId) return
     let channel: EventChannel | undefined
     let cancelled = false
@@ -73,7 +76,7 @@ export function useLiveEvents(projectId: string | null, agentId?: string | null)
       // feed on screen, and blanking it while history re-streamed was #1383's mid-run flicker:
       // the lost banner cleared on resubscribe, then the feed sat empty until the replay caught
       // up. So a reconnect buffers the replay and swaps atomically — on the server's stream-sync
-      // marker, or at a grace deadline for the in-memory sources that send none. The feed never
+      // marker, or at a grace deadline when the marker is slow. The feed never
       // shows less than it already showed (#1402's rule, applied to the live channel).
       const reconnect = !first
       first = false
@@ -111,6 +114,7 @@ export function useLiveEvents(projectId: string | null, agentId?: string | null)
           if (event.kind === 'stream-sync') {
             if (graceTimer) clearTimeout(graceTimer)
             swap()
+            setReplayedFor(agentId)
             return
           }
           if (event.kind === 'partial') {
@@ -164,5 +168,5 @@ export function useLiveEvents(projectId: string | null, agentId?: string | null)
   // An agent's own tail (#749) holds nothing but that agent, so the feed is its whole log: also the
   // second `session` boundary a resumed session (#762) appends to the SAME journal, where slicing
   // at the last one hid everything before the resume for as long as the agent was live.
-  return { events, lost, writing }
+  return { events, lost, writing, replayed: replayedFor === agentId }
 }

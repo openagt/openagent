@@ -73,6 +73,9 @@ describe('useRoute', () => {
     try {
       const { result } = renderHook(() => useRoute(projects))
       act(() => result.current.go({ projectId: 'my-repo-a1', agentId: '1-run', scope: 'my-repo-a1' }))
+      // The new page opened at its top.
+      expect(scrollTo).toHaveBeenCalledWith(0, 0)
+      scrollTo.mockClear()
       scrollY.mockReturnValue(0)
       // Back: the entry left kept its place, and the lists that fill the page have not shown yet.
       await act(async () => {
@@ -87,6 +90,25 @@ describe('useRoute', () => {
       expect(scrollTo).toHaveBeenCalledWith(0, 800)
     } finally {
       vi.unstubAllGlobals()
+      vi.restoreAllMocks()
+    }
+  })
+
+  it('a new page opens at its top, its own page and another project\'s alike; Settings over the page and a change of the query alone leave the page where it was scrolled', () => {
+    const scrollTo = vi.spyOn(window, 'scrollTo').mockImplementation(() => {})
+    try {
+      at('/my-repo/logs')
+      const { result } = renderHook(() => useRoute(projects))
+      act(() => result.current.go({ projectId: null, agentId: null, page: 'logs' }))
+      expect(scrollTo).toHaveBeenCalledWith(0, 0)
+      scrollTo.mockClear()
+      act(() => result.current.go({ projectId: null, agentId: null, page: 'permissions' }))
+      expect(scrollTo).toHaveBeenCalledWith(0, 0)
+      scrollTo.mockClear()
+      act(() => result.current.go({ ...result.current.route, settings: 'general' }, { keepQuery: true }))
+      act(() => result.current.go({ projectId: null, agentId: null, page: 'permissions', settings: 'profile' }, { keepQuery: true }))
+      expect(scrollTo).not.toHaveBeenCalled()
+    } finally {
       vi.restoreAllMocks()
     }
   })

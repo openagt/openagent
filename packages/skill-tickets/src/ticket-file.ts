@@ -1,12 +1,14 @@
 /**
- * A ticket's file as the fields a person writes by hand: its priority and topics (two of the
- * lines above its title), its title and its text. The other lines above the title — `Issue:`,
- * `PR:`, `Waiting:` — are kept as they are: a page that edits a ticket never loses one.
+ * A ticket's file as the fields a person writes by hand: its priority, topics and what it waits on
+ * (three of the lines above its title), its title and its text. The other lines above the title —
+ * `Issue:`, `PR:` — are kept as they are: a page that edits a ticket never loses one.
  */
 export interface TicketFields {
   /** `0`–`10`, or empty for none. */
   priority: string
   topics: string[]
+  /** What the ticket waits on before anyone can work it, or empty for nothing: only a person ends a wait. */
+  waiting: string
   title: string
   /** Everything under the title, as markdown. */
   body: string
@@ -14,31 +16,35 @@ export interface TicketFields {
   kept: string[]
 }
 
-const PRIORITY = /^Priority:\s*(.*)$/
-const TOPICS = /^Topics:\s*(.*)$/
+const PRIORITY = /^Priority:\s*(.*)$/i
+const TOPICS = /^Topics:\s*(.*)$/i
+const WAITING = /^Waiting:\s*(.*)$/i
 
 /** Read a ticket's file into its fields. A file with no `# ` title reads with an empty one and its whole text as the body. */
 export function readTicketFile(content: string): TicketFields {
   const lines = content.replace(/\r\n/g, '\n').split('\n')
   const at = lines.findIndex(line => line.startsWith('# '))
   const head = at < 0 ? [] : lines.slice(0, at).filter(line => line.trim() !== '')
-  const fields: TicketFields = { priority: '', topics: [], title: at < 0 ? '' : lines[at]!.slice(2).trim(), body: '', kept: [] }
+  const fields: TicketFields = { priority: '', topics: [], waiting: '', title: at < 0 ? '' : lines[at]!.slice(2).trim(), body: '', kept: [] }
   for (const line of head) {
     const priority = PRIORITY.exec(line)
     const topics = TOPICS.exec(line)
+    const waiting = WAITING.exec(line)
     if (priority) fields.priority = priority[1]!.trim()
     else if (topics) fields.topics = topicsIn(topics[1]!)
+    else if (waiting) fields.waiting = waiting[1]!.trim()
     else fields.kept.push(line)
   }
   fields.body = (at < 0 ? lines : lines.slice(at + 1)).join('\n').trim()
   return fields
 }
 
-/** The file for `fields`: the lines above the title (priority and topics first, when set), the title, the text. */
+/** The file for `fields`: the lines above the title (priority, topics and the wait first, when set), the title, the text. */
 export function writeTicketFile(fields: TicketFields): string {
   const head = [
     ...(fields.priority.trim() ? [`Priority: ${fields.priority.trim()}`] : []),
     ...(fields.topics.length > 0 ? [`Topics: [${fields.topics.join(', ')}]`] : []),
+    ...(fields.waiting.trim() ? [`Waiting: ${fields.waiting.trim()}`] : []),
     ...fields.kept,
   ]
   const body = fields.body.trim()

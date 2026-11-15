@@ -371,6 +371,23 @@ test('a login given up: its gh stops waiting, and nothing of it is kept, not eve
   }
 })
 
+test('a login gh could not start is refused in one line holding every line gh said: a refusal is told by its last line', async () => {
+  const dir = mkdtempSync(join(tmpdir(), 'gh-login-'))
+  const kept = process.env['PATH']
+  writeFileSync(join(dir, 'gh'), ['#!/bin/sh', 'echo "error connecting to github.com" >&2', 'echo "check your internet connection or https://githubstatus.com" >&2', 'exit 1', ''].join('\n'))
+  chmodSync(join(dir, 'gh'), 0o755)
+  process.env['PATH'] = `${dir}:${kept}`
+  try {
+    const root = join(dir, 'accounts')
+    mkdirSync(root)
+    const files = { log: join(dir, 'l.log'), pid: join(dir, 'l.pid'), exit: join(dir, 'l.exit') }
+    await assert.rejects(startLogin(root, files), { message: 'error connecting to github.com; check your internet connection or https://githubstatus.com' })
+  } finally {
+    process.env['PATH'] = kept
+    rmSync(dir, { recursive: true, force: true })
+  }
+})
+
 /**
  * A browser login run for real, with a stand-in `gh` that writes down what it is asked and
  * where: it logs in when `login` says `ok`, writing its file into the folder it is given, as gh does.

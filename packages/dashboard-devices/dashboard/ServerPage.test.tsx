@@ -1,6 +1,5 @@
-import { useMemo, useState } from 'react'
+import { Profiler, useLayoutEffect, useMemo, useState } from 'react'
 import { afterEach, describe, expect, test, vi } from 'vitest'
-import { Profiler, useLayoutEffect, useState } from 'react'
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { ModuleHostContext, type MachineAdded, type MachineRemoved, type ModuleCommandResult, type ModuleComputersThrough, type ModuleAccountsAgent, type ModuleHost, type ModuleMachineAccount, type ModuleMachinePerson, type ModuleMachines } from '@openagt/dashboard/module'
 import { fakeHost } from '@openagt/dashboard/module/testing'
@@ -529,6 +528,7 @@ describe('Settings › Devices: a server this computer installed', () => {
     // Nothing of a server to set up, and what this computer's own file holds of servers is not listed.
     fireEvent.click(screen.getByRole('button', { name: 'Add device' }))
     expect(await screen.findByRole('radio', { name: /^Computer/ })).toBeTruthy()
+    expect(screen.getByRole('radio', { name: /^Join with a code/ })).toBeTruthy()
     expect(screen.queryByRole('radio', { name: /^Server/ })).toBeNull()
     fireEvent.click(screen.getByRole('button', { name: 'Cancel' }))
     expect(queryRow('203.0.113.5')).toBeNull()

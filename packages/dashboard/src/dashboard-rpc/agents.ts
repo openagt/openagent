@@ -111,17 +111,18 @@ export interface AgentChange {
 /**
  * Save an agent: a new one under the id its name gives, an existing one under its own. The name
  * must give an id, every skill must be one this computer carries, and every account one it knows;
- * else nothing is written and the reason is said.
+ * else nothing is written and the reason is said, with `field: 'name'` when it is the name's.
  */
-export async function sendSaveAgent(change: AgentChange): Promise<({ ok: true; id: string } | { ok: false; error: string }) & Partial<AccountResult>> {
+export async function sendSaveAgent(change: AgentChange): Promise<({ ok: true; id: string } | { ok: false; error: string; field?: 'name' }) & Partial<AccountResult>> {
   if (typeof change !== 'object' || change === null) return { ok: false, error: 'That is no agent.' }
-  if (!isAgentName(change.name)) return { ok: false, error: 'An agent needs a name of a few words: letters and digits, at most 40 characters.' }
+  if (!isAgentName(change.name)) return { ok: false, error: 'An agent needs a name of a few words: letters and digits, at most 40 characters.', field: 'name' }
   const name = change.name.trim()
   const id = change.id === undefined ? agentIdOf(name) : change.id
   if (!isAgentId(id)) return { ok: false, error: 'That is no agent id.' }
-  if (change.id === undefined && (await readAgent(id)) !== undefined) return { ok: false, error: `There is an agent ${name} already.` }
+  const taken = change.id === undefined ? await readAgent(id) : undefined
+  if (taken) return { ok: false, error: `There is an agent ${taken.name} already: pick another name.`, field: 'name' }
   if (change.id !== undefined && change.id !== DEFAULT_AGENT && (await readAgent(change.id)) === undefined) return { ok: false, error: 'That agent is gone: make it again.' }
-  if (id === DEFAULT_AGENT && name !== 'Default') return { ok: false, error: 'The default agent keeps its name.' }
+  if (id === DEFAULT_AGENT && name !== 'Default') return { ok: false, error: 'The default agent keeps its name.', field: 'name' }
   const known = new Set((await skillChoices()).flatMap(group => group.skills.map(skill => skill.name)))
   const skills = Array.isArray(change.skills) ? change.skills : undefined
   if (!skills || skills.some(skill => typeof skill !== 'string' || !known.has(skill))) return { ok: false, error: 'An agent is given skills from the list.' }

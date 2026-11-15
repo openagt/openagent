@@ -1,6 +1,7 @@
 import { MessageSquare } from 'lucide-react'
 import { Button, List, Row, Tooltip, TooltipContent, TooltipTrigger, formatAge, type ModuleAgent } from '@openagt/dashboard/module'
 import { holderAgent, planAgentFor, workAgentFor } from '../src/module.js'
+import { holdingRun } from './lib/holding-run.js'
 
 /** One kind of session on a ticket: the one that wrote its plan, or the one that worked it. */
 export interface TicketSession {
@@ -25,11 +26,12 @@ const WORDS = {
 } as const
 
 /**
- * The sessions behind a ticket, each named and one press away: the one that wrote its plan and the
- * one that worked it. A finished one is gone on with in its own chat — the same conversation, the
- * ticket and the plan already in its context; one still running is watched.
+ * The sessions behind a ticket, each named as every list of runs names it and one press away: the
+ * one that wrote its plan and the one that worked it. A finished one is gone on with in its own
+ * chat — the same conversation, the ticket and the plan already in its context; one still running
+ * is watched.
  */
-export function TicketSessions({ sessions, onOpen }: { sessions: readonly TicketSession[]; onOpen: (agentId: string) => void }) {
+export function TicketSessions({ sessions, planned, onOpen }: { sessions: readonly TicketSession[]; planned: boolean; onOpen: (agentId: string) => void }) {
   if (sessions.length === 0) return null
   return (
     <List>
@@ -42,7 +44,8 @@ export function TicketSessions({ sessions, onOpen }: { sessions: readonly Ticket
             leading={<span className="w-9 text-xs font-medium">{words.label}</span>}
             title={
               <>
-                <span className="font-normal text-muted-foreground">{running ? words.running : words.ended}</span> {agent.title ?? agent.id}
+                {/* A planning run that ended with no plan beside the ticket wrote none: it was asked for one. */}
+                <span className="font-normal text-muted-foreground">{running ? words.running : kind === 'plan' && !planned ? 'Asked for in' : words.ended}</span> {holdingRun(agent)?.name ?? agent.id}
               </>
             }
             meta={<span className="tabular-nums">{`${running ? 'at work' : agent.status} · ${formatAge(agent.endedAt ?? agent.startedAt)}`}</span>}

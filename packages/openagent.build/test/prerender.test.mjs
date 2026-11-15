@@ -45,3 +45,33 @@ test("an address with no page gets the site's own not-found page", () => {
   assert.ok(existsSync(file), 'the error page was not built: run `pnpm build` first')
   assert.match(readFileSync(file, 'utf8'), /Page not found/)
 })
+
+/** The `<div>` of `html` whose opening tag holds `marker`, from that tag to its own closing one. */
+function divWith(html, marker) {
+  const start = html.lastIndexOf('<div', html.indexOf(marker))
+  assert.ok(html.includes(marker) && start !== -1, `no element with ${marker}`)
+  let depth = 0
+  for (const tag of html.slice(start).matchAll(/<(\/?)div\b/g)) {
+    depth += tag[1] ? -1 : 1
+    if (depth === 0) return html.slice(start, start + tag.index)
+  }
+  assert.fail(`the element with ${marker} is not closed`)
+}
+
+test("the toggle is one group, named for what it switches, with the landing page as the lit side", () => {
+  const toggle = divWith(readFileSync(built('index'), 'utf8'), 'class="view-toggle"')
+  assert.match(toggle, /^<div class="view-toggle" role="group" aria-label="View"/)
+  assert.match(toggle, /<span aria-current="page"[^>]*>Landing page<\/span>/)
+})
+
+test('on a computer with OpenAgent installed, the landing page offers no command that tries or installs it', () => {
+  const html = readFileSync(built('index'), 'utf8')
+  const body = html.replace(/<head[\s\S]*?<\/head>/, ' ')
+  // Every such command on the page is in the one block the installed copy's stylesheet hides, as it shows the Dashboard button.
+  const commands = divWith(body, 'class="try-commands"')
+  const command = /(npx|dlx|bunx) @openagt\/(dashboard|install)/
+  assert.match(commands, command)
+  assert.doesNotMatch(body.replace(commands, ' '), command)
+  const sheets = [...html.matchAll(/<link rel="stylesheet" type="text\/css" href="\/([^"]+)"/g)].map(([, href]) => readFileSync(new URL(href, client), 'utf8'))
+  assert.ok(sheets.some(css => /html\[data-installed\] \.try-commands\{display:none/.test(css)), 'the installed copy hides it')
+})

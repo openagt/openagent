@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Button, useOpenAgentDown, type ModuleCommandResult, type ModuleProject } from '@openagt/dashboard/module'
 import type { PublishPick } from '../src/state.js'
 import { MAX_AGENTS, OWN_AUTOMATIONS_DIR, type AgentName } from '../src/names.js'
@@ -183,8 +183,20 @@ export function EditPanel({
     if (!answer.ok) setFailed(`It was not removed: ${answer.error}`)
   }
 
+  // Back from the question, the keyboard is on Remove, which asked it, not on the panel's first field.
+  const removeButton = useRef<HTMLButtonElement>(null)
+  const backFromAsking = useRef(false)
+  useEffect(() => {
+    if (asking || !backFromAsking.current) return
+    backFromAsking.current = false
+    removeButton.current?.focus()
+  }, [asking])
   /** Back from the question to the panel: why a removal was not taken is said in the question alone. */
-  const back = (): void => (setAsking(false), setFailed(undefined))
+  const back = (): void => {
+    setAsking(false)
+    setFailed(undefined)
+    backFromAsking.current = true
+  }
 
   /** What stands in the panel's place after a save or before a removal: one thing said, in a box of its own. */
   const frame = 'mt-3 rounded-lg border border-hairline p-4'
@@ -325,7 +337,7 @@ export function EditPanel({
       <FormFoot where={keptWhereHint(opened)}>
         {/* Only what the tool wrote is the tool's to delete. */}
         {scheduled.editable && opened && (
-          <Button variant="ghost" disabled={saving} onClick={() => (setAsking(true), setFailed(undefined))} className="text-danger">
+          <Button ref={removeButton} variant="ghost" disabled={saving} onClick={() => (setAsking(true), setFailed(undefined))} className="text-danger">
             Remove
           </Button>
         )}

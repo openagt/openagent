@@ -224,3 +224,34 @@ test('a port another program holds is said to be taken, with what to do (#2141)'
     await other.close()
   }
 })
+
+test('Ctrl+C ends the dashboard with a line that says it stopped', async () => {
+  // Outside a repository, so no project is added; npm is not asked whether a newer version is out.
+  const dir = await mkdtemp(join(tmpdir(), 'openagent-cli-'))
+  const cwd = process.cwd()
+  const fetchBefore = globalThis.fetch
+  globalThis.fetch = (input, init) => (String(input).startsWith('https://registry.npmjs.org/') ? Promise.reject(new Error('offline')) : fetchBefore(input, init))
+  process.chdir(dir)
+  try {
+    await withConfig(async () => {
+      const { io, out, err } = capture()
+      const listening = process.listenerCount('SIGINT')
+      // Pressed once the dashboard waits for it, which is after it has started its services.
+      const pressCtrlC = (line: string): void => {
+        io.out(line)
+        if (!line.startsWith('◆ dashboard running: ')) return
+        const press = setInterval(() => {
+          if (process.listenerCount('SIGINT') === listening) return
+          clearInterval(press)
+          process.emit('SIGINT')
+        }, 50)
+      }
+      assert.equal(await runCli(['--port', '0'], { ...io, out: pressCtrlC }), 0, err.join('\n'))
+      assert.equal(out.at(-1), '◆ dashboard stopped.')
+    })
+  } finally {
+    process.chdir(cwd)
+    globalThis.fetch = fetchBefore
+    await rm(dir, { recursive: true, force: true })
+  }
+})
