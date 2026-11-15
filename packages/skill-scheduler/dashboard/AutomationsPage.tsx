@@ -379,10 +379,11 @@ function SchedulerOff() {
   const host = useModuleHost()
   const [commands, setCommands] = useState(false)
   return (
-    <div className="mt-4 max-w-180 space-y-2 text-sm text-muted-foreground">
+    <div className="mt-4 space-y-2 text-sm text-muted-foreground">
       <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
         <p className="min-w-0 grow basis-60">The scheduler is off in this project, so nothing here starts by itself.</p>
-        <div className="flex gap-2">
+        {/* At the page's right edge, as its other presses; under the sentence on a phone, where the first one's words stand on the page's left edge. */}
+        <div className="flex gap-2 max-md:-ml-3">
           <Button variant="ghost" aria-expanded={commands} onClick={() => setCommands(shown => !shown)}>
             In a terminal
           </Button>
@@ -393,12 +394,12 @@ function SchedulerOff() {
         </div>
       </div>
       {commands && (
-        <>
+        <div className="max-w-180 space-y-2">
           <p className="pt-2">To start it now, run in the project:</p>
           <Command text={START} />
           <p className="pt-2">To start it with the dashboard from now on:</p>
           <Command text={INIT} />
-        </>
+        </div>
       )}
     </div>
   )
