@@ -81,7 +81,7 @@ describe('TicketsPage (#1144)', () => {
     await screen.findByText('Do the thing')
     const title = screen.getByRole('heading', { level: 1 })
     expect(title.textContent).toBe('Tickets 2/2')
-    expect(title.className).toBe('text-xl font-semibold')
+    expect(title.className).toBe('text-2xl font-semibold tracking-tight')
     const line = title.closest('header')!.querySelector('p')!
     expect(line.textContent).toBe('Every project\u2019s tickets/ backlog: what agents plan from.')
     expect(line.className).toBe('mt-1 text-sm text-muted-foreground max-md:sr-only')
