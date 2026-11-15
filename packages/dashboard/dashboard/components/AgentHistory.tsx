@@ -414,7 +414,7 @@ export function AgentHistory({
                       when the list is empty (#1147): the heading is what makes "No sessions yet." read as
                       the state of this list rather than a lonely line in the sidebar. */}
                   <div className="sticky top-0 z-10">
-                    <SidebarGroupLabel className="rounded-none bg-sidebar pr-1 pl-2">
+                    <SidebarGroupLabel className="rounded-none bg-sidebar px-2">
                       Log
                       <RecentsSortMenu order={order} />
                     </SidebarGroupLabel>
