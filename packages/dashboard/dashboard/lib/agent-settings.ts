@@ -3,3 +3,6 @@
 
 /** What a surface says when no model is pinned and the CLI picks for itself (#1143). */
 export const NO_MODEL_PINNED = "the CLI's own default"
+
+/** The same, as a choice of its own among the models' names: it starts with a capital, as they do. */
+export const NO_MODEL_PINNED_CHOICE = "The CLI's own default"

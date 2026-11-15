@@ -127,18 +127,18 @@ describe('Settings › Agent', () => {
     open('agent')
     await waitFor(async () =>
       expect(await offered(select('Model'))).toEqual([
-        ["the CLI's own default", false],
+        ["The CLI's own default", false],
         ['Opus 5.5', false],
         ['Fable 5.1', false],
       ]),
     )
-    expect(showing(select('Model'))).toBe("the CLI's own default")
+    expect(showing(select('Model'))).toBe("The CLI's own default")
     // Each is saved by the id the agent gave it, and the agent's own default as no model at all.
     await pick(select('Model'), 'Opus 5.5')
     await pick(select('Model'), 'Fable 5.1')
-    await pick(select('Model'), "the CLI's own default")
+    await pick(select('Model'), "The CLI's own default")
     expect(saves()).toEqual([{ model: 'opus' }, { model: 'claude-fable-5-1' }, { model: '' }])
-    expect(showing(select('Model'))).toBe("the CLI's own default")
+    expect(showing(select('Model'))).toBe("The CLI's own default")
   })
 
   test('a saved model the agent does not list is kept, by its id, since a start is still given it', async () => {
@@ -146,7 +146,7 @@ describe('Settings › Agent', () => {
     refreshPreferences()
     open('agent')
     await waitFor(() => expect(showing(select('Model'))).toBe('fable'))
-    await waitFor(async () => expect((await choices(select('Model'))).slice(0, -1)).toEqual(["the CLI's own default", 'Opus 5.5', 'Fable 5.1']))
+    await waitFor(async () => expect((await choices(select('Model'))).slice(0, -1)).toEqual(["The CLI's own default", 'Opus 5.5', 'Fable 5.1']))
     expect((await offered(select('Model'))).at(-1)).toEqual(['fable', false])
     // The line is the saved id itself, not only its words: it is the one the list marks as the pick.
     const lines = within(await openList(select('Model'))).getAllByRole('option')
@@ -161,7 +161,7 @@ describe('Settings › Agent', () => {
     await waitFor(() => expect(showing(select('Agent'))).toBe('Codex'))
     await waitFor(async () =>
       expect(await offered(select('Model'))).toEqual([
-        ["the CLI's own default", false],
+        ["The CLI's own default", false],
         ['not logged in', true],
       ]),
     )
@@ -176,7 +176,7 @@ describe('Settings › Agent', () => {
     await pick(select('Agent'), 'Codex')
     expect(saves()).toEqual([{ driver: 'codex', model: '' }])
     expect(showing(select('Agent'))).toBe('Codex')
-    expect(showing(select('Model'))).toBe("the CLI's own default")
+    expect(showing(select('Model'))).toBe("The CLI's own default")
   })
 })
 

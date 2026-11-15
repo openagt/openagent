@@ -3,7 +3,7 @@ import { Dialog as BaseDialog } from '@base-ui/react/dialog'
 import { ArrowLeft, Bell, Bot, ChevronRight, Database, FolderGit2, Globe, KeyRound, Palette, Puzzle, UserRound, X, FolderSearch } from 'lucide-react'
 import { ACCENTS, DEFAULT_ACCENT_LABELS, accentOf, CODE_FONTS, DOCUMENT_FONTS, DRIVERS, FONTS, PALETTES, PALETTE_LABELS, type Accent, type CodeFont, type DocumentFont, type Font, type Palette as ColourPalette } from '../../src/client.js'
 import { driverOptions, useModels } from '../lib/models.js'
-import { NO_MODEL_PINNED } from '../lib/agent-settings.js'
+import { NO_MODEL_PINNED_CHOICE } from '../lib/agent-settings.js'
 import type { DriverOption } from './DriverModelMenu.js'
 import type { ProjectSummary } from '../../src/index.js'
 import { useMountedModules, type MountedSettings } from '../lib/use-modules.js'
@@ -576,7 +576,7 @@ function ToggleRow({
 function modelOptions(driver: DriverOption | undefined, model: string): SelectOption[] {
   const listed = driver?.models ?? []
   return [
-    { value: '', label: NO_MODEL_PINNED },
+    { value: '', label: NO_MODEL_PINNED_CHOICE },
     ...listed,
     ...(model && !listed.some(m => m.value === model) ? [{ value: model, label: model }] : []),
     ...(listed.length === 0 && driver?.modelsNote ? [{ value: driver.modelsNote, label: driver.modelsNote, disabled: true }] : []),
