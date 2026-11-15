@@ -132,7 +132,7 @@ export function QueuePage({ projects }: ModulePageProps) {
           })}
     >
       {phone && only && (
-        <div className="mb-4 space-y-3">
+        <div className="mb-6 space-y-3">
           <p className="text-sm text-muted-foreground">What agents take next, from the top. {taker}</p>
           <BatchStart read={only} primary fill starts={starts} />
         </div>
@@ -301,7 +301,7 @@ function EntryRow({ project, placed, next, names, starts, reload }: { project: M
         onClick={view.open}
         meta={[
           agent !== undefined ? (
-            <span className="inline-flex items-center gap-1.5">
+            <span className="inline-flex h-4 items-center gap-1.5 align-top">
               <StateCell state={agent.status === 'waiting' ? 'waiting' : 'working'} />
               <AgentOnEntry projectId={project.id} agent={agent} />
             </span>
@@ -332,7 +332,7 @@ function EntryRow({ project, placed, next, names, starts, reload }: { project: M
             />
           ) : (
             <DropdownMenu>
-              <DropdownMenuTrigger render={<Button variant="ghost" size="icon-sm" aria-label={menuLabel} />}>
+              <DropdownMenuTrigger render={<Button variant="ghost" size="icon-sm" aria-label={menuLabel} className="-mr-1.5" />}>
                 <Ellipsis className="size-4" aria-hidden />
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end">
@@ -417,7 +417,7 @@ function AddEntry({ project, reload }: { project: ModuleProject; reload: () => P
     >
       <ComposedField>
         {/* One row: the task, the priority it goes in at the end of, the press; on a phone the task over the other two. */}
-        <div className="flex flex-wrap items-center gap-1.5">
+        <div className="flex flex-wrap items-center gap-2">
           <div className="min-w-0 flex-1 max-md:basis-full">
             <ComposedFieldInput
               ref={field}
