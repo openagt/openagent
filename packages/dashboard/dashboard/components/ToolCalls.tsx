@@ -253,7 +253,7 @@ function GivenDetail({ label, call, whole, output, card }: { label: string; call
   const command = call.kind === 'command' && given !== undefined
   const coloured = useHighlightedIn(command ? given : '', command ? 'shellscript' : undefined)
   return (
-    <div className={cn('mt-1.5 flex flex-col gap-1.5', card && 'rounded-lg border border-border px-3 py-3')}>
+    <div className={cn('mt-1.5 flex flex-col gap-1.5', card && 'rounded-lg bg-card px-3 py-3 shadow-sm ring-1 ring-hairline')}>
       {card && <div className="text-sm text-muted-foreground">{label}</div>}
       {given !== undefined && (
         <div className="relative rounded-lg border border-border">
@@ -461,15 +461,15 @@ export function ToolCalls({ steps, lead, live }: { steps: readonly ToolStep[]; l
         (one && only?.type === 'action' ? (
           <CallDetail {...only} card />
         ) : (
-          <div className="mt-1.5 flex flex-col divide-y divide-border rounded-lg border border-border">
-            {lead && <div className="px-2 py-1.5">{lead}</div>}
+          <div role="group" aria-label="Steps" className="mt-1.5 flex flex-col rounded-lg bg-card p-1 shadow-sm ring-1 ring-hairline">
+            {lead && <div className="px-3 py-1.5">{lead}</div>}
             {shown.map((step, at) => (
-              <div key={at} className="px-2 py-1.5">
+              <div key={at} className="px-3 py-1.5">
                 {step.type === 'action' ? <CallLine {...step} /> : <ThoughtLine text={step.text} />}
               </div>
             ))}
             {live && (
-              <div className="px-2 py-1.5">
+              <div className="px-3 py-1.5">
                 <div className="flex min-w-0 items-center gap-1.5">{going!.words}</div>
                 <CallDetail {...live.call} />
               </div>
