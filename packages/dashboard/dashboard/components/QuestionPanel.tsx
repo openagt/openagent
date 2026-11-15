@@ -37,20 +37,21 @@ function Mark({ on, multi, n }: { on: boolean; multi: boolean | undefined; n: nu
 // the pick. Where several may be picked, each row is a box of its own.
 function Choices({ multi, labelledBy, picked, onPick, disabled, children }: { multi: boolean | undefined; labelledBy: string; picked: string | typeof OTHER | undefined; onPick: (value: string | typeof OTHER) => void; disabled: boolean; children: ReactNode }) {
   return multi ? (
-    <ul className="flex flex-col">{children}</ul>
+    <ul className="-mx-2 flex flex-col">{children}</ul>
   ) : (
-    <RadioGroup render={<ul />} aria-labelledby={labelledBy} value={picked} onValueChange={value => onPick(value as string | typeof OTHER)} disabled={disabled} className="flex flex-col gap-0">
+    <RadioGroup render={<ul />} aria-labelledby={labelledBy} value={picked} onValueChange={value => onPick(value as string | typeof OTHER)} disabled={disabled} className="-mx-2 flex flex-col gap-0">
       {children}
     </RadioGroup>
   )
 }
 
-// A choice's row: the radio group's radio, or a box the row toggles. A row of one line is 44 high,
-// of two 64, its mark on the first line's (spacing.md 3), and rows are parted by nothing but their
-// padding; none is filled but the one picked and the one under the pointer.
+// A choice's row: the radio group's radio, or a box the row toggles, from the card's edge to its edge.
+// A row of one line is 44 high, of two 64, its mark 16 in on the first line's, its words 44 in
+// (spacing.md 3), and rows are parted by nothing but their padding; none is filled but the one
+// picked and the one under the pointer.
 function Choice({ multi, value, on, twoLines, disabled, onPick, children }: { multi: boolean | undefined; value: string | typeof OTHER; on: boolean; twoLines: boolean; disabled: boolean; onPick: () => void; children: ReactNode }) {
   // A second line ends on its baseline, lower in its line than a mark ends: less padding under it keeps the words' insets even.
-  const row = cn('group/choice focus-ring flex w-full items-start gap-3 rounded-md px-2 pt-3 text-left transition-colors enabled:hover:bg-accent enabled:active:bg-foreground/10 disabled:opacity-60', twoLines ? 'pb-2' : 'pb-3', on && 'bg-accent')
+  const row = cn('group/choice focus-ring-inset flex w-full items-start gap-3 px-4 pt-3 text-left transition-colors enabled:hover:bg-accent enabled:active:bg-foreground/10 disabled:opacity-60', twoLines ? 'pb-2' : 'pb-3', on && 'bg-accent')
   return multi ? (
     <button type="button" role="checkbox" aria-checked={on} disabled={disabled} onClick={onPick} className={row}>
       {children}
@@ -247,13 +248,13 @@ export function QuestionPanel({
                 name="own-answer"
                 placeholder="Type your own answer here"
                 aria-label="Your own answer"
-                className="mr-2 mb-2 ml-9 h-8 rounded-md border border-border bg-transparent px-3 outline-none placeholder:text-faint-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus"
+                className="mr-4 mb-2 ml-11 h-8 rounded-md border border-border bg-transparent px-3 outline-none placeholder:text-faint-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus"
               />
             )}
           </li>
         )}
       </Choices>
-      <div className="flex items-center gap-2 pt-1">
+      <div className="flex items-center gap-2 px-2 pt-1 pb-2">
         {/* One line in every state, so the buttons never move: what went wrong, or that it is on its way. */}
         <span role={error ? 'alert' : busy ? 'status' : undefined} className={cn('min-w-0 flex-1 truncate pl-2 text-xs', error ? 'text-danger' : 'text-muted-foreground')}>
           {error ?? (busy ? 'Sending your answer…' : '')}
