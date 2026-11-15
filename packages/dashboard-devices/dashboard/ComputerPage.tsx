@@ -11,7 +11,7 @@ import type { Devices } from './use-devices.js'
 // starts runs here, and who can use it. The two ways are two things OpenAgent keeps apart: a
 // machine saved here, and a device in at this computer's door; the page shows them as one computer.
 
-export function ComputerPage({ d, item, onBack, onSetUp }: { d: Devices; item: ComputerItem; onBack: () => void; /** Set this computer up as a server: the setup dialog. */ onSetUp: () => void }) {
+export function ComputerPage({ d, item, onBack, onSetUp }: { d: Devices; item: ComputerItem; onBack: () => void; /** Set this computer up as a server. */ onSetUp: () => void }) {
   const down = useOpenAgentDown()
   const { host } = d
   const { machine, door, through } = item

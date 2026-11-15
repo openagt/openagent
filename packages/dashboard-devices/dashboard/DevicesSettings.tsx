@@ -3,7 +3,7 @@ import { ChevronLeft, Ellipsis, House, Loader2, Monitor, Plus, Server, Smartphon
 import { Badge, Button, ConfirmDialog, Dialog, DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, Input, List, Row, RowShapes, Section, SettingsRow, SettingsRowShapes, SettingsSection, Slot, formatDateTime, formatRelative, useOpenAgentDown, usePolled, useSettingsCrumb } from '@openagt/dashboard/module'
 import { addDevice, keepPerson, loadMine, myName, nameOwner, removeDevice, removeMine, removePerson, renameDevice, setTailscale, type Answer, type DeviceRow, type DoorStatus, type LineRow, type PersonRow, type PersonThere } from './devices.js'
 import { installFailed, removeDevice as removeServerDevice } from './servers.js'
-import { AddDevice, useJoined, type Adding } from './AddDevice.js'
+import { ADDING, AddDevice, isAdding, useJoined, type Adding } from './AddDevice.js'
 import { Invite } from './codes.js'
 import { ComputerPage } from './ComputerPage.js'
 import { JoinedPage, OtherPage } from './JoinedPage.js'
@@ -39,14 +39,18 @@ const findOpened = (items: Item[], opened: Opened): Item | undefined =>
   items.find(item => item.key === opened.key) ??
   items.find(item => (opened.machine !== undefined && 'machine' in item && item.machine?.id === opened.machine) || (opened.door !== undefined && item.kind === 'computer' && item.door?.id === opened.door))
 
-export function DevicesSettings({ everyMs = 3_000, devicesEveryMs = 30_000, devicesAnswerMs, item }: Partial<Paces> & { /** A saved machine to open the page of, by its id: what a link from elsewhere names. */ item?: string }) {
+export function DevicesSettings({ everyMs = 3_000, devicesEveryMs = 30_000, devicesAnswerMs, item }: Partial<Paces> & { /** The page the address names: a way of adding, or a saved machine's page by its id, which a link from elsewhere names. */ item?: string }) {
   const d = useDevices({ everyMs, devicesEveryMs, ...(devicesAnswerMs !== undefined ? { devicesAnswerMs } : {}) })
-  const [opened, setOpened] = useState<Opened | undefined>(item !== undefined ? { key: '', machine: item } : undefined)
+  const adding = isAdding(item) ? item : undefined
+  const machineId = adding === undefined ? item : undefined
+  const [opened, setOpened] = useState<Opened | undefined>(machineId !== undefined ? { key: '', machine: machineId } : undefined)
   // Named again (another link while Settings is open): that machine's page.
   useEffect(() => {
-    if (item !== undefined) setOpened({ key: '', machine: item })
-  }, [item])
-  const [adding, setAdding] = useState<Adding | undefined>()
+    if (machineId !== undefined) setOpened({ key: '', machine: machineId })
+  }, [machineId])
+  // A way of adding is kept in the address, as Settings' own place is: a reload stays on it, and Back leaves Settings.
+  const add = (next: Adding | undefined): void => d.host.openSettings('devices', next)
+  const onPage = adding !== undefined && ADDING[adding].page === true
   // A server just set up opens on its page with Invite open.
   const [inviting, setInviting] = useState(false)
   const status = d.door?.ok ? d.door.value : undefined
@@ -55,8 +59,16 @@ export function DevicesSettings({ everyMs = 3_000, devicesEveryMs = 30_000, devi
     setOpened(undefined)
     setInviting(false)
   }
-  // A device's page is named in the Settings dialog's header, with its way back; outside it, the page has its own.
-  const crumbShown = useSettingsCrumb(open ? { title: open.name, back } : undefined)
+  // A page of the entry is named in the Settings dialog's header, with its way back: a way of adding goes back to where it was opened from.
+  const crumbShown = useSettingsCrumb(onPage ? { title: ADDING[adding].title, back: () => add(undefined) } : open ? { title: open.name, back } : undefined)
+  // Outside the Settings dialog, a page draws its own way back.
+  const way = (onBack: () => void) =>
+    !crumbShown && (
+      <button type="button" aria-label="Back to Devices" onClick={onBack} className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground">
+        <ChevronLeft aria-hidden className="h-3.5 w-3.5" />
+        Devices
+      </button>
+    )
 
   // One person's own OpenAgent on a computer several people use: their devices are the door's, and only they are shown.
   if (status?.person !== undefined) return <PersonDevices person={status.person} everyMs={everyMs} />
@@ -64,38 +76,39 @@ export function DevicesSettings({ everyMs = 3_000, devicesEveryMs = 30_000, devi
   const known = d.door !== undefined && !(d.machines === undefined && d.door.ok)
   if (!known) return <Slot of={{ state: 'unknown', value: undefined }} shape={<SettingsRowShapes rows={3} />}>{() => null}</Slot>
 
-  const dialogs = adding !== undefined && (
+  const flow = adding !== undefined && (
     <AddDevice
       d={d}
-      start={adding}
+      adding={adding}
       isServer={d.isServer}
-      onClose={() => setAdding(undefined)}
+      onAdd={add}
+      onClose={() => add(undefined)}
       onInvite={address => {
-        setAdding(undefined)
+        add(undefined)
         setInviting(true)
         setOpened({ key: `server:${address}` })
       }}
-      onJoined={machineId => {
-        setAdding(undefined)
-        setOpened({ key: '', machine: machineId })
-      }}
+      onJoined={joined => d.host.openSettings('devices', joined)}
     />
   )
+
+  if (onPage)
+    return (
+      <>
+        {way(() => add(undefined))}
+        <section aria-label={ADDING[adding].title}>{flow}</section>
+      </>
+    )
 
   if (open)
     return (
       <>
-        {!crumbShown && (
-          <button type="button" aria-label="Back to Devices" onClick={back} className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground">
-            <ChevronLeft aria-hidden className="h-3.5 w-3.5" />
-            Devices
-          </button>
-        )}
-        {open.kind === 'computer' && <ComputerPage d={d} item={open} onBack={back} onSetUp={() => setAdding('server')} />}
+        {way(back)}
+        {open.kind === 'computer' && <ComputerPage d={d} item={open} onBack={back} onSetUp={() => add('set-up-server')} />}
         {open.kind === 'server' && <ServerPage d={d} item={open} onBack={back} invite={inviting} />}
         {open.kind === 'joined' && <JoinedPage d={d} item={open} onBack={back} />}
         {open.kind === 'other' && <OtherPage d={d} item={open} onBack={back} />}
-        {dialogs}
+        {flow}
       </>
     )
 
@@ -104,12 +117,12 @@ export function DevicesSettings({ everyMs = 3_000, devicesEveryMs = 30_000, devi
   return (
     <div className="space-y-8">
       <ThisComputer d={d} start={start} />
-      {start ? <Start d={d} onAdd={setAdding} /> : <YourDevices d={d} onOpen={item => setOpened(openedOf(item))} onAdd={() => setAdding('choose')} />}
+      {start ? <Start d={d} onAdd={add} /> : <YourDevices d={d} onOpen={item => setOpened(openedOf(item))} onAdd={() => add('add')} />}
       {d.door !== undefined && !d.door.ok && <Problem>{`The devices could not be read: ${d.door.error}`}</Problem>}
       {d.serversError !== undefined && !d.isServer && <Problem>{`The servers could not be read: ${d.serversError}`}</Problem>}
       {/* An open dialog says what went wrong in it. */}
       {d.error !== undefined && adding === undefined && <Problem>{d.error}</Problem>}
-      {dialogs}
+      {flow}
     </div>
   )
 }
@@ -130,12 +143,12 @@ function Start({ d, onAdd }: { d: Devices; onAdd: (adding: Adding) => void }) {
   return (
     <Section title="Add your first device">
       <SettingsSection description="Pick what you want to do. You can add the others later.">
-        <SettingsRow label="Use it on your phone" description="Start runs and answer your agents from your phone, on the same Wi-Fi as this computer." control={<Button onClick={() => onAdd('phone')}>Add phone</Button>} />
+        <SettingsRow label="Use it on your phone" description="Start runs and answer your agents from your phone, on the same Wi-Fi as this computer." control={<Button onClick={() => onAdd('add-phone')}>Add phone</Button>} />
         <SettingsRow
           label="Use another computer"
           description="Run agents on your other computer, on the same Wi-Fi as this one."
           control={
-            <Button variant="secondary" onClick={() => onAdd('computer')}>
+            <Button variant="secondary" onClick={() => onAdd('add-computer')}>
               Add computer
             </Button>
           }
@@ -145,7 +158,7 @@ function Start({ d, onAdd }: { d: Devices; onAdd: (adding: Adding) => void }) {
             label="Get a server"
             description="Always on. Your phone and computers reach each other from anywhere, and you can share it with people."
             control={
-              <Button variant="secondary" onClick={() => onAdd('server')}>
+              <Button variant="secondary" onClick={() => onAdd('set-up-server')}>
                 Set up a server
               </Button>
             }
@@ -153,7 +166,7 @@ function Start({ d, onAdd }: { d: Devices; onAdd: (adding: Adding) => void }) {
         )}
         <div className="space-y-2 text-xs text-muted-foreground">
           <p>
-            Someone gave you a code? <LinkPress onClick={() => onAdd('code')}>Join with a code</LinkPress>
+            Someone gave you a code? <LinkPress onClick={() => onAdd('join')}>Join with a code</LinkPress>
           </p>
           <p>
             On Tailscale? From anywhere, with no server: <LinkPress loading={turning} disabled={down} onClick={() => void onTailscale()}>Reach this computer on your Tailscale network</LinkPress>

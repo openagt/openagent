@@ -1,3 +1,4 @@
+import { useMemo, useState } from 'react'
 import { afterEach, describe, expect, test, vi } from 'vitest'
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { ModuleHostContext, type MachineAdded, type MachineRemoved, type ModuleCommandResult, type ModuleComputersThrough, type ModuleAccountsAgent, type ModuleHost, type ModuleMachineAccount, type ModuleMachinePerson, type ModuleMachines } from '@openagt/dashboard/module'
@@ -101,12 +102,19 @@ function dashboard(
   return { host, runComputerCommand, runComputerCommandOn, doorCommand, machines, addMachine, removeMachine, computersThrough, addComputerThrough, machinePerson, removeMachineDevice, useLoginsOn, syncDataOn, agentDataRemote, machineAccounts, removeMachineAccount, ran }
 }
 
-function show(host: ModuleHost) {
-  return render(
-    <ModuleHostContext.Provider value={host}>
-      <DevicesSettings everyMs={40} devicesEveryMs={60} />
-    </ModuleHostContext.Provider>,
+/** The entry as Settings holds it: a page the entry opens is kept where Settings keeps it, in the address. */
+function Entry({ host, everyMs, devicesEveryMs }: { host: ModuleHost; everyMs: number; devicesEveryMs?: number }) {
+  const [item, setItem] = useState<string | undefined>()
+  const held = useMemo(() => ({ ...host, openSettings: (_entry: string, next?: string) => setItem(next) }), [host])
+  return (
+    <ModuleHostContext.Provider value={held}>
+      <DevicesSettings everyMs={everyMs} {...(devicesEveryMs !== undefined ? { devicesEveryMs } : {})} {...(item !== undefined ? { item } : {})} />
+    </ModuleHostContext.Provider>
   )
+}
+
+function show(host: ModuleHost) {
+  return render(<Entry host={host} everyMs={40} devicesEveryMs={60} />)
 }
 
 const ok = (output: unknown): ModuleCommandResult => ({ ok: true, output })

@@ -17,15 +17,38 @@ import type { Devices } from './use-devices.js'
 // person's, from anywhere. Another computer on the Wi-Fi is found there, and connected once a
 // person there allows it; it can be let in here in the same go. A computer somewhere else is
 // given a code to type there, through a server. A server is set up over SSH. A code someone gave
-// is typed in.
+// is typed in. The address keeps which one is open: a reload stays on it.
 
-export type Adding = 'choose' | 'phone' | 'computer' | 'server' | 'code'
+/** A way of adding, by the word the address keeps it under. */
+export type Adding = 'add' | 'add-phone' | 'add-computer' | 'set-up-server' | 'join'
 
-const KINDS: readonly { id: Exclude<Adding, 'choose'>; title: string; words: string }[] = [
-  { id: 'phone', title: 'Phone or tablet', words: 'Scan a code with its camera.' },
-  { id: 'computer', title: 'Computer', words: 'Another computer that runs OpenAgent.' },
-  { id: 'server', title: 'Server', words: 'Install OpenAgent on a VPS, or on a PC that stays on.' },
-  { id: 'code', title: 'I have a code', words: 'Join a server of yours, or a computer someone shared with you.' },
+/** Each way of adding: its title, and whether it is a page of Settings › Devices or a dialog over it. */
+export const ADDING: Record<Adding, { title: string; page?: true }> = {
+  add: {
+    title: 'Add a device',
+  },
+  'add-phone': {
+    title: 'Add phone',
+  },
+  'add-computer': {
+    title: 'Add computer',
+  },
+  'set-up-server': {
+    title: 'Set up a server',
+  },
+  join: {
+    title: 'Join with a code',
+  },
+}
+
+/** Whether the page the address names inside Settings › Devices is a way of adding. */
+export const isAdding = (item: string | undefined): item is Adding => item !== undefined && Object.hasOwn(ADDING, item)
+
+const KINDS: readonly { id: Adding; title: string; words: string }[] = [
+  { id: 'add-phone', title: 'Phone or tablet', words: 'Scan a code with its camera.' },
+  { id: 'add-computer', title: 'Computer', words: 'Another computer that runs OpenAgent.' },
+  { id: 'set-up-server', title: 'Server', words: 'Install OpenAgent on a VPS, or on a PC that stays on.' },
+  { id: 'join', title: 'I have a code', words: 'Join a server of yours, or a computer someone shared with you.' },
 ]
 
 /** A Tailscale address is reached the first time only once its certificate is fetched, which Safari may sit out as a black page. */
@@ -60,22 +83,21 @@ export function useJoined(d: Devices, waiting: boolean, at?: string): string | u
   return joined
 }
 
-export function AddDevice({ d, start, isServer, onClose, onInvite, onJoined }: { d: Devices; start: Adding; /** This computer is a server: it sets up no server. */ isServer: boolean; onClose: () => void; /** Add people to a server just set up. */ onInvite: (address: string) => void; /** A computer someone shared was joined: its page, by its machine's id. */ onJoined: (machineId: string) => void }) {
-  const [adding, setAdding] = useState<Adding>(start)
-  if (adding === 'choose') return <Choose kinds={isServer ? KINDS.filter(kind => kind.id !== 'server') : KINDS} onPicked={setAdding} onClose={onClose} />
-  if (adding === 'phone') return <AddPhone d={d} onClose={onClose} />
-  if (adding === 'computer') return <AddComputer d={d} onClose={onClose} />
-  if (adding === 'server') return <ConnectServer d={d} onClose={onClose} onInvite={onInvite} />
+export function AddDevice({ d, adding, isServer, onAdd, onClose, onInvite, onJoined }: { d: Devices; adding: Adding; /** This computer is a server: it sets up no server. */ isServer: boolean; /** Go on to another way of adding. */ onAdd: (adding: Adding) => void; onClose: () => void; /** Add people to a server just set up. */ onInvite: (address: string) => void; /** A computer someone shared was joined: its page, by its machine's id. */ onJoined: (machineId: string) => void }) {
+  if (adding === 'add') return <Choose kinds={isServer ? KINDS.filter(kind => kind.id !== 'set-up-server') : KINDS} onPicked={onAdd} onClose={onClose} />
+  if (adding === 'add-phone') return <AddPhone d={d} onClose={onClose} />
+  if (adding === 'add-computer') return <AddComputer d={d} onClose={onClose} />
+  if (adding === 'set-up-server') return <ConnectServer d={d} onClose={onClose} onInvite={onInvite} />
   return <JoinDialog d={d} onClose={onClose} onJoined={onJoined} />
 }
 
 function Choose({ kinds, onPicked, onClose }: { kinds: typeof KINDS; onPicked: (adding: Adding) => void; onClose: () => void }) {
-  const [picked, setPicked] = useState<Exclude<Adding, 'choose'>>('phone')
+  const [picked, setPicked] = useState<Adding>('add-phone')
   return (
     <Dialog open onOpenChange={open => !open && onClose()} title="Add a device">
       <div className="space-y-4">
         <p className="text-sm">What are you adding?</p>
-        <RadioGroup aria-label="What are you adding?" value={picked} onValueChange={next => setPicked(next as Exclude<Adding, 'choose'>)} className="-mx-3 gap-0">
+        <RadioGroup aria-label="What are you adding?" value={picked} onValueChange={next => setPicked(next as Adding)} className="-mx-3 gap-0">
           {kinds.map(({ id, title, words }) => (
             <div key={id} onDoubleClick={() => onPicked(id)}>
               <Choice value={id} title={title} words={words} />
