@@ -377,17 +377,17 @@ describe('the Overview', () => {
     modules.loaded = false
     const { rerender } = show()
     const line = (await screen.findByText('no agent working')).closest('p')!
-    expect(line.textContent).toBe('nothing needs you·no agent working·Loading…·your agents')
+    expect(line.textContent).toBe('·nothing needs you·no agent working·Loading…·your agents')
     // A phone shows it too, beside Customize.
     expect(line.className).not.toContain('sr-only')
     modules.line = [{ id: '@x/queue/queued', order: 3, node: <span>nothing queued</span> }]
     rerender(overview())
-    expect(line.textContent).toBe('nothing needs you·no agent working·nothing queued·your agents')
+    expect(line.textContent).toBe('·nothing needs you·no agent working·nothing queued·your agents')
     // Every package in, none with a part: the line is its own parts only.
     modules.loaded = true
     modules.line = []
     rerender(overview())
-    expect(line.textContent).toBe('nothing needs you·no agent working·your agents')
+    expect(line.textContent).toBe('·nothing needs you·no agent working·your agents')
   })
 
   test('the Human Queue says it is loading before its read, not that nothing waits', async () => {
