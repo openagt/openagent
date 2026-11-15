@@ -16,8 +16,11 @@ import { Section } from '../components/ui/section.js'
 import { List, Row } from '../components/ui/list.js'
 import { PanelGroup, PanelRow } from '../components/ui/panel.js'
 import { PriorityBadge, StateCell, StatePill, type WorkState } from '../components/ui/state.js'
+import { Stepper } from '../components/ui/stepper.js'
+import { ButtonGroup } from '../components/ui/button-group.js'
+import { ComposedField, ComposedFieldFoot, ComposedFieldInput } from '../components/ui/composed-field.js'
 import { RowShapes, Slot } from '../components/ui/slot.js'
-import { ChevronRight, Ellipsis, Folder, Play, Trash2 } from 'lucide-react'
+import { ChevronRight, CornerDownLeft, Ellipsis, Folder, Play, Trash2 } from 'lucide-react'
 import { JumpPalette, openJump } from '../components/JumpPalette.js'
 import { ShortcutList } from '../components/ShortcutList.js'
 import type { AgentMeta } from '../../src/index.js'
@@ -586,6 +589,40 @@ function Panels() {
   )
 }
 
+function Composing() {
+  return (
+    <div className="max-w-xl space-y-6">
+      <ComposedField>
+        <ComposedFieldInput aria-label="A task" placeholder="Add a task: what should an agent do?" />
+        <ComposedFieldFoot>
+          <Select items={[{ value: '5', label: 'Priority 5' }]} value="5">
+            <SelectTrigger aria-label="Priority" className="h-7 w-auto border-transparent bg-accent px-2">
+              <SelectValue />
+            </SelectTrigger>
+          </Select>
+          <p className="min-w-0 flex-1 text-xs text-faint-foreground">Goes to the end of priority 5</p>
+          <span className="inline-flex items-center gap-1 text-xs text-faint-foreground max-md:hidden">
+            <kbd className="inline-flex h-4.5 items-center rounded-sm px-1 ring-1 ring-hairline ring-inset">
+              <CornerDownLeft className="size-3" aria-hidden />
+            </kbd>
+            to add
+          </span>
+          <Button variant="secondary" size="sm">Add</Button>
+        </ComposedFieldFoot>
+      </ComposedField>
+      <Labelled label="A stepper joined to its press">
+        <ButtonGroup>
+          <Stepper value={2} max={5} unit="agents" label="How many agents" fewer="One fewer" more="One more" onChange={() => {}} />
+          <Button>
+            <Play className="size-3.5" aria-hidden />
+            Start 2
+          </Button>
+        </ButtonGroup>
+      </Labelled>
+    </div>
+  )
+}
+
 // ---------------------------------------------------------------- registry
 
 const LONG_TITLE = 'Move the release notes for every package into one page the website renders, and link each version from the changelog of its own'
@@ -741,6 +778,14 @@ export const PREVIEWS: Preview[] = [
     subtitle: 'A group header (name, badge, count, link) over a card of two-line rows: a state, a name, what is known, one fact that gives way to the row\'s presses',
     width: 900,
     node: <Panels />,
+  },
+  {
+    path: 'components/composed-field.html',
+    group: 'Components',
+    name: 'Composed field + stepper',
+    subtitle: 'The text, a pick and the send in one card; a count joined to the press it counts for',
+    width: 900,
+    node: <Composing />,
   },
   {
     path: 'components/disclosure.html',
