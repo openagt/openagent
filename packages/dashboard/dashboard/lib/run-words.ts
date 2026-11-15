@@ -14,22 +14,26 @@ interface RunState {
   cell: WorkState
   /** The word's colour. */
   tone: string
+  /** The colour of its words in a row's line under the run's name, where the mark already carries the state's colour: quiet, but for what needs the person and a failure. */
+  line: string
 }
 
+const QUIET = 'text-muted-foreground'
+
 const RUN_STATES: Record<string, RunState> = {
-  running: { word: 'working', said: 'working', cell: 'working', tone: 'text-info' },
-  waiting: { word: 'waiting', said: 'waits on your answer', cell: 'waiting', tone: 'text-muted-foreground' },
-  saving: { word: 'saving…', said: 'saving', cell: 'working', tone: 'text-muted-foreground' },
-  done: { word: 'done', said: 'done', cell: 'done', tone: 'text-success' },
-  stopped: { word: 'stopped', said: 'stopped', cell: 'stopped', tone: 'text-warning' },
-  failed: { word: 'failed', said: 'failed', cell: 'failed', tone: 'text-danger' },
-  merged: { word: 'merged', said: 'merged', cell: 'merged', tone: 'text-muted-foreground' },
+  running: { word: 'working', said: 'working', cell: 'working', tone: 'text-info', line: QUIET },
+  waiting: { word: 'waiting', said: 'waits on your answer', cell: 'waiting', tone: 'text-muted-foreground', line: 'text-warning' },
+  saving: { word: 'saving…', said: 'saving', cell: 'working', tone: 'text-muted-foreground', line: QUIET },
+  done: { word: 'done', said: 'done', cell: 'done', tone: 'text-success', line: QUIET },
+  stopped: { word: 'stopped', said: 'stopped', cell: 'stopped', tone: 'text-warning', line: QUIET },
+  failed: { word: 'failed', said: 'failed', cell: 'failed', tone: 'text-danger', line: 'text-danger' },
+  merged: { word: 'merged', said: 'merged', cell: 'merged', tone: 'text-muted-foreground', line: QUIET },
   // Its computer does not answer: nothing known to be going.
-  unknown: { word: 'status unknown', said: 'its computer is offline', cell: 'idle', tone: 'text-muted-foreground' },
+  unknown: { word: 'status unknown', said: 'its computer is offline', cell: 'idle', tone: 'text-muted-foreground', line: QUIET },
 }
 
 /** A state this table does not name reads as itself, its hexagon empty. */
-const stateOf = (status: string): RunState => RUN_STATES[status] ?? { word: status, said: status, cell: 'idle', tone: 'text-muted-foreground' }
+const stateOf = (status: string): RunState => RUN_STATES[status] ?? { word: status, said: status, cell: 'idle', tone: QUIET, line: QUIET }
 
 /** The word a list prints for a run in this state. */
 export const runWord = (status: string): string => stateOf(status).word
@@ -39,6 +43,9 @@ export const runSaid = (status: string): string => stateOf(status).said
 
 /** The colour of a state's word. */
 export const runTone = (status: string): string => stateOf(status).tone
+
+/** The colour of a state's words in a row's line under the run's name. */
+export const runLineTone = (status: string): string => stateOf(status).line
 
 /** The state of work a run's mark draws. */
 export const runCell = (status: string): WorkState => stateOf(status).cell

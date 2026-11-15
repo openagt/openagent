@@ -5,7 +5,7 @@ import { fakeHost, type FakeHost } from '@openagt/dashboard/module/testing'
 import { LogsPage, dayOf } from './LogsPage.js'
 
 // The Logs page: every run of the projects shown, newest first, in one list cut by day, each day
-// with how many runs it had and what they cost; a word over the list picks one status.
+// with what its runs cost; a word over the list picks one status.
 
 const HOUR = 60 * 60_000
 const at = (ms: number) => new Date(ms).toISOString()
@@ -31,7 +31,7 @@ test('a day is said as Today, Yesterday, else its weekday and date', () => {
   expect(dayOf('2026-10-21T10:00:00', today)).toBe(new Date('2026-10-21T10:00:00').toLocaleDateString(undefined, { weekday: 'long', month: 'short', day: 'numeric' }))
 })
 
-test('the runs cut by day, each day with its runs and their cost; a run by its name over what it was asked, how long it took; a chip shows one status', async () => {
+test('the runs cut by day, each day with what its runs cost; a run by its name, what it was asked under the pointer, how long it took; a chip shows one status', async () => {
   const host = hostWith([
     { id: 'r1', startedAt: at(now - 1000), endedAt: at(now), status: 'done', title: 'Login page', intent: 'make the login page', cost: 0.5 },
     { id: 'r2', startedAt: at(now - 2000), status: 'failed', intent: 'break it', cost: 0.25 },
@@ -44,11 +44,11 @@ test('the runs cut by day, each day with its runs and their cost; a run by its n
   )
   const { rerender } = render(page([]))
   const today = (await screen.findAllByText('Today'))[0]!.closest('h2')!
-  expect(today.textContent).toBe('Today 2 runs · $0.75')
-  expect(screen.getAllByText('Yesterday')[0]!.closest('h2')!.textContent).toBe('Yesterday 1 run · $1.00')
-  // Its name, over what it was asked; a run with no name is its ask.
+  expect(today.textContent).toBe('Today $0.75')
+  expect(screen.getAllByText('Yesterday')[0]!.closest('h2')!.textContent).toBe('Yesterday $1.00')
+  // Its name, with what it was asked whole under the pointer; a run with no name is its ask.
   const login = screen.getAllByText('Login page')[0]!.closest('li')!
-  expect(within(login).getByText('make the login page')).toBeTruthy()
+  expect(within(login).getByRole('link', { name: 'Login page' }).getAttribute('title')).toBe('make the login page')
   expect(screen.getAllByText('yesterday work')[0]!.closest('li')!.textContent).toContain('2m')
   // A word per status the runs have, each with its count; its pick is kept in the page's address, in the place of the last one, so Back leaves the page.
   fireEvent.click(screen.getByRole('button', { name: /^Failed/ }))
@@ -97,6 +97,48 @@ test("each status is the sidebar's mark: a waiting run's hexagon waits, and one 
   await screen.findAllByText('Asks')
   expect(mark('Asks')).toContain('text-warning')
   expect(mark('Ended')).toContain('text-success')
+})
+
+test("a run whose pull request merged reads as the sidebar's merged run, its number a link to the request", async () => {
+  const pr = { number: 48, url: 'https://example.com/pull/48' }
+  const host = hostWith(
+    [
+      { id: 'r1', startedAt: at(now - 2000), endedAt: at(now - 1000), status: 'done', title: 'Landed', pr },
+      { id: 'r2', startedAt: at(now - 4000), endedAt: at(now - 3000), status: 'done', title: 'Open request', pr: { number: 49, url: 'https://example.com/pull/49' } },
+    ],
+    // The dashboard's word on the runs, as the sidebar has it: the git host says how each request stands.
+    [
+      { id: 'r1', startedAt: at(now - 2000), endedAt: at(now - 1000), status: 'done', title: 'Landed', pr: { ...pr, state: 'merged' } },
+      { id: 'r2', startedAt: at(now - 4000), endedAt: at(now - 3000), status: 'done', title: 'Open request', pr: { number: 49, url: 'https://example.com/pull/49', state: 'open' } },
+    ],
+  )
+  render(
+    <ModuleHostContext.Provider value={host}>
+      <LogsPage projects={[{ id: 'p1', name: 'alpha', gitHost: true }]} projectId={null} path={[]} />
+    </ModuleHostContext.Provider>,
+  )
+  const row = (title: string) => screen.getAllByText(title)[0]!.closest('li')!
+  await waitFor(() => expect(within(row('Landed')).getByText('Merged')).toBeTruthy())
+  // The merged run's mark is the merge glyph, as the sidebar draws it (RunMark).
+  expect(row('Landed').querySelector('svg.lucide-git-merge')).toBeTruthy()
+  expect(within(row('Landed')).getByRole('link', { name: '#48' }).getAttribute('href')).toBe(pr.url)
+  // A request still open: the run is done.
+  expect(within(row('Open request')).getByText(/^Done/)).toBeTruthy()
+})
+
+test("a row's press opens the run: Answer where its question waits, Review for any other", async () => {
+  const host = hostWith([
+    { id: 'r1', startedAt: at(now - 1000), status: 'waiting', title: 'Asks' },
+    { id: 'r2', startedAt: at(now - 2000), endedAt: at(now - 1000), status: 'done', title: 'Ended' },
+  ])
+  render(
+    <ModuleHostContext.Provider value={host}>
+      <LogsPage projects={[{ id: 'p1', name: 'alpha', gitHost: true }]} projectId={null} path={[]} />
+    </ModuleHostContext.Provider>,
+  )
+  fireEvent.click(await screen.findByRole('button', { name: 'Answer: Asks' }))
+  fireEvent.click(screen.getByRole('button', { name: 'Review: Ended' }))
+  expect(host.openAgent.mock.calls).toEqual([['p1', 'r1'], ['p1', 'r2']])
 })
 
 test('a run waiting on a question took nothing yet: its end so far is only its last turn\'s', async () => {
@@ -175,10 +217,10 @@ test('each run as the dashboard says it stands: a record that still says running
     </ModuleHostContext.Provider>,
   )
   const added = (await screen.findAllByText('Only on the laptop'))[0]!.closest('li')!
-  expect(added.textContent).toContain('done')
+  expect(added.textContent).toContain('Done')
   const frozen = screen.getAllByText('frozen in the records')[0]!.closest('li')!
-  expect(within(frozen).getByText('status unknown').closest('[title]')!.getAttribute('title')).toBe(`MacBook offline · last seen ${new Date(seenAt).toLocaleString()}`)
-  expect(screen.queryAllByText('working')).toHaveLength(0)
+  expect(within(frozen).getByText('Status unknown').closest('[title]')!.getAttribute('title')).toBe(`MacBook offline · last seen ${new Date(seenAt).toLocaleString()}`)
+  expect(screen.queryAllByText(/^Working/)).toHaveLength(0)
 })
 
 test("each run says whose it is: their picture where the project's git host knows them, else two letters; a very old card has no mark, and its name stays in line", async () => {
@@ -202,7 +244,7 @@ test("each run says whose it is: their picture where the project's git host know
   expect(within(row('Going')).getByRole('img', { name: 'ada@x.dev · ada' })).toBeTruthy()
   expect(within(row('His')).getByRole('img', { name: 'git@brillout.com' }).textContent).toBe('BR')
   expect(within(row('Very old')).queryByRole('img')).toBeNull()
-  expect(row('Very old').querySelector('span.size-6')).toBeTruthy()
+  expect(row('Very old').querySelector('span.size-5')).toBeTruthy()
   // Each person once, however many runs are theirs; and not again when the page reads its runs again.
   expect(vi.mocked(host.gitHostPeople).mock.calls.at(-1)).toEqual(['p1', ['ada@x.dev', 'git@brillout.com']])
 })

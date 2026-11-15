@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore
 import type { AgentDoing, AgentMeta, AgentWorktree, OpenAgentEvent } from '../../src/index.js'
 import { onAgentMainBranch, onAgentsDoing, onGitHostHome, onRetainedWorktrees } from '../rpc/reads.js'
 import { useLoaded, usePolled } from '../lib/use-async.js'
+import { DOING_EVERY_MS, NOTHING_DOING } from '../lib/use-doing.js'
 import { handoffSays, useAgentHandoff } from '../lib/use-agent-handoff.js'
 import { useCheckoutStatus } from '../lib/use-checkout-status.js'
 import { agentOutcome, cardOutcome, pendingChoices, shownStatus } from '../lib/live-state.js'
@@ -53,10 +54,7 @@ const READY_WAIT_MS = 1_000
 /** How long a queued message stays shown once the agent no longer works and was not stopped: its next turn, which reads it, starts well within this. Unread then, it goes back to the box. */
 const QUEUED_UNREAD_MS = 5_000
 
-/** How often what the working subagents are doing is read: the runs poll's own pace. */
-const DOING_EVERY_MS = 2_000
 const NO_SUBAGENTS: readonly AgentMeta[] = []
-const NOTHING_DOING: Record<string, AgentDoing> = {}
 
 export function AgentView({
   projectId,

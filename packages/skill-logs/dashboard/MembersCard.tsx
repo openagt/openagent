@@ -1,4 +1,4 @@
-import { PageLink, PartDescription, PersonMark, RunMark, Section, SentenceShape, Slot, Tooltip, TooltipContent, TooltipTrigger, cn, formatAge, formatDateTime, personName, personSaid, runTone, useModuleHost, usePolled, type ModuleCardProps, type ModuleHostPerson } from '@openagt/dashboard/module'
+import { PageLink, Panel, PanelGroup, PanelNote, PartDescription, PersonMark, RunMark, SentenceShape, Slot, Tooltip, TooltipContent, TooltipTrigger, formatAge, formatDateTime, personName, personSaid, runWord, useModuleHost, usePolled, type ModuleCardProps, type ModuleHostPerson } from '@openagt/dashboard/module'
 import { membersOf, peopleWithRuns, type Member, type PersonActivity } from '../src/people.js'
 
 // The Overview's Members card: who worked in the projects shown in the last 30 days, from `logs
@@ -59,43 +59,42 @@ export function MembersCard({ projects }: ModuleCardProps) {
     { remember: `skill-logs:members:${key}`, stored: true },
   )
   return (
-    <Section title="Members" count={state !== 'unknown' && members.length > 0 ? members.length : undefined} action={<PageLink href={host.pageHref('logs')} onOpen={() => host.openPage('logs')}>Logs</PageLink>}>
+    <PanelGroup bare title="Members" action={<PageLink href={host.pageHref('logs')} onOpen={() => host.openPage('logs')}>Logs</PageLink>}>
       <PartDescription>Who worked here in the last 30 days: agents started, commits</PartDescription>
       <Slot of={{ state, value: members }} shape={<SentenceShape />}>
-        {() => members.length === 0 ? (
-          <p className="text-sm text-muted-foreground">No one has started an agent here yet.</p>
-        ) : (
-          <ul className="space-y-1">
+        {() => (
+          <Panel>
+            {members.length === 0 && <PanelNote>No one has started an agent here yet.</PanelNote>}
             {members.map(member => (
-              <li key={member.person} aria-label={personName(member.person, member.name)} className="flex min-w-0 items-center gap-3 md:min-h-10 max-md:min-h-11">
+              <li key={member.person} aria-label={personName(member.person, member.name)} className="relative flex min-w-0 items-center gap-3 px-4 py-3 before:absolute before:top-0 before:right-4 before:left-4 before:h-px not-first:before:bg-hairline">
                 <PersonMark email={member.person} name={member.name} picture={member.account?.avatar} you={member.you} />
                 <div className="min-w-0 flex-1">
                   <p className="flex min-w-0 items-center gap-1.5 text-sm">
                     <span className="min-w-0 truncate font-medium" title={personSaid(member.person, member.account)}>
                       {personName(member.person, member.name)}
                     </span>
-                    {member.you && <span className="shrink-0 text-xs text-muted-foreground">you</span>}
+                    {member.you && <span className="shrink-0 text-xs text-faint-foreground">you</span>}
                   </p>
-                  <p className="truncate text-xs text-muted-foreground tabular-nums" title={projects.length > 1 ? `In ${member.projects.join(', ')}` : undefined}>
+                  <p className="mt-1 truncate text-xs text-faint-foreground tabular-nums" title={projects.length > 1 ? `In ${member.projects.join(', ')}` : undefined}>
                     {didWords(member)}
                   </p>
                 </div>
                 {member.running > 0 ? (
-                  <span className={cn('flex shrink-0 items-center gap-1.5 text-xs', runTone('running'))}>
-                    <RunMark status="running" className="size-2.5" />
-                    {member.running === 1 ? 'working' : `${member.running} working`}
+                  <span className="flex shrink-0 items-center gap-1.5 text-xs text-muted-foreground">
+                    <RunMark status="running" className="size-3" />
+                    {member.running === 1 ? runWord('running') : `${member.running} ${runWord('running')}`}
                   </span>
                 ) : (
                   <Tooltip>
-                    <TooltipTrigger render={<span className="shrink-0 text-xs text-muted-foreground tabular-nums" />}>{formatAge(member.lastAt)}</TooltipTrigger>
+                    <TooltipTrigger render={<span className="shrink-0 text-xs text-faint-foreground tabular-nums" />}>{formatAge(member.lastAt)}</TooltipTrigger>
                     <TooltipContent>Last active {formatDateTime(member.lastAt)}</TooltipContent>
                   </Tooltip>
                 )}
               </li>
             ))}
-          </ul>
+          </Panel>
         )}
       </Slot>
-    </Section>
+    </PanelGroup>
   )
 }

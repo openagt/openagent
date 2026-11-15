@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Button, PageLink, PartDescription, RowShapes, Section, Slot, Tooltip, TooltipContent, TooltipTrigger, cn, formatAge, inPlace, formatDateTime, useModuleHost, useOpenAgentDown, usePolled, type ModuleCardProps, type ModuleProject } from '@openagt/dashboard/module'
+import { Button, PageLink, Panel, PanelGroup, PartDescription, RowShapes, Slot, Tooltip, TooltipContent, TooltipTrigger, cn, formatAge, inPlace, formatDateTime, useModuleHost, useOpenAgentDown, usePolled, type ModuleCardProps, type ModuleProject } from '@openagt/dashboard/module'
 import { CodeWords } from './CodeWords.js'
 import { cannotRun, notAsked, readSchedulers, schedulersKey, rowTitle, schedulerStatus, schedulerStopped, startedNow, startsNext, unlistedWords, type Answered, type SchedulerCommand, type SchedulerRow } from './schedulers.js'
 
@@ -42,18 +42,19 @@ export function SchedulerCard({ projects }: ModuleCardProps) {
     </a>
   )
   return (
-    <Section title="Automations" action={<PageLink href={host.pageHref('automations')} onOpen={open}>Automations</PageLink>}>
+    <PanelGroup bare title="Automations" action={<PageLink href={host.pageHref('automations')} onOpen={open}>Automations</PageLink>}>
       <PartDescription>What starts by itself while nobody is at the keyboard</PartDescription>
       <Slot of={{ state, value: rows }} shape={<RowShapes rows={projects.length || 1} />}>
         {() => (
-          <ul className="space-y-4">
+          // A project to a row of one card, 16 in from its edges, a hairline from inset to inset between them.
+          <Panel>
             {rows.map(row => {
               const status = schedulerStatus(row)
               const stopped = schedulerStopped(row)
               const on = row.commands.filter(command => command.on)
               const off = offWords(row.commands.length - on.length, on.length)
               return (
-                <li key={row.project.id} aria-label={row.project.name}>
+                <li key={row.project.id} aria-label={row.project.name} className="relative px-4 py-3 before:absolute before:top-0 before:right-4 before:left-4 before:h-px not-first:before:bg-hairline">
                   <div className="flex items-center gap-2">
                     {projects.length > 1 && <span className="truncate text-sm font-medium">{row.project.name}</span>}
                     <span className={cn('shrink-0 text-xs font-medium', status.tone)}>Scheduler {status.label}</span>
@@ -74,7 +75,7 @@ export function SchedulerCard({ projects }: ModuleCardProps) {
                   {stopped !== undefined && row.error === undefined && on.length > 0 && <p className="mt-1 text-xs text-warning">Nothing starts by itself. {toPage('How to start it')}</p>}
                   {row.error === undefined && row.commands.length === 0 && row.unreadable.length === 0 && <p className="mt-1 text-xs text-muted-foreground">Nothing is scheduled here. {toPage('New automation')}</p>}
                   {on.length > 0 && (
-                    <ul className="mt-2 space-y-0.5">
+                    <ul className="mt-2">
                       {on.map(command => (
                         <OnRow key={command.command} project={row.project} command={command} stopped={stopped !== undefined} lookedAt={row.lastTick?.at} onOpenRun={run => host.openAgent(row.project.id, run)} reload={reload} />
                       ))}
@@ -93,10 +94,10 @@ export function SchedulerCard({ projects }: ModuleCardProps) {
                 </li>
               )
             })}
-          </ul>
+          </Panel>
         )}
       </Slot>
-    </Section>
+    </PanelGroup>
   )
 }
 
@@ -122,7 +123,7 @@ function OnRow({ project, command, stopped, lookedAt, onOpenRun, reload }: { pro
   return (
     // One line, whatever the card's width: the name whole, when it starts next cut short (and said
     // whole on hover), never a second line that leaves the rows at uneven gaps.
-    <li className="group/row relative -mx-3 flex items-center gap-3 rounded-md px-3 text-sm transition-colors hover:bg-accent md:h-10 max-md:h-11">
+    <li className="group/row relative -mx-4 flex items-center gap-3 bg-card px-4 text-sm transition-colors hover:bg-accent md:h-10 max-md:h-11">
       <span aria-hidden className={cn('size-1.5 shrink-0 rounded-full', stopped ? 'bg-muted-foreground/50' : 'bg-success')} />
       <span className="shrink-0 font-mono text-xs font-medium">{rowTitle(command)}</span>
       {/* While the scheduler is stopped a row has no next start: the line above says why. */}
@@ -154,7 +155,7 @@ function OnRow({ project, command, stopped, lookedAt, onOpenRun, reload }: { pro
           disabled={busy || down}
           onClick={() => void runNow()}
           aria-label={`Run ${rowTitle(command)} now`}
-          className="bg-[inherit] transition-opacity md:absolute md:inset-y-0 md:right-1 md:my-auto pointer-fine:opacity-0 pointer-fine:group-hover/row:opacity-100 pointer-fine:focus-visible:opacity-100 pointer-fine:disabled:opacity-100 max-md:ml-auto"
+          className="bg-[inherit] transition-opacity md:absolute md:inset-y-0 md:right-2 md:my-auto pointer-fine:opacity-0 pointer-fine:group-hover/row:opacity-100 pointer-fine:focus-visible:opacity-100 pointer-fine:disabled:opacity-100 max-md:ml-auto"
         >
           {busy ? 'Starting…' : 'Run now'}
         </Button>

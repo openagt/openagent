@@ -1,129 +1,118 @@
 import { useContext } from 'react'
-import type { ActiveAgent } from '../../src/index.js'
-import { Section } from './ui/section.js'
-import { List, Row } from './ui/list.js'
+import type { ActiveAgent, AgentDoing } from '../../src/index.js'
+import { Panel, PanelGroup, PanelNote, PanelRow } from './ui/panel.js'
 import { Skeleton } from './ui/skeleton.js'
 import { SentenceShape, Slot } from './ui/slot.js'
 import { PartDescription } from './PartDescription.js'
 import type { ReadState } from '../lib/use-async.js'
-import { Tooltip, TooltipTrigger, TooltipContent } from './ui/tooltip.js'
-import { formatAge, formatDateTime } from '../lib/format-date.js'
+import { formatDateTime, formatDuration } from '../lib/format-date.js'
 import { OnComputer } from './MachineMark.js'
 import { runName } from '../../src/client.js'
 import { awaitingName } from '../lib/agent-label.js'
+import { runWord } from '../lib/run-words.js'
 import { RunMark } from './RunMark.js'
 import { HostServicesContext, INERT_HOST_SERVICES } from '../lib/host-services.js'
 
-// The Overview's Agents card (#1139): the sessions working right now. Each row is the whole line,
-// clickable straight into that session — its label is the one-liner the sidebar shows, and its age
-// reads "22s ago" with the exact moment on hover. This is what replaced the old "Working now" list.
-// The Recent column the card launched with is gone: finished sessions already live in the sidebar's
-// session list, so a second copy here said nothing new.
+// The Overview's At work part (#1139): the sessions working right now, a row each, the whole row a
+// link straight into that session. A row names the run as the sidebar does; under it where it runs
+// and the last step its diary took, where this computer can read it; at its end how long it has
+// worked, its start on hover. The part's name says they work, so no row says it again. Finished
+// sessions live in the sidebar's session list, so a second copy here says nothing new.
 //
-// Its own file rather than inline in DashboardPage, like every other card on the Overview: opening
-// a session from here is the behaviour #1189 exists to protect, and DashboardPage has no test file
-// to pin it in.
+// Its own file rather than inline in DashboardPage: opening a session from here is the behaviour
+// #1189 exists to protect. What the runs are doing is read by the page and handed in, so the part has
+// no read of its own to stand in for in a test.
 
 export function Agents({
   working,
   state,
   namesRuns,
+  doing = {},
+  projectsNamed = true,
   onSelectAgent,
 }: {
   /** The agents at work; none says so in one line. */
   working: ActiveAgent[]
-  /** What is known of the agents: until they are read the card says it is loading, not that none is at work. */
+  /** What is known of the agents: until they are read the part waits, not saying that none is at work. */
   state: ReadState
   /** Whether runs are given a short name, which a row waits for as the sidebar's does. */
   namesRuns: boolean
+  /** What each is doing now, by `${projectId}/${agentId}`: a run with no entry says nothing of it. */
+  doing?: Record<string, AgentDoing>
+  /** The runs may be of several projects: each row names its own. */
+  projectsNamed?: boolean
   onSelectAgent: (projectId: string, agentId: string) => void
 }) {
   const services = useContext(HostServicesContext) ?? INERT_HOST_SERVICES
   return (
-    <Section title="Agents at work" count={state !== 'unknown' && working.length > 0 ? working.length : undefined}>
+    <PanelGroup bare title="At work">
       <PartDescription>Agents currently working</PartDescription>
       <Slot of={{ state, value: working }} shape={<SentenceShape />}>
-        {() => working.length === 0 ? (
-          <p className="text-sm text-muted-foreground">No agent is at work.</p>
-        ) : (
-          <List>
-            {working.map(a => (
-              <AgentRow
-                key={`${a.projectId}:${a.agentId}`}
-                label={activeLabel(a)}
-                naming={awaitingName(a, namesRuns)}
-                cloud={a.cloud}
-                computer={a.computer}
-                at={a.updatedAt}
-                projectName={a.projectName}
-                href={services.agentHref(a.projectId, a.agentId)}
-                onOpen={() => onSelectAgent(a.projectId, a.agentId)}
+        {() => (
+          <Panel>
+            {working.length === 0 && <PanelNote>No agent is at work.</PanelNote>}
+            {working.map(agent => (
+              <RunRow
+                key={`${agent.projectId}:${agent.agentId}`}
+                agent={agent}
+                naming={awaitingName(agent, namesRuns)}
+                doing={doing[`${agent.projectId}/${agent.agentId}`]?.doing}
+                projectNamed={projectsNamed}
+                href={services.agentHref(agent.projectId, agent.agentId)}
+                onOpen={() => onSelectAgent(agent.projectId, agent.agentId)}
               />
             ))}
-          </List>
+          </Panel>
         )}
       </Slot>
-    </Section>
+    </PanelGroup>
   )
 }
 
-function AgentRow({
-  label,
-  naming,
-  cloud,
-  computer,
-  at,
-  projectName,
-  href,
-  onOpen,
-}: {
-  /** The session's one-liner, the same the sidebar shows. */
-  label: string
+/** One run at work: its mark, its name, where it runs and its last step, and how long it has worked. */
+function RunRow({ agent, naming, doing, projectNamed, href, onOpen }: {
+  agent: ActiveAgent
   /** The name is still being made: the row holds its place, as the sidebar's does. */
   naming: boolean
-  /** A web run's cloud side at work (#1668): say where it is, since no local process backs the row. */
-  cloud?: 'in-cloud' | 'waiting' | undefined
-  /** The computer it runs on, when that is not this one (#1648). */
-  computer?: ActiveAgent['computer']
-  /** ISO: the session's last activity. */
-  at: string | undefined
-  projectName: string
+  /** The last step it took, on one line. */
+  doing: string | undefined
+  projectNamed: boolean
   /** The session's address, for a click the browser takes (a new tab, a middle click). */
   href: string
   /** Open the session — project and run both, never just the launcher (#1189). */
   onOpen: () => void
 }) {
+  // A web run's cloud side (#1668): no local process backs the row, so it says where it is, and when it waits on the person.
+  const status = agent.cloud === 'waiting' ? 'waiting' : 'running'
   return (
-    // No hint on the row itself: that a session row opens the session is the one thing this list
-    // says already, and a tooltip on the row would sit over the one on the age (#1149).
-    <Row
-      leading={
-        <span className="flex size-4 items-center justify-center" aria-hidden>
-          <RunMark status={cloud === 'waiting' ? 'waiting' : 'running'} />
-        </span>
-      }
+    // The run's mark is the hexagon, 14 in the row's 16 place (rulings-5: at least 12 of ink).
+    <PanelRow
+      state={<RunMark status={status} />}
       title={
         naming ? (
           <>
-            <Skeleton className="h-3.5 w-2/3" aria-hidden />
+            <Skeleton className="my-0.5 h-4 w-2/3" aria-hidden />
             <span className="sr-only">Naming this session</span>
           </>
         ) : (
-          label
+          activeLabel(agent)
         )
       }
-      meta={
-        <>
-          {cloud && <span>{cloud === 'waiting' ? 'waiting' : 'in cloud'}</span>}
-          <span>{projectName}</span>
-          {computer && <OnComputer computer={computer} />}
-          {at && (
-            <Tooltip>
-              <TooltipTrigger render={<span className="relative whitespace-nowrap tabular-nums" />}>{formatAge(at)}</TooltipTrigger>
-              <TooltipContent>{formatDateTime(at)}</TooltipContent>
-            </Tooltip>
-          )}
-        </>
+      meta={[
+        agent.branch && <span className="font-mono">{agent.branch}</span>,
+        agent.cloud === 'waiting' ? runWord('waiting') : agent.cloud === 'in-cloud' ? 'in cloud' : undefined,
+        projectNamed && agent.projectName,
+        agent.computer && <OnComputer computer={agent.computer} />,
+        doing !== undefined && (
+          <span title={doing} className="font-mono">
+            {doing}
+          </span>
+        ),
+      ]}
+      fact={
+        <span title={`Started ${formatDateTime(agent.startedAt)}`} className="tabular-nums">
+          {formatDuration(Date.now() - Date.parse(agent.startedAt))}
+        </span>
       }
       href={href}
       onClick={onOpen}

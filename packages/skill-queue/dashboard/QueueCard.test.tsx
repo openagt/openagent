@@ -94,20 +94,30 @@ describe('QueueCard', () => {
     host = fakeHost({ p1: { '--local': [LOGIN, 'Tidy the loader'] }, p2: { '--local': [] } })
     host.agents.mockImplementation(async (projectId: string) => (projectId === 'p1' ? [{ id: 'run-7', status: 'waiting', startedAt: '2026-10-01T10:00:00.000Z', ask: workOnEntryPrompt(LOGIN) }] : []))
     renderWithHost(<QueueCard projects={[alpha, beta]} />, host)
-    await screen.findByRole('button', { name: /^Waiting on you · / })
-    fireEvent.click(screen.getByRole('button', { name: 'Start 1 agent' }))
+    // The entry it waits on is at work: one is left up next.
+    fireEvent.click(await screen.findByRole('button', { name: 'Start 1 agent' }))
+    expect(screen.queryByText('Login page')).toBeNull()
     await waitFor(() => expect(started()).toEqual([['p1', workOnEntryPrompt('Tidy the loader'), { land: false }]]))
   })
 
-  test('an entry a working agent was asked says so, as on the Queue page, and opens that agent in place of a start', async () => {
+  test('an entry a working agent was asked is at work, not up next: the card starts from the next free entry', async () => {
     host = fakeHost({ p1: { '--local': [LOGIN, 'Tidy the loader'] }, p2: { '--local': [] } })
     host.agents.mockImplementation(async (projectId: string) => (projectId === 'p1' ? [{ id: 'run-7', status: 'running', startedAt: '2026-10-01T10:00:00.000Z', ask: workOnEntryPrompt(LOGIN) }] : []))
     renderWithHost(<QueueCard projects={[alpha, beta]} />, host)
-    const on = await screen.findByRole('button', { name: /^An agent is on it · / })
-    expect(on.closest('li')?.textContent).toContain('Login page')
+    const next = await screen.findByText('Tidy the loader')
+    expect(screen.queryByText('Login page')).toBeNull()
+    // Its place in the whole queue: the second, after the one at work.
+    expect(next.closest('li')!.textContent).toMatch(/^2\./)
     expect(screen.getAllByRole('button', { name: 'Start an agent working on this entry' })).toHaveLength(1)
-    fireEvent.click(on)
-    expect(host.openAgent).toHaveBeenCalledWith('p1', 'run-7')
+    expect(screen.getByRole('link', { name: 'All 1 waiting' })).toBeTruthy()
+  })
+
+  test('the first three free entries show; the link at its heading says how many wait in all', async () => {
+    render({ p1: [LOGIN, 'Tidy the loader', 'Third', 'Fourth'] })
+    await screen.findByText('Login page')
+    expect(screen.getByText('Third')).toBeTruthy()
+    expect(screen.queryByText('Fourth')).toBeNull()
+    expect(screen.getByRole('link', { name: 'All 4 waiting' }).getAttribute('href')).toBe('/queue')
   })
 
   test('the count is the Queue page\'s control: typed in its box as well as stepped', async () => {
@@ -139,7 +149,7 @@ describe('QueueCard', () => {
     render({ p1: [LOGIN, 'Tidy the loader'] })
     await screen.findByText('Login page')
     expect([...document.querySelectorAll('ul ul > li')].map(row => row.querySelector('span')?.textContent)).toEqual(['1.', '2.'])
-    const title = screen.getByRole('link', { name: 'Queue' })
+    const title = screen.getByRole('link', { name: 'All 2 waiting' })
     expect(title.getAttribute('href')).toBe('/queue')
     fireEvent.click(title)
     expect(host.openPage).toHaveBeenCalledWith('queue')

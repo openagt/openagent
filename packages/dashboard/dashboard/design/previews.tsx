@@ -1,4 +1,4 @@
-import { useEffect, type ReactNode } from 'react'
+import { useEffect, useState, type ReactNode } from 'react'
 import { Button } from '../components/ui/button.js'
 import { Card, CardContent, CardHeader, CardTitle, PageLink } from '../components/ui/card.js'
 import { Input } from '../components/ui/input.js'
@@ -14,12 +14,13 @@ import { OptionLabel } from '../components/ui/option-label.js'
 import { DisclosureToggle } from '../components/DisclosureToggle.js'
 import { Section } from '../components/ui/section.js'
 import { List, Row } from '../components/ui/list.js'
-import { PanelGroup, PanelRow } from '../components/ui/panel.js'
+import { Panel, PanelGroup, PanelMore, PanelNote, PanelRow } from '../components/ui/panel.js'
 import { PriorityBadge, StateCell, StatePill, type WorkState } from '../components/ui/state.js'
 import { Stepper } from '../components/ui/stepper.js'
 import { ButtonGroup } from '../components/ui/button-group.js'
 import { ComposedField, ComposedFieldFoot, ComposedFieldInput } from '../components/ui/composed-field.js'
 import { Empty } from '../components/ui/empty.js'
+import { FilterChips } from '../components/FilterChips.js'
 import { RowShapes, Slot } from '../components/ui/slot.js'
 import { ChevronRight, CornerDownLeft, Ellipsis, Folder, Play, Trash2 } from 'lucide-react'
 import { JumpPalette, openJump } from '../components/JumpPalette.js'
@@ -582,12 +583,58 @@ function Panels() {
         <PanelRow state={<StateCell state="working" />} title="Login page" meta={[<span className="font-medium text-info">Claude is on it · 4m</span>, 'from a ticket']} fact="Open run" />
         <PanelRow state={<StateCell state="queued" />} title="A press: the whole row opens it, its presses come in under the pointer" meta={['Next up', 'typed here']} fact="2nd" actions={start} onClick={() => {}} />
         <PanelRow state={<StateCell state="queued" />} title={LONG_TITLE} meta={['from a ticket', LONG_TITLE]} fact="3rd" actions={start} href="#long" onClick={() => {}} />
+        <PanelRow
+          state={<StateCell state="done" />}
+          title="Columns that stay under the pointer, the fact giving way"
+          meta={['Done in 11m']}
+          columns={
+            <>
+              <span className="w-24">Claude · Opus</span>
+              <span className="w-12 text-right">#48</span>
+            </>
+          }
+          fact="3:03 PM"
+          actions={
+            <Button variant="secondary" size="sm">
+              Review
+            </Button>
+          }
+          onClick={() => {}}
+        />
+      </PanelGroup>
+      <PanelGroup title="Human Queue: the press at rest">
+        <PanelRow
+          state={<StateCell state="waiting" />}
+          title="A row whose press is what the person comes for"
+          meta={['Needs answer', 'Where should the cart go?']}
+          fact="2m"
+          actions={<Button size="sm">Answer</Button>}
+          actionsAtRest
+          onClick={() => {}}
+        />
       </PanelGroup>
       <PanelGroup title="Nothing pressable" count="1">
         <PanelRow state={<StateCell state="done" />} title="Its name only" meta={['what is known of it']} fact="2h" />
+        <PanelMore onClick={() => {}}>Show 4 more</PanelMore>
+      </PanelGroup>
+      <PanelGroup title="Bare: its own panel, a sentence where the rows would be" bare>
+        <Panel>
+          <PanelNote>Nothing waits here.</PanelNote>
+        </Panel>
       </PanelGroup>
     </div>
   )
+}
+
+function Filters() {
+  const [picked, setPicked] = useState<string | null>('working')
+  const chips = [
+    { value: 'waiting', label: 'Waiting', count: 2 },
+    { value: 'working', label: 'Working', count: 2 },
+    { value: 'done', label: 'Done', count: 6 },
+    { value: 'failed', label: 'Failed', count: 2 },
+  ]
+  return <FilterChips chips={chips} total={12} picked={picked} onPick={setPicked} />
 }
 
 function Composing() {
@@ -791,6 +838,14 @@ export const PREVIEWS: Preview[] = [
     subtitle: 'A group header (name, badge, count, link) over a card of two-line rows: a state, a name, what is known, one fact that gives way to the row\'s presses',
     width: 900,
     node: <Panels />,
+  },
+  {
+    path: 'components/filter.html',
+    group: 'Components',
+    name: 'Segmented filter',
+    subtitle: 'A list told apart by one field: All and a segment per value, each with its count, the picked one a card on the track',
+    width: 900,
+    node: <Filters />,
   },
   {
     path: 'components/composed-field.html',
