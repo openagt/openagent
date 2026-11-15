@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react'
 import { afterEach, describe, expect, test, vi } from 'vitest'
+import { Profiler, useLayoutEffect, useState } from 'react'
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { ModuleHostContext, type MachineAdded, type MachineRemoved, type ModuleCommandResult, type ModuleComputersThrough, type ModuleAccountsAgent, type ModuleHost, type ModuleMachineAccount, type ModuleMachinePerson, type ModuleMachines } from '@openagt/dashboard/module'
 import { fakeHost } from '@openagt/dashboard/module/testing'
@@ -199,6 +200,96 @@ describe('Settings › Devices: a server this computer installed', () => {
     expect(ran().filter(line => line.startsWith('reach '))).toEqual(['reach 203.0.113.5 full'])
     // Its logins are the person's pick in Set up a server: none was made here.
     expect(useLoginsOn).not.toHaveBeenCalled()
+  })
+
+  test('a server whose add ends while the page draws a read of the servers asked before it is saved once: its door is asked for one link', async () => {
+    let adding = true
+    const { host, ran, addMachine } = dashboard(args => {
+      if (args[0] === 'link') return ok(LINK)
+      if (args[0] === 'added') adding = false
+      return ok({ servers: [server(ALL_DONE, { adding })] })
+    })
+    // Saving takes a moment, as it does over the network: a read of the servers is asked meanwhile.
+    addMachine.mockImplementation(async () => (await new Promise(resolve => setTimeout(resolve, 120)), { ok: true }))
+    let answerPoll!: () => void
+    const poll = new Promise<void>(resolve => (answerPoll = resolve))
+    let answerLast!: () => void
+    const last = new Promise<void>(resolve => (answerLast = resolve))
+    let pollHeld = false, lastHeld = false, pollAnswered = false, lastAnswered = false
+    const reads = host.runComputerCommand.getMockImplementation()!
+    host.runComputerCommand.mockImplementation(async args => {
+      if (args.join(' ') !== 'server status') return reads(args)
+      const answer = reads(args)
+      // The first read after the link was asked, while the server still says it is being added.
+      if (ran().includes('link 203.0.113.5') && adding && !pollHeld) {
+        pollHeld = true
+        await poll
+        pollAnswered = true
+      } else if (!adding && !lastHeld) {
+        // The add's own read once the server was told: it answers when that first read is drawn, before the page's effects for it run.
+        lastHeld = true
+        await last
+        lastAnswered = true
+      }
+      return answer
+    })
+    render(
+      <Profiler id="page" onRender={() => void (pollAnswered && !lastAnswered && queueMicrotask(answerLast))}>
+        <ModuleHostContext.Provider value={host}>
+          <DevicesSettings everyMs={40} devicesEveryMs={60} />
+        </ModuleHostContext.Provider>
+      </Profiler>,
+    )
+    await waitFor(() => expect(pollHeld && lastHeld).toBe(true))
+    answerPoll()
+    await waitFor(() => expect(lastAnswered).toBe(true))
+    await new Promise(resolve => setTimeout(resolve, 150))
+    expect(ran().filter(line => line === 'link 203.0.113.5')).toHaveLength(1)
+    expect(addMachine).toHaveBeenCalledTimes(1)
+  })
+
+  test('a server that could not be saved just as the page is drawn says why, and its door is asked for no new link by itself', async () => {
+    const { host, ran, addMachine } = dashboard(args => (args[0] === 'link' ? ok(LINK) : ok({ servers: [server(ALL_DONE)] })), { version: '1.2.3', machines: [] }, { ok: false, error: 'this code no longer works' })
+    // The first save answers once the page is drawn again, before the page's effects for that drawing run, as on a page that took long to draw.
+    let answer!: () => void
+    const answered = new Promise<void>(resolve => (answer = resolve))
+    const save = addMachine.getMockImplementation()!
+    addMachine.mockImplementationOnce(async (...args) => (await answered, save(...args)))
+    let drawAgain!: () => void
+    function Page() {
+      const [times, setTimes] = useState(0)
+      drawAgain = () => setTimes(n => n + 1)
+      useLayoutEffect(() => void (times > 0 && queueMicrotask(answer)), [times])
+      return (
+        <ModuleHostContext.Provider value={host}>
+          <DevicesSettings everyMs={40} devicesEveryMs={60} />
+        </ModuleHostContext.Provider>
+      )
+    }
+    render(<Page />)
+    await waitFor(() => expect(addMachine).toHaveBeenCalled())
+    drawAgain()
+    await new Promise(resolve => setTimeout(resolve, 150))
+    expect(ran().filter(line => line === 'link 203.0.113.5')).toHaveLength(1)
+    expect(addMachine).toHaveBeenCalledTimes(1)
+    await open('203.0.113.5')
+    expect((await screen.findByRole('alert')).textContent).toBe('this code no longer works')
+  })
+
+  test('a server updated from its page is added by itself again once the update is done, without a press', async () => {
+    let now = server(ALL_DONE)
+    const { host, ran } = dashboard(args => {
+      if (args[0] === 'connect') now = server([], { working: true })
+      if (args[0] === 'added') now = server(ALL_DONE, { adding: false })
+      return ok({ servers: [now] })
+    }, BOX_SAVED({ version: '1.2.0' }))
+    show(host)
+    await waitFor(() => expect(ran()).toContain('added 203.0.113.5'))
+    await open('203.0.113.5')
+    fireEvent.click(await screen.findByRole('button', { name: 'Update 203.0.113.5' }))
+    expect(await screen.findByText('Updating: step 1 of 8')).toBeTruthy()
+    now = server(ALL_DONE)
+    await waitFor(() => expect(ran().filter(line => line === 'added 203.0.113.5')).toHaveLength(2))
   })
 
   test('a PC on Tailscale, once every step is done, is saved by the link its door gives there, and no line is kept to it', async () => {
