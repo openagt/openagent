@@ -293,11 +293,10 @@ export function Head({ icon: Icon, name, badge, facts, rename }: { icon: Compone
               </p>
             )
           )}
-          <p className="flex min-w-0 flex-wrap items-center gap-x-2 text-xs text-muted-foreground">
-            {namedAbove && badge !== undefined && <Badge>{badge}</Badge>}
-            <span>
-              <Facts>{facts}</Facts>
-            </span>
+          {/* One run of words: on a phone the badge stays at the start of the facts' first line, not on a line of its own. */}
+          <p className="min-w-0 text-xs text-muted-foreground">
+            {namedAbove && badge !== undefined && <Badge className="mr-2 align-middle">{badge}</Badge>}
+            <Facts>{facts}</Facts>
           </p>
         </div>
         {rename && !renaming && (
