@@ -99,7 +99,7 @@ function ChangeRow({ path, mark, label, picked, rings, onPick }: { path: string;
         title={`${path} · ${mark.status === 'untracked' || mark.status === 'added' ? 'new' : mark.status}${mark.committed ? '' : ', not committed'}`}
         className={cn(treeRow, picked && 'bg-accent')}
       >
-        <span aria-hidden className={cn('w-4 shrink-0 text-center font-mono text-xs font-semibold', STATUS_LETTER[mark.status].tone)}>
+        <span aria-hidden className={cn('w-4 shrink-0 font-mono text-xs font-semibold', STATUS_LETTER[mark.status].tone)}>
           {STATUS_LETTER[mark.status].letter}
         </span>
         <span className={cn('flex min-w-0 flex-1', mark.status === 'deleted' && 'line-through')}>
@@ -389,7 +389,7 @@ function ChangeList({ paths, changes, group, picked, rings, onPick }: { paths: s
     </>
   )
   return (
-    <ul aria-label="Changed files" className="min-h-0 flex-auto overflow-y-auto p-1">
+    <ul aria-label="Changed files" className="min-h-0 flex-auto overflow-y-auto p-2">
       {group ? folderOf(foldersOf(paths)) : paths.map(path => rowOf(path, path))}
     </ul>
   )
@@ -400,14 +400,14 @@ function CommitList({ commits, picked, open, onOpen, onPick }: { commits: AgentC
   return (
     <section aria-label="Commits" className={cn('flex shrink-0 flex-col border-t border-hairline', open && 'max-h-1/2')}>
       <h3>
-        <button type="button" aria-expanded={open} onClick={() => onOpen(!open)} className="mt-1 flex h-7 w-full items-center gap-2 px-3 text-sm text-muted-foreground hover:text-foreground focus-ring-inset">
+        <button type="button" aria-expanded={open} onClick={() => onOpen(!open)} className="mt-1 flex h-7 w-full items-center gap-2 px-4 text-sm text-muted-foreground hover:text-foreground focus-ring-inset">
           <ChevronRight aria-hidden className={cn('size-4 shrink-0', open && 'rotate-90')} />
           <span className="flex-1 text-start">Commits</span>
           <span className="text-xs">{commits.length}</span>
         </button>
       </h3>
       {open && (
-        <ul className="min-h-0 space-y-0.5 overflow-y-auto p-1 pt-0">
+        <ul className="min-h-0 space-y-0.5 overflow-y-auto p-2 pt-0">
           <CommitRow label="All changes" picked={picked === undefined} onPick={() => onPick(undefined)} />
           {commits.map(c => (
             <CommitRow key={c.sha} label={c.subject} detail={`${c.short} · ${c.author} · ${formatRelative(c.date)}`} title={c.subject} picked={c.sha === picked} onPick={() => onPick(c.sha)} />
@@ -561,9 +561,9 @@ export function ChangesPanel({ projectId, agentId, activity, reveal }: ModulePan
           </div>
         )}
         {!(narrow && listShown) && (
-          <div ref={setDiffsElement} aria-label="Diffs" className="flex min-h-0 min-w-0 flex-auto flex-col overflow-y-auto">
+          <div ref={setDiffsElement} aria-label="Diffs" className="flex min-h-0 min-w-0 flex-auto flex-col gap-2 overflow-y-auto p-2">
             {caption && (
-              <p className="shrink-0 truncate border-b border-hairline px-3 py-2 text-xs text-muted-foreground" title={caption}>
+              <p className="shrink-0 truncate px-2 text-xs text-muted-foreground" title={caption}>
                 {caption}
               </p>
             )}
@@ -580,13 +580,13 @@ export function ChangesPanel({ projectId, agentId, activity, reveal }: ModulePan
                     if (node) sections.current.set(path, node)
                     else sections.current.delete(path)
                   }}
-                  className="border-b border-hairline"
+                  className="shrink-0"
                 >
                   <button
                     type="button"
                     aria-expanded={!isFolded}
                     onClick={() => foldDiff(page, path, !isFolded)}
-                    className={cn('sticky top-0 z-10 flex h-8 w-full items-center gap-2 bg-muted px-2 text-start text-sm text-muted-foreground hover:bg-accent focus-ring-inset', path === picked && 'text-foreground')}
+                    className={cn('sticky top-0 z-10 flex h-8 w-full items-center gap-2 rounded-md bg-muted px-2 text-start text-sm text-muted-foreground hover:bg-accent focus-ring-inset', path === picked && 'text-foreground')}
                   >
                     <ChevronRight aria-hidden className={cn('size-4 shrink-0', !isFolded && 'rotate-90')} />
                     <FileIcon path={path} />
