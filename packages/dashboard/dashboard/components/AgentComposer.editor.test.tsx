@@ -2,8 +2,8 @@ import { afterEach, beforeEach, expect, test, vi } from 'vitest'
 import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import type { Editor } from '@tiptap/core'
 
-// A session's box over the real composer, Tiptap editor and Context: what a refused message gives
-// back, which AgentComposer.test.tsx, with its stand-in composer, cannot see. The daemon's reads
+// A session's box over the real composer, Tiptap editor and Context: what a message leaves in it as it
+// goes, lands or is refused, which AgentComposer.test.tsx, with its stand-in composer, cannot see. The daemon's reads
 // and the session's other menus are stubbed as in those two files.
 const sendMessage = vi.hoisted(() => vi.fn())
 vi.mock('../rpc/control.js', () => ({ sendMessage, sendStop: vi.fn() }))
@@ -97,4 +97,39 @@ test('repicking the same file while sending keeps its Context', async () => {
   await act(async () => answer({ ok: true }))
   expect(box.querySelectorAll('[data-token]').length).toBe(1)
   expect(screen.getByTestId('context').textContent).toBe('README.md')
+})
+
+test('a click on Send hands the box back at once, for the next message', async () => {
+  sendMessage.mockReturnValueOnce(new Promise(() => {}))
+  render(<Session />)
+  const box = (await screen.findByRole('textbox', { name: 'Message' })) as HTMLElement & { editor: Editor }
+  // The box's own focus as it opens, before the click takes it away.
+  await waitFor(() => expect(document.activeElement).toBe(box))
+  act(() => void box.editor.commands.insertContent('first'))
+  const send = screen.getByRole('button', { name: 'Send' })
+  // The click's press takes the focus to the button, as a browser's does.
+  send.focus()
+  fireEvent.click(send)
+  await waitFor(() => expect(sendMessage).toHaveBeenCalledTimes(1))
+  await waitFor(() => expect(document.activeElement).toBe(box))
+})
+
+test('a message landing leaves the caret where it was put in the next one', async () => {
+  let answer: (outcome: unknown) => void = () => {}
+  sendMessage.mockReturnValueOnce(new Promise(resolve => (answer = resolve)))
+  render(<Session />)
+  const box = (await screen.findByRole('textbox', { name: 'Message' })) as HTMLElement & { editor: Editor }
+  act(() => void box.editor.commands.insertContent('first'))
+  fireEvent.keyDown(box, { key: 'Enter' })
+  await waitFor(() => expect(sendMessage).toHaveBeenCalledTimes(1))
+  // The next message typed while the first went, then a word put before it: the caret after "prefix ".
+  act(() => {
+    box.editor.commands.insertContent('new draft')
+    box.editor.commands.setTextSelection(1)
+    box.editor.commands.insertContent('prefix ')
+  })
+  expect(box.editor.state.selection.from).toBe(8)
+  await act(async () => answer({ ok: true }))
+  expect(box.editor.storage.markdown.getMarkdown()).toBe('prefix new draft')
+  expect(box.editor.state.selection.from).toBe(8)
 })
