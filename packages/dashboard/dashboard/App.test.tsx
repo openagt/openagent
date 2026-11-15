@@ -358,6 +358,19 @@ describe('a first visit, the projects not read yet', () => {
     }
   })
 
+  test("on a phone the dashboard's own page has its bar from the first frame: its word is no project's", async () => {
+    holdProjects()
+    const wide = phoneScreen()
+    try {
+      window.history.replaceState(null, '', '/agents')
+      render(<App />)
+      // The bar holds the menu's button and the page's name alone; a page with no bar has the button over it.
+      expect(screen.getByRole('button', { name: 'Open the menu' }).parentElement!.textContent).toBe('Agents')
+    } finally {
+      wide()
+    }
+  })
+
   test("a page's word no project has waits as a page's frame once the projects are read, not as a launcher", async () => {
     const answer = holdProjects()
     answers.set('onModules', () => new Promise(() => {}))

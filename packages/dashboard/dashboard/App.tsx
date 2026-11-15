@@ -469,7 +469,7 @@ export function App() {
   // id after it a session's. Any other page word waits as its page's frame until its code is in.
   const [run, ...pastRun] = route.pagePath ?? []
   const listedPage = listedPages?.find(page => page.segment === pageSegment)
-  const projectWord = pageSegment !== null && projectsState === 'unknown' && route.scope === undefined && !listedPage
+  const projectWord = pageSegment !== null && projectsState === 'unknown' && route.scope === undefined && !OWN_PAGES.has(pageSegment) && !listedPage
   const projectShape = !projectWord ? null : run === undefined ? <ProjectHomeShape /> : pastRun.length === 0 && startedAtFromAgentId(run) !== undefined ? <ChatShape /> : null
   const renderMain = () => {
     if (pageSegment === PERMISSIONS_PAGE) return <PermissionsPage />
