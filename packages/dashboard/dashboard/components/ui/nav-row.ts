@@ -12,5 +12,9 @@ export function navRowClass(active: boolean): string {
   )
 }
 
-/** The row that picks the project, over the rows it scopes: a navigation row, its name at 500. */
-export const PROJECT_ROW_CLASS = cn(navRowClass(false), 'font-medium')
+/**
+ * The press that picks the project, over the rows it scopes: a card standing on the column (white
+ * under a hairline and a faint lift), 40 high (44 on a phone), its name at 500.
+ */
+export const PROJECT_ROW_CLASS =
+  'focus-ring flex w-full items-center gap-2 rounded-md bg-card px-2 text-sm font-medium text-foreground shadow-sm ring-1 ring-hairline transition-colors hover:bg-accent active:bg-accent md:h-10 max-md:h-11 [&>svg]:size-4 [&>svg]:shrink-0 [&>svg]:text-muted-foreground'
