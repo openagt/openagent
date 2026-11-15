@@ -1,4 +1,4 @@
-import { FilterChips, List, Page, PersonMark, Row, RowShapes, STATUS_DOT, Section, STATUS_RING, Slot, cn, formatDateTime, formatDuration, needsWord, personSaid, runName, useGitHostPeople, useModuleHost, usePolled, type ModuleAgent, type ModuleHostPerson, type ModulePageProps, type ModuleProject, type ReadState } from '@openagt/dashboard/module'
+import { FilterChips, List, MiddleCut, Page, PersonMark, Row, RowShapes, STATUS_DOT, Section, STATUS_RING, Slot, cn, formatDateTime, formatDuration, needsWord, personSaid, runName, useGitHostPeople, useModuleHost, usePolled, type ModuleAgent, type ModuleHostPerson, type ModulePageProps, type ModuleProject, type ReadState } from '@openagt/dashboard/module'
 import type { RunCard } from '../src/run.js'
 
 /** How many runs each project lists: the command's own default page is 20; the page shows more. */
@@ -250,8 +250,9 @@ export function LogsPage({ projects, path }: ModulePageProps) {
                               #{card.pr.number}
                             </a>
                           ) : (
-                            <span className="truncate font-mono max-md:hidden md:w-40 @max-3xl:hidden" title={card.branch}>
-                              {card.branch}
+                            // Cut in its middle: runs started the same minute differ only at their branch's end.
+                            <span className="flex min-w-0 font-mono max-md:hidden md:w-40 @max-3xl:hidden" title={card.branch}>
+                              {card.branch && <MiddleCut text={card.branch} />}
                             </span>
                           )}
                           {/* What its work still needs before it leaves this machine, in the sidebar's words. */}

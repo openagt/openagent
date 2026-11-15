@@ -26,7 +26,7 @@ import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { FakeDriver, QUESTION_TAG, continuationPrompt, logDiaryFile, parseQuestion, type LogEndStatus } from '@openagt/agent-driver'
 import { nodeGitRunner } from '@openagt/agent-data'
-import { isPublish, type Publish } from '@openagt/agent-runner'
+import { NAME_FILE_ENV, givenName, isPublish, type Publish } from '@openagt/agent-runner'
 import { agentBranchName, attachCheckout, createCheckout, reclaimWorktree, worktreeBranch, worktreePath } from '@openagt/skill-branches'
 import { findRun, parseRunCard, readDiary, writeRun, type AnyDiaryLine, type RunCard } from '@openagt/skill-logs'
 import { agentIdFromStartedAt } from '../agent-id.js'
@@ -58,6 +58,21 @@ async function exists(path: string): Promise<boolean> {
   return stat(path).then(() => true, () => false)
 }
 
+/**
+ * The run's record, once there: the process of its first session takes the name its starter asked
+ * for before it records the run, and an answer can come sooner. agent-runner's resume waits for
+ * that process the same way.
+ */
+async function recorded(id: string): Promise<RunCard> {
+  const until = Date.now() + 60_000
+  for (;;) {
+    const card = await findRun(repo, id)
+    if (card) return card
+    if (Date.now() > until) throw new Error(`no run ${id}`)
+    await new Promise(r => setTimeout(r, 100))
+  }
+}
+
 /** One session of the run in `checkout`: the prompt, the log, the inbox, the record, the reclaim. */
 async function session(id: string, checkout: string, prompt: string, card: Omit<RunCard, 'status'>, continued: boolean): Promise<void> {
   const dir = join(checkout, OPENAGENT_DIR)
@@ -76,6 +91,12 @@ async function session(id: string, checkout: string, prompt: string, card: Omit<
   })
   const { id: _id, ...startCard } = card
   const driverSession = await driver.start({ cwd: checkout, signal: stop.signal, log: { dir, card: { id, ...startCard }, continue: continued } })
+  const log = driverSession.log!
+  // The name its starter asked for, taken beside the first turn as agent-runner takes it: the page
+  // shows it for a while from the starter, and for good once the run's record has it. The scripted
+  // agent asks no name of its own when the starter got none.
+  const file = continued ? undefined : process.env[NAME_FILE_ENV]
+  const named = file === undefined ? Promise.resolve() : givenName(file, stop.signal).then(title => (title === undefined || title === 'ask' ? undefined : log.title(title))).catch(() => {})
   let status: LogEndStatus = 'done'
   let lastText = ''
   try {
@@ -99,9 +120,10 @@ async function session(id: string, checkout: string, prompt: string, card: Omit<
   else if (status === 'done' && parseQuestion(lastText)) status = 'waiting'
 
   const branch = (await worktreeBranch(checkout, git).catch(() => undefined)) ?? agentBranchName(id)
-  const log = driverSession.log!
   await log.patch({ branch })
   await log.end(status)
+  // On the card before the record is copied, as agent-runner has it.
+  await named
   await log.settled()
 
   const written = parseRunCard(await readFile(join(dir, `${id}.json`), 'utf8'))
@@ -139,8 +161,7 @@ async function main(): Promise<void> {
     return
   }
   if (mode === 'continue' && runId) {
-    const card = await findRun(repo, runId)
-    if (!card) throw new Error(`no run ${runId}`)
+    const card = await recorded(runId)
     const kept = worktreePath(repo, runId)
     const checkout = (await exists(kept)) ? kept : (await attachCheckout(repo, { agentId: runId, branch: card.branch ?? agentBranchName(runId) }, git)).path
     // A checkout made again holds no diary: the recorded one is put back, so the log continues it.
