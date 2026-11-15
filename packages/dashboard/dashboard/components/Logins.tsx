@@ -69,10 +69,13 @@ export function PackageLogo({ svg, className }: { svg: string | undefined; class
   return <span aria-hidden className={cn('size-4 shrink-0 bg-current', className)} style={{ maskImage: url, WebkitMaskImage: url, maskSize: 'contain', WebkitMaskSize: 'contain', maskRepeat: 'no-repeat', WebkitMaskRepeat: 'no-repeat' }} />
 }
 
-/** The command a press runs, under its button, so the person sees what is done on their computer: one line, which scrolls sideways when it is longer than its room. */
+/**
+ * The command a press runs, under its button, so the person sees what is done on their computer: one line, which scrolls sideways when it
+ * is longer than its room. On a phone the copy press is a finger's size, its glyph 16 in from the right: the command starts 16 in too.
+ */
 function CommandLine({ command }: { command: string }) {
   return (
-    <div className="flex min-w-0 items-center gap-1 rounded-md bg-muted py-0.5 pr-0.5 pl-2">
+    <div className="flex min-w-0 items-center gap-1 rounded-md bg-muted py-0.5 pr-0.5 pl-2 max-md:pl-4">
       <code className="min-w-0 flex-1 overflow-x-auto py-1 font-mono text-xs whitespace-nowrap text-muted-foreground">{command}</code>
       <CopyButton text={command} label="Copy the command" className="justify-center md:size-6 max-md:size-11" />
     </div>

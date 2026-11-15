@@ -101,7 +101,7 @@ describe('the first steps on the Overview', () => {
     steps()
     // A part's heading like every other, the count beside it as every part's count stands.
     const heading = await screen.findByRole('heading', { level: 2, name: /^Good (morning|afternoon|evening), Ada 0 of 3$/ })
-    expect(heading.className).toContain('text-base')
+    expect(heading.className).toContain('text-sm')
     expect(within(heading).getByText('0 of 3').className).toContain('font-normal')
     expect(await screen.findByRole('list', { name: '0 of 3 done' })).toBeTruthy()
   })

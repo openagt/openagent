@@ -9,7 +9,8 @@ import { usePolled } from '../lib/use-async.js'
 import { HostServicesContext, INERT_HOST_SERVICES } from '../lib/host-services.js'
 import { cn } from '../lib/utils.js'
 import { Button } from './ui/button.js'
-import { Section } from './ui/section.js'
+import { PanelGroup } from './ui/panel.js'
+import { Card } from './ui/card.js'
 import { RowShapes, Slot } from './ui/slot.js'
 import { PartDescription } from './PartDescription.js'
 import { useAction } from '../lib/use-action.js'
@@ -104,7 +105,8 @@ export function SkillsCard({ projects, onSelectProject, projectHref }: { project
     }
   }
   return (
-    <Section
+    <PanelGroup
+      bare
       title="Skills"
       action={
         updatable.length > 1 ? (
@@ -117,7 +119,7 @@ export function SkillsCard({ projects, onSelectProject, projectHref }: { project
       <PartDescription>What each project adds to its agents, and what is new</PartDescription>
       <Slot of={{ state, value: reads }} shape={<RowShapes rows={projects.length || 1} />}>
         {() => (
-          <>
+          <Card className="px-4 py-2">
             <ul>
               {reads.map(read => (
                 <Row key={read.project.id} read={read} reload={reload} href={projectHref(read.project.id)} onOpen={() => onSelectProject(read.project.id)} />
@@ -125,10 +127,10 @@ export function SkillsCard({ projects, onSelectProject, projectHref }: { project
             </ul>
             {all.error && <p className="mt-2 text-xs text-danger">{all.error}</p>}
             <Usage used={used} unused={unused} />
-          </>
+          </Card>
         )}
       </Slot>
-    </Section>
+    </PanelGroup>
   )
 }
 

@@ -65,21 +65,24 @@ describe('the Overview', () => {
     working = []
     show()
     await screen.findByText('Human Queue')
-    expect(drawn().map(card => card.id)).toEqual(['human-queue', 'usage', 'working', 'skills', '@x/tickets/hot'])
+    expect(drawn().map(card => card.id)).toEqual(['human-queue', 'working', 'usage', 'skills', '@x/tickets/hot'])
     expect(screen.getByText('No agent is at work.')).toBeTruthy()
-    // Full width is the whole row at every size; a half is a half once the column has the room, at
-    // every width past that; a row's cards fill it.
-    expect(drawn()[0]!.spans).toContain('basis-full')
-    expect(drawn()[0]!.spans).not.toMatch(/@\w+:basis-/)
-    expect(drawn()[3]!.spans).toContain('@2xl:basis-[calc(50%_-_1rem)]')
-    expect(drawn()[3]!.spans).not.toContain('@4xl:')
+    // Two columns once the page has the room: what needs the person and what is at work two thirds
+    // wide, the usage a third beside them; in a middling column each is a half, in a narrow one the
+    // whole row; a half is a half from a middling column on; a row's cards fill it.
+    expect(drawn()[0]!.spans).toContain('@max-2xl:basis-full')
+    expect(drawn()[0]!.spans).toContain('@2xl:basis-[calc(50%_-_1rem)]')
+    expect(drawn()[0]!.spans).toContain('@4xl:basis-[calc(66.667%_-_0.667rem)]')
+    expect(drawn()[1]!.spans).toContain('@4xl:basis-[calc(66.667%_-_0.667rem)]')
+    expect(drawn()[2]!.spans).toContain('@4xl:basis-[calc(33.333%_-_1.333rem)]')
     expect(drawn()[4]!.spans).toContain('@2xl:basis-[calc(50%_-_1rem)]')
+    expect(drawn()[4]!.spans).not.toContain('@4xl:')
     expect(drawn()[4]!.spans).toContain('grow-[6]')
     cleanup()
     working = [active('r1', 'p1')]
     show()
     expect(await screen.findByText('working on r1')).toBeTruthy()
-    expect(drawn().map(card => card.id)).toEqual(['human-queue', 'usage', 'working', 'skills', '@x/tickets/hot'])
+    expect(drawn().map(card => card.id)).toEqual(['human-queue', 'working', 'usage', 'skills', '@x/tickets/hot'])
     cleanup()
     // With a project picked, only that project's agents count.
     show('p2')
@@ -93,7 +96,7 @@ describe('the Overview', () => {
     show()
     const firstSteps = await screen.findByText('onboarding')
     expect(firstSteps.parentElement!.previousElementSibling!.getAttribute('data-card')).toBe('human-queue')
-    expect(firstSteps.parentElement!.nextElementSibling!.getAttribute('data-card')).toBe('usage')
+    expect(firstSteps.parentElement!.nextElementSibling!.getAttribute('data-card')).toBe('working')
     cleanup()
     prefs.value = { overviewLayouts: { '*': [{ id: 'usage' }, { id: 'human-queue', hidden: true }] } }
     show()
@@ -115,8 +118,8 @@ describe('the Overview', () => {
     expect(drawn().map(card => card.id)).toEqual(['@x/tickets/hot', 'human-queue', 'skills', 'working'])
     expect(screen.queryByText('usage')).toBeNull()
     expect(drawn()[0]!.spans).toContain('@4xl:basis-[calc(33.333%_-_1.333rem)]')
-    // The Human Queue fits half at the narrowest: a quarter is passed over for its own width, the whole row.
-    expect(drawn()[1]!.spans).not.toMatch(/@\w+:basis-/)
+    // What needs the person fits half at the narrowest: a quarter is passed over for its own width, two thirds.
+    expect(drawn()[1]!.spans).toContain('@4xl:basis-[calc(66.667%_-_0.667rem)]')
     expect(drawn()[2]!.spans).toContain('@4xl:basis-[calc(25%_-_1.5rem)]')
   })
 
@@ -139,7 +142,7 @@ describe('the Overview', () => {
     fireEvent.click(await screen.findByRole('button', { name: 'Customize' }))
     expect(screen.getByRole('status').textContent).toMatch(/Arranging the layout for alpha/)
     // Every shown card has its bar; the agents at work, though none works, are there to be placed.
-    expect(screen.getAllByRole('toolbar').map(bar => bar.getAttribute('aria-label'))).toEqual(['Usage', 'Human Queue', 'Agents at work', 'Hot tickets'])
+    expect(screen.getAllByRole('toolbar').map(bar => bar.getAttribute('aria-label'))).toEqual(['Usage', 'Human Queue', 'At work', 'Hot tickets'])
     // The card hidden waits in the tray.
     const tray = within(screen.getByRole('region', { name: 'Cards not on the page' }))
     expect(tray.getAllByRole('listitem').map(item => item.getAttribute('aria-label'))).toEqual(['Skills'])
@@ -156,7 +159,7 @@ describe('the Overview', () => {
     fireEvent.click(tray.getByRole('button', { name: 'Add Skills' }))
     expect(saved()['p1']!.map(place => place.id).at(-1)).toBe('skills')
     expect(saved()['p1']!.at(-1)).toEqual({ id: 'skills' })
-    // The arrow keys on a card's handle move it among the cards on the page: Usage passes the Human Queue.
+    // The arrow keys on a card's handle move it among the cards on the page: Usage passes what needs the person.
     // (Each press here is read against the layout the page started with: the stand-in preferences do not change.)
     fireEvent.keyDown(screen.getByRole('button', { name: 'Move Usage: arrow keys' }), { key: 'ArrowRight' })
     expect(saved()['p1']!.map(place => place.id)).toEqual(['skills', 'human-queue', 'usage', 'working', '@x/tickets/hot'])
@@ -230,7 +233,7 @@ describe('the Overview', () => {
     window.removeEventListener('error', caught)
     expect(thrown).toEqual([])
     expect(prefs.updatePreferences).not.toHaveBeenCalled()
-    expect(drawn().map(card => card.id)).toEqual(['human-queue', 'usage', 'working', 'skills'])
+    expect(drawn().map(card => card.id)).toEqual(['human-queue', 'working', 'usage', 'skills'])
   })
 
   test('a card dragged on the page leaves the page still, shows where it lands, and moves only when dropped', async () => {
@@ -247,7 +250,7 @@ describe('the Overview', () => {
     expect(prefs.updatePreferences).not.toHaveBeenCalled()
     fireEvent.drop(document.querySelector('[data-card="human-queue"]')!, transfer)
     const order = (prefs.updatePreferences.mock.lastCall![0] as { overviewLayouts: Record<string, { id: string }[]> }).overviewLayouts['*']!.map(place => place.id)
-    expect(order).toEqual(['skills', 'human-queue', 'usage', 'working', '@x/tickets/hot'])
+    expect(order).toEqual(['skills', 'human-queue', 'working', 'usage', '@x/tickets/hot'])
   })
 
   test('the cards slide to their places after a drag, never after a key or a press, nor under reduced motion', async () => {
@@ -334,14 +337,14 @@ describe('the Overview', () => {
     expect(drawn().map(card => card.id)).toEqual(['human-queue'])
     firstSteps.read = true
     rerender(overview())
-    expect(drawn().map(card => card.id)).toEqual(['human-queue', 'usage', 'working', 'skills', '@x/tickets/hot'])
+    expect(drawn().map(card => card.id)).toEqual(['human-queue', 'working', 'usage', 'skills', '@x/tickets/hot'])
     cleanup()
     // With the first steps put away, only the Human Queue is waited for.
     prefs.value = { onboardingDismissed: true }
     firstSteps.read = false
     show()
     await screen.findByText('Human Queue')
-    expect(drawn().map(card => card.id)).toEqual(['human-queue', 'usage', 'working', 'skills', '@x/tickets/hot'])
+    expect(drawn().map(card => card.id)).toEqual(['human-queue', 'working', 'usage', 'skills', '@x/tickets/hot'])
   })
 
   test('no card is drawn before the layout is read: a card taken off never reads anything', async () => {
@@ -366,17 +369,19 @@ describe('the Overview', () => {
     modules.loaded = false
     const { rerender } = show()
     const line = (await screen.findByText('no agent working')).closest('p')!
-    expect(line.textContent).toBe('nothing needs you·no agent working·Loading…·your agents')
+    // The parts in their order, each after the first opening with its dot (drawn, not said).
+    const parts = () => [...line.children].map(part => part.textContent)
+    expect(parts()).toEqual(['nothing needs you', 'no agent working', 'Loading…', 'your agents'])
     // A phone shows it too, beside Customize.
     expect(line.className).not.toContain('sr-only')
     modules.line = [{ id: '@x/queue/queued', order: 3, node: <span>nothing queued</span> }]
     rerender(overview())
-    expect(line.textContent).toBe('nothing needs you·no agent working·nothing queued·your agents')
+    expect(parts()).toEqual(['nothing needs you', 'no agent working', 'nothing queued', 'your agents'])
     // Every package in, none with a part: the line is its own parts only.
     modules.loaded = true
     modules.line = []
     rerender(overview())
-    expect(line.textContent).toBe('nothing needs you·no agent working·your agents')
+    expect(parts()).toEqual(['nothing needs you', 'no agent working', 'your agents'])
   })
 
   test('the Human Queue says it is loading before its read, not that nothing waits', async () => {
@@ -409,12 +414,13 @@ describe('the Overview', () => {
       item({ number: 8, title: 'Condense README', url: 'https://x/pull/8' }),
     ]
     render(<DashboardPage onProjectAdded={() => {}} onSelectProject={() => {}} projectHref={id => `/${id}`} onSelectAgent={onSelectAgent} onAgentStarted={() => {}} interventions={interventions} interventionsState="fresh" active={{ active: [], state: 'fresh' }} projects={[]} scope={null} />)
-    // Grouped by kind, each under its heading, in the order that holds a run up most; a row says its kind on its icon's hover.
-    expect(within(screen.getByRole('region', { name: 'Human Queue' })).getAllByRole('region').map(group => document.getElementById(group.getAttribute('aria-labelledby')!)!.textContent)).toEqual(['Pull requests', 'To commit'])
-    expect(screen.getByTitle('Needs commit')).toBeTruthy()
-    expect(screen.getByText('1 file')).toBeTruthy()
+    // One panel, in the order the queue gives them: a row says what it needs in the line under its name, so no kind has a heading.
+    const part = within(screen.getByRole('region', { name: 'Human Queue' }))
+    expect(part.queryAllByRole('region')).toEqual([])
+    expect(part.getAllByRole('listitem').map(row => row.textContent)).toEqual(['Create test.mdNeeds commit·1 fileReview', 'Add DESCRIPTION.mdNeeds merge·#6Review', 'Condense READMENeeds merge·#8Review'])
+    // Each row carries its press, which opens where it is done, as the row does.
     fireEvent.click(screen.getByText('Create test.md'))
-    fireEvent.click(screen.getByText('Add DESCRIPTION.md'))
+    fireEvent.click(screen.getByRole('button', { name: 'Review: Add DESCRIPTION.md' }))
     expect(onSelectAgent.mock.calls).toEqual([['p1', 'r1'], ['p1', 'r6']])
     expect(screen.getByText('Condense README').closest('a')?.getAttribute('href')).toBe('https://x/pull/8')
     expect(screen.getByText('Add DESCRIPTION.md').closest('a')?.getAttribute('href')).toBe('/p1/r6')

@@ -15,7 +15,7 @@ export default defineModule({
   pages: [{ segment: 'queue', label: 'Queue', icon: ListTodo, Page: QueuePage }],
   cards: [
     { id: 'queued', label: 'In the queue', order: 3, line: true, Card: QueuePart },
-    { id: 'queue', label: 'AI Queue', order: 10, Card: QueueCard },
+    { id: 'queue', label: 'AI Queue', order: 8, width: '2/3', minWidth: '1/2', Card: QueueCard },
   ],
   linkActions: [ADD_TO_QUEUE],
 })

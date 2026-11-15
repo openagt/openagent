@@ -42,7 +42,8 @@ test('this computer and each saved machine: whether it answers, its memory and d
   ])
   show(host)
   const items = await screen.findAllByRole('listitem')
-  expect(items.map(item => item.querySelector('.font-medium')!.textContent)).toEqual(['Adas-MacBook', 'droplet', 'studio'])
+  // The computers, then the phones and browsers as the panel's last row.
+  expect(items.map(item => item.querySelector('.font-medium')!.textContent)).toEqual(['Adas-MacBook', 'droplet', 'studio', '1 phone or browser in'])
   expect(within(items[0]!).getByText('this computer')).toBeTruthy()
   expect(within(items[0]!).getByRole('meter', { name: 'RAM' }).getAttribute('aria-valuenow')).toBe('50')
   // The server: online, its RAM near full in amber, its disk, how busy, and behind this computer's OpenAgent.
@@ -74,7 +75,8 @@ test('each machine is said as the "Run on" menu says it: its own name, then what
   ]
   show(hostWith({ version: '0.39.1', name: 'Adas-MacBook', machines }))
   const items = await screen.findAllByRole('listitem')
-  const said = items.map(item => [item.querySelector('.font-medium')!.textContent, item.querySelector('.text-xs.text-muted-foreground')?.textContent])
+  // Each row's name, then the line under it.
+  const said = items.map(item => [item.querySelector('.font-medium')!.textContent, item.querySelector('.text-xs.text-faint-foreground')?.textContent])
   expect(said.slice(1)).toEqual([
     ['165.245.244.10', 'Server'],
     ['experiment', 'Server at home, through 165.245.244.10'],

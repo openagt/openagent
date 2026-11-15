@@ -134,7 +134,7 @@ describe('AccountsCard', () => {
   test('an agent with no login has no row, and still its press: "Add", at the card\u2019s title, lists both agents', async () => {
     renderCard(listed([{ name: 'This computer', who: 'Ada', own: true }], [{ name: 'This computer', signedOut: true, own: true }]))
     expect(await screen.findByText('Ada')).toBeTruthy()
-    expect(within(screen.getByRole('region', { name: 'Codex', hidden: true })).queryByText('This computer')).toBeNull()
+    expect(screen.queryByRole('region', { name: 'Codex', hidden: true })).toBeNull()
     // One account is there: the press is the one at the title, and the card says nothing of none.
     expect(screen.queryByText(/No account yet/)).toBeNull()
     expect(await add('Codex')).toBeTruthy()
