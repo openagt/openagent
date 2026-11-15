@@ -269,6 +269,19 @@ export function subagentRows(runs: readonly AgentMeta[], events: readonly OpenAg
   return [...runs.map(agent => runRow(agent, doing[agent.id])), ...callSubagents(events).map(call => callRow(call, working, fallbackAt))]
 }
 
+/**
+ * Why each of a run's subagents that failed failed, by its row's key, as the line the run was told
+ * when it ended says it. A subagent of the coding agent's own is told of by nothing that says why.
+ */
+export function failureReasons(events: readonly OpenAgentEvent[], runs: readonly AgentMeta[]): Map<string, string> {
+  const reasons = new Map<string, string>()
+  for (const e of events) {
+    const end = e.kind === 'driver' && e.event.type === 'start' ? subagentEnd(e.event.prompt, runs) : undefined
+    if (end?.status === 'failed' && end.detail !== undefined) reasons.set(`run:${end.agent.id}`, end.detail)
+  }
+  return reasons
+}
+
 /** One thing of a stretch of the chat: a subagent started, or a message one sent when it ended. */
 export type SubagentStep = { kind: 'agent'; row: SubagentRow } | { kind: 'message'; row: SubagentRow; text: string }
 

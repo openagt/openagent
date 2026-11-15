@@ -1,0 +1,328 @@
+import { useEffect, useId, useMemo, useRef, useState, type ReactNode, type Ref } from 'react'
+import { ChevronRight, Square, X } from 'lucide-react'
+import type { AgentMeta, OpenAgentEvent } from '../../src/index.js'
+import { onAgent } from '../rpc/reads.js'
+import { panesPage } from '../lib/panes.js'
+import { revealSubagent, useRevealedSubagent } from '../lib/reveal-change.js'
+import { failureReasons, subagentRows, subagentTranscript, type SubagentRow } from '../lib/subagents.js'
+import { formatDuration, formatElapsed, formatSince } from '../lib/format-date.js'
+import { anyModelName, useModels } from '../lib/models.js'
+import { runTone, runWord } from '../lib/run-words.js'
+import { usePolled } from '../lib/use-async.js'
+import { useStop } from '../lib/use-stop.js'
+import { cn } from '../lib/utils.js'
+import { Button } from './ui/button.js'
+import { navRowClass } from './ui/nav-row.js'
+import { Tooltip, TooltipContent, TooltipTrigger } from './ui/tooltip.js'
+import { EventList } from './EventList.js'
+import { RunMark } from './RunMark.js'
+import { Seconds, tokenWords } from './ToolCalls.js'
+import { PaneNote } from './PaneNote.js'
+
+// The pane of a run's subagents, beside its chat: a calm list of them, one line each (its state's
+// mark, its name, how long it worked), those at work first; and under the list the one a row opened,
+// here or in the chat, as Claude Code on the web shows a subagent: the whole prompt it was given,
+// what it runs on, what it said and did, and what that came to. Under the pointer a working row's
+// time gives way to its Stop, and a card says it whole. A subagent that is a run of its own is read
+// from its own log, can be stopped, and its page is one click away; one the coding agent started
+// inside its session is read out of the main agent's log, where its events are, and has no page,
+// no branch and no Stop of its own.
+
+/** How often a working subagent's own log is read again: the runs poll's own pace. */
+const TRANSCRIPT_EVERY_MS = 2_000
+/** How often an ended one's is: it changes no more, and a read now and then costs nothing. */
+const ENDED_EVERY_MS = 60_000
+/** How often a working row's time is said again: it counts in minutes. */
+const TICK_MS = 15_000
+/** How many rows the list holds before the ended ones fold into one. */
+const FOLD_PAST = 8
+const NO_EVENTS: OpenAgentEvent[] = []
+
+export function SubagentsPanel({
+  projectId,
+  agentId,
+  events,
+  subagents,
+  live,
+  onOpenAgent,
+}: {
+  projectId: string
+  /** The main agent. */
+  agentId: string
+  /** The main agent's log. */
+  events: readonly OpenAgentEvent[]
+  /** The runs started for the main agent. */
+  subagents: readonly AgentMeta[]
+  /** Whether the main agent's process is working. */
+  live: boolean
+  /** Open a run's own page. */
+  onOpenAgent?: ((agentId: string) => void) | undefined
+}) {
+  const page = panesPage(projectId, agentId)
+  const asked = useRevealedSubagent(page)
+  const rows = useMemo(() => subagentRows(subagents, events, live), [subagents, events, live])
+  const reasons = useMemo(() => failureReasons(events, subagents), [events, subagents])
+  const shown = rows.find(row => row.key === asked?.key)
+  const list = useRef<HTMLDivElement>(null)
+  // Closed, the keyboard goes back to the row that opened it.
+  const close = (key: string) => {
+    revealSubagent(page)
+    ;[...(list.current?.querySelectorAll<HTMLElement>('[data-key]') ?? [])].find(row => row.dataset['key'] === key)?.focus()
+  }
+  return (
+    <div className="flex min-h-0 flex-1 flex-col">
+      <SubagentList
+        ref={list}
+        rows={rows}
+        reasons={reasons}
+        shown={shown?.key}
+        projectId={projectId}
+        onPick={key => revealSubagent(page, key === shown?.key ? undefined : key)}
+        className={shown ? 'max-h-1/2 shrink-0' : 'flex-1'}
+      />
+      {shown && <Shown key={shown.key} row={shown} projectId={projectId} events={events} onOpenAgent={onOpenAgent} onClose={() => close(shown.key)} />}
+    </div>
+  )
+}
+
+/** Draws again now and then while `on`, so a working row's time goes on. */
+function useTicking(on: boolean): void {
+  const [, setTick] = useState(0)
+  useEffect(() => {
+    if (!on) return
+    const timer = setInterval(() => setTick(n => n + 1), TICK_MS)
+    return () => clearInterval(timer)
+  }, [on])
+}
+
+const byStart = (a: SubagentRow, b: SubagentRow): number => (a.startedAt < b.startedAt ? -1 : a.startedAt > b.startedAt ? 1 : 0)
+
+/** The run's subagents, those at work over those that ended; past {@link FOLD_PAST} rows in all, the ended ones fold into one. */
+function SubagentList({ ref, rows, reasons, shown, projectId, onPick, className }: {
+  ref: Ref<HTMLDivElement>
+  rows: readonly SubagentRow[]
+  reasons: ReadonlyMap<string, string>
+  shown: string | undefined
+  projectId: string
+  onPick: (key: string) => void
+  className: string
+}) {
+  useTicking(rows.some(row => row.working))
+  const [endedOpen, setEndedOpen] = useState(false)
+  const working = rows.filter(row => row.working).sort(byStart)
+  const ended = rows.filter(row => !row.working).sort(byStart)
+  const item = (row: SubagentRow) => <SubagentItem key={row.key} row={row} reason={reasons.get(row.key)} open={row.key === shown} projectId={projectId} onPick={onPick} />
+  return (
+    <div ref={ref} className={cn('min-h-0 overflow-y-auto px-2 pt-2', className)}>
+      {working.length > 0 && <Part name="Working">{working.map(item)}</Part>}
+      {ended.length > 0 &&
+        (rows.length > FOLD_PAST ? (
+          <section aria-label="Ended">
+            {/* A row in the list's place: its words on the names' edge. */}
+            <button type="button" aria-expanded={endedOpen} onClick={() => setEndedOpen(open => !open)} className={cn(navRowClass(false), 'text-muted-foreground')}>
+              <span aria-hidden className="w-4 shrink-0" />
+              <span className="min-w-0 flex-1 text-start">Ended · {ended.length}</span>
+              <ChevronRight aria-hidden className={cn('transition-transform duration-150 ease-out', endedOpen && 'rotate-90')} />
+            </button>
+            {endedOpen && <ul>{ended.map(item)}</ul>}
+          </section>
+        ) : (
+          <Part name="Ended">{ended.map(item)}</Part>
+        ))}
+      {/* The list's foot, 16 under its last row: while more is under it, what is cut there fades out rather than ending on a line. */}
+      <div aria-hidden className="pointer-events-none sticky bottom-0 h-4 bg-gradient-to-t from-card to-transparent" />
+    </div>
+  )
+}
+
+/** A part of the list: its name in the quiet part-name text, over its rows. */
+function Part({ name, children }: { name: string; children: ReactNode }) {
+  const heading = useId()
+  return (
+    <section aria-labelledby={heading}>
+      <h3 id={heading} className="flex h-8 items-center px-2 text-xs font-medium text-muted-foreground">
+        {name}
+      </h3>
+      <ul>{children}</ul>
+    </section>
+  )
+}
+
+/** How long a subagent has worked, or worked in all: "6m"; none for one that ended with no end known. */
+function ranFor(row: SubagentRow): string | undefined {
+  if (row.working) return formatSince(row.startedAt)
+  return row.endedAt !== undefined ? formatDuration(Date.parse(row.endedAt) - Date.parse(row.startedAt)) : undefined
+}
+
+const capital = (words: string): string => words.charAt(0).toUpperCase() + words.slice(1)
+
+/**
+ * One subagent, one line: its state's mark, its name and how long it worked, the compact row of the
+ * pane's lists (ui/look/spacing.md 3). One that failed says why under its name, where that is known.
+ * Under a fine pointer a working run's time gives way to its Stop; on a phone its Stop is in its open part.
+ */
+function SubagentItem({ row, reason, open, projectId, onPick }: { row: SubagentRow; reason: string | undefined; open: boolean; projectId: string; onPick: (key: string) => void }) {
+  const models = useModels()
+  const runId = row.agent?.id
+  const { stopping, error, stop } = useStop(projectId, runId, row.working)
+  const stoppable = row.working && runId !== undefined
+  const time = ranFor(row)
+  const second = error ?? reason
+  const model = row.model !== undefined ? [anyModelName(models, row.model), row.agent?.effort].filter(Boolean).join(' · ') : undefined
+  const state = row.working ? `${capital(runWord(row.status))} · ${time}` : time !== undefined ? `${capital(runWord(row.status))} · ran ${time}` : capital(runWord(row.status))
+  return (
+    <li className="group/row relative">
+      <Tooltip>
+        <TooltipTrigger
+          render={
+            <button
+              type="button"
+              data-key={row.key}
+              aria-expanded={open}
+              aria-label={[row.name, runWord(row.status), time, second].filter(Boolean).join(' · ')}
+              onClick={() => onPick(row.key)}
+              className={cn(navRowClass(open), second !== undefined && 'items-start md:h-12 md:py-1.5 max-md:h-16 max-md:py-3.5')}
+            />
+          }
+        >
+          <span className="flex h-5 w-4 shrink-0 items-center justify-center">
+            <RunMark status={row.status} />
+          </span>
+          <span className="min-w-0 flex-1 text-start">
+            <span className="block truncate">{row.name}</span>
+            {second !== undefined && <span className={cn('block truncate text-xs', runTone('failed'))}>{second}</span>}
+          </span>
+          {time !== undefined && (
+            <span className={cn('shrink-0 text-xs leading-5 text-faint-foreground tabular-nums', stoppable && 'pointer-fine:group-hover/row:invisible pointer-fine:group-has-focus-visible/row:invisible')}>{time}</span>
+          )}
+        </TooltipTrigger>
+        {/* The whole name, what it runs on, and how it stands, as T3 Code's card says them. */}
+        <TooltipContent side="left" align="start" className="grid max-w-72 gap-1 px-4 py-3 text-sm">
+          <span className="font-medium break-words">{row.name}</span>
+          <span className="flex items-center justify-between gap-4 text-xs text-muted-foreground">
+            <span className="min-w-0 truncate">{model}</span>
+            <span className="flex shrink-0 items-center gap-1.5">
+              <RunMark status={row.status} className="size-3" />
+              {state}
+            </span>
+          </span>
+        </TooltipContent>
+      </Tooltip>
+      {stoppable && (
+        <Button
+          variant="ghost"
+          size="icon-sm"
+          aria-label={`Stop ${row.name}`}
+          loading={stopping}
+          onClick={stop}
+          className="absolute top-1/2 right-0 -translate-y-1/2 text-danger not-pointer-fine:hidden pointer-fine:opacity-0 pointer-fine:group-hover/row:opacity-100 pointer-fine:group-has-focus-visible/row:opacity-100"
+        >
+          <Square className="size-3 fill-current" />
+        </Button>
+      )}
+    </li>
+  )
+}
+
+/** The subagent a row opened, under the list: its name and what can be done with it, over its prompt and what it said and did. */
+function Shown({ row, projectId, events, onOpenAgent, onClose }: { row: SubagentRow; projectId: string; events: readonly OpenAgentEvent[]; onOpenAgent?: ((agentId: string) => void) | undefined; onClose: () => void }) {
+  const runId = row.agent?.id
+  const { stopping, stop } = useStop(projectId, runId, row.working)
+  // A run's own log, read often while it works. Remembered by the run, so the pane opened again,
+  // and the read that goes on when the subagent ends, show what was read from the first frame:
+  // without that the pane said it had nothing to show until the read answered.
+  const { value: ownLog, state } = usePolled<OpenAgentEvent[]>(
+    runId ? () => onAgent(projectId, runId) : null,
+    NO_EVENTS,
+    row.working ? TRANSCRIPT_EVERY_MS : ENDED_EVERY_MS,
+    [projectId, runId, row.working],
+    runId ? { remember: `subagent-log:${projectId}:${runId}` } : undefined,
+  )
+  // A call's transcript is the main agent's events that are its own, shown as plain steps here.
+  const callId = row.call?.id
+  const transcript = useMemo(() => (callId !== undefined ? subagentTranscript(events, callId).map(untagged) : withoutPrompt(ownLog, row.prompt)), [callId, events, ownLog, row.prompt])
+  const calls = transcript.filter(e => e.kind === 'driver' && e.event.type === 'action').length
+  return (
+    <section aria-label={row.name} className="flex min-h-0 flex-1 flex-col border-t border-hairline">
+      {/* As the pane's own head: its name 16 in, its presses 8 in. */}
+      <header className="flex h-11 shrink-0 items-center gap-1 pr-2 pl-4">
+        <h3 className="min-w-0 flex-1 truncate text-sm font-medium">{row.name}</h3>
+        {row.working && runId && (
+          <Button variant="secondary" size="sm" loading={stopping} onClick={stop}>
+            <Square aria-hidden className="size-3 fill-current text-danger" />
+            {stopping ? 'Stopping…' : 'Stop'}
+          </Button>
+        )}
+        {runId && onOpenAgent && (
+          <Button variant="ghost" size="sm" className="text-muted-foreground" onClick={() => onOpenAgent(runId)}>
+            Open its page
+          </Button>
+        )}
+        <Tooltip>
+          <TooltipTrigger render={<Button variant="ghost" size="icon-sm" className="text-muted-foreground" aria-label={`Close ${row.name}`} onClick={onClose} />}>
+            <X className="size-4" />
+          </TooltipTrigger>
+          <TooltipContent>Close</TooltipContent>
+        </Tooltip>
+      </header>
+      <div className="flex min-h-0 flex-1 flex-col">
+        <EventList
+          events={transcript}
+          working={row.working}
+          stick={row.working}
+          openAt="start"
+          head={<PaneHead row={row} />}
+          tail={!row.working && transcript.length > 0 ? <PaneFoot row={row} calls={calls} /> : undefined}
+        />
+        {transcript.length === 0 && !(runId && state === 'unknown') && <PaneNote>{row.working ? 'Nothing said or done yet.' : 'It left nothing to show.'}</PaneNote>}
+      </div>
+    </section>
+  )
+}
+
+/** What the subagent was told, as a message, and what it runs on. One that did not end well says how. */
+function PaneHead({ row }: { row: SubagentRow }) {
+  const models = useModels()
+  return (
+    <div className="flex flex-col gap-4 pb-3 font-sans text-sm">
+      {row.prompt && (
+        // A painted block of the chat's column: its words on the column, its box pulled out to the pane's 16 inset.
+        <section aria-label="Its prompt" className="max-h-64 overflow-auto rounded-lg bg-muted px-4 py-3 break-words whitespace-pre-wrap text-foreground md:-mx-4">
+          {row.prompt}
+        </section>
+      )}
+      <div className="flex flex-wrap items-baseline gap-x-2 text-muted-foreground">
+        {row.model !== undefined && <span>Model {anyModelName(models, row.model)}</span>}
+        {!row.working && row.status !== 'done' && <span className={runTone(row.status)}>{runWord(row.status)}</span>}
+        {row.working && <Seconds since={row.startedAt} />}
+      </div>
+    </div>
+  )
+}
+
+/** What it came to, under what it said: "2 tool calls · 50.7k tokens · 4s", what it cost and where its work is when it has those. */
+function PaneFoot({ row, calls }: { row: SubagentRow; calls: number }) {
+  const tools = row.toolUses ?? calls
+  const parts = [
+    tools > 0 ? `${tools} tool ${tools === 1 ? 'call' : 'calls'}` : undefined,
+    row.tokens !== undefined ? `${tokenWords(row.tokens)} tokens` : undefined,
+    row.endedAt !== undefined ? formatElapsed(Date.parse(row.endedAt) - Date.parse(row.startedAt)) : undefined,
+    row.cost !== undefined ? `$${row.cost.toFixed(2)}` : undefined,
+    row.agent?.branch ? `on ${row.agent.branch}` : row.agent?.landed ? 'landed' : undefined,
+  ].filter(Boolean)
+  return <p className="py-1 font-sans text-sm text-muted-foreground">{parts.join(' · ')}</p>
+}
+
+/** A run's log without its first prompt when that is the prompt the pane already shows above it. */
+function withoutPrompt(events: OpenAgentEvent[], prompt: string | undefined): OpenAgentEvent[] {
+  const at = events.findIndex(e => e.kind === 'driver' && e.event.type === 'start')
+  const first = events[at]
+  return first?.kind === 'driver' && first.event.type === 'start' && first.event.prompt === prompt ? events.filter((_, i) => i !== at) : events
+}
+
+/** One of a call's own events without the mark that makes the main agent's chat pass it over. */
+function untagged(e: OpenAgentEvent): OpenAgentEvent {
+  if (e.kind !== 'driver' || !('subagent' in e.event)) return e
+  const { subagent: _subagent, ...event } = e.event
+  return { ...e, event } as OpenAgentEvent
+}

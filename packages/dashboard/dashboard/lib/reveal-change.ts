@@ -6,8 +6,8 @@ import { useMountedModules } from './use-modules.js'
 // end of a turn opens the pane that lists what the agent changed, with that file picked; the
 // card's "See all" opens it on all of them, from the first. A file: a step's file name ("Read
 // index.html") opens the pane that shows the run's files, on that file. A live
-// screen: its row opens the pane that shows it. A subagent: its row opens the pane that shows it,
-// with its prompt and its transcript. An ask is kept for the page it was made on
+// screen: its row opens the pane that shows it. A subagent: its row opens the pane of the run's
+// subagents with that one open, its prompt and its transcript. An ask is kept for the page it was made on
 // (`panesPage`), for the page's life; `at` tells one ask from the next for the same thing. The
 // panes act on it (Panes): they know which pane lists changes and which shows a screen.
 
@@ -28,9 +28,9 @@ export interface RevealedScreen {
   at: number
 }
 
-/** The subagent asked for, by its row's key, and which ask it is. */
+/** The subagent asked for, by its row's key, none when the one shown was closed, and which ask it is. */
 export interface RevealedSubagent {
-  key: string
+  key?: string
   at: number
 }
 
@@ -94,9 +94,9 @@ export function useRevealedScreen(name: string): RevealedScreen | undefined {
   return screens.useLast(name)
 }
 
-/** Ask the page with this name for one of its run's subagents, by its row's key. */
-export function revealSubagent(name: string, key: string): void {
-  subagents.ask(name, { key })
+/** Ask the page with this name for one of its run's subagents, by its row's key; with none, for none of them. */
+export function revealSubagent(name: string, key?: string): void {
+  subagents.ask(name, key === undefined ? {} : { key })
 }
 
 /** The subagent last asked for on the page with this name, as reactive state; none when none was. */
@@ -107,7 +107,7 @@ export function useRevealedSubagent(name: string): RevealedSubagent | undefined 
 /**
  * What the rows of a run's chat open beside it, on the run's page: a changed file, a file a step
  * names and a live screen, each only where a module of the project has a pane that takes it
- * (without one, that row opens nothing); and a subagent, in a pane of its own.
+ * (without one, that row opens nothing); and a subagent, in the pane of the run's subagents.
  */
 export function usePaneOpeners(projectId: string, agentId: string): {
   onOpenChange: ((path?: string) => void) | undefined
