@@ -1,6 +1,6 @@
 import { Fragment, type ReactNode } from 'react'
 import { ChevronRight } from 'lucide-react'
-import { PageColumn, ShowSidebarButton, Skeleton, cn } from '@openagt/dashboard/module'
+import { MiddleCut, PageColumn, ShowSidebarButton, Skeleton, cn } from '@openagt/dashboard/module'
 
 // The frame every page under the tickets list sits in (#1144, #685): the breadcrumb back to the
 // list, then the page's own content, in the column every page has. A page under a list needs the
@@ -32,6 +32,8 @@ export function TicketPageShape() {
 export interface Crumb {
   label: string
   onOpen?: (() => void) | undefined
+  /** A file's name, set as code. */
+  file?: boolean | undefined
 }
 
 export function TicketPageShell({
@@ -64,11 +66,13 @@ export function TicketPageShell({
               <Fragment key={at}>
                 <ChevronRight className="size-3.5 shrink-0" aria-hidden />
                 {crumb.onOpen && at < crumbs.length - 1 ? (
-                  <button type="button" className={step} onClick={crumb.onOpen}>
-                    {crumb.label}
+                  // A title cut in its middle when long: a ticket is known by its start and its end.
+                  <button type="button" className={cn(step, 'flex items-center')} onClick={crumb.onOpen}>
+                    <MiddleCut text={crumb.label} />
                   </button>
                 ) : (
-                  <span className="min-w-0 truncate font-mono text-xs" aria-current="page">
+                  // A file's name gives way; a page's own short name ("Plan") stands whole, the title before it giving way.
+                  <span className={crumb.file ? 'min-w-0 truncate font-mono text-xs' : 'shrink-0'} aria-current="page">
                     {crumb.label}
                   </span>
                 )}

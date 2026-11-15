@@ -1,7 +1,7 @@
 import { Markdown, Slot, useModuleHost } from '@openagt/dashboard/module'
 import { planBody } from '../src/module.js'
 import { TicketPageShell, TicketPageNote, TicketPageShape } from './TicketPageShell.js'
-import { TicketFacts, TicketHeader, ticketSlug } from './TicketHeader.js'
+import { TicketFacts, TicketHeader } from './TicketHeader.js'
 import { openToEdit } from './TicketDetailPage.js'
 import { useTicket } from './lib/use-ticket.js'
 
@@ -25,8 +25,8 @@ export function TicketPlanPage({
   return (
     <TicketPageShell
       onBack={onBack}
-      // The ticket's crumb opens it beside the plan, as its Ticket tab does.
-      crumbs={ticket ? [{ label: ticketSlug(ticket.file), onOpen: () => host.openPage('tickets', [ticket.file], projectId, { beside: true }) }, { label: 'Plan' }] : []}
+      // The ticket, by its title, opens it beside the plan, as its Ticket tab does.
+      crumbs={ticket ? [{ label: ticket.title, onOpen: () => host.openPage('tickets', [ticket.file], projectId, { beside: true }) }, { label: 'Plan' }] : []}
       aside={ticket && read && 'ticket' in read ? <TicketFacts projectId={projectId} ticket={ticket} holderStatus={read.holderStatus} sessions={read.sessions} /> : undefined}
     >
       <Slot of={{ state, value: read }} shape={<TicketPageShape />}>

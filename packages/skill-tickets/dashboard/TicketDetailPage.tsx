@@ -41,7 +41,7 @@ export function TicketDetailPage({
   return (
     <TicketPageShell
       onBack={onBack}
-      crumbs={ticket ? [{ label: ticketSlug(ticket.file) }] : []}
+      crumbs={ticket ? [{ label: ticketSlug(ticket.file), file: true }] : []}
       aside={ticket && read && 'ticket' in read && !editing ? <TicketFacts projectId={projectId} ticket={ticket} holderStatus={read.holderStatus} sessions={read.sessions} /> : undefined}
     >
       <Slot of={{ state, value: read }} shape={<TicketPageShape />}>

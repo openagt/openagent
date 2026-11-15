@@ -31,8 +31,8 @@ describe('TicketPlanPage (#685)', () => {
     await waitFor(() => expect(host.runCommand).toHaveBeenCalledWith('p1', ['show', SLUG, '--local']))
     expect(await screen.findByText('The plan')).toBeTruthy()
     expect(screen.getByText('Do it in two steps.')).toBeTruthy()
-    // The breadcrumb names the ticket's file, as on its Ticket tab, then the plan; the tab says which page this is.
-    expect(screen.getByRole('navigation', { name: 'Breadcrumb' }).textContent).toBe('Ticketsdo-the-thingPlan')
+    // The breadcrumb names the ticket by its title, then the plan; the tab says which page this is.
+    expect(screen.getByRole('navigation', { name: 'Breadcrumb' }).textContent).toBe('TicketsDo the thingPlan')
     expect(screen.getByRole('tab', { name: 'Plan', selected: true })).toBeTruthy()
   })
 
@@ -65,8 +65,7 @@ describe('TicketPlanPage (#685)', () => {
       await openMenu(await screen.findByRole('button', { name: 'More' }))
       fireEvent.click(await screen.findByText('Edit ticket'))
     }, () => fireEvent.click(screen.getByRole('button', { name: 'Cancel' }))],
-    // The crumb names the ticket by its file, as the look draws it.
-    ['crumb to the ticket', async () => fireEvent.click(await screen.findByRole('button', { name: 'do-the-thing' })), () => {}],
+    ['crumb to the ticket', async () => fireEvent.click(await screen.findByRole('button', { name: 'Do the thing' })), () => {}],
   ])('the Plan tab\'s %s opens the ticket beside it, whose "Tickets" goes back to the list', async (_, leave, onTicket) => {
     const host = fakeHost({ p1: { [`show ${SLUG} --local`]: { ok: true, ticket: TICKET, plan: PLAN } } })
     renderWithHost(<TicketPlanPage projectId="p1" slug={SLUG} />, host)
