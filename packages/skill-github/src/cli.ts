@@ -36,7 +36,7 @@ ${helpRows([
   ['requests [--branch <b>] [--state open|merged|all] [--since <iso>]', `the project's pull requests, newest first: number, url, state, title, draft, branch, head, createdAt, mergedAt, mergeCommit`],
   ['replies [--since <iso>]', `what came on the open issues and pull requests this machine's agents worked on, since each agent ended: maintainers' words that call the agent with /agent, and on an agent's own pull request checks that turned red and a conflict once the base branch moved; [{ run, text }], one per run, read from the project's run records; with --since, also [{ for, text, branch? }] for each open issue or pull request no run was on, where a maintainer called the agent since then: the check of a scheduler's row with each`],
   ['comment <number> --body <text>', `post a comment on issue or pull request <number>: its id and url. It opens with the coding agent's logo, the model and the effort, as the agent's run record says (found through AGENT_DIARY, which its runner sets), else the line 🤖 automated; a hidden mark after the text, so replies never counts it`],
-  ['open [--branch <b>] --title <t> [--body <text>] [--base <b>] [--draft] [--merge]', `open the pull request of branch <b> (default: the current branch; it must be on the remote already); an open one is answered as it is; --base names the branch it goes into (default: the repository's default branch); --merge lands it on green. An account that cannot write to the project pushes to its fork: git remote set-url --push origin <fork>; open and replies then take that fork's pull requests as this machine's`],
+  ['open [--branch <b>] --title <t> [--body <text>] [--base <b>] [--draft] [--merge]', `open the pull request of branch <b> (default: the current branch; it must be on the remote already), its body opened with the line a comment opens with; an open one is answered as it is; --base names the branch it goes into (default: the repository's default branch); --merge lands it on green. An account that cannot write to the project pushes to its fork: git remote set-url --push origin <fork>; open and replies then take that fork's pull requests as this machine's`],
   ['merge <number>', 'land pull request <number>: a draft is marked ready, then the merge is armed as --merge arms it'],
   ['watch <number>', `wait for pull request <number>'s checks and merge it once they pass; what --merge starts where the repository has no auto-merge`],
   ['home', `the project's page on GitHub, from its origin remote`],
@@ -178,7 +178,7 @@ const COMMANDS: Record<string, Command<[Context]>> = {
     return { ok: true, ...comment }
   }),
 
-  open: asOpenAgent(async (args, { cwd, gh, git, watch }) => {
+  open: asOpenAgent(async (args, { cwd, gh, git, watch, env }) => {
     const { values } = parseCommandArgs(args, { branch: { type: 'string' }, title: { type: 'string' }, body: { type: 'string' }, base: { type: 'string' }, merge: { type: 'boolean' }, draft: { type: 'boolean' } }, 0)
     if (!values.title?.trim()) throw new UsageError('--title is required: one line naming what the change does')
     if (values.branch !== undefined && !values.branch.trim()) throw new UsageError('--branch names a branch')
@@ -186,7 +186,8 @@ const COMMANDS: Record<string, Command<[Context]>> = {
     const outcome = await openRequest(cwd, {
       ...(values.branch ? { branch: values.branch } : {}),
       title: values.title.trim(),
-      ...(values.body !== undefined ? { body: values.body } : {}),
+      // Opened with what wrote it, as a comment is: the request is posted with a person's account.
+      body: [await byline(env[DIARY_ENV]), values.body?.trim()].filter(Boolean).join('\n\n'),
       ...(values.base ? { base: values.base.trim() } : {}),
       ...(values.merge ? { merge: true } : {}),
       ...(values.draft ? { draft: true } : {}),
