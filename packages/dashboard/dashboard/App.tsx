@@ -13,6 +13,7 @@ import { DashboardPage } from './components/DashboardPage.js'
 import { SettingsDialog } from './components/SettingsDialog.js'
 import { AgentView } from './components/AgentView.js'
 import { ChatShape } from './components/ChatPane.js'
+import { PageShape } from './components/Page.js'
 import { agentLabel, awaitingName } from './lib/agent-label.js'
 import { subagentsOf, taskLabel } from './lib/subagents.js'
 import { PaneLayout, PanesProvider } from './components/Panes.js'
@@ -463,11 +464,12 @@ export function App() {
   }
   // Another computer's project is removed there, not here.
   const removableHere = project?.machine === undefined ? leaveRemovedProject : undefined
-  // Before the projects and the modules are read, a project's address reads as a page's word. A
-  // word no page this browser listed may be a project's: its page waits as its shape, the
-  // launcher's, or with a run's id after it a session's.
+  // Before the projects are read, a project's address reads as a page's word. A word no page this
+  // browser listed may be a project's: its page waits as its shape, the launcher's, or with a run's
+  // id after it a session's. Any other page word waits as its page's frame until its code is in.
   const [run, ...pastRun] = route.pagePath ?? []
-  const projectWord = pageSegment !== null && !addressesRead && route.scope === undefined && !listedPages?.some(page => page.segment === pageSegment)
+  const listedPage = listedPages?.find(page => page.segment === pageSegment)
+  const projectWord = pageSegment !== null && projectsState === 'unknown' && route.scope === undefined && !listedPage
   const projectShape = !projectWord ? null : run === undefined ? <ProjectHomeShape /> : pastRun.length === 0 && startedAtFromAgentId(run) !== undefined ? <ChatShape /> : null
   const renderMain = () => {
     if (pageSegment === PERMISSIONS_PAGE) return <PermissionsPage />
@@ -477,7 +479,7 @@ export function App() {
         return <ModulePageView page={modulePage} projects={scopedProjects} projectId={scope} path={route.pagePath ?? []} />
       // Not read yet is not "no such page": the modules are imported after the first read, and
       // until the projects are read too a project's name reads as a page's word.
-      if (!addressesRead) return projectShape
+      if (!addressesRead) return projectWord ? projectShape : <PageShape title={listedPage?.label} />
       // A page another project's package adds is not the picked project's.
       const elsewhere = scope !== null && modulePages.some(page => page.segment === pageSegment)
       return (
@@ -616,7 +618,7 @@ export function App() {
   // An address that shows a "No such …" page: its own words are further down.
   const notFound = unknownProject || sessionGone || (pageSegment !== null && addressesRead && !OWN_PAGES.has(pageSegment) && !modulePage)
   // The name a phone's top bar gives the page; null on a project's own pages, which have a top row.
-  const phoneTitle = notFound ? 'Not found' : projectShape ? null : pageSegment ? (OWN_PAGES.get(pageSegment) ?? modulePage?.label ?? '') : projectId === null ? 'Overview' : null
+  const phoneTitle = notFound ? 'Not found' : projectShape ? null : pageSegment ? (OWN_PAGES.get(pageSegment) ?? modulePage?.label ?? listedPage?.label ?? '') : projectId === null ? 'Overview' : null
   // A page with no chat (the Overview, a module's page) scrolls as a page: the browser's own
   // scrolling, which bounces at either end, and its header goes up with the rest. On a phone its bar
   // stays at the top; on a wider screen the sidebar stays beside it. A chat keeps its box at the

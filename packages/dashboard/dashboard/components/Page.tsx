@@ -2,6 +2,8 @@ import { useContext, type ReactNode } from 'react'
 import { createPortal } from 'react-dom'
 import { PhoneBarCount } from './PhoneBar.js'
 import { ShowSidebarButton } from './SidebarToggle.js'
+import { RowShapes } from './ui/slot.js'
+import { Waiting } from './Waiting.js'
 import { cn } from '../lib/utils.js'
 
 // A page of the dashboard that is no chat (the Overview, and a module's page: Logs, Queue, Tickets,
@@ -18,6 +20,19 @@ import { cn } from '../lib/utils.js'
 export function PageColumn({ children }: { children: ReactNode }) {
   // 32 around it on a wide screen, 24 on a tablet, 16 on a phone.
   return <div className="mx-auto w-full max-w-240 lg:p-8 md:max-lg:p-6 max-md:p-4">{children}</div>
+}
+
+/**
+ * A page while its code is imported: its name, as this browser listed it, where the page's name
+ * will stand (none on a first visit, where it is not known yet), and rows' shapes where its list
+ * will stand. The page takes its place without moving its name.
+ */
+export function PageShape({ title }: { title: string | undefined }) {
+  return (
+    <Page title={title ?? ''}>
+      <Waiting shape={<RowShapes rows={3} />} />
+    </Page>
+  )
 }
 
 export function Page({

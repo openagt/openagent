@@ -248,9 +248,9 @@ describe('module pages in the shell (#1774)', () => {
       for (const [path, name] of [['/logs', 'Logs'], ['/agents', 'Agents'], ['/permissions', 'Permissions']]) {
         window.history.replaceState(null, '', path)
         render(<App />)
-        const bar = (await screen.findByRole('button', { name: 'Open the menu' })).parentElement!
-        // The name alone: the page's count stands beside it in the bar once the page has read it.
-        await waitFor(() => expect(bar.querySelector('span')!.textContent).toBe(name))
+        // The name alone: the page's count stands beside it in the bar once the page has read it. Read in the wait: the first
+        // button found may be the launcher's shape's, until the word is known to be no project's.
+        await waitFor(() => expect(screen.getByRole('button', { name: 'Open the menu' }).parentElement!.querySelector('span')!.textContent).toBe(name))
         cleanup()
       }
     } finally {
@@ -336,20 +336,38 @@ describe('a first visit, the projects not read yet', () => {
     await waitFor(() => expect(within(screen.getByTestId('chat-bottom')).getByRole('textbox')).toBeTruthy())
   })
 
-  test("a page's word this browser listed waits as nothing: it is no project's", async () => {
+  test("a page this browser listed waits as its frame while its code is out, its name where it will stand, and the page takes its place", async () => {
     const answer = holdProjects()
     // The modules not read either: the pages this browser listed on its last visit are what is known.
-    answers.set('onModules', () => new Promise(() => {}))
-    localStorage.setItem('openagent:listed-pages', JSON.stringify([{ segment: 'logs', label: 'Logs', projects: [] }]))
+    let answerModules = (_modules: unknown[]) => {}
+    answers.set('onModules', () => new Promise(resolve => (answerModules = resolve)))
+    localStorage.setItem('openagent:listed-pages', JSON.stringify([{ segment: 'logs', label: 'Logs', projects: [PROJECT.id] }]))
     try {
       window.history.replaceState(null, '', '/logs')
       render(<App />)
-      await new Promise(resolve => setTimeout(resolve, 500))
-      expect(within(await screen.findByRole('main')).queryByRole('status')).toBeNull()
+      const main = await screen.findByRole('main')
+      expect(within(main).getByRole('heading', { name: 'Logs' })).toBeTruthy()
+      expect(await within(main).findByRole('status', {}, { timeout: 2000 })).toBeTruthy()
       answer()
+      const Runs = () => createElement('p', null, 'the runs')
+      await act(async () => answerModules([{ package: '@acme/logs', url: moduleModule('__listedLogs', { pages: [{ segment: 'logs', label: 'Logs', Page: Runs }] }), projects: [PROJECT.id] }]))
+      expect(await screen.findByText('the runs')).toBeTruthy()
+      expect(within(screen.getByRole('main')).queryByRole('status')).toBeNull()
     } finally {
       localStorage.removeItem('openagent:listed-pages')
     }
+  })
+
+  test("a page's word no project has waits as a page's frame once the projects are read, not as a launcher", async () => {
+    const answer = holdProjects()
+    answers.set('onModules', () => new Promise(() => {}))
+    window.history.replaceState(null, '', '/logs')
+    render(<App />)
+    const main = await screen.findByRole('main')
+    expect((await within(main).findByRole('status', {}, { timeout: 2000 })).closest('.max-w-3xl')).not.toBeNull()
+    answer()
+    await waitFor(() => expect(within(main).getByRole('status').closest('.max-w-3xl')).toBeNull())
+    expect(within(main).getByRole('status').closest('.max-w-240')).not.toBeNull()
   })
 })
 
