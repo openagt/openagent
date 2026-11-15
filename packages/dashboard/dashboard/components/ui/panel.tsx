@@ -15,9 +15,10 @@ export function Panel({ className, children, ...props }: { className?: string; c
 
 /**
  * A group of rows on a page: its heading (a name, a badge, a count, a press or a link at its right)
- * over a {@link Panel} of them. Named by the heading's name alone.
+ * over a {@link Panel} of them. Named by the heading's name alone. `bare`: what it holds is drawn as
+ * given, under the heading, for a group that draws its own panel (inside a `Slot`) or cards of its own.
  */
-export function PanelGroup({ title, badge, count, action, children }: { title: ReactNode; badge?: ReactNode; count?: ReactNode; action?: ReactNode; children: ReactNode }) {
+export function PanelGroup({ title, badge, count, action, bare = false, children }: { title: ReactNode; badge?: ReactNode; count?: ReactNode; action?: ReactNode; bare?: boolean; children: ReactNode }) {
   const heading = useId()
   const Heading = useHeadingTag()
   return (
@@ -44,8 +45,24 @@ export function PanelGroup({ title, badge, count, action, children }: { title: R
         </Heading>
         {action !== undefined && <div className="flex shrink-0 items-center gap-2">{action}</div>}
       </div>
-      <Panel>{children}</Panel>
+      {bare ? children : <Panel>{children}</Panel>}
     </section>
+  )
+}
+
+/** A {@link Panel}'s one sentence where its rows would be: what it holds when it holds none, on the rows' inset. */
+export function PanelNote({ children }: { children: ReactNode }) {
+  return <li className="px-4 py-3 text-sm text-muted-foreground">{children}</li>
+}
+
+/** The press at a {@link Panel}'s foot that shows the rows it holds back, or hides them again: "Show 3 more", as tall as a one-line row. */
+export function PanelMore({ children, onClick }: { children: ReactNode; onClick: () => void }) {
+  return (
+    <li className="relative before:absolute before:top-0 before:right-4 before:left-4 before:h-px before:bg-hairline">
+      <button type="button" onClick={onClick} className="focus-ring-inset flex h-11 w-full items-center px-4 text-sm text-muted-foreground transition-colors hover:bg-foreground/4 hover:text-foreground">
+        {children}
+      </button>
+    </li>
   )
 }
 
@@ -67,12 +84,14 @@ const coverClass = 'outline-none after:absolute after:inset-0'
  * a fact stands on the title's line and the presses are centred on the row, both ending on the inset.
  * A press with no painted box is pulled out by its own padding by its caller, so its glyph ends there.
  */
-export function PanelRow({ state, title, titleHint, meta = [], fact, actions, href, external = false, onClick, className }: {
+export function PanelRow({ state, title, titleHint, meta = [], metaLines = 1, fact, actions, href, external = false, onClick, className }: {
   state?: ReactNode
   title: ReactNode
   /** Said under the pointer over the name: the whole text where the name stands in for it. */
   titleHint?: string | undefined
   meta?: ReactNode[]
+  /** How many lines what is known of it may take before it is cut: 2 for a sentence a person must read whole (a question). */
+  metaLines?: 1 | 2
   fact?: ReactNode
   actions?: ReactNode
   href?: string | undefined
@@ -113,13 +132,13 @@ export function PanelRow({ state, title, titleHint, meta = [], fact, actions, hr
       {state !== undefined && <span className="flex h-5 w-4 shrink-0 items-center">{state}</span>}
       <span className="min-w-0 flex-1">
         {named}
-        {/* Every part but the last is said whole; the last gives way, cut with "…". */}
+        {/* On one line every part but the last is said whole and the last gives way, cut with "…"; on two, the parts run on and the second line is cut. */}
         {parts.length > 0 && (
-          <span className="mt-1 flex min-w-0 items-center gap-1.5 text-xs text-faint-foreground">
+          <span className={cn('mt-1 text-xs text-faint-foreground', metaLines === 2 ? 'line-clamp-2' : 'flex min-w-0 items-center gap-1.5')}>
             {parts.map((part, index) => (
               <Fragment key={index}>
-                {index > 0 && <span aria-hidden>·</span>}
-                <span className="min-w-0 truncate not-last:shrink-0">{part}</span>
+                {index > 0 && <span aria-hidden className={cn(metaLines === 2 && 'mx-1.5')}>·</span>}
+                {metaLines === 2 ? part : <span className="min-w-0 truncate not-last:shrink-0">{part}</span>}
               </Fragment>
             ))}
           </span>

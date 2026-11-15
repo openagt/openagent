@@ -14,7 +14,7 @@ import { OptionLabel } from '../components/ui/option-label.js'
 import { DisclosureToggle } from '../components/DisclosureToggle.js'
 import { Section } from '../components/ui/section.js'
 import { List, Row } from '../components/ui/list.js'
-import { PanelGroup, PanelRow } from '../components/ui/panel.js'
+import { Panel, PanelGroup, PanelMore, PanelNote, PanelRow } from '../components/ui/panel.js'
 import { PriorityBadge, StateCell, StatePill, type WorkState } from '../components/ui/state.js'
 import { Stepper } from '../components/ui/stepper.js'
 import { ButtonGroup } from '../components/ui/button-group.js'
@@ -585,6 +585,12 @@ function Panels() {
       </PanelGroup>
       <PanelGroup title="Nothing pressable" count="1">
         <PanelRow state={<StateCell state="done" />} title="Its name only" meta={['what is known of it']} fact="2h" />
+        <PanelMore onClick={() => {}}>Show 4 more</PanelMore>
+      </PanelGroup>
+      <PanelGroup title="Bare: its own panel, a sentence where the rows would be" bare>
+        <Panel>
+          <PanelNote>Nothing waits here.</PanelNote>
+        </Panel>
       </PanelGroup>
     </div>
   )
