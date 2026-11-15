@@ -42,6 +42,7 @@ export const ADDING: Record<Adding, { title: string; page?: true }> = {
   },
   'set-up-server': {
     title: 'Set up a server',
+    page: true,
   },
   join: {
     title: 'Join with a code',

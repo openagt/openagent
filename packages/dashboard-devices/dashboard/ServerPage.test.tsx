@@ -1267,8 +1267,8 @@ describe('Settings › Devices: Set up a server, in steps', () => {
     await waitFor(() => expect(ran()).toContain('connect 203.0.113.5 root 1.2.3'))
     expect(host.runCommand).not.toHaveBeenCalled()
     await waitFor(() => expect(now()).toBe('Install: now'))
-    // Back to Where in another go: the dialog starts over.
-    fireEvent.click(button('Close'))
+    // Back to Where in another go: the page starts over.
+    fireEvent.click(button('Back to Devices'))
     await openConnect()
     expect(now()).toBe('Where: now')
   })

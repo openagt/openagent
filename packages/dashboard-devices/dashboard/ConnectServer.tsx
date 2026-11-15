@@ -1,6 +1,6 @@
 import { useEffect, useState, type FormEvent, type ReactNode } from 'react'
 import { CircleCheck, CircleX, Loader2, PlugZap } from 'lucide-react'
-import { Button, Checkbox, Dialog, Input, RadioGroup, Select, SelectContent, SelectItem, SelectTrigger, SelectValue, cn, useOpenAgentDown, usePolled } from '@openagt/dashboard/module'
+import { Button, Checkbox, Input, RadioGroup, Select, SelectContent, SelectItem, SelectTrigger, SelectValue, cn, useOpenAgentDown, usePolled } from '@openagt/dashboard/module'
 import type { Answer } from './devices.js'
 import { installDone, installFailed, testConnection, type ServerRow, type Tested } from './servers.js'
 import { CopyButton } from './codes.js'
@@ -11,7 +11,7 @@ import type { Devices } from './use-devices.js'
 
 // "Set up a server", in steps: where the server is, a test that this computer gets in there,
 // whether it uses this computer's logins, the install, and who else uses it. The install is the
-// `devices server` command's own process: closing the dialog stops nothing, and the server's row
+// `devices server` command's own process: leaving the page stops nothing, and the server's row
 // shows how far it is. A computer at home, which nothing on the internet reaches, is set up the
 // same way, through a server this computer is in at.
 
@@ -80,82 +80,80 @@ export function ConnectServer({ d, onClose, onInvite }: { d: Devices; onClose: (
 
   const server = installed !== undefined ? d.servers.find(row => row.address === installed) : undefined
   return (
-    <Dialog open onOpenChange={open => !open && onClose()} title="Set up a server">
-      <div className="space-y-4">
-        <Stepper at={stage} />
-        {stage === 'where' && <Where kind={kind} onKind={pickKind} doors={doors.map(door => ({ value: door.url, label: door.label }))} through={through} onVia={setVia} onCancel={onClose} onNext={() => setStage('connect')} />}
-        {stage === 'connect' && (
-          <form onSubmit={event => void test(event)} className="space-y-3">
-            <div className="grid grid-cols-[1fr_8rem] gap-2">
-              <label className="space-y-1">
-                <span className="block text-sm font-medium">{kind === 'tailscale' ? 'Its name on Tailscale' : kind === 'home' ? 'Its address on its network' : 'Its address'}</span>
-                <Input name="server-address" autoFocus aria-label="The server's address" placeholder={kind === 'tailscale' ? 'homepc.tail1234.ts.net' : kind === 'home' ? '192.168.1.40' : '203.0.113.5'} value={address} onChange={event => setAddress(event.target.value)} />
-              </label>
-              <label className="space-y-1">
-                <span className="block text-sm font-medium">User</span>
-                <Input name="server-user" aria-label="User name" placeholder={pc ? 'yours on it' : 'root'} value={user} onChange={event => setUser(event.target.value)} />
-              </label>
-            </div>
-            <p className="text-xs text-muted-foreground">
-              {pc
-                ? 'Your own user on the PC, which becomes root without a password: only to install and to update. What runs there afterwards runs as a user of its own, openagent.'
-                : 'root, or a user that becomes root without a password: only to install and to update. What runs there afterwards runs as a user of its own, openagent.'}
-            </p>
-            <Button type="submit" variant="secondary" loading={testing} disabled={!at || !as || knownWords !== undefined || down}>
-              <PlugZap className="size-4" aria-hidden />
-              Test connection
+    <div className="space-y-4">
+      <Stepper at={stage} />
+      {stage === 'where' && <Where kind={kind} onKind={pickKind} doors={doors.map(door => ({ value: door.url, label: door.label }))} through={through} onVia={setVia} onCancel={onClose} onNext={() => setStage('connect')} />}
+      {stage === 'connect' && (
+        <form onSubmit={event => void test(event)} className="space-y-3">
+          <div className="grid grid-cols-[1fr_8rem] gap-2">
+            <label className="space-y-1">
+              <span className="block text-sm font-medium">{kind === 'tailscale' ? 'Its name on Tailscale' : kind === 'home' ? 'Its address on its network' : 'Its address'}</span>
+              <Input name="server-address" autoFocus aria-label="The server's address" placeholder={kind === 'tailscale' ? 'homepc.tail1234.ts.net' : kind === 'home' ? '192.168.1.40' : '203.0.113.5'} value={address} onChange={event => setAddress(event.target.value)} />
+            </label>
+            <label className="space-y-1">
+              <span className="block text-sm font-medium">User</span>
+              <Input name="server-user" aria-label="User name" placeholder={pc ? 'yours on it' : 'root'} value={user} onChange={event => setUser(event.target.value)} />
+            </label>
+          </div>
+          <p className="text-xs text-muted-foreground">
+            {pc
+              ? 'Your own user on the PC, which becomes root without a password: only to install and to update. What runs there afterwards runs as a user of its own, openagent.'
+              : 'root, or a user that becomes root without a password: only to install and to update. What runs there afterwards runs as a user of its own, openagent.'}
+          </p>
+          <Button type="submit" variant="secondary" loading={testing} disabled={!at || !as || knownWords !== undefined || down}>
+            <PlugZap className="size-4" aria-hidden />
+            Test connection
+          </Button>
+          {knownWords !== undefined && <p role="status" className="text-xs">{knownWords}</p>}
+          {kind === 'tailscale' && at !== '' && !/\.ts\.net$/i.test(at) && <p className="text-xs text-muted-foreground">Its full name on Tailscale, as Tailscale shows it, like homepc.tail1234.ts.net: the door is at that name.</p>}
+          {current !== undefined && !testing && <TestResult answer={current} address={at} user={as} home={pc} />}
+          <Footer>
+            <Button type="button" variant="ghost" onClick={() => setStage('where')}>
+              Back
             </Button>
-            {knownWords !== undefined && <p role="status" className="text-xs">{knownWords}</p>}
-            {kind === 'tailscale' && at !== '' && !/\.ts\.net$/i.test(at) && <p className="text-xs text-muted-foreground">Its full name on Tailscale, as Tailscale shows it, like homepc.tail1234.ts.net: the door is at that name.</p>}
-            {current !== undefined && !testing && <TestResult answer={current} address={at} user={as} home={pc} />}
-            <Footer>
-              <Button type="button" variant="ghost" onClick={() => setStage('where')}>
-                Back
-              </Button>
-              <Button type="button" disabled={!current?.ok || !current.value.ok || knownWords !== undefined || (kind === 'tailscale' && !/\.ts\.net$/i.test(at))} onClick={() => setStage('logins')}>
-                Continue
-              </Button>
-            </Footer>
-          </form>
-        )}
-        {stage === 'logins' && (
-          <div className="space-y-4">
+            <Button type="button" disabled={!current?.ok || !current.value.ok || knownWords !== undefined || (kind === 'tailscale' && !/\.ts\.net$/i.test(at))} onClick={() => setStage('logins')}>
+              Continue
+            </Button>
+          </Footer>
+        </form>
+      )}
+      {stage === 'logins' && (
+        <div className="space-y-4">
+          <label className="flex items-start gap-2 text-sm">
+            <Checkbox className="mt-0.5" checked={useMine} onCheckedChange={checked => setUseMine(checked === true)} aria-label="Use my logins from this computer" />
+            <span>
+              Use my logins from this computer
+              <span className="block text-xs text-muted-foreground">Runs on the server use the accounts you're logged into here. Logging in or out here updates the server.</span>
+            </span>
+          </label>
+          <div className="space-y-1 pl-6 text-xs">
+            <p>The server gets logins of its own. Nothing here is logged out, now or later.</p>
+            <p className="text-muted-foreground">Unchecked: the server has no logins. You can turn it on later on the Permissions page.</p>
+          </div>
+          {remote !== undefined && (
             <label className="flex items-start gap-2 text-sm">
-              <Checkbox className="mt-0.5" checked={useMine} onCheckedChange={checked => setUseMine(checked === true)} aria-label="Use my logins from this computer" />
+              <Checkbox className="mt-0.5" checked={useMine && syncData} disabled={!useMine} onCheckedChange={checked => setSyncData(checked === true)} aria-label="Sync my agent data there too" />
               <span>
-                Use my logins from this computer
-                <span className="block text-xs text-muted-foreground">Runs on the server use the accounts you're logged into here. Logging in or out here updates the server.</span>
+                Sync my agent data there too
+                <span className="block text-xs text-muted-foreground">{`Its agent data syncs with ${remote}, as this computer's does: the same logs, tickets and agents on both. Sent as the GitHub login copied there${useMine ? '' : ', so it needs your logins'}.`}</span>
               </span>
             </label>
-            <div className="space-y-1 pl-6 text-xs">
-              <p>The server gets logins of its own. Nothing here is logged out, now or later.</p>
-              <p className="text-muted-foreground">Unchecked: the server has no logins. You can turn it on later on the Permissions page.</p>
-            </div>
-            {remote !== undefined && (
-              <label className="flex items-start gap-2 text-sm">
-                <Checkbox className="mt-0.5" checked={useMine && syncData} disabled={!useMine} onCheckedChange={checked => setSyncData(checked === true)} aria-label="Sync my agent data there too" />
-                <span>
-                  Sync my agent data there too
-                  <span className="block text-xs text-muted-foreground">{`Its agent data syncs with ${remote}, as this computer's does: the same logs, tickets and agents on both. Sent as the GitHub login copied there${useMine ? '' : ', so it needs your logins'}.`}</span>
-                </span>
-              </label>
-            )}
-            {d.error !== undefined && <Problem>{d.error}</Problem>}
-            <Footer>
-              <Button variant="ghost" onClick={() => setStage('connect')}>
-                Back
-              </Button>
-              {/* Not before this computer has said which OpenAgent it runs: that is the one the server gets. */}
-              <Button loading={d.busy} disabled={!d.machines || down} onClick={() => void install()}>
-                Install
-              </Button>
-            </Footer>
-          </div>
-        )}
-        {stage === 'install' && <Installing d={d} server={server} useMine={useMine} syncData={syncs} onReady={() => setStage('ready')} onClose={onClose} />}
-        {stage === 'ready' && server !== undefined && <Ready d={d} server={server} onInvite={() => onInvite(server.address)} onClose={onClose} />}
-      </div>
-    </Dialog>
+          )}
+          {d.error !== undefined && <Problem>{d.error}</Problem>}
+          <Footer>
+            <Button variant="ghost" onClick={() => setStage('connect')}>
+              Back
+            </Button>
+            {/* Not before this computer has said which OpenAgent it runs: that is the one the server gets. */}
+            <Button loading={d.busy} disabled={!d.machines || down} onClick={() => void install()}>
+              Install
+            </Button>
+          </Footer>
+        </div>
+      )}
+      {stage === 'install' && <Installing d={d} server={server} useMine={useMine} syncData={syncs} onReady={() => setStage('ready')} onClose={onClose} />}
+      {stage === 'ready' && server !== undefined && <Ready d={d} server={server} onInvite={() => onInvite(server.address)} onClose={onClose} />}
+    </div>
   )
 }
 
