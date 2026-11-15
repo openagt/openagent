@@ -189,6 +189,8 @@ export function useDevices({ everyMs, devicesEveryMs, devicesAnswerMs = DEVICES_
   const [notAdded, setNotAdded] = useState<Record<string, string>>({})
   const [pressed, setPressed] = useState<string | undefined>()
   const adding = useRef(new Set<string>())
+  // The servers the page started adding by itself, by address: a page drawn before the add ended still shows the server waiting, and would ask its door for a second link.
+  const addedByItself = useRef(new Set<string>())
   // The servers that are to use this computer's logins once they are saved, by address.
   const wantsLogins = useRef(new Set<string>())
   const [logins, setLogins] = useState<Devices['logins']>({})
@@ -273,7 +275,13 @@ export function useDevices({ everyMs, devicesEveryMs, devicesAnswerMs = DEVICES_
   // A server whose install just ended is added by itself, once: a failure is told, and tried again on a press.
   useEffect(() => {
     if (!machines) return
-    for (const server of servers) if (server.adding && installDone(server) && notAdded[server.address] === undefined) void addToMachines(server)
+    for (const server of servers) {
+      if (!server.adding || !installDone(server)) addedByItself.current.delete(server.address)
+      else if (!addedByItself.current.has(server.address)) {
+        addedByItself.current.add(server.address)
+        void addToMachines(server)
+      }
+    }
   })
 
   const removeMachine = async (id: string): Promise<boolean> => {
