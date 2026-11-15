@@ -3,7 +3,6 @@ import { Ellipsis, FastForward, Play } from 'lucide-react'
 import {
   Button,
   ComposedField,
-  ComposedFieldFoot,
   ComposedFieldInput,
   ConfirmDialog,
   DropdownMenu,
@@ -117,21 +116,27 @@ export function QueuePage({ projects }: ModulePageProps) {
 
   // One project's page: its start is the page's one primary press.
   const only = projects.length === 1 ? reads[0] : undefined
+  // A phone's bar names the page, and the head's row is too narrow for the line and the start: there
+  // the line takes the width, and the count and the start fill the row under it.
+  const phone = useIsMobile()
+  const taker = only && <TakerLine projectId={only.project.id} schedule={schedule} />
 
   return (
     <Page
       title="Queue"
-      description={
-        only ? (
-          <>
-            What agents take next, from the top. <TakerLine projectId={only.project.id} schedule={schedule} />
-          </>
-        ) : (
-          'What agents take next, from the top, one list per project.'
-        )
-      }
-      actions={only && <BatchStart read={only} primary starts={starts} />}
+      {...(phone && only
+        ? {}
+        : {
+            description: only ? <>What agents take next, from the top. {taker}</> : 'What agents take next, from the top, one list per project.',
+            actions: only && <BatchStart read={only} primary starts={starts} />,
+          })}
     >
+      {phone && only && (
+        <div className="mb-4 space-y-3">
+          <p className="text-sm text-muted-foreground">What agents take next, from the top. {taker}</p>
+          <BatchStart read={only} primary fill starts={starts} />
+        </div>
+      )}
       {starts.error && (
         <p role="alert" className="mb-4 text-sm text-danger">
           {starts.error}
@@ -166,7 +171,7 @@ export function QueuePage({ projects }: ModulePageProps) {
  * A project's batch act, as one control: how many, joined to the press the count qualifies. The
  * chevron sends the top entry alone: a launcher can only ever start one agent.
  */
-function BatchStart({ read, primary, starts }: { read: ProjectRead; primary: boolean; starts: QueueStarts }) {
+function BatchStart({ read, primary, fill = false, starts }: { read: ProjectRead; primary: boolean; fill?: boolean; starts: QueueStarts }) {
   const host = useModuleHost()
   const { project } = read
   // An entry an agent is on gets no second one: the batch starts from the top of the others.
@@ -188,6 +193,7 @@ function BatchStart({ read, primary, starts }: { read: ProjectRead; primary: boo
       onConfigure={() => host.configureRun(project.id, workOnEntryPrompt(free[0]!))}
       prompt={workOnEntryPrompt(free[0]!)}
       configureDescription="Opens the launcher with the top entry's prompt: one agent, not the batch."
+      fill={fill}
     />
   )
 }
@@ -223,8 +229,8 @@ function ProjectQueue({ read, names, starts, reload }: { read: ProjectRead; name
 }
 
 /**
- * Whether anything takes from the project's queue by itself, in a sentence under the page's title: the
- * command that works the queue, among the commands the project starts by itself, as whichever
+ * Whether anything takes from the project's queue by itself, in a sentence under the page's title: read
+ * from the command that works the queue, among the commands the project starts by itself, as whichever
  * installed package schedules them says, with the page that changes it.
  */
 function TakerLine({ projectId, schedule }: { projectId: string; schedule: Schedule }) {
@@ -233,13 +239,12 @@ function TakerLine({ projectId, schedule }: { projectId: string; schedule: Sched
   if (known === undefined) return null
   const taker = known.find(command => command.command === QUEUE_COMMAND)
   const page = schedule.page
+  // Said in plain words: the command's name is Automations' to say.
   return (
     <span role="status" aria-label="Who takes from the queue">
-      {taker === undefined ? (
-        'Nothing takes from it by itself: an entry waits until you start it.'
-      ) : (
+      {taker?.on ? 'Agents take from it by themselves, the first entry nobody has claimed.' : 'Nothing takes from it by itself: an entry waits until you start it.'}
+      {taker !== undefined && (
         <>
-          <span className="font-mono text-xs">/{QUEUE_COMMAND}</span> {taker.on ? 'is on: an agent takes the first entry nobody has claimed.' : 'is off: an entry waits until you start it.'}
           {taker.note !== undefined && ` ${taker.note}.`}
           {page && (
             <>
@@ -264,7 +269,7 @@ function origin(entry: string): string | undefined {
 }
 
 /**
- * One entry: what it reads as, then who is on it (the state's mark first) or that it is next, then
+ * One entry: its place in line, what it reads as, then who is on it (the state's mark first) or that it is next, then
  * where it came from, or a typed entry's words after its name, or the line as written
  * where a name stands in for it. Nothing at its right at rest: its one press comes under the pointer
  * and the keyboard, and is always there on touch. A free entry's is "Start now", with removing it in
@@ -288,6 +293,7 @@ function EntryRow({ project, placed, next, names, starts, reload }: { project: M
   return (
     <>
       <PanelRow
+        state={<span className="text-xs tabular-nums text-faint-foreground">{place}</span>}
         title={headline?.name ?? view.title}
         titleHint={entry}
         href={view.url}
@@ -365,8 +371,8 @@ function EntryRow({ project, placed, next, names, starts, reload }: { project: M
 
 /**
  * The field that adds an entry, as one control: the task, the priority section it goes to the end
- * of, and the press, through `queue add`. Beside the pick, one line that stands from the first frame:
- * why the last press did nothing, else where the task goes.
+ * of (said in the pick's title), and the press, through `queue add`. Under it, only after a press that
+ * added nothing, why.
  */
 function AddEntry({ project, reload }: { project: ModuleProject; reload: () => Promise<void> }) {
   const host = useModuleHost()
@@ -399,6 +405,8 @@ function AddEntry({ project, reload }: { project: ModuleProject; reload: () => P
     field.current?.focus()
   }
   const missing = asked && untyped
+  // Why the last press added nothing, under the field; nothing there otherwise.
+  const problem = failed !== undefined ? `Not added: ${failed}` : missing ? 'Write the task first.' : undefined
   return (
     <form
       aria-label={`Add to the queue of ${project.name}`}
@@ -408,20 +416,23 @@ function AddEntry({ project, reload }: { project: ModuleProject; reload: () => P
       }}
     >
       <ComposedField>
-        <ComposedFieldInput
-          ref={field}
-          name="task"
-          value={text}
-          onChange={event => (setText(event.target.value), setFailed(undefined), setAsked(false))}
-          readOnly={adding}
-          placeholder="Add a task: what should an agent do?"
-          aria-label="A task to add to the queue"
-          aria-invalid={missing}
-          aria-describedby={lineId}
-        />
-        <ComposedFieldFoot>
+        {/* One row: the task, the priority it goes in at the end of, the press; on a phone the task over the other two. */}
+        <div className="flex flex-wrap items-center gap-1.5">
+          <div className="min-w-0 flex-1 max-md:basis-full">
+            <ComposedFieldInput
+              ref={field}
+              name="task"
+              value={text}
+              onChange={event => (setText(event.target.value), setFailed(undefined), setAsked(false))}
+              readOnly={adding}
+              placeholder="Add a task: what should an agent do?"
+              aria-label="A task to add to the queue"
+              aria-invalid={missing}
+              {...(problem !== undefined ? { 'aria-describedby': lineId } : {})}
+            />
+          </div>
           <Select items={items} value={String(priority)} disabled={adding} onValueChange={next => setPriority(Number(next))}>
-            <SelectTrigger aria-label="Priority of the new task" className="h-7 w-auto gap-2 border-transparent bg-accent px-2 font-medium hover:border-transparent">
+            <SelectTrigger aria-label="Priority of the new task" title={`Goes to the end of priority ${priority}`} className="h-9 w-32 justify-between border-transparent bg-accent px-3 hover:border-transparent max-md:flex-1">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
@@ -433,14 +444,16 @@ function AddEntry({ project, reload }: { project: ModuleProject; reload: () => P
               ))}
             </SelectContent>
           </Select>
-          <p id={lineId} role={failed !== undefined ? 'alert' : undefined} className={`min-w-0 flex-1 truncate text-xs ${failed !== undefined || missing ? 'text-danger' : 'text-faint-foreground'}`}>
-            {failed !== undefined ? `Not added: ${failed}` : missing ? 'Write the task first.' : `Goes to the end of priority ${priority}`}
-          </p>
-          <Button type="submit" variant="secondary" size="sm" loading={adding} disabled={down} aria-label="Add to queue" title="Add to the queue (Enter)">
+          <Button type="submit" variant="secondary" className="h-9" loading={adding} disabled={down} aria-label="Add to queue" title="Add to the queue (Enter)">
             {adding ? 'Adding…' : 'Add'}
           </Button>
-        </ComposedFieldFoot>
+        </div>
       </ComposedField>
+      {problem !== undefined && (
+        <p id={lineId} role="alert" className="mt-2 text-sm text-danger">
+          {problem}
+        </p>
+      )}
     </form>
   )
 }
