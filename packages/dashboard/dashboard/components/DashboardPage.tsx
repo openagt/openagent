@@ -2,11 +2,13 @@ import type { ActiveAgent, Intervention } from '../../src/index.js'
 import { Fragment, useCallback, useState, type ReactNode } from 'react'
 import { SlidersHorizontal } from 'lucide-react'
 import { Quota } from './Quota.js'
-import { Section } from './ui/section.js'
 import { SentenceShape, Slot } from './ui/slot.js'
 import { PartDescription } from './PartDescription.js'
 import { Button } from './ui/button.js'
-import { HumanQueueList } from './HumanQueueList.js'
+import { useWaitingRows } from './HumanQueueList.js'
+import { Panel, PanelGroup, PanelMore, PanelNote, PanelRow } from './ui/panel.js'
+import { RunMark } from './RunMark.js'
+import { OnComputer } from './MachineMark.js'
 import { updatePreferences, usePreferences, usePreferencesLoaded } from '../lib/preferences.js'
 import { OnboardingChecklist } from './OnboardingChecklist.js'
 import { AgentUpdates } from './AgentUpdates.js'
@@ -119,13 +121,13 @@ export function DashboardPage({
     {
       id: 'human-queue',
       stale: interventionsState === 'kept',
-      label: 'Human Queue',
+      label: 'Needs you',
       order: 5,
       width: '1',
       minWidth: '1/2',
       node: (
         <div id={NEEDS_YOU_ID} className="flex scroll-mt-6 flex-col *:flex-1">
-          <HumanQueue items={interventions} state={interventionsState} onSelectProject={onSelectProject} onSelectAgent={onSelectAgent} />
+          <NeedsYou items={interventions} state={interventionsState} onSelectProject={onSelectProject} onSelectAgent={onSelectAgent} />
         </div>
       ),
     },
@@ -249,53 +251,71 @@ export function DashboardPage({
   )
 }
 
-// The Human Queue (#632/#1139): the cross-project things only a person can clear. Four kinds: open
-// PRs to review (proposals and finished work both surface as PRs) — merge to confirm, close to
-// reject — which open the session that made them, or the PR itself when no run here did; runs
-// paused mid-flight on a question (#636), which jump into that project's live view to answer; and
-// work a finished session left uncommitted or unpushed. #627 notifications fire off the same set.
-function HumanQueue({
+// What needs the person (#632/#1139), the Human Queue: the cross-project things only a person can
+// clear. Four kinds: open PRs to review (proposals and finished work both surface as PRs) — merge to
+// confirm, close to reject — which open the session that made them, or the PR itself when no run here
+// did; runs paused mid-flight on a question (#636), which jump into that project's live view to
+// answer; and work a finished session left uncommitted or unpushed. #627 notifications fire off the
+// same set. One panel, newest first as the queue gives them: a row says what is needed in its line
+// under the run's name, so the kinds need no heading of their own.
+function NeedsYou({
   items,
   state,
   onSelectProject,
   onSelectAgent,
 }: {
   items: Intervention[]
-  /** What is known of the items: until they are read, by this visit or an earlier one, the card says it is loading, not that nothing waits. */
+  /** What is known of the items: until they are read, by this visit or an earlier one, the part waits in a sentence's room, not saying that nothing waits. */
   state: ReadState
   onSelectProject: (id: string) => void
   onSelectAgent: (projectId: string, agentId: string) => void
 }) {
-  const groups = KINDS.map(kind => ({ ...kind, items: items.filter(item => item.kind === kind.value) })).filter(group => group.items.length > 0)
+  const { rows, more, projects } = useWaitingRows(items, onSelectAgent, onSelectProject)
   return (
-    <Section title="Human Queue" count={items.length > 0 ? items.length : undefined}>
+    <PanelGroup bare title={<span className="text-warning">Needs you</span>} count={more ? items.length : undefined}>
       <PartDescription>Agents awaiting your approval, review, or input</PartDescription>
       <Slot of={{ state, value: items }} shape={<SentenceShape />}>
-        {() => items.length === 0 ? (
-          <p className="text-sm text-muted-foreground">AI doesn&apos;t need you.</p>
-        ) : (
-          // One group per kind, under a quiet heading with how many: a few questions are not lost
-          // among many checkouts left to commit. Each group shows its first rows and offers the rest.
-          // Pulled out by the rows' own inset, so their text starts where the heading does.
-          <div className="space-y-3">
-            {groups.map(group => (
-              <Section key={group.value} title={group.label} count={group.items.length}>
-                <div className="-mx-3">
-                  <HumanQueueList grouped items={group.items} onOpenAgent={onSelectAgent} onOpenProject={onSelectProject} />
-                </div>
-              </Section>
+        {() => (
+          <Panel>
+            {rows.length === 0 && <PanelNote>AI doesn&apos;t need you.</PanelNote>}
+            {rows.map(({ key, item, needs, detail, hint, since, href, external, open }) => (
+              <PanelRow
+                key={key}
+                state={<RunMark status="waiting" className="size-2" />}
+                title={item.title}
+                titleHint={hint}
+                // What is needed in the waiting colour, then what it is about; a question is read whole: two lines before it is cut.
+                meta={[<span className="font-medium text-warning">{needs}</span>, detail, projects && item.projectName, item.computer && <OnComputer computer={item.computer} />]}
+                metaLines={2}
+                href={href}
+                external={external}
+                onClick={open}
+                fact={
+                  // Every row carries the press that does what it needs, the same at rest as under the pointer; on a phone the age gives way to it.
+                  <span className="flex items-center gap-3">
+                    {since && <span className="max-md:hidden">{since}</span>}
+                    <Button variant={item.kind === 'awaiting' ? 'default' : 'secondary'} size="sm" aria-label={`${PRESSES[item.kind]}: ${item.title}`} onClick={open} className="relative">
+                      {PRESSES[item.kind]}
+                    </Button>
+                  </span>
+                }
+              />
             ))}
-          </div>
+            {more && <PanelMore onClick={more.toggle}>{more.words}</PanelMore>}
+          </Panel>
         )}
       </Slot>
-    </Section>
+    </PanelGroup>
   )
 }
 
-/** The kinds the card groups its rows by, in the order of how much they hold a run up: a question stops one. */
-const KINDS: { value: Intervention['kind']; label: string; counted: (count: number) => string }[] = [
-  { value: 'awaiting', label: 'Questions', counted: count => (count === 1 ? '1 question' : `${count} questions`) },
-  { value: 'pr', label: 'Pull requests', counted: count => (count === 1 ? '1 pull request' : `${count} pull requests`) },
-  { value: 'unpushed', label: 'To publish', counted: count => `${count} to publish` },
-  { value: 'uncommitted', label: 'To commit', counted: count => `${count} to commit` },
+/** The press on a row that needs the person, by its kind: each opens where it is done, the session (its question, its changes and their Publish) or the request. */
+const PRESSES: Record<Intervention['kind'], string> = { awaiting: 'Answer', pr: 'Review', unpushed: 'Review', uncommitted: 'Review' }
+
+/** The kinds of what needs the person, in the order of how much they hold a run up (a question stops one), as the line under the title counts them. */
+const KINDS: { value: Intervention['kind']; counted: (count: number) => string }[] = [
+  { value: 'awaiting', counted: count => (count === 1 ? '1 question' : `${count} questions`) },
+  { value: 'pr', counted: count => (count === 1 ? '1 pull request' : `${count} pull requests`) },
+  { value: 'unpushed', counted: count => `${count} to publish` },
+  { value: 'uncommitted', counted: count => `${count} to commit` },
 ]
