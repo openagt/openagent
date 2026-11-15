@@ -388,7 +388,7 @@ const FILES_ROW = 'group/row -mx-1.5 mt-2 flex items-start gap-2 rounded-sm px-1
 // A turn's files, and under them the turn's copy and time when the turn ended on them.
 function TurnFiles({ files, onOpen, footer }: { files: readonly ChangedFile[]; onOpen?: ((path?: string) => void) | undefined; footer?: { text: string; at: string | undefined } | undefined }) {
   return (
-    <div className="flex min-w-0 flex-1 flex-col gap-1.5">
+    <div className="flex min-w-0 flex-1 flex-col gap-2">
       <ChangedFiles files={files} onOpen={onOpen} />
       {footer && <ReplyFooter text={footer.text} at={footer.at} />}
     </div>
@@ -1020,7 +1020,7 @@ export function EventList({
                   ) : message !== null ? (
                     // The agent's reply, shown whole, and the last of a finished turn with its footer.
                     footer ? (
-                      <div className="flex min-w-0 flex-1 flex-col gap-1.5">
+                      <div className="flex min-w-0 flex-1 flex-col gap-2">
                         <Reply text={message} />
                         {footer}
                       </div>
@@ -1033,7 +1033,7 @@ export function EventList({
                     <PassedChoice choice={choiceRow.choice} footer={footer} />
                   ) : choiceRow && choiceRow.pick === undefined && projectId !== undefined && agentId !== undefined ? (
                     // The question the agent waits on, answered here, under what it said.
-                    typing ? null : <div className="mt-1 flex min-w-0 flex-1 flex-col gap-1.5">
+                    typing ? null : <div className="mt-1 flex min-w-0 flex-1 flex-col gap-2">
                       <QuestionPanel key={`${agentId}:${chatGate(choiceRow.choice)}`} projectId={projectId} agentId={agentId} choice={choiceRow.choice} askedAt={e.at} active={e === asking} focused={e === openedOn.current} onSaid={onSaid} focusNext={focusNext} />
                       {footer}
                     </div>
