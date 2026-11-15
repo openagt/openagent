@@ -722,7 +722,7 @@ describe('the project select (#1513)', () => {
     answerTwo()
     render(<App />)
     expect(await screen.findByText('card for app, site')).toBeTruthy()
-    // Listed on the Overview and in the sidebar's "Needs you".
+    // Listed on the Overview and in the sidebar's "Waiting on you".
     await waitFor(() => expect(screen.getAllByText('app asks')).toHaveLength(2))
     expect(await screen.findByText('app works')).toBeTruthy()
     expect(await screen.findByText('app ran')).toBeTruthy()

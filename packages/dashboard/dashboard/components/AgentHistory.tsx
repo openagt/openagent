@@ -145,7 +145,7 @@ export function AgentHistory({
   activePage?: string | null
   /** Open a module's page by its segment. */
   onPage?: (segment: string) => void
-  /** What waits on the person (the Human Queue, #632), the picked project's or every project's: the "Needs you" part. */
+  /** What waits on the person (the Human Queue, #632), the picked project's or every project's: the "Waiting on you" part, named as the launcher names it. */
   waiting?: readonly Intervention[]
   /** The address a row or a nav item goes to, as the shell writes it: each is a link, which also opens in a new tab. */
   hrefOf?: (route: Route) => string
@@ -400,7 +400,7 @@ export function AgentHistory({
                 {/* The rows keep the nav's edges, the scrollbar laid over their right padding while it shows. The `!`, as on the
                     nav above: a module's stylesheet has the group's own `p-2`, which would otherwise win on its page. */}
                 {waiting.length > 0 && (
-                  <NeedsYou
+                  <WaitingOnYou
                     waiting={waiting}
                     hrefOf={item => (item.agentId ? hrefOf({ projectId: item.projectId, agentId: item.agentId }) : item.url)}
                     onOpen={item => (item.agentId ? leave(onSelectRecent ?? (() => {}))(item.projectId, item.agentId) : undefined)}
@@ -564,14 +564,14 @@ function NewButton({
 }
 
 /** How many of what waits on the person the sidebar lists before a row offers the rest, as the Human Queue does. */
-const NEEDS_SHOWN = 5
+const WAITING_SHOWN = 5
 
 /**
  * What waits on the person, over the Log: each a run's name in the waiting hexagon and what it needs
  * in the Human Queue's two words; past five, a row that opens the Overview, where the Human Queue
  * lists them all. The Log still lists every run in its order: a run answered stays where it was.
  */
-function NeedsYou({
+function WaitingOnYou({
   waiting,
   hrefOf,
   onOpen,
@@ -586,12 +586,12 @@ function NeedsYou({
   moreHref: string
   onMore: () => void
 }) {
-  const shown = waiting.slice(0, NEEDS_SHOWN)
+  const shown = waiting.slice(0, WAITING_SHOWN)
   const rest = waiting.length - shown.length
   const rowClass = 'focus-ring flex w-full items-center gap-3 rounded-md px-2 text-left text-sm text-foreground transition-colors hover:bg-foreground/4 active:bg-foreground/8 md:h-8 max-md:h-11'
   return (
     <SidebarGroup className="pt-3! pb-0!">
-      <SidebarGroupLabel>Needs you</SidebarGroupLabel>
+      <SidebarGroupLabel>Waiting on you</SidebarGroupLabel>
       <SidebarGroupContent>
         <SidebarMenu className="gap-0.5">
           {shown.map(item => {

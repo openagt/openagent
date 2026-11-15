@@ -68,7 +68,7 @@ describe('AgentHistory (#785)', () => {
     renderRail(
       <AgentHistory projectId="p1" scope="p1" agents={[]} selectedAgentId={null} onSelect={() => {}} onSelectRecent={onSelectRecent} onDashboard={onDashboard} homeHref="/p1" waiting={[1, 2, 3, 4, 5, 6].map(asks)} hrefOf={route => `/${route.projectId}/${route.agentId}`} />,
     )
-    expect(screen.getByText('Needs you')).toBeTruthy()
+    expect(screen.getByText('Waiting on you')).toBeTruthy()
     const row = screen.getByRole('link', { name: 'Run 1 · Needs answer' })
     expect(row.getAttribute('href')).toBe('/p1/r1')
     expect(row.textContent).toBe('Run 1Needs answer')
@@ -80,9 +80,9 @@ describe('AgentHistory (#785)', () => {
     expect(screen.getByRole('link', { name: 'Overview' }).textContent).toBe('Overview')
   })
 
-  test('with nothing waiting there is no "Needs you" part', () => {
+  test('with nothing waiting there is no "Waiting on you" part', () => {
     renderRail(<AgentHistory projectId="p1" scope="p1" agents={[agent()]} selectedAgentId={null} onSelect={() => {}} />)
-    expect(screen.queryByText('Needs you')).toBeNull()
+    expect(screen.queryByText('Waiting on you')).toBeNull()
   })
 
   test('a row and a nav item are links to their pages: a plain click goes there in place, a Ctrl+click is the browser\'s, for a new tab', () => {
