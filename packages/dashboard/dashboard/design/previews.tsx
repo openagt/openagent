@@ -14,6 +14,7 @@ import { OptionLabel } from '../components/ui/option-label.js'
 import { DisclosureToggle } from '../components/DisclosureToggle.js'
 import { Section } from '../components/ui/section.js'
 import { List, Row } from '../components/ui/list.js'
+import { PriorityBadge, StateCell, StatePill, type WorkState } from '../components/ui/state.js'
 import { RowShapes, Slot } from '../components/ui/slot.js'
 import { ChevronRight, Folder, Trash2 } from 'lucide-react'
 import { JumpPalette, openJump } from '../components/JumpPalette.js'
@@ -524,6 +525,40 @@ function EmptyStates() {
   )
 }
 
+// ---------------------------------------------------------------- the look's parts
+
+const STATES: WorkState[] = ['working', 'waiting', 'queued', 'done', 'merged', 'failed', 'stopped', 'idle']
+
+function States() {
+  return (
+    <div className="space-y-4">
+      <Labelled label="The cell">
+        {STATES.map(state => (
+          <span key={state} className="inline-flex items-center gap-2 text-sm">
+            <StateCell state={state} />
+            {state}
+          </span>
+        ))}
+      </Labelled>
+      <Labelled label="As a pill">
+        <StatePill state="working">Working · 7m</StatePill>
+        <StatePill state="waiting">Needs you</StatePill>
+        <StatePill state="queued">Queued</StatePill>
+        <StatePill state="done">Done</StatePill>
+        <StatePill state="merged">Merged</StatePill>
+        <StatePill state="failed">Failed</StatePill>
+        <StatePill state="stopped">Stopped</StatePill>
+      </Labelled>
+      <Labelled label="A priority">
+        <PriorityBadge priority={10} />
+        <PriorityBadge priority={8} />
+        <PriorityBadge priority={5} />
+        <PriorityBadge priority={0} />
+      </Labelled>
+    </div>
+  )
+}
+
 // ---------------------------------------------------------------- registry
 
 const LONG_TITLE = 'Move the release notes for every package into one page the website renders, and link each version from the changelog of its own'
@@ -663,6 +698,14 @@ export const PREVIEWS: Preview[] = [
     subtitle: 'A heading with its count and press, then rows on the page or boxed, a link, a press, or holding their own action',
     width: 900,
     node: <Lists />,
+  },
+  {
+    path: 'components/state.html',
+    group: 'Components',
+    name: 'State marks + priority',
+    subtitle: 'The logo\'s hexagon in each state, alone and as a pill; a priority as P8',
+    width: 900,
+    node: <States />,
   },
   {
     path: 'components/disclosure.html',
