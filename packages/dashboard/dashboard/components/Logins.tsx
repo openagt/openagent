@@ -97,7 +97,10 @@ export function CommandLine({ command }: { command: string }) {
   const long = command.length > LONG
   return (
     <div className="flex min-w-0 items-start gap-1">
-      <code className={cn('min-w-0 flex-1 font-mono text-[11px] text-muted-foreground', long && !whole ? 'truncate' : 'break-all')}>{command}</code>
+      {/* Broken between its words where a line is too narrow for it, and inside one only when that
+          word alone is wider than the line: "| bash" never splits as "bas" / "h" on a phone. No wider
+          than itself, so its copy button stands beside it, not at the far end of a wide card. */}
+      <code className={cn('min-w-0 font-mono text-[11px] text-muted-foreground', long && !whole ? 'truncate' : '[overflow-wrap:anywhere]')}>{command}</code>
       {long && (
         <button type="button" className="shrink-0 text-[11px] text-muted-foreground underline-offset-2 hover:text-foreground hover:underline" onClick={() => setWhole(!whole)}>
           {whole ? 'Less' : 'Show all'}
