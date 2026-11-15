@@ -4,7 +4,7 @@ import { onAgentMainBranch, onAgentsDoing, onGitHostHome, onRetainedWorktrees } 
 import { useLoaded, usePolled } from '../lib/use-async.js'
 import { handoffSays, useAgentHandoff } from '../lib/use-agent-handoff.js'
 import { useCheckoutStatus } from '../lib/use-checkout-status.js'
-import { agentOutcome, cardOutcome } from '../lib/live-state.js'
+import { agentOutcome, cardOutcome, pendingChoices, shownStatus } from '../lib/live-state.js'
 import { useAgentFeed } from '../lib/use-agent-feed.js'
 import { AgentActionBar } from './AgentActionBar.js'
 import { SessionRow } from './SessionRow.js'
@@ -350,6 +350,7 @@ export function AgentView({
             onToggle={toggle}
             ready={ready}
             checkout={checkout}
+            status={ready ? shownStatus(live === null && !feedLive ? null : feedLive, feedLive && pendingChoices(shown).length > 0, outcome, pr?.state === 'MERGED') : undefined}
             {...(workBar.away && say ? { onShowWorkBar: workBar.show } : {})}
           />
           {/* The always-available session-details strip: agent + spend (#322). What the run changed is

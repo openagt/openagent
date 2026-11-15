@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'vitest'
 import type { OpenAgentEvent } from '../../src/index.js'
-import { pendingChoices, isAgentActive, currentAgentEvents, agentOutcome, cardOutcome, actionsRunUrl } from './live-state.js'
+import { pendingChoices, isAgentActive, currentAgentEvents, agentOutcome, cardOutcome, actionsRunUrl, shownStatus } from './live-state.js'
 
 const choice = (id: string, title: string): OpenAgentEvent => ({
   kind: 'choice',
@@ -183,5 +183,18 @@ describe('actionsRunUrl', () => {
     expect(
       actionsRunUrl([action('run https://github.com/o/r/actions/runs/1'), action('run https://github.com/o/r/actions/runs/2')]),
     ).toBe('https://github.com/o/r/actions/runs/2')
+  })
+})
+
+describe('shownStatus', () => {
+  test('a question that waits on the person comes first, then that it works, then a merged request, then how it ended', () => {
+    expect(shownStatus(true, true, undefined, false)).toBe('waiting')
+    expect(shownStatus(false, false, { ok: false, stopped: false, waiting: true }, false)).toBe('waiting')
+    expect(shownStatus(true, false, undefined, false)).toBe('running')
+    expect(shownStatus(false, false, { ok: true, stopped: false }, true)).toBe('merged')
+    expect(shownStatus(false, false, { ok: true, stopped: false }, false)).toBe('done')
+    expect(shownStatus(false, false, { ok: false, stopped: true }, false)).toBe('stopped')
+    expect(shownStatus(false, false, { ok: false, stopped: false }, false)).toBe('failed')
+    expect(shownStatus(null, false, undefined, false)).toBeUndefined()
   })
 })

@@ -42,6 +42,12 @@ describe('AgentActionBar', () => {
     expect(screen.getAllByRole('button')).toHaveLength(2)
   })
 
+  test('the run\'s state stands after its name, in the run table\'s word on its soft fill', () => {
+    const { container } = render(<AgentActionBar projectId="p1" agentId="run-1" events={AGENTS.running!} label="Dark mode" checkout={DIRTY} status="running" />)
+    expect(container.textContent).toBe('[Dark mode ⌄]Working[⋮]')
+    expect(container.querySelector('svg')!.getAttribute('class')).toContain('text-info')
+  })
+
   test('the project\'s ⋮ stands where the "New agent session" page has it: past the spacer, just before the panes\' icons, acting on the project', () => {
     const removed = () => {}
     const error = { kind: 'error', message: 'The push was rejected' }
