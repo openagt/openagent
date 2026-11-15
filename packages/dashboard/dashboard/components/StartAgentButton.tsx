@@ -33,6 +33,74 @@ import {
 // A split button, not a control revealed on hover: what a hover reveals is reachable by neither
 // keyboard nor touch, and the row the pointer is on is not always the row that is meant.
 
+/**
+ * A start's press alone, without the chevron: for a row whose own menu carries "Configure first,
+ * then run" with the row's other choices (a queue entry's "⋯"), so the row has one menu. Busy and
+ * out as {@link StartAgentButton}'s press is: while a start is in flight and while OpenAgent does
+ * not answer.
+ */
+export function StartAgentPress({
+  icon,
+  label,
+  busyLabel = 'Starting…',
+  ariaLabel,
+  tooltip,
+  tooltipClassName,
+  onStart,
+  busy = false,
+  starting = false,
+  disabled = false,
+  variant = 'outline',
+  size = 'sm',
+  className,
+}: {
+  /** Its icon; swapped for a spinner while this press's own start is in flight. */
+  icon: ReactNode
+  /** Its text. Omitted on the dense rows, which are icon-only — pass `ariaLabel` there. */
+  label?: string | undefined
+  /** What it reads while this press's own start is in flight. */
+  busyLabel?: string | undefined
+  /** Its accessible name. Required where there is no `label` to serve as one. */
+  ariaLabel?: string | undefined
+  /** What it promises on hover: what it does, and what it is about to spend. */
+  tooltip: ReactNode
+  tooltipClassName?: string | undefined
+  onStart: () => void
+  /** A start is in flight somewhere on this surface: the press is out until it settles. */
+  busy?: boolean | undefined
+  /** *This* press's start is the one in flight, so only it reads as busy. */
+  starting?: boolean | undefined
+  /** There is nothing to act on at all (no project picked). */
+  disabled?: boolean | undefined
+  variant?: 'default' | 'secondary' | 'outline' | 'ghost' | undefined
+  size?: 'sm' | 'default' | 'icon-sm' | undefined
+  className?: string | undefined
+}) {
+  // OpenAgent is not answering: a start cannot reach it.
+  const down = useContext(DaemonDown)
+  return (
+    <Tooltip>
+      <TooltipTrigger
+        render={
+          <Button
+            type="button"
+            variant={variant}
+            size={size}
+            disabled={disabled || busy || down}
+            onClick={onStart}
+            {...(ariaLabel ? { 'aria-label': ariaLabel } : {})}
+            className={className}
+          />
+        }
+      >
+        {starting ? <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden /> : icon}
+        {label !== undefined && (starting ? busyLabel : label)}
+      </TooltipTrigger>
+      <TooltipContent {...(tooltipClassName ? { className: tooltipClassName } : {})}>{tooltip}</TooltipContent>
+    </Tooltip>
+  )
+}
+
 /** One more choice in a start button's menu. */
 export interface StartMenuItem {
   label: string
@@ -121,31 +189,25 @@ export function StartAgentButton({
     stashPendingDraft(prompt)
     onConfigure()
   }
-  // OpenAgent is not answering: a start cannot reach it.
-  const down = useContext(DaemonDown)
 
   return (
     <ButtonGroup {...(fill ? { className: 'w-full' } : {})}>
       {leading}
-      <Tooltip>
-        <TooltipTrigger
-          render={
-            <Button
-              type="button"
-              variant={variant}
-              size={size}
-              disabled={disabled || busy || down}
-              onClick={onStart}
-              {...(ariaLabel ? { 'aria-label': ariaLabel } : {})}
-              className={cn(fill && 'flex-1', className)}
-            />
-          }
-        >
-          {starting ? <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden /> : icon}
-          {label !== undefined && (starting ? busyLabel : label)}
-        </TooltipTrigger>
-        <TooltipContent {...(tooltipClassName ? { className: tooltipClassName } : {})}>{tooltip}</TooltipContent>
-      </Tooltip>
+      <StartAgentPress
+        icon={icon}
+        label={label}
+        busyLabel={busyLabel}
+        ariaLabel={ariaLabel}
+        tooltip={tooltip}
+        tooltipClassName={tooltipClassName}
+        onStart={onStart}
+        busy={busy}
+        starting={starting}
+        disabled={disabled}
+        variant={variant}
+        size={size}
+        className={cn(fill && 'flex-1', className)}
+      />
       {/* A filled pair has no border to tell its halves apart: a hairline does. An outline pair shares
           its border, and a ghost pair needs none — nothing is drawn between them until one is hovered. */}
       {variant === 'default' && <ButtonGroupSeparator className="bg-[var(--color-primary-foreground)]" />}

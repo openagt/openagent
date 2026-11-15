@@ -154,6 +154,21 @@ describe('QueuePage', () => {
       await waitFor(() => expect(host.startRun.mock.calls).toEqual([['p1', workOnEntryPrompt('Hot fix')]]))
     })
 
+    test('beside a free entry\'s "Start now", its menu sets a run up first or removes it; one an agent is on, only removes it', async () => {
+      host = fakeHost({ p1: { '--local --full': FULL } })
+      host.agents.mockImplementation(async () => [{ id: 'run-7', status: 'running', startedAt: '2026-10-01T10:00:00.000Z', ask: workOnEntryPrompt('Hand-written on top') }])
+      renderWithHost(<QueuePage projects={[alpha]} projectId={null} path={[]} />, host)
+      await screen.findByRole('button', { name: /^An agent is on it/ })
+      await openMenu(screen.getByRole('button', { name: 'More for entry 1' }))
+      expect(screen.getAllByRole('menuitem').map(item => item.textContent)).toEqual(['Remove from the queue'])
+      fireEvent.keyDown(document.activeElement!, { key: 'Escape' })
+      await waitFor(() => expect(screen.queryByRole('menu')).toBeNull())
+      await openMenu(screen.getByRole('button', { name: 'More for entry 2' }))
+      expect(screen.getAllByRole('menuitem').map(item => item.textContent)).toEqual(['Configure first, then run', 'Remove from the queue'])
+      fireEvent.click(screen.getByRole('menuitem', { name: 'Configure first, then run' }))
+      expect(host.configureRun).toHaveBeenCalledWith('p1', workOnEntryPrompt('Hot fix'))
+    })
+
     test('the batch starts one agent per entry from the top, as many as the count says, without leaving the page', async () => {
       show()
       await screen.findByText('Hot fix')

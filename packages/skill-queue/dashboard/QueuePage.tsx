@@ -21,6 +21,7 @@ import {
   SelectValue,
   Slot,
   StartAgentButton,
+  StartAgentPress,
   StateCell,
   inPlace,
   pathsIn,
@@ -291,9 +292,10 @@ function origin(entry: string): string | undefined {
 /**
  * One entry: its place in line, what it reads as, then who is on it (the state's mark first), where it
  * came from, or a typed entry's words after its name, or the line as written where a name stands in
- * for it, each part starting with a capital. Nothing at its right at rest: its one press comes under the pointer
- * and the keyboard, and is always there on touch. A free entry's is "Start now", with removing it in
- * its menu; one an agent is on, and every entry on a phone, has a menu alone, with all it offers.
+ * for it, each part starting with a capital. Nothing at its right at rest: its presses come under the
+ * pointer and the keyboard, and are always there on touch. Every entry has one menu ("⋯"): "Configure
+ * first, then run" where nobody is on it, and its removal. A free entry has "Start now" before it, and
+ * on a phone, where a row has one press, "Start now" is the menu's first item.
  */
 function EntryRow({ project, placed, names, starts, reload }: { project: ModuleProject; placed: Numbered; names: FileNames; starts: QueueStarts; reload: () => Promise<void> }) {
   const host = useModuleHost()
@@ -309,7 +311,9 @@ function EntryRow({ project, placed, names, starts, reload }: { project: ModuleP
     if (!answer.ok) throw new Error(answer.error)
     await reload()
   }
-  const menuLabel = `More for entry ${place}`
+  // Nobody is on it: it can be started, from its press beside its menu, or on a phone from its menu.
+  const free = agent === undefined
+  const start = (): void => void starts.startEntry(project.id, entry)
   return (
     <>
       <PanelRow
@@ -331,41 +335,35 @@ function EntryRow({ project, placed, names, starts, reload }: { project: ModuleP
           view.renamed && <span className="font-mono">{entry}</span>,
         ]}
         actions={
-          agent === undefined && !phone ? (
-            <StartAgentButton
-              variant="secondary"
-              size="sm"
-              icon={<Play className="size-3.5" aria-hidden />}
-              label="Start now"
-              ariaLabel={`Start now: entry ${place}`}
-              menuAriaLabel={menuLabel}
-              tooltip="Start an agent working on this entry"
-              busy={starts.inFlight}
-              starting={starts.starting(project.id, entry)}
-              onStart={() => void starts.startEntry(project.id, entry)}
-              onConfigure={() => host.configureRun(project.id, workOnEntryPrompt(entry))}
-              prompt={workOnEntryPrompt(entry)}
-              configureDescription="Opens the launcher with this entry's prompt, so you can set the model and where it runs."
-              moreItems={[{ label: 'Remove from the queue', onSelect: () => setRemoving(true) }]}
-            />
-          ) : (
+          <>
+            {free && !phone && (
+              <StartAgentPress
+                variant="secondary"
+                size="sm"
+                icon={<Play className="size-3.5" aria-hidden />}
+                label="Start now"
+                ariaLabel={`Start now: entry ${place}`}
+                tooltip="Start an agent working on this entry"
+                busy={starts.inFlight}
+                starting={starts.starting(project.id, entry)}
+                onStart={start}
+              />
+            )}
             <DropdownMenu>
-              <DropdownMenuTrigger render={<Button variant="ghost" size="icon-sm" aria-label={menuLabel} className="-mr-1.5" />}>
+              <DropdownMenuTrigger render={<Button variant="ghost" size="icon-sm" aria-label={`More for entry ${place}`} className="-mr-1.5" />}>
                 <Ellipsis className="size-4" aria-hidden />
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end">
-                {agent === undefined && (
-                  <>
-                    <DropdownMenuItem disabled={starts.inFlight || down} onClick={() => void starts.startEntry(project.id, entry)}>
-                      Start now
-                    </DropdownMenuItem>
-                    <DropdownMenuItem onClick={() => host.configureRun(project.id, workOnEntryPrompt(entry))}>Configure first, then run</DropdownMenuItem>
-                  </>
+                {free && phone && (
+                  <DropdownMenuItem disabled={starts.inFlight || down} onClick={start}>
+                    Start now
+                  </DropdownMenuItem>
                 )}
+                {free && <DropdownMenuItem onClick={() => host.configureRun(project.id, workOnEntryPrompt(entry))}>Configure first, then run</DropdownMenuItem>}
                 <DropdownMenuItem onClick={() => setRemoving(true)}>Remove from the queue</DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
-          )
+          </>
         }
       />
       <ConfirmDialog
