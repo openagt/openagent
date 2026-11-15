@@ -4,12 +4,13 @@ import { inPlace } from '../../lib/in-place.js'
 import { cardSurface } from './card.js'
 import { useHeadingTag } from './section.js'
 
-/** Rows held as one object: a card that is the list itself, its rows reaching its edges, a hairline between them. */
-export function Panel({ className, children, ...props }: { className?: string; children: ReactNode; 'aria-label'?: string }) {
+/** Rows held as one object: a card that is the list itself, its rows reaching its edges, a hairline between them. `ordered`: rows a person goes through in turn (numbered steps). */
+export function Panel({ ordered = false, className, children, ...props }: { ordered?: boolean; className?: string; children: ReactNode; 'aria-label'?: string; 'aria-hidden'?: boolean }) {
+  const List = ordered ? 'ol' : 'ul'
   return (
-    <ul {...props} className={cn(cardSurface, 'overflow-hidden', className)}>
+    <List {...props} className={cn(cardSurface, 'overflow-hidden', className)}>
       {children}
-    </ul>
+    </List>
   )
 }
 
