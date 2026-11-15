@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { Monitor, Ticket } from 'lucide-react'
-import { Button, Dialog, List, RadioGroup, Row, buttonVariants, useOpenAgentDown, type ModuleMachine } from '@openagt/dashboard/module'
+import { Button, List, RadioGroup, Row, buttonVariants, useOpenAgentDown, type ModuleMachine } from '@openagt/dashboard/module'
 import { addDevice, findComputers, readPersonThere, setSwitch, type Answer, type FoundComputer, type Given } from './devices.js'
 import { askLink, installDone } from './servers.js'
 import { CodeCard, Joined, NoCodeYet, PhoneCode, RanOut, Waiting, clock, useCode } from './codes.js'
@@ -20,7 +20,7 @@ import type { Devices } from './use-devices.js'
 // is typed in. The address keeps which one is open: a reload stays on it.
 
 /** A way of adding, by the word the address keeps it under. */
-export type Adding = 'add' | 'add-phone' | 'add-computer' | 'set-up-server' | 'join'
+export type Adding = 'add' | 'add-phone' | 'add-computer' | 'give-code' | 'set-up-server' | 'join'
 
 /** Each way of adding: its title, and whether it is a page of Settings › Devices or a dialog over it. */
 export const ADDING: Record<Adding, { title: string; page?: true }> = {
@@ -34,6 +34,11 @@ export const ADDING: Record<Adding, { title: string; page?: true }> = {
   },
   'add-computer': {
     title: 'Add computer',
+    page: true,
+  },
+  'give-code': {
+    title: 'Give it a code',
+    page: true,
   },
   'set-up-server': {
     title: 'Set up a server',
@@ -57,7 +62,7 @@ const KINDS: readonly { id: Adding; title: string; words: string }[] = [
 const TAILSCALE_FIRST_OPEN = 'The first open of a Tailscale address can take a few seconds. If the page stays black, reload it.'
 
 /**
- * The names of the devices on the list, and whose new one got in: what a code's dialog says once
+ * The names of the devices on the list, and whose new one got in: what a code's page says once
  * one did. A code from a server's door (`at`, by its address) is watched on that server's own list
  * of devices, as the list of this computer's devices never shows a server at home's.
  */
@@ -88,7 +93,12 @@ export function useJoined(d: Devices, waiting: boolean, at?: string): string | u
 export function AddDevice({ d, adding, isServer, onAdd, onClose, onInvite, onJoined }: { d: Devices; adding: Adding; /** This computer is a server: it sets up no server. */ isServer: boolean; /** Go on to another way of adding. */ onAdd: (adding: Adding) => void; onClose: () => void; /** Add people to a server just set up. */ onInvite: (address: string) => void; /** A computer someone shared was joined: its page, by its machine's id. */ onJoined: (machineId: string) => void }) {
   if (adding === 'add') return <Choose kinds={isServer ? KINDS.filter(kind => kind.id !== 'set-up-server') : KINDS} onPicked={onAdd} onClose={onClose} />
   if (adding === 'add-phone') return <AddPhone d={d} onClose={onClose} />
-  if (adding === 'add-computer') return <AddComputer d={d} onClose={onClose} />
+  if (adding === 'add-computer') return <AddComputer d={d} onGive={() => onAdd('give-code')} onClose={onClose} />
+  if (adding === 'give-code') {
+    // A code for a computer somewhere else goes through a server: with none, the computers on this Wi-Fi.
+    const server = serversOf(d)[0]
+    return server ? <GiveCode d={d} server={server} onClose={onClose} /> : <AddComputer d={d} onGive={() => onAdd('give-code')} onClose={onClose} />
+  }
   if (adding === 'set-up-server') return <ConnectServer d={d} onClose={onClose} onInvite={onInvite} />
   return <JoinDialog d={d} onClose={onClose} onJoined={onJoined} />
 }
@@ -124,7 +134,7 @@ function Choose({ kinds, onPicked, onClose }: { kinds: typeof KINDS; onPicked: (
 export const serversOf = (d: Devices): ModuleMachine[] =>
   (d.machines?.machines ?? []).filter(machine => hasDoor(machine) && machine.owner === undefined && !d.servers.some(server => server.url === machine.url && !installDone(server)))
 
-/** A code from a server's door, as the dialogs show it. */
+/** A code from a server's door, as the pages show it. */
 const codeAt = async (d: Devices, server: ModuleMachine): Promise<Answer<Given>> => {
   const asked = await d.host.machineCode(server.id)
   return asked.ok ? { ok: true, value: asked.value } : asked
@@ -294,12 +304,11 @@ function useFound(d: Devices, looking: boolean): { found: FoundComputer[] | unde
   return { found, error }
 }
 
-function AddComputer({ d, onClose }: { d: Devices; onClose: () => void }) {
+function AddComputer({ d, onGive, onClose }: { d: Devices; /** Give a computer somewhere else a code, through a server. */ onGive: () => void; onClose: () => void }) {
   const down = useOpenAgentDown()
   const status = d.door?.ok ? d.door.value : undefined
-  const [giving, setGiving] = useState(false)
   const [connecting, setConnecting] = useState<FoundComputer | undefined>()
-  const { found, error } = useFound(d, !giving && connecting === undefined)
+  const { found, error } = useFound(d, connecting === undefined)
   const [noneYet, setNoneYet] = useState(false)
   useEffect(() => {
     const timer = setTimeout(() => setNoneYet(true), NONE_YET_MS)
@@ -307,45 +316,42 @@ function AddComputer({ d, onClose }: { d: Devices; onClose: () => void }) {
   }, [])
   const server = serversOf(d)[0]
 
-  if (giving && server) return <GiveCode d={d} server={server} onClose={onClose} />
   // The other computer starts runs here too, when this computer's door can let it in.
   if (connecting) return <Connecting d={d} computer={connecting} canBoth={status?.listening === true} onBack={() => setConnecting(undefined)} onClose={onClose} />
 
   return (
-    <Dialog open onOpenChange={next => !next && onClose()} title="Add computer">
-      <div className="space-y-3">
-        <Waiting>{noneYet && !found?.length ? 'No computer found on this Wi-Fi yet. Still looking…' : 'Looking on this Wi-Fi…'}</Waiting>
-        {error !== undefined && <Problem>{error}</Problem>}
-        {found !== undefined && found.length > 0 && (
-          <List aria-label="On this Wi-Fi">
-            {found.map((computer, at) => (
-              <Row
-                key={computer.url}
-                leading={<Monitor className="size-4" aria-hidden />}
-                title={computer.name}
-                {...(computer.version !== undefined ? { detail: `OpenAgent ${computer.version}` } : {})}
-                meta={
-                  <Button variant={at === 0 ? 'default' : 'secondary'} disabled={down} aria-label={`Connect ${computer.name}`} onClick={() => setConnecting(computer)}>
-                    Connect
-                  </Button>
-                }
-              />
-            ))}
-          </List>
-        )}
-        <p className="text-xs text-muted-foreground">Don't see it? Open OpenAgent on it, on the same Wi-Fi, with "On this Wi-Fi" on there.</p>
-        <div className="flex flex-wrap items-center justify-between gap-3 pt-3">
-          <span className="text-sm font-medium">
-            Somewhere else?
-            <span className="block text-xs font-normal text-muted-foreground">{server ? `At the office, at a friend's: it joins through ${server.label}.` : "At the office, at a friend's: it joins through a server. Add a server first."}</span>
-          </span>
-          <Button type="button" variant="secondary" disabled={!server} onClick={() => setGiving(true)}>
-            <Ticket className="size-4" aria-hidden />
-            Give it a code
-          </Button>
-        </div>
+    <div className="space-y-3">
+      <Waiting>{noneYet && !found?.length ? 'No computer found on this Wi-Fi yet. Still looking…' : 'Looking on this Wi-Fi…'}</Waiting>
+      {error !== undefined && <Problem>{error}</Problem>}
+      {found !== undefined && found.length > 0 && (
+        <List aria-label="On this Wi-Fi">
+          {found.map((computer, at) => (
+            <Row
+              key={computer.url}
+              leading={<Monitor className="size-4" aria-hidden />}
+              title={computer.name}
+              {...(computer.version !== undefined ? { detail: `OpenAgent ${computer.version}` } : {})}
+              meta={
+                <Button variant={at === 0 ? 'default' : 'secondary'} disabled={down} aria-label={`Connect ${computer.name}`} onClick={() => setConnecting(computer)}>
+                  Connect
+                </Button>
+              }
+            />
+          ))}
+        </List>
+      )}
+      <p className="text-xs text-muted-foreground">Don't see it? Open OpenAgent on it, on the same Wi-Fi, with "On this Wi-Fi" on there.</p>
+      <div className="flex flex-wrap items-center justify-between gap-3 pt-3">
+        <span className="text-sm font-medium">
+          Somewhere else?
+          <span className="block text-xs font-normal text-muted-foreground">{server ? `At the office, at a friend's: it joins through ${server.label}.` : "At the office, at a friend's: it joins through a server. Add a server first."}</span>
+        </span>
+        <Button type="button" variant="secondary" disabled={!server} onClick={onGive}>
+          <Ticket className="size-4" aria-hidden />
+          Give it a code
+        </Button>
       </div>
-    </Dialog>
+    </div>
   )
 }
 
@@ -402,38 +408,36 @@ export function GiveCode({ d, server, onClose }: { d: Devices; server: ModuleMac
   const done = joined?.saved === true
 
   return (
-    <Dialog open onOpenChange={open => !open && onClose()} title="Give it a code">
-      <div className="space-y-4">
-        {done ? (
-          <Joined words={line ? 'Runs go both ways, through ' + server.label + '. The code is spent.' : `Your runs can go there. Turn on "From anywhere, through ${server.label}" for its runs to come here.`}>{`${joined!.name} is in.`}</Joined>
-        ) : asking || error !== undefined || !code?.where || !code.code ? (
-          <NoCodeYet asking={asking} error={error ?? (code ? 'the server gives no code to type yet: update it first' : undefined)} />
-        ) : expired && joined === undefined ? (
-          <RanOut />
-        ) : (
-          <>
-            <p className="text-sm">
-              On the other computer, open <span className="font-medium">Settings › Devices › Add device › I have a code</span>, and type:
-            </p>
-            <CodeCard where={code.where} code={code.code} />
-            {joined !== undefined ? (
-              <Waiting>{`${joined.name} is in. Waiting for it to keep its line at ${server.label}, so runs go both ways…`}</Waiting>
-            ) : (
-              <Waiting>{`Waiting… the code works once, for ${clock(left)}. It joins as yours, through ${server.label}.`}</Waiting>
-            )}
-          </>
-        )}
-        <div className="flex justify-end gap-2 max-md:[&_button]:h-11">
-          <Button variant={done ? 'default' : 'ghost'} onClick={onClose}>
-            {done ? 'Done' : 'Cancel'}
-          </Button>
-          {!asking && !done && (expired || error !== undefined || !code) && joined === undefined && (
-            <Button variant="secondary" disabled={down} onClick={() => void again()}>
-              New code
-            </Button>
+    <div className="space-y-4">
+      {done ? (
+        <Joined words={line ? 'Runs go both ways, through ' + server.label + '. The code is spent.' : `Your runs can go there. Turn on "From anywhere, through ${server.label}" for its runs to come here.`}>{`${joined!.name} is in.`}</Joined>
+      ) : asking || error !== undefined || !code?.where || !code.code ? (
+        <NoCodeYet asking={asking} error={error ?? (code ? 'the server gives no code to type yet: update it first' : undefined)} />
+      ) : expired && joined === undefined ? (
+        <RanOut />
+      ) : (
+        <>
+          <p className="text-sm">
+            On the other computer, open <span className="font-medium">Settings › Devices › Add device › I have a code</span>, and type:
+          </p>
+          <CodeCard where={code.where} code={code.code} />
+          {joined !== undefined ? (
+            <Waiting>{`${joined.name} is in. Waiting for it to keep its line at ${server.label}, so runs go both ways…`}</Waiting>
+          ) : (
+            <Waiting>{`Waiting… the code works once, for ${clock(left)}. It joins as yours, through ${server.label}.`}</Waiting>
           )}
-        </div>
+        </>
+      )}
+      <div className="flex justify-end gap-2 max-md:[&_button]:h-11">
+        <Button variant={done ? 'default' : 'ghost'} onClick={onClose}>
+          {done ? 'Done' : 'Cancel'}
+        </Button>
+        {!asking && !done && (expired || error !== undefined || !code) && joined === undefined && (
+          <Button variant="secondary" disabled={down} onClick={() => void again()}>
+            New code
+          </Button>
+        )}
       </div>
-    </Dialog>
+    </div>
   )
 }

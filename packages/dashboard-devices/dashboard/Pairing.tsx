@@ -87,64 +87,62 @@ export function Connecting({ d, computer, canBoth, onBack, onClose }: { d: Devic
 
   const name = computer.name
   return (
-    <Dialog open onOpenChange={open => !open && onClose()} title="Add computer">
-      <div className="space-y-4">
-        {phase.at === 'asking' || phase.at === 'saving' ? (
-          <div role="status" className="flex items-center justify-center gap-2 py-10 text-sm text-muted-foreground">
-            <Loader2 className="size-4 shrink-0 animate-spin text-primary" aria-hidden />
-            {phase.at === 'asking' ? `Asking ${name}…` : `${name} let you in. Saving it…`}
-          </div>
-        ) : phase.at === 'waiting' ? (
-          <>
-            <div className="space-y-1 text-center text-sm">
-              <p>
-                On <span className="font-medium">{name}</span>, press <span className="font-medium">Allow</span>.
-              </p>
-              <p>It shows the same number:</p>
-            </div>
-            <p aria-label="The number" className="text-center font-mono text-3xl font-semibold tracking-widest">
-              {shownNumber(phase.asked.number)}
-            </p>
-            <div className="flex justify-center">
-              <Waiting>{`Waiting for ${name}…`}</Waiting>
-            </div>
-            <label className="flex items-start gap-2 text-sm">
-              <Checkbox className="mt-0.5" checked={both && canBoth} disabled={!canBoth} onCheckedChange={checked => setBoth(checked === true)} aria-label={`${name} can start runs on this computer too`} />
-              <span>
-                {`${name} can start runs on this computer too`}
-                <span className="block text-xs text-muted-foreground">{canBoth ? 'Then runs go both ways.' : 'Turn on "On this Wi-Fi" here first: then runs can go both ways.'}</span>
-              </span>
-            </label>
-          </>
-        ) : phase.at === 'done' ? (
-          <Joined words={phase.words}>{`${name} is connected.`}</Joined>
-        ) : phase.at === 'denied' ? (
-          <p role="status" className="py-6 text-center text-sm">{`${name} said no.`}</p>
-        ) : phase.at === 'gone' ? (
-          <p role="status" className="py-6 text-center text-sm">{`${name} did not answer. Try again.`}</p>
-        ) : (
-          <Problem>{phase.error}</Problem>
-        )}
-        <div className="flex justify-end gap-2 max-md:[&_button]:h-11">
-          {phase.at === 'done' ? (
-            <Button onClick={onClose}>
-              Done
-            </Button>
-          ) : (
-            <>
-              <Button variant="ghost" disabled={phase.at === 'saving'} onClick={onBack}>
-                {phase.at === 'waiting' || phase.at === 'asking' ? 'Cancel' : 'Back'}
-              </Button>
-              {(phase.at === 'gone' || phase.at === 'failed') && (
-                <Button variant="secondary" disabled={down} onClick={() => setRound(round + 1)}>
-                  Try again
-                </Button>
-              )}
-            </>
-          )}
+    <div className="space-y-4">
+      {phase.at === 'asking' || phase.at === 'saving' ? (
+        <div role="status" className="flex items-center justify-center gap-2 py-10 text-sm text-muted-foreground">
+          <Loader2 className="size-4 shrink-0 animate-spin text-primary" aria-hidden />
+          {phase.at === 'asking' ? `Asking ${name}…` : `${name} let you in. Saving it…`}
         </div>
+      ) : phase.at === 'waiting' ? (
+        <>
+          <div className="space-y-1 text-center text-sm">
+            <p>
+              On <span className="font-medium">{name}</span>, press <span className="font-medium">Allow</span>.
+            </p>
+            <p>It shows the same number:</p>
+          </div>
+          <p aria-label="The number" className="text-center font-mono text-3xl font-semibold tracking-widest">
+            {shownNumber(phase.asked.number)}
+          </p>
+          <div className="flex justify-center">
+            <Waiting>{`Waiting for ${name}…`}</Waiting>
+          </div>
+          <label className="flex items-start gap-2 text-sm">
+            <Checkbox className="mt-0.5" checked={both && canBoth} disabled={!canBoth} onCheckedChange={checked => setBoth(checked === true)} aria-label={`${name} can start runs on this computer too`} />
+            <span>
+              {`${name} can start runs on this computer too`}
+              <span className="block text-xs text-muted-foreground">{canBoth ? 'Then runs go both ways.' : 'Turn on "On this Wi-Fi" here first: then runs can go both ways.'}</span>
+            </span>
+          </label>
+        </>
+      ) : phase.at === 'done' ? (
+        <Joined words={phase.words}>{`${name} is connected.`}</Joined>
+      ) : phase.at === 'denied' ? (
+        <p role="status" className="py-6 text-center text-sm">{`${name} said no.`}</p>
+      ) : phase.at === 'gone' ? (
+        <p role="status" className="py-6 text-center text-sm">{`${name} did not answer. Try again.`}</p>
+      ) : (
+        <Problem>{phase.error}</Problem>
+      )}
+      <div className="flex justify-end gap-2 max-md:[&_button]:h-11">
+        {phase.at === 'done' ? (
+          <Button onClick={onClose}>
+            Done
+          </Button>
+        ) : (
+          <>
+            <Button variant="ghost" disabled={phase.at === 'saving'} onClick={onBack}>
+              {phase.at === 'waiting' || phase.at === 'asking' ? 'Cancel' : 'Back'}
+            </Button>
+            {(phase.at === 'gone' || phase.at === 'failed') && (
+              <Button variant="secondary" disabled={down} onClick={() => setRound(round + 1)}>
+                Try again
+              </Button>
+            )}
+          </>
+        )}
       </div>
-    </Dialog>
+    </div>
   )
 }
 
