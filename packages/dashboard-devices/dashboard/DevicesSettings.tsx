@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { ChevronLeft, Ellipsis, House, Loader2, Monitor, Plus, Server, Smartphone, Tablet, UserPlus, UserRound } from 'lucide-react'
-import { Badge, Button, ConfirmDialog, Dialog, DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, Input, List as Rows, Row, RowShapes, Section, SettingsRow, SettingsRowShapes, SettingsSection, Slot, buttonVariants, formatDateTime, formatRelative, useOpenAgentDown, usePolled, useSettingsCrumb } from '@openagt/dashboard/module'
+import { Badge, Button, ConfirmDialog, Dialog, DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, Input, List, Row, RowShapes, Section, SettingsRow, SettingsRowShapes, SettingsSection, Slot, buttonVariants, formatDateTime, formatRelative, useOpenAgentDown, usePolled, useSettingsCrumb } from '@openagt/dashboard/module'
 import { addDevice, keepPerson, loadMine, myName, nameOwner, removeDevice, removeMine, removePerson, renameDevice, setTailscale, type Answer, type DeviceRow, type DoorStatus, type LineRow, type PersonRow, type PersonThere } from './devices.js'
 import { installFailed, removeDevice as removeServerDevice } from './servers.js'
 import { AddDevice, useJoined, type Adding } from './AddDevice.js'
@@ -104,7 +104,7 @@ export function DevicesSettings({ everyMs = 3_000, devicesEveryMs = 30_000, devi
   return (
     <div className="space-y-8">
       <ThisComputer d={d} start={start} />
-      {start ? <Start d={d} onAdd={setAdding} /> : <List d={d} onOpen={item => setOpened(openedOf(item))} onAdd={() => setAdding('choose')} />}
+      {start ? <Start d={d} onAdd={setAdding} /> : <YourDevices d={d} onOpen={item => setOpened(openedOf(item))} onAdd={() => setAdding('choose')} />}
       {d.door !== undefined && !d.door.ok && <Problem>{`The devices could not be read: ${d.door.error}`}</Problem>}
       {d.serversError !== undefined && !d.isServer && <Problem>{`The servers could not be read: ${d.serversError}`}</Problem>}
       {/* An open dialog says what went wrong in it. */}
@@ -166,7 +166,7 @@ function Start({ d, onAdd }: { d: Devices; onAdd: (adding: Adding) => void }) {
 }
 
 /** Every device, once, each a row: a phone with its menu, anything else opening its page. */
-function List({ d, onOpen, onAdd }: { d: Devices; onOpen: (item: Item) => void; onAdd: () => void }) {
+function YourDevices({ d, onOpen, onAdd }: { d: Devices; onOpen: (item: Item) => void; onAdd: () => void }) {
   const { host } = d
   const status = d.door?.ok ? d.door.value : undefined
   const persons = status?.persons ?? []
@@ -220,11 +220,11 @@ function List({ d, onOpen, onAdd }: { d: Devices; onOpen: (item: Item) => void; 
         />
       )}
       {items.length === 0 && !persons.length && <p className="text-sm text-muted-foreground">{server ? 'None yet. Add device: a phone from anywhere, or a computer.' : status?.tailscale ? 'None yet. Add device: a phone or a computer on your Tailscale network.' : 'None yet. Add device: a phone or a computer on the same Wi-Fi.'}</p>}
-      <Rows aria-label="Your devices">
+      <List aria-label="Your devices">
         {items.map(item => (
           <ItemRow key={item.key} d={d} item={item} onOpen={() => onOpen(item)} />
         ))}
-      </Rows>
+      </List>
       {persons.length > 0 && <DoorPeople d={d} persons={persons} devices={status?.devices ?? []} lines={status?.lines ?? []} />}
     </Section>
   )
@@ -452,11 +452,11 @@ function DoorPeople({ d, persons, devices, lines }: { d: Devices; persons: Perso
             {person.problem !== undefined && !person.working && <p role="alert" className="text-xs text-danger">{`${person.name}'s own user on this computer could not be made: ${person.problem.replace(/\.?$/, '.')} Add a device for them again to try again.`}</p>}
             {/* A person of a server has their devices at that server: none here is none missing. */}
             {person.from === undefined && theirs.length === 0 && <p className="text-xs text-muted-foreground">No device yet.</p>}
-            <Rows aria-label={`Devices of ${person.name}`}>
+            <List aria-label={`Devices of ${person.name}`}>
               {theirs.map(device => (
                 <DoorDevice key={device.id} device={device} mine={person.owner === true} busy={busy} onRemove={() => void act(() => removeDevice(host, device.id))} />
               ))}
-            </Rows>
+            </List>
           </div>
         )
       })}
@@ -497,11 +497,11 @@ function PersonDevices({ person, everyMs }: { person: string; everyMs: number })
           mine !== undefined && (
             <Section title="Your devices" {...(devices.length > 0 ? { count: devices.length } : {})}>
               {devices.length === 0 && <p className="text-sm text-muted-foreground">None.</p>}
-              <Rows aria-label="Your devices">
+              <List aria-label="Your devices">
                 {devices.map(device => (
                   <DoorDevice key={device.id} device={device} mine busy={busy} onRemove={() => void remove(device.id)} />
                 ))}
-              </Rows>
+              </List>
             </Section>
           )
         }
