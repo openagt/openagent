@@ -99,7 +99,7 @@ function AgentRow({
     <Row
       leading={
         <span className="flex size-4 items-center justify-center" aria-hidden>
-          <RunMark status={cloud === 'waiting' ? 'waiting' : 'running'} className="size-1.5" />
+          <RunMark status={cloud === 'waiting' ? 'waiting' : 'running'} />
         </span>
       }
       title={

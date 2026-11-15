@@ -75,11 +75,11 @@ const STATUSES = ['running', 'waiting', 'done', 'stopped', 'failed', 'unknown']
 /** A status as its chip says it: the word every place says, and a computer that does not answer in one. */
 const chipWord = (value: string): string => (value === 'unknown' ? 'unknown' : runWord(value))
 
-/** A run's status as a dot in the dashboard's colors: filled while something is going on, a ring once nothing is. */
+/** A run's status as its mark, the state's hexagon, on a 16 lead. */
 function StatusDot({ status }: { status: string }) {
   return (
     <span className="flex size-4 items-center justify-center">
-      <RunMark status={status} className="size-2" />
+      <RunMark status={status} />
     </span>
   )
 }

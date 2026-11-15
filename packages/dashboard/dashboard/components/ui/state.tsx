@@ -28,7 +28,7 @@ function hexagon(r: number): string {
  * merged and failed a solid cell, queued a dashed outline, stopped a small core in an outline, idle an
  * empty outline. 14 square; `className` sizes it.
  */
-export function StateCell({ state, className }: { state: WorkState; className?: string }) {
+export function StateCell({ state, className }: { state: WorkState; className?: string | undefined }) {
   const ringed = state === 'working' || state === 'waiting'
   const hollow = state === 'queued' || state === 'idle'
   const core = ringed ? 3.6 : state === 'stopped' ? 3 : 5.2

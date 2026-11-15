@@ -739,9 +739,8 @@ function AgentHistoryRow({
   const word = parked ? runWord('waiting') : inCloud ? 'in cloud' : cloudWord ? runWord(cloudWord) : savingNow ? runWord('saving') : runWord(status)
   // A run whose computer does not answer: which computer, and when it was last seen.
   const offline = status === 'unknown' ? `${remoteLabel ?? 'Its computer'} offline${seenAt ? ` · last seen ${formatRelative(seenAt)}` : ''}` : undefined
-  // The circle: filled while something is going on, a ring once nothing is, and the colour is the
-  // state's in the table every place reads (`run-words.ts`). Only a run that is working pulses — a
-  // run parked on you has been still for as long as you have not answered it (#785).
+  // The mark: the state's hexagon, from the table every place reads (`run-words.ts`). Only a working
+  // run's ring turns: a run parked on you has been still for as long as you have not answered it (#785).
   const working = status === 'running' || inCloud || savingNow
   const marked = savingNow ? 'saving' : parked ? 'waiting' : working ? 'running' : (cloudWord ?? status)
   const prMark = pr?.state ? PR_MARKS[pr.state] : undefined
@@ -775,10 +774,10 @@ function AgentHistoryRow({
   const agentSaid = picked ? [DRIVER_LABELS[picked], ...(model ? [model] : [])].join(' · ') : undefined
   const marks = (
     <>
-      {/* The circle stands where the status word stood, and carries that word for a reader who
+      {/* The mark stands where the status word stood, and carries that word for a reader who
           cannot see a colour. */}
       <span className="flex size-4 shrink-0 items-center justify-center">
-        <RunMark status={marked} label={word} className={cn('size-2', working && 'animate-pulse')} />
+        <RunMark status={marked} label={word} />
       </span>
       <Tooltip>
         <TooltipTrigger render={<span className={titleClass} />}>

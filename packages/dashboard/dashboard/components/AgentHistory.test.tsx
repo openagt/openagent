@@ -88,11 +88,10 @@ describe('AgentHistory (#785)', () => {
     expect(screen.getByRole('link', { name: 'Agents' }).parentElement?.className).not.toContain('starting:opacity-0')
   })
 
-  test('a failed run\'s circle is a red ring: nothing is going on in it, as the dots\' rule says', () => {
-    renderRail(<AgentHistory projectId="p1" scope="p1" agents={[agent({ status: 'failed' })]} selectedAgentId={null} onSelect={() => {}} />)
-    const dot = screen.getByLabelText('failed')
-    expect(dot.className).toContain('border-danger')
-    expect(dot.className).not.toContain('bg-danger')
+  test('a failed run\'s mark is the failed hexagon, still', () => {
+    const { container } = renderRail(<AgentHistory projectId="p1" scope="p1" agents={[agent({ status: 'failed' })]} selectedAgentId={null} onSelect={() => {}} />)
+    expect(screen.getByLabelText('failed').getAttribute('data-state')).toBe('failed')
+    expect(container.querySelector('.motion-safe\\:animate-spin')).toBeNull()
   })
 
   test('a working run reads as working and animates', () => {
@@ -100,7 +99,8 @@ describe('AgentHistory (#785)', () => {
     const { container } = renderRail(<AgentHistory projectId="p1" scope="p1" agents={[agent()]} selectedAgentId={null} onSelect={() => {}} />)
     expect(screen.getByLabelText('working')).toBeTruthy()
     expect(screen.getByRole('link', { name: /· working ·/ })).toBeTruthy()
-    expect(container.querySelector('.animate-pulse')).toBeTruthy()
+    expect(screen.getByLabelText('working').getAttribute('data-state')).toBe('working')
+    expect(container.querySelector('.motion-safe\\:animate-spin')).toBeTruthy()
   })
 
   test("where the listed runs were run by different coding agents, each row's agent is a logo at its end", () => {
@@ -122,15 +122,15 @@ describe('AgentHistory (#785)', () => {
     expect(screen.queryByText("replace 'Hello, world!' with 'Welcome!'")).toBeNull()
   })
 
-  test('a run that ended on its question reads as waiting, with the still dot', () => {
-    // It asked and waits for the answer: its dot stays, still, where a working run's pulses.
+  test('a run that ended on its question reads as waiting, with the still mark', () => {
+    // It asked and waits for the answer: its mark stays still, where a working run's turns.
     const { container } = renderRail(
       <AgentHistory projectId="p1" scope="p1" agents={[agent({ status: 'waiting' })]} selectedAgentId={null} onSelect={() => {}} />,
     )
     expect(screen.getByLabelText('waiting')).toBeTruthy()
     expect(screen.queryByLabelText('working')).toBeNull()
-    expect(container.querySelector('.animate-pulse')).toBeNull()
-    expect(container.querySelector('.rounded-full.bg-warning')).toBeTruthy()
+    expect(container.querySelector('.motion-safe\\:animate-spin')).toBeNull()
+    expect(screen.getByLabelText('waiting').getAttribute('data-state')).toBe('waiting')
   })
 
   test('an ended run the daemon marks saving reads as saving… (#1455)', () => {
@@ -139,7 +139,7 @@ describe('AgentHistory (#785)', () => {
     )
     expect(screen.getByLabelText('saving…')).toBeTruthy()
     expect(screen.queryByLabelText('done')).toBeNull()
-    expect(container.querySelector('.animate-pulse')).toBeTruthy()
+    expect(container.querySelector('.motion-safe\\:animate-spin')).toBeTruthy()
   })
 
   test('an ended run without the mark reads as plain done (#1455)', () => {
@@ -344,8 +344,8 @@ describe('AgentHistory rows', () => {
     renderRail(<AgentHistory projectId="p1" scope="p1" agents={[agent({ status: 'unknown', target: 'remote', remoteLabel: 'MacBook', remoteKind: 'computer', seenAt })]} selectedAgentId={null} onSelect={() => {}} />)
     expect(screen.getByLabelText('MacBook offline · last seen 12m ago')).toBeTruthy()
     const dot = screen.getByRole('img', { name: 'status unknown' })
-    expect(dot.getAttribute('class')).toContain('border-dashed')
-    expect(dot.getAttribute('class')).not.toContain('animate-pulse')
+    expect(dot.getAttribute('data-state')).toBe('idle')
+    expect(dot.querySelector('.motion-safe\\:animate-spin')).toBeNull()
     expect(dot.closest('a')!.getAttribute('aria-label')).toContain('status unknown')
   })
 
@@ -576,7 +576,7 @@ describe('subagents on the rail', () => {
     expect(screen.queryByLabelText('done')).toBeNull()
     // One circle and one word: not "saving…" as well.
     expect(screen.queryByLabelText('saving…')).toBeNull()
-    expect(container.querySelectorAll('.animate-pulse')).toHaveLength(2)
+    expect(container.querySelectorAll('.motion-safe\\:animate-spin')).toHaveLength(2)
     rerender(<SidebarProvider><AgentHistory projectId="p1" scope="p1" agents={[sub('c1', { status: 'waiting' }), main]} selectedAgentId={null} onSelect={() => {}} /></SidebarProvider>)
     expect(screen.queryByLabelText('working')).toBeNull()
     expect(screen.getByLabelText('done')).toBeTruthy()

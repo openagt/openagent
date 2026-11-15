@@ -82,7 +82,7 @@ export function MembersCard({ projects }: ModuleCardProps) {
                 </div>
                 {member.running > 0 ? (
                   <span className={cn('flex shrink-0 items-center gap-1.5 text-xs', runTone('running'))}>
-                    <RunMark status="running" className="size-1.5" />
+                    <RunMark status="running" className="size-2.5" />
                     {member.running === 1 ? 'working' : `${member.running} working`}
                   </span>
                 ) : (
