@@ -10,7 +10,7 @@ import { JoinedPage, OtherPage } from './JoinedPage.js'
 import { ServerPage } from './ServerPage.js'
 import { ThisComputer } from './ThisComputer.js'
 import { hasServer, labelOf, reachedAt, type Item, type PhoneItem } from './model.js'
-import { LinkPress, ListedDevice, Problem, State, olderThan } from './parts.js'
+import { LinkPress, ListedDevice, NamedAbove, Problem, State, olderThan } from './parts.js'
 import { useDevices, type Devices, type Paces } from './use-devices.js'
 
 // Settings › Devices: this computer, how the person's devices reach it, and every device of
@@ -99,13 +99,13 @@ export function DevicesSettings({ everyMs = 3_000, devicesEveryMs = 30_000, devi
 
   if (open)
     return (
-      <>
+      <NamedAbove.Provider value={crumbShown}>
         {way(back)}
         {open.kind === 'computer' && <ComputerPage d={d} item={open} onBack={back} onSetUp={() => add('set-up-server')} />}
         {open.kind === 'server' && <ServerPage d={d} item={open} onBack={back} invite={inviting} />}
         {open.kind === 'joined' && <JoinedPage d={d} item={open} onBack={back} />}
         {open.kind === 'other' && <OtherPage d={d} item={open} onBack={back} />}
-      </>
+      </NamedAbove.Provider>
     )
 
   const persons = status?.persons ?? []

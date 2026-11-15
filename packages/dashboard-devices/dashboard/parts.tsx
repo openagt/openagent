@@ -1,4 +1,4 @@
-import { Fragment, useEffect, useRef, useState, type ComponentType, type FormEvent, type ReactNode, type RefObject } from 'react'
+import { Fragment, createContext, useContext, useEffect, useRef, useState, type ComponentType, type FormEvent, type ReactNode, type RefObject } from 'react'
 import { ChevronRight, Circle, CircleArrowUp, CircleCheck, CircleX, Loader2, Pencil } from 'lucide-react'
 import { Badge, Button, Input, RadioGroupOption, Row, Section, cn, formatDateTime, formatRelative, useOpenAgentDown, useSettingsHold } from '@openagt/dashboard/module'
 import type { DeviceRow } from './devices.js'
@@ -259,23 +259,32 @@ export function RenameForm({ name, rename, onClose }: { name: string; rename: Re
   )
 }
 
-/** The top of a device's page: its icon, name and facts, and Rename. */
+/** A device's page is named above it, in the Settings dialog's header: its own top says it once more only outside the dialog. */
+export const NamedAbove = createContext(false)
+
+/** The top of a device's page: its icon, name and facts, and Rename; under Settings' header, which names it, its kind and facts alone. */
 export function Head({ icon: Icon, name, badge, facts, rename }: { icon: ComponentType<{ className?: string; 'aria-hidden'?: boolean }>; name: string; badge?: string; facts: ReactNode[]; rename?: Rename }) {
   const { renaming, open, close, press } = useRenaming()
+  const namedAbove = useContext(NamedAbove)
   return (
-    <div className="flex min-h-12 items-center gap-3">
+    <div className={cn('flex items-center gap-3', namedAbove ? 'min-h-8' : 'min-h-12')}>
         <Icon aria-hidden className="size-5 shrink-0 text-muted-foreground" />
         <div className="min-w-0 flex-1">
           {renaming && rename ? (
             <RenameForm name={name} rename={rename} onClose={close} />
           ) : (
-            <p className="flex min-w-0 items-center gap-2 text-base font-semibold">
-              <span className="truncate">{name}</span>
-              {badge !== undefined && <Badge>{badge}</Badge>}
-            </p>
+            !namedAbove && (
+              <p className="flex min-w-0 items-center gap-2 text-base font-semibold">
+                <span className="truncate">{name}</span>
+                {badge !== undefined && <Badge>{badge}</Badge>}
+              </p>
+            )
           )}
-          <p className="text-xs text-muted-foreground">
-            <Facts>{facts}</Facts>
+          <p className="flex min-w-0 flex-wrap items-center gap-x-2 text-xs text-muted-foreground">
+            {namedAbove && badge !== undefined && <Badge>{badge}</Badge>}
+            <span>
+              <Facts>{facts}</Facts>
+            </span>
           </p>
         </div>
         {rename && !renaming && (
