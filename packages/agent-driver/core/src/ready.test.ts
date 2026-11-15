@@ -61,7 +61,8 @@ test('root warns, naming the sudo user, and blocks nothing', async () => {
   const ready = await checkCliReady(spec, { isRoot: () => true, sudoUser: 'alice', probe: probeFor({ auth: { ok: true, output: 'yes' } }) })
   assert.deepEqual(ready.problems, [])
   assert.equal(ready.warnings.length, 1)
-  assert.match(ready.warnings[0]!, /root/)
+  // A sentence, as the launcher shows it above the message box.
+  assert.match(ready.warnings[0]!, /^Running as root/)
   assert.match(ready.warnings[0]!, /`alice`/)
 })
 
