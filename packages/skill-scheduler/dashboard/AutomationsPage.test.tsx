@@ -1960,7 +1960,7 @@ describe('the "New automation" form', () => {
     const form = screen.getByRole('group', { name: 'New automation' })
     const words = within(form).getByLabelText(/What the line waits for/)
     const line = within(form).getByLabelText(/A shell line that prints what is new/) as HTMLTextAreaElement
-    expect(within(form).getByText(/Asks Claude Code once for a shell line from these words/)).toBeTruthy()
+    expect(within(form).getByText(/^Claude Code writes it from these words/)).toBeTruthy()
     fireEvent.change(words, { target: { value: '  when someone comments on an issue ' } })
     fireEvent.click(within(form).getByRole('button', { name: 'Write the line' }))
     await waitFor(() => expect(line.value).toBe('gh api "repos/{owner}/{repo}/issues/comments?since=$LAST_RUN" --jq \'[.[].html_url]\''))

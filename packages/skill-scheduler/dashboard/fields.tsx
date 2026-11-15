@@ -20,7 +20,7 @@ const hint = 'text-xs text-muted-foreground'
 export function Section({ title, children }: { title: string; children: ReactNode }) {
   return (
     <section aria-label={title} className="space-y-2">
-      <h4 className="text-sm font-medium">{title}</h4>
+      <h4 className="text-sm font-semibold">{title}</h4>
       {children}
     </section>
   )
@@ -93,7 +93,7 @@ export function SaidFields({ project, said, agent, autoFocus, onChange }: { proj
       <Label htmlFor="automation-prompt">What the agent is told</Label>
       <Textarea id="automation-prompt" rows={4} autoFocus={autoFocus} value={said.prompt} onChange={e => onChange({ prompt: e.target.value })} placeholder="Answer each new comment below." />
       <Label htmlFor="automation-waits-for" className="pt-2">
-        What the line waits for, in plain words <span className={hint}>optional, said on the row</span>
+        What the line waits for, in plain words <span className={hint}>optional</span>
       </Label>
       <Input
         id="automation-waits-for"
@@ -110,7 +110,7 @@ export function SaidFields({ project, said, agent, autoFocus, onChange }: { proj
         <Button variant="secondary" disabled={words === '' || written === 'writing'} onClick={() => void writeIt()}>
           {written === 'writing' ? 'Writing…' : 'Write the line'}
         </Button>
-        <span className={hint}>Asks {AGENT_LABELS[agent]} once for a shell line from these words, and puts it below; costs a fraction of a cent. Nothing is run or saved.</span>
+        <span className={hint}>{AGENT_LABELS[agent]} writes it from these words, for a fraction of a cent.</span>
       </div>
       {written !== undefined && written !== 'writing' && (
         <p role="status" aria-label="What the agent answered" className="text-sm text-danger">
@@ -134,14 +134,13 @@ export function SaidFields({ project, said, agent, autoFocus, onChange }: { proj
         className="min-h-12 font-mono text-xs"
       />
       <p className={hint}>
-        Run in this project while the row is on: every minute, or once its wait is over. When it prints something, an agent starts and is handed what it printed; when it prints nothing, or an empty list, nothing starts.{' '}
-        <span className="font-mono">$LAST_RUN</span> is the time the row last started an agent, or was switched on when that is later.
+        While the row is on it runs every minute: an agent starts with what it prints, and nothing, or an empty list, starts none. <span className="font-mono">$LAST_RUN</span> is when the row last started.
       </p>
       <div className="flex flex-wrap items-center gap-3">
         <Button variant="secondary" disabled={line === '' || tried === 'trying'} onClick={() => void tryIt()}>
           {tried === 'trying' ? 'Trying…' : 'Try it'}
         </Button>
-        <span className={hint}>Runs the line once, now, on this machine, for 20 seconds at most. Nothing is saved and no agent starts.</span>
+        <span className={hint}>Runs it once, here: no agent starts.</span>
       </div>
       {tried !== undefined && tried !== 'trying' && (
         <div role="status" aria-label="What the line answered" className="rounded-md bg-muted px-3 py-2 text-sm">

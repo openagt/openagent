@@ -146,11 +146,11 @@ export function AutomationForm({
           <RadioGroup aria-label="Who gets the automation" value={draft.onThisMachine ? 'machine' : 'project'} onValueChange={who => set({ onThisMachine: who === 'machine' })} disabled={saving}>
             <RadioGroupOption value="project">
               Shared with the project
-              <span className="text-xs text-muted-foreground">a file you commit; everyone who has the project gets the row, switched off</span>
+              <span className="text-xs text-muted-foreground">a file you commit, for everyone</span>
             </RadioGroupOption>
             <RadioGroupOption value="machine">
               Only on this machine
-              <span className="text-xs text-muted-foreground">nothing to commit; nobody else gets the row</span>
+              <span className="text-xs text-muted-foreground">nothing to commit, for you alone</span>
             </RadioGroupOption>
           </RadioGroup>
         </Section>
