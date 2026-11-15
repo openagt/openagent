@@ -420,6 +420,8 @@ function AgentEditor({ agent, view, onAccounts, onDone }: { agent?: AgentRecord;
           <AccountPicks label="Claude" accounts={view.claude} picked={draft.claude} busy={busy} onTick={(id, on) => tick('claude', id, on)} onAll={() => setDraft(d => ({ ...d, claude: new Set() }))} />
           <AccountPicks label="Codex" accounts={view.codex} picked={draft.codex} busy={busy} onTick={(id, on) => tick('codex', id, on)} onAll={() => setDraft(d => ({ ...d, codex: new Set() }))} />
         </div>
+        {/* At the scroll's foot while more is under it: what is cut there fades out rather than ending on a line. */}
+        <div aria-hidden className="pointer-events-none sticky bottom-0 -mt-6 h-4 bg-gradient-to-t from-card to-transparent" />
       </form>
     </Dialog>
   )
