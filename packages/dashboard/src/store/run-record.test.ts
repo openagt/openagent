@@ -90,6 +90,8 @@ test('a line\'s time is its event\'s, on every kind; a line with none reads with
   assert.deepEqual(fromDiaryLine({ kind: 'result', text: 'done', at }), { kind: 'driver', event: { type: 'result', text: 'done' }, at })
   assert.deepEqual(fromDiaryLine({ kind: 'ended', status: 'waiting', at }), { kind: 'end', ok: false, waiting: true, at })
   assert.deepEqual(fromDiaryLine({ kind: 'screen', url: 'http://127.0.0.1:1/', label: 'browser', at }), { kind: 'screen', url: 'http://127.0.0.1:1/', label: 'browser', at })
+  // A question is the one asked at its line: its time is its id.
+  assert.deepEqual(fromDiaryLine({ kind: 'question', title: 'Ship it?', options: [{ id: 'opt:0', label: 'Approve' }], at }), { kind: 'choice', id: at, title: 'Ship it?', options: [{ id: 'opt:0', label: 'Approve' }], at })
   assert.deepEqual(fromDiaryLine({ kind: 'said', text: 'old' }), { kind: 'driver', event: { type: 'text', text: 'old' } })
 })
 

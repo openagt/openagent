@@ -223,6 +223,26 @@ test('a message and an answer to an ended run go through the project\'s resume h
   }
 })
 
+test('a question takes one answer: a second, pressed at once in another tab, is refused with the first', async () => {
+  const asked = { ...QUESTION, at: '2026-07-19T10:01:00.000Z' }
+  const ctx = await projectWithWorktreeAgent({ pid: process.pid, host: hostname() }, { diary: [asked] })
+  try {
+    const [first, second] = await Promise.all([sendChoice(ctx.projectId, asked.at, 'a', ctx.agentId), sendChoice(ctx.projectId, asked.at, 'b', ctx.agentId)])
+    assert.deepEqual(first, { ok: true })
+    assert.deepEqual(second, { ok: false, error: 'Already answered: Left' })
+    assert.deepEqual(await sendChoice(ctx.projectId, asked.at, 'b', ctx.agentId), { ok: false, error: 'Already answered: Left' })
+    assert.deepEqual(await entries(ctx.agentInbox), [{ kind: 'answer', question: 'Which way?', answer: 'Left' }])
+    // The run went on and asked again: the new question is its own, and takes its answer.
+    const again = { ...QUESTION, title: 'Which colour?', at: '2026-07-19T10:05:00.000Z' }
+    await writeFile(join(worktreePath(ctx.dir, ctx.agentId), OPENAGENT_DIR, `${ctx.agentId}.jsonl`), [asked, { kind: 'said', text: 'Going left.' }, again].map(line => JSON.stringify(line) + '\n').join(''))
+    assert.deepEqual(await sendChoice(ctx.projectId, asked.at, 'b', ctx.agentId), { ok: false, error: 'that question is no longer open' })
+    assert.deepEqual(await sendChoice(ctx.projectId, again.at, 'b', ctx.agentId), { ok: true })
+  } finally {
+    ctx.restore()
+    await rm(ctx.dir, { recursive: true, force: true })
+  }
+})
+
 test('an answer must be to the question the run\'s diary holds open, by its own options (#1774)', async () => {
   const ctx = await projectWithWorktreeAgent({ pid: process.pid, host: hostname() }, { diary: [QUESTION, { kind: 'said', text: 'going on' }] })
   try {

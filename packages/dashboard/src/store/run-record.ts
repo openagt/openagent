@@ -21,13 +21,15 @@ export function fromRunCard(card: RunCard): AgentMeta {
  * One diary line as one OpenAgent event: what the agent said, its result, the run's end and its
  * cost are the shape's four kinds; a line of any other kind is an OpenAgent event as written, and
  * one whose kind is no longer an event (the kinds of runs recorded before OpenAgent stopped
- * running agents) reads as nothing. The line's time, `at`, is the event's, whatever the kind.
+ * running agents) reads as nothing. The line's time, `at`, is the event's, whatever the kind, and a
+ * question's id: a run's second question is not its first.
  */
 export function fromDiaryLine(line: AnyDiaryLine): OpenAgentEvent | undefined {
   const { at, ...rest } = line
   const event = eventOf(rest as AnyDiaryLine)
   if (!event) return undefined
-  return typeof at === 'string' ? { ...event, at } : event
+  if (typeof at !== 'string') return event
+  return event.kind === 'choice' ? { ...event, id: at, at } : { ...event, at }
 }
 
 /** Every kind of event there is: a line of another kind has nothing to show. */

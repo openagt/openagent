@@ -3,6 +3,9 @@ import { test } from 'node:test'
 import { SeenTracker } from './keyed-watcher.js'
 import { activityKey, type Activity } from './activity.js'
 import { interventionKey, type Intervention } from './interventions.js'
+import { pendingChoices } from '../open-choices.js'
+import { eventsOf } from '../store/run-record.js'
+import type { AnyDiaryLine } from '../store/runs.js'
 
 const pr = (n: number, url: string, project = 'p'): Intervention => ({
   projectId: project,
@@ -60,4 +63,17 @@ test('an item seen in a partial read is remembered, so it is not news once the p
   assert.deepEqual(tracker.observe([pr(1, 'u1')], []), [])
   assert.deepEqual(tracker.observe([pr(1, 'u1')], ['p']), [])
   assert.deepEqual(tracker.observe([pr(1, 'u1')], ['p']), [])
+})
+
+test('a run\'s second question is announced: each question is the one asked at its own line', () => {
+  const tracker = new SeenTracker(interventionKey, projectOf)
+  const asking = (lines: AnyDiaryLine[]): Intervention[] =>
+    pendingChoices(eventsOf(lines)).map(choice => ({ projectId: 'p', projectName: 'p', kind: 'awaiting', title: 'r1', agentId: 'r1', awaitId: choice.id, question: choice.title }))
+  const first = { kind: 'question', title: 'Which way?', options: [{ id: 'a', label: 'Left' }], at: '2026-11-15T10:00:00.000Z' }
+  const second = { kind: 'question', title: 'Which colour?', options: [{ id: 'b', label: 'Blue' }], at: '2026-11-15T10:05:00.000Z' }
+  assert.deepEqual(tracker.observe([], ['p']), [])
+  assert.deepEqual(tracker.observe(asking([first]), ['p']).map(item => item.kind === 'awaiting' && item.question), ['Which way?'])
+  const answered = [first, { kind: 'said', text: 'Going left.', at: '2026-11-15T10:01:00.000Z' }]
+  assert.deepEqual(tracker.observe(asking(answered), ['p']), [])
+  assert.deepEqual(tracker.observe(asking([...answered, second]), ['p']).map(item => item.kind === 'awaiting' && item.question), ['Which colour?'])
 })

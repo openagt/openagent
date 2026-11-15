@@ -1170,6 +1170,16 @@ describe('EventList hides the block a question is written in', () => {
     expect(screen.getByText(/"title"/)).toBeTruthy()
   })
 
+  test('a pick made on the question as it is written stays once the run says it, under an id of its own', () => {
+    const two = '```await-choices\n{ "title": "Which color?", "options": [{ "label": "Red" }, { "label": "Blue" }] }\n```'
+    const asking = reply(`Pick one.\n\n${two}`)
+    const { rerender } = render(<EventList events={[prompt, asking]} projectId="p1" agentId="r1" stick={false} />)
+    fireEvent.click(screen.getByRole('radio', { name: 'Blue' }))
+    const said = { kind: 'choice', id: '2026-11-15T10:00:00.000Z', at: '2026-11-15T10:00:00.000Z', title: 'Which color?', options: [{ id: 'opt:0', label: 'Red' }, { id: 'opt:1', label: 'Blue' }] } as OpenAgentEvent
+    rerender(<EventList events={[prompt, asking, said]} projectId="p1" agentId="r1" stick={false} />)
+    expect(screen.getByRole('radio', { name: 'Blue' }).getAttribute('aria-checked')).toBe('true')
+  })
+
   test('a last message that is a question is one the moment it is written, before the run says it', () => {
     const asking = reply(`Pick one.\n\n${block}`)
     const early = withEarlyQuestion([prompt, asking])

@@ -164,6 +164,14 @@ function PassedChoice({ choice, footer }: { choice: ChoiceRequest; footer?: Reac
   )
 }
 
+/**
+ * The gate a question is to the chat: its own id, or, for a question of the run's diary (whose id
+ * is its line's time), the one gate every question of a run is, the early card's too.
+ */
+function chatGate(choice: { id: string; at?: string | undefined }): string {
+  return choice.id === choice.at ? QUESTION_TAG : choice.id
+}
+
 /** A question's row: answered through its gate (`pick`), passed by with a message instead (`passed`), or still waiting for its answer. */
 type ChoiceRow = { choice: ChoiceRequest; pick?: string | readonly string[]; passed?: true }
 
@@ -187,11 +195,11 @@ function foldChoiceRows(events: OpenAgentEvent[]): {
   const lastFiring = new Map<string, { e: OpenAgentEvent; at: number }>()
   const lastResolved = new Map<string, { e: Extract<OpenAgentEvent, { kind: 'choice-resolved' }>; at: number }>()
   events.forEach((e, at) => {
-    if (e.kind === 'choice') lastFiring.set(e.id, { e, at })
+    if (e.kind === 'choice') lastFiring.set(chatGate(e), { e, at })
     else if (e.kind === 'choice-resolved') lastResolved.set(e.id, { e, at })
   })
-  // A question answered in its card: every firing of it, not only the last. A local agent's
-  // questions all share one id, so an earlier question is an earlier firing.
+  // A question answered in its card: every firing of it, not only the last. A run's questions are
+  // one gate here, so an earlier question is an earlier firing.
   const answered = new Set(events.flatMap(e => (isTurnBoundary(e) ? [answeredQuestion((e as { event: { prompt: string } }).event.prompt)?.question] : [])))
   for (const e of events) if (e.kind === 'choice' && answered.has(e.title)) hidden.add(e)
   const open = new Set(pendingChoices(events).map(c => c.id))
@@ -199,7 +207,7 @@ function foldChoiceRows(events: OpenAgentEvent[]): {
     if (hidden.has(firing.e)) continue
     const { kind: _kind, ...choice } = firing.e as { kind: 'choice' } & ChoiceRequest
     const resolved = lastResolved.get(id)
-    if (open.has(id)) {
+    if (open.has(choice.id)) {
       rows.set(firing.e, { choice })
     } else if (resolved && resolved.at > firing.at) {
       // A resolution from BEFORE this firing answered an earlier gate, not this one — a gate
@@ -217,7 +225,7 @@ function foldChoiceRows(events: OpenAgentEvent[]): {
 /**
  * The question a turn ends on, the moment its message is written. The run says it only when the
  * agent's process is done, about a second later, and until then the message would show its block
- * as raw JSON. Read with the run's own parser, so it is the same question under the same id, and
+ * as raw JSON. Read with the run's own parser, so it is the same question, at the same gate, and
  * the run's own line of it takes its place without a change. Only a turn's last message, with
  * nothing after it: a block the agent went on from is not what the run will ask.
  */
@@ -1026,7 +1034,7 @@ export function EventList({
                   ) : choiceRow && choiceRow.pick === undefined && projectId !== undefined && agentId !== undefined ? (
                     // The question the agent waits on, answered here, under what it said.
                     typing ? null : <div className="mt-1 flex min-w-0 flex-1 flex-col gap-1.5">
-                      <QuestionPanel key={`${agentId}:${choiceRow.choice.id}`} projectId={projectId} agentId={agentId} choice={choiceRow.choice} active={e === asking} focused={e === openedOn.current} onSaid={onSaid} focusNext={focusNext} />
+                      <QuestionPanel key={`${agentId}:${chatGate(choiceRow.choice)}`} projectId={projectId} agentId={agentId} choice={choiceRow.choice} active={e === asking} focused={e === openedOn.current} onSaid={onSaid} focusNext={focusNext} />
                       {footer}
                     </div>
                   ) : choiceRow?.pick !== undefined ? (
