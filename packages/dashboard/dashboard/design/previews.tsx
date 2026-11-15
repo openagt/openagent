@@ -1,4 +1,4 @@
-import { useEffect, type ReactNode } from 'react'
+import { useEffect, useState, type ReactNode } from 'react'
 import { Button } from '../components/ui/button.js'
 import { Card, CardContent, CardHeader, CardTitle, PageLink } from '../components/ui/card.js'
 import { Input } from '../components/ui/input.js'
@@ -20,6 +20,7 @@ import { Stepper } from '../components/ui/stepper.js'
 import { ButtonGroup } from '../components/ui/button-group.js'
 import { ComposedField, ComposedFieldFoot, ComposedFieldInput } from '../components/ui/composed-field.js'
 import { Empty } from '../components/ui/empty.js'
+import { FilterChips } from '../components/FilterChips.js'
 import { RowShapes, Slot } from '../components/ui/slot.js'
 import { ChevronRight, CornerDownLeft, Ellipsis, Folder, Play, Trash2 } from 'lucide-react'
 import { JumpPalette, openJump } from '../components/JumpPalette.js'
@@ -596,6 +597,17 @@ function Panels() {
   )
 }
 
+function Filters() {
+  const [picked, setPicked] = useState<string | null>('working')
+  const chips = [
+    { value: 'waiting', label: 'Waiting', count: 2 },
+    { value: 'working', label: 'Working', count: 2 },
+    { value: 'done', label: 'Done', count: 6 },
+    { value: 'failed', label: 'Failed', count: 2 },
+  ]
+  return <FilterChips chips={chips} total={12} picked={picked} onPick={setPicked} />
+}
+
 function Composing() {
   return (
     <div className="max-w-xl space-y-6">
@@ -797,6 +809,14 @@ export const PREVIEWS: Preview[] = [
     subtitle: 'A group header (name, badge, count, link) over a card of two-line rows: a state, a name, what is known, one fact that gives way to the row\'s presses',
     width: 900,
     node: <Panels />,
+  },
+  {
+    path: 'components/filter.html',
+    group: 'Components',
+    name: 'Segmented filter',
+    subtitle: 'A list told apart by one field: All and a segment per value, each with its count, the picked one a card on the track',
+    width: 900,
+    node: <Filters />,
   },
   {
     path: 'components/composed-field.html',
