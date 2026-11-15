@@ -13,7 +13,7 @@ export function List({ boxed = false, className, ...props }: ComponentProps<'ul'
 
 // The whole row is the link or the press: the title's box covers the row, so a click anywhere on it,
 // a middle click and Ctrl+click too, is the title's. The actions stand above that cover.
-const coverClass = 'outline-none after:absolute after:inset-0 after:rounded-md focus-visible:after:outline-2 focus-visible:after:-outline-offset-2 focus-visible:after:outline-primary'
+const coverClass = 'outline-none after:absolute after:inset-0 after:rounded-md focus-visible:after:outline-2 focus-visible:after:-outline-offset-2 focus-visible:after:outline-focus'
 
 /**
  * One line of a {@link List}: what it is (`leading`), its name, what is said of it, its own presses.

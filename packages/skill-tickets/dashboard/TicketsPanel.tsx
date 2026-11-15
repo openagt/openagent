@@ -108,7 +108,7 @@ export function TicketRow({
         data-cover
         href={host.pageHref('tickets', [ticket.file], projectId)}
         onClick={inPlace(onOpen)}
-        className="min-h-8 min-w-0 flex-1 content-center truncate outline-none after:absolute after:inset-0 after:rounded-md focus-visible:after:outline-2 focus-visible:after:-outline-offset-2 focus-visible:after:outline-primary"
+        className="min-h-8 min-w-0 flex-1 content-center truncate outline-none after:absolute after:inset-0 after:rounded-md focus-visible:after:outline-2 focus-visible:after:-outline-offset-2 focus-visible:after:outline-focus"
       >
         {ticket.title}
       </a>

@@ -24,8 +24,8 @@ test('a primary colour is one of the palette’s own: Everforest’s on OpenAgen
   applyAppearance(root, { palette: 'openagent', accent: 'aqua' })
   expect(root.dataset.palette).toBeUndefined()
   expect(root.dataset.accent).toBe('aqua')
-  // Tailwind's blue is Neutral's, not OpenAgent's.
-  applyAppearance(root, { accent: 'blue' })
+  // Tailwind's indigo is Neutral's, not OpenAgent's.
+  applyAppearance(root, { accent: 'indigo' })
   expect(root.dataset.accent).toBeUndefined()
   applyAppearance(root, { palette: 'neutral', accent: 'aqua' })
   expect(root.dataset.accent).toBeUndefined()

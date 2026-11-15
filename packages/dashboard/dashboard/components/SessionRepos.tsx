@@ -195,7 +195,7 @@ export function RepoChip({ repo, tip, onRemove }: { repo: { name: string }; tip:
       <TooltipTrigger render={<span className={cn(rowItemClass, 'gap-1 pr-1')} />}>
         <FolderGit2 className="size-4 shrink-0" aria-hidden />
         <span className="truncate">{repo.name}</span>
-        <button type="button" aria-label={`Remove ${repo.name}`} onClick={onRemove} className="rounded-sm p-0.5 hover:bg-accent hover:text-accent-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary">
+        <button type="button" aria-label={`Remove ${repo.name}`} onClick={onRemove} className="rounded-sm p-0.5 hover:bg-accent hover:text-accent-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus">
           <X className="h-3 w-3" aria-hidden />
         </button>
       </TooltipTrigger>

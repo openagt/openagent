@@ -3,7 +3,7 @@ import type { ComponentProps, MouseEvent } from 'react'
 import { cn } from '../../lib/utils.js'
 
 // The presses (module/theme.css's scale): `default` is the primary, solid, one a view at most;
-// `secondary` a soft fill, for every other press; `ghost` a toolbar's, a row's own, an icon's;
+// `secondary` a card's white under a hairline, for every other press; `ghost` a toolbar's, a row's own, an icon's;
 // `outline` what holds a value; `destructive` solid, in a confirmation; `link` text that goes
 // somewhere. Hover raises the contrast a step, a press two.
 const buttonVariants = cva(
@@ -12,7 +12,7 @@ const buttonVariants = cva(
     variants: {
       variant: {
         default: 'bg-primary text-primary-foreground hover:bg-primary-hover active:bg-primary-active',
-        secondary: 'bg-accent text-accent-foreground hover:bg-foreground/10 active:bg-foreground/15',
+        secondary: 'bg-card text-foreground shadow-sm ring-1 ring-hairline ring-inset hover:bg-accent active:bg-foreground/10',
         outline: 'border border-border bg-transparent hover:bg-accent hover:text-accent-foreground active:bg-foreground/10',
         ghost: 'hover:bg-accent hover:text-accent-foreground active:bg-foreground/10',
         // A confirmed destructive action (#1032): --danger is a fill, so its label inverts the

@@ -233,7 +233,7 @@ export function QuestionPanel({
                 name="own-answer"
                 placeholder="Type your own answer here"
                 aria-label="Your own answer"
-                className="mr-3 mb-2 ml-10 h-8 rounded-md border border-border bg-transparent px-3 outline-none placeholder:text-faint-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
+                className="mr-3 mb-2 ml-10 h-8 rounded-md border border-border bg-transparent px-3 outline-none placeholder:text-faint-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus"
               />
             )}
           </li>

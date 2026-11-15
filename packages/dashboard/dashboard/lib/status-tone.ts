@@ -1,7 +1,7 @@
 // The one color vocabulary for an agent's status, shared by every list that shows one
 // (the Runs rail, the project log, the pages modules add) so the same status can never read as two colors.
 export const STATUS_TONE: Record<string, string> = {
-  running: 'text-primary',
+  running: 'text-info',
   done: 'text-success',
   stopped: 'text-warning',
   failed: 'text-danger',
@@ -12,7 +12,7 @@ export const STATUS_TONE: Record<string, string> = {
  * (the sessions on the rail): filled while something is going on, a ring once nothing is.
  */
 export const STATUS_DOT: Record<string, string> = {
-  running: 'bg-primary',
+  running: 'bg-info',
   waiting: 'bg-warning',
   saving: 'bg-success',
 }

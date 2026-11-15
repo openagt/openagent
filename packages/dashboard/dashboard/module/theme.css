@@ -33,20 +33,24 @@
   --text-3xl: 1.875rem;
   --text-3xl--line-height: 2.25rem;
 
-  /* Corners by role: `rounded-sm` inside a control, `rounded-md` a control or a menu's item,
-     `rounded-lg` a surface, `rounded-full` a dot, an avatar or a count, and `rounded-box` the
-     message box alone, a step rounder than a card. The bare `rounded` is the old ~2px corner, kept
-     until the last call site moves off it. */
+  /* Corners by role: `rounded-sm` inside a control (a key hint, a badge), `rounded-md` a control or
+     a menu's item, `rounded-lg` a surface (a card, a panel of rows, a menu, a popover),
+     `rounded-full` a dot, an avatar or a pill, and `rounded-box` what holds a person's writing (the
+     message box, a dialog), a step rounder than a card. The bare `rounded` is the old ~2px corner,
+     kept until the last call site moves off it. */
   --radius-*: initial;
-  --radius-sm: 0.25rem;
-  --radius-md: 0.375rem;
-  --radius-lg: 0.5rem;
-  --radius-box: 0.75rem;
+  --radius-sm: 0.375rem;
+  --radius-md: 0.5rem;
+  --radius-lg: 0.75rem;
+  --radius-box: 1rem;
   --radius: 0.125rem;
 
   /* What is raised (a popover, a menu, a dialog, the composer): two layers in the page's own tint
      (tailwind.css), which a dark theme keeps faint, showing height by a lighter surface instead. */
   --shadow-lg: 0 1px 2px color-mix(in oklab, var(--shadow-tint) 8%, transparent), 0 8px 24px -4px color-mix(in oklab, var(--shadow-tint) 12%, transparent);
+  /* A surface that stands on the page (a card, a panel of rows, the field that adds to it): a
+     faint lift under its hairline, less than what floats over the page. */
+  --shadow-sm: 0 1px 2px color-mix(in oklab, var(--shadow-tint) 4%, transparent), 0 4px 12px -4px color-mix(in oklab, var(--shadow-tint) 7%, transparent);
 
   /* Motion: 100ms for colour and opacity on hover, the default; 140ms for a popover, a menu or a
      tooltip entering, 180ms for a dialog or a sheet; an exit at two thirds of its entrance (90ms,
@@ -89,6 +93,8 @@
   --color-input: var(--input);
   --color-input-hover: color-mix(in oklab, var(--foreground) 40%, var(--input));
   --color-primary: var(--primary);
+  /* Where the keyboard is, and nothing else. */
+  --color-focus: var(--focus);
   --color-primary-foreground: var(--primary-foreground);
   /* A solid press under the pointer and pressed: a step and two towards the text's colour, so its
      label stands out more, never less, in every palette and accent. */
@@ -123,28 +129,28 @@
   font-variant-numeric: tabular-nums;
 }
 
-/* Where the keyboard is: 2px of the primary colour, 2px out, following the corner. */
+/* Where the keyboard is: 2px of the focus colour, 2px out, following the corner. */
 @utility focus-ring {
   &:focus-visible {
-    outline: 2px solid var(--primary);
+    outline: 2px solid var(--focus);
     outline-offset: 2px;
   }
 }
 
 /* The focus of a row inside a box that scrolls, which would cut a ring drawn outside the row: the
-   same 2px of the primary colour drawn inside its edge. */
+   same 2px of the focus colour drawn inside its edge. */
 @utility focus-ring-inset {
   &:focus-visible {
-    outline: 2px solid var(--primary);
+    outline: 2px solid var(--focus);
     outline-offset: -2px;
   }
 }
 
 /* The focus of a field, a text box or a select, which have an edge of their own: the same 2px of
-   the primary colour drawn over that edge, so a focused field has one edge, not an edge and a ring. */
+   the focus colour drawn over that edge, so a focused field has one edge, not an edge and a ring. */
 @utility focus-ring-field {
   &:focus-visible {
-    outline: 2px solid var(--primary);
+    outline: 2px solid var(--focus);
     outline-offset: -1px;
   }
 }

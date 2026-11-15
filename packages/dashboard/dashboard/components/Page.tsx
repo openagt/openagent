@@ -69,7 +69,7 @@ export function Page({
             <div className="flex shrink-0 items-center gap-2">
               {/* While the sidebar is hidden, the button that shows it again stands before the name. */}
               <ShowSidebarButton />
-              <h1 className="text-xl font-semibold">
+              <h1 className="text-2xl font-semibold tracking-tight">
                 <span className="max-md:sr-only">{title}</span>
                 {/* A space, not only a margin, so a screen reader says the name and the count apart. */}
                 {count !== undefined && phoneCount === null && (
