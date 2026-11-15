@@ -13,6 +13,7 @@ import { updatePreferences, usePreferences, usePreferencesLoaded } from '../lib/
 import { OnboardingChecklist } from './OnboardingChecklist.js'
 import { AgentUpdates } from './AgentUpdates.js'
 import { Agents } from './Agents.js'
+import { useRunsDoing } from '../lib/use-doing.js'
 import { useModuleCards, type OverviewCard } from './ModuleCards.js'
 import { SkillsCard } from './SkillsCard.js'
 import { CardGrid, EditOverview, TakeOffMark, UNDER, UnderCards, type Under } from './CustomizeOverview.js'
@@ -80,6 +81,7 @@ export function DashboardPage({
   const onboardingDismissed = usePreferences().onboardingDismissed ?? false
   const namesRuns = usePreferences().nameRuns !== false
   const working = active.active.filter(agent => scope === null || agent.projectId === scope)
+  const doing = useRunsDoing(working)
   const shownProjects = scope === null ? projects : projects.filter(project => project.id === scope)
   // Every card the Overview can show here, each with the widths it stands at; the person's layout
   // for this page (the picked project's, else all projects') orders them, sizes them, and hides some.
@@ -136,13 +138,13 @@ export function DashboardPage({
     {
       id: 'working',
       stale: active.state === 'kept',
-      label: 'Agents at work',
+      label: 'At work',
       order: 7,
       width: '1/2',
       minWidth: '1/3',
       node: (
         <div id={WORKING_ID} className="flex scroll-mt-6 flex-col *:flex-1">
-          <Agents working={working} state={active.state} namesRuns={namesRuns} onSelectAgent={onSelectAgent} />
+          <Agents working={working} state={active.state} namesRuns={namesRuns} doing={doing} projectsNamed={scope === null} onSelectAgent={onSelectAgent} />
         </div>
       ),
     },
