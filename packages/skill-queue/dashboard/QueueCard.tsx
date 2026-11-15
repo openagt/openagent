@@ -1,5 +1,5 @@
 import { FastForward, Play } from 'lucide-react'
-import { PageLink, Panel, PanelGroup, PanelNote, PanelRow, PartDescription, SentenceShape, Slot, StartAgentButton, pathsIn, useFileNames, useModuleHost, type ModuleCardProps } from '@openagt/dashboard/module'
+import { PageLink, Panel, PanelGroup, PanelNote, PanelRow, PartDescription, SentenceShape, Slot, StartAgentButton, pathsIn, useFileNames, useIsMobile, useModuleHost, type ModuleCardProps } from '@openagt/dashboard/module'
 import { fanOutLabel, fanOutPress, unclaimedEntries, workOnEntryPrompt } from '../src/module.js'
 import { EntryTitle, entryView } from './entry.js'
 import { useQueueStarts, type QueueStarts } from './starts.js'
@@ -31,8 +31,10 @@ export function QueueCard({ projects }: ModuleCardProps) {
   const { inFlight, error } = starts
 
   const shown = reads.filter(read => read.entries.length > 0 || read.error !== undefined)
-  // With one project, its batch act is the card's own, at its heading, before the way to the whole queue.
+  // With one project, its batch act is the card's own, at its heading, before the way to the whole queue;
+  // on a phone, where the heading has no room for it, at the card's foot.
   const single = shown.length === 1 ? shown[0] : undefined
+  const mobile = useIsMobile()
   const waiting = shown.reduce((sum, read) => sum + unclaimedEntries(read.entries, read.working).length, 0)
   return (
     <PanelGroup
@@ -40,7 +42,7 @@ export function QueueCard({ projects }: ModuleCardProps) {
       title="AI Queue"
       action={
         <>
-          {single && <BatchStart read={single} starts={starts} />}
+          {single && !mobile && <BatchStart read={single} starts={starts} />}
           {state !== 'unknown' && shown.length > 0 && (
             <PageLink href={host.pageHref('queue')} onOpen={() => host.openPage('queue')}>
               All {waiting} waiting
@@ -111,6 +113,11 @@ export function QueueCard({ projects }: ModuleCardProps) {
                             />
                           )
                         })}
+                        {single === read && mobile && free.length > 0 && (
+                          <li className="relative flex items-center justify-end gap-2 px-4 py-3 before:absolute before:top-0 before:right-4 before:left-4 before:h-px before:bg-hairline">
+                            <BatchStart read={read} starts={starts} />
+                          </li>
+                        )}
                       </Panel>
                     )}
                   </li>
