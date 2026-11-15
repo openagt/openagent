@@ -1,15 +1,15 @@
 import { Fragment, useId, type ReactNode } from 'react'
 import { cn } from '../../lib/utils.js'
 import { inPlace } from '../../lib/in-place.js'
-import { Card } from './card.js'
+import { cardSurface } from './card.js'
 import { useHeadingTag } from './section.js'
 
-/** Rows held as one object: a card whose rows reach its edges, a hairline between them. */
+/** Rows held as one object: a card that is the list itself, its rows reaching its edges, a hairline between them. */
 export function Panel({ className, children, ...props }: { className?: string; children: ReactNode; 'aria-label'?: string }) {
   return (
-    <Card className={cn('overflow-hidden', className)}>
-      <ul {...props}>{children}</ul>
-    </Card>
+    <ul {...props} className={cn(cardSurface, 'overflow-hidden', className)}>
+      {children}
+    </ul>
   )
 }
 
@@ -22,7 +22,8 @@ export function PanelGroup({ title, badge, count, action, children }: { title: R
   const Heading = useHeadingTag()
   return (
     <section aria-labelledby={heading} className="min-w-0">
-      <div className="mb-2 flex min-h-7 items-center gap-2">
+      {/* Its name 8 over its card: the row is as tall as the name, unless a press at its right is taller. */}
+      <div className="mb-2 flex items-center gap-2">
         <Heading className="flex min-w-0 flex-1 items-center gap-2 text-sm font-semibold">
           <span id={heading} className="min-w-0 truncate">
             {title}
@@ -52,12 +53,19 @@ export function PanelGroup({ title, badge, count, action, children }: { title: R
 const coverClass = 'outline-none after:absolute after:inset-0'
 
 /**
- * One row of a {@link Panel}, two lines: what it is (`state`, a {@link StateCell} say), its name, and
+ * One row of a {@link Panel}, two lines: what it is (`state`: a place, a {@link StateCell}), its name, and
  * under it what is known of it (`meta`, parts said with a dot between them). At its right one fact
  * (`fact`: an age, a place) that, under the pointer and the keyboard, gives its room to the row's
- * own presses (`actions`, always shown on touch). With `href` it is a link (`external` opens it in a
- * new tab; else a plain click goes through `onClick`); with `onClick` alone, a press. Under the pointer
- * it lightens, with the keyboard on it it takes an inset ring, and the hairline beside it gives way.
+ * own presses (`actions`, always shown where no mouse points, and on a phone-width screen, where a row's
+ * press is the one way to its actions). With `href` it is a link (`external`
+ * opens it in a new tab; else a plain click goes through `onClick`); with `onClick` alone, a press.
+ * Under the pointer it lightens, with the keyboard on it it takes an inset ring, and the hairline
+ * beside it gives way.
+ *
+ * Its spacing is the look's rule (ui/look/spacing.md): 16 in from every edge, as tall as its lines
+ * (44 with one, 64 with two); `state` takes 16 on the title's line and the title starts 12 after it;
+ * a fact stands on the title's line and the presses are centred on the row, both ending on the inset.
+ * A press with no painted box is pulled out by its own padding by its caller, so its glyph ends there.
  */
 export function PanelRow({ state, title, titleHint, meta = [], fact, actions, href, external = false, onClick, className }: {
   state?: ReactNode
@@ -92,23 +100,22 @@ export function PanelRow({ state, title, titleHint, meta = [], fact, actions, hr
   return (
     <li
       className={cn(
-        'group/row relative flex min-h-14 items-center gap-3 py-2 pr-3 pl-4 text-sm max-md:min-h-15',
-        // The hairline over every row but the first, from the name's edge, gone beside a lit row. Every
+        'group/row relative flex items-start gap-3 px-4 py-3 text-sm',
+        // The hairline over every row but the first, from inset to inset, gone beside a lit row. Every
         // row's line is placed out of the flow, so lighting the first (which draws none) moves nothing.
-        'before:absolute before:top-0 before:right-0 before:h-px not-first:before:bg-hairline',
-        state !== undefined ? 'before:left-11' : 'before:left-4',
+        'before:absolute before:top-0 before:right-4 before:left-4 before:h-px not-first:before:bg-hairline',
         'pointer-fine:hover:bg-foreground/4 pointer-fine:hover:before:opacity-0 pointer-fine:[&:hover+li]:before:opacity-0',
         'has-[[data-cover]:focus-visible]:ring-2 has-[[data-cover]:focus-visible]:ring-focus has-[[data-cover]:focus-visible]:ring-inset has-[[data-cover]:focus-visible]:before:opacity-0 [&:has([data-cover]:focus-visible)+li]:before:opacity-0',
         (href !== undefined || onClick !== undefined) && 'has-[[data-cover]:active]:bg-foreground/8',
         className,
       )}
     >
-      {state !== undefined && <span className="flex w-4 shrink-0 justify-center">{state}</span>}
+      {state !== undefined && <span className="flex h-5 w-4 shrink-0 items-center">{state}</span>}
       <span className="min-w-0 flex-1">
         {named}
         {/* Every part but the last is said whole; the last gives way, cut with "…". */}
         {parts.length > 0 && (
-          <span className="mt-0.5 flex min-w-0 items-center gap-1.5 text-xs text-faint-foreground">
+          <span className="mt-1 flex min-w-0 items-center gap-1.5 text-xs text-faint-foreground">
             {parts.map((part, index) => (
               <Fragment key={index}>
                 {index > 0 && <span aria-hidden>·</span>}
@@ -118,14 +125,16 @@ export function PanelRow({ state, title, titleHint, meta = [], fact, actions, hr
           </span>
         )}
       </span>
-      {/* The fact and the presses share one cell at the right: the presses come in over the fact, and stay reachable by Tab while unseen. */}
+      {/* The fact and the presses share one cell at the right: the presses come in over the fact, and stay
+          reachable by Tab while unseen. The cell spans the row's whole height (its margins undo the row's
+          padding), so a press is centred on the row and makes it no taller; the fact stands on the title's line. */}
       {(fact !== undefined || actions !== undefined) && (
-        <span className="grid shrink-0 items-center justify-items-end">
+        <span className="-my-3 grid shrink-0 self-stretch justify-items-end">
           {fact !== undefined && (
-            <span className={cn('col-start-1 row-start-1 text-xs text-faint-foreground', actions !== undefined && 'not-pointer-fine:invisible pointer-fine:group-hover/row:invisible pointer-fine:group-focus-within/row:invisible pointer-fine:group-has-[[aria-expanded=true]]/row:invisible')}>{fact}</span>
+            <span className={cn('col-start-1 row-start-1 mt-3 self-start text-xs leading-5 text-faint-foreground', actions !== undefined && 'not-pointer-fine:invisible max-md:invisible pointer-fine:group-hover/row:invisible pointer-fine:group-focus-within/row:invisible pointer-fine:group-has-[[aria-expanded=true]]/row:invisible')}>{fact}</span>
           )}
           {actions !== undefined && (
-            <span className="relative col-start-1 row-start-1 flex items-center gap-1 pointer-fine:opacity-0 pointer-fine:group-hover/row:opacity-100 pointer-fine:group-focus-within/row:opacity-100 pointer-fine:group-has-[[aria-expanded=true]]/row:opacity-100">
+            <span className="relative col-start-1 row-start-1 flex items-center gap-1 self-center md:pointer-fine:opacity-0 md:pointer-fine:group-hover/row:opacity-100 md:pointer-fine:group-focus-within/row:opacity-100 md:pointer-fine:group-has-[[aria-expanded=true]]/row:opacity-100">
               {actions}
             </span>
           )}

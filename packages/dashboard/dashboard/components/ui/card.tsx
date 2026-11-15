@@ -3,9 +3,12 @@ import { ArrowRight } from 'lucide-react'
 import { cn } from '../../lib/utils.js'
 import { inPlace } from '../../lib/in-place.js'
 
+/** The card's surface: white, a step above the page, its hairline and a faint lift. */
+export const cardSurface = 'rounded-lg border border-hairline bg-card text-card-foreground shadow-sm'
+
 /** The card: a white surface a step above the page, its hairline and a faint lift, with an optional header. */
 export function Card({ className, ...props }: HTMLAttributes<HTMLDivElement>) {
-  return <div className={cn('rounded-lg border border-hairline bg-card text-card-foreground shadow-sm', className)} {...props} />
+  return <div className={cn(cardSurface, className)} {...props} />
 }
 
 export function CardHeader({ className, ...props }: HTMLAttributes<HTMLDivElement>) {

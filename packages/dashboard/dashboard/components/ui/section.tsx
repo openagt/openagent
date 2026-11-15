@@ -34,7 +34,7 @@ export function Section({ title, count, action, className, children }: {
   const inside = Heading === 'h3'
   return (
     <section aria-labelledby={heading} className={cn('min-w-0', className)}>
-      <div className="mb-2 flex min-h-8 items-center gap-3">
+      <div className="mb-2 flex items-center gap-3">
         <Heading className={cn('flex min-w-0 flex-1 items-baseline gap-2 font-semibold', inside ? 'text-sm' : 'text-base')}>
           <span id={heading} className="min-w-0 truncate">{title}</span>
           {/* A space, not only the gap, so a screen reader says the heading and the count apart. */}
