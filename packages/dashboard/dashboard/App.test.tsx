@@ -1098,7 +1098,7 @@ describe('the shell on a phone', () => {
       answers.set('onDocs', () => [])
       answers.set('onProjectFiles', () => [])
       render(<App />)
-      const open = await screen.findByRole('button', { name: 'Menu' })
+      const open = await screen.findByRole('button', { name: 'More' })
       // The top bar's word and the bar of pages' press, not the sidebar's row: the sidebar is closed.
       // The page's own heading says it too, to a screen reader only: the bar already names the page.
       expect(await screen.findByRole('heading', { name: 'Overview' })).toBeTruthy()
@@ -1116,7 +1116,7 @@ describe('the shell on a phone', () => {
       await waitFor(() => expect(screen.queryByRole('link', { name: 'New agent session' })).toBeNull())
 
       // The launcher has a top row of its own: no bar names it, and the bar of pages stays at its foot.
-      fireEvent.click(screen.getByRole('button', { name: 'Menu' }))
+      fireEvent.click(screen.getByRole('button', { name: 'More' }))
       // New is one click, to the page of a session with no project.
       fireEvent.click(await screen.findByRole('link', { name: 'New agent session' }))
       expect(await screen.findByText(/^the launcher of/)).toBeTruthy()
@@ -1140,6 +1140,11 @@ describe('the shell on a phone', () => {
       fireEvent.click(await within(pages).findByRole('link', { name: 'Logs' }))
       await waitFor(() => expect(window.location.pathname).toBe('/logs'))
       expect(within(pages).getByRole('link', { name: 'Logs' }).getAttribute('aria-current')).toBe('page')
+      // New opens the "New agent session" page, as the sidebar's New does; More opens the sidebar.
+      fireEvent.click(within(pages).getByRole('link', { name: 'New' }))
+      expect(await screen.findByText(/^the launcher of/)).toBeTruthy()
+      expect(within(pages).getByRole('link', { name: 'New' }).getAttribute('aria-current')).toBe('page')
+      expect(within(pages).getByRole('button', { name: 'More' }).getAttribute('aria-expanded')).toBe('false')
     } finally {
       wide()
     }

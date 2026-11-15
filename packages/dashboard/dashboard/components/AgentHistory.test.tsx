@@ -1077,20 +1077,20 @@ describe('AgentHistory on a phone', () => {
       const onSelect = vi.fn()
       const ui = (
         <SidebarProvider>
-          <PagesBar pages={[]} activePage={null} overviewActive={false} overviewHref="/" onOverview={() => {}} pageHref={segment => `/${segment}`} onPage={() => {}} waiting={0} />
+          <PagesBar pages={[]} activePage={null} overviewActive={false} overviewHref="/" onOverview={() => {}} pageHref={segment => `/${segment}`} onPage={() => {}} newHref="/new" newActive={false} onNew={() => {}} waiting={0} />
           <AgentHistory projectId={null} scope="p1" agents={[agent({ status: 'done' })]} selectedAgentId={null} onSelect={onSelect} pages={[{ segment: 'logs', label: 'Logs' }]} onPage={onPage} />
         </SidebarProvider>
       )
       render(ui)
       expect(screen.queryByRole('link', { name: 'Logs' })).toBeNull()
 
-      fireEvent.click(screen.getByRole('button', { name: 'Menu' }))
+      fireEvent.click(screen.getByRole('button', { name: 'More' }))
       fireEvent.click(await screen.findByRole('link', { name: 'Logs' }))
       expect(onPage).toHaveBeenCalledWith('logs')
       await waitFor(() => expect(screen.queryByRole('link', { name: 'Logs' })).toBeNull())
 
       // An agent's row closes it too.
-      fireEvent.click(screen.getByRole('button', { name: 'Menu' }))
+      fireEvent.click(screen.getByRole('button', { name: 'More' }))
       fireEvent.click(await screen.findByText("replace 'Hello, world!' with 'Welcome!'"))
       expect(onSelect).toHaveBeenCalledWith('run-1')
       await waitFor(() => expect(screen.queryByText("replace 'Hello, world!' with 'Welcome!'")).toBeNull())

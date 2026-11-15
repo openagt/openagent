@@ -741,6 +741,9 @@ export function App() {
           onOverview={showDashboard}
           pageHref={segment => hrefOf({ projectId: null, agentId: null, page: segment })}
           onPage={showPage}
+          newHref={hrefOf({ projectId: scope ?? SESSIONS_ID, agentId: null })}
+          newActive={projectId !== null && agentId === null}
+          onNew={() => newAgentInProject(scope ?? SESSIONS_ID)}
           waiting={interventions.length}
         />
       )}

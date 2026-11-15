@@ -1,5 +1,5 @@
 import { createContext, type ComponentType } from 'react'
-import { Blocks, LayoutDashboard, Menu } from 'lucide-react'
+import { Blocks, Ellipsis, LayoutDashboard, Plus } from 'lucide-react'
 import { cn } from '../lib/utils.js'
 import { inPlace } from '../lib/in-place.js'
 import { useSidebar } from './ui/sidebar.js'
@@ -20,15 +20,16 @@ export function PhoneBar({ title, countSlot }: { title: string; countSlot: (slot
   )
 }
 
-/** How many of the modules' pages the bar holds; the others are in the menu. */
-const PAGES_IN_BAR = 3
+/** How many of the modules' pages the bar holds; the others are under More. */
+const PAGES_IN_BAR = 2
 
 type BarPage = { segment: string; label: string; icon?: ComponentType<{ className?: string; 'aria-hidden'?: boolean }> | undefined }
 
 /**
  * A phone's bar of pages, at the foot of every page: the Overview, with how many things wait on the
- * person in amber; the first three of the modules' pages; and the menu, the sidebar as a sheet, which
- * holds the sessions, every page and the person. Each a 56-high press, its icon over its name.
+ * person in amber; the first two of the modules' pages; New, the "New agent session" page; and More,
+ * the sidebar as a sheet, which holds the sessions, every page and the person. Each a 56-high press,
+ * its icon over its name.
  */
 export function PagesBar({
   pages,
@@ -38,6 +39,9 @@ export function PagesBar({
   onOverview,
   pageHref,
   onPage,
+  newHref,
+  newActive,
+  onNew,
   waiting,
 }: {
   /** The modules' pages, in the sidebar's order. */
@@ -49,6 +53,10 @@ export function PagesBar({
   onOverview: () => void
   pageHref: (segment: string) => string
   onPage: (segment: string) => void
+  /** The "New agent session" page, as the sidebar's New opens it. */
+  newHref: string
+  newActive: boolean
+  onNew: () => void
   /** How many things wait on the person: the Overview's count. */
   waiting: number
 }) {
@@ -74,9 +82,13 @@ export function PagesBar({
           </a>
         )
       })}
+      <a href={newHref} onClick={inPlace(onNew)} aria-current={newActive ? 'page' : undefined} className={item(newActive)}>
+        <Plus className="size-5" aria-hidden />
+        <span className="max-w-full truncate px-1">New</span>
+      </a>
       <button type="button" aria-expanded={openMobile} onClick={() => setOpenMobile(!openMobile)} className={item(openMobile)}>
-        <Menu className="size-5" aria-hidden />
-        <span className="max-w-full truncate px-1">Menu</span>
+        <Ellipsis className="size-5" aria-hidden />
+        <span className="max-w-full truncate px-1">More</span>
       </button>
     </nav>
   )
