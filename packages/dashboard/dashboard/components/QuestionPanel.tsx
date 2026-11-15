@@ -23,11 +23,11 @@ const OTHER = Symbol('other')
 // its picture.
 function Mark({ on, multi, n }: { on: boolean; multi: boolean | undefined; n: number }) {
   return multi ? (
-    <span className={cn('mt-1 flex size-4 shrink-0 items-center justify-center rounded-sm border transition-colors', on ? 'border-primary bg-primary text-primary-foreground' : 'border-input group-hover/choice:border-input-hover')} aria-hidden>
+    <span className={cn('mt-0.5 flex size-4 shrink-0 items-center justify-center rounded-sm border transition-colors', on ? 'border-primary bg-primary text-primary-foreground' : 'border-input group-hover/choice:border-input-hover')} aria-hidden>
       {on && <Check className="size-3" strokeWidth={3} />}
     </span>
   ) : (
-    <span className={cn('mt-0.5 flex size-5 shrink-0 items-center justify-center rounded-sm text-xs font-medium transition-colors', on ? 'bg-primary text-primary-foreground' : 'text-muted-foreground ring-1 ring-input ring-inset group-hover/choice:ring-input-hover')} aria-hidden>
+    <span className={cn('mt-0.5 flex size-4 shrink-0 items-center justify-center rounded-sm text-xs leading-none font-medium transition-colors', on ? 'bg-primary text-primary-foreground' : 'text-muted-foreground ring-1 ring-input ring-inset group-hover/choice:ring-input-hover')} aria-hidden>
       {n}
     </span>
   )
@@ -45,10 +45,12 @@ function Choices({ multi, labelledBy, picked, onPick, disabled, children }: { mu
   )
 }
 
-// A choice's row: the radio group's radio, or a box the row toggles. Rows are 40 high and parted by
-// nothing but their padding; none is filled but the one under the pointer.
-function Choice({ multi, value, on, disabled, onPick, children }: { multi: boolean | undefined; value: string | typeof OTHER; on: boolean; disabled: boolean; onPick: () => void; children: ReactNode }) {
-  const row = cn('group/choice focus-ring flex min-h-10 w-full items-start gap-3 rounded-md px-3 py-2 text-left transition-colors enabled:hover:bg-accent enabled:active:bg-foreground/10 disabled:opacity-60', on && 'bg-accent')
+// A choice's row: the radio group's radio, or a box the row toggles. A row of one line is 44 high,
+// of two 64, its mark on the first line's (spacing.md 3), and rows are parted by nothing but their
+// padding; none is filled but the one picked and the one under the pointer.
+function Choice({ multi, value, on, twoLines, disabled, onPick, children }: { multi: boolean | undefined; value: string | typeof OTHER; on: boolean; twoLines: boolean; disabled: boolean; onPick: () => void; children: ReactNode }) {
+  // A second line ends on its baseline, lower in its line than a mark ends: less padding under it keeps the words' insets even.
+  const row = cn('group/choice focus-ring flex w-full items-start gap-3 rounded-md px-2 pt-3 text-left transition-colors enabled:hover:bg-accent enabled:active:bg-foreground/10 disabled:opacity-60', twoLines ? 'pb-2' : 'pb-3', on && 'bg-accent')
   return multi ? (
     <button type="button" role="checkbox" aria-checked={on} disabled={disabled} onClick={onPick} className={row}>
       {children}
@@ -200,8 +202,8 @@ export function QuestionPanel({
 
   if (sent) return null
   return (
-    <section ref={card} role="region" aria-label={choice.title} className="flex w-full flex-col gap-1 rounded-box bg-card p-1.5 font-sans text-sm shadow-sm ring-1 ring-warning/30">
-      <div className="flex flex-col gap-0.5 px-3 pt-2 pb-1">
+    <section ref={card} role="region" aria-label={choice.title} className="flex w-full flex-col gap-1 rounded-box bg-card p-2 font-sans text-sm shadow-sm ring-1 ring-warning/30">
+      <div className="flex flex-col gap-0.5 px-2 pt-1.5 pb-1">
         <span className="flex items-center gap-2 text-xs font-semibold text-warning">
           <StateCell state="waiting" className="size-3" />
           Waiting for your answer{askedAt !== undefined && ` · ${formatSince(askedAt)}`}
@@ -213,9 +215,9 @@ export function QuestionPanel({
           const on = choice.multi ? checked.has(o.id) : picked === o.id
           return (
             <li key={o.id}>
-              <Choice multi={choice.multi} value={o.id} on={on} disabled={busy} onPick={() => pick(o.id)}>
+              <Choice multi={choice.multi} value={o.id} on={on} twoLines={Boolean(o.detail)} disabled={busy} onPick={() => pick(o.id)}>
                 <Mark on={on} multi={choice.multi} n={at + 1} />
-                <span className="flex min-w-0 flex-1 flex-col gap-0.5 py-0.5">
+                <span className="flex min-w-0 flex-1 flex-col gap-1">
                   <span className="font-medium">
                     {o.label}
                     {/* A box of its own, which a screen reader reads as a word apart from the label. */}
@@ -229,9 +231,9 @@ export function QuestionPanel({
         })}
         {!send && (
           <li className="flex flex-col">
-            <Choice multi={choice.multi} value={OTHER} on={otherPicked} disabled={busy} onPick={pickOther}>
+            <Choice multi={choice.multi} value={OTHER} on={otherPicked} twoLines={false} disabled={busy} onPick={pickOther}>
               <Mark on={otherPicked} multi={choice.multi} n={choice.options.length + 1} />
-              <span className="min-w-0 flex-1 py-0.5 font-medium">Other</span>
+              <span className="min-w-0 flex-1 font-medium">Other</span>
             </Choice>
             {otherPicked && (
               <input
@@ -245,15 +247,15 @@ export function QuestionPanel({
                 name="own-answer"
                 placeholder="Type your own answer here"
                 aria-label="Your own answer"
-                className="mr-3 mb-2 ml-10 h-8 rounded-md border border-border bg-transparent px-3 outline-none placeholder:text-faint-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus"
+                className="mr-2 mb-2 ml-9 h-8 rounded-md border border-border bg-transparent px-3 outline-none placeholder:text-faint-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus"
               />
             )}
           </li>
         )}
       </Choices>
-      <div className="flex items-center gap-2 px-2 pt-1 pb-1.5">
+      <div className="flex items-center gap-2 pt-1">
         {/* One line in every state, so the buttons never move: what went wrong, or that it is on its way. */}
-        <span role={error ? 'alert' : busy ? 'status' : undefined} className={cn('min-w-0 flex-1 truncate pl-1 text-xs', error ? 'text-danger' : 'text-muted-foreground')}>
+        <span role={error ? 'alert' : busy ? 'status' : undefined} className={cn('min-w-0 flex-1 truncate pl-2 text-xs', error ? 'text-danger' : 'text-muted-foreground')}>
           {error ?? (busy ? 'Sending your answer…' : '')}
         </span>
         {!send && (
