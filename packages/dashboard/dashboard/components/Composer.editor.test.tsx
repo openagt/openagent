@@ -35,6 +35,22 @@ async function renderBox() {
   return { handle: handle.current!, box, editor: box.editor }
 }
 
+describe('a session\'s box while a message goes', () => {
+  test('takes what is typed', async () => {
+    render(<Composer files={[]} onSubmit={vi.fn()} busy submitLabel="Send" submitBusyLabel="Sending…" inAgent />)
+    const box = (await screen.findByRole('textbox', { name: 'Message' })) as HTMLElement & { editor: Editor }
+    expect(box.editor.isEditable).toBe(true)
+  })
+})
+
+describe('a message taken back to edit (edit)', () => {
+  test('goes after what is typed, which stays', async () => {
+    const { handle, editor } = await renderBox()
+    act(() => handle.edit('race one'))
+    expect(editor.storage.markdown.getMarkdown()).toBe('first draft words\n\nrace one')
+  })
+})
+
 describe('words handed back to the box (append)', () => {
   test.each([
     { from: 4, to: 4 },

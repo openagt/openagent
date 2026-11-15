@@ -21,7 +21,7 @@ export function AgentMenu({ agents, picked, busy, onPick }: { agents: readonly A
   if (!agents) return null
   const on = agents.find(agent => agent.id === picked) ?? agents[0]
   if (!on) return null
-  const said = `This session is on the agent ${on.name}: ${on.skills.length === 1 ? 'one skill' : `${on.skills.length} skills`}${on.accounts.github !== undefined ? `, as @${on.accounts.github} on GitHub` : ''}`
+  const said = `This session is on the agent ${on.name}: its own ${on.skills.length === 1 ? 'one skill' : `${on.skills.length} skills`}${on.accounts.github !== undefined ? `, as @${on.accounts.github} on GitHub` : ''}`
   return (
     <DropdownMenu>
       <Tooltip>

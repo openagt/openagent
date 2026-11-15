@@ -3,6 +3,7 @@ import { Button, Markdown, Slot, useAction, useModuleHost } from '@openagt/dashb
 import { heldBack, planBody, planTicketPrompt } from '../src/module.js'
 import { TicketPageShell, TicketPageNote, TicketPageShape } from './TicketPageShell.js'
 import { TicketHeader } from './TicketHeader.js'
+import { openToEdit } from './TicketDetailPage.js'
 import type { WorkspaceTicketDetail } from './lib/types.js'
 import { useTicket } from './lib/use-ticket.js'
 
@@ -24,7 +25,7 @@ export function TicketPlanPage({
   const onBack = () => host.backToPage('tickets')
 
   return (
-    <TicketPageShell onBack={onBack} crumbs={ticket ? [{ label: ticket.title, onOpen: () => host.openPage('tickets', [ticket.file], projectId) }, { label: 'Plan' }] : []}>
+    <TicketPageShell onBack={onBack} crumbs={ticket ? [{ label: ticket.title, onOpen: () => host.openPage('tickets', [ticket.file], projectId, { beside: true }) }, { label: 'Plan' }] : []}>
       <Slot of={{ state, value: read }} shape={<TicketPageShape />}>
         {read =>
           read && 'error' in read ? (
@@ -35,7 +36,15 @@ export function TicketPlanPage({
             <TicketPageNote>This ticket does not exist.</TicketPageNote>
           ) : (
             <>
-              <TicketHeader projectId={projectId} ticket={ticket} holderStatus={read.holderStatus} sessions={read.sessions} tab="plan" onChanged={() => void reload()} />
+              <TicketHeader
+                projectId={projectId}
+                ticket={ticket}
+                holderStatus={read.holderStatus}
+                sessions={read.sessions}
+                tab="plan"
+                onEdit={() => openToEdit(host, projectId, ticket.file)}
+                onChanged={() => void reload()}
+              />
               <div className="mt-6 max-w-180">
                 {read.plan === null ? (
                   // No `.plan.md` beside the ticket: never written, or removed since.

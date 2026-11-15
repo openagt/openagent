@@ -249,7 +249,9 @@ export async function startLogin(root: string, files = jobFiles('login'), waitMs
     if (shown) return shown
     if (!state?.running || Date.now() > until) {
       if (state?.running) stopJob(files)
-      throw new Error((state && !state.running ? state.failed : undefined) ?? (lastLines(state?.said ?? '') || 'gh showed no code to log in with'))
+      const said = (state && !state.running ? state.failed : undefined) ?? (lastLines(state?.said ?? '') || 'gh showed no code to log in with')
+      // A refusal is told by its last line: gh's lines go as one.
+      throw new Error(said.replaceAll('\n', '; '))
     }
     await new Promise(resolve => setTimeout(resolve, 200))
   }

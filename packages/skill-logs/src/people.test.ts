@@ -32,27 +32,29 @@ test("a run's id says when it started", () => {
   assert.equal(startOfId('2026-10-25T00-36-42-115Z'), Date.parse('2026-10-25T00:36:42.115Z'))
 })
 
-test('each person who started runs, the busiest first: the runs of the last days, their cost, those going now, the last one; the person at this computer marked', async () => {
+test('each person who started runs, the busiest first: the runs of the last days, their cost, those going now and those waiting on an answer, the last one; the person at this computer marked, and named by git when no commit names them', async () => {
   const reader = records({
     'ada@x.dev': [
       { at: NOW - 1 * DAY, status: 'done', cost: 0.5 },
       { at: NOW - 2 * DAY, status: 'running', cost: 0.25 },
+      { at: NOW - 3 * DAY, status: 'waiting' },
       { at: NOW - 30 * DAY, status: 'done', cost: 9 },
     ],
     'rom@y.dev': [{ at: NOW - 40 * DAY, status: 'done' }],
   })
-  const people = await peopleOf(reader, 'agents', NOW - 7 * DAY, 'ADA@x.dev')
+  const people = await peopleOf(reader, 'agents', NOW - 7 * DAY, { email: 'ADA@x.dev', name: 'Ada' })
   assert.deepEqual(people, [
-    { person: 'ada@x.dev', runs: 2, running: 1, cost: 0.75, commits: 0, lastAt: new Date(NOW - DAY).toISOString(), you: true },
-    { person: 'rom@y.dev', runs: 0, running: 0, cost: 0, commits: 0, lastAt: new Date(NOW - 40 * DAY).toISOString() },
+    // With no commit to give a name, the person at this computer has git's.
+    { person: 'ada@x.dev', name: 'Ada', runs: 3, running: 1, waiting: 1, cost: 0.75, commits: 0, lastAt: new Date(NOW - DAY).toISOString(), you: true },
+    { person: 'rom@y.dev', runs: 0, running: 0, waiting: 0, cost: 0, commits: 0, lastAt: new Date(NOW - 40 * DAY).toISOString() },
   ])
   // Only the cards of those days are read: the older ones are passed over by their ids.
-  assert.equal(reader.reads.length, 2)
+  assert.equal(reader.reads.length, 3)
 })
 
 test('the same person in several projects is one member, their runs added up; whoever has a run going comes first', () => {
-  const ada = { person: 'ada@x.dev', runs: 2, running: 0, cost: 0.5, commits: 0, lastAt: '2026-10-24T00:00:00.000Z' }
-  const rom = { person: 'rom@y.dev', runs: 1, running: 1, cost: 0.1, commits: 0, lastAt: '2026-10-20T00:00:00.000Z' }
+  const ada = { person: 'ada@x.dev', runs: 2, running: 0, waiting: 0, cost: 0.5, commits: 0, lastAt: '2026-10-24T00:00:00.000Z' }
+  const rom = { person: 'rom@y.dev', runs: 1, running: 1, waiting: 0, cost: 0.1, commits: 0, lastAt: '2026-10-20T00:00:00.000Z' }
   const members = membersOf([
     { project: 'alpha', people: [ada, rom] },
     { project: 'beta', people: [{ ...ada, person: 'ADA@x.dev', runs: 3, cost: 0.25, lastAt: '2026-10-25T00:00:00.000Z', you: true }] },
@@ -64,13 +66,13 @@ test('the same person in several projects is one member, their runs added up; wh
 })
 
 test("a person's two emails on one account at the git host are one member, in one project too", () => {
-  const server = { person: '42+rom@users.noreply.github.com', runs: 1, running: 0, cost: 0.24, commits: 0, lastAt: '2026-10-29T00:00:00.000Z' }
-  const laptop = { person: 'git@y.dev', name: 'Rom B', runs: 1, running: 1, cost: 0, commits: 2, lastAt: '2026-10-30T00:00:00.000Z' }
-  const other = { person: 'ada@x.dev', runs: 1, running: 0, cost: 0, commits: 0, lastAt: '2026-10-28T00:00:00.000Z' }
+  const server = { person: '42+rom@users.noreply.github.com', runs: 1, running: 0, waiting: 1, cost: 0.24, commits: 0, lastAt: '2026-10-29T00:00:00.000Z' }
+  const laptop = { person: 'git@y.dev', name: 'Rom B', runs: 2, running: 1, waiting: 1, cost: 0, commits: 2, lastAt: '2026-10-30T00:00:00.000Z' }
+  const other = { person: 'ada@x.dev', runs: 1, running: 0, waiting: 0, cost: 0, commits: 0, lastAt: '2026-10-28T00:00:00.000Z' }
   const accounts: Record<string, string> = { '42+rom@users.noreply.github.com': 'rom', 'git@y.dev': 'ROM' }
   const members = membersOf([{ project: 'alpha', people: [server, laptop, other] }], person => accounts[person])
   assert.deepEqual(members, [
-    { ...server, name: 'Rom B', runs: 2, running: 1, commits: 2, lastAt: '2026-10-30T00:00:00.000Z', projects: ['alpha'] },
+    { ...server, name: 'Rom B', runs: 3, running: 1, waiting: 2, commits: 2, lastAt: '2026-10-30T00:00:00.000Z', projects: ['alpha'] },
     { ...other, projects: ['alpha'] },
   ])
 })
@@ -99,7 +101,7 @@ test('whoever committed to the main branch is a member too, by the name of their
 })
 
 test("a project's people with their runs counted as the dashboard lists them: their commits and names kept, a person only the dashboard knows added, older runs and runs of no one left out", () => {
-  const recorded = [{ person: 'S@a.dev', name: 'Suleiman', runs: 1, running: 1, cost: 0.5, commits: 2, lastAt: new Date(NOW - 5 * DAY).toISOString(), you: true as const }]
+  const recorded = [{ person: 'S@a.dev', name: 'Suleiman', runs: 1, running: 1, waiting: 0, cost: 0.5, commits: 2, lastAt: new Date(NOW - 5 * DAY).toISOString(), you: true as const }]
   const at = (days: number): string => new Date(NOW - days * DAY).toISOString()
   const people = peopleWithRuns(
     recorded,
@@ -108,15 +110,16 @@ test("a project's people with their runs counted as the dashboard lists them: th
       { person: 's@a.dev', startedAt: at(0), status: 'running', cost: 0.25 },
       { person: 's@a.dev', startedAt: at(40), status: 'done', cost: 9 },
       { person: 'rom@b.dev', startedAt: at(2), status: 'done', cost: 1 },
+      { person: 'rom@b.dev', startedAt: at(3), status: 'waiting' },
       { startedAt: at(0), status: 'running' },
     ],
     NOW - 30 * DAY,
   )
   assert.deepEqual(
-    people.map(person => [person.person, person.name, person.runs, person.running, person.cost, person.commits, person.lastAt, person.you]),
+    people.map(person => [person.person, person.name, person.runs, person.running, person.waiting, person.cost, person.commits, person.lastAt, person.you]),
     [
-      ['S@a.dev', 'Suleiman', 2, 1, 0.75, 2, at(0), true],
-      ['rom@b.dev', undefined, 1, 0, 1, 0, at(2), undefined],
+      ['S@a.dev', 'Suleiman', 2, 1, 0, 0.75, 2, at(0), true],
+      ['rom@b.dev', undefined, 2, 0, 1, 1, 0, at(2), undefined],
     ],
   )
 })

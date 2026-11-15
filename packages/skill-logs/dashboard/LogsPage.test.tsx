@@ -51,6 +51,8 @@ test('the runs cut by day, each day with what its runs cost; a run by its name, 
   expect(within(login).getByRole('link', { name: 'Login page' }).getAttribute('title')).toBe('make the login page')
   expect(screen.getAllByText('yesterday work')[0]!.closest('li')!.textContent).toContain('2m')
   // A word per status the runs have, each with its count; its pick is kept in the page's address, in the place of the last one, so Back leaves the page.
+  // A status is one word on its chip and beside a run's dot.
+  expect(within(screen.getAllByText('break it')[0]!.closest('li')!).getByText(/^Failed/)).toBeTruthy()
   fireEvent.click(screen.getByRole('button', { name: /^Failed/ }))
   expect(host.adjustPage).toHaveBeenLastCalledWith(['failed'])
   rerender(page(['failed']))
@@ -248,7 +250,7 @@ test("each run says whose it is: their picture where the project's git host know
   expect(vi.mocked(host.gitHostPeople).mock.calls.at(-1)).toEqual(['p1', ['ada@x.dev', 'git@brillout.com']])
 })
 
-test('a project that gave the whole page of 50 runs has older ones: the page says it lists the last 50; one with fewer lists every run', async () => {
+test('a project that gave the whole page of 50 runs has older ones: the page says it lists the last 50; one with fewer lists every run; the one project shown is named', async () => {
   const cards = (count: number) => Array.from({ length: count }, (_, index) => ({ id: `r${index}`, startedAt: at(now - index * 1000), endedAt: at(now - index * 1000 + 500), status: 'done', intent: `run ${index}` }))
   const page = (host: FakeHost) => (
     <ModuleHostContext.Provider value={host}>
@@ -256,11 +258,36 @@ test('a project that gave the whole page of 50 runs has older ones: the page say
     </ModuleHostContext.Provider>
   )
   render(page(hostWith(cards(50))))
-  expect(await screen.findByText('The last 50 runs recorded in this project, newest first.')).toBeTruthy()
+  expect(await screen.findByText('The last 50 runs recorded in alpha, newest first.')).toBeTruthy()
   cleanup()
   forgetRemembered()
   render(page(hostWith(cards(49))))
-  expect(await screen.findByText('Every run recorded in this project, newest first.')).toBeTruthy()
+  expect(await screen.findByText('Every run recorded in alpha, newest first.')).toBeTruthy()
   await screen.findAllByText('run 48')
   expect(screen.queryByText(/^The last 50 runs/)).toBeNull()
+})
+
+test("a run whose work never left this machine says what it needs in the sidebar's words: a commit, else a push, or a pull request where the project can open one", async () => {
+  const host = hostWith(
+    [],
+    [
+      { id: 'r1', startedAt: at(now - 3000), endedAt: at(now), status: 'done', title: 'Committed a login page', name: 'agent-1', unpublished: 1 },
+      { id: 'r2', startedAt: at(now - 2000), endedAt: at(now), status: 'done', title: 'Left files', name: 'agent-2', uncommitted: 2, unpublished: 3 },
+      { id: 'r3', startedAt: at(now - 1000), endedAt: at(now), status: 'done', title: 'Pushed', name: 'agent-3' },
+    ],
+  )
+  const page = (gitHost: boolean) => (
+    <ModuleHostContext.Provider value={host}>
+      <LogsPage projects={[{ id: 'p1', name: 'alpha', gitHost }]} projectId={null} path={[]} />
+    </ModuleHostContext.Provider>
+  )
+  render(page(false))
+  const row = async (name: string) => (await screen.findAllByText(name))[0]!.closest('li')!
+  expect((await row('Committed a login page')).textContent).toContain('Needs push · 1 commit')
+  expect((await row('Left files')).textContent).toContain('Needs commit · 2 files')
+  expect((await row('Pushed')).textContent).not.toMatch(/Needs/)
+  cleanup()
+  forgetRemembered()
+  render(page(true))
+  expect((await row('Committed a login page')).textContent).toContain('Needs PR · 1 commit')
 })

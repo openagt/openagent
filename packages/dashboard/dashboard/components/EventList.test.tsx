@@ -125,14 +125,15 @@ describe('EventList conversation rows', () => {
     ]
     render(<EventList events={events} stick={false} />)
     // My message says how long ago under its box; the reply, with no time of its own, holds none.
-    expect(screen.queryAllByText(new Date(at).toLocaleTimeString())).toHaveLength(0)
+    expect(screen.queryAllByText(/ago$/, { selector: 'span' })).toHaveLength(0)
     cleanup()
-    // A message holds none either: the column would narrow it as it lands. Other rows do.
+    // A message holds none either: the column would narrow it as it lands. Other rows do, as an age, as under a message.
     render(<EventList events={[{ kind: 'driver', event: { type: 'text', text: 'hi' }, at }]} stick={false} />)
-    expect(screen.queryAllByText(new Date(at).toLocaleTimeString())).toHaveLength(0)
+    expect(screen.queryAllByText(/ago$/, { selector: 'span' })).toHaveLength(0)
     cleanup()
     render(<EventList events={[{ kind: 'log', message: 'hi', at }, { kind: 'log', message: 'there', at }]} stick={false} />)
-    const times = screen.getAllByText(new Date(at).toLocaleTimeString())
+    expect(screen.queryAllByText(new Date(at).toLocaleTimeString())).toHaveLength(0)
+    const times = screen.getAllByText(/ago$/, { selector: 'span' })
     expect(times).toHaveLength(1)
     expect(times[0]!.className).toContain('opacity-0')
     expect(times[0]!.className).toContain('group-hover/row:opacity-100')
@@ -588,15 +589,23 @@ describe('EventList session line', () => {
     expect(screen.getByText('Initialized session')).toBeTruthy()
   })
 
+  test('a first call with nothing of its own to open still opens to the set-up it carries', () => {
+    const call: OpenAgentEvent = { kind: 'driver', event: { type: 'action', label: 'TodoWrite' } }
+    render(<EventList events={[prompt, call, said]} setup={setup} stick={false} />)
+    fireEvent.click(screen.getByRole('button', { name: 'Updated todos' }))
+    expect(screen.getByRole('button', { name: 'Initialized session' })).toBeTruthy()
+  })
+
   test('as the first row of a box of steps, opened, its lines have no box of their own; alone, they do; the line of steps has no time', () => {
     const at = '2026-09-25T10:04:05.000Z'
     const call: OpenAgentEvent = { kind: 'driver', event: { type: 'action', label: 'Bash', detail: 'ls' }, at }
     const { unmount } = render(<EventList events={[prompt, call, said]} setup={setup} stick={false} />)
-    fireEvent.click(screen.getByRole('button', { name: 'Ran a command' }))
+    // The first command is named, as every later one is: the set-up it carries opens with it.
+    fireEvent.click(screen.getByRole('button', { name: 'Ran ls' }))
     fireEvent.click(screen.getByRole('button', { name: 'Initialized session' }))
     const lines = screen.getByText('agent-1').closest('.flex-col') as HTMLElement
     expect(lines.className).not.toContain('border')
-    expect(screen.getByRole('button', { name: 'Ran a command' }).closest('[data-message-id]')!.querySelector('.tabular-nums')).toBeNull()
+    expect(screen.getAllByRole('button', { name: 'Ran ls' })[0]!.closest('[data-message-id]')!.querySelector('.tabular-nums')).toBeNull()
     unmount()
     render(<EventList events={[prompt, said]} setup={setup} stick={false} />)
     fireEvent.click(screen.getByRole('button', { name: 'Initialized session' }))
@@ -1059,7 +1068,7 @@ describe('EventList subagent rows', () => {
     expect(screen.getAllByLabelText('Your message')).toHaveLength(2)
     expect(messageRow()).toBeTruthy()
     // It has no time at its end.
-    expect(screen.queryByText(new Date('2026-10-01T10:04:00.000Z').toLocaleTimeString())).toBeNull()
+    expect(within(messageRow().closest('[data-message-id]') as HTMLElement).queryByText(/ago$/, { selector: 'span' })).toBeNull()
   })
 
   test("a subagent's end right under the row of a subagent just started goes on that run of rows: it holds no time of its own", () => {
@@ -1067,7 +1076,7 @@ describe('EventList subagent rows', () => {
     const quick = sub({ id: '2026-10-01T10-03-59-000Z', startedAt: '2026-10-01T10:03:59.000Z', intent: 'Second task', status: 'done', endedAt: '2026-10-01T10:03:59.900Z' })
     render(<EventList events={[...events, told]} subagents={[quick]} stick={false} />)
     expect(messageRow()).toBeTruthy()
-    expect(screen.queryByText(new Date('2026-10-01T10:04:00.000Z').toLocaleTimeString())).toBeNull()
+    expect(within(messageRow().closest('[data-message-id]') as HTMLElement).queryByText(/ago$/, { selector: 'span' })).toBeNull()
   })
 
   test('the same words about a run that is not a subagent of this one stay a message the reader wrote', () => {
@@ -1457,5 +1466,13 @@ describe('EventList a message just sent', () => {
     act(() => void vi.advanceTimersByTime(1000))
     // 8 seconds from the send; from the prompt line it would be 2.
     expect(screen.getByTestId('live-line').textContent).toContain('8s')
+  })
+
+  test('counts from when the message was sent, on a page opened after the send', () => {
+    vi.useFakeTimers()
+    vi.setSystemTime(new Date('2026-11-04T10:01:30.000Z'))
+    render(<EventList events={done} working sending="and again" sendingAt="2026-11-04T10:01:00.000Z" stick={false} />)
+    act(() => void vi.advanceTimersByTime(1000))
+    expect(screen.getByTestId('live-line').textContent).toContain('31s')
   })
 })

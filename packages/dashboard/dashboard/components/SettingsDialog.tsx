@@ -1,4 +1,4 @@
-import { useCallback, useId, useRef, useState, type ComponentType, type ReactNode } from 'react'
+import { useCallback, useEffect, useId, useRef, useState, type ComponentType, type ReactNode } from 'react'
 import { Dialog as BaseDialog } from '@base-ui/react/dialog'
 import { ArrowLeft, Bell, Bot, ChevronRight, ChevronsUpDown, Database, FolderGit2, Globe, Keyboard, Layers, Palette, Puzzle, UserRound, X, FolderSearch } from 'lucide-react'
 import { ACCENTS, DEFAULT_ACCENT_LABELS, accentOf, CODE_FONTS, DOCUMENT_FONTS, DRIVERS, DRIVER_LABELS, isDriverName, FONTS, PALETTES, PALETTE_LABELS, type Accent, type CodeFont, type DocumentFont, type Font, type Palette as ColourPalette } from '../../src/client.js'
@@ -92,6 +92,14 @@ export function SettingsDialog({
   const listOnly = phone && entry === ''
   // Opened, the dialog itself has the focus, not its first entry: a ring there read as a second pick.
   const popup = useRef<HTMLDivElement>(null)
+  // Opened by its address, nothing on the page opened it: closed, the focus goes to the page's title, not the page's body.
+  const opener = useRef(document.activeElement)
+  const finalFocus = (): HTMLElement | true => {
+    const title = document.querySelector<HTMLElement>('h1')
+    if (opener.current !== document.body || !title) return true
+    title.tabIndex = -1
+    return title
+  }
   // Skills opened from a project's page are that project's, whatever the sidebar has picked.
   const [picked, setPicked] = useState((entry === SKILLS_ENTRY || entry === PROJECT_AGENT_DATA_ENTRY ? openItem : undefined) ?? scope ?? ALL_PROJECTS)
   // A project removed while the dialog is open is no longer one to show.
@@ -142,6 +150,10 @@ export function SettingsDialog({
   const projectEntries = [...ownForProject, ...forProject.map(section => moduleEntry(section, project ? [project] : projects))]
   const shown = [...yours, ...projectEntries].find(e => e.id === entry)
   const current = shown ?? yours[0]!
+  // Opened with no entry, a computer shows the first: the address names it, as it names every other.
+  useEffect(() => {
+    if (!phone && entry === '') onEntry(current.id)
+  }, [phone, entry, current.id, onEntry])
   const inProject = projectEntries.includes(current)
   // With every project picked, an entry says which projects a change goes to.
   const savedTo = inProject && !project ? projectsHaving(forProject.find(s => s.id === current.id)?.projects ?? [], projects) : []
@@ -176,6 +188,7 @@ export function SettingsDialog({
           data-overlay="dialog"
           ref={popup}
           initialFocus={popup}
+          finalFocus={finalFocus}
           className={cn(
             'fixed z-50 flex overflow-hidden bg-background text-foreground outline-none',
             // It arrives as every dialog does: grown in over 180ms, gone in 120ms; on a phone, up from below.
@@ -284,9 +297,9 @@ export function SettingsDialog({
           <ConfirmDialog
             open={leaving !== undefined}
             onOpenChange={open => !open && setLeaving(undefined)}
-            title="Leave without saving?"
+            title={`Discard your changes to ${current.title}?`}
             body={`What you changed in ${current.title} is not saved.`}
-            confirmLabel="Leave"
+            confirmLabel="Discard"
             onSuccess={() => {
               setHeld(false)
               leaving?.()
@@ -582,14 +595,14 @@ function BridgeBrowserChoice({ daemonBrowser, onChange }: { daemonBrowser: boole
       <RadioGroup aria-labelledby={question} value={daemonBrowser ? 'daemon' : 'own'} onValueChange={next => onChange(next === 'daemon')} className="gap-4">
         {option(
           true,
-          'A browser the daemon runs',
+          'A browser the dashboard runs',
           'Chrome for Testing, downloaded once, signed in once, kept minimized. Web runs work with your own Chrome closed.',
           <BridgeBrowserSettings />,
         )}
         {option(
           false,
           'Your own Chrome',
-          'Install the extension, open its options and paste the token. Web runs need your Chrome open.',
+          'Install the extension from the folder below, open its options and paste the token. Web runs need your Chrome open.',
           <BridgeSettings />,
         )}
       </RadioGroup>

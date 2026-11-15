@@ -182,7 +182,8 @@ describe('TicketsPanel (#697/#1144)', () => {
     render(
       <TicketsPanel
         projectId="p1"
-        tickets={[ticket({ priority: '8', topics: ['dx', 'ui'], date: twoDaysAgo })]}
+        // Named with no day, it is dated by its file: two days ago.
+        tickets={[ticket({ file: 'do-the-thing.md', priority: '8', topics: ['dx', 'ui'], date: twoDaysAgo })]}
         onOpen={() => {}}
        
       />,
@@ -192,6 +193,14 @@ describe('TicketsPanel (#697/#1144)', () => {
     expect(screen.getByText('dx')).toBeTruthy()
     expect(screen.getByText('ui')).toBeTruthy()
     expect(screen.getByText('2d ago')).toBeTruthy()
+  })
+
+  test('a ticket named today reads today, at any hour: its filename holds a day, and its tooltip says the day', async () => {
+    const now = new Date()
+    const day = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`
+    render(<TicketsPanel projectId="p1" tickets={[ticket({ file: `${day}_dark-mode.md`, date: `${day}T00:00:00.000Z` })]} onOpen={() => {}} />)
+    const age = await screen.findByText('today')
+    expect(age.getAttribute('title')).toBe(now.toLocaleDateString())
   })
 
   test('sorts by date is the server\'s job — the list renders whatever order it is given (#1144)', async () => {
@@ -265,8 +274,9 @@ describe('TicketsPanel (#697/#1144)', () => {
        
       />,
     )
-    expect(await screen.findByText('Effort: 2')).toBeTruthy()
-    expect(screen.getByText('Uncertainty: 4')).toBeTruthy()
+    // Said as the ticket's own page says them.
+    expect(await screen.findByText('Effort 2/10')).toBeTruthy()
+    expect(screen.getByText('Uncertainty 4/10')).toBeTruthy()
     // Priority sits left of the date (#1265), the date left of the issue link.
     const row = screen.getByText('Do the thing').closest('li')!
     const order = [row.textContent!.indexOf('Priority'), row.textContent!.indexOf('ago'), row.textContent!.indexOf('#42')]
@@ -336,7 +346,7 @@ describe('TicketsPanel (#697/#1144)', () => {
     host = fakeHost({ p1: { 'meta --local': meta } })
     renderWithHost(<TicketsPanel projectId="p1" tickets={[ticket({ planned: false, priority: '8' })]} onOpen={() => {}} />, host, mounted)
     await openMenu(await screen.findByRole('button', { name: 'Other ways to plan Do the thing' }))
-    fireEvent.click(await screen.findByText('Queue plan'))
+    fireEvent.click(await screen.findByText('Add to queue'))
     await waitFor(() => expect(addToQueue).toHaveBeenCalledWith(expect.anything(), 'p1', [{ text: planTicketPrompt('2026-07-20_do-the-thing.md'), priority: 8 }]))
     // The row says it is queued, and starts nothing.
     expect(await screen.findByText('Queued')).toBeTruthy()
@@ -346,8 +356,17 @@ describe('TicketsPanel (#697/#1144)', () => {
     host = fakeHost({ p1: { 'meta --local': meta } })
     renderWithHost(<TicketsPanel projectId="p1" tickets={[ticket({ planned: true })]} onOpen={() => {}} />, host, mounted)
     await openMenu(await screen.findByRole('button', { name: 'Other ways to work on Do the thing' }))
-    fireEvent.click(await screen.findByText('Queue work'))
+    fireEvent.click(await screen.findByText('Add to queue'))
     await waitFor(() => expect(addToQueue).toHaveBeenCalledWith(expect.anything(), 'p1', [{ text: 'Do the thing', href: 'tickets/2026-07-20_do-the-thing.md', priority: 5 }]))
+  })
+
+  test('a claimed row still says its plan is queued, and offers no start', async () => {
+    const queuedPlan = { label: 'Add to queue', doneLabel: 'Queued', run: vi.fn(), done: async () => () => true, package: '@x/queue', projects: ['p1'] }
+    const mounted: MountedModules = { pages: [], cards: [], linkActions: [queuedPlan], panels: [], runSlots: [], settings: [], everyPage: [], loaded: true }
+    host = fakeHost({ p1: { 'meta --local': meta } })
+    renderWithHost(<TicketsPanel projectId="p1" tickets={[ticket({ locked: true, lockedBy: 'agent-1' })]} onOpen={() => {}} />, host, mounted)
+    expect(await screen.findByText('Queued')).toBeTruthy()
+    expect(screen.queryByRole('button', { name: /^Plan/ })).toBeNull()
   })
 
   test("Start work's Configure first opens the launcher with the ticket's own prompt", async () => {

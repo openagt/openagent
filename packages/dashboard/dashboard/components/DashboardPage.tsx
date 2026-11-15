@@ -1,5 +1,6 @@
 import type { ActiveAgent, Intervention } from '../../src/index.js'
-import { useCallback, useState, type ReactNode } from 'react'
+import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
+import { flushSync } from 'react-dom'
 import { SlidersHorizontal } from 'lucide-react'
 import { Quota } from './Quota.js'
 import { SentenceShape, Slot } from './ui/slot.js'
@@ -22,6 +23,7 @@ import type { ProjectSummary } from '../../src/index.js'
 import type { ReadState } from '../lib/use-async.js'
 import { Page } from './Page.js'
 import { cn } from '../lib/utils.js'
+import { overlayOpen, pressed } from '../lib/shortcut.js'
 import { LinePart, NEEDS_YOU_ID, WORKING_ID, counted, scrollToPart } from './LinePart.js'
 import { YourAgentsPart } from './YourAgentsPart.js'
 
@@ -171,6 +173,20 @@ export function DashboardPage({
   // Arranging the page, on its cards themselves: the layout of this page (the picked project's, else
   // all projects'), changed at once as the person moves, sizes and hides the cards.
   const [editing, setEditing] = useState(false)
+  // Done, or Esc unless it closes something open first; the keyboard goes back to Customize, drawn in Done's place.
+  const customize = useRef<HTMLButtonElement>(null)
+  const done = (): void => {
+    flushSync(() => setEditing(false))
+    customize.current?.focus()
+  }
+  useEffect(() => {
+    if (!editing) return
+    const onKey = (event: KeyboardEvent): void => {
+      if (!event.defaultPrevented && pressed(event, 'leaveCustomize') && !overlayOpen()) done()
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [editing])
   const scopeName = scope === null ? undefined : projects.find(project => project.id === scope)?.name
   const own = layouts?.[layoutKey] !== undefined
   const reset = (): void => {
@@ -212,13 +228,13 @@ export function DashboardPage({
               </Button>
             )}
             {/* Focused as it takes Customize's place, which the press took away from the keyboard. */}
-            <Button autoFocus onClick={() => setEditing(false)}>
+            <Button autoFocus onClick={done}>
               Done
             </Button>
           </>
         ) : (
           // Pulled out by its own padding, so its words (on a phone its mark alone, the line beside it keeping the width) end on the cards' edge.
-          <Button variant="ghost" className="-mr-3 gap-1.5 text-muted-foreground max-md:size-10 max-md:px-0" onClick={() => setEditing(true)}>
+          <Button ref={customize} variant="ghost" className="-mr-3 gap-1.5 text-muted-foreground max-md:size-10 max-md:px-0" onClick={() => setEditing(true)}>
             <SlidersHorizontal className="h-3.5 w-3.5 max-md:size-4" aria-hidden />
             <span className="max-md:sr-only">Customize</span>
           </Button>

@@ -60,7 +60,7 @@ const ok = (output: unknown): ModuleCommandResult => ({ ok: true, output })
 const theSwitch = (): Promise<HTMLElement> => screen.findByRole('switch', { name: 'On this Wi-Fi' })
 /** Add device › Phone or tablet, as a person picks it: the first of the kinds. */
 async function addPhone(): Promise<void> {
-  fireEvent.click(await screen.findByRole('button', { name: /^(Add device|Add phone)$/ }))
+  fireEvent.click(await screen.findByRole('button', { name: /^(Add device|Add a phone)$/ }))
   const go = screen.queryByRole('button', { name: 'Continue' })
   if (go) fireEvent.click(go)
 }
@@ -95,11 +95,11 @@ function getRow(name: string): HTMLElement {
 }
 const findRow = (name: string, options?: { timeout: number }): Promise<HTMLElement> => waitFor(() => getRow(name), options)
 const open = async (name: string): Promise<void> => void fireEvent.click(within(await findRow(name)).getByRole('button'))
-/** Add computer: from the start page's card, or Add device › Computer. */
+/** Add a computer: from the start page's card, or Add device › Computer. */
 async function addComputer(): Promise<void> {
-  const press = await screen.findByRole('button', { name: /^(Add computer|Add device)$/ })
+  const press = await screen.findByRole('button', { name: /^(Add a computer|Add device)$/ })
   fireEvent.click(press)
-  if (press.textContent === 'Add computer') return
+  if (press.textContent === 'Add a computer') return
   fireEvent.click(await screen.findByRole('radio', { name: /^Computer/ }))
   fireEvent.click(screen.getByRole('button', { name: 'Continue' }))
 }
@@ -175,7 +175,7 @@ describe('Settings › Devices: this computer, and how devices reach it', () => 
     expect(screen.queryByText(WARNING)).toBeNull()
   })
 
-  test('Add phone shows the code of the link by the name, and the number on request', async () => {
+  test('Add a phone shows the code of the link by the name, and the number on request', async () => {
     const { host } = door(args => (args[0] === 'add' ? ok(LINK) : ok(OPEN)))
     show(host)
     await addPhone()
@@ -310,13 +310,45 @@ describe('Settings › Devices: this computer, and how devices reach it', () => 
     expect(await screen.findByText(/open OpenAgent at https:\/\/laptop\.tail1234\.ts\.net, from anywhere/)).toBeTruthy()
     expect(screen.getByText('None yet. Add device: a phone or a computer on your Tailscale network.')).toBeTruthy()
     cleanup()
-    const signedOut = door(args => (args[0] === 'tailscale' ? { ok: false, error: 'Tailscale is not signed in on this computer. Sign in to Tailscale, then turn this on again.' } : ok(OFF)))
+    const signedOut = door(args => (args[0] === 'tailscale' ? { ok: false, error: 'Tailscale is not signed in on this computer. Sign in to Tailscale, then try again.' } : ok(OFF)))
     show(signedOut.host)
     fireEvent.click(await screen.findByRole('button', { name: 'Reach this computer on your Tailscale network' }))
-    expect((await screen.findByRole('alert')).textContent).toBe('Tailscale is not signed in on this computer. Sign in to Tailscale, then turn this on again.')
+    expect((await screen.findByRole('alert')).textContent).toBe('Tailscale is not signed in on this computer. Sign in to Tailscale, then try again.')
   })
 
-  test('behind Tailscale with Serve off for the network: what is in the way is said, with a press to the page in Tailscale that turns it on; Add phone says the same', async () => {
+  test('a press keeps the focus it was pressed with while what it started works, and sends nothing more until that is answered', async () => {
+    // Every command but the status waits here until it is answered.
+    let answer = (_result: ModuleCommandResult) => {}
+    const held = (): Promise<ModuleCommandResult> => new Promise(resolve => (answer = resolve))
+    const from = 'https://165.245.244.10'
+    const PEOPLE = { ...OPEN, persons: [{ name: 'Rom', owner: true }, { name: 'Kim', ready: true, from, removed: true }], devices: [{ ...PHONE, person: 'Rom' }], lines: [{ url: from, mode: 'full', name: 'OpenAgentVPS' }] }
+    const pressed = async (press: HTMLButtonElement, command: string, calls: ReturnType<typeof door>['runComputerCommand']): Promise<void> => {
+      press.focus()
+      fireEvent.click(press)
+      await waitFor(() => expect([press.disabled, press.getAttribute('aria-disabled')]).toEqual([false, 'true']))
+      fireEvent.click(press)
+      answer({ ok: false, error: `${command} could not be done` })
+      expect(await screen.findByText(`${command} could not be done`)).toBeTruthy()
+      expect(calls.mock.calls.filter(([args]) => args[0] === command)).toHaveLength(1)
+      expect(document.activeElement).toBe(press)
+    }
+    const start = door(args => (args[0] === 'tailscale' ? held() : ok(OFF)))
+    show(start.host)
+    await pressed((await screen.findByRole('button', { name: 'Reach this computer on your Tailscale network' })) as HTMLButtonElement, 'tailscale', start.runComputerCommand)
+    cleanup()
+    const phone = door(args => (args[0] === 'rename' ? held() : ok({ ...OPEN, devices: [PHONE] })))
+    show(phone.host)
+    await fromMenu('iPhone, Safari', 'Rename')
+    fireEvent.change(await screen.findByRole('textbox', { name: 'Name' }), { target: { value: 'My phone' } })
+    await pressed(screen.getByRole('button', { name: 'Save' }) as HTMLButtonElement, 'rename', phone.runComputerCommand)
+    cleanup()
+    const people = door(args => (args[0] === 'remove' || args[0] === 'keep' ? held() : ok(PEOPLE)))
+    show(people.host)
+    await pressed((await screen.findByRole('button', { name: 'Remove iPhone, Safari' })) as HTMLButtonElement, 'remove', people.runComputerCommand)
+    await pressed(screen.getByRole('button', { name: 'Keep, switched off' }) as HTMLButtonElement, 'keep', people.runComputerCommand)
+  })
+
+  test('behind Tailscale with Serve off for the network: what is in the way is said, with a press to the page in Tailscale that turns it on; Add a phone says the same', async () => {
     const OFF_THERE = { on: false, listening: false, tailscale: { address: 'laptop.tail1234.ts.net' }, problem: 'Serve is off on your Tailscale network. Turn it on once in your Tailscale account; the door opens by itself then.', fixAt: 'https://login.tailscale.com/f/serve?node=n1', devices: [PHONE], persons: [] }
     show(door(() => ok(OFF_THERE)).host)
     expect((await screen.findByRole('alert')).textContent).toBe(OFF_THERE.problem)
@@ -324,7 +356,7 @@ describe('Settings › Devices: this computer, and how devices reach it', () => 
     expect(screen.getByText('At https://laptop.tail1234.ts.net once Tailscale serves it.')).toBeTruthy()
     expect(screen.getByRole('link', { name: 'Turn on Serve' }).getAttribute('href')).toBe('https://login.tailscale.com/f/serve?node=n1')
     await addPhone()
-    const page = await screen.findByRole('region', { name: 'Add phone' })
+    const page = await screen.findByRole('region', { name: 'Add a phone' })
     expect(within(page).getByText(OFF_THERE.problem)).toBeTruthy()
     expect(within(page).getByRole('link', { name: 'Turn on Serve' }).getAttribute('href')).toBe('https://login.tailscale.com/f/serve?node=n1')
     cleanup()
@@ -572,13 +604,15 @@ describe('Settings › Devices: another computer, once', () => {
     })
   }
 
-  test('Add computer with nothing found on this Wi-Fi after a while says so, and keeps looking', async () => {
+  test('Add a computer with nothing found on this Wi-Fi after a while says so, and keeps looking', async () => {
     vi.useFakeTimers({ shouldAdvanceTime: true })
     try {
       const { host, runComputerCommand } = door(args => ok(args[0] === 'find' ? { found: [] } : OPEN))
       show(host)
       await addComputer()
       expect(await screen.findByText('Looking on this Wi-Fi…')).toBeTruthy()
+      // Where the switch is on the other computer, which this one has not shown yet.
+      expect(screen.getByText(/^Don't see it\?/).textContent).toBe('Don\'t see it? Open OpenAgent on it, on the same Wi-Fi, and turn on "On this Wi-Fi" in its Settings › Devices.')
       act(() => void vi.advanceTimersByTime(10_000))
       expect(await screen.findByText('No computer found on this Wi-Fi yet. Still looking…')).toBeTruthy()
       const looks = runComputerCommand.mock.calls.filter(([args]) => args[0] === 'find').length
@@ -588,17 +622,17 @@ describe('Settings › Devices: another computer, once', () => {
     }
   })
 
-  test('Add computer keeps a way out of its own, as every way of adding does: Cancel goes back to the list', async () => {
+  test('Add a computer keeps a way out of its own, as every way of adding does: Cancel goes back to the list', async () => {
     const { host } = pairing(OPEN, ['waiting'])
     show(host)
     await addComputer()
     await screen.findByRole('list', { name: 'On this Wi-Fi' })
     fireEvent.click(screen.getByRole('button', { name: 'Cancel' }))
-    expect(await screen.findByRole('button', { name: /^(Add computer|Add device)$/ })).toBeTruthy()
+    expect(await screen.findByRole('button', { name: /^(Add a computer|Add device)$/ })).toBeTruthy()
     expect(screen.queryByRole('list', { name: 'On this Wi-Fi' })).toBeNull()
   })
 
-  test('Add computer lists the computers found on this Wi-Fi; Connect shows the number to match there, and once allowed it is saved and let in here: runs go both ways', async () => {
+  test('Add a computer lists the computers found on this Wi-Fi; Connect shows the number to match there, and once allowed it is saved and let in here: runs go both ways', async () => {
     const { host, runComputerCommand } = pairing(OPEN, ['waiting', 'allowed'])
     show(host)
     await addComputer()
@@ -633,12 +667,21 @@ describe('Settings › Devices: another computer, once', () => {
     const { host } = pairing(OFF, ['allowed'])
     show(host)
     await addComputer()
-    expect((await screen.findByRole('button', { name: 'Give it a code' }) as HTMLButtonElement).disabled).toBe(true)
-    expect(screen.getByText("At the office, at a friend's: it joins through a server. Add a server first.")).toBeTruthy()
+    expect(await screen.findByText("At the office, at a friend's: it joins through a server. Add a server first.")).toBeTruthy()
+    expect(screen.queryByRole('button', { name: 'Give it a code' })).toBeNull()
     fireEvent.click(await screen.findByRole('button', { name: 'Connect Studio Mac' }))
     await screen.findByText('Studio Mac is connected.')
     expect(host.letMachineIn).not.toHaveBeenCalled()
     expect(screen.getByText('Your runs can go there.')).toBeTruthy()
+  })
+
+  test('Add a computer with no server offers to set one up, in place of a code nothing could give', async () => {
+    const { host } = pairing(OPEN, ['waiting'])
+    show(host)
+    await addComputer()
+    fireEvent.click(within(await screen.findByRole('region', { name: 'Add a computer' })).getByRole('button', { name: 'Set up a server' }))
+    expect(await screen.findByRole('region', { name: 'Set up a server' })).toBeTruthy()
+    expect(screen.queryByRole('region', { name: 'Add a computer' })).toBeNull()
   })
 
   test('the box is read when the answer comes: unticked while it waits, the computer is saved one way only', async () => {
@@ -976,6 +1019,46 @@ describe('Settings › Devices: a code typed on another computer', () => {
     expect(document.body.textContent).not.toContain('K7P4QX9M')
   })
 
+  test('Join with a code: a whole link it cannot read is said at Where, and the dialog stays to correct it', async () => {
+    const { host } = door(() => ok(OFF), [], () => ok({ servers: [] }))
+    show(host)
+    fireEvent.click(await screen.findByRole('button', { name: 'Join with a code' }))
+    const where = await screen.findByRole('textbox', { name: 'Where' })
+    fireEvent.change(where, { target: { value: 'http://192.168.1.23:4201x/_devices/enter#K7P4-QX9M' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Join' }))
+    expect(document.activeElement).toBe(where)
+    expect(where.getAttribute('aria-invalid')).toBe('true')
+    expect(document.getElementById(where.getAttribute('aria-describedby')!)?.textContent).toBe('That is no address: type it as the other device shows it, like 203.0.113.10.')
+    expect(host.addMachine).not.toHaveBeenCalled()
+    fireEvent.change(where, { target: { value: 'http://192.168.1.23:4201/_devices/enter#K7P4-QX9M' } })
+    expect(where.getAttribute('aria-invalid')).toBe('false')
+    fireEvent.click(screen.getByRole('button', { name: 'Join' }))
+    await waitFor(() => expect(host.addMachine).toHaveBeenCalledWith('http://192.168.1.23:4201/_devices/enter#K7P4-QX9M'))
+  })
+
+  test('Join with a code takes a Wi-Fi door\'s address as typed, http:// and all, and says at the field what is no address or no code', async () => {
+    const { host } = door(() => ok(OFF), [], () => ok({ servers: [] }))
+    show(host)
+    fireEvent.click(await screen.findByRole('button', { name: 'Join with a code' }))
+    const where = await screen.findByRole('textbox', { name: 'Where' })
+    const code = screen.getByRole('textbox', { name: 'Code' })
+    fireEvent.change(where, { target: { value: '192.168.1.5:4280/enter' } })
+    fireEvent.change(code, { target: { value: 'K7P' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Join' }))
+    expect(document.activeElement).toBe(where)
+    expect(where.getAttribute('aria-invalid')).toBe('true')
+    expect(document.getElementById(where.getAttribute('aria-describedby')!)?.textContent).toBe('That is no address: type it as the other device shows it, like 203.0.113.10.')
+    fireEvent.change(where, { target: { value: 'http://192.168.1.5:4280' } })
+    expect(where.getAttribute('aria-invalid')).toBe('false')
+    fireEvent.click(screen.getByRole('button', { name: 'Join' }))
+    expect(document.activeElement).toBe(code)
+    expect(document.getElementById(code.getAttribute('aria-describedby')!)?.textContent).toBe('That is no code: it is letters and digits, like K7P4-QX9M.')
+    expect(host.addMachine).not.toHaveBeenCalled()
+    fireEvent.change(code, { target: { value: 'K7P4-QX9M' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Join' }))
+    await waitFor(() => expect(host.addMachine).toHaveBeenCalledWith('http://192.168.1.5:4280/_devices/enter#K7P4QX9M'))
+  })
+
   test('Join with a code says why a code did not work, and keeps what was typed; unticked, this computer keeps no line there', async () => {
     const saved: ModuleMachine[] = []
     const { host, serverCommand } = door(() => ok(OFF), saved, () => ok({ servers: [] }))
@@ -1020,6 +1103,8 @@ describe('Settings › Devices: a code typed on another computer', () => {
     expect(await screen.findByText("At the office, at a friend's: it joins through my-vps.")).toBeTruthy()
     fireEvent.click(screen.getByRole('button', { name: 'Give it a code' }))
     const card = await screen.findByRole('group', { name: 'The code' })
+    // The path the other computer has, with no device yet as with some.
+    expect(screen.getByText(/^On the other computer, open/).textContent).toBe('On the other computer, open Settings › Devices, press Join with a code (or Add device › Join with a code), and type:')
     expect(host.machineCode).toHaveBeenCalledWith(VPS.id)
     expect(card.textContent).toContain('203.0.113.10')
     expect(card.textContent).toContain('K7P4-QX9M')

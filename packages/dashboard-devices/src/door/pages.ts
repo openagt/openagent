@@ -76,8 +76,8 @@ export function howToGetIn(kind: DoorKind): string {
   if (kind === 'tailscale-server')
     return 'This computer is a server on your Tailscale network. Log in to it and run `openagent-devices add --for <your name> --qr` then scan the code with this device. A device that is already in can also make a code: its Settings › Devices › Add device.'
   if (kind === 'tailscale')
-    return 'This computer is on your Tailscale network. On it, open OpenAgent\'s Settings › Devices, press Add phone (or Add device › Phone or tablet), and scan the code with this device. On a computer with no screen, run `npx @openagt/dashboard-devices add --qr` A device that is already in can also make a code: its Settings › Devices › Add device.'
-  return 'On the computer that runs OpenAgent, open Settings › Devices, press Add phone (or Add device › Phone or tablet), and scan the code with this device.'
+    return 'This computer is on your Tailscale network. On it, open OpenAgent\'s Settings › Devices, press Add a phone (or Add device › Phone or tablet), and scan the code with this device. On a computer with no screen, run `npx @openagt/dashboard-devices add --qr` A device that is already in can also make a code: its Settings › Devices › Add device.'
+  return 'On the computer that runs OpenAgent, open Settings › Devices, press Add a phone (or Add device › Phone or tablet), and scan the code with this device.'
 }
 
 /** What a device that is not in sees when it opens the door's address. */

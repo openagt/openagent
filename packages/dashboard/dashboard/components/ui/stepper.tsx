@@ -1,3 +1,4 @@
+import type { HTMLAttributes } from 'react'
 import { Minus, Plus } from 'lucide-react'
 import { cn } from '../../lib/utils.js'
 
@@ -8,14 +9,15 @@ const STEP =
 /**
  * A whole number from `min` to `max`, typed or stepped, with what it counts after it ("2 agents"): a
  * soft-filled segment that stands joined to the press it qualifies (a `ButtonGroup`'s first part).
+ * The rest of its props go to the segment, so it can be a tooltip's trigger.
  */
-export function Stepper({ value, min = 1, max, unit, label, fewer, more, onChange, className }: {
+export function Stepper({ value, min = 1, max, unit, label, fewer, more, onChange, className, ...props }: Omit<HTMLAttributes<HTMLDivElement>, 'onChange'> & {
   value: number
   min?: number
   max: number
   /** What the number counts, after it, quieter. */
   unit?: string
-  /** The group's and the number's name. */
+  /** The number's name, said by the box alone. */
   label: string
   /** The steps' names: "One agent fewer". */
   fewer: string
@@ -24,7 +26,7 @@ export function Stepper({ value, min = 1, max, unit, label, fewer, more, onChang
   className?: string
 }) {
   return (
-    <div role="group" aria-label={label} className={cn('flex h-8 shrink-0 items-center rounded-md bg-accent px-0.5 text-sm tabular-nums', className)}>
+    <div {...props} className={cn('flex h-8 shrink-0 items-center rounded-md bg-accent px-0.5 text-sm tabular-nums', className)}>
       <button type="button" aria-label={fewer} disabled={value <= min} onClick={() => onChange(value - 1)} className={STEP}>
         <Minus className="size-3.5" aria-hidden />
       </button>

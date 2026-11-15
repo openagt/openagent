@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { Button, PageLink, Panel, PanelGroup, PartDescription, RowShapes, Slot, Tooltip, TooltipContent, TooltipTrigger, cn, formatAge, inPlace, formatDateTime, useModuleHost, useOpenAgentDown, usePolled, type ModuleCardProps, type ModuleProject } from '@openagt/dashboard/module'
 import { CodeWords } from './CodeWords.js'
-import { cannotRun, notAsked, readSchedulers, schedulersKey, rowTitle, schedulerStatus, schedulerStopped, startedNow, startsNext, unlistedWords, type Answered, type SchedulerCommand, type SchedulerRow } from './schedulers.js'
+import { cannotRun, heldBy, notAsked, readSchedulers, schedulersKey, rowTitle, schedulerStatus, schedulerStopped, startedNow, startsNext, unlistedWords, type Answered, type SchedulerCommand, type SchedulerRow } from './schedulers.js'
 
 // The Overview's Automations card: what starts by itself in every project that has this package,
 // read with `scheduler status` every 10 seconds. It is called what its page is called, and
@@ -112,6 +112,8 @@ function OnRow({ project, command, stopped, lookedAt, onOpenRun, reload }: { pro
   const [busy, setBusy] = useState(false)
   const [said, setSaid] = useState<Answered>()
   const started = said?.started || command.decision?.run
+  // Switched on, and still not starting: no green dot, and why in the warning colour.
+  const held = cannotRun(command) !== undefined || heldBy(command) !== undefined
   const runNow = async (): Promise<void> => {
     setBusy(true)
     setSaid(undefined)
@@ -124,12 +126,12 @@ function OnRow({ project, command, stopped, lookedAt, onOpenRun, reload }: { pro
     // One line, whatever the card's width: the name whole, when it starts next cut short (and said
     // whole on hover), never a second line that leaves the rows at uneven gaps.
     <li className="group/row relative -mx-4 flex items-center gap-3 bg-card px-4 text-sm transition-colors hover:bg-accent md:h-10 max-md:h-11">
-      <span aria-hidden className={cn('size-1.5 shrink-0 rounded-full', stopped ? 'bg-muted-foreground/50' : 'bg-success')} />
+      <span aria-hidden className={cn('size-1.5 shrink-0 rounded-full', stopped || held ? 'bg-muted-foreground/50' : 'bg-success')} />
       <span className="shrink-0 font-mono text-xs font-medium">{rowTitle(command)}</span>
       {/* While the scheduler is stopped a row has no next start: the line above says why. */}
       {!stopped && (
-        <span title={startsNext(command)} className="min-w-0 truncate text-xs text-muted-foreground">
-          {startsNext(command)}
+        <span title={startsNext(command)} className={cn('min-w-0 truncate text-xs', held ? 'text-warning' : 'text-muted-foreground')}>
+          <CodeWords text={startsNext(command)} />
         </span>
       )}
       {started !== undefined && started !== '' && (
@@ -148,7 +150,8 @@ function OnRow({ project, command, stopped, lookedAt, onOpenRun, reload }: { pro
         </span>
       )}
       {/* Under the pointer, or with the keyboard on it; a touch screen has no hover, and there it always shows. */}
-      {cannotRun(command) === undefined && (
+      {/* Not where it would start nothing: what held every start back at the last look holds this one too. */}
+      {cannotRun(command) === undefined && (stopped || heldBy(command) !== 'every start') && (
         <Button
           variant="ghost"
           size="sm"

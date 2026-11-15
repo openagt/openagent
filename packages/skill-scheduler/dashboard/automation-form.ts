@@ -82,20 +82,14 @@ export function atRowsPace(opened: AutomationDraft, row: SchedulerCommand): Auto
 }
 
 /**
- * What keeps a draft from being saved yet, for the person typing it, the first thing first; nothing
- * when it can be saved. `file` is the file of an automation opened from its row: a text too long
+ * What keeps a draft from being saved yet, for the person typing it, the first thing first in the
+ * form's order; nothing when it can be saved. A name it cannot have is pointed at, its rule being
+ * said under its field. `file` is the file of an automation opened from its row: a text too long
  * for the form is then changed in that file.
  */
 export function draftProblem(draft: AutomationDraft, file?: string): string | undefined {
   if (draft.name.trim() === '') return draft.onThisMachine ? 'Give it a name, like answer-comments.' : 'Give it a name. It becomes the command, like /answer-comments.'
-  return nameProblem(draft.name) ?? whatAndWhenProblem(draft, file)
-}
-
-/**
- * What keeps what a draft does and when it runs from being saved yet, the first thing first; nothing
- * when both can be. Its name is not looked at. `file` is as for `draftProblem`.
- */
-export function whatAndWhenProblem(draft: AutomationDraft, file?: string): string | undefined {
+  if (nameProblem(draft.name) !== undefined) return "Give it another name: the one above cannot be an automation's."
   if (draft.prompt.trim() === '') return 'Write what the agent is told.'
   if (draft.prompt.trim().length > TEXT_MAX) return `What the agent is told is ${draft.prompt.trim().length} characters, and this form takes ${TEXT_MAX} at most. ${file === undefined ? 'Save a shorter one, then write the rest into the file.' : `Change it in its file, ${file}.`}`
   if (draft.when.trim().length > TEXT_MAX) return `The shell line is ${draft.when.trim().length} characters, and this form takes ${TEXT_MAX} at most.`
@@ -264,10 +258,10 @@ export function removedWords(title: string, output: unknown): string {
   const answer = record(output)
   const file = typeof answer['file'] === 'string' ? answer['file'] : 'its file'
   const startsFrom = typeof answer['startsFrom'] === 'string' ? answer['startsFrom'] : 'HEAD'
-  if (answer['onThisMachine'] === true) return `Removed ${title}: ${file} is deleted. Nothing is to commit.`
+  if (answer['onThisMachine'] === true) return `Removed ${title}: ${file} is deleted. Nothing to commit.`
   if (answer['git'] === 'committed') return `Removed ${title}: ${file} is deleted, and nothing was committed for you. ${startsFrom === 'HEAD' ? 'Commit the deletion.' : `Commit the deletion and bring it to ${startsFrom}: until then everyone else who has the project keeps the row.`}`
   if (answer['git'] === 'staged') return `Removed ${title}: ${file} is deleted. It was staged and never committed, so a commit made now would still add it: take it out of the next commit with "git rm --cached ${file}".`
-  if (answer['git'] === 'nothing') return `Removed ${title}: ${file} is deleted. Git never had the file, so nothing is to commit.`
+  if (answer['git'] === 'nothing') return `Removed ${title}: ${file} is deleted. Git never had the file, so there is nothing to commit.`
   return `Removed ${title}: ${file} is deleted. What git holds of it could not be read: look with "git status".`
 }
 
