@@ -40,25 +40,21 @@ function scheduling(commands: ModuleScheduledCommand[]): MountedModules {
   }
 }
 
-/** The section headings with their badges and counts and the entries' names, top to bottom, as the page shows them. */
+/** The section headings and the entries' names, top to bottom, as the page shows them. */
 const shown = () => [...document.querySelectorAll('h2, ul > li')].map(node => (node.tagName === 'H2' ? node.textContent : node.querySelector('[title]')?.textContent))
 /** Entry `place`'s menu opened, and its removal asked for. */
 const removeEntry = async (place: number): Promise<void> => {
   await openMenu(await screen.findByRole('button', { name: `More for entry ${place}` }))
   fireEvent.click(await screen.findByRole('menuitem', { name: 'Remove from the queue' }))
 }
+/** What the line under the page's title says of who takes from the queue. */
 const taker = (): string => screen.getByRole('status', { name: 'Who takes from the queue' }).textContent ?? ''
-/** What the status at the page's head says once pressed. */
-const takerSentence = async (): Promise<string> => {
-  fireEvent.click(within(screen.getByRole('status', { name: 'Who takes from the queue' })).getByRole('button'))
-  return (await screen.findByRole('dialog')).textContent ?? ''
-}
 
 describe('QueuePage', () => {
   test('shows the entries in the order agents take them, under the section each sits in: an unranked entry above the sections is first', async () => {
     show()
     await screen.findByText('Hand-written on top')
-    expect(shown()).toEqual(['No priority 1', 'Hand-written on top', 'Urgent P8 2', 'Hot fix', 'Also urgent', "When there's room P3 1", 'Later'])
+    expect(shown()).toEqual(['No priority', 'Hand-written on top', 'Priority 8', 'Hot fix', 'Also urgent', 'Priority 3', 'Later'])
   })
 
   test('the first entry nobody is on says it is next up; under a name, where the entry came from, or a typed entry\'s words after its name', async () => {
@@ -82,47 +78,44 @@ describe('QueuePage', () => {
     let answer = () => {}
     host.runCommand.mockImplementationOnce(() => new Promise(resolve => (answer = () => resolve({ ok: true, output: FULL }))))
     renderWithHost(<QueuePage projects={[alpha]} projectId={null} path={[]} />, host, NO_MODULES)
-    expect(screen.getByRole('status').textContent).toBe('Loading…')
+    expect(screen.getByText('Loading…')).toBeTruthy()
     expect(screen.queryByText('Nothing queued')).toBeNull()
     answer()
     await screen.findByText('Hand-written on top')
     expect(screen.queryByText('Loading…')).toBeNull()
   })
 
-  test('names a section at either end of the scale by what that end means', async () => {
+  test('names a section by its priority, the number the queue file holds, ends of the scale too', async () => {
     show([{ entry: 'Now', priority: 10 }, { entry: 'Some day', priority: 0 }])
     await screen.findByText('Now')
-    expect(screen.getByRole('region', { name: 'Most urgent' })).toBeTruthy()
-    expect(screen.getByRole('region', { name: 'Only if there is capacity' })).toBeTruthy()
+    expect(screen.getByRole('region', { name: 'Priority 10' })).toBeTruthy()
+    expect(screen.getByRole('region', { name: 'Priority 0' })).toBeTruthy()
   })
 
   describe('who takes from the queue', () => {
     test('with no package that starts commands by itself, entries wait for a person, and nothing links anywhere', async () => {
       show()
       await screen.findByText('Hot fix')
-      expect(taker()).toBe('Started by hand')
-      expect(await takerSentence()).toBe('Nothing takes from this queue by itself: entries wait until you start them.')
+      expect(taker()).toBe('Nothing takes from it by itself: an entry waits until you start it.')
+      expect(screen.queryByRole('link', { name: /Automations/ })).toBeNull()
     })
 
     test('the command that works the queue, switched off: entries wait, and the line opens the page that switches it', async () => {
       const openPage = vi.fn()
       show(FULL, scheduling([{ command: 'plan-tickets', on: true, note: 'Next start in 3h, if there is work' }, { command: 'work-queue', on: false }]), { ...INERT_HOST_SERVICES, openPage })
-      await waitFor(() => expect(taker()).toBe('/work-queue is off'))
-      expect(await takerSentence()).toBe('/work-queue is off: entries wait until you start them.Change it in Automations')
-      fireEvent.click(screen.getByRole('link', { name: 'Automations' }))
+      await waitFor(() => expect(taker()).toBe('/work-queue is off: an entry waits until you start it. Change it in Automations'))
+      fireEvent.click(screen.getByRole('link', { name: 'Change it in Automations' }))
       expect(openPage).toHaveBeenCalledWith('automations')
     })
 
     test('switched on: an agent takes the first entry nobody claimed, and when it starts next is said in the scheduling package\'s words', async () => {
       show(FULL, scheduling([{ command: 'work-queue', on: true, note: 'Starts when there is work' }]))
-      await waitFor(() => expect(taker()).toBe('/work-queue is on'))
-      expect(await takerSentence()).toBe('/work-queue is on: an agent takes the first entry nobody has claimed. Starts when there is work.Change it in Automations')
+      await waitFor(() => expect(taker()).toBe('/work-queue is on: an agent takes the first entry nobody has claimed. Starts when there is work. Change it in Automations'))
     })
 
     test('switched on while nothing starts by itself: the line says off, with why', async () => {
       show(FULL, scheduling([{ command: 'work-queue', on: false, note: 'The scheduler is off' }]))
-      await waitFor(() => expect(taker()).toBe('/work-queue is off'))
-      expect(await takerSentence()).toContain('/work-queue is off: entries wait until you start them. The scheduler is off.')
+      await waitFor(() => expect(taker()).toContain('/work-queue is off: an entry waits until you start it. The scheduler is off.'))
     })
 
     test('while what starts by itself is not known, the page says nothing of it: not read yet, or a read that failed', async () => {
@@ -151,7 +144,7 @@ describe('QueuePage', () => {
       show(FULL, scheduling([{ command: 'plan-tickets', on: true }]))
       await screen.findByText('Hot fix')
       await waitFor(() => expect(host.runCommand).toHaveBeenCalled())
-      expect(taker()).toBe('Started by hand')
+      expect(taker()).toBe('Nothing takes from it by itself: an entry waits until you start it.')
     })
   })
 
@@ -355,12 +348,11 @@ describe('QueuePage', () => {
       expect(field().value).toBe('Tidy the loader')
     })
 
-    test('an empty queue says so under the field that takes a task', async () => {
+    test('an empty queue is the same page: who takes from it, the field that takes a task, and one line under it', async () => {
       show([], scheduling([{ command: 'work-queue', on: false }]))
-      expect(await screen.findByText('Nothing queued')).toBeTruthy()
+      expect(await screen.findByText('Nothing queued.')).toBeTruthy()
       expect(field()).toBeTruthy()
-      await new Promise(resolve => setTimeout(resolve, 20))
-      expect(screen.queryByRole('status', { name: 'Who takes from the queue' })).toBeNull()
+      await waitFor(() => expect(taker()).toContain('/work-queue is off'))
     })
   })
 

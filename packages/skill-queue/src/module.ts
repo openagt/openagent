@@ -23,16 +23,6 @@ export function priorityMeaning(priority: number): string | undefined {
 }
 
 /**
- * A priority section's name, by what its number means: the scale's two ends in the queue file's own
- * words, and the steps between them in three bands, the lowest named as the look draws it.
- */
-export function priorityName(priority: number): string {
-  if (priority === 10) return 'Most urgent'
-  if (priority === 0) return 'Only if there is capacity'
-  return priority >= 7 ? 'Urgent' : priority >= 4 ? 'Normal' : "When there's room"
-}
-
-/**
  * A typed entry as a row says it: its name, the words up to the end of its first sentence, a colon or
  * a dash, and the rest of its words where it has more. A line with none of those is all name.
  */

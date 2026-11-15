@@ -1,6 +1,6 @@
 import { strict as assert } from 'node:assert'
 import { test } from 'node:test'
-import { DEFAULT_FAN_OUT_COUNT, DEFAULT_PRIORITY, PRIORITIES, QUEUE_COMMAND, addArgs, addTextArgs, doneArgs, isEntryLine, isPlacedEntry, isWorkingOn, entryHeadline, priorityMeaning, priorityName, addToQueue, alreadyQueued, entryLabel, fanOut, fanOutLabel, queueLine, readEntries, topEntries, workOnEntryPrompt, type CommandResult } from './module.js'
+import { DEFAULT_FAN_OUT_COUNT, DEFAULT_PRIORITY, PRIORITIES, QUEUE_COMMAND, addArgs, addTextArgs, doneArgs, isEntryLine, isPlacedEntry, isWorkingOn, entryHeadline, priorityMeaning, addToQueue, alreadyQueued, entryLabel, fanOut, fanOutLabel, queueLine, readEntries, topEntries, workOnEntryPrompt, type CommandResult } from './module.js'
 
 test('entryLabel shows a leading link\'s text, opens only an absolute http(s) target, and keeps anything else whole', () => {
   assert.deepEqual(entryLabel('[Login page](tickets/2026-08-01_login-page.md) — needs the cookie first'), { text: 'Login page' })
@@ -155,8 +155,4 @@ test('entryHeadline names a typed entry by its words up to the first sentence en
   // A dot, colon or dash inside a word is part of it.
   assert.deepEqual(entryHeadline('  Bump vite to 7.1 and fix src/app.ts:12 re-renders  '), { name: 'Bump vite to 7.1 and fix src/app.ts:12 re-renders' })
   assert.deepEqual(entryHeadline('Ends with a dot.'), { name: 'Ends with a dot.' })
-})
-
-test('priorityName names a section by what it means: the two ends as the queue file says them, then three bands', () => {
-  assert.deepEqual([10, 9, 7, 6, 4, 3, 1, 0].map(priorityName), ['Most urgent', 'Urgent', 'Urgent', 'Normal', 'Normal', "When there's room", "When there's room", 'Only if there is capacity'])
 })
