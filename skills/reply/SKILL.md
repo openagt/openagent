@@ -13,7 +13,7 @@ What follows the command says why you are here: a maintainer called you with /ag
 
 First read the whole issue or pull request again, its discussion and a pull request's changes, not only what is below: a comment may answer an earlier one, and one may already be answered. If it cannot be read, show an error to the user saying why and stop.
 
-Post on it the way your git host skill says. Each time a new comment, never an edit of an earlier one: a new comment reaches people by email, an edit reaches nobody.
+Post on it only with your git host skill's comment command, never with `gh` or another tool of the host: it opens what you post with what you run on, so it is told apart from what people write. Each time a new comment, never an edit of an earlier one: a new comment reaches people by email, an edit reaches nobody.
 
 If what came will take you more than about 5 minutes, first post a short comment: what you are going to do, and that you will comment here when finished.
 
