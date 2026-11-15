@@ -2,10 +2,11 @@ import type { ActiveAgent, AgentDoing } from '../../src/index.js'
 import { onAgentsDoing } from '../rpc/reads.js'
 import { usePolled } from './use-async.js'
 
-/** How often what the runs at work are doing is read: their last step, as a chat's live line moves. */
-const DOING_EVERY_MS = 2_000
+/** How often what runs at work are doing is read, on the Overview and for a run's subagents: their last step, as a chat's live line moves. */
+export const DOING_EVERY_MS = 2_000
 
-const NOTHING_DOING: Record<string, AgentDoing> = {}
+/** What no run is doing: one object, so a read that finds nothing changes nothing. */
+export const NOTHING_DOING: Record<string, AgentDoing> = {}
 
 /**
  * What each of these runs is doing now, by project and run (`${projectId}/${agentId}`): the last step
