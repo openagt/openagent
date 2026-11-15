@@ -192,7 +192,7 @@ function ProjectQueue({ read, schedule, names, starts, reload }: { read: Project
           </Section>
         ))
       )}
-      <AddEntry project={project} reload={reload} />
+      <AddEntry project={project} among={entries!.length > 0} reload={reload} />
       {/* Under the field, so that the line, read after the entries, moves nothing when it comes. */}
       {entries!.length > 0 && <TakerLine schedule={schedule} projectId={project.id} />}
     </div>
@@ -313,8 +313,8 @@ function EntryRow({ project, placed, agent, names, starts, reload }: { project: 
   )
 }
 
-/** The field that adds an entry: its text and the priority section it goes to the end of, through `queue add`. */
-function AddEntry({ project, reload }: { project: ModuleProject; reload: () => Promise<void> }) {
+/** The field that adds an entry: its text and the priority section it goes to the end of, through `queue add`. `among`: the queue has entries. */
+function AddEntry({ project, among, reload }: { project: ModuleProject; among: boolean; reload: () => Promise<void> }) {
   const host = useModuleHost()
   const [text, setText] = useState('')
   const [priority, setPriority] = useState(DEFAULT_PRIORITY)
@@ -383,13 +383,15 @@ function AddEntry({ project, reload }: { project: ModuleProject; reload: () => P
           {adding ? 'Adding…' : 'Add to queue'}
         </Button>
       </div>
-      {asked && untyped && (
+      {/* One line under the field: what is missing, or what the press does with the task. Among entries it
+          stands from the start, so a keystroke moves nothing under it; an empty queue gets it with the task. */}
+      {asked && untyped ? (
         <p id={`${formId}-missing`} className="mt-2 text-xs text-danger">
           Write the task first.
         </p>
+      ) : (
+        (among || !untyped) && <p className="mt-2 text-xs text-muted-foreground">It goes to the end of its priority. The text is what an agent is handed, so write the whole task.</p>
       )}
-      {/* While a task is typed: what the press does with it. */}
-      {!untyped && <p className="mt-2 text-xs text-muted-foreground">It goes to the end of its priority. The text is what an agent is handed, so write the whole task.</p>}
       {failed !== undefined && (
         <p role="alert" className="mt-1 text-xs text-danger">
           Not added: {failed}

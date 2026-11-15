@@ -263,9 +263,12 @@ describe('QueuePage', () => {
     test('nothing typed adds nothing: the press says what is missing under the field, with the caret there; a task typed is added with `queue add` at priority 5, trimmed, and the field empties', async () => {
       show()
       await screen.findByText('Urgent')
+      // Among entries, what the press does with a task stands under the field before one is typed; what is missing takes its place.
+      expect(screen.getByText(/^It goes to the end of its priority\./)).toBeTruthy()
       fireEvent.click(add())
       expect(host.act).not.toHaveBeenCalled()
       expect(screen.getByText('Write the task first.')).toBeTruthy()
+      expect(screen.queryByText(/^It goes to the end of its priority\./)).toBeNull()
       expect(document.activeElement).toBe(field())
       fireEvent.change(field(), { target: { value: '  Tidy the loader  ' } })
       fireEvent.click(add())
@@ -310,6 +313,7 @@ describe('QueuePage', () => {
       show([], scheduling([{ command: 'work-queue', on: false }]))
       expect(await screen.findByText('Nothing queued.')).toBeTruthy()
       expect(field()).toBeTruthy()
+      expect(screen.queryByText(/^It goes to the end of its priority\./)).toBeNull()
       await new Promise(resolve => setTimeout(resolve, 20))
       expect(screen.queryByRole('status', { name: 'Who takes from the queue' })).toBeNull()
     })
