@@ -92,8 +92,9 @@ export function PanelRow({ state, title, titleHint, meta = [], fact, actions, hr
     <li
       className={cn(
         'group/row relative flex min-h-14 items-center gap-3 py-2 pr-3 pl-4 text-sm max-md:min-h-15',
-        // The hairline over every row but the first, from the name's edge, gone beside a lit row.
-        'not-first:before:absolute not-first:before:top-0 not-first:before:right-0 not-first:before:left-11 not-first:before:h-px not-first:before:bg-hairline',
+        // The hairline over every row but the first, from the name's edge, gone beside a lit row. Every
+        // row's line is placed out of the flow, so lighting the first (which draws none) moves nothing.
+        'before:absolute before:top-0 before:right-0 before:left-11 before:h-px not-first:before:bg-hairline',
         'pointer-fine:hover:bg-foreground/4 pointer-fine:hover:before:opacity-0 pointer-fine:[&:hover+li]:before:opacity-0',
         'has-[[data-cover]:focus-visible]:ring-2 has-[[data-cover]:focus-visible]:ring-focus has-[[data-cover]:focus-visible]:ring-inset has-[[data-cover]:focus-visible]:before:opacity-0 [&:has([data-cover]:focus-visible)+li]:before:opacity-0',
         (href !== undefined || onClick !== undefined) && 'has-[[data-cover]:active]:bg-foreground/8',
