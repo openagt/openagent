@@ -306,7 +306,7 @@ export function StartAgentForm({
   return (
     // The width and the padding of an agent's message box (`AgentComposer.tsx`): the box is in the
     // same place on both pages.
-    <form onSubmit={e => e.preventDefault()} className="@container relative mx-auto w-full max-w-3xl px-4 pt-2 pb-4">
+    <form onSubmit={e => e.preventDefault()} className="@container mx-auto w-full max-w-3xl px-4 pt-2 pb-4">
       <Composer
         // A box of its own per project, so the prompt carried over from the picker lands in it (below).
         key={projectId}
@@ -363,79 +363,80 @@ export function StartAgentForm({
         canSubmit={!noStartHook}
         submitLabel="Start agent"
         submitBusyLabel="Starting…"
-      />
-
-      {/* Feedback right where the action is (#948): above the box, over the page, so the box never moves. */}
-      <div className="absolute inset-x-4 bottom-full flex flex-col gap-1.5 pb-1">
-        {/* A start that hit what the check says, or the missing logins, says nothing the boxes below do not. */}
-        {/* A refusal of this computer's hooks.yml: the project opens in the editor from here as from its menu. */}
-        {error && missingThere.length === 0 && !readiness?.problems.length && <Refusal {...said(error)} {...(!machine && !clonedHere && error.includes('.openagent/hooks.yml') ? { actions: <OpenInEditor projectId={projectId} /> } : {})} />}
-        {machine && missingThere.length > 0 && (
-          <Refusal
-            title={`Your ${missingThere.join(' and ')} ${missingThere.length === 1 ? 'login is' : 'logins are'} not on ${name} yet.`}
-            detail={`Runs there use your own logins. Log ${missingThere.length === 1 ? 'it' : 'them'} in on its page, or start your first run there from your page on ${reachedThrough(machine.url) ?? 'its server'}, which copies yours.`}
-            actions={
-              <Button type="button" size="sm" onClick={() => services.openSettings('devices', machine.id)}>
-                {`Log in on ${name}`}
-              </Button>
-            }
-          />
-        )}
-        {readiness?.problems.map(problem =>
-          problem === readiness.fix?.problem ? (
-            machine ? (
-              readiness.fix.kind === 'log-in' ? (
-                <Refusal key={problem} title={`${agentName} is not logged in on ${name}.`} actions={<MachineLogins machineId={machine.id} onAccounts={() => services.openPage(PERMISSIONS_PAGE)} />} />
-              ) : (
-                // The install brings every coding agent, and an update brings one added since.
-                <Refusal
-                  key={problem}
-                  title={`${agentName} is not installed on ${name}.`}
-                  detail={`Update ${name} to get it.`}
-                  actions={
-                    <Button type="button" size="sm" onClick={() => services.openSettings('devices', machine.id)}>
-                      {`Update ${name}`}
-                    </Button>
-                  }
-                />
-              )
-            ) : (
+        // Feedback right where the action is (#948): above the box, over the page, so the box never moves.
+        notes={
+          <>
+            {/* A start that hit what the check says, or the missing logins, says nothing the boxes below do not. */}
+            {/* A refusal of this computer's hooks.yml: the project opens in the editor from here as from its menu. */}
+            {error && missingThere.length === 0 && !readiness?.problems.length && <Refusal {...said(error)} {...(!machine && !clonedHere && error.includes('.openagent/hooks.yml') ? { actions: <OpenInEditor projectId={projectId} /> } : {})} />}
+            {machine && missingThere.length > 0 && (
               <Refusal
-                key={problem}
-                {...(agent && !agent.ready ? { title: agentWords(agent), actions: <AgentFix state={agent} onChanged={() => void reloadAgent()} size="sm" /> } : said(problem))}
+                title={`Your ${missingThere.join(' and ')} ${missingThere.length === 1 ? 'login is' : 'logins are'} not on ${name} yet.`}
+                detail={`Runs there use your own logins. Log ${missingThere.length === 1 ? 'it' : 'them'} in on its page, or start your first run there from your page on ${reachedThrough(machine.url) ?? 'its server'}, which copies yours.`}
+                actions={
+                  <Button type="button" size="sm" onClick={() => services.openSettings('devices', machine.id)}>
+                    {`Log in on ${name}`}
+                  </Button>
+                }
               />
-            )
-          ) : (
-            <Refusal key={problem} {...said(problem)} />
-          ),
-        )}
-        {readiness?.warnings.map(warning => (
-          <p key={warning} role="alert" className="flex items-start gap-2 rounded-lg bg-[color-mix(in_oklab,var(--color-warning)_8%,var(--color-background))] px-3 py-2 text-sm text-foreground">
-            <TriangleAlert className="mt-0.5 size-4 shrink-0 text-warning" aria-hidden />
-            {warning}
-          </p>
-        ))}
-        {noStartHook && (
-          <Refusal
-            title="This project has no start hook."
-            detail={
-              <>
-                Add a <code className="font-mono">start:</code> line to <code className="font-mono">.openagent/hooks.yml</code>.
-              </>
-            }
-          />
-        )}
-        {note === STARTING && startingSaid && !error && (
-          // The chat's own first line (`SessionLine.tsx`), in its words and its look: the page that
-          // opens a moment later goes on saying it. A machine that does not have the project yet
-          // clones it first, which can take minutes: the line says so for as long as it does.
-          <p role="status" className="flex items-center gap-2 px-2 text-sm text-muted-foreground">
-            <Dots />
-            <span className="text-shimmer">{cloning && sentTo ? `Cloning ${projectName ?? 'this project'} on ${sentTo}, the first time only` : note}</span>
-          </p>
-        )}
-        {note !== STARTING && note && !error && <p role="status" className="px-2 text-xs text-muted-foreground">{note}</p>}
-      </div>
+            )}
+            {readiness?.problems.map(problem =>
+              problem === readiness.fix?.problem ? (
+                machine ? (
+                  readiness.fix.kind === 'log-in' ? (
+                    <Refusal key={problem} title={`${agentName} is not logged in on ${name}.`} actions={<MachineLogins machineId={machine.id} onAccounts={() => services.openPage(PERMISSIONS_PAGE)} />} />
+                  ) : (
+                    // The install brings every coding agent, and an update brings one added since.
+                    <Refusal
+                      key={problem}
+                      title={`${agentName} is not installed on ${name}.`}
+                      detail={`Update ${name} to get it.`}
+                      actions={
+                        <Button type="button" size="sm" onClick={() => services.openSettings('devices', machine.id)}>
+                          {`Update ${name}`}
+                        </Button>
+                      }
+                    />
+                  )
+                ) : (
+                  <Refusal
+                    key={problem}
+                    {...(agent && !agent.ready ? { title: agentWords(agent), actions: <AgentFix state={agent} onChanged={() => void reloadAgent()} size="sm" /> } : said(problem))}
+                  />
+                )
+              ) : (
+                <Refusal key={problem} {...said(problem)} />
+              ),
+            )}
+            {readiness?.warnings.map(warning => (
+              <p key={warning} role="alert" className="flex items-start gap-2 rounded-lg bg-[color-mix(in_oklab,var(--color-warning)_8%,var(--color-background))] px-3 py-2 text-sm text-foreground">
+                <TriangleAlert className="mt-0.5 size-4 shrink-0 text-warning" aria-hidden />
+                {warning}
+              </p>
+            ))}
+            {noStartHook && (
+              <Refusal
+                title="This project has no start hook."
+                detail={
+                  <>
+                    Add a <code className="font-mono">start:</code> line to <code className="font-mono">.openagent/hooks.yml</code>.
+                  </>
+                }
+              />
+            )}
+            {note === STARTING && startingSaid && !error && (
+              // The chat's own first line (`SessionLine.tsx`), in its words and its look: the page that
+              // opens a moment later goes on saying it. A machine that does not have the project yet
+              // clones it first, which can take minutes: the line says so for as long as it does.
+              <p role="status" className="flex items-center gap-2 px-2 text-sm text-muted-foreground">
+                <Dots />
+                <span className="text-shimmer">{cloning && sentTo ? `Cloning ${projectName ?? 'this project'} on ${sentTo}, the first time only` : note}</span>
+              </p>
+            )}
+            {note !== STARTING && note && !error && <p role="status" className="px-2 text-xs text-muted-foreground">{note}</p>}
+          </>
+        }
+      />
     </form>
   )
 }

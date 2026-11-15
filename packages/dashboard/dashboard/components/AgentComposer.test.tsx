@@ -35,6 +35,7 @@ vi.mock('./Composer.js', async () => {
       <button type="button" disabled={props.busy} onClick={() => props.onSubmit('hello', { later: true })}>
         submit later
       </button>
+      {props.notes}
       <span data-testid="composer-props">
         {JSON.stringify({ inAgent: props.inAgent, busyLabel: props.submitBusyLabel, placeholder: props.placeholder, sessionModel: props.sessionModel, autoFocus: props.autoFocus })}
       </span>

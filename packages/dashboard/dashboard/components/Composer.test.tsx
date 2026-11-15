@@ -85,7 +85,7 @@ vi.mock('./PromptEditor.js', async () => {
 /** What the editor is actually holding, as opposed to what Start would submit. */
 const editorText = (): string => (screen.getByLabelText('prompt') as HTMLInputElement).value
 
-const { Composer } = await import('./Composer.js')
+const { BoxNotes, Composer } = await import('./Composer.js')
 type ComposerHandle = import('./Composer.js').ComposerHandle
 
 function renderComposer(over: Partial<Parameters<typeof Composer>[0]> = {}) {
@@ -410,6 +410,29 @@ describe('Composer (#721)', () => {
     renderComposer()
     await waitFor(() => expect(machinesRpc.onMachines).toHaveBeenCalled())
     expect(note()).toBeNull()
+  })
+
+  test('every note lies over the page above the box, the caller\'s and its own in one place, none in the box\'s flow; a page that keeps a place for them gets them there', async () => {
+    const box = { id: 'box', url: 'http://127.0.0.1:4311', label: 'rom-desktop', owner: 'rom' }
+    await saveMachines(box)
+    selectMachine(box.id)
+    renderComposer({ notes: <p role="alert">Could not send.</p> })
+    await waitFor(() => expect(screen.queryByRole('note')).not.toBeNull())
+    const notes = screen.getByRole('note').parentElement!
+    expect(screen.getByRole('alert').parentElement).toBe(notes)
+    expect(notes.parentElement!.className).toContain('absolute')
+    expect(notes.parentElement!.className).toContain('bottom-full')
+    expect(screen.getByLabelText('prompt').closest('.border')!.contains(notes)).toBe(false)
+    cleanup()
+    const place = document.createElement('div')
+    document.body.append(place)
+    render(
+      <BoxNotes.Provider value={place}>
+        <Composer files={[]} onSubmit={vi.fn()} busy={false} submitLabel="Send" submitBusyLabel="Sending…" notes={<p role="alert">Could not send.</p>} />
+      </BoxNotes.Provider>,
+    )
+    expect(place.contains(screen.getByRole('alert'))).toBe(true)
+    place.remove()
   })
 
   test('an online "Run on" machine leaves Start enabled with no offline note (#1073)', async () => {

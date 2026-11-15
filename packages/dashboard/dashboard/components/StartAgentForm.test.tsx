@@ -93,6 +93,7 @@ vi.mock('./Composer.js', async () => {
         <div data-testid="starts-at">{props.startsAt}</div>
         <div data-testid="controls">{props.controls}</div>
         <div data-testid="controls-end">{props.controlsEnd}</div>
+        <div data-testid="notes">{props.notes}</div>
         <button type="button" disabled={!props.canSubmit} onClick={() => props.onSubmit('do the thing')}>
           submit-typed
         </button>
@@ -221,7 +222,7 @@ describe('StartAgentForm (#1774)', () => {
     render(<StartAgentForm {...props} />)
     act(() => (composerProps.current.onPreset as (label: string, replaced: boolean) => void)('footer', false))
     expect(screen.getByRole('status').textContent).toBe('footer loaded — review or edit, then Start')
-    expect(screen.getByRole('status').parentElement!.className).toContain('bottom-full')
+    expect(screen.getByRole('status').parentElement!.dataset.testid).toBe('notes')
   })
 
   test('a start refused in a moment is not preceded by a flash of "Starting session"', async () => {
@@ -315,7 +316,7 @@ describe('StartAgentForm (#1774)', () => {
     const title = within(alert).getByText('shop could not be cloned on Studio.')
     expect(title.className).toContain('text-sm')
     expect(within(alert).getByText('Studio says: This computer has no login that can read github.com/acme/shop.').className).toContain('text-xs')
-    expect(alert.parentElement!.className).toContain('bottom-full')
+    expect(alert.parentElement!.dataset.testid).toBe('notes')
   })
 
   test('under the box, at the left: the agent, then Skills, then the Context picker; at the right, before the model: the account, then the "Auto" menu', async () => {
@@ -573,7 +574,7 @@ describe('StartAgentForm (#1774)', () => {
     expect(warning!.querySelector('svg')!.getAttribute('class')).toContain('text-warning')
     expect((screen.getByText('submit-typed') as HTMLButtonElement).disabled).toBe(false)
     // Above the box, over the page: the box does not move when they come.
-    expect(problem!.parentElement!.className).toContain('bottom-full')
+    expect(problem!.parentElement!.dataset.testid).toBe('notes')
   })
 
   test('with a machine picked, the machine is asked whether a run would start there, and its logged-out agent is said in words naming it, with this computer\'s logins to use there', async () => {

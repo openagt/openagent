@@ -1,4 +1,5 @@
-import { forwardRef, useContext, useEffect, useImperativeHandle, useMemo, useRef, useState, type FormEvent, type ReactNode } from 'react'
+import { createContext, forwardRef, useContext, useEffect, useImperativeHandle, useMemo, useRef, useState, type FormEvent, type ReactNode } from 'react'
+import { createPortal } from 'react-dom'
 import { ArrowUp, Loader2 } from 'lucide-react'
 import type { ProjectSummary } from '../../src/index.js'
 import { machineName, type DriverName } from '../../src/client.js'
@@ -83,6 +84,13 @@ export interface ComposerHandle {
   append: (text: string) => void
 }
 
+/**
+ * Where a page lays the box's notes, over itself above the box, when the box cannot: a session's
+ * box is in a bar that scrolls inside itself, which would cut them (ChatPane). Elsewhere they lie
+ * right above the box.
+ */
+export const BoxNotes = createContext<HTMLElement | null>(null)
+
 // The shared agent composer (#721), laid out as Claude Code's: a box one line tall when empty that
 // holds the commands menu (+), the text (the Tiptap editor, `/` `@` `#` triggers) and the submit at
 // its right; a row under it with the caller's controls at the left and the model at the right; and
@@ -138,12 +146,15 @@ export const Composer = forwardRef<ComposerHandle, {
   idleControl?: ReactNode
   /** The saved machine the project is on, when only another computer of the person's has it (elsewhere.ts). */
   home?: string | undefined
+  /** What the caller says about the box: laid over the page above it with the box's own notes,
+   *  never in its flow, so the text being typed does not move when one comes or goes. */
+  notes?: ReactNode
   /** Which box this is, by project or session: what is typed in it is kept in this browser, across a navigation and a reload, until it is sent. */
   draftKey?: string | undefined
   /** The box takes the caret when it opens. */
   autoFocus?: boolean | undefined
 }>(function Composer(
-  { files, addContext, removeContext, startsAt, controls, controlsEnd, sessionModel, sessionContext, onSubmit, onPromptChange, onPreset, busy, submitLabel, submitBusyLabel, placeholder, inAgent = false, sessionRow, canSubmit = true, idleControl, home, draftKey, autoFocus = false },
+  { files, addContext, removeContext, startsAt, controls, controlsEnd, sessionModel, sessionContext, onSubmit, onPromptChange, onPreset, busy, submitLabel, submitBusyLabel, placeholder, inAgent = false, sessionRow, canSubmit = true, idleControl, home, notes, draftKey, autoFocus = false },
   ref,
 ) {
   const services = useContext(HostServicesContext) ?? INERT_HOST_SERVICES
@@ -407,21 +418,21 @@ export const Composer = forwardRef<ComposerHandle, {
 
   // #1073: an offline target blocks Start; say so and point back to the pick of where it runs. No auto-fallback.
   const offlineNote = targetOffline && (
-    <p role="alert" className="mt-2 text-xs text-danger">
+    <p role="alert" className="rounded-md bg-background px-2 py-0.5 text-xs text-danger">
       {`${selectedMachine ? machineName(selectedMachine) : 'The selected machine'} is offline. Pick another place to run, then start.`}
     </p>
   )
   // The saved pick, let go as the page opened: where the run goes instead, and why.
   const here = thisMachineName() === 'This machine' ? 'this machine' : thisMachineName()
   const fallbackNote = !inAgent && fallback && !selectedMachine && (
-    <p role="status" className="mt-2 text-xs text-muted-foreground">
+    <p role="status" className="rounded-md bg-background px-2 py-0.5 text-xs text-muted-foreground">
       {fallback.why === 'gone'
         ? `The computer you last picked to run on is no longer saved, so runs start on ${here}.`
         : `${fellBackFrom ? machineName(fellBackFrom) : 'The computer you last picked'} is offline, so runs start on ${here}. Pick it again once it is on.`}
     </p>
   )
   const loginsNote = untold && (
-    <div role="note" className="mb-1.5 flex items-center gap-3 rounded-md border border-border bg-background px-3 py-2 text-xs">
+    <div role="note" className="flex items-center gap-3 rounded-md border border-border bg-background px-3 py-2 text-xs">
       <p className="min-w-0 flex-1">
         <span className="text-foreground">{`Your own logins are used on ${owner}'s computer: copied there by a server of yours, or logged in on its page.`}</span>{' '}
         <span className="text-muted-foreground">{`${owner} can see what is on it. Runs there start once you say OK.`}</span>
@@ -440,54 +451,63 @@ export const Composer = forwardRef<ComposerHandle, {
     </div>
   )
 
-  return (
-    <>
-      <div ref={surface} className={SURFACE}>
-        {/* Where the agent starts, the box's first line (his pick, above the text): the machine, the
-            project and the branch, drawn as the last line draws its items. A session has its own words
-            in the same place. */}
-        {inAgent ? (
-          sessionRow
-        ) : (
-          <RowAboveBox>
-            {runOnEl}
-            {startsAt}
-          </RowAboveBox>
-        )}
-
-        {loginsNote}
-
-        {/* The text, as Claude Code's: the commands menu (+) at its left, the text, and the submit at
-            its right, the two kept at the text's last line. One line tall when empty, growing with
-            what is typed. The editor is borderless: the edge is the surface's. The +'s icon stands
-            on the rows' first icons' line, and the send's on their last ones'. */}
-        <div className="flex items-end">
-          <div className="-mr-2 flex shrink-0 items-center py-1 pl-0.5">{commandsEl}</div>
-          <div className="min-w-0 flex-1">{editorEl}</div>
-          <div className="flex shrink-0 items-center py-1 pr-0.5">{slotEl}</div>
-        </div>
-
-        {/* How it runs, the box's last line: the caller's controls at the left, the model at the right. The
-            left side is the one that gives way: a longer label there never moves the model or the
-            page below. */}
-        <TooltipsPastBox value={surface}>
-          <div className={cn('mt-1', rowClass)}>
-            <div className={rowLeftClass}>{controls}</div>
-            <div className="flex shrink-0 items-center gap-0.5">
-              {controlsEnd}
-              {driverModelEl || (
-                <span className="flex items-center">
-                  {sessionModel !== undefined && <span className={rowItemClass}>{sessionModel}</span>}
-                  {sessionContext}
-                </span>
-              )}
-            </div>
-          </div>
-        </TooltipsPastBox>
-      </div>
-
+  // Every note at once, stacked up from the box; none moves the box or what is typed in it.
+  const notesSlot = useContext(BoxNotes)
+  const notesEl = (
+    <div className="flex flex-col gap-1.5 pb-1 empty:hidden">
+      {notes}
+      {loginsNote}
       {offlineNote}
       {fallbackNote}
+    </div>
+  )
+
+  return (
+    <>
+      <div className="relative">
+        {notesSlot ? createPortal(notesEl, notesSlot) : <div className="absolute inset-x-0 bottom-full">{notesEl}</div>}
+        <div ref={surface} className={SURFACE}>
+          {/* Where the agent starts, the box's first line (his pick, above the text): the machine, the
+              project and the branch, drawn as the last line draws its items. A session has its own words
+              in the same place. */}
+          {inAgent ? (
+            sessionRow
+          ) : (
+            <RowAboveBox>
+              {runOnEl}
+              {startsAt}
+            </RowAboveBox>
+          )}
+
+          {/* The text, as Claude Code's: the commands menu (+) at its left, the text, and the submit at
+              its right, the two kept at the text's last line. One line tall when empty, growing with
+              what is typed. The editor is borderless: the edge is the surface's. The +'s icon stands
+              on the rows' first icons' line, and the send's on their last ones'. */}
+          <div className="flex items-end">
+            <div className="-mr-2 flex shrink-0 items-center py-1 pl-0.5">{commandsEl}</div>
+            <div className="min-w-0 flex-1">{editorEl}</div>
+            <div className="flex shrink-0 items-center py-1 pr-0.5">{slotEl}</div>
+          </div>
+
+          {/* How it runs, the box's last line: the caller's controls at the left, the model at the right. The
+              left side is the one that gives way: a longer label there never moves the model or the
+              page below. */}
+          <TooltipsPastBox value={surface}>
+            <div className={cn('mt-1', rowClass)}>
+              <div className={rowLeftClass}>{controls}</div>
+              <div className="flex shrink-0 items-center gap-0.5">
+                {controlsEnd}
+                {driverModelEl || (
+                  <span className="flex items-center">
+                    {sessionModel !== undefined && <span className={rowItemClass}>{sessionModel}</span>}
+                    {sessionContext}
+                  </span>
+                )}
+              </div>
+            </div>
+          </TooltipsPastBox>
+        </div>
+      </div>
 
       {addingPreset && (
         <PresetCreatePanel

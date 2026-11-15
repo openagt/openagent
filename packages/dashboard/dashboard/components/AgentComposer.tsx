@@ -261,8 +261,6 @@ export function AgentComposer({
   return (
     // The chat's column and its side padding (EventList), so the box and what is in the chat share both edges.
     <div className="@container mx-auto w-full max-w-3xl px-4 pt-2 pb-4">
-      {surfacedError && <p role="alert" className="mb-1 px-2 text-xs text-danger">{surfacedError}</p>}
-      {notSent && <p role="status" className="mb-1 px-2 text-xs text-muted-foreground">Not sent: the session stopped first.</p>}
       <Composer
         // A box of its own per session, with the draft it was left with.
         key={agentId}
@@ -308,6 +306,12 @@ export function AgentComposer({
           </>
         }
         idleControl={idleControl}
+        notes={
+          <>
+            {surfacedError && <p role="alert" className="rounded-md bg-background px-2 py-0.5 text-xs text-danger">{surfacedError}</p>}
+            {notSent && <p role="status" className="rounded-md bg-background px-2 py-0.5 text-xs text-muted-foreground">Not sent: the session stopped first.</p>}
+          </>
+        }
         // What the box can do, not what it is for: the keys for a working agent, as Claude Code's box
         // says them in the same place; a touch screen has none to name.
         placeholder={down ? 'OpenAgent is not answering' : live ? (touch || phone ? 'Message the agent…' : `Enter to send, ${shortcut('Enter')} to queue for later`) : 'Message the agent to continue it…'}
