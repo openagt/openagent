@@ -10,7 +10,7 @@ import { PathStrip } from './PathStrip.js'
 /** The dialog's title, as every dialog's. */
 const TITLE = 'mb-3 text-base font-semibold'
 /** Its presses, under what it says, primary last. */
-const PRESSES = cn('mt-5 flex gap-2', DIALOG_PRESSES_CLASS)
+const PRESSES = cn('mt-6 flex gap-2', DIALOG_PRESSES_CLASS)
 
 // Add a project (#396/#1150): the OS's own folder picker instead of a typed path — the daemon
 // opens the dialog (a browser page cannot learn an absolute path from a picker of its own) and

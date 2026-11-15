@@ -91,7 +91,7 @@ export function RemoveProjectDialog({
                   It left the dashboard&rsquo;s list, and nothing in the folder was deleted. Add the folder again to bring the project back.
                 </AlertDialog.Description>
               )}
-              <div className={cn('mt-5 flex justify-end', DIALOG_PRESSES_CLASS)}>
+              <div className={cn('mt-6 flex justify-end', DIALOG_PRESSES_CLASS)}>
                 <Button autoFocus onClick={finish}>
                   Done
                 </Button>
@@ -141,7 +141,7 @@ export function RemoveProjectDialog({
                 </div>
               )}
               {error && <p className="mt-3 text-sm text-danger">{error}</p>}
-              <div className={cn('mt-5 flex justify-end gap-2', DIALOG_PRESSES_CLASS)}>
+              <div className={cn('mt-6 flex justify-end gap-2', DIALOG_PRESSES_CLASS)}>
                 <AlertDialog.Close
                   ref={cancel}
                   render={
