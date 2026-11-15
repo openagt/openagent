@@ -5,7 +5,7 @@ import { needsChrome, smoke } from './smoke.js'
 // The project's pages, in a real browser (smoke.ts): a page a project's package brings, adding
 // a project from the picker, and the list of files the message box opens, on a phone.
 
-const { demo, flow } = smoke()
+const { demo, flow, start } = smoke()
 
 test("the Tickets page lists the project's tickets", needsChrome, async () => {
   await flow('tickets', async page => {
@@ -77,7 +77,7 @@ test("the files a # lists stay on a phone's screen, each with its name whole", n
   })
 })
 
-test('a repository on the computer is added as a project from the picker', needsChrome, async () => {
+test('a repository on the computer is added as a project from the picker, and its runs are scripted as the demo\u2019s own', needsChrome, async () => {
   await flow('add-project', async page => {
     await page.getByLabel('Project: shop').click()
     await page.getByRole('option', { name: /blog/ }).click()
@@ -85,5 +85,10 @@ test('a repository on the computer is added as a project from the picker', needs
     await page.getByLabel('Project: blog').waitFor()
     const projects = await demo().call<Array<{ path: string }>>('onProjects')
     assert.ok(projects.some(project => project.path === demo().toAdd), 'the daemon has the project')
+    // The add kept the lines the demo gave the folder: nothing stands in the way of a start, as the
+    // real check would say of a coding agent that is not logged in, and a Start is the scripted agent's.
+    await start(page, 'add an about page')
+    await page.getByText(/done: .*add an about page/).waitFor()
+    assert.equal(await page.getByRole('alert').count(), 0, 'the check said nothing')
   })
 })

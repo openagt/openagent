@@ -88,6 +88,8 @@ export async function startDemo(options: DemoOptions = {}): Promise<Demo> {
     await git(cwd, 'config', 'user.name', DEMO_USER.name)
     await git(cwd, 'config', 'user.email', DEMO_USER.email)
   }
+  // The project to add starts scripted runs too: its lines are there before a person adds it, and the add keeps them.
+  await writeFakeRunHooks(toAdd)
 
   const env: NodeJS.ProcessEnv = Object.fromEntries(Object.entries(process.env).filter(([name]) => !handedToAgents(name)))
   // Its temporary folder in the home too, so what the dashboard leaves there goes with it.

@@ -1,6 +1,7 @@
 // A fixture project as the E2E stories and the demo stand it up (see README.md): a real git repo
-// with an `origin`, the tickets and queue skills (and more for the demo), and, once it is added to a dashboard, start and
-// resume lines that run `fake-run-bin.js`, so a Start goes the whole production way offline.
+// with an `origin`, the tickets and queue skills (and more for the demo), and, once it is added to a dashboard, start
+// and resume lines that run `fake-run-bin.js`, so a Start goes the whole production way offline, and a check line that
+// says nothing is in its way.
 import { copyFile, mkdir, writeFile } from 'node:fs/promises'
 import { execFile } from 'node:child_process'
 import { dirname, join, resolve } from 'node:path'
@@ -75,14 +76,21 @@ export async function makeFixtureRepo(cwd: string, files: Record<string, string>
   await git(cwd, 'remote', 'add', 'origin', origin)
 }
 
-/** The tool the fixture's start and resume lines run: a stand-in for a real run's, with a scripted agent. */
+/** The tool the fixture's hook lines run: a stand-in for a real run's, with a scripted agent. */
 export const FAKE_RUN = fileURLToPath(new URL('./fake-run-bin.js', import.meta.url))
 
+/** What the fixture's check line prints: nothing stands in the way of a scripted start, which needs no CLI and no login. */
+const NOTHING_WRONG = JSON.stringify({ problems: [], warnings: [] })
+
 /**
- * Give an added fixture project its start and resume lines, and only those: this machine's file,
- * under the directory adding the project ignored. Written after the add, which writes its own
- * defaults there.
+ * Give a fixture project its start, resume and check lines, and only those: this machine's file,
+ * under the directory adding the project ignores. Written after the add, over the defaults the add
+ * writes there; or before it, for a project a person adds later: an add keeps every line already
+ * there, so the project starts scripted runs from its first Start, never a real coding agent. The
+ * check is the shell's own `echo`: a launcher asks it each time it opens, and nothing is started for it.
  */
 export async function writeFakeRunHooks(cwd: string): Promise<void> {
-  await writeFile(join(cwd, PROJECT_HOOKS_FILE), `start: node ${JSON.stringify(FAKE_RUN)} start\nresume: node ${JSON.stringify(FAKE_RUN)} resume\n`)
+  const run = (mode: string) => `${mode}: node ${JSON.stringify(FAKE_RUN)} ${mode}\n`
+  await mkdir(dirname(join(cwd, PROJECT_HOOKS_FILE)), { recursive: true })
+  await writeFile(join(cwd, PROJECT_HOOKS_FILE), `${run('start')}${run('resume')}check: ${JSON.stringify(`echo '${NOTHING_WRONG}'`)}\n`)
 }
