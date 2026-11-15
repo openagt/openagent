@@ -1,45 +1,57 @@
-/* OpenAgent's colours, light and dark. The dashboard (tailwind.css) and openagent.build
-   (pages/index/styles.css) both read this file, so the two are one product and the switch between
-   them changes no colour. Components read the `--color-*` tokens surfaced in `@theme inline`
-   (module/theme.css), so this is a palette swap only. */
+/* OpenAgent's colours, light and dark, on Everforest (#1118). The dashboard (tailwind.css) and
+   openagent.build (pages/index/styles.css) both read this file, so the two are one product and
+   the switch between them changes no colour. The light theme is Everforest Light, so the theme
+   toggle still works rather than dropping to a single dark mode. Components read the `--color-*`
+   tokens surfaced in `@theme inline` (module/theme.css), so this is a palette swap only. */
 :root {
   /* Let the browser paint native theme-matched scrollbars + form controls (the shadcn way).
      `.dark` flips it below. */
   color-scheme: light;
-  /* Colour is for life: the frame is neutral (a warm paper page in the Everforest canvas's grey,
-     white surfaces on it, the sidebar a step below), and the knot's hues are kept for what an
-     agent is doing or waits on. The primary press is ink, so it never competes with a state. */
-  --background: #f6f6f3;
-  --sidebar: #efefeb;
-  --foreground: #1d2420;
+  /* Everforest's greens on a white canvas (#1141). Everforest Light is paper-coloured (#fdf6e3),
+     which reads as orange next to any other app; the identity people recognise is the green, not
+     the paper, so the hues stay and the canvas goes near-white, in the greens' own cool grey. As
+     in Claude Code's light, the levels are close: the sidebar a step below the page, and what
+     stands on the page (a card, the message box, the panes) in pure white, a step above it, with
+     a hairline and a faint lift (`shadow-sm`).
+     The greens are darkened from Everforest Light, which was mixed for cream: #8da101 is 2.9:1 on
+     white, below readable for the small text these tokens carry. */
+  --background: #f5f6f4;
+  --sidebar: #edefec;
+  --foreground: #3a4248;
   --card: #ffffff;
-  --card-foreground: #1d2420;
-  --muted: #f0f0ec;
+  --card-foreground: #3a4248;
+  --muted: #eef0ed;
   /* 4.5:1 or more on the hover fill (`--accent`) and the sidebar, not only on the page. */
-  --muted-foreground: #565f5a;
-  --faint-foreground: #737b76;
-  --border: #e1e2de;
+  --muted-foreground: #526158;
+  /* A row's second line, an age: 4.5:1 on a card. */
+  --faint-foreground: #6c7a71;
+  --border: #dfe3dd;
   /* The edge of what a person types into or ticks: 3:1 or more on every surface it sits on (the
      page, a card, the sidebar, a hovered row). */
   --input: color-mix(in oklab, var(--foreground) 60%, var(--background));
-  --shadow-tint: #1e2420;
-  /* The one press a view is for, in ink; Settings › Appearance can pick a colour instead. */
-  --primary: #1d2420;
+  --shadow-tint: #3a4248;
+  /* The primary colour is Everforest's blue (his pick), darkened like the status colours below;
+     what is done stays Everforest's green (`--success`). */
+  --primary: #2b7ba5;
   --primary-foreground: #ffffff;
-  /* Where the keyboard is: a blue no state uses, so a focused thing never reads as one. */
-  --focus: #2f7fb0;
+  /* Where the keyboard is: Everforest's blue whichever primary colour is picked, so the ring
+     reads the same on every press. */
+  --focus: #2b7ba5;
   /* The hover and active fill: a step below the sidebar too, so a row there still lights up. */
-  --accent: #ebebe7;
-  --accent-foreground: #1d2420;
+  --accent: #e8ece5;
+  --accent-foreground: #3a4248;
 
-  /* Life, in the knot's hues, each darkened to stay readable as small text on white: done, needs
-     you, failed, working (`--info`), merged. */
-  --success: #5d7a1c;
-  --warning: #a86f0a;
-  /* White text on it (Remove) reads at 4.5:1. */
-  --danger: #c23d3a;
-  --info: #2c7aa8;
-  --merged: #9a4d88;
+  /* Status. Every status colour used to be a raw palette value, so "good" was six different
+     greens and `amber-500` meant both "stopped" and "building, fine". These four are the whole
+     vocabulary: Everforest's four hues, each darkened to stay readable on white (the shipped
+     Light tones run 2.3-3.4:1 there, which is why they are not used verbatim). */
+  --success: #6f7f00;
+  --warning: #9a6b00;
+  /* A step darker than Everforest's red, so white text on it (Remove) reads at 4.5:1. */
+  --danger: #cc3d3a;
+  --info: #2b7ba5;
+  /* A merged pull request: Everforest's purple, darkened like the four above. */
+  --merged: #a24f8c;
 
   /* Code, a colour per kind of word (lib/highlight.tsx), in Claude Code on the web's way of
      telling them apart and in Everforest's hues, darkened as the status colours are. */
@@ -68,30 +80,35 @@
 
 .dark {
   color-scheme: dark;
-  /* The same frame at night: a near-black page in the canvas's green-grey, the sidebar a step
-     below it, surfaces a step above; height is a lighter surface, the shadow only grounds it. */
-  --background: #121513;
-  --sidebar: #0e100f;
-  --foreground: #e7eae5;
-  --card: #191d1b;
-  --card-foreground: #e7eae5;
-  --muted: #202523;
-  --muted-foreground: #a9b0ab;
-  --faint-foreground: #858d88;
-  --border: #2a2f2c;
+  /* Everforest Dark's hue a step darker than its dimmest background (his pick: darker than
+     Everforest's own steps, as dark as Claude Code's dark): the page near-black, the sidebar and
+     panes a step above it, fills and lines a step or two above that. The text (#d3c6aa) and the
+     accents are Everforest's as on the landing page. */
+  --background: #171b1d;
+  /* The sidebar a step above the page, as Claude Code's dark lays it. */
+  --sidebar: #1c2124;
+  --foreground: #d3c6aa;
+  --card: #1c2124;
+  --card-foreground: #d3c6aa;
+  --muted: #262d31;
+  --muted-foreground: #9da9a0;
+  --faint-foreground: #808b84;
+  --border: #30383c;
   --input: color-mix(in oklab, var(--foreground) 58%, var(--background));
   --shadow-tint: #000000;
-  --primary: #eceee9;
-  --primary-foreground: #121513;
-  --focus: #7fb7d8;
-  --accent: #242926;
-  --accent-foreground: #e7eae5;
+  /* Everforest's blue; what is done stays its green (`--success`). */
+  --primary: #7fbbb3;
+  --primary-foreground: #171b1d;
+  --focus: #7fbbb3;
+  --accent: #262d31;
+  --accent-foreground: #d3c6aa;
 
-  --success: #a9c47f;
-  --warning: #e2b65e;
-  --danger: #ec8a85;
-  --info: #82bddb;
-  --merged: #d89cbb;
+  /* Same four meanings on the Everforest Dark accents. */
+  --success: #a7c080;
+  --warning: #dbbc7f;
+  --danger: #e67e80;
+  --info: #7fbbb3;
+  --merged: #d699b6;
 
   /* Code, in Everforest's hues, a colour per kind of word as Claude Code on the web tells them apart. */
   --code-plain: #d3c6aa;

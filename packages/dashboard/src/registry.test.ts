@@ -439,7 +439,7 @@ test('writePreferences keeps a known look, stores the default look as nothing, a
   assert.deepEqual(await readPreferences(ENV, fs), {})  // A primary colour is kept only with the palette it belongs to.
   await writePreferences({ accent: 'aqua' }, ENV, fs)
   assert.deepEqual(await readPreferences(ENV, fs), { accent: 'aqua' })
-  await writePreferences({ accent: 'indigo' }, ENV, fs)
+  await writePreferences({ accent: 'blue' }, ENV, fs)
   assert.deepEqual(await readPreferences(ENV, fs), {})
   await writePreferences({ palette: 'neutral', accent: 'aqua' }, ENV, fs)
   assert.deepEqual(await readPreferences(ENV, fs), { palette: 'neutral' })

@@ -94,15 +94,9 @@
 }
 
 /* The primary colour (Settings › Appearance): buttons, links and what is picked, in one of the
-   palette's own colours. On OpenAgent, Everforest's (its ink, the default, is set in tokens.css), each
+   palette's own colours. On OpenAgent, Everforest's (its blue, the default, is set above), each
    darkened on light as the status colours are; on Neutral, Tailwind's as shadcn's themes offer
    them, its 600 on light and its 400 on dark. Each with text that reads on it. */
-:root:not([data-palette])[data-accent='blue'] {
-  --primary: #2b7ba5;
-}
-:root.dark:not([data-palette])[data-accent='blue'] {
-  --primary: #7fbbb3;
-}
 :root:not([data-palette])[data-accent='green'] {
   --primary: #6f7f00;
 }
