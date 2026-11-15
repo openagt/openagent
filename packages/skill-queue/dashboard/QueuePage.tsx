@@ -33,6 +33,7 @@ import {
   inPlace,
   pathsIn,
   useFileNames,
+  useIsMobile,
   runsAgain,
   useModuleHost,
   useOpenAgentDown,
@@ -295,11 +296,13 @@ function origin(entry: string): string | undefined {
  * One entry: its state (an agent on it, or waiting its turn), what it reads as, who is on it or that
  * it is next, then where it came from, or a typed entry's words after its name, or the line as written
  * where a name stands in for it. Nothing at its right at rest: its one press comes under the pointer
- * and the keyboard, and is always there on touch. A free entry's is "Start now", one an agent is on a
- * menu; removing it is in the menu of both.
+ * and the keyboard, and is always there on touch. A free entry's is "Start now", with removing it in
+ * its menu; one an agent is on, and every entry on a phone, has a menu alone, with all it offers.
  */
 function EntryRow({ project, placed, next, names, starts, reload }: { project: ModuleProject; placed: Numbered; next: boolean; names: FileNames; starts: QueueStarts; reload: () => Promise<void> }) {
   const host = useModuleHost()
+  const phone = useIsMobile()
+  const down = useOpenAgentDown()
   const [removing, setRemoving] = useState(false)
   const { entry, place, agent } = placed
   const view = entryView(project.id, entry, names)
@@ -327,7 +330,7 @@ function EntryRow({ project, placed, next, names, starts, reload }: { project: M
           view.renamed && <span className="font-mono">{entry}</span>,
         ]}
         actions={
-          agent === undefined ? (
+          agent === undefined && !phone ? (
             <StartAgentButton
               variant="secondary"
               size="sm"
@@ -350,6 +353,14 @@ function EntryRow({ project, placed, next, names, starts, reload }: { project: M
                 <Ellipsis className="size-4" aria-hidden />
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end">
+                {agent === undefined && (
+                  <>
+                    <DropdownMenuItem disabled={starts.inFlight || down} onClick={() => void starts.startEntry(project.id, entry)}>
+                      Start now
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => host.configureRun(project.id, workOnEntryPrompt(entry))}>Configure first, then run</DropdownMenuItem>
+                  </>
+                )}
                 <DropdownMenuItem onClick={() => setRemoving(true)}>Remove from the queue</DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>

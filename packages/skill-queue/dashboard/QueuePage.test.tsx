@@ -6,7 +6,7 @@ import { forgetRemembered, type ModuleScheduledCommand } from '@openagt/dashboar
 import { QueuePage } from './QueuePage.js'
 import { NO_MODULES, fakeHost, renderWithHost, type FakeHost } from './test-host.js'
 import { workOnEntryPrompt } from '../src/module.js'
-import { openMenu } from '../../dashboard/dashboard/test-utils.js'
+import { openMenu, phoneScreen } from '../../dashboard/dashboard/test-utils.js'
 
 // The page rendered from nothing but this package: a host answering `queue --local --full`, and
 // the queue's own `done` and `add`. What other packages tell it (which commands start by
@@ -248,6 +248,21 @@ describe('QueuePage', () => {
           ['p1', workOnEntryPrompt('Also urgent'), { land: false }],
         ]),
       )
+    })
+
+    test('on a phone a row has one press, its menu, holding its start, the launcher and its removal', async () => {
+      const wide = phoneScreen()
+      try {
+        show()
+        await screen.findByText('Hot fix')
+        expect(screen.queryByRole('button', { name: /^Start now: entry/ })).toBeNull()
+        await openMenu(screen.getByRole('button', { name: 'More for entry 2' }))
+        expect(screen.getAllByRole('menuitem').map(item => item.textContent)).toEqual(['Start now', 'Configure first, then run', 'Remove from the queue'])
+        fireEvent.click(screen.getByRole('menuitem', { name: 'Start now' }))
+        await waitFor(() => expect(host.startRun.mock.calls).toEqual([['p1', workOnEntryPrompt('Hot fix')]]))
+      } finally {
+        wide()
+      }
     })
   })
 
