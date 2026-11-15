@@ -61,8 +61,8 @@ function agent(over: Partial<AgentMeta> = {}): AgentMeta {
 const renderRail = (ui: ReactElement) => render(<SidebarProvider>{ui}</SidebarProvider>)
 
 describe('AgentHistory (#785)', () => {
-  test('what waits on the person is its own part over the Log: a run\'s name and what it needs, five, then a row that opens the Overview; the Overview row has no count', () => {
-    const asks = (n: number) => ({ projectId: 'p1', projectName: 'p1', kind: 'awaiting' as const, title: `Run ${n}`, agentId: `r${n}`, awaitId: `q${n}` })
+  test('what waits on the person is its own part over the Log: a run\'s name and how long it has waited, what it needs under them, five, then a row that opens the Overview; the Overview row has no count', () => {
+    const asks = (n: number) => ({ projectId: 'p1', projectName: 'p1', kind: 'awaiting' as const, title: `Run ${n}`, agentId: `r${n}`, awaitId: `q${n}`, createdAt: new Date(Date.now() - 3 * 60_000).toISOString() })
     const onSelectRecent = vi.fn()
     const onDashboard = vi.fn()
     renderRail(
@@ -71,7 +71,8 @@ describe('AgentHistory (#785)', () => {
     expect(screen.getByText('Waiting on you')).toBeTruthy()
     const row = screen.getByRole('link', { name: 'Run 1 · Needs answer' })
     expect(row.getAttribute('href')).toBe('/p1/r1')
-    expect(row.textContent).toBe('Run 1Needs answer')
+    // Two lines: the name and its age, then what it needs.
+    expect([...row.firstElementChild!.children].map(line => line.textContent)).toEqual(['Run 13m', 'Needs answer'])
     fireEvent.click(row)
     expect(onSelectRecent).toHaveBeenCalledWith('p1', 'r1')
     expect(screen.queryByRole('link', { name: /^Run 6/ })).toBeNull()

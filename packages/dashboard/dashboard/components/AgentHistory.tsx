@@ -567,9 +567,11 @@ function NewButton({
 const WAITING_SHOWN = 5
 
 /**
- * What waits on the person, over the Log: each a run's name in the waiting hexagon and what it needs
- * in the Human Queue's two words; past five, a row that opens the Overview, where the Human Queue
- * lists them all. The Log still lists every run in its order: a run answered stays where it was.
+ * What waits on the person, over the Log: each the compact two-line row (spacing.md 3), the waiting
+ * hexagon and the run's name, cut at the row's end, with how long it has waited at its end as the Log's
+ * rows have it, and under the name, quiet, what it needs in the Human Queue's two words; past five, a
+ * row that opens the Overview, where the Human Queue lists them all. The Log still lists every run in
+ * its order: a run answered stays where it was.
  */
 function WaitingOnYou({
   waiting,
@@ -588,7 +590,7 @@ function WaitingOnYou({
 }) {
   const shown = waiting.slice(0, WAITING_SHOWN)
   const rest = waiting.length - shown.length
-  const rowClass = 'focus-ring flex w-full items-center gap-3 rounded-md px-2 text-left text-sm text-foreground transition-colors hover:bg-foreground/4 active:bg-foreground/8 md:h-8 max-md:h-11'
+  const rowClass = 'focus-ring flex w-full items-center gap-3 rounded-md px-2 text-left text-sm text-foreground transition-colors hover:bg-foreground/4 active:bg-foreground/8'
   return (
     <SidebarGroup className="pt-3! pb-0!">
       <SidebarGroupLabel>Waiting on you</SidebarGroupLabel>
@@ -604,20 +606,27 @@ function WaitingOnYou({
                   href={href}
                   aria-label={`${item.title} · ${need}`}
                   {...(external ? { target: '_blank', rel: 'noreferrer' } : { onClick: inPlace(() => onOpen(item)) })}
-                  className={rowClass}
+                  className={cn(rowClass, 'md:h-12 max-md:h-16')}
                 >
-                  <span className="flex size-4 shrink-0 items-center justify-center">
-                    <StateCell state="waiting" />
+                  <span className="flex min-w-0 flex-1 flex-col">
+                    {/* The mark on the name's line, never between the two (spacing.md 3). */}
+                    <span className="flex min-w-0 items-center gap-3">
+                      <span className="flex size-4 shrink-0 items-center justify-center">
+                        <StateCell state="waiting" />
+                      </span>
+                      <span className="min-w-0 flex-1 truncate">{item.title}</span>
+                      <span aria-hidden className="shrink-0 text-xs text-muted-foreground">{formatSince(item.createdAt)}</span>
+                    </span>
+                    {/* Under the name, 16 for the mark and 12 after it: the words start where the name does. */}
+                    <span aria-hidden className="truncate pl-7 text-xs text-muted-foreground">{need}</span>
                   </span>
-                  <span className="min-w-0 flex-1 truncate">{item.title}</span>
-                  <span aria-hidden className="shrink-0 text-xs text-muted-foreground">{need}</span>
                 </a>
               </SidebarMenuItem>
             )
           })}
           {rest > 0 && (
             <SidebarMenuItem>
-              <a href={moreHref} onClick={inPlace(onMore)} className={cn(rowClass, 'text-muted-foreground')}>
+              <a href={moreHref} onClick={inPlace(onMore)} className={cn(rowClass, 'text-muted-foreground md:h-8 max-md:h-11')}>
                 <span aria-hidden className="size-4 shrink-0" />
                 {rest} more
               </a>
