@@ -18,7 +18,7 @@ import { agentLabel, awaitingName } from './lib/agent-label.js'
 import { subagentsOf, taskLabel } from './lib/subagents.js'
 import { PaneLayout, PanesProvider } from './components/Panes.js'
 import { SubagentPanel } from './components/SubagentPanel.js'
-import { MenuButton, PhoneBar, PhoneBarCount } from './components/PhoneBar.js'
+import { PagesBar, PhoneBar, PhoneBarCount } from './components/PhoneBar.js'
 import { cn } from './lib/utils.js'
 import { onSkillsSaved } from './lib/skills-saved.js'
 import { usePolled } from './lib/use-async.js'
@@ -708,10 +708,6 @@ export function App() {
           waiting={interventions}
           hrefOf={hrefOf}
         />
-        {/* On a phone the sidebar is a sheet, and this button, over the page's top left corner,
-            opens it. An agent's page and the "New agent session" page keep that corner of their top row
-            free; a page with no top row of its own gets a bar that names it. */}
-        {isMobile && !pageScrolls && <MenuButton />}
         {/* A project's page and an agent's have panes beside them (Panes). A module's page takes
             the full width itself (#1774), the way the Overview does. */}
         <PanesProvider
@@ -735,6 +731,19 @@ export function App() {
           </PaneLayout>
         </PanesProvider>
       </div>
+      {/* On a phone the sidebar is a sheet, opened from the bar of pages at the foot of every page. */}
+      {isMobile && (
+        <PagesBar
+          pages={sidebarPages ?? []}
+          activePage={pageSegment}
+          overviewActive={projectId === null && pageSegment === null}
+          overviewHref={hrefOf({ projectId: null, agentId: null })}
+          onOverview={showDashboard}
+          pageHref={segment => hrefOf({ projectId: null, agentId: null, page: segment })}
+          onPage={showPage}
+          waiting={interventions.length}
+        />
+      )}
       {/* What a module of this computer's draws over every page: a popup it raises itself. */}
       {modules.everyPage.map(({ EveryPage, package: pkg }) => (
         <ModuleSlot key={pkg} package={pkg} label={`${pkg} popup`}>

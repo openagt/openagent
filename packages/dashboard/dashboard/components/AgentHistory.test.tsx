@@ -4,7 +4,7 @@ import { afterEach, describe, expect, test, vi } from 'vitest'
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { SidebarProvider } from './ui/sidebar.js'
 import { hoverTooltip, openMenu, phoneScreen } from '../test-utils.js'
-import { MenuButton } from './PhoneBar.js'
+import { PagesBar } from './PhoneBar.js'
 import { projectLabels, ProjectLabelsContext } from '../lib/project-labels.js'
 
 // AgentHistory pulls in AddProjectPanel, which imports the projects RPC stubs; stub them so
@@ -1077,20 +1077,20 @@ describe('AgentHistory on a phone', () => {
       const onSelect = vi.fn()
       const ui = (
         <SidebarProvider>
-          <MenuButton />
+          <PagesBar pages={[]} activePage={null} overviewActive={false} overviewHref="/" onOverview={() => {}} pageHref={segment => `/${segment}`} onPage={() => {}} waiting={0} />
           <AgentHistory projectId={null} scope="p1" agents={[agent({ status: 'done' })]} selectedAgentId={null} onSelect={onSelect} pages={[{ segment: 'logs', label: 'Logs' }]} onPage={onPage} />
         </SidebarProvider>
       )
       render(ui)
       expect(screen.queryByRole('link', { name: 'Logs' })).toBeNull()
 
-      fireEvent.click(screen.getByRole('button', { name: 'Open the menu' }))
+      fireEvent.click(screen.getByRole('button', { name: 'Menu' }))
       fireEvent.click(await screen.findByRole('link', { name: 'Logs' }))
       expect(onPage).toHaveBeenCalledWith('logs')
       await waitFor(() => expect(screen.queryByRole('link', { name: 'Logs' })).toBeNull())
 
       // An agent's row closes it too.
-      fireEvent.click(screen.getByRole('button', { name: 'Open the menu' }))
+      fireEvent.click(screen.getByRole('button', { name: 'Menu' }))
       fireEvent.click(await screen.findByText("replace 'Hello, world!' with 'Welcome!'"))
       expect(onSelect).toHaveBeenCalledWith('run-1')
       await waitFor(() => expect(screen.queryByText("replace 'Hello, world!' with 'Welcome!'")).toBeNull())

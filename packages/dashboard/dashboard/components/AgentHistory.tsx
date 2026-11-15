@@ -168,8 +168,8 @@ export function AgentHistory({
   /** The project that run was started in, by its label: the stand-in row names it as the run's own row will. */
   startProjectName?: string | undefined
 }) {
-  // On a phone the rail is a sheet over the page, opened from the page's top left corner
-  // (MenuButton): going somewhere from it closes it.
+  // On a phone the rail is a sheet over the page, opened from the bar of pages (PagesBar): going
+  // somewhere from it closes it.
   const { isMobile, open, setOpenMobile } = useSidebar()
   // What stands under the modules' rows waits while their pages are not known, and comes in at its
   // place once they are; drawn with the first frame wherever they were known from the start.

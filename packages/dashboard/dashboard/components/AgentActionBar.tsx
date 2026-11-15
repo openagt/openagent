@@ -71,13 +71,10 @@ export function AgentActionBar({
   // Only once nothing is writing to the worktree is there a size to say (#798).
   const size = ready ? formatBytes(checkout?.checkout?.sizeBytes, '') : ''
   return (
-    // On a phone the row's start is kept free: the shell lays the menu's button over it
-    // (MenuButton). Each left padding is under its own screen size, never a plain one with a
-    // phone's over it: a module's stylesheet carries its own copy of the plain class, which comes
-    // later and would win. The row is as tall as the "New agent session" page's (ProjectActions) and as an
+    // The row is as tall as the "New agent session" page's (ProjectActions) and as an
     // open pane's header, so the three stand level; unlike a pane's, it has no line under it.
     <TopBar>
-      <div className="flex h-11 shrink-0 items-center gap-2 overflow-hidden pr-2 md:pl-4 max-md:pl-11">
+      <div className="flex h-11 shrink-0 items-center gap-2 overflow-hidden pr-2 pl-4">
         <ShowSidebarButton />
         {/* Which session this is: its name, which is the button of its menu and the one part that
             gives up width. */}
