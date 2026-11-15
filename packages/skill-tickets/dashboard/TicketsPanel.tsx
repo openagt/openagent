@@ -114,7 +114,7 @@ function TicketRow({ listed, priorities, showStage, busy, starting, isSelected, 
           <span className="flex items-center gap-3">
             {projectName && <span className="max-w-32 truncate">{projectName}</span>}
             {ticket.topics && ticket.topics.length > 0 && (
-              <span className="flex items-center gap-2">
+              <span className="flex items-center gap-2 max-lg:hidden">
                 {ticket.topics.map(topic => (
                   <Badge key={topic}>{topic}</Badge>
                 ))}

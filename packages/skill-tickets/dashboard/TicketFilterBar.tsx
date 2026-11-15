@@ -304,8 +304,8 @@ export function TicketFilterBar({
 
   return (
     <div className="flex items-center gap-2">
-      {/* The filters, then the sort; on a phone a strip scrolled sideways, its end faded to say there is more. */}
-      <div className="-ml-2 flex min-w-0 items-center gap-1 md:flex-wrap max-md:flex-1 max-md:overflow-x-auto max-md:pe-8 max-md:[scrollbar-width:none] max-md:[mask-image:linear-gradient(to_right,#000_calc(100%_-_2rem),transparent)]">
+      {/* The filters, then the sort; where the page is narrow a strip scrolled sideways, its end faded to say there is more. */}
+      <div className="-ml-2 flex min-w-0 items-center gap-1 lg:flex-wrap max-lg:flex-1 max-lg:overflow-x-auto max-lg:pe-8 max-lg:[scrollbar-width:none] max-lg:[mask-image:linear-gradient(to_right,#000_calc(100%_-_2rem),transparent)]">
       <RangeFacet
         label="Priority"
         noneLabel="No priority"
