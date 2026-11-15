@@ -251,6 +251,7 @@ function TakerLine({ projectId, schedule }: { projectId: string; schedule: Sched
       <a href={page.href} onClick={inPlace(schedule.open)} className="font-medium text-primary pointer-fine:hover:underline">
         {page.label}
       </a>
+      .
     </>
   )
   // Not read yet, or a read that failed: what takes from it would be a guess, so its words are not said,
@@ -259,7 +260,7 @@ function TakerLine({ projectId, schedule }: { projectId: string; schedule: Sched
     return (
       <span aria-hidden className="invisible">
         {WAITS}
-        {page && ` Change it in ${page.label}`}
+        {page && ` Change it in ${page.label}.`}
       </span>
     )
   const taker = known.find(command => command.command === QUEUE_COMMAND)
@@ -306,6 +307,8 @@ function EntryRow({ project, placed, names, starts, reload }: { project: ModuleP
   const view = entryView(project.id, entry, names)
   const from = origin(entry)
   const headline = from === undefined && !view.renamed ? entryHeadline(view.title) : undefined
+  // What the row calls it, and the dialog that removes it.
+  const name = headline?.name ?? view.title
   const remove = async (): Promise<void> => {
     const answer = await host.act(project.id, doneArgs(entry))
     if (!answer.ok) throw new Error(answer.error)
@@ -318,7 +321,7 @@ function EntryRow({ project, placed, names, starts, reload }: { project: ModuleP
     <>
       <PanelRow
         state={<span className="text-xs tabular-nums text-faint-foreground">{place}</span>}
-        title={headline?.name ?? view.title}
+        title={name}
         titleHint={entry}
         href={view.url}
         external={view.url !== undefined}
@@ -372,8 +375,7 @@ function EntryRow({ project, placed, names, starts, reload }: { project: ModuleP
         title="Remove this entry from the queue?"
         body={
           <>
-            <span className="block break-words font-mono text-xs">{entry}</span>
-            <span className="mt-2 block">It is deleted from the queue of {project.name}, for everyone who shares it. Nothing else changes: no ticket is closed, and an agent already working on it goes on.</span>
+            <span className="break-words font-medium text-foreground">{name}</span> is deleted from the queue of {project.name}, for everyone who shares it. Nothing else changes: no ticket is closed, and an agent already working on it goes on.
           </>
         }
         confirmLabel="Remove"

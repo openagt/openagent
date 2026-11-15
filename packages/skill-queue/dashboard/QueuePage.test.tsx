@@ -101,19 +101,19 @@ describe('QueuePage', () => {
     test('the command that works the queue, switched off: entries wait, and the line opens the page that switches it', async () => {
       const openPage = vi.fn()
       show(FULL, scheduling([{ command: 'plan-tickets', on: true, note: 'Next start in 3h, if there is work' }, { command: 'work-queue', on: false }]), { ...INERT_HOST_SERVICES, openPage })
-      await waitFor(() => expect(taker()).toBe('Entries wait here until you start them. Change it in Automations'))
+      await waitFor(() => expect(taker()).toBe('Entries wait here until you start them. Change it in Automations.'))
       fireEvent.click(screen.getByRole('link', { name: 'Automations' }))
       expect(openPage).toHaveBeenCalledWith('automations')
     })
 
     test('switched on: an agent takes the first entry nobody claimed, and when it starts next is said in the scheduling package\'s words', async () => {
       show(FULL, scheduling([{ command: 'work-queue', on: true, note: 'Starts when there is work' }]))
-      await waitFor(() => expect(taker()).toBe('Agents take entries from here by themselves. Starts when there is work. Change it in Automations'))
+      await waitFor(() => expect(taker()).toBe('Agents take entries from here by themselves. Starts when there is work. Change it in Automations.'))
     })
 
     test('switched on while nothing starts by itself: the line says off, with why', async () => {
       show(FULL, scheduling([{ command: 'work-queue', on: false, note: 'The scheduler is off' }]))
-      await waitFor(() => expect(taker()).toBe('Entries wait here until you start them. The scheduler is off. Change it in Automations'))
+      await waitFor(() => expect(taker()).toBe('Entries wait here until you start them. The scheduler is off. Change it in Automations.'))
     })
 
     test('while what starts by itself is not known, the page says nothing of it: not read yet, or a read that failed', async () => {
@@ -142,7 +142,7 @@ describe('QueuePage', () => {
       show(FULL, scheduling([{ command: 'plan-tickets', on: true }]))
       await screen.findByText('Hot fix')
       await waitFor(() => expect(host.runCommand).toHaveBeenCalled())
-      expect(taker()).toBe('Entries wait here until you start them. Change it in Automations')
+      expect(taker()).toBe('Entries wait here until you start them. Change it in Automations.')
     })
   })
 
@@ -280,17 +280,19 @@ describe('QueuePage', () => {
   })
 
   describe('removing', () => {
-    test('removing, from the entry\'s menu, asks first, with the entry as written; "Remove" runs `queue done` with exactly that line and reads the queue again', async () => {
-      show()
-      await screen.findByText('Hot fix')
+    test('removing, from the entry\'s menu, asks first, naming the entry as its row does; "Remove" runs `queue done` with the line as written and reads the queue again', async () => {
+      const ticket = '[Login page](tickets/2026-08-01_login-page.md)'
+      show([{ entry: 'Hot fix', priority: 5 }, { entry: ticket, priority: 5 }])
+      await screen.findByText('Login page')
       await removeEntry(2)
       const dialog = await screen.findByRole('alertdialog')
       expect(dialog.textContent).toContain('Remove this entry from the queue?')
-      expect(dialog.textContent).toContain('Hot fix')
+      expect(within(dialog).getByRole('heading').nextElementSibling?.textContent).toMatch(/^Login page is deleted from the queue of /)
+      expect(dialog.textContent).not.toContain('tickets/')
       expect(host.act).not.toHaveBeenCalled()
       const reads = host.runCommand.mock.calls.length
       fireEvent.click(within(dialog).getByRole('button', { name: 'Remove' }))
-      await waitFor(() => expect(host.act).toHaveBeenCalledWith('p1', ['done', '--', 'Hot fix']))
+      await waitFor(() => expect(host.act).toHaveBeenCalledWith('p1', ['done', '--', ticket]))
       await waitFor(() => expect(host.runCommand.mock.calls.length).toBeGreaterThan(reads))
     })
 
@@ -372,7 +374,7 @@ describe('QueuePage', () => {
       show([], scheduling([{ command: 'work-queue', on: false }]))
       expect(await screen.findByText('Nothing queued.')).toBeTruthy()
       expect(field()).toBeTruthy()
-      await waitFor(() => expect(taker()).toContain('Change it in Automations'))
+      await waitFor(() => expect(taker()).toContain('Change it in Automations.'))
     })
   })
 
