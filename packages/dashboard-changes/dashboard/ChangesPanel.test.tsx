@@ -414,6 +414,10 @@ describe('ChangesPanel, as Claude Code on the web draws it', () => {
     fireEvent.click(await findRow(/new\.ts/))
     await waitFor(() => expect(screen.queryByRole('list', { name: 'Changed files' })).toBeNull())
     await waitFor(() => expect(scrolled.mock.contexts.at(-1)).toBe(screen.getByRole('region', { name: 'src/new.ts' })))
+    // Too narrow for the branches, the head keeps its name and says them on hover, not a fragment.
+    const title = within(screen.getByTestId('pane-title')).getByRole('heading')
+    expect(title.textContent).toBe('Changes')
+    expect(title.getAttribute('title')).toMatch(/→/)
     vi.unstubAllGlobals()
   })
 

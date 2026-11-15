@@ -284,11 +284,13 @@ function useHeld<T>(agentId: string | undefined, value: T, keep: boolean, moving
 }
 
 /**
- * The pane's header: the branches the changes are between and whether they are merged, or the
- * pane's name; then search, the button that hides the list, and the ⋮ menu.
+ * The pane's header: its name, then on a pane wide enough the branches the changes are between and
+ * whether they are merged, then the files' total; then search, the button that hides the list, and
+ * the ⋮ menu.
  */
-function ChangesHeader({ between, merged, page, paths, changes, listShown, onPick, onToggleList, onRefresh }: {
+function ChangesHeader({ between, narrow, merged, page, paths, changes, listShown, onPick, onToggleList, onRefresh }: {
   between: string | undefined
+  narrow: boolean
   merged: boolean | undefined
   page: string
   paths: string[]
@@ -305,8 +307,9 @@ function ChangesHeader({ between, merged, page, paths, changes, listShown, onPic
   return (
     <>
       <PaneTitle>
-        {/* One line, the branches cut in their middle on a narrow pane, so the run's own stays told apart. */}
-        {between ? (
+        {/* One line, the branches cut in their middle, so the run's own stays told apart; a pane too
+            narrow for them keeps its name and says them on hover, rather than show a fragment. */}
+        {between && !narrow ? (
           <h2 className="flex min-w-0 items-baseline gap-2 pl-2 text-sm" title={between}>
             <span className="shrink-0 font-medium">Changes</span>
             <span className="flex min-w-0 items-baseline gap-1 text-muted-foreground">
@@ -315,7 +318,9 @@ function ChangesHeader({ between, merged, page, paths, changes, listShown, onPic
             </span>
           </h2>
         ) : (
-          <h2 className="truncate pl-2 text-sm font-medium">Changes</h2>
+          <h2 className="truncate pl-2 text-sm font-medium" title={between}>
+            Changes
+          </h2>
         )}
         {total && <DiffStat added={total.added} removed={total.removed} zeros className="ml-auto pl-2" />}
       </PaneTitle>
@@ -506,6 +511,7 @@ export function ChangesPanel({ projectId, agentId, activity, reveal }: ModulePan
   const header = (
     <ChangesHeader
       between={between}
+      narrow={narrow}
       merged={merged}
       page={page}
       paths={paths}
