@@ -2,7 +2,7 @@ import { useEffect, useState, type ReactNode } from 'react'
 import { ChevronRight } from 'lucide-react'
 import { cn } from '../lib/utils.js'
 import { formatElapsed } from '../lib/format-date.js'
-import { STATUS_TONE } from '../lib/status-tone.js'
+import { runTone, runWord } from '../lib/run-words.js'
 import { anyModelName, useModels } from '../lib/models.js'
 import { stepWords, type SubagentRow, type SubagentStep } from '../lib/subagents.js'
 import { Markdown } from './Markdown.js'
@@ -17,10 +17,6 @@ import { Seconds } from './ToolCalls.js'
 
 /** How long the moving line stays on one working subagent's name. */
 const NAME_EVERY_MS = 2500
-
-function toneOf(status: string): string {
-  return status === 'waiting' ? 'text-muted-foreground' : (STATUS_TONE[status] ?? 'text-muted-foreground')
-}
 
 /** A subagent's row: the verb in grey, its name in dark, its model; while it works the tool it is on; how long it took. */
 function AgentRow({ row, onOpen }: { row: SubagentRow; onOpen?: ((key: string) => void) | undefined }) {
@@ -38,7 +34,7 @@ function AgentRow({ row, onOpen }: { row: SubagentRow; onOpen?: ((key: string) =
               {[row.tool, `${row.calls} ${row.calls === 1 ? 'call' : 'calls'}`].filter(Boolean).join(' · ')}
             </span>
           )
-        : row.status !== 'done' && <span className={cn('shrink-0', toneOf(row.status))}>{row.status}</span>}
+        : row.status !== 'done' && <span className={cn('shrink-0', runTone(row.status))}>{runWord(row.status)}</span>}
       <span className="ml-auto shrink-0 tabular-nums" title={`Started ${new Date(row.startedAt).toLocaleString()}`}>
         {row.working ? <Seconds since={row.startedAt} /> : row.endedAt !== undefined ? formatElapsed(Date.parse(row.endedAt) - Date.parse(row.startedAt)) : null}
         {row.cost !== undefined && ` · $${row.cost.toFixed(2)}`}
@@ -58,7 +54,7 @@ export function SubagentMessage({ name, text, status, detail }: { name: string; 
     <>
       <span className="shrink-0">Message from</span>
       <span className="shrink-0 text-foreground">subagent</span>
-      {status !== undefined && status !== 'done' && <span className={cn('shrink-0', toneOf(status))}>{status}</span>}
+      {status !== undefined && status !== 'done' && <span className={cn('shrink-0', runTone(status))}>{runWord(status)}</span>}
     </>
   )
   return (

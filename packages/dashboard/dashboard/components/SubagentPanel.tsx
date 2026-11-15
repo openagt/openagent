@@ -6,7 +6,7 @@ import { useRevealedSubagent } from '../lib/reveal-change.js'
 import { callRow, callSubagents, runRow, subagentTranscript, type SubagentRow } from '../lib/subagents.js'
 import { formatElapsed } from '../lib/format-date.js'
 import { anyModelName, useModels } from '../lib/models.js'
-import { STATUS_TONE } from '../lib/status-tone.js'
+import { runTone, runWord } from '../lib/run-words.js'
 import { usePolled } from '../lib/use-async.js'
 import { Button } from './ui/button.js'
 import { EventList } from './EventList.js'
@@ -111,7 +111,7 @@ function PaneHead({ row }: { row: SubagentRow }) {
       )}
       <div className="flex flex-wrap items-baseline gap-x-2 text-muted-foreground">
         {row.model !== undefined && <span>Model {anyModelName(models, row.model)}</span>}
-        {!row.working && row.status !== 'done' && <span className={STATUS_TONE[row.status] ?? 'text-muted-foreground'}>{row.status}</span>}
+        {!row.working && row.status !== 'done' && <span className={runTone(row.status)}>{runWord(row.status)}</span>}
         {row.working && <Seconds since={row.startedAt} />}
       </div>
     </div>

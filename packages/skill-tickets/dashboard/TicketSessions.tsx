@@ -1,5 +1,5 @@
 import { MessageSquare } from 'lucide-react'
-import { Button, List, Row, Tooltip, TooltipContent, TooltipTrigger, formatAge, type ModuleAgent } from '@openagt/dashboard/module'
+import { Button, List, Row, Tooltip, TooltipContent, TooltipTrigger, formatAge, runSaid, type ModuleAgent } from '@openagt/dashboard/module'
 import { holderAgent, planAgentFor, workAgentFor } from '../src/module.js'
 
 /** One kind of session on a ticket: the one that wrote its plan, or the one that worked it. */
@@ -45,7 +45,7 @@ export function TicketSessions({ sessions, onOpen }: { sessions: readonly Ticket
                 <span className="font-normal text-muted-foreground">{running ? words.running : words.ended}</span> {agent.title ?? agent.id}
               </>
             }
-            meta={<span className="tabular-nums">{`${running ? 'at work' : agent.status} · ${formatAge(agent.endedAt ?? agent.startedAt)}`}</span>}
+            meta={<span className="tabular-nums">{`${running ? runSaid(agent.status) : agent.status} · ${formatAge(agent.endedAt ?? agent.startedAt)}`}</span>}
             actions={
               <Tooltip>
                 <TooltipTrigger render={<Button variant="ghost" size="sm" onClick={() => onOpen(agent.id)} />}>

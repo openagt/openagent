@@ -1,6 +1,5 @@
 import type { ReactNode } from 'react'
-import { cn } from '../lib/utils.js'
-import { STATUS_DOT } from '../lib/status-tone.js'
+import { RunMark } from './RunMark.js'
 import { inPlace } from '../lib/in-place.js'
 
 // One part of the line under the Overview's title: how one thing stands, in a few words ("2 need
@@ -40,7 +39,7 @@ export function LinePart({ children, reading = false, note, live = false, href, 
     )
   const words = (
     <>
-      {live && <span aria-hidden className={cn('mr-1.5 inline-block size-1.5 rounded-full align-middle', STATUS_DOT['running'])} />}
+      {live && <RunMark status="running" className="mr-1.5 inline-block size-1.5 align-middle" />}
       {children}
     </>
   )

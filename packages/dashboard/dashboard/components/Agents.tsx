@@ -11,8 +11,7 @@ import { formatAge, formatDateTime } from '../lib/format-date.js'
 import { OnComputer } from './MachineMark.js'
 import { runName } from '../../src/client.js'
 import { awaitingName } from '../lib/agent-label.js'
-import { STATUS_DOT } from '../lib/status-tone.js'
-import { cn } from '../lib/utils.js'
+import { RunMark } from './RunMark.js'
 import { HostServicesContext, INERT_HOST_SERVICES } from '../lib/host-services.js'
 
 // The Overview's Agents card (#1139): the sessions working right now. Each row is the whole line,
@@ -100,7 +99,7 @@ function AgentRow({
     <Row
       leading={
         <span className="flex size-4 items-center justify-center" aria-hidden>
-          <span className={cn('size-1.5 rounded-full', STATUS_DOT[cloud === 'waiting' ? 'waiting' : 'running'])} />
+          <RunMark status={cloud === 'waiting' ? 'waiting' : 'running'} className="size-1.5" />
         </span>
       }
       title={

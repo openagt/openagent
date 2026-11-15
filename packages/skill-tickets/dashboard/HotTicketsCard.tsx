@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { ArrowUp, Bot, CirclePause, Clock, WifiOff, type LucideIcon } from 'lucide-react'
-import { Button, LinkActions, PageLink, Section, SentenceShape, Slot, cn, formatDateTime, inPlace, usePolled, useModuleHost, useOpenAgentDown, type ModuleCardProps, type ModuleProject, type ReadState } from '@openagt/dashboard/module'
+import { Button, LinkActions, PageLink, Section, SentenceShape, Slot, cn, formatDateTime, inPlace, runSaid, usePolled, useModuleHost, useOpenAgentDown, type ModuleCardProps, type ModuleProject, type ReadState } from '@openagt/dashboard/module'
 import { claimState, heldBack, holderAgent, hotLane, ticketLink, withHolder, type ClaimState, type HotLane } from '../src/module.js'
 import { holdingRun } from './lib/holding-run.js'
 import { listTickets } from './lib/list.js'
@@ -150,7 +150,7 @@ function HotList({ hot, errors, state, showProject, reload }: { hot: HotTicket[]
 function stateOf(hot: HotTicket): { Icon: LucideIcon; says: string; tone: string } {
   const holder = hot.ticket.lockedByAgent?.name ?? hot.ticket.lockedBy
   const by = holder ? `, claimed by ${holder}` : ''
-  if (hot.lane === 'working') return { Icon: Bot, says: `${hot.holder?.status === 'waiting' ? 'Its run waits on your answer' : 'Its run is at work'}${by}: open the run`, tone: 'text-success' }
+  if (hot.lane === 'working') return { Icon: Bot, says: `Its run ${hot.holder?.status === 'waiting' ? runSaid('waiting') : `is ${runSaid('running')}`}${by}: open the run`, tone: 'text-success' }
   if (hot.lane === 'offline') {
     const seen = hot.holder?.seenAt ? `, last seen ${formatDateTime(hot.holder.seenAt)}` : ''
     return { Icon: WifiOff, says: `${hot.holder?.machine ?? 'Its computer'} is offline${seen}: how its run stands is unknown${by}`, tone: 'text-muted-foreground' }

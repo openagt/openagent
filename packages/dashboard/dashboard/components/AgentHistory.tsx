@@ -18,7 +18,8 @@ import { formatRelative } from '../lib/format-date.js'
 import { updatePreferences, usePreferences } from '../lib/preferences.js'
 import { RECENTS_SORT_LABELS, sortRuns, type RecentsSort } from '../lib/recents-sort.js'
 import { useProjectLabel } from '../lib/project-labels.js'
-import { STATUS_DOT, STATUS_RING } from '../lib/status-tone.js'
+import { runWord } from '../lib/run-words.js'
+import { RunMark } from './RunMark.js'
 import { DriverLogo } from './driver-logos.js'
 import { modelName, useModels } from '../lib/models.js'
 import { PR_MARKS, type PrState } from '../lib/pr-marks.js'
@@ -735,15 +736,14 @@ function AgentHistoryRow({
   const titleClass = 'rail-title min-w-0 flex-1 truncate text-sm font-normal'
   // What the row says in a word, the one the status badge used to print: it names the circle, and
   // opens the sentence the row's hover says.
-  const word = parked ? 'waiting' : inCloud ? 'in cloud' : cloudWord ? cloudWord : savingNow ? 'saving…' : status === 'unknown' ? 'status unknown' : status
+  const word = parked ? runWord('waiting') : inCloud ? 'in cloud' : cloudWord ? runWord(cloudWord) : savingNow ? runWord('saving') : runWord(status)
   // A run whose computer does not answer: which computer, and when it was last seen.
   const offline = status === 'unknown' ? `${remoteLabel ?? 'Its computer'} offline${seenAt ? ` · last seen ${formatRelative(seenAt)}` : ''}` : undefined
   // The circle: filled while something is going on, a ring once nothing is, and the colour is the
-  // status vocabulary every list shares (`status-tone.ts`). Only a run that is working pulses — a
+  // state's in the table every place reads (`run-words.ts`). Only a run that is working pulses — a
   // run parked on you has been still for as long as you have not answered it (#785).
   const working = status === 'running' || inCloud || savingNow
-  const dotTone = savingNow ? STATUS_DOT['saving'] : parked ? STATUS_DOT['waiting'] : working ? STATUS_DOT['running'] : STATUS_DOT[status]
-  const ringTone = (cloudWord ? STATUS_RING[cloudWord] : STATUS_RING[status]) ?? STATUS_RING['done']
+  const marked = savingNow ? 'saving' : parked ? 'waiting' : working ? 'running' : (cloudWord ?? status)
   const prMark = pr?.state ? PR_MARKS[pr.state] : undefined
   const prSaid = pr ? `PR #${pr.number}${prMark ? ` ${prMark.word}` : ''}` : undefined
   // Work that never left the machine, in the Human Queue's words and icon, gray (his pick): files left
@@ -778,7 +778,7 @@ function AgentHistoryRow({
       {/* The circle stands where the status word stood, and carries that word for a reader who
           cannot see a colour. */}
       <span className="flex size-4 shrink-0 items-center justify-center">
-        <span role="img" aria-label={word} className={cn('size-2 rounded-full', dotTone ?? cn('border', ringTone), working && 'animate-pulse')} />
+        <RunMark status={marked} label={word} className={cn('size-2', working && 'animate-pulse')} />
       </span>
       <Tooltip>
         <TooltipTrigger render={<span className={titleClass} />}>

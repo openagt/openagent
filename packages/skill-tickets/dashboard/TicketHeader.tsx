@@ -11,6 +11,7 @@ import {
   cn,
   formatAge,
   formatDateTime,
+  runSaid,
   useAction,
   useModuleHost,
   useOpenAgentDown,
@@ -274,7 +275,5 @@ function TicketFacts({
 
 /** How the run holding the claim stands, as the facts say it after the run's name. */
 function standing(holderStatus: string): string {
-  const state = claimState(holderStatus)
-  if (state === 'working') return holderStatus === 'waiting' ? 'waits on your answer' : 'at work'
-  return state === 'offline' ? 'its computer is offline' : `run ${holderStatus}`
+  return claimState(holderStatus) === 'stale' ? `run ${holderStatus}` : runSaid(holderStatus)
 }

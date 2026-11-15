@@ -1,4 +1,4 @@
-import { FilterChips, List, Page, PersonMark, Row, RowShapes, STATUS_DOT, Section, STATUS_RING, Slot, cn, formatDateTime, formatDuration, personSaid, runName, useGitHostPeople, runsAgain, useModuleHost, usePolled, type ModuleAgent, type ModuleHostPerson, type ModulePageProps, type ModuleProject, type ReadState } from '@openagt/dashboard/module'
+import { FilterChips, List, Page, PersonMark, Row, RowShapes, RunMark, Section, Slot, formatDateTime, formatDuration, personSaid, runName, useGitHostPeople, runsAgain, useModuleHost, usePolled, type ModuleAgent, type ModuleHostPerson, type ModulePageProps, type ModuleProject, type ReadState } from '@openagt/dashboard/module'
 import type { RunCard } from '../src/run.js'
 
 /** How many runs each project lists: the command's own default page is 20; the page shows more. */
@@ -79,7 +79,7 @@ const wordOf = (status: string): string => (status === 'running' ? 'working' : s
 function StatusDot({ status }: { status: string }) {
   return (
     <span className="flex size-4 items-center justify-center">
-      <span aria-hidden className={cn('size-2 shrink-0 rounded-full', STATUS_DOT[status] ?? cn('border', STATUS_RING[status] ?? STATUS_RING['done']))} />
+      <RunMark status={status} className="size-2" />
     </span>
   )
 }

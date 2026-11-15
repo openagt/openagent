@@ -1,4 +1,4 @@
-import { PageLink, PartDescription, PersonMark, Section, SentenceShape, Slot, STATUS_DOT, STATUS_TONE, Tooltip, TooltipContent, TooltipTrigger, cn, formatAge, formatDateTime, personName, personSaid, useModuleHost, usePolled, type ModuleCardProps, type ModuleHostPerson } from '@openagt/dashboard/module'
+import { PageLink, PartDescription, PersonMark, RunMark, Section, SentenceShape, Slot, Tooltip, TooltipContent, TooltipTrigger, cn, formatAge, formatDateTime, personName, personSaid, runTone, useModuleHost, usePolled, type ModuleCardProps, type ModuleHostPerson } from '@openagt/dashboard/module'
 import { membersOf, peopleWithRuns, type Member, type PersonActivity } from '../src/people.js'
 
 // The Overview's Members card: who worked in the projects shown in the last 30 days, from `logs
@@ -81,8 +81,8 @@ export function MembersCard({ projects }: ModuleCardProps) {
                   </p>
                 </div>
                 {member.running > 0 ? (
-                  <span className={cn('flex shrink-0 items-center gap-1.5 text-xs', STATUS_TONE['running'])}>
-                    <span aria-hidden className={cn('size-1.5 rounded-full', STATUS_DOT['running'])} />
+                  <span className={cn('flex shrink-0 items-center gap-1.5 text-xs', runTone('running'))}>
+                    <RunMark status="running" className="size-1.5" />
                     {member.running === 1 ? 'working' : `${member.running} working`}
                   </span>
                 ) : (
