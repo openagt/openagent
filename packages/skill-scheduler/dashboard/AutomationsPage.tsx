@@ -272,7 +272,7 @@ export function AutomationsPage({ projects }: ModulePageProps) {
                                     {scheduled.description && <span className="text-muted-foreground"> {scheduled.description}</span>}
                                   </p>
                                   <div className="flex shrink-0 items-center gap-1 max-md:-ml-2">
-                                    <Button variant="ghost" size="sm" disabled={saving || down || cannotRun(scheduled) !== undefined} onClick={() => void startNow(id, row.project, scheduled.command)} aria-label={`Run ${title} now`}>
+                                    <Button variant="ghost" size="sm" disabled={saving || down || cannotRun(scheduled) !== undefined} onClick={() => void startNow(id, row.project, scheduled.command)} aria-label={`Run ${title} now`} className="max-md:h-11">
                                       {starting.includes(id) ? 'Starting…' : 'Run now'}
                                     </Button>
                                     <Button
@@ -285,6 +285,7 @@ export function AutomationsPage({ projects }: ModulePageProps) {
                                       disabled={saving || shown !== undefined || held}
                                       onClick={() => void open(id, row.project, scheduled)}
                                       aria-label={`Edit ${title}`}
+                                      className="max-md:h-11"
                                     >
                                       Edit
                                     </Button>
