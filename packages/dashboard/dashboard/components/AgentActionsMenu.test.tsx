@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest'
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 
 // The ⋮ menu holds the git host / folder / editor / Stop / Remove / Delete actions, so it pulls
 // their RPC + editor reads; stub them.
@@ -7,7 +7,7 @@ const onGitHostHome = vi.fn(async () => ({ url: 'https://github.com/o/r', name: 
 const onRepositoryOffer = vi.fn(async () => null as { repository: string; name: string } | null)
 const sendCreateRepository = vi.fn(async () => ({ ok: true, url: 'https://github.com/me/shop' }) as unknown)
 const sendOpenInApp = vi.fn(async () => ({ ok: true as const }))
-const sendStop = vi.fn(async () => {})
+const sendStop = vi.fn(async (): Promise<{ ok: true } | { ok: false; error: string }> => ({ ok: true }))
 const sendRemoveWorktree = vi.fn(async () => ({ ok: true as const }))
 const sendDeleteAgent = vi.fn(async () => ({ ok: true as const }))
 const sendRemoveProject = vi.fn(async (_projectId: string, _files: boolean) => ({ ok: true }) as unknown)
@@ -34,6 +34,7 @@ vi.mock('../lib/preferences.js', () => ({ usePreferences: () => prefs, updatePre
 vi.mock('../lib/editors.js', () => ({ useDetectedEditors: () => detectedEditors }))
 
 const { AgentActionsMenu } = await import('./AgentActionsMenu.js')
+const { useStop } = await import('../lib/use-stop.js')
 
 const openMenu = () => fireEvent.click(screen.getByRole('button', { name: /session actions/i }))
 
@@ -175,6 +176,59 @@ describe('the live-session action: Stop', () => {
     openMenu()
     await waitFor(() => expect(screen.getByText('Open in editor')).toBeTruthy())
     expect(screen.queryByText('Stop agent')).toBeNull()
+  })
+
+  test('a landed Stop reads "Stopping…" until the run is no longer live, and a continued run is stoppable again', async () => {
+    const ended = [{ kind: 'session-update', sessionId: 'working' }, { kind: 'end', ok: false, stopped: true }] as never
+    const continued = [...(ended as unknown as object[]), { kind: 'session', driver: 'claude-code' }] as never
+    const ui = (events: never) => <AgentActionsMenu projectId="p1" agentId="run-menu-stop" events={events} onDeleted={vi.fn()} />
+    const { rerender } = render(ui(liveEvents))
+    openMenu()
+    fireEvent.click(await screen.findByRole('menuitem', { name: 'Stop agent' }))
+    await waitFor(() => expect(sendStop).toHaveBeenCalledWith('p1', 'run-menu-stop'))
+    openMenu()
+    expect((await screen.findByRole('menuitem', { name: 'Stopping…' })).getAttribute('aria-disabled')).toBe('true')
+    rerender(ui(ended))
+    rerender(ui(continued))
+    expect(await screen.findByRole('menuitem', { name: 'Stop agent' })).toBeTruthy()
+  })
+
+  test('another press of the menu is not a Stop: Stop still reads as Stop while a folder opens', async () => {
+    let opened!: (value: { ok: true }) => void
+    sendOpenInApp.mockReturnValueOnce(new Promise(resolve => (opened = resolve)))
+    render(<AgentActionsMenu projectId="p1" agentId="run-menu-open" events={liveEvents} onDeleted={vi.fn()} />)
+    openMenu()
+    fireEvent.click(await screen.findByText("Open session's folder"))
+    openMenu()
+    expect(await screen.findByRole('menuitem', { name: 'Stop agent' })).toBeTruthy()
+    await act(async () => opened({ ok: true }))
+  })
+
+  test('a Stop that reached nothing says why, and holds nothing', async () => {
+    sendStop.mockResolvedValueOnce({ ok: false, error: 'This run is on another-box.' })
+    render(<AgentActionsMenu projectId="p1" agentId="run-menu-refused" events={liveEvents} onDeleted={vi.fn()} />)
+    openMenu()
+    fireEvent.click(await screen.findByRole('menuitem', { name: 'Stop agent' }))
+    openMenu()
+    expect(await screen.findByText('This run is on another-box.')).toBeTruthy()
+    expect(screen.getByRole('menuitem', { name: 'Stop agent' }).getAttribute('aria-disabled')).toBeNull()
+  })
+
+  test("the menu's Stop and the message box's are one press: pressed in the menu, the box's reads Stopping too", async () => {
+    function BoxStop() {
+      const { stopping } = useStop('p1', 'run-menu-one', true)
+      return <span>{stopping ? 'box: stopping' : 'box: stop'}</span>
+    }
+    render(
+      <>
+        <AgentActionsMenu projectId="p1" agentId="run-menu-one" events={liveEvents} onDeleted={vi.fn()} />
+        <BoxStop />
+      </>,
+    )
+    expect(screen.getByText('box: stop')).toBeTruthy()
+    openMenu()
+    fireEvent.click(await screen.findByRole('menuitem', { name: 'Stop agent' }))
+    expect(await screen.findByText('box: stopping')).toBeTruthy()
   })
 
   test('while OpenAgent is not answering, Stop is off and sends nothing', async () => {

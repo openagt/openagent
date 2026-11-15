@@ -111,7 +111,7 @@ test('sendStop signals the pid the run\'s card names, and writes nothing', async
   const onSignal = (): void => signalled()
   process.on('SIGINT', onSignal)
   try {
-    await sendStop(ctx.projectId, ctx.agentId)
+    assert.deepEqual(await sendStop(ctx.projectId, ctx.agentId), { ok: true })
     await caught
     assert.deepEqual(await entries(ctx.agentInbox), [], 'a stop is not an inbox line')
     assert.deepEqual(await entries(ctx.rootInbox), [])
@@ -122,28 +122,35 @@ test('sendStop signals the pid the run\'s card names, and writes nothing', async
   }
 })
 
-test('sendStop leaves an agent alone whose process is not this machine\'s, or is gone', async () => {
-  const elsewhere = await projectWithWorktreeAgent({ pid: process.pid, host: 'another-box' })
+test('sendStop leaves an agent alone that has ended, whose process is not this machine\'s, or is gone, and says why', async () => {
+  const onSignal = (): void => assert.fail('signalled a run that was not this machine\'s live one')
+  process.on('SIGINT', onSignal)
   try {
-    const onSignal = (): void => assert.fail('signalled a pid on another host')
-    process.on('SIGINT', onSignal)
+    const ended = await projectWithWorktreeAgent({ pid: process.pid, host: hostname() }, { status: 'done' })
     try {
-      await sendStop(elsewhere.projectId, elsewhere.agentId)
-      await new Promise(r => setTimeout(r, 50))
+      assert.deepEqual(await sendStop(ended.projectId, ended.agentId), { ok: false, error: 'It had already ended.' })
     } finally {
-      process.off('SIGINT', onSignal)
+      ended.restore()
+      await rm(ended.dir, { recursive: true, force: true })
     }
+    const elsewhere = await projectWithWorktreeAgent({ pid: process.pid, host: 'another-box' })
+    try {
+      assert.deepEqual(await sendStop(elsewhere.projectId, elsewhere.agentId), { ok: false, error: 'This run is on another-box.' })
+    } finally {
+      elsewhere.restore()
+      await rm(elsewhere.dir, { recursive: true, force: true })
+    }
+    // A dead pid on this host: nothing to signal, and nothing thrown.
+    const dead = await projectWithWorktreeAgent({ pid: 2 ** 22 - 1, host: hostname() })
+    try {
+      assert.deepEqual(await sendStop(dead.projectId, dead.agentId), { ok: false, error: 'Its process had already ended.' })
+    } finally {
+      dead.restore()
+      await rm(dead.dir, { recursive: true, force: true })
+    }
+    await new Promise(r => setTimeout(r, 50))
   } finally {
-    elsewhere.restore()
-    await rm(elsewhere.dir, { recursive: true, force: true })
-  }
-  // A dead pid on this host: nothing to signal, and nothing thrown.
-  const dead = await projectWithWorktreeAgent({ pid: 2 ** 22 - 1, host: hostname() })
-  try {
-    await sendStop(dead.projectId, dead.agentId)
-  } finally {
-    dead.restore()
-    await rm(dead.dir, { recursive: true, force: true })
+    process.off('SIGINT', onSignal)
   }
 })
 
@@ -159,13 +166,15 @@ test('sendStop for a run that never writes its card waits as long as a start may
   try {
     const pressed = Date.now()
     let returnedAfter: number | undefined
-    void sendStop(ctx.projectId, '2026-07-19T11-00-00-000Z').then(() => (returnedAfter = Date.now() - pressed))
+    let answered: unknown
+    void sendStop(ctx.projectId, '2026-07-19T11-00-00-000Z').then(said => ((answered = said), (returnedAfter = Date.now() - pressed)))
     while (returnedAfter === undefined && Date.now() - pressed < STARTING_AT_MOST_MS + 5000) {
       await pause(20)
       mock.timers.tick(250)
     }
     assert.ok(returnedAfter !== undefined, 'the Stop returned')
     assert.ok(returnedAfter >= STARTING_AT_MOST_MS, `returned after ${returnedAfter} ms, before a start may have ended`)
+    assert.deepEqual(answered, { ok: false, error: 'It has not started yet.' })
   } finally {
     mock.timers.reset()
     process.off('SIGINT', onSignal)
@@ -575,8 +584,7 @@ test('a machine that refuses what would change a run, and says why, is answered 
   try {
     assert.deepEqual(await sendMessage(ctx.projectId, 'go on', ctx.agentId), { ok: false, error: WHY })
     assert.deepEqual(await sendOpenPullRequest(ctx.projectId, ctx.agentId), { ok: false, error: WHY })
-    // A stop has no words to answer with: it is not done, and says nothing.
-    assert.equal(await sendStop(ctx.projectId, ctx.agentId), undefined)
+    assert.deepEqual(await sendStop(ctx.projectId, ctx.agentId), { ok: false, error: WHY })
     await assert.rejects(stat(join(ctx.dir, 'resumed.txt')), { code: 'ENOENT' })
     await assert.rejects(stat(ctx.agentInbox), { code: 'ENOENT' })
   } finally {

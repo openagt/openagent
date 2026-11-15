@@ -3,8 +3,9 @@ import type { GitHostHome } from '../../src/index.js'
 import { useContext, useEffect, useRef, useState, type MutableRefObject, type ReactNode } from 'react'
 import { Loader2, Square } from 'lucide-react'
 import { Composer, type ComposerHandle } from './Composer.js'
-import { sendMessage, sendStop } from '../rpc/control.js'
+import { sendMessage } from '../rpc/control.js'
 import { useAction } from '../lib/use-action.js'
+import { useStop } from '../lib/use-stop.js'
 import { DaemonDown } from '../lib/use-daemon-health.js'
 import { Button } from './ui/button.js'
 import { Tooltip, TooltipTrigger, TooltipContent } from './ui/tooltip.js'
@@ -145,18 +146,9 @@ export function AgentComposer({
   // A touch screen has no keys to name: its pointer is a finger. A phone's box has no room for them either.
   const touch = typeof matchMedia === 'function' && matchMedia('(pointer: coarse)').matches
   const { busy, error, run } = useAction()
-  // The slot's Stop (#1455), its own action so a message send's busy beat cannot read as
-  // "stopping". A landed Stop stays "Stopping…" until the end event flips `live`, so it cannot
-  // be re-fired. Released the moment `live` drops, not only on an agent switch: a message continues
-  // the SAME agent (#762), so a latch keyed to the agent id alone re-engaged on the continued
-  // session and froze its Stop as a disabled spinner.
-  const { busy: stopBusy, error: stopError, run: runStop } = useAction()
-  const [stopRequested, setStopRequested] = useState(false)
-  useEffect(() => setStopRequested(false), [agentId])
-  useEffect(() => {
-    if (!live) setStopRequested(false)
-  }, [live])
-  const stopping = stopBusy || (stopRequested && live)
+  // The slot's Stop (#1455), its own press so a message send's busy beat cannot read as
+  // "stopping", and the session menu's Stop the same press: one per run (`use-stop.ts`).
+  const { stopping, error: stopError, stop: stopSession } = useStop(projectId, agentId, live)
   // OpenAgent is not answering: Stop cannot reach the agent, by the button or by Esc.
   const down = useContext(DaemonDown)
   // The "Auto" menu, as the launcher's (his pick): how far the run takes its work. A pick goes with
@@ -202,11 +194,6 @@ export function AgentComposer({
     composerRef.current?.focus()
   }
 
-  const stopSession = () =>
-    void runStop(() => sendStop(projectId, agentId).then(() => true), 'Could not stop the agent.').then(result => {
-      if (result) setStopRequested(true)
-    })
-
   // Esc stops the agent, as in Claude Code, also typed in the box, unless it closes something open
   // first: a menu, a dialog, the box's own suggestions. Read before anything on the page takes the
   // key, while what it closes still reads open. An Esc straight after the one that closed something
@@ -233,10 +220,11 @@ export function AgentComposer({
             type="button"
             size="icon-sm"
             onClick={stopSession}
-            disabled={stopping || down}
+            loading={stopping}
+            disabled={down}
             aria-label="Stop agent"
             // Stopping draws its spinner in full; off while OpenAgent is not answering, Stop is dimmed as any button off.
-            className={stopping ? 'shrink-0 disabled:opacity-100' : 'shrink-0'}
+            className={stopping ? 'shrink-0 opacity-100' : 'shrink-0'}
           />
         }
       >

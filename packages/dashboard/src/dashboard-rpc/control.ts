@@ -46,20 +46,25 @@ function agentLockKey(cwd: string, agentId: string): string {
  * this machine's and alive. The run's tool asks its agent to end the turn where it is, as Esc does
  * in Claude Code; a message continues it. The card is the file the dashboard shows the run from, and its pid is
  * whoever runs the agent; OpenAgent names no tool. A run still starting is stopped once its card
- * names its pid. Nothing else: a run without a live pid here has nothing to stop.
+ * names its pid. Nothing else: a run without a live pid here has nothing to stop, and is answered why.
  */
-export async function sendStop(projectId: string, agentId?: string): Promise<void> {
-  return relayOr(agentId, 'sendStop', [projectId, agentId], async () => {
+export async function sendStop(projectId: string, agentId?: string): Promise<SteerResult> {
+  return relayOr(agentId, 'sendStop', [projectId, agentId], async (): Promise<SteerResult> => {
     const cwd = await resolveProjectPath(projectId)
-    if (!cwd || !agentId) return
+    if (!cwd || !agentId) return { ok: false, error: 'unknown session' }
     const meta = await cardOnceUp(cwd, agentId)
-    if (!meta || meta.status !== 'running' || meta.pid === undefined || meta.host !== hostname() || !isPidAlive(meta.pid)) return
+    if (!meta || (meta.status === 'running' && meta.pid === undefined)) return { ok: false, error: 'It has not started yet.' }
+    if (meta.status !== 'running') return { ok: false, error: 'It had already ended.' }
+    if (meta.host !== hostname()) return { ok: false, error: `This run is on ${meta.host ?? 'another computer'}.` }
+    if (meta.pid === undefined || !isPidAlive(meta.pid)) return { ok: false, error: 'Its process had already ended.' }
     try {
       process.kill(meta.pid, 'SIGINT')
     } catch {
       // Gone between the probe and the signal.
+      return { ok: false, error: 'Its process had already ended.' }
     }
-  }, undefined)
+    return { ok: true }
+  }, { ok: false, error: 'could not reach the machine' })
 }
 
 /**
