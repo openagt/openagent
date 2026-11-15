@@ -6,6 +6,8 @@ import { sendChoice, sendMessage } from '../rpc/control.js'
 import { useAction } from '../lib/use-action.js'
 import { DaemonDown } from '../lib/use-daemon-health.js'
 import { cn } from '../lib/utils.js'
+import { formatDuration } from '../lib/format-date.js'
+import { StateCell } from './ui/state.js'
 import { RadioGroup } from './ui/radio-group.js'
 import { Button } from './ui/button.js'
 import { answerPrompt, skipPrompt } from '../lib/answered-question.js'
@@ -45,7 +47,7 @@ function Choices({ multi, labelledBy, picked, onPick, disabled, children }: { mu
 // A choice's row: the radio group's radio, or a box the row toggles. Rows are 40 high and parted by
 // nothing but their padding; none is filled but the one under the pointer.
 function Choice({ multi, value, on, disabled, onPick, children }: { multi: boolean | undefined; value: string | typeof OTHER; on: boolean; disabled: boolean; onPick: () => void; children: ReactNode }) {
-  const row = 'group/choice focus-ring flex min-h-10 w-full items-start gap-3 rounded-md px-3 py-2 text-left transition-colors enabled:hover:bg-accent enabled:active:bg-foreground/10 disabled:opacity-60'
+  const row = cn('group/choice focus-ring flex min-h-10 w-full items-start gap-3 rounded-md px-3 py-2 text-left transition-colors enabled:hover:bg-accent enabled:active:bg-foreground/10 disabled:opacity-60', on && 'bg-accent')
   return multi ? (
     <button type="button" role="checkbox" aria-checked={on} disabled={disabled} onClick={onPick} className={row}>
       {children}
@@ -59,7 +61,7 @@ function Choice({ multi, value, on, disabled, onPick, children }: { multi: boole
 
 // The question an agent's turn ended on, in the chat under what the agent said, the way Claude
 // Code on the web asks: the one card in the chat, its title, one row per option (a ring, its
-// label, its description), an "Other" row to answer in one's own words, and Skip / Submit. The
+// label, its description), an "Other" row to answer in one's own words, and Skip / Answer. The
 // number keys pick, as before, with no number drawn. An option's pick goes over the control RPC,
 // which hands the chosen labels to the agent; "Other" and Skip go as a message in the same
 // sentence's shape, so the chat draws every answer, a skip too, as the question and what was said
@@ -76,10 +78,13 @@ export function QuestionPanel({
   onSaid,
   focusNext,
   send,
+  askedAt,
 }: {
   projectId: string
   agentId: string
   choice: ChoiceRequest
+  /** When the agent asked it: how long it has waited, on the card's first line. */
+  askedAt?: string | undefined
   /** The one question the keys answer: the number keys pick, ⌘ or Ctrl + Enter submits. */
   active?: boolean
   /** The question the page opened on: its pick takes the focus as it shows, where the screen is no phone's. */
@@ -194,8 +199,14 @@ export function QuestionPanel({
 
   if (sent) return null
   return (
-    <section ref={card} role="region" aria-label={choice.title} className="flex w-full flex-col gap-1 rounded-lg border border-hairline bg-card p-1 font-sans text-sm">
-      <h2 id={titleId} className="px-3 pt-1 pb-1 font-medium">{choice.title}</h2>
+    <section ref={card} role="region" aria-label={choice.title} className="flex w-full flex-col gap-1 rounded-box bg-card p-1.5 font-sans text-sm shadow-sm ring-1 ring-warning/30">
+      <div className="flex flex-col gap-0.5 px-3 pt-2 pb-1">
+        <span className="flex items-center gap-2 text-xs font-semibold text-warning">
+          <StateCell state="waiting" className="size-3" />
+          Waiting for your answer{askedAt !== undefined && ` · ${since(askedAt)}`}
+        </span>
+        <h2 id={titleId} className="text-base font-semibold">{choice.title}</h2>
+      </div>
       <Choices multi={choice.multi} labelledBy={titleId} picked={picked} onPick={setPicked} disabled={busy}>
         {choice.options.map(o => {
           const on = choice.multi ? checked.has(o.id) : picked === o.id
@@ -204,10 +215,10 @@ export function QuestionPanel({
               <Choice multi={choice.multi} value={o.id} on={on} disabled={busy} onPick={() => pick(o.id)}>
                 <Mark on={on} multi={choice.multi} />
                 <span className="flex min-w-0 flex-1 flex-col gap-0.5 py-0.5">
-                  <span>
+                  <span className="font-medium">
                     {o.label}
                     {/* A box of its own, which a screen reader reads as a word apart from the label. */}
-                    {o.id === choice.recommended && <span className="ml-2 inline-block text-muted-foreground">Recommended</span>}
+                    {o.id === choice.recommended && <span className="ml-2 inline-block text-xs font-normal text-muted-foreground">Recommended</span>}
                   </span>
                   {o.detail && <span className="text-muted-foreground">{o.detail}</span>}
                 </span>
@@ -219,7 +230,7 @@ export function QuestionPanel({
           <li className="flex flex-col">
             <Choice multi={choice.multi} value={OTHER} on={otherPicked} disabled={busy} onPick={pickOther}>
               <Mark on={otherPicked} multi={choice.multi} />
-              <span className="min-w-0 flex-1 py-0.5">Other</span>
+              <span className="min-w-0 flex-1 py-0.5 font-medium">Other</span>
             </Choice>
             {otherPicked && (
               <input
@@ -239,9 +250,9 @@ export function QuestionPanel({
           </li>
         )}
       </Choices>
-      <div className="flex items-center gap-2 px-2 pt-1 pb-2">
+      <div className="flex items-center gap-2 px-2 pt-1 pb-1.5">
         {/* One line in every state, so the buttons never move: what went wrong, or that it is on its way. */}
-        <span role={error ? 'alert' : busy ? 'status' : undefined} className={cn('min-w-0 flex-1 truncate text-xs', error ? 'text-danger' : 'text-muted-foreground')}>
+        <span role={error ? 'alert' : busy ? 'status' : undefined} className={cn('min-w-0 flex-1 truncate pl-1 text-xs', error ? 'text-danger' : 'text-muted-foreground')}>
           {error ?? (busy ? 'Sending your answer…' : '')}
         </span>
         {!send && (
@@ -250,7 +261,7 @@ export function QuestionPanel({
           </Button>
         )}
         <Button disabled={busy || down || !ready} onClick={submit}>
-          Submit
+          Answer
           {active && (
             // The message box's rule for naming keys: none on a touch screen, none at a phone's width.
             <span className="gap-0.5 pointer-coarse:hidden max-md:hidden md:not-pointer-coarse:flex" aria-hidden>
@@ -262,4 +273,10 @@ export function QuestionPanel({
       </div>
     </section>
   )
+}
+
+/** How long ago a question was asked, in a word: "now", "2m", "1h". */
+function since(at: string): string {
+  const ms = Date.now() - Date.parse(at)
+  return Number.isNaN(ms) || ms < 60_000 ? 'now' : formatDuration(ms)
 }

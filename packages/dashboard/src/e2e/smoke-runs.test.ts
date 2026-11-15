@@ -20,7 +20,7 @@ test("a run's question is answered on its page, and the run goes on with the ans
     await start(page, 'ask about the footer colour')
     const question = page.getByRole('region', { name: 'Which way?' })
     await question.getByRole('radio', { name: /Right/ }).click()
-    await question.getByRole('button', { name: 'Submit' }).click()
+    await question.getByRole('button', { name: 'Answer' }).click()
     await page.getByText(/The user chose: Right/).waitFor()
     await question.waitFor({ state: 'detached' })
   })
