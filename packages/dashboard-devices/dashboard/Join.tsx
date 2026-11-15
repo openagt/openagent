@@ -1,7 +1,7 @@
 import { useId, useState, type ClipboardEvent, type FormEvent } from 'react'
-import { Button, Checkbox, Input, SettingsFoot, useOpenAgentDown } from '@openagt/dashboard/module'
+import { Button, Checkbox, Input, useOpenAgentDown } from '@openagt/dashboard/module'
 import { hasDoor } from './model.js'
-import { Problem, useFlowHold } from './parts.js'
+import { Presses, Problem, useFlowHold } from './parts.js'
 import { sharedReach } from './servers.js'
 import type { Devices } from './use-devices.js'
 
@@ -135,18 +135,16 @@ export function Join({ d, onClose, onJoined }: { d: Devices; onClose: () => void
         </label>
       )}
       {error !== undefined && <Problem>{error}</Problem>}
-      <SettingsFoot>
-        <div className="flex justify-end gap-2 max-md:[&_button]:h-11">
-          <Button type="button" variant="ghost" onClick={() => leave(onClose)}>
-            {error?.startsWith('Joined.') ? 'Done' : 'Cancel'}
+      <Presses>
+        <Button type="button" variant="ghost" onClick={() => leave(onClose)}>
+          {error?.startsWith('Joined.') ? 'Done' : 'Cancel'}
+        </Button>
+        {!error?.startsWith('Joined.') && (
+          <Button type="submit" form={formId} loading={joining} disabled={link === undefined || down}>
+            Join
           </Button>
-          {!error?.startsWith('Joined.') && (
-            <Button type="submit" form={formId} loading={joining} disabled={link === undefined || down}>
-              Join
-            </Button>
-          )}
-        </div>
-      </SettingsFoot>
+        )}
+      </Presses>
     </form>
   )
 }

@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { Monitor, Ticket } from 'lucide-react'
-import { Button, List, RadioGroup, Row, SettingsFoot, buttonVariants, useOpenAgentDown, type ModuleMachine } from '@openagt/dashboard/module'
+import { Button, List, RadioGroup, Row, buttonVariants, useOpenAgentDown, type ModuleMachine } from '@openagt/dashboard/module'
 import { addDevice, findComputers, readPersonThere, setSwitch, type Answer, type FoundComputer, type Given } from './devices.js'
 import { askLink, installDone } from './servers.js'
 import { CodeCard, Joined, NoCodeYet, PhoneCode, RanOut, Waiting, clock, useCode } from './codes.js'
@@ -8,7 +8,7 @@ import { ConnectServer } from './ConnectServer.js'
 import { Join } from './Join.js'
 import { Connecting } from './Pairing.js'
 import { computerName, hasDoor, isComputer } from './model.js'
-import { Choice, Problem, hostOf } from './parts.js'
+import { Choice, Presses, Problem, hostOf } from './parts.js'
 import { WARNING } from './ThisComputer.js'
 import type { Devices } from './use-devices.js'
 
@@ -99,16 +99,14 @@ function Choose({ kinds, onPicked, onClose }: { kinds: typeof KINDS; onPicked: (
           </div>
         ))}
       </RadioGroup>
-      <SettingsFoot>
-        <div className="flex justify-end gap-2 max-md:[&_button]:h-11">
-          <Button variant="ghost" onClick={onClose}>
-            Cancel
-          </Button>
-          <Button onClick={() => onPicked(picked)}>
-            Continue
-          </Button>
-        </div>
-      </SettingsFoot>
+      <Presses>
+        <Button variant="ghost" onClick={onClose}>
+          Cancel
+        </Button>
+        <Button onClick={() => onPicked(picked)}>
+          Continue
+        </Button>
+      </Presses>
     </div>
   )
 }
@@ -186,16 +184,14 @@ function AddPhone({ d, onClose }: { d: Devices; onClose: () => void }) {
             <Choice value="" title="Only on this Wi-Fi" words="It opens this computer directly. No lock on the link: someone on the same Wi-Fi could listen. Use it at home." />
           )}
         </RadioGroup>
-        <SettingsFoot>
-          <div className="flex justify-end gap-2 max-md:[&_button]:h-11">
-            <Button variant="ghost" onClick={onClose}>
-              Back
-            </Button>
-            <Button onClick={() => setWhere(picked)}>
-              Show the code
-            </Button>
-          </div>
-        </SettingsFoot>
+        <Presses>
+          <Button variant="ghost" onClick={onClose}>
+            Back
+          </Button>
+          <Button onClick={() => setWhere(picked)}>
+            Show the code
+          </Button>
+        </Presses>
       </div>
     )
 
@@ -204,18 +200,16 @@ function AddPhone({ d, onClose }: { d: Devices; onClose: () => void }) {
     return (
       <div className="space-y-4 text-sm">
         <p>{status.problem ?? 'The door on your Tailscale network is opening. One moment.'}</p>
-        <SettingsFoot>
-          <div className="flex justify-end gap-2 max-md:[&_button]:h-11">
-            <Button variant="ghost" onClick={onClose}>
-              Cancel
-            </Button>
-            {status.fixAt !== undefined && (
-              <a href={status.fixAt} target="_blank" rel="noreferrer" className={buttonVariants()}>
-                Turn on Serve
-              </a>
-            )}
-          </div>
-        </SettingsFoot>
+        <Presses>
+          <Button variant="ghost" onClick={onClose}>
+            Cancel
+          </Button>
+          {status.fixAt !== undefined && (
+            <a href={status.fixAt} target="_blank" rel="noreferrer" className={buttonVariants()}>
+              Turn on Serve
+            </a>
+          )}
+        </Presses>
       </div>
     )
 
@@ -226,29 +220,27 @@ function AddPhone({ d, onClose }: { d: Devices; onClose: () => void }) {
         <p>{status?.on ? 'The door on this Wi-Fi is opening. One moment.' : 'Turning this on opens this computer to the phones on this Wi-Fi.'}</p>
         {!status?.on && <p className="text-xs text-muted-foreground">{WARNING}</p>}
         {error !== undefined && <Problem>{error}</Problem>}
-        <SettingsFoot>
-          <div className="flex justify-end gap-2 max-md:[&_button]:h-11">
-            <Button variant="ghost" onClick={onClose}>
-              Cancel
+        <Presses>
+          <Button variant="ghost" onClick={onClose}>
+            Cancel
+          </Button>
+          {!status?.on && (
+            <Button
+              loading={turning}
+              disabled={!status || down}
+              onClick={() => {
+                setTurning(true)
+                void setSwitch(host, true).then(async answer => {
+                  if (!answer.ok) setError(answer.error)
+                  await d.reloadDoor().catch(() => {})
+                  setTurning(false)
+                })
+              }}
+            >
+              Turn on and show the code
             </Button>
-            {!status?.on && (
-              <Button
-                loading={turning}
-                disabled={!status || down}
-                onClick={() => {
-                  setTurning(true)
-                  void setSwitch(host, true).then(async answer => {
-                    if (!answer.ok) setError(answer.error)
-                    await d.reloadDoor().catch(() => {})
-                    setTurning(false)
-                  })
-                }}
-              >
-                Turn on and show the code
-              </Button>
-            )}
-          </div>
-        </SettingsFoot>
+          )}
+        </Presses>
       </div>
     )
 
@@ -344,13 +336,11 @@ function AddComputer({ d, onGive, onClose }: { d: Devices; /** Give a computer s
         </Button>
       </div>
       {/* Its way out, where every other way of adding keeps one: the dialog it was had only its ×. */}
-      <SettingsFoot>
-        <div className="flex justify-end gap-2 max-md:[&_button]:h-11">
-          <Button variant="ghost" onClick={onClose}>
-            Cancel
-          </Button>
-        </div>
-      </SettingsFoot>
+      <Presses>
+        <Button variant="ghost" onClick={onClose}>
+          Cancel
+        </Button>
+      </Presses>
     </div>
   )
 }
@@ -428,18 +418,16 @@ export function GiveCode({ d, server, onClose }: { d: Devices; server: ModuleMac
           )}
         </>
       )}
-      <SettingsFoot>
-        <div className="flex justify-end gap-2 max-md:[&_button]:h-11">
-          <Button variant={done ? 'default' : 'ghost'} onClick={onClose}>
-            {done ? 'Done' : 'Cancel'}
+      <Presses>
+        <Button variant={done ? 'default' : 'ghost'} onClick={onClose}>
+          {done ? 'Done' : 'Cancel'}
+        </Button>
+        {!asking && !done && (expired || error !== undefined || !code) && joined === undefined && (
+          <Button variant="secondary" disabled={down} onClick={() => void again()}>
+            New code
           </Button>
-          {!asking && !done && (expired || error !== undefined || !code) && joined === undefined && (
-            <Button variant="secondary" disabled={down} onClick={() => void again()}>
-              New code
-            </Button>
-          )}
-        </div>
-      </SettingsFoot>
+        )}
+      </Presses>
     </div>
   )
 }

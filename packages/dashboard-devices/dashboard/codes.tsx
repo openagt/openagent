@@ -1,8 +1,8 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { Check, CircleCheck, Copy, ExternalLink, Loader2, RotateCw } from 'lucide-react'
-import { Button, Dialog, Input, QrCode, SettingsFoot, Skeleton, Slot, useOpenAgentDown } from '@openagt/dashboard/module'
+import { Button, Dialog, Input, QrCode, Skeleton, Slot, useOpenAgentDown } from '@openagt/dashboard/module'
 import { failed, type Answer, type Given } from './devices.js'
-import { CodeStrip, LinkPress, Problem } from './parts.js'
+import { CodeStrip, LinkPress, Presses, PressRow, Problem } from './parts.js'
 
 // A code a new device gets in with, the ways it is shown: as a QR code a phone's camera opens, and
 // as where and a code typed on another computer. It is asked for as it is shown, works once, and
@@ -278,22 +278,20 @@ export function PhoneCode({
         </div>
       )}
       {/* Cancel before the other press; once joined, Done is the press the page ends on, last. */}
-      <SettingsFoot>
-        <div className="flex justify-end gap-2 max-md:[&_button]:h-11">
-          {joined === undefined && (
-            <Button variant="ghost" onClick={onClose}>
-              Cancel
-            </Button>
-          )}
-          {!asking && (joined !== undefined || expired || error !== undefined || !code) && (
-            <Button variant="secondary" disabled={down} onClick={() => void again()}>
-              <RotateCw className="size-4" aria-hidden />
-              {joined !== undefined ? 'Add another' : 'New code'}
-            </Button>
-          )}
-          {joined !== undefined && <Button onClick={onClose}>Done</Button>}
-        </div>
-      </SettingsFoot>
+      <Presses>
+        {joined === undefined && (
+          <Button variant="ghost" onClick={onClose}>
+            Cancel
+          </Button>
+        )}
+        {!asking && (joined !== undefined || expired || error !== undefined || !code) && (
+          <Button variant="secondary" disabled={down} onClick={() => void again()}>
+            <RotateCw className="size-4" aria-hidden />
+            {joined !== undefined ? 'Add another' : 'New code'}
+          </Button>
+        )}
+        {joined !== undefined && <Button onClick={onClose}>Done</Button>}
+      </Presses>
     </div>
   )
 }
@@ -368,14 +366,14 @@ export function WhoAreYou({ title, naming, onType, onConfirm, onClose }: { title
           {naming.typed.trim() !== '' && name === undefined && <p className="text-xs text-danger">{NOT_A_NAME}</p>}
         </div>
         {naming.error !== undefined && <Problem>{naming.error}</Problem>}
-        <div className="flex justify-end gap-2 max-md:[&_button]:h-11">
+        <PressRow>
           <Button variant="ghost" type="button" onClick={onClose}>
             Cancel
           </Button>
           <Button type="submit" loading={naming.busy} disabled={name === undefined || down}>
             Continue
           </Button>
-        </div>
+        </PressRow>
       </form>
     </Dialog>
   )
@@ -487,7 +485,7 @@ export function Invite({
             <p role="timer" className="text-xs text-muted-foreground">{`Works once, for ${clock(left)} more.`}</p>
           </>
         )}
-        <div className="flex justify-end gap-2 max-md:[&_button]:h-11">
+        <PressRow>
           {person !== undefined && !asking && (joined !== undefined || expired || error !== undefined) && (
             <Button variant="secondary" disabled={down} onClick={() => void again(person)}>
               <RotateCw className="size-4" aria-hidden />
@@ -498,7 +496,7 @@ export function Invite({
           <Button variant={person === undefined || name !== person ? 'secondary' : 'default'} onClick={onClose}>
             Done
           </Button>
-        </div>
+        </PressRow>
       </div>
     </Dialog>
   )

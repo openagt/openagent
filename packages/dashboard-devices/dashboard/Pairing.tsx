@@ -1,9 +1,9 @@
 import { useEffect, useRef, useState } from 'react'
 import { Laptop, Loader2 } from 'lucide-react'
-import { Button, Checkbox, Dialog, SettingsFoot, useModuleHost, useOpenAgentDown } from '@openagt/dashboard/module'
+import { Button, Checkbox, Dialog, useModuleHost, useOpenAgentDown } from '@openagt/dashboard/module'
 import { Joined, Waiting } from './codes.js'
 import { addDevice, answerAsk, askComputer, cancelAsk, hearAnswer, loadAsks, type AskHere, type AskedThere, type FoundComputer } from './devices.js'
-import { Problem } from './parts.js'
+import { Presses, PressRow, Problem } from './parts.js'
 import type { Devices } from './use-devices.js'
 
 // Pairing on this Wi-Fi, both ends. Here: Connect was pressed on a computer found on the Wi-Fi,
@@ -122,26 +122,24 @@ export function Connecting({ d, computer, canBoth, onBack, onClose }: { d: Devic
       ) : (
         <Problem>{phase.error}</Problem>
       )}
-      <SettingsFoot>
-        <div className="flex justify-end gap-2 max-md:[&_button]:h-11">
-          {phase.at === 'done' ? (
-            <Button onClick={onClose}>
-              Done
+      <Presses>
+        {phase.at === 'done' ? (
+          <Button onClick={onClose}>
+            Done
+          </Button>
+        ) : (
+          <>
+            <Button variant="ghost" disabled={phase.at === 'saving'} onClick={onBack}>
+              {phase.at === 'waiting' || phase.at === 'asking' ? 'Cancel' : 'Back'}
             </Button>
-          ) : (
-            <>
-              <Button variant="ghost" disabled={phase.at === 'saving'} onClick={onBack}>
-                {phase.at === 'waiting' || phase.at === 'asking' ? 'Cancel' : 'Back'}
+            {(phase.at === 'gone' || phase.at === 'failed') && (
+              <Button variant="secondary" disabled={down} onClick={() => setRound(round + 1)}>
+                Try again
               </Button>
-              {(phase.at === 'gone' || phase.at === 'failed') && (
-                <Button variant="secondary" disabled={down} onClick={() => setRound(round + 1)}>
-                  Try again
-                </Button>
-              )}
-            </>
-          )}
-        </div>
-      </SettingsFoot>
+            )}
+          </>
+        )}
+      </Presses>
     </div>
   )
 }
@@ -233,14 +231,14 @@ export function AskPopup() {
           {shownNumber(ask.number)}
         </p>
         {error !== undefined && <Problem>{error}</Problem>}
-        <div className="flex justify-end gap-2 max-md:[&_button]:h-11">
+        <PressRow>
           <Button ref={deny} variant="secondary" loading={busy} disabled={down} onClick={() => void answer(false)}>
             Deny
           </Button>
           <Button loading={busy} disabled={down} onClick={() => void answer(true)}>
             Allow
           </Button>
-        </div>
+        </PressRow>
       </div>
     </Dialog>
   )

@@ -10,7 +10,7 @@ import { JoinedPage, OtherPage } from './JoinedPage.js'
 import { ServerPage } from './ServerPage.js'
 import { ThisComputer } from './ThisComputer.js'
 import { hasServer, labelOf, reachedAt, type Item, type PhoneItem } from './model.js'
-import { LinkPress, ListedDevice, NamedAbove, Problem, State, olderThan } from './parts.js'
+import { LinkPress, ListedDevice, NamedAbove, PressRow, Problem, State, olderThan } from './parts.js'
 import { useDevices, type Devices, type Paces } from './use-devices.js'
 
 // Settings › Devices: this computer, how the person's devices reach it, and every device of
@@ -352,14 +352,14 @@ function PhoneRow({ d, item }: { d: Devices; item: PhoneItem }) {
             }}
           >
             <Input name="device-name" autoFocus aria-label="Name" value={name} maxLength={80} onChange={event => setName(event.target.value)} />
-            <div className="flex justify-end gap-2 max-md:[&_button]:h-11">
+            <PressRow>
               <Button type="button" variant="ghost" onClick={() => setRenaming(false)}>
                 Cancel
               </Button>
               <Button type="submit" loading={busy} disabled={!name.trim() || down}>
                 Save
               </Button>
-            </div>
+            </PressRow>
           </form>
         </Dialog>
       )}

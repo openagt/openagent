@@ -1,6 +1,6 @@
 import { Fragment, createContext, useContext, useEffect, useRef, useState, type ComponentType, type FormEvent, type ReactNode, type RefObject } from 'react'
 import { ChevronRight, Circle, CircleArrowUp, CircleCheck, CircleX, Loader2, Pencil } from 'lucide-react'
-import { Badge, Button, Input, RadioGroupOption, Row, Section, cn, formatDateTime, formatRelative, useOpenAgentDown, useSettingsHold } from '@openagt/dashboard/module'
+import { Badge, Button, Input, RadioGroupOption, Row, Section, SettingsFoot, cn, formatDateTime, formatRelative, useOpenAgentDown, useSettingsHold } from '@openagt/dashboard/module'
 import type { DeviceRow } from './devices.js'
 import type { StepState } from './servers.js'
 
@@ -186,6 +186,20 @@ export function Problem({ children }: { children: ReactNode }) {
     <p role="alert" className="text-xs text-danger">
       {children}
     </p>
+  )
+}
+
+/** The presses a form or a question ends on: one row at its end, Cancel before the press it ends on, each 44 high on a phone. */
+export function PressRow({ children }: { children: ReactNode }) {
+  return <div className="flex justify-end gap-2 max-md:[&_:is(button,a)]:h-11">{children}</div>
+}
+
+/** The presses of a way of adding: in Settings' foot, where they hold their place from step to step; outside Settings, under the flow. */
+export function Presses({ children }: { children: ReactNode }) {
+  return (
+    <SettingsFoot>
+      <PressRow>{children}</PressRow>
+    </SettingsFoot>
   )
 }
 

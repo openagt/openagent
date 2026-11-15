@@ -1,11 +1,11 @@
 import { useEffect, useState, type FormEvent, type ReactNode } from 'react'
 import { CircleCheck, CircleX, Loader2, PlugZap } from 'lucide-react'
-import { Button, Checkbox, Input, RadioGroup, Select, SelectContent, SelectItem, SelectTrigger, SelectValue, SettingsFoot, cn, useOpenAgentDown, usePolled } from '@openagt/dashboard/module'
+import { Button, Checkbox, Input, RadioGroup, Select, SelectContent, SelectItem, SelectTrigger, SelectValue, cn, useOpenAgentDown, usePolled } from '@openagt/dashboard/module'
 import type { Answer } from './devices.js'
 import { installDone, installFailed, testConnection, type ServerRow, type Tested } from './servers.js'
 import { CopyButton } from './codes.js'
 import { hasDoor, labelOf } from './model.js'
-import { Choice, Problem, StepLine, StepMark, useFlowHold } from './parts.js'
+import { Choice, Presses, Problem, StepLine, StepMark, useFlowHold } from './parts.js'
 import { RunsThrough } from './ServerPage.js'
 import type { Devices } from './use-devices.js'
 
@@ -109,14 +109,14 @@ export function ConnectServer({ d, onClose, onInvite }: { d: Devices; onClose: (
           {knownWords !== undefined && <p role="status" className="text-xs">{knownWords}</p>}
           {kind === 'tailscale' && at !== '' && !/\.ts\.net$/i.test(at) && <p className="text-xs text-muted-foreground">Its full name on Tailscale, as Tailscale shows it, like homepc.tail1234.ts.net: the door is at that name.</p>}
           {current !== undefined && !testing && <TestResult answer={current} address={at} user={as} home={pc} />}
-          <Footer>
+          <Presses>
             <Button type="button" variant="ghost" onClick={() => setStage('where')}>
               Back
             </Button>
             <Button type="button" disabled={!current?.ok || !current.value.ok || knownWords !== undefined || (kind === 'tailscale' && !/\.ts\.net$/i.test(at))} onClick={() => setStage('logins')}>
               Continue
             </Button>
-          </Footer>
+          </Presses>
         </form>
       )}
       {stage === 'logins' && (
@@ -142,7 +142,7 @@ export function ConnectServer({ d, onClose, onInvite }: { d: Devices; onClose: (
             </label>
           )}
           {d.error !== undefined && <Problem>{d.error}</Problem>}
-          <Footer>
+          <Presses>
             <Button variant="ghost" onClick={() => setStage('connect')}>
               Back
             </Button>
@@ -150,7 +150,7 @@ export function ConnectServer({ d, onClose, onInvite }: { d: Devices; onClose: (
             <Button loading={d.busy} disabled={!d.machines || down} onClick={() => void install()}>
               Install
             </Button>
-          </Footer>
+          </Presses>
         </div>
       )}
       {stage === 'install' && <Installing d={d} server={server} useMine={useMine} syncData={syncs} onReady={() => setStage('ready')} onClose={onClose} />}
@@ -171,15 +171,6 @@ function Stepper({ at }: { at: Stage }) {
         </li>
       ))}
     </ol>
-  )
-}
-
-/** A step's presses, in Settings' foot: they hold their place from step to step. */
-function Footer({ children }: { children: ReactNode }) {
-  return (
-    <SettingsFoot>
-      <div className="flex justify-end gap-2 max-md:[&_button]:h-11">{children}</div>
-    </SettingsFoot>
   )
 }
 
@@ -210,14 +201,14 @@ function Where({ kind, onKind, doors, through, onVia, onCancel, onNext }: { kind
           </Select>
         </div>
       )}
-      <Footer>
+      <Presses>
         <Button variant="ghost" onClick={onCancel}>
           Cancel
         </Button>
         <Button onClick={onNext}>
           Continue
         </Button>
-      </Footer>
+      </Presses>
     </div>
   )
 }
@@ -339,7 +330,7 @@ function Installing({ d, server, useMine, syncData, onReady, onClose }: { d: Dev
       </ol>
       {!failed && !done && <p className="text-xs text-muted-foreground">A few minutes. You can close this: it goes on, and its row shows how far it is.</p>}
       {d.error !== undefined && <Problem>{d.error}</Problem>}
-      <Footer>
+      <Presses>
         <Button variant="ghost" onClick={onClose}>
           Close
         </Button>
@@ -358,7 +349,7 @@ function Installing({ d, server, useMine, syncData, onReady, onClose }: { d: Dev
             Continue
           </Button>
         )}
-      </Footer>
+      </Presses>
     </div>
   )
 }
@@ -376,14 +367,14 @@ function Ready({ d, server, onInvite, onClose }: { d: Devices; server: ServerRow
         </p>
       </div>
       {server.through !== undefined && <RunsThrough host={d.host} server={{ ...server, through: server.through }} label={name} busy={d.busy} onChange={d.act} />}
-      <Footer>
+      <Presses>
         <Button variant="secondary" onClick={onInvite}>
           Add people
         </Button>
         <Button onClick={onClose}>
           Done
         </Button>
-      </Footer>
+      </Presses>
     </div>
   )
 }

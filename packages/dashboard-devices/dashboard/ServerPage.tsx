@@ -5,7 +5,7 @@ import { idsOf, myName, type Answer, type DeviceRow } from './devices.js'
 import { installDone, installFailed, nameOwner, removeDevice, removePerson, setPeople, setWho, askLink, type ServerRow } from './servers.js'
 import { labelOf, type ServerItem } from './model.js'
 import { Invite } from './codes.js'
-import { Head, Part, Problem, Removal, Said, Seen, State, StepLine, SwitchLine, Tabs, hostOf, olderThan } from './parts.js'
+import { Head, Part, PressRow, Problem, Removal, Said, Seen, State, StepLine, SwitchLine, Tabs, hostOf, olderThan } from './parts.js'
 import type { Devices } from './use-devices.js'
 
 // A server's own page in Settings › Devices, for a server this computer installed OpenAgent on:
@@ -387,7 +387,7 @@ export function PickPeople({ host, server, label, onChange, onClose }: { host: M
             </ul>
           </>
         )}
-        <div className="flex justify-end gap-2 max-md:[&_button]:h-11">
+        <PressRow>
           <Button variant="ghost" onClick={onClose}>
             Cancel
           </Button>
@@ -396,7 +396,7 @@ export function PickPeople({ host, server, label, onChange, onClose }: { host: M
               {picked.length > 1 ? `Add ${picked.length} people` : 'Add person'}
             </Button>
           )}
-        </div>
+        </PressRow>
       </div>
     </Dialog>
   )
