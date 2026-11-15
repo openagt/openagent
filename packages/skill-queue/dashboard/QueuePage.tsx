@@ -1,5 +1,5 @@
 import { useId, useRef, useState } from 'react'
-import { CornerDownLeft, Ellipsis, FastForward, Play } from 'lucide-react'
+import { Ellipsis, FastForward, Play } from 'lucide-react'
 import {
   Button,
   ComposedField,
@@ -208,7 +208,7 @@ function ProjectQueue({ read, names, starts, reload }: { read: ProjectRead; name
     <div className="space-y-8">
       <AddEntry project={project} reload={reload} />
       {runs.length === 0 ? (
-        <p className="px-1 text-sm text-muted-foreground">Nothing queued.</p>
+        <p className="text-sm text-muted-foreground">Nothing queued.</p>
       ) : (
         runs.map((run, index) => (
           <PanelGroup key={index} title={run.priority === undefined ? 'No priority' : `Priority ${run.priority}`}>
@@ -436,13 +436,7 @@ function AddEntry({ project, reload }: { project: ModuleProject; reload: () => P
           <p id={lineId} role={failed !== undefined ? 'alert' : undefined} className={`min-w-0 flex-1 truncate text-xs ${failed !== undefined || missing ? 'text-danger' : 'text-faint-foreground'}`}>
             {failed !== undefined ? `Not added: ${failed}` : missing ? 'Write the task first.' : `Goes to the end of priority ${priority}`}
           </p>
-          <span className="inline-flex items-center gap-1 text-xs text-faint-foreground max-md:hidden" aria-hidden>
-            <kbd className="inline-flex h-5 items-center rounded-sm px-1 ring-1 ring-hairline ring-inset">
-              <CornerDownLeft className="size-3.5" />
-            </kbd>
-            to add
-          </span>
-          <Button type="submit" variant="secondary" size="sm" loading={adding} disabled={down} aria-label="Add to queue">
+          <Button type="submit" variant="secondary" size="sm" loading={adding} disabled={down} aria-label="Add to queue" title="Add to the queue (Enter)">
             {adding ? 'Adding…' : 'Add'}
           </Button>
         </ComposedFieldFoot>
