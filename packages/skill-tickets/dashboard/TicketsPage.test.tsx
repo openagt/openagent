@@ -160,6 +160,17 @@ describe('TicketsPage (#1144)', () => {
     expect(await screen.findByRole('button', { name: 'Update tickets' })).toBeTruthy()
   })
 
+  test('with no ticket in any project there is nothing to filter: the page says so in one line, with no filters and no search', async () => {
+    onAllTickets.mockResolvedValue([{ projectId: 'p1', projectName: 'Alpha', tickets: [] }])
+    render()
+    expect(await screen.findByText('No tickets yet. Update them from the tracker, or write one.')).toBeTruthy()
+    expect(screen.queryByRole('textbox', { name: /search tickets/i })).toBeNull()
+    expect(screen.queryByRole('button', { name: /^Priority/ })).toBeNull()
+    // The head's two presses stay.
+    expect(screen.getByRole('button', { name: 'Update tickets' })).toBeTruthy()
+    expect(screen.getByRole('button', { name: /New ticket/ })).toBeTruthy()
+  })
+
   test('no project with the package says so rather than an empty page', async () => {
     onAllTickets.mockResolvedValue([])
     render()
@@ -304,6 +315,8 @@ describe('TicketsPage filters (#1144)', () => {
     window.history.replaceState(null, '', '/tickets?q=zzz-no-match')
     render()
     expect(await screen.findByText('2 tickets hidden by the filters.')).toBeTruthy()
+    // A filter that leaves no row keeps the filters: they are how to get the rows back.
+    expect(screen.getByRole('textbox', { name: /search tickets/i })).toBeTruthy()
     // Not an update offer in the list: these tickets exist, they are filtered (#1230); the page's head keeps its own.
     expect(screen.getAllByRole('button', { name: 'Update tickets' }).every(button => button.closest('header'))).toBe(true)
     fireEvent.click(screen.getByRole('button', { name: /clear filters/i }))

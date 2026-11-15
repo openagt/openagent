@@ -309,8 +309,8 @@ describe('the tickets list', () => {
 
   test('an empty tickets/ says so where its rows would stand, and what fills it', async () => {
     render(<Rows tickets={[]} />)
-    expect(await screen.findByText('No tickets yet')).toBeTruthy()
-    expect(screen.getByText('Update them from the tracker, or write one.')).toBeTruthy()
+    // One plain paragraph, as the look draws an empty page.
+    expect((await screen.findByText('No tickets yet. Update them from the tracker, or write one.')).tagName).toBe('P')
   })
 
   test('an empty list with tickets hidden by the filters says so, and clears them from right there (#1144/#1230)', async () => {

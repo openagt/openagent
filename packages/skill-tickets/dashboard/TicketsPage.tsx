@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { X } from 'lucide-react'
-import { Button, LinkActions, Page, RowShapes, Section, Slot, cn, runsAgain, usePolled, useAction, useLinkActions, useModuleHost, type ProjectLinks, type ModuleLink, type ModuleProject, type LinkActionOffer } from '@openagt/dashboard/module'
+import { Button, Empty, LinkActions, Page, RowShapes, Section, Slot, cn, runsAgain, usePolled, useAction, useLinkActions, useModuleHost, type ProjectLinks, type ModuleLink, type ModuleProject, type LinkActionOffer } from '@openagt/dashboard/module'
 import { heldBack, holderAgent, planLink, ticketLink, withHolder } from '../src/module.js'
 import { holdingRun } from './lib/holding-run.js'
 import type { ProjectTickets, WorkspaceTicket } from './lib/types.js'
@@ -68,6 +68,8 @@ export function TicketsPage({ projects }: { projects: ModuleProject[] }) {
   const clearFilters = () => setView({ ...view, filters: defaultView().filters })
 
   const rows = useMemo(() => flattenTickets(groups), [groups])
+  // Read, and no project holds a ticket: there is nothing to filter, so the filters are not drawn.
+  const noTicket = state !== 'unknown' && groups.every(g => g.error === undefined && g.tickets.length === 0)
   const visible = filterRows(rows, view.filters)
   const flatRows = sortRows(visible, view.sort)
 
@@ -144,14 +146,14 @@ export function TicketsPage({ projects }: { projects: ModuleProject[] }) {
       bar={
         <>
           {error && <p role="alert" className="mb-2 text-xs text-danger">{error}</p>}
-          <TicketFilterBar view={view} rows={rows} spansProjects={projects.length > 1} onChange={setView} />
+          {!noTicket && <TicketFilterBar view={view} rows={rows} spansProjects={projects.length > 1} onChange={setView} />}
         </>
       }
     >
       <Slot of={{ state, value: groups }} shape={<RowShapes rows={3} />}>
         {groups =>
           groups.length === 0 ? (
-            <p className="text-sm text-muted-foreground">No project has the tickets package.</p>
+            <Empty title="No project has the tickets package." />
           ) : groups.length > 1 && view.group === 'project' ? (
             // A part per project, each with its own presses: the page's head cannot hold one project's.
             <div className="space-y-8">
@@ -179,7 +181,7 @@ export function TicketsPage({ projects }: { projects: ModuleProject[] }) {
                   </p>
                 ))}
               {rows.length === 0 ? (
-                <p className="text-sm text-muted-foreground">No project has a ticket yet.</p>
+                <Empty title="No project has a ticket yet." />
               ) : (
                 <TicketsPanel projectId="" rows={flatRows.map(r => listed(r, true))} hiddenByFilter={rows.length - visible.length} onClearFilters={clearFilters} {...rowsProps} />
               )}

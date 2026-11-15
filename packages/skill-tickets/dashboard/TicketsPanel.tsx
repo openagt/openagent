@@ -3,7 +3,6 @@ import { Plus, RefreshCw } from 'lucide-react'
 import {
   Badge,
   Button,
-  Card,
   Checkbox,
   Empty,
   Panel,
@@ -256,9 +255,7 @@ export function TicketsPanel({
     )
   if (rows.length === 0)
     return (
-      <Card data-project={projectId}>
-        <Empty title="No tickets yet">Update them from the tracker, or write one.</Empty>
-      </Card>
+      <Empty title="No tickets yet.">Update them from the tracker, or write one.</Empty>
     )
   return <TicketRows rows={rows} {...props} />
 }
