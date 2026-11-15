@@ -6,19 +6,29 @@ import { portOf } from '../cli/cli.js'
 import { projectAddresses } from '../project-address.js'
 import { startDemo } from './demo.js'
 
-const USAGE = `usage: pnpm demo [--port <n>]
+const USAGE = `Usage: pnpm demo [--port <n>]
 
   The real dashboard on a throwaway home, with a project whose runs are scripted and offline.
   --port <n>  the port it listens on; a free one otherwise.`
+
+/** The port the arguments ask for, 0 for a free one; or the first of them that cannot be read, said as `openagent` says it. */
+function portAsked([first, value, extra]: string[]): number | { refused: string } {
+  const unknown = (arg: string) => ({ refused: arg.startsWith('-') ? `unknown option: ${arg}` : `unknown command: ${arg}` })
+  if (first === undefined) return 0
+  if (first !== '--port') return unknown(first)
+  const port = portOf(value)
+  if (port === undefined) return { refused: 'invalid --port: must be a port number from 0 to 65535' }
+  return extra === undefined ? port : unknown(extra)
+}
 
 const args = process.argv.slice(2)
 if (args.length === 1 && (args[0] === '--help' || args[0] === '-h')) {
   console.log(USAGE)
   process.exit(0)
 }
-const port = args.length === 0 ? 0 : args.length === 2 && args[0] === '--port' ? portOf(args[1]) : undefined
-if (port === undefined) {
-  console.error(USAGE)
+const port = portAsked(args)
+if (typeof port !== 'number') {
+  console.error(`${port.refused}\n\n${USAGE}`)
   process.exit(2)
 }
 
@@ -32,6 +42,10 @@ const demo = await startDemo({
     said.push(line)
     if (said.length > 20) said.shift()
   },
+}).catch((err: unknown) => {
+  // What went wrong is in the message, with the dashboard's own lines; a stack would only bury it.
+  console.error(err instanceof Error ? err.message : String(err))
+  process.exit(1)
 })
 // Printed at the address the page shows, opened by its id, as `openagent` does with a project.
 const address = projectAddresses([demo.project.id], []).addressOf(demo.project.id)

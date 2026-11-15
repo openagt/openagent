@@ -1,4 +1,4 @@
-import { listAgents, loadAgentEvents, readLiveMetas, type LiveAgent, type AgentMeta } from '../store/index.js'
+import { checkoutsFirst, listAgents, loadAgentEvents, readLiveMetas, type LiveAgent, type AgentMeta } from '../store/index.js'
 import { pendingChoices } from '../open-choices.js'
 import type { ChoiceRequest, OpenAgentEvent } from '../events.js'
 import type { ProjectSummary, ProjectionRead } from './projects.js'
@@ -192,7 +192,8 @@ async function projectInterventions(project: ProjectSummary, deps: Interventions
   // publishes it, or the agent does on their ask.
   if (recorded === undefined) unread()
   const requested = project.gitHost && open ? new Set(open.map(pr => pr.headRefName)) : undefined
-  items.push(...(await unpushedFor(project, recorded ?? [], deps.branches ?? projectBranches, unread, requested)))
+  // A run continued in its checkout works again, whatever its record says of its first leg (#768).
+  items.push(...(await unpushedFor(project, checkoutsFirst(live ?? [], recorded ?? []), deps.branches ?? projectBranches, unread, requested)))
   return { id: project.id, items, whole: sawEverything }
 }
 

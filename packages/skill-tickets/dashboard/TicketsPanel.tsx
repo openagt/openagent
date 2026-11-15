@@ -1,11 +1,12 @@
 import { createContext, useContext, useState, type ReactNode } from 'react'
 import { ExternalLink, ClipboardList, Hammer, Plus } from 'lucide-react'
-import { Badge, Button, Checkbox, List, Tooltip, TooltipTrigger, TooltipContent, cn, formatRelative, formatAge, formatDateTime, inPlace, useAction, useLoaded, useModuleHost } from '@openagt/dashboard/module'
+import { Badge, Button, Checkbox, List, Tooltip, TooltipTrigger, TooltipContent, cn, formatRelative, inPlace, useAction, useLoaded, useModuleHost } from '@openagt/dashboard/module'
 import { NEW_TICKET, UPDATE_TICKETS_PROMPT, heldBack, readMeta, type TicketsMeta } from '../src/module.js'
 import { TicketStartActions } from './TicketStartActions.js'
 import type { WorkspaceTicket } from './lib/types.js'
 import { UpdateTicketsButton } from './UpdateTicketsButton.js'
 import { priorityTone } from './lib/ticket-priority.js'
+import { ticketAge, ticketDay } from './lib/ticket-date.js'
 
 /** Captured once: `useLoaded` treats a fresh `{}` literal as a new value on every render. */
 const NO_META: TicketsMeta = {}
@@ -86,7 +87,7 @@ export function TicketRow({
   const holder = ticket.lockedByAgent?.name ?? ticket.lockedBy
   const host = useModuleHost()
   // In review or waiting: no agent is started on it nor on its plan, the tickets skill's own rule;
-  // claimed: an agent holds it. Either way the row offers no next step.
+  // claimed: an agent holds it. Either way the row offers no next step, only what is queued for it.
   const held = heldBack(ticket)
   const offered = !held && !ticket.locked
   const filled = useContext(FilledColumns)
@@ -118,11 +119,9 @@ export function TicketRow({
           its own; in a wide one it takes none: it shows beside the facts, over the title's end, so
           the facts stand at the row's right edge and nothing moves. */}
       <span className="relative flex shrink-0 items-center justify-end @max-2xl:w-28 @2xl:w-0 pointer-fine:opacity-0 pointer-fine:group-hover/row:opacity-100 pointer-fine:group-focus-within/row:opacity-100 pointer-fine:has-[[data-popup-open]]:opacity-100">
-        {offered && (
-          <span className="flex items-center gap-1.5 @2xl:absolute @2xl:right-0 @2xl:rounded-md @2xl:bg-accent">
-            <TicketStartActions compact projectId={projectId} ticket={ticket} busy={busy} starting={starting} onStart={onStart} onConfigure={onConfigure} />
-          </span>
-        )}
+        <span className="flex items-center gap-1.5 @2xl:absolute @2xl:right-0 @2xl:rounded-md @2xl:bg-accent">
+          <TicketStartActions compact startable={offered} projectId={projectId} ticket={ticket} busy={busy} starting={starting} onStart={onStart} onConfigure={onConfigure} />
+        </span>
       </span>
       {/* The facts: under the title in a narrow list, in columns beside it in a wide one. */}
       <span className={cn('relative order-last flex min-h-6 basis-full items-center gap-x-3 text-xs text-muted-foreground @2xl:order-none @2xl:basis-auto', onToggleSelect && 'pl-7 @2xl:pl-0')}>
@@ -178,8 +177,8 @@ export function TicketRow({
               Waiting
             </Badge>
           )}
-          {ticket.effort !== undefined && <Badge>Effort: {ticket.effort}</Badge>}
-          {ticket.uncertainty !== undefined && <Badge>Uncertainty: {ticket.uncertainty}</Badge>}
+          {ticket.effort !== undefined && <Badge>Effort {ticket.effort}/10</Badge>}
+          {ticket.uncertainty !== undefined && <Badge>Uncertainty {ticket.uncertainty}/10</Badge>}
         </span>
         {/* Priority and age: fixed widths, kept (and drawn even when empty) so the columns line up
             row to row; the priority's is given up when no ticket of the list has one. The priority
@@ -189,8 +188,8 @@ export function TicketRow({
             {ticket.priority ? `Priority ${ticket.priority}` : ''}
           </span>
         )}
-        <span className="shrink-0 tabular-nums @2xl:w-14 @2xl:text-right" title={formatDateTime(ticket.date)}>
-          {formatAge(ticket.date)}
+        <span className="shrink-0 tabular-nums @2xl:w-14 @2xl:text-right" title={ticketDay(ticket)}>
+          {ticketAge(ticket)}
         </span>
         {/* The plan, when there is one to read, then the issue: each the same width when empty, so the
             columns line up, and given up when no ticket of the list has one. */}

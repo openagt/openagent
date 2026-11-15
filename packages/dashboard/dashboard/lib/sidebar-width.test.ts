@@ -1,5 +1,6 @@
+import { createElement } from 'react'
 import { afterEach, describe, expect, test, vi } from 'vitest'
-import { act, renderHook } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, renderHook, screen } from '@testing-library/react'
 
 // Each test reads the module fresh, as a page load does: the width is read from the browser once.
 async function load(kept?: string) {
@@ -8,9 +9,22 @@ async function load(kept?: string) {
   return import('./sidebar-width.js')
 }
 
-afterEach(() => localStorage.clear())
+afterEach(() => {
+  cleanup()
+  localStorage.clear()
+})
 
 describe('the sidebar\'s width', () => {
+  test('its edge says the width in pixels, and an arrow key moves it', async () => {
+    await load('300')
+    const { SidebarResizer } = await import('../components/SidebarResizer.js')
+    render(createElement(SidebarResizer))
+    const edge = screen.getByRole('separator', { name: 'The width of the sidebar' })
+    expect(edge.getAttribute('aria-valuetext')).toBe('300 pixels')
+    fireEvent.keyDown(edge, { key: 'ArrowRight' })
+    expect(edge.getAttribute('aria-valuetext')).toBe('316 pixels')
+  })
+
   test('never set, the default; set, kept in this browser within its bounds, and read so on the next load; taken back, forgotten', async () => {
     const width = await load()
     const { result } = renderHook(() => width.useSidebarWidth())

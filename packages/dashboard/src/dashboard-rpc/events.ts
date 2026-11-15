@@ -18,7 +18,7 @@ async function resolveEventsDiary(projectId: string, agentId?: string, opts: { c
  * The end-of-replay marker (#1383). A subscribe replays the whole log before following live,
  * and without a boundary a reconnecting client cannot tell "replay still streaming" from "the
  * log is genuinely this short" — so it blanked a populated feed and refilled it line by line.
- * Sent once per subscription, after the on-disk replay is delivered. Wire-only: it is not a
+ * Sent once per subscription, after the replay of what the source held is delivered. Wire-only: it is not a
  * {@link OpenAgentEvent}, is never written to any journal, and the client swallows it.
  */
 export type StreamSync = { kind: 'stream-sync' }
@@ -44,9 +44,8 @@ export type LiveFeedEvent = OpenAgentEvent | StreamSync | PartialMessage
  * from a machine (#1067). Otherwise the on-disk log. The daemon's source answers only for relayed
  * runs, so an ordinary local agent falls through to tailing the log.
  *
- * Only the on-disk tail sends the {@link StreamSync} marker: the in-memory sources have no replay
- * boundary to report, so a reconnecting client falls back to a grace deadline before swapping its
- * feed (see use-live-events in the dashboard).
+ * Both send the {@link StreamSync} marker once their replay is sent: the events held in memory
+ * when the page subscribed, or the lines on disk. What comes after it is live.
  */
 export async function streamAgentEvents(
   projectId: string,
@@ -59,7 +58,18 @@ export async function streamAgentEvents(
   const stream = contextEventsSource()(projectId, agentId)
   // An in-memory agent: replay + follow it, and end when it ends — a relayed agent that finished has
   // nothing more to say, and leaving the response open would read as a live feed gone quiet.
-  if (stream) return forwardStream(stream, send, onDone)
+  if (stream) {
+    let held = stream.length
+    if (held === 0) send({ kind: 'stream-sync' })
+    return forwardStream(
+      stream,
+      event => {
+        send(event)
+        if (--held === 0) send({ kind: 'stream-sync' })
+      },
+      onDone,
+    )
+  }
 
   // Everywhere else: tail the run's diary. The relocating tail, because the diary moves
   // mid-subscription: when the run ends its tool records it and reclaims the checkout, and a

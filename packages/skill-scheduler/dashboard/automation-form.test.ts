@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'vitest'
-import { EMPTY_DRAFT, TEXT_MAX, addArgs, atRowsPace, draftProblem, draftRow, draftSentence, editArgs, editedWords, isUntouched, keptWhereHint, openedAutomation, ownPaceArgs, removeWarning, removedWords, whatAndWhenProblem, savedFile, savedWords, saysTheSame, startsWhen, triedLine, whereHint, type AutomationDraft, type OwnPace } from './automation-form.js'
+import { EMPTY_DRAFT, TEXT_MAX, addArgs, atRowsPace, draftProblem, draftRow, draftSentence, editArgs, editedWords, isUntouched, keptWhereHint, nameProblem, openedAutomation, ownPaceArgs, removeWarning, removedWords, savedFile, savedWords, saysTheSame, startsWhen, triedLine, whereHint, type AutomationDraft, type OwnPace } from './automation-form.js'
 
 // The automation form as data: what keeps a draft from being saved, the command that saves it, the sentence its row would say, what a try answered, an automation opened from its row to be saved again, and what is said of one removed.
 
@@ -15,8 +15,11 @@ describe('a new automation', () => {
     expect(draftProblem(EMPTY_DRAFT)).toBe('Give it a name. It becomes the command, like /answer-comments.')
     // One kept on this machine is no command a person types.
     expect(draftProblem({ ...EMPTY_DRAFT, onThisMachine: true })).toBe('Give it a name, like answer-comments.')
-    expect(draftProblem(draft({ name: 'Answer comments' }))).toBe('A name is lower-case letters, digits and dashes, never three dashes in a row, like answer-comments.')
-    expect(draftProblem(draft({ name: 'a'.repeat(65) }))).toBe('A name is 64 characters at most.')
+    // A name it cannot have comes next, pointed at: its rule is said under its field.
+    expect(draftProblem(draft({ name: 'Answer comments', prompt: '' }))).toBe("Give it another name: the one above cannot be an automation's.")
+    expect([nameProblem('Answer comments'), nameProblem('a---b')]).toEqual(Array(2).fill('A name is lower-case letters, digits and dashes, never three dashes in a row, like answer-comments.'))
+    expect(draftProblem(draft({ name: 'a'.repeat(65) }))).toBe("Give it another name: the one above cannot be an automation's.")
+    expect(nameProblem('a'.repeat(65))).toBe('A name is 64 characters at most.')
     expect(draftProblem(draft({ name: 'a'.repeat(64) }))).toBeUndefined()
     expect(draftProblem(draft({ prompt: ' \n' }))).toBe('Write what the agent is told.')
     expect(draftProblem(draft({ pace: every('') }))).toBe('Type a whole number, from 1 to 9999.')
@@ -34,17 +37,7 @@ describe('a new automation', () => {
     expect(draftProblem(draft({ prompt: 'p'.repeat(TEXT_MAX + 1) }))).toBe('What the agent is told is 4001 characters, and this form takes 4000 at most. Save a shorter one, then write the rest into the file.')
     expect(draftProblem(draft({ when: 'w'.repeat(TEXT_MAX + 1) }))).toBe('The shell line is 4001 characters, and this form takes 4000 at most.')
     expect(draftProblem(draft({ when: CHECK, waitsFor: 'x'.repeat(TEXT_MAX + 1) }))).toBe('What the line waits for is 4001 characters, and this form takes 4000 at most.')
-    expect(draftProblem(draft({ name: 'a---b' }))).toBe('A name is lower-case letters, digits and dashes, never three dashes in a row, like answer-comments.')
     expect(addArgs(draft({ prompt: 'p'.repeat(TEXT_MAX) }))!.every(arg => arg.length <= 4096)).toBe(true)
-  })
-
-  test("what else keeps a draft from being saved, its name aside: said while the name typed cannot be one, which is said under its own field", () => {
-    const badName = (over: Partial<AutomationDraft> = {}): AutomationDraft => draft({ name: 'Answer comments', ...over })
-    expect(whatAndWhenProblem(badName({ pace: every('') }))).toBe('Type a whole number, from 1 to 9999.')
-    expect(whatAndWhenProblem(badName({ pace: { ...every('2'), atHalfTyped: true } }))).toBe('Finish the time of day, like 10:00, or clear it.')
-    expect(whatAndWhenProblem(badName({ pace: WORK }))).toBe('Say when it runs: on a pace, by a shell line, or both.')
-    expect(whatAndWhenProblem(badName({ prompt: '' }))).toBe('Write what the agent is told.')
-    expect(whatAndWhenProblem(badName())).toBeUndefined()
   })
 
   test('a form nothing was typed into, which Escape may close', () => {
@@ -201,8 +194,8 @@ describe('an automation opened from its row', () => {
     // Staged and never committed: "commit the deletion" would commit the file.
     expect(removedWords('/answer-comments', { ok: true, file: FILE, git: 'staged', startsFrom: 'origin/main' })).toBe(`Removed /answer-comments: ${FILE} is deleted. It was staged and never committed, so a commit made now would still add it: take it out of the next commit with "git rm --cached ${FILE}".`)
     // Git never had it.
-    expect(removedWords('/answer-comments', { ok: true, file: FILE, git: 'nothing', startsFrom: 'origin/main' })).toBe(`Removed /answer-comments: ${FILE} is deleted. Git never had the file, so nothing is to commit.`)
-    expect(removedWords('tidy', { ok: true, file: '.scheduler/automations/tidy.md', onThisMachine: true })).toBe('Removed tidy: .scheduler/automations/tidy.md is deleted. Nothing is to commit.')
+    expect(removedWords('/answer-comments', { ok: true, file: FILE, git: 'nothing', startsFrom: 'origin/main' })).toBe(`Removed /answer-comments: ${FILE} is deleted. Git never had the file, so there is nothing to commit.`)
+    expect(removedWords('tidy', { ok: true, file: '.scheduler/automations/tidy.md', onThisMachine: true })).toBe('Removed tidy: .scheduler/automations/tidy.md is deleted. Nothing to commit.')
     // Git could not be asked, or an answer that is not what the command promises: it is gone, and the person is sent to git to look.
     expect(removedWords('/answer-comments', { ok: true, file: FILE, git: 'unknown', startsFrom: 'origin/main' })).toBe(`Removed /answer-comments: ${FILE} is deleted. What git holds of it could not be read: look with "git status".`)
     expect(removedWords('tidy', null)).toBe('Removed tidy: its file is deleted. What git holds of it could not be read: look with "git status".')

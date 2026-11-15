@@ -197,9 +197,13 @@ describe('the Skills page', () => {
     tick('tickets', 'queue', 'scheduler')
     expect(screen.getByText('3 skills to write.')).toBeTruthy()
 
-    fireEvent.click(screen.getByRole('button', { name: 'Save and send to GitHub' }))
+    const save = screen.getByRole('button', { name: 'Save and send to GitHub' })
+    save.focus()
+    fireEvent.click(save)
     await waitFor(() => expect(sendChangeSkills).toHaveBeenCalledWith('p1', { write: ['tickets', 'queue', 'scheduler'], remove: [] }))
     expect(await screen.findByText(/Wrote 3 skills in/)).toBeTruthy()
+    // The focus the gone press had is on what the save did.
+    expect(document.activeElement).toBe(screen.getByText(/Wrote 3 skills in/).parentElement)
     expect(document.body.textContent).toContain('tickets, queue, scheduler')
     // The same press sends what it wrote, and nothing else.
     await waitFor(() => expect(sendProjectSkills).toHaveBeenCalledWith('p1', ['tickets', 'queue', 'scheduler']))

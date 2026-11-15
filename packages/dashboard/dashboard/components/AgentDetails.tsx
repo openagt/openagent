@@ -1,6 +1,7 @@
 import type { AgentMeta, OpenAgentEvent } from '../../src/index.js'
 import { DRIVER_LABELS, driverFromImpl } from '../../src/client.js'
 import { modelName, useModels } from '../lib/models.js'
+import { formatDateTimeShort } from '../lib/format-date.js'
 
 // The session-details strip behind "Show details" in the session's menu (always available now, so the
 // chevron no longer pops in and out with the git/handoff data). It shows the "about this agent"
@@ -22,8 +23,8 @@ function spend(events: OpenAgentEvent[]): { costUsd?: number; turns: number } {
   return { ...(costUsd !== undefined ? { costUsd } : {}), turns }
 }
 
-/** What the strip reads off the run's card: the agent that ran it and the model it ran. */
-export type AgentDetailsCard = Pick<AgentMeta, 'driver' | 'model' | 'effort' | 'contextTokens'>
+/** What the strip reads off the run's card: the agent that ran it, the model it ran and when it started. */
+export type AgentDetailsCard = Pick<AgentMeta, 'driver' | 'model' | 'effort' | 'contextTokens'> & Partial<Pick<AgentMeta, 'startedAt'>>
 
 function Fact({ label, value }: { label: string; value: string }) {
   return (
@@ -45,6 +46,7 @@ export function AgentDetails({ events, card, pr }: { events: OpenAgentEvent[]; c
     <div className="flex flex-wrap items-center gap-x-4 gap-y-1 border-b border-border px-4 py-2 text-xs">
       {agent && <Fact label="Coding agent" value={agent} />}
       {model && <Fact label="Model" value={model} />}
+      {card?.startedAt && <Fact label="Started" value={formatDateTimeShort(card.startedAt)} />}
       {costUsd !== undefined && <Fact label="Spent" value={`$${costUsd.toFixed(2)}`} />}
       {turns > 0 && <Fact label="Turns" value={String(turns)} />}
       {pr && (

@@ -2,6 +2,7 @@ import { useRef, useState } from 'react'
 import { Button, Input, Label, Textarea, useModuleHost } from '@openagt/dashboard/module'
 import { newTicketFile, topicsIn, writeTicketFile, type TicketFields } from '../src/ticket-file.js'
 import { listTickets, ticketsChanged } from './lib/list.js'
+import { focusTitleOnceShown } from './TicketHeader.js'
 
 /** What `put` answered, when it refused: its reason. */
 function refusal(output: unknown): string | undefined {
@@ -16,9 +17,9 @@ function today(): string {
 }
 
 /**
- * A ticket written by hand: its title, priority, topics and text, saved with the tickets
- * command's `put` as one commit, like any other change to the tickets. Editing keeps the lines
- * above the title it does not show (`Issue:`, `PR:`, `Waiting:`); a new ticket is named by today
+ * A ticket written by hand: its title, priority, topics, what it waits on and its text, saved with
+ * the tickets command's `put` as one commit, like any other change to the tickets. Editing keeps
+ * the lines above the title it does not show (`Issue:`, `PR:`); a new ticket is named by today
  * and its title, never over one already there.
  */
 export function TicketEditor({
@@ -26,6 +27,7 @@ export function TicketEditor({
   file,
   initial,
   issueLabel,
+  workedBy,
   onSaved,
   onCancel,
 }: {
@@ -35,6 +37,8 @@ export function TicketEditor({
   initial: TicketFields
   /** The issue the ticket follows: its title and text are rewritten from it when it changes. */
   issueLabel?: string | undefined
+  /** The run at work on the ticket, by its name: it started from the ticket as it was. */
+  workedBy?: string | undefined
   onSaved: (file: string) => void
   onCancel: () => void
 }) {
@@ -42,6 +46,7 @@ export function TicketEditor({
   const [title, setTitle] = useState(initial.title)
   const [priority, setPriority] = useState(initial.priority)
   const [topics, setTopics] = useState(initial.topics.join(', '))
+  const [waiting, setWaiting] = useState(initial.waiting)
   const [body, setBody] = useState(initial.body)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -63,12 +68,13 @@ export function TicketEditor({
         if ('error' in listed) throw new Error(listed.error)
         name = newTicketFile(title, today(), new Set(listed.tickets.map(ticket => ticket.file)))
       }
-      const content = writeTicketFile({ priority: priority.trim(), topics: topicsIn(topics), title, body, kept: initial.kept })
+      const content = writeTicketFile({ priority: priority.trim(), topics: topicsIn(topics), waiting, title, body, kept: initial.kept })
       const result = await host.act(projectId, ['put', name], undefined, content)
       if (!result.ok) throw new Error(result.error)
       const refused = refusal(result.output)
       if (refused) throw new Error(refused)
       ticketsChanged(projectId)
+      focusTitleOnceShown(name)
       onSaved(name)
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err))
@@ -90,8 +96,9 @@ export function TicketEditor({
         else void save()
       }}
     >
+      {workedBy && <p className="text-sm text-muted-foreground">The run “{workedBy}” is working on this ticket and started from it as it was: it may not see this change.</p>}
       {issueLabel && (
-        <p className="text-sm text-muted-foreground">
+        <p id="ticket-issue-note" className="text-sm text-muted-foreground">
           This ticket follows issue {issueLabel}: when the issue changes, Update tickets writes its title and text again from it. Priority and topics stay as you set them.
         </p>
       )}
@@ -104,7 +111,8 @@ export function TicketEditor({
           onChange={event => setTitle(event.target.value)}
           placeholder="What should be done, in a few words"
           aria-invalid={askedTitle && untitled}
-          aria-describedby={askedTitle && untitled ? 'ticket-title-missing' : undefined}
+          // The issue's note is said at the two fields it may write again.
+          aria-describedby={[askedTitle && untitled && 'ticket-title-missing', issueLabel && 'ticket-issue-note'].filter(Boolean).join(' ') || undefined}
           autoFocus
         />
         {askedTitle && untitled && (
@@ -116,20 +124,38 @@ export function TicketEditor({
       <div className="flex gap-4 max-sm:flex-col">
         <div className="space-y-2 sm:w-32">
           <Label htmlFor="ticket-priority">Priority</Label>
-          <Input ref={priorityField} id="ticket-priority" value={priority} onChange={event => setPriority(event.target.value)} inputMode="numeric" placeholder="0–10" aria-invalid={!priorityOk} />
+          <Input ref={priorityField} id="ticket-priority" value={priority} onChange={event => setPriority(event.target.value)} inputMode="numeric" placeholder="0–10" aria-invalid={!priorityOk} aria-describedby={priorityOk ? undefined : 'ticket-priority-error'} />
         </div>
         <div className="flex-1 space-y-2">
           <Label htmlFor="ticket-topics">Topics</Label>
           <Input id="ticket-topics" value={topics} onChange={event => setTopics(event.target.value)} placeholder="ui, install" />
         </div>
       </div>
-      {!priorityOk && <p className="text-xs text-danger">Priority is a whole number from 0 to 10, or empty for none.</p>}
+      {!priorityOk && (
+        <p id="ticket-priority-error" className="text-xs text-danger">
+          Priority is a whole number from 0 to 10, or empty for none.
+        </p>
+      )}
+      <div className="space-y-2">
+        <Label htmlFor="ticket-waiting">Waiting on</Label>
+        <Input id="ticket-waiting" value={waiting} onChange={event => setWaiting(event.target.value)} placeholder="Nothing" aria-describedby="ticket-waiting-note" />
+        <p id="ticket-waiting-note" className="text-xs text-muted-foreground">
+          No agent plans or works the ticket while it waits. Empty it when the wait is over.
+        </p>
+      </div>
       <div className="space-y-2">
         <Label htmlFor="ticket-body">Text</Label>
         <Textarea
           id="ticket-body"
+          aria-describedby={issueLabel ? 'ticket-issue-note' : undefined}
           value={body}
           onChange={event => setBody(event.target.value)}
+          // Enter makes a new line in the text; with Ctrl or ⌘ it saves the ticket.
+          onKeyDown={event => {
+            if (event.key !== 'Enter' || !(event.ctrlKey || event.metaKey)) return
+            event.preventDefault()
+            event.currentTarget.form?.requestSubmit()
+          }}
           rows={14}
           className="font-mono text-sm"
           placeholder={'## TLDR\n\nWhat is wrong or missing, and what done looks like.\n\n## Why it matters\n\n…'}

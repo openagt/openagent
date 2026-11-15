@@ -31,8 +31,9 @@ export type RemoveProjectHandler = (projectId: string, files: boolean) => Remove
 
 /** Resolve an agent to its live event stream: the relay feeds `onEvents` from its own in-memory stream
  * rather than a file on disk (#426), and the daemon feeds an agent it is relaying from a machine (#1067).
+ * Its iterator replays the `length` events the stream holds, then follows live.
  * Returns undefined when there is no in-memory stream, so `onEvents` falls back to tailing the log. */
-export type EventsSource = (projectId: string, agentId?: string) => AsyncIterable<OpenAgentEvent> | undefined
+export type EventsSource = (projectId: string, agentId?: string) => (AsyncIterable<OpenAgentEvent> & { readonly length: number }) | undefined
 
 /** A saved machine as a run's row needs it: the name it was given, and its address. */
 export interface SavedMachine {

@@ -23,3 +23,14 @@ describe('openagentTitle', () => {
     expect(openagentTitle(0, 'gemstack')).toBe('gemstack — OpenAgent')
   })
 })
+
+describe('openagentTitle with the page', () => {
+  it("puts the page's own name first, before the project and after the count", () => {
+    expect(openagentTitle(2, 'shop', 'Logs')).toBe('(2) Logs · shop — OpenAgent')
+    expect(openagentTitle(0, 'shop', 'ask which colour')).toBe('ask which colour · shop — OpenAgent')
+  })
+
+  it('names the page alone when no project is picked', () => {
+    expect(openagentTitle(1, null, 'Agents')).toBe('(1) Agents — OpenAgent')
+  })
+})

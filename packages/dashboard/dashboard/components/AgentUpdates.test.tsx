@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, expect, test, vi } from 'vitest'
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 
 // The Overview's line for a coding agent with a newer version out, and its press; and OpenAgent's own, with its command.
 
@@ -77,7 +77,9 @@ test('a failed update says what failed and what to do before the program\'s line
   expect(await screen.findByRole('button', { name: 'Updating…' })).toBe(document.activeElement)
   fail({ ok: false, error: "Error: EACCES: permission denied, mkdir '/usr/lib/node_modules/@anthropic-ai'" })
   const alert = await screen.findByRole('alert')
-  expect(alert.textContent).toBe("Claude Code could not be updated. Run claude update in a terminal to see why, or try again.Error: EACCES: permission denied, mkdir '/usr/lib/node_modules/@anthropic-ai'")
+  expect(alert.textContent).toBe("Claude Code could not be updated. Run this in a terminal to see why, or try again:claude updateError: EACCES: permission denied, mkdir '/usr/lib/node_modules/@anthropic-ai'")
+  // The command to run comes with the press that copies it, as every command on the page does.
+  expect(within(alert).getByRole('button', { name: 'Copy the command' })).toBeTruthy()
   expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Update Claude Code' }))
 })
 

@@ -195,8 +195,10 @@ export function ProjectPicker({
   const { open, typed } = search
   const [adding, setAdding] = useState<{ folder: string } | { address: string } | null>(null)
   const triggerRef = useRef<HTMLButtonElement>(null)
-  // The folder just added, until the projects read again have it: then it is picked.
-  const [added, setAdded] = useState<string | null>(null)
+  // The folder just added, and what was picked then, until the projects read again have it: then it
+  // is picked, however late that is, unless another pick was made meanwhile, which stays. The panel
+  // says it was added until it closes itself or Done closes it, whether the pick came yet or not.
+  const [added, setAdded] = useState<{ path: string; over: string | null } | null>(null)
   const [folderError, setFolderError] = useState<string | null>(null)
   // Read again after a folder is added: the daemon has crawled it by then.
   const [folders, setFolders] = useState(0)
@@ -210,12 +212,12 @@ export function ProjectPicker({
 
   useEffect(() => {
     if (added === null) return
-    const project = projects.find(p => p.path === added && p.machine === undefined)
+    if (picked !== added.over) return setAdded(null)
+    const project = projects.find(p => p.path === added.path && p.machine === undefined)
     if (!project) return
     setAdded(null)
-    setAdding(null)
     onPick(project.id)
-  }, [added, projects, onPick])
+  }, [added, picked, projects, onPick])
 
   const NONE: Row = useMemo(() => ({ value: 'none', label: none.label, pick: { kind: 'none' }, search: '' }), [none.label])
   const projectRows = useMemo<Row[]>(
@@ -382,13 +384,10 @@ export function ProjectPicker({
           {...('folder' in adding ? { folder: adding.folder } : { address: adding.address })}
           opener={triggerRef}
           onAdded={path => {
-            setAdded(path)
+            setAdded({ path, over: picked })
             onProjectAdded()
           }}
-          onClose={() => {
-            setAdding(null)
-            setAdded(null)
-          }}
+          onClose={() => setAdding(null)}
         />
       )}
     </>

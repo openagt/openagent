@@ -1,5 +1,5 @@
 import { FastForward, Play } from 'lucide-react'
-import { PageLink, Panel, PanelGroup, PanelNote, PanelRow, PartDescription, SentenceShape, Slot, StartAgentButton, pathsIn, useFileNames, useIsMobile, useModuleHost, type ModuleCardProps } from '@openagt/dashboard/module'
+import { PageLink, Panel, PanelGroup, PanelNote, PanelRow, PartDescription, SentenceShape, Slot, StartAgentButton, useIsMobile, useModuleHost, type FileNames, type ModuleCardProps } from '@openagt/dashboard/module'
 import { fanOutLabel, fanOutPress, unclaimedEntries, workOnEntryPrompt } from '../src/module.js'
 import { EntryTitle, entryView } from './entry.js'
 import { useQueueStarts, type QueueStarts } from './starts.js'
@@ -25,9 +25,8 @@ const SHOWN = 3
 
 export function QueueCard({ projects }: ModuleCardProps) {
   const host = useModuleHost()
-  const { reads, state } = useQueueReads(projects)
+  const { reads, state, names } = useQueueReads(projects)
   const starts = useQueueStarts(host)
-  const names = useFileNames(reads.map(read => ({ projectId: read.project.id, paths: read.entries.flatMap(pathsIn) })))
   const { inFlight, error } = starts
 
   const shown = reads.filter(read => read.entries.length > 0 || read.error !== undefined)
@@ -35,14 +34,14 @@ export function QueueCard({ projects }: ModuleCardProps) {
   // on a phone, where the heading has no room for it, at the card's foot.
   const single = shown.length === 1 ? shown[0] : undefined
   const mobile = useIsMobile()
-  const waiting = shown.reduce((sum, read) => sum + unclaimedEntries(read.entries, read.working).length, 0)
+  const waiting = shown.reduce((sum, read) => sum + startable(read, names).length, 0)
   return (
     <PanelGroup
       bare
       title="AI Queue"
       action={
         <>
-          {single && !mobile && <BatchStart read={single} starts={starts} />}
+          {single && !mobile && <BatchStart read={single} names={names} starts={starts} />}
           {state !== 'unknown' && shown.length > 0 && (
             <PageLink href={host.pageHref('queue')} onOpen={() => host.openPage('queue')}>
               All {waiting} waiting
@@ -70,7 +69,7 @@ export function QueueCard({ projects }: ModuleCardProps) {
                     {projects.length > 1 && (
                       <div className="mb-2 flex min-h-8 w-full items-center gap-2">
                         <span className="min-w-0 flex-1 truncate text-sm font-medium">{project.name}</span>
-                        {!single && <BatchStart read={read} starts={starts} />}
+                        {!single && <BatchStart read={read} names={names} starts={starts} />}
                       </div>
                     )}
                     {read.error !== undefined && (
@@ -91,31 +90,34 @@ export function QueueCard({ projects }: ModuleCardProps) {
                               state={<span className="text-xs tabular-nums text-faint-foreground">{entries.indexOf(entry) + 1}.</span>}
                               title={<EntryTitle view={view} entry={entry} {...((view.open ?? view.url) !== undefined ? { className: 'relative hover:underline' } : {})} />}
                               actions={
-                                // Pulled out by its chevron's own padding, so the glyph ends on the row's inset.
-                                <span className="-mr-1.5 flex">
-                                  <StartAgentButton
-                                    variant="ghost"
-                                    size="icon-sm"
-                                    icon={<Play className="h-3.5 w-3.5" aria-hidden />}
-                                    ariaLabel="Start an agent working on this entry"
-                                    menuAriaLabel={`Other ways to run ${view.title}`}
-                                    tooltip="Start an agent working on this entry"
-                                    busy={inFlight}
-                                    starting={starts.starting(project.id, entry)}
-                                    onStart={() => void starts.startEntry(project.id, entry)}
-                                    onConfigure={() => host.configureRun(project.id, workOnEntryPrompt(entry))}
-                                    prompt={workOnEntryPrompt(entry)}
-                                    configureDescription="Opens the launcher with this entry's prompt, so you can set the model and where it runs."
-                                    className="text-muted-foreground hover:text-foreground"
-                                  />
-                                </span>
+                                // One done already (a plan already written) is left over: nothing to start on it.
+                                !view.done && (
+                                  // Pulled out by its chevron's own padding, so the glyph ends on the row's inset.
+                                  <span className="-mr-1.5 flex">
+                                    <StartAgentButton
+                                      variant="ghost"
+                                      size="icon-sm"
+                                      icon={<Play className="h-3.5 w-3.5" aria-hidden />}
+                                      ariaLabel="Start an agent working on this entry"
+                                      menuAriaLabel={`Other ways to run ${view.title}`}
+                                      tooltip="Start an agent working on this entry"
+                                      busy={inFlight}
+                                      starting={starts.starting(project.id, entry)}
+                                      onStart={() => void starts.startEntry(project.id, entry)}
+                                      onConfigure={() => host.configureRun(project.id, workOnEntryPrompt(entry))}
+                                      prompt={workOnEntryPrompt(entry)}
+                                      configureDescription="Opens the launcher with this entry's prompt, so you can set the model and where it runs."
+                                      className="text-muted-foreground hover:text-foreground"
+                                    />
+                                  </span>
+                                )
                               }
                             />
                           )
                         })}
-                        {single === read && mobile && free.length > 0 && (
+                        {single === read && mobile && startable(read, names).length > 0 && (
                           <li className="relative flex items-center justify-end gap-2 px-4 py-3 before:absolute before:top-0 before:right-4 before:left-4 before:h-px before:bg-hairline">
-                            <BatchStart read={read} starts={starts} />
+                            <BatchStart read={read} names={names} starts={starts} />
                           </li>
                         )}
                       </Panel>
@@ -137,9 +139,9 @@ export function QueueCard({ projects }: ModuleCardProps) {
 }
 
 /** A project's batch act, said as one: how many agents, then "Start N agents", which starts them from the top of the free entries. The chevron sends the top entry alone: a launcher can only ever start one agent. */
-function BatchStart({ read, starts }: { read: ProjectRead; starts: QueueStarts }) {
+function BatchStart({ read, names, starts }: { read: ProjectRead; names: FileNames; starts: QueueStarts }) {
   const host = useModuleHost()
-  const free = unclaimedEntries(read.entries, read.working)
+  const free = startable(read, names)
   if (free.length === 0) return null
   const { project } = read
   const count = starts.batchOf(project.id, free)
@@ -160,4 +162,9 @@ function BatchStart({ read, starts }: { read: ProjectRead; starts: QueueStarts }
       />
     </>
   )
+}
+
+/** What a project's batch can start: the entries no agent is on, less one done already (a plan already written), which is left over. */
+function startable(read: ProjectRead, names: FileNames): string[] {
+  return unclaimedEntries(read.entries, read.working).filter(entry => !entryView(read.project.id, entry, names).done)
 }

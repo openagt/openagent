@@ -77,7 +77,7 @@ test('Ctrl+K, a few letters and Enter land on a run from the launcher, and nothi
     await page.getByRole('option', { name: /ask about the jump colour/ }).waitFor()
     await page.keyboard.press('Enter')
     await page.getByRole('region', { name: 'Which way?' }).waitFor()
-    assert.equal(await page.getByRole('combobox', { name: 'Jump to' }).count(), 0)
+    await page.getByRole('combobox', { name: 'Jump to' }).waitFor({ state: 'detached' })
     assert.deepEqual(await page.evaluate('window.shifts'), [])
   })
 })

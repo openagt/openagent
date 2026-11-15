@@ -27,7 +27,7 @@ describe('pathsIn', () => {
 
 describe('useFileNames', () => {
   function Names({ asked, path }: { asked: { projectId: string; paths: string[] }[]; path: string }) {
-    const names = useFileNames(asked)
+    const names = useFileNames(asked, 'test:names')
     const name = names('p1', path)
     return name ? <button onClick={name.open}>{name.title}</button> : <span>no name</span>
   }

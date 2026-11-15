@@ -8,6 +8,7 @@ import { FocusHome } from '../lib/focus-home.js'
 import { Button } from './ui/button.js'
 import { CopyButton } from './ui/copy-button.js'
 import { useAction } from '../lib/use-action.js'
+import { CommandLine } from './Logins.js'
 
 // The Overview's line for a coding agent on this computer with a newer version out: the version it
 // has, the newest, and the press that runs the agent's own update. Nothing when every agent is up
@@ -102,11 +103,8 @@ function AgentUpdateLine({ update, onUpdated }: { update: AgentUpdate; onUpdated
       </div>
       {error && (
         <div role="alert" className="mt-1 space-y-0.5 text-xs">
-          <p className="text-danger">
-            {`${label} could not be updated. Run `}
-            <code className="font-mono">{UPDATE_COMMANDS[update.agent]}</code>
-            {' in a terminal to see why, or try again.'}
-          </p>
+          <p className="text-danger">{`${label} could not be updated. Run this in a terminal to see why, or try again:`}</p>
+          <CommandLine command={UPDATE_COMMANDS[update.agent]} />
           <p className="font-mono text-muted-foreground">{error}</p>
         </div>
       )}

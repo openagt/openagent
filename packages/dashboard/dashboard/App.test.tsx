@@ -62,6 +62,13 @@ vi.mock('./components/ProjectActions.js', async importOriginal => ({
   ProjectMenu: ({ onProjectRemoved }: { onProjectRemoved?: () => void }) => (onProjectRemoved ? createElement('button', { onClick: onProjectRemoved }, 'remove the project from its menu') : null),
 }))
 
+// A session's page, as itself unless a test stands in for it: the stand-in gets what the shell hands the page.
+const agentView = vi.hoisted(() => ({ standIn: null as null | ((props: Record<string, unknown>) => unknown) }))
+vi.mock('./components/AgentView.js', async importOriginal => {
+  const real = await importOriginal<typeof import('./components/AgentView.js')>()
+  return { ...real, AgentView: (props: Parameters<typeof real.AgentView>[0]) => (agentView.standIn ? agentView.standIn(props as Record<string, unknown>) : createElement(real.AgentView, props)) }
+})
+
 const { App } = await import('./App.js')
 const { Dialog } = await import('./components/ui/dialog.js')
 
@@ -89,6 +96,7 @@ function answerShell(modules: unknown[]): void {
 
 afterEach(() => {
   cleanup()
+  agentView.standIn = null
   window.history.replaceState(null, '', '/')
   calls.length = 0
 })
@@ -201,6 +209,32 @@ describe('module pages in the shell (#1774)', () => {
     render(<App />)
     fireEvent.click(await screen.findByRole('button', { name: 'back to the list' }))
     expect(window.location.pathname + window.location.search).toBe('/app/list')
+  })
+
+  test("a module's page opened beside the item the list opened, and back again, goes back to that list as it was left, by Back as many entries", async () => {
+    function ListPage({ path }: ModulePageProps) {
+      const host = useModuleHost()
+      if (path.length === 0) return createElement('button', { onClick: () => host.openPage('list', ['a'], PROJECT.id) }, 'open item a')
+      const other = path.length === 1 ? ['a', 'tab'] : ['a']
+      return createElement(
+        'div',
+        null,
+        createElement('button', { onClick: () => host.openPage('list', other, PROJECT.id, { beside: true }) }, 'its other tab'),
+        createElement('button', { onClick: () => host.backToPage('list') }, 'back to the list'),
+      )
+    }
+    answerShell([{ package: '@acme/list', url: moduleModule('__listBeside', { pages: [{ segment: 'list', label: 'List', Page: ListPage }] }), projects: [PROJECT.id] }])
+    window.history.replaceState(null, '', '/list?sort=new')
+    render(<App />)
+    fireEvent.click(await screen.findByRole('button', { name: 'open item a' }))
+    fireEvent.click(await screen.findByRole('button', { name: 'its other tab' }))
+    expect(window.location.pathname).toBe('/app/list/a/tab')
+    fireEvent.click(screen.getByRole('button', { name: 'its other tab' }))
+    expect(window.location.pathname).toBe('/app/list/a')
+    const entries = window.history.length
+    fireEvent.click(screen.getByRole('button', { name: 'back to the list' }))
+    await waitFor(() => expect(window.location.pathname + window.location.search).toBe('/list?sort=new'))
+    expect(window.history.length).toBe(entries)
   })
 
   test("a run a module opens while Settings holds a change asks first: Cancel keeps the change and Settings' address, Leave goes", async () => {
@@ -735,16 +769,17 @@ describe('the project select (#1513)', () => {
     expect(screen.queryByText('app works')).toBeNull()
     expect(await screen.findByText('site ran')).toBeTruthy()
     await waitFor(() => expect(screen.queryByText('app ran')).toBeNull())
-    expect(document.title).toBe('(1) site — OpenAgent')
+    expect(document.title).toBe('(1) Overview · site — OpenAgent')
   })
 
-  test('the pick rides along to a module page and Settings over it, and its row opens that project\'s agent', async () => {
+  test('the pick rides along to a module page and Settings over it, and its row opens that project\'s agent; the tab names each page first', async () => {
     answerTwo()
     window.history.replaceState(null, '', '/site/overview')
     render(<App />)
     fireEvent.click(await screen.findByRole('link', { name: 'Logs' }))
     expect(url()).toBe('/site/logs')
     expect(await screen.findByText('runs of site')).toBeTruthy()
+    expect(document.title).toBe('(1) Logs · site — OpenAgent')
     // The sidebar marks the page that is open, also with Settings open over it. The Overview row's
     // name carries its Human Queue count here, and the person's row ends in "settings", hence the patterns.
     const marked = () => ['Overview', 'Logs', 'Settings'].filter(name => screen.getByRole(name === 'Settings' ? 'button' : 'link', { name: name === 'Settings' ? /settings$/i : new RegExp(`^${name}`) }).getAttribute('aria-current') === 'page')
@@ -755,6 +790,7 @@ describe('the project select (#1513)', () => {
     expect(await screen.findByText("the settings dialog on ''")).toBeTruthy()
     expect(screen.getByText('runs of site')).toBeTruthy()
     expect(marked()).toEqual(['Logs'])
+    expect(document.title).toBe('(1) Settings · site — OpenAgent')
     // Another entry replaces the address, so Back leaves Settings rather than stepping through it.
     const steps = window.history.length
     fireEvent.click(screen.getByRole('button', { name: 'to Agent' }))
@@ -766,6 +802,7 @@ describe('the project select (#1513)', () => {
     expect(screen.queryByText(/the settings dialog/)).toBeNull()
     fireEvent.click(await screen.findByText('site ran'))
     expect(url()).toBe('/site/3-s')
+    await waitFor(() => expect(document.title).toBe('(1) site ran · site — OpenAgent'))
   })
 
   test.each([
@@ -854,6 +891,7 @@ describe('the project select (#1513)', () => {
     fireEvent.click(await screen.findByText('New agent session'))
     expect(url()).toBe('/site')
     expect(await screen.findByText('the launcher of site')).toBeTruthy()
+    expect(document.title).toBe('(1) New agent session · site — OpenAgent')
     await pick('site', /app/)
     expect(url()).toBe('/app')
     await pick('app', /All projects/)
@@ -1084,6 +1122,44 @@ describe('the project select (#1513)', () => {
     window.history.replaceState(null, '', '/gone')
     render(<App />)
     expect(await screen.findByText('No project has the address "/gone", and no installed package adds a page there.')).toBeTruthy()
+  })
+})
+
+describe('the Context of a session continued from its box', () => {
+  // The session's page as the shell drives it: it picks into the shell's Context as `#` does, and says a message
+  // landed as its box does, for the session shown (a continuation) or for another run (a launch).
+  function SessionPage({ agentId, contextSet, onAgentStarted }: { agentId: string; contextSet: { context: Set<string>; add: (path: string) => void }; onAgentStarted: (intent: string, id: string) => void }) {
+    return createElement(
+      'div',
+      null,
+      createElement('p', null, `Context: ${[...contextSet.context].join(', ')}`),
+      createElement('button', { onClick: () => contextSet.add('README.md') }, 'pick README.md'),
+      createElement('button', { onClick: () => onAgentStarted('go on', agentId) }, 'the continuation lands'),
+      createElement('button', { onClick: () => onAgentStarted('another', '8-n') }, 'a new run starts'),
+    )
+  }
+
+  test('a file picked while an ended run\'s continuation went keeps its Context once it lands; a new run starts with none', async () => {
+    agentView.standIn = props => createElement(SessionPage, props as unknown as Parameters<typeof SessionPage>[0])
+    answerShell([])
+    answers.set('onDocs', () => [])
+    answers.set('onProjectFiles', () => [])
+    answers.set('onAgentChanges', () => [])
+    answers.set('onRetainedWorktrees', () => [])
+    answers.set('onAgents', () => [{ id: '7-e', status: 'done', startedAt: '2026-07-19T16:05:44.756Z', updatedAt: '2026-07-19T16:06:21.000Z', intent: 'app ran' }])
+    window.history.replaceState(null, '', '/app/7-e')
+    render(<App />)
+    // The session is known: the shell's own fresh start for it is behind.
+    await waitFor(() => expect(calls.some(call => call.name === 'onAgents' && call.args[0] === PROJECT.id)).toBe(true))
+    fireEvent.click(await screen.findByRole('button', { name: 'pick README.md' }))
+    expect(await screen.findByText('Context: README.md')).toBeTruthy()
+    fireEvent.click(screen.getByRole('button', { name: 'the continuation lands' }))
+    expect(window.location.pathname).toBe('/app/7-e')
+    expect(screen.getByText('Context: README.md')).toBeTruthy()
+    // A launch: the picked Context went with that run (#948).
+    fireEvent.click(screen.getByRole('button', { name: 'a new run starts' }))
+    await waitFor(() => expect(window.location.pathname).toBe('/app/8-n'))
+    await waitFor(() => expect(screen.getByText(/^Context:/).textContent).toBe('Context: '))
   })
 })
 
