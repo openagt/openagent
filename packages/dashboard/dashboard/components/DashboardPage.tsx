@@ -1,5 +1,5 @@
 import type { ActiveAgent, Intervention } from '../../src/index.js'
-import { Fragment, useCallback, useState, type ReactNode } from 'react'
+import { useCallback, useState, type ReactNode } from 'react'
 import { SlidersHorizontal } from 'lucide-react'
 import { Quota } from './Quota.js'
 import { SentenceShape, Slot } from './ui/slot.js'
@@ -21,6 +21,7 @@ import { ALL_PROJECTS, arrangeCards } from '../../src/client.js'
 import type { ProjectSummary } from '../../src/index.js'
 import type { ReadState } from '../lib/use-async.js'
 import { Page } from './Page.js'
+import { cn } from '../lib/utils.js'
 import { LinePart, NEEDS_YOU_ID, WORKING_ID, counted, scrollToPart } from './LinePart.js'
 import { YourAgentsPart } from './YourAgentsPart.js'
 
@@ -195,10 +196,11 @@ export function DashboardPage({
       title="Overview"
       line={
         line.map((part, at) => (
-          <Fragment key={part.id}>
-            {at > 0 && <span aria-hidden className="mx-1.5">·</span>}
+          // A part after the first opens with its dot, drawn as the part's own (so the two stand as one) and not read aloud. On a phone the line
+          // wraps beside Customize: there a space parts them, never a dot, which would start a line.
+          <span key={part.id} className={cn('max-md:mr-3 max-md:inline-block', at > 0 && "md:before:mx-1.5 md:before:content-['·'_/_'']")}>
             {part.node}
-          </Fragment>
+          </span>
         ))
       }
       actions={
@@ -215,9 +217,10 @@ export function DashboardPage({
             </Button>
           </>
         ) : (
-          <Button variant="ghost" className="gap-1.5 text-muted-foreground" onClick={() => setEditing(true)}>
-            <SlidersHorizontal className="h-3.5 w-3.5" aria-hidden />
-            Customize
+          // Pulled out by its own padding, so its words (on a phone its mark alone, the line beside it keeping the width) end on the cards' edge.
+          <Button variant="ghost" className="-mr-3 gap-1.5 text-muted-foreground max-md:size-10 max-md:px-0" onClick={() => setEditing(true)}>
+            <SlidersHorizontal className="h-3.5 w-3.5 max-md:size-4" aria-hidden />
+            <span className="max-md:sr-only">Customize</span>
           </Button>
         )
       }
