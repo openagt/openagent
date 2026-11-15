@@ -130,7 +130,7 @@ export function defaultView(): TicketsView {
       stage: [],
       unlinked: false,
     },
-    sort: { key: 'date', dir: 'desc' },
+    sort: { key: 'priority', dir: 'desc' },
     group: 'project',
   }
 }
@@ -404,7 +404,7 @@ export function formatTicketsView(view: TicketsView, search = ''): string {
   if (topics.length) params.set('topics', topics.join(','))
   if (f.stage.length) params.set('stage', f.stage.join(','))
   if (f.unlinked) params.set('issue', 'none')
-  if (view.sort.key !== 'date') params.set('sort', view.sort.key)
+  if (view.sort.key !== 'priority') params.set('sort', view.sort.key)
   if (view.sort.dir !== DEFAULT_DIR[view.sort.key]) params.set('dir', view.sort.dir)
   if (view.group === 'none') params.set('group', 'none')
   return params.toString()
