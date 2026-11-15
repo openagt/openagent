@@ -56,7 +56,7 @@ export function AgentWorkBar({
           {/* What the run did, then its branch: the two parts that give up width, each cut short, the
               branch in its middle so the end that tells it apart stays, its whole name in its
               tooltip. No icon beside it: the name says what it is, and the row is shorter without one. */}
-          <span className="flex min-w-0 flex-1 items-baseline gap-2 pl-1">
+          <span className="flex min-w-0 flex-1 items-baseline gap-2 pl-2">
             {did && <span className="min-w-0 shrink truncate text-foreground">{did}</span>}
             <Tooltip>
               <TooltipTrigger render={<span className={cn('flex min-w-0 font-mono text-xs text-muted-foreground', did ? 'max-w-1/2 shrink-0' : 'flex-1')} />}>
