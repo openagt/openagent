@@ -194,7 +194,6 @@ export function AgentHistory({
   const listOf = projectId ?? scope ?? null
   const listed = crossProject ? recentAgents!.map(recent => recent.agent) : agents
 
-  const hasRunning = listed.some(agent => agent.status === 'running')
   // The handover: the row this one stands in for has landed once the list holds the run the start
   // reported — whatever its status.
   //
@@ -208,6 +207,10 @@ export function AgentHistory({
   // hand over to: it sat beside the finished session's own row, claiming a second session was
   // starting, until the deadline below swept it. That was hard to hit while a broken agent hung as
   // `running` forever; it stopped being hard once such agents began failing in milliseconds.
+  //
+  // And it was too wide: any run at work counted as the one started. With another agent working,
+  // which is the usual day, a start had no row at all until its own landed seconds later, and the
+  // page it opened had nothing marked in the list.
   const landed = optimistic !== null && listed.some(agent => agent.id === optimistic.id)
   useEffect(() => {
     if (landed) setOptimistic(null)
@@ -220,14 +223,14 @@ export function AgentHistory({
   // this just stops the rail pretending. Still the backstop, not the usual path: `landed` above
   // retires the row as soon as the real one exists.
   useEffect(() => {
-    if (optimistic === null || hasRunning) return
+    if (optimistic === null) return
     const timer = setTimeout(() => setOptimistic(null), 20_000)
     return () => clearTimeout(timer)
-  }, [optimistic, hasRunning])
+  }, [optimistic])
 
   // `landed` is checked here as well as in its effect so the stand-in and the real row are never
   // painted together for a frame while the effect is still queued.
-  const showOptimistic = optimistic !== null && !hasRunning && !landed
+  const showOptimistic = optimistic !== null && !landed
 
   // A session selected but not in the list is one just started, whose row lands with its card
   // a beat later (#784): the optimistic row is standing in for it, so highlight that.
