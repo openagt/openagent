@@ -354,7 +354,8 @@ function Age({ at }: { at: string }) {
  */
 function ReplyFooter({ text, at }: { text: string; at?: string | undefined }) {
   return (
-    <div className="turn-footer flex h-6 items-center gap-1 font-sans text-muted-foreground opacity-0 transition-opacity focus-within:opacity-100 pointer-coarse:opacity-100">
+    // Pulled out by the copy press's own padding, so its glyph stands on the chat's one left edge (ui/look/spacing.md 4).
+    <div className="turn-footer -ml-1.5 flex h-6 items-center gap-1 font-sans text-muted-foreground opacity-0 transition-opacity focus-within:opacity-100 pointer-coarse:opacity-100">
       <CopyMessage text={text} />
       {at !== undefined && <Age at={at} />}
     </div>
