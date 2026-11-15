@@ -99,8 +99,9 @@ export function AgentActionBar({
             count is only useful if it is whole. */}
         {ready && <AgentErrorCount events={events} />}
         {/* A session with no project has no project's menu. */}
-        {/* The ⋮ and the panes' icons, one kind of button, 4px apart. */}
-        <div className="flex shrink-0 items-center gap-1">
+        {/* The ⋮ and the panes' icons, one kind of button, 4px apart, the last glyph ending 16 from the
+            bar's edge as the title starts 16 from the other (ui/look/spacing.md 4). */}
+        <div className="flex shrink-0 items-center gap-1 pr-0.5">
           {projectId !== SESSIONS_ID && <ProjectMenu projectId={projectId} onProjectRemoved={onProjectRemoved} />}
           <PaneToggles />
         </div>

@@ -32,8 +32,9 @@ export function ProjectActions({
         <h1 className="min-w-0 truncate px-2 text-sm font-medium">New agent session</h1>
         <div className="grow shrink-0" />
         {/* No project, no menu of a project's. */}
-        {/* The ⋮ and the panes' icons, one kind of button, 4px apart. */}
-        <div className="flex shrink-0 items-center gap-1">
+        {/* The ⋮ and the panes' icons, one kind of button, 4px apart, the last glyph ending 16 from the
+            bar's edge as the title starts 16 from the other (ui/look/spacing.md 4). */}
+        <div className="flex shrink-0 items-center gap-1 pr-0.5">
           {projectId !== SESSIONS_ID && <ProjectMenu projectId={projectId} onProjectRemoved={onProjectRemoved} />}
           <PaneToggles />
         </div>
