@@ -260,10 +260,13 @@ describe('QueuePage', () => {
     const field = (): HTMLInputElement => screen.getByRole('textbox', { name: 'A task to add to the queue' }) as HTMLInputElement
     const add = (): HTMLButtonElement => screen.getByRole('button', { name: 'Add to queue' }) as HTMLButtonElement
 
-    test('nothing typed adds nothing; a task typed is added with `queue add` at priority 5, trimmed, and the field empties', async () => {
+    test('nothing typed adds nothing: the press says what is missing under the field, with the caret there; a task typed is added with `queue add` at priority 5, trimmed, and the field empties', async () => {
       show()
       await screen.findByText('Urgent')
-      expect(add().disabled).toBe(true)
+      fireEvent.click(add())
+      expect(host.act).not.toHaveBeenCalled()
+      expect(screen.getByText('Write the task first.')).toBeTruthy()
+      expect(document.activeElement).toBe(field())
       fireEvent.change(field(), { target: { value: '  Tidy the loader  ' } })
       fireEvent.click(add())
       await waitFor(() => expect(host.act).toHaveBeenCalledWith('p1', ['add', '--priority', '5', '--', 'Tidy the loader']))
@@ -303,10 +306,12 @@ describe('QueuePage', () => {
       expect(field().value).toBe('Tidy the loader')
     })
 
-    test('an empty queue still takes a task', async () => {
-      show([])
+    test('an empty queue says so in one line over the field that takes a task', async () => {
+      show([], scheduling([{ command: 'work-queue', on: false }]))
       expect(await screen.findByText('Nothing queued.')).toBeTruthy()
       expect(field()).toBeTruthy()
+      await new Promise(resolve => setTimeout(resolve, 20))
+      expect(screen.queryByRole('status', { name: 'Who takes from the queue' })).toBeNull()
     })
   })
 

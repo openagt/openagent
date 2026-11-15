@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react'
+import { useId, useRef, useState } from 'react'
 import { FastForward, Play, Plus, Trash2 } from 'lucide-react'
 import {
   Button,
@@ -168,7 +168,7 @@ function BatchStart({ read, primary, starts }: { read: ProjectRead; primary: boo
   )
 }
 
-/** One project's queue: its entries by priority, who takes from it, and the field that adds one. */
+/** One project's queue: its entries by priority, the field that adds one, and who takes from it; an empty one says so in one line, over the field. */
 function ProjectQueue({ read, schedule, names, starts, reload }: { read: ProjectRead; schedule: Schedule; names: FileNames; starts: QueueStarts; reload: () => Promise<void> }) {
   const { project, entries, error, working } = read
   if (error !== undefined)
@@ -192,8 +192,9 @@ function ProjectQueue({ read, schedule, names, starts, reload }: { read: Project
           </Section>
         ))
       )}
-      <TakerLine schedule={schedule} projectId={project.id} />
       <AddEntry project={project} reload={reload} />
+      {/* Under the field, so that the line, read after the entries, moves nothing when it comes. */}
+      {entries!.length > 0 && <TakerLine schedule={schedule} projectId={project.id} />}
     </div>
   )
 }
@@ -319,12 +320,20 @@ function AddEntry({ project, reload }: { project: ModuleProject; reload: () => P
   const [priority, setPriority] = useState(DEFAULT_PRIORITY)
   const [adding, setAdding] = useState(false)
   const [failed, setFailed] = useState<string | undefined>()
+  const [asked, setAsked] = useState(false)
   // The next task goes in where this one went: the caret is back in the field once it is added.
   const field = useRef<HTMLInputElement>(null)
   const down = useOpenAgentDown()
   const items = PRIORITIES.map(p => ({ value: String(p), label: `Priority ${p}` }))
+  const untyped = text.trim() === ''
+  const formId = useId()
   const add = async (): Promise<void> => {
-    if (text.trim() === '' || adding) return
+    if (adding) return
+    if (untyped) {
+      setAsked(true)
+      field.current?.focus()
+      return
+    }
     setAdding(true)
     setFailed(undefined)
     const answer = await host.act(project.id, addTextArgs(text, priority)).catch((err: unknown) => ({ ok: false as const, error: err instanceof Error ? err.message : String(err) }))
@@ -344,7 +353,18 @@ function AddEntry({ project, reload }: { project: ModuleProject; reload: () => P
       }}
     >
       <div className="flex flex-wrap items-center gap-2">
-        <Input ref={field} name="task" value={text} onChange={event => (setText(event.target.value), setFailed(undefined))} readOnly={adding} placeholder="Add a task: what an agent should do" aria-label="A task to add to the queue" className="min-w-48 flex-1 max-md:basis-full" />
+        <Input
+          ref={field}
+          name="task"
+          value={text}
+          onChange={event => (setText(event.target.value), setFailed(undefined), setAsked(false))}
+          readOnly={adding}
+          placeholder="Add a task: what an agent should do"
+          aria-label="A task to add to the queue"
+          aria-invalid={asked && untyped}
+          aria-describedby={asked && untyped ? `${formId}-missing` : undefined}
+          className="min-w-48 flex-1 max-md:basis-full"
+        />
         <Select items={items} value={String(priority)} disabled={adding} onValueChange={next => setPriority(Number(next))}>
           <SelectTrigger aria-label="Priority of the new task" className="w-32">
             <SelectValue />
@@ -358,12 +378,18 @@ function AddEntry({ project, reload }: { project: ModuleProject; reload: () => P
             ))}
           </SelectContent>
         </Select>
-        <Button type="submit" variant="secondary" disabled={text.trim() === '' || adding || down}>
+        <Button type="submit" variant="secondary" loading={adding} disabled={down}>
           <Plus className="size-4" aria-hidden />
           {adding ? 'Adding…' : 'Add to queue'}
         </Button>
       </div>
-      <p className="mt-2 text-xs text-muted-foreground">It goes to the end of its priority. The text is what an agent is handed, so write the whole task.</p>
+      {asked && untyped && (
+        <p id={`${formId}-missing`} className="mt-2 text-xs text-danger">
+          Write the task first.
+        </p>
+      )}
+      {/* While a task is typed: what the press does with it. */}
+      {!untyped && <p className="mt-2 text-xs text-muted-foreground">It goes to the end of its priority. The text is what an agent is handed, so write the whole task.</p>}
       {failed !== undefined && (
         <p role="alert" className="mt-1 text-xs text-danger">
           Not added: {failed}
