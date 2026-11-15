@@ -103,7 +103,7 @@ export type FixVariant = 'secondary' | undefined
 export function FixAction({ label, busy, busyWords, command, failed, onPress, words, url, onCancel, size = 'default', variant }: { label: string; busy: boolean; busyWords: string; command?: string; failed?: string; onPress: () => void; words?: ReactNode; url?: string | undefined; onCancel?: (() => void) | undefined; size?: 'default' | 'sm' | undefined; variant?: FixVariant }) {
   // Busy, the press stays with the focus it was pressed with, and says it is waiting under it.
   const press = (
-    <Button size={size} variant={variant} aria-disabled={busy || undefined} className={cn(busy && 'opacity-50')} onClick={() => void (busy || onPress())}>
+    <Button size={size} variant={variant} loading={busy} onClick={onPress}>
       {label}
     </Button>
   )
@@ -123,7 +123,7 @@ export function FixAction({ label, busy, busyWords, command, failed, onPress, wo
       )}
       {busy && (
         <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
-          <p role="status" className="min-w-0 grow basis-60 text-xs text-muted-foreground">
+          <p role="status" className="min-w-0 grow basis-60 text-sm text-muted-foreground">
             {busyWords}
             {url !== undefined && (
               <>
@@ -179,7 +179,7 @@ export function AgentFix({ state, onChanged, words, size, variant }: { state: Ag
     return (
       <div className="min-w-0 space-y-2">
         {words !== undefined && <p className="text-sm text-muted-foreground">{words}</p>}
-        <p className="text-xs text-muted-foreground">This computer has no browser to log in with a press: type this in a terminal on it.</p>
+        <p className="text-sm text-muted-foreground">This computer has no browser to log in with a press: type this in a terminal on it.</p>
         <CommandLine command={state.fix.command} />
       </div>
     )
