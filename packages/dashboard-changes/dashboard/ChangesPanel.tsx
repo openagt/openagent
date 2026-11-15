@@ -74,12 +74,20 @@ function Counts({ mark, className }: { mark: FileMark; className?: string }) {
   return mark.added !== undefined && mark.removed !== undefined ? <DiffStat added={mark.added} removed={mark.removed} zeros className={cn('shrink-0 text-xs', className)} /> : null
 }
 
+/** What git did to a file, as its letter: added, modified, deleted, in the colour of what it does to the lines. */
+const STATUS_LETTER: Record<FileMark['status'], { letter: string; tone: string }> = {
+  untracked: { letter: 'A', tone: 'text-success' },
+  added: { letter: 'A', tone: 'text-success' },
+  modified: { letter: 'M', tone: 'text-warning' },
+  deleted: { letter: 'D', tone: 'text-danger' },
+}
+
 /** Narrower than this, the pane has room for the list or the diffs, not both. */
 const NARROW = 520
 
 /**
- * A changed file in the list: its icon, its name (or its path, ungrouped), its counts, and a ring
- * while it is only on disk, where the list holds both (`rings`).
+ * A changed file in the list: what git did to it in a letter, its name (or its path, ungrouped), its
+ * counts, and a ring while it is only on disk, where the list holds both (`rings`).
  */
 function ChangeRow({ path, mark, label, picked, rings, onPick }: { path: string; mark: FileMark; label: string; picked: boolean; rings: boolean; onPick: () => void }) {
   return (
@@ -91,7 +99,9 @@ function ChangeRow({ path, mark, label, picked, rings, onPick }: { path: string;
         title={`${path} · ${mark.status === 'untracked' || mark.status === 'added' ? 'new' : mark.status}${mark.committed ? '' : ', not committed'}`}
         className={cn(treeRow, picked && 'bg-accent')}
       >
-        <FileIcon path={path} />
+        <span aria-hidden className={cn('w-4 shrink-0 text-center font-mono text-xs font-semibold', STATUS_LETTER[mark.status].tone)}>
+          {STATUS_LETTER[mark.status].letter}
+        </span>
         <span className={cn('flex min-w-0 flex-1', mark.status === 'deleted' && 'line-through')}>
           <PathCut path={label} />
         </span>
@@ -289,18 +299,25 @@ function ChangesHeader({ between, merged, page, paths, changes, listShown, onPic
   onRefresh: () => void
 }) {
   const settings = useChangesSettings()
+  // What the files add up to, once git counted every one: the sum of the lines the list shows.
+  const marks = Object.values(changes)
+  const total = marks.length > 0 && marks.every(mark => mark.added !== undefined && mark.removed !== undefined) ? { added: marks.reduce((sum, mark) => sum + mark.added!, 0), removed: marks.reduce((sum, mark) => sum + mark.removed!, 0) } : undefined
   return (
     <>
       <PaneTitle>
         {/* One line, the branches cut in their middle on a narrow pane, so the run's own stays told apart. */}
         {between ? (
-          <h2 className="flex min-w-0 items-baseline gap-1 pl-2 text-sm text-muted-foreground" title={between}>
-            <MiddleCut text={between} />
-            {merged !== undefined && <span className="shrink-0 text-xs">{merged ? '· merged' : '· not merged yet'}</span>}
+          <h2 className="flex min-w-0 items-baseline gap-2 pl-2 text-sm" title={between}>
+            <span className="shrink-0 font-medium">Changes</span>
+            <span className="flex min-w-0 items-baseline gap-1 text-muted-foreground">
+              <MiddleCut text={between} />
+              {merged !== undefined && <span className="shrink-0 text-xs">{merged ? '· merged' : '· not merged yet'}</span>}
+            </span>
           </h2>
         ) : (
           <h2 className="truncate pl-2 text-sm font-medium">Changes</h2>
         )}
+        {total && <DiffStat added={total.added} removed={total.removed} zeros className="ml-auto pl-2" />}
       </PaneTitle>
       <PaneActions>
         <ChangeSearch paths={paths} changes={changes} onPick={onPick} />

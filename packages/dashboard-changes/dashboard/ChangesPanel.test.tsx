@@ -52,9 +52,9 @@ describe('ChangesPanel', () => {
     expect(readRun).toHaveBeenCalledWith(expect.anything(), 'p1', 'run-1')
     expect(readProject).not.toHaveBeenCalled()
     expect(within(list()).getAllByRole('button').map(b => [b.textContent, b.title])).toEqual([
-      ['app.ts', 'src/app.ts · modified'],
-      ['new.ts', 'src/new.ts · new, not committed'],
-      ['old.txt', 'old.txt · deleted'],
+      ['Mapp.ts', 'src/app.ts · modified'],
+      ['Anew.ts', 'src/new.ts · new, not committed'],
+      ['Dold.txt', 'old.txt · deleted'],
     ])
     expect(within(list()).getByText('src')).toBeTruthy()
     expect(screen.queryByText('README.md')).toBeNull()
@@ -192,7 +192,7 @@ describe('ChangesPanel commits', () => {
     await waitFor(() => expect(commitRows()).toHaveLength(3))
     fireEvent.click(commitRows()[1]!)
     await waitFor(() => expect(readCommit).toHaveBeenCalledWith(expect.anything(), 'p1', 'run-1', NEW.sha))
-    await waitFor(() => expect(within(list()).getAllByRole('button').map(b => b.textContent)).toEqual(['app.ts']))
+    await waitFor(() => expect(within(list()).getAllByRole('button').map(b => b.textContent)).toEqual(['Mapp.ts']))
     expect(screen.getByText('bbbbbbb Change the app')).toBeTruthy()
         await waitFor(() => expect(readDiff).toHaveBeenCalledWith(expect.anything(), 'p1', 'src/app.ts', 'run-1', NEW.sha, false))
     expect(commitRows().map(row => row.getAttribute('aria-pressed'))).toEqual(['false', 'true', 'false'])
@@ -338,6 +338,20 @@ describe('ChangesPanel, as Claude Code on the web draws it', () => {
     expect(within(screen.getByRole('region', { name: 'src/app.ts' })).queryAllByText('+3')).toHaveLength(0)
   })
 
+  test('each file says what git did to it in a letter, and the header the sum of every file\'s lines', async () => {
+    readRun.mockResolvedValue({
+      source: 'checkout',
+      changes: { 'src/app.ts': { status: 'modified', committed: true, added: 3, removed: 2 }, 'src/new.ts': { status: 'added', committed: true, added: 4, removed: 0 } },
+      merged: false,
+      from: 'main',
+      to: 'agent-x',
+    })
+    render(<ChangesPanel projectId="p1" agentId="run-1" context={context} />)
+    await waitFor(() => expect(row(/app\.ts/).textContent).toContain('Mapp.ts+3 −2'))
+    expect(row(/new\.ts/).textContent).toContain('Anew.ts+4 −0')
+    expect(screen.getByTestId('pane-title').textContent).toContain('+7 −2')
+  })
+
   test('a diff numbers its lines and says how many unchanged lines it leaves out; a click shows the whole file', async () => {
     readRun.mockResolvedValue({ source: 'checkout', changes: { 'src/app.ts': { status: 'modified', committed: true } }, merged: false })
     readDiff.mockResolvedValue({ path: 'src/app.ts', status: 'modified', patch: '@@ -10,2 +10,2 @@\n a = 1\n-b = 2\n+b = 3', added: 1, removed: 1, truncated: false, binary: false, lines: 30 })
@@ -408,7 +422,7 @@ describe('ChangesPanel, as Claude Code on the web draws it', () => {
     await findRow(/old\.txt/)
     fireEvent.click(screen.getByLabelText('The pane’s settings'))
     fireEvent.click(await screen.findByText('Group files by folder'))
-    await waitFor(() => expect(within(list()).getAllByRole('button').map(b => b.textContent)).toEqual(['old.txt', 'src/app.ts', 'src/new.ts']))
+    await waitFor(() => expect(within(list()).getAllByRole('button').map(b => b.textContent)).toEqual(['Dold.txt', 'Msrc/app.ts', 'Asrc/new.ts']))
   })
 
   test('search finds a changed file and goes to its diff', async () => {
