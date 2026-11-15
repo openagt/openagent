@@ -6,7 +6,7 @@ import { sendChoice, sendMessage } from '../rpc/control.js'
 import { useAction } from '../lib/use-action.js'
 import { DaemonDown } from '../lib/use-daemon-health.js'
 import { cn } from '../lib/utils.js'
-import { formatDuration } from '../lib/format-date.js'
+import { formatSince } from '../lib/format-date.js'
 import { StateCell } from './ui/state.js'
 import { RadioGroup } from './ui/radio-group.js'
 import { Button } from './ui/button.js'
@@ -204,7 +204,7 @@ export function QuestionPanel({
       <div className="flex flex-col gap-0.5 px-3 pt-2 pb-1">
         <span className="flex items-center gap-2 text-xs font-semibold text-warning">
           <StateCell state="waiting" className="size-3" />
-          Waiting for your answer{askedAt !== undefined && ` · ${since(askedAt)}`}
+          Waiting for your answer{askedAt !== undefined && ` · ${formatSince(askedAt)}`}
         </span>
         <h2 id={titleId} className="text-base font-semibold">{choice.title}</h2>
       </div>
@@ -274,10 +274,4 @@ export function QuestionPanel({
       </div>
     </section>
   )
-}
-
-/** How long ago a question was asked, in a word: "now", "2m", "1h". */
-function since(at: string): string {
-  const ms = Date.now() - Date.parse(at)
-  return Number.isNaN(ms) || ms < 60_000 ? 'now' : formatDuration(ms)
 }

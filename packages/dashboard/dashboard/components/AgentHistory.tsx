@@ -15,7 +15,7 @@ import { inPlace } from '../lib/in-place.js'
 import { formatRoute, type Route } from '../lib/route.js'
 import { NO_PROJECTS } from '../../src/project-address.js'
 import { cn } from '../lib/utils.js'
-import { formatDuration, formatRelative } from '../lib/format-date.js'
+import { formatRelative, formatSince } from '../lib/format-date.js'
 import { updatePreferences, usePreferences } from '../lib/preferences.js'
 import { RECENTS_SORT_LABELS, sortRuns, type RecentsSort } from '../lib/recents-sort.js'
 import { useProjectLabel } from '../lib/project-labels.js'
@@ -304,7 +304,7 @@ export function AgentHistory({
       // project's own rail already knows its project, and a subagent is in its main agent's.
       {...(row.project && !subagent ? { project: row.project } : {})}
       subtitle={formatRelative(row.agent.startedAt)}
-      age={shortAge(row.agent.startedAt)}
+      age={formatSince(row.agent.startedAt)}
       active={row.active}
       remote={row.agent.target === 'remote'}
       cloud={row.agent.target === 'web'}
@@ -667,14 +667,6 @@ function RecentsSortMenu({ order }: { order: RecentsSort }) {
       </DropdownMenuContent>
     </DropdownMenu>
   )
-}
-
-/** How long ago a run started, in a word: "now", "2m", "3h", "5d". */
-function shortAge(startedAt: string | undefined): string {
-  const at = startedAt ? Date.parse(startedAt) : NaN
-  if (Number.isNaN(at)) return ''
-  const ms = Date.now() - at
-  return ms < 60_000 ? 'now' : formatDuration(ms)
 }
 
 /** A person's mark on a row, beside its smaller marks. */
