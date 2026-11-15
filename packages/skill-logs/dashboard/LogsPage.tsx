@@ -83,11 +83,11 @@ const STATUSES = ['running', 'waiting', 'done', 'stopped', 'failed', 'unknown']
 /** A status as its chip says it: the word every place says, and a computer that does not answer in one. */
 const chipWord = (value: string): string => (value === 'unknown' ? 'unknown' : runWord(value))
 
-/** What a run's work still needs before it leaves this machine, as its row in the sidebar says it: "Needs commit · 2 files", "Needs push · 1 commit". */
-export function leftWords(card: Pick<RunRow['card'], 'uncommitted' | 'unpublished'>, gitHost: boolean): string | undefined {
-  if (card.uncommitted) return `${needsWord('uncommitted')} · ${card.uncommitted} file${card.uncommitted === 1 ? '' : 's'}`
-  if (card.unpublished) return `${needsWord('unpushed', gitHost)} · ${card.unpublished} commit${card.unpublished === 1 ? '' : 's'}`
-  return undefined
+/** What a run's work still needs before it leaves this machine, in the sidebar's words, as two facts of its line: "Needs commit", "2 files". */
+export function leftParts(card: Pick<RunRow['card'], 'uncommitted' | 'unpublished'>, gitHost: boolean): string[] {
+  if (card.uncommitted) return [needsWord('uncommitted'), `${card.uncommitted} file${card.uncommitted === 1 ? '' : 's'}`]
+  if (card.unpublished) return [needsWord('unpushed', gitHost), `${card.unpublished} commit${card.unpublished === 1 ? '' : 's'}`]
+  return []
 }
 
 /** The day a run started, as a heading says it: "Today", "Yesterday", else the weekday and the date. */
@@ -260,7 +260,7 @@ export function LogsPage({ projects, path }: ModulePageProps) {
                         {standing(card)}
                       </span>,
                       // What its work still needs before it leaves this machine, in the sidebar's words.
-                      leftWords(card, project.gitHost),
+                      ...leftParts(card, project.gitHost),
                       many && project.name,
                       card.cost !== undefined && dollars(card.cost),
                       // Last, as the part that gives way, and cut in its middle: runs started the same minute differ only at

@@ -299,11 +299,12 @@ test("a run whose work never left this machine says what it needs in the sidebar
   )
   render(page(false))
   const row = async (name: string) => (await screen.findAllByText(name))[0]!.closest('li')!
-  expect((await row('Committed a login page')).textContent).toContain('Needs push · 1 commit')
-  expect((await row('Left files')).textContent).toContain('Needs commit · 2 files')
+  // Two facts of the line, joined by its one dot as its others are.
+  expect((await row('Committed a login page')).textContent).toContain('Needs push·1 commit')
+  expect((await row('Left files')).textContent).toContain('Needs commit·2 files')
   expect((await row('Pushed')).textContent).not.toMatch(/Needs/)
   cleanup()
   forgetRemembered()
   render(page(true))
-  expect((await row('Committed a login page')).textContent).toContain('Needs PR · 1 commit')
+  expect((await row('Committed a login page')).textContent).toContain('Needs PR·1 commit')
 })
