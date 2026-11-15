@@ -47,10 +47,10 @@ function Choices({ multi, labelledBy, picked, onPick, disabled, children }: { mu
 // A choice's row: the radio group's radio, or a box the row toggles, from the card's edge to its edge.
 // A row of one line is 44 high, of two 64, its mark 16 in on the first line's, its words 44 in
 // (spacing.md 3), and rows are parted by nothing but their padding; none is filled but the one
-// picked and the one under the pointer.
+// picked and the one under the pointer, with the lightest fill a list's hovered row has (ui/panel).
 function Choice({ multi, value, on, twoLines, disabled, onPick, children }: { multi: boolean | undefined; value: string | typeof OTHER; on: boolean; twoLines: boolean; disabled: boolean; onPick: () => void; children: ReactNode }) {
   // A second line ends on its baseline, lower in its line than a mark ends: less padding under it keeps the words' insets even.
-  const row = cn('group/choice focus-ring-inset flex w-full items-start gap-3 px-4 pt-3 text-left transition-colors enabled:hover:bg-accent enabled:active:bg-foreground/10 disabled:opacity-60', twoLines ? 'pb-2' : 'pb-3', on && 'bg-accent')
+  const row = cn('group/choice focus-ring-inset flex w-full items-start gap-3 px-4 pt-3 text-left transition-colors enabled:hover:bg-foreground/4 enabled:active:bg-foreground/8 disabled:opacity-60', twoLines ? 'pb-2' : 'pb-3', on && 'bg-foreground/4')
   return multi ? (
     <button type="button" role="checkbox" aria-checked={on} disabled={disabled} onClick={onPick} className={row}>
       {children}
