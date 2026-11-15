@@ -371,7 +371,8 @@ export function SkillTick({ name, description, note, checked, onChange, disabled
             type="button"
             aria-expanded={whole}
             onClick={() => setWhole(on => !on)}
-            className={cn('focus-ring relative block max-w-full rounded-sm text-left text-xs text-muted-foreground after:absolute after:-inset-y-1 after:inset-x-0 hover:text-foreground', !whole && 'truncate')}
+            // 24 high over a 16 line: its own box, since a cut line clips whatever reaches past it.
+            className={cn('focus-ring -my-1 block max-w-full rounded-sm py-1 text-left text-xs text-muted-foreground hover:text-foreground', !whole && 'truncate')}
           >
             {description}
           </button>
