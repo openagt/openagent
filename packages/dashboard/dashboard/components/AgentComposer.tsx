@@ -211,7 +211,8 @@ export function AgentComposer({
     for (const path of sent ?? []) contextSet?.remove(path)
     // The box takes the next message at once, after a click on Send too; the answer leaves its focus and caret alone.
     composerRef.current?.focus()
-    const went = await say(sent ? promptWithContext(text, sent) : text, later)
+    const message = sent ? promptWithContext(text, sent) : text
+    const went = await say(message, later)
     const box = shown.current === agentId ? composerRef.current : null
     if (box) {
       if (went) setNotSent(false)
@@ -220,10 +221,11 @@ export function AgentComposer({
         for (const path of sent ?? []) contextSet?.add(path)
       }
     } else if (!went) {
-      // The page is closed or shows another session by now: the words go back to the draft of the one they were written in, after what it holds, as its append puts them.
+      // The page is closed or shows another session by now: the message goes back as it went, its Context line included, to the
+      // draft of the session it was written in, after what that holds, as its append puts them.
       const draftKey = `${projectId}:${agentId}`
       const kept = keptDraft(draftKey)
-      keepDraft(draftKey, kept === undefined ? text : `${kept}\n\n${text}`)
+      keepDraft(draftKey, kept === undefined ? message : `${kept}\n\n${message}`)
     }
   }
 

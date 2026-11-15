@@ -76,8 +76,27 @@ test('a message refused once its session page closed waits in that session\'s dr
   await waitFor(() => expect(sendMessage).toHaveBeenCalledTimes(1))
   page.rerender(<Session open={false} />)
   await act(async () => answer({ ok: false, error: 'resume refused' }))
-  expect(keptDraft('p1:run-1')).toBe('do not lose these words')
+  expect(keptDraft('p1:run-1')).toBe('do not lose these words\n\nContext: README.md')
   expect([...context.context]).toEqual([])
+})
+
+test('a message refused once another session is shown is sent again from its own session with the Context it went with', async () => {
+  let answer: (outcome: unknown) => void = () => {}
+  sendMessage.mockReturnValueOnce(new Promise(resolve => (answer = resolve))).mockResolvedValue({ ok: true })
+  const page = render(<Session />)
+  const box = (await screen.findByRole('textbox', { name: 'Message' })) as HTMLElement & { editor: Editor }
+  act(() => void box.editor.commands.insertContent('look at this'))
+  act(() => context.add('README.md'))
+  fireEvent.keyDown(box, { key: 'Enter' })
+  await waitFor(() => expect(sendMessage).toHaveBeenCalledWith('p1', 'look at this\n\nContext: README.md', 'run-1'))
+  page.rerender(<Session id="run-2" />)
+  await act(async () => answer({ ok: false, error: 'resume refused' }))
+  page.rerender(<Session id="run-1" />)
+  const again = (await screen.findByRole('textbox', { name: 'Message' })) as HTMLElement & { editor: Editor }
+  await waitFor(() => expect(again.editor.storage.markdown.getMarkdown()).not.toBe(''))
+  fireEvent.keyDown(again, { key: 'Enter' })
+  await waitFor(() => expect(sendMessage).toHaveBeenCalledTimes(2))
+  expect(sendMessage).toHaveBeenLastCalledWith('p1', 'look at this\n\nContext: README.md', 'run-1')
 })
 
 test('a file picked while a message went keeps its Context once that message lands, and goes with the next one', async () => {
