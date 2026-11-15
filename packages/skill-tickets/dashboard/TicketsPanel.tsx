@@ -197,7 +197,7 @@ export function StageWord({ ticket }: { ticket: WorkspaceTicket }) {
   return (
     <span className={cn('flex items-center gap-1', stage === 'claimed' && claimWorking(ticket) && 'text-info')} title={title}>
       {stage === 'claimed' && <ClaimMark ticket={ticket} />}
-      {stage === 'waiting' && <StateCell state="waiting" />}
+      {stage === 'waiting' && <StateCell state="waiting" className="size-3" />}
       <span>{STAGE_LABEL[stage]}</span>
     </span>
   )
@@ -205,9 +205,9 @@ export function StageWord({ ticket }: { ticket: WorkspaceTicket }) {
 
 /** A claim's mark: the holding run's own while one of the project's runs holds it, a still one for any other holder. */
 function ClaimMark({ ticket }: { ticket: WorkspaceTicket }) {
-  if (!ticket.lockedByAgent || ticket.holderStatus === undefined) return <StateCell state="stopped" />
+  if (!ticket.lockedByAgent || ticket.holderStatus === undefined) return <StateCell state="stopped" className="size-3" />
   return (
-    <span className="flex size-3.5 shrink-0 items-center justify-center">
+    <span className="flex size-3 shrink-0 items-center justify-center">
       <RunMark status={ticket.holderStatus} className={cn('size-2', claimWorking(ticket) && 'motion-safe:animate-pulse')} />
     </span>
   )
