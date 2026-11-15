@@ -19,6 +19,7 @@ import { PriorityBadge, StateCell, StatePill, type WorkState } from '../componen
 import { Stepper } from '../components/ui/stepper.js'
 import { ButtonGroup } from '../components/ui/button-group.js'
 import { ComposedField, ComposedFieldFoot, ComposedFieldInput } from '../components/ui/composed-field.js'
+import { Empty } from '../components/ui/empty.js'
 import { RowShapes, Slot } from '../components/ui/slot.js'
 import { ChevronRight, CornerDownLeft, Ellipsis, Folder, Play, Trash2 } from 'lucide-react'
 import { JumpPalette, openJump } from '../components/JumpPalette.js'
@@ -623,6 +624,18 @@ function Composing() {
   )
 }
 
+function Empties() {
+  return (
+    <div className="grid gap-4 sm:grid-cols-2">
+      <Card>
+        <Empty title="Nothing queued" action={<Button variant="secondary">Queue from tickets</Button>}>
+          Add what an agent should do next. It waits here, in priority order, until you start it.
+        </Empty>
+      </Card>
+    </div>
+  )
+}
+
 // ---------------------------------------------------------------- registry
 
 const LONG_TITLE = 'Move the release notes for every package into one page the website renders, and link each version from the changelog of its own'
@@ -786,6 +799,14 @@ export const PREVIEWS: Preview[] = [
     subtitle: 'The text, a pick and the send in one card; a count joined to the press it counts for',
     width: 900,
     node: <Composing />,
+  },
+  {
+    path: 'components/empty.html',
+    group: 'Components',
+    name: 'Empty',
+    subtitle: 'Nothing here yet: the empty hexagon, what fills it, the press that does',
+    width: 900,
+    node: <Empties />,
   },
   {
     path: 'components/disclosure.html',
