@@ -8,6 +8,7 @@ import {
   formatDuration,
   formatDurationLong,
   formatRelative,
+  formatSince,
 } from './format-date.js'
 
 describe('format-date (#759)', () => {
@@ -101,6 +102,21 @@ describe('formatDuration (#960 Edit)', () => {
 
   test('a negative duration reads as its own magnitude, not below zero', () => {
     expect(formatDuration(-5 * S)).toBe('0s')
+  })
+})
+
+describe('formatSince', () => {
+  test('says "now" under a minute, then the floored duration, and nothing without a date', () => {
+    vi.useFakeTimers({ now: new Date('2026-07-19T16:00:00Z') })
+    try {
+      expect(formatSince('2026-07-19T15:59:30Z')).toBe('now')
+      expect(formatSince('2026-07-19T15:48:00Z')).toBe('12m')
+      expect(formatSince('2026-07-19T13:00:00Z')).toBe('3h')
+      expect(formatSince(undefined)).toBe('')
+      expect(formatSince('not a date')).toBe('')
+    } finally {
+      vi.useRealTimers()
+    }
   })
 })
 

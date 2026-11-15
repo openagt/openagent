@@ -1,4 +1,5 @@
 import type { ReactNode } from 'react'
+import { GitMerge } from 'lucide-react'
 import { cn } from '../../lib/utils.js'
 
 // What an agent's work is doing, drawn from the logo's hexagon: the one place the knot's hues
@@ -24,11 +25,13 @@ function hexagon(r: number): string {
 }
 
 /**
- * A state's mark: working and waiting a core in a faint ring (the ring turns while it works), done,
- * merged and failed a solid cell, queued a dashed outline, stopped a small core in an outline, idle an
- * empty outline. 14 square; `className` sizes it.
+ * A state's mark, told apart by its shape as well as its colour: working and waiting a core in a faint
+ * ring (the ring turns while it works), done a solid cell, failed a solid cell crossed, merged the
+ * merge glyph, queued a dashed outline, stopped a small core in an outline, idle an empty outline. 14
+ * square; `className` sizes it.
  */
-export function StateCell({ state, className }: { state: WorkState; className?: string }) {
+export function StateCell({ state, className }: { state: WorkState; className?: string | undefined }) {
+  if (state === 'merged') return <GitMerge aria-hidden strokeWidth={2.5} className={cn('size-3.5 shrink-0', HUE[state], className)} />
   const ringed = state === 'working' || state === 'waiting'
   const hollow = state === 'queued' || state === 'idle'
   const core = ringed ? 3.6 : state === 'stopped' ? 3 : 5.2
@@ -47,6 +50,7 @@ export function StateCell({ state, className }: { state: WorkState; className?: 
         />
       )}
       {!hollow && <polygon points={hexagon(core)} fill="currentColor" stroke="currentColor" strokeWidth={1.6} strokeLinejoin="round" />}
+      {state === 'failed' && <path d="M5.9 5.9l4.2 4.2M10.1 5.9l-4.2 4.2" className="stroke-card" strokeWidth={1.5} strokeLinecap="round" />}
     </svg>
   )
 }

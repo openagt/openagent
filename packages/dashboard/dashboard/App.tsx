@@ -18,7 +18,7 @@ import { agentLabel, awaitingName } from './lib/agent-label.js'
 import { subagentsOf, taskLabel } from './lib/subagents.js'
 import { PaneLayout, PanesProvider } from './components/Panes.js'
 import { SubagentPanel } from './components/SubagentPanel.js'
-import { MenuButton, PhoneBar, PhoneBarCount } from './components/PhoneBar.js'
+import { PagesBar, PhoneBar, PhoneBarCount } from './components/PhoneBar.js'
 import { cn } from './lib/utils.js'
 import { onSkillsSaved } from './lib/skills-saved.js'
 import { usePolled } from './lib/use-async.js'
@@ -356,6 +356,9 @@ export function App() {
   const showDashboard = () => {
     go({ projectId: null, agentId: null })
   }
+  // A phone's session page has no bar of pages: its top bar's back arrow goes to the page this app
+  // showed before it, and to the Overview when there is none (a link opened cold).
+  const backFromSession = () => back(() => true, showDashboard)
 
   // Settings (#958): a dialog over the page you are on, which stays under it, its own query too;
   // with `item`, at that page inside the entry. Moving between its entries, from its list or from a
@@ -585,6 +588,7 @@ export function App() {
       onAgentStarted,
       contextSet,
       onProjectRemoved: removableHere,
+      onBack: backFromSession,
     }
     if (!selectedAgent) {
       // Not in the list: either the run we just started (its card lands a beat later) or a
@@ -731,13 +735,9 @@ export function App() {
           pages={sidebarPages}
           activePage={pageSegment}
           onPage={showPage}
-          interventionCount={interventions.length}
+          waiting={interventions}
           hrefOf={hrefOf}
         />
-        {/* On a phone the sidebar is a sheet, and this button, over the page's top left corner,
-            opens it. An agent's page and the "New agent session" page keep that corner of their top row
-            free; a page with no top row of its own gets a bar that names it. */}
-        {isMobile && !pageScrolls && <MenuButton />}
         {/* A project's page and an agent's have panes beside them (Panes). A module's page takes
             the full width itself (#1774), the way the Overview does. */}
         <PanesProvider
@@ -761,6 +761,23 @@ export function App() {
           </PaneLayout>
         </PanesProvider>
       </div>
+      {/* On a phone the sidebar is a sheet, opened from the bar of pages at the foot of every page
+          but a session's, whose message box is the page's foot (its top bar's arrow goes back). */}
+      {isMobile && agentId === null && (
+        <PagesBar
+          pages={sidebarPages ?? []}
+          activePage={pageSegment}
+          overviewActive={projectId === null && pageSegment === null}
+          overviewHref={hrefOf({ projectId: null, agentId: null })}
+          onOverview={showDashboard}
+          pageHref={segment => hrefOf({ projectId: null, agentId: null, page: segment })}
+          onPage={showPage}
+          newHref={hrefOf({ projectId: scope ?? SESSIONS_ID, agentId: null })}
+          newActive={projectId !== null && agentId === null}
+          onNew={() => newAgentInProject(scope ?? SESSIONS_ID)}
+          waiting={interventions.length}
+        />
+      )}
       {/* What a module of this computer's draws over every page: a popup it raises itself. */}
       {modules.everyPage.map(({ EveryPage, package: pkg }) => (
         <ModuleSlot key={pkg} package={pkg} label={`${pkg} popup`}>

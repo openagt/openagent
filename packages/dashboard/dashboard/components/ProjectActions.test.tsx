@@ -41,11 +41,8 @@ describe('ProjectActions', () => {
     const row = container.firstElementChild!.firstElementChild!
     // No layout in the test DOM, so the row is read off its classes.
     expect(row.className).not.toMatch(/border/)
-    for (const cls of ['flex', 'h-11', 'items-center', 'gap-2', 'overflow-hidden', 'md:pl-4']) expect(row.className.split(' ')).toContain(cls)
-    // On a phone its start is free for the menu's button. The phone's padding is never over a plain
-    // one: a module's stylesheet has its own copy of that class, which comes later and would win.
-    for (const cls of ['pr-2', 'max-md:pl-11']) expect(row.className.split(' ')).toContain(cls)
-    for (const cls of ['px-4', 'pl-4']) expect(row.className.split(' ')).not.toContain(cls)
+    // It starts 16 in on every screen: a phone opens the sidebar from the bar of pages at its foot.
+    for (const cls of ['flex', 'h-11', 'items-center', 'gap-2', 'overflow-hidden', 'pr-2', 'pl-4']) expect(row.className.split(' ')).toContain(cls)
     // The page's name, a spacer that takes the row's width, then the menu, last.
     expect(row.children).toHaveLength(3)
     expect(row.children[1]!.className).toContain('grow')

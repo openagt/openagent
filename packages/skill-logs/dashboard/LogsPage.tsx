@@ -249,7 +249,7 @@ export function LogsPage({ projects, path }: ModulePageProps) {
                 {rows.map(({ project, card }) => (
                   <PanelRow
                     key={`${project.id}/${card.id}`}
-                    state={<RunMark status={shownStatus(card)} className="size-2" />}
+                    state={<RunMark status={shownStatus(card)} />}
                     // As every list names a run; a run with none of its names goes by its id. What it was asked, whole, under the pointer.
                     title={runName(card) ?? card.id}
                     titleHint={card.intent?.trim() || undefined}

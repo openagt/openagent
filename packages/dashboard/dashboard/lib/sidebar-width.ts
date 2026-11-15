@@ -7,7 +7,7 @@ import { useSyncExternalStore } from 'react'
 const WIDTH_KEY = 'oa.sidebar-width'
 
 /** The width it has until it is dragged, and the bounds a drag keeps to, in pixels. */
-export const SIDEBAR_DEFAULT = 256
+export const SIDEBAR_DEFAULT = 288
 export const SIDEBAR_MIN = 224
 export const SIDEBAR_MAX = 448
 

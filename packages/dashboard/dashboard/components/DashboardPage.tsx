@@ -313,7 +313,7 @@ function HumanQueue({
             {rows.map(({ key, item, needs, detail, hint, since, href, external, open }) => (
               <PanelRow
                 key={key}
-                state={<RunMark status="waiting" className="size-2" />}
+                state={<RunMark status="waiting" />}
                 title={item.title}
                 titleHint={hint}
                 // What is needed in the waiting colour, then what it is about; a question is read whole: two lines before it is cut.

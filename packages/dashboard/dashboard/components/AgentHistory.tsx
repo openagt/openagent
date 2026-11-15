@@ -5,16 +5,17 @@ import { Plus, ChevronDown, Bot, ArrowDownUp, Check, Cloud, Laptop, LayoutDashbo
 import { MACHINE_ICONS } from './MachineMark.js'
 import { PersonMark } from './PersonMark.js'
 import type { ComponentType } from 'react'
-import type { AgentMeta, AgentStatus, RecentAgent, ProjectSummary } from '../../src/index.js'
+import type { AgentMeta, AgentStatus, Intervention, RecentAgent, ProjectSummary } from '../../src/index.js'
+import { interventionKey } from '../../src/client.js'
+import { StateCell } from './ui/state.js'
 import type { ModuleHostPerson } from '../module/index.js'
 import { DRIVER_LABELS, driverFromImpl, cloudRunState, type CloudRunState, type MachineKind } from '../../src/client.js'
 import { buttonVariants } from './ui/button.js'
-import { Badge } from './ui/badge.js'
 import { inPlace } from '../lib/in-place.js'
 import { formatRoute, type Route } from '../lib/route.js'
 import { NO_PROJECTS } from '../../src/project-address.js'
 import { cn } from '../lib/utils.js'
-import { formatRelative } from '../lib/format-date.js'
+import { formatRelative, formatSince } from '../lib/format-date.js'
 import { updatePreferences, usePreferences } from '../lib/preferences.js'
 import { RECENTS_SORT_LABELS, sortRuns, type RecentsSort } from '../lib/recents-sort.js'
 import { useProjectLabel } from '../lib/project-labels.js'
@@ -107,7 +108,7 @@ export function AgentHistory({
   pages = [],
   activePage = null,
   onPage = () => {},
-  interventionCount = 0,
+  waiting = [],
   hrefOf = route => formatRoute(route, NO_PROJECTS),
 }: {
   /** The page beside it scrolls as a page (App): the sidebar then stays where it is, as tall as the screen. */
@@ -144,8 +145,8 @@ export function AgentHistory({
   activePage?: string | null
   /** Open a module's page by its segment. */
   onPage?: (segment: string) => void
-  /** Human Queue count, shown on the Overview item and the picker (#632). */
-  interventionCount?: number
+  /** What waits on the person (the Human Queue, #632), the picked project's or every project's: the "Waiting on you" part, named as the launcher names it. */
+  waiting?: readonly Intervention[]
   /** The address a row or a nav item goes to, as the shell writes it: each is a link, which also opens in a new tab. */
   hrefOf?: (route: Route) => string
   /** Cross-project recents, for when all projects show: every project's sessions pooled. */
@@ -167,8 +168,8 @@ export function AgentHistory({
   /** The project that run was started in, by its label: the stand-in row names it as the run's own row will. */
   startProjectName?: string | undefined
 }) {
-  // On a phone the rail is a sheet over the page, opened from the page's top left corner
-  // (MenuButton): going somewhere from it closes it.
+  // On a phone the rail is a sheet over the page, opened from the bar of pages (PagesBar): going
+  // somewhere from it closes it.
   const { isMobile, open, setOpenMobile } = useSidebar()
   // What stands under the modules' rows waits while their pages are not known, and comes in at its
   // place once they are; drawn with the first frame wherever they were known from the start.
@@ -303,6 +304,7 @@ export function AgentHistory({
       // project's own rail already knows its project, and a subagent is in its main agent's.
       {...(row.project && !subagent ? { project: row.project } : {})}
       subtitle={formatRelative(row.agent.startedAt)}
+      age={formatSince(row.agent.startedAt)}
       active={row.active}
       remote={row.agent.target === 'remote'}
       cloud={row.agent.target === 'web'}
@@ -343,7 +345,7 @@ export function AgentHistory({
             under it shows. No rule under it: the room around it sets it apart. */}
         <SidebarHeader className="gap-4 pb-2">
           {/* The mark + wordmark, the way home (#909), now that there is no navbar to hold them. */}
-          <div className="flex items-center justify-between gap-2 pt-1 pl-1">
+          <div className="flex items-center justify-between gap-2 pt-1 pr-0.5 pl-2">
             <BrandLink working={working} href={homeHref} onNavigate={leave(onDashboard)} />
             {/* The jump's press, for a screen with no keyboard, beside the sidebar's own. */}
             <span className="flex items-center gap-1">
@@ -372,7 +374,7 @@ export function AgentHistory({
           />
           {/* Overview: the way home, its own nav item directly under New and above the session list,
               more prominent than a menu row. Only this — the current view — carries the active fill. */}
-          <OverviewButton active={projectId === null && activePage === null} count={interventionCount} href={homeHref} onClick={leave(onDashboard)} />
+          <NavRow icon={LayoutDashboard} label="Overview" active={projectId === null && activePage === null} href={homeHref} onClick={leave(onDashboard)} />
           {/* The modules' pages the shell hands over (#1774), the picked project's only when one is
               picked: destinations with no project selected, like the Overview, named by the module,
               never by the dashboard — the tickets' page among them, when a package brings one. */}
@@ -397,13 +399,22 @@ export function AgentHistory({
               <ScrollArea className="min-h-0 flex-1">
                 {/* The rows keep the nav's edges, the scrollbar laid over their right padding while it shows. The `!`, as on the
                     nav above: a module's stylesheet has the group's own `p-2`, which would otherwise win on its page. */}
+                {waiting.length > 0 && (
+                  <WaitingOnYou
+                    waiting={waiting}
+                    hrefOf={item => (item.agentId ? hrefOf({ projectId: item.projectId, agentId: item.agentId }) : item.url)}
+                    onOpen={item => (item.agentId ? leave(onSelectRecent ?? (() => {}))(item.projectId, item.agentId) : undefined)}
+                    moreHref={homeHref}
+                    onMore={leave(onDashboard)}
+                  />
+                )}
                 <SidebarGroup className="pt-3!">
                   {/* The label sticks to the top of the scroll; the gradient strip under it (also sticky)
                       fades the rows into the background as they scroll up beneath the label. Shown even
                       when the list is empty (#1147): the heading is what makes "No sessions yet." read as
                       the state of this list rather than a lonely line in the sidebar. */}
                   <div className="sticky top-0 z-10">
-                    <SidebarGroupLabel className="rounded-none bg-sidebar px-1.5">
+                    <SidebarGroupLabel className="rounded-none bg-sidebar px-2">
                       Log
                       <RecentsSortMenu order={order} />
                     </SidebarGroupLabel>
@@ -426,6 +437,7 @@ export function AgentHistory({
                             {...(preferences.nameRuns === false ? { intent: optimistic?.intent ?? undefined } : startTitle !== undefined ? { intent: startTitle } : { intent: undefined, naming: true })}
                             {...(crossProject && startProjectName ? { project: startProjectName } : {})}
                             subtitle="just now"
+                            age="now"
                             telling={telling}
                             driver={preferences.driver}
                             active={starting}
@@ -489,7 +501,7 @@ export function AgentHistory({
 /** Two of the rows below while they are read, in their own shape and height: a {@link Slot}'s `shape`. */
 function NavShapes() {
   return Array.from({ length: 2 }, (_, at) => (
-    <div key={at} className="flex items-center gap-2 px-1.5 md:h-8 max-md:h-11">
+    <div key={at} className="flex items-center gap-3 px-2 md:h-8 max-md:h-11">
       <Skeleton className="size-4 shrink-0 rounded-sm" />
       <Skeleton className={cn('h-3.5', at === 0 ? 'w-20' : 'w-24')} />
     </div>
@@ -521,29 +533,6 @@ function NavRow({
   )
 }
 
-// The Overview entry (Rom): the way home, pinned above the session list and more prominent than a
-// menu row. Carries the Human Queue count (#632) so the one cross-project signal stays visible, and
-// highlights while it is the current view.
-function OverviewButton({ active, count, href, onClick }: { active: boolean; count: number; href: string; onClick: () => void }) {
-  return (
-    <NavRow icon={LayoutDashboard} label="Overview" active={active} href={href} onClick={onClick}>
-      {count > 0 && (
-        <Tooltip>
-          <TooltipTrigger
-            // The one filled pill of the sidebar: a count that needs the person.
-            render={<Badge className="bg-foreground/10 text-foreground" />}
-          >
-            {count}
-          </TooltipTrigger>
-          <TooltipContent>
-            {count} item{count === 1 ? '' : 's'} in your Human Queue
-          </TooltipContent>
-        </Tooltip>
-      )}
-    </NavRow>
-  )
-}
-
 // The "New" launcher: one click to the "New agent session" page, of the project picked at the top of
 // the rail, or with all of them showing, of no project. Where the session works is picked on that
 // page, in the row above the box (ProjectPicker), not here.
@@ -571,6 +560,81 @@ function NewButton({
       <Plus aria-hidden />
       <span className="truncate">New agent session</span>
     </a>
+  )
+}
+
+/** How many of what waits on the person the sidebar lists before a row offers the rest, as the Human Queue does. */
+const WAITING_SHOWN = 5
+
+/**
+ * What waits on the person, over the Log: each the compact two-line row (spacing.md 3), the waiting
+ * hexagon and the run's name, cut at the row's end, with how long it has waited at its end as the Log's
+ * rows have it, and under the name, quiet, what it needs in the Human Queue's two words; past five, a
+ * row that opens the Overview, where the Human Queue lists them all. The Log still lists every run in
+ * its order: a run answered stays where it was.
+ */
+function WaitingOnYou({
+  waiting,
+  hrefOf,
+  onOpen,
+  moreHref,
+  onMore,
+}: {
+  waiting: readonly Intervention[]
+  /** Where a row goes: its run's page, or a pull request no run here opened. */
+  hrefOf: (item: Intervention) => string | undefined
+  /** Open a row's run in place. */
+  onOpen: (item: Intervention) => void
+  moreHref: string
+  onMore: () => void
+}) {
+  const shown = waiting.slice(0, WAITING_SHOWN)
+  const rest = waiting.length - shown.length
+  const rowClass = 'focus-ring flex w-full items-center gap-3 rounded-md px-2 text-left text-sm text-foreground transition-colors hover:bg-foreground/4 active:bg-foreground/8'
+  return (
+    <SidebarGroup className="pt-3! pb-0!">
+      <SidebarGroupLabel>Waiting on you</SidebarGroupLabel>
+      <SidebarGroupContent>
+        <SidebarMenu className="gap-0.5">
+          {shown.map(item => {
+            const href = hrefOf(item)
+            const need = needsWord(item.kind, item.gitHost)
+            const external = item.agentId === undefined
+            return (
+              <SidebarMenuItem key={interventionKey(item)}>
+                <a
+                  href={href}
+                  aria-label={`${item.title} · ${need}`}
+                  {...(external ? { target: '_blank', rel: 'noreferrer' } : { onClick: inPlace(() => onOpen(item)) })}
+                  className={cn(rowClass, 'md:h-12 max-md:h-16')}
+                >
+                  <span className="flex min-w-0 flex-1 flex-col">
+                    {/* The mark on the name's line, never between the two (spacing.md 3). */}
+                    <span className="flex min-w-0 items-center gap-3">
+                      <span className="flex size-4 shrink-0 items-center justify-center">
+                        <StateCell state="waiting" />
+                      </span>
+                      <span className="min-w-0 flex-1 truncate">{item.title}</span>
+                      <span aria-hidden className="shrink-0 text-xs text-muted-foreground">{formatSince(item.createdAt)}</span>
+                    </span>
+                    {/* Under the name, 16 for the mark and 12 after it: the words start where the name does. */}
+                    <span aria-hidden className="truncate pl-7 text-xs text-muted-foreground">{need}</span>
+                  </span>
+                </a>
+              </SidebarMenuItem>
+            )
+          })}
+          {rest > 0 && (
+            <SidebarMenuItem>
+              <a href={moreHref} onClick={inPlace(onMore)} className={cn(rowClass, 'text-muted-foreground md:h-8 max-md:h-11')}>
+                <span aria-hidden className="size-4 shrink-0" />
+                {rest} more
+              </a>
+            </SidebarMenuItem>
+          )}
+        </SidebarMenu>
+      </SidebarGroupContent>
+    </SidebarGroup>
   )
 }
 
@@ -635,6 +699,7 @@ function AgentHistoryRow({
   naming = false,
   project,
   subtitle,
+  age,
   active,
   href,
   onClick,
@@ -670,6 +735,8 @@ function AgentHistoryRow({
   /** When the sessions come from several projects, which one this is: it is what tells the rows apart there. */
   project?: string | undefined
   subtitle: string
+  /** How long ago it started, in a word ("2m"), at the row's end: the order the list is in by default. */
+  age: string
   /** The agent that ran it, so the row can show whose session it was. */
   driver?: string | undefined
   /** The model it ran on, by the name its coding agent gives it: said when the agent's logo is pointed at. */
@@ -739,9 +806,8 @@ function AgentHistoryRow({
   const word = parked ? runWord('waiting') : inCloud ? 'in cloud' : cloudWord ? runWord(cloudWord) : savingNow ? runWord('saving') : runWord(status)
   // A run whose computer does not answer: which computer, and when it was last seen.
   const offline = status === 'unknown' ? `${remoteLabel ?? 'Its computer'} offline${seenAt ? ` · last seen ${formatRelative(seenAt)}` : ''}` : undefined
-  // The circle: filled while something is going on, a ring once nothing is, and the colour is the
-  // state's in the table every place reads (`run-words.ts`). Only a run that is working pulses — a
-  // run parked on you has been still for as long as you have not answered it (#785).
+  // The mark: the state's hexagon, from the table every place reads (`run-words.ts`). Only a working
+  // run's ring turns: a run parked on you has been still for as long as you have not answered it (#785).
   const working = status === 'running' || inCloud || savingNow
   const marked = savingNow ? 'saving' : parked ? 'waiting' : working ? 'running' : (cloudWord ?? status)
   const prMark = pr?.state ? PR_MARKS[pr.state] : undefined
@@ -775,10 +841,10 @@ function AgentHistoryRow({
   const agentSaid = picked ? [DRIVER_LABELS[picked], ...(model ? [model] : [])].join(' · ') : undefined
   const marks = (
     <>
-      {/* The circle stands where the status word stood, and carries that word for a reader who
+      {/* The mark stands where the status word stood, and carries that word for a reader who
           cannot see a colour. */}
       <span className="flex size-4 shrink-0 items-center justify-center">
-        <RunMark status={marked} label={word} className={cn('size-2', working && 'animate-pulse')} />
+        <RunMark status={marked} label={word} />
       </span>
       <Tooltip>
         <TooltipTrigger render={<span className={titleClass} />}>
@@ -792,6 +858,8 @@ function AgentHistoryRow({
           <span className="block text-xs text-muted-foreground">{said}</span>
         </TooltipContent>
       </Tooltip>
+      {/* When it started, in a word: the list's own order, read down the rows' end. */}
+      <span aria-hidden className="shrink-0 text-xs text-muted-foreground">{age}</span>
       {/* What is unusual about where the run is, kept on the row as one small glyph: another
           machine, a person's own computer, a cloud session. Rare, so the row stays a circle and a
           name nearly always. */}
@@ -880,7 +948,7 @@ function AgentHistoryRow({
     'aria-label': `${naming ? 'Naming this session' : titleText} · ${said}`,
     'aria-current': active ? ('page' as const) : undefined,
     // The navigation's row: 32 high (44 on a phone), the picked one filled, the one under the pointer half filled.
-    className: cn('focus-ring rail-row flex w-full items-center gap-2 rounded-md px-1.5 text-left text-sm text-foreground transition-colors md:h-8 max-md:h-11', active ? 'bg-foreground/8' : 'hover:bg-foreground/4 active:bg-foreground/8'),
+    className: cn('focus-ring rail-row flex w-full items-center gap-3 rounded-md px-2 text-left text-sm text-foreground transition-colors md:h-8 max-md:h-11', active ? 'bg-foreground/8' : 'hover:bg-foreground/4 active:bg-foreground/8'),
     ...(standIn ? { 'data-stand-in': '' } : {}),
     onPointerEnter: onNear,
     onFocus: onNear,

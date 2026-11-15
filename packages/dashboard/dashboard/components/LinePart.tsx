@@ -43,7 +43,7 @@ export function LinePart({ children, reading = false, shape, note, live = false,
     )
   const words = (
     <>
-      {live && <RunMark status="running" className="mr-1.5 inline-block size-1.5 align-middle" />}
+      {live && <RunMark status="running" className="mr-1.5 inline-block size-2.5 align-middle" />}
       {children}
     </>
   )

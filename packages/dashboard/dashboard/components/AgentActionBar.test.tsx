@@ -42,6 +42,12 @@ describe('AgentActionBar', () => {
     expect(screen.getAllByRole('button')).toHaveLength(2)
   })
 
+  test('the run\'s state stands after its name, in the run table\'s word on its soft fill', () => {
+    const { container } = render(<AgentActionBar projectId="p1" agentId="run-1" events={AGENTS.running!} label="Dark mode" checkout={DIRTY} status="running" />)
+    expect(container.textContent).toBe('[Dark mode ⌄]Working[⋮]')
+    expect(container.querySelector('svg')!.getAttribute('class')).toContain('text-info')
+  })
+
   test('the project\'s ⋮ stands where the "New agent session" page has it: past the spacer, just before the panes\' icons, acting on the project', () => {
     const removed = () => {}
     const error = { kind: 'error', message: 'The push was rejected' }
@@ -81,10 +87,10 @@ describe('AgentActionBar', () => {
     expect(container.textContent).not.toContain('5 MB')
   })
 
-  test('on a phone the bar keeps its start free for the menu\'s button; its end is its own, for the panes\' icons', () => {
+  test('the bar starts 16 in on every screen, the sidebar opening from the bar of pages on a phone; its end is its own, for the panes\' icons', () => {
     const { container } = render(<AgentActionBar projectId="p1" agentId="run-1" events={AGENTS.finished!} label="Dark mode" checkout={DIRTY} />)
     const row = container.firstElementChild!.firstElementChild!.className.split(' ')
-    for (const cls of ['pr-2', 'md:pl-4', 'max-md:pl-11']) expect(row).toContain(cls)
+    for (const cls of ['pr-2', 'pl-4']) expect(row).toContain(cls)
     expect(row).not.toContain('pr-12')
     // As tall as the "New agent session" page's row and an open pane's header, so the three stand level;
     // unlike a pane's header, a line under it only while the chat is scrolled under it.

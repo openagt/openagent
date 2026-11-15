@@ -62,7 +62,8 @@ const NO_COMMITS: AgentCommit[] = []
 const NO_CHANGES: Record<string, FileMark> = {}
 
 /** The pane while its list is read: rows in a row's shape. */
-const Reading = () => <Waiting shape={<RowShapes rows={3} />} className="px-3 py-1" />
+/** Rows in their own shape while the pane is read; `className` sets them on the 16 inset of where they stand. */
+const Reading = ({ className }: { className: string }) => <Waiting shape={<RowShapes rows={3} />} className={className} />
 
 /** The last ask from the chat that was taken: a pane opened again later does not take it a second time. */
 let revealTaken = 0
@@ -74,12 +75,20 @@ function Counts({ mark, className }: { mark: FileMark; className?: string }) {
   return mark.added !== undefined && mark.removed !== undefined ? <DiffStat added={mark.added} removed={mark.removed} zeros className={cn('shrink-0 text-xs', className)} /> : null
 }
 
+/** What git did to a file, as its letter: added, modified, deleted, in the colour of what it does to the lines. */
+const STATUS_LETTER: Record<FileMark['status'], { letter: string; tone: string }> = {
+  untracked: { letter: 'A', tone: 'text-success' },
+  added: { letter: 'A', tone: 'text-success' },
+  modified: { letter: 'M', tone: 'text-warning' },
+  deleted: { letter: 'D', tone: 'text-danger' },
+}
+
 /** Narrower than this, the pane has room for the list or the diffs, not both. */
 const NARROW = 520
 
 /**
- * A changed file in the list: its icon, its name (or its path, ungrouped), its counts, and a ring
- * while it is only on disk, where the list holds both (`rings`).
+ * A changed file in the list: what git did to it in a letter, its name (or its path, ungrouped), its
+ * counts, and a ring while it is only on disk, where the list holds both (`rings`).
  */
 function ChangeRow({ path, mark, label, picked, rings, onPick }: { path: string; mark: FileMark; label: string; picked: boolean; rings: boolean; onPick: () => void }) {
   return (
@@ -91,7 +100,9 @@ function ChangeRow({ path, mark, label, picked, rings, onPick }: { path: string;
         title={`${path} · ${mark.status === 'untracked' || mark.status === 'added' ? 'new' : mark.status}${mark.committed ? '' : ', not committed'}`}
         className={cn(treeRow, picked && 'bg-accent')}
       >
-        <FileIcon path={path} />
+        <span aria-hidden className={cn('w-4 shrink-0 font-mono text-xs font-semibold', STATUS_LETTER[mark.status].tone)}>
+          {STATUS_LETTER[mark.status].letter}
+        </span>
         <span className={cn('flex min-w-0 flex-1', mark.status === 'deleted' && 'line-through')}>
           <PathCut path={label} />
         </span>
@@ -274,11 +285,13 @@ function useHeld<T>(agentId: string | undefined, value: T, keep: boolean, moving
 }
 
 /**
- * The pane's header: the branches the changes are between and whether they are merged, or the
- * pane's name; then search, the button that hides the list, and the ⋮ menu.
+ * The pane's header: its name, then on a pane wide enough the branches the changes are between and
+ * whether they are merged, then the files' total; then search, the button that hides the list, and
+ * the ⋮ menu.
  */
-function ChangesHeader({ between, merged, page, paths, changes, listShown, onPick, onToggleList, onRefresh }: {
+function ChangesHeader({ between, narrow, merged, page, paths, changes, listShown, onPick, onToggleList, onRefresh }: {
   between: string | undefined
+  narrow: boolean
   merged: boolean | undefined
   page: string
   paths: string[]
@@ -289,18 +302,28 @@ function ChangesHeader({ between, merged, page, paths, changes, listShown, onPic
   onRefresh: () => void
 }) {
   const settings = useChangesSettings()
+  // What the files add up to, once git counted every one: the sum of the lines the list shows.
+  const marks = Object.values(changes)
+  const total = marks.length > 0 && marks.every(mark => mark.added !== undefined && mark.removed !== undefined) ? { added: marks.reduce((sum, mark) => sum + mark.added!, 0), removed: marks.reduce((sum, mark) => sum + mark.removed!, 0) } : undefined
   return (
     <>
       <PaneTitle>
-        {/* One line, the branches cut in their middle on a narrow pane, so the run's own stays told apart. */}
-        {between ? (
-          <h2 className="flex min-w-0 items-baseline gap-1 pl-2 text-sm text-muted-foreground" title={between}>
-            <MiddleCut text={between} />
-            {merged !== undefined && <span className="shrink-0 text-xs">{merged ? '· merged' : '· not merged yet'}</span>}
+        {/* One line, the branches cut in their middle, so the run's own stays told apart; a pane too
+            narrow for them keeps its name and says them on hover, rather than show a fragment. */}
+        {between && !narrow ? (
+          <h2 className="flex min-w-0 items-baseline gap-2 pl-2 text-sm" title={between}>
+            <span className="shrink-0 font-medium">Changes</span>
+            <span className="flex min-w-0 items-baseline gap-1 text-muted-foreground">
+              <MiddleCut text={between} />
+              {merged !== undefined && <span className="shrink-0 text-xs">{merged ? '· merged' : '· not merged yet'}</span>}
+            </span>
           </h2>
         ) : (
-          <h2 className="truncate pl-2 text-sm font-medium">Changes</h2>
+          <h2 className="truncate pl-2 text-sm font-medium" title={between}>
+            Changes
+          </h2>
         )}
+        {total && <DiffStat added={total.added} removed={total.removed} zeros className="ml-auto pl-2" />}
       </PaneTitle>
       <PaneActions>
         <ChangeSearch paths={paths} changes={changes} onPick={onPick} />
@@ -367,7 +390,7 @@ function ChangeList({ paths, changes, group, picked, rings, onPick }: { paths: s
     </>
   )
   return (
-    <ul aria-label="Changed files" className="min-h-0 flex-auto overflow-y-auto p-1">
+    <ul aria-label="Changed files" className="min-h-0 flex-auto overflow-y-auto p-2">
       {group ? folderOf(foldersOf(paths)) : paths.map(path => rowOf(path, path))}
     </ul>
   )
@@ -378,14 +401,14 @@ function CommitList({ commits, picked, open, onOpen, onPick }: { commits: AgentC
   return (
     <section aria-label="Commits" className={cn('flex shrink-0 flex-col border-t border-hairline', open && 'max-h-1/2')}>
       <h3>
-        <button type="button" aria-expanded={open} onClick={() => onOpen(!open)} className="mt-1 flex h-7 w-full items-center gap-2 px-3 text-sm text-muted-foreground hover:text-foreground focus-ring-inset">
+        <button type="button" aria-expanded={open} onClick={() => onOpen(!open)} className="mt-1 flex h-7 w-full items-center gap-2 px-4 text-sm text-muted-foreground hover:text-foreground focus-ring-inset">
           <ChevronRight aria-hidden className={cn('size-4 shrink-0', open && 'rotate-90')} />
           <span className="flex-1 text-start">Commits</span>
           <span className="text-xs">{commits.length}</span>
         </button>
       </h3>
       {open && (
-        <ul className="min-h-0 space-y-0.5 overflow-y-auto p-1 pt-0">
+        <ul className="min-h-0 space-y-0.5 overflow-y-auto p-2 pt-0">
           <CommitRow label="All changes" picked={picked === undefined} onPick={() => onPick(undefined)} />
           {commits.map(c => (
             <CommitRow key={c.sha} label={c.subject} detail={`${c.short} · ${c.author} · ${formatRelative(c.date)}`} title={c.subject} picked={c.sha === picked} onPick={() => onPick(c.sha)} />
@@ -489,6 +512,7 @@ export function ChangesPanel({ projectId, agentId, activity, reveal }: ModulePan
   const header = (
     <ChangesHeader
       between={between}
+      narrow={narrow}
       merged={merged}
       page={page}
       paths={paths}
@@ -514,7 +538,7 @@ export function ChangesPanel({ projectId, agentId, activity, reveal }: ModulePan
   const waiting = (
     <>
       {header}
-      <Reading />
+      <Reading className="px-4 py-2" />
     </>
   )
   if (agentId) {
@@ -538,13 +562,13 @@ export function ChangesPanel({ projectId, agentId, activity, reveal }: ModulePan
           </div>
         )}
         {!(narrow && listShown) && (
-          <div ref={setDiffsElement} aria-label="Diffs" className="flex min-h-0 min-w-0 flex-auto flex-col overflow-y-auto">
+          <div ref={setDiffsElement} aria-label="Diffs" className="flex min-h-0 min-w-0 flex-auto flex-col gap-2 overflow-y-auto p-2">
             {caption && (
-              <p className="shrink-0 truncate border-b border-hairline px-3 py-2 text-xs text-muted-foreground" title={caption}>
+              <p className="shrink-0 truncate px-2 text-xs text-muted-foreground" title={caption}>
                 {caption}
               </p>
             )}
-            {paths.length === 0 && (nothing === undefined ? <Reading /> : <PaneNote>{nothing}</PaneNote>)}
+            {paths.length === 0 && (nothing === undefined ? <Reading className="px-2" /> : <PaneNote>{nothing}</PaneNote>)}
             {paths.map(path => {
               const mark = changes[path]!
               const isFolded = folded.has(path)
@@ -557,13 +581,13 @@ export function ChangesPanel({ projectId, agentId, activity, reveal }: ModulePan
                     if (node) sections.current.set(path, node)
                     else sections.current.delete(path)
                   }}
-                  className="border-b border-hairline"
+                  className="shrink-0"
                 >
                   <button
                     type="button"
                     aria-expanded={!isFolded}
                     onClick={() => foldDiff(page, path, !isFolded)}
-                    className={cn('sticky top-0 z-10 flex h-8 w-full items-center gap-2 bg-muted px-2 text-start text-sm text-muted-foreground hover:bg-accent focus-ring-inset', path === picked && 'text-foreground')}
+                    className={cn('sticky top-0 z-10 flex h-8 w-full items-center gap-2 rounded-md bg-muted px-2 text-start text-sm text-muted-foreground hover:bg-accent focus-ring-inset', path === picked && 'text-foreground')}
                   >
                     <ChevronRight aria-hidden className={cn('size-4 shrink-0', !isFolded && 'rotate-90')} />
                     <FileIcon path={path} />
