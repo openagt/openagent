@@ -647,7 +647,7 @@ export { GaugeFace } from '../components/ui/gauge.js'
 export { ClaudeLogo, CodexLogo } from '../components/driver-logos.js'
 export { cn } from '../lib/utils.js'
 export { inPlace } from '../lib/in-place.js'
-export { runWord, runSaid, runTone } from '../lib/run-words.js'
+export { runWord, runSaid, runTone, runLineTone } from '../lib/run-words.js'
 export { RunMark } from '../components/RunMark.js'
 export { usePolled, useLoaded, useAskOn, forgetRemembered, type ReadState } from '../lib/use-async.js'
 /** For a read of runs: read again the moment the runs of a project (of every one, `undefined`) change, as the dashboard's own lists are. */
