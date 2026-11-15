@@ -73,7 +73,7 @@ export function ThisComputer({ d, start }: { d: Devices; /** The start page: not
         },
       })),
     ...(d.machines?.machines ?? [])
-      .filter(machine => hasDoor(machine) && d.people[machine.id] !== undefined && !d.servers.some(server => server.url === machine.url))
+      .filter(machine => hasDoor(machine) && d.people[machine.id] && !d.servers.some(server => server.url === machine.url))
       .map(machine => {
         const kept = d.shared.find(row => row.url === machine.url)
         return {

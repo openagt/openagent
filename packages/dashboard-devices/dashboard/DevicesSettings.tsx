@@ -271,7 +271,7 @@ function ItemRow({ d, item, onOpen }: { d: Devices; item: Item; onOpen: () => vo
   }
   if (item.kind === 'joined') {
     const { machine, person } = item
-    return <ListedDevice icon={Server} name={item.name} facts={['Server', person.owner ? 'yours' : person.person !== undefined ? `you are ${person.person}` : undefined]} state={machine.version !== undefined ? <State tone="good">Online</State> : <State tone="quiet">Offline</State>} onOpen={onOpen} />
+    return <ListedDevice icon={Server} name={item.name} facts={['Server', person?.owner ? 'yours' : person?.person !== undefined ? `you are ${person.person}` : undefined]} state={machine.version !== undefined ? <State tone="good">Online</State> : <State tone="quiet">Offline</State>} onOpen={onOpen} />
   }
   return <ListedDevice icon={Server} name={item.name} facts={[`${item.owner}'s, shared with you`, item.person?.person !== undefined ? `you are ${item.person.person}` : undefined]} state={item.machine.version !== undefined ? <State tone="good">Online</State> : <State tone="quiet">Offline</State>} onOpen={onOpen} />
 }

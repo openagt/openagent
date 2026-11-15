@@ -24,12 +24,13 @@ type Tab = 'overview' | 'devices'
 export function JoinedPage({ d, item, onBack }: { d: Devices; item: JoinedItem; onBack: () => void }) {
   const { host } = d
   const { machine, person } = item
-  const owner = person.owner
+  const owner = person?.owner
   const [tab, setTab] = useState<Tab>('overview')
   const { busy, setBusy, error, setError, act } = useChange(() => d.reloadShared())
   const here = d.shared.find(row => row.url === machine.url)
 
-  const tabs: { id: Tab; title: string }[] = [{ id: 'overview', title: 'Overview' }, { id: 'devices', title: 'Your devices' }]
+  // The person's devices there are listed once its door has said them.
+  const tabs: { id: Tab; title: string }[] = person ? [{ id: 'overview', title: 'Overview' }, { id: 'devices', title: 'Your devices' }] : [{ id: 'overview', title: 'Overview' }]
 
   return (
     <div>
@@ -48,7 +49,7 @@ export function JoinedPage({ d, item, onBack }: { d: Devices; item: JoinedItem; 
       {tab === 'overview' && (
         <>
           <Part>
-            <p className="text-sm">{owner ? 'Yours, set up from another computer.' : person.person !== undefined ? `You are in as ${person.person}.` : 'You are in.'}</p>
+            <p className="text-sm">{owner ? 'Yours, set up from another computer.' : person?.person !== undefined ? `You are in as ${person.person}.` : 'You are in.'}</p>
             <p className="text-xs text-muted-foreground">
               {owner
                 ? 'Its install, its updates and its invites are done from the computer that set it up, its logins on the Permissions page. From here, your phone and this computer reach it, and runs go there.'
@@ -80,7 +81,7 @@ export function JoinedPage({ d, item, onBack }: { d: Devices; item: JoinedItem; 
           </Removal>
         </>
       )}
-      {tab === 'devices' && <DevicesThere d={d} machine={machine} name={item.name} devices={person.devices} line={here?.line} busy={busy} onBusy={setBusy} onError={setError} />}
+      {tab === 'devices' && person && <DevicesThere d={d} machine={machine} name={item.name} devices={person.devices} line={here?.line} busy={busy} onBusy={setBusy} onError={setError} />}
       {error !== undefined && <Problem>{error}</Problem>}
     </div>
   )

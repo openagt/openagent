@@ -985,6 +985,19 @@ describe('Settings › Devices: a code typed on another computer', () => {
     expect(serverCommand).not.toHaveBeenCalledWith(expect.arrayContaining(['shared-reach']))
   })
 
+  test('a server joined with a code that does not answer who this person is there is listed as a server, never as a computer', async () => {
+    const { host } = door(() => ok(OPEN), [{ id: VPS.id, label: VPS.label, url: VPS.url }])
+    vi.mocked(host.machinePerson).mockResolvedValue({ ok: false, error: 'my-vps does not answer.' })
+    show(host)
+    await waitFor(() => expect(getRow('my-vps').textContent).toContain('Server'))
+    expect(getRow('my-vps').textContent).not.toContain('Computer')
+    expect(getRow('my-vps').textContent).not.toContain('your runs go there')
+    await open('my-vps')
+    expect(await screen.findByText('Does not answer right now')).toBeTruthy()
+    // Its devices there are not offered while its door has not said them.
+    expect(screen.queryAllByRole('tab')).toEqual([])
+  })
+
   test('Give it a code: where and a code from the server, for a computer somewhere else; once it keeps its line there it is saved here through the server, and runs go both ways', async () => {
     const { host } = door(() => ok(OPEN), [VPS], args => ok(args[0] === 'shared' ? { shared: [{ url: VPS.url, reach: 'full' }] } : { servers: [] }))
     vi.mocked(host.machineCode).mockResolvedValue({ ok: true, value: { url: 'https://203.0.113.10/_devices/enter#K7P4QX9M', where: '203.0.113.10', code: 'K7P4-QX9M', expires: new Date(Date.now() + 10 * 60_000).toISOString() } })
