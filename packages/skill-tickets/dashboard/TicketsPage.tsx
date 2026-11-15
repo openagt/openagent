@@ -1,5 +1,5 @@
 import { Fragment, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
-import { Button, LinkActions, Page, RowShapes, Section, Slot, cn, usePolled, useAction, useLinkActions, useModuleHost, type ProjectLinks, type ModuleLink, type ModuleProject } from '@openagt/dashboard/module'
+import { Button, LinkActions, Page, RowShapes, Section, Slot, cn, runsAgain, usePolled, useAction, useLinkActions, useModuleHost, type ProjectLinks, type ModuleLink, type ModuleProject } from '@openagt/dashboard/module'
 import { UPDATE_TICKETS_PROMPT, heldBack, holderAgent, planLink, ticketLink, withHolder } from '../src/module.js'
 import { holdingRun } from './lib/holding-run.js'
 import type { ProjectTickets, WorkspaceTicket } from './lib/types.js'
@@ -62,6 +62,7 @@ export function TicketsPage({ projects }: { projects: ModuleProject[] }) {
     [key],
     // Kept for the next visit: the page opens with the last list, faded until it is read again.
     { remember: `skill-tickets:page:${key}`, stored: true },
+    runsAgain(undefined),
   )
   const [view, setViewState] = useState<TicketsView>(initialView)
   const open = (projectId: string, path: string[]) => host.openPage('tickets', path, projectId)

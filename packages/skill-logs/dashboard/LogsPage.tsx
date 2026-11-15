@@ -1,4 +1,4 @@
-import { FilterChips, List, Page, PersonMark, Row, RowShapes, STATUS_DOT, Section, STATUS_RING, Slot, cn, formatDateTime, formatDuration, personSaid, runName, useGitHostPeople, useModuleHost, usePolled, type ModuleAgent, type ModuleHostPerson, type ModulePageProps, type ModuleProject, type ReadState } from '@openagt/dashboard/module'
+import { FilterChips, List, Page, PersonMark, Row, RowShapes, STATUS_DOT, Section, STATUS_RING, Slot, cn, formatDateTime, formatDuration, personSaid, runName, useGitHostPeople, runsAgain, useModuleHost, usePolled, type ModuleAgent, type ModuleHostPerson, type ModulePageProps, type ModuleProject, type ReadState } from '@openagt/dashboard/module'
 import type { RunCard } from '../src/run.js'
 
 /** How many runs each project lists: the command's own default page is 20; the page shows more. */
@@ -145,6 +145,7 @@ export function LogsPage({ projects, path }: ModulePageProps) {
     10_000,
     [key],
     { remember: `skill-logs:live:${key}`, stored: true },
+    runsAgain(undefined),
   )
   const { value: recorded, state: recordedState, failing } = usePolled<Read>(
     async () => {

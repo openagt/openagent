@@ -1,4 +1,4 @@
-import { usePolled, useModuleHost, type ReadState } from '@openagt/dashboard/module'
+import { runsAgain, usePolled, useModuleHost, type ReadState } from '@openagt/dashboard/module'
 import { holderAgent, readShown, withHolder } from '../../src/module.js'
 import { sessionsOf, type TicketSession } from '../TicketSessions.js'
 import { holdingRun } from './holding-run.js'
@@ -33,6 +33,8 @@ export function useTicket(projectId: string, slug: string): { read: TicketRead |
     null,
     10_000,
     [projectId, slug],
+    undefined,
+    runsAgain(projectId),
   )
   return { read, state, reload }
 }

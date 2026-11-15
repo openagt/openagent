@@ -239,15 +239,20 @@ export function App() {
 
   // The cross-project "needs you" queue (#632): open PRs to review, questions to answer, work left
   // on this machine. Polled here in the shell so the sidebar badge, the Overview card and the
-  // launcher's "Waiting on you" share one poll. Every five seconds, so an answered question leaves
-  // the list soon; the git host is read no more often for it, its listing being cached.
+  // launcher's "Waiting on you" share one poll. Read again the moment a run changes, as the sidebar
+  // is, and every five seconds for what no run tells (a pull request on the git host, read no more
+  // often for it, its listing being cached).
   // The read as a whole goes to the notifier, which tells of every project's items whichever one
   // is picked, and also needs to know which projects the poll actually reached before it calls
   // anything "new" (#1625).
-  const { value: interventionsRead, state: interventionsState } = usePolled<ProjectionRead<Intervention>>(onInterventions, EMPTY_INTERVENTIONS, 5000, [], {
-    remember: 'interventions',
-    stored: true,
-  })
+  const { value: interventionsRead, state: interventionsState } = usePolled<ProjectionRead<Intervention>>(
+    onInterventions,
+    EMPTY_INTERVENTIONS,
+    5000,
+    [],
+    { remember: 'interventions', stored: true },
+    runsAgain(undefined),
+  )
 
   const project = projectId ? projects.find(p => p.id === projectId) : undefined
   const projectName = project ? (labels.get(project.id) ?? project.name) : null

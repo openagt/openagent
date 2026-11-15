@@ -649,6 +649,8 @@ export { cn } from '../lib/utils.js'
 export { inPlace } from '../lib/in-place.js'
 export { STATUS_TONE, STATUS_DOT, STATUS_RING } from '../lib/status-tone.js'
 export { usePolled, useLoaded, useAskOn, forgetRemembered, type ReadState } from '../lib/use-async.js'
+/** For a read of runs: read again the moment the runs of a project (of every one, `undefined`) change, as the dashboard's own lists are. */
+export { runsAgain } from '../lib/runs-changed.js'
 export { useKeptDraft } from '../lib/draft-handoff.js'
 export { FadeWhileStale } from '../components/FadeWhileStale.js'
 export { Badge } from '../components/ui/badge.js'

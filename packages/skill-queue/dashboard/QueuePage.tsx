@@ -20,6 +20,7 @@ import {
   inPlace,
   pathsIn,
   useFileNames,
+  runsAgain,
   useModuleHost,
   useOpenAgentDown,
   usePolled,
@@ -100,6 +101,7 @@ export function QueuePage({ projects }: ModulePageProps) {
     [key],
     // Kept for the next visit: the page opens with the last list, faded until it is read again.
     { remember: `skill-queue:page:${key}`, stored: true },
+    runsAgain(undefined),
   )
   const schedule = useSchedule(projects)
   const names = useFileNames(reads.map(read => ({ projectId: read.project.id, paths: (read.entries ?? []).flatMap(placed => pathsIn(placed.entry)) })))

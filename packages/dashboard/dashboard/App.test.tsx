@@ -93,6 +93,38 @@ afterEach(() => {
   calls.length = 0
 })
 
+describe('the queue of what needs you', () => {
+  test('a change of the runs reads it again at once, as it does the sidebar', async () => {
+    const streams: { onmessage: ((message: { data: string }) => void) | null }[] = []
+    vi.stubGlobal(
+      'EventSource',
+      class {
+        onopen = null
+        onerror = null
+        onmessage: ((message: { data: string }) => void) | null = null
+        constructor() {
+          streams.push(this)
+        }
+        close(): void {}
+      },
+    )
+    try {
+      answerShell([])
+      window.history.replaceState(null, '', '/app/overview')
+      render(<App />)
+      const reads = () => calls.filter(call => call.name === 'onInterventions').length
+      await waitFor(() => expect(reads()).toBeGreaterThan(0))
+      await waitFor(() => expect(streams.length).toBe(1))
+      const before = reads()
+      act(() => streams[0]!.onmessage?.({ data: JSON.stringify({ kind: 'runs', projectId: PROJECT.id }) }))
+      // Well inside the five seconds the queue is polled at.
+      await waitFor(() => expect(reads()).toBeGreaterThan(before), { timeout: 1000 })
+    } finally {
+      vi.unstubAllGlobals()
+    }
+  })
+})
+
 describe('module pages in the shell (#1774)', () => {
   test("a module opens the dashboard's own pages in the project the address picks, every project where none is, and the page it is on adds no entry", async () => {
     function Opens() {
