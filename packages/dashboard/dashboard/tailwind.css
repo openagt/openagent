@@ -618,9 +618,21 @@ html[data-pinned] body {
   @view-transition {
     navigation: auto;
   }
-  /* Starting a run (StartAgentForm): the box moves to its place on the run's page, the rest of the
-     page changes under it, both on the scale's 180ms. */
+  /* Starting a run (StartAgentForm): the box moves to its place on the run's page, the words in it
+     to the chat's first message, the rest of the page changes under them, all on the scale's 180ms.
+     The words keep their size on the way: a picture stretched to its new box would warp them. */
+  .carrying-box form .ProseMirror,
+  .carrying-box [data-message-id='turn:1'] [aria-label='Your message'] {
+    view-transition-name: words;
+  }
+  .carrying-box::view-transition-old(words),
+  .carrying-box::view-transition-new(words) {
+    height: 100%;
+    object-fit: none;
+    object-position: left top;
+  }
   .carrying-box::view-transition-group(composer),
+  .carrying-box::view-transition-group(words),
   .carrying-box::view-transition-old(root),
   .carrying-box::view-transition-new(root) {
     animation-duration: 180ms;

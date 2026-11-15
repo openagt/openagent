@@ -19,7 +19,7 @@ import { Button } from './ui/button.js'
 import { PERMISSIONS_PAGE } from '../lib/use-route.js'
 import { HostServicesContext, INERT_HOST_SERVICES } from '../lib/host-services.js'
 import { promptWithContext } from '../lib/use-context-set.js'
-import { stashPendingDraft } from '../lib/draft-handoff.js'
+import { keepDraft, stashPendingDraft } from '../lib/draft-handoff.js'
 import { AutoMenu } from './AutoMenu.js'
 import { ProjectContextMenu } from './ContextMenu.js'
 import { Composer, type ComposerHandle } from './Composer.js'
@@ -277,19 +277,22 @@ export function StartAgentForm({
       // A remote agent (#1067) carries the machine label so the view can mark where it executes.
       // What this page says goes with it, for the run's page until the run's record says it.
       const started = startFrom ? (startFromPick?.kind === 'local' ? startFrom.local : startFromPick?.kind === 'published' ? startFromPick.branch : startFrom.main) : undefined
-      carryBox(() => onAgentStarted?.(text, result.agentId, machine?.label, result.projectId, {
-        ...(started !== undefined ? { branch: started } : {}),
-        ...(!noProject && remote && account !== undefined ? { gitAccount: account } : {}),
-        ...(agentId !== undefined ? { agent: agentId } : {}),
-        ...pickedSkills,
-        ...(noProject ? {} : { publish: publishPick }),
-        ...(prInto !== undefined ? { prBase: prInto } : {}),
-        ...(preferences.driver ? { driver: preferences.driver } : {}),
-        ...(preferences.model ? { model: preferences.model } : {}),
-        ...(preferences.effort ? { effort: preferences.effort } : {}),
-        ...(noProject && !machine && repos.length > 0 ? { repos: repos.map(repo => ({ name: repo.name, from: repo.path })) } : {}),
-      })) // select the run we just started (#761)
-      composerRef.current?.clear()
+      // The box keeps the words until the move has taken its picture of them; its draft goes with the page.
+      void carryBox(() => {
+        keepDraft(`launcher:${projectId}`, '')
+        onAgentStarted?.(text, result.agentId, machine?.label, result.projectId, {
+          ...(started !== undefined ? { branch: started } : {}),
+          ...(!noProject && remote && account !== undefined ? { gitAccount: account } : {}),
+          ...(agentId !== undefined ? { agent: agentId } : {}),
+          ...pickedSkills,
+          ...(noProject ? {} : { publish: publishPick }),
+          ...(prInto !== undefined ? { prBase: prInto } : {}),
+          ...(preferences.driver ? { driver: preferences.driver } : {}),
+          ...(preferences.model ? { model: preferences.model } : {}),
+          ...(preferences.effort ? { effort: preferences.effort } : {}),
+          ...(noProject && !machine && repos.length > 0 ? { repos: repos.map(repo => ({ name: repo.name, from: repo.path })) } : {}),
+        }) // select the run we just started (#761)
+      }).finally(() => composerRef.current?.clear())
       setRepos([])
       setSkillPicks(agentPicks(onAgent))
     } else setRefused(true)
@@ -440,13 +443,17 @@ export function StartAgentForm({
 /**
  * Starting a run carries the box from this page to its place on the run's page in one movement: the
  * browser's own view transition, the box named the same on both (`composer`, Composer and
- * tailwind.css). Under reduced motion, or where the browser has none, the page just changes.
+ * tailwind.css), and the words in it the same as the run's first message (`words`). Under reduced
+ * motion, or where the browser has none, the page just changes. Settles once the move is over.
  */
-function carryBox(update: () => void): void {
-  if (typeof document.startViewTransition !== 'function' || matchMedia('(prefers-reduced-motion: reduce)').matches) return update()
+function carryBox(update: () => void): Promise<void> {
+  if (typeof document.startViewTransition !== 'function' || matchMedia('(prefers-reduced-motion: reduce)').matches) {
+    update()
+    return Promise.resolve()
+  }
   const root = document.documentElement
   root.classList.add('carrying-box')
-  void document.startViewTransition(() => flushSync(update)).finished.finally(() => root.classList.remove('carrying-box'))
+  return document.startViewTransition(() => flushSync(update)).finished.finally(() => root.classList.remove('carrying-box'))
 }
 
 /** This computer, in "Cloning … on …": by the name the page was reached at, or as this computer when it is open on it. */

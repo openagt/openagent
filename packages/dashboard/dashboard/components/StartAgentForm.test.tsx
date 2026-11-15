@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest'
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { forgetRemembered } from '../lib/use-async.js'
 import { openMenu } from '../test-utils.js'
-import { takePendingDraft } from '../lib/draft-handoff.js'
+import { keepDraft, keptDraft, takePendingDraft } from '../lib/draft-handoff.js'
 
 // Everything the form reads goes through a lib module, so the mocks stop at the `rpc/` stubs: an
 // unmocked one reaches for `/_rpc/<name>`, and there is no daemon behind jsdom to answer.
@@ -79,12 +79,13 @@ vi.mock('../lib/use-start-agent.js', async () => ({
 // the form lets it submit at all, and renders the launcher's controls.
 const composerProps = vi.hoisted(() => ({ current: {} as Record<string, unknown> }))
 const composerFocus = vi.hoisted(() => vi.fn())
+const composerClear = vi.hoisted(() => vi.fn())
 vi.mock('./Composer.js', async () => {
   const { forwardRef, useImperativeHandle } = await import('react')
   const Composer = forwardRef((props: any, ref: any) => {
     composerProps.current = props
     useImperativeHandle(ref, () => ({
-      clear: () => {},
+      clear: composerClear,
       focus: composerFocus,
     }))
     return (
@@ -121,6 +122,7 @@ afterEach(() => {
   forgetRemembered()
   start.mockReset()
   composerFocus.mockReset()
+  composerClear.mockReset()
   startSays.cloning = false
   startSays.error = null
   onCommands.mockReset()
@@ -169,6 +171,38 @@ describe('StartAgentForm (#1774)', () => {
     fireEvent.click(screen.getByText('submit-typed'))
     await waitFor(() => expect(onAgentStarted).toHaveBeenCalledWith('do the thing', 'r1', undefined, undefined, expect.anything()))
     expect(start).toHaveBeenCalledWith('p1', 'do the thing', { driver: 'codex', model: 'gpt-5' })
+  })
+
+  test('a start carries the words: the box keeps them for the move\'s picture, its update drops the draft, and the box is emptied once the move is over, also where the page stayed', async () => {
+    onCommands.mockResolvedValue({ commands: [], startHook: true, gitHost: true })
+    start.mockResolvedValue({ agentId: 'r1' })
+    keepDraft('launcher:p1', 'do the thing')
+    let update: (() => void) | undefined
+    let over = () => {}
+    const finished = new Promise<void>(resolve => (over = resolve))
+    const reduced = window.matchMedia
+    window.matchMedia = (query: string) => ({ ...reduced(query), matches: false })
+    document.startViewTransition = ((callback: () => void) => {
+      update = callback
+      return { finished }
+    }) as unknown as typeof document.startViewTransition
+    try {
+      const onAgentStarted = vi.fn()
+      render(<StartAgentForm {...props} onAgentStarted={onAgentStarted} />)
+      fireEvent.click(screen.getByText('submit-typed'))
+      await waitFor(() => expect(update).toBeDefined())
+      expect(keptDraft('launcher:p1')).toBe('do the thing')
+      expect(onAgentStarted).not.toHaveBeenCalled()
+      update!()
+      expect(onAgentStarted).toHaveBeenCalled()
+      expect(keptDraft('launcher:p1')).toBeUndefined()
+      expect(composerClear).not.toHaveBeenCalled()
+      over()
+      await waitFor(() => expect(composerClear).toHaveBeenCalled())
+    } finally {
+      window.matchMedia = reduced
+      delete (document as { startViewTransition?: unknown }).startViewTransition
+    }
   })
 
   test('while the start is asked for, the form says "Starting session", the chat\'s own first line, and nothing once it answers', async () => {
