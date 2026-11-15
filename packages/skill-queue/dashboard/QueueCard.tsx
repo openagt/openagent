@@ -6,7 +6,7 @@ import { useQueueStarts, type QueueStarts } from './starts.js'
 import { BatchCount } from './batch-count.js'
 import { useQueueReads, type ProjectRead } from './reads.js'
 
-// The Overview's Up next card: in each project with open entries, the first entries no agent is on,
+// The Overview's AI Queue card: in each project with open entries, the first entries no agent is on,
 // the work agents pick up next, numbered by their place in the queue; at its heading a link to the
 // Queue page that says how many wait, where an entry is also removed and added. An entry an agent is on is at
 // work, and the At work part lists it. Its data is `queue --local` in each project, the very list an
@@ -37,7 +37,7 @@ export function QueueCard({ projects }: ModuleCardProps) {
   return (
     <PanelGroup
       bare
-      title="Up next"
+      title="AI Queue"
       action={
         <>
           {single && <BatchStart read={single} starts={starts} />}

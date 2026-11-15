@@ -64,7 +64,7 @@ describe('the Overview', () => {
   test('with no layout picked, the cards stand in their own order and widths; the agents at work show even while none works', async () => {
     working = []
     show()
-    await screen.findByText('Needs you')
+    await screen.findByText('Human Queue')
     expect(drawn().map(card => card.id)).toEqual(['human-queue', 'working', 'usage', 'skills', '@x/tickets/hot'])
     expect(screen.getByText('No agent is at work.')).toBeTruthy()
     // Two columns once the page has the room: what needs the person and what is at work two thirds
@@ -86,7 +86,7 @@ describe('the Overview', () => {
     cleanup()
     // With a project picked, only that project's agents count.
     show('p2')
-    await screen.findByText('Needs you')
+    await screen.findByText('Human Queue')
     expect(screen.queryByText('working on r1')).toBeNull()
   })
 
@@ -114,7 +114,7 @@ describe('the Overview', () => {
       overviewLayouts: { '*': [{ id: '@x/tickets/hot', width: '1/3' }, { id: 'usage', hidden: true }, { id: 'human-queue', width: '1/4' }, { id: 'gone' }, { id: 'skills', width: '1/4' }] },
     }
     show()
-    await screen.findByText('Needs you')
+    await screen.findByText('Human Queue')
     expect(drawn().map(card => card.id)).toEqual(['@x/tickets/hot', 'human-queue', 'skills', 'working'])
     expect(screen.queryByText('usage')).toBeNull()
     expect(drawn()[0]!.spans).toContain('@4xl:basis-[calc(33.333%_-_1.333rem)]')
@@ -127,11 +127,11 @@ describe('the Overview', () => {
     working = []
     prefs.value = { onboardingDismissed: true, overviewLayouts: { '*': [{ id: 'human-queue' }], p1: [{ id: '@x/tickets/hot' }] } }
     show('p1')
-    await screen.findByText('Needs you')
+    await screen.findByText('Human Queue')
     expect(drawn()[0]!.id).toBe('@x/tickets/hot')
     cleanup()
     show('p2')
-    await screen.findByText('Needs you')
+    await screen.findByText('Human Queue')
     expect(drawn()[0]!.id).toBe('human-queue')
   })
 
@@ -142,7 +142,7 @@ describe('the Overview', () => {
     fireEvent.click(await screen.findByRole('button', { name: 'Customize' }))
     expect(screen.getByRole('status').textContent).toMatch(/Arranging the layout for alpha/)
     // Every shown card has its bar; the agents at work, though none works, are there to be placed.
-    expect(screen.getAllByRole('toolbar').map(bar => bar.getAttribute('aria-label'))).toEqual(['Usage', 'Needs you', 'At work', 'Hot tickets'])
+    expect(screen.getAllByRole('toolbar').map(bar => bar.getAttribute('aria-label'))).toEqual(['Usage', 'Human Queue', 'At work', 'Hot tickets'])
     // The card hidden waits in the tray.
     const tray = within(screen.getByRole('region', { name: 'Cards not on the page' }))
     expect(tray.getAllByRole('listitem').map(item => item.getAttribute('aria-label'))).toEqual(['Skills'])
@@ -153,7 +153,7 @@ describe('the Overview', () => {
     fireEvent.click(widths.getByRole('button', { name: 'Full' }))
     expect(saved()['p1']!.find(place => place.id === '@x/tickets/hot')).toEqual({ id: '@x/tickets/hot', width: '1' })
     // ✕ takes a card off the page.
-    fireEvent.click(screen.getByRole('button', { name: 'Take Needs you off the page' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Take Human Queue off the page' }))
     expect(saved()['p1']!.find(place => place.id === 'human-queue')).toEqual({ id: 'human-queue', hidden: true })
     // + brings one back, at the end.
     fireEvent.click(tray.getByRole('button', { name: 'Add Skills' }))
@@ -329,7 +329,7 @@ describe('the Overview', () => {
     prefs.value = {}
     firstSteps.read = false
     const { rerender } = show(null, { interventions: false, active: false }, false)
-    await screen.findByText('Needs you')
+    await screen.findByText('Human Queue')
     expect(drawn().map(card => card.id)).toEqual(['human-queue'])
     expect(screen.queryByText('onboarding')).toBeNull()
     rerender(overview())
@@ -343,7 +343,7 @@ describe('the Overview', () => {
     prefs.value = { onboardingDismissed: true }
     firstSteps.read = false
     show()
-    await screen.findByText('Needs you')
+    await screen.findByText('Human Queue')
     expect(drawn().map(card => card.id)).toEqual(['human-queue', 'working', 'usage', 'skills', '@x/tickets/hot'])
   })
 
@@ -356,7 +356,7 @@ describe('the Overview', () => {
 
   test('the line under the title says no count before its reads, and a nothing in words after', async () => {
     show(null, { interventions: false, active: false }, false)
-    await screen.findByText('Needs you')
+    await screen.findByText('Human Queue')
     expect(screen.queryByRole('button', { name: /needs? you/ })).toBeNull()
     expect(screen.queryByText(/^(no agent|\d+) working$/)).toBeNull()
     cleanup()
@@ -386,7 +386,7 @@ describe('the Overview', () => {
 
   test('the Human Queue says it is loading before its read, not that nothing waits', async () => {
     show(null, { interventions: false, active: false }, false)
-    const card = (await screen.findByText('Needs you')).closest('[data-card]')!
+    const card = (await screen.findByText('Human Queue')).closest('[data-card]')!
     expect(card.textContent).toContain('Loading…')
     expect(card.textContent).not.toContain('AI doesn’t need you.')
   })
@@ -415,7 +415,7 @@ describe('the Overview', () => {
     ]
     render(<DashboardPage onProjectAdded={() => {}} onSelectProject={() => {}} projectHref={id => `/${id}`} onSelectAgent={onSelectAgent} onAgentStarted={() => {}} interventions={interventions} interventionsState="fresh" active={{ active: [], state: 'fresh' }} projects={[]} scope={null} />)
     // One panel, in the order the queue gives them: a row says what it needs in the line under its name, so no kind has a heading.
-    const part = within(screen.getByRole('region', { name: 'Needs you' }))
+    const part = within(screen.getByRole('region', { name: 'Human Queue' }))
     expect(part.queryAllByRole('region')).toEqual([])
     expect(part.getAllByRole('listitem').map(row => row.textContent)).toEqual(['Create test.mdNeeds commit·1 fileReview', 'Add DESCRIPTION.mdNeeds merge·#6Review', 'Condense READMENeeds merge·#8Review'])
     // Each row carries its press, which opens where it is done, as the row does.

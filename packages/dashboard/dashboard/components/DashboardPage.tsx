@@ -124,13 +124,13 @@ export function DashboardPage({
     {
       id: 'human-queue',
       stale: interventionsState === 'kept',
-      label: 'Needs you',
+      label: 'Human Queue',
       order: 5,
       width: '2/3',
       minWidth: '1/2',
       node: (
         <div id={NEEDS_YOU_ID} className="flex scroll-mt-6 flex-col *:flex-1">
-          <NeedsYou items={interventions} state={interventionsState} onSelectProject={onSelectProject} onSelectAgent={onSelectAgent} />
+          <HumanQueue items={interventions} state={interventionsState} onSelectProject={onSelectProject} onSelectAgent={onSelectAgent} />
         </div>
       ),
     },
@@ -266,7 +266,7 @@ export function DashboardPage({
 // answer; and work a finished session left uncommitted or unpushed. #627 notifications fire off the
 // same set. One panel, newest first as the queue gives them: a row says what is needed in its line
 // under the run's name, so the kinds need no heading of their own.
-function NeedsYou({
+function HumanQueue({
   items,
   state,
   onSelectProject,
@@ -280,7 +280,7 @@ function NeedsYou({
 }) {
   const { rows, more, projects } = useWaitingRows(items, onSelectAgent, onSelectProject)
   return (
-    <PanelGroup bare title={<span className="text-warning">Needs you</span>} count={more ? items.length : undefined}>
+    <PanelGroup bare title={<span className="text-warning">Human Queue</span>} count={more ? items.length : undefined}>
       <PartDescription>Agents awaiting your approval, review, or input</PartDescription>
       <Slot of={{ state, value: items }} shape={<SentenceShape />}>
         {() => (

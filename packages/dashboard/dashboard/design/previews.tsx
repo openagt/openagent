@@ -602,7 +602,7 @@ function Panels() {
           onClick={() => {}}
         />
       </PanelGroup>
-      <PanelGroup title="Needs you: the press at rest">
+      <PanelGroup title="Human Queue: the press at rest">
         <PanelRow
           state={<StateCell state="waiting" />}
           title="A row whose press is what the person comes for"
