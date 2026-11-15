@@ -1,5 +1,6 @@
+import { useRef, useState } from 'react'
 import { afterEach, describe, expect, test, vi } from 'vitest'
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 
 const sendAddProject = vi.hoisted(() => vi.fn())
 const sendPickProjectDirectory = vi.hoisted(() => vi.fn())
@@ -11,6 +12,19 @@ const { AddProjectPanel } = await import('./AddProjectPanel.js')
 
 /** Opened here with no control to give focus back to. */
 const NO_OPENER = { current: null }
+
+/** The panel as the project picker opens it: from a button, over a page with a message box, and taken away when it closes. */
+function Opened() {
+  const opener = useRef<HTMLButtonElement>(null)
+  const [open, setOpen] = useState(true)
+  return (
+    <>
+      <button ref={opener}>Project: shop</button>
+      <input aria-label="Prompt" />
+      {open && <AddProjectPanel opener={opener} folder="/Users/dev/here" onAdded={() => {}} onClose={() => setOpen(false)} />}
+    </>
+  )
+}
 
 afterEach(() => {
   cleanup()
@@ -64,6 +78,34 @@ describe('AddProjectPanel (#1150)', () => {
     cleanup()
     render(<AddProjectPanel opener={NO_OPENER} folder="/Users/dev/here" onAdded={() => {}} onClose={() => {}} />)
     expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Cancel' }))
+  })
+
+  test('closed, it hands the keyboard back to the control that opened it', async () => {
+    render(<Opened />)
+    const cancel = screen.getByRole('button', { name: 'Cancel' })
+    cancel.focus()
+    fireEvent.click(cancel)
+    expect(screen.queryByRole('dialog')).toBeNull()
+    expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Project: shop' }))
+  })
+
+  test('closing itself after the add, it leaves the keyboard where the person took it meanwhile: the new project\u2019s message box', async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true })
+    try {
+      sendAddProject.mockResolvedValue({ ok: true, alreadyActivated: false })
+      render(<Opened />)
+      fireEvent.click(screen.getByRole('button', { name: 'I trust it, add it' }))
+      await screen.findByText('Project added')
+      // The project's page opens under the note, and its message box takes the caret: the person types.
+      const box = screen.getByRole('textbox', { name: 'Prompt' })
+      box.focus()
+      await act(() => vi.advanceTimersByTimeAsync(2500))
+      expect(screen.queryByRole('dialog')).toBeNull()
+      // Handed to the opener, the rest of the sentence went into the project picker's search.
+      expect(document.activeElement).toBe(box)
+    } finally {
+      vi.useRealTimers()
+    }
   })
 
   test('a repo that was already a project reads "Already added"', async () => {
