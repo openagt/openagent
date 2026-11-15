@@ -305,10 +305,14 @@ export function AgentView({
   // A run just started writes its prompt line only once its record is saved and its checkout made.
   // Told apart from the prompts in the same draw that brings the prompt's line, not an effect
   // later: for that one frame the message was in the chat twice.
-  const shownSending = (sending && prompts <= sending.prompts ? sending.text : undefined) ?? (startedWith && prompts === 0 ? startedWith : undefined)
+  const sentNow = sending && prompts <= sending.prompts ? sending.text : undefined
+  const startedNow = startedWith && prompts === 0 ? startedWith : undefined
+  const shownSending = sentNow ?? startedNow
   // The agent works, or is about to: on a message just sent, or as its feed shows before the
-  // agents poll does.
-  const going = feedLive || shownSending !== undefined
+  // agents poll does. The prompt a run was started with says it is about to only while its card
+  // does not say it ended: one stopped before it wrote that line (while its checkout was made) is
+  // over, and its prompt stays in the chat with nothing moving under it.
+  const going = feedLive || sentNow !== undefined || (startedNow !== undefined && live !== false)
   // What the branch holds (#1023), read once for the bar above the message box. Read once
   // the agent stops rather than once the process does: while it is still writing to the branch
   // there is nothing to hand off yet, but a parked session's branch is finished work. "Stops" is
@@ -552,7 +556,7 @@ export function AgentView({
           onSaid={onSending}
           writing={feedLive ? writing : ''}
           {...(shownSending !== undefined ? { sending: shownSending } : {})}
-          working={feedLive || shownSending !== undefined}
+          working={going}
           queued={waiting.length > 0 ? waiting : undefined}
           waitingOn={!going && live === false && outcome?.ok !== false && !outcome?.waiting ? subagentsRunning : 0}
           {...(feedLive ? {} : { openAt: 'end' as const, emptyLabel: 'This agent has no events.' })}

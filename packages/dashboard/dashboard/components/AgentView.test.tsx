@@ -925,6 +925,15 @@ describe('a run just started', () => {
     expect(screen.getByRole('status')).toBeTruthy()
   })
 
+  test('one stopped before its prompt line landed is over: its prompt stays, and no moving line says it is starting', async () => {
+    // Stop pressed while the run's checkout was made: its card says it ended, and its prompt line never comes.
+    render(view({ live: false, events: [], startedWith: 'Say hi', card: { status: 'stopped', workspace: '/repo/.branches/agent-1', branch: 'agent-1', driver: 'codex' } }))
+    expect(await screen.findByText('Say hi')).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'Initialized session' })).toBeTruthy()
+    expect(screen.queryByRole('status')).toBeNull()
+    expect(screen.queryByText(/^Starting/)).toBeNull()
+  })
+
   test('an agent just started on a machine says nothing of a set-up before its card is listed: no checkout is made for it here', () => {
     const events = [{ kind: 'driver', event: { type: 'start', prompt: 'Say hi' } }, { kind: 'driver', event: { type: 'text', text: 'Hi.' } }] as OpenAgentEvent[]
     render(view({ live: true, events, remoteLabel: 'laptop' }))
