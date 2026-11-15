@@ -176,6 +176,8 @@ export function AskPopup() {
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | undefined>()
   const down = useOpenAgentDown()
+  // The keyboard starts on an answer, the one that lets nothing in: Enter at once denies, it never allows.
+  const deny = useRef<HTMLButtonElement>(null)
 
   useEffect(() => {
     let stopped = false
@@ -218,7 +220,7 @@ export function AskPopup() {
   }
 
   return (
-    <Dialog open onOpenChange={open => !open && setClosed(new Set([...closed, ask.id]))} title="A computer wants to connect">
+    <Dialog open onOpenChange={open => !open && setClosed(new Set([...closed, ask.id]))} title="A computer wants to connect" initialFocus={deny}>
       <div className="space-y-4">
         <p className="flex items-start gap-2 text-sm">
           <Laptop className="mt-0.5 size-4 shrink-0 text-muted-foreground" aria-hidden />
@@ -232,7 +234,7 @@ export function AskPopup() {
         </p>
         {error !== undefined && <Problem>{error}</Problem>}
         <div className="flex justify-end gap-2 max-md:[&_button]:h-11">
-          <Button variant="secondary" loading={busy} disabled={down} onClick={() => void answer(false)}>
+          <Button ref={deny} variant="secondary" loading={busy} disabled={down} onClick={() => void answer(false)}>
             Deny
           </Button>
           <Button loading={busy} disabled={down} onClick={() => void answer(true)}>
