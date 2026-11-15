@@ -28,6 +28,7 @@ test('--help says what the install does, and touches nothing', async () => {
   const { code, stdout, stderr, left } = await install(['--help'])
   assert.equal(code, 0, stderr)
   assert.match(stdout, /^Usage: npx @openagt\/install\n/)
+  for (const line of stdout.split('\n')) assert.ok(line.length <= 100, line)
   assert.equal(stderr, '')
   assert.deepEqual(left, [])
 })

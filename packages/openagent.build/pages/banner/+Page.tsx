@@ -6,19 +6,21 @@ import { BADGES, mono } from '../index/ui'
 // cards) with >=64px safe margins all around.
 export default function Page() {
   return (
+    // Dark whatever the visitor's computer asks for: it is the picture other sites show.
     <div
+      className="dark"
       style={{
         position: 'relative',
         width: 1200,
         height: 630,
-        background: '#2d353b',
+        background: 'var(--background)',
         overflow: 'hidden',
         display: 'flex',
         alignItems: 'center',
         gap: 48,
         padding: '64px 88px',
         boxSizing: 'border-box',
-        color: '#d3c6aa',
+        color: 'var(--foreground)',
       }}
     >
       {/* Soft glows so the background doesn't read as a flat void. */}
@@ -30,7 +32,7 @@ export default function Page() {
           top: -160,
           width: 720,
           height: 720,
-          background: 'radial-gradient(circle, rgba(167, 192, 128, 0.09) 0%, rgba(167, 192, 128, 0) 62%)',
+          background: 'radial-gradient(circle, color-mix(in oklab, var(--success) 9%, transparent) 0%, transparent 62%)',
         }}
       />
       <div
@@ -41,13 +43,13 @@ export default function Page() {
           bottom: -260,
           width: 640,
           height: 640,
-          background: 'radial-gradient(circle, rgba(127, 187, 179, 0.06) 0%, rgba(127, 187, 179, 0) 60%)',
+          background: 'radial-gradient(circle, color-mix(in oklab, var(--primary) 6%, transparent) 0%, transparent 60%)',
         }}
       />
 
       <div style={{ position: 'relative', flex: 1, display: 'flex', flexDirection: 'column', gap: 26 }}>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-          <span style={{ position: 'relative', alignSelf: 'flex-start', fontSize: 40, fontWeight: 500, color: '#9da9a0' }}>
+          <span style={{ position: 'relative', alignSelf: 'flex-start', fontSize: 40, fontWeight: 500, color: 'var(--muted-foreground)' }}>
             Babysit AI
             <span
               aria-hidden
@@ -58,7 +60,7 @@ export default function Page() {
                 width: '106%',
                 height: 5,
                 borderRadius: 3,
-                background: '#e67e80',
+                background: 'var(--danger)',
                 transform: 'rotate(-5deg)',
               }}
             />
@@ -67,7 +69,7 @@ export default function Page() {
             Autonomous AI
           </div>
         </div>
-        <div style={{ fontSize: 31, color: '#9da9a0', lineHeight: 1.4 }}>
+        <div style={{ fontSize: 31, color: 'var(--muted-foreground)', lineHeight: 1.4 }}>
           Make the important decisions,
           <br />
           let AI do the rest.
@@ -80,7 +82,7 @@ export default function Page() {
                 display: 'flex',
                 alignItems: 'center',
                 gap: 9,
-                border: '1px solid #475258',
+                border: '1px solid var(--border)',
                 borderRadius: 999,
                 padding: '8px 17px',
                 color,
@@ -111,7 +113,7 @@ export default function Page() {
             fontSize: 22,
             letterSpacing: '0.16em',
             textTransform: 'uppercase',
-            color: '#a7c080',
+            color: 'var(--success)',
           }}
         >
           OpenAgent

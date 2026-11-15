@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useId, useLayoutEffect, useRef, useState, type FormEvent, type KeyboardEvent, type PointerEvent, type ReactNode, type RefObject } from 'react'
 import { ArrowLeft, ArrowRight, ChevronDown, ChevronUp, CornerDownRight, MousePointer2, RotateCw } from 'lucide-react'
-import { Button, Input, useModuleHost, type ModulePanelProps } from '@openagt/dashboard/module'
+import { Button, Input, PaneNote, useModuleHost, type ModulePanelProps } from '@openagt/dashboard/module'
 import { KEPT_LINES } from '../src/console.js'
 import type { ScreenInput } from '../src/screen.js'
 import { ACTED, CONSOLE, CURSOR, FRAME, jpegSize, MAX_SELECTION, readActed, readConsoleLine, readCursor, readSelection, readState, SELECTED, STATE, streamReader, type ActedPoint, type ConsoleLevel, type ConsoleLine, type Cursor } from '../src/stream.js'
@@ -34,7 +34,7 @@ export function BrowserPanel({ projectId, agentId, activity }: ModulePanelProps)
   const canvas = useRef<HTMLCanvasElement>(null)
   const { live, address, setAddress, editing, lines, cursor, agent, picture, selected } = useScreen(projectId, agentId, activity, canvas)
 
-  if (!agentId) return <Nothing>Open a session to see its browser.</Nothing>
+  if (!agentId) return <PaneNote>Open a session to see its browser.</PaneNote>
 
   const send = (input: ScreenInput): void => void host.sendToScreen(projectId, agentId, input)
   const onKey = (e: KeyboardEvent): void => {
@@ -63,7 +63,7 @@ export function BrowserPanel({ projectId, agentId, activity }: ModulePanelProps)
 
   return (
     <div className="flex h-full min-h-0 flex-col">
-      <form onSubmit={go} className="flex items-center gap-1 border-b border-border p-2">
+      <form onSubmit={go} className="flex items-center gap-1 border-b border-hairline p-2">
         <Button type="button" variant="ghost" size="icon-sm" className="h-7 w-7 shrink-0" aria-label="Back" disabled={!live} onClick={() => send({ type: 'back' })}>
           <ArrowLeft className="h-4 w-4" />
         </Button>
@@ -76,7 +76,7 @@ export function BrowserPanel({ projectId, agentId, activity }: ModulePanelProps)
         <Input
           name="page-address"
           aria-label="Address"
-          className="h-7 min-w-0 flex-1 text-xs"
+          className="h-7 min-w-0 flex-1 text-sm"
           spellCheck={false}
           autoComplete="off"
           autoCapitalize="off"
@@ -115,7 +115,7 @@ export function BrowserPanel({ projectId, agentId, activity }: ModulePanelProps)
           />
         </Hand>
         {live && agent && picture && <AgentPointer at={agent.at} n={agent.n} canvas={canvas} picture={picture} />}
-        {!live && <Nothing>No browser is open in this session. When the agent opens one, it shows here, live.</Nothing>}
+        {!live && <PaneNote>No browser is open in this session. When the agent opens one, it shows here, live.</PaneNote>}
       </div>
       {live && <Console lines={lines} />}
     </div>
@@ -273,9 +273,9 @@ function Console({ lines }: { lines: ConsoleLine[] }) {
   }
   const Arrow = open ? ChevronDown : ChevronUp
   return (
-    <div className={`shrink-0 border-t border-border ${open ? 'flex min-h-0 basis-1/3 flex-col' : ''}`}>
+    <div className={`shrink-0 border-t border-hairline ${open ? 'flex min-h-0 basis-1/3 flex-col' : ''}`}>
       <button type="button" aria-expanded={open} aria-controls={open ? listId : undefined} aria-label={errors > 0 ? `Console, ${said}` : 'Console'} onClick={toggle} className="flex w-full shrink-0 items-center gap-2 px-3 py-2 text-left text-xs hover:bg-muted">
-        <Arrow className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+        <Arrow className="size-3.5 shrink-0 text-muted-foreground" />
         <span className="font-medium">Console</span>
         {errors > 0 && <span className="text-danger">{said}</span>}
       </button>
@@ -288,7 +288,7 @@ function Console({ lines }: { lines: ConsoleLine[] }) {
           aria-live="off"
           aria-label="The page's console"
           tabIndex={0}
-          className="min-h-0 flex-1 overflow-y-auto border-t border-border font-mono text-[11px] leading-relaxed outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
+          className="min-h-0 flex-1 overflow-y-auto border-t border-hairline font-mono text-xs outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
           onScroll={e => {
             const el = e.currentTarget
             atEnd.current = el.scrollHeight - el.scrollTop - el.clientHeight < 8
@@ -297,13 +297,13 @@ function Console({ lines }: { lines: ConsoleLine[] }) {
           {lines.length === 0 && <p className="px-3 py-2 font-sans text-xs text-muted-foreground">The page has said nothing.</p>}
           {lines.map(said =>
             said.level === 'went' ? (
-              <div key={said.n} data-went className="flex gap-2 border-b border-border/50 bg-muted px-3 py-0.5 text-muted-foreground">
+              <div key={said.n} data-went className="flex gap-2 border-b border-hairline bg-muted px-3 py-0.5 text-muted-foreground">
                 <time className="shrink-0">{clock(said.at)}</time>
                 <CornerDownRight aria-label="Went to" className="mt-0.5 h-3 w-3 shrink-0" />
                 <span className="min-w-0 flex-1 wrap-anywhere">{said.text}</span>
               </div>
             ) : (
-              <div key={said.n} className={`flex gap-2 border-b border-border/50 px-3 py-0.5 ${TONE[said.level]}`}>
+              <div key={said.n} className={`flex gap-2 border-b border-hairline px-3 py-0.5 ${TONE[said.level]}`}>
                 <time className="shrink-0 text-muted-foreground">{clock(said.at)}</time>
                 <span className="min-w-0 flex-1 whitespace-pre-wrap wrap-anywhere">
                   {(said.level === 'error' || said.level === 'warning') && <span className="sr-only">{said.level}: </span>}
@@ -343,9 +343,6 @@ function keepOpen(open: boolean): void {
   }
 }
 
-function Nothing({ children }: { children: string }) {
-  return <p className="p-4 text-center text-sm text-muted-foreground">{children}</p>
-}
 
 /** Whether the page is on screen: a tab in the background, or a phone with its screen off, is not. */
 function usePageVisible(): boolean {
@@ -540,7 +537,7 @@ function AgentPointer({ at, n, canvas, picture }: { at: ActedPoint; n: number; c
     >
       <span className="agent-pointer-ring absolute -left-4 -top-4 h-8 w-8 rounded-full border-2 border-current" />
       <MousePointer2 className="h-4 w-4 fill-current drop-shadow-[0_1px_1px_rgba(0,0,0,0.45)]" />
-      <span className="absolute left-4 top-3 whitespace-nowrap rounded-sm bg-primary px-1 py-px text-[10px] leading-tight font-medium text-primary-foreground">{at.act === 'type' ? 'agent typed' : 'agent clicked'}</span>
+      <span className="absolute left-4 top-3 whitespace-nowrap rounded-sm bg-primary px-1 text-xs font-medium text-primary-foreground">{at.act === 'type' ? 'agent typed' : 'agent clicked'}</span>
     </span>
   )
 }
@@ -550,12 +547,12 @@ function TypeHere({ send }: { send: (input: ScreenInput) => void }) {
   const [coarse] = useState(() => typeof matchMedia === 'function' && matchMedia('(pointer: coarse)').matches)
   if (!coarse) return null
   return (
-    <div className="border-b border-border p-2">
+    <div className="border-b border-hairline p-2">
       <Input
         name="page-text"
         aria-label="Type into the page"
         placeholder="Type into the page"
-        className="h-7 text-xs"
+        className="h-7 text-sm"
         autoCapitalize="off"
         autoCorrect="off"
         spellCheck={false}

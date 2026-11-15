@@ -108,12 +108,21 @@ function subscribe(listener: () => void): () => void {
   return () => listeners.delete(listener)
 }
 
-/** Open or close one pane of the page with this name, and remember it. A pane just opened is the last of the open ones. */
+/** Narrower than this a screen has room for one pane: two would leave the chat too narrow to read. */
+const ONE_PANE = '(width < 64rem)'
+
+/** Whether the screen has room for one pane only, now; jsdom has no matchMedia, and is wide. */
+const onePane = () => (typeof window !== 'undefined' && typeof window.matchMedia === 'function' ? window.matchMedia(ONE_PANE).matches : false)
+
+/**
+ * Open or close one pane of the page with this name, and remember it. A pane just opened is the
+ * last of the open ones; on a screen with room for one, it takes the place of those open.
+ */
 export function setPaneOpen(name: string, id: string, open: boolean): void {
   if (!open && expanded.get(name) === id) expanded.delete(name)
   write(name, page => {
     if (page.open.includes(id) === open) return page
-    return { ...page, open: open ? [...page.open, id] : page.open.filter(other => other !== id) }
+    return { ...page, open: open ? [...(onePane() ? [] : page.open), id] : page.open.filter(other => other !== id) }
   })
 }
 

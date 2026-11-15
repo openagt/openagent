@@ -17,8 +17,11 @@ import { SkillsOff } from './SkillsMenu.js'
 import { isPublishPick, offeredPublishPicks, type PublishPick } from '../../src/client.js'
 import { useProjectLauncher } from '../lib/use-project-launcher.js'
 import { promptWithContext, type ContextSet } from '../lib/use-context-set.js'
-import { shortcut } from '../lib/shortcut.js'
+import { overlayOpen, pressed, shortcut } from '../lib/shortcut.js'
 import { useIsMobile } from '../lib/use-mobile.js'
+
+/** How long after an Esc that closed something a second Esc is still that press, said twice: a double press. */
+const DOUBLE_PRESS_MS = 500
 
 /** A message sent to a working agent that it has not read yet: shown waiting until it lands. */
 export interface QueuedMessage {
@@ -143,7 +146,7 @@ export function AgentComposer({
     }
   }, [focusBox])
   const phone = useIsMobile()
-  // A touch screen has no keys to name: its pointer is a finger.
+  // A touch screen has no keys to name: its pointer is a finger. A phone's box has no room for them either.
   const touch = typeof matchMedia === 'function' && matchMedia('(pointer: coarse)').matches
   const { busy, error, run } = useAction(agentId)
   // The slot's Stop (#1455), its own action so a message send's busy beat cannot read as
@@ -230,35 +233,38 @@ export function AgentComposer({
 
   // Esc stops the agent, as in Claude Code, also typed in the box, unless it closes something open
   // first: a menu, a dialog, the box's own suggestions. Read before anything on the page takes the
-  // key, while what it closes still reads open.
+  // key, while what it closes still reads open. An Esc straight after the one that closed something
+  // is the same press to a person, and a key held down is no press: neither stops the agent.
+  const closedAt = useRef(-Infinity)
   useEffect(() => {
     if (!live) return
     const onKey = (event: KeyboardEvent) => {
-      if (event.key !== 'Escape' || stopping || down || document.querySelector('[role="dialog"], [role="menu"], [role="listbox"], .ProseMirror[aria-expanded="true"]')) return
+      if (!pressed(event, 'stop')) return
+      if (overlayOpen() || document.querySelector('.ProseMirror[aria-expanded="true"]')) return void (closedAt.current = Date.now())
+      if (event.repeat || Date.now() - closedAt.current < DOUBLE_PRESS_MS || stopping || down) return
       stopSession()
     }
     window.addEventListener('keydown', onKey, true)
     return () => window.removeEventListener('keydown', onKey, true)
   })
 
-  // The empty box's slot control while the agent works: Stop, as Claude Code's, a square and no button around it.
+  // The empty box's slot control while the agent works: Stop, as Claude Code's, a square in the box's one primary press.
   const idleControl = live ? (
     <Tooltip>
       <TooltipTrigger
         render={
           <Button
             type="button"
-            variant="ghost"
             size="icon-sm"
             onClick={stopSession}
             disabled={stopping || down}
             aria-label="Stop agent"
             // Stopping draws its spinner in full; off while OpenAgent is not answering, Stop is dimmed as any button off.
-            className={stopping ? 'h-8 w-8 shrink-0 disabled:opacity-100' : 'h-8 w-8 shrink-0'}
+            className={stopping ? 'shrink-0 disabled:opacity-100' : 'shrink-0'}
           />
         }
       >
-        {stopping ? <Loader2 className="h-4 w-4 animate-spin" /> : <Square className="h-3.5 w-3.5 rounded-[3px] fill-current" />}
+        {stopping ? <Loader2 className="h-4 w-4 animate-spin" /> : <Square className="size-3 fill-current" />}
       </TooltipTrigger>
       <TooltipContent className="flex items-center gap-1.5">
         {stopping ? (
@@ -266,7 +272,7 @@ export function AgentComposer({
         ) : (
           <>
             Stop
-            <kbd className="flex h-[17px] items-center justify-center rounded border border-background/20 px-1 font-sans text-[11px]">Esc</kbd>
+            <kbd className="flex h-5 items-center justify-center rounded-sm border border-hairline px-1 font-sans text-xs">Esc</kbd>
           </>
         )}
       </TooltipContent>
@@ -276,7 +282,8 @@ export function AgentComposer({
   const surfacedError = error ?? stopError
 
   return (
-    <div className="@container mx-auto w-full max-w-3xl p-2">
+    // The chat's column and its side padding (EventList), so the box and what is in the chat share both edges.
+    <div className="@container mx-auto w-full max-w-3xl px-4 pt-2 pb-4">
       {surfacedError && <p role="alert" className="mb-1 px-2 text-xs text-danger">{surfacedError}</p>}
       {notSent && <p role="status" className="mb-1 px-2 text-xs text-muted-foreground">Not sent: the session stopped first.</p>}
       <Composer
@@ -326,7 +333,7 @@ export function AgentComposer({
         idleControl={idleControl}
         // What the box can do, not what it is for: the keys for a working agent, as Claude Code's box
         // says them in the same place; a touch screen has none to name.
-        placeholder={down ? 'OpenAgent is not answering' : live ? (touch ? 'Message the agent…' : `Enter to send, ${shortcut('Enter')} to queue for later`) : asked ? 'Or answer in your own words…' : 'Message the agent to continue it…'}
+        placeholder={down ? 'OpenAgent is not answering' : live ? (touch || phone ? 'Message the agent…' : `Enter to send, ${shortcut('Enter')} to queue for later`) : asked ? 'Or answer in your own words…' : 'Message the agent to continue it…'}
       />
     </div>
   )

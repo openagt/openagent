@@ -7,9 +7,11 @@ const rpc = vi.hoisted(() => ({ onAgentsList: vi.fn(), sendSaveAgent: vi.fn(), s
 vi.mock('../rpc/agents.js', () => rpc)
 const logins = vi.hoisted(() => ({ onGitHosts: vi.fn(), sendGitHostLogin: vi.fn(), sendStopGitHostLogin: vi.fn(), sendGitHostInstall: vi.fn(), onAgentState: vi.fn(), sendAgentFix: vi.fn() }))
 vi.mock('../rpc/logins.js', () => logins)
-const route = vi.hoisted(() => ({ openAgents: vi.fn() }))
-// The real leave guard: Back and a reload are the browser's.
-vi.mock('../lib/use-route.js', async () => ({ holdEntry: (await vi.importActual<typeof import('../lib/use-route.js')>('../lib/use-route.js')).holdEntry, ...route }))
+const route = vi.hoisted(() => ({ openPage: vi.fn() }))
+vi.mock('../lib/host-services.js', async importOriginal => {
+  const actual = await importOriginal<typeof import('../lib/host-services.js')>()
+  return { ...actual, INERT_HOST_SERVICES: { ...actual.INERT_HOST_SERVICES, ...route } }
+})
 // The tooltip's words are on the page.
 vi.mock('./ui/tooltip.js', async () => {
   const { cloneElement } = await import('react')
@@ -48,40 +50,58 @@ afterEach(() => {
   cleanup()
   forgetRemembered()
   for (const fn of [...Object.values(rpc), ...Object.values(logins)]) fn.mockReset()
-  route.openAgents.mockReset()
+  route.openPage.mockReset()
 })
 
+/** "New agent", once the agents are read: before, it is there and takes no press. */
+async function newAgentPress(): Promise<HTMLElement> {
+  const press = await screen.findByRole('button', { name: 'New agent' })
+  await waitFor(() => expect((press as HTMLButtonElement).disabled).toBe(false))
+  return press
+}
+
+/** The agents' rows, top to bottom, without what is said under one; `hidden`, also while a dialog over the page hides them. */
+async function agentRows(hidden = false): Promise<HTMLElement[]> {
+  const list = await screen.findByRole('list', { name: 'Agents', hidden })
+  return within(list).getAllByRole('listitem', { hidden }).filter(item => item.parentElement === list && item.classList.contains('group/row'))
+}
+
 describe('the Agents page', () => {
-  test('one card per agent, the default first and marked; each with its skills and the accounts it works as, the computer’s where it names none', async () => {
+  test("while the agents are first read, rows' shapes stand where the agents will, and the agents take their place", async () => {
+    let answer = () => {}
+    rpc.onAgentsList.mockImplementationOnce(() => new Promise(resolve => (answer = () => resolve(VIEW))))
     render(<AgentsPage />)
-    const cards = await screen.findAllByRole('region')
-    expect(cards.map(card => card.getAttribute('aria-label'))).toEqual(['Default', 'Reviewer'])
-    // Each card's title is a heading right under the page's own.
-    expect(screen.getAllByRole('heading', { level: 2 }).map(heading => heading.textContent)).toEqual(['Default', 'Reviewer'])
-    expect(within(cards[0]!).getByText(/The agent a session is on unless you pick another/)).toBeTruthy()
-    expect(within(cards[0]!).getByText('GitHub: whatever the computer uses')).toBeTruthy()
-    expect(within(cards[1]!).getByText('@octo-agent on GitHub · Claude: Dani')).toBeTruthy()
-    expect(within(cards[1]!).getByText('readability')).toBeTruthy()
+    expect(screen.getByRole('status').textContent).toBe('Loading…')
+    answer()
+    expect(await agentRows()).toHaveLength(2)
+    expect(screen.queryByText('Loading…')).toBeNull()
+  })
+
+  test('one row per agent, the default first and marked; each with its skills and the accounts it works as, the computer’s where it names none', async () => {
+    render(<AgentsPage />)
+    const rows = await agentRows()
+    expect(rows.map(row => row.querySelector('.flex-col')?.firstChild?.textContent)).toEqual(['Default', 'Reviewer'])
+    expect(within(rows[0]!).getByText(/The agent a session is on unless you pick another/)).toBeTruthy()
+    expect(within(rows[0]!).getByText('ask, github · GitHub: whatever the computer uses')).toBeTruthy()
     // An agent set to never pick up the project's own skills says so after its list; the default does not.
-    expect(within(cards[1]!).getByText('· no project skills')).toBeTruthy()
-    expect(within(cards[0]!).queryByText('· no project skills')).toBeNull()
-    // One without a skill every agent starts with says so, in the skill's own words; the default has both.
-    expect(within(cards[1]!).getByText('Without github, which every agent starts with. Pull requests on GitHub.')).toBeTruthy()
-    expect(within(cards[0]!).queryByText(/^Without /)).toBeNull()
+    expect(within(rows[1]!).getByText('ask, readability, no project skills · @octo-agent on GitHub · Claude: Dani')).toBeTruthy()
+    // One without a skill every agent starts with says so under its row, in the skill's own words; the default has both.
+    expect(screen.getByText('Without github, which every agent starts with. Pull requests on GitHub.').closest('li')?.previousElementSibling).toBe(rows[1])
+    expect(screen.getAllByText(/^Without /)).toHaveLength(1)
     // The default is never removed.
-    expect(within(cards[0]!).queryByRole('button', { name: 'Remove Default' })).toBeNull()
-    expect(within(cards[1]!).getByRole('button', { name: 'Remove Reviewer' })).toBeTruthy()
+    expect(within(rows[0]!).queryByRole('button', { name: 'Remove Default' })).toBeNull()
+    expect(within(rows[1]!).getByRole('button', { name: 'Remove Reviewer' })).toBeTruthy()
   })
 
   test('a new agent: its name, typed at once, the skills ticked from the list, the two every agent starts with ticked already; saved as the dashboard’s call, and the list read again', async () => {
     render(<AgentsPage />)
-    fireEvent.click(await screen.findByRole('button', { name: 'New agent' }))
+    fireEvent.click(await newAgentPress())
     const editor = screen.getByRole('dialog', { name: 'New agent' })
     // What is typed first goes to the name.
     await waitFor(() => expect(document.activeElement).toBe(within(editor).getByLabelText('Name')))
-    expect((within(editor).getByLabelText('ask') as HTMLInputElement).getAttribute('aria-checked') ?? (within(editor).getByLabelText('ask') as HTMLInputElement).checked.toString()).toMatch(/true/)
+    expect((within(editor).getByRole('checkbox', { name: 'ask' }) as HTMLInputElement).getAttribute('aria-checked') ?? (within(editor).getByRole('checkbox', { name: 'ask' }) as HTMLInputElement).checked.toString()).toMatch(/true/)
     fireEvent.change(within(editor).getByLabelText('Name'), { target: { value: 'Social Media' } })
-    fireEvent.click(within(editor).getByLabelText('ux'))
+    fireEvent.click(within(editor).getByRole('checkbox', { name: 'ux' }))
     fireEvent.click(within(editor).getByLabelText('Claude account Dani'))
     fireEvent.click(within(editor).getByRole('button', { name: 'Save' }))
     await waitFor(() => expect(rpc.sendSaveAgent).toHaveBeenCalledWith({ name: 'Social Media', skills: ['ask', 'github', 'ux'], accounts: { claude: ['Dani'] }, projectSkills: true }))
@@ -89,20 +109,32 @@ describe('the Agents page', () => {
     expect(screen.queryByRole('dialog', { name: 'New agent' })).toBeNull()
   })
 
-  test('after a new agent is saved, the focus goes to its card\u2019s Edit once the list is read with it', async () => {
+  test('after a new agent is saved, the focus goes to its row’s Edit once the list is read with it', async () => {
     render(<AgentsPage />)
-    await screen.findByRole('region', { name: 'Default' })
-    fireEvent.click(screen.getByRole('button', { name: 'New agent' }))
+    fireEvent.click(await newAgentPress())
     fireEvent.change(within(screen.getByRole('dialog', { name: 'New agent' })).getByLabelText('Name'), { target: { value: 'Social' } })
     rpc.onAgentsList.mockResolvedValue({ ...VIEW, agents: [...VIEW.agents, { id: 'social', name: 'Social', skills: ['ask', 'github'], accounts: {}, projectSkills: true }] })
     fireEvent.click(within(screen.getByRole('dialog', { name: 'New agent' })).getByRole('button', { name: 'Save' }))
-    await screen.findByRole('region', { name: 'Social' })
-    await waitFor(() => expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Edit Social' })))
+    const edit = await screen.findByRole('button', { name: 'Edit Social' })
+    await waitFor(() => expect(document.activeElement).toBe(edit))
+  })
+
+  test("a skill's sentence is one line, the whole of it on a press of that line, which ticks nothing", async () => {
+    render(<AgentsPage />)
+    fireEvent.click(await newAgentPress())
+    const editor = screen.getByRole('dialog', { name: 'New agent' })
+    const sentence = within(editor).getByRole('button', { name: 'Read the code.' })
+    expect(sentence.getAttribute('aria-expanded')).toBe('false')
+    expect(sentence.className).toContain('truncate')
+    fireEvent.click(sentence)
+    expect(sentence.getAttribute('aria-expanded')).toBe('true')
+    expect(sentence.className).not.toContain('truncate')
+    expect(within(editor).getByRole('checkbox', { name: 'readability' }).getAttribute('aria-checked')).toBe('false')
   })
 
   test('the editor is a form: Enter in the name saves; with no name, Save says what it needs under the field and saves nothing', async () => {
     render(<AgentsPage />)
-    fireEvent.click(await screen.findByRole('button', { name: 'New agent' }))
+    fireEvent.click(await newAgentPress())
     const editor = screen.getByRole('dialog', { name: 'New agent' })
     const name = within(editor).getByLabelText('Name') as HTMLInputElement
     fireEvent.click(within(editor).getByRole('button', { name: 'Save' }))
@@ -143,7 +175,7 @@ describe('the Agents page', () => {
 
   test('Cancel, Esc or the ✕ on an editor with something changed asks first: Cancel there keeps what was typed, Discard closes it; with nothing changed it closes at once', async () => {
     render(<AgentsPage />)
-    fireEvent.click(await screen.findByRole('button', { name: 'New agent' }))
+    fireEvent.click(await newAgentPress())
     const editor = screen.getByRole('dialog', { name: 'New agent' })
     fireEvent.change(within(editor).getByLabelText('Name'), { target: { value: 'Reviewer two' } })
     fireEvent.keyDown(within(editor).getByLabelText('Name'), { key: 'Escape' })
@@ -177,24 +209,20 @@ describe('the Agents page', () => {
       window.history.back()
       await act(async () => void (await popped))
     }
-    // "New agent" is a press once the agents are read.
-    await screen.findByRole('region', { name: 'Default' })
-    fireEvent.click(screen.getByRole('button', { name: 'New agent' }))
+    fireEvent.click(await newAgentPress())
     fireEvent.change(within(screen.getByRole('dialog', { name: 'New agent' })).getByLabelText('Name'), { target: { value: 'Backtest' } })
     const reload = new Event('beforeunload', { cancelable: true })
     window.dispatchEvent(reload)
     expect(reload.defaultPrevented).toBe(true)
     await back()
     const asked = await screen.findByRole('alertdialog', { name: 'Discard the new agent?' })
-    expect(window.location.pathname).toBe('/agents')
+    await waitFor(() => expect(window.location.pathname).toBe('/agents'))
     fireEvent.click(within(asked).getByRole('button', { name: 'Cancel' }))
     await waitFor(() => expect(screen.queryByRole('alertdialog')).toBeNull())
     expect((within(screen.getByRole('dialog', { name: 'New agent' })).getByLabelText('Name') as HTMLInputElement).value).toBe('Backtest')
     await back()
-    const popped = new Promise(resolve => window.addEventListener('popstate', resolve, { once: true }))
     fireEvent.click(within(await screen.findByRole('alertdialog')).getByRole('button', { name: 'Discard' }))
-    await act(async () => void (await popped))
-    expect(window.location.pathname).toBe('/permissions')
+    await waitFor(() => expect(window.location.pathname).toBe('/permissions'))
     const after = new Event('beforeunload', { cancelable: true })
     window.dispatchEvent(after)
     expect(after.defaultPrevented).toBe(false)
@@ -202,7 +230,7 @@ describe('the Agents page', () => {
 
   test('with OpenAgent not answering after a name is typed, Discard still closes the editor: it sends nothing', async () => {
     const page = render(<DaemonDown.Provider value={false}><AgentsPage /></DaemonDown.Provider>)
-    fireEvent.click(await screen.findByRole('button', { name: 'New agent' }))
+    fireEvent.click(await newAgentPress())
     fireEvent.change(within(screen.getByRole('dialog', { name: 'New agent' })).getByLabelText('Name'), { target: { value: 'Offline draft' } })
     page.rerender(<DaemonDown.Provider value={true}><AgentsPage /></DaemonDown.Provider>)
     fireEvent.click(within(screen.getByRole('dialog', { name: 'New agent' })).getByRole('button', { name: 'Close' }))
@@ -218,10 +246,10 @@ describe('the Agents page', () => {
     render(<AgentsPage />)
     fireEvent.click(await screen.findByRole('button', { name: 'Edit Reviewer' }))
     const editor = screen.getByRole('dialog', { name: 'Editing Reviewer' })
-    fireEvent.click(within(editor).getByLabelText('readability'))
+    fireEvent.click(within(editor).getByRole('checkbox', { name: 'readability' }))
     // Its project-skills tick is off as its record says; ticked on, the save says so.
-    expect(within(editor).getByLabelText('Project skills').getAttribute('aria-checked')).toBe('false')
-    fireEvent.click(within(editor).getByLabelText('Project skills'))
+    expect(within(editor).getByRole('checkbox', { name: 'Project skills' }).getAttribute('aria-checked')).toBe('false')
+    fireEvent.click(within(editor).getByRole('checkbox', { name: 'Project skills' }))
     fireEvent.click(within(editor).getByRole('button', { name: 'Save' }))
     await waitFor(() => expect(rpc.sendSaveAgent).toHaveBeenCalledWith({ id: 'reviewer', name: 'Reviewer', skills: ['ask'], accounts: { github: 'octo-agent', claude: ['Dani'] }, projectSkills: true }))
     expect((await within(editor).findByRole('alert')).textContent).toContain('no GitHub account stranger')
@@ -240,12 +268,12 @@ describe('the Agents page', () => {
     fireEvent.click(await screen.findByRole('button', { name: 'Edit Reviewer' }))
     const editor = screen.getByRole('dialog', { name: 'Editing Reviewer' })
     const checked = (name: string) => within(editor).getByLabelText(name).getAttribute('aria-checked')
-    expect([checked('All Claude accounts'), checked('Claude account Dani')]).toEqual(['false', 'true'])
-    fireEvent.click(within(editor).getByLabelText('All Claude accounts'))
-    expect([checked('All Claude accounts'), checked('Claude account Dani')]).toEqual(['true', 'false'])
+    expect([checked('Every Claude account, also new ones'), checked('Claude account Dani')]).toEqual(['false', 'true'])
+    fireEvent.click(within(editor).getByLabelText('Every Claude account, also new ones'))
+    expect([checked('Every Claude account, also new ones'), checked('Claude account Dani')]).toEqual(['true', 'false'])
     fireEvent.click(within(editor).getByLabelText('Claude account Claude login on Studio'))
-    expect([checked('All Claude accounts'), checked('Claude account Claude login on Studio')]).toEqual(['false', 'true'])
-    fireEvent.click(within(editor).getByLabelText('All Claude accounts'))
+    expect([checked('Every Claude account, also new ones'), checked('Claude account Claude login on Studio')]).toEqual(['false', 'true'])
+    fireEvent.click(within(editor).getByLabelText('Every Claude account, also new ones'))
     fireEvent.click(within(editor).getByRole('button', { name: 'Save' }))
     await waitFor(() => expect(rpc.sendSaveAgent).toHaveBeenCalledWith({ id: 'reviewer', name: 'Reviewer', skills: ['ask', 'readability'], accounts: { github: 'octo-agent' }, projectSkills: false }))
   })
@@ -254,7 +282,7 @@ describe('the Agents page', () => {
     const claude = [{ id: 'This computer', name: 'Claude login on Studio', loggedOut: true }, { id: 'Dani', name: 'Dani' }]
     rpc.onAgentsList.mockResolvedValue({ ...VIEW, agents: [DEFAULT, { ...REVIEWER, accounts: { claude: ['This computer'] } }], claude })
     render(<AgentsPage />)
-    fireEvent.click(await screen.findByRole('button', { name: 'New agent' }))
+    fireEvent.click(await newAgentPress())
     const editor = screen.getByRole('dialog', { name: 'New agent' })
     expect(within(editor).queryByLabelText(/Claude login on Studio/)).toBeNull()
     expect(within(editor).getByLabelText('Claude account Dani')).toBeTruthy()
@@ -271,7 +299,7 @@ describe('the Agents page', () => {
     logins.sendGitHostLogin.mockResolvedValue({ ok: true, code: 'ABCD-1234', url: 'https://github.com/login/device' })
     logins.sendStopGitHostLogin.mockResolvedValue({ ok: true })
     render(<AgentsPage />)
-    fireEvent.click(await screen.findByRole('button', { name: 'New agent' }))
+    fireEvent.click(await newAgentPress())
     const editor = screen.getByRole('dialog', { name: 'New agent' })
     fireEvent.change(within(editor).getByLabelText('Name'), { target: { value: 'Social media' } })
     expect(within(editor).getByRole('combobox', { name: 'GitHub account' }).textContent).toContain('None')
@@ -290,11 +318,11 @@ describe('the Agents page', () => {
     await waitFor(() => expect(rpc.sendSaveAgent).toHaveBeenCalledWith(expect.objectContaining({ name: 'Social media', accounts: { github: 'me-agent' } })))
   }, 15_000)
 
-  test('the editor is a dialog over the page: the agent\u2019s card stays under it, a click beside it closes nothing, and it says what every project run gets besides', async () => {
+  test('the editor is a dialog over the page: the agent\u2019s row stays under it, a click beside it closes nothing, and it says what every project run gets besides', async () => {
     render(<AgentsPage />)
     fireEvent.click(await screen.findByRole('button', { name: 'Edit Reviewer' }))
     const editor = screen.getByRole('dialog', { name: 'Editing Reviewer' })
-    expect(screen.getByRole('region', { name: 'Reviewer', hidden: true })).toBeTruthy()
+    expect((await agentRows(true)).some(row => row.textContent?.startsWith('Reviewer'))).toBe(true)
     expect(within(editor).getByText(/every run also gets the branches skill/)).toBeTruthy()
     // Save and Cancel are the dialog's own presses, outside what scrolls.
     expect(within(editor).getByRole('button', { name: 'Save' })).toBeTruthy()
@@ -340,7 +368,7 @@ describe('the Agents page', () => {
     fireEvent.click(await screen.findByRole('button', { name: 'Remove Reviewer' }))
     rpc.onAgentsList.mockResolvedValue({ ...VIEW, agents: [DEFAULT] })
     fireEvent.click(within(await screen.findByRole('alertdialog')).getByRole('button', { name: 'Remove' }))
-    await waitFor(() => expect(screen.queryByRole('region', { name: 'Reviewer' })).toBeNull())
+    await waitFor(() => expect(screen.queryByText('Reviewer')).toBeNull())
     await waitFor(() => expect(document.activeElement).toBe(screen.getByRole('button', { name: 'New agent' })))
   })
 })
@@ -360,6 +388,6 @@ describe('the Agent menu under the box', () => {
     expect(onPick).toHaveBeenCalledWith('default')
     fireEvent.click(trigger)
     fireEvent.click(screen.getByRole('menuitem', { name: 'Manage agents…' }))
-    expect(route.openAgents).toHaveBeenCalled()
+    expect(route.openPage).toHaveBeenCalledWith('agents')
   })
 })

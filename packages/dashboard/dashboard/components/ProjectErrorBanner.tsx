@@ -20,12 +20,13 @@ export function projectErrorTitle(code: ProjectErrorCode): string {
 export function ProjectErrorBanner({ errors }: { errors: ProjectError[] | undefined }) {
   if (!errors || errors.length === 0) return null
   return (
-    <div className="flex flex-col gap-2 border-b border-danger/30 bg-danger/10 px-4 py-3">
+    // The banners' strip: a tinted fill with no edge, the mark in the danger's colour, the words in the text's.
+    <div className="flex flex-col gap-2 bg-danger/10 px-4 py-3">
       {errors.map(error => (
         <div key={error.code} role="alert" className="flex items-start gap-2 text-sm">
-          <TriangleAlert className="mt-0.5 h-4 w-4 shrink-0 text-danger" aria-hidden />
+          <TriangleAlert className="mt-0.5 size-4 shrink-0 text-danger" aria-hidden />
           <div className="min-w-0">
-            <p className="font-medium text-danger">
+            <p className="font-medium">
               {projectErrorTitle(error.code)}
               {/* Since when, so a week-old failure does not read like a blip that will pass. */}
               <span className="font-normal text-muted-foreground"> · since {formatAge(error.since)}</span>

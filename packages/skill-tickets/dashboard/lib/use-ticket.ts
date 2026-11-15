@@ -1,4 +1,4 @@
-import { usePolled, useModuleHost } from '@openagt/dashboard/module'
+import { usePolled, useModuleHost, type ReadState } from '@openagt/dashboard/module'
 import { holderAgent, readShown, withHolder } from '../../src/module.js'
 import { sessionsOf, type TicketSession } from '../TicketSessions.js'
 import { holdingRun } from './holding-run.js'
@@ -18,9 +18,9 @@ export type TicketRead =
  * The ticket `slug` of a project, read by identity (`tickets show <file> --local`) and again every
  * 10 s. The last read is kept, in this browser too, so both its tabs open on it at once.
  */
-export function useTicket(projectId: string, slug: string): { read: TicketRead | null; loaded: boolean; reload: () => Promise<void> } {
+export function useTicket(projectId: string, slug: string): { read: TicketRead | null; state: ReadState; reload: () => Promise<void> } {
   const host = useModuleHost()
-  const { value: read, loaded, reload } = usePolled<TicketRead | null>(
+  const { value: read, state, reload } = usePolled<TicketRead | null>(
     async () => {
       const [shown, agents] = await Promise.all([host.runCommand(projectId, ['show', slug, '--local']).then(result => readShown(result, slug)), host.agents(projectId).catch(() => [])])
       if ('error' in shown) return shown
@@ -38,5 +38,5 @@ export function useTicket(projectId: string, slug: string): { read: TicketRead |
     [projectId, slug],
     { remember: `skill-tickets:ticket:${projectId}/${slug}`, stored: true },
   )
-  return { read, loaded, reload }
+  return { read, state, reload }
 }

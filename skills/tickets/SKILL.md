@@ -10,7 +10,7 @@ The tickets (`tickets/<DATE>_<SLUG>.md`, with their `.plan.md` and `.lock.md` si
 
 Read and change them with the `tickets` command, always run by its full name: `npx @openagt/skill-tickets@0.1`. Every change it makes is one commit, pushed straight to the remote when the project shares its records. Never pass `--local` or `--force`: they are a person's.
 
-Every command prints one JSON document; a refusal is `{"ok":false,"reason":…}` with why on stderr, exit 1; a wrong command line prints the usage on stderr, nothing on stdout, exit 2. Every `<file>` below is a ticket's filename (`2042-01-01_some-ticket.md`) or the `tickets/…` path a queue entry links to; `put` also takes the ticket's `.plan.md` and `meta.json`.
+Every command prints one JSON document; a refusal is `{"ok":false,"reason":…}` with why on stderr, exit 1; a wrong command line prints what was wrong and a pointer to `--help` on stderr, nothing on stdout, exit 2. Every `<file>` below is a ticket's filename (`2042-01-01_some-ticket.md`) or the `tickets/…` path a queue entry links to; `put` also takes the ticket's `.plan.md` and `meta.json`.
 
 ## Read
 

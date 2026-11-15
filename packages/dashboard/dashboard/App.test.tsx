@@ -1,10 +1,11 @@
 import { afterEach, describe, expect, test, vi } from 'vitest'
-import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
-import { createElement, useContext } from 'react'
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
+import { createElement, useContext, useRef, useState } from 'react'
 import { openMenu, phoneScreen } from './test-utils.js'
 import { useModuleHost, useOpenAgentDown, type ModuleCardProps, type ModuleDefinition, type ModulePageProps } from './module/index.js'
 import { forgetRemembered } from './lib/use-async.js'
-import { openSettings } from './lib/use-route.js'
+import { holdEntry } from './lib/use-route.js'
+import { HostServicesContext } from './lib/host-services.js'
 import { skillsSaved } from './lib/skills-saved.js'
 
 // The whole transport, stubbed at its one seam: every RPC stub is `rpc(name)`, so a map by name
@@ -25,8 +26,12 @@ vi.mock('./lib/rpc.js', () => ({
 vi.mock('./components/SettingsDialog.js', async () => {
   const { DaemonDown } = await import('./lib/use-daemon-health.js')
   return {
-    SettingsDialog: ({ entry, scope, onEntry, onClose }: { entry: string; scope: string | null; onEntry: (id: string) => void; onClose: () => void }) =>
-      createElement(
+    SettingsDialog: ({ entry, scope, onEntry, onClose }: { entry: string; scope: string | null; onEntry: (id: string) => void; onClose: () => void }) => {
+      // A change held as an entry holds one, and the question it asks before a step leaves it.
+      const [asked, setAsked] = useState<(() => void) | undefined>()
+      const release = useRef<() => void>(() => {})
+      const host = useContext(HostServicesContext)
+      return createElement(
         'div',
         null,
         createElement('p', null, `the settings dialog on '${entry}'`),
@@ -34,10 +39,21 @@ vi.mock('./components/SettingsDialog.js', async () => {
         createElement('p', null, `its saves: ${useContext(DaemonDown) ? 'off' : 'on'}`),
         createElement('button', { onClick: () => onEntry('agent') }, 'to Agent'),
         createElement('button', { onClick: onClose }, 'shut the dialog'),
-      ),
+        createElement('button', { onClick: () => host?.openSettings('agent') }, 'a link to Agent'),
+        createElement('button', { onClick: () => (release.current = holdEntry(step => setAsked(() => step))) }, 'hold a change'),
+        asked &&
+          createElement(
+            'div',
+            { role: 'alertdialog', 'aria-label': 'Leave without saving?' },
+            createElement('button', { onClick: () => setAsked(undefined) }, 'Cancel'),
+            createElement('button', { onClick: () => (release.current(), setAsked(undefined), asked()) }, 'Leave'),
+          ),
+      )
+    },
   }
 })
-vi.mock('./components/ProjectHome.js', () => ({
+vi.mock('./components/ProjectHome.js', async importOriginal => ({
+  ProjectHomeShape: (await importOriginal<typeof import('./components/ProjectHome.js')>()).ProjectHomeShape,
   ProjectHome: ({ projectName, onProjectRemoved }: { projectName?: string; onProjectRemoved?: () => void }) =>
     createElement('p', null, `the launcher of ${projectName}`, createElement('button', { onClick: onProjectRemoved }, 'remove the project')),
 }))
@@ -54,6 +70,7 @@ vi.mock('./components/AgentView.js', async importOriginal => {
 })
 
 const { App } = await import('./App.js')
+const { Dialog } = await import('./components/ui/dialog.js')
 
 const PROJECT = { id: 'app-abc', path: '/work/app', name: 'app', activated: true }
 
@@ -85,6 +102,129 @@ afterEach(() => {
 })
 
 describe('module pages in the shell (#1774)', () => {
+  test("a module opens the dashboard's own pages in the project the address picks, every project where none is, and the page it is on adds no entry", async () => {
+    function Opens() {
+      const host = useModuleHost()
+      return createElement('div', null, createElement('button', { onClick: () => host.openPage('permissions') }, 'open Permissions'), createElement('button', { onClick: () => host.openPage('agents') }, 'open Agents'))
+    }
+    answerShell([{ package: '@acme/door', url: moduleModule('__doorOpensPages', { everyPage: Opens }), projects: [], computer: true }])
+    window.history.replaceState(null, '', '/app/overview')
+    render(<App />)
+    fireEvent.click(await screen.findByRole('button', { name: 'open Permissions' }))
+    expect(window.location.pathname).toBe('/app/permissions')
+    const entries = window.history.length
+    fireEvent.click(screen.getByRole('button', { name: 'open Permissions' }))
+    expect(window.history.length).toBe(entries)
+    fireEvent.click(screen.getByRole('button', { name: 'open Agents' }))
+    expect(window.location.pathname).toBe('/app/agents')
+    cleanup()
+    window.history.replaceState(null, '', '/')
+    render(<App />)
+    fireEvent.click(await screen.findByRole('button', { name: 'open Agents' }))
+    expect(window.location.pathname).toBe('/agents')
+  })
+
+  test('a module opens a Settings entry over the page it is on, its own query kept, as a step Back undoes; from inside Settings, in place', async () => {
+    function Opens() {
+      const host = useModuleHost()
+      return createElement('button', { onClick: () => host.openSettings('devices', 'd3') }, 'open Devices')
+    }
+    answerShell([{ package: '@acme/door', url: moduleModule('__doorOpensSettings', { everyPage: Opens }), projects: [], computer: true }])
+    window.history.replaceState(null, '', '/?view=wide')
+    render(<App />)
+    const entries = window.history.length
+    fireEvent.click(await screen.findByRole('button', { name: 'open Devices' }))
+    expect([window.location.pathname + window.location.search, window.history.length]).toEqual(['/?view=wide&settings=devices&item=d3', entries + 1])
+    fireEvent.click(await screen.findByRole('button', { name: 'to Agent' }))
+    fireEvent.click(screen.getByRole('button', { name: 'open Devices' }))
+    expect([window.location.pathname + window.location.search, window.history.length]).toEqual(['/?view=wide&settings=devices&item=d3', entries + 1])
+    fireEvent.click(screen.getByRole('button', { name: 'shut the dialog' }))
+    await waitFor(() => expect(window.location.pathname + window.location.search).toBe('/?view=wide'))
+  })
+
+  test("a pick a module's page keeps in its address takes the place of the address it had: the page reads it, and Back steps over it", async () => {
+    function ListPage({ path }: ModulePageProps) {
+      const host = useModuleHost()
+      return createElement('button', { onClick: () => host.adjustPage(['failed'], 'sort=new') }, `the list at ${path.join('/') || 'all'}`)
+    }
+    answerShell([{ package: '@acme/list', url: moduleModule('__listAdjusted', { pages: [{ segment: 'list', label: 'List', Page: ListPage }] }), projects: [PROJECT.id] }])
+    window.history.replaceState(null, '', '/list')
+    render(<App />)
+    const entries = window.history.length
+    fireEvent.click(await screen.findByRole('button', { name: 'the list at all' }))
+    expect(screen.getByRole('button', { name: 'the list at failed' })).toBeTruthy()
+    expect([window.location.pathname + window.location.search, window.history.length]).toEqual(['/list/failed?sort=new', entries])
+  })
+
+  test("a module's page goes back to the list it was opened from as that list was left, by Back; reached another way, it opens the list", async () => {
+    function ListPage({ path }: ModulePageProps) {
+      const host = useModuleHost()
+      return path.length === 0
+        ? createElement('button', { onClick: () => host.openPage('list', ['a'], PROJECT.id) }, 'open item a')
+        : createElement('button', { onClick: () => host.backToPage('list') }, 'back to the list')
+    }
+    answerShell([{ package: '@acme/list', url: moduleModule('__listModule', { pages: [{ segment: 'list', label: 'List', Page: ListPage }] }), projects: [PROJECT.id] }])
+    window.history.replaceState(null, '', '/list?sort=new')
+    render(<App />)
+    fireEvent.click(await screen.findByRole('button', { name: 'open item a' }))
+    expect(window.location.pathname).toBe('/app/list/a')
+    const entries = window.history.length
+    fireEvent.click(await screen.findByRole('button', { name: 'back to the list' }))
+    await waitFor(() => expect(window.location.pathname + window.location.search).toBe('/list?sort=new'))
+    expect(window.history.length).toBe(entries)
+    cleanup()
+    window.history.replaceState(null, '', '/app/list/a')
+    render(<App />)
+    fireEvent.click(await screen.findByRole('button', { name: 'back to the list' }))
+    expect(window.location.pathname + window.location.search).toBe('/app/list')
+  })
+
+  test("a module's page opened beside the item the list opened, and back again, goes back to that list as it was left, by Back as many entries", async () => {
+    function ListPage({ path }: ModulePageProps) {
+      const host = useModuleHost()
+      if (path.length === 0) return createElement('button', { onClick: () => host.openPage('list', ['a'], PROJECT.id) }, 'open item a')
+      const other = path.length === 1 ? ['a', 'tab'] : ['a']
+      return createElement(
+        'div',
+        null,
+        createElement('button', { onClick: () => host.openPage('list', other, PROJECT.id, { beside: true }) }, 'its other tab'),
+        createElement('button', { onClick: () => host.backToPage('list') }, 'back to the list'),
+      )
+    }
+    answerShell([{ package: '@acme/list', url: moduleModule('__listBeside', { pages: [{ segment: 'list', label: 'List', Page: ListPage }] }), projects: [PROJECT.id] }])
+    window.history.replaceState(null, '', '/list?sort=new')
+    render(<App />)
+    fireEvent.click(await screen.findByRole('button', { name: 'open item a' }))
+    fireEvent.click(await screen.findByRole('button', { name: 'its other tab' }))
+    expect(window.location.pathname).toBe('/app/list/a/tab')
+    fireEvent.click(screen.getByRole('button', { name: 'its other tab' }))
+    expect(window.location.pathname).toBe('/app/list/a')
+    const entries = window.history.length
+    fireEvent.click(screen.getByRole('button', { name: 'back to the list' }))
+    await waitFor(() => expect(window.location.pathname + window.location.search).toBe('/list?sort=new'))
+    expect(window.history.length).toBe(entries)
+  })
+
+  test("a run a module opens while Settings holds a change asks first: Cancel keeps the change and Settings' address, Leave goes", async () => {
+    function OpensRun() {
+      const host = useModuleHost()
+      return createElement('button', { onClick: () => host.openAgent(PROJECT.id, '3-a') }, 'open a run')
+    }
+    answerShell([{ package: '@acme/door', url: moduleModule('__doorOpensRun', { everyPage: OpensRun }), projects: [], computer: true }])
+    window.history.replaceState(null, '', '/?settings=')
+    render(<App />)
+    fireEvent.click(await screen.findByRole('button', { name: 'hold a change' }))
+    fireEvent.click(await screen.findByRole('button', { name: 'open a run' }))
+    const asked = await screen.findByRole('alertdialog', { name: 'Leave without saving?' })
+    expect(window.location.pathname + window.location.search).toBe('/?settings=')
+    fireEvent.click(within(asked).getByRole('button', { name: 'Cancel' }))
+    expect(window.location.pathname + window.location.search).toBe('/?settings=')
+    // Still held: the next move asks again.
+    fireEvent.click(screen.getByRole('button', { name: 'open a run' }))
+    fireEvent.click(within(await screen.findByRole('alertdialog')).getByRole('button', { name: 'Leave' }))
+    expect(window.location.pathname).toBe('/app/3-a')
+  })
+
   test('a module\'s page gets a sidebar row and its own URL, where no project is selected', async () => {
     function LogsPage({ projects }: ModulePageProps) {
       return createElement('p', null, `runs of ${projects.map(p => p.name).join(', ')}`)
@@ -142,8 +282,9 @@ describe('module pages in the shell (#1774)', () => {
       for (const [path, name] of [['/logs', 'Logs'], ['/agents', 'Agents'], ['/permissions', 'Permissions']]) {
         window.history.replaceState(null, '', path)
         render(<App />)
-        const bar = (await screen.findByRole('button', { name: 'Open the menu' })).parentElement!
-        await waitFor(() => expect(bar.textContent).toBe(name))
+        // The name alone: the page's count stands beside it in the bar once the page has read it. Read in the wait: the first
+        // button found may be the launcher's shape's, until the word is known to be no project's.
+        await waitFor(() => expect(screen.getByRole('button', { name: 'Open the menu' }).parentElement!.querySelector('span')!.textContent).toBe(name))
         cleanup()
       }
     } finally {
@@ -157,8 +298,8 @@ describe('module pages in the shell (#1774)', () => {
     try {
       window.history.replaceState(null, '', '/nothing')
       render(<App />)
-      const bar = (await screen.findByRole('button', { name: 'Open the menu' })).parentElement!
-      await waitFor(() => expect(bar.textContent).toBe('Not found'))
+      // Until the projects are read the word may be a project's, whose page waits as its shape: the bar comes once it is known.
+      await waitFor(() => expect(screen.getByRole('button', { name: 'Open the menu' }).parentElement!.textContent).toBe('Not found'))
     } finally {
       wide()
     }
@@ -185,6 +326,95 @@ describe('module pages in the shell (#1774)', () => {
     render(<App />)
     fireEvent.click(await screen.findByText('read'))
     await waitFor(() => expect(calls).toContainEqual({ name: 'runModuleCommand', args: [PROJECT.id, '@acme/logs', ['--limit', '5'], undefined, false] }))
+  })
+})
+
+describe('a first visit, the projects not read yet', () => {
+  /** The projects' read, held until `answer` is called, in a fresh browser: one that kept no list of them. */
+  function holdProjects(): () => void {
+    localStorage.clear()
+    forgetRemembered()
+    answerShell([])
+    // A session's page reads its files and its changes.
+    answers.set('onProjectFiles', () => [])
+    answers.set('onAgentChanges', () => [])
+    answers.set('onDocs', () => [])
+    let answer = () => {}
+    answers.set('onProjects', () => new Promise(resolve => (answer = () => resolve([PROJECT]))))
+    return () => act(answer)
+  }
+
+  test("a project's launcher waits as its box's shape, where the box will stand, and the launcher replaces it", async () => {
+    const answer = holdProjects()
+    window.history.replaceState(null, '', `/${PROJECT.name}`)
+    render(<App />)
+    const shape = await within(await screen.findByRole('main')).findByRole('status', {}, { timeout: 2000 })
+    expect(shape.closest('.max-w-3xl')).not.toBeNull()
+    // A project's page has its own top row: no phone bar names the word as a page while it waits.
+    expect(document.querySelector('main')!.textContent).toBe('Loading…')
+    answer()
+    expect(await screen.findByText('the launcher of app')).toBeTruthy()
+    expect(within(document.querySelector('main')!).queryByRole('status')).toBeNull()
+  })
+
+  test("a session waits as the chat's column with the box's shape at its foot, and the session's box replaces it", async () => {
+    const answer = holdProjects()
+    const id = '2026-11-14T23-05-03-506Z'
+    answers.set('onAgents', () => [{ id, status: 'done', startedAt: '2026-11-14T23:05:03.506Z', updatedAt: '2026-11-14T23:06:00.000Z', intent: 'tidy up' }])
+    answers.set('onRetainedWorktrees', () => [])
+    window.history.replaceState(null, '', `/${PROJECT.name}/${id}`)
+    render(<App />)
+    const foot = await screen.findByTestId('chat-bottom')
+    expect(await within(foot).findByRole('status', {}, { timeout: 2000 })).toBeTruthy()
+    answer()
+    await waitFor(() => expect(within(screen.getByTestId('chat-bottom')).getByRole('textbox')).toBeTruthy())
+  })
+
+  test("a page this browser listed waits as its frame while its code is out, its name where it will stand, and the page takes its place", async () => {
+    const answer = holdProjects()
+    // The modules not read either: the pages this browser listed on its last visit are what is known.
+    let answerModules = (_modules: unknown[]) => {}
+    answers.set('onModules', () => new Promise(resolve => (answerModules = resolve)))
+    localStorage.setItem('openagent:listed-pages', JSON.stringify([{ segment: 'logs', label: 'Logs', projects: [PROJECT.id] }]))
+    try {
+      window.history.replaceState(null, '', '/logs')
+      render(<App />)
+      const main = await screen.findByRole('main')
+      expect(within(main).getByRole('heading', { name: 'Logs' })).toBeTruthy()
+      expect(await within(main).findByRole('status', {}, { timeout: 2000 })).toBeTruthy()
+      answer()
+      const Runs = () => createElement('p', null, 'the runs')
+      await act(async () => answerModules([{ package: '@acme/logs', url: moduleModule('__listedLogs', { pages: [{ segment: 'logs', label: 'Logs', Page: Runs }] }), projects: [PROJECT.id] }]))
+      expect(await screen.findByText('the runs')).toBeTruthy()
+      expect(within(screen.getByRole('main')).queryByRole('status')).toBeNull()
+    } finally {
+      localStorage.removeItem('openagent:listed-pages')
+    }
+  })
+
+  test("on a phone the dashboard's own page has its bar from the first frame: its word is no project's", async () => {
+    holdProjects()
+    const wide = phoneScreen()
+    try {
+      window.history.replaceState(null, '', '/agents')
+      render(<App />)
+      // The bar holds the menu's button and the page's name alone; a page with no bar has the button over it.
+      expect(screen.getByRole('button', { name: 'Open the menu' }).parentElement!.textContent).toBe('Agents')
+    } finally {
+      wide()
+    }
+  })
+
+  test("a page's word no project has waits as a page's frame once the projects are read, not as a launcher", async () => {
+    const answer = holdProjects()
+    answers.set('onModules', () => new Promise(() => {}))
+    window.history.replaceState(null, '', '/logs')
+    render(<App />)
+    const main = await screen.findByRole('main')
+    expect((await within(main).findByRole('status', {}, { timeout: 2000 })).closest('.max-w-3xl')).not.toBeNull()
+    answer()
+    await waitFor(() => expect(within(main).getByRole('status').closest('.max-w-3xl')).toBeNull())
+    expect(within(main).getByRole('status').closest('.max-w-240')).not.toBeNull()
   })
 })
 
@@ -318,7 +548,7 @@ describe('module cards on the Overview (#1818)', () => {
       render(<App />)
       expect(await screen.findByRole('heading', { name: 'Overview' })).toBeTruthy()
       answers.set('onProjects', () => { throw new TypeError('Failed to fetch') })
-      await act(async () => void (await vi.advanceTimersByTimeAsync(5000)))
+      await act(async () => void (await vi.advanceTimersByTimeAsync(5000 + 1000)))
       const banner = (await screen.findByRole('alert')).textContent
       expect(banner).toBe('OpenAgent has stopped. Start it again with openagent in a terminal; an installed one restarts with the computer or with its installer\u2019s command.')
     } finally {
@@ -338,7 +568,7 @@ describe('module cards on the Overview (#1818)', () => {
       expect(await screen.findByText('its saves: on')).toBeTruthy()
       expect(await screen.findByText("the popup's saves: on")).toBeTruthy()
       answers.set('onProjects', () => { throw new TypeError('Failed to fetch') })
-      await act(async () => void (await vi.advanceTimersByTimeAsync(5000)))
+      await act(async () => void (await vi.advanceTimersByTimeAsync(5000 + 1000)))
       expect(await screen.findByRole('alert')).toBeTruthy()
       expect(screen.getByText('its saves: off')).toBeTruthy()
       expect(screen.getByText("the popup's saves: off")).toBeTruthy()
@@ -545,7 +775,7 @@ describe('the project select (#1513)', () => {
 
   test.each([
     ["the dialog's own list", async () => fireEvent.click(await screen.findByRole('button', { name: 'to Agent' }))],
-    ['a link inside an entry', async () => act(() => openSettings('agent'))],
+    ['a link inside an entry', async () => fireEvent.click(await screen.findByRole('button', { name: 'a link to Agent' }))],
   ])('Settings opened over a page, moved to another entry by %s, and closed leaves that page as its history entry was: Back goes on to the page before, not into Settings again', async (_by, moveToAgent) => {
     answerTwo()
     window.history.replaceState(null, '', '/site/overview')
@@ -559,7 +789,7 @@ describe('the project select (#1513)', () => {
     expect(url()).toBe('/site/logs?settings=agent')
     fireEvent.click(screen.getByRole('button', { name: 'shut the dialog' }))
     await waitFor(() => expect(url()).toBe('/site/logs'))
-    expect(window.history.state).toEqual({ written: 'by the page' })
+    expect(window.history.state).toMatchObject({ written: 'by the page' })
     window.history.back()
     await waitFor(() => expect(url()).toBe('/site/overview'))
     expect(screen.queryByText(/the settings dialog/)).toBeNull()
@@ -578,6 +808,35 @@ describe('the project select (#1513)', () => {
     held.forEach(answer => answer([PROJECT, OTHER]))
     expect(await screen.findByText("the settings dialog on 'notifications'")).toBeTruthy()
     expect(screen.getByText(`its project: ${OTHER.id}`)).toBeTruthy()
+  })
+
+  test("a project the browser kept from its last load is drawn at once; any other project's address waits for the projects' read, so no such project never replaces a launcher", async () => {
+    const visit = async (address: string): Promise<(projects: unknown) => void> => {
+      cleanup()
+      forgetRemembered()
+      localStorage.clear()
+      localStorage.setItem('openagent:read:projects', JSON.stringify([PROJECT]))
+      answerTwo()
+      const held: ((projects: unknown) => void)[] = []
+      answers.set('onProjects', () => new Promise(resolve => held.push(resolve)))
+      window.history.replaceState(null, '', address)
+      render(<App />)
+      await waitFor(() => expect(held.length).toBeGreaterThan(0))
+      return projects => held.forEach(answer => answer(projects))
+    }
+    await visit(`/${PROJECT.id}`)
+    expect(screen.getByText('the launcher of app')).toBeTruthy()
+
+    const answerSite = await visit(`/${OTHER.id}`)
+    expect([screen.queryByText(/the launcher of/), screen.queryByText('No such project')]).toEqual([null, null])
+    answerSite([PROJECT, OTHER])
+    expect(await screen.findByText('the launcher of site')).toBeTruthy()
+
+    const answerNothing = await visit('/nothing-here')
+    expect([screen.queryByText(/the launcher of/), screen.queryByText('No such project')]).toEqual([null, null])
+    answerNothing([PROJECT, OTHER])
+    expect(await screen.findByText('No such project')).toBeTruthy()
+    expect(screen.queryByText(/the launcher of/)).toBeNull()
   })
 
   test("a jump to another project's agent names it at once, before that project's agents are read", async () => {
@@ -956,5 +1215,22 @@ describe('the shell on a phone', () => {
     // The sidebar's row, and the page's own heading: no bar names it a third time.
     expect(await screen.findByRole('heading', { name: 'Overview' })).toBeTruthy()
     expect(screen.getAllByText('Overview')).toHaveLength(2)
+  })
+})
+
+describe('the keyboard shortcuts', () => {
+  test('? outside a text field opens their list in Settings; typed into a field, or over a dialog, it is only a character', async () => {
+    answerShell([])
+    render(<App />)
+    await screen.findByRole('heading', { name: 'Overview' })
+    const field = document.body.appendChild(document.createElement('input'))
+    fireEvent.keyDown(field, { key: '?', shiftKey: true })
+    const dialog = render(<Dialog open onOpenChange={() => {}} title="A dialog">Over the page</Dialog>)
+    fireEvent.keyDown(document.body, { key: '?', shiftKey: true })
+    expect(screen.queryByText(/the settings dialog/)).toBeNull()
+    dialog.unmount()
+    field.remove()
+    fireEvent.keyDown(document.body, { key: '?', shiftKey: true })
+    expect(await screen.findByText("the settings dialog on 'shortcuts'")).toBeTruthy()
   })
 })

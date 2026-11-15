@@ -62,14 +62,25 @@ describe('useDaemonHealth', () => {
     expect(screen.getByText('answering')).toBeTruthy()
   })
 
-  test('a probe refused at once reads stopped; offline, it reads only silent', async () => {
+  test('a probe refused at once reads stopped once a second try a second later is refused too; offline, it reads only silent', async () => {
     way = 'fail'
     render(<Probe />)
     await after(5000)
+    expect(screen.getByText('answering')).toBeTruthy()
+    await after(1000)
+    expect(asked).toHaveLength(2)
     expect(screen.getByText('stopped')).toBeTruthy()
     vi.spyOn(navigator, 'onLine', 'get').mockReturnValue(false)
     await after(5000)
     expect(screen.getByText('silent')).toBeTruthy()
+  })
+
+  test('one refused probe that the second try answers never reads stopped', async () => {
+    ways = ['fail']
+    render(<Probe />)
+    await after(5000 + 1000)
+    expect(asked).toHaveLength(2)
+    expect(screen.getByText('answering')).toBeTruthy()
   })
 
   test('a probe the daemon takes but does not answer counts as not answered after its time limit, which lets its request go; the next answer brings it back', async () => {

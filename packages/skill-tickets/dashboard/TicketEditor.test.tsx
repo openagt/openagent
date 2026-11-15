@@ -4,13 +4,11 @@ import { openMenu } from '../../dashboard/dashboard/test-utils.js'
 import { fakeHost, renderWithHost } from './test-host.js'
 import { NewTicketPage } from './NewTicketPage.js'
 import { TicketDetailPage } from './TicketDetailPage.js'
-import { TicketsPanel } from './TicketsPanel.js'
 
 afterEach(cleanup)
 
 const now = new Date()
 const TODAY = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`
-const ticketRow = { file: '2026-07-20_dark-mode.md', title: 'Dark mode', summary: '', date: '2026-07-20T00:00:00.000Z', planned: false }
 const type = (label: string, value: string) => fireEvent.change(screen.getByLabelText(label), { target: { value } })
 
 describe('a ticket written by hand', () => {
@@ -26,43 +24,37 @@ describe('a ticket written by hand', () => {
     const file = `${TODAY}_dark-mode-2.md`
     await waitFor(() => expect(host.act).toHaveBeenCalledWith('p1', ['put', file], undefined, 'Priority: 3\nTopics: [ui, ux]\n\n# Dark mode\n\nA toggle in the header.\n'))
     // In the form's place in the history: Back from it goes where New ticket was pressed, not to an empty form.
-    await waitFor(() => expect(host.openPage).toHaveBeenCalledWith('tickets', [file], 'p1', { replace: true }))
+    await waitFor(() => expect(host.adjustPage).toHaveBeenCalledWith([file]))
   })
 
-  test('opened from the list, Cancel goes back to the list as it was', async () => {
-    window.history.replaceState(null, '', '/p1/tickets?q=dark')
-    const list = fakeHost()
-    list.openPage.mockImplementation((segment: string, path?: string[], projectId?: string) => window.history.pushState(null, '', `/${[projectId, segment, ...(path ?? [])].join('/')}`))
-    renderWithHost(<TicketsPanel projectId="p1" tickets={[ticketRow]} loaded onOpen={() => {}} />, list)
-    fireEvent.click(screen.getByRole('button', { name: 'New ticket' }))
-    expect(window.location.pathname).toBe('/p1/tickets/new')
-    cleanup()
+  test("Cancel goes back to the list by the dashboard's return, which is the browser's Back when the list opened the form", () => {
     const host = fakeHost()
     renderWithHost(<NewTicketPage projectId="p1" />, host)
     fireEvent.click(screen.getByRole('button', { name: 'Cancel' }))
-    await waitFor(() => expect(window.location.pathname + window.location.search).toBe('/p1/tickets?q=dark'))
+    expect(host.backToPage).toHaveBeenCalledWith('tickets')
     expect(host.openPage).not.toHaveBeenCalled()
-    window.history.replaceState(null, '')
   })
 
-  test('no title, or a priority outside 0–10, is not saved', async () => {
+  test('no title, or a priority outside 0–10, is not saved: Create ticket says why where it is, and takes the keyboard there', async () => {
     const host = fakeHost()
     renderWithHost(<NewTicketPage projectId="p1" />, host)
-    const create = screen.getByRole('button', { name: 'Create ticket' }) as HTMLButtonElement
+    const create = screen.getByRole('button', { name: 'Create ticket' })
+    expect(screen.queryByText('Give the ticket a title.')).toBeNull()
     // Pressed with no title, it says why, and the caret is in Title.
-    expect(create.disabled).toBe(false)
     screen.getByLabelText('Topics').focus()
     fireEvent.click(create)
     const title = screen.getByLabelText('Title')
     expect(document.activeElement).toBe(title)
     expect(title.getAttribute('aria-invalid')).toBe('true')
-    expect(document.getElementById(title.getAttribute('aria-describedby')!)?.textContent).toBe('A ticket needs a title.')
+    expect(document.getElementById(title.getAttribute('aria-describedby')!)?.textContent).toBe('Give the ticket a title.')
     expect(host.act).not.toHaveBeenCalled()
     type('Title', 'Dark mode')
-    expect(screen.queryByText('A ticket needs a title.')).toBeNull()
-    expect(create.disabled).toBe(false)
+    expect(screen.queryByText('Give the ticket a title.')).toBeNull()
     type('Priority', '11')
-    expect(create.disabled).toBe(true)
+    expect(screen.getByText(/whole number from 0 to 10/)).toBeTruthy()
+    fireEvent.click(create)
+    expect(document.activeElement).toBe(screen.getByLabelText('Priority'))
+    expect(host.act).not.toHaveBeenCalled()
     // The field is marked wrong, and says why to whoever is on it.
     const field = screen.getByLabelText('Priority')
     expect(field.getAttribute('aria-invalid')).toBe('true')
@@ -83,7 +75,7 @@ describe('a ticket written by hand', () => {
     renderWithHost(<NewTicketPage projectId="p1" />, host)
     type('Title', 'Dark mode')
     fireEvent.click(screen.getByRole('button', { name: 'Create ticket' }))
-    await waitFor(() => expect(host.openPage).toHaveBeenCalled())
+    await waitFor(() => expect(host.adjustPage).toHaveBeenCalled())
     cleanup()
     const created = { ...ticket, file: `${TODAY}_dark-mode.md`, title: 'Dark mode', content: '# Dark mode\n' }
     renderWithHost(<TicketDetailPage projectId="p1" slug={created.file} />, fakeHost({ p1: { [`show ${created.file} --local`]: { ok: true, ticket: created } } }))
@@ -157,7 +149,7 @@ describe('a ticket written by hand', () => {
     type('Title', 'Dark mode')
     fireEvent.click(screen.getByRole('button', { name: 'Create ticket' }))
     expect(await screen.findByText(/Not saved: the push was refused/)).toBeTruthy()
-    expect(host.openPage).not.toHaveBeenCalled()
+    expect(host.adjustPage).not.toHaveBeenCalled()
   })
 
   test('an edit saves the whole ticket again, keeping the issue line, and says the issue may write it again', async () => {

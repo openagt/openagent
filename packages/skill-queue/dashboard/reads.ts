@@ -1,4 +1,4 @@
-import { pathsIn, useFileNames, usePolled, useModuleHost, type FileNames, type ModuleAgent, type ModuleProject } from '@openagt/dashboard/module'
+import { pathsIn, useFileNames, usePolled, useModuleHost, type FileNames, type ModuleAgent, type ModuleProject, type ReadState } from '@openagt/dashboard/module'
 import { isEntryLine, readEntries } from '../src/module.js'
 
 /** One project's open entries as read, or why the command failed, and its agents at work. */
@@ -17,10 +17,10 @@ const NOTHING_READ: ProjectRead[] = []
  * read, no fetch: cheap enough to follow the queue closely. The AI Queue card and the queue's tile
  * read it alike, with what the files the entries name are called.
  */
-export function useQueueReads(projects: ModuleProject[]): { reads: ProjectRead[]; loaded: boolean; names: FileNames } {
+export function useQueueReads(projects: ModuleProject[]): { reads: ProjectRead[]; state: ReadState; names: FileNames } {
   const host = useModuleHost()
   const key = projects.map(p => p.id).join(',')
-  const { value: reads, loaded } = usePolled<ProjectRead[]>(
+  const { value: reads, state } = usePolled<ProjectRead[]>(
     () =>
       Promise.all(
         projects.map(async (project): Promise<ProjectRead> => {
@@ -39,5 +39,5 @@ export function useQueueReads(projects: ModuleProject[]): { reads: ProjectRead[]
     reads.map(read => ({ projectId: read.project.id, paths: read.entries.flatMap(pathsIn) })),
     `skill-queue:queue-names:${key}`,
   )
-  return { reads, loaded, names }
+  return { reads, state, names }
 }

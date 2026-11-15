@@ -19,8 +19,9 @@ export function ActionsRunNotice({
   if (target !== 'actions') return null
   const url = actionsRunUrl(events)
   return (
-    <div role="status" className="flex items-center gap-2 border-b border-border bg-muted/40 px-4 py-2 text-xs text-muted-foreground">
-      <Github className="h-3.5 w-3.5 shrink-0" aria-hidden />
+    // The banners' strip: a tinted fill with no edge, its link at the right.
+    <div role="status" className="flex items-center gap-2 bg-muted px-4 py-2 text-sm text-muted-foreground">
+      <Github className="size-4 shrink-0" aria-hidden />
       <span className="min-w-0 flex-1">
         Running on GitHub Actions{live ? ' — updates arrive when the run finishes.' : '.'}
       </span>
@@ -29,10 +30,10 @@ export function ActionsRunNotice({
           href={url}
           target="_blank"
           rel="noreferrer"
-          className="inline-flex shrink-0 items-center gap-1 text-primary hover:underline"
+          className="focus-ring inline-flex shrink-0 items-center gap-1 rounded-sm text-primary underline-offset-4 hover:underline"
         >
           View the Actions run
-          <ExternalLink className="h-3.5 w-3.5" aria-hidden />
+          <ExternalLink className="size-3.5" aria-hidden />
         </a>
       )}
     </div>

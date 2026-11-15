@@ -15,7 +15,10 @@ const sendRemoveProject = vi.fn(async (_projectId: string, _files: boolean) => (
 vi.mock('../rpc/reads.js', () => ({ onGitHostHome, onRepositoryOffer }))
 vi.mock('../rpc/projects.js', () => ({ sendShareRecords: vi.fn(), sendRemoveProject }))
 const openSettings = vi.hoisted(() => vi.fn())
-vi.mock('../lib/use-route.js', async importOriginal => ({ ...(await importOriginal<object>()), openSettings }))
+vi.mock('../lib/host-services.js', async importOriginal => {
+  const actual = await importOriginal<typeof import('../lib/host-services.js')>()
+  return { ...actual, INERT_HOST_SERVICES: { ...actual.INERT_HOST_SERVICES, openSettings } }
+})
 vi.mock('../rpc/control.js', () => ({
   sendOpenInApp,
   sendStop,

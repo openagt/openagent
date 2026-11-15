@@ -2,7 +2,7 @@ import { strict as assert } from 'node:assert'
 import { test } from 'node:test'
 import { agentUpdates, KEEP_MS, newer, versionIn, type RunProgram } from './agent-updates.js'
 import { asCaller } from './person.js'
-import { onAgentUpdates, sendAgentUpdate } from '../dashboard-rpc/models.js'
+import { onAgentUpdates, onOpenAgentUpdate, sendAgentUpdate } from '../dashboard-rpc/models.js'
 import { provideTestContext } from '../dashboard-rpc/test-context.js'
 
 /** Programs that say the versions in `have`, and an `update` that moves one to `after`; every call recorded. */
@@ -72,11 +72,47 @@ test('an update runs the agent\'s own update, says the version it now has, and w
 
 test('the owner is told of an update and runs it; a person the owner invited is told of none, and cannot run one', async () => {
   const ran: string[] = []
-  provideTestContext({ agentUpdates: { read: async () => [{ agent: 'codex', installed: '0.144.4', latest: '0.166.0' }], update: async agent => (ran.push(agent), { ok: true, version: '0.166.0' }) } })
+  provideTestContext({ agentUpdates: { read: async () => [{ agent: 'codex', installed: '0.144.4', latest: '0.166.0' }], update: async agent => (ran.push(agent), { ok: true, version: '0.166.0' }), openAgent: async () => ({ installed: '0.65.0', latest: '0.66.0', command: 'npm i -g @openagt/dashboard' }) } })
   assert.equal((await onAgentUpdates()).length, 1)
   assert.deepEqual(await sendAgentUpdate('codex'), { ok: true, version: '0.166.0' })
   assert.deepEqual(await sendAgentUpdate('claude'), { ok: false, error: 'unknown coding agent' })
   assert.deepEqual(await asCaller('Dani', () => onAgentUpdates()), [])
   assert.deepEqual(await asCaller('Dani', () => sendAgentUpdate('codex')), { ok: false, error: "Only this computer's owner updates its coding agents." })
   assert.deepEqual(ran, ['codex'])
+  assert.deepEqual(await onOpenAgentUpdate(), { installed: '0.65.0', latest: '0.66.0', command: 'npm i -g @openagt/dashboard' })
+  assert.equal(await asCaller('Dani', () => onOpenAgentUpdate()), null)
+})
+
+test('a newer OpenAgent than the one running is said with the command that updates it, kept for half a day; the same one, an older one, or npm not answering is not', async () => {
+  let now = 0
+  let asked = 0
+  let newest: string | Error = '0.66.0'
+  const updates = agentUpdates({ models, run: programs({}), version: '0.65.0', now: () => now, latest: async pkg => (asked++, assert.equal(pkg, '@openagt/dashboard'), newest instanceof Error ? Promise.reject(newest) : newest) })
+  const said = await updates.openAgent()
+  assert.deepEqual({ ...said, command: undefined }, { installed: '0.65.0', latest: '0.66.0', command: undefined })
+  assert.match(said!.command, /@openagt\/(install|dashboard)/)
+  newest = '0.65.0'
+  now = KEEP_MS - 1
+  assert.equal((await updates.openAgent())?.latest, '0.66.0', 'the kept reading')
+  assert.equal(asked, 1)
+  now = KEEP_MS
+  assert.equal(await updates.openAgent(), undefined)
+  newest = '0.64.9'
+  now = 2 * KEEP_MS
+  assert.equal(await updates.openAgent(), undefined)
+  newest = new Error('fetch failed')
+  now = 3 * KEEP_MS
+  assert.equal(await updates.openAgent(), undefined)
+})
+
+test('while an update runs, every read says so, whoever pressed it; once it ends, none does', async () => {
+  let finish: (said: string) => void = () => {}
+  const run: RunProgram = async (bin, args) => (args[0] === 'update' ? new Promise(resolve => (finish = resolve)) : bin === 'codex' ? 'codex-cli 0.144.4' : Promise.reject(new Error('ENOENT')))
+  const updates = agentUpdates({ models, run, latest: async pkg => NPM[pkg]! })
+  assert.deepEqual(await updates.read(), [{ agent: 'codex', installed: '0.144.4', latest: '0.166.0' }])
+  const pressed = updates.update('codex')
+  assert.deepEqual(await updates.read(), [{ agent: 'codex', installed: '0.144.4', latest: '0.166.0', updating: true }])
+  finish('updated')
+  await pressed
+  assert.equal((await updates.read())[0]?.updating, undefined)
 })

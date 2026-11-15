@@ -5,7 +5,6 @@
 import { defineModule } from '@openagt/dashboard/module'
 import { Globe } from 'lucide-react'
 import { BrowserPanel } from './BrowserPanel.js'
-import './dashboard.css'
 
 export default defineModule({
   panels: [
@@ -17,5 +16,4 @@ export default defineModule({
       Panel: BrowserPanel,
     },
   ],
-  stylesheet: 'dashboard.css',
 })

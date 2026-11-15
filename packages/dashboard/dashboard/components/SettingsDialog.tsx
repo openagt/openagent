@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useId, useRef, useState, type ComponentType, type ReactNode } from 'react'
 import { Dialog as BaseDialog } from '@base-ui/react/dialog'
-import { ArrowLeft, Bell, Bot, ChevronRight, Database, FolderGit2, Globe, Palette, Puzzle, UserRound, X, FolderSearch } from 'lucide-react'
+import { ArrowLeft, Bell, Bot, ChevronRight, ChevronsUpDown, Database, FolderGit2, Globe, Keyboard, Layers, Palette, Puzzle, UserRound, X, FolderSearch } from 'lucide-react'
 import { ACCENTS, DEFAULT_ACCENT_LABELS, accentOf, CODE_FONTS, DOCUMENT_FONTS, DRIVERS, DRIVER_LABELS, isDriverName, FONTS, PALETTES, PALETTE_LABELS, type Accent, type CodeFont, type DocumentFont, type Font, type Palette as ColourPalette } from '../../src/client.js'
 import { driverOptions, useModels } from '../lib/models.js'
 import type { DriverOption } from './DriverModelMenu.js'
@@ -17,20 +17,28 @@ import { HUMAN_QUEUE_ABOUT, NEW_ACTIVITY_ABOUT, browserHint, kindHint } from '..
 import { BridgeSettings } from './BridgeSettings.js'
 import { AGENT_DATA_ENTRY, AgentDataSettings } from './AgentDataSettings.js'
 import { PROFILE_ENTRY, ProfileSettings } from './ProfileSettings.js'
+import { SHORTCUTS_ENTRY, ShortcutList } from './ShortcutList.js'
 import { REPO_SOURCES_ENTRY, RepoSourcesSettings } from './RepoSourcesSettings.js'
 import { SKILLS_ENTRY, SkillsSettings } from './ProjectSkills.js'
 import { PickProject } from './PickProject.js'
+import { ProjectDot } from './ProjectPicker.js'
 import { PROJECT_AGENT_DATA_ENTRY, ProjectAgentDataSettings } from './ProjectAgentDataSettings.js'
 import { BridgeBrowserSettings } from './BridgeBrowserSettings.js'
 import { ModuleSlot, projectsHaving } from './ModulePageView.js'
 import { ConfirmDialog } from './ui/confirm-dialog.js'
+import { buttonVariants } from './ui/button.js'
+import { BACKDROP_CLASS, DIALOG_PRESSES_CLASS } from './ui/dialog.js'
 import { Switch } from './ui/switch.js'
+import { Separator } from './ui/separator.js'
 import { RadioGroup, RadioGroupItem } from './ui/radio-group.js'
 import { ScrollArea } from './ui/scroll-area.js'
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select.js'
+import { InSection, Section } from './ui/section.js'
+import { Select, SelectContent, SelectItem, SelectTriggerBare, SelectValue } from './ui/select.js'
+import { MENU_TRIGGER_OPEN_CLASS } from './ui/dropdown-menu.js'
+import { navRowClass, PROJECT_ROW_CLASS } from './ui/nav-row.js'
 import { cn } from '../lib/utils.js'
 import { useProjectLabel } from '../lib/project-labels.js'
-import { SettingsRow as Row, SettingsSection as Section, SettingsSelectRow as SelectRow, type SettingsOption as SelectOption } from './SettingsRows.js'
+import { SettingsFootContext, SettingsRow as Row, SettingsSection, SettingsSelectRow as SelectRow, type SettingsOption as SelectOption } from './SettingsRows.js'
 
 // Settings (#958): a dialog over the page you are on, a list of entries on the left and the
 // picked entry's settings on the right. It opens from the person's menu and closes back to the
@@ -100,6 +108,8 @@ export function SettingsDialog({
   const own = useOwnEntries()
   // A page inside the entry shown, which the entry says it opened: its title in the header, and the back arrow to the entry.
   const [crumb, setCrumb] = useState<SettingsCrumb | undefined>()
+  // Where an entry's presses go (`SettingsFoot`): under what scrolls, so they hold their place.
+  const [foot, setFoot] = useState<HTMLDivElement | null>(null)
   // A change the entry holds and has not saved: leaving it, by Back too, asks first, and the step asked about waits here.
   const [leaving, setLeaving] = useState<(() => void) | undefined>()
   const held = useRef<(() => void) | null>(null)
@@ -159,110 +169,107 @@ export function SettingsDialog({
             // The entry shown, pressed again, goes nowhere: it asks nothing, and what it holds stays held.
             if (e !== current || listOnly) leave(() => onEntry(e.id))
           }}
-          className={cn(
-            'flex w-full items-center gap-2 rounded-md px-2 text-left text-sm outline-none hover:bg-sidebar-accent/50 hover:text-sidebar-accent-foreground focus-visible:ring-2 focus-visible:ring-[var(--color-primary)]',
-            // A hovered row is a lighter shade than the picked one, so the two never read alike. On a
-            // phone the list is a page of its own: taller rows, and none marked, since no entry is open beside it.
-            phone ? 'h-10' : 'h-8 aria-[current=page]:bg-sidebar-accent aria-[current=page]:font-medium',
-          )}
+          // The sidebar's row. On a phone the list is a page of its own: none is marked, since no entry is open beside it.
+          className={cn(navRowClass(e === current && !phone), 'text-left')}
         >
-          <Icon className="size-4 shrink-0 text-muted-foreground" aria-hidden />
+          <Icon aria-hidden />
           <span className="truncate">{e.title}</span>
         </button>
       </li>
     )
   }
+  const iconPress = cn(buttonVariants({ variant: 'ghost', size: 'icon-sm' }), 'text-muted-foreground hover:text-foreground max-md:size-11')
 
   return (
     <BaseDialog.Root open onOpenChange={open => !open && leave(onClose)}>
       <BaseDialog.Portal>
-        <BaseDialog.Backdrop className="fixed inset-0 z-50 bg-black/40 backdrop-blur-[1px]" />
+        <BaseDialog.Backdrop className={BACKDROP_CLASS} />
         <BaseDialog.Popup
+          data-overlay="dialog"
           ref={popup}
           initialFocus={popup}
           finalFocus={finalFocus}
           className={cn(
             'fixed z-50 flex overflow-hidden bg-background text-foreground outline-none',
-            phone ? 'inset-0' : 'top-1/2 left-1/2 h-[min(40rem,calc(100dvh-2rem))] w-[min(56rem,calc(100vw-2rem))] -translate-x-1/2 -translate-y-1/2 rounded-xl border border-border shadow-lg',
+            // It arrives as every dialog does: grown in over 180ms, gone in 120ms; on a phone, up from below.
+            'transition-[opacity,scale,translate] duration-180 data-[ending-style]:duration-120 data-[starting-style]:opacity-0 data-[ending-style]:opacity-0',
+            phone
+              ? 'inset-0 data-[starting-style]:translate-y-8 data-[ending-style]:translate-y-8'
+              : 'top-1/2 left-1/2 h-[min(42.5rem,calc(100dvh-3rem))] w-[min(60rem,calc(100vw-3rem))] -translate-x-1/2 -translate-y-1/2 rounded-lg border border-hairline shadow-lg data-[starting-style]:scale-97 data-[ending-style]:scale-97',
           )}
         >
           {/* On a phone the list is the whole dialog until an entry is picked, and an entry the whole dialog after. */}
           {(!phone || listOnly) && (
-            <nav aria-label="Settings" className={cn('flex shrink-0 flex-col gap-4 overflow-y-auto bg-sidebar p-2', phone ? 'w-full' : 'w-56 border-r border-border')}>
+            <nav aria-label="Settings" className={cn('flex shrink-0 flex-col gap-4 overflow-y-auto bg-sidebar p-2', phone ? 'w-full' : 'w-56 border-r border-hairline')}>
               {phone && (
-                <div className="flex h-10 items-center justify-between px-2">
+                <div className="flex h-11 items-center justify-between pl-1.5">
                   <BaseDialog.Title className="text-base font-semibold">Settings</BaseDialog.Title>
-                  <BaseDialog.Close aria-label="Close settings" className="rounded p-1 text-muted-foreground outline-none hover:text-foreground focus-visible:ring-2 focus-visible:ring-[var(--color-primary)]">
+                  <BaseDialog.Close aria-label="Close settings" className={iconPress}>
                     <X className="size-4" aria-hidden />
                   </BaseDialog.Close>
                 </div>
               )}
               {/* Named for a screen reader only: the list starts with them, and needs no title over it. */}
               <section aria-label="You and this computer">
-                <ul className="flex flex-col gap-1">{yours.map(item)}</ul>
+                <ul className="flex flex-col gap-px">{yours.map(item)}</ul>
               </section>
               <section aria-label="Project">
-                <div className="flex items-center gap-2 px-2 pb-1">
-                  <p className="text-xs font-medium text-muted-foreground">Project</p>
-                  <ProjectSelect projects={projects} value={project?.id ?? ALL_PROJECTS} onChange={id => leave(() => setPicked(id))} />
-                </div>
+                <p className="flex h-8 items-center px-1.5 text-xs font-medium text-muted-foreground">Project</p>
+                <ProjectSelect projects={projects} value={project?.id ?? ALL_PROJECTS} onChange={id => leave(() => setPicked(id))} />
                 {projectEntries.length > 0 ? (
-                  <ul className="flex flex-col gap-1">{projectEntries.map(item)}</ul>
+                  <ul className="mt-px flex flex-col gap-px">{projectEntries.map(item)}</ul>
                 ) : (
-                  <p className="px-2 text-xs text-muted-foreground">Nothing to set for your projects.</p>
+                  <p className="px-1.5 pt-2 text-xs text-muted-foreground">Nothing to set for your projects.</p>
                 )}
               </section>
             </nav>
           )}
           {!listOnly && (
             <div className="flex min-w-0 flex-1 flex-col">
-              <div className="flex h-12 shrink-0 items-center gap-2 px-4">
+              <div className="flex h-14 shrink-0 items-center gap-2 px-6 max-md:px-2">
                 {crumb ? (
-                  <button type="button" aria-label={`Back to ${current.title}`} onClick={crumb.back} className="-ml-1 rounded p-1 text-muted-foreground outline-none hover:text-foreground">
+                  <button type="button" aria-label={`Back to ${current.title}`} onClick={crumb.back} className={iconPress}>
                     <ArrowLeft className="size-4" aria-hidden />
                   </button>
                 ) : (
                   phone && (
-                    <button type="button" aria-label="All settings" onClick={() => leave(() => onEntry(''))} className="-ml-1 rounded p-1 text-muted-foreground outline-none hover:text-foreground">
+                    <button type="button" aria-label="All settings" onClick={() => leave(() => onEntry(''))} className={iconPress}>
                       <ArrowLeft className="size-4" aria-hidden />
                     </button>
                   )
                 )}
-                <BaseDialog.Title className="flex min-w-0 flex-1 items-center gap-1.5 text-sm font-normal">
-                  {!phone && (
-                    <>
-                      <span className="text-muted-foreground">Settings</span>
-                      <ChevronRight className="size-3.5 shrink-0 text-muted-foreground" aria-hidden />
-                    </>
-                  )}
+                {/* The entry's title leads; where it is (the project, the entry a page is in) quieter before it. */}
+                <BaseDialog.Title className="flex min-w-0 flex-1 items-center gap-1.5 text-base font-semibold">
+                  <span className="sr-only">Settings</span>
                   {inProject && (
                     <>
-                      <span className="truncate text-muted-foreground">{project ? label(project.id, project.name) : 'All projects'}</span>
-                      <ChevronRight className="size-3.5 shrink-0 text-muted-foreground" aria-hidden />
+                      <span className="truncate font-normal text-muted-foreground">{project ? label(project.id, project.name) : 'All projects'}</span>
+                      <ChevronRight className="size-4 shrink-0 text-muted-foreground" aria-hidden />
                     </>
                   )}
                   {crumb ? (
                     <>
                       {!phone && (
                         <>
-                          <button type="button" onClick={crumb.back} className="truncate rounded text-muted-foreground outline-none hover:text-foreground">
+                          <button type="button" onClick={crumb.back} className="focus-ring truncate rounded-sm font-normal text-muted-foreground hover:text-foreground">
                             {current.title}
                           </button>
-                          <ChevronRight className="size-3.5 shrink-0 text-muted-foreground" aria-hidden />
+                          <ChevronRight className="size-4 shrink-0 text-muted-foreground" aria-hidden />
                         </>
                       )}
-                      <span className="truncate font-medium">{crumb.title}</span>
+                      <span className="truncate">{crumb.title}</span>
                     </>
                   ) : (
-                    <span className="truncate font-medium">{current.title}</span>
+                    <span className="truncate">{current.title}</span>
                   )}
                 </BaseDialog.Title>
-                <BaseDialog.Close aria-label="Close settings" className="rounded p-1 text-muted-foreground outline-none hover:text-foreground focus-visible:ring-2 focus-visible:ring-[var(--color-primary)]">
+                <BaseDialog.Close aria-label="Close settings" className={iconPress}>
                   <X className="size-4" aria-hidden />
                 </BaseDialog.Close>
               </div>
-              <ScrollArea className="min-h-0 flex-1">
-                <div className="mx-auto max-w-2xl space-y-3 px-4 pb-6">
+              {/* `peer/entry`: the foot under it shows its line only while the entry scrolls on under it. */}
+              <ScrollArea className="peer/entry min-h-0 flex-1">
+                <div className="space-y-4 px-6 pb-6 max-md:px-4">
                   {savedTo.length > 0 && (
                     <p className="text-xs text-muted-foreground">
                       Saved to {savedTo.length === 1 ? 'one project' : `${savedTo.length} projects`}: {savedTo.map(p => label(p.id, p.name)).join(', ')}.
@@ -271,11 +278,20 @@ export function SettingsDialog({
                   {/* Keyed by the projects too: an entry's reads and picks are of the projects it was drawn for. */}
                   <div key={`${current.id}/${project?.id ?? ALL_PROJECTS}`}>
                     <SettingsCrumbContext.Provider value={setCrumb}>
-                      <SettingsHoldContext.Provider value={setHeld}>{current.body}</SettingsHoldContext.Provider>
+                      <SettingsHoldContext.Provider value={setHeld}>
+                        <SettingsFootContext.Provider value={foot}>
+                          {/* Under the entry's title, a section is a group of it. */}
+                          <InSection>{current.body}</InSection>
+                        </SettingsFootContext.Provider>
+                      </SettingsHoldContext.Provider>
                     </SettingsCrumbContext.Provider>
                   </div>
                 </div>
               </ScrollArea>
+              <div
+                ref={setFoot}
+                className={cn('shrink-0 border-t border-transparent px-6 py-3 empty:hidden max-md:px-4 max-md:pb-[max(0.75rem,env(safe-area-inset-bottom))]', 'peer-data-[overflow-y-end]/entry:border-hairline', DIALOG_PRESSES_CLASS)}
+              />
             </div>
           )}
           <ConfirmDialog
@@ -295,15 +311,22 @@ export function SettingsDialog({
   )
 }
 
-/** The "Project" group's select: every project, or one. */
+/** The "Project" group's select, drawn as the sidebar's: every project, or one. */
 function ProjectSelect({ projects, value, onChange }: { projects: ProjectSummary[]; value: string; onChange: (id: string) => void }) {
   const label = useProjectLabel()
   const items = [{ value: ALL_PROJECTS, label: 'All projects' }, ...projects.map(p => ({ value: p.id, label: label(p.id, p.name) }))]
+  const picked = projects.find(p => p.id === value)
   return (
     <Select items={items} value={value} onValueChange={next => onChange(String(next ?? ALL_PROJECTS))}>
-      <SelectTrigger size="sm" aria-label="Project" className="h-6 min-w-0 flex-1 border-transparent bg-transparent px-1.5 text-xs shadow-none">
-        <SelectValue />
-      </SelectTrigger>
+      <SelectTriggerBare aria-label="Project" className={cn(PROJECT_ROW_CLASS, MENU_TRIGGER_OPEN_CLASS)}>
+        <span className="flex size-4 shrink-0 items-center justify-center">
+          {picked ? <ProjectDot project={picked} /> : <Layers className="size-4 text-muted-foreground" aria-hidden />}
+        </span>
+        <span className="min-w-0 flex-1 truncate text-left">
+          <SelectValue />
+        </span>
+        <ChevronsUpDown aria-hidden />
+      </SelectTriggerBare>
       <SelectContent>
         {items.map(i => (
           <SelectItem key={i.value} value={i.value}>
@@ -315,7 +338,7 @@ function ProjectSelect({ projects, value, onChange }: { projects: ProjectSummary
   )
 }
 
-/** The dashboard's own entries, the first of the list: who you are, how it looks, what it tells you, which agent runs, on which accounts, Claude web. */
+/** The dashboard's own entries, the first of the list: who you are, how it looks, what it tells you, which agent runs, on which accounts, Claude web, the keys. */
 function useOwnEntries(): Entry[] {
   const preferences = usePreferences()
   const editors = useDetectedEditors()
@@ -332,6 +355,8 @@ function useOwnEntries(): Entry[] {
   // will not happen.
   const permission = useNotificationPermission()
   const browserBlocked = permission === 'denied'
+  // While the browser delivers nothing, the kinds wait on it: their rows are greyed, and still switch.
+  const delivered = permission === 'unsupported' || ((preferences.notifyBrowser ?? true) && permission === 'granted')
 
   const palette = preferences.palette ?? 'openagent'
 
@@ -347,7 +372,7 @@ function useOwnEntries(): Entry[] {
       title: 'Appearance',
       icon: Palette,
       body: (
-        <Section>
+        <SettingsSection>
           <SelectRow
             label="Theme"
             description="Follow the system, or pin light or dark."
@@ -409,11 +434,11 @@ function useOwnEntries(): Entry[] {
           {/* The Overview's checklist hides with its own ✕, and comes back here. */}
           <ToggleRow
             label="Onboarding on the Overview"
-            description="The checklist of what a new install needs, at the top of the Overview."
+            description="The checklist of what a new install needs, on the Overview, under what needs you."
             checked={!(preferences.onboardingDismissed ?? false)}
             onChange={next => updatePreferences({ onboardingDismissed: !next })}
           />
-        </Section>
+        </SettingsSection>
       ),
     },
     {
@@ -421,7 +446,7 @@ function useOwnEntries(): Entry[] {
       title: 'Notifications',
       icon: Bell,
       body: (
-        <div className="space-y-6">
+        <div className="flex flex-col gap-6">
           <HeadedSection heading="Deliver to">
             <ToggleRow
               label="Browser"
@@ -431,16 +456,19 @@ function useOwnEntries(): Entry[] {
               onChange={setBrowserNotifications}
             />
           </HeadedSection>
+          <Separator className="bg-hairline" />
           <HeadedSection heading="Notify me about">
             <ToggleRow
               label="Human Queue"
               description={kindHint(HUMAN_QUEUE_ABOUT, permission, preferences.notifyBrowser ?? true)}
               checked={preferences.notifyHumanIntervention ?? true}
+              dimmed={!delivered}
               onChange={next => updatePreferences({ notifyHumanIntervention: next })}
             />
             <ToggleRow
               label="New activity"
               description={kindHint(NEW_ACTIVITY_ABOUT, permission, preferences.notifyBrowser ?? true)}
+              dimmed={!delivered}
               checked={preferences.notifyNewActivity ?? false}
               onChange={next => updatePreferences({ notifyNewActivity: next })}
             />
@@ -453,10 +481,20 @@ function useOwnEntries(): Entry[] {
       title: 'Coding agent',
       icon: Bot,
       body: (
-        <Section>
+        <SettingsSection>
           <SelectRow
             label="Coding agent"
-            description={`Which coding agent runs the work.${missingDriver !== undefined ? ` ${missingDriver} is not installed on this computer.` : ''}`}
+            description={
+              <>
+                Which coding agent runs the work.
+                {missingDriver !== undefined && (
+                  <>
+                    {' '}
+                    <span className="text-warning">{missingDriver} is not installed on this computer.</span>
+                  </>
+                )}
+              </>
+            }
             value={driver}
             options={drivers}
             // A model is always one agent's own (the start menu's rule), so a new agent starts unpinned.
@@ -481,7 +519,7 @@ function useOwnEntries(): Entry[] {
             checked={preferences.showThinking ?? false}
             onChange={next => updatePreferences({ showThinking: next })}
           />
-        </Section>
+        </SettingsSection>
       ),
     },
     {
@@ -501,9 +539,9 @@ function useOwnEntries(): Entry[] {
       title: 'Claude web',
       icon: Globe,
       body: (
-        <Section description="A Claude web agent hands off and ends, so the questions its session asks never reach this dashboard. The browser bridge carries them back and types your answers into the session.">
+        <SettingsSection description="A Claude web agent hands off and ends, so the questions its session asks never reach this dashboard. The Claude web bridge carries them back and types your answers into the session.">
           <ToggleRow
-            label="Browser bridge"
+            label="Claude web bridge"
             description="Carry claude.ai questions into this dashboard and type your answers back. A browser signed in to claude.ai does the work, through the bridge extension."
             checked={preferences.bridge ?? false}
             onChange={next => updatePreferences({ bridge: next })}
@@ -517,15 +555,21 @@ function useOwnEntries(): Entry[] {
               onChange={next => updatePreferences({ bridgeBrowser: next })}
             />
           )}
-        </Section>
+        </SettingsSection>
       ),
+    },
+    {
+      id: SHORTCUTS_ENTRY,
+      title: 'Keyboard shortcuts',
+      icon: Keyboard,
+      body: <ShortcutList />,
     },
   ]
 }
 
 /**
- * Which browser does the bridge's work (#1332): one the daemon runs — recommended, since web runs
- * then work with the user's own Chrome closed — or the user's own Chrome with the extension set up
+ * Which browser does the bridge's work (#1332): one the daemon runs, with which web runs work with
+ * the user's own Chrome closed, or the user's own Chrome with the extension set up
  * by hand. Each option carries what it needs right under it: the daemon's browser its status and
  * window controls, the user's Chrome the token to paste. Both can technically serve at once
  * (answers are claimed on read), but a person decides one, so it is presented as one.
@@ -533,8 +577,8 @@ function useOwnEntries(): Entry[] {
 function BridgeBrowserChoice({ daemonBrowser, onChange }: { daemonBrowser: boolean; onChange: (daemonBrowser: boolean) => void }) {
   const question = useId()
   const option = (value: boolean, label: string, description: string, body: ReactNode) => (
-    <label className={cn('flex cursor-pointer gap-3 rounded-md border p-3', daemonBrowser === value ? 'border-primary/60 bg-muted/20' : 'border-border')}>
-      <RadioGroupItem value={value ? 'daemon' : 'own'} aria-label={label} className="mt-1" />
+    <label className="flex cursor-pointer gap-3">
+      <RadioGroupItem value={value ? 'daemon' : 'own'} aria-label={label} className="mt-0.5" />
       <span className="min-w-0 flex-1">
         <span className="block text-sm font-medium">{label}</span>
         <span className="block text-xs text-muted-foreground">{description}</span>
@@ -544,14 +588,14 @@ function BridgeBrowserChoice({ daemonBrowser, onChange }: { daemonBrowser: boole
   )
   return (
     // One group with one name: the radio group is named by the question above it.
-    <div className="mt-3">
-      <p id={question} className="mb-2 text-sm font-medium">
+    <div>
+      <p id={question} className="mb-3 text-sm font-medium">
         Which browser does the work?
       </p>
-      <RadioGroup aria-labelledby={question} value={daemonBrowser ? 'daemon' : 'own'} onValueChange={next => onChange(next === 'daemon')}>
+      <RadioGroup aria-labelledby={question} value={daemonBrowser ? 'daemon' : 'own'} onValueChange={next => onChange(next === 'daemon')} className="gap-4">
         {option(
           true,
-          'A browser the dashboard runs — recommended',
+          'A browser the dashboard runs',
           'Chrome for Testing, downloaded once, signed in once, kept minimized. Web runs work with your own Chrome closed.',
           <BridgeBrowserSettings />,
         )}
@@ -568,14 +612,10 @@ function BridgeBrowserChoice({ daemonBrowser, onChange }: { daemonBrowser: boole
 
 /** A group of rows under a heading of its own. */
 function HeadedSection({ heading, children }: { heading: string; children: ReactNode }) {
-  const id = useId()
   return (
-    <section aria-labelledby={id} className="space-y-2">
-      <h3 id={id} className="text-xs font-semibold text-muted-foreground">
-        {heading}
-      </h3>
-      <Section>{children}</Section>
-    </section>
+    <Section title={heading}>
+      <SettingsSection>{children}</SettingsSection>
+    </Section>
   )
 }
 
@@ -586,6 +626,7 @@ function ToggleRow({
   checked,
   onChange,
   disabled = false,
+  dimmed = disabled,
 }: {
   label: string
   description: string
@@ -593,13 +634,15 @@ function ToggleRow({
   onChange: (next: boolean) => void
   /** A capability the daemon or browser withholds, e.g. notifications the browser has blocked. */
   disabled?: boolean
+  /** Greyed while what it needs is off, and still to be switched. */
+  dimmed?: boolean
 }) {
   const id = useId()
   return (
     <Row
       label={label}
       description={description}
-      dimmed={disabled}
+      dimmed={dimmed}
       labelFor={id}
       control={
         <Switch

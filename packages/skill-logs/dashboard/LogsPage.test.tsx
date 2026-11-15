@@ -4,8 +4,8 @@ import { ModuleHostContext, forgetRemembered, type ModuleAgent } from '@openagt/
 import { fakeHost, type FakeHost } from '@openagt/dashboard/module/testing'
 import { LogsPage, dayOf } from './LogsPage.js'
 
-// The Logs page: every run of the projects shown, newest first, in one table cut by day, each day
-// with how many runs it had and what they cost; chips pick one status.
+// The Logs page: every run of the projects shown, newest first, in one list cut by day, each day
+// with how many runs it had and what they cost; a word over the list picks one status.
 
 const HOUR = 60 * 60_000
 const at = (ms: number) => new Date(ms).toISOString()
@@ -44,29 +44,29 @@ test('the runs cut by day, each day with its runs and their cost; a run by its n
   )
   const { rerender } = render(page([]))
   const today = (await screen.findAllByText('Today'))[0]!.closest('h2')!
-  expect(today.textContent).toBe('Today2 runs · $0.75')
-  expect(screen.getAllByText('Yesterday')[0]!.closest('h2')!.textContent).toBe('Yesterday1 run · $1.00')
+  expect(today.textContent).toBe('Today 2 runs · $0.75')
+  expect(screen.getAllByText('Yesterday')[0]!.closest('h2')!.textContent).toBe('Yesterday 1 run · $1.00')
   // Its name, over what it was asked; a run with no name is its ask.
-  const login = screen.getAllByText('Login page')[0]!.closest('tr')!
+  const login = screen.getAllByText('Login page')[0]!.closest('li')!
   expect(within(login).getByText('make the login page')).toBeTruthy()
-  expect(screen.getAllByText('yesterday work')[0]!.closest('tr')!.textContent).toContain('2m')
-  // A chip per status the runs have, each with its count; its pick is kept in the page's address, in the place of the last one, so Back leaves the page.
+  expect(screen.getAllByText('yesterday work')[0]!.closest('li')!.textContent).toContain('2m')
+  // A word per status the runs have, each with its count; its pick is kept in the page's address, in the place of the last one, so Back leaves the page.
   // A status is one word on its chip and beside a run's dot.
-  expect(within(screen.getAllByText('break it')[0]!.closest('tr')!).getByText('Failed')).toBeTruthy()
+  expect(within(screen.getAllByText('break it')[0]!.closest('li')!).getByText('Failed')).toBeTruthy()
   fireEvent.click(screen.getByRole('button', { name: /^Failed/ }))
-  expect(host.openPage).toHaveBeenLastCalledWith('logs', ['failed'], undefined, { replace: true })
+  expect(host.adjustPage).toHaveBeenLastCalledWith(['failed'])
   rerender(page(['failed']))
   expect(screen.queryAllByText('Login page')).toHaveLength(0)
   expect(screen.getAllByText('break it').length).toBeGreaterThan(0)
   fireEvent.click(screen.getByRole('button', { name: /^All/ }))
-  expect(host.openPage).toHaveBeenLastCalledWith('logs', [], undefined, { replace: true })
+  expect(host.adjustPage).toHaveBeenLastCalledWith([])
   rerender(page([]))
   expect(screen.getAllByText('Login page').length).toBeGreaterThan(0)
   // A status no run has any more shows them all.
   rerender(page(['stopped']))
   expect(screen.getAllByText('Login page').length).toBeGreaterThan(0)
   // A row opens its run.
-  fireEvent.click(screen.getAllByText('Login page')[0]!.closest('tr')!)
+  fireEvent.click(screen.getAllByText('Login page')[0]!.closest('a')!)
   expect(host.openAgent).toHaveBeenCalledWith('p1', 'r1')
 })
 
@@ -77,17 +77,12 @@ test("a run's name is a link to the run: the keyboard reaches it, it opens the r
       <LogsPage projects={[{ id: 'p1', name: 'alpha', gitHost: true }]} projectId={null} path={[]} />
     </ModuleHostContext.Provider>,
   )
-  const [table, phone] = await screen.findAllByRole('link', { name: 'Login page' })
-  expect(table!.getAttribute('href')).toBe('/p1/r1')
-  expect(fireEvent.click(table!, { ctrlKey: true })).toBe(true)
+  const link = await screen.findByRole('link', { name: 'Login page' })
+  expect(link.getAttribute('href')).toBe('/p1/r1')
+  expect(fireEvent.click(link, { ctrlKey: true })).toBe(true)
   expect(host.openAgent).not.toHaveBeenCalled()
-  fireEvent.click(table!)
+  fireEvent.click(link)
   expect(host.openAgent.mock.calls).toEqual([['p1', 'r1']])
-  fireEvent.click(phone!)
-  expect(host.openAgent.mock.calls).toEqual([
-    ['p1', 'r1'],
-    ['p1', 'r1'],
-  ])
 })
 
 test("each status in the dashboard's colors: a waiting run's dot is the sidebar's amber, and one that ended is a ring", async () => {
@@ -100,7 +95,7 @@ test("each status in the dashboard's colors: a waiting run's dot is the sidebar'
       <LogsPage projects={[{ id: 'p1', name: 'alpha', gitHost: true }]} projectId={null} path={[]} />
     </ModuleHostContext.Provider>,
   )
-  const dot = (title: string) => within(screen.getAllByText(title)[0]!.closest('tr')!).getByText(/^(Waiting|Done)$/).querySelector('span')!.className
+  const dot = (title: string) => screen.getAllByText(title)[0]!.closest('li')!.querySelector('[aria-hidden]')!.className
   await screen.findAllByText('Asks')
   expect(dot('Asks')).toContain('bg-warning')
   expect(dot('Ended')).toContain('border-muted-foreground/60')
@@ -116,10 +111,10 @@ test('a run waiting on a question took nothing yet: its end so far is only its l
       <LogsPage projects={[{ id: 'p1', name: 'alpha', gitHost: true }]} projectId={null} path={[]} />
     </ModuleHostContext.Provider>,
   )
-  const took = (title: string) => (screen.getAllByText(title)[0]!.closest('tr')!.children[3] as HTMLElement).textContent
+  const row = (title: string) => screen.getAllByText(title)[0]!.closest('li')!.textContent
   await screen.findAllByText('Asks')
-  expect(took('Asks')).toBe('—')
-  expect(took('Halted')).toBe('2m')
+  expect(row('Asks')).not.toMatch(/\dm/)
+  expect(row('Halted')).toContain('2m')
 })
 
 test('a run goes by the name every list gives it: with no short name and no prompt, its branch; with none of these, its id', async () => {
@@ -130,18 +125,6 @@ test('a run goes by the name every list gives it: with no short name and no prom
   )
   expect((await screen.findAllByRole('link', { name: 'agent-fix-header' })).length).toBeGreaterThan(0)
   expect(screen.getAllByRole('link', { name: 'r2' }).length).toBeGreaterThan(0)
-})
-
-test("a run's name, pointed at, says what it was asked, in the table and the narrow list alike; with no ask, its name", async () => {
-  render(
-    <ModuleHostContext.Provider value={hostWith([{ id: 'r1', startedAt: at(now - 1000), status: 'done', title: 'Login page', intent: 'make the login page' }, { id: 'r2', startedAt: at(now - 2000), status: 'done', title: 'Named only' }])}>
-      <LogsPage projects={[{ id: 'p1', name: 'alpha', gitHost: true }]} projectId={null} path={[]} />
-    </ModuleHostContext.Provider>,
-  )
-  const titles = (name: string) => screen.getAllByRole('link', { name }).map(link => link.getAttribute('title'))
-  expect(await screen.findAllByRole('link', { name: 'Login page' })).toHaveLength(2)
-  expect(titles('Login page')).toEqual(['make the login page', 'make the login page'])
-  expect(titles('Named only')).toEqual(['Named only', 'Named only'])
 })
 
 test('a second visit opens with the last list at once, while the runs are read again, faded once that read has been out a second', async () => {
@@ -193,11 +176,11 @@ test('each run as the dashboard says it stands: a record that still says running
       <LogsPage projects={[{ id: 'p1', name: 'alpha', gitHost: true }]} projectId={null} path={[]} />
     </ModuleHostContext.Provider>,
   )
-  const added = (await screen.findAllByText('Only on the laptop'))[0]!.closest('tr')!
+  const added = (await screen.findAllByText('Only on the laptop'))[0]!.closest('li')!
   expect(added.textContent).toContain('Done')
-  const frozen = screen.getAllByText('frozen in the records')[0]!.closest('tr')!
+  const frozen = screen.getAllByText('frozen in the records')[0]!.closest('li')!
   expect(within(frozen).getByText('Status unknown').closest('[title]')!.getAttribute('title')).toBe(`MacBook offline · last seen ${new Date(seenAt).toLocaleString()}`)
-  expect(screen.queryAllByText('Running')).toHaveLength(0)
+  expect(screen.queryAllByText('Working')).toHaveLength(0)
 })
 
 test("each run says whose it is: their picture where the project's git host knows them, else two letters; a very old card has no mark, and its name stays in line", async () => {
@@ -216,7 +199,7 @@ test("each run says whose it is: their picture where the project's git host know
       <LogsPage projects={[{ id: 'p1', name: 'alpha', gitHost: true }]} projectId={null} path={[]} />
     </ModuleHostContext.Provider>,
   )
-  const row = (title: string) => screen.getAllByText(title)[0]!.closest('tr')!
+  const row = (title: string) => screen.getAllByText(title)[0]!.closest('li')!
   await waitFor(() => expect(within(row('Hers')).getByRole('img', { name: 'ada@x.dev · ada' }).querySelector('img')?.getAttribute('src')).toBe('https://avatars.githubusercontent.com/u/1'))
   expect(within(row('Going')).getByRole('img', { name: 'ada@x.dev · ada' })).toBeTruthy()
   expect(within(row('His')).getByRole('img', { name: 'git@brillout.com' }).textContent).toBe('BR')
@@ -258,7 +241,7 @@ test("a run whose work never left this machine says what it needs in the sidebar
     </ModuleHostContext.Provider>
   )
   render(page(false))
-  const row = async (name: string) => (await screen.findAllByText(name))[0]!.closest('tr')!
+  const row = async (name: string) => (await screen.findAllByText(name))[0]!.closest('li')!
   expect((await row('Committed a login page')).textContent).toContain('Needs push · 1 commit')
   expect((await row('Left files')).textContent).toContain('Needs commit · 2 files')
   expect((await row('Pushed')).textContent).not.toMatch(/Needs/)

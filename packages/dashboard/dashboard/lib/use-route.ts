@@ -1,6 +1,6 @@
 import { useSyncExternalStore } from 'react'
-import { SETTINGS_ITEM_PARAM, SETTINGS_PARAM, parseRoute, formatRoute, keepPageQuery, type Route } from './route.js'
-import { NO_PROJECTS, type ProjectAddresses } from '../../src/project-address.js'
+import { parseRoute, formatRoute, keepPageQuery, type Route } from './route.js'
+import type { ProjectAddresses } from '../../src/project-address.js'
 
 // The route as state (#784): read the current one, go to another. Back/Forward are free, and a
 // session is a link you can paste, reload, and open twice.
@@ -18,12 +18,51 @@ function notify(): void {
   for (const listener of listeners) listener()
 }
 
-/** The entry shown while it holds what leaving it would lose, and what asks before it goes. */
-let held: { url: string; state: unknown; ask: (leave: () => void) => void } | null = null
+/** Where an entry the dashboard writes keeps its place in the tab's list: how far a Back or Forward went. */
+const STEP = 'openagent:step'
+/** Where an entry the dashboard writes keeps the address it was entered from: what a return goes back to. */
+const BEHIND = 'openagent:behind'
+/** Where an entry opened beside another keeps how many entries back that address is; one where it says none. */
+const BEHIND_BY = 'openagent:behind-by'
 
-/** Keep the entry shown when Back or Forward would leave it: its address is put back, and `ask` is handed the step that leaves; leaving the document, the browser asks. Until the returned function is called. */
+/** The place in the tab's list of the entry shown. */
+let shown = 0
+
+/** The place of the entry whose state is `state`; one the dashboard did not write lies behind the entry shown. */
+function stepOf(state: unknown): number {
+  const step = (state as Record<string, unknown> | null)?.[STEP]
+  return typeof step === 'number' ? step : shown - 1
+}
+
+/** How many entries back the address the entry whose state is `state` was entered from is. */
+function behindBy(state: Record<string, unknown> | null): number {
+  const by = state?.[BEHIND_BY]
+  return typeof by === 'number' ? by : 1
+}
+
+/** A new entry after the one shown, at `url`, entered from the entry shown; one `beside` it, a page of the same thing, from where the entry shown was, one entry further. */
+function push(url: string, beside: boolean): void {
+  const state = window.history.state as Record<string, unknown> | null
+  const behind = state?.[BEHIND]
+  const from = beside && typeof behind === 'string' ? { [BEHIND]: behind, [BEHIND_BY]: behindBy(state) + 1 } : { [BEHIND]: currentUrl() }
+  window.history.pushState({ [STEP]: shown + 1, ...from }, '', url)
+  shown += 1
+}
+
+/** Go back to the place the entry shown was entered from: by Back, as many entries as it is behind, when `isBehind` says the address it was entered from is that place, else by `otherwise`, a move. */
+export function back(isBehind: (address: string) => boolean, otherwise: () => void): void {
+  const state = window.history.state as Record<string, unknown> | null
+  const behind = state?.[BEHIND]
+  if (typeof behind === 'string' && isBehind(behind)) leaving(() => window.history.go(-behindBy(state)))
+  else otherwise()
+}
+
+/** The entry shown while it holds what leaving it would lose, and what asks before it goes. */
+let held: { url: string; ask: (leave: () => void) => void } | null = null
+
+/** Keep the entry shown when Back or Forward would leave it: the tab returns to it, and `ask` is handed the step that leaves; leaving the document, the browser asks. Until the returned function is called. */
 export function holdEntry(ask: (leave: () => void) => void): () => void {
-  const entry = { url: currentUrl(), state: window.history.state as unknown, ask }
+  const entry = { url: currentUrl(), ask }
   held = entry
   window.addEventListener('beforeunload', askBeforeUnload)
   return () => {
@@ -33,25 +72,46 @@ export function holdEntry(ask: (leave: () => void) => void): () => void {
   }
 }
 
+/** Take `step`, a move off the entry shown: now, or once the person says to leave what the entry holds. */
+export function leaving(step: () => void): void {
+  if (held) held.ask(step)
+  else step()
+}
+
 /** Back past the dashboard's first entry, a reload or the tab closed, while an entry is held: the browser asks in its own words. */
 function askBeforeUnload(event: BeforeUnloadEvent): void {
   event.preventDefault()
 }
 
-/** Back or Forward: the route is read again, and the page goes back to where it was scrolled on that entry. */
+/** Back or Forward: the route is read again, and the page goes back to where it was scrolled on that entry.
+ *  While an entry is held, the tab goes back to it by as many steps as it went, and leaving takes them again. */
 function onPopState(): void {
+  const arrived = stepOf(window.history.state)
   if (held) {
-    window.history.pushState(held.state, '', held.url)
-    return held.ask(() => window.history.back())
+    // Back on the held entry: the return, or steps that came to nothing.
+    if (arrived === shown) return
+    const refused = arrived - shown
+    window.history.go(-refused)
+    return held.ask(() => window.history.go(refused))
   }
+  stamp()
   notify()
   restoreScroll()
+}
+
+/** The entry shown is stamped with its place, the first one when the page starts. */
+function stamp(): void {
+  shown = stepOf(window.history.state)
+  window.history.replaceState({ ...window.history.state, [STEP]: shown }, '')
 }
 
 function subscribe(listener: () => void): () => void {
   // `popstate` covers Back/Forward; the History API does not fire it for our own pushes, which is
   // why `go` notifies directly.
-  if (listeners.size === 0) window.addEventListener('popstate', onPopState)
+  if (listeners.size === 0) {
+    stamp()
+    window.addEventListener('popstate', onPopState)
+  }
   listeners.add(listener)
   return () => {
     listeners.delete(listener)
@@ -106,48 +166,47 @@ function restoreScroll(): void {
 
 const currentUrl = (): string => window.location.pathname + window.location.search
 
-/** The projects the route was last read with, which name them for a part of the page that has no route to hand. */
-let addresses: ProjectAddresses = NO_PROJECTS
-
-/** Marks a history entry as Settings this tab opened over the page under it. */
-const OVER_PAGE = 'openagent:settings-over-page'
-const OVER_PAGE_STATE = { [OVER_PAGE]: true }
-
-/** Settings is open over the page this tab showed before it: Back closes it onto that page's own entry, with what the page wrote to it. */
-export function settingsOverPage(): boolean {
-  return window.history.state?.[OVER_PAGE] === true
-}
+/** The address shown: while an entry is held, its own, also in the moment the tab is on the way back to it. */
+const shownUrl = (): string => held?.url ?? currentUrl()
 
 /** The route, with its projects named by `projects`: what the address names changes when they do. */
 export function useRoute(projects: ProjectAddresses): {
   route: Route
-  /** Navigate to `next`. Replaces the current history entry, keeping what the page wrote to it,
-   *  when `replace` is set — for a correction, not a step you should be able to go Back to. Keeps
-   *  what the page mirrored into the query when `keepQuery` is set — for a change of the picked
-   *  project alone (#1513), or Settings opening or closing over the page. Marks the entry as
-   *  Settings opened over the page when `overPage` is set ({@link settingsOverPage}). */
-  go: (next: Route, options?: { replace?: boolean; keepQuery?: boolean; overPage?: boolean }) => void
+  /** Navigate to `next`, a new history entry. Keeps what the page mirrored into the query when
+   *  `keepQuery` is set — for a change of the picked project alone (#1513), or Settings opening or
+   *  closing over the page. With `beside`, `next` is a page of the same thing as the one shown (a
+   *  ticket's other tab): it is entered from where the one shown was, so a return goes there. */
+  go: (next: Route, options?: { keepQuery?: boolean; beside?: boolean }) => void
+  /** Write `next` in place of the current history entry, keeping what the page wrote to it: a
+   *  correction or a pick the page keeps, not a step to go Back to. With `query`, that is the page's
+   *  own query; without, the one it has stays. */
+  adjust: (next: Route, query?: string) => void
 } {
-  addresses = projects
-  const current = useSyncExternalStore(subscribe, currentUrl, () => '/')
+  const current = useSyncExternalStore(subscribe, shownUrl, () => '/')
   const route = parseRoute(current, projects)
 
-  const go = (next: Route, options?: { replace?: boolean; keepQuery?: boolean; overPage?: boolean }) => {
+  const go = (next: Route, options?: { keepQuery?: boolean; beside?: boolean }) => {
     const url = options?.keepQuery ? keepPageQuery(formatRoute(next, projects), window.location.search) : formatRoute(next, projects)
     // Going where you already are is not a history entry.
     if (url === current) return
-    if (options?.replace) window.history.replaceState(window.history.state, '', url)
-    else {
-      // Settings over the page leaves the page mounted, scrolled where it was, and so does a change of the query alone.
-      const otherPage = !options?.overPage && new URL(url, window.location.href).pathname !== window.location.pathname
-      if (!options?.overPage) keepScroll()
-      window.history.pushState(options?.overPage ? OVER_PAGE_STATE : null, '', url)
+    leaving(() => {
+      // A new page opens at its top; Settings over the page and a change of the query alone leave it where it was scrolled.
+      const otherPage = new URL(url, window.location.href).pathname !== window.location.pathname
+      keepScroll()
+      push(url, options?.beside ?? false)
       if (otherPage) scrollToTop()
-    }
+      notify()
+    })
+  }
+
+  const adjust = (next: Route, query = window.location.search) => {
+    const url = keepPageQuery(formatRoute(next, projects), query)
+    if (url === current) return
+    window.history.replaceState(window.history.state, '', url)
     notify()
   }
 
-  return { route, go }
+  return { route, go, adjust }
 }
 
 /** The dashboard's own page of every account OpenAgent works with, at `/permissions`. */
@@ -155,35 +214,3 @@ export const PERMISSIONS_PAGE = 'permissions'
 
 /** The dashboard's own page of the agents, each a name, skills and accounts, at `/agents`. */
 export const AGENTS_PAGE = 'agents'
-
-/** Go to the Agents page, from a part of the page that has no route to hand. */
-export function openAgents(): void {
-  openOwnPage(AGENTS_PAGE)
-}
-
-/** Go to the Permissions page, from a part of the page that has no route to hand. */
-export function openPermissions(): void {
-  openOwnPage(PERMISSIONS_PAGE)
-}
-
-/** Go to one of the dashboard's own pages with the project the address picks, as the sidebar's press does. */
-function openOwnPage(page: string): void {
-  const { scope } = parseRoute(currentUrl(), addresses)
-  keepScroll()
-  window.history.pushState(null, '', formatRoute({ projectId: null, agentId: null, page, ...(scope ? { scope } : {}) }, addresses))
-  scrollToTop()
-  notify()
-}
-
-/** Open Settings at `entry` over the page you are on, from a part of the page that has no route to hand; with `item`, at that page inside it.
- *  From inside Settings, it moves to that entry in place, as the dialog's own list does: Back and closing still go to the page under it. */
-export function openSettings(entry: string, item?: string): void {
-  const url = new URL(window.location.href)
-  const open = url.searchParams.has(SETTINGS_PARAM)
-  url.searchParams.set(SETTINGS_PARAM, entry)
-  if (item) url.searchParams.set(SETTINGS_ITEM_PARAM, item)
-  else url.searchParams.delete(SETTINGS_ITEM_PARAM)
-  if (open) window.history.replaceState(window.history.state, '', url.pathname + url.search)
-  else window.history.pushState(OVER_PAGE_STATE, '', url.pathname + url.search)
-  notify()
-}

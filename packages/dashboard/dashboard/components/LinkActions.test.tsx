@@ -57,7 +57,7 @@ describe('LinkActions', () => {
       )
     shown([LINK])
     const queued = await screen.findByRole('button', { name: 'Queued' })
-    expect(queued.hasAttribute('disabled')).toBe(true)
+    expect(queued.getAttribute('aria-disabled')).toBe('true')
     cleanup()
     shown([LINK, { text: 'Other', href: 'tickets/other.md' }])
     await waitFor(() => expect(done).toHaveBeenCalledTimes(2))
@@ -77,7 +77,9 @@ describe('LinkActions', () => {
         />
       </ModulesContext.Provider>,
     )
-    fireEvent.click(screen.getByRole('button', { name: 'Add to queue' }))
+    const press = screen.getByRole('button', { name: 'Add to queue' })
+    press.focus()
+    fireEvent.click(press)
     await waitFor(() => expect(run).toHaveBeenCalledTimes(2))
     expect(run.mock.calls[0]![1]).toBe('p1')
     expect(run.mock.calls[0]![2]).toEqual([LINK, { text: 'Second' }])
@@ -87,9 +89,14 @@ describe('LinkActions', () => {
     await run.mock.calls[0]![0].runCommand('p1', ['add', 'x'])
     // The last argument marks the command as an act, so the daemon converges the project's data and re-reads.
     expect(runModuleCommand).toHaveBeenCalledWith('p1', '@x/queue', ['add', 'x'], undefined, true)
-    // Done: the button says so and rests.
+    // Done: the button says so and rests, with the keyboard still on it, and a second press sends nothing.
     const rested = await screen.findByRole('button', { name: 'Queued' })
-    expect((rested as HTMLButtonElement).disabled).toBe(true)
+    expect(rested.getAttribute('aria-disabled')).toBe('true')
+    // Not `disabled`: a browser moves the focus off a disabled button, to the page.
+    expect((rested as HTMLButtonElement).disabled).toBe(false)
+    expect(document.activeElement).toBe(rested)
+    fireEvent.click(rested)
+    expect(run).toHaveBeenCalledTimes(2)
   })
 
   test('a project the action\'s package is not in is skipped, and an empty group runs nothing', async () => {

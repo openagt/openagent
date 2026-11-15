@@ -35,6 +35,10 @@ export interface Platform {
   removeDashboard(env: NodeJS.ProcessEnv): Promise<void>
   /** The browsers made to stop trusting the certificate in `certFile`. */
   untrust(certFile: string, io: InstallIO, env: NodeJS.ProcessEnv): Promise<void>
+  /** Whether the dashboard's own service is on this computer, for the person in `env`. */
+  dashboardInstalled(env: NodeJS.ProcessEnv): boolean
+  /** Whether anything {@link adminInstall} puts there is on this computer: else the uninstall has no step to ask the password for. */
+  adminInstalled(): Promise<boolean>
   /** The uninstall's step as the administrator: everything {@link adminInstall} put there, taken off. */
   adminUninstall(): AdminStep
   /** The folders the install made, beside the certificate's. */

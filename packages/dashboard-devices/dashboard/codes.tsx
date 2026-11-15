@@ -1,12 +1,12 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { Check, CircleCheck, Copy, ExternalLink, Loader2, RotateCw } from 'lucide-react'
-import { Button, Dialog, Input, QrCode } from '@openagt/dashboard/module'
+import { Button, Dialog, Input, QrCode, Skeleton, Slot, useOpenAgentDown } from '@openagt/dashboard/module'
 import { failed, type Answer, type Given } from './devices.js'
-import { Problem } from './parts.js'
+import { CodeStrip, LinkPress, Presses, PressRow, Problem } from './parts.js'
 
 // A code a new device gets in with, the ways it is shown: as a QR code a phone's camera opens, and
-// as where and a code typed on another computer. It is asked for as its dialog opens, works once,
-// and runs out: the dialog says for how long still, and waits for the device that uses it.
+// as where and a code typed on another computer. It is asked for as it is shown, works once, and
+// runs out: what shows it says for how long still, and waits for the device that uses it.
 
 /** Minutes and seconds, as a clock shows them. */
 export const clock = (ms: number): string => {
@@ -72,8 +72,8 @@ export function CopyButton({ text, label, children }: { text: string; label: str
     return () => clearTimeout(timer)
   }, [copied])
   return (
-    <Button size="sm" type="button" variant="outline" aria-label={label} className="shrink-0" onClick={() => void navigator.clipboard?.writeText(text).then(() => setCopied(true))}>
-      {copied ? <Check className="h-3.5 w-3.5 text-success" aria-hidden /> : <Copy className="h-3.5 w-3.5" aria-hidden />}
+    <Button type="button" variant="ghost" size="sm" aria-label={label} onClick={() => void navigator.clipboard?.writeText(text).then(() => setCopied(true))}>
+      {copied ? <Check className="size-4 text-success" aria-hidden /> : <Copy className="size-4" aria-hidden />}
       {copied ? 'Copied' : children}
     </Button>
   )
@@ -85,25 +85,26 @@ export const bothOf = (where: string, code: string): string => `Where: ${where}\
 /** Where and the code, to type on another computer. */
 export function CodeCard({ where, code }: { where: string; code: string }) {
   return (
-    <div role="group" aria-label="The code" className="space-y-3 rounded-lg border border-border p-4">
-      <div className="flex items-end justify-between gap-3">
-        <div className="min-w-0">
-          <p className="text-xs text-muted-foreground">Where</p>
-          <p className="truncate font-mono text-lg">{where}</p>
-        </div>
-        <CopyButton text={where} label="Copy where">
-          Copy
-        </CopyButton>
-      </div>
-      <div className="flex items-end justify-between gap-3">
-        <div className="min-w-0">
-          <p className="text-xs text-muted-foreground">Code</p>
-          <p className="font-mono text-2xl font-semibold tracking-wider">{code}</p>
-        </div>
-        <CopyButton text={bothOf(where, code)} label="Copy both">
-          Copy both
-        </CopyButton>
-      </div>
+    <div role="group" aria-label="The code" className="space-y-3">
+      <CodeStrip
+        label="Where"
+        text={where}
+        copy={
+          <CopyButton text={where} label="Copy where">
+            Copy
+          </CopyButton>
+        }
+      />
+      <CodeStrip
+        label="Code"
+        text={code}
+        big
+        copy={
+          <CopyButton text={bothOf(where, code)} label="Copy both">
+            Copy both
+          </CopyButton>
+        }
+      />
     </div>
   )
 }
@@ -112,7 +113,7 @@ export function CodeCard({ where, code }: { where: string; code: string }) {
 export function Waiting({ children }: { children: ReactNode }) {
   return (
     <p role="status" className="flex items-center gap-2 text-xs text-muted-foreground">
-      <Loader2 className="h-3.5 w-3.5 shrink-0 animate-spin text-primary" aria-hidden />
+      <Loader2 className="size-3.5 shrink-0 animate-spin text-primary" aria-hidden />
       <span role="timer">{children}</span>
     </p>
   )
@@ -121,22 +122,44 @@ export function Waiting({ children }: { children: ReactNode }) {
 /** A device got in with the code: said in place of the code, which is spent. */
 export function Joined({ children, words = 'It stays in until it is removed. The code is spent.' }: { children: ReactNode; words?: string }) {
   return (
-    <div role="status" className="flex flex-col items-center gap-2 py-6 text-center">
-      <CircleCheck className="h-8 w-8 text-success" aria-hidden />
+    <div role="status" className="flex flex-col gap-2">
+      <CircleCheck className="size-8 text-success" aria-hidden />
       <p className="text-sm font-medium">{children}</p>
       <p className="text-xs text-muted-foreground">{words}</p>
     </div>
   )
 }
 
-/** While a code is asked for, or why there is none. */
-export function NoCodeYet({ asking, error }: { asking: boolean; error: string | undefined }) {
+/** Where and the code while they are asked for: {@link CodeCard}'s shape. */
+export const CODE_SHAPE = (
+  <div className="space-y-3">
+    {[0, 1].map(at => (
+      <div key={at} className="space-y-1">
+        <Skeleton className="h-4 w-12" />
+        <Skeleton className="h-9 w-full" />
+      </div>
+    ))}
+  </div>
+)
+
+/** A phone's code while it is asked for: the QR code's square and the steps beside it. */
+const QR_SHAPE = (
+  <div className="flex gap-6 max-sm:flex-col">
+    <Skeleton className="size-64 shrink-0 rounded-lg" />
+    <div className="w-full space-y-3">
+      <Skeleton className="h-4 w-3/4" />
+      <Skeleton className="h-4 w-2/3" />
+    </div>
+  </div>
+)
+
+/** While a code is asked for, in the shape of what it brings; or why there is none. */
+export function NoCodeYet({ asking, error, shape = CODE_SHAPE }: { asking: boolean; error: string | undefined; shape?: ReactNode }) {
   if (asking)
     return (
-      <div role="status" className="flex items-center gap-2 py-10 text-sm text-muted-foreground">
-        <Loader2 className="h-4 w-4 shrink-0 animate-spin text-primary" aria-hidden />
-        Asking for a code…
-      </div>
+      <Slot of={{ state: 'unknown', value: undefined }} shape={shape}>
+        {() => null}
+      </Slot>
     )
   return <Problem>{`No code: ${error ?? 'none was given'}`}</Problem>
 }
@@ -144,7 +167,7 @@ export function NoCodeYet({ asking, error }: { asking: boolean; error: string | 
 /** The code ran out before a device used it. */
 export function RanOut() {
   return (
-    <p role="status" className="py-6 text-center text-sm text-muted-foreground">
+    <p role="status" className="text-sm text-muted-foreground">
       The code ran out. A new one works for ten minutes more.
     </p>
   )
@@ -178,7 +201,6 @@ const NOT_A_NAME = 'A name is letters and digits, with spaces, dots, apostrophes
  * own: someone else's device is added with Add person.
  */
 export function PhoneCode({
-  title,
   ask,
   steps = ["Open the phone's camera and point it at the code.", 'Tap the link it shows. OpenAgent opens, and stays in.'],
   camera = true,
@@ -188,7 +210,6 @@ export function PhoneCode({
   onCode,
   onClose,
 }: {
-  title: string
   ask: () => Promise<Answer<Given>>
   /** What the person does with the code, step by step. */
   steps?: readonly string[]
@@ -203,88 +224,84 @@ export function PhoneCode({
   onCode?: (code: Given | undefined) => void
   onClose: () => void
 }) {
+  const down = useOpenAgentDown()
   const [byNumber, setByNumber] = useState(false)
   const [byWifi, setByWifi] = useState(false)
   const { code, asking, error, left, expired, again } = useCode(() => ask(), true, next => (setByNumber(false), setByWifi(false), onCode?.(next)), joined !== undefined)
   const link = code && byWifi && code.wifiUrl ? code.wifiUrl : code && byNumber && code.numberUrl ? code.numberUrl : code?.url
 
   return (
-    <Dialog open onOpenChange={open => !open && onClose()} title={title}>
-      <div className="space-y-4">
-        {joined !== undefined ? (
-          <Joined>{`${joined} is in.`}</Joined>
-        ) : asking || error !== undefined || !code ? (
-          <NoCodeYet asking={asking} error={error} />
-        ) : expired ? (
-          <RanOut />
-        ) : (
-          <div className="flex items-start gap-5 max-sm:flex-col max-sm:items-center">
-            <div className="shrink-0">
-              <QrCode text={link!} label="The code a new device scans" />
-            </div>
-            <div className="w-full min-w-0 space-y-3">
-              <ol className="space-y-3 text-sm">
-                {steps.map((step, at) => (
-                  <Step key={step} n={at + 1}>
-                    {step}
-                  </Step>
-                ))}
-              </ol>
-              {hint !== undefined && <p className="text-xs text-muted-foreground">{hint}</p>}
-              {code.wifiUrl !== undefined && !byWifi && (
-                <button type="button" className="relative mr-3 text-xs underline after:absolute after:-inset-y-1 after:inset-x-0" onClick={() => setByWifi(true)}>
-                  Not on Tailscale? Use this Wi-Fi.
-                </button>
-              )}
-              {code.numberUrl !== undefined && !byNumber && (
-                <button type="button" className="relative text-xs underline after:absolute after:-inset-y-1 after:inset-x-0" onClick={() => setByNumber(true)}>
-                  Phone does not open it? Use the number.
-                </button>
-              )}
-              <p className="text-xs text-muted-foreground">
-                {camera ? 'No camera? ' : ''}
-                <CopyLink text={link!} />
-                {camera ? ' and send it to the phone.' : ' to paste it there.'}
-                {openHere && (
-                  <>
-                    {' '}
-                    {/* The code is spent by the tab it opens: it leaves the page with the press. */}
-                    <a href={link} target="_blank" rel="noreferrer" className="inline-flex items-center gap-0.5 underline" onClick={onClose}>
-                      Let this browser in instead
-                      <ExternalLink className="h-3 w-3" aria-hidden />
-                    </a>
-                  </>
-                )}
+    <div className="space-y-4">
+      {joined !== undefined ? (
+        <Joined>{`${joined} is in.`}</Joined>
+      ) : asking || error !== undefined || !code ? (
+        <NoCodeYet asking={asking} error={error} shape={QR_SHAPE} />
+      ) : expired ? (
+        <RanOut />
+      ) : (
+        <div className="flex gap-6 sm:items-start max-sm:flex-col">
+          <QrOnWhite text={link!} />
+          <div className="w-full min-w-0 space-y-3">
+            <ol className="list-decimal space-y-2 pl-5 text-sm marker:text-muted-foreground">
+              {steps.map(step => (
+                <li key={step}>{step}</li>
+              ))}
+            </ol>
+            {hint !== undefined && <p className="text-xs text-muted-foreground">{hint}</p>}
+            {code.wifiUrl !== undefined && !byWifi && (
+              <p className="text-xs">
+                <LinkPress onClick={() => setByWifi(true)}>Not on Tailscale? Use this Wi-Fi.</LinkPress>
               </p>
-              <Waiting>{`Waiting for the ${camera ? 'phone' : 'other computer'}… works once, for ${clock(left)}.`}</Waiting>
-            </div>
+            )}
+            {code.numberUrl !== undefined && !byNumber && (
+              <p className="text-xs">
+                <LinkPress onClick={() => setByNumber(true)}>Phone does not open it? Use the number.</LinkPress>
+              </p>
+            )}
+            <p className="text-xs text-muted-foreground">
+              {camera ? 'No camera? ' : ''}
+              <CopyLink text={link!} />
+              {camera ? ' and send it to the phone.' : ' to paste it there.'}
+              {openHere && (
+                <>
+                  {' '}
+                  {/* The code is spent by the tab it opens: it leaves the page with the press. */}
+                  <a href={link} target="_blank" rel="noreferrer" className="focus-ring inline-flex items-center gap-1 rounded-sm text-primary hover:underline" onClick={onClose}>
+                    Let this browser in instead
+                    <ExternalLink className="size-3.5" aria-hidden />
+                  </a>
+                </>
+              )}
+            </p>
+            <Waiting>{`Waiting for the ${camera ? 'phone' : 'other computer'}… works once, for ${clock(left)}.`}</Waiting>
           </div>
-        )}
-        <div className="flex justify-end gap-2">
-          {!asking && (joined !== undefined || expired || error !== undefined || !code) && (
-            <Button size="sm" variant="outline" onClick={() => void again()}>
-              <RotateCw className="h-3.5 w-3.5" aria-hidden />
-              {joined !== undefined ? 'Add another' : 'New code'}
-            </Button>
-          )}
-          <Button size="sm" variant={joined !== undefined ? 'default' : 'ghost'} onClick={onClose}>
-            {joined !== undefined ? 'Done' : 'Cancel'}
-          </Button>
         </div>
-      </div>
-    </Dialog>
+      )}
+      {/* Cancel before the other press; once joined, Done is the press the page ends on, last. */}
+      <Presses>
+        {joined === undefined && (
+          <Button variant="ghost" onClick={onClose}>
+            Cancel
+          </Button>
+        )}
+        {!asking && (joined !== undefined || expired || error !== undefined || !code) && (
+          <Button variant="secondary" disabled={down} onClick={() => void again()}>
+            <RotateCw className="size-4" aria-hidden />
+            {joined !== undefined ? 'Add another' : 'New code'}
+          </Button>
+        )}
+        {joined !== undefined && <Button onClick={onClose}>Done</Button>}
+      </Presses>
+    </div>
   )
 }
 
-/** One numbered step. */
-function Step({ n, children }: { n: number; children: ReactNode }) {
+/** The QR code on white with room around it, in either theme: a camera finds a code by its quiet edge. */
+function QrOnWhite({ text }: { text: string }) {
   return (
-    <li className="flex gap-2">
-      <span aria-hidden className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-[var(--color-primary)] text-[11px] font-semibold text-primary-foreground">
-        {n}
-      </span>
-      <span>{children}</span>
-    </li>
+    <div className="shrink-0 rounded-lg bg-white p-4">
+      <QrCode text={text} label="The code a new device scans" />
+    </div>
   )
 }
 
@@ -292,9 +309,7 @@ function Step({ n, children }: { n: number; children: ReactNode }) {
 function CopyLink({ text }: { text: string }) {
   const [copied, setCopied] = useState(false)
   return (
-    <button type="button" className="underline" onClick={() => void navigator.clipboard?.writeText(text).then(() => setCopied(true))}>
-      {copied ? 'Copied the link' : 'Copy the link'}
-    </button>
+    <LinkPress onClick={() => void navigator.clipboard?.writeText(text).then(() => setCopied(true))}>{copied ? 'Copied the link' : 'Copy the link'}</LinkPress>
   )
 }
 
@@ -326,6 +341,7 @@ export function useNaming(persons: Persons) {
 
 /** The first time someone else is let in: the person at the page names themselves, the owner. */
 export function WhoAreYou({ title, naming, onType, onConfirm, onClose }: { title: string; naming: { typed: string; error?: string; busy: boolean }; onType: (typed: string) => void; onConfirm: (owner: string) => void; onClose: () => void }) {
+  const down = useOpenAgentDown()
   const name = nameOf(naming.typed)
   const field = useRef<HTMLInputElement>(null)
   // The field is disabled while the name is read and while it is tried; once either ends, it takes the focus.
@@ -342,23 +358,22 @@ export function WhoAreYou({ title, naming, onType, onConfirm, onClose }: { title
         }}
       >
         <div className="space-y-1">
-          <label htmlFor="owner-name" className="text-sm">
+          <label htmlFor="owner-name" className="block text-sm font-medium">
             First, your name?
           </label>
-          <Input id="owner-name" ref={field} disabled={naming.busy} value={naming.typed} onChange={event => onType(event.target.value)} className="h-8 bg-background px-2 text-sm" />
+          <Input id="owner-name" ref={field} disabled={naming.busy} value={naming.typed} onChange={event => onType(event.target.value)} />
           <p className="text-xs text-muted-foreground">You are the owner, the one who invites. The devices already in are yours.</p>
           {naming.typed.trim() !== '' && name === undefined && <p className="text-xs text-danger">{NOT_A_NAME}</p>}
         </div>
         {naming.error !== undefined && <Problem>{naming.error}</Problem>}
-        <div className="flex justify-end gap-2">
-          <Button size="sm" variant="outline" type="button" onClick={onClose}>
+        <PressRow>
+          <Button variant="ghost" type="button" onClick={onClose}>
             Cancel
           </Button>
-          <Button size="sm" type="submit" disabled={naming.busy || name === undefined}>
-            {naming.busy && <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden />}
+          <Button type="submit" loading={naming.busy} disabled={name === undefined || down}>
             Continue
           </Button>
-        </div>
+        </PressRow>
       </form>
     </Dialog>
   )
@@ -390,6 +405,7 @@ export function Invite({
   onCode?: (code: Given | undefined) => void
   onClose: () => void
 }) {
+  const down = useOpenAgentDown()
   const title = `Add person to ${label}`
   const [typed, setTyped] = useState('')
   const field = useRef<HTMLInputElement>(null)
@@ -420,13 +436,13 @@ export function Invite({
             make()
           }}
         >
-          <label htmlFor="invite-name" className="text-xs text-muted-foreground">
+          <label htmlFor="invite-name" className="block text-sm font-medium">
             Their name
           </label>
           <div className="flex gap-2">
-            <Input id="invite-name" ref={field} placeholder="Their name" value={typed} onChange={event => setTyped(event.target.value)} className="h-8 min-w-0 flex-1 bg-background px-2 text-sm" />
+            <Input id="invite-name" ref={field} placeholder="Their name" value={typed} onChange={event => setTyped(event.target.value)} className="min-w-0 flex-1" />
             {(person === undefined || name !== person) && (
-              <Button size="sm" type="submit" disabled={name === undefined || own || asking}>
+              <Button type="submit" disabled={name === undefined || own || asking || down}>
                 Make the code
               </Button>
             )}
@@ -446,7 +462,7 @@ export function Invite({
             {tailscale && <p className="text-xs">{`${label} is on your Tailscale network: ${person} reaches it only once you share it with them in Tailscale (its machine in the Tailscale admin › Share), with Tailscale on their device.`}</p>}
             {qr ? (
               <div className="flex justify-center">
-                <QrCode text={code.url} label="The code a new device scans" />
+                <QrOnWhite text={code.url} />
               </div>
             ) : (
               <CodeCard where={code.where} code={code.code} />
@@ -455,17 +471,13 @@ export function Invite({
               {qr ? (
                 <>
                   {`On their phone: open the camera and point it at the code; OpenAgent on ${label} opens, as them. On their computer: `}
-                  <button type="button" className="underline" onClick={() => setQr(false)}>
-                    show where and the code
-                  </button>
+                  <LinkPress onClick={() => setQr(false)}>show where and the code</LinkPress>
                   {' instead.'}
                 </>
               ) : (
                 <>
                   On their computer: <span className="font-medium">Settings › Devices</span>, then <span className="font-medium">Join with a code</span> (or <span className="font-medium">Add device › Join with a code</span>). {label} is then in their own OpenAgent, as yours, shared with them. On a phone with no computer:{' '}
-                  <button type="button" className="underline" onClick={() => setQr(true)}>
-                    show a QR code
-                  </button>{' '}
+                  <LinkPress onClick={() => setQr(true)}>show a QR code</LinkPress>{' '}
                   instead.
                 </>
               )}
@@ -473,17 +485,18 @@ export function Invite({
             <p role="timer" className="text-xs text-muted-foreground">{`Works once, for ${clock(left)} more.`}</p>
           </>
         )}
-        <div className="flex justify-end gap-2">
+        <PressRow>
           {person !== undefined && !asking && (joined !== undefined || expired || error !== undefined) && (
-            <Button size="sm" variant="outline" onClick={() => void again(person)}>
-              <RotateCw className="h-3.5 w-3.5" aria-hidden />
+            <Button variant="secondary" disabled={down} onClick={() => void again(person)}>
+              <RotateCw className="size-4" aria-hidden />
               New code
             </Button>
           )}
-          <Button size="sm" onClick={onClose}>
+          {/* Until the code is made, Make the code is the press the dialog is for. */}
+          <Button variant={person === undefined || name !== person ? 'secondary' : 'default'} onClick={onClose}>
             Done
           </Button>
-        </div>
+        </PressRow>
       </div>
     </Dialog>
   )

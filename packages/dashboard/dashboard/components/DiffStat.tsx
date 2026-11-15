@@ -12,7 +12,7 @@ import { cn } from '../lib/utils.js'
 export function DiffStat({ added, removed, className, zeros = false }: { added: number; removed: number; className?: string; zeros?: boolean }) {
   const shown = (count: number) => zeros || count > 0
   return (
-    <span className={cn('shrink-0 font-mono text-[10px] tabular-nums', className)}>
+    <span className={cn('shrink-0 text-xs', className)}>
       <span aria-hidden>
         {shown(added) && <span className="text-success">+{added}</span>}
         {shown(added) && shown(removed) && ' '}

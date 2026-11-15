@@ -1,6 +1,7 @@
 import type { ModuleReadInput, ModuleServer, ModuleServerHost } from '@openagt/dashboard/module-server'
 import { readFileStatuses, type FileGitStatus } from './status.js'
-import { CONTEXT_LINES, WHOLE_FILE, readFileChanges, readFileDiff, type FileChange, type FileDiff } from './diff.js'
+import { CONTEXT_LINES } from './confined.js'
+import { WHOLE_FILE, readFileChanges, readFileDiff, type FileChange, type FileDiff } from './diff.js'
 import { checkoutBranch, defaultBranchName, pendingChanges, readAgentChanges, readAgentCommitChanges, readAgentCommitFileDiff, readAgentCommits, readAgentFileDiff, resolveAgentWork, type AgentChanges, type AgentCommit, type FileMark } from './run.js'
 
 // The Changes module's server part: the reads its browser part makes. A read about a run takes the

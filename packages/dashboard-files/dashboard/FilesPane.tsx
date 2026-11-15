@@ -2,12 +2,15 @@ import { useEffect, useRef, useState } from 'react'
 import { ListTree, MoreVertical, Search, X } from 'lucide-react'
 import {
   Button,
+  buttonVariants,
   DropdownMenu,
   DropdownMenuCheckboxItem,
   DropdownMenuContent,
   DropdownMenuTrigger,
   FileIcon,
   PaneActions,
+  PaneNote,
+  RowShapes,
   PaneTitle,
   Tooltip,
   TooltipContent,
@@ -71,13 +74,13 @@ export function fileAt(files: readonly string[], path: string): string | undefin
 /** One opened file's tab: a click shows it, a double click keeps a preview, the cross closes it. */
 function Tab({ tab, shown, onShow, onKeep, onClose }: { tab: OpenTab; shown: boolean; onShow: () => void; onKeep: () => void; onClose: () => void }) {
   return (
-    <div role="tab" aria-selected={shown} className={cn('flex h-6 shrink-0 items-center rounded-md text-[13px] text-muted-foreground hover:bg-accent', shown && 'bg-accent text-foreground')}>
-      <button type="button" title={tab.path} onClick={onShow} onDoubleClick={onKeep} className="flex h-full items-center gap-1.5 pl-2">
-        <FileIcon path={tab.path} className="size-3" />
+    <div role="tab" aria-selected={shown} className={cn('flex h-7 shrink-0 items-center rounded-md text-sm text-muted-foreground hover:bg-accent', shown && 'bg-accent text-foreground')}>
+      <button type="button" title={tab.path} onClick={onShow} onDoubleClick={onKeep} className="flex h-full items-center gap-2 rounded-md pl-2 focus-ring-inset">
+        <FileIcon path={tab.path} />
         <span className={cn('max-w-40 truncate', !tab.kept && 'italic')}>{nameOf(tab.path)}</span>
       </button>
-      <button type="button" aria-label={`Close ${nameOf(tab.path)}`} onClick={onClose} className="flex h-full items-center px-1.5 hover:text-foreground">
-        <X aria-hidden className="size-3" />
+      <button type="button" aria-label={`Close ${nameOf(tab.path)}`} onClick={onClose} className="flex h-full items-center rounded-md px-1.5 hover:text-foreground focus-ring-inset">
+        <X aria-hidden className="size-3.5" />
       </button>
     </div>
   )
@@ -107,7 +110,7 @@ function FilesHeader({ page, tabs, active, tree, onOpen, onSearch, onShowTree }:
     <>
       <PaneTitle>
         {tabs.length === 0 ? (
-          <h2 className="truncate pl-2 text-[13px] text-muted-foreground">Files</h2>
+          <h2 className="truncate pl-2 text-sm font-medium">Files</h2>
         ) : (
           <div ref={tablist} role="tablist" aria-label="Open files" className="flex min-w-0 items-center gap-0.5 overflow-x-auto [scrollbar-width:none]">
             {tabs.map(tab => (
@@ -119,7 +122,7 @@ function FilesHeader({ page, tabs, active, tree, onOpen, onSearch, onShowTree }:
       <PaneActions>
         <Tooltip>
           <TooltipTrigger render={<Button variant="ghost" size="icon-sm" className="shrink-0 text-muted-foreground" aria-label="Search files" onClick={onSearch} />}>
-            <Search className="size-3.5" />
+            <Search className="size-4" />
           </TooltipTrigger>
           <TooltipContent>Search files</TooltipContent>
         </Tooltip>
@@ -141,7 +144,7 @@ function FilesHeader({ page, tabs, active, tree, onOpen, onSearch, onShowTree }:
           <TooltipContent>{tree ? 'Hide the file tree' : 'Show the file tree'}</TooltipContent>
         </Tooltip>
         <DropdownMenu>
-          <DropdownMenuTrigger aria-label="The pane’s settings" className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-muted-foreground hover:bg-accent hover:text-accent-foreground">
+          <DropdownMenuTrigger aria-label="The pane’s settings" className={cn(buttonVariants({ variant: 'ghost', size: 'icon-sm' }), 'shrink-0 text-muted-foreground data-[popup-open]:bg-accent')}>
             <MoreVertical aria-hidden className="size-4" />
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end" className="min-w-[11rem]">
@@ -191,8 +194,8 @@ export function FilesPane({ projectId, agentId, activity, show, context }: Modul
 
   // The project's files (#492), polled so they track edits; with a run selected, the run's own
   // tree instead (#815), polled so they track an agent editing.
-  const { value: projectFiles, loaded: projectLoaded } = usePolled<string[]>(agentId ? null : () => readProject(host, projectId), EMPTY_FILES, 8_000, [projectId, agentId], { remember: projectKey(projectId) })
-  const { value: answer, loaded: treeLoaded, reload: reloadTree } = usePolled<AgentTree | null>(
+  const { value: projectFiles, state: projectState } = usePolled<string[]>(agentId ? null : () => readProject(host, projectId), EMPTY_FILES, 8_000, [projectId, agentId], { remember: projectKey(projectId) })
+  const { value: answer, state: treeState, reload: reloadTree } = usePolled<AgentTree | null>(
     agentId ? () => readTree(host, projectId, agentId) : null,
     null,
     8_000,
@@ -247,20 +250,21 @@ export function FilesPane({ projectId, agentId, activity, show, context }: Modul
   const line = (text: string) => (
     <>
       {header}
-      <p className="p-3 text-xs text-muted-foreground">{text}</p>
+      <PaneNote>{text}</PaneNote>
     </>
   )
-  const waiting = (text: string) => (
+  // The tree while it is read: rows in a row's shape, unseen for the first 200ms.
+  const waiting = (
     <>
       {header}
-      <Waiting className="p-3">{text}</Waiting>
+      <Waiting shape={<RowShapes rows={3} />} className="px-3 py-1" />
     </>
   )
-  if (agentId && (!treeLoaded || runTree?.source === 'pending')) return waiting('Looking for this session’s files…')
+  if (agentId && (treeState === 'unknown' || runTree?.source === 'pending')) return waiting
   // No checkout, no branch and no merge commit on this machine: say so rather than show the
   // project's own files, which reads as "these are the run's".
   if (agentId && runTree?.source === 'gone') return line('This session’s files are gone from this machine: its checkout was reclaimed and it left no branch or merged pull request here.')
-  if (!agentId && !projectLoaded) return waiting('Reading the project’s files…')
+  if (!agentId && projectState === 'unknown') return waiting
   if (files.length === 0) return line('No files here.')
 
   return (
@@ -269,7 +273,7 @@ export function FilesPane({ projectId, agentId, activity, show, context }: Modul
       {/* Beside each other while the pane is wide enough; on a narrow pane, one or the other. */}
       <div ref={setBody} className="flex min-h-0 min-w-0 flex-auto">
         {tree && (
-          <div className={cn('flex min-h-0 flex-col', narrow ? 'w-full' : 'w-2/5 max-w-72 min-w-40 shrink-0 border-r border-border')}>
+          <div className={cn('flex min-h-0 flex-col', narrow ? 'w-full' : 'w-1/2 max-w-72 min-w-48 shrink-0 border-r border-hairline')}>
             <FileTree files={files} caption={runTree ? sourceCaption(runTree) : undefined} shown={active} context={context} filter={filter} onOpen={open} />
           </div>
         )}

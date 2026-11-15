@@ -306,7 +306,7 @@ describe('TicketDetailPage (#1144)', () => {
     onTicket.mockResolvedValue(ticket())
     render(<TicketDetailPage projectId="p1" slug="2026-07-20_do-the-thing.md" />)
     fireEvent.click(await screen.findByRole('button', { name: /tickets/i }))
-    expect(host.openPage).toHaveBeenCalledWith('tickets')
+    expect(host.backToPage).toHaveBeenCalledWith('tickets')
   })
 
   test('a claim naming one of the project\'s runs reads as its session name and opens the run (#1748)', async () => {
@@ -366,7 +366,9 @@ describe('TicketDetailPage (#1144)', () => {
     agents = [{ id: 'plan-run', ask: 'Create tickets/2026-07-20_do-the-thing.plan.md', title: 'Plan the thing', status: 'done', startedAt: '2026-08-29T10:00:00.000Z' }]
     onTicket.mockResolvedValue(ticket({ planned: false }))
     render(<TicketDetailPage projectId="p1" slug="2026-07-20_do-the-thing.md" />)
-    expect((await screen.findByText('Plan the thing')).parentElement!.textContent).toMatch(/^Asked for in Plan the thing · done/)
+    const said = await screen.findByText('Asked for in')
+    expect(said.parentElement!.textContent).toBe('Asked for in Plan the thing')
+    expect(screen.queryByText(/Written in/)).toBeNull()
   })
 
   test('a command that cannot run is named, not shown as a missing ticket', async () => {

@@ -52,11 +52,11 @@ export function TicketEditor({
   const [error, setError] = useState<string | null>(null)
 
   const priorityOk = priority.trim() === '' || (/^\d+$/.test(priority.trim()) && Number(priority) <= 10)
-  const ready = priorityOk && !saving
-  // Pressed with no title: the field says so, and the caret goes there.
-  const [untitled, setUntitled] = useState(false)
+  const untitled = title.trim() === ''
+  // Pressed without a title: the field says it needs one, until it has one.
+  const [askedTitle, setAskedTitle] = useState(false)
   const titleField = useRef<HTMLInputElement>(null)
-  const titleMissing = untitled && title.trim() === ''
+  const priorityField = useRef<HTMLInputElement>(null)
 
   const save = async () => {
     setSaving(true)
@@ -84,29 +84,25 @@ export function TicketEditor({
 
   return (
     <form
-      className="space-y-4"
+      className="max-w-180 space-y-4"
       onSubmit={event => {
         event.preventDefault()
-        if (!ready) return
-        if (title.trim() === '') {
-          setUntitled(true)
+        if (saving) return
+        // What stops the save is said where it is, and the keyboard is taken there.
+        if (untitled) {
+          setAskedTitle(true)
           titleField.current?.focus()
-          return
-        }
-        void save()
+        } else if (!priorityOk) priorityField.current?.focus()
+        else void save()
       }}
     >
-      {workedBy && (
-        <p className="rounded-md border border-border px-3 py-2 text-xs text-muted-foreground">
-          The run “{workedBy}” is working on this ticket and started from it as it was: it may not see this change.
-        </p>
-      )}
+      {workedBy && <p className="text-sm text-muted-foreground">The run “{workedBy}” is working on this ticket and started from it as it was: it may not see this change.</p>}
       {issueLabel && (
-        <p id="ticket-issue-note" className="rounded-md border border-border px-3 py-2 text-xs text-muted-foreground">
+        <p id="ticket-issue-note" className="text-sm text-muted-foreground">
           This ticket follows issue {issueLabel}: when the issue changes, Update tickets writes its title and text again from it. Priority and topics stay as you set them.
         </p>
       )}
-      <div className="space-y-1.5">
+      <div className="space-y-2">
         <Label htmlFor="ticket-title">Title</Label>
         <Input
           ref={titleField}
@@ -114,23 +110,23 @@ export function TicketEditor({
           value={title}
           onChange={event => setTitle(event.target.value)}
           placeholder="What should be done, in a few words"
-          autoFocus
-          aria-invalid={titleMissing}
+          aria-invalid={askedTitle && untitled}
           // The issue's note is said at the two fields it may write again.
-          aria-describedby={[titleMissing && 'ticket-title-error', issueLabel && 'ticket-issue-note'].filter(Boolean).join(' ') || undefined}
+          aria-describedby={[askedTitle && untitled && 'ticket-title-missing', issueLabel && 'ticket-issue-note'].filter(Boolean).join(' ') || undefined}
+          autoFocus
         />
-        {titleMissing && (
-          <p id="ticket-title-error" className="text-xs text-danger">
-            A ticket needs a title.
+        {askedTitle && untitled && (
+          <p id="ticket-title-missing" className="text-xs text-danger">
+            Give the ticket a title.
           </p>
         )}
       </div>
-      <div className="flex gap-3 max-sm:flex-col">
-        <div className="space-y-1.5 sm:w-32">
+      <div className="flex gap-4 max-sm:flex-col">
+        <div className="space-y-2 sm:w-32">
           <Label htmlFor="ticket-priority">Priority</Label>
-          <Input id="ticket-priority" value={priority} onChange={event => setPriority(event.target.value)} inputMode="numeric" placeholder="0–10" aria-invalid={!priorityOk} aria-describedby={priorityOk ? undefined : 'ticket-priority-error'} />
+          <Input ref={priorityField} id="ticket-priority" value={priority} onChange={event => setPriority(event.target.value)} inputMode="numeric" placeholder="0–10" aria-invalid={!priorityOk} aria-describedby={priorityOk ? undefined : 'ticket-priority-error'} />
         </div>
-        <div className="flex-1 space-y-1.5">
+        <div className="flex-1 space-y-2">
           <Label htmlFor="ticket-topics">Topics</Label>
           <Input id="ticket-topics" value={topics} onChange={event => setTopics(event.target.value)} placeholder="ui, install" />
         </div>
@@ -140,14 +136,14 @@ export function TicketEditor({
           Priority is a whole number from 0 to 10, or empty for none.
         </p>
       )}
-      <div className="space-y-1.5">
+      <div className="space-y-2">
         <Label htmlFor="ticket-waiting">Waiting on</Label>
         <Input id="ticket-waiting" value={waiting} onChange={event => setWaiting(event.target.value)} placeholder="Nothing" aria-describedby="ticket-waiting-note" />
         <p id="ticket-waiting-note" className="text-xs text-muted-foreground">
           No agent plans or works the ticket while it waits. Empty it when the wait is over.
         </p>
       </div>
-      <div className="space-y-1.5">
+      <div className="space-y-2">
         <Label htmlFor="ticket-body">Text</Label>
         <Textarea
           id="ticket-body"
@@ -161,7 +157,7 @@ export function TicketEditor({
             event.currentTarget.form?.requestSubmit()
           }}
           rows={14}
-          className="font-mono text-xs"
+          className="font-mono text-sm"
           placeholder={'## TLDR\n\nWhat is wrong or missing, and what done looks like.\n\n## Why it matters\n\n…'}
         />
         <p className="text-xs text-muted-foreground">Markdown. Agents read it as the ticket.</p>
@@ -171,11 +167,11 @@ export function TicketEditor({
           Not saved: {error}
         </p>
       )}
-      <div className="flex justify-end gap-2">
-        <Button type="button" variant="ghost" size="sm" onClick={onCancel} disabled={saving}>
+      <div className="flex justify-end gap-2 pt-2">
+        <Button type="button" variant="ghost" size="lg" onClick={onCancel} disabled={saving}>
           Cancel
         </Button>
-        <Button type="submit" size="sm" disabled={!ready}>
+        <Button type="submit" size="lg" loading={saving}>
           {saving ? 'Saving…' : file === undefined ? 'Create ticket' : 'Save'}
         </Button>
       </div>

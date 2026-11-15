@@ -3,8 +3,8 @@ import { hostname } from 'node:os'
 import { nodeGitRunner, originDefaultBranch, type GitRunner } from '@openagt/agent-data'
 import type { MergeLookup, ModuleServerHost } from '@openagt/dashboard/module-server'
 import { readFileStatuses, type FileGitStatus } from './status.js'
-import { CONTEXT_LINES, parseNumstat, readFileChanges, readFileDiff, type FileDiff } from './diff.js'
-import { safeRepoPath } from './confined.js'
+import { CONTEXT_LINES, safeRepoPath } from './confined.js'
+import { parseNumstat, readFileChanges, readFileDiff, type FileDiff } from './diff.js'
 
 // What a run changed, for the agent page's Changes pane, for as long as git still has it. The run's
 // checkout while it exists; once it is reclaimed, the run's branch, local or on origin; once the

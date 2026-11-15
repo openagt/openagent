@@ -39,6 +39,9 @@
     "test": "tsc -p tsconfig.test.json && node ../../scripts/test-node.mjs --test-timeout=120000 && cd dashboard && vitest run",
     "clean": "rm -rf dist dist-test SKILL.md"
   },
+  "dependencies": {
+    "@openagt/agent-data": "workspace:*"
+  },
   "devDependencies": {
     "@tailwindcss/vite": "^4.0.0",
     "@testing-library/dom": "^10.4.1",

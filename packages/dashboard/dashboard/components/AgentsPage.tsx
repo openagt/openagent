@@ -3,23 +3,24 @@ import { Bot, Check, Loader2, Pencil, Plus, RefreshCw, Trash2 } from 'lucide-rea
 import { onAgentLogins, onAgentsList, sendCopyAgentLogins, sendRemoveAgent, sendSaveAgent, type AgentAccountChoice, type AgentLoginsOn, type AgentRecord, type AgentsView } from '../rpc/agents.js'
 import { DEFAULT_AGENT } from '../../src/client.js'
 import { holdEntry } from '../lib/use-route.js'
-import { usePolled } from '../lib/use-async.js'
-import { cn } from '../lib/utils.js'
+import { usePolled, type ReadState } from '../lib/use-async.js'
 import { useAddGitAccount } from './AddGitAccount.js'
 import { Button } from './ui/button.js'
-import { Card, CardContent, CardHeader, CardTitle } from './ui/card.js'
+import { List, Row } from './ui/list.js'
+import { Section } from './ui/section.js'
 import { Checkbox } from './ui/checkbox.js'
+import { SKILL_TICKS_CLASS, SkillTick } from './ProjectSkills.js'
 import { ConfirmDialog } from './ui/confirm-dialog.js'
 import { Dialog } from './ui/dialog.js'
 import { Input } from './ui/input.js'
 import { Label } from './ui/label.js'
 import { Page } from './Page.js'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select.js'
-import { Skeleton } from './ui/skeleton.js'
+import { RowShapes, Slot } from './ui/slot.js'
 
 // The Agents page (Rom's design): an agent is a name, a set of skills and a set of accounts, made
-// once and used in any project or none. One card per agent, the default first, each edited in
-// place: its name, its skills ticked from the list the Skills page has (and the two every agent
+// once and used in any project or none. One row per agent, the default first, each edited in a
+// dialog over the page: its name, its skills ticked from the list the Skills page has (and the two every agent
 // starts with), and its accounts among the ones the Permissions page knows. The agents are kept
 // in the person's folder (~/.openagent), so every computer that syncs it has them; a computer
 // without an account an agent names runs the agent without it.
@@ -27,10 +28,14 @@ import { Skeleton } from './ui/skeleton.js'
 /** How often the agents are read again while the page is open. */
 const SELDOM_MS = 30_000
 
-/** The agents (a name, skills and accounts each) as the dashboard reads them, remembered across pages so a menu lands whole. */
-export function useAgentsList(): { view: AgentsView | undefined; reload: () => Promise<void> } {
-  const { value, reload } = usePolled<AgentsView | undefined>(onAgentsList, undefined, SELDOM_MS, [], { remember: 'agents' })
-  return { view: value, reload }
+/**
+ * The agents (a name, skills and accounts each) as the dashboard reads them, remembered across
+ * pages and loads so a menu lands whole and the box's rows, which name the agent and count its
+ * skills, are drawn from the first frame.
+ */
+export function useAgentsList(): { view: AgentsView | undefined; state: ReadState; failing: boolean; reload: () => Promise<void> } {
+  const { value, state, failing, reload } = usePolled<AgentsView | undefined>(onAgentsList, undefined, SELDOM_MS, [], { remember: 'agents', stored: true })
+  return { view: value, state, failing, reload }
 }
 
 /** How often the devices are asked how the agents' GitHub accounts stand there. */
@@ -72,13 +77,13 @@ function sameDraft(a: Draft, b: Draft): boolean {
 
 /** The Agents page. */
 export function AgentsPage() {
-  const { view, reload } = useAgentsList()
+  const { view, state, failing, reload } = useAgentsList()
   const { devices, reload: reloadDevices } = useAgentLogins()
   const [adding, setAdding] = useState(false)
   const newAgent = useRef<HTMLButtonElement>(null)
   // The agent just removed: once the list is read without it, its Remove press is gone with its card, and the focus goes to "New agent".
   const removed = useRef<string | undefined>(undefined)
-  // The agent just made: once the list is read with it, the focus goes to its card's Edit.
+  // The agent just made: once the list is read with it, the focus goes to its row's Edit.
   const made = useRef<string | undefined>(undefined)
   const madeEdit = useRef<HTMLButtonElement>(null)
   useEffect(() => {
@@ -97,95 +102,102 @@ export function AgentsPage() {
   return (
     <Page
       title="Agents"
+      count={view && state !== 'unknown' ? view.agents.length : undefined}
       description="An agent is a name, a set of skills and a set of accounts. Pick one under the message box; it works in any project, or in none."
       actions={
-        <Button ref={newAgent} size="sm" disabled={!view || adding} onClick={() => setAdding(true)}>
-          <Plus className="size-3.5" aria-hidden />
+        <Button ref={newAgent} disabled={!view || adding} onClick={() => setAdding(true)}>
+          <Plus className="size-4" aria-hidden />
           New agent
         </Button>
       }
     >
-      {!view ? (
-        <Skeleton className="h-32 w-full" />
-      ) : (
-        <div className="space-y-4">
-          {adding && <AgentEditor view={view} onAccounts={reload} onDone={async saved => (setAdding(false), saved ? ((made.current = saved), changed()) : undefined)} />}
-          {view.agents.map(agent => (
-            <AgentCard key={agent.id} agent={agent} view={view} devices={devices} onChanged={changed} onRemoved={() => void (removed.current = agent.id)} {...(agent.id === made.current ? { editRef: madeEdit } : {})} />
-          ))}
-        </div>
-      )}
+      <Slot of={{ state, value: view, failing }} shape={<RowShapes />}>
+        {view =>
+          view && (
+            <List aria-label="Agents">
+              {view.agents.map(agent => (
+                <AgentRow key={agent.id} agent={agent} view={view} devices={devices} onChanged={changed} onRemoved={() => void (removed.current = agent.id)} {...(agent.id === made.current ? { editRef: madeEdit } : {})} />
+              ))}
+            </List>
+          )
+        }
+      </Slot>
+      {/* Over the page, so it opens at the press even while the list's shape still holds. */}
+      {adding && view && <AgentEditor view={view} onAccounts={reload} onDone={async saved => (setAdding(false), saved ? ((made.current = saved), changed()) : undefined)} />}
     </Page>
   )
 }
 
-/** One agent: its name, skills and accounts, and the presses that edit or remove it; `onRemoved` is told before the list is read again without it. */
-function AgentCard({ agent, view, devices, onChanged, onRemoved, editRef }: { agent: AgentRecord; view: AgentsView; devices: AgentLoginsOn[] | undefined; onChanged: () => Promise<void>; onRemoved: () => void; editRef?: Ref<HTMLButtonElement> }) {
+/**
+ * One agent: its name over what it starts with (its skills and the accounts it works as), and the
+ * presses that edit or remove it; under it, what it goes without and where its GitHub account is.
+ * `onRemoved` is told before the list is read again without it.
+ */
+function AgentRow({ agent, view, devices, onChanged, onRemoved, editRef }: { agent: AgentRecord; view: AgentsView; devices: AgentLoginsOn[] | undefined; onChanged: () => Promise<void>; onRemoved: () => void; editRef?: Ref<HTMLButtonElement> }) {
   const [editing, setEditing] = useState(false)
   const isDefault = agent.id === DEFAULT_AGENT
   // What a skill every agent starts with does is what this one goes without: the skill's own line says it.
   const without = (view.skills[0]?.skills ?? []).filter(skill => !agent.skills.includes(skill.name))
-  const accounts = [
+  const said = [
+    `${agent.skills.length === 0 ? 'No skills' : agent.skills.join(', ')}${agent.projectSkills ? '' : ', no project skills'}`,
     agent.accounts.github !== undefined ? `@${agent.accounts.github} on GitHub` : 'GitHub: whatever the computer uses',
     ...(agent.accounts.claude ? [`Claude: ${agent.accounts.claude.map(id => view.claude.find(account => account.id === id)?.name ?? id).join(', ')}`] : []),
     ...(agent.accounts.codex ? [`Codex: ${agent.accounts.codex.map(id => view.codex.find(account => account.id === id)?.name ?? id).join(', ')}`] : []),
-  ]
+  ].join(' · ')
   return (
-    <Card role="region" aria-label={agent.name}>
-      <CardHeader>
-        <div className="flex items-center gap-2">
-          <Bot className="size-4 shrink-0 text-muted-foreground" aria-hidden />
-          <CardTitle level={2} className="min-w-0 flex-1 truncate text-base">{agent.name}</CardTitle>
-          <Button ref={editRef} size="xs" variant="ghost" aria-label={`Edit ${agent.name}`} onClick={() => setEditing(true)}>
-            <Pencil className="size-3.5" aria-hidden />
-            Edit
-          </Button>
-          {!isDefault && (
-            <ConfirmDialog
-              trigger={
-                <Button size="xs" variant="ghost" className="hover:text-danger" aria-label={`Remove ${agent.name}`}>
-                  <Trash2 className="size-3.5" aria-hidden />
-                  Remove
-                </Button>
-              }
-              title={`Remove ${agent.name}?`}
-              body="Sessions that ran on it keep their records. Nothing is removed from any account."
-              confirmLabel="Remove"
-              onConfirm={async () => {
-                const done = await sendRemoveAgent(agent.id)
-                if (!done.ok) throw new Error(done.error)
-              }}
-              onSuccess={() => {
-                onRemoved()
-                void onChanged()
-              }}
-            />
-          )}
-        </div>
-        {isDefault && <p className="text-xs text-muted-foreground">The agent a session is on unless you pick another.</p>}
-      </CardHeader>
-      <CardContent className="space-y-2 text-sm">
-        <p className="flex flex-wrap items-center gap-1.5">
-          <span className="text-muted-foreground">Skills:</span>
-          {agent.skills.length === 0 ? (
-            <span className="text-muted-foreground">none</span>
-          ) : (
-            agent.skills.map(skill => (
-              <span key={skill} className="rounded-md border border-border px-1.5 py-0.5 text-xs">
-                {skill}
-              </span>
-            ))
-          )}
-          {!agent.projectSkills && <span className="text-muted-foreground">· no project skills</span>}
-        </p>
-        {without.map(skill => (
-          <p key={skill.name} className="text-xs text-muted-foreground">{`Without ${skill.name}, which every agent starts with. ${skill.description}`}</p>
-        ))}
-        <p className="text-muted-foreground">{accounts.join(' · ')}</p>
-        {agent.accounts.github !== undefined && devices && devices.length > 0 && <OnDevices login={agent.accounts.github} devices={devices} onCopied={onChanged} />}
-      </CardContent>
+    <>
+      <Row
+        stackOnPhone
+        leading={<Bot className="size-4" aria-hidden />}
+        title={agent.name}
+        detail={<span title={said}>{said}</span>}
+        {...(isDefault ? { meta: 'The agent a session is on unless you pick another.' } : {})}
+        actions={
+          <>
+            <Button ref={editRef} size="sm" variant="ghost" aria-label={`Edit ${agent.name}`} onClick={() => setEditing(true)}>
+              <Pencil className="size-4" aria-hidden />
+              Edit
+            </Button>
+            {!isDefault && (
+              <ConfirmDialog
+                trigger={
+                  <Button size="sm" variant="ghost" className="hover:text-danger" aria-label={`Remove ${agent.name}`}>
+                    <Trash2 className="size-4" aria-hidden />
+                    Remove
+                  </Button>
+                }
+                title={`Remove ${agent.name}?`}
+                body="Sessions that ran on it keep their records. Nothing is removed from any account."
+                confirmLabel="Remove"
+                onConfirm={async () => {
+                  const done = await sendRemoveAgent(agent.id)
+                  if (!done.ok) throw new Error(done.error)
+                }}
+                onSuccess={() => {
+                  onRemoved()
+                  void onChanged()
+                }}
+              />
+            )}
+          </>
+        }
+      />
+      {without.length > 0 && (
+        // Under the agent's name, on the edge its words start at.
+        <li className="space-y-0.5 pb-2 pr-3 pl-10 text-xs text-muted-foreground">
+          {without.map(skill => (
+            <p key={skill.name}>{`Without ${skill.name}, which every agent starts with. ${skill.description}`}</p>
+          ))}
+        </li>
+      )}
+      {agent.accounts.github !== undefined && devices && devices.length > 0 && (
+        // Under the agent's name, on the edge its words start at.
+        <li className="pb-2 pr-3 pl-10">
+          <OnDevices login={agent.accounts.github} devices={devices} onCopied={onChanged} />
+        </li>
+      )}
       {editing && <AgentEditor agent={agent} view={view} onAccounts={onChanged} onDone={async saved => (setEditing(false), saved ? onChanged() : undefined)} />}
-    </Card>
+    </>
   )
 }
 
@@ -219,7 +231,7 @@ function OnDevices({ login, devices, onCopied }: { login: string; devices: Agent
               <span className="text-muted-foreground">{device.label}: not reached</span>
             ) : on?.state === 'there' ? (
               <>
-                <Check className="size-3 text-success" aria-hidden />
+                <Check className="size-3.5 text-success" aria-hidden />
                 <span>on {device.label}</span>
               </>
             ) : on?.state === 'failed' ? (
@@ -232,8 +244,8 @@ function OnDevices({ login, devices, onCopied }: { login: string; devices: Agent
       })}
       {failed && (
         <li>
-          <Button size="xs" variant="ghost" className="-ml-2 font-normal" disabled={copying} onClick={() => void copy()}>
-            {copying ? <Loader2 className="size-3 animate-spin" aria-hidden /> : <RefreshCw className="size-3" aria-hidden />}
+          <Button size="sm" variant="ghost" className="-ml-2 font-normal" disabled={copying} onClick={() => void copy()}>
+            {copying ? <Loader2 className="size-3.5 animate-spin" aria-hidden /> : <RefreshCw className="size-3.5" aria-hidden />}
             {copying ? 'Copying…' : 'Copy again'}
           </Button>
           {error !== undefined && (
@@ -337,12 +349,11 @@ function AgentEditor({ agent, view, onAccounts, onDone }: { agent?: AgentRecord;
             </p>
           )}
           <div className="flex items-center justify-end gap-2">
-            <Button size="sm" variant="ghost" disabled={busy} onClick={close}>
+            <Button variant="secondary" disabled={busy} onClick={close}>
               Cancel
             </Button>
-            {/* Saving, Save and the name keep the focus a press or Enter left on them: disabled, either would drop it to the page. */}
-            <Button type="submit" form={formId} size="sm" aria-disabled={busy || undefined} className={cn(busy && 'opacity-50')}>
-              {busy && <Loader2 className="size-3.5 animate-spin" aria-hidden />}
+            <Button type="submit" form={formId} loading={busy}>
+              {busy && <Loader2 className="size-4 animate-spin" aria-hidden />}
               {busy ? 'Saving…' : 'Save'}
             </Button>
           </div>
@@ -360,7 +371,7 @@ function AgentEditor({ agent, view, onAccounts, onDone }: { agent?: AgentRecord;
         </div>
       }
     >
-      <form id={formId} noValidate onSubmit={submit} className="space-y-5 pb-1">
+      <form id={formId} noValidate onSubmit={submit} className="space-y-6 pb-1">
         <div className="space-y-1.5">
           <Label htmlFor="agent-name">Name</Label>
           <Input
@@ -390,43 +401,37 @@ function AgentEditor({ agent, view, onAccounts, onDone }: { agent?: AgentRecord;
             </p>
           )}
         </div>
-        <div className="space-y-3">
+        <div className="space-y-4">
           <div>
-            <p className="text-sm font-medium">Skills</p>
+            <p className="text-sm font-semibold">Skills</p>
             <p className="text-xs text-muted-foreground">In a project, every run also gets the branches skill: where its work goes.</p>
           </div>
           {view.skills.map(group => (
-            <section key={group.title} aria-label={group.title} className="space-y-1.5">
-              <h4 className="text-xs font-medium uppercase tracking-wide text-muted-foreground">{group.title}</h4>
-              <div className="grid gap-2 sm:grid-cols-2">
+            <Section key={group.title} title={group.title}>
+              <div className={SKILL_TICKS_CLASS}>
                 {group.skills.map(skill => (
-                  <label key={skill.name} className={cn('flex cursor-pointer items-start gap-2.5 rounded-lg border bg-card p-3 transition-colors', draft.skills.has(skill.name) ? 'border-primary/60' : 'border-border hover:border-muted-foreground/40')}>
-                    <Checkbox checked={draft.skills.has(skill.name)} onCheckedChange={checked => tick('skills', skill.name, checked === true)} disabled={busy} className="mt-0.5" aria-label={skill.name} />
-                    <span className="min-w-0">
-                      <span className="block text-sm font-medium">{skill.name}</span>
-                      <span className="mt-0.5 block text-xs text-muted-foreground">{skill.description}</span>
-                    </span>
-                  </label>
+                  <SkillTick key={skill.name} brief name={skill.name} description={skill.description} checked={draft.skills.has(skill.name)} onChange={on => tick('skills', skill.name, on)} disabled={busy} />
                 ))}
               </div>
-            </section>
+            </Section>
           ))}
           {/* Rom's first level: an agent set to never pick up the project's own skills. A session can still pick them. */}
-          <label className="flex cursor-pointer items-start gap-2.5 text-sm">
-            <Checkbox checked={draft.projectSkills} onCheckedChange={checked => setDraft(d => ({ ...d, projectSkills: checked === true }))} disabled={busy} className="mt-0.5" aria-label="Project skills" />
-            <span className="min-w-0">
-              <span className="block font-medium">Project skills</span>
-              <span className="mt-0.5 block text-xs text-muted-foreground">The skills a project keeps in its repo go to this agent&rsquo;s sessions too. Off, a session starts without them and can still pick them under the box.</span>
-            </span>
-          </label>
+          <SkillTick
+            brief
+            name="Project skills"
+            description="The skills a project keeps in its repo go to this agent’s sessions too. Off, a session starts without them and can still pick them under the box."
+            checked={draft.projectSkills}
+            onChange={on => setDraft(d => ({ ...d, projectSkills: on }))}
+            disabled={busy}
+          />
         </div>
         <div className="space-y-3">
-          <p className="text-sm font-medium">Accounts</p>
+          <p className="text-sm font-semibold">Accounts</p>
           <div className="space-y-1.5">
             <Label htmlFor="agent-github">GitHub</Label>
             <div className="flex flex-wrap items-center gap-2">
               <Select items={githubItems} value={draft.github ?? COMPUTERS} onValueChange={next => setDraft(d => ({ ...d, ...(next ? { github: String(next) } : {}), ...(next ? {} : { github: undefined }) }))} disabled={busy}>
-                <SelectTrigger id="agent-github" size="sm" aria-label="GitHub account" className="min-w-0 max-w-sm grow basis-48">
+                <SelectTrigger id="agent-github" aria-label="GitHub account" className="min-w-0 max-w-sm grow basis-48">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -438,8 +443,8 @@ function AgentEditor({ agent, view, onAccounts, onDone }: { agent?: AgentRecord;
                 </SelectContent>
               </Select>
               {view.github && (
-                <Button type="button" size="sm" variant="outline" disabled={busy} onClick={() => addingAccount.add(view.github!.host)}>
-                  <Plus className="size-3.5" aria-hidden />
+                <Button type="button" variant="secondary" disabled={busy} onClick={() => addingAccount.add(view.github!.host)}>
+                  <Plus className="size-4" aria-hidden />
                   Add account
                 </Button>
               )}
@@ -450,13 +455,15 @@ function AgentEditor({ agent, view, onAccounts, onDone }: { agent?: AgentRecord;
           <AccountPicks label="Claude" accounts={view.claude} picked={draft.claude} busy={busy} onTick={(id, on) => tick('claude', id, on)} onAll={() => setDraft(d => ({ ...d, claude: new Set() }))} />
           <AccountPicks label="Codex" accounts={view.codex} picked={draft.codex} busy={busy} onTick={(id, on) => tick('codex', id, on)} onAll={() => setDraft(d => ({ ...d, codex: new Set() }))} />
         </div>
+        {/* At the scroll's foot while more is under it: what is cut there fades out rather than ending on a line. */}
+        <div aria-hidden className="pointer-events-none sticky bottom-0 -mt-6 h-4 bg-gradient-to-t from-card to-transparent" />
       </form>
     </Dialog>
   )
 }
 
 /**
- * A coding agent's accounts to pick from: "All", ticked while none is picked, is every one of this computer's; one or more ticked, those alone, where the computer has them.
+ * A coding agent's accounts to pick from: "Every account, also new ones", ticked while none is picked, is every one of this computer's, also one added later; one or more ticked, those alone, where the computer has them.
  * This computer's own login, logged out, is offered only while it is picked, and says so.
  */
 function AccountPicks({ label, accounts: all, picked, busy, onTick, onAll }: { label: string; accounts: readonly AgentAccountChoice[]; picked: Set<string>; busy: boolean; onTick: (id: string, on: boolean) => void; onAll: () => void }) {
@@ -468,8 +475,8 @@ function AccountPicks({ label, accounts: all, picked, busy, onTick, onAll }: { l
       <div className="flex flex-wrap gap-3">
         {/* Left by ticking an account, as a radio is left by picking another. */}
         <label className="flex cursor-pointer items-center gap-2 text-sm">
-          <Checkbox checked={picked.size === 0} onCheckedChange={checked => checked === true && onAll()} disabled={busy} aria-label={`All ${label} accounts`} />
-          All
+          <Checkbox checked={picked.size === 0} onCheckedChange={checked => checked === true && onAll()} disabled={busy} aria-label={`Every ${label} account, also new ones`} />
+          Every account, also new ones
         </label>
         {accounts.map(account => {
           const name = account.loggedOut ? `${account.name}, not logged in` : account.name

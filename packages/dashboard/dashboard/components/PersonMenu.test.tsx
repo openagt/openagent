@@ -10,6 +10,11 @@ const logins = vi.hoisted(() => ({ onGitHosts: vi.fn(), sendUseGitHostAccount: v
 vi.mock('../rpc/logins.js', () => logins)
 const backup = vi.hoisted(() => ({ onBackup: vi.fn(), sendBackUpAs: vi.fn() }))
 vi.mock('../rpc/backup.js', () => backup)
+const openPage = vi.hoisted(() => vi.fn())
+vi.mock('../lib/host-services.js', async importOriginal => {
+  const actual = await importOriginal<typeof import('../lib/host-services.js')>()
+  return { ...actual, INERT_HOST_SERVICES: { ...actual.INERT_HOST_SERVICES, openPage } }
+})
 // The menu's theme and notifications rows have their own suites; here they are the rows' names.
 vi.mock('./ThemeSubmenu.js', () => ({ ThemeSubmenu: () => <div role="menuitem">Theme</div> }))
 vi.mock('./NotificationsSubmenu.js', () => ({ NotificationsSubmenu: () => <div role="menuitem">Notifications</div> }))
@@ -110,7 +115,7 @@ describe('PersonMenu: what is missing', () => {
     expect(container.ownerDocument.querySelector('[data-testid="missing-dot"]')).toBeTruthy()
     expect(await screen.findByRole('menuitem', { name: 'Add your GitHub account again…' })).toBeTruthy()
     fireEvent.click(screen.getByRole('menuitem', { name: 'Log Claude Code in…' }))
-    expect(window.location.pathname).toBe('/permissions')
+    expect(openPage).toHaveBeenCalledWith('permissions')
     expect(onSettings).not.toHaveBeenCalled()
   })
 

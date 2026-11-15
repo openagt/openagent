@@ -4,13 +4,16 @@ import { AlertDialog } from '@base-ui/react/alert-dialog'
 import type { CleanupReport } from '../../src/index.js'
 import { sendRemoveProject } from '../rpc/projects.js'
 import { ProjectLabelsContext } from '../lib/project-labels.js'
+import { useMountedModules } from '../lib/use-modules.js'
 import { useAction } from '../lib/use-action.js'
 import { cn } from '../lib/utils.js'
 import { Button } from './ui/button.js'
 import { Checkbox } from './ui/checkbox.js'
+import { BACKDROP_CLASS, DIALOG_POPUP_CLASS, DIALOG_PRESSES_CLASS } from './ui/dialog.js'
 
 const name = 'font-medium text-foreground'
-const POPUP = 'fixed left-1/2 top-1/2 z-50 max-h-[calc(100vh-2rem)] w-[min(28rem,calc(100vw-2rem))] -translate-x-1/2 -translate-y-1/2 overflow-y-auto rounded-lg border border-border bg-card p-5 text-card-foreground shadow-lg'
+/** The question and its report alike: the dialog every question has, its own width on a wide screen. */
+const POPUP = cn(DIALOG_POPUP_CLASS, 'overflow-y-auto md:w-[min(28rem,calc(100vw-2rem))]')
 
 // "Remove project…", asked first. Removing takes the project off the list and deletes nothing,
 // unless the person ticks the box: then OpenAgent's own files in the folder go too. Either way the
@@ -35,6 +38,8 @@ export function RemoveProjectDialog({
   // It opens on Cancel, as the other confirmations do, never on the box that widens the deletion.
   const cancel = useRef<HTMLButtonElement>(null)
   const label = useContext(ProjectLabelsContext).get(projectId)
+  // Only a project that has the scheduler has one to stop.
+  const scheduled = useMountedModules().pages.some(page => page.package === '@openagt/skill-scheduler' && page.projects.includes(projectId))
 
   // Each time it opens the box is unticked and an old error is gone: the menu opens it from
   // outside, so the dialog is not told through its own open-change.
@@ -65,11 +70,11 @@ export function RemoveProjectDialog({
       }}
     >
       <AlertDialog.Portal>
-        <AlertDialog.Backdrop className="fixed inset-0 z-50 bg-black/40 backdrop-blur-[1px]" />
-        <AlertDialog.Popup initialFocus={cancel} className={POPUP}>
-          <AlertDialog.Title className="text-sm font-semibold">{label ? `Remove the project ${label}?` : 'Remove this project?'}</AlertDialog.Title>
-          <AlertDialog.Description className="mt-2 text-xs leading-relaxed text-muted-foreground">
-            It leaves the dashboard&rsquo;s list, and its scheduler stops unless you set it to keep running.{' '}
+        <AlertDialog.Backdrop className={BACKDROP_CLASS} />
+        <AlertDialog.Popup data-overlay="question" initialFocus={cancel} className={POPUP}>
+          <AlertDialog.Title className="text-base font-semibold">{label ? `Remove the project ${label}?` : 'Remove this project?'}</AlertDialog.Title>
+          <AlertDialog.Description className="mt-2 text-sm text-muted-foreground">
+            It leaves the dashboard&rsquo;s list{scheduled && <>, and its scheduler stops unless you set it to keep running</>}.{' '}
             {files ? (
               <>Your files and your commits stay.</>
             ) : (
@@ -82,12 +87,12 @@ export function RemoveProjectDialog({
             )}{' '}
             Add the folder again to bring the project back.
           </AlertDialog.Description>
-          <label className="mt-3 flex cursor-pointer items-start gap-2 text-xs text-foreground">
+          <label className="mt-4 flex cursor-pointer items-start gap-2 text-sm text-foreground">
             <Checkbox checked={files} onCheckedChange={checked => setFiles(checked === true)} disabled={busy} className="mt-0.5" />
             <span>Also delete OpenAgent&rsquo;s files in this folder</span>
           </label>
           {files && (
-            <div className="mt-2 rounded-md border border-border p-3 text-xs leading-relaxed text-muted-foreground">
+            <div className="mt-3 rounded-md border border-hairline p-3 text-sm text-muted-foreground">
               <p>
                 This deletes, on this machine: the agents&rsquo; checkouts in <span className={name}>.branches</span>, the folders{' '}
                 <span className={name}>.openagent</span> (with <span className={name}>hooks.yml</span>, the project&rsquo;s start lines) and{' '}
@@ -108,17 +113,17 @@ export function RemoveProjectDialog({
               </p>
             </div>
           )}
-          {error && <p className="mt-2 text-xs text-danger">{error}</p>}
-          <div className="mt-4 flex justify-end gap-2">
+          {error && <p className="mt-3 text-sm text-danger">{error}</p>}
+          <div className={cn('mt-5 flex justify-end gap-2', DIALOG_PRESSES_CLASS)}>
             <AlertDialog.Close
               ref={cancel}
               render={
-                <Button variant="outline" size="sm" disabled={busy}>
+                <Button variant="secondary" disabled={busy}>
                   Cancel
                 </Button>
               }
             />
-            <Button variant="destructive" size="sm" disabled={busy} onClick={remove} className={cn(busy && 'cursor-progress')}>
+            <Button variant="destructive" loading={busy} onClick={remove}>
               {busy ? 'Removing…' : files ? 'Remove and delete' : 'Remove'}
             </Button>
           </div>
@@ -145,13 +150,13 @@ export function ProjectRemovedReport({ children }: { children: ReactNode }) {
       {children}
       <AlertDialog.Root open={removed !== null} onOpenChange={open => open || setRemoved(null)}>
         <AlertDialog.Portal>
-          <AlertDialog.Backdrop className="fixed inset-0 z-50 bg-black/40 backdrop-blur-[1px]" />
+          <AlertDialog.Backdrop className={BACKDROP_CLASS} />
           {/* The menu that opened the question is gone with the project: the project picker, where the next project is picked, takes the focus. */}
-          <AlertDialog.Popup initialFocus={done} finalFocus={() => document.querySelector<HTMLElement>('[data-project-picker]')} className={POPUP}>
-            <AlertDialog.Title className="text-sm font-semibold">Project removed</AlertDialog.Title>
+          <AlertDialog.Popup data-overlay="question" initialFocus={done} finalFocus={() => document.querySelector<HTMLElement>('[data-project-picker]')} className={POPUP}>
+            <AlertDialog.Title className="text-base font-semibold">Project removed</AlertDialog.Title>
             {report ? (
               <>
-                <AlertDialog.Description className="mt-2 text-xs leading-relaxed text-muted-foreground">
+                <AlertDialog.Description className="mt-2 text-sm text-muted-foreground">
                   It left the dashboard&rsquo;s list. This is what happened to OpenAgent&rsquo;s files in the folder.
                 </AlertDialog.Description>
                 <ReportList title="Deleted" empty="Nothing: there was nothing of OpenAgent&rsquo;s to delete." lines={report.removed} />
@@ -159,12 +164,12 @@ export function ProjectRemovedReport({ children }: { children: ReactNode }) {
                 {report.failed.length > 0 && <ReportList title="Could not be cleaned" lines={report.failed} danger />}
               </>
             ) : (
-              <AlertDialog.Description className="mt-2 text-xs leading-relaxed text-muted-foreground">
+              <AlertDialog.Description className="mt-2 text-sm text-muted-foreground">
                 It left the dashboard&rsquo;s list, and nothing in the folder was deleted. Add the folder again to bring the project back.
               </AlertDialog.Description>
             )}
-            <div className="mt-4 flex justify-end">
-              <AlertDialog.Close ref={done} render={<Button size="sm">Done</Button>} />
+            <div className={cn('mt-5 flex justify-end', DIALOG_PRESSES_CLASS)}>
+              <AlertDialog.Close ref={done} render={<Button>Done</Button>} />
             </div>
           </AlertDialog.Popup>
         </AlertDialog.Portal>
@@ -175,12 +180,12 @@ export function ProjectRemovedReport({ children }: { children: ReactNode }) {
 
 function ReportList({ title, lines, empty, danger = false }: { title: string; lines: string[]; empty?: string; danger?: boolean }) {
   return (
-    <div className="mt-3 text-xs">
+    <div className="mt-4 text-sm">
       <p className={cn('font-medium', danger ? 'text-danger' : 'text-foreground')}>{title}</p>
       {lines.length === 0 ? (
         <p className="mt-1 text-muted-foreground">{empty}</p>
       ) : (
-        <ul className="mt-1 space-y-0.5 text-muted-foreground">
+        <ul className="mt-1 space-y-1 font-mono text-xs text-muted-foreground">
           {lines.map(line => (
             <li key={line} className="break-words">
               {line}

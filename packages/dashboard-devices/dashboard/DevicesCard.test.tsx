@@ -59,8 +59,8 @@ test('this computer and each saved machine: whether it answers, its memory and d
   // The phones: the iPhone, not the computer that got in by itself.
   fireEvent.click(screen.getByText(/1 phone or browser in/))
   expect(host.openSettings).toHaveBeenCalledWith('devices')
-  // The title is a link to Settings › Devices over the page, so it opens in a new tab too.
-  expect(screen.getByRole('link', { name: 'Devices' }).getAttribute('href')).toBe('?settings=devices')
+  // The link at its heading goes to Settings › Devices over the page, so it opens in a new tab too.
+  expect(screen.getByRole('link', { name: 'Settings' }).getAttribute('href')).toBe('?settings=devices')
   // Never a server's SSH: only the door's own status.
   expect(vi.mocked(host.runComputerCommand).mock.calls.map(call => call[0])).toEqual([['status']])
 })

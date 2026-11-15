@@ -75,7 +75,7 @@ describe('the Files pane’s reads (#815)', () => {
     first.unmount()
     readTree.mockReturnValue(new Promise(() => {}) as never)
     render(<FilesPane projectId="p1" agentId="run-1" context={context()} />)
-    expect(screen.queryByText('Looking for this session’s files…')).toBeNull()
+    expect(document.querySelector('[aria-busy]')).toBeNull()
     expect(screen.getByText('notes.md')).toBeTruthy()
   })
 
@@ -112,7 +112,7 @@ describe('the Files pane’s reads (#815)', () => {
   test('a run that is starting says so, and is read again within seconds until its checkout is there', async () => {
     readTree.mockResolvedValue({ source: 'pending' })
     render(<FilesPane projectId="p1" agentId="run-1" context={context()} />)
-    await waitFor(() => expect(screen.getByText('Looking for this session’s files…')).toBeTruthy())
+    expect(await screen.findByText('Loading…')).toBeTruthy()
     readTree.mockResolvedValue({ source: 'checkout', files: ['made-by-run.ts'] })
     // Well before the 8s poll: the starting run's own, sooner read.
     await waitFor(() => expect(screen.getByText('made-by-run.ts')).toBeTruthy(), { timeout: 3_000 })
@@ -144,7 +144,7 @@ describe('the Files pane’s reads (#815)', () => {
     await waitFor(() => expect(readTree.mock.calls.length).toBeGreaterThan(1))
     await new Promise(resolve => setTimeout(resolve, 400))
     expect(screen.getByText('hello.txt')).toBeTruthy()
-    expect(screen.queryByText('Looking for this session’s files…')).toBeNull()
+    expect(document.querySelector('[aria-busy]')).toBeNull()
   })
 
   test('a run whose files are gone says so, instead of showing the project’s own', async () => {
@@ -408,7 +408,7 @@ describe('opening files, as Claude Code on the web does', () => {
     render(<FilesPane projectId="p1" context={context()} />)
     fireEvent.click(await screen.findByTitle('README.md'))
     await waitFor(() => expect(readContent).toHaveBeenCalled())
-    expect(screen.getByText('Reading the file…')).toBeTruthy()
+    expect(await screen.findByText('Loading…')).toBeTruthy()
   })
 
   test('a tab shown again shows its file at once, and a Markdown file shown as its source stays so', async () => {
@@ -421,7 +421,7 @@ describe('opening files, as Claude Code on the web does', () => {
     await waitFor(() => expect(screen.getByText('const a = 1')).toBeTruthy())
     readContent.mockReturnValue(new Promise(() => {}) as never)
     fireEvent.click(within(screen.getAllByRole('tab')[0]!).getByTitle('README.md'))
-    expect(screen.queryByText('Reading the file…')).toBeNull()
+    expect(document.querySelector('[aria-busy]')).toBeNull()
     expect(screen.getByText('# Hello')).toBeTruthy()
   })
 

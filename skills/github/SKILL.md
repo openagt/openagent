@@ -10,7 +10,7 @@ The project's pull requests and issues are on GitHub. This skill is how you reac
 
 ## The command
 
-Run the `github` command inside your checkout, always by its full name: `npx @openagt/skill-github@0.1`. It prints JSON; a refusal exits 1 with a line on stderr; a wrong command line exits 2 with the usage.
+Run the `github` command inside your checkout, always by its full name: `npx @openagt/skill-github@0.1`. It prints JSON; a refusal exits 1 with a line on stderr; a wrong command line exits 2 with what was wrong and a pointer to `--help`.
 
 ## Your pull request
 

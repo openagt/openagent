@@ -1,90 +1,66 @@
-import type { CSSProperties } from 'react'
-import { CommandChip, CommandLine, PmTabs, usePickedCommand } from './commands'
-import { CopiedStatus, copyPress, useCopy } from './copy'
-import { BADGES, kickerStyle, mono } from './ui'
+import type { ReactNode } from 'react'
+import { CommandBox, PmTabs } from './commands'
+import { CheckIcon } from './icons'
+import { BADGES, labelStyle, proseStyle, Screenshot, text } from './ui'
 import { switchInPlace, useDashboardHref } from './ViewToggle'
 
-const commentStyle: CSSProperties = { color: '#859289' }
-
-function Badge({ label, copied }: { label: string; copied: boolean }) {
+/** A label beside its command; on a phone, over it. */
+function Labelled({ label, children }: { label: string; children: ReactNode }) {
   return (
-    <span
-      className={'try-badge' + (copied ? ' copied' : '')}
-      style={{
-        marginLeft: 'auto',
-        position: 'relative',
-        background: '#14181b',
-        color: '#d3c6aa',
-        fontWeight: 600,
-        fontSize: 10,
-        letterSpacing: '0.1em',
-        textTransform: 'uppercase',
-        borderRadius: 5,
-        padding: '4px 9px',
-        transition: 'opacity 0.15s',
-        pointerEvents: 'none',
-        userSelect: 'none',
-      }}
-    >
-      {label}
+    <span className="labelled" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px 12px', maxWidth: '100%' }}>
+      <span style={labelStyle}>{label}</span>
+      {children}
     </span>
   )
 }
 
 export function Hero() {
-  const tryCopy = useCopy()
-  const tryCommand = usePickedCommand('try')
   const dashboardHref = useDashboardHref()
 
   return (
     <header
       id="top"
+      className="hero"
       style={{
-        maxWidth: 1120,
+        maxWidth: 'var(--container)',
         margin: '0 auto',
-        padding: 'clamp(32px, 6vw, 56px) clamp(14px, 4vw, 24px) 32px',
+        // Its top in styles.css: on a wide screen it starts right under the logo's row.
+        paddingInline: 'var(--space-gutter)',
+        paddingBottom: 32,
         textAlign: 'center',
         display: 'flex',
         flexDirection: 'column',
         alignItems: 'center',
-        gap: 20,
+        gap: 12,
       }}
     >
-      <div
+      <ul
+        className="claims"
         style={{
+          margin: 0,
+          padding: 0,
+          listStyle: 'none',
           display: 'flex',
-          gap: 8,
           flexWrap: 'wrap',
           justifyContent: 'center',
-          fontSize: 12,
-          fontFamily: mono,
+          ...text('sm'),
+          color: 'var(--muted-foreground)',
         }}
       >
-        {BADGES.map(([label, color]) => (
-          <span
-            key={label}
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: 7,
-              border: '1px solid #475258',
-              borderRadius: 999,
-              padding: '5px 12px',
-              color,
-            }}
-          >
-            <span style={{ width: 6, height: 6, borderRadius: '50%', background: color }} />
+        {BADGES.map(([label]) => (
+          <li key={label} style={{ display: 'flex', alignItems: 'center', whiteSpace: 'nowrap' }}>
+            <CheckIcon />
             {label}
-          </span>
+          </li>
         ))}
-      </div>
+      </ul>
 
       <h1
         style={{
           margin: 0,
-          fontSize: 'clamp(32px, 11vw, 68px)',
-          lineHeight: 1.08,
-          fontWeight: 700,
+          fontSize: 'var(--text-hero)',
+          lineHeight: 'var(--leading-hero)',
+          fontWeight: 600,
           letterSpacing: '-0.02em',
         }}
       >
@@ -94,10 +70,11 @@ export function Hero() {
             display: 'table',
             textDecoration: 'none',
             position: 'relative',
-            margin: '0 auto 0px',
-            fontSize: 'clamp(26px, 6vw, 42px)',
+            margin: '0 auto',
+            fontSize: 'var(--text-struck)',
+            lineHeight: 'var(--leading-struck)',
             fontWeight: 500,
-            color: '#9da9a0',
+            color: 'var(--muted-foreground)',
           }}
         >
           Babysit AI
@@ -106,12 +83,11 @@ export function Hero() {
       </h1>
       <p
         style={{
-          margin: '-10px 0 0',
-          fontSize: 'clamp(19px, 4.5vw, 25px)',
+          margin: 0,
+          ...text('lg'),
           fontWeight: 500,
-          lineHeight: 1.45,
-          color: '#d3c6aa',
-          maxWidth: 680,
+          color: 'var(--foreground)',
+          maxWidth: 'var(--measure)',
           textWrap: 'pretty',
         }}
       >
@@ -120,122 +96,57 @@ export function Hero() {
       <a
         href={dashboardHref}
         onClick={switchInPlace}
-        className="dashboard-cta"
-        style={{
-          display: 'inline-flex',
-          alignItems: 'center',
-          gap: 10,
-          marginTop: 6,
-          background: '#a7c080',
-          color: '#232a2e',
-          borderRadius: 12,
-          padding: '14px 30px',
-          fontSize: 19,
-          fontWeight: 600,
-        }}
+        className="press press-primary dashboard-cta"
+        style={{ marginTop: 4 }}
       >
         Dashboard <span aria-hidden>→</span>
       </a>
 
       <div
         className="try-commands"
-        style={{
-          display: 'flex',
-          flexDirection: 'column',
-          gap: 16,
-          alignItems: 'center',
-          marginTop: 18,
-          maxWidth: '100%',
-        }}
+        style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8, marginTop: 12, maxWidth: '100%' }}
       >
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 7, alignItems: 'center', maxWidth: '100%' }}>
-          <span style={kickerStyle}>Try:</span>
-          <div
-            className="try-box"
-            style={{
-              maxWidth: '100%',
-              boxSizing: 'border-box',
-              background: '#232a2e',
-              border: '1.5px solid #a7c080',
-              boxShadow: '0 0 0 4px rgba(167, 192, 128, 0.12)',
-              borderRadius: 12,
-              overflow: 'hidden',
-              textAlign: 'left',
-            }}
-          >
-            <div
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: 4,
-                padding: '7px 8px',
-                background: '#2d353b',
-                borderBottom: '1px solid #3d484d',
-              }}
-            >
-              <PmTabs />
-              <Badge label={tryCopy.copied ? 'copied!' : 'copy'} copied={tryCopy.copied} />
-            </div>
-            <div
-              className="copy-box"
-              {...copyPress(`Copy ${tryCommand}`, (e) => tryCopy.copy(tryCommand, e))}
-              style={{
-                position: 'relative',
-                cursor: 'pointer',
-                display: 'flex',
-                flexDirection: 'column',
-                gap: 7,
-                padding: '14px clamp(12px, 3vw, 20px)',
-                fontFamily: mono,
-                fontSize: 'clamp(11px, 3.4vw, 15px)',
-              }}
-            >
-              <CommandLine command="try" after={<span style={commentStyle}># One-shot (no install)</span>} />
-            </div>
-            <CopiedStatus copied={tryCopy.copied} />
-          </div>
+        <PmTabs />
+        <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'center', gap: '8px 32px', maxWidth: '100%' }}>
+          <Labelled label="Try:">
+            <CommandBox command="try" size="large" after={<span style={{ color: 'var(--muted-foreground)' }}># One-shot (no install)</span>} />
+          </Labelled>
+          <Labelled label="Or install:">
+            <CommandBox command="install" size="small" />
+          </Labelled>
         </div>
-        <p
-          style={{
-            margin: 0,
-            fontSize: 14,
-            color: '#9da9a0',
-            display: 'flex',
-            alignItems: 'center',
-            gap: 10,
-            flexWrap: 'wrap',
-            justifyContent: 'center',
-            maxWidth: '100%',
-          }}
-        >
-          Or install:
-          <CommandChip command="install" />
-        </p>
+      </div>
+
+      <div style={{ width: '100%', marginTop: 12 }}>
+        <Screenshot
+          name="run"
+          first
+          alt="The OpenAgent dashboard: an agent's run asks which way to go, its recommended answer picked, beside the project's pages and runs."
+        />
       </div>
 
       <div
         style={{
-          marginTop: 16,
-          paddingTop: 8,
+          marginTop: 32,
           width: '100%',
-          maxWidth: 1056,
+          maxWidth: 'var(--container)',
           boxSizing: 'border-box',
           display: 'grid',
           gridTemplateColumns: 'repeat(auto-fit, minmax(min(300px, 100%), 1fr))',
-          gap: 48,
+          gap: 'var(--space-items) var(--space-columns)',
           textAlign: 'left',
         }}
       >
         <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-          <span style={kickerStyle}>What is it?</span>
-          <p style={{ margin: 0, fontSize: 15.5, lineHeight: 1.7, color: '#9da9a0', textWrap: 'pretty' }}>
+          <span style={labelStyle}>What is it?</span>
+          <p style={{ ...proseStyle, color: 'var(--muted-foreground)' }}>
             It turns AI agents into autonomous teammates that handle work end-to-end — while you stay in control of key
             decisions.
           </p>
         </div>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-          <span style={kickerStyle}>Any software</span>
-          <p style={{ margin: 0, fontSize: 15.5, lineHeight: 1.7, color: '#9da9a0', textWrap: 'pretty' }}>
+          <span style={labelStyle}>Any software</span>
+          <p style={{ ...proseStyle, color: 'var(--muted-foreground)' }}>
             (Semi-)autonomously build anything from simple web apps to complex software.
           </p>
         </div>

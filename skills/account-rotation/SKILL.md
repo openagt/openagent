@@ -11,7 +11,7 @@ A person can give a coding agent several accounts. Runs started with `@openagt/a
 Run the `account-rotation` command, always by its full name: `npx @openagt/skill-account-rotation@0.1`. It prints one JSON document; a refusal exits 1 with why on stderr; a wrong command line exits 2. Change the accounts only when the person asks.
 
 ```
-npx @openagt/skill-account-rotation@0.1 list                         {"claude":[…],"codex":[…]}, each in the order runs try them
+npx @openagt/skill-account-rotation@0.1 list                         {"claude":[…],"codex":[…],"notInstalled":[…]}, each in the order runs try them
 npx @openagt/skill-account-rotation@0.1 usage                        how full each account is now, where it can be read; can take 20 seconds
 npx @openagt/skill-account-rotation@0.1 add <claude|codex> <name>    start adding a new account, last in the order; answers at once
 npx @openagt/skill-account-rotation@0.1 adding                       {"claude":{…},"codex":{…}}, how adding stands
@@ -23,7 +23,7 @@ npx @openagt/skill-account-rotation@0.1 use-first <claude|codex> <name>
                                                                      the account runs try first from now on
 ```
 
-`remove` and `use-first` answer with that agent's list. An account in a list has `name`, `own` (true for the person's own login, which cannot be removed), and, when known, `who` (who a login the person gave no name is: show it, but commands take `name`), `signedOut` (the agent has no login of the person's: runs skip it while another account is there), `computer` (the computer the person's own login is on), `from` (on a server, the person's computer that handed it over), `comesBack` (`remove` refuses it: removed here it would only be handed over again, so it is removed on that computer), `limitedUntil` (epoch milliseconds, no run picks it before then) and `windows` (how full it was on its last run; `usage` says now: `windows` shortest first, and `at`, epoch milliseconds, when that is still from a last run).
+`notInstalled` names the agents whose program this computer does not have: an account of one cannot be added until it is installed. `remove` and `use-first` answer with that agent's list. An account in a list has `name`, `own` (true for the person's own login, which cannot be removed), and, when known, `who` (who a login the person gave no name is: show it, but commands take `name`), `signedOut` (the agent has no login of the person's: runs skip it while another account is there), `computer` (the computer the person's own login is on), `from` (on a server, the person's computer that handed it over), `comesBack` (`remove` refuses it: removed here it would only be handed over again, so it is removed on that computer), `limitedUntil` (epoch milliseconds, no run picks it before then) and `windows` (how full it was on its last run; `usage` says now: `windows` shortest first, and `at`, epoch milliseconds, when that is still from a last run).
 
 `add` starts the sign-in and answers at once; it goes on by itself for up to 10 minutes. Tell the person to sign in to the account being added, not one they are already signed in to. Then read `adding` until that agent's answer has no `adding`: `{"adding":{"name":…}}` while it goes, with `url` once there is a page to sign in at, and `{"failed":…}` if it did not go through. Then the account is in `list`.
 

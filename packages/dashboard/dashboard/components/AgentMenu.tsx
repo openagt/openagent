@@ -1,9 +1,11 @@
-import { Bot, Check, ChevronDown, Settings2 } from 'lucide-react'
+import { useContext } from 'react'
+import { Bot, Check, Settings2 } from 'lucide-react'
 import type { AgentRecord } from '../rpc/agents.js'
 import { DEFAULT_AGENT } from '../../src/client.js'
-import { openAgents } from '../lib/use-route.js'
+import { AGENTS_PAGE } from '../lib/use-route.js'
+import { HostServicesContext, INERT_HOST_SERVICES } from '../lib/host-services.js'
 import { cn } from '../lib/utils.js'
-import { RowSaid, rowButtonClass } from './ui/row-item.js'
+import { RowSaid, rowButtonClass, RowChevron } from './ui/row-item.js'
 import { useAgentName } from './AgentsPage.js'
 import { Tooltip, TooltipContent, TooltipTrigger } from './ui/tooltip.js'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuGroup, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from './ui/dropdown-menu.js'
@@ -15,6 +17,7 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuGroup, DropdownMenuItem,
  * so the name lands whole.
  */
 export function AgentMenu({ agents, picked, busy, onPick }: { agents: readonly AgentRecord[] | undefined; picked: string | undefined; busy: boolean; onPick: (id: string) => void }) {
+  const services = useContext(HostServicesContext) ?? INERT_HOST_SERVICES
   if (!agents) return null
   const on = agents.find(agent => agent.id === picked) ?? agents[0]
   if (!on) return null
@@ -23,9 +26,9 @@ export function AgentMenu({ agents, picked, busy, onPick }: { agents: readonly A
     <DropdownMenu>
       <Tooltip>
         <TooltipTrigger render={<DropdownMenuTrigger type="button" disabled={busy} aria-label={`Agent: ${on.name}`} className={rowButtonClass} />}>
-          <Bot className="h-3.5 w-3.5 shrink-0" aria-hidden />
+          <Bot className="size-4 shrink-0" aria-hidden />
           <span className="max-w-32 truncate">{on.name}</span>
-          <ChevronDown className="h-3 w-3 shrink-0 opacity-70" aria-hidden />
+          <RowChevron />
         </TooltipTrigger>
         <TooltipContent>{said}</TooltipContent>
       </Tooltip>
@@ -42,7 +45,7 @@ export function AgentMenu({ agents, picked, busy, onPick }: { agents: readonly A
           ))}
         </DropdownMenuGroup>
         <DropdownMenuSeparator />
-        <DropdownMenuItem onClick={openAgents}>
+        <DropdownMenuItem onClick={() => services.openPage(AGENTS_PAGE)}>
           <Settings2 className="h-3.5 w-3.5 shrink-0 opacity-70" aria-hidden />
           Manage agents…
         </DropdownMenuItem>
@@ -60,7 +63,7 @@ export function AgentOff({ agent }: { agent: string | undefined }) {
   if (name === undefined) return null
   return (
     <RowSaid tip={`This session is on the agent ${name}: its skills and accounts`}>
-      <Bot className="h-3.5 w-3.5 shrink-0" aria-hidden />
+      <Bot className="size-4 shrink-0" aria-hidden />
       <span className="sr-only">Agent: </span>
       <span className="max-w-32 truncate">{name}</span>
     </RowSaid>

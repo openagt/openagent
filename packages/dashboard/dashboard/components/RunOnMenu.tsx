@@ -1,11 +1,11 @@
-import { Check, ChevronDown, Laptop, Plus, type LucideIcon } from 'lucide-react'
+import { Check, Laptop, Plus, type LucideIcon } from 'lucide-react'
 import type { Machine } from '../lib/machines.js'
 import type { MachineStatus } from '../lib/use-machine-status.js'
 import { thisMachineName } from '../lib/this-machine.js'
 import { machineKind, machineName, reachedByLine } from '../../src/client.js'
 import { MACHINE_ICONS, MachineMark } from './MachineMark.js'
 import { cn } from '../lib/utils.js'
-import { rowButtonClass } from './ui/row-item.js'
+import { rowButtonClass, RowChevron } from './ui/row-item.js'
 import { OptionLabel } from './ui/option-label.js'
 import { Tooltip, TooltipTrigger, TooltipContent } from './ui/tooltip.js'
 import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuGroup, DropdownMenuItem, DropdownMenuLabel } from './ui/dropdown-menu.js'
@@ -53,16 +53,15 @@ function wordsOf(machine: Machine): string {
   return kind === 'shared' ? `${place}. Runs use your own logins.` : place
 }
 
-/** The target in words, as the row above the box draws it: its icon, with a dot when it is not this machine, and its name. */
+/** The target in words, as the row above the box draws it: its icon, with a dot when it is not this machine, and its name. The menu adds its chevron. */
 export function RunOnWords({ icon: Icon, elsewhere, label }: { icon: LucideIcon; elsewhere: boolean; label: string }) {
   return (
     <>
       <span className="relative flex shrink-0">
-        <Icon className="h-3.5 w-3.5" aria-hidden />
+        <Icon className="size-4 shrink-0" aria-hidden />
         {elsewhere && <span className="absolute -right-0.5 -top-0.5 h-1.5 w-1.5 rounded-full bg-[var(--color-primary)]" />}
       </span>
       <span className="truncate">{label}</span>
-      <ChevronDown className="h-3 w-3 shrink-0 opacity-70" aria-hidden />
     </>
   )
 }
@@ -90,6 +89,7 @@ export function RunOnMenu({ connection, busy }: { connection: ConnectionControl;
           }
         >
           <RunOnWords icon={Icon} elsewhere={!onThisMachine} label={summary} />
+          <RowChevron />
         </TooltipTrigger>
         <TooltipContent>{`Run on — ${selectedMachine?.label ?? here}`}</TooltipContent>
       </Tooltip>

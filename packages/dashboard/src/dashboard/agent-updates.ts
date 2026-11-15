@@ -1,11 +1,14 @@
 import { execFile } from 'node:child_process'
 import { DRIVERS, type DriverName } from '../driver-names.js'
 import type { ModelsSource } from './models.js'
+import { PACKAGE_NAME, updateCommand } from '../cli/update-check.js'
+import { openagentVersion } from '../version.js'
 
 // Whether a coding agent on this computer is behind its newest version: the version its program
 // says, against the one npm's `latest` names for its package. Each agent updates itself by its own
 // `update` command, which takes the way it was installed (its own installer, npm, a package
-// manager), so nothing here guesses that.
+// manager), so nothing here guesses that. And whether OpenAgent itself is: the version running
+// against npm's `latest`, with the command that updates the copy that runs, which a person types.
 
 /** Each coding agent's program, and the npm package its versions come out under. */
 const CLIS: Record<DriverName, { bin: string; pkg: string }> = {
@@ -24,6 +27,15 @@ export interface AgentUpdate {
   agent: DriverName
   installed: string
   latest: string
+  /** Its update is running now, pressed in any tab or on any computer: each says "Updating…". */
+  updating?: true
+}
+
+/** A newer OpenAgent than the one running here: the two versions, and the command that updates this copy. */
+export interface OpenAgentUpdate {
+  installed: string
+  latest: string
+  command: string
 }
 
 /** What an update did: the version now on this computer, or what the agent said when it failed. */
@@ -39,12 +51,16 @@ export interface AgentUpdatesOptions {
   /** The version npm's `latest` names for `pkg`. */
   latest?: (pkg: string) => Promise<string>
   now?: () => number
+  /** The version of OpenAgent running here. */
+  version?: string
 }
 
 export interface AgentUpdates {
   /** The agents that are behind; one that is not on this computer, or whose versions could not be read, is not. */
   read(): Promise<AgentUpdate[]>
   update(agent: DriverName): Promise<AgentUpdateResult>
+  /** OpenAgent's own, when a newer one is out; none when it is not, or npm does not answer. */
+  openAgent(): Promise<OpenAgentUpdate | undefined>
 }
 
 /** The first version number in what a program said: `2.1.314 (Claude Code)`, `codex-cli 0.166.0`. */
@@ -91,6 +107,8 @@ export function agentUpdates(opts: AgentUpdatesOptions): AgentUpdates {
   const latest = opts.latest ?? npmLatest
   const now = opts.now ?? Date.now
   let kept: { at: number; reading: Promise<AgentUpdate[]> } | undefined
+  let keptOwn: { at: number; reading: Promise<OpenAgentUpdate | undefined> } | undefined
+  const updating = new Set<DriverName>()
 
   const readOne = async (agent: DriverName): Promise<AgentUpdate | undefined> => {
     const { bin, pkg } = CLIS[agent]
@@ -101,20 +119,29 @@ export function agentUpdates(opts: AgentUpdatesOptions): AgentUpdates {
   return {
     read() {
       if (!kept || now() - kept.at >= KEEP_MS) kept = { at: now(), reading: Promise.all(DRIVERS.map(readOne)).then(found => found.filter(update => update !== undefined)) }
-      return kept.reading
+      return kept.reading.then(found => found.map(update => (updating.has(update.agent) ? { ...update, updating: true as const } : update)))
     },
     async update(agent) {
       const { bin } = CLIS[agent]
+      updating.add(agent)
       try {
         await run(bin, ['update'], UPDATE_TIMEOUT_MS)
       } catch (err) {
         return { ok: false, error: lastLine(err) }
       } finally {
+        updating.delete(agent)
         kept = undefined
       }
       opts.models.forget(agent)
       const version = await run(bin, ['--version'], 15_000).then(versionIn, () => undefined)
       return version !== undefined ? { ok: true, version } : { ok: false, error: `${bin} --version said no version after the update` }
+    },
+    openAgent() {
+      if (!keptOwn || now() - keptOwn.at >= KEEP_MS) {
+        const installed = opts.version ?? openagentVersion()
+        keptOwn = { at: now(), reading: latest(PACKAGE_NAME).then(versionIn, () => undefined).then(newest => (newest !== undefined && newer(newest, installed) ? { installed, latest: newest, command: updateCommand() } : undefined)) }
+      }
+      return keptOwn.reading
     },
   }
 }

@@ -349,8 +349,8 @@ test('a command before open refuses, close has nothing to do; a wrong command li
   assert.match(read.err, /browser open <address>/)
   const close = await cli('close')
   assert.deepEqual([close.code, close.out], [0, 'No browser is open.'])
-  assert.equal((await cli('click')).code, 2)
-  assert.equal((await cli('fly', 'away')).code, 2)
+  assert.deepEqual(await cli('click'), { code: 2, out: '', err: 'wrong arguments for click: none\nRun `browser --help` for usage.' })
+  assert.deepEqual(await cli('fly', 'away'), { code: 2, out: '', err: 'unknown command: fly\nRun `browser --help` for usage.' })
 })
 
 test('the address a screen says it shows is one line of a chat, whatever the page did to it', () => {

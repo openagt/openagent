@@ -1,4 +1,5 @@
 import { spawn } from 'node:child_process'
+import { existsSync } from 'node:fs'
 import { mkdir, readFile, realpath, rm, writeFile } from 'node:fs/promises'
 import { request } from 'node:https'
 import { createRequire } from 'node:module'
@@ -115,9 +116,9 @@ function openInBrowser(command: string, url: string): void {
 
 /**
  * `npx @openagt/install`: the dashboard starts at login, at `https://openagent.build`. Asks for
- * the person's password as the administrator, for the name and its port; on a Mac also macOS's
- * own window, to trust the certificate made here. Run again, it does the same, and asks for nothing
- * it no longer needs.
+ * the person's password as the administrator, to point the name at this computer and its port 443
+ * at the dashboard; on a Mac also macOS's own window, to trust the certificate made here. Run
+ * again, it does the same and asks for the password again, but not for what is already in place.
  */
 export async function install(io: InstallIO = defaultIO, env: NodeJS.ProcessEnv = process.env): Promise<number> {
   const platform = PLATFORMS[process.platform]
@@ -183,14 +184,22 @@ export async function uninstall(io: InstallIO = defaultIO, env: NodeJS.ProcessEn
     io.err('OpenAgent installs on a Mac or on Linux only, so there is nothing to take off here.')
     return 1
   }
+  const dir = secureAddressDir(env)
+  // Nothing of an install here: no password is asked for, and nothing is touched.
+  const asks = await platform.adminInstalled()
+  if (!asks && !platform.dashboardInstalled(env) && !existsSync(dir) && !platform.folders(env).some(folder => existsSync(folder))) {
+    io.out('◆ OpenAgent is not installed on this computer: there is nothing to take off.')
+    return 0
+  }
   const left = await platform.leftBehind(env)
   await platform.removeDashboard(env)
-  const dir = secureAddressDir(env)
   await platform.untrust(join(dir, CERTIFICATE_FILE), io, env)
-  const admin = await asAdmin(platform.adminUninstall(), io).then(
-    () => true,
-    () => false,
-  )
+  const admin =
+    !asks ||
+    (await asAdmin(platform.adminUninstall(), io).then(
+      () => true,
+      () => false,
+    ))
   await rm(dir, { recursive: true, force: true })
   for (const folder of platform.folders(env)) await rm(folder, { recursive: true, force: true })
   if (!admin) {

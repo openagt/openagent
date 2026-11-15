@@ -1,11 +1,10 @@
-import { afterEach, describe, expect, test, vi } from 'vitest'
-import { cleanup, fireEvent, screen, waitFor } from '@testing-library/react'
+import { afterEach, describe, expect, test } from 'vitest'
+import { cleanup, fireEvent, screen, waitFor, within } from '@testing-library/react'
 import { forgetRemembered, type ModuleAgent } from '@openagt/dashboard/module'
 import { planTicketPrompt, workOnTicketPrompt } from '../src/module.js'
 import { fakeHost, renderWithHost, type FakeHost } from './test-host.js'
 import { TicketPlanPage } from './TicketPlanPage.js'
 import { TicketDetailPage } from './TicketDetailPage.js'
-import { openFromList } from './lib/back-to-list.js'
 import { openMenu } from '../../dashboard/dashboard/test-utils.js'
 
 afterEach(() => {
@@ -41,29 +40,24 @@ describe('TicketPlanPage (#685)', () => {
     const host = render(PLAN)
     await openMenu(await screen.findByRole('button', { name: 'More' }))
     fireEvent.click(await screen.findByText('Edit ticket'))
-    expect(host.openPage).toHaveBeenCalledWith('tickets', [SLUG], 'p1')
+    expect(host.openPage).toHaveBeenCalledWith('tickets', [SLUG], 'p1', { beside: true })
     cleanup()
     renderWithHost(<TicketDetailPage projectId="p1" slug={SLUG} />, host)
     expect(await screen.findByRole('heading', { name: 'Edit ticket' })).toBeTruthy()
     expect((screen.getByLabelText('Title') as HTMLInputElement).value).toBe('Do the thing')
   })
 
-  test('opened from the list, the Plan tab\'s crumb goes back to the list as it was left', async () => {
-    const back = vi.spyOn(window.history, 'go').mockImplementation(() => {})
+  // The shell carries a return across pages opened beside each other (its App tests): from either
+  // of a ticket's pages, the list the ticket was opened from is reached by Back, as it was left.
+  test('the ticket\'s Plan tab opens beside the ticket, and its crumb "Tickets" goes back to the list', async () => {
     const host = fakeHost({ p1: { [`show ${SLUG} --local`]: { ok: true, ticket: TICKET, plan: PLAN } } })
-    // The list opens the ticket; its Plan tab is a page of its own, one entry further.
-    openFromList([SLUG])
     renderWithHost(<TicketDetailPage projectId="p1" slug={SLUG} />, host)
     fireEvent.click(await screen.findByRole('tab', { name: 'Plan' }))
-    expect(host.openPage).toHaveBeenCalledWith('tickets', [SLUG, 'plan'], 'p1')
+    expect(host.openPage).toHaveBeenCalledWith('tickets', [SLUG, 'plan'], 'p1', { beside: true })
     cleanup()
-    window.history.pushState(null, '', `/p1/tickets/${SLUG}/plan`)
     renderWithHost(<TicketPlanPage projectId="p1" slug={SLUG} />, host)
     fireEvent.click(await screen.findByRole('button', { name: 'Tickets' }))
-    expect(back).toHaveBeenCalledWith(-2)
-    expect(host.openPage).not.toHaveBeenCalledWith('tickets')
-    back.mockRestore()
-    window.history.replaceState(null, '')
+    expect(host.backToPage).toHaveBeenCalledWith('tickets')
   })
 
   test.each([
@@ -72,28 +66,31 @@ describe('TicketPlanPage (#685)', () => {
       fireEvent.click(await screen.findByText('Edit ticket'))
     }, () => fireEvent.click(screen.getByRole('button', { name: 'Cancel' }))],
     ['crumb to the ticket', async () => fireEvent.click(await screen.findByRole('button', { name: 'Do the thing' })), () => {}],
-  ])('opened from the list, the Plan tab\'s %s keeps the way back to the list as it was left', async (_, leave, onTicket) => {
-    const back = vi.spyOn(window.history, 'go').mockImplementation(() => {})
+  ])('the Plan tab\'s %s opens the ticket beside it, whose "Tickets" goes back to the list', async (_, leave, onTicket) => {
     const host = fakeHost({ p1: { [`show ${SLUG} --local`]: { ok: true, ticket: TICKET, plan: PLAN } } })
-    openFromList([SLUG, 'plan'])
     renderWithHost(<TicketPlanPage projectId="p1" slug={SLUG} />, host)
     await leave()
-    expect(host.openPage).toHaveBeenCalledWith('tickets', [SLUG], 'p1')
+    expect(host.openPage).toHaveBeenCalledWith('tickets', [SLUG], 'p1', { beside: true })
     cleanup()
-    window.history.pushState(null, '', `/p1/tickets/${SLUG}`)
     renderWithHost(<TicketDetailPage projectId="p1" slug={SLUG} />, host)
     await screen.findByRole('button', { name: 'Tickets' })
     onTicket()
     fireEvent.click(screen.getByRole('button', { name: 'Tickets' }))
-    expect(back).toHaveBeenCalledWith(-2)
-    expect(host.openPage).not.toHaveBeenCalledWith('tickets')
-    back.mockRestore()
-    window.history.replaceState(null, '')
+    expect(host.backToPage).toHaveBeenCalledWith('tickets')
   })
 
-  test('a ticket with no plan says so rather than showing a blank page', async () => {
-    render(undefined)
-    expect(await screen.findByText(/no plan yet/i)).toBeTruthy()
+  test('a ticket with no plan says so in one line, and offers the press that has an agent write it', async () => {
+    const host = render(undefined)
+    const note = await screen.findByText('No plan yet.')
+    fireEvent.click(within(note.parentElement!).getByRole('button', { name: 'Plan now' }))
+    await waitFor(() => expect(host.startRun).toHaveBeenCalledWith('p1', planTicketPrompt(SLUG)))
+  })
+
+  test('a ticket an agent holds, with no plan, says so and offers no press', async () => {
+    const held = fakeHost({ p1: { [`show ${SLUG} --local`]: { ok: true, ticket: { ...TICKET, locked: true } } } }, { p1: [] })
+    renderWithHost(<TicketPlanPage projectId="p1" slug={SLUG} />, held)
+    const note = await screen.findByText('No plan yet.')
+    expect(within(note.parentElement!).queryByRole('button')).toBeNull()
   })
 
   test('a plan with a known author names its session and opens it (#1511)', async () => {
@@ -132,6 +129,6 @@ describe('TicketPlanPage (#685)', () => {
   test('Back returns to the list, the module\'s own page', async () => {
     const host = render(PLAN)
     fireEvent.click(await screen.findByRole('button', { name: /tickets/i }))
-    expect(host.openPage).toHaveBeenCalledWith('tickets')
+    expect(host.backToPage).toHaveBeenCalledWith('tickets')
   })
 })

@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest'
-import { cleanup, fireEvent, screen, waitFor } from '@testing-library/react'
+import { cleanup, fireEvent, screen, waitFor, within } from '@testing-library/react'
 import { configureFirst } from '../../dashboard/dashboard/test-utils.js'
 import { forgetRemembered } from '@openagt/dashboard/module'
 import type { MountedModules } from '@openagt/dashboard/module/testing'
@@ -81,18 +81,22 @@ describe('TicketsPage (#1144)', () => {
     await screen.findByText('Do the thing')
     const title = screen.getByRole('heading', { level: 1 })
     expect(title.textContent).toBe('Tickets 2/2')
-    expect(title.className).toBe('text-lg font-semibold')
-    const line = title.nextElementSibling!
+    expect(title.className).toBe('text-xl font-semibold')
+    const line = title.closest('header')!.querySelector('p')!
     expect(line.textContent).toBe('Every project\u2019s tickets/ backlog: what agents plan from.')
-    expect(line.className).toBe('mt-1 text-sm text-muted-foreground')
+    expect(line.className).toBe('mt-1 text-sm text-muted-foreground max-md:sr-only')
     // No bar of its own under the header.
     expect(title.closest('.border-b')).toBeNull()
     cleanup()
-    // With one project shown, the line does not say "every".
+    // With one project shown, the line does not say "every", and says when its tickets last came from the tracker;
+    // the project's update and its New ticket, the primary, stand last in the header's row.
     onAllTickets.mockResolvedValue([{ projectId: 'p1', projectName: 'Alpha', tickets: [ticket({ title: 'Do the thing' })] }])
     render()
     await screen.findByText('Do the thing')
-    expect(screen.getByRole('heading', { level: 1 }).nextElementSibling!.textContent).toBe('This project\u2019s tickets/ backlog: what agents plan from.')
+    const header = screen.getByRole('heading', { level: 1 }).closest('header')!
+    expect(header.querySelector('p')!.textContent).toBe('This project\u2019s tickets/ backlog: what agents plan from. No record of an import yet.')
+    const presses = within(header.firstElementChild as HTMLElement).getAllByRole('button').map(button => button.textContent?.trim()).filter(Boolean)
+    expect(presses.slice(-2)).toEqual(['Update tickets', 'New ticket'])
   })
 
   test('reads every project\'s tickets and lists each under its own project heading', async () => {
@@ -113,28 +117,19 @@ describe('TicketsPage (#1144)', () => {
     fireEvent.click(await screen.findByText('Do the thing'))
     // The module's own page for that ticket: where the dashboard's link convention sends a link to it.
     expect(host.openPage).toHaveBeenCalledWith('tickets', ['t.md'], 'p1')
+    expect(screen.getByRole('link', { name: 'Do the thing' }).getAttribute('href')).toBe('/p1/tickets/t.md')
   })
 
-  test("a ticket's page opened from the list goes back to the list as it was, every project's or one's: the browser's Back, after Forward or a reload too", async () => {
+  test("a ticket's page opened from the list goes back to it by the dashboard's return, which is the browser's Back when the list is the entry behind", async () => {
     onAllTickets.mockResolvedValue([{ projectId: 'p1', projectName: 'Alpha', tickets: [ticket()] }])
     render()
-    // The dashboard's address for a module page: the page's segment and path, under its project.
-    const openPage = (segment: string, path?: string[], inProject?: string) => window.history.pushState(null, '', `/${[inProject ?? 'p1', segment, ...(path ?? [])].join('/')}`)
-    host.openPage.mockImplementation(openPage)
     fireEvent.click(await screen.findByText('Do the thing'))
-    expect(window.location.pathname).toBe('/p1/tickets/t.md')
+    expect(host.openPage).toHaveBeenCalledWith('tickets', ['t.md'], 'p1')
+    cleanup()
     const page = fakeHost({ p1: { 'show t.md --local': { ok: true, ticket: { ...ticket(), content: '# Do the thing' } } } })
-    page.openPage.mockImplementation(openPage)
-    // The ticket's page drawn on its history entry: opened from the list, then again after Forward. A reload is the browser story's (smoke-pages).
-    for (const reached of ['opened', 'forward']) {
-      cleanup()
-      renderWithHost(<TicketDetailPage projectId="p1" slug="t.md" />, page, modules())
-      fireEvent.click(await screen.findByRole('button', { name: /tickets/i }))
-      await waitFor(() => expect([reached, window.location.pathname]).toEqual([reached, '/tickets']))
-      window.history.forward()
-      await waitFor(() => expect(window.location.pathname).toBe('/p1/tickets/t.md'))
-    }
-    window.history.replaceState(null, '')
+    renderWithHost(<TicketDetailPage projectId="p1" slug="t.md" />, page, modules())
+    fireEvent.click(await screen.findByRole('button', { name: /tickets/i }))
+    expect(page.backToPage).toHaveBeenCalledWith('tickets')
   })
 
   test('a second visit opens with the last list at once, faded once its fresh read has been out a second', async () => {
@@ -163,8 +158,7 @@ describe('TicketsPage (#1144)', () => {
   test('a project with no tickets still offers its own update, not a dead end', async () => {
     onAllTickets.mockResolvedValue([{ projectId: 'p1', projectName: 'Alpha', tickets: [] }])
     render()
-    expect(await screen.findByText('Alpha')).toBeTruthy()
-    expect(screen.getByRole('button', { name: 'Update tickets' })).toBeTruthy()
+    expect(await screen.findByRole('button', { name: 'Update tickets' })).toBeTruthy()
   })
 
   test('no project with the package says so rather than an empty page', async () => {
@@ -219,7 +213,7 @@ describe('TicketsPage sort (#1144/#1265)', () => {
     twoByPriority()
     render()
     await screen.findByText('Low priority')
-    const titles = screen.getAllByRole('button').map(b => b.textContent)
+    const titles = screen.getAllByRole('link').map(b => b.textContent)
     // 'low.md' is first in the fixture, standing in for "whatever order the server sent" — the
     // default sort must not have reordered it.
     expect(titles.findIndex(t => t?.includes('Low priority'))).toBeLessThan(titles.findIndex(t => t?.includes('High priority')))
@@ -230,10 +224,10 @@ describe('TicketsPage sort (#1144/#1265)', () => {
     render()
     await screen.findByText('Low priority')
     fireEvent.click(screen.getByRole('button', { name: /sort: date/i }))
-    fireEvent.click(await screen.findByRole('menuitem', { name: 'Priority' }))
-    const titles = (await screen.findAllByRole('button')).map(b => b.textContent)
+    fireEvent.click(await screen.findByRole('menuitemcheckbox', { name: 'Priority' }))
+    const titles = (await screen.findAllByRole('link')).map(b => b.textContent)
     expect(titles.findIndex(t => t?.includes('High priority'))).toBeLessThan(titles.findIndex(t => t?.includes('Low priority')))
-    expect(window.location.search).toBe('?sort=priority')
+    expect(host.adjustPage).toHaveBeenLastCalledWith(undefined, 'sort=priority')
   })
 
   test('a priority tie falls back to newest first, not an arbitrary order', async () => {
@@ -251,8 +245,8 @@ describe('TicketsPage sort (#1144/#1265)', () => {
     render()
     await screen.findByText('Newer')
     fireEvent.click(screen.getByRole('button', { name: /sort: date/i }))
-    fireEvent.click(await screen.findByRole('menuitem', { name: 'Priority' }))
-    const titles = (await screen.findAllByRole('button')).map(b => b.textContent)
+    fireEvent.click(await screen.findByRole('menuitemcheckbox', { name: 'Priority' }))
+    const titles = (await screen.findAllByRole('link')).map(b => b.textContent)
     expect(titles.findIndex(t => t?.includes('Newer'))).toBeLessThan(titles.findIndex(t => t?.includes('Older')))
   })
 })
@@ -276,7 +270,7 @@ describe('TicketsPage filters (#1144)', () => {
     await waitFor(() => expect(screen.queryByText('Something else')).toBeNull())
     expect(screen.getByText('Improve the lock')).toBeTruthy()
     expect(screen.getByText('1/2')).toBeTruthy()
-    expect(window.location.search).toBe('?q=lock')
+    expect(host.adjustPage).toHaveBeenLastCalledWith(undefined, 'q=lock')
   })
 
   test('the URL is the initial state: mounting under ?q= starts filtered', async () => {
@@ -293,7 +287,7 @@ describe('TicketsPage filters (#1144)', () => {
     await screen.findByText('Improve the lock')
     fireEvent.click(screen.getByRole('button', { name: 'dx' }))
     await waitFor(() => expect(screen.queryByText('Something else')).toBeNull())
-    expect(window.location.search).toBe('?topics=dx')
+    expect(host.adjustPage).toHaveBeenLastCalledWith(undefined, 'topics=dx')
   })
 
   test('a badge whose topic is capitalised filters by it just the same', async () => {
@@ -305,7 +299,7 @@ describe('TicketsPage filters (#1144)', () => {
     fireEvent.click(screen.getByRole('button', { name: 'UX' }))
     await waitFor(() => expect(screen.queryByText('Something else')).toBeNull())
     expect(screen.getByText('Polish the rail')).toBeTruthy()
-    expect(window.location.search).toBe('?topics=ux')
+    expect(host.adjustPage).toHaveBeenLastCalledWith(undefined, 'topics=ux')
   })
 
   test('clicking the claim marker narrows to claimed tickets', async () => {
@@ -315,7 +309,7 @@ describe('TicketsPage filters (#1144)', () => {
     fireEvent.click(screen.getByText('agent-1'))
     await waitFor(() => expect(screen.queryByText('Improve the lock')).toBeNull())
     expect(screen.getByText('Something else')).toBeTruthy()
-    expect(window.location.search).toBe('?stage=claimed')
+    expect(host.adjustPage).toHaveBeenLastCalledWith(undefined, 'stage=claimed')
   })
 
   test('a project filtered to nothing says so and clears from right there', async () => {
@@ -323,11 +317,11 @@ describe('TicketsPage filters (#1144)', () => {
     window.history.replaceState(null, '', '/tickets?q=zzz-no-match')
     render()
     expect(await screen.findByText(/2 tickets hidden by the current filters/i)).toBeTruthy()
-    // Not the update offer — these tickets exist, they are filtered (#1230's rule, kept).
-    expect(screen.queryByRole('button', { name: 'Update tickets' })).toBeNull()
+    // Not the update offer in the list — these tickets exist, they are filtered (#1230's rule, kept); the page's head keeps its own.
+    expect(screen.getAllByRole('button', { name: 'Update tickets' }).every(button => button.closest('header'))).toBe(true)
     fireEvent.click(screen.getByRole('button', { name: /clear filters/i }))
     expect(await screen.findByText('Improve the lock')).toBeTruthy()
-    expect(window.location.search).toBe('')
+    expect(host.adjustPage).toHaveBeenLastCalledWith(undefined, '')
   })
 })
 
@@ -346,7 +340,7 @@ describe('TicketsPage grouping (#1144)', () => {
     expect(screen.getByText('Alpha')).toBeTruthy()
     expect(screen.getByText('Beta')).toBeTruthy()
     // Cross-project priority order: Beta's 9 above Alpha's 2.
-    const titles = (await screen.findAllByRole('button')).map(b => b.textContent)
+    const titles = (await screen.findAllByRole('link')).map(b => b.textContent)
     expect(titles.findIndex(t => t?.includes('Beta ticket'))).toBeLessThan(titles.findIndex(t => t?.includes('Alpha ticket')))
     // No per-project Update bars in the flat list.
     expect(screen.queryByRole('button', { name: 'Update tickets' })).toBeNull()
@@ -410,7 +404,7 @@ describe('TicketsPage add the shown set to the AI queue', () => {
     expect(host.startRun).not.toHaveBeenCalled()
     // Done, the button says so and rests for this exact set…
     const queued = await screen.findByRole('button', { name: 'Queued: 2 tickets' })
-    expect((queued as HTMLButtonElement).disabled).toBe(true)
+    expect(queued.getAttribute('aria-disabled')).toBe('true')
     // …and narrowing the shown set arms it again, counting the new set.
     fireEvent.change(screen.getByRole('textbox', { name: /search tickets/i }), { target: { value: 'First' } })
     expect(await screen.findByRole('button', { name: 'Add to queue: 1 ticket' })).toBeTruthy()
@@ -516,7 +510,7 @@ describe('TicketsPage queue plans for the shown set', () => {
     expect(handed('p1')).toEqual([[plan('a.md', 7), plan('b.md')]])
     expect(host.startRun).not.toHaveBeenCalled()
     const rested = await screen.findByRole('button', { name: 'Queued: 2 plans' })
-    expect((rested as HTMLButtonElement).disabled).toBe(true)
+    expect(rested.getAttribute('aria-disabled')).toBe('true')
   })
 
   test('a plan already on the queue is not counted, and done, the button names the whole set', async () => {
@@ -534,7 +528,7 @@ describe('TicketsPage queue plans for the shown set', () => {
     render(queued)
     fireEvent.click(await screen.findByRole('button', { name: 'Add to queue: 2 plans' }))
     await waitFor(() => expect(addToQueue).toHaveBeenCalledTimes(1))
-    expect((await screen.findByRole('button', { name: 'Queued: 3 plans' }) as HTMLButtonElement).disabled).toBe(true)
+    expect((await screen.findByRole('button', { name: 'Queued: 3 plans' })).getAttribute('aria-disabled')).toBe('true')
   })
 
   test('planned and claimed tickets are skipped, and the label counts only what is left to plan', async () => {
@@ -563,6 +557,35 @@ describe('TicketsPage queue plans for the shown set', () => {
     render()
     await screen.findByText('First')
     expect(screen.queryByRole('button', { name: /add to queue: (a plan|plans) for/i })).toBeNull()
+    expect(screen.getByRole('button', { name: 'Add to queue: 1 ticket' })).toBeTruthy()
+  })
+
+  test('every shown ticket on the queue already: the ticket add rests as Queued, and their plans are not offered beside it', async () => {
+    onAllTickets.mockResolvedValue([{ projectId: 'p1', projectName: 'Alpha', tickets: [ticket({ file: 'a.md', title: 'First' }), ticket({ file: 'b.md', title: 'Second' })] }])
+    const mounted = modules()
+    mounted.linkActions = [{ ...mounted.linkActions[0]!, done: async () => () => true }]
+    render(mounted)
+    await screen.findByRole('button', { name: 'Queued: 2 tickets' })
+    expect(screen.queryByRole('button', { name: 'Add to queue: 2 plans' })).toBeNull()
+  })
+
+  test('the ticket add pressed: it rests as Queued, and the plan add beside it goes at once', async () => {
+    onAllTickets.mockResolvedValue([{ projectId: 'p1', projectName: 'Alpha', tickets: [ticket({ file: 'a.md', title: 'First' })] }])
+    await controls()
+    render()
+    fireEvent.click(await screen.findByRole('button', { name: 'Add to queue: 1 ticket' }))
+    await screen.findByRole('button', { name: 'Queued: 1 ticket' })
+    expect(screen.queryByRole('button', { name: 'Add to queue: 1 plan' })).toBeNull()
+  })
+
+  test('one shown ticket not on the queue yet: both adds are offered', async () => {
+    onAllTickets.mockResolvedValue([{ projectId: 'p1', projectName: 'Alpha', tickets: [ticket({ file: 'a.md', title: 'First' }), ticket({ file: 'b.md', title: 'Second' })] }])
+    const mounted = modules()
+    mounted.linkActions = [{ ...mounted.linkActions[0]!, done: async () => link => link.href === 'tickets/a.md' }]
+    render(mounted)
+    await screen.findByText('First')
+    expect(await screen.findByRole('button', { name: 'Add to queue: 2 plans' })).toBeTruthy()
+    // The ticket add counts only the one not on the queue yet.
     expect(screen.getByRole('button', { name: 'Add to queue: 1 ticket' })).toBeTruthy()
   })
 
@@ -631,6 +654,18 @@ describe('TicketsPage selection scopes the queue buttons', () => {
     expect(handed('p1')).toEqual([[plan('b.md')]])
   })
 
+  test('after one tick, Select all ticks every shown ticket, and is gone once they all are', async () => {
+    threeTickets()
+    await controls()
+    render()
+    await screen.findByText('First')
+    fireEvent.click(screen.getByRole('checkbox', { name: 'Select Second' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Select all' }))
+    expect(screen.getByText('3 selected')).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'Add to queue: 3 tickets' })).toBeTruthy()
+    expect(screen.queryByRole('button', { name: 'Select all' })).toBeNull()
+  })
+
   test('clearing the selection hands the buttons back to the whole shown set', async () => {
     threeTickets()
     render()
@@ -638,8 +673,20 @@ describe('TicketsPage selection scopes the queue buttons', () => {
     fireEvent.click(screen.getByRole('checkbox', { name: 'Select First' }))
     expect(screen.getByRole('button', { name: 'Add to queue: 1 ticket' })).toBeTruthy()
     fireEvent.click(screen.getByRole('button', { name: 'Clear selection' }))
-    expect(screen.queryByText(/selected/)).toBeNull()
+    // The bar leaves in 120ms.
+    await waitFor(() => expect(screen.queryByText(/selected/)).toBeNull())
     expect(screen.getByRole('button', { name: 'Add to queue: 3 tickets' })).toBeTruthy()
+  })
+
+  test('Escape clears the selection, as Clear selection does', async () => {
+    threeTickets()
+    render()
+    await screen.findByText('First')
+    fireEvent.click(screen.getByRole('checkbox', { name: 'Select First' }))
+    expect(screen.getByText('1 selected')).toBeTruthy()
+    fireEvent.keyDown(window, { key: 'Escape' })
+    await waitFor(() => expect(screen.queryByText(/selected/)).toBeNull())
+    expect(screen.getByRole('checkbox', { name: 'Select First' }).getAttribute('data-checked')).toBeNull()
   })
 
   test('a claimed ticket in the selection is still skipped, and the label counts without it', async () => {
@@ -673,7 +720,7 @@ describe('TicketsPage selection scopes the queue buttons', () => {
     // shown set again and the selection readout goes quiet.
     fireEvent.change(screen.getByRole('textbox', { name: /search tickets/i }), { target: { value: 'First' } })
     await waitFor(() => expect(screen.queryByText('Second')).toBeNull())
-    expect(screen.queryByText('1 selected')).toBeNull()
+    await waitFor(() => expect(screen.queryByText('1 selected')).toBeNull())
     fireEvent.click(screen.getByRole('button', { name: 'Add to queue: 1 ticket' }))
     await screen.findByRole('button', { name: /^Queued:/ })
     expect(handed('p1')).toEqual([[link('First', 'a.md', 7)]])

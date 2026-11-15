@@ -59,6 +59,13 @@ describe('A computer wants to connect', () => {
     await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
   })
 
+  test('the keyboard starts on Deny: Enter at once lets nothing in', async () => {
+    const h = host([ASK])
+    show(h.host)
+    const deny = await screen.findByRole('button', { name: 'Deny' })
+    await waitFor(() => expect(document.activeElement).toBe(deny))
+  })
+
   test('Deny says no; an ask answered elsewhere or run out goes from the page by itself', async () => {
     const h = host([ASK])
     show(h.host)

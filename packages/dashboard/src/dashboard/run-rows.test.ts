@@ -98,15 +98,15 @@ test('a followed run that has a record keeps the record\'s row, in its place, an
   assert.equal(withFollowed([{ ...followed[0]!, remoteKind: 'computer' }], [record], sent)[0]!.remoteKind, 'computer')
 })
 
-test('each run with a pull request is marked with how it stands; one with no request, or one the git host did not list, is left as it was; no request among the runs, nothing is read', async () => {
+test('each run with a pull request is marked with how it stands and its title; one with no request, or one the git host did not list, is left as it was; no request among the runs, nothing is read', async () => {
   const run = (id: string, pr?: number): AgentMeta => ({ id, status: 'done', startedAt: '2026-10-18T13:00:00.000Z', updatedAt: '2026-10-18T13:00:00.000Z', ...(pr !== undefined ? { pr: { number: pr, url: `https://example.com/pull/${pr}` } } : {}) })
   const read: string[] = []
   const states = async (cwd: string) => {
     read.push(cwd)
-    return new Map([['https://example.com/pull/7', 'merged' as const], ['https://example.com/pull/8', 'draft' as const]])
+    return new Map([['https://example.com/pull/7', { state: 'merged' as const, title: 'Dark mode' }], ['https://example.com/pull/8', { state: 'draft' as const, title: 'Login page' }]])
   }
   const marked = await withPrStates('/repo', [run('a', 7), run('b', 8), run('c'), run('d', 99)], states)
-  assert.deepEqual(marked.map(agent => [agent.id, agent.prState]), [['a', 'merged'], ['b', 'draft'], ['c', undefined], ['d', undefined]])
+  assert.deepEqual(marked.map(agent => [agent.id, agent.prState, agent.prTitle]), [['a', 'merged', 'Dark mode'], ['b', 'draft', 'Login page'], ['c', undefined, undefined], ['d', undefined, undefined]])
   assert.ok(!('prState' in marked[2]!) && !('prState' in marked[3]!))
   assert.deepEqual(read, ['/repo'])
   await withPrStates('/repo', [run('e')], states)

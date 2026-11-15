@@ -41,23 +41,37 @@ function scheduling(commands: ModuleScheduledCommand[]): MountedModules {
   }
 }
 
-/** The section headers and entries, top to bottom, as the page shows them: an entry with its number. */
-const shown = () => [...document.querySelectorAll('h3, ol > li')].map(node => (node.tagName === 'H3' ? node.textContent : `${node.querySelector('span')?.textContent} ${node.querySelector('.min-w-0')?.textContent}`))
+/** The section headings with their counts and the entries, top to bottom, as the page shows them: an entry with its number. */
+const shown = () => [...document.querySelectorAll('h2, ul > li')].map(node => (node.tagName === 'H2' ? node.textContent : `${node.querySelector('span')?.textContent} ${node.querySelector('[title]')?.textContent}`))
 const taker = (): string => screen.getByRole('status', { name: 'Who takes from the queue' }).textContent ?? ''
 
 describe('QueuePage', () => {
   test('shows the entries in the order agents take them, numbered across the sections: an unranked entry above the sections is first', async () => {
     show()
     await screen.findByText('Hand-written on top')
-    expect(shown()).toEqual(['No priority', '1. Hand-written on top', 'Priority 8', '2. Urgent', '3. Also urgent', 'Priority 3', '4. Later'])
+    expect(shown()).toEqual(['No priority 1 entry', '1. Hand-written on top', 'Priority 8 2 entries', '2. Urgent', '3. Also urgent', 'Priority 3 1 entry', '4. Later'])
+  })
+
+  test("while the queue is first read, its rows' shapes stand where the entries will, and the entries take their place", async () => {
+    // A browser that kept no list from an earlier visit.
+    localStorage.clear()
+    host = fakeHost({ p1: { '--local --full': FULL } })
+    let answer = () => {}
+    host.runCommand.mockImplementationOnce(() => new Promise(resolve => (answer = () => resolve({ ok: true, output: FULL }))))
+    renderWithHost(<QueuePage projects={[alpha]} projectId={null} path={[]} />, host, NO_MODULES)
+    expect(screen.getByRole('status').textContent).toBe('Loading…')
+    expect(screen.queryByText('Nothing queued.')).toBeNull()
+    answer()
+    await screen.findByText('Hand-written on top')
+    expect(screen.queryByText('Loading…')).toBeNull()
   })
 
   test('says what the two ends of the scale mean: on the page, and on a section at either end', async () => {
     show([{ entry: 'Now', priority: 10 }, { entry: 'Some day', priority: 0 }])
     await screen.findByText('Now')
     expect(screen.getByText(/10 is the most urgent, 0 is only if there is capacity/)).toBeTruthy()
-    expect(screen.getByRole('heading', { level: 3, name: 'Priority 10 most urgent' })).toBeTruthy()
-    expect(screen.getByRole('heading', { level: 3, name: 'Priority 0 only if there is capacity' })).toBeTruthy()
+    expect(screen.getByRole('region', { name: 'Priority 10 most urgent' })).toBeTruthy()
+    expect(screen.getByRole('region', { name: 'Priority 0 only if there is capacity' })).toBeTruthy()
   })
 
   describe('who takes from the queue', () => {
@@ -288,10 +302,16 @@ describe('QueuePage', () => {
     const field = (): HTMLInputElement => screen.getByRole('textbox', { name: 'A task to add to the queue' }) as HTMLInputElement
     const add = (): HTMLButtonElement => screen.getByRole('button', { name: 'Add to queue' }) as HTMLButtonElement
 
-    test('nothing typed adds nothing; a task typed is added with `queue add` at priority 5, trimmed, and the field empties', async () => {
+    test('nothing typed adds nothing: the press says what is missing under the field, with the caret there; a task typed is added with `queue add` at priority 5, trimmed, and the field empties', async () => {
       show()
       await screen.findByText('Urgent')
-      expect(add().disabled).toBe(true)
+      // Among entries, what the press does with a task stands under the field before one is typed; what is missing takes its place.
+      expect(screen.getByText(/^It goes to the end of its priority\./)).toBeTruthy()
+      fireEvent.click(add())
+      expect(host.act).not.toHaveBeenCalled()
+      expect(screen.getByText('Write the task first.')).toBeTruthy()
+      expect(screen.queryByText(/^It goes to the end of its priority\./)).toBeNull()
+      expect(document.activeElement).toBe(field())
       fireEvent.change(field(), { target: { value: '  Tidy the loader  ' } })
       fireEvent.click(add())
       await waitFor(() => expect(host.act).toHaveBeenCalledWith('p1', ['add', '--priority', '5', '--', 'Tidy the loader']))
@@ -331,10 +351,13 @@ describe('QueuePage', () => {
       expect(field().value).toBe('Tidy the loader')
     })
 
-    test('an empty queue still takes a task', async () => {
-      show([])
+    test('an empty queue says so in one line over the field that takes a task', async () => {
+      show([], scheduling([{ command: 'work-queue', on: false }]))
       expect(await screen.findByText('Nothing queued.')).toBeTruthy()
       expect(field()).toBeTruthy()
+      expect(screen.queryByText(/^It goes to the end of its priority\./)).toBeNull()
+      await new Promise(resolve => setTimeout(resolve, 20))
+      expect(screen.queryByRole('status', { name: 'Who takes from the queue' })).toBeNull()
     })
   })
 

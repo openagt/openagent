@@ -16,7 +16,7 @@ export function backupChanged(): void {
 }
 
 export function useBackup(): { view: BackupView | null; reload: () => Promise<void> } {
-  const { value: view, reload } = usePolled<BackupView | null>(() => onBackup().catch(() => null), null, EVERY_MS, [], { remember: 'backup' })
+  const { value: view, reload } = usePolled<BackupView | null>(onBackup, null, EVERY_MS, [], { remember: 'backup' })
   useEffect(() => {
     const again = (): void => void reload()
     changed.add(again)

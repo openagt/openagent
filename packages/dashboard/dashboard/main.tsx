@@ -1,6 +1,7 @@
 import { flushSync } from 'react-dom'
 import { createRoot } from 'react-dom/client'
 import './tailwind.css'
+import './lib/fonts.js'
 import { AppFrame } from './components/AppFrame.js'
 import { App } from './App.js'
 

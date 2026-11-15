@@ -28,8 +28,11 @@ const logins = vi.hoisted(() => ({ onGitHosts: vi.fn(), sendUseGitHostAccount: v
 vi.mock('../rpc/logins.js', () => logins)
 const models = vi.hoisted(() => ({ onModels: vi.fn() }))
 vi.mock('../rpc/models.js', () => models)
-const route = vi.hoisted(() => ({ openSettings: vi.fn(), openPermissions: vi.fn() }))
-vi.mock('../lib/use-route.js', () => route)
+const route = vi.hoisted(() => ({ openSettings: vi.fn(), openPage: vi.fn() }))
+vi.mock('../lib/host-services.js', async importOriginal => {
+  const actual = await importOriginal<typeof import('../lib/host-services.js')>()
+  return { ...actual, INERT_HOST_SERVICES: { ...actual.INERT_HOST_SERVICES, ...route } }
+})
 // The editor needs a real DOM; the pickers do not look at it.
 vi.mock('./PromptEditor.js', async () => {
   const { forwardRef } = await import('react')
@@ -157,7 +160,7 @@ describe('the agent picker holds each agent\'s accounts, on the computer the run
     fireEvent.click(screen.getByRole('menuitem', { name: /Dani/ }))
     expect(accounts.sendUseAgentAccountFirst).toHaveBeenCalledWith('claude', 'Dani')
     fireEvent.click(screen.getByRole('menuitem', { name: 'Add account…' }))
-    expect(route.openPermissions).toHaveBeenCalled()
+    expect(route.openPage).toHaveBeenCalledWith('permissions')
   })
 
   test('an agent with no account read has no accounts part, and Codex none while it is not installed and has one account', async () => {

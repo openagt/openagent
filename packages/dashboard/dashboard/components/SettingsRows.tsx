@@ -1,7 +1,9 @@
-import { useContext, type ReactNode } from 'react'
+import { createContext, useContext, type ReactNode } from 'react'
+import { createPortal } from 'react-dom'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select.js'
 import { cn } from '../lib/utils.js'
 import { DaemonDown } from '../lib/use-daemon-health.js'
+import { Skeleton } from './ui/skeleton.js'
 
 // Settings' building blocks (#958): an entry's settings, a row, a row picked from a list. The
 // dashboard's own entries are made of them, and so is an entry a module brings (`@openagt/dashboard/module`
@@ -9,7 +11,7 @@ import { DaemonDown } from '../lib/use-daemon-health.js'
 
 /**
  * An entry's settings: what they are about as a whole (`description`) and what the entry offers as
- * a whole (`action`, a button) over its rows, a line between each. No card around them: the dialog
+ * a whole (`action`, a button) over its rows, 16 apart. No card and no line between them: the dialog
  * is their frame. The entry's title is Settings' own, over it.
  */
 export function SettingsSection({ description, action, children }: { description?: ReactNode; action?: ReactNode; children: ReactNode }) {
@@ -18,16 +20,25 @@ export function SettingsSection({ description, action, children }: { description
       {(description !== undefined || action !== undefined) && (
         // On a phone the action goes under the words: beside them it squeezes them to a word a line.
         <div className="flex items-start justify-between gap-3 max-sm:flex-col">
-          {description !== undefined && <p className="text-sm text-muted-foreground">{description}</p>}
-          {action !== undefined && <div className="ml-auto shrink-0 max-sm:ml-0">{action}</div>}
+          {description !== undefined && <p className="max-w-180 text-sm text-muted-foreground">{description}</p>}
+          {action !== undefined && <div className="shrink-0 sm:ml-auto">{action}</div>}
         </div>
       )}
-      <div className="divide-y divide-border">{children}</div>
+      <div className="flex flex-col gap-4">{children}</div>
     </div>
   )
 }
 
-/** One setting: what it is and what it does on the left, its control on the right. */
+/** Where Settings keeps an entry's presses: under what scrolls, in sight however long the entry is. */
+export const SettingsFootContext = createContext<HTMLElement | null>(null)
+
+/** An entry's presses (what is not saved yet, Cancel, Save), at the foot of Settings; elsewhere, where it stands. */
+export function SettingsFoot({ children }: { children: ReactNode }) {
+  const foot = useContext(SettingsFootContext)
+  return foot ? createPortal(children, foot) : children
+}
+
+/** One setting: what it is and what it does on the left, its control on the right; on a phone, the control under it. */
 export function SettingsRow({
   label,
   description,
@@ -43,9 +54,10 @@ export function SettingsRow({
   /** The control's `id`: a click on the label works the control. */
   labelFor?: string
 }) {
-  const named = cn('text-sm', dimmed && 'text-muted-foreground')
+  const named = cn('text-sm font-medium', dimmed && 'text-muted-foreground')
   return (
-    <div className="flex items-start justify-between gap-4 py-3 first:pt-0 last:pb-0">
+    // A switch is narrow: it stays beside its label on a phone too.
+    <div className="flex items-start justify-between gap-x-6 gap-y-2 max-md:flex-col max-md:items-stretch max-md:has-[[role=switch]]:flex-row">
       <div className="min-w-0">
         {labelFor === undefined ? (
           <p className={named}>{label}</p>
@@ -54,9 +66,27 @@ export function SettingsRow({
             {label}
           </label>
         )}
-        <p className="text-xs text-muted-foreground">{description}</p>
+        <p className="mt-0.5 text-xs text-muted-foreground">{description}</p>
       </div>
-      <div className="shrink-0">{control}</div>
+      {/* On a phone a press or a field in it is 44 high, under the thumb. */}
+      <div className="shrink-0 max-md:[&_button]:h-11 max-md:[&_input]:h-11">{control}</div>
+    </div>
+  )
+}
+
+/** Settings rows while they are read, in their own shape: a {@link Slot}'s `shape`. */
+export function SettingsRowShapes({ rows = 2 }: { rows?: number }) {
+  return (
+    <div className="flex flex-col gap-4">
+      {Array.from({ length: rows }, (_, at) => (
+        <div key={at} className="flex items-start justify-between gap-x-6 gap-y-2 max-md:flex-col max-md:items-stretch">
+          <div className="min-w-0 flex-1 space-y-2 pt-0.5">
+            <Skeleton className="h-4 w-32" />
+            <Skeleton className="h-3 w-2/3" />
+          </div>
+          <Skeleton className="h-8 w-60 max-md:w-full" />
+        </div>
+      ))}
     </div>
   )
 }
@@ -110,7 +140,7 @@ export function SettingsSelectRow({
       description={description}
       control={
         <Select items={items} value={value === '' ? NO_VALUE : value} onValueChange={picked} disabled={down}>
-          <SelectTrigger size="sm" aria-label={label} className="max-w-[min(16rem,45vw)]">
+          <SelectTrigger aria-label={label} className="w-60 max-md:w-full">
             <SelectValue />
           </SelectTrigger>
           <SelectContent align="end">

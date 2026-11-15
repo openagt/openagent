@@ -14,11 +14,13 @@ describe('the pages the sidebar lists', () => {
     const { result, rerender } = renderHook(({ mounted }) => useListedPages(mounted), { initialProps: { mounted: modules(false) } })
     expect(result.current).toEqual([logs])
     rerender({ mounted: modules(true, [{ segment: 'queue', label: 'Queue', projects: ['p1'] }]) })
-    expect(result.current.map(page => page.segment)).toEqual(['queue'])
+    expect(result.current?.map(page => page.segment)).toEqual(['queue'])
   })
 
-  test('with nothing kept, none until the modules are imported', () => {
-    const { result } = renderHook(() => useListedPages(modules(false)))
+  test('with nothing kept, not known until the modules are imported', () => {
+    const { result, rerender } = renderHook(({ mounted }) => useListedPages(mounted), { initialProps: { mounted: modules(false) } })
+    expect(result.current).toBeNull()
+    rerender({ mounted: modules(true) })
     expect(result.current).toEqual([])
   })
 })

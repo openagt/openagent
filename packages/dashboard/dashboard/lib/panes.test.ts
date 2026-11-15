@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, test, vi } from 'vitest'
 import { act, renderHook } from '@testing-library/react'
+import { phoneScreen } from '../test-utils.js'
 import { closePanes, forgetPanes, paneSizes, paneSizesOwner, panesPage, setExpandedPane, setPaneOpen, setPaneSizes, useExpandedPane, useOpenPanes } from './panes.js'
 
 beforeEach(() => forgetPanes())
@@ -23,6 +24,17 @@ describe('the open panes of a page', () => {
     act(() => setPaneOpen('p1/r1', 'files', true))
     expect(result.current).toEqual(['files', 'changes'])
     act(() => setPaneOpen('p1/r1', 'files', false))
+    act(() => setPaneOpen('p1/r1', 'files', true))
+    expect(result.current).toEqual(['changes', 'files'])
+  })
+
+  test('on a screen narrower than 1024px, a pane opened takes the place of the one open: two would leave the chat too narrow to read', () => {
+    const wide = phoneScreen()
+    const { result } = renderHook(() => useOpenPanes('p1/r1'))
+    act(() => setPaneOpen('p1/r1', 'files', true))
+    act(() => setPaneOpen('p1/r1', 'changes', true))
+    expect(result.current).toEqual(['changes'])
+    wide()
     act(() => setPaneOpen('p1/r1', 'files', true))
     expect(result.current).toEqual(['changes', 'files'])
   })

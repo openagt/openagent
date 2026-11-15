@@ -8,7 +8,7 @@ import type { ProvidedCommand } from '@openagt/agent-data'
 import { addProject } from '../registry.js'
 import { readProvider, remoteHost } from '../dashboard/git-hosts.js'
 import { accountsWiring } from './accounts.js'
-import { loginsWiring, onAgentState, onGitHosts, runningFixes, sendAgentFix, sendForgetGitHostAccount, sendGitHostLogin, sendUseGitHostAccount } from './logins.js'
+import { loginsWiring, onAgentState, onGitHosts, runningFixes, sendAgentFix, sendStopAgentFix, sendForgetGitHostAccount, sendGitHostLogin, sendUseGitHostAccount } from './logins.js'
 import { provideTestContext } from './test-context.js'
 import { accountsPath, addAccount } from '@openagt/skill-account-rotation'
 
@@ -171,11 +171,64 @@ test('the agent: what is in the way and the fix its package declared; a press ru
   }
 })
 
+test('a login the person will not finish is stopped with Cancel, with what it started; the sign-in address it printed is said while it waits', async () => {
+  const before = { ...loginsWiring }
+  const headless = accountsWiring.headless
+  accountsWiring.headless = () => false
+  let stopped: AbortSignal | undefined
+  Object.assign(loginsWiring, {
+    ready: async () => ({ problems: ['`claude` is not logged in.'], warnings: [], fix: { kind: 'log-in', command: 'claude auth login' } }),
+    fix: (_command: string, stop: AbortSignal, said: (url: string) => void) => {
+      stopped = stop
+      said('https://claude.ai/oauth/authorize?code=1')
+      return new Promise<void>((_, reject) => stop.addEventListener('abort', () => reject(new Error('Terminated'))))
+    },
+  })
+  try {
+    assert.equal((await sendAgentFix('claude-code')).ok, true)
+    const waiting = await onAgentState('claude-code')
+    assert.deepEqual([waiting.fixing, waiting.url], ['log-in', 'https://claude.ai/oauth/authorize?code=1'])
+    assert.deepEqual(await sendStopAgentFix('claude-code'), { ok: true })
+    assert.equal(stopped?.aborted, true)
+    await new Promise(resolve => setImmediate(resolve))
+    // Stopped by the person: no failure to say, and the press is there again.
+    assert.deepEqual(await onAgentState('claude-code'), { driver: 'claude-code', ready: false, problem: '`claude` is not logged in.', fix: { kind: 'log-in', command: 'claude auth login' } })
+    assert.equal((await sendAgentFix('claude-code')).ok, true)
+    await sendStopAgentFix('claude-code')
+  } finally {
+    Object.assign(loginsWiring, before)
+    accountsWiring.headless = headless
+  }
+})
+
+test('a stopped login that ends late takes nothing from the one pressed after it', async () => {
+  const before = { ...loginsWiring }
+  const headless = accountsWiring.headless
+  accountsWiring.headless = () => false
+  const ends: Array<(err: Error) => void> = []
+  Object.assign(loginsWiring, {
+    ready: async () => ({ problems: ['`claude` is not logged in.'], warnings: [], fix: { kind: 'log-in', command: 'claude auth login' } }),
+    fix: () => new Promise<void>((_, reject) => ends.push(reject)),
+  })
+  try {
+    assert.equal((await sendAgentFix('claude-code')).ok, true)
+    await sendStopAgentFix('claude-code')
+    assert.equal((await sendAgentFix('claude-code')).ok, true)
+    ends[0]!(new Error('Terminated'))
+    await new Promise(resolve => setImmediate(resolve))
+    assert.equal((await onAgentState('claude-code')).fixing, 'log-in')
+    await sendStopAgentFix('claude-code')
+  } finally {
+    Object.assign(loginsWiring, before)
+    accountsWiring.headless = headless
+  }
+})
+
 test('a fix the dashboard started ends as it stops, with what the fix started: a login waiting on a browser does not outlive it', async () => {
   const dir = mkdtempSync(join(tmpdir(), 'oa-fix-'))
   const said = join(dir, 'pid')
   try {
-    const fixing = realFix(`sleep 60 & echo $! > ${said}; wait`)
+    const fixing = realFix(`sleep 60 & echo $! > ${said}; wait`, new AbortController().signal, () => {})
     const pidOf = (): number => {
       try {
         return Number(readFileSync(said, 'utf8'))
@@ -207,7 +260,7 @@ test('a fix the dashboard started ends as it stops, with what the fix started: a
 
 test('an install whose download fails fails, with what the download said, though the shell it is piped to read nothing, and on an sh without pipefail', async () => {
   const download = `sh -c 'echo "curl: (6) Could not resolve host: chatgpt.com" >&2; exit 6' | sh`
-  await assert.rejects(realFix(download), { message: 'curl: (6) Could not resolve host: chatgpt.com' })
+  await assert.rejects(realFix(download, new AbortController().signal, () => {}), { message: 'curl: (6) Could not resolve host: chatgpt.com' })
   // An `sh` without `pipefail`, as Debian 12's and Ubuntu 22.04's are: bash with its `set` turned off, first on the PATH.
   const dir = mkdtempSync(join(tmpdir(), 'oa-fix-'))
   const path = process.env.PATH
@@ -216,7 +269,7 @@ test('an install whose download fails fails, with what the download said, though
     writeFileSync(join(dir, 'sh'), `#!/bin/bash\nBASH_ENV=${join(dir, 'no-set')} exec "$BASH" "$@"\n`, { mode: 0o755 })
     process.env.PATH = `${dir}:${path}`
     assert.equal(execFileSync('sh', ['-c', 'command set -o pipefail 2>/dev/null || echo none'], { encoding: 'utf8' }), 'none\n')
-    await assert.rejects(realFix(download), { message: 'curl: (6) Could not resolve host: chatgpt.com' })
+    await assert.rejects(realFix(download, new AbortController().signal, () => {}), { message: 'curl: (6) Could not resolve host: chatgpt.com' })
   } finally {
     process.env.PATH = path
     rmSync(dir, { recursive: true, force: true })
@@ -230,7 +283,7 @@ test('a fix needs no bash: on a computer with only sh, a log-in runs there', asy
     symlinkSync('/bin/sh', join(dir, 'sh'))
     writeFileSync(join(dir, 'codex'), '#!/bin/sh\necho logged-in\n', { mode: 0o755 })
     process.env.PATH = dir
-    await realFix('codex login')
+    await realFix('codex login', new AbortController().signal, () => {})
   } finally {
     process.env.PATH = path
     rmSync(dir, { recursive: true, force: true })

@@ -69,8 +69,8 @@ const WITH_PROJECT: DashboardData = {
 
 const SHOP: ProjectSummary = { id: 'p1', path: '/home/ada/shop', name: 'shop', activated: true, gitHost: true }
 
-const steps = ({ projects = [] as ProjectSummary[], onAgentStarted = vi.fn(), onSelectProject = vi.fn() } = {}) =>
-  render(<OnboardingChecklist projects={projects} onAgentStarted={onAgentStarted} onSelectProject={onSelectProject} onProjectAdded={vi.fn()} />)
+const steps = ({ projects = [] as ProjectSummary[], onAgentStarted = vi.fn(), onSelectProject = vi.fn(), onRead = vi.fn() } = {}) =>
+  render(<OnboardingChecklist projects={projects} onAgentStarted={onAgentStarted} onSelectProject={onSelectProject} onProjectAdded={vi.fn()} onRead={onRead} />)
 
 /** A step's row, by its title. */
 const row = (label: string) => screen.getByRole('listitem', { name: label })
@@ -99,18 +99,22 @@ describe('the first steps on the Overview', () => {
     onDashboard.mockResolvedValue(EMPTY)
     logins.onGitHosts.mockResolvedValue(github([]))
     steps()
-    expect(await screen.findByRole('heading', { name: /^Good (morning|afternoon|evening), Ada$/ })).toBeTruthy()
+    // A part's heading like every other, the count beside it as every part's count stands.
+    const heading = await screen.findByRole('heading', { level: 2, name: /^Good (morning|afternoon|evening), Ada 0 of 3$/ })
+    expect(heading.className).toContain('text-base')
+    expect(within(heading).getByText('0 of 3').className).toContain('font-normal')
     expect(await screen.findByRole('list', { name: '0 of 3 done' })).toBeTruthy()
   })
 
-  test.each(['dashboard', 'agent', 'hosts'])('says "Loading…" and no step until the projects, the coding agent and the git hosts are read: %s answers last', async last => {
+  test.each(['dashboard', 'agent', 'hosts'])('says "Loading…" and no step until the projects, the coding agent and the git hosts are read, and tells the page only then: %s answers last', async last => {
     const answers: Record<string, (value: unknown) => void> = {}
     const held = (name: string) => () => new Promise(resolve => (answers[name] = resolve))
     onDashboard.mockImplementation(held('dashboard'))
     logins.onAgentState.mockImplementation(held('agent'))
     logins.onGitHosts.mockImplementation(held('hosts'))
     const values: Record<string, unknown> = { dashboard: WITH_PROJECT, agent: { driver: 'claude-code', ready: true }, hosts: CONNECTED }
-    steps()
+    const onRead = vi.fn()
+    steps({ onRead })
     expect(await screen.findByText('Loading…')).toBeTruthy()
     expect(screen.queryAllByRole('listitem')).toEqual([])
     await act(async () => {
@@ -118,17 +122,26 @@ describe('the first steps on the Overview', () => {
     })
     expect(screen.getByText('Loading…')).toBeTruthy()
     expect(screen.queryAllByRole('listitem')).toEqual([])
+    expect(onRead).not.toHaveBeenCalled()
     await act(async () => answers[last]!(values[last]))
     expect(within(row('Add your first project')).getByLabelText('Done')).toBeTruthy()
+    expect(onRead).toHaveBeenCalled()
     expect(screen.queryByText('Loading…')).toBeNull()
   })
 
-  test('while it reads, the card draws a row per step it knows of, so what is below it does not move when they land', async () => {
+  test('while it reads, the card draws a row per step it knows of once the coding agent and the git hosts are read, so no row is pushed by a step they add', async () => {
     onDashboard.mockImplementation(() => new Promise(() => {}))
+    let agent: (value: unknown) => void = () => {}
+    logins.onAgentState.mockImplementation(() => new Promise(resolve => (agent = resolve)))
     steps()
     await screen.findByText('Loading…')
+    expect(document.querySelector('ol')).toBeNull()
+    await act(async () => agent({ driver: 'claude-code', ready: false, installed: false }))
+    await screen.findByText('Loading…')
     const frame = document.querySelector('ol[aria-hidden="true"]')
-    expect([...(frame?.children ?? [])].map(item => item.lastElementChild?.textContent)).toContain('Add your first project')
+    const rows = [...(frame?.children ?? [])].map(item => item.querySelector('span.text-sm')?.textContent)
+    expect(rows[0]).toBe('Set up Claude Code')
+    expect(rows).toContain('Add your first project')
   })
 
   test('what adding a project does is behind an ⓘ beside the open step, not in its way', async () => {
@@ -207,7 +220,7 @@ describe('the first steps on the Overview', () => {
     const openPage = vi.fn()
     render(
       <HostServicesContext.Provider value={{ ...INERT_HOST_SERVICES, openPage }}>
-        <OnboardingChecklist projects={[SHOP]} onAgentStarted={vi.fn()} onSelectProject={vi.fn()} onProjectAdded={vi.fn()} />
+        <OnboardingChecklist projects={[SHOP]} onAgentStarted={vi.fn()} onSelectProject={vi.fn()} onProjectAdded={vi.fn()} onRead={vi.fn()} />
       </HostServicesContext.Provider>,
     )
     await openStep('Populate the queue of AI tasks')
@@ -227,7 +240,7 @@ describe('the first steps on the Overview', () => {
     onDashboard.mockResolvedValue({ ...WITH_PROJECT, projects: [{ projectId: 'p1', hasTickets: false, providesTickets: false }] } as DashboardData)
     const onSelectProject = vi.fn()
     steps({ projects: [SHOP], onSelectProject })
-    expect(await screen.findByRole('heading', { name: "You're all set, Ada" })).toBeTruthy()
+    expect(await screen.findByRole('region', { name: "You're all set, Ada" })).toBeTruthy()
     fireEvent.click(screen.getByRole('button', { name: 'Start your first session' }))
     expect(onSelectProject).toHaveBeenCalledWith('p1')
     expect(updatePreferences).toHaveBeenCalledWith({ onboardingDismissed: true })

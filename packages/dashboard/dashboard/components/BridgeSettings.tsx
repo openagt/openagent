@@ -63,7 +63,7 @@ export function BridgeSettings() {
   }, [])
 
   return (
-    <div className="mt-2 space-y-2 rounded-md border border-border bg-muted/30 p-3 text-xs">
+    <div className="mt-3 space-y-2 text-xs">
       <p className="text-muted-foreground">
         The extension reports the question a Claude web session is parked on, so it shows up here instead of only on
         claude.ai.
@@ -72,7 +72,7 @@ export function BridgeSettings() {
         <div className="space-y-1">
           <p className="text-muted-foreground">To install it: at chrome://extensions, turn on Developer mode, press Load unpacked and pick this folder.</p>
           <div className="flex items-center gap-2">
-            <code className="min-w-0 flex-1 break-all rounded bg-muted px-2 py-1 font-mono">{folder}</code>
+            <code className="min-w-0 flex-1 break-all rounded-md bg-muted px-2 py-1 font-mono">{folder}</code>
             <CopyButton text={folder} label="Copy the folder" />
           </div>
         </div>
@@ -96,10 +96,10 @@ export function BridgeSettings() {
         </p>
       ) : (
         <div className="flex flex-wrap items-center gap-2">
-          <code className="min-w-0 flex-1 truncate rounded bg-muted px-2 py-1 font-mono">
+          <code className="min-w-0 flex-1 truncate rounded-sm bg-muted px-2 py-1.5 font-mono">
             {shown ? token : '•'.repeat(24)}
           </code>
-          <Button variant="outline" size="sm" onClick={() => setShown(v => !v)}>
+          <Button variant="secondary" onClick={() => setShown(v => !v)}>
             {shown ? 'Hide' : 'Reveal'}
           </Button>
           <CopyButton text={token} label="Copy the bridge token" />

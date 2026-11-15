@@ -29,9 +29,10 @@ export function BackupNotice({ onChanged }: { onChanged?: () => void }) {
   const byHost = new Map<string, BackupGap[]>()
   for (const gap of view.gaps) byHost.set(gap.host, [...(byHost.get(gap.host) ?? []), gap])
   return (
-    <section aria-label="Not backed up" className="mb-4 space-y-3 rounded-lg border border-warning/40 bg-warning/5 p-3">
-      <p className="flex items-center gap-2 text-sm font-medium text-warning">
-        <CircleAlert className="h-4 w-4 shrink-0" aria-hidden />
+    // The banners' strip, on a tinted fill with no edge; its words in the text's colour, its mark in the warning's.
+    <section aria-label="Not backed up" className="mb-4 space-y-3 rounded-lg bg-warning/10 p-3">
+      <p className="flex items-center gap-2 text-sm font-medium">
+        <CircleAlert className="size-4 shrink-0 text-warning" aria-hidden />
         Not backed up
       </p>
       {[...byHost].map(([host, gaps]) => {
@@ -52,7 +53,7 @@ export function BackupNotice({ onChanged }: { onChanged?: () => void }) {
                     </li>
                   ))}
                 </ul>
-                {row ? <HostFix row={row} onChanged={reloadHosts} size="xs" /> : <p className="text-xs text-muted-foreground">{`No package answers for ${host} yet.`}</p>}
+                {row ? <HostFix row={row} onChanged={reloadHosts} size="sm" /> : <p className="text-xs text-muted-foreground">{`No package answers for ${host} yet.`}</p>}
               </>
             ) : (
               <ul className="space-y-2">
@@ -117,7 +118,7 @@ function GapRow({ gap, at, onChanged }: { gap: BackupGap; at: SendAsHost; onChan
       </p>
       <div className="flex flex-wrap items-center gap-2">
         <SendAs host={at} value={login} onChange={setPicked} disabled={busy} label="Back up as" />
-        <Button size="xs" disabled={busy || login === undefined} onClick={() => void backUp()}>
+        <Button size="sm" disabled={busy || login === undefined} onClick={() => void backUp()}>
           {busy && <Loader2 className="size-3 animate-spin" aria-hidden />}
           {busy ? 'Backing up…' : 'Back up'}
         </Button>
