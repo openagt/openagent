@@ -62,6 +62,7 @@ export function StartAgentButton({
   variant = 'outline',
   size = 'sm',
   className,
+  fill = false,
 }: {
   /** The primary half's icon; swapped for a spinner while this button's own start is in flight. */
   icon: ReactNode
@@ -107,6 +108,8 @@ export function StartAgentButton({
   size?: 'sm' | 'default' | 'icon-sm' | undefined
   /** Styling the two halves share, so the pair reads as one control rather than two buttons. */
   className?: string | undefined
+  /** The group takes its row's width, and the press what `leading` and the chevron leave (a phone's head). */
+  fill?: boolean | undefined
 }) {
   /**
    * The carry is the draft stash a hot ticket already uses (#1066/#1139) rather than a second
@@ -122,7 +125,7 @@ export function StartAgentButton({
   const down = useContext(DaemonDown)
 
   return (
-    <ButtonGroup>
+    <ButtonGroup {...(fill ? { className: 'w-full' } : {})}>
       {leading}
       <Tooltip>
         <TooltipTrigger
@@ -134,7 +137,7 @@ export function StartAgentButton({
               disabled={disabled || busy || down}
               onClick={onStart}
               {...(ariaLabel ? { 'aria-label': ariaLabel } : {})}
-              className={className}
+              className={cn(fill && 'flex-1', className)}
             />
           }
         >
