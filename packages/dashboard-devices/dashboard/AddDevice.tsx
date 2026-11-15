@@ -17,37 +17,19 @@ import type { Devices } from './use-devices.js'
 // person's, from anywhere. Another computer on the Wi-Fi is found there, and connected once a
 // person there allows it; it can be let in here in the same go. A computer somewhere else is
 // given a code to type there, through a server. A server is set up over SSH. A code someone gave
-// is typed in. The address keeps which one is open: a reload stays on it.
+// is typed in. Each is a page of Settings › Devices, which the address keeps: a reload stays on it.
 
 /** A way of adding, by the word the address keeps it under. */
 export type Adding = 'add' | 'add-phone' | 'add-computer' | 'give-code' | 'set-up-server' | 'join'
 
-/** Each way of adding: its title, and whether it is a page of Settings › Devices or a dialog over it. */
-export const ADDING: Record<Adding, { title: string; page?: true }> = {
-  add: {
-    title: 'Add a device',
-    page: true,
-  },
-  'add-phone': {
-    title: 'Add phone',
-    page: true,
-  },
-  'add-computer': {
-    title: 'Add computer',
-    page: true,
-  },
-  'give-code': {
-    title: 'Give it a code',
-    page: true,
-  },
-  'set-up-server': {
-    title: 'Set up a server',
-    page: true,
-  },
-  join: {
-    title: 'Join with a code',
-    page: true,
-  },
+/** Each way of adding, by the word the address keeps its page of Settings › Devices under, with the page's title. */
+export const ADDING: Record<Adding, string> = {
+  add: 'Add a device',
+  'add-phone': 'Add phone',
+  'add-computer': 'Add computer',
+  'give-code': 'Give it a code',
+  'set-up-server': 'Set up a server',
+  join: 'Join with a code',
 }
 
 /** Whether the page the address names inside Settings › Devices is a way of adding. */

@@ -50,7 +50,6 @@ export function DevicesSettings({ everyMs = 3_000, devicesEveryMs = 30_000, devi
   }, [machineId])
   // A way of adding is kept in the address, as Settings' own place is: a reload stays on it, and Back leaves Settings.
   const add = (next: Adding | undefined): void => d.host.openSettings('devices', next)
-  const onPage = adding !== undefined && ADDING[adding].page === true
   // A server just set up opens on its page with Invite open.
   const [inviting, setInviting] = useState(false)
   const status = d.door?.ok ? d.door.value : undefined
@@ -60,7 +59,7 @@ export function DevicesSettings({ everyMs = 3_000, devicesEveryMs = 30_000, devi
     setInviting(false)
   }
   // A page of the entry is named in the Settings dialog's header, with its way back: a way of adding goes back to where it was opened from.
-  const crumbShown = useSettingsCrumb(onPage ? { title: ADDING[adding].title, back: () => add(undefined) } : open ? { title: open.name, back } : undefined)
+  const crumbShown = useSettingsCrumb(adding ? { title: ADDING[adding], back: () => add(undefined) } : open ? { title: open.name, back } : undefined)
   // Outside the Settings dialog, a page draws its own way back.
   const way = (onBack: () => void) =>
     !crumbShown && (
@@ -76,27 +75,25 @@ export function DevicesSettings({ everyMs = 3_000, devicesEveryMs = 30_000, devi
   const known = d.door !== undefined && !(d.machines === undefined && d.door.ok)
   if (!known) return <Slot of={{ state: 'unknown', value: undefined }} shape={<SettingsRowShapes rows={3} />}>{() => null}</Slot>
 
-  const flow = adding !== undefined && (
-    <AddDevice
-      d={d}
-      adding={adding}
-      isServer={d.isServer}
-      onAdd={add}
-      onClose={() => add(undefined)}
-      onInvite={address => {
-        add(undefined)
-        setInviting(true)
-        setOpened({ key: `server:${address}` })
-      }}
-      onJoined={joined => d.host.openSettings('devices', joined)}
-    />
-  )
-
-  if (onPage)
+  if (adding)
     return (
       <>
         {way(() => add(undefined))}
-        <section aria-label={ADDING[adding].title}>{flow}</section>
+        <section aria-label={ADDING[adding]}>
+          <AddDevice
+            d={d}
+            adding={adding}
+            isServer={d.isServer}
+            onAdd={add}
+            onClose={() => add(undefined)}
+            onInvite={address => {
+              add(undefined)
+              setInviting(true)
+              setOpened({ key: `server:${address}` })
+            }}
+            onJoined={joined => d.host.openSettings('devices', joined)}
+          />
+        </section>
       </>
     )
 
@@ -108,7 +105,6 @@ export function DevicesSettings({ everyMs = 3_000, devicesEveryMs = 30_000, devi
         {open.kind === 'server' && <ServerPage d={d} item={open} onBack={back} invite={inviting} />}
         {open.kind === 'joined' && <JoinedPage d={d} item={open} onBack={back} />}
         {open.kind === 'other' && <OtherPage d={d} item={open} onBack={back} />}
-        {flow}
       </>
     )
 
@@ -120,9 +116,7 @@ export function DevicesSettings({ everyMs = 3_000, devicesEveryMs = 30_000, devi
       {start ? <Start d={d} onAdd={add} /> : <YourDevices d={d} onOpen={item => setOpened(openedOf(item))} onAdd={() => add('add')} />}
       {d.door !== undefined && !d.door.ok && <Problem>{`The devices could not be read: ${d.door.error}`}</Problem>}
       {d.serversError !== undefined && !d.isServer && <Problem>{`The servers could not be read: ${d.serversError}`}</Problem>}
-      {/* An open dialog says what went wrong in it. */}
-      {d.error !== undefined && adding === undefined && <Problem>{d.error}</Problem>}
-      {flow}
+      {d.error !== undefined && <Problem>{d.error}</Problem>}
     </div>
   )
 }
