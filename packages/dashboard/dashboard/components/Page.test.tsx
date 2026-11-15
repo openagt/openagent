@@ -1,6 +1,7 @@
 import { afterEach, expect, test } from 'vitest'
 import { cleanup, render, screen } from '@testing-library/react'
 import { Page } from './Page.js'
+import { PhoneBarCount } from './PhoneBar.js'
 
 // A page that is no chat: its header (name, count, line, buttons, a bar of its own) over what it
 // shows, in the one column every such page has. On a wide screen the name shows; on a phone the
@@ -22,21 +23,75 @@ test('the name, its count, the line under it and the page\'s buttons in a header
   expect(header.textContent).toContain("Every project's backlog")
   expect(header.textContent).toContain('Add to queue')
   expect(header.textContent).toContain('filters')
-  // What the page shows comes after its header, in the same column.
+  // What the page shows comes after its header, in the same column: 960 at most, on every page.
   const column = header.parentElement!
-  expect(column.className.split(' ')).toEqual(expect.arrayContaining(['mx-auto', 'max-w-6xl']))
+  expect(column.className.split(' ')).toEqual(expect.arrayContaining(['mx-auto', 'max-w-240']))
   expect(column.lastElementChild!.textContent).toBe('the list')
   // Drawn alone, with no sidebar around it, it offers none to show.
   expect(screen.queryByRole('button', { name: 'Show the sidebar' })).toBeNull()
 })
 
-test("the buttons' row gives up width at every width, so its buttons go under each other when the column is narrower than them", () => {
+test("the buttons stand in the name's row, at its right, and the line under that row: however long it is, it moves no button", () => {
   render(
-    <Page title="Tickets" actions={<button type="button">Add to queue</button>}>
+    <Page title="Queue" count={3} description={'What agents will work on next. '.repeat(10)} actions={<button type="button">Start 3 agents</button>}>
       <p>the list</p>
     </Page>,
   )
-  const row = screen.getByRole('button', { name: 'Add to queue' }).parentElement!
-  expect(row.className.split(' ')).toEqual(expect.arrayContaining(['min-w-0', 'flex-wrap']))
-  expect(row.className).not.toMatch(/shrink-0/)
+  const heading = screen.getByRole('heading', { level: 1 })
+  const buttons = screen.getByRole('button', { name: 'Start 3 agents' }).parentElement!
+  const row = buttons.parentElement!
+  expect(row.contains(heading)).toBe(true)
+  expect(row.className.split(' ')).toEqual(expect.arrayContaining(['flex', 'justify-between']))
+  expect(row.className).not.toMatch(/flex-wrap/)
+  expect(row.textContent).not.toContain('What agents will work on next.')
+  // Said to a screen reader only on a phone, where the bar names the page.
+  expect(screen.getByText(/What agents will work on next\./).className).toContain('max-md:sr-only')
+  // The buttons give up width: they go under each other, from the right, when the row is narrower than them.
+  expect(buttons.className.split(' ')).toEqual(expect.arrayContaining(['min-w-0', 'flex-wrap', 'justify-end']))
+  expect(buttons.className).not.toMatch(/shrink-0/)
+  // The name and its count never do: the count stays beside the name.
+  expect(heading.parentElement!.className.split(' ')).toContain('shrink-0')
+})
+
+test("a page's line stands where its description does from a tablet up, and on a phone first in the buttons' row, wrapping as text beside them", () => {
+  render(
+    <Page title="Overview" line={<span>2 need you · 1 working</span>} actions={<button type="button">Customize</button>}>
+      <p>the parts</p>
+    </Page>,
+  )
+  const line = screen.getByText('2 need you · 1 working').parentElement!
+  const row = screen.getByRole('button', { name: 'Customize' }).parentElement!.parentElement!
+  expect(line.parentElement).toBe(row)
+  // From a tablet up the row wraps to put the line under it; on a phone the buttons never go to another row.
+  expect(row.className.split(' ')).toEqual(expect.arrayContaining(['md:flex-wrap']))
+  expect(row.className.split(' ')).not.toContain('flex-wrap')
+  expect(line.className.split(' ')).toEqual(expect.arrayContaining(['max-md:order-first', 'max-md:flex-1', 'md:order-last', 'md:basis-full']))
+  expect(line.className).not.toContain('sr-only')
+  expect(row.parentElement!.className).not.toContain('sr-only')
+})
+
+test('on a phone, a page with no count and no buttons draws no empty row under the bar', () => {
+  render(
+    <Page title="Logs" description="Every run">
+      <p>the list</p>
+    </Page>,
+  )
+  expect(screen.getByRole('heading', { level: 1 }).closest('header')!.firstElementChild!.className).toContain('max-md:sr-only')
+})
+
+test("on a phone the count stands beside the name in the phone's bar, and a page with no buttons then draws no row under the bar", () => {
+  const slot = document.createElement('span')
+  document.body.append(slot)
+  render(
+    <PhoneBarCount.Provider value={slot}>
+      <Page title="Tickets" count="2/40" description="Every project's backlog">
+        <p>the list</p>
+      </Page>
+    </PhoneBarCount.Provider>,
+  )
+  expect(slot.textContent).toBe('2/40')
+  const heading = screen.getByRole('heading', { level: 1 })
+  expect(heading.textContent).toBe('Tickets')
+  expect(heading.closest('header')!.firstElementChild!.className).toContain('max-md:sr-only')
+  slot.remove()
 })

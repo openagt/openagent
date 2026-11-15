@@ -1,11 +1,11 @@
 import { useEffect, useState } from 'react'
 import { Server } from 'lucide-react'
-import { Button, ConfirmDialog, formatDateTime, formatRelative, usePolled } from '@openagt/dashboard/module'
+import { Button, ConfirmDialog, List, Row, useAskOn, useOpenAgentDown, usePolled } from '@openagt/dashboard/module'
 import { idsOf, readPersonThere, type Answer, type DeviceRow } from './devices.js'
 import { loadOther, otherLogin, sharedForget, type OtherLogin, type OtherRow } from './servers.js'
 import { hasDoor, throughOf, type JoinedItem, type OtherItem } from './model.js'
 import { ComputersThrough } from './ServerPage.js'
-import { Head, LoginLine, Part, Problem, State, Tabs, hostOf, useChange } from './parts.js'
+import { Head, LoginLine, Part, Problem, Removal, Seen, State, Tabs, hostOf, useChange } from './parts.js'
 import type { Devices } from './use-devices.js'
 
 // The page of a server this person is in at, set up from somewhere else: their own from another
@@ -24,12 +24,13 @@ type Tab = 'overview' | 'devices'
 export function JoinedPage({ d, item, onBack }: { d: Devices; item: JoinedItem; onBack: () => void }) {
   const { host } = d
   const { machine, person } = item
-  const owner = person.owner
+  const owner = person?.owner
   const [tab, setTab] = useState<Tab>('overview')
   const { busy, setBusy, error, setError, act } = useChange(() => d.reloadShared())
   const here = d.shared.find(row => row.url === machine.url)
 
-  const tabs: { id: Tab; title: string }[] = [{ id: 'overview', title: 'Overview' }, { id: 'devices', title: 'Your devices' }]
+  // The person's devices there are listed once its door has said them.
+  const tabs: { id: Tab; title: string }[] = person ? [{ id: 'overview', title: 'Overview' }, { id: 'devices', title: 'Your devices' }] : [{ id: 'overview', title: 'Overview' }]
 
   return (
     <div>
@@ -48,7 +49,7 @@ export function JoinedPage({ d, item, onBack }: { d: Devices; item: JoinedItem; 
       {tab === 'overview' && (
         <>
           <Part>
-            <p className="text-sm">{owner ? 'Yours, set up from another computer.' : person.person !== undefined ? `You are in as ${person.person}.` : 'You are in.'}</p>
+            <p className="text-sm">{owner ? 'Yours, set up from another computer.' : person?.person !== undefined ? `You are in as ${person.person}.` : 'You are in.'}</p>
             <p className="text-xs text-muted-foreground">
               {owner
                 ? 'Its install, its updates and its invites are done from the computer that set it up, its logins on the Permissions page. From here, your phone and this computer reach it, and runs go there.'
@@ -57,10 +58,10 @@ export function JoinedPage({ d, item, onBack }: { d: Devices; item: JoinedItem; 
             {here?.lineRefused && <p className="text-xs text-warning">{`${item.name} no longer lets this computer in for its line: turn on "From anywhere, through ${item.name}" under This computer to set it up again.`}</p>}
           </Part>
           <ComputersThrough host={host} machine={machine} busy={busy} everyMs={30_000} />
-          <div className="pt-4">
+          <Removal said="Takes the server off this list, and this computer out of it.">
             <ConfirmDialog
               trigger={
-                <Button size="sm" variant="outline" className="text-danger" disabled={busy} aria-label={`Remove ${item.name}`}>
+                <Button variant="secondary" className="text-danger" disabled={busy} aria-label={`Remove ${item.name}`}>
                   Remove server
                 </Button>
               }
@@ -77,10 +78,10 @@ export function JoinedPage({ d, item, onBack }: { d: Devices; item: JoinedItem; 
                 if (done) onBack()
               }}
             />
-          </div>
+          </Removal>
         </>
       )}
-      {tab === 'devices' && <DevicesThere d={d} machine={machine} name={item.name} devices={person.devices} line={here?.line} busy={busy} onBusy={setBusy} onError={setError} />}
+      {tab === 'devices' && person && <DevicesThere d={d} machine={machine} name={item.name} devices={person.devices} line={here?.line} busy={busy} onBusy={setBusy} onError={setError} />}
       {error !== undefined && <Problem>{error}</Problem>}
     </div>
   )
@@ -92,6 +93,7 @@ export function JoinedPage({ d, item, onBack }: { d: Devices; item: JoinedItem; 
  * a key that opens nothing.
  */
 function DevicesThere({ d, machine, name, devices, line, busy, onBusy, onError }: { d: Devices; machine: JoinedItem['machine']; name: string; devices: DeviceRow[]; /** The id this computer's line has there, when it keeps one. */ line: string | undefined; busy: boolean; onBusy: (busy: boolean) => void; onError: (error: string | undefined) => void }) {
+  const down = useOpenAgentDown()
   const { host } = d
   const [changed, setChanged] = useState<DeviceRow[] | undefined>()
   const listed = changed ?? devices
@@ -109,29 +111,23 @@ function DevicesThere({ d, machine, name, devices, line, busy, onBusy, onError }
   }
   return (
     <Part>
-      <p className="text-sm">{`Your devices on ${name} (${listed.length})`}</p>
-      <ul aria-label={`Your devices on ${name}`} className="space-y-2 text-xs">
+      <p className="text-sm font-semibold">
+        {`Your devices on ${name} `}
+        <span className="font-normal tabular-nums text-muted-foreground">{listed.length}</span>
+      </p>
+      <List aria-label={`Your devices on ${name}`}>
         {listed.map(device => {
           const own = (line !== undefined && idsOf(device).includes(line)) || (machine.device !== undefined && idsOf(device).includes(machine.device))
           return (
-            <li key={device.id} className="flex items-center justify-between gap-4">
-              <div className="min-w-0">
-                <p className="truncate text-sm">{device.name}</p>
-                <p className="text-muted-foreground" title={formatDateTime(device.seen ?? device.added)}>
-                  {`Added ${formatRelative(device.added)}`}
-                  {device.seen !== undefined ? `, last seen ${formatRelative(device.seen)}` : ''}
-                </p>
-                {own && <p className="text-muted-foreground">This computer. To take it out, remove the server.</p>}
-              </div>
-              {!own && (
-                <Button size="sm" variant="ghost" disabled={busy} aria-label={`Remove ${device.name} from ${name}`} onClick={() => void remove(device)}>
-                  Remove
-                </Button>
-              )}
-            </li>
+            <Row
+              key={device.id}
+              title={device.name}
+              detail={<Seen device={device} note={own ? 'This computer. To take it out, remove the server.' : undefined} />}
+              {...(own ? {} : { actions: <Button variant="ghost" size="sm" disabled={busy || down} aria-label={`Remove ${device.name} from ${name}`} onClick={() => void remove(device)}>Remove</Button> })}
+            />
           )
         })}
-      </ul>
+      </List>
     </Part>
   )
 }
@@ -153,12 +149,14 @@ function otherWords(label: 'GitHub' | 'Claude', login: OtherLogin | undefined, n
  * person's own devices there are listed too.
  */
 export function OtherPage({ d, item, onBack }: { d: Devices; item: OtherItem; onBack: () => void }) {
+  const down = useOpenAgentDown()
   const { host, account, noLogin } = d
   const { machine, owner, person } = item
   const [tab, setTab] = useState<Tab>('overview')
   const [working, setWorking] = useState(false)
   const pace = working ? 3_000 : 30_000
-  const { value: read, reload } = usePolled<Answer<OtherRow[]> | undefined>(() => loadOther(host, [machine.url]), undefined, pace, [machine.url, pace], 'previous')
+  const { value: read, reload, refresh } = usePolled<Answer<OtherRow[]> | undefined>(() => loadOther(host, [machine.url]), undefined, pace, [machine.url])
+  useAskOn(pace, refresh)
   const { busy, setBusy, error, setError, act } = useChange(reload)
   const row = read?.ok ? read.value.find(candidate => candidate.url === machine.url) : undefined
   const making = row?.making ?? { working: false }
@@ -188,35 +186,38 @@ export function OtherPage({ d, item, onBack }: { d: Devices; item: OtherItem; on
             {read !== undefined && !read.ok && <p className="text-xs text-muted-foreground">{`${name} did not say: ${read.error}`}</p>}
             <ul aria-label={`Your logins on ${name}`} className="space-y-3 text-xs">
               <LoginLine label="GitHub" words={otherWords('GitHub', row?.github, name)} said={undefined}>
-                <Button size="sm" variant="outline" disabled={busy || account === undefined} aria-label={`Log in to GitHub on ${name} instead`} title={account !== undefined ? `Copies the login of ${account} from this computer to your own OpenAgent on ${name}.${copies}` : noLogin} onClick={() => void act(() => otherLogin(host, machine.url, 'github'))}>
+                <Button variant="secondary" disabled={busy || account === undefined || down} aria-label={`Log in to GitHub on ${name} instead`} title={account !== undefined ? `Copies the login of ${account} from this computer to your own OpenAgent on ${name}.${copies}` : noLogin} onClick={() => void act(() => otherLogin(host, machine.url, 'github'))}>
                   {row?.github === undefined ? 'Log in here' : 'Log in here instead'}
                 </Button>
               </LoginLine>
               <LoginLine label="Claude" words={making.asking ? "Claude: say yes in the page this computer's browser opened." : making.working ? `Claude: one moment, ${name} is being told.` : otherWords('Claude', row?.claude, name)} said={making.working ? undefined : making.said}>
-                <Button size="sm" variant="outline" disabled={busy || (making.working && making.asking !== true)} aria-label={`Log in to Claude on ${name} instead`} title={`Opens this computer's browser, where you say yes once. The login is made for your OpenAgent on ${name} alone and lasts a year.${copies}`} onClick={() => void act(() => otherLogin(host, machine.url, 'claude'))}>
+                <Button variant="secondary" disabled={busy || (making.working && making.asking !== true) || down} aria-label={`Log in to Claude on ${name} instead`} title={`Opens this computer's browser, where you say yes once. The login is made for your OpenAgent on ${name} alone and lasts a year.${copies}`} onClick={() => void act(() => otherLogin(host, machine.url, 'claude'))}>
                   {making.asking ? 'Start over' : row?.claude === undefined ? 'Log in here' : 'Log in here instead'}
                 </Button>
               </LoginLine>
             </ul>
           </Part>
-          <div className="pt-4">
-            <Button
-              size="sm"
-              variant="outline"
-              className="text-danger"
-              disabled={busy}
-              aria-label={`Remove ${name}`}
-              onClick={() =>
-                void (async () => {
+          <Removal said={`Takes ${name} off this list, and this computer out of it.`}>
+            <ConfirmDialog
+              trigger={
+                <Button variant="secondary" className="text-danger" disabled={busy || down} aria-label={`Remove ${name}`}>
+                  {`Remove ${name}`}
+                </Button>
+              }
+              title={`Remove ${name}?`}
+              body={`Takes ${name} off this list, and this computer out of it. Your user, your logins and your projects there stay until ${owner} removes you.`}
+              confirmLabel="Remove"
+              confirmBusyLabel="Removing…"
+              onConfirm={async () => {
+                const done = await act(async () => {
                   // A line this computer keeps there as this person goes with it.
                   if (hasDoor(machine)) await sharedForget(host, machine.url)
-                  if (await d.removeMachine(machine.id)) onBack()
-                })()
-              }
-            >
-              {`Remove ${name}`}
-            </Button>
-          </div>
+                  return (await d.removeMachine(machine.id)) ? { ok: true } : { ok: false, error: `${name} could not be taken off.` }
+                })
+                if (done) onBack()
+              }}
+            />
+          </Removal>
         </>
       )}
       {tab === 'devices' && person && <DevicesThere d={d} machine={machine} name={name} devices={person.devices} line={here?.line} busy={busy} onBusy={setBusy} onError={setError} />}

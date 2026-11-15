@@ -4,7 +4,7 @@ import { mkdir, mkdtemp, readFile, realpath, rm, writeFile } from 'node:fs/promi
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { nodeGitRunner, projectDataDir, withFileBranch, writeSharing, DATA_BRANCH } from '@openagt/agent-data'
-import { runCli, USAGE } from './cli.js'
+import { runCli } from './cli.js'
 import { QUEUE_FILE } from './names.js'
 import { addTextArgs, doneArgs } from './module.js'
 
@@ -154,7 +154,7 @@ test('usage: an unknown command, a wrong argument count, an empty entry and a pr
     const unknown = await run(a!, ['dance'])
     assert.equal(unknown.code, 2)
     assert.equal(unknown.json, undefined)
-    assert.equal(unknown.stderr, `unknown command: dance\n\n${USAGE}`)
+    assert.equal(unknown.stderr, 'unknown command: dance\nRun `queue --help` for usage.')
     assert.equal((await run(a!, ['extra'])).code, 2)
     assert.equal((await run(a!, ['add'])).code, 2)
     assert.equal((await run(a!, ['add', '   '])).code, 2)

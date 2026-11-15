@@ -17,7 +17,7 @@ export interface PageDiffs {
   whole: ReadonlySet<string>
 }
 
-const DEFAULTS: ChangesSettings = { list: true, group: true, wrap: true }
+const DEFAULTS: ChangesSettings = { list: true, group: true, wrap: false }
 const NONE: PageDiffs = { folded: new Set(), whole: new Set() }
 const KEY = 'oa.changes'
 

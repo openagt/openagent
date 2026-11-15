@@ -42,12 +42,13 @@ const findRow = async (name: RegExp) => within(await screen.findByRole('list', {
 const queryRow = (name: RegExp) => screen.queryByRole('list', { name: 'Changed files' }) && within(list()).queryByRole('button', { name })
 const NOT_MERGED = 'main → agent-x'
 /** A diff's lines as they read, number, sign and text: the text is in pieces once it is coloured. */
-const diffLines = (root: HTMLElement = document.body) => [...root.querySelectorAll('.font-mono > div')].map(line => line.textContent)
+const diffLines = (root: HTMLElement = document.body) => [...root.querySelectorAll('.font-mono > div > div')].map(line => line.textContent)
 
 describe('ChangesPanel', () => {
   test('a run’s page lists only the files the run changed, grouped by folder, and its header says between which branches and that they are not merged yet', async () => {
     render(<ChangesPanel projectId="p1" agentId="run-1" context={context} />)
-    await waitFor(() => expect(screen.getByTestId('pane-title').textContent).toBe(`${NOT_MERGED} · not merged yet`))
+    await waitFor(() => expect(within(screen.getByTestId('pane-title')).getByText(NOT_MERGED)).toBeTruthy())
+    expect(within(screen.getByTestId('pane-title')).getByText('· not merged yet')).toBeTruthy()
     expect(readRun).toHaveBeenCalledWith(expect.anything(), 'p1', 'run-1')
     expect(readProject).not.toHaveBeenCalled()
     expect(within(list()).getAllByRole('button').map(b => [b.textContent, b.title])).toEqual([
@@ -112,7 +113,7 @@ describe('ChangesPanel', () => {
     readRun.mockResolvedValue({ source: 'pending' })
     render(<ChangesPanel projectId="p1" agentId="run-3" context={context} />)
     await waitFor(() => expect(readRun).toHaveBeenCalledWith(expect.anything(), 'p1', 'run-3'))
-    expect(screen.getByText('Looking for this session’s changes…')).toBeTruthy()
+    expect(await screen.findByText('Loading…')).toBeTruthy()
   })
 
   test('the project’s own page lists what is changed in its folder and not committed, or says nothing is', async () => {
@@ -137,7 +138,7 @@ describe('ChangesPanel remembered', () => {
     readRun.mockReturnValue(new Promise(() => {}) as never)
     readCommits.mockReturnValue(new Promise(() => {}) as never)
     render(<ChangesPanel projectId="p1" agentId="run-1" context={context} />)
-    expect(screen.queryByText('Looking for this session’s changes…')).toBeNull()
+    expect(document.querySelector('[aria-busy]')).toBeNull()
     expect(screen.getByText(NOT_MERGED)).toBeTruthy()
     expect(readRun).toHaveBeenCalledTimes(2)
   })
@@ -151,7 +152,7 @@ describe('ChangesPanel remembered', () => {
     // Its commits have answered; its files have not.
     await waitFor(() => expect(readCommits).toHaveBeenCalledWith(expect.anything(), 'p1', 'run-2'))
     await new Promise(resolve => setTimeout(resolve, 20))
-    expect(screen.getByText('Looking for this session’s changes…')).toBeTruthy()
+    expect(await screen.findByText('Loading…')).toBeTruthy()
     expect(queryRow(/app\.ts/)).toBeNull()
   })
 })
@@ -244,7 +245,7 @@ describe('ChangesPanel commits', () => {
     await waitFor(() => expect(readRun).toHaveBeenCalled())
     await new Promise(resolve => setTimeout(resolve, 20))
     expect(screen.queryByText('This session changed no files.')).toBeNull()
-    expect(screen.getByText('Looking for this session’s changes…')).toBeTruthy()
+    expect(await screen.findByText('Loading…')).toBeTruthy()
     answer([NEW])
     await waitFor(() => expect(screen.getByText('No change is left: the commits cancel out.')).toBeTruthy())
   })
@@ -328,13 +329,13 @@ describe('ChangesPanel, a file asked for from the chat', () => {
 })
 
 describe('ChangesPanel, as Claude Code on the web draws it', () => {
-  test('each file shows its lines added and removed, a count of none too, in the list and over its diff', async () => {
+  test('each file shows its lines added and removed, a count of none too, once: in the list, not again over its diff', async () => {
     readRun.mockResolvedValue({ source: 'checkout', changes: { 'src/app.ts': { status: 'modified', committed: true, added: 3, removed: 0 } }, merged: false, from: 'main', to: 'agent-x' })
     render(<ChangesPanel projectId="p1" agentId="run-1" context={context} />)
     await waitFor(() => expect(row(/app\.ts/).textContent).toContain('app.ts+3 −0'))
     // Said in words, not as the signs a screen reader would spell out.
     expect(row(/app\.ts.*3 lines added, none removed/)).toBe(row(/app\.ts/))
-    expect(within(screen.getByRole('region', { name: 'src/app.ts' })).getAllByText('+3')).toHaveLength(1)
+    expect(within(screen.getByRole('region', { name: 'src/app.ts' })).queryAllByText('+3')).toHaveLength(0)
   })
 
   test('a diff numbers its lines and says how many unchanged lines it leaves out; a click shows the whole file', async () => {
@@ -442,7 +443,7 @@ describe('ChangesPanel, as Claude Code on the web draws it', () => {
     await say({ ...base, status: 'untracked', patch: '' }, 'Empty file.')
     await say({ ...base, patch: '@@ -1 +1 @@\n-a\n+b', truncated: true }, 'Cut here. The rest is in the worktree.')
     await say(null, 'No change to show.')
-    await say(new Error('daemon restarted'), 'Reading the diff…')
+    await say(new Error('daemon restarted'), 'Loading…')
   })
 
   test('a file longer than a diff may be offers no whole view: it would be cut before the change', async () => {

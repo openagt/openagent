@@ -10,7 +10,6 @@ import { AutomationsPage } from './AutomationsPage.js'
 import { SchedulerCard } from './SchedulerCard.js'
 import { SchedulerSettings } from './SchedulerSettings.js'
 import { cannotRun, loosestSpendOffset, readSchedulers, saveSpendOffset, schedulerStopped, startsNext } from './schedulers.js'
-import './dashboard.css'
 
 export default defineModule({
   pages: [{ segment: 'automations', label: 'Automations', icon: CalendarClock, Page: AutomationsPage }],
@@ -31,5 +30,4 @@ export default defineModule({
       return row.commands.map(command => ({ command: command.command, on: command.on && stopped === undefined && cannotRun(command) === undefined, ...(command.on ? { note: stopped ?? startsNext(command) } : {}) }))
     },
   },
-  stylesheet: 'dashboard.css',
 })

@@ -248,9 +248,10 @@ export function keptWhereHint(opened: OpenedAutomation | undefined): string {
 }
 
 /** What a row says before its automation is removed, for the person to confirm: what is deleted, what of it can be brought back, and what stays. */
-export function removeWarning(command: { onThisMachine?: true }): string {
+export function removeWarning(command: { onThisMachine?: true; untracked?: true }): string {
   const rest = 'Its switch and your picks for it go with it. The records of its past runs stay.'
   if (command.onThisMachine) return `Its file is deleted. It is kept on this machine alone, outside git, so it cannot be brought back. ${rest}`
+  if (command.untracked) return `Its skill file is deleted from your files in this project. It was never committed, so nobody else has it, and it cannot be brought back. ${rest}`
   return `Its skill file is deleted from your files in this project, and nothing is committed for you. Git can bring back only what you committed of it: a file never committed, or your last changes to it, cannot be brought back. Everyone else who has the project keeps the row until your deletion reaches them. ${rest}`
 }
 

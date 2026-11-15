@@ -46,6 +46,7 @@
     "clean": "rm -rf dist dist-test SKILL.md"
   },
   "dependencies": {
+    "@openagt/agent-data": "workspace:*",
     "@openagt/agent-driver": "workspace:*",
     "@openagt/agent-driver-claude": "workspace:*",
     "@openagt/agent-driver-codex": "workspace:*"

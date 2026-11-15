@@ -113,7 +113,7 @@ export function SubagentSteps({ steps, lead, onOpen }: { steps: readonly Subagen
               </span>
             </>
           ) : (
-            <span key={words} className="morph-in min-w-0 truncate text-left group-hover/status:text-foreground/80 group-has-focus-visible/status:text-foreground/80">
+            <span key={words} className="morph-in min-w-0 truncate text-left group-hover/status:text-foreground group-has-focus-visible/status:text-foreground">
               {words}
             </span>
           )}

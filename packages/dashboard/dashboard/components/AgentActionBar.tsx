@@ -2,7 +2,7 @@ import type { AgentWorktree, OpenAgentEvent } from '../../src/index.js'
 import { formatBytes } from '../../src/client.js'
 import { AgentActionsMenu } from './AgentActionsMenu.js'
 import { AgentErrorCount } from './AgentErrorCount.js'
-import { PaneMenu, PaneToggles, TopBar } from './Panes.js'
+import { PaneToggles, TopBar } from './Panes.js'
 import { ShowSidebarButton } from './SidebarToggle.js'
 import { ProjectMenu } from './ProjectActions.js'
 import { SESSIONS_ID } from '../../src/project-address.js'
@@ -74,7 +74,6 @@ export function AgentActionBar({
     <TopBar>
       <div className="flex h-11 shrink-0 items-center gap-2 overflow-hidden pr-2 md:pl-4 max-md:pl-11">
         <ShowSidebarButton />
-        <PaneMenu />
         {/* Which session this is: its name, which is the button of its menu and the one part that
             gives up width. */}
         <AgentActionsMenu
@@ -97,8 +96,11 @@ export function AgentActionBar({
             count is only useful if it is whole. */}
         {ready && <AgentErrorCount events={events} />}
         {/* A session with no project has no project's menu. */}
-        {projectId !== SESSIONS_ID && <ProjectMenu projectId={projectId} onProjectRemoved={onProjectRemoved} />}
-        <PaneToggles />
+        {/* The ⋮ and the panes' icons, one kind of button, 4px apart. */}
+        <div className="flex shrink-0 items-center gap-1">
+          {projectId !== SESSIONS_ID && <ProjectMenu projectId={projectId} onProjectRemoved={onProjectRemoved} />}
+          <PaneToggles />
+        </div>
       </div>
     </TopBar>
   )

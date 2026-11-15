@@ -84,7 +84,7 @@ export function MessageScrollerButton({ direction = 'end', className, children, 
       direction={direction}
       aria-label={direction === 'end' ? 'Jump to latest' : 'Jump to start'}
       className={cn(
-        'absolute left-1/2 z-10 flex size-9 -translate-x-1/2 items-center justify-center rounded-full border border-border/60 bg-muted/80 text-foreground shadow-[0_2px_4px_rgb(0_0_0/0.07),0_6px_16px_rgb(0_0_0/0.24)] backdrop-blur-sm transition-opacity duration-200 hover:bg-accent',
+        'absolute left-1/2 z-10 flex size-9 -translate-x-1/2 items-center justify-center rounded-full border border-border/60 bg-muted/80 text-foreground shadow-[0_2px_4px_rgb(0_0_0/0.07),0_6px_16px_rgb(0_0_0/0.24)] backdrop-blur-sm transition-opacity duration-140 hover:bg-accent',
         'data-[active=false]:pointer-events-none data-[active=false]:opacity-0 data-[active=true]:opacity-100',
         'data-[direction=end]:bottom-3 data-[direction=start]:top-3',
         className,

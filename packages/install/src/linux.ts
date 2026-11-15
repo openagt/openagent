@@ -3,7 +3,7 @@ import { mkdir, readFile, readdir, rm, writeFile } from 'node:fs/promises'
 import { homedir, release } from 'node:os'
 import { dirname, join } from 'node:path'
 import { SECURE_PORT } from '@openagt/dashboard/secure-address'
-import { ADDRESS, LOOPBACK_ADDRESS, addHostsLine, quoted, removeHostsLine } from './address.js'
+import { ADDRESS, LOOPBACK_ADDRESS, addHostsLine, hasHostsLine, quoted, removeHostsLine } from './address.js'
 import type { Platform } from './platform.js'
 import { asAdmin, installed, run, succeeds } from './run.js'
 
@@ -289,6 +289,8 @@ export const linux: Platform = {
       await run('certutil', ['-D', '-d', `sql:${store}`, '-n', NSS_NICKNAME]).catch(() => {})
     }
   },
+  dashboardInstalled: env => existsSync(places(env).unit),
+  adminInstalled: async () => (await hasHostsLine('/etc/hosts')) || existsSync(PORT_UNIT_FILE) || existsSync(SYSTEM_STORE.file),
   adminUninstall() {
     const store = systemStore()
     return {

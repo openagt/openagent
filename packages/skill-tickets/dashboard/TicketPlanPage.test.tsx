@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, test } from 'vitest'
-import { cleanup, fireEvent, screen, waitFor } from '@testing-library/react'
+import { cleanup, fireEvent, screen, waitFor, within } from '@testing-library/react'
 import type { ModuleAgent } from '@openagt/dashboard/module'
 import { planTicketPrompt, workOnTicketPrompt } from '../src/module.js'
 import { fakeHost, renderWithHost, type FakeHost } from './test-host.js'
@@ -29,9 +29,18 @@ describe('TicketPlanPage (#685)', () => {
     expect(screen.getByRole('tab', { name: 'Plan', selected: true })).toBeTruthy()
   })
 
-  test('a ticket with no plan says so rather than showing a blank page', async () => {
-    render(undefined)
-    expect(await screen.findByText(/no plan yet/i)).toBeTruthy()
+  test('a ticket with no plan says so in one line, and offers the press that has an agent write it', async () => {
+    const host = render(undefined)
+    const note = await screen.findByText('No plan yet.')
+    fireEvent.click(within(note.parentElement!).getByRole('button', { name: 'Plan now' }))
+    await waitFor(() => expect(host.startRun).toHaveBeenCalledWith('p1', planTicketPrompt(SLUG)))
+  })
+
+  test('a ticket an agent holds, with no plan, says so and offers no press', async () => {
+    const held = fakeHost({ p1: { [`show ${SLUG} --local`]: { ok: true, ticket: { ...TICKET, locked: true } } } }, { p1: [] })
+    renderWithHost(<TicketPlanPage projectId="p1" slug={SLUG} />, held)
+    const note = await screen.findByText('No plan yet.')
+    expect(within(note.parentElement!).queryByRole('button')).toBeNull()
   })
 
   test('a plan with a known author names its session and opens it (#1511)', async () => {
@@ -70,6 +79,6 @@ describe('TicketPlanPage (#685)', () => {
   test('Back returns to the list, the module\'s own page', async () => {
     const host = render(PLAN)
     fireEvent.click(await screen.findByRole('button', { name: /tickets/i }))
-    expect(host.openPage).toHaveBeenCalledWith('tickets')
+    expect(host.backToPage).toHaveBeenCalledWith('tickets')
   })
 })

@@ -43,10 +43,10 @@ describe('Settings › Repos', () => {
 
   test('a folder added to search in can be taken off', async () => {
     render(<RepoSourcesSettings />)
-    expect(await screen.findByText('/work/clients')).toBeTruthy()
+    expect(await screen.findByTitle('/work/clients')).toBeTruthy()
     sources = { ...sources, folders: [] }
     fireEvent.click(screen.getByRole('button', { name: 'Remove /work/clients' }))
     await waitFor(() => expect(sendRemoveRepoFolder).toHaveBeenCalledWith('/work/clients'))
-    await waitFor(() => expect(screen.queryByText('/work/clients')).toBeNull())
+    await waitFor(() => expect(screen.queryByTitle('/work/clients')).toBeNull())
   })
 })

@@ -285,7 +285,7 @@ export async function runPackageCommand(root: string, command: { name: string; b
   }
 }
 
-/** What a failed command said, as one line: a refusal's reason is its last line; a wrong command line (exit 2) says what was wrong first, then the usage. */
+/** What a failed command said, as one line: a refusal's reason is its last line; a wrong command line (exit 2) says what was wrong first, then where the usage is. */
 function failureLine(stderr: string, code: unknown): string | undefined {
   const lines = stderr.trim().split('\n')
   return (code === 2 ? lines[0] : lines.at(-1))?.trim()

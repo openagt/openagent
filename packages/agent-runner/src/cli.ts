@@ -1,4 +1,4 @@
-import { AGENT_ENV, Refused, UsageError, errorMessage, inRepo, nodeGitRunner, parseCommandArgs, runCommandLine, runPackageCommand, sessionsHomeOf, type Command, type GitRunner, PROJECT_SKILLS_ENV, SKILLS_OFF_ENV, SKILLS_ON_ENV } from '@openagt/agent-data'
+import { AGENT_ENV, Refused, UsageError, errorMessage, inRepo, nodeGitRunner, parseCommandArgs, runCommandLine, runPackageCommand, sessionsHomeOf, PROJECT_SKILLS_ENV, SKILLS_OFF_ENV, SKILLS_ON_ENV, helpRows, helpText, type Command, type GitRunner } from '@openagt/agent-data'
 import { liftSkillRules, projectRoot } from '@openagt/skill-branches'
 import { findRun } from '@openagt/skill-logs'
 import { DRIVER_NAMES, GIT_ACCOUNT_ENV, agentLoginFor, detachResume, detachRun, isDriverName, readyToRun, resumeProject, runProject, type DriverName, type SpawnedResume } from './runner.js'
@@ -19,68 +19,42 @@ import { sessionRepos } from './session-folder.js'
 
 export const USAGE = `usage: agent-runner <command>
 
-  run <prompt> [--model <id>] [--effort <level>] [--driver <claude-code|codex>] [--publish <commit|branch|pr|merge>] [--attach <text>] [--parent <id>] [--base <ref>]
-      [--pr-base <branch>] [--branch <name>] [--for <thread>] [--repos <folders>]
-                                one run of <prompt> in its own checkout, now, recorded; on Claude Code unless --driver says Codex,
-                                on the coding agent's own default model unless --model names one;
-                                with --publish, the agent is told, in one sentence after the prompt, how far to take its work when it finishes: commit it, and from there push its branch,
-                                open its pull request, or set the request to merge once its checks pass; without it the prompt goes as written, and nothing is committed or published unless the prompt asks;
-                                with --attach, the agent is handed <text> with the prompt, after it and before the --publish sentence, and with no later message; the run's record keeps it apart from the prompt, which alone names the run;
-                                with --parent, the run <id> is told when this one ends: which run, how it ended, its last words, as its next prompt;
-                                with --base, the run's branch starts from <ref> instead of origin's default branch; refs/remotes/origin/<branch> is that branch as origin has it, fetched first;
-                                with --pr-base, the --publish sentence names <branch> as the branch its pull request goes into, instead of origin's default branch;
-                                with --branch, the run works on <name>, a branch that exists, such as a person's pull request's, instead of a fresh one;
-                                with --for, the run's record names what it was started for, a thread's address on the git host, so the next call there finds it;
-                                with --repos, in the sessions home, each git repository among <folders>, one per line, is copied into the session's folder (below)
-  run --detach <prompt>         the same run in its own process, answered at once with its id: what a dashboard's start hook runs
-  run --resume <id> [<text>] [--answer <label>] [--publish <commit|branch|pr|merge|nothing>]
-                                continue an ended run: the same record, its session resumed; the text as the next prompt, or the answer to the question it ended on;
-                                with --publish, the run takes its work that far from here on, or, with nothing, only as far as its prompts ask; at its record's level without it
-  run --detach --resume <id> …  the same continuing in its own process, answered at once: what a dashboard's resume hook runs
-  run --resume <id> … --by <who>
-                                kept on the run's record with the time, until its next resume: a scheduler's row that resumed it, which counts the run as its own
-  check [--driver <claude-code|codex>]
-                                whether a run can start here: the coding agent's CLI installed and logged in, and its warnings; what a dashboard's check hook runs
-  git-host <command> [<arg>…]   run a command of the project's git host, whichever package is it, and print what it printed: a skill's check reads
-                                pull requests with no host named (git-host replies); refused where the project has no git host
-  init                          this tool's lines in the dashboard's .openagent/hooks.yml, so its Start works; a line already there is kept
-  cleanup                       remove what this tool left in the project: the runs' locks and stderr files, then .agent-runner/ and the rule hiding it from git once it is empty;
-                                config.yml is yours and stays; refused while a run's process is alive; the command a dashboard asks for when a project is removed with its files
+${helpRows([
+  ['run <prompt> [--model <id>] [--effort <level>] [--driver <claude-code|codex>] [<option>…]', `one run of <prompt> in its own checkout, now, recorded; on Claude Code unless --driver says Codex, on the coding agent's own default model unless --model names one`],
+  ['run --detach <prompt>', `the same run in its own process, answered at once with its id: what a dashboard's start hook runs`],
+  ['run --resume <id> [<text>] [--answer <label>] [--publish <commit|branch|pr|merge|nothing>]', `continue an ended run: the same record, its session resumed; the text as the next prompt, or the answer to the question it ended on; with --publish, the run takes its work that far from here on, or, with nothing, only as far as its prompts ask; at its record's level without it`],
+  ['run --detach --resume <id> …', `the same continuing in its own process, answered at once: what a dashboard's resume hook runs`],
+  ['run --resume <id> … --by <who>', `kept on the run's record with the time, until its next resume: a scheduler's row that resumed it, which counts the run as its own`],
+  ['check [--driver <claude-code|codex>]', `whether a run can start here: the coding agent's CLI installed and logged in, and its warnings; what a dashboard's check hook runs`],
+  ['git-host <command> [<arg>…]', `run a command of the project's git host, whichever package is it, and print what it printed: a skill's check reads pull requests with no host named (git-host replies); refused where the project has no git host`],
+  ['init', `this tool's lines in the dashboard's .openagent/hooks.yml, so its Start works; a line already there is kept`],
+  ['cleanup', `remove what this tool left in the project: the runs' locks and stderr files, then .agent-runner/ and the rule hiding it from git once it is empty; config.yml is yours and stays; refused while a run's process is alive; the command a dashboard asks for when a project is removed with its files`],
+  'Options of run:',
+  ['--publish <commit|branch|pr|merge>', 'with --publish, the agent is told, in one sentence after the prompt, how far to take its work when it finishes: commit it, and from there push its branch, open its pull request, or set the request to merge once its checks pass; without it the prompt goes as written, and nothing is committed or published unless the prompt asks'],
+  ['--attach <text>', `with --attach, the agent is handed <text> with the prompt, after it and before the --publish sentence, and with no later message; the run's record keeps it apart from the prompt, which alone names the run`],
+  ['--parent <id>', 'with --parent, the run <id> is told when this one ends: which run, how it ended, its last words, as its next prompt'],
+  ['--base <ref>', `with --base, the run's branch starts from <ref> instead of origin's default branch; refs/remotes/origin/<branch> is that branch as origin has it, fetched first`],
+  ['--pr-base <branch>', `with --pr-base, the --publish sentence names <branch> as the branch its pull request goes into, instead of origin's default branch`],
+  ['--branch <name>', `with --branch, the run works on <name>, a branch that exists, such as a person's pull request's, instead of a fresh one`],
+  ['--for <thread>', `with --for, the run's record names what it was started for, a thread's address on the git host, so the next call there finds it`],
+  ['--repos <folders>', `with --repos, in the sessions home, each git repository among <folders>, one per line, is copied into the session's folder (below)`],
+])}
 
-In the sessions home (~/.openagent-sessions, or $XDG_CONFIG_HOME/openagent-sessions) a run has no project: it works in a
-folder of its own there, <home>/<id>, with no git, kept when it ends; its record is kept with the other sessions' in the
-personal folder, and --publish, --base, --pr-base and --branch are refused. Each repo given with --repos is a clone in
-it, <home>/<id>/<repo's folder name>, on a new branch agent-<id>, its origin the repo's own (none when the repo has none);
-the run's record names them, and a resumed run goes on with the same ones. --repos is refused in a project.
+${helpText(`In the sessions home (~/.openagent-sessions, or $XDG_CONFIG_HOME/openagent-sessions) a run has no project: it works in a folder of its own there, <home>/<id>, with no git, kept when it ends; its record is kept with the other sessions' in the personal folder, and --publish, --base, --pr-base and --branch are refused. Each repo given with --repos is a clone in it, <home>/<id>/<repo's folder name>, on a new branch agent-<id>, its origin the repo's own (none when the repo has none); the run's record names them, and a resumed run goes on with the same ones. --repos is refused in a project.`)}
 
-A run is on an agent (~/.openagent/agents/<id>.json: a name, skills, accounts), the one OPENAGENT_AGENT names, else the
-default agent; its skills are linked into the checkout like the default ones, and its accounts are the run's: at the git
-host its login, unless OPENAGENT_GIT_ACCOUNT names the pick for that session, and on Claude and Codex the accounts it
-names that this computer has. The record keeps the agent and the login, and a resumed run goes on with them. An account
-this computer cannot use at the git host stops the run before it starts, naming it.
+${helpText(`A run is on an agent (~/.openagent/agents/<id>.json: a name, skills, accounts), the one OPENAGENT_AGENT names, else the default agent; its skills are linked into the checkout like the default ones, and its accounts are the run's: at the git host its login, unless OPENAGENT_GIT_ACCOUNT names the pick for that session, and on Claude and Codex the accounts it names that this computer has. The record keeps the agent and the login, and a resumed run goes on with them. An account this computer cannot use at the git host stops the run before it starts, naming it.`)}
 
-A session's picks of skills, for that run alone: OPENAGENT_SKILLS_ON names skills its agent lacks that it gets too, and
-OPENAGENT_SKILLS_OFF skills of its agent's it does not get, each names separated by commas; OPENAGENT_PROJECT_SKILLS says
-which of the project's own skills (.agents/skills/<name>, .claude/skills/<name>) stay in its checkout: all (unset too),
-none, or their names separated by commas, the others left out of that checkout by git's sparse checkout, nothing
-committed. The record keeps the picks, and a resumed run goes on with them.
+${helpText(`A session's picks of skills, for that run alone: OPENAGENT_SKILLS_ON names skills its agent lacks that it gets too, and OPENAGENT_SKILLS_OFF skills of its agent's it does not get, each names separated by commas; OPENAGENT_PROJECT_SKILLS says which of the project's own skills (.agents/skills/<name>, .claude/skills/<name>) stay in its checkout: all (unset too), none, or their names separated by commas, the others left out of that checkout by git's sparse checkout, nothing committed. The record keeps the picks, and a resumed run goes on with them.`)}
 
-When a run ends waiting on a question, or ends done with a pull request it did not have, the \`ended:\` line in the
-project's .agent-runner/config.yml runs, if there is one, in the project's root, with MESSAGE (one line for a person),
-RUN_ID, STATUS, QUESTION and PR_URL in its environment. The file is this machine's: keep it out of git (this tool hides
-.agent-runner/ from git once a run has started here). A run's coding agent loads the person's own setup, as when
-started by hand; in the same file, each part is left out with its own line under \`personal:\`, so a run does the same
-job on every machine:
-  personal:
-    memory: off       Claude Code's auto-memory; Codex's memories
-    connectors: off   your claude.ai connectors; Codex's apps and plugins
-    skills: off       Claude Code: your user settings (effort, model, hooks, a login through apiKeyHelper or env), the skills
-                      synced from your claude.ai account, ~/.claude/CLAUDE.md, ~/.claude/skills.
-                      Codex: ~/.codex/AGENTS.md, ~/.codex/skills, ~/.codex/config.toml (with a model provider or
-                      login set there) and its memories, so Codex's memory stays on only with skills on too (\`check\` warns).
-                      Codex loads skills in ~/.agents/skills either way; with skills off, \`check --driver codex\` warns about them.
+${helpText(`When a run ends waiting on a question, or ends done with a pull request it did not have, the \`ended:\` line in the project's .agent-runner/config.yml runs, if there is one, in the project's root, with MESSAGE (one line for a person), RUN_ID, STATUS, QUESTION and PR_URL in its environment. The file is this machine's: keep it out of git (this tool hides .agent-runner/ from git once a run has started here). A run's coding agent loads the person's own setup, as when started by hand; in the same file, each part is left out with its own line under \`personal:\`, so a run does the same job on every machine:`)}
+${helpRows([
+  ['personal:', ''],
+  ['  memory: off', `Claude Code's auto-memory; Codex's memories`],
+  ['  connectors: off', `your claude.ai connectors; Codex's apps and plugins`],
+  ['  skills: off', `Claude Code: your user settings (effort, model, hooks, a login through apiKeyHelper or env), the skills synced from your claude.ai account, ~/.claude/CLAUDE.md, ~/.claude/skills.\nCodex: ~/.codex/AGENTS.md, ~/.codex/skills, ~/.codex/config.toml (with a model provider or login set there) and its memories, so Codex's memory stays on only with skills on too (\`check\` warns).\nCodex loads skills in ~/.agents/skills either way; with skills off, \`check --driver codex\` warns about them.`],
+])}
 
-JSON on stdout. Exit code 1 for a refusal or a failure (the reason on stderr), 2 for a usage error.`
+${helpText('JSON on stdout. Exit code 1 for a refusal or a failure (the reason on stderr), 2 for a usage error.')}`
 
 export interface CliIo {
   cwd: string
@@ -89,7 +63,7 @@ export interface CliIo {
 }
 
 export function runCli(argv: string[], io: CliIo, git: GitRunner = nodeGitRunner()): Promise<number> {
-  return runCommandLine(argv, io, { usage: USAGE, commands: COMMANDS }, io, git)
+  return runCommandLine(argv, io, { program: 'agent-runner', usage: USAGE, commands: COMMANDS }, io, git)
 }
 
 /** The flags of `run`: what a run is asked, how its process is started, and what a resume continues it with. */

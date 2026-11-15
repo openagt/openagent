@@ -178,6 +178,11 @@ export function topEntries(entries: readonly string[], count: number): string[] 
   return entries.slice(0, Math.max(1, count))
 }
 
+/** The fan-out button's words, on the Overview's card and the Queue page alike. */
+export function fanOutPress(count: number): string {
+  return count === 1 ? 'Start 1 agent' : `Start ${count} agents`
+}
+
 /** What the fan-out button promises, sized to what a click would actually start. */
 export function fanOutLabel(count: number): string {
   return count === 1 ? 'Start an agent working on the top entry' : `Start ${count} agents working on the top ${count} entries`

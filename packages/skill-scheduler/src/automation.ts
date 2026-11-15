@@ -6,7 +6,7 @@ import { MAX_NAME, OWN_AUTOMATIONS_DIR, OWN_TEXT_MAX, RUN_SKILLS_DIR, SKILL_FILE
 import { createHash } from 'node:crypto'
 import { FOLDER_LITTER, HALF_SAVED, automationOf, automationSkill, frontMatterOf, wellFormed, type NewAutomation } from './automation-file.js'
 import { readSchedule, skillFile, skillSchedule, whyUnlisted } from './schedule.js'
-import { startRef } from './start-point.js'
+import { isOnCommit, startRef } from './start-point.js'
 
 /**
  * A person's own automation: a prompt they wrote, saved as a command skill of the project, so it
@@ -281,4 +281,19 @@ export async function removeAutomation(repo: string, name: string, git: GitRunne
   // One line for the one file, its first letter what the index holds: `A` for a file added and never committed.
   const held = await git(['status', '--porcelain', '--', join(folder, SKILL_FILE)], repo).catch(() => undefined)
   return { ok: true, command: name, file: found.file, git: held === undefined ? 'unknown' : held.trim() === '' ? 'nothing' : held.startsWith('A') ? 'staged' : 'committed', startsFrom: await startRef(repo, git) }
+}
+
+/**
+ * What git holds of a shared automation's file, as `status` says it on its row: whether git has
+ * it at all (a file never added is `untracked`: removing it takes it from nobody else), and, when
+ * it is not at `ref`, where a run's checkout starts as this clone last saw it, that start point
+ * (`notOn`): a run of it would start nothing. Nothing is fetched; a commit that cannot be read
+ * says nothing.
+ */
+export async function sharedInGit(repo: string, name: string, ref: string, git: GitRunner): Promise<{ untracked?: true; notOn?: string }> {
+  // Git is asked about the file where it really is: the skills folder may be a link to another one.
+  const file = join(await realpath(join(repo, RUN_SKILLS_DIR)), name, SKILL_FILE)
+  const untracked = (await git(['ls-files', '--', file], repo).catch(() => 'unknown')).trim() === ''
+  const there = (await isOnCommit(repo, ref, `${RUN_SKILLS_DIR}/${name}/${SKILL_FILE}`, git)) ?? true
+  return { ...(untracked ? { untracked: true as const } : {}), ...(there ? {} : { notOn: ref }) }
 }

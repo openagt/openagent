@@ -60,8 +60,11 @@ vi.mock('../rpc/server-logins.js', () => serverLogins)
 const sendOpenInApp = vi.hoisted(() => vi.fn())
 vi.mock('../rpc/control.js', () => ({ sendOpenInApp }))
 const openSettings = vi.hoisted(() => vi.fn())
-const openPermissions = vi.hoisted(() => vi.fn())
-vi.mock('../lib/use-route.js', async () => ({ ...(await vi.importActual<typeof import('../lib/use-route.js')>('../lib/use-route.js')), openSettings, openPermissions }))
+const openPage = vi.hoisted(() => vi.fn())
+vi.mock('../lib/host-services.js', async importOriginal => {
+  const actual = await importOriginal<typeof import('../lib/host-services.js')>()
+  return { ...actual, INERT_HOST_SERVICES: { ...actual.INERT_HOST_SERVICES, openSettings, openPage } }
+})
 
 const start = vi.hoisted(() => vi.fn())
 // What the start says of itself beside its answer: that the machine is cloning the project, or why there is no run.
@@ -271,10 +274,12 @@ describe('StartAgentForm (#1774)', () => {
     render(<StartAgentForm {...props} />)
     const alert = await screen.findByRole('alert')
     expect(alert.textContent).toBe(startSays.error)
-    for (const part of ['border-danger/30', 'var(--color-danger)_8%,var(--color-background)']) expect(alert.className).toContain(part)
+    // Said wrong by its tint and its mark; the words in the text's own colour, which reads on the tint.
+    expect(alert.className).toContain('var(--color-danger)_8%,var(--color-background)')
+    expect(alert.className).toContain('text-foreground')
+    expect(alert.querySelector('svg')!.getAttribute('class')).toContain('text-danger')
     const title = within(alert).getByText('shop could not be cloned on Studio.')
     expect(title.className).toContain('text-sm')
-    expect(title.className).toContain('text-danger')
     expect(within(alert).getByText('Studio says: This computer has no login that can read github.com/acme/shop.').className).toContain('text-xs')
     expect(alert.parentElement!.className).toContain('bottom-full')
   })
@@ -530,8 +535,8 @@ describe('StartAgentForm (#1774)', () => {
     expect(onStartCheck).toHaveBeenCalledWith('p1', 'codex')
     const [problem, warning] = screen.getAllByRole('alert')
     expect(problem!.textContent).toBe('`codex` is not logged in. Run `codex login`, then start again.')
-    expect(within(problem!).getByText('`codex` is not logged in.').className).toContain('text-danger')
-    expect(warning!.className).toContain('text-warning')
+    expect(problem!.querySelector('svg')!.getAttribute('class')).toContain('text-danger')
+    expect(warning!.querySelector('svg')!.getAttribute('class')).toContain('text-warning')
     expect((screen.getByText('submit-typed') as HTMLButtonElement).disabled).toBe(false)
     // Above the box, over the page: the box does not move when they come.
     expect(problem!.parentElement!.className).toContain('bottom-full')
@@ -626,7 +631,7 @@ describe('StartAgentForm (#1774)', () => {
     fireEvent.click(await screen.findByRole('button', { name: 'Open Accounts' }))
     expect(screen.getByRole('alert').textContent).toContain('Codex is not logged in on Dani\'s PC.')
     expect(onMachineStartCheck).toHaveBeenCalledWith('p1', 'd2', 'codex')
-    expect(openPermissions).toHaveBeenCalled()
+    expect(openPage).toHaveBeenCalledWith('permissions')
   })
 
   test('a machine without the picked agent says so in words naming it, and the press opens its page, where an update brings it', async () => {

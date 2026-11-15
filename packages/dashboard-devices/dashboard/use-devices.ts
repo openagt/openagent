@@ -1,8 +1,8 @@
 import { useEffect, useRef, useState } from 'react'
 import { useModuleHost, usePolled, type ModuleHost, type ModuleMachines } from '@openagt/dashboard/module'
-import { failed, loadStatus, readPersonThere, type Answer, type DoorStatus, type PersonThere } from './devices.js'
+import { failed, loadStatus, readPersonThere, type Answer, type DoorStatus } from './devices.js'
 import { addThrough, askLink, connect, forget, installDone, loadDevices, loadServers, loadShared, markAdded, ownGithub, reach, type DevicesRead, type OwnGithub, type ServerRow, type ServersRead, type SharedRow, type StepState } from './servers.js'
-import { hasDoor, itemsOf, onTailscale, type Item, type Sources } from './model.js'
+import { hasDoor, itemsOf, onTailscale, type Item, type PersonRead, type Sources } from './model.js'
 import { useChange } from './parts.js'
 
 // What Settings › Devices reads, read once for the list and every page of it: this computer's
@@ -42,7 +42,7 @@ export interface Devices {
   /** This computer is itself a server OpenAgent was installed on: it offers no server to set up. */
   isServer: boolean
   machines: ModuleMachines | undefined
-  people: Record<string, PersonThere | undefined>
+  people: Record<string, PersonRead>
   /** Who is in at each server this computer installed, by address; and why the last read failed. */
   devices: Record<string, DevicesRead | undefined>
   devicesError: Record<string, string | undefined>
@@ -128,10 +128,10 @@ export function useDevices({ everyMs, devicesEveryMs, devicesAnswerMs = DEVICES_
   // What each server with a door of its own, set up elsewhere, says of this computer's person there; a computer on Tailscale says too.
   const doors = (machines?.machines ?? []).filter(machine => (hasDoor(machine) || onTailscale(machine)) && !installed(machine.url))
   const doorIds = doors.map(machine => machine.id).join(' ')
-  const { value: people } = usePolled<Record<string, PersonThere | undefined>>(
+  const { value: people } = usePolled<Record<string, PersonRead>>(
     doors.length
       ? async () => {
-          const said = await Promise.all(doors.map(async machine => [machine.id, await host.machinePerson(machine.id).then(asked => (asked.ok ? readPersonThere(asked.said) : undefined))] as const))
+          const said = await Promise.all(doors.map(async machine => [machine.id, await host.machinePerson(machine.id).then(asked => (asked.ok ? readPersonThere(asked.said) : asked.unknown ? undefined : null))] as const))
           return Object.fromEntries(said)
         }
       : null,
@@ -189,6 +189,8 @@ export function useDevices({ everyMs, devicesEveryMs, devicesAnswerMs = DEVICES_
   const [notAdded, setNotAdded] = useState<Record<string, string>>({})
   const [pressed, setPressed] = useState<string | undefined>()
   const adding = useRef(new Set<string>())
+  // The servers the page started adding by itself, by address: a page drawn before the add ended still shows the server waiting, and would ask its door for a second link.
+  const addedByItself = useRef(new Set<string>())
   // The servers that are to use this computer's logins once they are saved, by address.
   const wantsLogins = useRef(new Set<string>())
   const [logins, setLogins] = useState<Devices['logins']>({})
@@ -273,7 +275,13 @@ export function useDevices({ everyMs, devicesEveryMs, devicesAnswerMs = DEVICES_
   // A server whose install just ended is added by itself, once: a failure is told, and tried again on a press.
   useEffect(() => {
     if (!machines) return
-    for (const server of servers) if (server.adding && installDone(server) && notAdded[server.address] === undefined) void addToMachines(server)
+    for (const server of servers) {
+      if (!server.adding || !installDone(server)) addedByItself.current.delete(server.address)
+      else if (!addedByItself.current.has(server.address)) {
+        addedByItself.current.add(server.address)
+        void addToMachines(server)
+      }
+    }
   })
 
   const removeMachine = async (id: string): Promise<boolean> => {

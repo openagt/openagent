@@ -76,23 +76,24 @@ export function TicketStartActions({
     disabled: queued === 'running' || queued === 'done' || action.done,
     onSelect: () => void queue(action.key),
   }))
-  const size = compact ? 'xs' : 'sm'
-  const iconClass = compact ? 'h-3 w-3' : 'h-3.5 w-3.5'
+  const size = compact ? 'sm' : 'default'
   return (
     <>
       {isQueued && (
-        <span className="flex items-center gap-1 text-[10px] text-muted-foreground">
-          <Check className="h-3 w-3" aria-hidden /> Queued
+        <span className="flex items-center gap-1 text-xs text-muted-foreground">
+          <Check className="size-3.5" aria-hidden /> Queued
         </span>
       )}
       {queued !== null && typeof queued === 'object' && (
-        <span role="alert" title={queued.error} className={compact ? 'text-[10px] text-danger' : 'text-xs text-danger'}>
+        <span role="alert" title={queued.error} className="text-xs text-danger">
           {compact ? 'Not queued' : `Not queued: ${queued.error}`}
         </span>
       )}
+      {/* The page's one primary press; on a list's row, a ghost press among many rows. */}
       <StartAgentButton
+        variant={compact ? 'ghost' : 'default'}
         size={size}
-        icon={<step.Icon className={iconClass} aria-hidden />}
+        icon={<step.Icon className="size-4" aria-hidden />}
         label={step.now}
         menuAriaLabel={step.menu}
         tooltip={step.tooltip}

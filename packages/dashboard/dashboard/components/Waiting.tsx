@@ -1,19 +1,17 @@
-import { useEffect, useState, type ReactNode } from 'react'
-import { cn } from '../lib/utils.js'
+import type { ReactNode } from 'react'
+import { Slot } from './ui/slot.js'
 
-/** How long a read may take before the line saying it is waiting shows. */
-const WAIT_MS = 500
+/** A read with no answer yet. */
+const UNKNOWN = { value: null, state: 'unknown' } as const
 
 /**
- * What a pane says while it waits on a read ("Reading the file…"), shown only once the read takes
- * a moment: a read that answers at once goes from nothing straight to what it read, with no line
- * flashing between. It keeps its room while unseen, so nothing moves when it shows.
+ * A part that only waits, as a {@link Slot} waits: `shape` holds the room, unseen for the first
+ * 200ms. For a part that is told a read is out and draws the answer itself once it comes.
  */
-export function Waiting({ children, className }: { children: ReactNode; className?: string }) {
-  const [shown, setShown] = useState(false)
-  useEffect(() => {
-    const timer = setTimeout(() => setShown(true), WAIT_MS)
-    return () => clearTimeout(timer)
-  }, [])
-  return <p className={cn('text-xs text-muted-foreground', !shown && 'invisible', className)}>{children}</p>
+export function Waiting({ shape, className }: { shape: ReactNode; className?: string }) {
+  return (
+    <Slot of={UNKNOWN} shape={shape} className={className}>
+      {() => null}
+    </Slot>
+  )
 }

@@ -1,9 +1,10 @@
+import { existsSync } from 'node:fs'
 import { X509Certificate } from 'node:crypto'
 import { mkdir, readFile, rm, writeFile } from 'node:fs/promises'
 import { homedir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { SECURE_PORT } from '@openagt/dashboard/secure-address'
-import { ADDRESS, LOOPBACK_ADDRESS, addHostsLine, quoted, removeHostsLine } from './address.js'
+import { ADDRESS, LOOPBACK_ADDRESS, addHostsLine, hasHostsLine, quoted, removeHostsLine } from './address.js'
 import type { Platform } from './platform.js'
 import { run, succeeds } from './run.js'
 
@@ -168,6 +169,8 @@ export const mac: Platform = {
     const sha1 = new X509Certificate(pem).fingerprint.replaceAll(':', '')
     await run('security', ['delete-certificate', '-Z', sha1, places(env).keychain]).catch(() => {})
   },
+  dashboardInstalled: env => existsSync(places(env).agent),
+  adminInstalled: async () => (await hasHostsLine('/etc/hosts')) || existsSync(PORT_PLIST),
   adminUninstall: () => ({
     says: `your password as the administrator, once: the hosts line for ${ADDRESS} and its port rule are taken off.`,
     script: adminUninstallScript(),

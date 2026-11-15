@@ -49,6 +49,7 @@ vi.mock('./Composer.js', async () => {
 })
 
 const { AgentComposer } = await import('./AgentComposer.js')
+const { ConfirmDialog } = await import('./ui/confirm-dialog.js')
 
 function renderComposer(over: Partial<Parameters<typeof AgentComposer>[0]> = {}) {
   const onAgentStarted = vi.fn()
@@ -63,7 +64,10 @@ beforeEach(() => {
   sendMessage.mockReset()
   sendStop.mockReset()
 })
-afterEach(cleanup)
+afterEach(() => {
+  cleanup()
+  vi.useRealTimers()
+})
 
 // The empty box's submit slot holds Stop while the agent is live, and nothing (the launcher
 // collapse) once it ended, however it ended: a message continues it.
@@ -141,6 +145,17 @@ describe('AgentComposer box', () => {
       window.matchMedia = matchMedia
     }
   })
+
+  test("on a phone's width the box names no keys either: they would not fit", () => {
+    const matchMedia = window.matchMedia
+    window.matchMedia = (query: string) => ({ ...matchMedia(query), matches: query === '(width < 48rem)' || matchMedia(query).matches })
+    try {
+      renderComposer()
+      expect(props().placeholder).toBe('Message the agent…')
+    } finally {
+      window.matchMedia = matchMedia
+    }
+  })
 })
 
 describe('AgentComposer slot control (#1455)', () => {
@@ -186,15 +201,16 @@ describe('AgentComposer slot control (#1455)', () => {
     expect(screen.queryByRole('button', { name: 'Stop agent' })).toBeNull()
   })
 
-  test('Esc stops a live session, as in Claude Code, unless a dialog or menu took it', async () => {
+  test('Esc stops a live session, as in Claude Code, unless a question or the box took it', async () => {
+    // The clock alone is stood in for: a double press is told by it.
+    vi.useFakeTimers({ toFake: ['Date'] })
     sendStop.mockResolvedValue(undefined)
     renderComposer()
-    const dialog = document.createElement('div')
-    dialog.setAttribute('role', 'dialog')
-    document.body.appendChild(dialog)
-    fireEvent.keyDown(window, { key: 'Escape' })
+    // A question over the session: the key is its Cancel.
+    const question = render(<ConfirmDialog open onOpenChange={() => {}} title="Delete this session?" body="It goes for good." confirmLabel="Delete" />)
+    fireEvent.keyDown(screen.getByRole('alertdialog'), { key: 'Escape' })
     expect(sendStop).not.toHaveBeenCalled()
-    dialog.remove()
+    question.unmount()
     // The box's own suggestions are open: the key closes them, and stops nothing.
     const box = document.createElement('div')
     box.className = 'ProseMirror'
@@ -202,9 +218,14 @@ describe('AgentComposer slot control (#1455)', () => {
     document.body.appendChild(box)
     fireEvent.keyDown(box, { key: 'Escape' })
     expect(sendStop).not.toHaveBeenCalled()
-    // Closed, Esc in the box stops the agent, even when the box takes the key.
+    // Closed, an Esc straight after the one that closed them is the same press, said twice; so is a key held down.
     box.setAttribute('aria-expanded', 'false')
     box.addEventListener('keydown', event => event.preventDefault())
+    fireEvent.keyDown(box, { key: 'Escape' })
+    vi.setSystemTime(Date.now() + 600)
+    fireEvent.keyDown(box, { key: 'Escape', repeat: true })
+    expect(sendStop).not.toHaveBeenCalled()
+    // A press of its own in the box stops the agent, even when the box takes the key.
     fireEvent.keyDown(box, { key: 'Escape' })
     await waitFor(() => expect(sendStop).toHaveBeenCalledWith('p1', 'run-1'))
     box.remove()

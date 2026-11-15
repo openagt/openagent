@@ -65,7 +65,8 @@ export interface JoinedItem {
   key: string
   name: string
   machine: ModuleMachine
-  person: PersonThere
+  /** What its door says of this person there; none while it has not said, or does not answer. */
+  person?: PersonThere
 }
 
 /** Another person's computer, shared with everyone on a server this person is in at. */
@@ -81,6 +82,9 @@ export interface OtherItem {
 
 export type Item = PhoneItem | ComputerItem | ServerItem | JoinedItem | OtherItem
 
+/** What a machine's door says of this person there: who they are; `null`, that it did not answer; nothing, before it is asked, or when it keeps no persons (a computer's door). */
+export type PersonRead = PersonThere | null | undefined
+
 /** What each part says, as the page last read it. */
 export interface Sources {
   /** This computer's door. */
@@ -90,7 +94,7 @@ export interface Sources {
   /** The saved machines, with what each says of itself. */
   machines: readonly ModuleMachine[]
   /** What the door of each server with a door of its own says of this person, by the machine's id, once asked. */
-  people: Readonly<Record<string, PersonThere | undefined>>
+  people: Readonly<Record<string, PersonRead>>
   /** Who is in at each server this computer installed, by its address, once asked. */
   devices: Readonly<Record<string, DevicesRead | undefined>>
 }
@@ -155,9 +159,11 @@ export function itemsOf(sources: Sources): Item[] {
       items.push({ kind: 'phone', key: `on:${machine.id}:${device.id}`, name: device.name, via: { server: machine.url, label: machine.label }, added: device.added, ...(device.seen !== undefined ? { seen: device.seen } : {}), on: { machine, device } })
   }
 
-  // Other computers: each saved machine that is no server, with its device here when it is in here too.
+  // Other computers: each saved machine that is no server, with its device here when it is in here too. A door of its own on
+  // the internet that does not answer is a server's still: only a server's door is asked who this person is there.
+  const isServer = (machine: ModuleMachine): boolean => (people[machine.id] ? true : hasDoor(machine) && people[machine.id] === null)
   for (const machine of machines) {
-    if (installed(machine) || people[machine.id] !== undefined) continue
+    if (installed(machine) || isServer(machine)) continue
     if (machine.owner !== undefined) continue
     const device = doorDevices.find(candidate => isComputer(candidate) && computerOf(candidate) === machine)
     if (device) matched.add(device.id)
@@ -176,7 +182,7 @@ export function itemsOf(sources: Sources): Item[] {
   }
   for (const machine of machines) {
     const person = people[machine.id]
-    if (person && !installed(machine) && machine.owner === undefined) items.push({ kind: 'joined', key: `joined:${machine.id}`, name: machine.label, machine, person })
+    if (isServer(machine) && !installed(machine) && machine.owner === undefined) items.push({ kind: 'joined', key: `joined:${machine.id}`, name: machine.label, machine, ...(person ? { person } : {}) })
   }
   for (const machine of machines) {
     if (machine.owner === undefined || installed(machine)) continue

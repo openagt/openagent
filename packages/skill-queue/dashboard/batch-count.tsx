@@ -1,12 +1,15 @@
 import { Minus, Plus } from 'lucide-react'
-import { Tooltip, TooltipContent, TooltipTrigger } from '@openagt/dashboard/module'
+import { Tooltip, TooltipContent, TooltipTrigger, cn } from '@openagt/dashboard/module'
 
-/** How many agents a project's batch starts, typed or stepped, from one to `max`: the Queue page's and the card's. */
-export function BatchCount({ count, max, onChange }: { count: number; max: number; onChange: (count: number) => void }) {
+/** A step of the count: 24 wide, and on a phone 44 by 44, its press reaching 6 past the group's top and bottom. */
+const STEP_CLASS = 'relative flex h-full w-6 items-center justify-center text-muted-foreground hover:text-foreground disabled:opacity-40 max-md:w-11 max-md:after:absolute max-md:after:inset-x-0 max-md:after:-inset-y-1.5'
+
+/** How many agents a project's batch starts, typed or stepped, from one to `max`: the Queue page's and the card's. `className` sets its height to the press beside it. */
+export function BatchCount({ count, max, onChange, className }: { count: number; max: number; onChange: (count: number) => void; className?: string }) {
   return (
     <Tooltip>
-      <TooltipTrigger render={<div role="group" aria-label="How many agents to start" className="flex h-7 shrink-0 items-center rounded-md border border-border text-xs tabular-nums" />}>
-        <button type="button" aria-label="One agent fewer" disabled={count <= 1} onClick={() => onChange(count - 1)} className="flex h-full w-6 items-center justify-center text-muted-foreground hover:text-foreground disabled:opacity-40">
+      <TooltipTrigger render={<div role="group" aria-label="How many agents to start" className={cn('flex h-7 shrink-0 items-center rounded-md border border-border text-sm tabular-nums', className)} />}>
+        <button type="button" aria-label="One agent fewer" disabled={count <= 1} onClick={() => onChange(count - 1)} className={STEP_CLASS}>
           <Minus className="h-3 w-3" aria-hidden />
         </button>
         <input
@@ -26,7 +29,7 @@ export function BatchCount({ count, max, onChange }: { count: number; max: numbe
           }}
           className="h-full w-7 [appearance:textfield] bg-transparent text-center outline-none [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
         />
-        <button type="button" aria-label="One agent more" disabled={count >= max} onClick={() => onChange(count + 1)} className="flex h-full w-6 items-center justify-center text-muted-foreground hover:text-foreground disabled:opacity-40">
+        <button type="button" aria-label="One agent more" disabled={count >= max} onClick={() => onChange(count + 1)} className={STEP_CLASS}>
           <Plus className="h-3 w-3" aria-hidden />
         </button>
       </TooltipTrigger>

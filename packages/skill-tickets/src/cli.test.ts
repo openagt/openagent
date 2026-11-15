@@ -4,7 +4,7 @@ import { mkdir, mkdtemp, realpath, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { nodeGitRunner, writeSharing, DATA_BRANCH } from '@openagt/agent-data'
-import { runCli, USAGE } from './cli.js'
+import { runCli } from './cli.js'
 
 const git = nodeGitRunner()
 // The command reads AGENT_ID from the real environment, and the scheduler sets it for every run it
@@ -86,7 +86,7 @@ test('reads: list and show come off origin, and a missing ticket is a refusal', 
     // Usage: an unknown command, a wrong argument count.
     const unknown = await run(a!, ['dance'])
     assert.equal(unknown.code, 2)
-    assert.equal(unknown.stderr, `unknown command: dance\n\n${USAGE}`)
+    assert.equal(unknown.stderr, 'unknown command: dance\nRun `tickets --help` for usage.')
     assert.equal((await run(a!, ['show'])).code, 2)
   } finally {
     await cleanup()

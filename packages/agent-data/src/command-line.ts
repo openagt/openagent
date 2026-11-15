@@ -8,7 +8,8 @@ import { listProjectDir, openProjectReader, readProjectFile, writeProjectDataDet
  * `scheduler`, `orchestration`, `agent-runner`), so an agent, a person and OpenAgent read any of
  * them the same way: JSON on stdout, one line for a person on stderr, and the exit code says how
  * it went — 0 for a result, 1 for a refusal or a failure, 2 for a command line that could not be
- * read; `--help` is the usage, for a person, on stdout with exit 0. A refusal is a rule saying no
+ * read, said in one line with a pointer to `--help`; `--help` is the usage, for a person, on
+ * stdout with exit 0. A refusal is a rule saying no
  * (there is no such ticket, the branch is someone else's); it is reported on stdout as
  * `{ ok: false, reason }` so a caller parsing the output learns why, and on stderr so a person does. A failure is reported the same way, its `reason` naming what failed
  * and its `detail` saying how.
@@ -33,8 +34,23 @@ export class Refused extends Error {
   }
 }
 
-/** Thrown inside a command for a command line that cannot be read: why, then the usage, on stderr, exit 2. */
+/** Thrown inside a command for a command line that cannot be read: why, then where the usage is, on stderr, exit 2. */
 export class UsageError extends Error {}
+
+/** What a command line that cannot be read is told on stderr: what was wrong, then where the usage is. */
+export function usageError(program: string, wrong: string): string {
+  return `${wrong}\nRun \`${program} --help\` for usage.`
+}
+
+/** What is wrong with a first word that names no command: an unknown option, or an unknown command. */
+export function unknownWord(word: string): string {
+  return `${word.startsWith('-') ? 'unknown option' : 'unknown command'}: ${word}`
+}
+
+/** What is wrong with a command given arguments it cannot read: the command, and what it was given. */
+export function wrongArguments(command: string, args: readonly string[]): string {
+  return `wrong arguments for ${command}: ${args.length ? args.join(' ') : 'none'}`
+}
 
 /** One command: the arguments after its name, then what the command line hands every command. */
 export type Command<Context extends unknown[]> = (args: string[], ...context: Context) => Promise<unknown>
@@ -52,6 +68,8 @@ export const GIT_FAILED: Failure = { reason: 'git-failed', detail: gitReason }
 export const FAILED: Failure = { reason: 'failed', detail: errorMessage }
 
 export interface CommandLine<Context extends unknown[]> {
+  /** The program's name as a person types it, for the pointer to its `--help`. */
+  program: string
   usage: string
   commands: Record<string, Command<Context>>
   /** The command run when the line names none: it is empty, or starts with a flag. Without one, such a line is a usage error. */
@@ -73,7 +91,7 @@ export async function runCommandLine<Context extends unknown[]>(argv: string[], 
   const bare = name === undefined || name.startsWith('--')
   const command = bare ? line.bare : Object.hasOwn(line.commands, name) ? line.commands[name] : undefined
   if (!command) {
-    output.stderr(name === undefined ? line.usage : `${name.startsWith('-') ? 'unknown option' : 'unknown command'}: ${name}\n\n${line.usage}`)
+    output.stderr(name === undefined ? line.usage : usageError(line.program, unknownWord(name)))
     return 2
   }
   try {
@@ -81,7 +99,7 @@ export async function runCommandLine<Context extends unknown[]>(argv: string[], 
     return 0
   } catch (err) {
     if (err instanceof UsageError) {
-      output.stderr(`${err.message}\n\n${line.usage}`)
+      output.stderr(usageError(line.program, err.message))
       return 2
     }
     if (err instanceof Refused) {

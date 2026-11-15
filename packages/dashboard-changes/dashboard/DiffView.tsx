@@ -1,5 +1,5 @@
 import { ChevronsUpDown } from 'lucide-react'
-import { Pieces, cn, useHighlighted } from '@openagt/dashboard/module'
+import { Pieces, Skeleton, cn, useHighlighted } from '@openagt/dashboard/module'
 import type { FileDiff } from '../src/diff.js'
 import { MAX_PREVIEW_LINES } from '../src/confined.js'
 
@@ -55,20 +55,37 @@ function read(patch: string): { rows: Row[]; shown: number } {
   return { rows, shown }
 }
 
-// A changed line is lit, with a bar of its colour at its start, its number and sign in that colour
-// and its text as any other line's.
-const TONE = { add: 'border-success bg-success/10', del: 'border-danger bg-danger/10', same: 'border-transparent' } as const
-const MARK = { add: 'text-success', del: 'text-danger', same: 'text-muted-foreground' } as const
+// A changed line is lit: a light tint of its colour and a bar at its start, under its sign and its
+// text, light enough that every colour of the code reads on it; its number stays in the gutter,
+// untinted. A file that is new whole is its lines, as a file is read: its header says it is new.
+const TINT = { add: 'border-success bg-success/8', del: 'border-danger bg-danger/8', same: 'border-transparent' } as const
 const SIGN = { add: '+', del: '−', same: ' ' } as const
+
+/** One row's height in px: a line of code, a gap's row, "Show more lines". */
+const ROW = 16
+
+/** The room a diff of `rows` rows takes with its padding, held for it while it is read, a line or two of it pulsing. */
+export function DiffShape({ rows }: { rows: number }) {
+  return (
+    <div style={{ height: rows * ROW + 8 }} className="flex flex-col gap-1 overflow-hidden px-3 py-1">
+      {Array.from({ length: Math.min(rows, 2) }, (_, at) => (
+        <Skeleton key={at} className={cn('h-3 shrink-0', at === 0 ? 'w-2/3' : 'w-1/2')} />
+      ))}
+    </div>
+  )
+}
 
 function More({ children, onClick }: { children: string; onClick: (() => void) | undefined }) {
   return (
-    <button type="button" disabled={!onClick} onClick={onClick} className="flex w-full items-center gap-1.5 bg-muted/50 py-0.5 pr-2 pl-[11px] text-start text-xs text-muted-foreground enabled:hover:text-foreground">
-      <ChevronsUpDown aria-hidden className="size-3" />
+    <button type="button" disabled={!onClick} onClick={onClick} className="sticky left-0 flex h-4 w-full items-center gap-1.5 bg-muted px-2 text-start text-xs text-muted-foreground enabled:hover:text-foreground">
+      <ChevronsUpDown aria-hidden className="size-3.5" />
       {children}
     </button>
   )
 }
+
+/** Whether a file is new whole: every line of its diff added. */
+export const isNewFile = (status: string) => status === 'untracked' || status === 'added'
 
 export function DiffView({ diff, wrap, whole, onWhole, className }: { diff: FileDiff; wrap: boolean; whole: boolean; onWhole?: () => void; className?: string }) {
   const { rows, shown } = read(diff.binary ? '' : diff.patch)
@@ -79,28 +96,34 @@ export function DiffView({ diff, wrap, whole, onWhole, className }: { diff: File
   let at = -1
   const lineOf = rows.map(row => (row.kind === 'gap' ? -1 : ++at))
   if (diff.binary) return <p className="p-2 text-xs text-muted-foreground">Binary file, nothing to show.</p>
-  if (rows.length === 0) return <p className="p-2 text-xs text-muted-foreground">{diff.status === 'untracked' || diff.status === 'added' ? 'Empty file.' : 'No line changed.'}</p>
+  if (rows.length === 0) return <p className="p-2 text-xs text-muted-foreground">{isNewFile(diff.status) ? 'Empty file.' : 'No line changed.'}</p>
   const ask = diff.lines !== undefined && diff.lines > MAX_PREVIEW_LINES ? undefined : onWhole
-  const width = `${String(rows.reduce((most, row) => (row.kind === 'gap' ? most : Math.max(most, row.number)), 0)).length + 1}ch`
+  const width = `calc(${String(rows.reduce((most, row) => (row.kind === 'gap' ? most : Math.max(most, row.number)), 0)).length}ch + 1rem)`
   // Lines are left under the last change while the file has more than the diff shows.
   const more = !whole && diff.lines !== undefined && shown < diff.lines
+  const fresh = isNewFile(diff.status)
   return (
-    <div className={cn('overflow-x-auto font-mono text-xs leading-[17px] text-foreground', className)}>
-      {rows.map((row, i) =>
-        row.kind === 'gap' ? (
-          <More key={i} onClick={ask}>{`${row.hidden} unmodified ${row.hidden === 1 ? 'line' : 'lines'}`}</More>
-        ) : (
-          <div key={i} className={cn('flex border-l-[3px]', TONE[row.kind])}>
-            <span className={cn('shrink-0 select-none pr-2 pl-2 text-right tabular-nums', MARK[row.kind])} style={{ width: `calc(${width} + 1rem)` }}>
-              {row.number}
-            </span>
-            <span className={cn('w-3 shrink-0 select-none', MARK[row.kind])}>{SIGN[row.kind]}</span>
-            <span className={cn('min-w-0 pr-2', wrap ? 'whitespace-pre-wrap break-all' : 'whitespace-pre')}>{colored?.[lineOf[i]!] ? <Pieces pieces={colored[lineOf[i]!]!} /> : row.text || ' '}</span>
-          </div>
-        ),
-      )}
-      {more && ask && <More onClick={ask}>Show more lines</More>}
-      {diff.truncated && <p className="px-2 py-1 text-[10px] italic text-muted-foreground">Cut here. The rest is in the worktree.</p>}
+    // Unwrapped, a long line scrolls sideways inside its file, each row as wide as the longest so its tint runs under it.
+    <div className={cn('overflow-x-auto font-mono text-xs text-foreground', className)}>
+      <div className={wrap ? undefined : 'w-max min-w-full'}>
+        {rows.map((row, i) => {
+          if (row.kind === 'gap') return <More key={i} onClick={ask}>{`${row.hidden} unmodified ${row.hidden === 1 ? 'line' : 'lines'}`}</More>
+          const kind = fresh ? 'same' : row.kind
+          return (
+            <div key={i} className="flex">
+              <span className="sticky left-0 shrink-0 select-none bg-card pr-2 pl-2 text-right text-muted-foreground" style={{ width }}>
+                {row.number}
+              </span>
+              <span className={cn('flex min-w-0 flex-1 border-l-2', TINT[kind])}>
+                <span className="w-4 shrink-0 select-none text-center text-muted-foreground">{SIGN[kind]}</span>
+                <span className={cn('min-w-0 pr-2', wrap ? 'whitespace-pre-wrap break-words' : 'whitespace-pre')}>{colored?.[lineOf[i]!] ? <Pieces pieces={colored[lineOf[i]!]!} /> : row.text || ' '}</span>
+              </span>
+            </div>
+          )
+        })}
+        {more && ask && <More onClick={ask}>Show more lines</More>}
+      </div>
+      {diff.truncated && <p className="px-2 py-1 text-xs italic text-muted-foreground">Cut here. The rest is in the worktree.</p>}
     </div>
   )
 }

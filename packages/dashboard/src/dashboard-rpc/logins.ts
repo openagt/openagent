@@ -45,8 +45,8 @@ export const loginsWiring: {
   /** Where a git host's package is asked when no project is on its host: the person's home folder. */
   home: () => string
   ready: (driver: DriverName) => Promise<DriverReadiness>
-  /** Run a fix's command to its end; rejects with its last lines. */
-  fix: (command: string) => Promise<void>
+  /** Run a fix's command to its end, or until `stop` aborts it; `said` hears the first web address it prints. Rejects with its last lines. */
+  fix: (command: string, stop: AbortSignal, said: (url: string) => void) => Promise<void>
   driver: () => Promise<DriverName>
 } = {
   origin: root => originUrl(root),
@@ -232,10 +232,12 @@ export interface AgentState {
   fixing?: DriverFix['kind']
   /** Why the last press's fix failed. */
   failed?: string
+  /** The address the fix going on said to open: its sign-in page, for a browser that did not open by itself. */
+  url?: string
 }
 
-/** The fixes under way and the last one that failed, by agent. */
-const fixes = new Map<DriverName, { fixing?: DriverFix['kind']; failed?: string }>()
+/** The fixes under way, each with what stops it and the address it said, and the last one that failed, by agent. */
+const fixes = new Map<DriverName, { fixing?: DriverFix['kind']; stop?: AbortController; url?: string; failed?: string }>()
 
 /** The coding agent picked in Settings, or `driver`: installed, logged in, and what a press fixes. */
 export async function onAgentState(driver?: string): Promise<AgentState> {
@@ -253,6 +255,7 @@ export async function onAgentState(driver?: string): Promise<AgentState> {
     ...(fix && noPress ? { typed: true as const } : {}),
     ...(ready.ownLoggedOut ? { ownLoggedOut: true as const } : {}),
     ...(press?.fixing ? { fixing: press.fixing } : {}),
+    ...(press?.fixing && press.url !== undefined ? { url: press.url } : {}),
     ...(press?.failed !== undefined && ready.problems.length > 0 ? { failed: press.failed } : {}),
   }
 }
@@ -267,13 +270,32 @@ export async function sendAgentFix(driver: string): Promise<AccountResult> {
   if (fixes.get(driver)?.fixing) return { ok: false, error: 'It is being fixed: wait for it to end.' }
   const fix = (await loginsWiring.ready(driver)).fix
   if (!fix) return { ok: false, error: 'Nothing to fix by a press: see the line it says.' }
-  fixes.set(driver, { fixing: fix.kind })
+  const stop = new AbortController()
+  fixes.set(driver, { fixing: fix.kind, stop })
+  // Only while this fix is the one going on: a fix the person stopped is out of the table, so its late end
+  // says nothing, and takes nothing from a fix pressed after it.
+  const mine = (): boolean => fixes.get(driver)?.stop === stop
   void loginsWiring
-    .fix(fix.command)
+    .fix(fix.command, stop.signal, url => {
+      if (mine()) fixes.set(driver, { fixing: fix.kind, stop, url })
+    })
     .then(
-      () => fixes.delete(driver),
-      (err: unknown) => fixes.set(driver, { failed: err instanceof Error ? err.message : String(err) }),
+      () => {
+        if (mine()) fixes.delete(driver)
+      },
+      (err: unknown) => {
+        if (mine()) fixes.set(driver, { failed: err instanceof Error ? err.message : String(err) })
+      },
     )
+  return { ok: true }
+}
+
+/** Stop the fix of `driver` going on, and what it started: a login whose yes the person will not give. */
+export async function sendStopAgentFix(driver: string): Promise<AccountResult> {
+  if (!isDriverName(driver)) return { ok: false, error: `No coding agent ${driver}.` }
+  const going = fixes.get(driver)
+  going?.stop?.abort()
+  fixes.delete(driver)
   return { ok: true }
 }
 
@@ -298,22 +320,29 @@ function endGroup(group: number, signal: NodeJS.Signals): void {
   }
 }
 
-/** A fix's command in a shell, to its end, its own group ended with it on a timeout. */
-function runFix(command: string): Promise<void> {
+/** A fix's command in a shell, to its end, its own group ended with it on a timeout or when `stop` aborts. */
+function runFix(command: string, stop: AbortSignal, saidUrl: (url: string) => void): Promise<void> {
   return new Promise((resolve, reject) => {
     const child = spawn('sh', ['-c', command], { stdio: ['ignore', 'pipe', 'pipe'], detached: true })
     const group = child.pid
     if (group !== undefined) fixGroups.add(group)
+    const end = (): void => endGroup(group!, 'SIGTERM')
+    stop.addEventListener('abort', end, { once: true })
     let said = ''
+    let url: string | undefined
     const keep = (chunk: Buffer): void => {
       said = (said + chunk.toString('utf8')).slice(-4096)
+      if (url !== undefined) return
+      url = /https?:\/\/\S+/.exec(said)?.[0]
+      if (url !== undefined) saidUrl(url)
     }
     child.stdout.on('data', keep)
     child.stderr.on('data', keep)
     const timer = setTimeout(() => endGroup(group!, 'SIGKILL'), FIX_MS)
-    child.once('error', err => (clearTimeout(timer), reject(err)))
+    child.once('error', err => (clearTimeout(timer), stop.removeEventListener('abort', end), reject(err)))
     child.once('close', code => {
       clearTimeout(timer)
+      stop.removeEventListener('abort', end)
       if (group !== undefined) fixGroups.delete(group)
       if (code === 0) resolve()
       else reject(new Error(said.trim().split('\n').slice(-3).join('\n') || (code === null ? 'It took too long, and was stopped.' : `It ended with ${code}.`)))

@@ -7,15 +7,19 @@
     "build": "vike build",
     "preview": "vike preview",
     "typecheck": "tsc --noEmit",
-    "test": "node ../../scripts/test-node.mjs test/prerender.test.mjs"
+    "test": "node ../../scripts/test-node.mjs test/prerender.test.mjs",
+    "pictures": "node pictures.mjs"
   },
   "dependencies": {
+    "lucide-react": "^0.469.0",
     "react": "^19.2.0",
     "react-dom": "^19.2.0",
     "vike": "^0.4.235",
     "vike-react": "^0.6.5"
   },
   "devDependencies": {
+    "@fontsource/ibm-plex-mono": "^5.3.0",
+    "@fontsource/ibm-plex-sans": "^5.3.0",
     "@types/react": "^19.2.0",
     "@types/react-dom": "^19.2.0",
     "@vitejs/plugin-react": "^6.0.3",

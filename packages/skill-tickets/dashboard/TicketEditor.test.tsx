@@ -26,16 +26,22 @@ describe('a ticket written by hand', () => {
     await waitFor(() => expect(host.openPage).toHaveBeenCalledWith('tickets', [file], 'p1'))
   })
 
-  test('no title, or a priority outside 0–10, is not saved', async () => {
+  test('no title, or a priority outside 0–10, is not saved: Create ticket says why where it is, and takes the keyboard there', async () => {
     const host = fakeHost()
     renderWithHost(<NewTicketPage projectId="p1" />, host)
-    const create = screen.getByRole('button', { name: 'Create ticket' }) as HTMLButtonElement
-    expect(create.disabled).toBe(true)
+    const create = screen.getByRole('button', { name: 'Create ticket' })
+    expect(screen.queryByText('Give the ticket a title.')).toBeNull()
+    fireEvent.click(create)
+    expect(screen.getByText('Give the ticket a title.')).toBeTruthy()
+    expect(screen.getByLabelText('Title').getAttribute('aria-invalid')).toBe('true')
+    expect(document.activeElement).toBe(screen.getByLabelText('Title'))
     type('Title', 'Dark mode')
-    expect(create.disabled).toBe(false)
+    expect(screen.queryByText('Give the ticket a title.')).toBeNull()
     type('Priority', '11')
-    expect(create.disabled).toBe(true)
     expect(screen.getByText(/whole number from 0 to 10/)).toBeTruthy()
+    fireEvent.click(create)
+    expect(document.activeElement).toBe(screen.getByLabelText('Priority'))
+    expect(host.act).not.toHaveBeenCalled()
   })
 
   test('a refused save says why and stays on the form', async () => {

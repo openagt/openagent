@@ -1,6 +1,6 @@
 import { nodeGitRunner, type GitRunner } from '@openagt/agent-data'
 import type { FileGitStatus } from './status.js'
-import { cutToPreview, readConfinedFile, safeRepoPath } from './confined.js'
+import { CONTEXT_LINES, cutToPreview, readConfinedFile, safeRepoPath } from './confined.js'
 
 // One changed file's diff for the Changes pane (#816, #817). The list already says a file is new,
 // modified or deleted; this says what actually changed, without leaving the dashboard for
@@ -10,8 +10,6 @@ import { cutToPreview, readConfinedFile, safeRepoPath } from './confined.js'
 // The read takes a caller-supplied path, so the guard is here rather than at the call site:
 // `safeRepoPath` is the only way in, and every caller goes through it.
 
-/** The unchanged lines a diff shows around each change, as git does. */
-export const CONTEXT_LINES = 3
 /** Enough unchanged lines around a change to show the whole file: what "Show more lines" asks for. */
 export const WHOLE_FILE = 100_000
 

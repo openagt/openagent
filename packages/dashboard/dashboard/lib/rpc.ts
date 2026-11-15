@@ -2,13 +2,6 @@ import type { LiveFeedEvent } from '../../src/dashboard-rpc/index.js'
 
 // The dashboard's whole transport (F3): `POST /_rpc/<name>` for calls, `GET /_rpc/events` for the
 // live feed. Same-origin, so there is nothing to configure.
-//
-// This replaced Telefunc. What Telefunc gave was type-safety across a package boundary, which A7
-// removed — the signatures are now imported directly from the implementations, one package away
-// rather than one network away. What it cost was a build-time transform over every `.telefunc.ts`
-// file, a registration table pinning each RPC to the client-baked key of the dashboard source path
-// it was re-exported from (rename a file, break every call), a re-export shim per module to keep
-// those keys stable, and a dev-server plugin to undo a URL its own client wrote.
 
 const RPC_PREFIX = '/_rpc'
 

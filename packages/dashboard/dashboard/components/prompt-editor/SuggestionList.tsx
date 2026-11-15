@@ -85,7 +85,7 @@ export const SuggestionList = forwardRef<SuggestionListRef, SuggestionListProps>
       {items.map((item, i) => (
         <div key={item.id}>
           {item.group && (i === 0 || items[i - 1]?.group !== item.group) && (
-            <div className="px-2 pb-1 pt-2 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground/70">
+            <div className="px-2 py-1.5 text-xs font-semibold text-muted-foreground">
               {item.group}
             </div>
           )}

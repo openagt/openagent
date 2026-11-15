@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { Combobox } from '@base-ui/react/combobox'
 import { addressOfRemote } from '@openagt/agent-data/repository-address'
-import { Cloud, Check, ChevronDown, ChevronsUpDown, Folder, FolderGit2, FolderPlus, FolderSearch, Layers, Plus, Search } from 'lucide-react'
+import { Cloud, Check, ChevronsUpDown, Folder, FolderGit2, FolderPlus, FolderSearch, Layers, Plus, Search } from 'lucide-react'
 import type { ProjectSummary } from '../../src/index.js'
 import { machineKind, machineName, typedRepository } from '../../src/client.js'
 import { onRepos, sendAddRepoFolder, type ReposRead } from '../rpc/projects.js'
@@ -11,12 +11,16 @@ import { useProjectLabel } from '../lib/project-labels.js'
 import { cn } from '../lib/utils.js'
 import { MACHINE_ICONS } from './MachineMark.js'
 import { projectErrorTitle } from './ProjectErrorBanner.js'
-import { rowButtonClass } from './ui/row-item.js'
+import { rowButtonClass, RowChevron } from './ui/row-item.js'
 import { buttonVariants } from './ui/button.js'
 import { ScrollArea } from './ui/scroll-area.js'
+import { Skeleton, useSkeleton } from './ui/skeleton.js'
 import { Tooltip, TooltipTrigger, TooltipContent } from './ui/tooltip.js'
 import { MENU_ITEM_CLASS, MENU_POPUP_CLASS, MENU_TRIGGER_OPEN_CLASS } from './ui/dropdown-menu.js'
+import { PROJECT_ROW_CLASS } from './ui/nav-row.js'
 import { usePopupPlacement } from './ui/popup-placement.js'
+import { usePickerSearch } from './ui/picker-search.js'
+import { pressed } from '../lib/shortcut.js'
 import { AddProjectPanel } from './AddProjectPanel.js'
 
 /** How many repos the menu lists before a search: the search reaches the rest. */
@@ -91,7 +95,7 @@ function pickerGroups(none: Row | undefined, projects: readonly Row[], repos: re
 }
 
 /** A project's state as a dot: red when the daemon recorded an error for it (#1500), else whether it is activated. */
-function ProjectDot({ project }: { project: ProjectSummary }) {
+export function ProjectDot({ project }: { project: ProjectSummary }) {
   return <span aria-hidden className={cn('h-2 w-2 shrink-0 rounded-full', project.errors?.length ? 'bg-danger' : project.activated ? 'bg-primary' : 'bg-muted-foreground')} />
 }
 
@@ -181,8 +185,8 @@ function TickBox({ box }: { box: { checked: boolean; tip: string; toggle: () => 
 // shows (#1513) — all of them, one, or several. There each project's row and the first one have a
 // box: ticking it adds the project to the ones shown or takes it off, and the menu stays open;
 // a click anywhere else on the row shows that project alone, as Enter does on the row highlighted,
-// and Shift+Enter ticks it. The projects picked are listed first, as they were when the menu opened. The menu is the same: the first row, the projects with
-// their lines, the repos searchable, "Search another folder…" to look in one more folder, and a
+// and Shift+Enter ticks it. The projects picked are listed first, as they were when the menu opened.
+// The menu is the same: the first row, the projects with their lines, the repos searchable, "Search another folder…" to look in one more folder, and a
 // repository's address typed into the search offered to add. The button reads the pick, so it is
 // on screen with the menu shut.
 //
@@ -226,12 +230,17 @@ export function ProjectPicker({
 }) {
   const label = useProjectLabel()
   const positionMethod = usePopupPlacement()
-  const [open, setOpen] = useState(false)
+  const search = usePickerSearch()
+  const { open, typed } = search
   // The projects picked as the menu opened, listed first: a tick does not move a row under the pointer.
   const [listedFirst, setListedFirst] = useState<readonly string[]>([])
+  const [wasOpen, setWasOpen] = useState(open)
+  if (open !== wasOpen) {
+    setWasOpen(open)
+    if (open) setListedFirst(multi?.picked ?? [])
+  }
   // The row the keyboard is on, which Shift+Enter ticks.
   const highlighted = useRef<Row | undefined>(undefined)
-  const [typed, setTyped] = useState('')
   const [adding, setAdding] = useState<{ folder: string } | { address: string } | null>(null)
   const triggerRef = useRef<HTMLButtonElement>(null)
   // The folder just added, until the projects read again have it: then it is picked.
@@ -286,6 +295,7 @@ export function ProjectPicker({
       ? NONE
       : (projectRows.find(row => row.value === `project:${picked}`) ?? { value: `project:${picked}`, label: pickedName ?? '', pick: { kind: 'none' }, search: '' })
   const shown = current.label
+  const loading = useSkeleton(pending)
   // No project word until the name is known, never a wrong one.
   if (!shown && !pending) return null
   const project = current.pick.kind === 'project' ? current.pick.project : undefined
@@ -312,39 +322,36 @@ export function ProjectPicker({
   const name = look === 'sidebar' ? `${several ? 'Projects' : 'Project'}: ${pending ? 'loading' : shown}` : look === 'add' ? none.label : 'The session works in'
   const button =
     look === 'add' ? (
-      <button type="button" className={buttonVariants({ size: 'sm' })}>
+      <button type="button" className={buttonVariants()}>
         <FolderPlus className="h-3.5 w-3.5" aria-hidden />
         {none.label}
       </button>
     ) : look === 'sidebar' ? (
-      <button type="button" className="flex w-full items-center gap-2 rounded-md border border-sidebar-border bg-background px-2 py-1.5 text-sm font-medium transition-colors hover:bg-sidebar-accent/60">
+      // A ghost row of the sidebar's, 32 high (44 on a phone) whatever it shows, so the rows under it never move: the
+      // chevrons say it opens, the soft fill under the pointer that it is pressed.
+      <button type="button" className={PROJECT_ROW_CLASS}>
+        <span className="flex size-4 shrink-0 items-center justify-center">
+          {pending ? null : project ? <ProjectDot project={project} /> : <Layers className="size-4 text-muted-foreground" aria-hidden />}
+        </span>
         {/* Until the projects are read, the project the address names is not known: a bar where its
             name goes, rather than "All projects" for a moment. */}
-        {pending ? (
-          <>
-            <span aria-hidden className="h-2 w-2 shrink-0 rounded-full bg-muted" />
-            <span className="flex-1">
-              <span aria-hidden className="block h-3.5 w-24 animate-pulse rounded bg-muted" />
-            </span>
-          </>
+        {loading ? (
+          <Skeleton className="h-4 w-24" />
         ) : (
-          <>
-            {project ? <ProjectDot project={project} /> : <Layers className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden />}
-            <span className="flex-1 truncate text-left" {...(several ? { title: shown } : {})}>
-              {shown}
-            </span>
-          </>
+          <span className="flex-1 truncate text-left" {...(several ? { title: shown } : {})}>
+            {pending ? '' : shown}
+          </span>
         )}
-        <ChevronsUpDown className="h-3.5 w-3.5 shrink-0 opacity-70" aria-hidden />
+        <ChevronsUpDown className="ml-auto" aria-hidden />
       </button>
     ) : (
       <button type="button" className={cn(rowButtonClass, 'max-w-[16rem]!')}>
         <Folder className="h-3.5 w-3.5 shrink-0" aria-hidden />
         <span className="truncate">{shown}</span>
-        <ChevronDown className="h-3 w-3 shrink-0 opacity-70" aria-hidden />
+        <RowChevron />
       </button>
     )
-  const trigger = <Combobox.Trigger ref={triggerRef} disabled={busy || pending} aria-label={name} className={MENU_TRIGGER_OPEN_CLASS} render={button} {...(look === 'sidebar' ? { 'data-project-picker': '' } : {})} />
+  const trigger = <Combobox.Trigger ref={triggerRef} disabled={busy || pending} aria-label={name} className={MENU_TRIGGER_OPEN_CLASS} render={button} {...search.trigger} {...(look === 'sidebar' ? { 'data-project-picker': '' } : {})} />
 
   return (
     <>
@@ -354,15 +361,8 @@ export function ProjectPicker({
         value={current}
         isItemEqualToValue={sameRow}
         itemToStringLabel={row => row.label}
-        inputValue={typed}
         autoHighlight
-        onInputValueChange={setTyped}
-        open={open}
-        onOpenChange={next => {
-          setOpen(next)
-          if (next) setListedFirst(multi?.picked ?? [])
-          else setTyped('')
-        }}
+        {...search.root}
         onItemHighlighted={row => {
           highlighted.current = row
         }}
@@ -385,13 +385,13 @@ export function ProjectPicker({
         )}
         <Combobox.Portal>
           <Combobox.Positioner positionMethod={positionMethod} sideOffset={6} align="start" className="z-50 outline-none">
-            <Combobox.Popup aria-label={name} className={cn(MENU_POPUP_CLASS, 'group/picker w-[22rem] max-w-[var(--available-width)]')}>
+            <Combobox.Popup data-overlay="picker" aria-label={name} className={cn(MENU_POPUP_CLASS, 'group/picker w-[22rem] max-w-[var(--available-width)]')}>
               <div className="flex items-center gap-2 border-b border-border px-3">
                 <Search className="h-3.5 w-3.5 shrink-0 text-muted-foreground" aria-hidden />
                 <Combobox.Input
                   onKeyDown={event => {
                     const box = highlighted.current && tick(highlighted.current)
-                    if (event.key !== 'Enter' || !(event.shiftKey || event.metaKey || event.ctrlKey) || !box) return
+                    if (!box || !pressed(event, 'tickProject')) return
                     event.preventBaseUIHandler()
                     event.preventDefault()
                     box.toggle()

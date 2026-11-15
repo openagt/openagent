@@ -3,7 +3,7 @@ import { Laptop, Loader2 } from 'lucide-react'
 import { Button, Checkbox, Dialog, useModuleHost, useOpenAgentDown } from '@openagt/dashboard/module'
 import { Joined, Waiting } from './codes.js'
 import { addDevice, answerAsk, askComputer, cancelAsk, hearAnswer, loadAsks, type AskHere, type AskedThere, type FoundComputer } from './devices.js'
-import { Problem } from './parts.js'
+import { Presses, PressRow, Problem } from './parts.js'
 import type { Devices } from './use-devices.js'
 
 // Pairing on this Wi-Fi, both ends. Here: Connect was pressed on a computer found on the Wi-Fi,
@@ -25,6 +25,7 @@ type Phase = { at: 'asking' } | { at: 'waiting'; asked: AskedThere } | { at: 'sa
  * here, so runs go both ways in one go. That needs this computer's own door open on the Wi-Fi.
  */
 export function Connecting({ d, computer, canBoth, onBack, onClose }: { d: Devices; computer: FoundComputer; /** This computer's door is open: the other one can be let in here too. */ canBoth: boolean; onBack: () => void; onClose: () => void }) {
+  const down = useOpenAgentDown()
   const { host } = d
   const [phase, setPhase] = useState<Phase>({ at: 'asking' })
   const [both, setBoth] = useState(true)
@@ -86,64 +87,60 @@ export function Connecting({ d, computer, canBoth, onBack, onClose }: { d: Devic
 
   const name = computer.name
   return (
-    <Dialog open onOpenChange={open => !open && onClose()} title="Add computer">
-      <div className="space-y-4">
-        {phase.at === 'asking' || phase.at === 'saving' ? (
-          <div role="status" className="flex items-center justify-center gap-2 py-10 text-sm text-muted-foreground">
-            <Loader2 className="h-4 w-4 shrink-0 animate-spin text-primary" aria-hidden />
-            {phase.at === 'asking' ? `Asking ${name}…` : `${name} let you in. Saving it…`}
-          </div>
-        ) : phase.at === 'waiting' ? (
-          <>
-            <div className="space-y-1 text-center text-sm">
-              <p>
-                On <span className="font-medium">{name}</span>, press <span className="font-medium">Allow</span>.
-              </p>
-              <p>It shows the same number:</p>
-            </div>
-            <p aria-label="The number" className="text-center font-mono text-3xl font-semibold tracking-widest">
-              {shownNumber(phase.asked.number)}
-            </p>
-            <div className="flex justify-center">
-              <Waiting>{`Waiting for ${name}…`}</Waiting>
-            </div>
-            <label className="flex items-start gap-2 text-sm">
-              <Checkbox className="mt-0.5" checked={both && canBoth} disabled={!canBoth} onCheckedChange={checked => setBoth(checked === true)} aria-label={`${name} can start runs on this computer too`} />
-              <span>
-                {`${name} can start runs on this computer too`}
-                <span className="block text-xs text-muted-foreground">{canBoth ? 'Then runs go both ways.' : 'Turn on "On this Wi-Fi" here first: then runs can go both ways.'}</span>
-              </span>
-            </label>
-          </>
-        ) : phase.at === 'done' ? (
-          <Joined words={phase.words}>{`${name} is connected.`}</Joined>
-        ) : phase.at === 'denied' ? (
-          <p role="status" className="py-6 text-center text-sm">{`${name} said no.`}</p>
-        ) : phase.at === 'gone' ? (
-          <p role="status" className="py-6 text-center text-sm">{`${name} did not answer. Try again.`}</p>
-        ) : (
-          <Problem>{phase.error}</Problem>
-        )}
-        <div className="flex justify-end gap-2">
-          {phase.at === 'done' ? (
-            <Button size="sm" onClick={onClose}>
-              Done
-            </Button>
-          ) : (
-            <>
-              {(phase.at === 'gone' || phase.at === 'failed') && (
-                <Button size="sm" variant="outline" onClick={() => setRound(round + 1)}>
-                  Try again
-                </Button>
-              )}
-              <Button size="sm" variant="ghost" disabled={phase.at === 'saving'} onClick={onBack}>
-                {phase.at === 'waiting' || phase.at === 'asking' ? 'Cancel' : 'Back'}
-              </Button>
-            </>
-          )}
+    <div className="space-y-4">
+      {phase.at === 'asking' || phase.at === 'saving' ? (
+        <div role="status" className="flex items-center gap-2 text-sm text-muted-foreground">
+          <Loader2 className="size-4 shrink-0 animate-spin text-primary" aria-hidden />
+          {phase.at === 'asking' ? `Asking ${name}…` : `${name} let you in. Saving it…`}
         </div>
-      </div>
-    </Dialog>
+      ) : phase.at === 'waiting' ? (
+        <>
+          <div className="space-y-1 text-sm">
+            <p>
+              On <span className="font-medium">{name}</span>, press <span className="font-medium">Allow</span>.
+            </p>
+            <p>It shows the same number:</p>
+          </div>
+          <p aria-label="The number" className="font-mono text-3xl font-semibold tracking-widest">
+            {shownNumber(phase.asked.number)}
+          </p>
+          <Waiting>{`Waiting for ${name}…`}</Waiting>
+          <label className="flex items-start gap-2 text-sm">
+            <Checkbox className="mt-0.5" checked={both && canBoth} disabled={!canBoth} onCheckedChange={checked => setBoth(checked === true)} aria-label={`${name} can start runs on this computer too`} />
+            <span>
+              {`${name} can start runs on this computer too`}
+              <span className="block text-xs text-muted-foreground">{canBoth ? 'Then runs go both ways.' : 'Turn on "On this Wi-Fi" here first: then runs can go both ways.'}</span>
+            </span>
+          </label>
+        </>
+      ) : phase.at === 'done' ? (
+        <Joined words={phase.words}>{`${name} is connected.`}</Joined>
+      ) : phase.at === 'denied' ? (
+        <p role="status" className="text-sm">{`${name} said no.`}</p>
+      ) : phase.at === 'gone' ? (
+        <p role="status" className="text-sm">{`${name} did not answer. Try again.`}</p>
+      ) : (
+        <Problem>{phase.error}</Problem>
+      )}
+      <Presses>
+        {phase.at === 'done' ? (
+          <Button onClick={onClose}>
+            Done
+          </Button>
+        ) : (
+          <>
+            <Button variant="ghost" disabled={phase.at === 'saving'} onClick={onBack}>
+              {phase.at === 'waiting' || phase.at === 'asking' ? 'Cancel' : 'Back'}
+            </Button>
+            {(phase.at === 'gone' || phase.at === 'failed') && (
+              <Button variant="secondary" disabled={down} onClick={() => setRound(round + 1)}>
+                Try again
+              </Button>
+            )}
+          </>
+        )}
+      </Presses>
+    </div>
   )
 }
 
@@ -177,6 +174,8 @@ export function AskPopup() {
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | undefined>()
   const down = useOpenAgentDown()
+  // The keyboard starts on an answer, the one that lets nothing in: Enter at once denies, it never allows.
+  const deny = useRef<HTMLButtonElement>(null)
 
   useEffect(() => {
     let stopped = false
@@ -219,10 +218,10 @@ export function AskPopup() {
   }
 
   return (
-    <Dialog open onOpenChange={open => !open && setClosed(new Set([...closed, ask.id]))} title="A computer wants to connect">
+    <Dialog open onOpenChange={open => !open && setClosed(new Set([...closed, ask.id]))} title="A computer wants to connect" initialFocus={deny}>
       <div className="space-y-4">
         <p className="flex items-start gap-2 text-sm">
-          <Laptop className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" aria-hidden />
+          <Laptop className="mt-0.5 size-4 shrink-0 text-muted-foreground" aria-hidden />
           <span>
             <span className="font-medium">{ask.name}</span> asks to start runs on this computer.
           </span>
@@ -232,15 +231,14 @@ export function AskPopup() {
           {shownNumber(ask.number)}
         </p>
         {error !== undefined && <Problem>{error}</Problem>}
-        <div className="flex justify-end gap-2">
-          <Button size="sm" variant="outline" disabled={busy || down} onClick={() => void answer(false)}>
+        <PressRow>
+          <Button ref={deny} variant="secondary" loading={busy} disabled={down} onClick={() => void answer(false)}>
             Deny
           </Button>
-          <Button size="sm" disabled={busy || down} onClick={() => void answer(true)}>
-            {busy && <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden />}
+          <Button loading={busy} disabled={down} onClick={() => void answer(true)}>
             Allow
           </Button>
-        </div>
+        </PressRow>
       </div>
     </Dialog>
   )

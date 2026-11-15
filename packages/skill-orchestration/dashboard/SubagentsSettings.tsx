@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { SettingsSection, SettingsSelectRow, useCodingAgents, useModuleHost, usePolled, type ModuleProject, type ModuleSettingsProps, type SettingsOption } from '@openagt/dashboard/module'
+import { SettingsRowShapes, SettingsSection, SettingsSelectRow, Slot, useCodingAgents, useModuleHost, usePolled, type ModuleProject, type ModuleSettingsProps, type SettingsOption } from '@openagt/dashboard/module'
 import { DEFAULT_AT_ONCE, LEVELS, type Level, type Runner, type Settings } from '../src/levels.js'
 import { runnerChoices, runnerOf, runnerValue } from './choices.js'
 
@@ -40,7 +40,7 @@ export function SubagentsSettings({ projects }: ModuleSettingsProps) {
   const host = useModuleHost()
   const agents = useCodingAgents()
   const key = projects.map(p => p.id).join(',')
-  const { value: read, reload } = usePolled<Read>(
+  const subagents = usePolled<Read>(
     async () => {
       const of: Read['of'] = []
       let error: string | undefined
@@ -60,6 +60,7 @@ export function SubagentsSettings({ projects }: ModuleSettingsProps) {
     10_000,
     [key],
   )
+  const { value: read, reload } = subagents
   // What was picked, shown until a read made after the last save brings it back: each save lays
   // every pick so far over each project's own, so a second pick made before the first is saved
   // keeps the first. Saves go one at a time: a pick made while one is on its way waits, and the
@@ -125,17 +126,23 @@ export function SubagentsSettings({ projects }: ModuleSettingsProps) {
 
   return (
     <SettingsSection description="The models a main agent's subagents run on, by how hard the main agent says each task is, and how many run at once.">
-      {levelRow('simple', 'Simple tasks', 'A task the main agent marks simple.')}
-      {levelRow('hard', 'Hard tasks', 'A task the main agent marks hard.')}
-      <SettingsSelectRow
-        label="At once"
-        description={'How many of one main agent\'s subagents run at the same time. It starts the next when one ends.' + differing(shown, atOnces, value => value)}
-        {...mixed(atOnces, Array.from({ length: most }, (_, i) => ({ value: String(i + 1), label: String(i + 1) })))}
-        onChange={value => save({ atOnce: Number(value) })}
-      />
-      {saving && <p className="py-2 text-xs text-muted-foreground">Saving…</p>}
+      <Slot of={subagents} shape={<SettingsRowShapes rows={3} />} className="flex flex-col gap-4">
+        {() => (
+          <>
+            {levelRow('simple', 'Simple tasks', 'A task the main agent marks simple.')}
+            {levelRow('hard', 'Hard tasks', 'A task the main agent marks hard.')}
+            <SettingsSelectRow
+              label="At once"
+              description={'How many of one main agent\'s subagents run at the same time. It starts the next when one ends.' + differing(shown, atOnces, value => value)}
+              {...mixed(atOnces, Array.from({ length: most }, (_, i) => ({ value: String(i + 1), label: String(i + 1) })))}
+              onChange={value => save({ atOnce: Number(value) })}
+            />
+          </>
+        )}
+      </Slot>
+      {saving && <p className="text-xs text-muted-foreground">Saving…</p>}
       {(error ?? read.error) !== undefined && (
-        <p role="alert" className="py-2 text-xs text-danger">
+        <p role="alert" className="text-xs text-danger">
           {error !== undefined ? `The subagent settings were not saved: ${error}` : `The subagent settings could not be read: ${read.error}`}
         </p>
       )}

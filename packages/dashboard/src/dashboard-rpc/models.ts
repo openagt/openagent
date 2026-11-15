@@ -1,6 +1,6 @@
 import { contextAgentUpdates, contextModels } from './context.js'
 import { ownerAsks } from '../dashboard/person.js'
-import type { AgentUpdate, AgentUpdateResult } from '../dashboard/agent-updates.js'
+import type { AgentUpdate, AgentUpdateResult, OpenAgentUpdate } from '../dashboard/agent-updates.js'
 import { isDriverName } from '../driver-names.js'
 import type { ModelsView } from '../dashboard/models.js'
 
@@ -16,6 +16,11 @@ export function onModels(): Promise<ModelsView> {
 /** The coding agents on this computer with a newer version out: none for anyone but its owner, who alone updates them. */
 export function onAgentUpdates(): Promise<AgentUpdate[]> {
   return ownerAsks() ? contextAgentUpdates().read() : Promise.resolve([])
+}
+
+/** A newer OpenAgent than the one running here, for its owner, who alone updates it; null when there is none. */
+export async function onOpenAgentUpdate(): Promise<OpenAgentUpdate | null> {
+  return ownerAsks() ? ((await contextAgentUpdates().openAgent()) ?? null) : null
 }
 
 /** Update a coding agent on this computer, by its own `update` command. */
