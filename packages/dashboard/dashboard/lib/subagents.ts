@@ -259,6 +259,16 @@ export function callRow(call: CallSubagent, runWorking: boolean, fallbackAt: str
   }
 }
 
+/**
+ * A run's subagents of both kinds as their rows: the runs started for it, then the ones its coding
+ * agent started inside its session, each in the order they were started. `working` is whether the
+ * run's own process works; `doing`, what each working run is on now.
+ */
+export function subagentRows(runs: readonly AgentMeta[], events: readonly OpenAgentEvent[], working: boolean, doing: Readonly<Record<string, AgentDoing>> = {}): SubagentRow[] {
+  const fallbackAt = events[0]?.at ?? new Date(0).toISOString()
+  return [...runs.map(agent => runRow(agent, doing[agent.id])), ...callSubagents(events).map(call => callRow(call, working, fallbackAt))]
+}
+
 /** One thing of a stretch of the chat: a subagent started, or a message one sent when it ended. */
 export type SubagentStep = { kind: 'agent'; row: SubagentRow } | { kind: 'message'; row: SubagentRow; text: string }
 

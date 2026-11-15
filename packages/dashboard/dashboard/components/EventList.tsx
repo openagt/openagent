@@ -5,7 +5,7 @@ import { Fragment, useContext, useEffect, useLayoutEffect, useMemo, useRef, useS
 import { Check, ChevronRight, Copy, PencilLine } from 'lucide-react'
 import { pendingChoices } from '../lib/live-state.js'
 import { DaemonDown } from '../lib/use-daemon-health.js'
-import { callRow, callSubagents, isAgentsOwn, runRow, endMessage, subagentEnd, subagentEvents, subagentReport, subagentSteps, subagentWait, type SubagentEnd } from '../lib/subagents.js'
+import { callSubagents, isAgentsOwn, runRow, endMessage, subagentEnd, subagentEvents, subagentReport, subagentRows, subagentSteps, subagentWait, type SubagentEnd } from '../lib/subagents.js'
 import { answeredQuestion } from '../lib/answered-question.js'
 import { rowWords, type RowWords } from '../lib/row-words.js'
 import { formatAge } from '../lib/format-date.js'
@@ -851,7 +851,7 @@ export function EventList({
   // the scroller keeps its place. A message just sent is the next turn's.
   const idOf = (e: OpenAgentEvent): string => rowIds.get(e) ?? `turn:${turns + 1}`
   const groupOf = (e: OpenAgentEvent): string => (ends.has(e) ? SUBAGENT : rowGroup(e))
-  const rows = [...subagents.map(agent => runRow(agent, doing[agent.id])), ...calls.map(call => callRow(call, working, events[0]?.at ?? new Date(0).toISOString()))]
+  const rows = subagentRows(subagents, events, working, doing)
   // A prompt or the agent's own words part them: what it started after saying something comes after those words.
   const reports = new Map(calls.flatMap(call => {
     const report = subagentReport(events, call.id)
