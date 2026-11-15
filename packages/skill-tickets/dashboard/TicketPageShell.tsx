@@ -45,7 +45,8 @@ export function TicketPageShell({
   crumbs?: readonly Crumb[]
   children: ReactNode
 }) {
-  const step = 'focus-ring min-w-0 truncate rounded-sm hover:text-foreground hover:underline'
+  // A step's words are 16 high; its padding makes it a target of 24, 44 on a phone, in the bar's 28.
+  const step = 'focus-ring min-w-0 truncate rounded-sm py-1 hover:text-foreground hover:underline max-md:-my-2 max-md:min-h-11'
   return (
     <PageColumn>
       {/* While the sidebar is hidden, the button that shows it again stands first. */}
