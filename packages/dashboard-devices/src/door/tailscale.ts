@@ -23,8 +23,9 @@ export const TAILSCALE_PORT = 443
 const SERVE_MS = 15_000
 const ASK_MS = 10_000
 
-const NOT_INSTALLED = 'Tailscale is not installed on this computer. Install it from tailscale.com and sign in, then turn this on again.'
-const NOT_IN = 'Tailscale is not signed in on this computer. Sign in to Tailscale, then turn this on again.'
+const NOT_INSTALLED = 'Tailscale is not installed on this computer. Install it from tailscale.com and sign in, then try again.'
+const NOT_RUNNING = 'Tailscale is not running on this computer. Start it (the Tailscale app, or sudo systemctl start tailscaled), then try again.'
+const NOT_IN = 'Tailscale is not signed in on this computer. Sign in to Tailscale, then try again.'
 
 /** Where macOS keeps the command of the Tailscale app, for a Mac whose command line has none. */
 const MAC_APP = '/Applications/Tailscale.app/Contents/MacOS/Tailscale'
@@ -64,11 +65,14 @@ export async function tailscaleName(run: TailscaleRun): Promise<Said<string>> {
   try {
     status = JSON.parse(out) as typeof status
   } catch {
-    return { ok: false, problem: code === 0 ? 'Tailscale answered in a way OpenAgent does not read.' : NOT_IN }
+    // A Tailscale whose service is not running answers in words, not JSON.
+    return { ok: false, problem: code === 0 ? 'Tailscale answered in a way OpenAgent does not read.' : NOT_RUNNING }
   }
+  // Stopped: signed in, with Tailscale turned off on this computer.
+  if (status.BackendState === 'Stopped') return { ok: false, problem: 'Tailscale is turned off on this computer. Turn it on (the Tailscale app, or tailscale up), then try again.' }
   if (status.BackendState !== 'Running') return { ok: false, problem: NOT_IN }
   const name = typeof status.Self?.DNSName === 'string' ? status.Self.DNSName.replace(/\.$/, '').toLowerCase() : ''
-  if (!/\.ts\.net$/.test(name)) return { ok: false, problem: 'This computer has no name on your Tailscale network: turn on MagicDNS in your Tailscale account, then turn this on again.' }
+  if (!/\.ts\.net$/.test(name)) return { ok: false, problem: 'This computer has no name on your Tailscale network: turn on MagicDNS in your Tailscale account, then try again.' }
   return { ok: true, value: name }
 }
 
@@ -97,7 +101,7 @@ export async function serveDoor(run: TailscaleRun, port: number, user = userInfo
   // Off for the whole network: Tailscale names the page in the person's account where it is turned on, and waits for it.
   const enable = /https:\/\/login\.tailscale\.com\/\S+/.exec(out)?.[0]
   if (/not enabled/i.test(out)) return { ok: false, problem: 'Serve is off on your Tailscale network. Turn it on once in your Tailscale account; the door opens by itself then.', ...(enable ? { enable } : {}) }
-  if (/Access denied/i.test(out)) return { ok: false, problem: `Tailscale does not let the user ${user} serve the door. Run sudo tailscale set --operator=${user} once on this computer, then turn this on again.` }
+  if (/Access denied/i.test(out)) return { ok: false, problem: `Tailscale does not let the user ${user} serve the door. Run sudo tailscale set --operator=${user} once on this computer; the door opens by itself then.` }
   if (code !== 0) return { ok: false, problem: `Tailscale did not serve the door: ${firstLine(out)}` }
   return { ok: true, value: undefined }
 }

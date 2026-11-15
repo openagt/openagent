@@ -1,7 +1,7 @@
 import { mkdir, stat, writeFile } from 'node:fs/promises'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
-import { errorMessage, gitReason, nodeGitRunner, type GitRunner } from './git.js'
+import { errorMessage, gitReason, missingIdentity, nodeGitRunner, type GitRunner } from './git.js'
 import { withLockFile, type CheckoutLockDeps } from './checkout-lock.js'
 import { originUrl } from './origin.js'
 import { NoRemoteAccountError, accountGit, clearRemoteAccount, readRemoteAccount, writeRemoteAccount, type RemoteAccount } from './remote-account.js'
@@ -42,10 +42,7 @@ async function ensurePersonalFolder(folder: string, git: GitRunner): Promise<voi
   await git(['init', '-q', '-b', 'main'], folder)
   await mkdir(join(folder, '.git', 'info'), { recursive: true })
   await writeFile(join(folder, '.git', 'info', 'exclude'), `/${LOCK_FILE}\n`)
-  for (const [key, value] of [['user.name', 'OpenAgent'], ['user.email', 'openagent@localhost']] as const) {
-    const set = await git(['config', '--get', key], folder).then(out => out.trim() !== '', () => false)
-    if (!set) await git(['config', '--local', key, value], folder)
-  }
+  for (const [key, value] of await missingIdentity(folder, git)) await git(['config', '--local', key, value], folder)
   await git(['commit', '-q', '--allow-empty', '-m', 'create the personal folder'], folder)
 }
 

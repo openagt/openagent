@@ -2,8 +2,9 @@ import { useCallback, useState } from 'react'
 
 // The composer draft carried across a navigation inside the app, held in sessionStorage so the
 // typed prompt never sits in the address bar, history, or a Referer header. The launcher
-// rehydrates from it once. And the draft each box keeps in this browser, until it is sent, and the
-// messages sent to a working run that it has not read yet, until it reads them.
+// rehydrates from it once. And the draft each box keeps in this browser, until it is sent, the
+// messages sent to a working run that it has not read yet, until it reads them, and the message
+// sent to continue an ended run, until it begins on it.
 
 /** sessionStorage key holding a carried draft, until the launcher takes it. */
 const PENDING_DRAFT_KEY = 'oa.pending-draft'
@@ -72,6 +73,9 @@ export function useKeptDraft<T>(key: string, empty: T): [T, (change: (current: T
 /** localStorage key prefix of the messages each run has not read yet. */
 const KEPT_WAITING_KEY = 'oa.waiting:'
 
+/** localStorage key prefix of the message each ended run was sent to continue it, until it writes that message as its prompt. */
+const KEPT_SENDING_KEY = 'oa.sending:'
+
 /** The draft the box `key` names was left with, as a chat app keeps one across a reload and a closed tab. */
 export function keptDraft(key: string): string | undefined {
   return kept(KEPT_DRAFT_KEY + key)
@@ -104,6 +108,21 @@ export function onKeptWaiting<Message>(run: string, take: (messages: Message[]) 
 /** Keep the messages `run` has not read yet; none keeps nothing. */
 export function keepWaiting(run: string, messages: readonly unknown[]): void {
   keep(KEPT_WAITING_KEY + run, messages.length === 0 ? undefined : JSON.stringify(messages))
+}
+
+/** The message sent to continue `run` that it had not begun on when the page was left or reloaded. */
+export function keptSending<Message>(run: string): Message | null {
+  const message = kept(KEPT_SENDING_KEY + run)
+  try {
+    return message ? (JSON.parse(message) as Message) : null
+  } catch {
+    return null
+  }
+}
+
+/** Keep the message sent to continue `run`; none keeps nothing. */
+export function keepSending(run: string, message: unknown): void {
+  keep(KEPT_SENDING_KEY + run, message === null ? undefined : JSON.stringify(message))
 }
 
 function kept(key: string): string | undefined {

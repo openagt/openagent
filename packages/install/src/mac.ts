@@ -138,7 +138,7 @@ export const mac: Platform = {
   appDir: env => places(env).app,
   prepare: async () => {},
   adminInstall: () => ({
-    says: `your password as the administrator, once: ${ADDRESS} is pointed at this Mac (/etc/hosts), and its port 443 at the dashboard (a packet filter rule).`,
+    says: `Your password as the administrator, once, to point ${ADDRESS} at this Mac (/etc/hosts) and its port 443 at the dashboard (a packet filter rule).`,
     script: adminInstallScript(),
   }),
   async trust(certFile, io, env) {
@@ -172,7 +172,7 @@ export const mac: Platform = {
   dashboardInstalled: env => existsSync(places(env).agent),
   adminInstalled: async () => (await hasHostsLine('/etc/hosts')) || existsSync(PORT_PLIST),
   adminUninstall: () => ({
-    says: `your password as the administrator, once: the hosts line for ${ADDRESS} and its port rule are taken off.`,
+    says: `Your password as the administrator, once, to take off the hosts line for ${ADDRESS} and its port rule.`,
     script: adminUninstallScript(),
   }),
   folders: env => [places(env).app, places(env).logs],

@@ -8,7 +8,7 @@ import { MembersCard } from './MembersCard.js'
 // behind their emails. The tally itself is src/people.test.ts's.
 
 const NOW = new Date().toISOString()
-const person = (email: string, over: Record<string, unknown> = {}) => ({ person: email, runs: 0, running: 0, cost: 0, commits: 0, lastAt: NOW, ...over })
+const person = (email: string, over: Record<string, unknown> = {}) => ({ person: email, runs: 0, running: 0, waiting: 0, cost: 0, commits: 0, lastAt: NOW, ...over })
 
 /** A host whose `logs people` says `people`; the runs it lists are `runs`, and with none it cannot list them. */
 function hostWith(people: unknown[], accounts: ModuleHostPerson[], runs?: unknown[]): FakeHost {
@@ -78,7 +78,7 @@ test('a person with two emails on one git host account is one row, with their na
 test("a member's runs are counted as the dashboard lists them: a run its record still calls going is not working when the dashboard says it is not", async () => {
   // The records froze while the laptop's run went on: they say one run, going.
   const host = hostWith(
-    [person('s@a.dev', { name: 'Suleiman Shahbari', runs: 1, running: 1, cost: 0.5, commits: 2 })],
+    [person('s@a.dev', { name: 'Suleiman Shahbari', runs: 1, running: 1, waiting: 0, cost: 0.5, commits: 2 })],
     [],
     [
       // Its computer does not answer: how it stands is unknown, so it is not working.
@@ -103,4 +103,21 @@ test('a run the dashboard says is going makes its person working, though no reco
   show(host)
   const me = await screen.findByRole('listitem', { name: 'Suleiman Shahbari' })
   expect(within(me).getByText('working')).toBeTruthy()
+})
+
+test('a member with runs that wait on an answer says so beside the ones working', async () => {
+  const host = hostWith(
+    [person('s@a.dev', { name: 'Suleiman Shahbari' })],
+    [],
+    [
+      { id: 'r1', status: 'running', startedAt: NOW, person: 's@a.dev' },
+      { id: 'r2', status: 'waiting', startedAt: NOW, person: 's@a.dev' },
+      { id: 'r3', status: 'waiting', startedAt: NOW, person: 's@a.dev' },
+    ],
+  )
+  show(host)
+  const member = await screen.findByRole('listitem', { name: 'Suleiman Shahbari' })
+  expect(within(member).getByText('working')).toBeTruthy()
+  // In the sidebar's amber for a run that waits.
+  expect(within(member).getByText('2 waiting').querySelector('span')!.className).toMatch(/bg-warning/)
 })

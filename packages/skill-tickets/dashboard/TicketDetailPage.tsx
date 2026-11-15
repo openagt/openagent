@@ -1,11 +1,20 @@
 import { useState } from 'react'
-import { Markdown, Slot, useModuleHost } from '@openagt/dashboard/module'
-import { ticketBody } from '../src/module.js'
+import { Markdown, Slot, useModuleHost, type ModuleHost } from '@openagt/dashboard/module'
+import { claimState, ticketBody } from '../src/module.js'
 import { readTicketFile } from '../src/ticket-file.js'
 import { TicketPageShell, TicketPageNote, TicketPageShape } from './TicketPageShell.js'
 import { TicketFacts, TicketHeader, ticketSlug } from './TicketHeader.js'
 import { TicketEditor } from './TicketEditor.js'
 import { useTicket } from './lib/use-ticket.js'
+
+/** The ticket whose page opens on its edit form: Edit ticket was chosen on its plan's tab. */
+let editOnOpen: string | null = null
+
+/** Open ticket `file`'s page on its edit form, from its plan's tab, beside it: the form edits the ticket, which that tab shows. */
+export function openToEdit(host: ModuleHost, projectId: string, file: string): void {
+  editOnOpen = file
+  host.openPage('tickets', [file], projectId, { beside: true })
+}
 
 // One ticket's own page: its whole text, not just the head the list row reads, under the head it
 // shares with its plan's page. `slug` is the same filename the list row and the URL carry, so this
@@ -23,7 +32,11 @@ export function TicketDetailPage({
   const ticket = read && 'ticket' in read ? read.ticket : null
   const onBack = () => host.backToPage('tickets')
   // The ticket written by hand in place of its text, until saved or left.
-  const [editing, setEditing] = useState(false)
+  const [editing, setEditing] = useState(() => {
+    if (editOnOpen !== slug) return false
+    editOnOpen = null
+    return true
+  })
 
   return (
     <TicketPageShell
@@ -48,10 +61,9 @@ export function TicketDetailPage({
                 file={ticket.file}
                 initial={readTicketFile(ticket.content)}
                 issueLabel={ticket.issue?.label}
-                onSaved={() => {
-                  setEditing(false)
-                  void reload()
-                }}
+                workedBy={ticket.locked && claimState(read.holderStatus) === 'working' ? (ticket.lockedByAgent?.name ?? ticket.lockedBy) : undefined}
+                // The form stays until the ticket is read as saved: closed sooner, it shows the last read.
+                onSaved={() => void reload().then(() => setEditing(false))}
                 onCancel={() => setEditing(false)}
               />
             </>

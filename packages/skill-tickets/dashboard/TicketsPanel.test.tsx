@@ -210,11 +210,20 @@ describe('the tickets list', () => {
 
   test('shows the row\'s facts: its priority, its topics and its age (#1144/#1265)', async () => {
     const twoDaysAgo = new Date(Date.now() - 2 * 24 * 60 * 60_000).toISOString()
-    render(<Rows tickets={[ticket({ priority: '8', topics: ['dx', 'ui'], date: twoDaysAgo })]} />)
+    // Named with no day, it is dated by its file: two days ago.
+    render(<Rows tickets={[ticket({ file: 'do-the-thing.md', priority: '8', topics: ['dx', 'ui'], date: twoDaysAgo })]} />)
     expect((await screen.findByText('P8')).getAttribute('title')).toBe('Priority 8')
     expect(screen.getByText('dx')).toBeTruthy()
     expect(screen.getByText('ui')).toBeTruthy()
     expect(screen.getByText('2d')).toBeTruthy()
+  })
+
+  test('a ticket named today reads today, at any hour: its filename holds a day, and its tooltip says the day', async () => {
+    const now = new Date()
+    const day = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`
+    render(<Rows tickets={[ticket({ file: `${day}_dark-mode.md`, date: `${day}T00:00:00.000Z` })]} />)
+    const age = await screen.findByText('today')
+    expect(age.getAttribute('title')).toBe(now.toLocaleDateString())
   })
 
   test('the priority column is kept on every row once a ticket of the list has one, and given up when none has', async () => {
@@ -260,7 +269,7 @@ describe('the tickets list', () => {
     const mounted: MountedModules = { pages: [], cards: [], linkActions: [{ label: 'Add to queue', doneLabel: 'Queued', run: addToQueue, package: '@x/queue', projects: ['p1'] }], panels: [], runSlots: [], settings: [], everyPage: [], loaded: true }
     render(<Rows tickets={[ticket({ planned: false, priority: '8' })]} />, mounted)
     await openMenu(await screen.findByRole('button', { name: 'Other ways to plan Do the thing' }))
-    fireEvent.click(await screen.findByText('Queue plan'))
+    fireEvent.click(await screen.findByText('Add to queue'))
     await waitFor(() => expect(addToQueue).toHaveBeenCalledWith(expect.anything(), 'p1', [{ text: planTicketPrompt('2026-07-20_do-the-thing.md'), priority: 8 }]))
     // The row says it is queued, and starts nothing.
     expect(await screen.findByText('Queued')).toBeTruthy()
@@ -269,8 +278,16 @@ describe('the tickets list', () => {
     addToQueue.mockClear()
     render(<Rows tickets={[ticket({ planned: true })]} />, mounted)
     await openMenu(await screen.findByRole('button', { name: 'Other ways to work on Do the thing' }))
-    fireEvent.click(await screen.findByText('Queue work'))
+    fireEvent.click(await screen.findByText('Add to queue'))
     await waitFor(() => expect(addToQueue).toHaveBeenCalledWith(expect.anything(), 'p1', [{ text: 'Do the thing', href: 'tickets/2026-07-20_do-the-thing.md', priority: 5 }]))
+  })
+
+  test('a claimed row still says its plan is queued, and offers no start', async () => {
+    const queuedPlan = { label: 'Add to queue', doneLabel: 'Queued', run: vi.fn(), done: async () => () => true, package: '@x/queue', projects: ['p1'] }
+    const mounted: MountedModules = { pages: [], cards: [], linkActions: [queuedPlan], panels: [], runSlots: [], settings: [], everyPage: [], loaded: true }
+    render(<Rows tickets={[ticket({ locked: true, lockedBy: 'agent-1' })]} />, mounted)
+    expect(await screen.findByText('Queued')).toBeTruthy()
+    expect(screen.queryByRole('button', { name: /^Plan/ })).toBeNull()
   })
 
   test("Start work's Configure first opens the launcher with the ticket's own prompt", async () => {

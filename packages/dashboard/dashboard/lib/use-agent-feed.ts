@@ -10,14 +10,16 @@ import { useLoaded } from './use-async.js'
 // behind the events already on screen.
 
 /**
- * The log to show for one agent, given its live channel's `events` and whether it is still running
- * (`live`; `null` while the list of agents has not been read).
+ * The log to show for one agent, given its live channel's `events`, whether the channel's replay of
+ * the lines already written is in (`replayed`), and whether it is still running (`live`; `null`
+ * while the list of agents has not been read).
  */
 export function useAgentFeed(
   projectId: string,
   agentId: string,
   live: boolean | null,
   events: OpenAgentEvent[],
+  replayed: boolean,
 ): {
   /** The archived log, once read: `null` while the agent works, and until the read has answered. */
   archived: OpenAgentEvent[] | null
@@ -85,8 +87,16 @@ export function useAgentFeed(
   // archive that was read counts: before the first read the channel is ahead of nothing.
   const [resumedFor, setResumedFor] = useState<string | null>(null)
   const active = isAgentActive(shown)
+  // A continued run's next leg writes nothing until its coding agent answers (agent-driver's `continuingTurn`):
+  // an end among the lines the feed had when this page saw the list of runs say it works, its replay
+  // in, is the leg before's. Told by the lines' order, never their times: those are the daemon's
+  // clock, and this browser's may be another device's.
+  const [workingFrom, setWorkingFrom] = useState<{ agentId: string; lines: number } | null>(null)
+  if (!working && workingFrom !== null) setWorkingFrom(null)
+  else if (working && replayed && workingFrom?.agentId !== agentId) setWorkingFrom({ agentId, lines: shown.length })
+  const endedSince = workingFrom?.agentId === agentId && shown.slice(workingFrom.lines).some(event => event.kind === 'end')
   // The feed's own end line ends it at once, with the "Stopped" it draws: the list of runs says so up to a poll later.
-  const feedLive = (working && agentOutcome(shown) === undefined) || (active && (feedAhead || resumedFor === agentId))
+  const feedLive = (working && (agentOutcome(shown) === undefined || !endedSince)) || (active && (feedAhead || resumedFor === agentId))
   useEffect(() => {
     if (active && feedAhead && archived !== null) setResumedFor(agentId)
     else if (!active) setResumedFor(null)

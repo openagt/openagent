@@ -27,8 +27,8 @@ function subscribe(listener: () => void): () => void {
 export function useStop(projectId: string, agentId: string | undefined, live: boolean): { stopping: boolean; error: string | null; stop: () => void } {
   const key = agentId ? `${projectId}\0${agentId}` : undefined
   const state = useSyncExternalStore(subscribe, () => (key ? pressed.get(key) : undefined), () => undefined)
-  const [error, setError] = useState<string | null>(null)
-  useEffect(() => setError(null), [key])
+  // Why a Stop was refused, said in the run it was pressed in, however late the refusal comes back.
+  const [refused, setRefused] = useState<{ key: string; error: string } | null>(null)
   // Released once the run is no longer live: a message continues the same run (#762), which is to be stoppable again.
   useEffect(() => {
     if (key && !live && state === 'landed') set(key, undefined)
@@ -36,16 +36,16 @@ export function useStop(projectId: string, agentId: string | undefined, live: bo
   const stop = (): void => {
     if (!key || pressed.has(key)) return
     set(key, 'sent')
-    setError(null)
+    setRefused(null)
     sendStop(projectId, agentId)
       .then(result => {
         set(key, result.ok ? 'landed' : undefined)
-        if (!result.ok) setError(result.error)
+        if (!result.ok) setRefused({ key, error: result.error })
       })
       .catch((err: unknown) => {
         set(key, undefined)
-        setError(err instanceof Error ? err.message : 'Could not stop the agent.')
+        setRefused({ key, error: err instanceof Error ? err.message : 'Could not stop the agent.' })
       })
   }
-  return { stopping: state === 'sent' || (state === 'landed' && live), error, stop }
+  return { stopping: state === 'sent' || (state === 'landed' && live), error: refused && refused.key === key ? refused.error : null, stop }
 }

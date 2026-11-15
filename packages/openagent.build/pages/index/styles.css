@@ -201,6 +201,10 @@ html[data-installed] .view-toggle {
 html[data-installed] .dashboard-cta {
   display: inline-flex !important;
 }
+/* And the commands that try or install it, under that button: it is installed. */
+html[data-installed] .try-commands {
+  display: none !important;
+}
 
 /*
  * The switch between this page and the dashboard (#1919), two pages of one address on a computer

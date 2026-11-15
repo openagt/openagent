@@ -67,6 +67,8 @@ export function ViewToggle({ style }: { style?: CSSProperties }) {
     <div
       // Shown only where OpenAgent is installed (styles.css), with no dashboard to switch to elsewhere.
       className="view-toggle"
+      role="group"
+      aria-label="View"
       style={{
         // The thumb is placed in it: in place, or where the caller puts it.
         position: 'relative',

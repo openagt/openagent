@@ -2,7 +2,7 @@ import { afterEach, describe, expect, test, vi } from 'vitest'
 import { cleanup, fireEvent, screen, waitFor, within } from '@testing-library/react'
 import { openMenu } from '../../dashboard/dashboard/test-utils.js'
 import type { ReactElement } from 'react'
-import type { ModuleAgent } from '@openagt/dashboard/module'
+import { forgetRemembered, type ModuleAgent } from '@openagt/dashboard/module'
 import type { MountedModules } from '@openagt/dashboard/module/testing'
 import { fakeHost, renderWithHost, type FakeHost } from './test-host.js'
 import { TicketDetailPage } from './TicketDetailPage.js'
@@ -33,7 +33,9 @@ const modules = (projects: string[] = ['p1']): MountedModules => ({
 })
 const render = (ui: ReactElement, mounted: MountedModules = modules()) => {
   const slug = (ui.props as { slug: string }).slug
-  host = fakeHost({ p1: { [`show ${slug} --local`]: shown ? { ok: true, ticket: shown } : { ok: false, reason: 'no-ticket', file: slug } } }, { p1: agents })
+  host = fakeHost(shown ? { p1: { [`show ${slug} --local`]: { ok: true, ticket: shown } } } : {}, { p1: agents })
+  // The command refuses a ticket it does not have: the page is handed the line the refusal leaves, as the dashboard runs it.
+  if (!shown) host.runCommand.mockImplementation(async () => ({ ok: false, error: `no ticket tickets/${slug}` }))
   host.act.mockImplementation(async (_projectId, args) => {
     expect(args).toEqual(['release', slug, '--force'])
     return released.ok ? { ok: true, output: { ok: true, file: `tickets/${slug}` } } : released
@@ -62,6 +64,9 @@ const ticket = (over: Record<string, unknown> = {}) => ({
 
 afterEach(() => {
   cleanup()
+  // Every story reads the same ticket: none opens on the one before's.
+  forgetRemembered()
+  localStorage.clear()
   shown = null
   agents = []
   released = { ok: true }
@@ -71,6 +76,18 @@ afterEach(() => {
 // One ticket's own page (#1144): the entire file, read by the same slug the list row and the
 // route carry, plus the actions on it the one-liner list no longer has room for.
 describe('TicketDetailPage (#1144)', () => {
+  test('a ticket read before opens on that read at once, not on Loading', async () => {
+    onTicket.mockResolvedValue(ticket())
+    render(<TicketDetailPage projectId="p1" slug="2026-07-20_do-the-thing.md" />)
+    expect(await screen.findByRole('heading', { name: 'Do the thing' })).toBeTruthy()
+    cleanup()
+    // Open again, the read still on its way.
+    render(<TicketDetailPage projectId="p1" slug="2026-07-20_do-the-thing.md" />)
+    host.runCommand.mockImplementation(() => new Promise(() => {}))
+    expect(screen.getByRole('heading', { name: 'Do the thing' })).toBeTruthy()
+    expect(screen.queryByText('Loading…')).toBeNull()
+  })
+
   test('reads the ticket by slug and renders its text below the title, the title, the keys above it and its summary said once', async () => {
     onTicket.mockResolvedValue(ticket({ priority: '8', planned: true, content: 'Priority: 8\n\n# Do the thing\n\n## TLDR\n\nThe thing is not done.\n\nMore detail below the fold.' }))
     render(<TicketDetailPage projectId="p1" slug="2026-07-20_do-the-thing.md" />)
@@ -89,12 +106,13 @@ describe('TicketDetailPage (#1144)', () => {
 
   test('says at its side where it stands, its issue, when it was opened and its file (#1144/#1265)', async () => {
     const twoDaysAgo = new Date(Date.now() - 2 * 24 * 60 * 60_000).toISOString()
-    onTicket.mockResolvedValue(ticket({ priority: '3', date: twoDaysAgo, issue: { label: '#42', url: 'https://example.com/org/repo/issues/42' } }))
+    // Named with no day, it is dated by its file: two days ago.
+    onTicket.mockResolvedValue(ticket({ file: 'do-the-thing.md', priority: '3', date: twoDaysAgo, issue: { label: '#42', url: 'https://example.com/org/repo/issues/42' } }))
     render(<TicketDetailPage projectId="p1" slug="2026-07-20_do-the-thing.md" />)
     expect((await fact('Stage')).textContent).toBe('Unplanned')
     expect((await fact('Issue')).querySelector('a')?.getAttribute('href')).toBe('https://example.com/org/repo/issues/42')
-    expect((await fact('Opened')).textContent).toBe('2 days ago')
-    expect((await fact('File')).textContent).toBe('tickets/2026-07-20_do-the-thing.md')
+    expect((await fact('Opened')).textContent).toBe('2d ago')
+    expect((await fact('File')).textContent).toBe('tickets/do-the-thing.md')
     // Where the facts are not beside the title, what decides the next step stands under it.
     expect(screen.getByRole('heading', { name: 'Do the thing' }).nextElementSibling?.textContent).toBe('P3·Unplanned')
   })
@@ -112,11 +130,18 @@ describe('TicketDetailPage (#1144)', () => {
     expect(screen.queryByRole('button', { name: /^Queue / })).toBeNull()
   })
 
+  test('the Plan tab of a ticket with no plan is named as it reads: "Plan, none yet"', async () => {
+    onTicket.mockResolvedValue(ticket())
+    render(<TicketDetailPage projectId="p1" slug="2026-07-20_do-the-thing.md" />)
+    expect(await screen.findByRole('tab', { name: 'Plan, none yet' })).toBeTruthy()
+    expect(screen.getByRole('tab', { name: 'Ticket' })).toBeTruthy()
+  })
+
   test('shows the effort and uncertainty the plan recorded, with the rest of the meta (#1144/#1265)', async () => {
     onTicket.mockResolvedValue(ticket({ planned: true, effort: 2, uncertainty: 0 }))
     render(<TicketDetailPage projectId="p1" slug="2026-07-20_do-the-thing.md" />)
-    expect((await fact('Effort')).textContent).toBe('2 of 10')
-    expect((await fact('Uncertainty')).textContent).toBe('0 of 10')
+    expect((await fact('Effort')).textContent).toBe('2/10')
+    expect((await fact('Uncertainty')).textContent).toBe('0/10')
   })
 
   test('a planned ticket is handed as a link to the module\'s action, at the priority its own says (#1164/#1774)', async () => {
@@ -230,10 +255,28 @@ describe('TicketDetailPage (#1144)', () => {
     await screen.findAllByRole('button', { name: 'login-page' })
     await release()
     expect(host.act).not.toHaveBeenCalled()
+    // The run is named as a run, not as the sentence's first word.
+    expect((await screen.findByRole('alertdialog')).textContent).toContain('The run “login-page” goes on working, and the ticket can be started or queued again.')
     fireEvent.click(await screen.findByRole('button', { name: 'Release' }))
     await waitFor(() => expect(host.act).toHaveBeenCalledWith('p1', ['release', '2026-07-20_do-the-thing.md', '--force']))
     await waitFor(() => expect(screen.queryAllByText(/Claimed/)).toHaveLength(0))
     await waitFor(() => expect(document.activeElement).toBe(screen.getByRole('heading', { name: 'Do the thing' })))
+  })
+
+  test('editing a ticket a run is working on says the run may not see the change; one held for nobody says nothing', async () => {
+    agents = [{ id: 'run-1', name: 'login-page', status: 'running', startedAt: '2026-08-30T10:00:00.000Z' }]
+    onTicket.mockResolvedValue(ticket({ locked: true, lockedBy: 'run-1' }))
+    render(<TicketDetailPage projectId="p1" slug="2026-07-20_do-the-thing.md" />)
+    await screen.findAllByRole('button', { name: 'login-page' })
+    await openMenu(screen.getByRole('button', { name: 'More' }))
+    fireEvent.click(await screen.findByText('Edit ticket'))
+    expect(screen.getByText('The run “login-page” is working on this ticket and started from it as it was: it may not see this change.')).toBeTruthy()
+    cleanup()
+    agents = [{ id: 'run-1', name: 'login-page', status: 'done', startedAt: '2026-08-30T10:00:00.000Z' }]
+    render(<TicketDetailPage projectId="p1" slug="2026-07-20_do-the-thing.md" />)
+    await openMenu(await screen.findByRole('button', { name: 'More' }))
+    fireEvent.click(await screen.findByText('Edit ticket'))
+    expect(screen.queryByText(/may not see this change/)).toBeNull()
   })
 
   test('a failed release surfaces and keeps the claim visible (#1420)', async () => {
@@ -295,6 +338,26 @@ describe('TicketDetailPage (#1144)', () => {
     expect(after.getByText('Work the thing').getAttribute('title')).toMatch(/^Worked on it/)
     fireEvent.click(after.getByRole('button', { name: 'Work the thing' }))
     expect(host.openAgent).toHaveBeenCalledWith('p1', 'run-2')
+  })
+
+  test('a session with no title yet is named as the claim on the line above names it, never by its id', async () => {
+    agents = [{ id: '2026-11-13T20-09-35-236Z', name: 'login-page', ask: 'hold: move the cart to a page of its own', status: 'running', startedAt: '2026-08-30T10:00:00.000Z' }]
+    onTicket.mockResolvedValue(ticket({ locked: true, lockedBy: '2026-11-13T20-09-35-236Z' }))
+    render(<TicketDetailPage projectId="p1" slug="2026-07-20_do-the-thing.md" />)
+    // The look sets the claim and the runs at the side, the claim above the runs.
+    const runs = (await screen.findByText('Runs on this ticket')).parentElement!
+    expect(runs.textContent).not.toContain('2026-11-13T20-09-35-236Z')
+    const claim = within(await fact('Claimed by')).getByRole('button')
+    expect(within(runs).getByRole('button', { name: claim.textContent! })).toBeTruthy()
+  })
+
+  test('a planning session that ended with no plan written is said to have been asked for one, not to have written it', async () => {
+    agents = [{ id: 'plan-run', ask: 'Create tickets/2026-07-20_do-the-thing.plan.md', title: 'Plan the thing', status: 'done', startedAt: '2026-08-29T10:00:00.000Z' }]
+    onTicket.mockResolvedValue(ticket({ planned: false }))
+    render(<TicketDetailPage projectId="p1" slug="2026-07-20_do-the-thing.md" />)
+    const runs = within((await screen.findByText('Runs on this ticket')).parentElement!)
+    expect(runs.getByText('Plan the thing').getAttribute('title')).toMatch(/^Asked for its plan/)
+    expect(runs.queryByTitle(/^Wrote its plan/)).toBeNull()
   })
 
   test('a command that cannot run is named, not shown as a missing ticket', async () => {

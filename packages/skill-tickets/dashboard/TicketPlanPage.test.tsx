@@ -1,11 +1,18 @@
 import { afterEach, describe, expect, test } from 'vitest'
 import { cleanup, fireEvent, screen, waitFor, within } from '@testing-library/react'
-import type { ModuleAgent } from '@openagt/dashboard/module'
+import { forgetRemembered, type ModuleAgent } from '@openagt/dashboard/module'
 import { planTicketPrompt, workOnTicketPrompt } from '../src/module.js'
 import { fakeHost, renderWithHost, type FakeHost } from './test-host.js'
 import { TicketPlanPage } from './TicketPlanPage.js'
+import { TicketDetailPage } from './TicketDetailPage.js'
+import { openMenu } from '../../dashboard/dashboard/test-utils.js'
 
-afterEach(cleanup)
+afterEach(() => {
+  cleanup()
+  // Every story reads the same ticket: none opens on the one before's.
+  forgetRemembered()
+  localStorage.clear()
+})
 
 const SLUG = '2026-07-20_do-the-thing.md'
 const TICKET = { file: SLUG, title: 'Do the thing', summary: '', date: '2026-01-01T00:00:00.000Z', planned: true, content: '# Do the thing\n' }
@@ -24,9 +31,53 @@ describe('TicketPlanPage (#685)', () => {
     await waitFor(() => expect(host.runCommand).toHaveBeenCalledWith('p1', ['show', SLUG, '--local']))
     expect(await screen.findByText('The plan')).toBeTruthy()
     expect(screen.getByText('Do it in two steps.')).toBeTruthy()
-    // The breadcrumb names the ticket's file, as on its Ticket tab; the tab says which page this is.
-    expect(screen.getByRole('navigation', { name: 'Breadcrumb' }).textContent).toBe('Ticketsdo-the-thing')
+    // The breadcrumb names the ticket's file, as on its Ticket tab, then the plan; the tab says which page this is.
+    expect(screen.getByRole('navigation', { name: 'Breadcrumb' }).textContent).toBe('Ticketsdo-the-thingPlan')
     expect(screen.getByRole('tab', { name: 'Plan', selected: true })).toBeTruthy()
+  })
+
+  test('the head is the ticket tab\'s: More offers Edit ticket, which opens the ticket\'s page on its edit form', async () => {
+    const host = render(PLAN)
+    await openMenu(await screen.findByRole('button', { name: 'More' }))
+    fireEvent.click(await screen.findByText('Edit ticket'))
+    expect(host.openPage).toHaveBeenCalledWith('tickets', [SLUG], 'p1', { beside: true })
+    cleanup()
+    renderWithHost(<TicketDetailPage projectId="p1" slug={SLUG} />, host)
+    expect(await screen.findByRole('heading', { name: 'Edit ticket' })).toBeTruthy()
+    expect((screen.getByLabelText('Title') as HTMLInputElement).value).toBe('Do the thing')
+  })
+
+  // The shell carries a return across pages opened beside each other (its App tests): from either
+  // of a ticket's pages, the list the ticket was opened from is reached by Back, as it was left.
+  test('the ticket\'s Plan tab opens beside the ticket, and its crumb "Tickets" goes back to the list', async () => {
+    const host = fakeHost({ p1: { [`show ${SLUG} --local`]: { ok: true, ticket: TICKET, plan: PLAN } } })
+    renderWithHost(<TicketDetailPage projectId="p1" slug={SLUG} />, host)
+    fireEvent.click(await screen.findByRole('tab', { name: 'Plan' }))
+    expect(host.openPage).toHaveBeenCalledWith('tickets', [SLUG, 'plan'], 'p1', { beside: true })
+    cleanup()
+    renderWithHost(<TicketPlanPage projectId="p1" slug={SLUG} />, host)
+    fireEvent.click(await screen.findByRole('button', { name: 'Tickets' }))
+    expect(host.backToPage).toHaveBeenCalledWith('tickets')
+  })
+
+  test.each([
+    ['More → Edit ticket, then Cancel', async () => {
+      await openMenu(await screen.findByRole('button', { name: 'More' }))
+      fireEvent.click(await screen.findByText('Edit ticket'))
+    }, () => fireEvent.click(screen.getByRole('button', { name: 'Cancel' }))],
+    // The crumb names the ticket by its file, as the look draws it.
+    ['crumb to the ticket', async () => fireEvent.click(await screen.findByRole('button', { name: 'do-the-thing' })), () => {}],
+  ])('the Plan tab\'s %s opens the ticket beside it, whose "Tickets" goes back to the list', async (_, leave, onTicket) => {
+    const host = fakeHost({ p1: { [`show ${SLUG} --local`]: { ok: true, ticket: TICKET, plan: PLAN } } })
+    renderWithHost(<TicketPlanPage projectId="p1" slug={SLUG} />, host)
+    await leave()
+    expect(host.openPage).toHaveBeenCalledWith('tickets', [SLUG], 'p1', { beside: true })
+    cleanup()
+    renderWithHost(<TicketDetailPage projectId="p1" slug={SLUG} />, host)
+    await screen.findByRole('button', { name: 'Tickets' })
+    onTicket()
+    fireEvent.click(screen.getByRole('button', { name: 'Tickets' }))
+    expect(host.backToPage).toHaveBeenCalledWith('tickets')
   })
 
   test('a ticket with no plan says so in one line, under the head whose press has an agent write it', async () => {

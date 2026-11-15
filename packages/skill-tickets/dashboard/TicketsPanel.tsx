@@ -11,7 +11,6 @@ import {
   StartAgentPress,
   StateCell,
   cn,
-  formatAge,
   formatDateTime,
   formatRelative,
   useAction,
@@ -24,6 +23,7 @@ import { TicketStartActions } from './TicketStartActions.js'
 import type { WorkspaceTicket } from './lib/types.js'
 import { parsePriority } from './lib/ticket-priority.js'
 import { STAGE_LABEL, STAGE_ORDER, claimWorking, ticketStage, type TicketStageId } from './lib/ticket-stage.js'
+import { ticketAge, ticketDay } from './lib/ticket-date.js'
 
 /** Captured once: `useLoaded` treats a fresh `{}` literal as a new value on every render. */
 const NO_META: TicketsMeta = {}
@@ -87,13 +87,21 @@ function TicketRow({ listed, priorities, showStage, busy, starting, isSelected, 
   const phone = useIsMobile()
   const { projectId, projectName, ticket } = listed
   const selected = isSelected?.(listed) ?? false
-  // A ticket in review, waiting or claimed is not handed to an agent: its row offers no next step.
+  // A ticket in review, waiting or claimed is not handed to an agent: its row offers no next step, only what is queued for it.
   const offered = !heldBack(ticket) && !ticket.locked
   const stage = <StageWord ticket={ticket} />
   const holder = ticket.lockedByAgent?.name ?? ticket.lockedBy
   // A claim by one of the project's runs opens that run (#1748); any other narrows the list to claimed (#1144).
   const run = ticket.lockedByAgent
   const claimPress = ticket.locked ? (run ? () => host.openAgent(projectId, run.id) : onClaimed) : undefined
+  const startProps = {
+    projectId,
+    ticket,
+    busy,
+    starting: starting?.projectId === projectId ? starting.prompt : null,
+    onStart: (prompt: string, failure: string) => onStart(listed, prompt, failure),
+    onConfigure: (prompt: string) => onConfigure(listed, prompt),
+  }
   return (
     <PanelRow
       className={cn(selected && 'bg-foreground/6 before:opacity-0 [&+li]:before:opacity-0')}
@@ -129,6 +137,8 @@ function TicketRow({ listed, priorities, showStage, busy, starting, isSelected, 
                 )}
               </span>
             )}
+            {/* A ticket no agent is handed now offers no next step, only what is queued for it. */}
+            {!offered && <TicketStartActions compact startable={false} {...startProps} />}
             {showStage && (
               <span className="flex w-26">
                 {claimPress ? (
@@ -146,8 +156,8 @@ function TicketRow({ listed, priorities, showStage, busy, starting, isSelected, 
                 )}
               </span>
             )}
-            <span className="w-9 text-right tabular-nums" title={formatDateTime(ticket.date)}>
-              {formatAge(ticket.date).replace(/ ago$/, '')}
+            <span className="w-16 text-right tabular-nums" title={ticketDay(ticket)}>
+              {ticketAge(ticket).replace(/ ago$/, '')}
             </span>
           </span>
         )
@@ -155,15 +165,7 @@ function TicketRow({ listed, priorities, showStage, busy, starting, isSelected, 
       actions={
         offered && !phone ? (
           <span className="-mr-1.5 flex items-center gap-2">
-            <TicketStartActions
-              compact
-              projectId={projectId}
-              ticket={ticket}
-              busy={busy}
-              starting={starting?.projectId === projectId ? starting.prompt : null}
-              onStart={(prompt, failure) => onStart(listed, prompt, failure)}
-              onConfigure={prompt => onConfigure(listed, prompt)}
-            />
+            <TicketStartActions compact {...startProps} />
           </span>
         ) : undefined
       }

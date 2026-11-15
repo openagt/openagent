@@ -9,7 +9,8 @@ import { planLink, planTicketPrompt, ticketLink, workOnTicketPrompt } from '../s
  * "later" hands the same ask to the installed modules' link actions — "Add to queue" when the
  * project has a queue package — and offers nothing without one. One button, the step now, the rest
  * in its menu, so a ticket's actions never crowd it; shorter words on the list's dense rows
- * (`compact`). The caller leaves it out for a ticket no agent is handed: in review, waiting, claimed.
+ * (`compact`). A ticket no agent is handed now (in review, waiting, claimed) is not `startable`: it
+ * shows only what is queued for it.
  */
 export function TicketStartActions({
   projectId,
@@ -19,6 +20,7 @@ export function TicketStartActions({
   onStart,
   onConfigure,
   compact = false,
+  startable = true,
 }: {
   projectId: string
   ticket: { file: string; title: string; planned?: boolean | undefined; priority?: string | undefined }
@@ -32,6 +34,8 @@ export function TicketStartActions({
   onConfigure: (prompt: string) => void
   /** The list's rows: a smaller button, shorter words. */
   compact?: boolean | undefined
+  /** Whether an agent may be handed the ticket now; without, only the Queued mark shows. */
+  startable?: boolean | undefined
 }) {
   const step = ticket.planned
     ? {
@@ -74,7 +78,8 @@ export function TicketStartActions({
   // On a row the queue is in the start's menu; on the page it is a press of its own beside it.
   const moreItems: StartMenuItem[] = compact
     ? actions.map(action => ({
-        label: queued === 'done' || action.done ? (action.doneLabel ?? action.label) : step.later,
+        // The module's own name for the act: the menu it is in says plan or work.
+        label: queued === 'done' || action.done ? (action.doneLabel ?? action.label) : action.label,
         description: step.laterSays,
         disabled: queued === 'running' || queued === 'done' || action.done,
         onSelect: () => void queue(action.key),
@@ -93,22 +98,25 @@ export function TicketStartActions({
         </span>
       )}
       {/* The page's one primary press; on a list's row, a ghost press among many rows. */}
-      <StartAgentButton
-        variant={compact ? 'ghost' : 'default'}
-        size={compact ? 'sm' : 'default'}
-        icon={<step.Icon className="size-4" aria-hidden />}
-        label={step.now}
-        menuAriaLabel={step.menu}
-        tooltip={step.tooltip}
-        busy={busy}
-        starting={starting === step.prompt}
-        prompt={step.prompt}
-        configureDescription={step.configure}
-        onStart={() => onStart(step.prompt, step.failure)}
-        onConfigure={() => onConfigure(step.prompt)}
-        moreItems={moreItems}
-      />
+      {startable && (
+        <StartAgentButton
+          variant={compact ? 'ghost' : 'default'}
+          size={compact ? 'sm' : 'default'}
+          icon={<step.Icon className="size-4" aria-hidden />}
+          label={step.now}
+          menuAriaLabel={step.menu}
+          tooltip={step.tooltip}
+          busy={busy}
+          starting={starting === step.prompt}
+          prompt={step.prompt}
+          configureDescription={step.configure}
+          onStart={() => onStart(step.prompt, step.failure)}
+          onConfigure={() => onConfigure(step.prompt)}
+          moreItems={moreItems}
+        />
+      )}
       {!compact &&
+        startable &&
         actions.map(action => {
           const done = queued === 'done' || action.done
           return (

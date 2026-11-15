@@ -6,6 +6,7 @@ import { Composer, type ComposerHandle } from './Composer.js'
 import { sendMessage } from '../rpc/control.js'
 import { useAction } from '../lib/use-action.js'
 import { useStop } from '../lib/use-stop.js'
+import { keepDraft, keptDraft } from '../lib/draft-handoff.js'
 import { DaemonDown } from '../lib/use-daemon-health.js'
 import { Button } from './ui/button.js'
 import { Tooltip, TooltipTrigger, TooltipContent } from './ui/tooltip.js'
@@ -49,6 +50,7 @@ export function AgentComposer({
   projectId,
   agentId,
   live,
+  asked = false,
   files,
   onAgentStarted,
   onSending,
@@ -75,6 +77,8 @@ export function AgentComposer({
   agentId: string
   /** Whether the agent is still running: what a send does is the same call, the note differs. */
   live: boolean
+  /** It ended on a question its card asks: a message is the answer, in the person's own words. */
+  asked?: boolean
   files: string[]
   /** An ended run was continued: the shell follows the same run as it goes live again. */
   onAgentStarted?: ((intent: string, agentId: string) => void) | undefined
@@ -145,7 +149,7 @@ export function AgentComposer({
   const phone = useIsMobile()
   // A touch screen has no keys to name: its pointer is a finger. A phone's box has no room for them either.
   const touch = typeof matchMedia === 'function' && matchMedia('(pointer: coarse)').matches
-  const { busy, error, run } = useAction()
+  const { busy, error, run } = useAction(agentId)
   // The slot's Stop (#1455), its own press so a message send's busy beat cannot read as
   // "stopping", and the session menu's Stop the same press: one per run (`use-stop.ts`).
   const { stopping, error: stopError, stop: stopSession } = useStop(projectId, agentId, live)
@@ -164,6 +168,9 @@ export function AgentComposer({
   useEffect(() => {
     if (picked === recorded) setPicked(null)
   }, [picked, recorded])
+  // The session shown now: a send's answer, back after another was picked, leaves that one's box and menus alone.
+  const shown = useRef(agentId)
+  shown.current = agentId
   /** Say `text` to the run, `later` for after its turn. Resolves whether it went through; a refusal's words are shown. */
   const say = async (text: string, later: boolean): Promise<boolean> => {
     const wasLive = live
@@ -178,7 +185,7 @@ export function AgentComposer({
       if (!wasLive) onSending?.(null)
       return false
     }
-    if (!wasLive) setPicked(null)
+    if (!wasLive && shown.current === agentId) setPicked(null)
     if (wasLive) onQueued?.({ id, text, later })
     // An ended run goes live again under the same id: tell the shell, which keeps its feed (#762).
     else onAgentStarted?.(text, agentId)
@@ -186,12 +193,27 @@ export function AgentComposer({
   }
 
   const send = async (text: string, { later }: { later: boolean } = { later: false }): Promise<void> => {
-    if (await say(contextSet ? promptWithContext(text, contextSet.context) : text, later)) {
-      composerRef.current?.clear()
-      contextSet?.reset()
-      setNotSent(false)
+    // The box is emptied as the message goes, so what is typed meanwhile stays; a message refused comes back to it
+    // as the same draft: its chips, and the Context it went with.
+    const sent = contextSet?.context
+    const draft = composerRef.current?.clear()
+    // The Context goes with the message, out of the set as the box empties: what is picked while it goes, a path it
+    // went with picked again included, is the next message's, and its landing leaves the set alone.
+    for (const path of sent ?? []) contextSet?.remove(path)
+    const went = await say(sent ? promptWithContext(text, sent) : text, later)
+    if (shown.current === agentId) {
+      if (went) setNotSent(false)
+      else {
+        if (draft) composerRef.current?.restore(draft)
+        for (const path of sent ?? []) contextSet?.add(path)
+      }
+      composerRef.current?.focus()
+    } else if (!went) {
+      // Another session's box is shown by now: the words go back to the one they were written in, after what it holds, as its append puts them.
+      const draftKey = `${projectId}:${agentId}`
+      const kept = keptDraft(draftKey)
+      keepDraft(draftKey, kept === undefined ? text : `${kept}\n\n${text}`)
     }
-    composerRef.current?.focus()
   }
 
   // Esc stops the agent, as in Claude Code, also typed in the box, unless it closes something open
@@ -301,7 +323,7 @@ export function AgentComposer({
         }
         // What the box can do, not what it is for: the keys for a working agent, as Claude Code's box
         // says them in the same place; a touch screen has none to name.
-        placeholder={down ? 'OpenAgent is not answering' : live ? (touch || phone ? 'Message the agent…' : `Enter to send, ${shortcut('Enter')} to queue for later`) : 'Message the agent to continue it…'}
+        placeholder={down ? 'OpenAgent is not answering' : live ? (touch || phone ? 'Message the agent…' : `Enter to send, ${shortcut('Enter')} to queue for later`) : asked ? 'Or answer in your own words…' : 'Message the agent to continue it…'}
       />
     </div>
   )

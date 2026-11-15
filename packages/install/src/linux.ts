@@ -239,7 +239,7 @@ export const linux: Platform = {
     const packages = missing.map(tool => TOOLS[tool].package[manager])
     await asAdmin(
       {
-        says: `your password as the administrator: ${packages.join(', ')} ${packages.length === 1 ? 'is' : 'are'} installed (${missing.map(tool => `${tool}, which ${TOOLS[tool].does}`).join('; ')}).`,
+        says: `Your password as the administrator, to install ${packages.join(', ')} (${missing.map(tool => `${tool}, which ${TOOLS[tool].does}`).join('; ')}).`,
         script: installPackagesScript(manager, packages),
       },
       io,
@@ -252,7 +252,7 @@ export const linux: Platform = {
   adminInstall(certFile) {
     const store = systemStore()
     return {
-      says: `your password as the administrator: ${ADDRESS} is pointed at this computer (/etc/hosts), and its port 443 at the dashboard (an nftables rule, loaded at each start)${store ? '; the system trusts its certificate, for curl and other tools' : ''}.`,
+      says: `Your password as the administrator, to point ${ADDRESS} at this computer (/etc/hosts) and its port 443 at the dashboard (an nftables rule, loaded at each start)${store ? ', and to have the system trust its certificate, for curl and other tools' : ''}.`,
       script: adminInstallScript(certFile, store),
     }
   },
@@ -294,7 +294,7 @@ export const linux: Platform = {
   adminUninstall() {
     const store = systemStore()
     return {
-      says: `your password as the administrator, once: the hosts line for ${ADDRESS} and its port rule are taken off${store ? ', and the system trusts its certificate no more' : ''}.`,
+      says: `Your password as the administrator, once, to take off the hosts line for ${ADDRESS} and its port rule${store ? ', and the system’s trust in its certificate' : ''}.`,
       script: adminUninstallScript(store),
     }
   },

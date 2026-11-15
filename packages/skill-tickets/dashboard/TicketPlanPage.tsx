@@ -2,6 +2,7 @@ import { Markdown, Slot, useModuleHost } from '@openagt/dashboard/module'
 import { planBody } from '../src/module.js'
 import { TicketPageShell, TicketPageNote, TicketPageShape } from './TicketPageShell.js'
 import { TicketFacts, TicketHeader, ticketSlug } from './TicketHeader.js'
+import { openToEdit } from './TicketDetailPage.js'
 import { useTicket } from './lib/use-ticket.js'
 
 // One ticket's plan, its second tab: under the head it shares with the ticket's page, the plan set
@@ -24,7 +25,8 @@ export function TicketPlanPage({
   return (
     <TicketPageShell
       onBack={onBack}
-      crumbs={ticket ? [{ label: ticketSlug(ticket.file) }] : []}
+      // The ticket's crumb opens it beside the plan, as its Ticket tab does.
+      crumbs={ticket ? [{ label: ticketSlug(ticket.file), onOpen: () => host.openPage('tickets', [ticket.file], projectId, { beside: true }) }, { label: 'Plan' }] : []}
       aside={ticket && read && 'ticket' in read ? <TicketFacts projectId={projectId} ticket={ticket} holderStatus={read.holderStatus} sessions={read.sessions} /> : undefined}
     >
       <Slot of={{ state, value: read }} shape={<TicketPageShape />}>
@@ -37,7 +39,7 @@ export function TicketPlanPage({
             <TicketPageNote>This ticket does not exist.</TicketPageNote>
           ) : (
             <>
-              <TicketHeader projectId={projectId} ticket={ticket} holderStatus={read.holderStatus} tab="plan" onReleased={released} />
+              <TicketHeader projectId={projectId} ticket={ticket} holderStatus={read.holderStatus} tab="plan" onEdit={() => openToEdit(host, projectId, ticket.file)} onReleased={released} />
               <div className="max-w-180">
                 {read.plan === null ? (
                   // No `.plan.md` beside the ticket: never written, or removed since.

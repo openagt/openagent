@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { X } from 'lucide-react'
-import { Button, LinkActions, Page, RowShapes, Section, Slot, cn, runsAgain, usePolled, useAction, useLinkActions, useModuleHost, type ProjectLinks, type ModuleLink, type ModuleProject } from '@openagt/dashboard/module'
+import { Button, LinkActions, Page, RowShapes, Section, Slot, cn, runsAgain, usePolled, useAction, useLinkActions, useModuleHost, type ProjectLinks, type ModuleLink, type ModuleProject, type LinkActionOffer } from '@openagt/dashboard/module'
 import { heldBack, holderAgent, planLink, ticketLink, withHolder } from '../src/module.js'
 import { holdingRun } from './lib/holding-run.js'
 import type { ProjectTickets, WorkspaceTicket } from './lib/types.js'
@@ -256,6 +256,10 @@ function QueueAdds({ rows, disabled }: { rows: readonly TicketRow[]; disabled: b
   const [addedHere, setAddedHere] = useState<string | null>(null)
   const ticketsQueued = addedHere === queueKey || (queuedAlready.length > 0 && queuedAlready.every(action => action.done))
   const left = rows.length - targets.length
+  // Each counts what a press adds, never a ticket it skips or one already on the queue; done, what
+  // the set now has on the queue on its projects.
+  const label = (noun: string) => (action: LinkActionOffer, done: boolean) =>
+    done ? `${action.doneLabel ?? 'Queued'} ${counted(action.total, noun)}` : `Queue ${counted(action.left, noun)}`
   return (
     <>
       {targets.length > 0 && (
@@ -264,7 +268,7 @@ function QueueAdds({ rows, disabled }: { rows: readonly TicketRow[]; disabled: b
           targets={ticketLinks}
           resetKey={`tickets\n${queueKey}`}
           onDone={() => setAddedHere(queueKey)}
-          label={() => `Queue ${counted(targets.length, 'ticket')}`}
+          label={label('ticket')}
           variant="ghost"
           size="sm"
           disabled={disabled}
@@ -276,7 +280,7 @@ function QueueAdds({ rows, disabled }: { rows: readonly TicketRow[]; disabled: b
           projects={projectsShown}
           targets={linksByProject(planTargets, planLink)}
           resetKey={`plans\n${planKey}`}
-          label={() => `Queue ${counted(planTargets.length, 'plan')}`}
+          label={label('plan')}
           variant="ghost"
           size="sm"
           disabled={disabled}
@@ -298,7 +302,7 @@ function linksByProject(rows: readonly { projectId: string; ticket: WorkspaceTic
   return groups
 }
 
-/** "2 tickets", "1 plan". */
+/** "2 tickets", "1 plan": in digits, beside each other. */
 function counted(count: number, noun: string): string {
   return `${count} ${noun}${count === 1 ? '' : 's'}`
 }

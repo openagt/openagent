@@ -10,7 +10,6 @@ import {
   DropdownMenuTrigger,
   PriorityBadge,
   cn,
-  formatDateTime,
   runSaid,
   useAction,
   useModuleHost,
@@ -21,10 +20,19 @@ import { TICKETS_DIR } from '../src/names.js'
 import type { WorkspaceTicketDetail } from './lib/types.js'
 import { releaseClaim } from './lib/release.js'
 import { parsePriority } from './lib/ticket-priority.js'
+import { ticketAge, ticketDay } from './lib/ticket-date.js'
 import { STAGE_LABEL, ticketStage } from './lib/ticket-stage.js'
 import { TicketStartActions } from './TicketStartActions.js'
 import { TicketSessions, type TicketSession } from './TicketSessions.js'
 import { StageWord } from './TicketsPanel.js'
+
+/** The ticket just saved by hand, whose head takes the focus to its title once shown: the form it was saved from is gone. */
+let saved: string | null = null
+
+/** The ticket `file` was saved by hand: its head, once shown, puts the focus on its title. */
+export function focusTitleOnceShown(file: string): void {
+  saved = file
+}
 
 /** Which of a ticket's two pages is shown under its head. */
 export type TicketTab = 'ticket' | 'plan'
@@ -76,6 +84,11 @@ export function TicketHeader({
   useEffect(() => {
     if (released) title.current?.focus()
   }, [released])
+  useEffect(() => {
+    if (saved !== ticket.file) return
+    saved = null
+    title.current?.focus()
+  }, [ticket.file])
   // Which start is in flight, by its prompt: only that one spins.
   const [starting, setStarting] = useState<string | null>(null)
   const start = async (prompt: string, failure: string) => {
@@ -83,7 +96,8 @@ export function TicketHeader({
     await run(() => host.startRun(projectId, prompt), failure)
     setStarting(null)
   }
-  const open = (path: string[]) => host.openPage('tickets', path, projectId)
+  // The other tab is a page of the same ticket: a return from it goes where this one came from.
+  const openTab = (path: string[]) => host.openPage('tickets', path, projectId, { beside: true })
   const more = onEdit ? [{ label: 'Edit ticket', Icon: Pencil, onSelect: onEdit }] : []
   const priority = parsePriority(ticket.priority)
   const stage = ticketStage(ticket)
@@ -141,7 +155,8 @@ export function TicketHeader({
         open={asking}
         onOpenChange={setAsking}
         title="An agent is working on this ticket. Release it anyway?"
-        body={`${holder ?? 'The agent'} goes on working, and the ticket can be started or queued again.`}
+        // A run's name is not a sentence's start: it may begin in lowercase, and with a colon in it.
+        body={`${holder ? `The run “${holder}”` : 'The agent'} goes on working, and the ticket can be started or queued again.`}
         confirmLabel="Release"
         confirmBusyLabel="Releasing…"
         onConfirm={async () => {
@@ -160,7 +175,9 @@ export function TicketHeader({
             type="button"
             role="tab"
             aria-selected={tab === name}
-            onClick={() => tab !== name && open(name === 'ticket' ? [ticket.file] : [ticket.file, 'plan'])}
+            // A plan not written yet is said, not drawn.
+            aria-label={name === 'plan' && !ticket.planned ? 'Plan, none yet' : undefined}
+            onClick={() => tab !== name && openTab(name === 'ticket' ? [ticket.file] : [ticket.file, 'plan'])}
             className={cn(
               'focus-ring -mb-px flex h-9 items-center rounded-t-sm border-b-2 font-medium transition-colors max-md:h-11',
               tab === name ? 'border-foreground text-foreground' : 'border-transparent text-muted-foreground pointer-fine:hover:text-foreground',
@@ -237,15 +254,15 @@ export function TicketFacts({
             </a>
           </Fact>
         )}
-        {ticket.effort !== undefined && <Fact name="Effort">{ticket.effort} of 10</Fact>}
-        {ticket.uncertainty !== undefined && <Fact name="Uncertainty">{ticket.uncertainty} of 10</Fact>}
+        {ticket.effort !== undefined && <Fact name="Effort">{ticket.effort}/10</Fact>}
+        {ticket.uncertainty !== undefined && <Fact name="Uncertainty">{ticket.uncertainty}/10</Fact>}
         {ticket.outdated && (
           <Fact name="Plan">
             <span className="text-warning">Outdated</span>
           </Fact>
         )}
         <Fact name="Opened">
-          <span title={formatDateTime(ticket.date)}>{longAge(ticket.date)}</span>
+          <span title={ticketDay(ticket)}>{ticketAge(ticket)}</span>
         </Fact>
         <Fact name="File">
           {/* It may break after a slash or an underscore, never inside a word. */}
@@ -262,7 +279,7 @@ export function TicketFacts({
       {sessions.length > 0 && (
         <div className="mt-4 border-t border-hairline pt-4">
           <h2 className="mb-2 text-xs font-medium text-faint-foreground">Runs on this ticket</h2>
-          <TicketSessions sessions={sessions} onOpen={agentId => host.openAgent(projectId, agentId)} />
+          <TicketSessions sessions={sessions} planned={Boolean(ticket.planned)} onOpen={agentId => host.openAgent(projectId, agentId)} />
         </div>
       )}
     </aside>
@@ -282,15 +299,4 @@ function Fact({ name, wide = false, children }: { name: string; wide?: boolean; 
 /** How the run holding the claim stands, said after its name. */
 function standing(holderStatus: string): string {
   return claimState(holderStatus) === 'stale' ? `run ${holderStatus}` : runSaid(holderStatus)
-}
-
-/** An age in words, "18 weeks ago", for a fact that has the room. */
-function longAge(iso: string): string {
-  const days = Math.floor((Date.now() - Date.parse(iso)) / 86_400_000)
-  const said = (n: number, unit: string) => `${n} ${unit}${n === 1 ? '' : 's'} ago`
-  if (Number.isNaN(days)) return '—'
-  if (days < 1) return 'Today'
-  if (days < 7) return said(days, 'day')
-  if (days < 365) return said(Math.floor(days / 7), 'week')
-  return said(Math.floor(days / 365), 'year')
 }

@@ -51,11 +51,13 @@ test('the command\'s answers are read back: a list, one ticket or its refusal, t
   assert.deepEqual(readListed({ ok: true, output: { ok: false } }), { error: 'the tickets command did not print a list' })
   assert.deepEqual(readListed({ ok: false, error: 'tickets took too long' }), { error: 'tickets took too long' })
   const detail = { ...row, content: '# Login page\n' }
-  assert.deepEqual(readShown({ ok: true, output: { ok: true, ticket: detail, plan: 'Effort: 1\n', holder: 'a1' } }), { shown: { ticket: detail, plan: 'Effort: 1\n', holder: 'a1' } })
-  assert.deepEqual(readShown({ ok: true, output: { ok: true, ticket: detail } }), { shown: { ticket: detail } })
-  assert.deepEqual(readShown({ ok: true, output: { ok: false, reason: 'no-ticket', file: FILE } }), { shown: null })
-  assert.deepEqual(readShown({ ok: true, output: { ok: true, ticket: row } }), { error: 'the tickets command did not print a ticket' })
-  assert.deepEqual(readShown({ ok: false, error: 'boom' }), { error: 'boom' })
+  assert.deepEqual(readShown({ ok: true, output: { ok: true, ticket: detail, plan: 'Effort: 1\n', holder: 'a1' } }, FILE), { shown: { ticket: detail, plan: 'Effort: 1\n', holder: 'a1' } })
+  assert.deepEqual(readShown({ ok: true, output: { ok: true, ticket: detail } }, FILE), { shown: { ticket: detail } })
+  // A refusal reaches the page as the line the command left: the ticket's own "no ticket" is no ticket, any other line an error.
+  assert.deepEqual(readShown({ ok: false, error: `no ticket tickets/${FILE}` }, FILE), { shown: null })
+  assert.deepEqual(readShown({ ok: false, error: 'no ticket tickets/2026-01-01_other.md' }, FILE), { error: 'no ticket tickets/2026-01-01_other.md' })
+  assert.deepEqual(readShown({ ok: true, output: { ok: true, ticket: row } }, FILE), { error: 'the tickets command did not print a ticket' })
+  assert.deepEqual(readShown({ ok: false, error: 'boom' }, FILE), { error: 'boom' })
   assert.deepEqual(readMeta({ ok: true, output: { lastImportedAt: '2026-09-01T00:00:00Z' } }), { lastImportedAt: '2026-09-01T00:00:00Z' })
   assert.deepEqual(readMeta({ ok: true, output: {} }), {})
   assert.deepEqual(readMeta({ ok: false, error: 'x' }), {})
@@ -110,9 +112,9 @@ test('a path under tickets/ is called what its ticket is called: a ticket by its
   assert.deepEqual(namesOf(['tickets/2026-01-01_gone.md', 'tickets/2026-01-01_gone.plan.md', 'docs/readme.md', 'tickets/'], tickets), {})
 })
 
-test('a plan its ticket already has is called written already, unless it is outdated: an ask to write it again is left over', () => {
+test('a plan its ticket already has is done, unless it is outdated: the ask to write it again is left over, and only that ask is called written already', () => {
   const plan = 'tickets/2026-08-30_login-page.plan.md'
-  assert.deepEqual(namesOf([plan], [{ file: FILE, title: 'Login page', planned: true }]), { [plan]: { title: 'Plan: Login page · already written', href: `tickets/${FILE}` } })
+  assert.deepEqual(namesOf([plan], [{ file: FILE, title: 'Login page', planned: true }]), { [plan]: { title: 'Plan: Login page', href: `tickets/${FILE}`, done: { ask: `Create ${plan}`, title: 'Plan: Login page · already written' } } })
   assert.deepEqual(namesOf([plan], [{ file: FILE, title: 'Login page', planned: true, outdated: true }]), { [plan]: { title: 'Plan: Login page', href: `tickets/${FILE}` } })
 })
 

@@ -102,7 +102,10 @@ export function Hero() {
         Dashboard <span aria-hidden>→</span>
       </a>
 
-      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8, marginTop: 12, maxWidth: '100%' }}>
+      <div
+        className="try-commands"
+        style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8, marginTop: 12, maxWidth: '100%' }}
+      >
         <PmTabs />
         <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'center', gap: '8px 32px', maxWidth: '100%' }}>
           <Labelled label="Try:">

@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { Monitor, Ticket } from 'lucide-react'
+import { Monitor, Server, Ticket } from 'lucide-react'
 import { Button, List, RadioGroup, Row, buttonVariants, useOpenAgentDown, type ModuleMachine } from '@openagt/dashboard/module'
 import { addDevice, findComputers, readPersonThere, setSwitch, type Answer, type FoundComputer, type Given } from './devices.js'
 import { askLink, installDone } from './servers.js'
@@ -25,8 +25,8 @@ export type Adding = 'add' | 'add-phone' | 'add-computer' | 'give-code' | 'set-u
 /** Each way of adding, by the word the address keeps its page of Settings › Devices under, with the page's title. */
 export const ADDING: Record<Adding, string> = {
   add: 'Add a device',
-  'add-phone': 'Add phone',
-  'add-computer': 'Add computer',
+  'add-phone': 'Add a phone',
+  'add-computer': 'Add a computer',
   'give-code': 'Give it a code',
   'set-up-server': 'Set up a server',
   join: 'Join with a code',
@@ -39,7 +39,7 @@ const KINDS: readonly { id: Adding; title: string; words: string }[] = [
   { id: 'add-phone', title: 'Phone or tablet', words: 'Scan a code with its camera.' },
   { id: 'add-computer', title: 'Computer', words: 'Another computer that runs OpenAgent.' },
   { id: 'set-up-server', title: 'Server', words: 'Install OpenAgent on a VPS, or on a PC that stays on.' },
-  { id: 'join', title: 'I have a code', words: 'Join a server of yours, or a computer someone shared with you.' },
+  { id: 'join', title: 'Join with a code', words: 'Join a server of yours, or a computer someone shared with you.' },
 ]
 
 /** A Tailscale address is reached the first time only once its certificate is fetched, which Safari may sit out as a black page. */
@@ -77,11 +77,13 @@ export function useJoined(d: Devices, waiting: boolean, at?: string): string | u
 export function AddDevice({ d, adding, isServer, onAdd, onClose, onInvite, onJoined }: { d: Devices; adding: Adding; /** This computer is a server: it sets up no server. */ isServer: boolean; /** Go on to another way of adding. */ onAdd: (adding: Adding) => void; onClose: () => void; /** Add people to a server just set up. */ onInvite: (address: string) => void; /** A computer someone shared was joined: its page, by its machine's id. */ onJoined: (machineId: string) => void }) {
   if (adding === 'add') return <Choose kinds={isServer ? KINDS.filter(kind => kind.id !== 'set-up-server') : KINDS} onPicked={onAdd} onClose={onClose} />
   if (adding === 'add-phone') return <AddPhone d={d} onClose={onClose} />
-  if (adding === 'add-computer') return <AddComputer d={d} onGive={() => onAdd('give-code')} onClose={onClose} />
+  // With no server, a computer somewhere else has nothing to join through: Add a computer offers to set one up, but not on a server.
+  const addComputer = <AddComputer d={d} onGive={() => onAdd('give-code')} {...(isServer ? {} : { onSetUpServer: () => onAdd('set-up-server') })} onClose={onClose} />
+  if (adding === 'add-computer') return addComputer
   if (adding === 'give-code') {
     // A code for a computer somewhere else goes through a server: with none, the computers on this Wi-Fi.
     const server = serversOf(d)[0]
-    return server ? <GiveCode d={d} server={server} onClose={onClose} /> : <AddComputer d={d} onGive={() => onAdd('give-code')} onClose={onClose} />
+    return server ? <GiveCode d={d} server={server} onClose={onClose} /> : addComputer
   }
   if (adding === 'set-up-server') return <ConnectServer d={d} onClose={onClose} onInvite={onInvite} />
   return <Join d={d} onClose={onClose} onJoined={onJoined} />
@@ -288,7 +290,7 @@ function useFound(d: Devices, looking: boolean): { found: FoundComputer[] | unde
   return { found, error }
 }
 
-function AddComputer({ d, onGive, onClose }: { d: Devices; /** Give a computer somewhere else a code, through a server. */ onGive: () => void; onClose: () => void }) {
+function AddComputer({ d, onGive, onSetUpServer, onClose }: { d: Devices; /** Give a computer somewhere else a code, through a server. */ onGive: () => void; /** Set up a server, in place of this page: what a computer somewhere else joins through. None on a server. */ onSetUpServer?: () => void; onClose: () => void }) {
   const down = useOpenAgentDown()
   const status = d.door?.ok ? d.door.value : undefined
   const [connecting, setConnecting] = useState<FoundComputer | undefined>()
@@ -324,16 +326,23 @@ function AddComputer({ d, onGive, onClose }: { d: Devices; /** Give a computer s
           ))}
         </List>
       )}
-      <p className="text-xs text-muted-foreground">Don't see it? Open OpenAgent on it, on the same Wi-Fi, with "On this Wi-Fi" on there.</p>
+      <p className="text-xs text-muted-foreground">Don't see it? Open OpenAgent on it, on the same Wi-Fi, and turn on "On this Wi-Fi" in its Settings › Devices.</p>
       <div className="flex flex-wrap items-center justify-between gap-3 pt-3">
         <span className="text-sm font-medium">
           Somewhere else?
           <span className="block text-xs font-normal text-muted-foreground">{server ? `At the office, at a friend's: it joins through ${server.label}.` : "At the office, at a friend's: it joins through a server. Add a server first."}</span>
         </span>
-        <Button type="button" variant="secondary" disabled={!server} onClick={onGive}>
-          <Ticket className="size-4" aria-hidden />
-          Give it a code
-        </Button>
+        {server || !onSetUpServer ? (
+          <Button type="button" variant="secondary" disabled={!server} onClick={onGive}>
+            <Ticket className="size-4" aria-hidden />
+            Give it a code
+          </Button>
+        ) : (
+          <Button type="button" variant="secondary" onClick={onSetUpServer}>
+            <Server className="size-4" aria-hidden />
+            Set up a server
+          </Button>
+        )}
       </div>
       {/* Its way out, where every other way of adding keeps one: the dialog it was had only its ×. */}
       <Presses>
@@ -408,7 +417,7 @@ export function GiveCode({ d, server, onClose }: { d: Devices; server: ModuleMac
       ) : (
         <>
           <p className="text-sm">
-            On the other computer, open <span className="font-medium">Settings › Devices › Add device › I have a code</span>, and type:
+            On the other computer, open <span className="font-medium">Settings › Devices</span>, press <span className="font-medium">Join with a code</span> (or <span className="font-medium">Add device › Join with a code</span>), and type:
           </p>
           <CodeCard where={code.where} code={code.code} />
           {joined !== undefined ? (

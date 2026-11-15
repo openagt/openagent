@@ -19,6 +19,7 @@ export function AgentActionBar({
   projectId,
   agentId,
   events,
+  live = false,
   retainedWorktree = false,
   onWorktreeRemoved,
   onDeleted,
@@ -35,6 +36,8 @@ export function AgentActionBar({
   /** Which run Stop addresses (#749). */
   agentId?: string | null | undefined
   events: OpenAgentEvent[]
+  /** The run works, as its page knows it: its menu offers Stop. */
+  live?: boolean
   /** The session's name: it leads the bar, and is the button of the session's menu. */
   label?: string | undefined
   /** The name is still being made: see AgentActionsMenu. */
@@ -80,6 +83,7 @@ export function AgentActionBar({
           projectId={projectId}
           agentId={agentId}
           events={events}
+          live={live}
           label={label}
           {...(naming ? { naming } : {})}
           retainedWorktree={retainedWorktree}

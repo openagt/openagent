@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, test, vi } from 'vitest'
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import type { KeyboardEvent } from 'react'
 
 const sendChoice = vi.hoisted(() => vi.fn())
 const sendMessage = vi.hoisted(() => vi.fn())
@@ -181,6 +182,39 @@ describe('QuestionPanel', () => {
     fireEvent.keyDown(box, { key: 'Enter', ctrlKey: true })
     expect(option(/SQLite/).getAttribute('aria-checked')).toBe('false')
     expect(sendChoice).not.toHaveBeenCalled()
+  })
+
+  test('a key the message box took is not the question\'s, though the box stops taking keys as it sends', () => {
+    // As the message box does: Ctrl+Enter sends, and the box is off while the message goes.
+    const sendFromBox = (e: KeyboardEvent<HTMLDivElement>) => {
+      if (!(e.ctrlKey && e.key === 'Enter')) return
+      e.preventDefault()
+      e.currentTarget.contentEditable = 'false'
+    }
+    render(
+      <>
+        <div role="textbox" aria-label="message box" contentEditable onKeyDown={sendFromBox} />
+        {panel({ active: true })}
+      </>,
+    )
+    fireEvent.keyDown(screen.getByLabelText('message box'), { key: 'Enter', ctrlKey: true })
+    expect(sendChoice).not.toHaveBeenCalled()
+  })
+
+  test('Submit\'s Ctrl+Enter is dimmed while the message box has that key, and keeps its place, so Submit and Skip stand still', () => {
+    render(
+      <>
+        <textarea aria-label="message box" />
+        {panel({ active: true })}
+      </>,
+    )
+    const keys = screen.getByRole('button', { name: 'Submit' }).querySelector('kbd')!.parentElement!
+    expect(keys.className.split(' ')).not.toContain('opacity-40')
+    act(() => screen.getByLabelText('message box').focus())
+    expect(keys.isConnected).toBe(true)
+    expect(keys.className.split(' ')).toContain('opacity-40')
+    act(() => screen.getByLabelText('message box').blur())
+    expect(keys.className.split(' ')).not.toContain('opacity-40')
   })
 
   test('one pick is a radio group: ArrowDown picks the next choice and takes the focus there, "Other" included', async () => {

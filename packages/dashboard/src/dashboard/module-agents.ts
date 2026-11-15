@@ -29,6 +29,9 @@ export interface ModuleAgent {
   seenAt?: string
   /** Its pull request, with how it stands as the git host last said (`merged`: the sidebar's merged run), once read. */
   pr?: { number: number; url: string; state?: AgentMeta['prState'] }
+  /** Its work that never left this machine: files its checkout left uncommitted, and commits never pushed. */
+  uncommitted?: number
+  unpublished?: number
 }
 
 /**
@@ -59,6 +62,8 @@ export function moduleAgentOf(agent: AgentMeta): ModuleAgent {
     ...(agent.remoteLabel ? { machine: agent.remoteLabel } : {}),
     ...(agent.seenAt ? { seenAt: agent.seenAt } : {}),
     ...(agent.pr ? { pr: { ...agent.pr, ...(agent.prState ? { state: agent.prState } : {}) } } : {}),
+    ...(agent.uncommitted ? { uncommitted: agent.uncommitted } : {}),
+    ...(agent.unpublished ? { unpublished: agent.unpublished } : {}),
   }
 }
 

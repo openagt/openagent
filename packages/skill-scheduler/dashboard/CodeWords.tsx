@@ -1,6 +1,10 @@
+import { Fragment } from 'react'
 import { CopyButton } from '@openagt/dashboard/module'
 
-/** A sentence of the `scheduler` command, its `backticked` words set as code: what a person types is shown as such. */
+/** A web address in a sentence, without the punctuation that ends the sentence. */
+const ADDRESS = /(https:\/\/[^\s<>"]*[^\s<>".,;:!?)])/
+
+/** A sentence of the `scheduler` command, its `backticked` words set as code and a web address made a link: what a person types is shown as such, and where it sends them opens. */
 export function CodeWords({ text }: { text: string }) {
   return text.split('`').map((part, index) =>
     index % 2 === 1 ? (
@@ -8,7 +12,17 @@ export function CodeWords({ text }: { text: string }) {
         {part}
       </code>
     ) : (
-      part
+      <Fragment key={index}>
+        {part.split(ADDRESS).map((words, at) =>
+          at % 2 === 1 ? (
+            <a key={at} href={words} target="_blank" rel="noreferrer" className="underline underline-offset-2">
+              {words}
+            </a>
+          ) : (
+            words
+          ),
+        )}
+      </Fragment>
     ),
   )
 }
