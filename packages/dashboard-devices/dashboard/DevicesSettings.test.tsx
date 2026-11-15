@@ -588,6 +588,16 @@ describe('Settings › Devices: another computer, once', () => {
     }
   })
 
+  test('Add computer keeps a way out of its own, as every way of adding does: Cancel goes back to the list', async () => {
+    const { host } = pairing(OPEN, ['waiting'])
+    show(host)
+    await addComputer()
+    await screen.findByRole('list', { name: 'On this Wi-Fi' })
+    fireEvent.click(screen.getByRole('button', { name: 'Cancel' }))
+    expect(await screen.findByRole('button', { name: /^(Add computer|Add device)$/ })).toBeTruthy()
+    expect(screen.queryByRole('list', { name: 'On this Wi-Fi' })).toBeNull()
+  })
+
   test('Add computer lists the computers found on this Wi-Fi; Connect shows the number to match there, and once allowed it is saved and let in here: runs go both ways', async () => {
     const { host, runComputerCommand } = pairing(OPEN, ['waiting', 'allowed'])
     show(host)

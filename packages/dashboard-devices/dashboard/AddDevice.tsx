@@ -343,6 +343,14 @@ function AddComputer({ d, onGive, onClose }: { d: Devices; /** Give a computer s
           Give it a code
         </Button>
       </div>
+      {/* Its way out, where every other way of adding keeps one: the dialog it was had only its ×. */}
+      <SettingsFoot>
+        <div className="flex justify-end gap-2 max-md:[&_button]:h-11">
+          <Button variant="ghost" onClick={onClose}>
+            Cancel
+          </Button>
+        </div>
+      </SettingsFoot>
     </div>
   )
 }
