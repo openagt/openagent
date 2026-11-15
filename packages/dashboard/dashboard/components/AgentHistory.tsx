@@ -345,7 +345,7 @@ export function AgentHistory({
             under it shows. No rule under it: the room around it sets it apart. */}
         <SidebarHeader className="gap-4 pb-2">
           {/* The mark + wordmark, the way home (#909), now that there is no navbar to hold them. */}
-          <div className="flex items-center justify-between gap-2 pt-1 pl-1">
+          <div className="flex items-center justify-between gap-2 pt-1 pr-0.5 pl-2">
             <BrandLink working={working} href={homeHref} onNavigate={leave(onDashboard)} />
             {/* The jump's press, for a screen with no keyboard, beside the sidebar's own. */}
             <span className="flex items-center gap-1">
@@ -414,7 +414,7 @@ export function AgentHistory({
                       when the list is empty (#1147): the heading is what makes "No sessions yet." read as
                       the state of this list rather than a lonely line in the sidebar. */}
                   <div className="sticky top-0 z-10">
-                    <SidebarGroupLabel className="rounded-none bg-sidebar px-1.5">
+                    <SidebarGroupLabel className="rounded-none bg-sidebar pr-1 pl-2">
                       Log
                       <RecentsSortMenu order={order} />
                     </SidebarGroupLabel>
@@ -501,7 +501,7 @@ export function AgentHistory({
 /** Two of the rows below while they are read, in their own shape and height: a {@link Slot}'s `shape`. */
 function NavShapes() {
   return Array.from({ length: 2 }, (_, at) => (
-    <div key={at} className="flex items-center gap-2 px-1.5 md:h-8 max-md:h-11">
+    <div key={at} className="flex items-center gap-3 px-2 md:h-8 max-md:h-11">
       <Skeleton className="size-4 shrink-0 rounded-sm" />
       <Skeleton className={cn('h-3.5', at === 0 ? 'w-20' : 'w-24')} />
     </div>
@@ -588,10 +588,10 @@ function NeedsYou({
 }) {
   const shown = waiting.slice(0, NEEDS_SHOWN)
   const rest = waiting.length - shown.length
-  const rowClass = 'focus-ring flex w-full items-center gap-2 rounded-md px-1.5 text-left text-sm text-foreground transition-colors hover:bg-foreground/4 active:bg-foreground/8 md:h-8 max-md:h-11'
+  const rowClass = 'focus-ring flex w-full items-center gap-3 rounded-md px-2 text-left text-sm text-foreground transition-colors hover:bg-foreground/4 active:bg-foreground/8 md:h-8 max-md:h-11'
   return (
     <SidebarGroup className="pt-3! pb-0!">
-      <SidebarGroupLabel className="px-1.5">Needs you</SidebarGroupLabel>
+      <SidebarGroupLabel>Needs you</SidebarGroupLabel>
       <SidebarGroupContent>
         <SidebarMenu className="gap-0.5">
           {shown.map(item => {
@@ -939,7 +939,7 @@ function AgentHistoryRow({
     'aria-label': `${naming ? 'Naming this session' : titleText} · ${said}`,
     'aria-current': active ? ('page' as const) : undefined,
     // The navigation's row: 32 high (44 on a phone), the picked one filled, the one under the pointer half filled.
-    className: cn('focus-ring rail-row flex w-full items-center gap-2 rounded-md px-1.5 text-left text-sm text-foreground transition-colors md:h-8 max-md:h-11', active ? 'bg-foreground/8' : 'hover:bg-foreground/4 active:bg-foreground/8'),
+    className: cn('focus-ring rail-row flex w-full items-center gap-3 rounded-md px-2 text-left text-sm text-foreground transition-colors md:h-8 max-md:h-11', active ? 'bg-foreground/8' : 'hover:bg-foreground/4 active:bg-foreground/8'),
     ...(standIn ? { 'data-stand-in': '' } : {}),
     onPointerEnter: onNear,
     onFocus: onNear,
