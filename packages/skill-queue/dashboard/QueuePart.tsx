@@ -12,7 +12,7 @@ export function QueuePart({ projects }: ModuleCardProps) {
   const queued = reads.reduce((sum, read) => sum + read.entries.length, 0)
   const over = reads.filter(read => read.entries.length > 0).length
   return (
-    <LinePart reading={state === 'unknown'} note={queued === 0 ? 'Nothing waits its turn' : over > 1 ? `Across ${over} projects` : 'Waits for an agent'} href={host.pageHref('queue')} onClick={() => host.openPage('queue')}>
+    <LinePart reading={state === 'unknown'} shape="4 queued" note={queued === 0 ? 'Nothing waits its turn' : over > 1 ? `Across ${over} projects` : 'Waits for an agent'} href={host.pageHref('queue')} onClick={() => host.openPage('queue')}>
       {counted(queued, 'queued', 'queued', 'nothing queued')}
     </LinePart>
   )

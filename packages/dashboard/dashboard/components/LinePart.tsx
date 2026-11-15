@@ -1,6 +1,7 @@
 import type { ReactNode } from 'react'
 import { RunMark } from './RunMark.js'
 import { inPlace } from '../lib/in-place.js'
+import { cn } from '../lib/utils.js'
 
 // One part of the line under the Overview's title: how one thing stands, in a few words ("2 need
 // you", "nothing queued"), a link to where it is. The Overview's own parts (what needs the person,
@@ -19,11 +20,13 @@ export function scrollToPart(id: string): void {
 
 const PRESS = 'focus-ring rounded-sm text-foreground underline-offset-4 hover:underline'
 
-export function LinePart({ children, reading = false, note, live = false, href, onClick }: {
+export function LinePart({ children, reading = false, shape, note, live = false, href, onClick }: {
   /** What it says: a count and its words, a nothing said in words. */
   children: ReactNode
   /** Not read yet: its words wait, and a screen reader hears that. */
   reading?: boolean
+  /** The words it most likely says ("4 queued"): while it reads, its shape is as wide as they are, so the line moves as little as it can when it is read. */
+  shape?: string
   /** More of it, on a hover: "1 question, 1 to publish". */
   note?: string | undefined
   /** Something is going on: a dot before the words. */
@@ -33,7 +36,8 @@ export function LinePart({ children, reading = false, note, live = false, href, 
 }) {
   if (reading)
     return (
-      <span className="inline-block h-4 w-16 animate-skeleton rounded-md bg-accent align-middle motion-reduce:animate-skeleton-still">
+      // Its likely words, drawn unseen before it (not text of the page, nor said), give it their width.
+      <span data-shape={shape} className={cn('inline-block h-4 animate-skeleton rounded-md bg-accent align-middle leading-4 motion-reduce:animate-skeleton-still', shape === undefined ? 'w-16' : 'before:invisible before:content-[attr(data-shape)]')}>
         <span className="sr-only">Loading…</span>
       </span>
     )

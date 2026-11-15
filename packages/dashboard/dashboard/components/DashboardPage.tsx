@@ -98,6 +98,7 @@ export function DashboardPage({
       node: (
         <LinePart
           reading={interventionsState === 'unknown'}
+          shape="2 need you"
           note={waiting.length === 0 ? 'Nothing waits on you' : waiting.map(({ kind, count }) => kind.counted(count)).join(', ')}
           onClick={() => scrollToPart(NEEDS_YOU_ID)}
         >
@@ -109,14 +110,14 @@ export function DashboardPage({
       id: 'working-now',
       order: 2,
       node: (
-        <LinePart reading={active.state === 'unknown'} live={working.length > 0} note={counted(working.length, 'agent at work', 'agents at work', 'No agent is at work')} {...(working.length > 0 ? { onClick: () => scrollToPart(WORKING_ID) } : {})}>
+        <LinePart reading={active.state === 'unknown'} shape="1 working" live={working.length > 0} note={counted(working.length, 'agent at work', 'agents at work', 'No agent is at work')} {...(working.length > 0 ? { onClick: () => scrollToPart(WORKING_ID) } : {})}>
           {working.length === 0 ? 'no agent working' : `${working.length} working`}
         </LinePart>
       ),
     },
-    // Until the packages' code is in, one part waits in their place: a part that came after the line
-    // was drawn would lengthen it, and on a phone push the Customize press and the page under it.
-    ...(modulesLoaded || moduleLine.length > 0 ? moduleLine : [{ id: 'packages', order: PACKAGES_PLACE, node: <LinePart reading>{null}</LinePart> }]),
+    // Until the packages' code is in, one part waits in their place, as wide as the queue's: a part that
+    // came after the line was drawn would lengthen it, and on a phone push the Customize press and the page under it.
+    ...(modulesLoaded || moduleLine.length > 0 ? moduleLine : [{ id: 'packages', order: PACKAGES_PLACE, node: <LinePart reading shape="4 queued">{null}</LinePart> }]),
     // The person's agents (Rom's design: an agent is a name, skills and accounts): how many, by name, a press from their page.
     { id: 'your-agents', order: 4, node: <YourAgentsPart /> },
   ].sort((one, other) => one.order - other.order)
