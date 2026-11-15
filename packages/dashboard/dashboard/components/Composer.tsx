@@ -481,22 +481,23 @@ export const Composer = forwardRef<ComposerHandle, {
             </RowAboveBox>
           )}
 
-          {/* The text, as Claude Code's: the commands menu (+) at its left, the text, and the submit at
-              its right, the two kept at the text's last line. One line tall when empty, growing with
-              what is typed. The editor is borderless: the edge is the surface's. The +'s icon stands
-              on the rows' first icons' line, and the send's on their last ones'. */}
+          {/* The text, starting at the box's own edge, and the submit at its right, kept at the text's
+              last line. One line tall when empty, growing with what is typed. The editor is borderless:
+              the edge is the surface's. The send's icon stands on the rows' last ones' line. */}
           <div className="flex items-end">
-            <div className="-mr-2 flex shrink-0 items-center py-1 pl-0.5">{commandsEl}</div>
             <div className="min-w-0 flex-1">{editorEl}</div>
             <div className="flex shrink-0 items-center py-1 pr-0.5">{slotEl}</div>
           </div>
 
-          {/* How it runs, the box's last line: the caller's controls at the left, the model at the right. The
-              left side is the one that gives way: a longer label there never moves the model or the
-              page below. */}
+          {/* How it runs, the box's last line: the commands menu (+) and the caller's controls at the
+              left, the model at the right. The left side is the one that gives way: a longer label there
+              never moves the model or the page below. */}
           <TooltipsPastBox value={surface}>
             <div className={cn('mt-1', rowClass)}>
-              <div className={rowLeftClass}>{controls}</div>
+              <div className={rowLeftClass}>
+                {commandsEl}
+                {controls}
+              </div>
               <div className="flex shrink-0 items-center gap-0.5">
                 {controlsEnd}
                 {driverModelEl || (
