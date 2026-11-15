@@ -25,6 +25,7 @@ vi.mock('./AgentMenu.js', () => ({ AgentOff: () => null }))
 vi.mock('./SkillsMenu.js', () => ({ SkillsOff: () => null }))
 vi.mock('./GitHosts.js', () => ({ GitHostOff: () => null }))
 import { saveMachines } from '../test-machines.js'
+import { keptDraft } from '../lib/draft-handoff.js'
 
 const { AgentComposer } = await import('./AgentComposer.js')
 const { useContextSet } = await import('../lib/use-context-set.js')
@@ -36,12 +37,13 @@ beforeEach(async () => {
 })
 afterEach(cleanup)
 
-// The page's Context, as App holds it: the test picks into it as the `#` picker does.
+// The page's Context, as App holds it: the test picks into it as the `#` picker does. Closed, the session's page is
+// gone and the shell's Context stays, as when New agent session shows the project's home.
 let context: ReturnType<typeof useContextSet>
-function Session() {
+function Session({ id = 'run-1', open = true }: { id?: string; open?: boolean }) {
   const contextSet = useContextSet()
   context = contextSet
-  return <AgentComposer projectId="p1" agentId="run-1" live={false} files={['README.md']} contextSet={contextSet} />
+  return open ? <AgentComposer projectId="p1" agentId={id} live={false} files={['README.md']} contextSet={contextSet} /> : null
 }
 
 test('a refused message comes back as the same draft, its picked file a chip again and in the Context, after what was typed while it went', async () => {
@@ -61,6 +63,21 @@ test('a refused message comes back as the same draft, its picked file a chip aga
   expect(box.editor.storage.markdown.getMarkdown()).toBe('and then\n\nlook at #README.md')
   expect(box.querySelectorAll('[data-token]').length).toBe(1)
   expect(screen.getByTestId('context').textContent).toBe('README.md')
+})
+
+test('a message refused once its session page closed waits in that session\'s draft, and leaves the shell\'s Context alone', async () => {
+  let answer: (outcome: unknown) => void = () => {}
+  sendMessage.mockReturnValueOnce(new Promise(resolve => (answer = resolve)))
+  const page = render(<Session />)
+  const box = (await screen.findByRole('textbox', { name: 'Message' })) as HTMLElement & { editor: Editor }
+  act(() => void box.editor.commands.insertContent('do not lose these words'))
+  act(() => context.add('README.md'))
+  fireEvent.keyDown(box, { key: 'Enter' })
+  await waitFor(() => expect(sendMessage).toHaveBeenCalledTimes(1))
+  page.rerender(<Session open={false} />)
+  await act(async () => answer({ ok: false, error: 'resume refused' }))
+  expect(keptDraft('p1:run-1')).toBe('do not lose these words')
+  expect([...context.context]).toEqual([])
 })
 
 test('a file picked while a message went keeps its Context once that message lands, and goes with the next one', async () => {
