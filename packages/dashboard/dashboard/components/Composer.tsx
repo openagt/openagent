@@ -236,6 +236,9 @@ export const Composer = forwardRef<ComposerHandle, {
   const untold = !inAgent && !!selectedMachine && owner !== undefined && !selectedMachine.told && toldNow !== selectedMachine.id
   // OpenAgent is not answering: nothing typed can be sent, and the box keeps it.
   const down = useContext(DaemonDown)
+  // What holds a send, whatever the box holds: the one list the arrow and the keyboard both read.
+  // #1073: a keyboard submit is held too when the target machine is offline.
+  const held = busy || targetOffline || untold || down || !canSubmit
 
   useImperativeHandle(ref, () => ({
     clear: () => {
@@ -281,8 +284,7 @@ export const Composer = forwardRef<ComposerHandle, {
   const submit = (e?: FormEvent, later = false) => {
     e?.preventDefault()
     const text = prompt.trim()
-    // #1073: a keyboard submit must be blocked too when the target machine is offline.
-    if (!text || busy || submittingRef.current || targetOffline || untold || down || !canSubmit) return
+    if (!text || held || submittingRef.current) return
     submittingRef.current = true
     void Promise.resolve(onSubmit(text, { later })).finally(() => {
       submittingRef.current = false
@@ -389,7 +391,7 @@ export const Composer = forwardRef<ComposerHandle, {
             type="submit"
             size="icon-sm"
             onClick={submit}
-            disabled={busy || !hasPrompt || targetOffline || untold || down || !canSubmit}
+            disabled={held || !hasPrompt}
             aria-hidden={!hasPrompt}
             tabIndex={hasPrompt ? undefined : -1}
             aria-label={submitLabel}

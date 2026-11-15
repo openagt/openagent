@@ -435,6 +435,16 @@ describe('Composer (#721)', () => {
     place.remove()
   })
 
+  test('a box whose send is on its way sends nothing more, by the arrow or the keyboard, and keeps what is typed', () => {
+    const { onSubmit } = renderComposer({ busy: true })
+    fireEvent.change(screen.getByLabelText('prompt'), { target: { value: 'ship it' } })
+    expect(screen.getByRole('button', { name: 'Send' }).hasAttribute('disabled')).toBe(true)
+    fireEvent.click(screen.getByRole('button', { name: 'Send' }))
+    fireEvent.click(screen.getByText('editor-submit'))
+    expect(onSubmit).not.toHaveBeenCalled()
+    expect(editorText()).toBe('ship it')
+  })
+
   test('an online "Run on" machine leaves Start enabled with no offline note (#1073)', async () => {
     await saveMachines(STUDIO_MACHINE)
     daemon.reachable = { [STUDIO]: true }
