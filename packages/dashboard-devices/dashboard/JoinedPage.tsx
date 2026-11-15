@@ -197,21 +197,25 @@ export function OtherPage({ d, item, onBack }: { d: Devices; item: OtherItem; on
             </ul>
           </Part>
           <Removal said={`Takes ${name} off this list, and this computer out of it.`}>
-            <Button
-              variant="secondary"
-              className="text-danger"
-              disabled={busy || down}
-              aria-label={`Remove ${name}`}
-              onClick={() =>
-                void (async () => {
+            <ConfirmDialog
+              trigger={
+                <Button variant="secondary" className="text-danger" disabled={busy || down} aria-label={`Remove ${name}`}>
+                  {`Remove ${name}`}
+                </Button>
+              }
+              title={`Remove ${name}?`}
+              body={`Takes ${name} off this list, and this computer out of it. Your user, your logins and your projects there stay until ${owner} removes you.`}
+              confirmLabel="Remove"
+              confirmBusyLabel="Removing…"
+              onConfirm={async () => {
+                const done = await act(async () => {
                   // A line this computer keeps there as this person goes with it.
                   if (hasDoor(machine)) await sharedForget(host, machine.url)
-                  if (await d.removeMachine(machine.id)) onBack()
-                })()
-              }
-            >
-              {`Remove ${name}`}
-            </Button>
+                  return (await d.removeMachine(machine.id)) ? { ok: true } : { ok: false, error: `${name} could not be taken off.` }
+                })
+                if (done) onBack()
+              }}
+            />
           </Removal>
         </>
       )}

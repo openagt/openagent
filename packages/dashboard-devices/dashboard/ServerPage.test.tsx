@@ -987,7 +987,11 @@ describe('Settings › Devices: a computer someone shared with this person at it
     fireEvent.click(within(devices).getByRole('button', { name: 'Remove iPhone, Safari from dani-pc' }))
     await waitFor(() => expect(removeMachineDevice).toHaveBeenCalledWith(PC, 'p1abcd'))
     await tab('Overview')
+    // Asked first, as every removal is.
     fireEvent.click(screen.getByRole('button', { name: 'Remove dani-pc' }))
+    const asked = await screen.findByRole('alertdialog', { name: 'Remove dani-pc?' })
+    expect(removeMachine).not.toHaveBeenCalled()
+    fireEvent.click(within(asked).getByRole('button', { name: 'Remove' }))
     await waitFor(() => expect(removeMachine).toHaveBeenCalledWith(PC))
     expect(runComputerCommand.mock.calls.some(([args]) => args[0] === 'shared-forget')).toBe(false)
   })

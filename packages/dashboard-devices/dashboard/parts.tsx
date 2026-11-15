@@ -80,6 +80,8 @@ export function ListedDevice({ icon: Icon, name, facts, state, actions, onOpen }
 
 /** The tabs of a device's page: each a word, the picked one underlined. */
 export function Tabs<T extends string>({ tabs, value, onChange, label }: { tabs: readonly { id: T; title: string }[]; value: T; onChange: (id: T) => void; label: string }) {
+  // One tab is no choice: the page is its overview alone.
+  if (tabs.length < 2) return null
   return (
     <div role="tablist" aria-label={label} className="mt-4 flex gap-1 border-b border-hairline">
       {tabs.map(tab => (
