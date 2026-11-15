@@ -80,7 +80,7 @@ export function Dialog({
             <BaseDialog.Title className="text-base font-semibold">{title}</BaseDialog.Title>
             <BaseDialog.Close
               aria-label="Close"
-              className={cn(buttonVariants({ variant: 'ghost', size: 'icon-sm' }), '-my-1 -mr-1 text-muted-foreground hover:text-foreground')}
+              className={cn(buttonVariants({ variant: 'ghost', size: 'icon-bar' }), '-my-1 -mr-1 text-muted-foreground hover:text-foreground')}
             >
               <X className="size-4" aria-hidden />
             </BaseDialog.Close>
