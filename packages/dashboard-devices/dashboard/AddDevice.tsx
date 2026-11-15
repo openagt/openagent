@@ -317,14 +317,14 @@ function AddComputer({ d, onGive, onClose }: { d: Devices; /** Give a computer s
       {error !== undefined && <Problem>{error}</Problem>}
       {found !== undefined && found.length > 0 && (
         <List aria-label="On this Wi-Fi">
-          {found.map((computer, at) => (
+          {found.map(computer => (
             <Row
               key={computer.url}
               leading={<Monitor className="size-4" aria-hidden />}
               title={computer.name}
               {...(computer.version !== undefined ? { detail: `OpenAgent ${computer.version}` } : {})}
               meta={
-                <Button variant={at === 0 ? 'default' : 'secondary'} disabled={down} aria-label={`Connect ${computer.name}`} onClick={() => setConnecting(computer)}>
+                <Button variant="secondary" disabled={down} aria-label={`Connect ${computer.name}`} onClick={() => setConnecting(computer)}>
                   Connect
                 </Button>
               }

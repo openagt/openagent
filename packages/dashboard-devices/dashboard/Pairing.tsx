@@ -89,24 +89,22 @@ export function Connecting({ d, computer, canBoth, onBack, onClose }: { d: Devic
   return (
     <div className="space-y-4">
       {phase.at === 'asking' || phase.at === 'saving' ? (
-        <div role="status" className="flex items-center justify-center gap-2 py-10 text-sm text-muted-foreground">
+        <div role="status" className="flex items-center gap-2 text-sm text-muted-foreground">
           <Loader2 className="size-4 shrink-0 animate-spin text-primary" aria-hidden />
           {phase.at === 'asking' ? `Asking ${name}…` : `${name} let you in. Saving it…`}
         </div>
       ) : phase.at === 'waiting' ? (
         <>
-          <div className="space-y-1 text-center text-sm">
+          <div className="space-y-1 text-sm">
             <p>
               On <span className="font-medium">{name}</span>, press <span className="font-medium">Allow</span>.
             </p>
             <p>It shows the same number:</p>
           </div>
-          <p aria-label="The number" className="text-center font-mono text-3xl font-semibold tracking-widest">
+          <p aria-label="The number" className="font-mono text-3xl font-semibold tracking-widest">
             {shownNumber(phase.asked.number)}
           </p>
-          <div className="flex justify-center">
-            <Waiting>{`Waiting for ${name}…`}</Waiting>
-          </div>
+          <Waiting>{`Waiting for ${name}…`}</Waiting>
           <label className="flex items-start gap-2 text-sm">
             <Checkbox className="mt-0.5" checked={both && canBoth} disabled={!canBoth} onCheckedChange={checked => setBoth(checked === true)} aria-label={`${name} can start runs on this computer too`} />
             <span>
@@ -118,9 +116,9 @@ export function Connecting({ d, computer, canBoth, onBack, onClose }: { d: Devic
       ) : phase.at === 'done' ? (
         <Joined words={phase.words}>{`${name} is connected.`}</Joined>
       ) : phase.at === 'denied' ? (
-        <p role="status" className="py-6 text-center text-sm">{`${name} said no.`}</p>
+        <p role="status" className="text-sm">{`${name} said no.`}</p>
       ) : phase.at === 'gone' ? (
-        <p role="status" className="py-6 text-center text-sm">{`${name} did not answer. Try again.`}</p>
+        <p role="status" className="text-sm">{`${name} did not answer. Try again.`}</p>
       ) : (
         <Problem>{phase.error}</Problem>
       )}

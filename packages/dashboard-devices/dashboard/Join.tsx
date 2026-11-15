@@ -113,13 +113,14 @@ export function Join({ d, onClose, onJoined }: { d: Devices; onClose: () => void
   return (
     <form id={formId} className="space-y-4" onSubmit={event => void join(event)}>
       <p className="text-sm text-muted-foreground">Type what the other device shows.</p>
-      <label className="block space-y-1">
+      {/* The two fields are one column, as wide as an address: a link pasted whole scrolls in its field. */}
+      <label className="block max-w-xs space-y-1">
         <span className="block text-sm font-medium">Where</span>
         <Input name="pairing-address" autoFocus aria-label="Where" placeholder="203.0.113.10" value={where} onPaste={paste} onChange={event => setWhere(event.target.value)} className="font-mono" />
         <span className="block text-xs text-muted-foreground">An address, or the whole link the other device gave.</span>
       </label>
       {!isLink(where) && (
-        <label className="block space-y-1">
+        <label className="block max-w-xs space-y-1">
           <span className="block text-sm font-medium">Code</span>
           <Input name="pairing-code" aria-label="Code" placeholder="K7P4-QX9M" autoCapitalize="characters" autoComplete="off" spellCheck={false} value={code} onPaste={paste} onChange={event => setCode(event.target.value)} className="font-mono uppercase placeholder:normal-case" />
         </label>

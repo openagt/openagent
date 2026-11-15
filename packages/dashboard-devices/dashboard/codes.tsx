@@ -122,7 +122,7 @@ export function Waiting({ children }: { children: ReactNode }) {
 /** A device got in with the code: said in place of the code, which is spent. */
 export function Joined({ children, words = 'It stays in until it is removed. The code is spent.' }: { children: ReactNode; words?: string }) {
   return (
-    <div role="status" className="flex flex-col items-center gap-2 py-6 text-center">
+    <div role="status" className="flex flex-col gap-2">
       <CircleCheck className="size-8 text-success" aria-hidden />
       <p className="text-sm font-medium">{children}</p>
       <p className="text-xs text-muted-foreground">{words}</p>
@@ -144,7 +144,7 @@ export const CODE_SHAPE = (
 
 /** A phone's code while it is asked for: the QR code's square and the steps beside it. */
 const QR_SHAPE = (
-  <div className="flex gap-6 max-sm:flex-col max-sm:items-center">
+  <div className="flex gap-6 max-sm:flex-col">
     <Skeleton className="size-64 shrink-0 rounded-lg" />
     <div className="w-full space-y-3">
       <Skeleton className="h-4 w-3/4" />
@@ -167,7 +167,7 @@ export function NoCodeYet({ asking, error, shape = CODE_SHAPE }: { asking: boole
 /** The code ran out before a device used it. */
 export function RanOut() {
   return (
-    <p role="status" className="py-6 text-center text-sm text-muted-foreground">
+    <p role="status" className="text-sm text-muted-foreground">
       The code ran out. A new one works for ten minutes more.
     </p>
   )
@@ -239,7 +239,7 @@ export function PhoneCode({
       ) : expired ? (
         <RanOut />
       ) : (
-        <div className="flex gap-6 sm:items-start max-sm:flex-col max-sm:items-center">
+        <div className="flex gap-6 sm:items-start max-sm:flex-col">
           <QrOnWhite text={link!} />
           <div className="w-full min-w-0 space-y-3">
             <ol className="list-decimal space-y-2 pl-5 text-sm marker:text-muted-foreground">

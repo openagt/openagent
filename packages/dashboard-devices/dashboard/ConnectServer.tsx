@@ -368,7 +368,7 @@ function Ready({ d, server, onInvite, onClose }: { d: Devices; server: ServerRow
   const name = item?.name ?? server.address
   return (
     <div className="space-y-4">
-      <div className="flex flex-col items-center gap-1 py-1 text-center">
+      <div className="flex flex-col gap-1">
         <CircleCheck aria-hidden className="h-5 w-5 text-success" />
         <p className="text-sm font-medium">{`${name} is ready.`}</p>
         <p className="text-xs text-muted-foreground">

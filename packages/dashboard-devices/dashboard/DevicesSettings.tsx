@@ -79,7 +79,7 @@ export function DevicesSettings({ everyMs = 3_000, devicesEveryMs = 30_000, devi
     return (
       <>
         {way(() => add(undefined))}
-        <section aria-label={ADDING[adding]}>
+        <section aria-label={ADDING[adding]} className="max-w-prose">
           <AddDevice
             d={d}
             adding={adding}
