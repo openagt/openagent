@@ -122,12 +122,12 @@ describe('TicketDetailPage (#1144)', () => {
     render(<TicketDetailPage projectId="p1" slug="2026-07-20_do-the-thing.md" />)
     expect((await fact('Stage')).textContent).toBe('In review')
     expect((await fact('In review')).querySelector('a')?.getAttribute('href')).toBe('https://example.com/pull/12')
-    expect(screen.queryByRole('button', { name: /^Queue / })).toBeNull()
+    expect(screen.queryByRole('button', { name: /^Add to queue/ })).toBeNull()
     cleanup()
     onTicket.mockResolvedValue(ticket({ waiting: 'the vendor answer' }))
     render(<TicketDetailPage projectId="p1" slug="2026-07-20_do-the-thing.md" />)
     expect((await fact('Waiting on')).textContent).toBe('the vendor answer')
-    expect(screen.queryByRole('button', { name: /^Queue / })).toBeNull()
+    expect(screen.queryByRole('button', { name: /^Add to queue/ })).toBeNull()
   })
 
   test('the Plan tab of a ticket with no plan is named as it reads: "Plan, none yet"', async () => {
@@ -148,7 +148,7 @@ describe('TicketDetailPage (#1144)', () => {
     onTicket.mockResolvedValue(ticket({ planned: true, priority: '8' }))
     addToQueue.mockResolvedValue({ ok: true })
     render(<TicketDetailPage projectId="p1" slug="2026-07-20_do-the-thing.md" />)
-    await queue('Queue work')
+    await queue('Add to queue')
     // The title as the link, pointing back at the ticket's file, its priority as a number on the
     // queue's own 0–10 scale.
     await waitFor(() => expect(addToQueue).toHaveBeenCalledWith(expect.anything(), 'p1', [{ text: 'Do the thing', href: 'tickets/2026-07-20_do-the-thing.md', priority: 8 }]))
@@ -158,7 +158,7 @@ describe('TicketDetailPage (#1144)', () => {
     onTicket.mockResolvedValue(ticket({ planned: true }))
     addToQueue.mockResolvedValue({ ok: true })
     render(<TicketDetailPage projectId="p1" slug="2026-07-20_do-the-thing.md" />)
-    await queue('Queue work')
+    await queue('Add to queue')
     await waitFor(() => expect(addToQueue).toHaveBeenCalledWith(expect.anything(), 'p1', [{ text: 'Do the thing', href: 'tickets/2026-07-20_do-the-thing.md', priority: 5 }]))
   })
 
@@ -168,7 +168,7 @@ describe('TicketDetailPage (#1144)', () => {
     render(<TicketDetailPage projectId="p1" slug="2026-07-20_do-the-thing.md" />)
     expect(await screen.findByRole('button', { name: 'Plan now' })).toBeTruthy()
     expect(screen.queryByRole('button', { name: 'Start work' })).toBeNull()
-    await queue('Queue plan')
+    await queue('Add to queue')
     await waitFor(() => expect(addToQueue).toHaveBeenCalledWith(expect.anything(), 'p1', [{ text: 'Create tickets/2026-07-20_do-the-thing.plan.md', priority: 8 }]))
   })
 
@@ -176,7 +176,7 @@ describe('TicketDetailPage (#1144)', () => {
     onTicket.mockResolvedValue(ticket())
     addToQueue.mockResolvedValue({ ok: true })
     render(<TicketDetailPage projectId="p1" slug="2026-07-20_do-the-thing.md" />)
-    await queue('Queue plan')
+    await queue('Add to queue')
     // The press now says so, and cannot be pressed again.
     const queued = await screen.findByRole('button', { name: 'Queued' })
     expect(queued.getAttribute('aria-disabled')).toBe('true')
@@ -196,10 +196,10 @@ describe('TicketDetailPage (#1144)', () => {
     onTicket.mockResolvedValue(ticket())
     addToQueue.mockResolvedValue({ ok: false, error: 'the queue could not be written' })
     render(<TicketDetailPage projectId="p1" slug="2026-07-20_do-the-thing.md" />)
-    await queue('Queue plan')
+    await queue('Add to queue')
     expect(await screen.findByText(/could not be written/i)).toBeTruthy()
     expect(screen.queryByText('Queued')).toBeNull()
-    expect(screen.getByRole('button', { name: 'Queue plan' }).getAttribute('aria-disabled')).toBeNull()
+    expect(screen.getByRole('button', { name: 'Add to queue' }).getAttribute('aria-disabled')).toBeNull()
   })
 
   test('no module offering an action on links in this project, no button (#1774)', async () => {
@@ -208,7 +208,7 @@ describe('TicketDetailPage (#1144)', () => {
     await screen.findByRole('heading', { name: 'Do the thing' })
     await openMenu(screen.getByRole('button', { name: 'Other ways to plan Do the thing' }))
     expect(await screen.findByText('Configure first, then run')).toBeTruthy()
-    expect(screen.queryByText('Queue plan')).toBeNull()
+    expect(screen.queryByText('Add to queue')).toBeNull()
   })
 
   test('a missing ticket says so rather than rendering blank', async () => {
@@ -225,7 +225,7 @@ describe('TicketDetailPage (#1144)', () => {
     expect((await fact('Claimed by')).textContent).toBe('plan-1-0')
     expect(screen.getByRole('button', { name: 'Release the claim' })).toBeTruthy()
     // Not queued while claimed: the agent the queue hands it to would find it taken.
-    expect(screen.queryByRole('button', { name: /^Queue / })).toBeNull()
+    expect(screen.queryByRole('button', { name: /^Add to queue/ })).toBeNull()
   })
 
   test('an unclaimed ticket offers no release (#1420)', async () => {

@@ -199,7 +199,7 @@ export function TicketsPage({ projects }: { projects: ModuleProject[] }) {
         }
       </Slot>
       {/* The selection bar's room at the list's end, 16 under it, kept whether or not a row is ticked, so ticking moves nothing. */}
-      <div aria-hidden className="h-13 max-md:h-30" />
+      <div aria-hidden className="h-13 max-md:h-45" />
       {barRows.length > 0 && (
         <SelectionBar
           leaving={!hasSelection}
@@ -223,7 +223,7 @@ function SelectionBar({ leaving, count, onSelectAll, onClear, children }: { leav
         aria-label="Selected tickets"
         className={cn(
           'pointer-events-auto absolute bottom-0 flex items-center gap-1 menu-surface rounded-lg py-1 pr-1 pl-4 text-sm shadow-lg ring-1 ring-foreground/10 backdrop-blur-xl',
-          // In the middle of the column on a wider screen; on a phone across it, its adds a line of their own.
+          // In the middle of the column on a wider screen; on a phone across it, each add on a line of its own, its words whole.
           'md:left-1/2 md:w-max md:-translate-x-1/2 max-md:inset-x-0 max-md:flex-wrap max-md:px-4 max-md:py-0',
           'transition-[opacity,translate] ease-out starting:translate-y-2 starting:opacity-0',
           leaving ? 'pointer-events-none translate-y-2 opacity-0 duration-120' : 'duration-180',
@@ -235,7 +235,7 @@ function SelectionBar({ leaving, count, onSelectAll, onClear, children }: { leav
             Select all
           </Button>
         )}
-        <div className="contents max-md:order-last max-md:flex max-md:basis-full max-md:gap-2 max-md:*:h-11 max-md:*:flex-1">{children}</div>
+        <div className="contents max-md:order-last max-md:flex max-md:basis-full max-md:flex-col max-md:gap-2 max-md:pb-2 max-md:*:h-11">{children}</div>
         <Button variant="ghost" size="icon-sm" aria-label="Clear the selection" title="Clear the selection (Esc)" onClick={onClear} className="text-muted-foreground max-md:-mr-3 max-md:ml-auto max-md:size-11">
           <X className="size-4" aria-hidden />
         </Button>
@@ -258,10 +258,10 @@ function QueueAdds({ rows, disabled }: { rows: readonly TicketRow[]; disabled: b
   const [addedHere, setAddedHere] = useState<string | null>(null)
   const ticketsQueued = addedHere === queueKey || (queuedAlready.length > 0 && queuedAlready.every(action => action.done))
   const left = rows.length - targets.length
-  // Each counts what a press adds, never a ticket it skips or one already on the queue; done, what
-  // the set now has on the queue on its projects.
+  // Each the object of the module's own verb, "Add to queue: 2 tickets", counting what a press adds, never a
+  // ticket it skips or one already on the queue; done, what the set now has on the queue: "Queued: 3 plans".
   const label = (noun: string) => (action: LinkActionOffer, done: boolean) =>
-    done ? `${action.doneLabel ?? 'Queued'} ${counted(action.total, noun)}` : `Queue ${counted(action.left, noun)}`
+    done ? `${action.doneLabel ?? action.label}: ${counted(action.total, noun)}` : `${action.label}: ${counted(action.left, noun)}`
   return (
     <>
       {targets.length > 0 && (

@@ -41,7 +41,6 @@ export function TicketStartActions({
     ? {
         prompt: workOnTicketPrompt(ticket.file),
         now: compact ? 'Start' : 'Start work',
-        later: 'Queue work',
         Icon: Play,
         tooltip: 'Starts an agent working on this ticket, from its plan',
         laterSays: 'An agent works on it when the queue reaches it.',
@@ -53,7 +52,6 @@ export function TicketStartActions({
     : {
         prompt: planTicketPrompt(ticket.file),
         now: compact ? 'Plan' : 'Plan now',
-        later: 'Queue plan',
         Icon: ClipboardPlus,
         tooltip: "Starts an agent writing this ticket's plan",
         laterSays: 'An agent writes the plan when the queue reaches it.',
@@ -125,7 +123,7 @@ export function TicketStartActions({
                 render={<Button variant="secondary" loading={queued === 'running'} aria-disabled={done || undefined} onClick={() => !done && void queue(action.key)} className={cn(done && 'text-muted-foreground')} />}
               >
                 {done ? <Check className="size-4" aria-hidden /> : <ListPlus className="size-4" aria-hidden />}
-                {done ? (action.doneLabel ?? 'Queued') : step.later}
+                {done ? (action.doneLabel ?? 'Queued') : action.label}
               </TooltipTrigger>
               <TooltipContent>{done ? 'It is on the queue.' : step.laterSays}</TooltipContent>
             </Tooltip>

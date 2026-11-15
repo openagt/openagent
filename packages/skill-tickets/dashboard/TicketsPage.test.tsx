@@ -398,7 +398,7 @@ describe("TicketsPage queues the selection", () => {
     twoTickets()
     render()
     await screen.findByText('First')
-    expect(screen.queryByRole('button', { name: /^Queue \d/ })).toBeNull()
+    expect(screen.queryByRole('button', { name: /^Add to queue:/ })).toBeNull()
     tick('First')
     expect(screen.getByRole('region', { name: 'Selected tickets' })).toBeTruthy()
   })
@@ -409,16 +409,16 @@ describe("TicketsPage queues the selection", () => {
     render()
     await screen.findByText('First')
     tick('First', 'Second')
-    fireEvent.click(screen.getByRole('button', { name: 'Queue 2 tickets' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Add to queue: 2 tickets' }))
     // Queued as the ticket's page queues (#1164): title as the entry, the ticket named so the entry links back, its priority picking the section.
     await waitFor(() => expect(addToQueue).toHaveBeenCalledTimes(1))
     expect(handed('p1')).toEqual([[link('First', 'a.md', 7), link('Second', 'b.md')]])
     expect(host.startRun).not.toHaveBeenCalled()
-    const queued = await screen.findByRole('button', { name: 'Queued 2 tickets' })
+    const queued = await screen.findByRole('button', { name: 'Queued: 2 tickets' })
     expect(queued.getAttribute('aria-disabled')).toBe('true')
     // Changing the selection is a new set: the press arms again, counting it.
     tick('Second')
-    expect(await screen.findByRole('button', { name: 'Queue 1 ticket' })).toBeTruthy()
+    expect(await screen.findByRole('button', { name: 'Add to queue: 1 ticket' })).toBeTruthy()
   })
 
   test('claimed tickets are left to the agents holding them, and the press counts without them', async () => {
@@ -434,8 +434,8 @@ describe("TicketsPage queues the selection", () => {
     await screen.findByText('First')
     tick('First', 'Second')
     expect(screen.getByText('2 selected')).toBeTruthy()
-    fireEvent.click(screen.getByRole('button', { name: 'Queue 1 ticket' }))
-    await screen.findByRole('button', { name: /^Queued / })
+    fireEvent.click(screen.getByRole('button', { name: 'Add to queue: 1 ticket' }))
+    await screen.findByRole('button', { name: /^Queued:/ })
     expect(handed('p1')).toEqual([[link('First', 'a.md')]])
   })
 
@@ -455,10 +455,10 @@ describe("TicketsPage queues the selection", () => {
     render()
     await screen.findByText('First')
     tick('First', 'Second', 'Third')
-    fireEvent.click(screen.getByRole('button', { name: 'Queue 1 plan' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Add to queue: 1 plan' }))
     await waitFor(() => expect(addToQueue).toHaveBeenCalledTimes(1))
     expect(handed('p1')).toEqual([[plan('a.md')]])
-    fireEvent.click(screen.getByRole('button', { name: 'Queue 1 ticket' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Add to queue: 1 ticket' }))
     await waitFor(() => expect(addToQueue).toHaveBeenCalledTimes(2))
     expect(handed('p1')).toEqual([[plan('a.md')], [link('First', 'a.md')]])
   })
@@ -480,7 +480,7 @@ describe("TicketsPage queues the selection", () => {
     await screen.findByText('Second')
     tick('Second', 'Third', 'Fourth')
     expect(screen.getByText('3 selected')).toBeTruthy()
-    expect(screen.queryByRole('button', { name: /^Queue \d/ })).toBeNull()
+    expect(screen.queryByRole('button', { name: /^Add to queue:/ })).toBeNull()
   })
 
   test('every ticked ticket still to plan gets its plan queued, and the press rests as Queued', async () => {
@@ -489,12 +489,12 @@ describe("TicketsPage queues the selection", () => {
     render()
     await screen.findByText('First')
     tick('First', 'Second')
-    fireEvent.click(screen.getByRole('button', { name: 'Queue 2 plans' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Add to queue: 2 plans' }))
     // One plan ask per ticket, at its priority; neither an implementation entry nor an agent comes of it.
     await waitFor(() => expect(addToQueue).toHaveBeenCalledTimes(1))
     expect(handed('p1')).toEqual([[plan('a.md', 7), plan('b.md')]])
     expect(host.startRun).not.toHaveBeenCalled()
-    expect((await screen.findByRole('button', { name: 'Queued 2 plans' })).getAttribute('aria-disabled')).toBe('true')
+    expect((await screen.findByRole('button', { name: 'Queued: 2 plans' })).getAttribute('aria-disabled')).toBe('true')
   })
 
   test('planned and claimed tickets get no plan asked for, and the press counts only what is left to plan', async () => {
@@ -513,11 +513,11 @@ describe("TicketsPage queues the selection", () => {
     render()
     await screen.findByText('First')
     tick('First', 'Second', 'Third')
-    fireEvent.click(screen.getByRole('button', { name: 'Queue 1 plan' }))
-    await screen.findByRole('button', { name: /^Queued / })
+    fireEvent.click(screen.getByRole('button', { name: 'Add to queue: 1 plan' }))
+    await screen.findByRole('button', { name: /^Queued:/ })
     expect(handed('p1')).toEqual([[plan('a.md')]])
     // The planned one is still queued as work.
-    expect(screen.getByRole('button', { name: 'Queue 2 tickets' })).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'Add to queue: 2 tickets' })).toBeTruthy()
   })
 
   test('every ticked ticket on the queue already: the ticket add rests as Queued, and their plans are not offered beside it', async () => {
@@ -527,8 +527,8 @@ describe("TicketsPage queues the selection", () => {
     render(mounted)
     await screen.findByText('First')
     tick('First', 'Second')
-    await screen.findByRole('button', { name: 'Queued 2 tickets' })
-    expect(screen.queryByRole('button', { name: 'Queue 2 plans' })).toBeNull()
+    await screen.findByRole('button', { name: 'Queued: 2 tickets' })
+    expect(screen.queryByRole('button', { name: 'Add to queue: 2 plans' })).toBeNull()
   })
 
   test('the ticket add pressed: it rests as Queued, and the plan add beside it goes at once', async () => {
@@ -537,9 +537,9 @@ describe("TicketsPage queues the selection", () => {
     render()
     await screen.findByText('First')
     tick('First')
-    fireEvent.click(screen.getByRole('button', { name: 'Queue 1 ticket' }))
-    await screen.findByRole('button', { name: 'Queued 1 ticket' })
-    expect(screen.queryByRole('button', { name: 'Queue 1 plan' })).toBeNull()
+    fireEvent.click(screen.getByRole('button', { name: 'Add to queue: 1 ticket' }))
+    await screen.findByRole('button', { name: 'Queued: 1 ticket' })
+    expect(screen.queryByRole('button', { name: 'Add to queue: 1 plan' })).toBeNull()
   })
 
   test('one ticked ticket not on the queue yet: both adds are offered', async () => {
@@ -549,9 +549,9 @@ describe("TicketsPage queues the selection", () => {
     render(mounted)
     await screen.findByText('First')
     tick('First', 'Second')
-    expect(await screen.findByRole('button', { name: 'Queue 2 plans' })).toBeTruthy()
+    expect(await screen.findByRole('button', { name: 'Add to queue: 2 plans' })).toBeTruthy()
     // The ticket add counts only the one not on the queue yet.
-    expect(screen.getByRole('button', { name: 'Queue 1 ticket' })).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'Add to queue: 1 ticket' })).toBeTruthy()
   })
 
   test('a plan already on the queue is not counted, and done, the button names the whole set', async () => {
@@ -569,9 +569,9 @@ describe("TicketsPage queues the selection", () => {
     render(queued)
     await screen.findByText('First')
     tick('First', 'Second', 'Third')
-    fireEvent.click(await screen.findByRole('button', { name: 'Queue 2 plans' }))
+    fireEvent.click(await screen.findByRole('button', { name: 'Add to queue: 2 plans' }))
     await waitFor(() => expect(addToQueue).toHaveBeenCalledTimes(1))
-    expect((await screen.findByRole('button', { name: 'Queued 3 plans' })).getAttribute('aria-disabled')).toBe('true')
+    expect((await screen.findByRole('button', { name: 'Queued: 3 plans' })).getAttribute('aria-disabled')).toBe('true')
   })
 
   test.each(['ticket', 'plan'])('across projects, the %s add done counts what it added, on the projects with a queue alone', async kind => {
@@ -583,10 +583,10 @@ describe("TicketsPage queues the selection", () => {
     render(modules(['p1']))
     await screen.findByText('First')
     tick('First', 'Second')
-    fireEvent.click(await screen.findByRole('button', { name: `Queue 1 ${kind}` }))
+    fireEvent.click(await screen.findByRole('button', { name: `Add to queue: 1 ${kind}` }))
     await waitFor(() => expect(addToQueue).toHaveBeenCalledTimes(1))
     expect([handed('p1'), handed('p2')]).toEqual([[[kind === 'plan' ? plan('a.md') : link('First', 'a.md')]], []])
-    expect(await screen.findByRole('button', { name: `Queued 1 ${kind}` })).toBeTruthy()
+    expect(await screen.findByRole('button', { name: `Queued: 1 ${kind}` })).toBeTruthy()
   })
 
   test('no module offering an action on links, no adds at all (#1774)', async () => {
@@ -594,7 +594,7 @@ describe("TicketsPage queues the selection", () => {
     render(modules([]))
     await screen.findByText('First')
     tick('First')
-    expect(screen.queryByRole('button', { name: /^Queue \d/ })).toBeNull()
+    expect(screen.queryByRole('button', { name: /^Add to queue:/ })).toBeNull()
   })
 
   test('after one tick, Select all ticks every shown ticket, and is gone once they all are', async () => {
@@ -607,7 +607,7 @@ describe("TicketsPage queues the selection", () => {
     tick('Second')
     fireEvent.click(screen.getByRole('button', { name: 'Select all' }))
     expect(screen.getByText('3 selected')).toBeTruthy()
-    expect(screen.getByRole('button', { name: 'Queue 3 tickets' })).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'Add to queue: 3 tickets' })).toBeTruthy()
     expect(screen.queryByRole('button', { name: 'Select all' })).toBeNull()
   })
 
@@ -616,11 +616,11 @@ describe("TicketsPage queues the selection", () => {
     render()
     await screen.findByText('First')
     tick('First')
-    expect(screen.getByRole('button', { name: 'Queue 1 ticket' })).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'Add to queue: 1 ticket' })).toBeTruthy()
     fireEvent.click(screen.getByRole('button', { name: 'Clear the selection' }))
     // The bar leaves in 120ms.
     await waitFor(() => expect(screen.queryByText(/selected/)).toBeNull())
-    expect(screen.queryByRole('button', { name: /^Queue \d/ })).toBeNull()
+    expect(screen.queryByRole('button', { name: /^Add to queue:/ })).toBeNull()
   })
 
   test('Escape clears the selection, as its clear does', async () => {
@@ -644,8 +644,8 @@ describe("TicketsPage queues the selection", () => {
     await waitFor(() => expect(screen.queryByText('Second')).toBeNull())
     await waitFor(() => expect(screen.queryByText('1 selected')).toBeNull())
     tick('First')
-    fireEvent.click(screen.getByRole('button', { name: 'Queue 1 ticket' }))
-    await screen.findByRole('button', { name: /^Queued / })
+    fireEvent.click(screen.getByRole('button', { name: 'Add to queue: 1 ticket' }))
+    await screen.findByRole('button', { name: /^Queued:/ })
     expect(handed('p1')).toEqual([[link('First', 'a.md', 7)]])
     // The tick itself survives the filter and comes back with the row.
     fireEvent.change(screen.getByRole('textbox', { name: /search tickets/i }), { target: { value: '' } })
@@ -662,8 +662,8 @@ describe("TicketsPage queues the selection", () => {
     render()
     await screen.findByText('Beta ticket')
     tick('Beta ticket')
-    fireEvent.click(screen.getByRole('button', { name: 'Queue 1 ticket' }))
-    await screen.findByRole('button', { name: /^Queued / })
+    fireEvent.click(screen.getByRole('button', { name: 'Add to queue: 1 ticket' }))
+    await screen.findByRole('button', { name: /^Queued:/ })
     expect(addToQueue).toHaveBeenCalledTimes(1)
     expect(handed('p2')).toEqual([[link('Beta ticket', 'b.md')]])
   })
