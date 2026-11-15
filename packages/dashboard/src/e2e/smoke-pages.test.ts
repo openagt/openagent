@@ -1,5 +1,6 @@
 import { strict as assert } from 'node:assert'
 import { test } from 'node:test'
+import { git } from './fixture.js'
 import { needsChrome, smoke } from './smoke.js'
 
 // The project's pages, in a real browser (smoke.ts): a page a project's package brings, adding
@@ -91,4 +92,14 @@ test('a repository on the computer is added as a project from the picker, and it
     await page.getByText(/done: .*add an about page/).waitFor()
     assert.equal(await page.getByRole('alert').count(), 0, 'the check said nothing')
   })
+})
+
+test("the demo's project holds its own files alone, and its commits are its person's alone", needsChrome, async () => {
+  // Its origin stands outside its folder: listed among its files, a bare repository's own (HEAD, config, hooks/…) were offered by the message box's #.
+  const files = await demo().call<string[]>('onProjectFiles', demo().project.id)
+  assert.ok(files.includes('README.md'), 'its files are listed')
+  assert.deepEqual(files.filter(file => file !== 'README.md' && !file.startsWith('.claude/')), [])
+  // A commit by anyone else is one more member on the Overview's card.
+  const authors = (await git(demo().project.cwd, 'log', '--format=%an <%ae>', 'main')).trim().split('\n')
+  assert.deepEqual([...new Set(authors)], ['Demo <demo@example.invalid>'])
 })

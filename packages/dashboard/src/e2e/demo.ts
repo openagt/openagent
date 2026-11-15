@@ -6,12 +6,12 @@ import { spawn } from 'node:child_process'
 import { existsSync, mkdtempSync } from 'node:fs'
 import { mkdir, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
-import { join, resolve } from 'node:path'
+import { basename, join, resolve } from 'node:path'
 import { createInterface } from 'node:readline'
 import { fileURLToPath } from 'node:url'
 import { projectId } from '../registry.js'
 import type { AgentMeta, AgentStatus } from '../store/index.js'
-import { git, makeFixtureRepo, writeFakeRunHooks } from './fixture.js'
+import { makeFixtureRepo, writeFakeRunHooks } from './fixture.js'
 
 const CLI = fileURLToPath(new URL('../../dist/cli/bin.js', import.meta.url))
 
@@ -80,13 +80,14 @@ export async function startDemo(options: DemoOptions = {}): Promise<Demo> {
   // The person the dashboard names is the home's git user: "Demo", not whoever runs the demo.
   await writeFile(join(home, '.gitconfig'), `[user]\n\tname = ${DEMO_USER.name}\n\temail = ${DEMO_USER.email}\n`)
   // The project the dashboard has holds every skill with a page of its own, so each page can be walked.
+  // Every commit is the demo's person's, so nobody else is among the project's members; and each
+  // origin stands outside its project's folder, in a hidden one the picker does not look into, so
+  // the project's files are its own alone.
   for (const [cwd, files, skills] of [
     [shop, SHOP_FILES, ['tickets', 'queue', 'logs', 'scheduler']],
     [toAdd, { 'README.md': '# blog\n\nThe project to add from the dashboard.\n' }, ['tickets', 'queue']],
   ] as const) {
-    await makeFixtureRepo(cwd, files, skills)
-    await git(cwd, 'config', 'user.name', DEMO_USER.name)
-    await git(cwd, 'config', 'user.email', DEMO_USER.email)
+    await makeFixtureRepo(cwd, files, skills, { user: DEMO_USER, origin: join(home, '.origins', `${basename(cwd)}.git`) })
   }
   // The project to add starts scripted runs too: its lines are there before a person adds it, and the add keeps them.
   await writeFakeRunHooks(toAdd)

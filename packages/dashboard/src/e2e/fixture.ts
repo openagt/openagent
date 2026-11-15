@@ -34,14 +34,27 @@ export async function git(cwd: string, ...args: string[]): Promise<string> {
   return stdout
 }
 
+/** Who a fixture's commits are by, and where its `origin` stands, when not the stories' own. */
+export interface FixtureOptions {
+  /** The repository's git user: its seed commit is theirs, and every commit made in the folder after. */
+  user?: { name: string; email: string }
+  /**
+   * The bare repository that stands in for `origin`. Inside the project's folder by default, where
+   * a story's clean-up takes it with the project; a project a person looks at has it elsewhere, or
+   * its files (`HEAD`, `config`, `hooks/…`) are listed among the project's own.
+   */
+  origin?: string
+}
+
 /**
  * Make `cwd` (an empty directory) a fixture repo holding `files` and the texts of `skills`: committed
  * on `main`, except the tickets and the queue, which go on the data branch where the product reads them.
  */
-export async function makeFixtureRepo(cwd: string, files: Record<string, string> = {}, skills: readonly FixtureSkill[] = ['tickets', 'queue']): Promise<void> {
+export async function makeFixtureRepo(cwd: string, files: Record<string, string> = {}, skills: readonly FixtureSkill[] = ['tickets', 'queue'], options: FixtureOptions = {}): Promise<void> {
+  const user = options.user ?? { name: 'e2e', email: 'e2e@test' }
   await git(cwd, 'init', '-q', '-b', 'main')
-  await git(cwd, 'config', 'user.email', 'e2e@test')
-  await git(cwd, 'config', 'user.name', 'e2e')
+  await git(cwd, 'config', 'user.email', user.email)
+  await git(cwd, 'config', 'user.name', user.name)
   const seeded = Object.keys(files).length ? files : { 'README.md': '# story fixture\n' }
   // The tickets and the queue live on the `agent-data` branch (#1748), never in the working
   // tree: a story that seeds them names the same paths, and they land where the product reads.
@@ -71,7 +84,8 @@ export async function makeFixtureRepo(cwd: string, files: Record<string, string>
   }
   // A bare repo standing in for `origin`, because a real project has one: an agent's branch
   // starts from its default branch, and whether a run's work reached it is what a story reads.
-  const origin = join(cwd, 'origin.git')
+  const origin = options.origin ?? join(cwd, 'origin.git')
+  await mkdir(dirname(origin), { recursive: true })
   await git(cwd, 'init', '-q', '--bare', origin)
   await git(cwd, 'remote', 'add', 'origin', origin)
 }
