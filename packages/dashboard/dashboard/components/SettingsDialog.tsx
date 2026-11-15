@@ -564,8 +564,8 @@ function useOwnEntries(): Entry[] {
 function BridgeBrowserChoice({ daemonBrowser, onChange }: { daemonBrowser: boolean; onChange: (daemonBrowser: boolean) => void }) {
   const question = useId()
   const option = (value: boolean, label: string, description: string, body: ReactNode) => (
-    <label className={cn('flex cursor-pointer gap-3 rounded-md border p-3', daemonBrowser === value ? 'border-primary/60 bg-muted/20' : 'border-border')}>
-      <RadioGroupItem value={value ? 'daemon' : 'own'} aria-label={label} className="mt-1" />
+    <label className="flex cursor-pointer gap-3">
+      <RadioGroupItem value={value ? 'daemon' : 'own'} aria-label={label} className="mt-0.5" />
       <span className="min-w-0 flex-1">
         <span className="block text-sm font-medium">{label}</span>
         <span className="block text-xs text-muted-foreground">{description}</span>
@@ -575,11 +575,11 @@ function BridgeBrowserChoice({ daemonBrowser, onChange }: { daemonBrowser: boole
   )
   return (
     // One group with one name: the radio group is named by the question above it.
-    <div className="mt-3">
-      <p id={question} className="mb-2 text-sm font-medium">
+    <div>
+      <p id={question} className="mb-3 text-sm font-medium">
         Which browser does the work?
       </p>
-      <RadioGroup aria-labelledby={question} value={daemonBrowser ? 'daemon' : 'own'} onValueChange={next => onChange(next === 'daemon')}>
+      <RadioGroup aria-labelledby={question} value={daemonBrowser ? 'daemon' : 'own'} onValueChange={next => onChange(next === 'daemon')} className="gap-4">
         {option(
           true,
           'A browser the daemon runs',
