@@ -7,6 +7,7 @@ import {
   Panel,
   PanelGroup,
   PanelRow,
+  RunMark,
   StartAgentPress,
   StateCell,
   cn,
@@ -49,6 +50,10 @@ export interface RowsProps {
   onOpen: (row: ListedTicket) => void
   onStart: (row: ListedTicket, prompt: string, failure: string) => void
   onConfigure: (row: ListedTicket, prompt: string) => void
+  /** Adds a row's topic to the filters (#1144). */
+  onTopic?: ((topic: string) => void) | undefined
+  /** Narrows the list to claimed tickets: a claim by none of the project's runs (#1144). */
+  onClaimed?: (() => void) | undefined
 }
 
 /** Tickets as one card, or once the list is long and spans stages, a card per stage in the order agents take them. */
@@ -71,7 +76,7 @@ export function TicketRows({ rows, ...props }: RowsProps & { rows: readonly List
 }
 
 /** One ticket as a row; under the pointer its next step takes its facts' place. */
-function TicketRow({ listed, priorities, showStage, busy, starting, isSelected, onToggleSelect, onOpen, onStart, onConfigure }: RowsProps & {
+function TicketRow({ listed, priorities, showStage, busy, starting, isSelected, onToggleSelect, onOpen, onStart, onConfigure, onTopic, onClaimed }: RowsProps & {
   listed: ListedTicket
   /** Whether some ticket of the list has a priority: the column is kept on every row, or on none. */
   priorities: boolean
@@ -85,6 +90,10 @@ function TicketRow({ listed, priorities, showStage, busy, starting, isSelected, 
   // A ticket in review, waiting or claimed is not handed to an agent: its row offers no next step.
   const offered = !heldBack(ticket) && !ticket.locked
   const stage = <StageWord ticket={ticket} />
+  const holder = ticket.lockedByAgent?.name ?? ticket.lockedBy
+  // A claim by one of the project's runs opens that run (#1748); any other narrows the list to claimed (#1144).
+  const run = ticket.lockedByAgent
+  const claimPress = ticket.locked ? (run ? () => host.openAgent(projectId, run.id) : onClaimed) : undefined
   return (
     <PanelRow
       className={cn(selected && 'bg-foreground/6 before:opacity-0 [&+li]:before:opacity-0')}
@@ -109,12 +118,34 @@ function TicketRow({ listed, priorities, showStage, busy, starting, isSelected, 
             {projectName && <span className="max-w-32 truncate">{projectName}</span>}
             {ticket.topics && ticket.topics.length > 0 && (
               <span className="flex items-center gap-2 max-lg:hidden">
-                {ticket.topics.map(topic => (
-                  <Badge key={topic}>{topic}</Badge>
-                ))}
+                {ticket.topics.map(topic =>
+                  onTopic ? (
+                    <button key={topic} type="button" title={`Filter by ${topic}`} onClick={() => onTopic(topic)} className={cn(QUIET_PRESS, 'rounded-full')}>
+                      <Badge className="transition-colors">{topic}</Badge>
+                    </button>
+                  ) : (
+                    <Badge key={topic}>{topic}</Badge>
+                  ),
+                )}
               </span>
             )}
-            {showStage && <span className="w-26">{stage}</span>}
+            {showStage && (
+              <span className="flex w-26">
+                {claimPress ? (
+                  <button
+                    type="button"
+                    aria-label={holder ? `Claimed by ${holder}` : 'Claimed'}
+                    title={run ? `Claimed by ${holder}: open its run` : `Claimed${holder ? ` by ${holder}` : ''}: show the claimed tickets`}
+                    onClick={claimPress}
+                    className={cn(QUIET_PRESS, '-mx-1 px-1')}
+                  >
+                    {stage}
+                  </button>
+                ) : (
+                  stage
+                )}
+              </span>
+            )}
             <span className="w-9 text-right tabular-nums" title={formatDateTime(ticket.date)}>
               {formatAge(ticket.date).replace(/ ago$/, '')}
             </span>
@@ -153,27 +184,31 @@ function Priority({ value }: { value: string | undefined }) {
   )
 }
 
-/** Where a ticket stands, in a word: an agent's claim with its mark (turning while its run is at it), what it waits on in a tooltip. */
+/** A press inside a row: above its link, quiet until a fine pointer is on it. */
+const QUIET_PRESS = 'focus-ring relative z-10 rounded-sm pointer-fine:hover:*:text-foreground'
+
+/** Where a ticket stands, in a word of one size: a claim and a wait differ by their mark and colour, what it waits on in a tooltip. */
 export function StageWord({ ticket }: { ticket: WorkspaceTicket }) {
   const stage: TicketStageId = ticketStage(ticket)
-  if (stage === 'claimed') {
-    const working = claimWorking(ticket)
-    const holder = ticket.lockedByAgent?.name ?? ticket.lockedBy
-    return (
-      <span className={cn('inline-flex items-center gap-1', working && 'font-medium text-info')} title={holder ? `Claimed by ${holder}` : undefined}>
-        <StateCell state={working ? 'working' : 'stopped'} />
-        {STAGE_LABEL.claimed}
-      </span>
-    )
-  }
-  if (stage === 'waiting')
-    return (
-      <span className="inline-flex items-center gap-1" title={`Waiting: ${ticket.waiting}`}>
-        <StateCell state="waiting" />
-        {STAGE_LABEL.waiting}
-      </span>
-    )
-  return <span title={stage === 'in-review' && ticket.pr ? `In review: ${ticket.pr.label}` : undefined}>{STAGE_LABEL[stage]}</span>
+  const holder = ticket.lockedByAgent?.name ?? ticket.lockedBy
+  const title = stage === 'claimed' ? (holder ? `Claimed by ${holder}` : undefined) : stage === 'waiting' ? `Waiting: ${ticket.waiting}` : stage === 'in-review' && ticket.pr ? `In review: ${ticket.pr.label}` : undefined
+  return (
+    <span className={cn('flex items-center gap-1', stage === 'claimed' && claimWorking(ticket) && 'text-info')} title={title}>
+      {stage === 'claimed' && <ClaimMark ticket={ticket} />}
+      {stage === 'waiting' && <StateCell state="waiting" />}
+      <span>{STAGE_LABEL[stage]}</span>
+    </span>
+  )
+}
+
+/** A claim's mark: the holding run's own while one of the project's runs holds it, a still one for any other holder. */
+function ClaimMark({ ticket }: { ticket: WorkspaceTicket }) {
+  if (!ticket.lockedByAgent || ticket.holderStatus === undefined) return <StateCell state="stopped" />
+  return (
+    <span className="flex size-3.5 shrink-0 items-center justify-center">
+      <RunMark status={ticket.holderStatus} className={cn('size-2', claimWorking(ticket) && 'motion-safe:animate-pulse')} />
+    </span>
+  )
 }
 
 /** One project's tickets on the list: its rows, or why there are none. */

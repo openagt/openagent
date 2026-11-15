@@ -1,4 +1,4 @@
-import { claimState, heldBack } from '../../src/module.js'
+import { heldBack } from '../../src/module.js'
 import type { WorkspaceTicket } from './types.js'
 
 /** Where a ticket stands, as a list says it: the first that holds of claimed, in review, waiting, planned. */
@@ -20,7 +20,7 @@ export function ticketStage(ticket: Pick<WorkspaceTicket, 'locked' | 'pr' | 'wai
   return heldBack(ticket) ?? (ticket.planned ? 'planned' : 'unplanned')
 }
 
-/** Whether the run holding a claim is at it, so its mark turns; a claim whose run ended, or another machine's, rests. */
+/** Whether the run holding a claim is at work right now: its mark pulses and the claim is said in colour. */
 export function claimWorking(ticket: Pick<WorkspaceTicket, 'holderStatus'>): boolean {
-  return claimState(ticket.holderStatus) === 'working'
+  return ticket.holderStatus === 'running'
 }

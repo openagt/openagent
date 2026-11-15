@@ -31,12 +31,14 @@ const ticket = (over: Partial<WorkspaceTicket> = {}): WorkspaceTicket => ({
 })
 
 /** One project's list as the page wires it: its starts go to the row's project, as the page's do. */
-function Rows({ tickets, hiddenByFilter, isSelected, onToggleSelect, onOpen = () => {} }: {
+function Rows({ tickets, hiddenByFilter, isSelected, onToggleSelect, onOpen = () => {}, onTopic, onClaimed }: {
   tickets: WorkspaceTicket[]
   hiddenByFilter?: number
   isSelected?: (row: ListedTicket) => boolean
   onToggleSelect?: (row: ListedTicket) => void
   onOpen?: (row: ListedTicket) => void
+  onTopic?: (topic: string) => void
+  onClaimed?: () => void
 }) {
   const host = useModuleHost()
   const { busy, error, run } = useAction()
@@ -59,6 +61,8 @@ function Rows({ tickets, hiddenByFilter, isSelected, onToggleSelect, onOpen = ()
           setStarting(null)
         }}
         onConfigure={(row, prompt) => host.configureRun(row.projectId, prompt)}
+        onTopic={onTopic}
+        onClaimed={onClaimed}
       />
     </>
   )
@@ -130,7 +134,7 @@ describe('the tickets list', () => {
     for (const title of ['Reviewed', 'Blocked', 'Planned too']) {
       expect(screen.queryByRole('button', { name: new RegExp(`other ways to (work on|plan) ${title}`, 'i') })).toBeNull()
     }
-    expect(screen.getByText('In review').getAttribute('title')).toBe('In review: #12')
+    expect(screen.getByText('In review').closest('[title]')?.getAttribute('title')).toBe('In review: #12')
     expect(screen.getAllByText('Waiting')[0]?.closest('[title]')?.getAttribute('title')).toBe('Waiting: the vendor answer')
   })
 
@@ -141,14 +145,52 @@ describe('the tickets list', () => {
     expect(screen.queryByRole('button', { name: /other ways to (work on|plan) do the thing/i })).toBeNull()
   })
 
-  test("a claim's mark turns while the run holding it is at it, and rests once that run ended", async () => {
+  test("a claim's mark is its run's own: pulsing and said in colour while the run works, its own still mark while it waits or once it ended; any other holder's is still", async () => {
     render(<Rows tickets={[ticket({ locked: true, lockedBy: 'r1', lockedByAgent: { id: 'r1', name: 'login-page' }, holderStatus: 'running' })]} />)
     const working = (await screen.findByText('Claimed')).closest('[title]')!
     expect(working.getAttribute('title')).toBe('Claimed by login-page')
-    expect(working.querySelector('.animate-spin, [class*="animate-spin"]')).not.toBeNull()
+    expect(working.querySelector('.bg-info')?.className).toContain('animate-pulse')
+    expect(working.className).toContain('text-info')
+    cleanup()
+    render(<Rows tickets={[ticket({ locked: true, lockedBy: 'r1', lockedByAgent: { id: 'r1', name: 'login-page' }, holderStatus: 'waiting' })]} />)
+    const asking = (await screen.findByText('Claimed')).closest('[title]')!
+    expect(asking.querySelector('.bg-warning')?.className).not.toContain('animate')
+    expect(asking.className).not.toContain('text-info')
     cleanup()
     render(<Rows tickets={[ticket({ locked: true, lockedBy: 'r1', lockedByAgent: { id: 'r1', name: 'login-page' }, holderStatus: 'done' })]} />)
-    expect((await screen.findByText('Claimed')).closest('[title]')!.querySelector('[class*="animate-spin"]')).toBeNull()
+    const ended = (await screen.findByText('Claimed')).closest('[title]')!
+    expect(ended.querySelector('[class*="animate"]')).toBeNull()
+    expect(ended.querySelector('.bg-info')).toBeNull()
+    cleanup()
+    render(<Rows tickets={[ticket({ locked: true, lockedBy: 'alice-laptop' })]} />)
+    const other = (await screen.findByText('Claimed')).closest('[title]')!
+    expect(other.querySelector('svg')).not.toBeNull()
+    expect(other.querySelector('[class*="animate"]')).toBeNull()
+  })
+
+  test('topic badges filter on click when the page passes a handler, without opening the row (#1144)', async () => {
+    const onOpen = vi.fn()
+    const onTopic = vi.fn()
+    render(<Rows tickets={[ticket({ topics: ['dx'] })]} onOpen={onOpen} onTopic={onTopic} />)
+    const badge = await screen.findByRole('button', { name: 'dx' })
+    expect(badge.getAttribute('title')).toBe('Filter by dx')
+    fireEvent.click(badge)
+    expect(onTopic).toHaveBeenCalledWith('dx')
+    expect(onOpen).not.toHaveBeenCalled()
+  })
+
+  test('the claim marker filters to claimed tickets on click (#1144); a claim by one of the project\'s runs opens that run (#1748)', async () => {
+    const onClaimed = vi.fn()
+    const onOpen = vi.fn()
+    render(<Rows tickets={[ticket({ locked: true, lockedBy: 'agent-1' })]} onOpen={onOpen} onClaimed={onClaimed} />)
+    fireEvent.click(await screen.findByRole('button', { name: 'Claimed by agent-1' }))
+    expect(onClaimed).toHaveBeenCalled()
+    expect(onOpen).not.toHaveBeenCalled()
+    cleanup()
+    render(<Rows tickets={[ticket({ locked: true, lockedBy: 'r1', lockedByAgent: { id: 'r1', name: 'login-page' }, holderStatus: 'running' })]} onClaimed={onClaimed} />)
+    fireEvent.click(await screen.findByRole('button', { name: 'Claimed by login-page' }))
+    expect(host.openAgent).toHaveBeenCalledWith('p1', 'r1')
+    expect(onClaimed).toHaveBeenCalledTimes(1)
   })
 
   test('rows carry a selection checkbox only when the page wires one, toggling the row without opening it', async () => {
