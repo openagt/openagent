@@ -36,6 +36,15 @@ export function Markdown({ text, compact = false, fade = false, document = false
   )
 }
 
+/**
+ * One line said by a tool (a check's problem, a hook's refusal) with its inline marks drawn as the
+ * chat draws them: what it puts in backticks is code, and an address is a link. For a sentence
+ * that sits inside a box of its own rather than a block of text.
+ */
+export function InlineMarkdown({ text }: { text: string }) {
+  return <>{inline(text)}</>
+}
+
 /** How the text is set: a notch smaller (`compact`), or as a page (`document`). */
 interface Look {
   compact: boolean
