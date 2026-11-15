@@ -1,5 +1,5 @@
 import { useState, type ClipboardEvent, type FormEvent } from 'react'
-import { Button, Checkbox, Dialog, Input, useOpenAgentDown } from '@openagt/dashboard/module'
+import { Button, Checkbox, Input, useOpenAgentDown } from '@openagt/dashboard/module'
 import { hasDoor } from './model.js'
 import { Problem } from './parts.js'
 import { sharedReach } from './servers.js'
@@ -47,7 +47,7 @@ export function linkOf(where: string, code: string): string | undefined {
   return origin && /^[A-Z0-9]{4,32}$/.test(typed) ? `${origin}/_devices/enter#${typed}` : undefined
 }
 
-export function JoinDialog({ d, onClose, onJoined }: { d: Devices; onClose: () => void; /** The code was someone else's computer's: its page opens, where their logins are set. */ onJoined?: (machineId: string) => void }) {
+export function Join({ d, onClose, onJoined }: { d: Devices; onClose: () => void; /** The code was someone else's computer's: its page opens, where their logins are set. */ onJoined?: (machineId: string) => void }) {
   const down = useOpenAgentDown()
   const { host } = d
   const [where, setWhere] = useState('')
@@ -107,41 +107,39 @@ export function JoinDialog({ d, onClose, onJoined }: { d: Devices; onClose: () =
   }
 
   return (
-    <Dialog open onOpenChange={open => !open && onClose()} title="Join with a code">
-      <form className="space-y-4" onSubmit={event => void join(event)}>
-        <p className="text-sm text-muted-foreground">Type what the other device shows.</p>
+    <form className="space-y-4" onSubmit={event => void join(event)}>
+      <p className="text-sm text-muted-foreground">Type what the other device shows.</p>
+      <label className="block space-y-1">
+        <span className="block text-sm font-medium">Where</span>
+        <Input name="pairing-address" autoFocus aria-label="Where" placeholder="203.0.113.10" value={where} onPaste={paste} onChange={event => setWhere(event.target.value)} className="font-mono" />
+        <span className="block text-xs text-muted-foreground">An address, or the whole link the other device gave.</span>
+      </label>
+      {!isLink(where) && (
         <label className="block space-y-1">
-          <span className="block text-sm font-medium">Where</span>
-          <Input name="pairing-address" autoFocus aria-label="Where" placeholder="203.0.113.10" value={where} onPaste={paste} onChange={event => setWhere(event.target.value)} className="font-mono" />
-          <span className="block text-xs text-muted-foreground">An address, or the whole link the other device gave.</span>
+          <span className="block text-sm font-medium">Code</span>
+          <Input name="pairing-code" aria-label="Code" placeholder="K7P4-QX9M" autoCapitalize="characters" autoComplete="off" spellCheck={false} value={code} onPaste={paste} onChange={event => setCode(event.target.value)} className="font-mono uppercase placeholder:normal-case" />
         </label>
-        {!isLink(where) && (
-          <label className="block space-y-1">
-            <span className="block text-sm font-medium">Code</span>
-            <Input name="pairing-code" aria-label="Code" placeholder="K7P4-QX9M" autoCapitalize="characters" autoComplete="off" spellCheck={false} value={code} onPaste={paste} onChange={event => setCode(event.target.value)} className="font-mono uppercase placeholder:normal-case" />
-          </label>
-        )}
-        {server && (
-          <label className="flex items-start gap-2 text-sm">
-            <Checkbox className="mt-0.5" checked={both} onCheckedChange={checked => setBoth(checked === true)} aria-label="Your other devices can start runs on this computer" />
-            <span>
-              Your other devices can start runs on this computer
-              <span className="block text-xs text-muted-foreground">{`Through ${shownWhere}, while it is on.`}</span>
-            </span>
-          </label>
-        )}
-        {error !== undefined && <Problem>{error}</Problem>}
-        <div className="flex justify-end gap-2 max-md:[&_button]:h-11">
-          <Button type="button" variant="ghost" onClick={onClose}>
-            {error?.startsWith('Joined.') ? 'Done' : 'Cancel'}
+      )}
+      {server && (
+        <label className="flex items-start gap-2 text-sm">
+          <Checkbox className="mt-0.5" checked={both} onCheckedChange={checked => setBoth(checked === true)} aria-label="Your other devices can start runs on this computer" />
+          <span>
+            Your other devices can start runs on this computer
+            <span className="block text-xs text-muted-foreground">{`Through ${shownWhere}, while it is on.`}</span>
+          </span>
+        </label>
+      )}
+      {error !== undefined && <Problem>{error}</Problem>}
+      <div className="flex justify-end gap-2 max-md:[&_button]:h-11">
+        <Button type="button" variant="ghost" onClick={onClose}>
+          {error?.startsWith('Joined.') ? 'Done' : 'Cancel'}
+        </Button>
+        {!error?.startsWith('Joined.') && (
+          <Button type="submit" loading={joining} disabled={link === undefined || down}>
+            Join
           </Button>
-          {!error?.startsWith('Joined.') && (
-            <Button type="submit" loading={joining} disabled={link === undefined || down}>
-              Join
-            </Button>
-          )}
-        </div>
-      </form>
-    </Dialog>
+        )}
+      </div>
+    </form>
   )
 }

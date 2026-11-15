@@ -5,7 +5,7 @@ import { addDevice, findComputers, readPersonThere, setSwitch, type Answer, type
 import { askLink, installDone } from './servers.js'
 import { CodeCard, Joined, NoCodeYet, PhoneCode, RanOut, Waiting, clock, useCode } from './codes.js'
 import { ConnectServer } from './ConnectServer.js'
-import { JoinDialog } from './Join.js'
+import { Join } from './Join.js'
 import { Connecting } from './Pairing.js'
 import { computerName, hasDoor, isComputer } from './model.js'
 import { Choice, Problem, hostOf } from './parts.js'
@@ -45,6 +45,7 @@ export const ADDING: Record<Adding, { title: string; page?: true }> = {
   },
   join: {
     title: 'Join with a code',
+    page: true,
   },
 }
 
@@ -100,7 +101,7 @@ export function AddDevice({ d, adding, isServer, onAdd, onClose, onInvite, onJoi
     return server ? <GiveCode d={d} server={server} onClose={onClose} /> : <AddComputer d={d} onGive={() => onAdd('give-code')} onClose={onClose} />
   }
   if (adding === 'set-up-server') return <ConnectServer d={d} onClose={onClose} onInvite={onInvite} />
-  return <JoinDialog d={d} onClose={onClose} onJoined={onJoined} />
+  return <Join d={d} onClose={onClose} onJoined={onJoined} />
 }
 
 function Choose({ kinds, onPicked, onClose }: { kinds: typeof KINDS; onPicked: (adding: Adding) => void; onClose: () => void }) {
