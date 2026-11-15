@@ -15,10 +15,7 @@ export type TicketRead =
   | { ticket: WorkspaceTicketDetail | null; plan: string | null; holderStatus?: string; sessions: TicketSession[] }
   | { error: string }
 
-/**
- * The ticket `slug` of a project, read by identity (`tickets show <file> --local`) and again every 10 s.
- * `released` withdraws its claim at once, until a read no longer shows that holder's claim.
- */
+/** The ticket `slug`, read every 10 s; `released` hides its claim until a read no longer shows that holder's. */
 export function useTicket(projectId: string, slug: string): { read: TicketRead | null; state: ReadState; reload: () => Promise<void>; released: () => void } {
   const host = useModuleHost()
   const { value: polled, state, reload } = usePolled<TicketRead | null>(

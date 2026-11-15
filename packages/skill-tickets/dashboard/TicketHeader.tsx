@@ -34,11 +34,7 @@ export function ticketSlug(file: string): string {
   return file.replace(/\.md$/, '').replace(/^\d{4}-\d{2}-\d{2}_/, '')
 }
 
-/**
- * The head both of a ticket's pages share, so moving between them keeps one's place: its title,
- * (on a narrow screen its priority and stage under it), its next step now or queued and the rarer
- * actions behind "More", then its two pages as tabs.
- */
+/** The head both of a ticket's pages share: its title, its presses and its two pages as tabs. */
 export function TicketHeader({
   projectId,
   ticket,
@@ -109,8 +105,7 @@ export function TicketHeader({
       </p>
       {(offered || claimed || more.length > 0) && (
         <div className="mt-6 flex flex-wrap items-center gap-2 max-md:mt-4">
-          {/* The next step, now or queued: none for a ticket in review or waiting, which is never
-              handed to an agent, nor for a claimed one, which an agent holds: its step is the release. */}
+          {/* A ticket in review, waiting or claimed is never handed to an agent: a claimed one offers its release. */}
           {offered && (
             <TicketStartActions
               projectId={projectId}
@@ -179,10 +174,7 @@ export function TicketHeader({
   )
 }
 
-/**
- * What is known of a ticket, at the side of its page (under its text on a narrow screen): one fact a
- * line, a name and its value, then the runs that planned and worked it.
- */
+/** What is known of a ticket, one fact a line, then the runs that planned and worked it. */
 export function TicketFacts({
   projectId,
   ticket,

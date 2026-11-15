@@ -34,16 +34,11 @@ function initialView(): TicketsView {
 /** A ticket's key on a page that spans projects, where two projects can share a filename. */
 const keyOf = (row: { projectId: string; ticket: { file: string } }) => `${row.projectId}/${row.ticket.file}`
 
-/**
- * The Tickets page: the backlog of the picked project, or of every project, searched, filtered and
- * sorted by one view the URL carries. Rows tick: while some are ticked, a bar floating at the
- * list's foot queues them, or their plans.
- */
+/** The backlog of the picked project or of every project, in one view the URL carries. */
 export function TicketsPage({ projects }: { projects: ModuleProject[] }) {
   const host = useModuleHost()
   const key = projects.map(p => p.id).join(',')
-  // `tickets list --local` in each project, each claim's holder looked up among its runs; a project
-  // whose command fails says why, and the others still show. A local read, cheap enough to poll.
+  // A project whose read fails says why while the others still show.
   const { value: groups, state } = usePolled<ProjectRead[]>(
     () =>
       Promise.all(
@@ -80,8 +75,7 @@ export function TicketsPage({ projects }: { projects: ModuleProject[] }) {
   const [starting, setStarting] = useState<{ projectId: string; prompt: string } | null>(null)
   const only = projects.length === 1 ? projects[0] : undefined
 
-  // Ticked rows, by project and file. Only shown ones count: a ticked ticket the filters hide is
-  // neither acted on nor counted, and comes back ticked with its row.
+  // A ticked ticket the filters hide is neither counted nor acted on, and comes back ticked with its row.
   const [selected, setSelected] = useState<ReadonlySet<string>>(new Set())
   const selectedShown = flatRows.filter(r => selected.has(keyOf(r)))
   const hasSelection = selectedShown.length > 0
@@ -210,10 +204,7 @@ export function TicketsPage({ projects }: { projects: ModuleProject[] }) {
   )
 }
 
-/**
- * The selection's bar, floating over the list's foot in the middle of its column and taking no room,
- * so ticking a row moves nothing: how many are ticked, ticking every shown one, the adds, and its close.
- */
+/** The selection's bar, floating over the list's foot and taking no room, so ticking a row moves nothing. */
 function SelectionBar({ leaving, count, onSelectAll, onClear, children }: { leaving: boolean; count: number; /** Ticks every shown ticket; none once all are. */ onSelectAll: (() => void) | undefined; onClear: () => void; children: ReactNode }) {
   return (
     <div className="pointer-events-none sticky bottom-6 z-10 h-0 max-md:bottom-4">
@@ -243,11 +234,7 @@ function SelectionBar({ leaving, count, onSelectAll, onClear, children }: { leav
   )
 }
 
-/**
- * The selection's adds: each ticked ticket handed, as a link, to the actions the installed modules
- * offer on links ("Add to queue" where a project has a queue package), as the ticket itself or as the
- * ask for its plan, in the shown order. What is already there is the action's own to leave alone.
- */
+/** The ticked tickets, or the asks for their plans, handed as links to the actions modules offer on links. */
 function QueueAdds({ rows, disabled }: { rows: readonly TicketRow[]; disabled: boolean }) {
   // Not a ticket an agent holds, nor one in review or waiting; a plan only for a ticket that has none.
   const targets = rows.filter(r => !heldBack(r.ticket) && !r.ticket.locked)

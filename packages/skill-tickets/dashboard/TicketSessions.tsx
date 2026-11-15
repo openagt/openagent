@@ -24,11 +24,7 @@ const DID = { plan: { running: 'Writing its plan', ended: 'Wrote its plan' }, wo
 /** A run's status as its mark draws it. */
 const STATE: Record<string, WorkState> = { running: 'working', waiting: 'waiting', done: 'done', failed: 'failed', stopped: 'stopped' }
 
-/**
- * The runs behind a ticket, each its mark, its name and its age, one press away: the one that wrote
- * its plan and the one that worked it. A finished one goes on in its own chat, the ticket and the
- * plan already in its context; one still running is watched.
- */
+/** The runs that planned and worked a ticket, each opened by a press on its row. */
 export function TicketSessions({ sessions, onOpen }: { sessions: readonly TicketSession[]; onOpen: (agentId: string) => void }) {
   if (sessions.length === 0) return null
   return (

@@ -51,10 +51,7 @@ export interface RowsProps {
   onConfigure: (row: ListedTicket, prompt: string) => void
 }
 
-/**
- * Tickets as one card of rows, or, once the list is long and holds more than one stage, a card per
- * stage under its name, in the order agents take them; the rows in the order given.
- */
+/** Tickets as one card, or once the list is long and spans stages, a card per stage in the order agents take them. */
 export function TicketRows({ rows, ...props }: RowsProps & { rows: readonly ListedTicket[] }) {
   const priorities = rows.some(row => row.ticket.priority !== undefined)
   const stages = STAGE_ORDER.map(stage => ({ stage, rows: rows.filter(row => ticketStage(row.ticket) === stage) })).filter(part => part.rows.length > 0)
@@ -73,10 +70,7 @@ export function TicketRows({ rows, ...props }: RowsProps & { rows: readonly List
   )
 }
 
-/**
- * One ticket as a row: its tick, its priority, its title, then its topics, its stage and its age; on a
- * phone, the title takes two lines and the stage is said under it. Under the pointer its next step, now or queued, takes the facts' place.
- */
+/** One ticket as a row; under the pointer its next step takes its facts' place. */
 function TicketRow({ listed, priorities, showStage, busy, starting, isSelected, onToggleSelect, onOpen, onStart, onConfigure }: RowsProps & {
   listed: ListedTicket
   /** Whether some ticket of the list has a priority: the column is kept on every row, or on none. */
@@ -182,10 +176,7 @@ export function StageWord({ ticket }: { ticket: WorkspaceTicket }) {
   return <span title={stage === 'in-review' && ticket.pr ? `In review: ${ticket.pr.label}` : undefined}>{STAGE_LABEL[stage]}</span>
 }
 
-/**
- * One project's tickets on the list: its rows, or why there are none. With `presses`, its own
- * presses lead (the cross-project list, where the page's head cannot hold one project's).
- */
+/** One project's tickets on the list: its rows, or why there are none. */
 export function TicketsPanel({
   projectId,
   rows,
@@ -236,10 +227,7 @@ export function useTicketsMeta(projectId: string | null): TicketsMeta {
   return useLoaded<TicketsMeta>(projectId ? async () => readMeta(await host.runCommand(projectId, ['meta', '--local'])) : null, NO_META, [projectId])
 }
 
-/**
- * A project's own presses, at the right of a head: when its tickets last caught up with the tracker
- * and the press that has an agent bring them up to date, then one written by hand.
- */
+/** A project's presses at a head's right: when its tickets were last updated, the update, and a new ticket. */
 export function ProjectTicketsPresses({ projectId, primary = true }: { projectId: string; /** New ticket is the head's primary. */ primary?: boolean }) {
   const host = useModuleHost()
   const meta = useTicketsMeta(projectId)
