@@ -534,7 +534,11 @@ describe('StartAgentForm (#1774)', () => {
     await waitFor(() => expect(screen.getAllByRole('alert')).toHaveLength(2))
     expect(onStartCheck).toHaveBeenCalledWith('p1', 'codex')
     const [problem, warning] = screen.getAllByRole('alert')
-    expect(problem!.textContent).toBe('`codex` is not logged in. Run `codex login`, then start again.')
+    // What the line puts in backticks is code, as the chat draws it, not the backticks themselves.
+    expect(problem!.textContent).toBe('codex is not logged in. Run codex login, then start again.')
+    expect(within(problem!).getByText('codex login').tagName).toBe('CODE')
+    expect(warning!.textContent).toBe('gh is not logged in.')
+    expect(within(warning!).getByText('gh').tagName).toBe('CODE')
     expect(problem!.querySelector('svg')!.getAttribute('class')).toContain('text-danger')
     expect(warning!.querySelector('svg')!.getAttribute('class')).toContain('text-warning')
     expect((screen.getByText('submit-typed') as HTMLButtonElement).disabled).toBe(false)
