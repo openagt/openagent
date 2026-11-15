@@ -22,6 +22,7 @@ const WORDED = new RegExp(`[sS]tatus\\s*===\\s*'(${STATES})'\\s*\\?\\s*'(?!(${ST
 const ALLOWED: Record<string, string> = {
   'dashboard/dashboard/lib/run-words.ts': 'the one table',
   'dashboard/dashboard/components/ServerLogins.tsx': "a login's states, not a run's",
+  'dashboard/dashboard/components/ui/state.tsx': "where any piece of work stands (a queue entry, a ticket, a run), drawn as the look's cell: a run's state is mapped to one, its word and colour stay in the table",
 }
 
 function said(pattern: RegExp): Record<string, string[]> {

@@ -17,7 +17,7 @@ interface RunState {
 const RING = 'border border-muted-foreground/60'
 
 const RUN_STATES: Record<string, RunState> = {
-  running: { word: 'working', said: 'working', mark: 'bg-primary', tone: 'text-primary' },
+  running: { word: 'working', said: 'working', mark: 'bg-info', tone: 'text-info' },
   waiting: { word: 'waiting', said: 'waits on your answer', mark: 'bg-warning', tone: 'text-muted-foreground' },
   saving: { word: 'saving…', said: 'saving', mark: 'bg-success', tone: 'text-muted-foreground' },
   done: { word: 'done', said: 'done', mark: RING, tone: 'text-success' },
