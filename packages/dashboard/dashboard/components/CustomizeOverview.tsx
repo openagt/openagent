@@ -263,7 +263,9 @@ export function EditOverview({ arranged, layouts, layoutKey }: { arranged: Place
             onDrop={drop}
             onDragEnd={endDrag}
             // The card being moved stays where it was, faded, until it is dropped where the bar shows.
-            className={cn('relative flex min-w-0 cursor-grab flex-col rounded-lg outline-1 outline-offset-2 outline-border outline-dashed', FLEX[width], dragging?.id === card.id && 'opacity-40')}
+            // Room above the card for its bar, inside the dashed outline: laid over the card, the bar
+            // hid the title of a quarter-width tile, so the cards being arranged could not be told apart.
+            className={cn('relative flex min-w-0 cursor-grab flex-col rounded-lg pt-9 outline-1 outline-offset-2 outline-border outline-dashed', FLEX[width], dragging?.id === card.id && 'opacity-40')}
             style={{ viewTransitionName: transitionName(card.id) }}
           >
             {/* Where the dragged card lands: a bar in the gap at this card's edge, laid over the page. */}
@@ -289,10 +291,10 @@ export function EditOverview({ arranged, layouts, layoutKey }: { arranged: Place
   )
 }
 
-/** The bar on a card's top edge while the page is arranged: its handle, its widths, and ✕. */
+/** The bar above a card while the page is arranged, in the room left for it: its handle, its widths, and ✕. */
 function CardBar({ label, widths, width, first, last, onStep, onWidth, onHide }: { label: string; widths: CardWidth[]; width: CardWidth; first: boolean; last: boolean; onStep: (by: -1 | 1) => void; onWidth: (width: CardWidth) => void; onHide: () => void }) {
   return (
-    <div role="toolbar" aria-label={label} className="absolute top-2 right-2 z-10 flex items-center gap-1 rounded-md border border-border bg-popover p-0.5 text-popover-foreground shadow-sm">
+    <div role="toolbar" aria-label={label} className="absolute top-0 right-0 z-10 flex items-center gap-1 rounded-md border border-border bg-popover p-0.5 text-popover-foreground shadow-sm">
       <button
         type="button"
         aria-label={`Move ${label}: arrow keys`}
@@ -323,7 +325,7 @@ function CardBar({ label, widths, width, first, last, onStep, onWidth, onHide }:
               type="button"
               aria-pressed={option === width}
               onClick={() => onWidth(option)}
-              className={cn('min-w-7 px-1.5 py-0.5 tabular-nums transition-colors', option === width ? 'bg-accent text-accent-foreground' : 'text-muted-foreground hover:text-foreground')}
+              className={cn('min-w-6 px-1 py-0.5 tabular-nums transition-colors', option === width ? 'bg-accent text-accent-foreground' : 'text-muted-foreground hover:text-foreground')}
             >
               {WIDTH_WORDS[option]}
             </button>
