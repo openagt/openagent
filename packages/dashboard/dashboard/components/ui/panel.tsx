@@ -83,8 +83,12 @@ const coverClass = 'outline-none after:absolute after:inset-0'
  * (44 with one, 64 with two); `state` takes 16 on the title's line and the title starts 12 after it;
  * a fact stands on the title's line and the presses are centred on the row, both ending on the inset.
  * A press with no painted box is pulled out by its own padding by its caller, so its glyph ends there.
+ * Before the fact, `columns`: facts a list lines up down its rows (who ran it, its pull request), on
+ * the title's line too, which stay under the pointer: only the fact gives its room to the presses.
+ * `actionsAtRest`: the presses show with no pointer on the row too, where the press is what a person
+ * comes to the row for (Answer, Review).
  */
-export function PanelRow({ state, title, titleHint, meta = [], metaLines = 1, fact, actions, href, external = false, onClick, className }: {
+export function PanelRow({ state, title, titleHint, meta = [], metaLines = 1, columns, fact, actions, actionsAtRest = false, href, external = false, onClick, className }: {
   state?: ReactNode
   title: ReactNode
   /** Said under the pointer over the name: the whole text where the name stands in for it. */
@@ -92,8 +96,10 @@ export function PanelRow({ state, title, titleHint, meta = [], metaLines = 1, fa
   meta?: ReactNode[]
   /** How many lines what is known of it may take before it is cut: 2 for a sentence a person must read whole (a question). */
   metaLines?: 1 | 2
+  columns?: ReactNode
   fact?: ReactNode
   actions?: ReactNode
+  actionsAtRest?: boolean
   href?: string | undefined
   external?: boolean
   onClick?: (() => void) | undefined
@@ -144,6 +150,7 @@ export function PanelRow({ state, title, titleHint, meta = [], metaLines = 1, fa
           </span>
         )}
       </span>
+      {columns !== undefined && <span className="flex h-5 shrink-0 items-center gap-4 text-xs text-faint-foreground">{columns}</span>}
       {/* The fact and the presses share one cell at the right: the presses come in over the fact, and stay
           reachable by Tab while unseen. The cell spans the row's whole height (its margins undo the row's
           padding), so a press is centred on the row and makes it no taller; the fact stands on the title's line. */}
@@ -153,7 +160,7 @@ export function PanelRow({ state, title, titleHint, meta = [], metaLines = 1, fa
             <span className={cn('col-start-1 row-start-1 mt-3 self-start text-xs leading-5 text-faint-foreground', actions !== undefined && 'not-pointer-fine:invisible max-md:invisible pointer-fine:group-hover/row:invisible pointer-fine:group-focus-within/row:invisible pointer-fine:group-has-[[aria-expanded=true]]/row:invisible')}>{fact}</span>
           )}
           {actions !== undefined && (
-            <span className="relative col-start-1 row-start-1 flex items-center gap-1 self-center md:pointer-fine:opacity-0 md:pointer-fine:group-hover/row:opacity-100 md:pointer-fine:group-focus-within/row:opacity-100 md:pointer-fine:group-has-[[aria-expanded=true]]/row:opacity-100">
+            <span className={cn('relative col-start-1 row-start-1 flex items-center gap-1 self-center', !actionsAtRest && 'md:pointer-fine:opacity-0 md:pointer-fine:group-hover/row:opacity-100 md:pointer-fine:group-focus-within/row:opacity-100 md:pointer-fine:group-has-[[aria-expanded=true]]/row:opacity-100')}>
               {actions}
             </span>
           )}

@@ -583,6 +583,35 @@ function Panels() {
         <PanelRow state={<StateCell state="working" />} title="Login page" meta={[<span className="font-medium text-info">Claude is on it · 4m</span>, 'from a ticket']} fact="Open run" />
         <PanelRow state={<StateCell state="queued" />} title="A press: the whole row opens it, its presses come in under the pointer" meta={['Next up', 'typed here']} fact="2nd" actions={start} onClick={() => {}} />
         <PanelRow state={<StateCell state="queued" />} title={LONG_TITLE} meta={['from a ticket', LONG_TITLE]} fact="3rd" actions={start} href="#long" onClick={() => {}} />
+        <PanelRow
+          state={<StateCell state="done" />}
+          title="Columns that stay under the pointer, the fact giving way"
+          meta={['Done in 11m']}
+          columns={
+            <>
+              <span className="w-24">Claude · Opus</span>
+              <span className="w-12 text-right">#48</span>
+            </>
+          }
+          fact="3:03 PM"
+          actions={
+            <Button variant="secondary" size="sm">
+              Review
+            </Button>
+          }
+          onClick={() => {}}
+        />
+      </PanelGroup>
+      <PanelGroup title="Needs you: the press at rest">
+        <PanelRow
+          state={<StateCell state="waiting" />}
+          title="A row whose press is what the person comes for"
+          meta={['Needs answer', 'Where should the cart go?']}
+          columns={<span>2m</span>}
+          actions={<Button size="sm">Answer</Button>}
+          actionsAtRest
+          onClick={() => {}}
+        />
       </PanelGroup>
       <PanelGroup title="Nothing pressable" count="1">
         <PanelRow state={<StateCell state="done" />} title="Its name only" meta={['what is known of it']} fact="2h" />
