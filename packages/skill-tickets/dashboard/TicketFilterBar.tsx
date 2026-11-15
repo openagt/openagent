@@ -63,7 +63,7 @@ function OptionRow({
 }) {
   return (
     // The whole row is the target: 32 high, 44 on a phone, as a menu's items are.
-    <label className="flex min-h-8 cursor-pointer items-center gap-2 rounded-md px-2 text-sm select-none transition-colors hover:bg-accent max-md:min-h-11">
+    <label className="flex min-h-8 cursor-pointer items-center gap-2 rounded-md px-2 text-sm select-none transition-colors pointer-fine:hover:bg-accent max-md:min-h-11">
       <Checkbox checked={checked} onCheckedChange={next => onChange(next === true)} aria-label={label} />
       <span className={cn('min-w-0 flex-1 truncate', tone)}>{label}</span>
       <span className="shrink-0 text-xs tabular-nums text-muted-foreground">{count}</span>
