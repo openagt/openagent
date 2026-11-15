@@ -628,8 +628,8 @@ function Empties() {
   return (
     <div className="grid gap-4 sm:grid-cols-2">
       <Card>
-        <Empty title="Nothing queued" action={<Button variant="secondary">Queue from tickets</Button>}>
-          Add what an agent should do next. It waits here, in priority order, until you start it.
+        <Empty title="No runs yet" action={<Button variant="secondary">New agent session</Button>}>
+          A run shows here from the moment an agent starts.
         </Empty>
       </Card>
     </div>
@@ -804,7 +804,7 @@ export const PREVIEWS: Preview[] = [
     path: 'components/empty.html',
     group: 'Components',
     name: 'Empty',
-    subtitle: 'Nothing here yet: the empty hexagon, what fills it, the press that does',
+    subtitle: 'Nothing here yet: what is missing, what fills it, the press that does',
     width: 900,
     node: <Empties />,
   },
