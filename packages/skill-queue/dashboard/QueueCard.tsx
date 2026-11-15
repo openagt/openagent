@@ -50,7 +50,7 @@ export function QueueCard({ projects }: ModuleCardProps) {
                       <>
                         {/* The project's batch act, said as one: how many agents, then "Start N agents", which starts them from the top. */}
                         <div className="ml-auto">
-                          <BatchCount count={count} max={free.length} onChange={next => starts.setCount(project.id, next)} />
+                          <BatchCount count={count} max={free.length} onChange={next => starts.setCount(project.id, next)} className="h-7" />
                         </div>
                         {/* The chevron sends the top entry alone: a launcher can only ever start one agent. */}
                         <StartAgentButton
