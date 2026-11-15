@@ -249,7 +249,8 @@ describe('module pages in the shell (#1774)', () => {
         window.history.replaceState(null, '', path)
         render(<App />)
         const bar = (await screen.findByRole('button', { name: 'Open the menu' })).parentElement!
-        await waitFor(() => expect(bar.textContent).toBe(name))
+        // The name alone: the page's count stands beside it in the bar once the page has read it.
+        await waitFor(() => expect(bar.querySelector('span')!.textContent).toBe(name))
         cleanup()
       }
     } finally {
