@@ -1,7 +1,7 @@
 import { strict as assert } from 'node:assert'
 import { test } from 'node:test'
 import { execFileSync } from 'node:child_process'
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import type { ProvidedCommand } from '@openagt/agent-data'
@@ -254,6 +254,38 @@ test('a fix the dashboard started ends as it stops, with what the fix started: a
     for (let tries = 0; alive() && tries < 40; tries++) await new Promise(resolve => setTimeout(resolve, 50))
     assert.equal(alive(), false, 'the sleep the fix started is gone')
   } finally {
+    rmSync(dir, { recursive: true, force: true })
+  }
+})
+
+test('an install whose download fails fails, with what the download said, though the shell it is piped to read nothing, and on an sh without pipefail', async () => {
+  const download = `sh -c 'echo "curl: (6) Could not resolve host: chatgpt.com" >&2; exit 6' | sh`
+  await assert.rejects(realFix(download, new AbortController().signal, () => {}), { message: 'curl: (6) Could not resolve host: chatgpt.com' })
+  // An `sh` without `pipefail`, as Debian 12's and Ubuntu 22.04's are: bash with its `set` turned off, first on the PATH.
+  const dir = mkdtempSync(join(tmpdir(), 'oa-fix-'))
+  const path = process.env.PATH
+  try {
+    writeFileSync(join(dir, 'no-set'), 'unset BASH_ENV\nenable -n set\n')
+    writeFileSync(join(dir, 'sh'), `#!/bin/bash\nBASH_ENV=${join(dir, 'no-set')} exec "$BASH" "$@"\n`, { mode: 0o755 })
+    process.env.PATH = `${dir}:${path}`
+    assert.equal(execFileSync('sh', ['-c', 'command set -o pipefail 2>/dev/null || echo none'], { encoding: 'utf8' }), 'none\n')
+    await assert.rejects(realFix(download, new AbortController().signal, () => {}), { message: 'curl: (6) Could not resolve host: chatgpt.com' })
+  } finally {
+    process.env.PATH = path
+    rmSync(dir, { recursive: true, force: true })
+  }
+})
+
+test('a fix needs no bash: on a computer with only sh, a log-in runs there', async () => {
+  const dir = mkdtempSync(join(tmpdir(), 'oa-fix-'))
+  const path = process.env.PATH
+  try {
+    symlinkSync('/bin/sh', join(dir, 'sh'))
+    writeFileSync(join(dir, 'codex'), '#!/bin/sh\necho logged-in\n', { mode: 0o755 })
+    process.env.PATH = dir
+    await realFix('codex login', new AbortController().signal, () => {})
+  } finally {
+    process.env.PATH = path
     rmSync(dir, { recursive: true, force: true })
   }
 })

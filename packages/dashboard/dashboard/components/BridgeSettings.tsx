@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
-import { onBridgeStatus, onBridgeToken } from '../rpc/reads.js'
+import { onBridgeExtensionFolder, onBridgeStatus, onBridgeToken } from '../rpc/reads.js'
 import { INSTALLED_RESTARTS } from '../lib/use-daemon-health.js'
+import { useLoaded } from '../lib/use-async.js'
 import { Button } from './ui/button.js'
 import { CopyButton } from './ui/copy-button.js'
 
@@ -22,6 +23,7 @@ export function BridgeSettings() {
   const [shown, setShown] = useState(false)
   const [blocked, setBlocked] = useState<{ got: string; expected: string } | null>(null)
   const [refused, setRefused] = useState(false)
+  const folder = useLoaded(onBridgeExtensionFolder, null, [])
 
   // The version gate's visible half (#1519): a refused extension would otherwise look merely
   // disconnected, and "the bridge stopped working" after a pull is exactly this. Polled, because
@@ -66,6 +68,15 @@ export function BridgeSettings() {
         The extension reports the question a Claude web session is parked on, so it shows up here instead of only on
         claude.ai.
       </p>
+      {folder !== null && (
+        <div className="space-y-1">
+          <p className="text-muted-foreground">To install it: at chrome://extensions, turn on Developer mode, press Load unpacked and pick this folder.</p>
+          <div className="flex items-center gap-2">
+            <code className="min-w-0 flex-1 break-all rounded-md bg-muted px-2 py-1 font-mono">{folder}</code>
+            <CopyButton text={folder} label="Copy the folder" />
+          </div>
+        </div>
+      )}
       {blocked && (
         <p className="text-danger">
           The extension is blocked: it is v{blocked.got} and this dashboard expects v{blocked.expected}. Update it —

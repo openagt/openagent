@@ -18,6 +18,8 @@ export interface PersonActivity {
   runs: number
   /** Of those, how many are going now. */
   running: number
+  /** Of those, how many wait on an answer to go on. */
+  waiting: number
   /** What those runs cost, in US dollars. */
   cost: number
   /** Commits of theirs on the main branch in those days. */
@@ -62,15 +64,16 @@ function toCents(usd: number): number {
 
 /**
  * Each person who started runs under `dir` or made commits among `commits`, the busiest first:
- * their runs and commits since `since`, when they last did either, and their name from the commits.
+ * their runs and commits since `since`, when they last did either, and their name from the commits;
+ * the person at this computer, `me` by git's email, by git's name when no commit gives one.
  */
-export async function peopleOf(reader: RecordsReader, dir: string, since: number, me: string | undefined, commits: CommitLine[] = []): Promise<PersonActivity[]> {
+export async function peopleOf(reader: RecordsReader, dir: string, since: number, me: { email: string; name?: string } | undefined, commits: CommitLine[] = []): Promise<PersonActivity[]> {
   const byEmail = new Map<string, PersonActivity>()
-  const isMe = (email: string): boolean => me !== undefined && email.toLowerCase() === me.toLowerCase()
+  const isMe = (email: string): boolean => me !== undefined && email.toLowerCase() === me.email.toLowerCase()
   const entry = (email: string, at: number): PersonActivity => {
     const key = email.toLowerCase()
     let person = byEmail.get(key)
-    if (!person) byEmail.set(key, (person = { person: email, runs: 0, running: 0, cost: 0, commits: 0, lastAt: new Date(at).toISOString(), ...(isMe(email) ? { you: true as const } : {}) }))
+    if (!person) byEmail.set(key, (person = { person: email, runs: 0, running: 0, waiting: 0, cost: 0, commits: 0, lastAt: new Date(at).toISOString(), ...(isMe(email) ? { you: true as const } : {}) }))
     if (new Date(at).toISOString() > person.lastAt) person.lastAt = new Date(at).toISOString()
     return person
   }
@@ -84,6 +87,7 @@ export async function peopleOf(reader: RecordsReader, dir: string, since: number
       if (!card) continue
       person.runs++
       if (card.status === 'running') person.running++
+      if (card.status === 'waiting') person.waiting++
       person.cost += card.cost ?? 0
     }
     person.cost = toCents(person.cost)
@@ -99,6 +103,10 @@ export async function peopleOf(reader: RecordsReader, dir: string, since: number
       person.commits++
       if (new Date(commit.at).toISOString() > person.lastAt) person.lastAt = new Date(commit.at).toISOString()
     }
+  }
+  if (me?.name !== undefined) {
+    const you = byEmail.get(me.email.toLowerCase())
+    if (you) you.name ??= me.name
   }
   return [...byEmail.values()].sort(busiestFirst)
 }
@@ -118,14 +126,15 @@ export interface RunAsListed {
  * person with runs since `since` that no record has yet is added.
  */
 export function peopleWithRuns(people: readonly PersonActivity[], runs: readonly RunAsListed[], since: number): PersonActivity[] {
-  const byEmail = new Map(people.map(person => [person.person.toLowerCase(), { ...person, runs: 0, running: 0, cost: 0 }]))
+  const byEmail = new Map(people.map(person => [person.person.toLowerCase(), { ...person, runs: 0, running: 0, waiting: 0, cost: 0 }]))
   for (const run of runs) {
     if (run.person === undefined || !(Date.parse(run.startedAt) >= since)) continue
     const key = run.person.toLowerCase()
     let person = byEmail.get(key)
-    if (!person) byEmail.set(key, (person = { person: run.person, runs: 0, running: 0, cost: 0, commits: 0, lastAt: run.startedAt }))
+    if (!person) byEmail.set(key, (person = { person: run.person, runs: 0, running: 0, waiting: 0, cost: 0, commits: 0, lastAt: run.startedAt }))
     person.runs++
     if (run.status === 'running') person.running++
+    if (run.status === 'waiting') person.waiting++
     person.cost += run.cost ?? 0
     if (run.startedAt > person.lastAt) person.lastAt = run.startedAt
   }
@@ -159,6 +168,7 @@ export function membersOf(reads: { project: string; people: PersonActivity[] }[]
       known.commits += activity.commits
       if (known.name === undefined && activity.name !== undefined) known.name = activity.name
       known.running += activity.running
+      known.waiting += activity.waiting
       known.cost = toCents(known.cost + activity.cost)
       if (activity.lastAt > known.lastAt) known.lastAt = activity.lastAt
       if (activity.you) known.you = true

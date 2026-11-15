@@ -1,4 +1,4 @@
-import { useId, useRef, useState } from 'react'
+import { useEffect, useId, useRef, useState } from 'react'
 import { FastForward, Play, Plus, Trash2 } from 'lucide-react'
 import {
   Button,
@@ -102,7 +102,10 @@ export function QueuePage({ projects }: ModulePageProps) {
     { remember: `skill-queue:page:${key}`, stored: true },
   )
   const schedule = useSchedule(projects)
-  const names = useFileNames(reads.map(read => ({ projectId: read.project.id, paths: (read.entries ?? []).flatMap(placed => pathsIn(placed.entry)) })))
+  const names = useFileNames(
+    reads.map(read => ({ projectId: read.project.id, paths: (read.entries ?? []).flatMap(placed => pathsIn(placed.entry)) })),
+    `skill-queue:page-names:${key}`,
+  )
   const starts = useQueueStarts(host)
 
   const total = reads.reduce((sum, read) => sum + (read.entries?.length ?? 0), 0)
@@ -114,7 +117,7 @@ export function QueuePage({ projects }: ModulePageProps) {
       title="Queue"
       count={state !== 'unknown' && total > 0 ? total : undefined}
       description={`What agents will work on next, from the top${projects.length > 1 ? ', one list per project' : ''}. A higher priority is taken first: 10 is the most urgent, 0 is only if there is capacity.`}
-      actions={only && <BatchStart read={only} primary starts={starts} />}
+      actions={only && <BatchStart read={only} primary names={names} starts={starts} />}
     >
       {starts.error && (
         <p role="alert" className="mb-4 text-sm text-danger">
@@ -127,7 +130,7 @@ export function QueuePage({ projects }: ModulePageProps) {
             only ? (
               <ProjectQueue key={read.project.id} read={read} schedule={schedule} names={names} starts={starts} reload={reload} />
             ) : (
-              <Section key={read.project.id} title={read.project.name} count={read.entries?.length || undefined} action={<BatchStart read={read} primary={false} starts={starts} />}>
+              <Section key={read.project.id} title={read.project.name} count={read.entries?.length || undefined} action={<BatchStart read={read} primary={false} names={names} starts={starts} />}>
                 <ProjectQueue read={read} schedule={schedule} names={names} starts={starts} reload={reload} />
               </Section>
             ),
@@ -142,11 +145,11 @@ export function QueuePage({ projects }: ModulePageProps) {
  * A project's batch act, as one control: how many, then the press the count qualifies. The chevron
  * sends the top entry alone: a launcher can only ever start one agent.
  */
-function BatchStart({ read, primary, starts }: { read: ProjectRead; primary: boolean; starts: QueueStarts }) {
+function BatchStart({ read, primary, names, starts }: { read: ProjectRead; primary: boolean; names: FileNames; starts: QueueStarts }) {
   const host = useModuleHost()
   const { project } = read
-  // An entry an agent is on gets no second one: the batch starts from the top of the others.
-  const free = unclaimedEntries((read.entries ?? []).map(placed => placed.entry), read.working)
+  // An entry an agent is on gets no second one, and one that is done already none at all: the batch starts from the top of the others.
+  const free = unclaimedEntries((read.entries ?? []).map(placed => placed.entry), read.working).filter(entry => !entryView(project.id, entry, names).done)
   if (free.length === 0) return null
   const count = starts.batchOf(project.id, free)
   return (
@@ -171,6 +174,14 @@ function BatchStart({ read, primary, starts }: { read: ProjectRead; primary: boo
 /** One project's queue: its entries by priority, the field that adds one, and who takes from it; an empty one says so in one line, over the field. */
 function ProjectQueue({ read, schedule, names, starts, reload }: { read: ProjectRead; schedule: Schedule; names: FileNames; starts: QueueStarts; reload: () => Promise<void> }) {
   const { project, entries, error, working } = read
+  const queue = useRef<HTMLDivElement>(null)
+  // A removed row takes the focus with it: it goes to the entry now in its place, else the one before it, else the field that adds one.
+  const [removed, setRemoved] = useState<{ place: number }>()
+  useEffect(() => {
+    if (!removed || !queue.current) return
+    const bins = queue.current.querySelectorAll<HTMLElement>('[data-remove-entry]')
+    ;(bins[removed.place - 1] ?? bins[bins.length - 1] ?? queue.current.querySelector<HTMLElement>('input[name="task"]'))?.focus()
+  }, [removed])
   if (error !== undefined)
     return (
       <p role="alert" className="text-sm text-danger">
@@ -178,7 +189,7 @@ function ProjectQueue({ read, schedule, names, starts, reload }: { read: Project
       </p>
     )
   return (
-    <div className="space-y-6">
+    <div ref={queue} className="space-y-6">
       {entries!.length === 0 ? (
         <p className="text-sm text-muted-foreground">Nothing queued.</p>
       ) : (
@@ -186,7 +197,16 @@ function ProjectQueue({ read, schedule, names, starts, reload }: { read: Project
           <Section key={index} title={<PriorityTitle priority={section.priority} />} count={section.entries.length === 1 ? '1 entry' : `${section.entries.length} entries`}>
             <List>
               {section.entries.map(placed => (
-                <EntryRow key={`${placed.place}\n${placed.entry}`} project={project} placed={placed} agent={working.find(agent => isWorkingOn(agent.ask, placed.entry))} names={names} starts={starts} reload={reload} />
+                <EntryRow
+                  key={`${placed.place}\n${placed.entry}`}
+                  project={project}
+                  placed={placed}
+                  agent={working.find(agent => isWorkingOn(agent.ask, placed.entry))}
+                  names={names}
+                  starts={starts}
+                  reload={reload}
+                  onRemoved={() => setRemoved({ place: placed.place })}
+                />
               ))}
             </List>
           </Section>
@@ -253,7 +273,23 @@ function TakerLine({ schedule, projectId }: { schedule: Schedule; projectId: str
 }
 
 /** One entry: its place, what it reads as, the agent on it when one is, its start button, and its removal. */
-function EntryRow({ project, placed, agent, names, starts, reload }: { project: ModuleProject; placed: Numbered; agent: ModuleAgent | undefined; names: FileNames; starts: QueueStarts; reload: () => Promise<void> }) {
+function EntryRow({
+  project,
+  placed,
+  agent,
+  names,
+  starts,
+  reload,
+  onRemoved,
+}: {
+  project: ModuleProject
+  placed: Numbered
+  agent: ModuleAgent | undefined
+  names: FileNames
+  starts: QueueStarts
+  reload: () => Promise<void>
+  onRemoved: () => void
+}) {
   const host = useModuleHost()
   const { entry, place } = placed
   const view = entryView(project.id, entry, names)
@@ -261,6 +297,7 @@ function EntryRow({ project, placed, agent, names, starts, reload }: { project: 
     const answer = await host.act(project.id, doneArgs(entry))
     if (!answer.ok) throw new Error(answer.error)
     await reload()
+    onRemoved()
   }
   return (
     <Row
@@ -272,7 +309,7 @@ function EntryRow({ project, placed, agent, names, starts, reload }: { project: 
       meta={agent && <AgentOnEntry projectId={project.id} agent={agent} />}
       actions={
         <>
-          {!agent && (
+          {!agent && !view.done && (
             <StartAgentButton
               variant="ghost"
               size="icon-sm"
@@ -291,14 +328,16 @@ function EntryRow({ project, placed, agent, names, starts, reload }: { project: 
           )}
           <ConfirmDialog
             trigger={
-              <Button variant="ghost" size="icon-sm" aria-label={`Remove entry ${place} from the queue`} title="Remove from the queue" className="text-muted-foreground hover:text-danger">
+              <Button data-remove-entry variant="ghost" size="icon-sm" aria-label={`Remove entry ${place} from the queue`} title="Remove from the queue" className="text-muted-foreground hover:text-danger">
                 <Trash2 className="size-4" aria-hidden />
               </Button>
             }
             title="Remove this entry from the queue?"
             body={
               <>
-                <span className="block break-words font-mono text-xs">{entry}</span>
+                {/* Named as the row names it; the line as written under a name that stands in for it, as on the row. */}
+                <span className="block break-words">{view.title}</span>
+                {view.renamed && <span className="block break-words font-mono text-xs">{entry}</span>}
                 <span className="mt-2 block">It is deleted from the queue of {project.name}, for everyone who shares it. Nothing else changes: no ticket is closed, and an agent already working on it goes on.</span>
               </>
             }

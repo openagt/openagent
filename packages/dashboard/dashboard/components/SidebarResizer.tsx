@@ -17,6 +17,7 @@ export function SidebarResizer() {
       aria-orientation="vertical"
       aria-label="The width of the sidebar"
       aria-valuenow={width}
+      aria-valuetext={`${width} pixels`}
       aria-valuemin={SIDEBAR_MIN}
       aria-valuemax={SIDEBAR_MAX}
       tabIndex={0}

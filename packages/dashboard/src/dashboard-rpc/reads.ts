@@ -3,7 +3,7 @@ import { stat } from 'node:fs/promises'
 import { originDefaultBranch } from '@openagt/agent-data'
 import { moduleAgents, type ModuleAgent, type ModuleAgentsWanted } from '../dashboard/module-agents.js'
 import { join } from 'node:path'
-import type { BridgeBrowserStatus } from '../bridge-browser.js'
+import { bridgeExtensionSource, type BridgeBrowserStatus } from '../bridge-browser.js'
 import { findAgent, findCheckout, readLiveMetas, readDoing, loadAgentEvents, type AgentDoing, startedAtFromAgentId, type AgentMeta, isRunId, projectBranches } from '../store/index.js'
 import { listProjectWorktrees } from '../worktrees.js'
 import { projectGitHost, type GitHostHome } from '../store/git-host.js'
@@ -490,6 +490,11 @@ export async function onBridgeToken(): Promise<string | null> {
   const preferences = await readPreferences()
   if (preferences.bridge !== true) return null
   return (await readBridgeToken()) ?? null
+}
+
+/** The folder a person loads the bridge extension from into their own Chrome: the checkout's, or the copy this package carries; null with neither. */
+export async function onBridgeExtensionFolder(): Promise<string | null> {
+  return bridgeExtensionSource()?.dir ?? null
 }
 
 /**

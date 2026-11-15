@@ -476,7 +476,7 @@ export function Invite({
                 </>
               ) : (
                 <>
-                  On their computer: <span className="font-medium">Settings › Devices › Add device › I have a code</span>. {label} is then in their own OpenAgent, as yours, shared with them. On a phone with no computer:{' '}
+                  On their computer: <span className="font-medium">Settings › Devices</span>, then <span className="font-medium">Join with a code</span> (or <span className="font-medium">Add device › Join with a code</span>). {label} is then in their own OpenAgent, as yours, shared with them. On a phone with no computer:{' '}
                   <LinkPress onClick={() => setQr(true)}>show a QR code</LinkPress>{' '}
                   instead.
                 </>

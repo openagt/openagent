@@ -137,11 +137,6 @@ function promptFirst(events: OpenAgentEvent[]): OpenAgentEvent[] {
   return [events[at]!, ...events.slice(0, at), ...events.slice(at + 1)]
 }
 
-/** HH:MM:SS in the reader's locale, for the column that says when each line was written. */
-function formatTime(at: string): string {
-  return new Date(at).toLocaleTimeString()
-}
-
 /**
  * A question the person did not answer in its card but wrote a message instead of: one grey line,
  * as Claude Code on the web folds it, `Asked "Background"  Replied in chat`, opening to the question.
@@ -436,24 +431,27 @@ function Prompt({ text, at, waiting, attached, fresh = false }: { text: string; 
               </button>
             )}
           </div>
-          {waiting.later || !waiting.onSendNow ? (
+          {waiting.later ? (
             <span className="pr-1 text-xs leading-6">Queued</span>
           ) : (
             <>
               <span className="pl-1 text-xs leading-6">Read at the agent's next step</span>
-              <button
-                type="button"
-                onClick={waiting.onSendNow}
-                disabled={down}
-                title="The agent reads it now; what it runs goes on in the background"
-                className="rounded-md px-1.5 text-xs leading-6 hover:bg-accent hover:text-accent-foreground disabled:opacity-50"
-              >
-                Send now
-              </button>
+              {waiting.onSendNow && (
+                <button
+                  type="button"
+                  onClick={waiting.onSendNow}
+                  disabled={down || waiting.sendingNow}
+                  title="The agent reads the messages waiting now; what it runs goes on in the background"
+                  className="rounded-md px-1.5 text-xs leading-6 hover:bg-accent hover:text-accent-foreground disabled:opacity-50"
+                >
+                  {waiting.sendingNow ? 'Sending…' : 'Send now'}
+                </button>
+              )}
             </>
           )}
         </div>
       )}
+      {waiting?.refused && <p role="alert" className="text-xs text-danger">{waiting.refused}</p>}
     </div>
   )
 }
@@ -462,8 +460,12 @@ function Prompt({ text, at, waiting, attached, fresh = false }: { text: string; 
 export interface Waiting {
   /** Sent for after the turn (⌘Enter): "Queued", no Send now. */
   later: boolean
-  /** Send now: the agent reads it at once. */
+  /** Send now: the agent reads it, and every message waiting with it, at once. */
   onSendNow?: (() => void) | undefined
+  /** Send now is on its way. */
+  sendingNow?: boolean | undefined
+  /** Why the run refused the last Send now. */
+  refused?: string | undefined
   /** Cancel and edit: it goes back into the box. */
   onEdit?: (() => void) | undefined
 }
@@ -687,6 +689,7 @@ export function EventList({
   events: given,
   writing = '',
   sending,
+  sendingAt,
   working = false,
   queued = NONE_QUEUED,
   waitingOn = 0,
@@ -712,6 +715,8 @@ export function EventList({
   /** A message just sent to an ended agent: the last prompt row, until the prompt's own line
    *  arrives and takes the same row. Being a prompt, the scroller brings it into view. */
   sending?: string | undefined
+  /** When that message was sent, where this page did not see it go (a reload): its live line counts from then. */
+  sendingAt?: string | undefined
   /** The agent is working: while it writes nothing, a moving line closes the feed: the call going
    *  on now, else "Starting…" when the last row is a prompt and "Working…" after, so a quiet agent
    *  never looks stalled. */
@@ -777,7 +782,7 @@ export function EventList({
   // The message just sent, as the prompt line its run is about to write: dated when it was sent, so
   // the live line comes and counts from then, as Claude Code on the web's does the moment a message
   // is sent, not seconds later when the run writes its first line.
-  const sentAt = useMemo(() => (sending !== undefined ? new Date().toISOString() : undefined), [sending])
+  const sentAt = useMemo(() => (sending !== undefined ? (sendingAt ?? new Date().toISOString()) : undefined), [sending, sendingAt])
   // Its row holds no time, as one being sent shows none.
   const sent: OpenAgentEvent | undefined = sending !== undefined ? { kind: 'driver', event: { type: 'start', prompt: sending } } : undefined
   const kept: OpenAgentEvent[] = sent === undefined || answeredInPlace ? logged : [...logged, sent]
@@ -1048,7 +1053,7 @@ export function EventList({
                   {!own && !end && message === null && chunkHead && at !== undefined && footer === undefined && !steps.has(e) && (
                     <Tooltip>
                       <TooltipTrigger render={<span className={TIME} />}>
-                        {formatTime(at)}
+                        {formatAge(at)}
                       </TooltipTrigger>
                       <TooltipContent>{new Date(at).toLocaleString()}</TooltipContent>
                     </Tooltip>

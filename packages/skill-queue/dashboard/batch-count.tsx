@@ -8,7 +8,7 @@ const STEP_CLASS = 'relative flex h-full w-6 items-center justify-center text-mu
 export function BatchCount({ count, max, onChange, className }: { count: number; max: number; onChange: (count: number) => void; className?: string }) {
   return (
     <Tooltip>
-      <TooltipTrigger render={<div role="group" aria-label="How many agents to start" className={cn('flex h-7 shrink-0 items-center rounded-md border border-border text-sm tabular-nums', className)} />}>
+      <TooltipTrigger render={<div className={cn('flex h-7 shrink-0 items-center rounded-md border border-border text-sm tabular-nums', className)} />}>
         <button type="button" aria-label="One agent fewer" disabled={count <= 1} onClick={() => onChange(count - 1)} className={STEP_CLASS}>
           <Minus className="h-3 w-3" aria-hidden />
         </button>
@@ -33,7 +33,7 @@ export function BatchCount({ count, max, onChange, className }: { count: number;
           <Plus className="h-3 w-3" aria-hidden />
         </button>
       </TooltipTrigger>
-      <TooltipContent>How many agents to start: one per entry, from the top of the queue.</TooltipContent>
+      <TooltipContent>How many agents to start: one per entry, from the top of the queue, so at most {max}.</TooltipContent>
     </Tooltip>
   )
 }

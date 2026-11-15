@@ -39,6 +39,10 @@ export interface LinkActionOffer {
   icon?: MountedLinkAction['icon']
   /** The module reads it done on every link of the targets already: a ticket already on the queue. */
   done: boolean
+  /** How many links of the targets the module does not read as done, what a click adds: 0 for targets read only on click. */
+  left: number
+  /** How many links of the targets are on the projects the module acts on, done or not. */
+  total: number
 }
 
 /**
@@ -83,12 +87,14 @@ export function useLinkActions(
     [readKey],
     { remember: `link-done:${readKey}` },
   )
-  const doneBefore = (action: MountedLinkAction): boolean => {
+  const offer = (action: MountedLinkAction): LinkActionOffer => {
     const mine = groups.filter(group => action.projects.includes(group.projectId))
-    return mine.length > 0 && mine.every(({ projectId, links }) => links.every(link => doneOn[`${keyOf(action)}\n${projectId}`]?.(link) ?? false))
+    const left = mine.reduce((sum, { projectId, links }) => sum + links.filter(link => !(doneOn[`${keyOf(action)}\n${projectId}`]?.(link) ?? false)).length, 0)
+    const total = mine.reduce((sum, { links }) => sum + links.length, 0)
+    return { key: keyOf(action), label: action.label, busyLabel: action.busyLabel, doneLabel: action.doneLabel, icon: action.icon, done: mine.length > 0 && left === 0, left, total }
   }
 
-  const actions = mounted.map(action => ({ key: keyOf(action), label: action.label, busyLabel: action.busyLabel, doneLabel: action.doneLabel, icon: action.icon, done: doneBefore(action) }))
+  const actions = mounted.map(offer)
   const run = async (key: string, targets: LinkTargets): Promise<LinkActionResult> => {
     const action = mounted.find(candidate => keyOf(candidate) === key)
     if (!action) return { ok: false, error: 'That action is no longer offered here.' }
@@ -129,8 +135,8 @@ export function LinkActions({
   targets: LinkTargets
   /** A done button rests until this changes: the identity of the set it acted on. Defaults to the projects. */
   resetKey?: string
-  /** The button's text for an action; the action's own label otherwise. */
-  label?: (action: LinkActionOffer) => string
+  /** The button's text for an action, done or not; the action's own label, or its done label, otherwise. */
+  label?: (action: LinkActionOffer, done: boolean) => string
   /** Shown on hover, the same for every action. */
   tooltip?: ReactNode
   disabled?: boolean
@@ -171,7 +177,7 @@ export function LinkActions({
         const busy = running === action.key
         const content = rested ? (
           <>
-            <Check className="h-3.5 w-3.5" aria-hidden /> <span className="max-md:min-w-0 max-md:truncate">{action.doneLabel ?? action.label}</span>
+            <Check className="h-3.5 w-3.5" aria-hidden /> <span className="max-md:min-w-0 max-md:truncate">{label ? label(action, true) : (action.doneLabel ?? action.label)}</span>
           </>
         ) : busy ? (
           <>
@@ -180,7 +186,7 @@ export function LinkActions({
         ) : (
           <>
             {Icon && <Icon className="h-3.5 w-3.5" aria-hidden />}
-            <span className="max-md:min-w-0 max-md:truncate">{label ? label(action) : action.label}</span>
+            <span className="max-md:min-w-0 max-md:truncate">{label ? label(action, false) : action.label}</span>
           </>
         )
         // Working or done, it keeps the focus it was pressed with: a disabled press would drop it to the page.

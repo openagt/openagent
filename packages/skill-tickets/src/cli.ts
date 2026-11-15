@@ -1,6 +1,6 @@
 import { join } from 'node:path'
 import { GIT_FAILED, Refused, commandReader, commandWrite, inRepo, nodeBranchFileFs, nodeGitRunner, parseCommandArgs, runCommandLine, helpRows, helpText, type BranchFileFs, type Command, type GitRunner } from '@openagt/agent-data'
-import { isTicketFile, META_FILE, nameInTickets, TICKETS_DIR, ticketLockName, ticketOfPlan, ticketPlanName, ticketStem } from './names.js'
+import { isTicketFile, META_FILE, nameInTickets, noTicketSaid, TICKETS_DIR, ticketLockName, ticketOfPlan, ticketPlanName, ticketStem } from './names.js'
 import { readTicket, readTickets, readTicketsMeta } from './tickets.js'
 import { applyClaims, applyRelease, claimHistory, claimMessage, lockOn, releaseMessage } from './locks.js'
 import { holderOf } from './holder.js'
@@ -167,7 +167,7 @@ async function identity(cwd: string, git: GitRunner): Promise<string> {
 }
 
 function noTicket(file: string): Refused {
-  return new Refused({ ok: false, reason: 'no-ticket', file }, `no ticket ${TICKETS_DIR}/${file}`)
+  return new Refused({ ok: false, reason: 'no-ticket', file }, noTicketSaid(file))
 }
 
 /** Whether `put` writes a file: a ticket, a ticket's plan, or the meta file — never a lock: claims go through `claim`. */

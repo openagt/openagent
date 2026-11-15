@@ -2,7 +2,7 @@ import { afterEach, describe, expect, test, vi } from 'vitest'
 import { createRef } from 'react'
 import { act, cleanup, fireEvent, render, waitFor } from '@testing-library/react'
 import type { Editor } from '@tiptap/core'
-import { PromptEditor, type PromptEditorHandle } from './PromptEditor.js'
+import { PromptEditor, type PromptDraft, type PromptEditorHandle } from './PromptEditor.js'
 
 // The real Tiptap editor (no mock): what's under test is the keyboard seam itself — which
 // Enter reaches the submit callback and which stays an editing key (#1510).
@@ -196,6 +196,22 @@ describe('words given back after the draft (append)', () => {
     expect(box.querySelectorAll('[data-token]').length).toBe(1)
     expect(onMentionRemoved).not.toHaveBeenCalled()
     expect(said(onChange)).toBe('look at #src/a.ts first\n\nthe words it never read')
+  })
+
+  test('a draft cleared and restored comes back after what was typed since, its chip a chip again', async () => {
+    const { box, editor, handle, onChange, onMentionRemoved } = await renderDraft()
+    act(() => void editor.commands.insertContent([{ type: 'text', text: 'look at ' }, { type: 'token', attrs: { kind: 'file', label: '#src/a.ts', text: '#src/a.ts' } }, { type: 'text', text: ' first' }]))
+    let draft!: PromptDraft
+    act(() => void (draft = handle.clear()))
+    // Emptied as at any deletion: the chip's Context goes with it.
+    expect(onMentionRemoved).toHaveBeenCalledWith('src/a.ts')
+    act(() => void editor.commands.insertContent('and then'))
+    act(() => handle.restore(draft))
+    expect(box.querySelectorAll('[data-token]').length).toBe(1)
+    expect(said(onChange)).toBe('and then\n\nlook at #src/a.ts first')
+    act(() => void editor.commands.clearContent(true))
+    act(() => handle.restore(draft))
+    expect(said(onChange)).toBe('look at #src/a.ts first')
   })
 
   test.each(['a < b & c > d', 'run `pnpm test` & see', '- one\n- two'])('they read as typed, as the same words loaded into the box read: %s', async words => {

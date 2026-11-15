@@ -1,4 +1,4 @@
-import { FilterChips, List, Page, PersonMark, Row, RowShapes, STATUS_DOT, Section, STATUS_RING, Slot, cn, formatDateTime, formatDuration, personSaid, runName, useGitHostPeople, useModuleHost, usePolled, type ModuleAgent, type ModuleHostPerson, type ModulePageProps, type ModuleProject, type ReadState } from '@openagt/dashboard/module'
+import { FilterChips, List, Page, PersonMark, Row, RowShapes, STATUS_DOT, Section, STATUS_RING, Slot, cn, formatDateTime, formatDuration, needsWord, personSaid, runName, useGitHostPeople, useModuleHost, usePolled, type ModuleAgent, type ModuleHostPerson, type ModulePageProps, type ModuleProject, type ReadState } from '@openagt/dashboard/module'
 import type { RunCard } from '../src/run.js'
 
 /** How many runs each project lists: the command's own default page is 20; the page shows more. */
@@ -14,6 +14,9 @@ export interface RunRow {
     offline?: string
     /** Whose run it is, by the email its record is kept under; a very old card has none. */
     person?: string
+    /** Its work that never left this machine, as the dashboard lists it: files left uncommitted, commits never pushed. */
+    uncommitted?: number
+    unpublished?: number
   }
 }
 
@@ -57,6 +60,8 @@ function cardOf(run: ModuleAgent): Omit<RunRow['card'], 'id' | 'startedAt'> {
     ...(run.cost !== undefined ? { cost: run.cost } : {}),
     ...(run.driver ? { driver: run.driver } : {}),
     ...(run.model ? { model: run.model } : {}),
+    ...(run.uncommitted ? { uncommitted: run.uncommitted } : {}),
+    ...(run.unpublished ? { unpublished: run.unpublished } : {}),
     ...(run.status === 'unknown' ? { offline: `${run.machine ?? 'Its computer'} offline${run.seenAt ? ` · last seen ${formatDateTime(run.seenAt)}` : ''}` } : {}),
   }
 }
@@ -72,8 +77,11 @@ const NOTHING_READ: Read = { rows: [], failed: [] }
 /** The statuses a chip picks, in this order: what is going, then how runs ended, then the runs whose computer does not answer. */
 const STATUSES = ['running', 'waiting', 'done', 'stopped', 'failed', 'unknown']
 
-/** A status as the rest of the dashboard says it: a live run is "working". */
-const wordOf = (status: string): string => (status === 'running' ? 'working' : status)
+/** A status as the page says it, on a chip and beside a run's dot alike, and as the rest of the dashboard says it: a live run is "Working"; "Status unknown". */
+function statusWord(status: string): string {
+  const word = status === 'unknown' ? 'status unknown' : status === 'running' ? 'working' : status
+  return word[0]!.toUpperCase() + word.slice(1)
+}
 
 /** A run's status as a dot in the dashboard's colors: filled while something is going on, a ring once nothing is. */
 function StatusDot({ status }: { status: string }) {
@@ -86,7 +94,14 @@ function StatusDot({ status }: { status: string }) {
 
 /** A run's status in words; one whose computer does not answer says which, pointed at. */
 function StatusWord({ status, offline }: { status: string; offline?: string | undefined }) {
-  return <span {...(offline ? { title: offline } : {})}>{status === 'unknown' ? 'status unknown' : wordOf(status)}</span>
+  return <span {...(offline ? { title: offline } : {})}>{statusWord(status)}</span>
+}
+
+/** What a run's work still needs before it leaves this machine, as its row in the sidebar says it: "Needs commit · 2 files", "Needs push · 1 commit". */
+export function leftWords(card: Pick<RunRow['card'], 'uncommitted' | 'unpublished'>, gitHost: boolean): string | undefined {
+  if (card.uncommitted) return `${needsWord('uncommitted')} · ${card.uncommitted} file${card.uncommitted === 1 ? '' : 's'}`
+  if (card.unpublished) return `${needsWord('unpushed', gitHost)} · ${card.unpublished} commit${card.unpublished === 1 ? '' : 's'}`
+  return undefined
 }
 
 /** The day a run started, as a heading says it: "Today", "Yesterday", else the weekday and the date. */
@@ -174,16 +189,19 @@ export function LogsPage({ projects, path }: ModulePageProps) {
   // Which status the list shows: every one, until a chip picks one, kept in the address (`/logs/waiting`) so a
   // reload or Back from a run shows the list the person left. One no run has any more goes back to all.
   const picked = path[0] ?? null
-  const counts = STATUSES.map(value => ({ value, label: wordOf(value)[0]!.toUpperCase() + wordOf(value).slice(1), count: read.rows.filter(row => row.card.status === value).length })).filter(c => c.count > 0)
+  const counts = STATUSES.map(value => ({ value, label: statusWord(value), count: read.rows.filter(row => row.card.status === value).length })).filter(c => c.count > 0)
   const status = counts.some(c => c.value === picked) ? picked : null
   const shown = status === null ? read.rows : read.rows.filter(row => row.card.status === status)
   const days = byDay(shown)
   const many = projects.length > 1
+  // The one project shown, by its name: with every project picked, the page may still have only one.
+  const only = projects[0]?.name ?? 'this project'
   // Over every run, not the ones the chip shows, so picking a status moves no column.
   const columns = {
     who: new Set(read.rows.map(row => row.card.person).filter(Boolean)).size > 1,
     took: read.rows.some(row => took(row.card) !== undefined),
     cost: read.rows.some(row => row.card.cost !== undefined),
+    left: read.rows.some(row => leftWords(row.card, row.project.gitHost) !== undefined),
   }
   // A project that gave a whole page may have older runs the page does not list.
   const capped = projects.some(project => recorded.rows.filter(row => row.project.id === project.id).length >= LIMIT)
@@ -191,7 +209,7 @@ export function LogsPage({ projects, path }: ModulePageProps) {
   return (
     <Page
       title="Logs"
-      description={capped ? `The last ${LIMIT} runs recorded in ${many ? 'each of these projects' : 'this project'}, newest first.` : `Every run recorded in ${many ? 'these projects' : 'this project'}, newest first.`}
+      description={capped ? `The last ${LIMIT} runs recorded in ${many ? 'each of these projects' : only}, newest first.` : `Every run recorded in ${many ? 'these projects' : only}, newest first.`}
       bar={state === 'unknown' ? undefined : <FilterChips chips={counts} total={read.rows.length} picked={status} onPick={value => host.adjustPage(value === null ? [] : [value])} />}
     >
       <Slot of={{ state, value: read, failing }} shape={<RowShapes rows={3} />} className="@container space-y-6">
@@ -236,6 +254,8 @@ export function LogsPage({ projects, path }: ModulePageProps) {
                               {card.branch}
                             </span>
                           )}
+                          {/* What its work still needs before it leaves this machine, in the sidebar's words. */}
+                          {columns.left && <span className="truncate md:w-40">{leftWords(card, project.gitHost)}</span>}
                           {columns.took && <span className="text-right tabular-nums md:w-12 @max-2xl:hidden">{took(card) !== undefined && <><span className="sr-only">took </span>{took(card)}</>}</span>}
                           {columns.cost && <span className="text-right tabular-nums md:w-14">{card.cost !== undefined && dollars(card.cost)}</span>}
                           <span className="whitespace-nowrap text-right tabular-nums md:w-16" title={formatDateTime(card.startedAt)}>

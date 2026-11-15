@@ -37,7 +37,7 @@ ${helpRows([
   'For a dashboard that shows the runs, not for an agent:',
   ['--local', `with either read: read this machine's copy, no fetch from origin`],
   ['--full', `with either read: the whole card (with the writer's caller key) and, for show, every diary line`],
-  ['people [--days N]', 'who works here: each person who started runs (by the folder their runs are kept in) or committed to the main branch, with their runs of the last N days (30 unless said), what they cost, how many are going now, their commits, the name git knows them by, and when they last did either'],
+  ['people [--days N]', 'who works here: each person who started runs (by the folder their runs are kept in) or committed to the main branch, with their runs of the last N days (30 unless said), what they cost, how many are going now and how many wait on an answer, their commits, the name git knows them by, and when they last did either'],
   ['skills [--days N]', 'which skills the agents used in the last N days (30 unless said): for each, how many times it was loaded or a run started with its command, in how many runs, and when last'],
   ['delete <id>', 'remove a run, card and diary, as one commit'],
   ['patch <id> [--branch <name>] [--pr <number> --pr-url <url>] [--landed <commit> --from <commit>]', 'set the branch the work landed on, and its pull request'],
@@ -92,7 +92,8 @@ const COMMANDS: Record<string, Command<[CliIo, GitRunner]>> = {
   async people(args, io, git) {
     const { values } = parseCommandArgs(args, DAYS_FLAGS, 0)
     const since = sinceDays(values.days)
-    const me = (await git(['config', 'user.email'], io.cwd).catch(() => '')).trim() || undefined
+    const [email, name] = await Promise.all(['user.email', 'user.name'].map(async key => (await git(['config', key], io.cwd).catch(() => '')).trim()))
+    const me = email ? { email, ...(name ? { name } : {}) } : undefined
     // The main branch's commits, newest first: the default branch as origin names it, else what is checked out.
     const main = (await git(['symbolic-ref', '--short', 'refs/remotes/origin/HEAD'], io.cwd).catch(() => '')).trim() || 'HEAD'
     const commits = readCommitLines(await git(['log', main, '-n', '5000', '--format=%ae%x09%an%x09%at'], io.cwd).catch(() => ''))

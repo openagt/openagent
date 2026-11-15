@@ -11,6 +11,9 @@ import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { addProject, projectId } from '../registry.js'
+import { EventStream } from '../event-stream.js'
+import type { OpenAgentEvent } from '../events.js'
+import type { LiveFeedEvent } from '../dashboard-rpc/events.js'
 
 // F3: the dashboard's transport is `POST /_rpc/<name>` and `GET /_rpc/events`, where it used to be
 // Telefunc. The CSRF and rebound-Host guards are covered in server.test.ts, which exercises them
@@ -229,15 +232,48 @@ test('the event stream sends one SSE frame per event', async () => {
     yield { kind: 'session-update', sessionId: 'one' } as const
     yield { kind: 'session-update', sessionId: 'two' } as const
   }
-  const server = await mounted({ eventsSource: () => source() })
+  const server = await mounted({ eventsSource: () => ({ length: 2, [Symbol.asyncIterator]: source }) })
   try {
     const res = await fetch(`${server.url}/_rpc/events?projectId=p1&agentId=r1`)
     const text = await res.text()
     const events = text
       .split('\n\n')
       .filter(Boolean)
-      .map(frame => JSON.parse(frame.replace(/^data: /, '')) as { sessionId?: string })
-    assert.deepEqual(events.map(e => e.sessionId), ['one', 'two'])
+      .map(frame => JSON.parse(frame.replace(/^data: /, '')) as LiveFeedEvent)
+    assert.deepEqual(events.map(e => (e.kind === 'session-update' ? e.sessionId : e.kind)), ['one', 'two', 'stream-sync'])
+  } finally {
+    await server.close()
+  }
+})
+
+test('the event stream of a run held here marks the end of what it held when the page subscribed, at once when it held none', async () => {
+  // A run relayed from a saved machine: the page tells the events this computer held from the ones that come after.
+  const held = new EventStream<OpenAgentEvent>()
+  held.push({ kind: 'session-update', sessionId: 'one' })
+  held.push({ kind: 'session-update', sessionId: 'two' })
+  const streams: Record<string, EventStream<OpenAgentEvent>> = { held, none: new EventStream<OpenAgentEvent>() }
+  let subscribed = (): void => {}
+  const server = await mounted({
+    eventsSource: (_projectId, agentId) => {
+      subscribed()
+      return streams[agentId!]
+    },
+  })
+  const frames = async (agentId: string): Promise<string[]> => {
+    const subscribing = new Promise<void>(resolve => (subscribed = resolve))
+    const res = await fetch(`${server.url}/_rpc/events?projectId=p1&agentId=${agentId}`)
+    await subscribing
+    streams[agentId]!.push({ kind: 'session-update', sessionId: 'later' })
+    streams[agentId]!.close()
+    return (await res.text())
+      .split('\n\n')
+      .filter(Boolean)
+      .map(frame => JSON.parse(frame.replace(/^data: /, '')) as LiveFeedEvent)
+      .map(event => (event.kind === 'session-update' ? event.sessionId : event.kind))
+  }
+  try {
+    assert.deepEqual(await frames('held'), ['one', 'two', 'stream-sync', 'later'])
+    assert.deepEqual(await frames('none'), ['stream-sync', 'later'])
   } finally {
     await server.close()
   }
@@ -246,7 +282,8 @@ test('the event stream sends one SSE frame per event', async () => {
 /** A run's live source that says nothing until it is stopped, counting how often it was started and stopped. */
 function quietSource() {
   const counts = { started: 0, stopped: 0 }
-  const source = (): AsyncIterable<never> => ({
+  const source = (): AsyncIterable<never> & { length: number } => ({
+    length: 0,
     [Symbol.asyncIterator]() {
       counts.started++
       let said: ((result: IteratorResult<never>) => void) | undefined

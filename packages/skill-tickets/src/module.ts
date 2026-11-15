@@ -2,7 +2,7 @@
 // are unit-tested like the rest of the package: the sentences the pages start agents with, how a
 // page finds the agent behind a claim or a plan, how the module's URL reads, what a ticket is as
 // a link, which lane of the Overview card a ticket sits in, and how the command's answers are read back.
-import { TICKETS_DIR, isTicketFile, nameInTickets, queuePriorityForTicket, ticketOfPlan, ticketPlanName } from './names.js'
+import { TICKETS_DIR, isTicketFile, nameInTickets, noTicketSaid, queuePriorityForTicket, ticketOfPlan, ticketPlanName } from './names.js'
 import type { Ticket, TicketDetail, TicketsMeta } from './tickets.js'
 
 export type { Ticket, TicketDetail, TicketsMeta }
@@ -161,13 +161,17 @@ export interface NamedPath {
   title: string
   /** The path opened for it, when it is not the path itself. */
   href?: string
+  /** The ask for what it names, once it is there already, and what an entry asking just that is called: a plan already written, whose ask to write it is left over. */
+  done?: { ask: string; title: string }
 }
 
 /**
  * What each of `paths` is called, by the tickets as listed: a ticket's file is its title; a
  * ticket's plan file (`tickets/<stem>.plan.md`) is "Plan: " and the ticket's title, and opens the
  * ticket, since an entry that names a plan is often the ask to write it. A plan the ticket already
- * has, and not outdated, says so: an ask to write it again is left over. A path that is no
+ * has, and not outdated, has its ask ({@link planTicketPrompt}) done: an entry asking it again is
+ * left over, and only that one says the plan is written already; any other entry naming the plan is
+ * still work, and is called the plan's plain name. A path that is no
  * ticket's, or whose ticket is not listed (closed, deleted), has no name.
  */
 export function namesOf(paths: readonly string[], tickets: readonly { file: string; title: string; planned?: boolean; outdated?: true }[]): Record<string, NamedPath> {
@@ -185,7 +189,8 @@ export function namesOf(paths: readonly string[], tickets: readonly { file: stri
     const planned = ticket === undefined ? undefined : byFile.get(ticket)
     if (ticket !== undefined && planned !== undefined) {
       const written = planned.planned === true && planned.outdated !== true
-      named[path] = { title: `Plan: ${planned.title}${written ? ' · already written' : ''}`, href: `${TICKETS_DIR}/${ticket}` }
+      const title = `Plan: ${planned.title}`
+      named[path] = { title, href: `${TICKETS_DIR}/${ticket}`, ...(written ? { done: { ask: planTicketPrompt(ticket), title: `${title} · already written` } } : {}) }
     }
   }
   return named
@@ -248,14 +253,14 @@ export interface ShownTicket {
 }
 
 /**
- * What `show` answered: the ticket, `null` for a refusal (no such ticket — deleted since the list
- * read, or a stale link), or the error of a command that could not run or printed no ticket.
+ * What `show <file>` answered: the ticket, `null` for its refusal of a ticket it does not have
+ * (deleted since the list read, or a stale link), or the error of a command that could not run or
+ * printed no ticket.
  */
-export function readShown(result: CommandResult): { shown: ShownTicket | null } | { error: string } {
-  if (!result.ok) return { error: result.error }
-  const answer = result.output as { ok?: unknown; ticket?: unknown; plan?: unknown; holder?: unknown } | null
+export function readShown(result: CommandResult, file: string): { shown: ShownTicket | null } | { error: string } {
+  if (!result.ok) return result.error === noTicketSaid(file) ? { shown: null } : { error: result.error }
+  const answer = result.output as { ticket?: unknown; plan?: unknown; holder?: unknown } | null
   if (!answer || typeof answer !== 'object') return { error: 'the tickets command did not print a ticket' }
-  if (answer.ok === false) return { shown: null }
   if (!isTicket(answer.ticket) || typeof (answer.ticket as { content?: unknown }).content !== 'string') return { error: 'the tickets command did not print a ticket' }
   return {
     shown: {

@@ -181,6 +181,17 @@ describe('the Overview', () => {
     expect(screen.getByText("a package's card").closest('[inert]')).toBeNull()
   })
 
+  test('Esc leaves Customize as Done does, and the keyboard is back on Customize', async () => {
+    // A layout of the page's own: its reset press stands before Done.
+    prefs.value = { onboardingDismissed: true, overviewLayouts: { '*': [{ id: 'usage' }] } }
+    show()
+    fireEvent.click(await screen.findByRole('button', { name: 'Customize' }))
+    expect(screen.getAllByRole('toolbar').length).toBeGreaterThan(0)
+    fireEvent.keyDown(document.activeElement!, { key: 'Escape' })
+    expect(screen.queryByRole('toolbar')).toBeNull()
+    expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Customize' }))
+  })
+
   test('a card dragged from the tray shows where it lands, a bar beside the card under the pointer or at the end, and lands there', async () => {
     working = []
     prefs.value = { onboardingDismissed: true, overviewLayouts: { '*': [{ id: 'skills', hidden: true }] } }

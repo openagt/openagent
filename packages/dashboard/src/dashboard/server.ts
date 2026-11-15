@@ -226,7 +226,7 @@ export async function startDashboard(opts: DashboardOptions): Promise<Dashboard>
     const websiteDir = opts.websiteDir
     if (websiteDir && isSecureAddressRequest(req)) {
       if (pathname === VIEW_PREFIX || pathname.startsWith(`${VIEW_PREFIX}/`)) {
-        handleViewRequest(res, pathname)
+        handleViewRequest(req, res, pathname)
         return
       }
       keepView(req, res)

@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'vitest'
 import { STATUS, hostAnswering } from './fixtures.js'
-import { agentOf, modelLabel, modelOf, runsOnWords, agentsArgs, agentsDraftOf, atOnce, atOnceWords, saysAtOnce, cannotRun, decided, draftOf, isOwn, outcomeWords, loosestSpendOffset, nextWords, offsetsThatDiffer, ownPace, pace, paceArgs, paceProblem, publishChoices, publishLabel, publishes, readSchedulers, saveSpendOffset, schedulerRow, schedulerStatus, schedulerStopped, nextStart, startsNext, spelled, typedOffset, withDraft, rowTitle, unlistedWords } from './schedulers.js'
+import { agentOf, modelLabel, modelOf, runsOnWords, agentsArgs, agentsDraftOf, atOnce, atOnceWords, saysAtOnce, cannotRun, decided, draftOf, heldBy, isOwn, outcomeWords, loosestSpendOffset, nextWords, offsetsThatDiffer, ownPace, pace, paceArgs, paceProblem, publishChoices, publishLabel, publishes, readSchedulers, saveSpendOffset, schedulerRow, schedulerStatus, schedulerStopped, nextStart, startsNext, spelled, typedOffset, withDraft, rowTitle, unlistedWords } from './schedulers.js'
 
 const GEMSTACK = { id: 'p1', name: 'gemstack', gitHost: true }
 const OTHER = { id: 'p2', name: 'other', gitHost: false }
@@ -381,8 +381,10 @@ describe('in words', () => {
     expect(said('not due (last start less than a minute ago, every 15m)', { every: '15m', lastRun: { id: 'r', at: new Date().toISOString() } })).toBe('Next start in 15 min')
     expect(said('cap reached (1 in flight: 2026-10-03T10-00-00-000Z on other-box)')).toBe('One is already running')
     expect(said('cap reached (3 in flight: a on x, b on y, c on z)')).toBe('3 are already running')
+    // The quota holds it back: that it waits, and why in the tool's words; a usage that could not be read, with what to check.
+    expect(said('quota: the week is 90% used')).toBe('Waits for quota: the week is 90% used')
+    expect(said('quota: the quota could not be read, so there is no way to tell what is spare')).toBe("Waits until Claude Code's usage can be read: check it is logged in and online")
     // A reason only the tool knows stays in the tool's words.
-    expect(said('quota: the week is 90% used')).toBe('Quota: the week is 90% used')
     expect(said('check failed: not found: queue')).toBe('Check failed: not found: queue')
     expect(said('not ready: `claude` is not logged in.')).toBe('Not ready: `claude` is not logged in.')
     // The row says when it last ran: a start is not said twice.
@@ -412,6 +414,16 @@ describe('in words', () => {
     expect(said("not on HEAD: a run's checkout starts from HEAD, and the command's skill is not there")).toBe('Cannot start yet: its skill is not committed')
     // The same words for what "Run now" answered, which is a decision with no row's switch to read.
     expect([outcomeWords('not due'), outcomeWords(unpublished), outcomeWords(elsewhere), outcomeWords('agent-data could not be pulled: offline'), outcomeWords(undefined)]).toEqual(['No work', 'Cannot start yet: its skill is not on origin/main', 'Cannot start on Codex: its skill is not in .agents/skills', 'Agent-data could not be pulled: offline', undefined])
+  })
+
+  test('what the last look held a row back by: a skill not where a run starts and an agent not ready hold every start, the quota only the scheduler\'s own; one run of a row with each holds that run alone', () => {
+    const by = (outcome: string) => heldBy({ decision: { command: 'a', outcome } })
+    expect(by("not on HEAD: a run's checkout starts from HEAD, and the command's skill is not there")).toBe('every start')
+    expect(by('not ready: `claude` not found')).toBe('every start')
+    expect(by('quota: Current week is 99% used')).toBe('quota')
+    expect(by('no run for https://github.com/o/r/issues/5: quota: Current week is 99% used')).toBeUndefined()
+    expect(by('run r2 not resumed: not ready: `claude` not found')).toBeUndefined()
+    expect([by('not due'), by('started r1'), by('cap reached (1 in flight: r1 on this-box)'), heldBy({})]).toEqual([undefined, undefined, undefined, undefined])
   })
 
   test('the publish menu: every pick with a git host package, no level, Commit and Publish branch without; the pick in force is listed even when not offered', () => {
@@ -466,7 +478,7 @@ describe('when a row that is on starts next', () => {
     expect(said('not due')).toBe('Next start in 3h, if there is work')
     expect(said('started 2026-10-08T09-00-00-000Z')).toBe('Next start in 3h, if there is work')
     expect(said('cap reached (1 in flight, cap 1)')).toBe('One is already running')
-    expect(said('quota: 96% of the week used')).toBe('Quota: 96% of the week used')
+    expect(said('quota: 96% of the week used')).toBe('Waits for quota: 96% of the week used')
     expect(said('check failed: jq: not found')).toBe('Check failed: jq: not found')
     // A row its coding agent cannot run says so whatever the pace says.
     expect(startsNext({ ...row, runsOn: 'codex', able: ['claude-code'] }, now)).toBe('Cannot start on Codex: its skill is not in .agents/skills')

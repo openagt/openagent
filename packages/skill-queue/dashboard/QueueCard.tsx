@@ -1,5 +1,5 @@
 import { FastForward, Play } from 'lucide-react'
-import { List, PageLink, PartDescription, Row, Section, SentenceShape, Slot, StartAgentButton, cn, pathsIn, useFileNames, useModuleHost, type ModuleCardProps } from '@openagt/dashboard/module'
+import { List, PageLink, PartDescription, Row, Section, SentenceShape, Slot, StartAgentButton, cn, useModuleHost, type ModuleCardProps } from '@openagt/dashboard/module'
 import { fanOutLabel, fanOutPress, isWorkingOn, unclaimedEntries, workOnEntryPrompt } from '../src/module.js'
 import { AgentOnEntry, EntryTitle, entryView } from './entry.js'
 import { useQueueStarts } from './starts.js'
@@ -21,9 +21,8 @@ import { useQueueReads } from './reads.js'
 
 export function QueueCard({ projects }: ModuleCardProps) {
   const host = useModuleHost()
-  const { reads, state } = useQueueReads(projects)
+  const { reads, state, names } = useQueueReads(projects)
   const starts = useQueueStarts(host)
-  const names = useFileNames(reads.map(read => ({ projectId: read.project.id, paths: read.entries.flatMap(pathsIn) })))
   const { inFlight, error } = starts
 
   const shown = reads.filter(read => read.entries.length > 0 || read.error !== undefined)
@@ -38,14 +37,14 @@ export function QueueCard({ projects }: ModuleCardProps) {
           <ul className="space-y-4">
             {shown.map(read => {
               const { project, entries } = read
-              // An entry an agent is on gets no second one: the batch starts from the top of the others.
-              const free = unclaimedEntries(entries, read.working)
+              // An entry an agent is on gets no second one, and one that is done already none at all: the batch starts from the top of the others.
+              const free = unclaimedEntries(entries, read.working).filter(entry => !entryView(project.id, entry, names).done)
               const count = starts.batchOf(project.id, free)
               return (
                 <li key={project.id}>
                   <div className="flex w-full items-center gap-2">
                     <span className="truncate text-sm font-medium">{project.name}</span>
-                    <span className="shrink-0 text-xs tabular-nums text-muted-foreground">{entries.length} queued</span>
+                    <span className="shrink-0 text-xs tabular-nums text-muted-foreground">{entries.length === 1 ? '1 entry' : `${entries.length} entries`}</span>
                     {free.length > 0 && (
                       <>
                         {/* The project's batch act, said as one: how many agents, then "Start N agents", which starts them from the top. */}
@@ -85,7 +84,7 @@ export function QueueCard({ projects }: ModuleCardProps) {
                           title={<EntryTitle view={view} entry={entry} className={cn('block max-w-full truncate text-left max-sm:line-clamp-2 max-sm:whitespace-normal', (view.open ?? view.url) !== undefined && 'hover:underline')} />}
                           meta={agent && <AgentOnEntry projectId={project.id} agent={agent} />}
                           actions={
-                            agent ? undefined : (
+                            agent || view.done ? undefined : (
                               <StartAgentButton
                                 variant="ghost"
                                 size="icon-sm"

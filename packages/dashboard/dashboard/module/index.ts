@@ -116,6 +116,12 @@ export interface ModuleFileName {
   title: string
   /** The path that is opened for it, when it is not the path asked about: a plan still to be written opens its ticket. */
   href?: string
+  /**
+   * The ask for what the path names, word for word, once it is there already: an entry saying just
+   * this is left over (`Create tickets/<stem>.plan.md`, a plan already written), and is called
+   * `title` ("Plan: Login page · already written"). Any other entry naming the path is still work.
+   */
+  done?: { ask: string; title: string }
 }
 
 /**
@@ -400,9 +406,11 @@ export interface ModuleHost {
   /**
    * Open a page a module adds (this one's or another's), at a sub-path, in the project picked in
    * the dashboard, or in `projectId`, which is then the one picked: `openPage('tickets', [file], projectId)`.
-   * A page the picked project's packages do not add shows "No such page".
+   * A page the picked project's packages do not add shows "No such page". With `beside`, the page
+   * is one of the same thing as the page shown (a ticket's other tab): it is entered from where the
+   * page shown was, so `backToPage` from it goes there as it was left.
    */
-  openPage(segment: string, path?: string[], projectId?: string): void
+  openPage(segment: string, path?: string[], projectId?: string, options?: { beside?: boolean }): void
   /**
    * Write a pick the page shown keeps in its address, in place of the address it had, so Back
    * steps over it: its sub-path, its query (without `?`), or both. The query left out stays.
@@ -412,8 +420,8 @@ export interface ModuleHost {
   pageHref(segment: string, path?: string[], projectId?: string): string
   /**
    * Go back to a page at a sub-path, in any project: by the browser's Back when the page shown was
-   * opened from it, so it is as it was left (its filters, its scroll); else `openPage` with the same
-   * arguments. A list's way back from one of its items: `backToPage('tickets')`.
+   * opened from it, or beside a page that was, so it is as it was left (its filters, its scroll);
+   * else `openPage` with the same arguments. A list's way back from one of its items: `backToPage('tickets')`.
    */
   backToPage(segment: string, path?: string[], projectId?: string): void
   /**
@@ -684,6 +692,7 @@ export { ButtonGroup, ButtonGroupSeparator } from '../components/ui/button-group
 export { LinkActions, useLinkActions, type LinkActionOffer, type ProjectLinks, type LinkTargets } from '../components/LinkActions.js'
 export { MachineMark } from '../components/MachineMark.js'
 export { PersonMark, personName } from '../components/PersonMark.js'
+export { needsWord } from '../components/HumanQueueList.js'
 export { useGitHostPeople, personSaid } from '../lib/use-git-host-people.js'
 export { machineKind, machineName, runName, type MachineKind } from '../../src/client.js'
 export { SettingsFoot, SettingsSection, SettingsRow, SettingsRowShapes, SettingsSelectRow, type SettingsOption } from '../components/SettingsRows.js'

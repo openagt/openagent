@@ -10,13 +10,23 @@ const onBridgeStatus = vi.hoisted(() =>
     version: { got: string; expected: string; blocked: boolean; at: string } | null
   }),
 )
-vi.mock('../rpc/reads.js', () => ({ onBridgeToken, onBridgeStatus }))
+const onBridgeExtensionFolder = vi.hoisted(() => vi.fn(async (): Promise<string | null> => '/home/me/openagent/packages/chrome-extension'))
+vi.mock('../rpc/reads.js', () => ({ onBridgeToken, onBridgeStatus, onBridgeExtensionFolder }))
 
 import { BridgeSettings } from './BridgeSettings.js'
 
 afterEach(() => {
   cleanup()
   vi.clearAllMocks()
+})
+
+describe('BridgeSettings: where the extension is', () => {
+  test('the folder it is loaded from, with how, and a press that copies it', async () => {
+    render(<BridgeSettings />)
+    expect(await screen.findByText('/home/me/openagent/packages/chrome-extension')).toBeTruthy()
+    expect(screen.getByText(/press Load unpacked and pick this folder/).textContent).toContain('chrome://extensions')
+    expect(screen.getByRole('button', { name: 'Copy the folder' })).toBeTruthy()
+  })
 })
 
 describe('BridgeSettings version gate (#1519)', () => {

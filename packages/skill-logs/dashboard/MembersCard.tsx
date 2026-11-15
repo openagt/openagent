@@ -5,7 +5,7 @@ import { membersOf, peopleWithRuns, type Member, type PersonActivity } from '../
 // people --local` in each, the same person counted once, across projects and across the emails of
 // one account at the git host: whoever started agents or committed to the main branch. Each by the name git knows them by, with their runs and what
 // they cost (as the dashboard lists the runs, so another computer's are as it says them), their
-// commits, whether a run of theirs is going now, and when they last did either;
+// commits, whether a run of theirs is going now or waits on an answer, and when they last did either;
 // the person at this computer marked. Its title opens the Logs page, where each run is. Each with
 // their picture, where the project's git host knows the account behind their email (asked of the
 // shell, which keeps the answer a day); else two letters of their name.
@@ -25,6 +25,16 @@ function didWords(member: Member): string {
     member.commits > 0 ? (member.commits === 1 ? '1 commit' : `${member.commits} commits`) : undefined,
   ].filter(Boolean)
   return parts.length ? parts.join(' · ') : 'Nothing in the last 30 days'
+}
+
+/** How many runs of a member stand one way now, in the dashboard's colors: "working", "2 waiting". */
+function Going({ status, count, word }: { status: 'running' | 'waiting'; count: number; word: string }) {
+  return (
+    <span className={cn('flex items-center gap-1.5', STATUS_TONE[status])}>
+      <span aria-hidden className={cn('size-1.5 rounded-full', STATUS_DOT[status])} />
+      {count === 1 ? word : `${count} ${word}`}
+    </span>
+  )
 }
 
 export function MembersCard({ projects }: ModuleCardProps) {
@@ -60,7 +70,7 @@ export function MembersCard({ projects }: ModuleCardProps) {
   )
   return (
     <Section title="Members" count={state !== 'unknown' && members.length > 0 ? members.length : undefined} action={<PageLink href={host.pageHref('logs')} onOpen={() => host.openPage('logs')}>Logs</PageLink>}>
-      <PartDescription>Who worked here in the last 30 days: agents started, commits</PartDescription>
+      <PartDescription>Who started agents or made commits here in the last 30 days</PartDescription>
       <Slot of={{ state, value: members }} shape={<SentenceShape />}>
         {() => members.length === 0 ? (
           <p className="text-sm text-muted-foreground">No one has started an agent here yet.</p>
@@ -80,10 +90,10 @@ export function MembersCard({ projects }: ModuleCardProps) {
                     {didWords(member)}
                   </p>
                 </div>
-                {member.running > 0 ? (
-                  <span className={cn('flex shrink-0 items-center gap-1.5 text-xs', STATUS_TONE['running'])}>
-                    <span aria-hidden className={cn('size-1.5 rounded-full', STATUS_DOT['running'])} />
-                    {member.running === 1 ? 'working' : `${member.running} working`}
+                {member.running > 0 || member.waiting > 0 ? (
+                  <span className="flex shrink-0 items-center gap-3 text-xs">
+                    {member.running > 0 && <Going status="running" count={member.running} word="working" />}
+                    {member.waiting > 0 && <Going status="waiting" count={member.waiting} word="waiting" />}
                   </span>
                 ) : (
                   <Tooltip>

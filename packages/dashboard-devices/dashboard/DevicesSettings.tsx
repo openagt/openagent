@@ -137,13 +137,13 @@ function Start({ d, onAdd }: { d: Devices; onAdd: (adding: Adding) => void }) {
   return (
     <Section title="Add your first device">
       <SettingsSection description="Pick what you want to do. You can add the others later.">
-        <SettingsRow label="Use it on your phone" description="Start runs and answer your agents from your phone, on the same Wi-Fi as this computer." control={<Button onClick={() => onAdd('add-phone')}>Add phone</Button>} />
+        <SettingsRow label="Use it on your phone" description="Start runs and answer your agents from your phone, on the same Wi-Fi as this computer." control={<Button onClick={() => onAdd('add-phone')}>Add a phone</Button>} />
         <SettingsRow
           label="Use another computer"
           description="Run agents on your other computer, on the same Wi-Fi as this one."
           control={
             <Button variant="secondary" onClick={() => onAdd('add-computer')}>
-              Add computer
+              Add a computer
             </Button>
           }
         />
@@ -348,6 +348,7 @@ function PhoneRow({ d, item }: { d: Devices; item: PhoneItem }) {
             className="space-y-4"
             onSubmit={event => {
               event.preventDefault()
+              if (busy) return
               void act(() => d.changeDoor(() => renameDevice(host, item.door!.id, name.trim()))).then(done => done && setRenaming(false))
             }}
           >
@@ -399,7 +400,7 @@ function DoorDevice({ device, mine, busy, onRemove }: { device: DeviceRow; mine:
       {...(line !== undefined ? { meta: <span title={formatDateTime(device.seen ?? device.added)}>{seen}</span> } : {})}
       stackOnPhone
       actions={
-        <Button variant="ghost" size="sm" disabled={busy || down} aria-label={`Remove ${device.name}`} onClick={onRemove}>
+        <Button variant="ghost" size="sm" loading={busy} disabled={down} aria-label={`Remove ${device.name}`} onClick={onRemove}>
           Remove
         </Button>
       }
@@ -450,7 +451,7 @@ function DoorPeople({ d, persons, devices, lines }: { d: Devices; persons: Perso
               <div role="group" aria-label={`${person.name} was removed from ${nameAt(person.from)}`} className="flex flex-wrap items-center justify-between gap-2">
                 <p className="text-xs text-warning">{`Removed from ${nameAt(person.from)}.`}</p>
                 <div className="flex gap-2">
-                  <Button variant="secondary" disabled={busy || down} onClick={() => void act(() => keepPerson(host, person.name))}>
+                  <Button variant="secondary" loading={busy} disabled={down} onClick={() => void act(() => keepPerson(host, person.name))}>
                     Keep, switched off
                   </Button>
                   <RemovePerson name={person.name} label="Remove" busy={busy} onConfirm={() => act(() => removePerson(host, person.name))} />

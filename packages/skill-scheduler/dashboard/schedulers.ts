@@ -1,5 +1,6 @@
 import { MAX_SPEND_OFFSET, type ModuleCommandResult, type ModuleHost, type ModuleProject } from '@openagt/dashboard/module'
 import type { PublishPick, TickDecision } from '../src/state.js'
+import { QUOTA_UNREAD } from '../src/quota-boundary.js'
 import { AGENTS, AGENT_LABELS, AGENT_SKILLS_DIR, DEFAULT_AGENT, DEFAULT_PUBLISH, isAgent, isAgents, isTime, type AgentName } from '../src/names.js'
 import { MAX_COUNT, dueFrom, paceInForce, parseInterval, parseTimeOfDay, takesTimeOfDay, type PacePick, type PaceUnit } from '../src/pace.js'
 
@@ -477,9 +478,9 @@ export function publishes(command: SchedulerCommand): string {
  * agent cannot run says so whatever its switch: switching it on would start nothing. Then nothing
  * for a command switched off here, whose row says "Off", for one switched on that no tick has
  * decided yet, and for one the tick started, whose row says when it last ran. A decision is said in
- * plain words where the tool's own are a rule's shorthand ("No work", "One is already running"),
- * and in the tool's words with a capital where they carry a reason only the tool knows
- * (`Quota: …`, `Check failed: …`). A command whose wait is not over says when it starts next:
+ * plain words where the tool's own are a rule's shorthand ("No work", "One is already running",
+ * "Waits for quota: …"), and in the tool's words with a capital where they carry a reason only the
+ * tool knows (`Check failed: …`). A command whose wait is not over says when it starts next:
  * "Next start in 3h, if there is work", "Next start Saturday 10:00".
  */
 export function decided(command: SchedulerCommand, now: Date = new Date()): string | undefined {
@@ -518,6 +519,18 @@ const notYet = (ref: string, lastSeen: boolean): string => (ref === 'HEAD' ? 'Ca
 
 const notThere = (agent: string, dir: string): string => `Cannot start on ${agent}: its skill is not in ${dir}`
 
+/**
+ * What the scheduler's last look found holds a row back, whatever its pace: its skill is not where
+ * a run's checkout starts, or its coding agent is not ready, which hold back "Run now" too; or the
+ * quota, which holds back only the starts the scheduler makes by itself. Nothing for any other look,
+ * nor for one run of a row with each: its own agent and quota are asked for it, and hold it alone.
+ */
+export function heldBy(command: Pick<SchedulerCommand, 'decision'>): 'every start' | 'quota' | undefined {
+  const held = /^(not on \S+|not ready: |quota: )/.exec(command.decision?.outcome ?? '')
+  if (!held) return undefined
+  return held[1] === 'quota: ' ? 'quota' : 'every start'
+}
+
 /** One decision of the scheduler, a tick's or the answer to "Run now", for a person; nothing for one the row already says in another place: that it is switched off, that it started. A wait that is not over is said by {@link decided}, which knows the row. */
 export function outcomeWords(outcome: string | undefined): string | undefined {
   if (outcome === undefined || outcome === 'switched off on this machine' || outcome.startsWith('started ') || outcome.startsWith('resumed ')) return undefined
@@ -531,6 +544,8 @@ export function outcomeWords(outcome: string | undefined): string | undefined {
   if (unpublished) return notYet(unpublished[1]!, unpublished[2] !== undefined)
   const capped = /^cap reached \((\d+) in flight/.exec(outcome)
   if (capped) return capped[1] === '1' ? 'One is already running' : `${capped[1]} are already running`
+  const quota = /^quota: (.*)$/.exec(outcome)
+  if (quota) return quota[1] === QUOTA_UNREAD ? "Waits until Claude Code's usage can be read: check it is logged in and online" : `Waits for quota: ${quota[1]}`
   return sentence(outcome)
 }
 

@@ -16,6 +16,8 @@ import { fileIn, sendFile } from './static.js'
 export const VIEW_PREFIX = '/_view'
 /** What `/` shows, kept in the browser. */
 export const VIEW_COOKIE = 'openagent-view'
+/** The dashboard's page the landing page was last picked from, which "Dashboard" opens again: sent to `/_view` alone. */
+const BACK_COOKIE = 'openagent-back'
 
 export type View = 'dashboard' | 'landing'
 
@@ -53,9 +55,11 @@ export function keepView(req: IncomingMessage, res: ServerResponse): void {
 
 /**
  * The toggle's own route. `/_view` answers 204, which is how a page tells this copy from the
- * public website (200 there, from its own `_view` file). `/_view/landing` and `/_view/dashboard` keep the pick and go to `/`.
+ * public website (200 there, from its own `_view` file). `/_view/landing` and `/_view/dashboard`
+ * keep the pick and go to `/`; `/_view/landing` also keeps the dashboard's page its `back` names, or
+ * forgets the one kept, and `/_view/dashboard` goes back to that page however often it is asked.
  */
-export function handleViewRequest(res: ServerResponse, pathname: string): void {
+export function handleViewRequest(req: IncomingMessage, res: ServerResponse, pathname: string): void {
   if (pathname === VIEW_PREFIX) {
     res.writeHead(204).end()
     return
@@ -65,13 +69,35 @@ export function handleViewRequest(res: ServerResponse, pathname: string): void {
     res.writeHead(404, { 'content-type': 'text/plain' }).end('no such view')
     return
   }
+  // Only the landing page changes the page kept: one click on "Dashboard" can ask for it twice.
+  const back = view === 'landing' ? [backCookie(pageOf(new URL(req.url ?? '/', 'https://x').searchParams.get('back')))] : []
   res
     .writeHead(303, {
-      location: '/',
-      'set-cookie': viewCookie(view),
+      location: view === 'dashboard' ? (pageOf(cookieOf(req, BACK_COOKIE)) ?? '/') : '/',
+      'set-cookie': [viewCookie(view), ...back],
       'cache-control': 'no-store',
     })
     .end()
+}
+
+/** The cookie that keeps the dashboard's page to go back to, for the browser's session; with none, the one kept is forgotten. */
+function backCookie(page: string | undefined): string {
+  return `${BACK_COOKIE}=${page === undefined ? '' : encodeURIComponent(page)}; Path=${VIEW_PREFIX}; ${page === undefined ? 'Max-Age=0; ' : ''}HttpOnly; Secure; SameSite=Lax`
+}
+
+function cookieOf(req: IncomingMessage, name: string): string | undefined {
+  const value = (req.headers.cookie ?? '').split(';').map(part => part.trim()).find(part => part.startsWith(`${name}=`))?.slice(name.length + 1)
+  try {
+    return value === undefined ? undefined : decodeURIComponent(value)
+  } catch {
+    return undefined
+  }
+}
+
+/** A page of this address, as its path and query; undefined for anything else, another site above all. */
+function pageOf(said: string | null | undefined): string | undefined {
+  const url = said?.startsWith('/') ? URL.parse(said, 'https://x') : null
+  return url?.origin === 'https://x' ? `${url.pathname}${url.search}` : undefined
 }
 
 /**

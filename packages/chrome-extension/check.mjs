@@ -911,5 +911,56 @@ function appPage({ sessions = SESSIONS, firstPage = 6, sendAppendsRow = true } =
   dom.window.close()
 }
 
+// ---------------------------------------------------------------------------
+// The options page's Save (options.js): Chrome grants the extension the addresses its manifest
+// names and no others, so an address outside them is told where the dashboard is reached, with no
+// Site access switch to look for; it is kept as typed. A localhost address on any port is tested.
+
+{
+  const manifest = JSON.parse(readFileSync(join(here, 'manifest.json'), 'utf8'))
+  const granted = [...manifest.host_permissions, ...manifest.content_scripts.flatMap(c => c.matches)]
+  /** The page saved with `address`: what it stored, what it fetched, and what it said. */
+  const save = async address => {
+    const html = readFileSync(join(here, manifest.options_page), 'utf8').replace(/<script src="[^"]+"><\/script>/g, '')
+    const dom = new JSDOM(html, { url: 'chrome-extension://oa/options.html', runScripts: 'outside-only' })
+    const stored = {}
+    const fetched = []
+    // A match pattern without a port grants every port of its host.
+    const hosts = origin => granted.some(pattern => [new URL(origin), new URL(pattern)].reduce((a, b) => a.protocol === b.protocol && a.hostname === b.hostname))
+    dom.window.chrome = {
+      storage: { local: { get: async () => ({}), set: async values => Object.assign(stored, values) }, onChanged: { addListener() {} } },
+      permissions: { contains: async ({ origins }) => origins.every(hosts) },
+      runtime: { getManifest: () => manifest },
+    }
+    dom.window.fetch = async url => (fetched.push(url), url.endsWith('/ping') ? { ok: true, status: 200, text: async () => 'ok' } : { ok: true, status: 200, json: async () => ({ sessions: [] }) })
+    dom.window.eval(readFileSync(join(here, 'options.js'), 'utf8'))
+    dom.window.document.getElementById('daemon').value = address
+    dom.window.document.getElementById('token').value = 'oa-token'
+    dom.window.document.getElementById('save').click()
+    await new Promise(resolve => setTimeout(resolve, 50))
+    const said = dom.window.document.getElementById('status').textContent
+    dom.window.close()
+    return { stored: stored.daemonUrl, fetched, said }
+  }
+  const outside = await save('https://openagent.build')
+  const otherPort = await save('http://localhost:4300')
+  const ok =
+    outside.stored === 'https://openagent.build' &&
+    outside.fetched.length === 0 &&
+    !/Site access/.test(outside.said) &&
+    /http:\/\/localhost/.test(outside.said) &&
+    /http:\/\/127\.0\.0\.1/.test(outside.said) &&
+    otherPort.fetched[0] === 'http://localhost:4300/_bridge/ping' &&
+    /^Connected\./.test(otherPort.said)
+  check(ok, 'an address Chrome never lets the extension reach is kept, and told the localhost address to use instead of a Site access switch; localhost on another port is tested', `outside: stored=${outside.stored}, fetched=${outside.fetched.length}, said=${outside.said}; port 4300: fetched=${otherPort.fetched[0]}, said=${otherPort.said}`)
+  // A host is the same whatever its case, to Chrome's grant too.
+  const upper = await save('http://LOCALHOST:4200')
+  check(
+    upper.stored === 'http://LOCALHOST:4200' && upper.fetched[0] === 'http://LOCALHOST:4200/_bridge/ping' && /^Connected\./.test(upper.said),
+    'localhost typed in capitals is kept as typed and tested, as any localhost address',
+    `stored=${upper.stored}, fetched=${upper.fetched[0]}, said=${upper.said}`,
+  )
+}
+
 console.log(failed ? `\n${failed} case(s) failed` : '\nall cases passed')
 process.exit(failed ? 1 : 0)

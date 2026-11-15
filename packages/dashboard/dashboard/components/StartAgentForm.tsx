@@ -137,6 +137,8 @@ export function StartAgentForm({
   // The machine the last start was sent to, by its name: what the form says it is cloning on.
   const [sentTo, setSentTo] = useState<string | null>(null)
   const { busy, cloning, error, reset, start } = useStartAgent(projectId)
+  // A refusal of the project's start line: no prompt changes it, and the project opens in the editor from it.
+  const hooksRefused = error?.includes('.openagent/hooks.yml') === true
   const composerRef = useRef<ComposerHandle>(null)
   const phone = useIsMobile()
   // A refused start gives the prompt the focus once the box is on again, however Start was pressed:
@@ -353,7 +355,8 @@ export function StartAgentForm({
           typed.current = value
           if (!value.trim() && note) setNote(null)
           // Editing after a failed start: the red error described the old attempt, drop it (#948).
-          if (error) reset()
+          // One about the project's start line stays until the next Start.
+          if (error && !hooksRefused) reset()
         }}
         onPreset={loaded}
         busy={busy}
@@ -366,7 +369,7 @@ export function StartAgentForm({
       <div className="absolute inset-x-4 bottom-full flex flex-col gap-1.5 pb-1">
         {/* A start that hit what the check says, or the missing logins, says nothing the boxes below do not. */}
         {/* A refusal of this computer's hooks.yml: the project opens in the editor from here as from its menu. */}
-        {error && missingThere.length === 0 && !readiness?.problems.length && <Refusal {...said(error)} {...(!machine && !clonedHere && error.includes('.openagent/hooks.yml') ? { actions: <OpenInEditor projectId={projectId} /> } : {})} />}
+        {error && missingThere.length === 0 && !readiness?.problems.length && <Refusal {...said(error)} {...(!machine && !clonedHere && hooksRefused ? { actions: <OpenInEditor projectId={projectId} /> } : {})} />}
         {machine && missingThere.length > 0 && (
           <Refusal
             title={`Your ${missingThere.join(' and ')} ${missingThere.length === 1 ? 'login is' : 'logins are'} not on ${name} yet.`}

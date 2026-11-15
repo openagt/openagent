@@ -48,9 +48,10 @@ vi.mock('../lib/preferences.js', () => ({
 // The `actions` and `summary` slots of the bar above the message box ARE rendered, so the handoff
 // cluster and the modules' summaries stay reachable.
 vi.mock('./AgentActionBar.js', () => ({
-  AgentActionBar: ({ ready, checkout, onToggle, onProjectRemoved, onShowWorkBar }: { ready?: boolean; checkout: unknown; onToggle?: () => void; onProjectRemoved?: () => void; onShowWorkBar?: () => void }) => (
+  AgentActionBar: ({ live, ready, checkout, onToggle, onProjectRemoved, onShowWorkBar }: { live?: boolean; ready?: boolean; checkout: unknown; onToggle?: () => void; onProjectRemoved?: () => void; onShowWorkBar?: () => void }) => (
     <>
       <span data-testid="bar-frame" />
+      <span data-testid="bar-live">{String(live)}</span>
       {onShowWorkBar && <button type="button" onClick={onShowWorkBar}>Show the work bar</button>}
       <button type="button" onClick={onProjectRemoved}>project removed</button>
       <button type="button" onClick={onToggle}>details</button>
@@ -86,7 +87,7 @@ let queuedIds = 0
 const edited: string[] = []
 const givenBack: string[] = []
 vi.mock('./AgentComposer.js', () => ({
-  AgentComposer: ({ live, model, context, controls, onQueued, editInBox, giveBack, row, publish, prBase, agent, gitAccount, projectSkills }: { publish?: string; prBase?: string; live: boolean; model?: string; context?: ReactNode; controls?: ReactNode; onQueued?: (message: { id: string; text: string; later: boolean }) => void; editInBox?: { current: ((text: string) => void) | null }; giveBack?: { current: ((text: string) => void) | null }; row?: ReactNode; agent?: string; gitAccount?: string; projectSkills?: 'none' | string[] }) => {
+  AgentComposer: ({ live, asked, model, context, controls, onSending, onQueued, editInBox, giveBack, row, publish, prBase, agent, gitAccount, projectSkills }: { publish?: string; prBase?: string; live: boolean; asked?: boolean; model?: string; context?: ReactNode; controls?: ReactNode; onSending?: (text: string | null) => void; onQueued?: (message: { id: string; text: string; later: boolean }) => void; editInBox?: { current: ((text: string) => void) | null }; giveBack?: { current: ((text: string) => void) | null }; row?: ReactNode; agent?: string; gitAccount?: string; projectSkills?: 'none' | string[] }) => {
     if (editInBox) editInBox.current = text => void edited.push(text)
     if (giveBack) giveBack.current = text => void givenBack.push(text)
     return (
@@ -94,6 +95,7 @@ vi.mock('./AgentComposer.js', () => ({
         {row}
         <span data-testid="composer-controls">{controls}</span>
         <button type="button" onClick={() => onQueued?.({ id: `m${++queuedIds}`, text: 'and then this', later: false })}>queue-one</button>
+        <button type="button" onClick={() => onSending?.('add a logout button')}>continue-it</button>
         <span data-testid="composer-model">{model ?? ''}</span>
         <span data-testid="composer-auto" data-publish={publish ?? ''} data-pr-base={prBase ?? ''} />
         <span data-testid="composer-agent" data-value={agent ?? ''} />
@@ -101,6 +103,7 @@ vi.mock('./AgentComposer.js', () => ({
         <span data-testid="composer-project-skills" data-value={projectSkills === undefined ? 'all' : projectSkills === 'none' ? 'none' : projectSkills.join('+')} />
         <span data-testid="composer-context">{context}</span>
         <span data-testid="composer-live">{String(live)}</span>
+        <span data-testid="composer-asked">{String(asked)}</span>
       </>
     )
   },
@@ -724,6 +727,42 @@ describe('a message sent while the agent works', () => {
     expect(queuedBoxes()).toHaveLength(0)
   })
 
+  test('Send now, which sends every waiting message, is under the last of them, says it is on its way and says why the run refused it', async () => {
+    let answer: (outcome: unknown) => void = () => {}
+    sendNow.mockReturnValueOnce(new Promise(resolve => (answer = resolve)))
+    render(view({ live: true, events: [start('go'), text] }))
+    fireEvent.click(screen.getByText('queue-one'))
+    fireEvent.click(screen.getByText('queue-one'))
+    // Each box with what is said under it: the whole message.
+    const [first, last] = queuedBoxes().map(box => box.closest<HTMLElement>('.group\\/prompt')!)
+    expect(within(first!).queryByRole('button', { name: 'Send now' })).toBeNull()
+    expect(within(first!).getByText("Read at the agent's next step")).toBeTruthy()
+    fireEvent.click(within(last!).getByRole('button', { name: 'Send now' }))
+    expect((await within(last!).findByRole('button', { name: 'Sending…' })) as HTMLButtonElement).toHaveProperty('disabled', true)
+    act(() => answer({ ok: false, error: 'could not reach the machine' }))
+    expect((await screen.findByRole('alert')).textContent).toBe('could not reach the machine')
+  })
+
+  test('what Send now said is the session’s it was pressed in: another session picked shows its own, and an answer that comes back later shows in its session alone', async () => {
+    sendNow.mockResolvedValueOnce({ ok: false, error: 'session A could not be reached' })
+    const page = render(view({ live: true, events: [start('go'), text] }))
+    fireEvent.click(screen.getByText('queue-one'))
+    fireEvent.click(screen.getByRole('button', { name: 'Send now' }))
+    expect((await screen.findByRole('alert')).textContent).toBe('session A could not be reached')
+    page.rerender(view({ agentId: 'run-2', live: true, events: [start('go'), text] }))
+    fireEvent.click(screen.getByText('queue-one'))
+    expect(screen.queryByRole('alert')).toBeNull()
+    let answer: (outcome: unknown) => void = () => {}
+    sendNow.mockReturnValueOnce(new Promise(resolve => (answer = resolve)))
+    fireEvent.click(screen.getByRole('button', { name: 'Send now' }))
+    page.rerender(view({ live: true, events: [start('go'), text] }))
+    expect(screen.getByRole('button', { name: 'Send now' })).toBeTruthy()
+    await act(async () => answer({ ok: false, error: 'session B refused it late' }))
+    expect(screen.getByRole('alert').textContent).toBe('session A could not be reached')
+    page.rerender(view({ agentId: 'run-2', live: true, events: [start('go'), text] }))
+    expect(screen.getByRole('alert').textContent).toBe('session B refused it late')
+  })
+
   test('it is still waiting after the page is left or reloaded, with Send now and Cancel and edit, until the agent reads it', () => {
     const before = [start('go'), text]
     render(view({ live: true, events: before }))
@@ -734,7 +773,7 @@ describe('a message sent while the agent works', () => {
     cleanup()
     const { rerender } = render(view({ live: true, events: before }))
     expect(queuedBoxes().map(n => n.textContent)).toEqual(['and then this', 'and then this'])
-    fireEvent.click(screen.getAllByRole('button', { name: 'Send now' })[1]!)
+    fireEvent.click(screen.getByRole('button', { name: 'Send now' }))
     expect(sendNow).toHaveBeenCalledWith('p1', 'run-1')
     fireEvent.click(screen.getAllByRole('button', { name: 'Cancel and edit message' })[0]!)
     expect(withdrawMessage).toHaveBeenCalledWith('p1', 'run-1', first)
@@ -822,8 +861,67 @@ describe('a message sent while the agent works', () => {
   test('a run whose feed shows its end is ended at once, its Stop gone with the end line, before the list of runs says so', () => {
     const { rerender } = render(view({ live: true, events: [start('go'), text] }))
     expect(screen.getByTestId('composer-live').textContent).toBe('true')
-    rerender(view({ live: true, events: [start('go'), text, { kind: 'end', ok: false, stopped: true }] as OpenAgentEvent[] }))
+    rerender(view({ live: true, events: [start('go'), text, { kind: 'end', ok: false, stopped: true, at: new Date().toISOString() }] as OpenAgentEvent[] }))
     expect(screen.getByTestId('composer-live').textContent).toBe('false')
+    expect(screen.getByTestId('bar-live').textContent).toBe('false')
+  })
+
+  test('a run continued by a message is live from the list of runs on, its Stop in the box and the menu, before its new leg writes a line', () => {
+    const before = [start('go'), text, { kind: 'end', ok: true, at: '2026-01-01T10:00:00.000Z' }] as OpenAgentEvent[]
+    const { rerender } = render(view({ live: false, events: before }))
+    expect(screen.getByTestId('composer-live').textContent).toBe('false')
+    rerender(view({ live: true, events: before }))
+    expect(screen.getByTestId('composer-live').textContent).toBe('true')
+    expect(screen.getByTestId('bar-live').textContent).toBe('true')
+  })
+
+  test('a run that ended on a question tells the box so: a message is the answer', async () => {
+    const asking = [start('go'), { kind: 'end', ok: true, waiting: true }] as OpenAgentEvent[]
+    onAgent.mockResolvedValue(asking)
+    render(view({ live: false, events: asking }))
+    await waitFor(() => expect(screen.getByTestId('composer-asked').textContent).toBe('true'))
+  })
+
+  test('a continued run opened afresh is live while its feed replays the leg before, and ends with its own end', () => {
+    const before = [start('go'), text, { kind: 'end', ok: true, at: '2026-01-01T10:00:00.000Z' }] as OpenAgentEvent[]
+    const { rerender } = render(view({ live: true, events: [], replayed: false }))
+    rerender(view({ live: true, events: before.slice(0, 2), replayed: false }))
+    rerender(view({ live: true, events: before, replayed: false }))
+    expect(screen.getByTestId('composer-live').textContent).toBe('true')
+    rerender(view({ live: true, events: before }))
+    expect(screen.getByTestId('composer-live').textContent).toBe('true')
+    rerender(view({ live: true, events: [...before, { kind: 'end', ok: false, stopped: true, at: '2026-01-01T10:00:00.000Z' }] as OpenAgentEvent[] }))
+    expect(screen.getByTestId('composer-live').textContent).toBe('false')
+  })
+
+  // The browser may be another device, its clock its own: the daemon's times say nothing of this page's.
+  describe.each([
+    ['five minutes ahead of', 300_000],
+    ['five minutes behind', -300_000],
+    ['the same as', 0],
+  ])('with this browser\'s clock %s the daemon\'s', (_, skew) => {
+    const daemonNow = () => new Date(Date.now() - skew).toISOString()
+    afterEach(() => vi.restoreAllMocks())
+
+    test('a continued run is live from the list of runs on, before its new leg writes a line', () => {
+      const before = [start('go'), text, { kind: 'end', ok: true, at: new Date(Date.now() - 1000).toISOString() }] as OpenAgentEvent[]
+      const now = Date.now()
+      vi.spyOn(Date, 'now').mockReturnValue(now + skew)
+      const { rerender } = render(view({ live: false, events: before }))
+      rerender(view({ live: true, events: before }))
+      expect(screen.getByTestId('composer-live').textContent).toBe('true')
+    })
+
+    test('a continued run\'s own end ends it at once, its Stop gone with the end line', () => {
+      const before = [start('go'), text, { kind: 'end', ok: true, at: new Date(Date.now() - 1000).toISOString() }] as OpenAgentEvent[]
+      const now = Date.now()
+      vi.spyOn(Date, 'now').mockReturnValue(now + skew)
+      const { rerender } = render(view({ live: false, events: before }))
+      rerender(view({ live: true, events: before }))
+      rerender(view({ live: true, events: [...before, start('more'), { kind: 'end', ok: false, stopped: true, at: daemonNow() }] as OpenAgentEvent[] }))
+      expect(screen.getByTestId('composer-live').textContent).toBe('false')
+      expect(screen.getByTestId('bar-live').textContent).toBe('false')
+    })
   })
 
   test('a session whose run is not known yet has no message box, which would say an ended run\'s words; it comes once the record or the feed says', () => {
@@ -1287,6 +1385,110 @@ describe('AgentView: the bar when the work is landed', () => {
     render(view({ agentId: 'run-p', events: ENDED }))
     await waitFor(() => expect(screen.getByRole('button', { name: 'Commit' })).toBeTruthy())
     expect(screen.getByTestId('work-bar').dataset.show).toBe('true')
+  })
+})
+
+describe('AgentView: a message sent to continue an ended run', () => {
+  const start = (prompt: string) => ({ kind: 'driver', event: { type: 'start', prompt } }) as OpenAgentEvent
+  const ended = [start('Add a page'), { kind: 'end', ok: true, at: '2026-01-01T10:00:00.000Z' }] as OpenAgentEvent[]
+
+  test('is still shown after a reload, until the run writes it as its prompt', async () => {
+    onAgent.mockResolvedValue(ended)
+    const first = render(view({ events: ended }))
+    fireEvent.click(screen.getByRole('button', { name: 'continue-it' }))
+    expect(await screen.findByText('add a logout button')).toBeTruthy()
+    first.unmount()
+    // Reloaded before the list of runs has seen the run continued: its record still says the leg before ended.
+    const { rerender } = render(view({ events: ended, card: { status: 'done', endedAt: '2026-01-01T10:00:00.000Z' } as never }))
+    expect(await screen.findByText('add a logout button')).toBeTruthy()
+    rerender(view({ live: true, events: ended }))
+    expect(screen.getByText('add a logout button')).toBeTruthy()
+    rerender(view({ live: true, events: [...ended, start('add a logout button')] }))
+    await waitFor(() => expect(screen.getAllByText('add a logout button')).toHaveLength(1))
+    cleanup()
+    render(view({ live: true, events: [...ended, start('add a logout button')] }))
+    expect(screen.getAllByText('add a logout button')).toHaveLength(1)
+  })
+
+  test('stays out of the box when the run began on it, its record ending before its feed shows the prompt line', async () => {
+    onAgent.mockResolvedValue(ended)
+    givenBack.length = 0
+    const { rerender } = render(view({ events: ended }))
+    fireEvent.click(screen.getByRole('button', { name: 'continue-it' }))
+    // The list of runs says the new leg ended before this page read its lines.
+    const over = { status: 'done', endedAt: new Date(Date.now() + 1000).toISOString() } as never
+    rerender(view({ events: ended, card: over }))
+    await new Promise(resolve => setTimeout(resolve, 50))
+    rerender(view({ events: [...ended, start('add a logout button'), { kind: 'end', ok: true }] as OpenAgentEvent[], card: over }))
+    await waitFor(() => expect(screen.getAllByText('add a logout button')).toHaveLength(1))
+    expect(givenBack).toEqual([])
+  })
+
+  test('goes back to the box when the run ends after it without beginning on it, five seconds on', async () => {
+    onAgent.mockResolvedValue(ended)
+    givenBack.length = 0
+    const first = render(view({ events: ended }))
+    fireEvent.click(screen.getByRole('button', { name: 'continue-it' }))
+    first.unmount()
+    vi.useFakeTimers()
+    try {
+      render(view({ live: false, events: ended, card: { status: 'failed', endedAt: new Date(Date.now() + 1000).toISOString() } as never }))
+      // The ended run's feed is read.
+      await act(async () => {})
+      act(() => void vi.advanceTimersByTime(4_000))
+      expect(givenBack).toEqual([])
+      act(() => void vi.advanceTimersByTime(1_500))
+      expect(givenBack).toEqual(['add a logout button'])
+      expect(screen.queryByText('add a logout button')).toBeNull()
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  // The browser may be another device, its clock its own: the daemon's times say nothing of this page's.
+  describe.each([
+    ['five minutes ahead of', 300_000],
+    ['five minutes behind', -300_000],
+  ])('with this browser\'s clock %s the daemon\'s', (_, skew) => {
+    const daemonAt = (ms: number) => new Date(Date.now() - skew + ms).toISOString()
+
+    test('goes back to the box when the run ends again without beginning on it, five seconds on', async () => {
+      const legBefore = { status: 'done', endedAt: daemonAt(-60_000) } as never
+      const endedThen = [start('Add a page'), { kind: 'end', ok: true, at: daemonAt(-60_000) }] as OpenAgentEvent[]
+      onAgent.mockResolvedValue(endedThen)
+      givenBack.length = 0
+      const first = render(view({ events: endedThen, card: legBefore }))
+      fireEvent.click(screen.getByRole('button', { name: 'continue-it' }))
+      first.unmount()
+      vi.useFakeTimers()
+      try {
+        render(view({ live: false, events: endedThen, card: { status: 'failed', endedAt: daemonAt(1000) } as never }))
+        await act(async () => {})
+        act(() => void vi.advanceTimersByTime(5_500))
+        expect(givenBack).toEqual(['add a logout button'])
+      } finally {
+        vi.useRealTimers()
+      }
+    })
+
+    test('stays on screen while the record still says the leg before ended, the run not yet continued', async () => {
+      const legBefore = { status: 'done', endedAt: daemonAt(-60_000) } as never
+      const endedThen = [start('Add a page'), { kind: 'end', ok: true, at: daemonAt(-60_000) }] as OpenAgentEvent[]
+      onAgent.mockResolvedValue(endedThen)
+      givenBack.length = 0
+      vi.useFakeTimers()
+      try {
+        render(view({ events: endedThen, card: legBefore }))
+        await act(async () => {})
+        fireEvent.click(screen.getByRole('button', { name: 'continue-it' }))
+        // Its checkout is being made again: the record is written running only once it is there.
+        act(() => void vi.advanceTimersByTime(10_000))
+        expect(givenBack).toEqual([])
+        expect(screen.getByText('add a logout button')).toBeTruthy()
+      } finally {
+        vi.useRealTimers()
+      }
+    })
   })
 })
 
