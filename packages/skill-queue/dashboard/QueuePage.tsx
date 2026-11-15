@@ -1,5 +1,5 @@
 import { useId, useRef, useState } from 'react'
-import { CornerDownLeft, FastForward, Play, Trash2 } from 'lucide-react'
+import { CornerDownLeft, Ellipsis, FastForward, Play } from 'lucide-react'
 import {
   Badge,
   Button,
@@ -8,6 +8,10 @@ import {
   ComposedFieldFoot,
   ComposedFieldInput,
   ConfirmDialog,
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
   Empty,
   Page,
   PanelGroup,
@@ -41,7 +45,7 @@ import {
   type Schedule,
 } from '@openagt/dashboard/module'
 import type { PlacedEntry } from '../src/queue.js'
-import { DEFAULT_PRIORITY, PRIORITIES, QUEUE_COMMAND, addTextArgs, doneArgs, entryTarget, fanOutLabel, fanOutPress, isPlacedEntry, isWorkingOn, ordinal, priorityMeaning, priorityName, readEntries, unclaimedEntries, workOnEntryPrompt } from '../src/module.js'
+import { DEFAULT_PRIORITY, PRIORITIES, QUEUE_COMMAND, addTextArgs, doneArgs, entryTarget, fanOutLabel, fanOutPress, isPlacedEntry, entryHeadline, isWorkingOn, priorityMeaning, priorityName, readEntries, unclaimedEntries, workOnEntryPrompt } from '../src/module.js'
 import { AgentOnEntry, entryView } from './entry.js'
 import { useQueueStarts, type QueueStarts } from './starts.js'
 import { BatchCount } from './batch-count.js'
@@ -117,15 +121,13 @@ export function QueuePage({ projects }: ModulePageProps) {
   const names = useFileNames(reads.map(read => ({ projectId: read.project.id, paths: (read.entries ?? []).flatMap(placed => pathsIn(placed.entry)) })))
   const starts = useQueueStarts(host)
 
-  const total = reads.reduce((sum, read) => sum + (read.entries?.length ?? 0), 0)
   // One project's page: its start is the page's one primary press.
   const only = projects.length === 1 ? reads[0] : undefined
 
   return (
     <Page
       title="Queue"
-      count={state !== 'unknown' && total > 0 ? total : undefined}
-      description={`What agents will work on next, from the top${projects.length > 1 ? ', one list per project' : ''}. A higher priority is taken first: 10 is the most urgent, 0 is only if there is capacity.`}
+      description={`What agents take next, from the top${projects.length > 1 ? ', one list per project' : ''}.`}
       actions={
         only && (
           <>
@@ -281,52 +283,58 @@ function TakerStatus({ read, schedule }: { read: ProjectRead; schedule: Schedule
 }
 
 /** Where an entry came from, as its row says it: a ticket's page, a web address, or typed as a task. */
-function origin(entry: string): string {
+/** Where an entry came from, where it names something: a ticket, a web address, a file. A typed entry names nothing. */
+function origin(entry: string): string | undefined {
   const target = entryTarget(entry) ?? pathsIn(entry)[0]
-  if (target === undefined) return 'typed'
+  if (target === undefined) return undefined
   if (URL.canParse(target)) return `from ${new URL(target).host || 'a link'}`
   return target.startsWith('tickets/') ? 'from a ticket' : `from ${target}`
 }
 
 /**
  * One entry: its state (an agent on it, or waiting its turn), what it reads as, who is on it or that
- * it is next, where it came from, the line as written where a name stands in for it; its place at the
- * right, which gives its room to its start and its removal.
+ * it is next, then where it came from, or a typed entry's words after its name, or the line as written
+ * where a name stands in for it. Nothing at its right at rest: its one press comes under the pointer
+ * and the keyboard, and is always there on touch. A free entry's is "Start now", one an agent is on a
+ * menu; removing it is in the menu of both.
  */
 function EntryRow({ project, placed, next, names, starts, reload }: { project: ModuleProject; placed: Numbered; next: boolean; names: FileNames; starts: QueueStarts; reload: () => Promise<void> }) {
   const host = useModuleHost()
+  const [removing, setRemoving] = useState(false)
   const { entry, place, agent } = placed
   const view = entryView(project.id, entry, names)
+  const from = origin(entry)
+  const headline = from === undefined && !view.renamed ? entryHeadline(view.title) : undefined
   const remove = async (): Promise<void> => {
     const answer = await host.act(project.id, doneArgs(entry))
     if (!answer.ok) throw new Error(answer.error)
     await reload()
   }
+  const menuLabel = `More for entry ${place}`
   return (
-    <PanelRow
-      state={<StateCell state={agent === undefined ? 'queued' : agent.status === 'waiting' ? 'waiting' : 'working'} />}
-      title={view.title}
-      titleHint={entry}
-      href={view.url}
-      external={view.url !== undefined}
-      onClick={view.open}
-      meta={[
-        agent !== undefined ? <AgentOnEntry projectId={project.id} agent={agent} /> : next && 'Next up',
-        origin(entry),
-        // The line as written, under a name that stands in for it: it is what an agent is handed.
-        view.renamed && <span className="font-mono">{entry}</span>,
-      ]}
-      fact={ordinal(place)}
-      actions={
-        <>
-          {agent === undefined && (
+    <>
+      <PanelRow
+        state={<StateCell state={agent === undefined ? 'queued' : agent.status === 'waiting' ? 'waiting' : 'working'} />}
+        title={headline?.name ?? view.title}
+        titleHint={entry}
+        href={view.url}
+        external={view.url !== undefined}
+        onClick={view.open}
+        meta={[
+          agent !== undefined ? <AgentOnEntry projectId={project.id} agent={agent} /> : next && 'Next up',
+          from ?? headline?.rest,
+          // The line as written, under a name that stands in for it: it is what an agent is handed.
+          view.renamed && <span className="font-mono">{entry}</span>,
+        ]}
+        actions={
+          agent === undefined ? (
             <StartAgentButton
               variant="secondary"
               size="sm"
               icon={<Play className="size-3.5" aria-hidden />}
               label="Start now"
               ariaLabel={`Start now: entry ${place}`}
-              menuAriaLabel={`Other ways to run ${view.title}`}
+              menuAriaLabel={menuLabel}
               tooltip="Start an agent working on this entry"
               busy={starts.inFlight}
               starting={starts.starting(project.id, entry)}
@@ -334,29 +342,36 @@ function EntryRow({ project, placed, next, names, starts, reload }: { project: M
               onConfigure={() => host.configureRun(project.id, workOnEntryPrompt(entry))}
               prompt={workOnEntryPrompt(entry)}
               configureDescription="Opens the launcher with this entry's prompt, so you can set the model and where it runs."
+              moreItems={[{ label: 'Remove from the queue', onSelect: () => setRemoving(true) }]}
             />
-          )}
-          <ConfirmDialog
-            trigger={
-              <Button variant="ghost" size="icon-sm" aria-label={`Remove entry ${place} from the queue`} title="Remove from the queue" className="text-muted-foreground hover:text-danger">
-                <Trash2 className="size-4" aria-hidden />
-              </Button>
-            }
-            title="Remove this entry from the queue?"
-            body={
-              <>
-                <span className="block break-words font-mono text-xs">{entry}</span>
-                <span className="mt-2 block">It is deleted from the queue of {project.name}, for everyone who shares it. Nothing else changes: no ticket is closed, and an agent already working on it goes on.</span>
-              </>
-            }
-            confirmLabel="Remove"
-            confirmBusyLabel="Removing…"
-            onConfirm={remove}
-            fallbackError="The entry was not removed."
-          />
-        </>
-      }
-    />
+          ) : (
+            <DropdownMenu>
+              <DropdownMenuTrigger render={<Button variant="ghost" size="icon-sm" aria-label={menuLabel} />}>
+                <Ellipsis className="size-4" aria-hidden />
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                <DropdownMenuItem onClick={() => setRemoving(true)}>Remove from the queue</DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          )
+        }
+      />
+      <ConfirmDialog
+        open={removing}
+        onOpenChange={setRemoving}
+        title="Remove this entry from the queue?"
+        body={
+          <>
+            <span className="block break-words font-mono text-xs">{entry}</span>
+            <span className="mt-2 block">It is deleted from the queue of {project.name}, for everyone who shares it. Nothing else changes: no ticket is closed, and an agent already working on it goes on.</span>
+          </>
+        }
+        confirmLabel="Remove"
+        confirmBusyLabel="Removing…"
+        onConfirm={remove}
+        fallbackError="The entry was not removed."
+      />
+    </>
   )
 }
 

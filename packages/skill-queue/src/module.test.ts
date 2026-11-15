@@ -1,6 +1,6 @@
 import { strict as assert } from 'node:assert'
 import { test } from 'node:test'
-import { DEFAULT_FAN_OUT_COUNT, DEFAULT_PRIORITY, PRIORITIES, QUEUE_COMMAND, addArgs, addTextArgs, doneArgs, isEntryLine, isPlacedEntry, isWorkingOn, ordinal, priorityMeaning, priorityName, addToQueue, alreadyQueued, entryLabel, fanOut, fanOutLabel, queueLine, readEntries, topEntries, workOnEntryPrompt, type CommandResult } from './module.js'
+import { DEFAULT_FAN_OUT_COUNT, DEFAULT_PRIORITY, PRIORITIES, QUEUE_COMMAND, addArgs, addTextArgs, doneArgs, isEntryLine, isPlacedEntry, isWorkingOn, entryHeadline, priorityMeaning, priorityName, addToQueue, alreadyQueued, entryLabel, fanOut, fanOutLabel, queueLine, readEntries, topEntries, workOnEntryPrompt, type CommandResult } from './module.js'
 
 test('entryLabel shows a leading link\'s text, opens only an absolute http(s) target, and keeps anything else whole', () => {
   assert.deepEqual(entryLabel('[Login page](tickets/2026-08-01_login-page.md) — needs the cookie first'), { text: 'Login page' })
@@ -147,10 +147,16 @@ test('an agent is on an entry when it was asked exactly what the page asks for t
   assert.equal(isWorkingOn('/work-queue', '  '), false)
 })
 
-test('ordinal says a place as it is read: 1st, 2nd, 3rd, then th, and th again from 11 to 13 of every hundred', () => {
-  assert.deepEqual([1, 2, 3, 4, 10, 11, 12, 13, 21, 22, 23, 101, 111, 112].map(ordinal), ['1st', '2nd', '3rd', '4th', '10th', '11th', '12th', '13th', '21st', '22nd', '23rd', '101st', '111th', '112th'])
+test('entryHeadline names a typed entry by its words up to the first sentence end, colon or dash, the rest under it; a line without one is all name', () => {
+  assert.deepEqual(entryHeadline('Fix the checkout rounding. Coupons and gift cards both apply.'), { name: 'Fix the checkout rounding', rest: 'Coupons and gift cards both apply.' })
+  assert.deepEqual(entryHeadline('Search: forgive typos in product names'), { name: 'Search', rest: 'forgive typos in product names' })
+  assert.deepEqual(entryHeadline('Dark mode — follow the system setting'), { name: 'Dark mode', rest: 'follow the system setting' })
+  assert.deepEqual(entryHeadline('Is the cart slow? Measure it first'), { name: 'Is the cart slow', rest: 'Measure it first' })
+  // A dot, colon or dash inside a word is part of it.
+  assert.deepEqual(entryHeadline('  Bump vite to 7.1 and fix src/app.ts:12 re-renders  '), { name: 'Bump vite to 7.1 and fix src/app.ts:12 re-renders' })
+  assert.deepEqual(entryHeadline('Ends with a dot.'), { name: 'Ends with a dot.' })
 })
 
 test('priorityName names a section by what it means: the two ends as the queue file says them, then three bands', () => {
-  assert.deepEqual([10, 9, 7, 6, 4, 3, 1, 0].map(priorityName), ['Most urgent', 'Urgent', 'Urgent', 'Normal', 'Normal', 'Low', 'Low', 'Only if there is capacity'])
+  assert.deepEqual([10, 9, 7, 6, 4, 3, 1, 0].map(priorityName), ['Most urgent', 'Urgent', 'Urgent', 'Normal', 'Normal', "When there's room", "When there's room", 'Only if there is capacity'])
 })

@@ -6,6 +6,7 @@ import { forgetRemembered, type ModuleScheduledCommand } from '@openagt/dashboar
 import { QueuePage } from './QueuePage.js'
 import { NO_MODULES, fakeHost, renderWithHost, type FakeHost } from './test-host.js'
 import { workOnEntryPrompt } from '../src/module.js'
+import { openMenu } from '../../dashboard/dashboard/test-utils.js'
 
 // The page rendered from nothing but this package: a host answering `queue --local --full`, and
 // the queue's own `done` and `add`. What other packages tell it (which commands start by
@@ -39,8 +40,13 @@ function scheduling(commands: ModuleScheduledCommand[]): MountedModules {
   }
 }
 
-/** The section headings with their badges and counts and the entries, top to bottom, as the page shows them: an entry with its place. */
-const shown = () => [...document.querySelectorAll('h2, ul > li')].map(node => (node.tagName === 'H2' ? node.textContent : `${node.textContent?.match(/\d+(st|nd|rd|th)/)?.[0]} ${node.querySelector('[title]')?.textContent}`))
+/** The section headings with their badges and counts and the entries' names, top to bottom, as the page shows them. */
+const shown = () => [...document.querySelectorAll('h2, ul > li')].map(node => (node.tagName === 'H2' ? node.textContent : node.querySelector('[title]')?.textContent))
+/** Entry `place`'s menu opened, and its removal asked for. */
+const removeEntry = async (place: number): Promise<void> => {
+  await openMenu(await screen.findByRole('button', { name: `More for entry ${place}` }))
+  fireEvent.click(await screen.findByRole('menuitem', { name: 'Remove from the queue' }))
+}
 const taker = (): string => screen.getByRole('status', { name: 'Who takes from the queue' }).textContent ?? ''
 /** What the status at the page's head says once pressed. */
 const takerSentence = async (): Promise<string> => {
@@ -49,16 +55,21 @@ const takerSentence = async (): Promise<string> => {
 }
 
 describe('QueuePage', () => {
-  test('shows the entries in the order agents take them, their places counted across the sections: an unranked entry above the sections is first', async () => {
+  test('shows the entries in the order agents take them, under the section each sits in: an unranked entry above the sections is first', async () => {
     show()
     await screen.findByText('Hand-written on top')
-    expect(shown()).toEqual(['No priority 1', '1st Hand-written on top', 'Urgent P8 2', '2nd Hot fix', '3rd Also urgent', 'Low P3 1', '4th Later'])
+    expect(shown()).toEqual(['No priority 1', 'Hand-written on top', 'Urgent P8 2', 'Hot fix', 'Also urgent', "When there's room P3 1", 'Later'])
   })
 
-  test('the first entry nobody is on says it is next up; where an entry came from is said under it', async () => {
-    show([{ entry: 'Tidy the loader', priority: 5 }, { entry: '[Login page](tickets/2026-08-01_login-page.md)', priority: 5 }, { entry: '[Upstream bug](https://github.com/x/y/issues/1)', priority: 5 }])
+  test('the first entry nobody is on says it is next up; under a name, where the entry came from, or a typed entry\'s words after its name', async () => {
+    show([{ entry: 'Tidy the loader', priority: 5 }, { entry: '[Login page](tickets/2026-08-01_login-page.md)', priority: 5 }, { entry: '[Upstream bug](https://github.com/x/y/issues/1)', priority: 5 }, { entry: 'Search: forgive typos in product names', priority: 5 }])
     const first = (await screen.findByText('Tidy the loader')).closest('li')!
-    expect(first.textContent).toContain('Next up·typed')
+    // A typed line with nothing after its name is the name alone.
+    expect(first.textContent).toContain('Next up')
+    expect(first.textContent).not.toContain('·')
+    const typed = screen.getByText('Search').closest('li')!
+    expect(typed.textContent).toContain('forgive typos in product names')
+    expect(typed.querySelector('[title]')?.getAttribute('title')).toBe('Search: forgive typos in product names')
     expect(screen.getByText('Login page').closest('li')!.textContent).toContain('from a ticket')
     expect(screen.getByText('Login page').closest('li')!.textContent).not.toContain('Next up')
     expect(screen.getByText('Upstream bug').closest('li')!.textContent).toContain('from github.com')
@@ -78,10 +89,9 @@ describe('QueuePage', () => {
     expect(screen.queryByText('Loading…')).toBeNull()
   })
 
-  test('says what the two ends of the scale mean: on the page, and as the name of a section at either end', async () => {
+  test('names a section at either end of the scale by what that end means', async () => {
     show([{ entry: 'Now', priority: 10 }, { entry: 'Some day', priority: 0 }])
     await screen.findByText('Now')
-    expect(screen.getByText(/10 is the most urgent, 0 is only if there is capacity/)).toBeTruthy()
     expect(screen.getByRole('region', { name: 'Most urgent' })).toBeTruthy()
     expect(screen.getByRole('region', { name: 'Only if there is capacity' })).toBeTruthy()
   })
@@ -227,6 +237,9 @@ describe('QueuePage', () => {
       renderWithHost(<QueuePage projects={[alpha]} projectId={null} path={[]} />, host)
       await screen.findByRole('button', { name: /^(An agent is on it|Waiting on you) · / })
       expect(screen.queryByRole('button', { name: 'Start now: entry 1' })).toBeNull()
+      // Its one press is its menu, which still removes it.
+      await removeEntry(1)
+      fireEvent.click(within(await screen.findByRole('alertdialog')).getByRole('button', { name: 'Cancel' }))
       fireEvent.change(screen.getByRole('spinbutton', { name: 'How many agents to start' }), { target: { value: '2' } })
       fireEvent.click(screen.getByRole('button', { name: 'Start 2 agents' }))
       await waitFor(() =>
@@ -239,10 +252,10 @@ describe('QueuePage', () => {
   })
 
   describe('removing', () => {
-    test('the bin asks first, with the entry as written; "Remove" runs `queue done` with exactly that line and reads the queue again', async () => {
+    test('removing, from the entry\'s menu, asks first, with the entry as written; "Remove" runs `queue done` with exactly that line and reads the queue again', async () => {
       show()
       await screen.findByText('Hot fix')
-      fireEvent.click(screen.getByRole('button', { name: 'Remove entry 2 from the queue' }))
+      await removeEntry(2)
       const dialog = await screen.findByRole('alertdialog')
       expect(dialog.textContent).toContain('Remove this entry from the queue?')
       expect(dialog.textContent).toContain('Hot fix')
@@ -256,7 +269,7 @@ describe('QueuePage', () => {
     test('"Cancel" removes nothing', async () => {
       show()
       await screen.findByText('Hot fix')
-      fireEvent.click(screen.getByRole('button', { name: 'Remove entry 2 from the queue' }))
+      await removeEntry(2)
       fireEvent.click(within(await screen.findByRole('alertdialog')).getByRole('button', { name: 'Cancel' }))
       await waitFor(() => expect(screen.queryByRole('alertdialog')).toBeNull())
       expect(host.act).not.toHaveBeenCalled()
@@ -266,7 +279,7 @@ describe('QueuePage', () => {
       show()
       await screen.findByText('Hot fix')
       host.act.mockImplementation(async () => ({ ok: false, error: 'no open queue entry reads "Hot fix"' }))
-      fireEvent.click(screen.getByRole('button', { name: 'Remove entry 2 from the queue' }))
+      await removeEntry(2)
       const dialog = await screen.findByRole('alertdialog')
       fireEvent.click(within(dialog).getByRole('button', { name: 'Remove' }))
       expect(await within(dialog).findByText('no open queue entry reads "Hot fix"')).toBeTruthy()
@@ -359,7 +372,7 @@ describe('QueuePage', () => {
       fireEvent.click(screen.getByRole('button', { name: 'Start now: entry 1' }))
       await waitFor(() => expect(host.startRun.mock.calls).toEqual([['p1', workOnEntryPrompt(PLAN)]]))
       // And what is removed is the line as written: the queue knows no other name for it.
-      fireEvent.click(screen.getByRole('button', { name: 'Remove entry 1 from the queue' }))
+      await removeEntry(1)
       fireEvent.click(within(await screen.findByRole('alertdialog')).getByRole('button', { name: 'Remove' }))
       await waitFor(() => expect(host.act).toHaveBeenCalledWith('p1', ['done', '--', PLAN]))
     })
