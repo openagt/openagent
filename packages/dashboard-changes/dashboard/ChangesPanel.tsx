@@ -62,7 +62,8 @@ const NO_COMMITS: AgentCommit[] = []
 const NO_CHANGES: Record<string, FileMark> = {}
 
 /** The pane while its list is read: rows in a row's shape. */
-const Reading = () => <Waiting shape={<RowShapes rows={3} />} className="px-3 py-1" />
+/** Rows in their own shape while the pane is read; `className` sets them on the 16 inset of where they stand. */
+const Reading = ({ className }: { className: string }) => <Waiting shape={<RowShapes rows={3} />} className={className} />
 
 /** The last ask from the chat that was taken: a pane opened again later does not take it a second time. */
 let revealTaken = 0
@@ -537,7 +538,7 @@ export function ChangesPanel({ projectId, agentId, activity, reveal }: ModulePan
   const waiting = (
     <>
       {header}
-      <Reading />
+      <Reading className="px-4 py-2" />
     </>
   )
   if (agentId) {
@@ -567,7 +568,7 @@ export function ChangesPanel({ projectId, agentId, activity, reveal }: ModulePan
                 {caption}
               </p>
             )}
-            {paths.length === 0 && (nothing === undefined ? <Reading /> : <PaneNote>{nothing}</PaneNote>)}
+            {paths.length === 0 && (nothing === undefined ? <Reading className="px-2" /> : <PaneNote>{nothing}</PaneNote>)}
             {paths.map(path => {
               const mark = changes[path]!
               const isFolded = folded.has(path)
