@@ -31,6 +31,9 @@ const NO_META: TicketsMeta = {}
 /** From how many shown tickets a list is grouped by stage, when they stand in more than one. */
 export const GROUP_BY_STAGE_FROM = 13
 
+/** The stages whose word carries a mark: inside their own group the row keeps both, the mark never without its word. */
+const MARKED: readonly TicketStageId[] = ['claimed', 'waiting']
+
 /** A ticket of a list, with the project it is in: where its next step starts and where it opens. */
 export interface ListedTicket {
   projectId: string
@@ -68,7 +71,7 @@ export function TicketRows({ rows, ...props }: RowsProps & { rows: readonly List
     <div className="space-y-8">
       {stages.map(part => (
         <PanelGroup key={part.stage} title={STAGE_LABEL[part.stage]}>
-          {part.rows.map(listed => row(listed, false))}
+          {part.rows.map(listed => row(listed, MARKED.includes(part.stage)))}
         </PanelGroup>
       ))}
     </div>
@@ -80,7 +83,7 @@ function TicketRow({ listed, priorities, showStage, busy, starting, isSelected, 
   listed: ListedTicket
   /** Whether some ticket of the list has a priority: the column is kept on every row, or on none. */
   priorities: boolean
-  /** Said on the row: not where the row's part is named by its stage. */
+  /** Said on the row: not where the row's part is named by its stage, unless its word carries a mark. */
   showStage: boolean
 }) {
   const host = useModuleHost()

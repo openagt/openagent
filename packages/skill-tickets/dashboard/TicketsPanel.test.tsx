@@ -258,6 +258,9 @@ describe('the tickets list', () => {
     // A part's name says its rows' stage: they do not say it again.
     const planned = screen.getByRole('region', { name: 'Planned' })
     expect(within(planned).queryByText('Planned', { selector: 'li *' })).toBeNull()
+    // A claim's mark keeps its word, in its own group too.
+    const claimed = within(screen.getByRole('region', { name: 'Claimed' })).getByText('Claimed', { selector: 'li *' })
+    expect(claimed.parentElement!.querySelector('svg')).not.toBeNull()
     cleanup()
     render(<Rows tickets={many.slice(0, GROUP_BY_STAGE_FROM - 1)} />)
     await screen.findByText('Ticket 0')
