@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
-import { Check, ClipboardPlus, Play } from 'lucide-react'
-import { StartAgentButton, useLinkActions, type StartMenuItem } from '@openagt/dashboard/module'
+import { Check, ClipboardPlus, ListPlus, Play } from 'lucide-react'
+import { Button, StartAgentButton, Tooltip, TooltipContent, TooltipTrigger, cn, useLinkActions, type StartMenuItem } from '@openagt/dashboard/module'
 import { planLink, planTicketPrompt, ticketLink, workOnTicketPrompt } from '../src/module.js'
 
 /**
@@ -70,29 +70,32 @@ export function TicketStartActions({
   }
   // Queued here, or read as queued already (an entry on the queue for this ask).
   const isQueued = queued === 'done' || actions.some(action => action.done)
-  const moreItems: StartMenuItem[] = actions.map(action => ({
-    label: queued === 'done' || action.done ? (action.doneLabel ?? action.label) : step.later,
-    description: step.laterSays,
-    disabled: queued === 'running' || queued === 'done' || action.done,
-    onSelect: () => void queue(action.key),
-  }))
-  const size = compact ? 'sm' : 'default'
+  const failed = queued !== null && typeof queued === 'object' ? queued.error : null
+  // On a row the queue is in the start's menu; on the page it is a press of its own beside it.
+  const moreItems: StartMenuItem[] = compact
+    ? actions.map(action => ({
+        label: queued === 'done' || action.done ? (action.doneLabel ?? action.label) : step.later,
+        description: step.laterSays,
+        disabled: queued === 'running' || queued === 'done' || action.done,
+        onSelect: () => void queue(action.key),
+      }))
+    : []
   return (
     <>
-      {isQueued && (
+      {compact && isQueued && (
         <span className="flex items-center gap-1 text-xs text-muted-foreground">
           <Check className="size-3.5" aria-hidden /> Queued
         </span>
       )}
-      {queued !== null && typeof queued === 'object' && (
-        <span role="alert" title={queued.error} className="text-xs text-danger">
-          {compact ? 'Not queued' : `Not queued: ${queued.error}`}
+      {compact && failed !== null && (
+        <span role="alert" title={failed} className="text-xs text-danger">
+          Not queued
         </span>
       )}
       {/* The page's one primary press; on a list's row, a ghost press among many rows. */}
       <StartAgentButton
         variant={compact ? 'ghost' : 'default'}
-        size={size}
+        size={compact ? 'sm' : 'default'}
         icon={<step.Icon className="size-4" aria-hidden />}
         label={step.now}
         menuAriaLabel={step.menu}
@@ -105,6 +108,26 @@ export function TicketStartActions({
         onConfigure={() => onConfigure(step.prompt)}
         moreItems={moreItems}
       />
+      {!compact &&
+        actions.map(action => {
+          const done = queued === 'done' || action.done
+          return (
+            <Tooltip key={action.key}>
+              <TooltipTrigger
+                render={<Button variant="secondary" loading={queued === 'running'} aria-disabled={done || undefined} onClick={() => !done && void queue(action.key)} className={cn(done && 'text-muted-foreground')} />}
+              >
+                {done ? <Check className="size-4" aria-hidden /> : <ListPlus className="size-4" aria-hidden />}
+                {done ? (action.doneLabel ?? 'Queued') : step.later}
+              </TooltipTrigger>
+              <TooltipContent>{done ? 'It is on the queue.' : step.laterSays}</TooltipContent>
+            </Tooltip>
+          )
+        })}
+      {!compact && failed !== null && (
+        <span role="alert" className="text-xs text-danger">
+          Not queued: {failed}
+        </span>
+      )}
     </>
   )
 }

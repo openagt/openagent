@@ -141,7 +141,7 @@ export function TicketEditor({
           Not saved: {error}
         </p>
       )}
-      <div className="flex justify-end gap-2 pt-2">
+      <div className="flex justify-end gap-2 pt-2 max-md:*:h-11 max-md:*:flex-1">
         <Button type="button" variant="ghost" size="lg" onClick={onCancel} disabled={saving}>
           Cancel
         </Button>

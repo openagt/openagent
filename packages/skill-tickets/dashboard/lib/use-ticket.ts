@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import { runsAgain, usePolled, useModuleHost, type ReadState } from '@openagt/dashboard/module'
 import { holderAgent, readShown, withHolder } from '../../src/module.js'
 import { sessionsOf, type TicketSession } from '../TicketSessions.js'
@@ -14,10 +15,13 @@ export type TicketRead =
   | { ticket: WorkspaceTicketDetail | null; plan: string | null; holderStatus?: string; sessions: TicketSession[] }
   | { error: string }
 
-/** The ticket `slug` of a project, read by identity (`tickets show <file> --local`) and again every 10 s. */
-export function useTicket(projectId: string, slug: string): { read: TicketRead | null; state: ReadState; reload: () => Promise<void> } {
+/**
+ * The ticket `slug` of a project, read by identity (`tickets show <file> --local`) and again every 10 s.
+ * `released` withdraws its claim at once, until a read no longer shows that holder's claim.
+ */
+export function useTicket(projectId: string, slug: string): { read: TicketRead | null; state: ReadState; reload: () => Promise<void>; released: () => void } {
   const host = useModuleHost()
-  const { value: read, state, reload } = usePolled<TicketRead | null>(
+  const { value: polled, state, reload } = usePolled<TicketRead | null>(
     async () => {
       const [shown, agents] = await Promise.all([host.runCommand(projectId, ['show', slug, '--local']).then(readShown), host.agents(projectId).catch(() => [])])
       if ('error' in shown) return shown
@@ -36,5 +40,17 @@ export function useTicket(projectId: string, slug: string): { read: TicketRead |
     undefined,
     runsAgain(projectId),
   )
-  return { read, state, reload }
+  const [releasedFrom, setReleasedFrom] = useState<string | null>(null)
+  const ticket = polled && 'ticket' in polled ? polled.ticket : null
+  let read = polled
+  if (polled && 'ticket' in polled && ticket?.locked && ticket.lockedBy === releasedFrom) {
+    const { lockedBy: _by, lockedByAgent: _agent, ...free } = ticket
+    const { holderStatus: _status, ...rest } = polled
+    read = { ...rest, ticket: { ...free, locked: false } }
+  }
+  const released = () => {
+    setReleasedFrom(ticket?.lockedBy ?? null)
+    void reload()
+  }
+  return { read, state, reload, released }
 }

@@ -1,5 +1,5 @@
-import { useEffect, useRef, useState } from 'react'
-import { ExternalLink, LockOpen, MoreHorizontal, Pencil } from 'lucide-react'
+import { Fragment, useEffect, useRef, useState, type ReactNode } from 'react'
+import { LockOpen, MoreHorizontal, Pencil } from 'lucide-react'
 import {
   Badge,
   Button,
@@ -8,8 +8,8 @@ import {
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
+  PriorityBadge,
   cn,
-  formatAge,
   formatDateTime,
   runSaid,
   useAction,
@@ -17,52 +17,57 @@ import {
   useOpenAgentDown,
 } from '@openagt/dashboard/module'
 import { claimState, heldBack } from '../src/module.js'
+import { TICKETS_DIR } from '../src/names.js'
 import type { WorkspaceTicketDetail } from './lib/types.js'
 import { releaseClaim } from './lib/release.js'
-import { priorityTone } from './lib/ticket-priority.js'
+import { parsePriority } from './lib/ticket-priority.js'
+import { STAGE_LABEL, ticketStage } from './lib/ticket-stage.js'
 import { TicketStartActions } from './TicketStartActions.js'
 import { TicketSessions, type TicketSession } from './TicketSessions.js'
+import { StageWord } from './TicketsPanel.js'
 
-/** Which of a ticket's two pages is shown under its header. */
+/** Which of a ticket's two pages is shown under its head. */
 export type TicketTab = 'ticket' | 'plan'
 
+/** A ticket's file as the crumb names it: its name without the date it was written on and `.md`. */
+export function ticketSlug(file: string): string {
+  return file.replace(/\.md$/, '').replace(/^\d{4}-\d{2}-\d{2}_/, '')
+}
+
 /**
- * The head both of a ticket's pages share, so moving between them keeps one's place: its title
- * with its next step (one button, the rest in its menu) and the rarer actions behind "More", what
- * is known about it on one line, its two pages as tabs, and the sessions that planned and worked it.
+ * The head both of a ticket's pages share, so moving between them keeps one's place: its title,
+ * (on a narrow screen its priority and stage under it), its next step now or queued and the rarer
+ * actions behind "More", then its two pages as tabs.
  */
 export function TicketHeader({
   projectId,
   ticket,
   holderStatus,
-  sessions,
   tab,
   onEdit,
-  onChanged,
+  onReleased,
 }: {
   projectId: string
   ticket: WorkspaceTicketDetail
   /** How the run holding its claim stands, when one of the project's runs holds it. */
   holderStatus?: string | undefined
-  sessions: readonly TicketSession[]
   tab: TicketTab
   /** Edit the ticket by hand; none where the page does not edit it. */
   onEdit?: (() => void) | undefined
-  /** The ticket changed here (its claim lifted): read it again. */
-  onChanged: () => void
+  /** Its claim was lifted here. */
+  onReleased: () => void
 }) {
   const host = useModuleHost()
   const { busy, error, run } = useAction()
   const down = useOpenAgentDown()
-  // A lifted claim bridges the gap until the next read says so.
   const [released, setReleased] = useState(false)
-  const claimed = Boolean(ticket.locked) && !released
+  const claimed = Boolean(ticket.locked)
   const holder = ticket.lockedByAgent?.name ?? ticket.lockedBy
   const offered = !heldBack(ticket) && !claimed
   const working = claimState(holderStatus) === 'working'
   const lifted = () => {
     setReleased(true)
-    onChanged()
+    onReleased()
   }
   const release = async () => {
     const outcome = await run(() => releaseClaim(host, projectId, ticket.file), 'The claim could not be lifted.')
@@ -70,7 +75,7 @@ export function TicketHeader({
   }
   // A run at work on it keeps working, and the ticket is then free for another agent: the release asks first.
   const [asking, setAsking] = useState(false)
-  // Released, its menu item is gone: the focus goes to the ticket's title, not to the page's body.
+  // Released, its press is gone: the focus goes to the ticket's title, not to the page's body.
   const title = useRef<HTMLHeadingElement>(null)
   useEffect(() => {
     if (released) title.current?.focus()
@@ -83,22 +88,29 @@ export function TicketHeader({
     setStarting(null)
   }
   const open = (path: string[]) => host.openPage('tickets', path, projectId)
-  const more = [
-    ...(onEdit ? [{ label: 'Edit ticket', Icon: Pencil, onSelect: onEdit }] : []),
-    ...(claimed ? [{ label: 'Release the claim', Icon: LockOpen, onSelect: () => (working ? setAsking(true) : void release()) }] : []),
-  ]
+  const more = onEdit ? [{ label: 'Edit ticket', Icon: Pencil, onSelect: onEdit }] : []
+  const priority = parsePriority(ticket.priority)
+  const stage = ticketStage(ticket)
 
   return (
     <div>
-      {/* The title, then its presses at its right: from a tablet up a long title wraps in its own room
-          and the presses stay on its first line; on a phone they go under a title too long to share one. */}
-      <div className="flex items-start justify-between gap-x-3 gap-y-2 max-md:flex-wrap">
-        <h1 ref={title} tabIndex={-1} className="min-w-0 text-xl font-semibold outline-none md:flex-1 md:py-0.5" title={ticket.file}>
-          {ticket.title}
-        </h1>
-        <div className="flex shrink-0 items-center gap-1.5">
+      <h1 ref={title} tabIndex={-1} className="text-2xl font-semibold tracking-tight outline-none max-md:text-xl" title={ticket.file}>
+        {ticket.title}
+      </h1>
+      {/* What decides the next step, under the title where the facts are not beside it. */}
+      <p className="mt-2 flex items-center gap-2 text-sm text-muted-foreground lg:hidden">
+        {priority !== undefined && (
+          <>
+            <span className="font-medium tabular-nums">P{priority}</span>
+            <span aria-hidden className="text-faint-foreground">·</span>
+          </>
+        )}
+        <span>{STAGE_LABEL[stage]}</span>
+      </p>
+      {(offered || claimed || more.length > 0) && (
+        <div className="mt-6 flex flex-wrap items-center gap-2 max-md:mt-4">
           {/* The next step, now or queued: none for a ticket in review or waiting, which is never
-              handed to an agent, nor for a claimed one, which an agent holds. Released, it is offered. */}
+              handed to an agent, nor for a claimed one, which an agent holds: its step is the release. */}
           {offered && (
             <TicketStartActions
               projectId={projectId}
@@ -109,14 +121,17 @@ export function TicketHeader({
               onConfigure={prompt => host.configureRun(projectId, prompt)}
             />
           )}
-          {/* The rarer actions behind "More". Its place is kept where it has none (the plan's tab),
-              so the next step stands at one x on both of the ticket's pages. */}
-          {more.length > 0 ? (
+          {claimed && (
+            <Button variant="secondary" disabled={busy || down} onClick={() => (working ? setAsking(true) : void release())}>
+              <LockOpen className="size-4" aria-hidden /> Release the claim
+            </Button>
+          )}
+          {more.length > 0 && (
             <DropdownMenu>
-              <DropdownMenuTrigger render={<Button variant="ghost" size="icon" aria-label="More" className="text-muted-foreground" />}>
+              <DropdownMenuTrigger render={<Button variant="ghost" size="icon" aria-label="More" className={cn('text-muted-foreground', !offered && !claimed && '-ml-2')} />}>
                 <MoreHorizontal className="size-4" aria-hidden />
               </DropdownMenuTrigger>
-              <DropdownMenuContent align="end">
+              <DropdownMenuContent align="start">
                 {more.map(item => (
                   <DropdownMenuItem key={item.label} onClick={item.onSelect} disabled={busy || down}>
                     <item.Icon className="size-4 text-muted-foreground" aria-hidden /> {item.label}
@@ -124,11 +139,9 @@ export function TicketHeader({
                 ))}
               </DropdownMenuContent>
             </DropdownMenu>
-          ) : (
-            offered && <span aria-hidden className="size-8" />
           )}
         </div>
-      </div>
+      )}
       <ConfirmDialog
         open={asking}
         onOpenChange={setAsking}
@@ -143,10 +156,9 @@ export function TicketHeader({
         onSuccess={lifted}
         fallbackError="The claim could not be lifted."
       />
-      <TicketFacts ticket={ticket} claimed={claimed} holder={holder} holderStatus={holderStatus} onOpenAgent={agentId => host.openAgent(projectId, agentId)} />
       {error && <p role="alert" className="mt-2 text-xs text-danger">{error}</p>}
       {/* The ticket's two pages, as tabs: what it asks, and how it will be done. */}
-      <div role="tablist" className="mt-6 flex gap-6 border-b border-hairline text-sm">
+      <div role="tablist" className="mt-6 mb-6 flex gap-6 border-b border-hairline text-sm">
         {(['ticket', 'plan'] as const).map(name => (
           <button
             key={name}
@@ -154,126 +166,139 @@ export function TicketHeader({
             role="tab"
             aria-selected={tab === name}
             onClick={() => tab !== name && open(name === 'ticket' ? [ticket.file] : [ticket.file, 'plan'])}
-            className={cn('focus-ring -mb-px flex h-9 items-center rounded-t-sm border-b-2 font-medium transition-colors', tab === name ? 'border-foreground text-foreground' : 'border-transparent text-muted-foreground hover:text-foreground')}
+            className={cn(
+              'focus-ring -mb-px flex h-9 items-center rounded-t-sm border-b-2 font-medium transition-colors max-md:h-11',
+              tab === name ? 'border-foreground text-foreground' : 'border-transparent text-muted-foreground pointer-fine:hover:text-foreground',
+            )}
           >
             {name === 'ticket' ? 'Ticket' : 'Plan'}
-            {name === 'plan' && !ticket.planned && <span className="ml-2 text-xs font-normal text-muted-foreground">none yet</span>}
           </button>
         ))}
       </div>
-      {sessions.length > 0 && (
-        <div className="mt-6">
-          <TicketSessions sessions={sessions} onOpen={agentId => host.openAgent(projectId, agentId)} />
-        </div>
-      )}
     </div>
   )
 }
 
 /**
- * What is known about the ticket, on one line under its title (#1144/#1265): its issue, age and
- * priority lead, then where it stands, then what its plan says of the work, then its topics.
+ * What is known of a ticket, at the side of its page (under its text on a narrow screen): one fact a
+ * line, a name and its value, then the runs that planned and worked it.
  */
-function TicketFacts({
+export function TicketFacts({
+  projectId,
   ticket,
-  claimed,
-  holder,
   holderStatus,
-  onOpenAgent,
+  sessions,
 }: {
+  projectId: string
   ticket: WorkspaceTicketDetail
-  claimed: boolean
-  holder: string | undefined
-  holderStatus: string | undefined
-  onOpenAgent: (agentId: string) => void
+  holderStatus?: string | undefined
+  sessions: readonly TicketSession[]
 }) {
-  const dot = <span aria-hidden>·</span>
+  const host = useModuleHost()
+  const priority = parsePriority(ticket.priority)
+  const holder = ticket.lockedByAgent?.name ?? ticket.lockedBy
+  const withStatus = { ...ticket, ...(holderStatus !== undefined ? { holderStatus } : {}) }
   return (
-    <div className="mt-2 flex flex-wrap items-center gap-x-1.5 gap-y-1 text-xs text-muted-foreground">
-      {ticket.issue && (
-        <>
-          <a href={ticket.issue.url} target="_blank" rel="noreferrer" className="focus-ring inline-flex items-center gap-1 rounded-sm hover:text-foreground hover:underline">
-            <ExternalLink className="h-3.5 w-3.5" aria-hidden />
-            {ticket.issue.label}
-          </a>
-          {dot}
-        </>
-      )}
-      <span className="tabular-nums" title={formatDateTime(ticket.date)}>{formatAge(ticket.date)}</span>
-      {ticket.priority && (
-        <>
-          {dot}
-          <span className={priorityTone(ticket.priority)}>Priority {ticket.priority}</span>
-        </>
-      )}
-      {ticket.pr && (
-        <>
-          {dot}
-          <a href={ticket.pr.url} target="_blank" rel="noreferrer" className="focus-ring rounded-sm text-info hover:underline">
-            In review · {ticket.pr.label}
-          </a>
-        </>
-      )}
-      {ticket.waiting && (
-        <>
-          {dot}
-          <span className="text-warning">Waiting · {ticket.waiting}</span>
-        </>
-      )}
-      {/* The holder inline (#1420): one of this project's agents (#1748) is named by its session
-          and opens its page; anyone else is shown as written. */}
-      {claimed && (
-        <>
-          {dot}
-          <span className="text-warning">
-            Claimed
-            {holder &&
-              (ticket.lockedByAgent ? (
-                <>
-                  {' · '}
-                  <button type="button" className="focus-ring rounded-sm hover:underline" onClick={() => onOpenAgent(ticket.lockedByAgent!.id)}>
-                    {holder}
-                  </button>
-                  {holderStatus !== undefined && ` · ${standing(holderStatus)}`}
-                </>
-              ) : (
-                ` · ${holder}`
-              ))}
+    <aside aria-label="About this ticket" className="text-sm">
+      <dl>
+        {/* Priority and stage stand under the title where the facts are under the text. */}
+        {priority !== undefined && (
+          <Fact name="Priority" wide>
+            <PriorityBadge priority={priority} className={cn(priority === 10 && 'text-danger')} />
+          </Fact>
+        )}
+        <Fact name="Stage" wide>
+          <StageWord ticket={withStatus} />
+        </Fact>
+        {ticket.locked && holder && (
+          <Fact name="Claimed by">
+            {ticket.lockedByAgent ? (
+              <button type="button" className="focus-ring min-w-0 truncate rounded-sm text-left pointer-fine:hover:underline" onClick={() => host.openAgent(projectId, ticket.lockedByAgent!.id)}>
+                {holder}
+              </button>
+            ) : (
+              <span className="min-w-0 truncate">{holder}</span>
+            )}
+            {/* A run at it is said by the stage's turning mark; one that ended is said here. */}
+            {holderStatus !== undefined && claimState(holderStatus) !== 'working' && <span className="text-faint-foreground">{standing(holderStatus)}</span>}
+          </Fact>
+        )}
+        {ticket.pr && (
+          <Fact name="In review">
+            <a href={ticket.pr.url} target="_blank" rel="noreferrer" className="focus-ring rounded-sm text-info pointer-fine:hover:underline">
+              {ticket.pr.label}
+            </a>
+          </Fact>
+        )}
+        {ticket.waiting && <Fact name="Waiting on">{ticket.waiting}</Fact>}
+        {ticket.topics && ticket.topics.length > 0 && (
+          <Fact name="Topics">
+            {ticket.topics.map(topic => (
+              <Badge key={topic}>{topic}</Badge>
+            ))}
+          </Fact>
+        )}
+        {ticket.issue && (
+          <Fact name="Issue">
+            <a href={ticket.issue.url} target="_blank" rel="noreferrer" className="focus-ring rounded-sm pointer-fine:hover:underline">
+              {ticket.issue.label}
+            </a>
+          </Fact>
+        )}
+        {ticket.effort !== undefined && <Fact name="Effort">{ticket.effort} of 10</Fact>}
+        {ticket.uncertainty !== undefined && <Fact name="Uncertainty">{ticket.uncertainty} of 10</Fact>}
+        {ticket.outdated && (
+          <Fact name="Plan">
+            <span className="text-warning">Outdated</span>
+          </Fact>
+        )}
+        <Fact name="Opened">
+          <span title={formatDateTime(ticket.date)}>{longAge(ticket.date)}</span>
+        </Fact>
+        <Fact name="File">
+          {/* It may break after a slash or an underscore, never inside a word. */}
+          <span className="min-w-0 font-mono text-xs text-muted-foreground">
+            {`${TICKETS_DIR}/${ticket.file}`.split(/(?<=[/_])/).map((part, at) => (
+              <Fragment key={at}>
+                {at > 0 && <wbr />}
+                {part}
+              </Fragment>
+            ))}
           </span>
-        </>
+        </Fact>
+      </dl>
+      {sessions.length > 0 && (
+        <div className="mt-4 border-t border-hairline pt-4">
+          <h2 className="mb-2 text-xs font-medium text-faint-foreground">Runs on this ticket</h2>
+          <TicketSessions sessions={sessions} onOpen={agentId => host.openAgent(projectId, agentId)} />
+        </div>
       )}
-      {ticket.effort !== undefined && (
-        <>
-          {dot}
-          <span>Effort {ticket.effort}/10</span>
-        </>
-      )}
-      {ticket.uncertainty !== undefined && (
-        <>
-          {dot}
-          <span>Uncertainty {ticket.uncertainty}/10</span>
-        </>
-      )}
-      {ticket.outdated && (
-        <>
-          {dot}
-          <span className="text-warning">Plan outdated</span>
-        </>
-      )}
-      {ticket.topics && ticket.topics.length > 0 && (
-        <span className="ml-1 flex flex-wrap gap-1">
-          {ticket.topics.map(topic => (
-            <Badge key={topic}>
-              {topic}
-            </Badge>
-          ))}
-        </span>
-      )}
+    </aside>
+  )
+}
+
+/** One fact of the side list: its name in a column of its own, its value beside it. `wide`: said under the title on a narrow screen instead. */
+function Fact({ name, wide = false, children }: { name: string; wide?: boolean; children: ReactNode }) {
+  return (
+    <div className={cn('flex items-baseline gap-2 py-1.5', wide && 'max-lg:hidden')}>
+      <dt className="w-20 shrink-0 text-faint-foreground">{name}</dt>
+      <dd className="flex min-w-0 flex-wrap items-baseline gap-1">{children}</dd>
     </div>
   )
 }
 
-/** How the run holding the claim stands, as the facts say it after the run's name. */
+/** How the run holding the claim stands, said after its name. */
 function standing(holderStatus: string): string {
   return claimState(holderStatus) === 'stale' ? `run ${holderStatus}` : runSaid(holderStatus)
+}
+
+/** An age in words, "18 weeks ago", for a fact that has the room. */
+function longAge(iso: string): string {
+  const days = Math.floor((Date.now() - Date.parse(iso)) / 86_400_000)
+  const said = (n: number, unit: string) => `${n} ${unit}${n === 1 ? '' : 's'} ago`
+  if (Number.isNaN(days)) return '—'
+  if (days < 1) return 'Today'
+  if (days < 7) return said(days, 'day')
+  if (days < 365) return said(Math.floor(days / 7), 'week')
+  return said(Math.floor(days / 365), 'year')
 }
