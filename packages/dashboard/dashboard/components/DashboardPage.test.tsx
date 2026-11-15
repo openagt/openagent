@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest'
 import { act, cleanup, fireEvent, render, screen, within } from '@testing-library/react'
 import type { ActiveAgent, Intervention } from '../../src/index.js'
+import type { ListedPage } from '../lib/use-modules.js'
 
 // The Overview's own layout: its cards on a grid, ordered, sized and hidden by the person's layout
 // for the page (#overview layouts). The cards are tested on their own; here they are stand-ins, the
@@ -41,8 +42,10 @@ const active = (agentId: string, projectId = 'p1'): ActiveAgent => ({ projectId,
 const projects = [{ id: 'p1', name: 'alpha' }, { id: 'p2', name: 'beta' }] as never[]
 /** The agents at work, as the shell read them. */
 let working: ActiveAgent[] = []
+/** The modules' pages as the sidebar lists them: none known until a test says. */
+let listed: readonly ListedPage[] | null = null
 const overview = (scope: string | null = null, kept = { interventions: false, active: false }, read = true) => (
-  <DashboardPage onProjectAdded={() => {}} onSelectProject={() => {}} projectHref={id => `/${id}`} onSelectAgent={() => {}} onAgentStarted={() => {}} interventions={[]} interventionsState={!read ? 'unknown' : kept.interventions ? 'kept' : 'fresh'} active={{ active: working, state: !read ? 'unknown' : kept.active ? 'kept' : 'fresh' }} projects={projects} scope={scope} />
+  <DashboardPage onProjectAdded={() => {}} onSelectProject={() => {}} projectHref={id => `/${id}`} onSelectAgent={() => {}} onAgentStarted={() => {}} interventions={[]} interventionsState={!read ? 'unknown' : kept.interventions ? 'kept' : 'fresh'} active={{ active: working, state: !read ? 'unknown' : kept.active ? 'kept' : 'fresh' }} projects={projects} scope={scope} listedPages={listed} />
 )
 const show = (...args: Parameters<typeof overview>) => render(overview(...args))
 /** The cards drawn, in order, each with its grid classes. */
@@ -50,6 +53,7 @@ const drawn = () => [...document.querySelectorAll<HTMLElement>('[data-card]')].m
 
 beforeEach(() => {
   working = []
+  listed = null
   prefs.value = { onboardingDismissed: true }
   prefs.loaded = true
   prefs.updatePreferences.mockReset()
@@ -378,6 +382,8 @@ describe('the Overview', () => {
 
   test("before the packages' code is in, their part of the line waits in its place, and the part that comes takes it", async () => {
     modules.loaded = false
+    // The sidebar's pages say a shown project has the Queue: its part will stand there.
+    listed = [{ segment: 'queue', label: 'Queue', projects: ['p2'] }]
     const { rerender } = show()
     const line = (await screen.findByText('no agent working')).closest('p')!
     expect(line.textContent).toBe('·nothing needs you·no agent working·Loading…·your agents')
@@ -393,6 +399,19 @@ describe('the Overview', () => {
     expect(line.textContent).toBe('·nothing needs you·no agent working·your agents')
   })
 
+  test("before the packages' code is in, no place waits for the queue's part where the sidebar's pages say no shown project has the Queue, or say nothing yet", async () => {
+    modules.loaded = false
+    listed = [{ segment: 'queue', label: 'Queue', projects: ['p2'] }, { segment: 'logs', label: 'Logs', projects: ['p1'] }]
+    show('p1')
+    const line = (await screen.findByText('no agent working')).closest('p')!
+    expect(line.textContent).toBe('·nothing needs you·no agent working·your agents')
+    cleanup()
+    // A browser's first visit: no page known, none waited for.
+    listed = null
+    show()
+    expect((await screen.findByText('no agent working')).closest('p')!.textContent).toBe('·nothing needs you·no agent working·your agents')
+  })
+
   test('the Human Queue says it is loading before its read, not that nothing waits', async () => {
     show(null, { interventions: false, active: false }, false)
     const card = (await screen.findByText('Human Queue')).closest('[data-card]')!
@@ -405,7 +424,7 @@ describe('the Overview', () => {
     const item = (kind: Intervention['kind'], n: number): Intervention => ({ projectId: 'p1', projectName: 'alpha', kind, title: `t${n}`, agentId: `r${n}` })
     const scrolled = vi.fn()
     Element.prototype.scrollIntoView = scrolled
-    render(<DashboardPage onProjectAdded={() => {}} onSelectProject={() => {}} projectHref={id => `/${id}`} onSelectAgent={() => {}} onAgentStarted={() => {}} interventions={[item('awaiting', 1), item('awaiting', 2), item('pr', 3)]} interventionsState="fresh" active={{ active: [], state: 'fresh' }} projects={projects} scope={null} />)
+    render(<DashboardPage onProjectAdded={() => {}} onSelectProject={() => {}} projectHref={id => `/${id}`} onSelectAgent={() => {}} onAgentStarted={() => {}} interventions={[item('awaiting', 1), item('awaiting', 2), item('pr', 3)]} interventionsState="fresh" active={{ active: [], state: 'fresh' }} projects={projects} scope={null} listedPages={null} />)
     const part = await screen.findByRole('button', { name: '3 need you' })
     expect(part.getAttribute('title')).toBe('2 questions, 1 pull request')
     fireEvent.click(part)
@@ -422,7 +441,7 @@ describe('the Overview', () => {
       item({ number: 6, title: 'Add DESCRIPTION.md', url: 'https://x/pull/6', agentId: 'r6' }),
       item({ number: 8, title: 'Condense README', url: 'https://x/pull/8' }),
     ]
-    render(<DashboardPage onProjectAdded={() => {}} onSelectProject={() => {}} projectHref={id => `/${id}`} onSelectAgent={onSelectAgent} onAgentStarted={() => {}} interventions={interventions} interventionsState="fresh" active={{ active: [], state: 'fresh' }} projects={[]} scope={null} />)
+    render(<DashboardPage onProjectAdded={() => {}} onSelectProject={() => {}} projectHref={id => `/${id}`} onSelectAgent={onSelectAgent} onAgentStarted={() => {}} interventions={interventions} interventionsState="fresh" active={{ active: [], state: 'fresh' }} projects={[]} scope={null} listedPages={null} />)
     // One panel, in the order the queue gives them: a row says what it needs in the line under its name, so no kind has a heading.
     const part = within(screen.getByRole('region', { name: 'Human Queue' }))
     expect(part.queryAllByRole('region')).toEqual([])

@@ -19,6 +19,7 @@ import { hostLoginState, hostWords, useMissing } from './Logins.js'
 import { firstName } from './PersonMenu.js'
 import { Tooltip, TooltipTrigger, TooltipContent } from './ui/tooltip.js'
 import { HostServicesContext, INERT_HOST_SERVICES } from '../lib/host-services.js'
+import type { ListedPage } from '../lib/use-modules.js'
 
 // The Overview's first steps (#958): what a new install needs, each with the state it is actually
 // in rather than a static list to read past.
@@ -71,6 +72,7 @@ export function OnboardingChecklist({
   onSelectProject,
   onProjectAdded,
   onRead,
+  listedPages,
 }: {
   /** The projects as the app read them: the picker sees one it added land, and closes on it. */
   projects: readonly ProjectSummary[]
@@ -85,6 +87,8 @@ export function OnboardingChecklist({
   onProjectAdded: () => void
   /** Told once the steps stand where their reads say, before that frame is drawn: what the page holds back under them can come. */
   onRead: () => void
+  /** The modules' pages as the sidebar lists them, null where none is known yet: which projects have the Queue and the Tickets. */
+  listedPages: readonly ListedPage[] | null
 }) {
   // Slower than the Overview's own 5s poll: these change at human speed, and this read fans out
   // over every project to answer the tickets question.
@@ -243,10 +247,13 @@ export function OnboardingChecklist({
   const name = person ? `, ${firstName(person.name)}` : ''
 
   const doneCount = steps.filter(step => step.done).length
-  // While the projects are not read: the queue's and the tickets' steps, which some projects have and only their read
-  // says, hold their places before the last step. With no project (a new install) neither can be there.
+  // While the projects are not read: the queue's and the tickets' steps hold their places before the last step exactly
+  // where the sidebar's pages say a project has the Queue or the Tickets, as the same packages bring the page and the
+  // step. Where no page is known yet (a browser's first visit), none is held.
+  const listed = (segment: string) => listedPages?.some(page => page.segment === segment && page.projects.length > 0) === true
+  const coming = [...(listed('queue') ? [{ key: 'todos', done: false }] : []), ...(listed('tickets') ? [{ key: 'tickets', done: false }] : [])]
   const frame: { key: string; label?: string; description?: ReactNode; done: boolean }[] = steps.flatMap(step => [
-    ...(data === null && projects.length > 0 && step.key === 'browser-notification' ? [{ key: 'todos', done: false }, { key: 'tickets', done: false }] : []),
+    ...(data === null && step.key === 'browser-notification' ? coming : []),
     { key: step.key, label: step.label, description: step.description, done: step.done },
   ])
   return (

@@ -21,6 +21,7 @@ import { CardGrid, EditOverview, TakeOffMark, UNDER, UnderCards, type Under } fr
 import { ALL_PROJECTS, arrangeCards } from '../../src/client.js'
 import type { ProjectSummary } from '../../src/index.js'
 import type { ReadState } from '../lib/use-async.js'
+import type { ListedPage } from '../lib/use-modules.js'
 import { Page } from './Page.js'
 import { overlayOpen, pressed } from '../lib/shortcut.js'
 import { LinePart, NEEDS_YOU_ID, WORKING_ID, counted, scrollToPart } from './LinePart.js'
@@ -58,6 +59,7 @@ export function DashboardPage({
   projects,
   scope,
   onProjectAdded,
+  listedPages,
 }: {
   onSelectProject: (id: string) => void
   /** The address `onSelectProject` goes to: a link's `href`. */
@@ -78,6 +80,8 @@ export function DashboardPage({
   scope: string | null
   /** A project was added from the first steps: the app reads its projects again. */
   onProjectAdded: () => void
+  /** The modules' pages as the sidebar lists them, null where none is known yet: which projects have the Queue and the Tickets, before the packages' code is in. */
+  listedPages: readonly ListedPage[] | null
 }) {
   // Its ✕ hides it (#958), and a switch in Settings › Appearance shows it again.
   const onboardingDismissed = usePreferences().onboardingDismissed ?? false
@@ -88,6 +92,7 @@ export function DashboardPage({
   // Every card the Overview can show here, each with the widths it stands at; the person's layout
   // for this page (the picked project's, else all projects') orders them, sizes them, and hides some.
   const { cards: moduleCards, line: moduleLine, loaded: modulesLoaded } = useModuleCards(shownProjects)
+  const queueComing = !modulesLoaded && moduleLine.length === 0 && listedPages?.some(page => page.segment === 'queue' && shownProjects.some(project => page.projects.includes(project.id))) === true
   // What the number counts, kind by kind: "1 question, 1 to publish".
   const waiting = KINDS.map(kind => ({ kind, count: interventions.filter(item => item.kind === kind.value).length })).filter(({ count }) => count > 0)
   // How things stand, in one line under the title, each part a link to where it is: what needs the
@@ -116,9 +121,10 @@ export function DashboardPage({
         </LinePart>
       ),
     },
-    // Until the packages' code is in, one part waits in their place, as wide as the queue's: a part that
-    // came after the line was drawn would lengthen it, and on a phone push the Customize press and the page under it.
-    ...(modulesLoaded || moduleLine.length > 0 ? moduleLine : [{ id: 'packages', order: PACKAGES_PLACE, node: <LinePart reading shape="4 queued">{null}</LinePart> }]),
+    // Until the packages' code is in, the queue's part waits in its place, as wide as it, where the sidebar's pages say a
+    // shown project has the Queue: a part that came after the line was drawn would lengthen it (on a phone pushing the
+    // Customize press and the page under it), and a place no part takes would shorten it.
+    ...(queueComing ? [{ id: 'packages', order: PACKAGES_PLACE, node: <LinePart reading shape="4 queued">{null}</LinePart> }] : moduleLine),
     // The person's agents (Rom's design: an agent is a name, skills and accounts): how many, by name, a press from their page.
     { id: 'your-agents', order: 4, node: <YourAgentsPart /> },
   ].sort((one, other) => one.order - other.order)
@@ -201,7 +207,7 @@ export function DashboardPage({
     card: 'human-queue',
     node: (
       <>
-        {!onboardingDismissed && <OnboardingChecklist projects={projects} onAgentStarted={onAgentStarted} onSelectProject={onSelectProject} onProjectAdded={onProjectAdded} onRead={firstStepsHaveRead} />}
+        {!onboardingDismissed && <OnboardingChecklist projects={projects} onAgentStarted={onAgentStarted} onSelectProject={onSelectProject} onProjectAdded={onProjectAdded} onRead={firstStepsHaveRead} listedPages={listedPages} />}
         <AgentUpdates />
       </>
     ),

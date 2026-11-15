@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest'
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { forgetRemembered } from '../lib/use-async.js'
 import type { DashboardData, ProjectSummary } from '../../src/index.js'
+import type { ListedPage } from '../lib/use-modules.js'
 import { configureFirst } from '../test-utils.js'
 import { HostServicesContext, INERT_HOST_SERVICES } from '../lib/host-services.js'
 
@@ -69,8 +70,8 @@ const WITH_PROJECT: DashboardData = {
 
 const SHOP: ProjectSummary = { id: 'p1', path: '/home/ada/shop', name: 'shop', activated: true, gitHost: true }
 
-const steps = ({ projects = [] as ProjectSummary[], onAgentStarted = vi.fn(), onSelectProject = vi.fn(), onRead = vi.fn() } = {}) =>
-  render(<OnboardingChecklist projects={projects} onAgentStarted={onAgentStarted} onSelectProject={onSelectProject} onProjectAdded={vi.fn()} onRead={onRead} />)
+const steps = ({ projects = [] as ProjectSummary[], onAgentStarted = vi.fn(), onSelectProject = vi.fn(), onRead = vi.fn(), listedPages = null as readonly ListedPage[] | null } = {}) =>
+  render(<OnboardingChecklist projects={projects} onAgentStarted={onAgentStarted} onSelectProject={onSelectProject} onProjectAdded={vi.fn()} onRead={onRead} listedPages={listedPages} />)
 
 /** A step's row, by its title. */
 const row = (label: string) => screen.getByRole('listitem', { name: label })
@@ -142,6 +143,25 @@ describe('the first steps on the Overview', () => {
     const rows = [...(frame?.children ?? [])].map(item => item.querySelector('span.text-sm')?.textContent)
     expect(rows[0]).toBe('Set up Claude Code')
     expect(rows).toContain('Add your first project')
+  })
+
+  test("while it reads, the queue's and the tickets' steps hold a place each exactly where the sidebar's pages say a project has the Queue or the Tickets, and none where no page is known yet", async () => {
+    onDashboard.mockImplementation(() => new Promise(() => {}))
+    logins.onAgentState.mockResolvedValue({ driver: 'claude-code', ready: false, installed: false })
+    const frame = async (listedPages: readonly ListedPage[] | null) => {
+      steps({ projects: [SHOP], listedPages })
+      await waitFor(() => expect(document.querySelector('ol[aria-hidden="true"]')).toBeTruthy())
+      const rows = [...document.querySelector('ol[aria-hidden="true"]')!.children].map(item => item.querySelector('span.text-sm')?.textContent ?? 'a place')
+      cleanup()
+      return rows
+    }
+    const none = await frame(null)
+    expect(none).not.toContain('a place')
+    expect(none.at(-1)).toBe('Turn on notifications')
+    const queue = await frame([{ segment: 'queue', label: 'Queue', projects: ['p1'] }, { segment: 'logs', label: 'Logs', projects: ['p1'] }])
+    expect(queue).toEqual([...none.slice(0, -1), 'a place', 'Turn on notifications'])
+    const both = await frame([{ segment: 'queue', label: 'Queue', projects: ['p1'] }, { segment: 'tickets', label: 'Tickets', projects: ['p1'] }])
+    expect(both).toEqual([...none.slice(0, -1), 'a place', 'a place', 'Turn on notifications'])
   })
 
   test('what adding a project does is behind an ⓘ beside the open step, not in its way', async () => {
@@ -220,7 +240,7 @@ describe('the first steps on the Overview', () => {
     const openPage = vi.fn()
     render(
       <HostServicesContext.Provider value={{ ...INERT_HOST_SERVICES, openPage }}>
-        <OnboardingChecklist projects={[SHOP]} onAgentStarted={vi.fn()} onSelectProject={vi.fn()} onProjectAdded={vi.fn()} onRead={vi.fn()} />
+        <OnboardingChecklist projects={[SHOP]} onAgentStarted={vi.fn()} onSelectProject={vi.fn()} onProjectAdded={vi.fn()} onRead={vi.fn()} listedPages={null} />
       </HostServicesContext.Provider>,
     )
     await openStep('Populate the queue of AI tasks')
