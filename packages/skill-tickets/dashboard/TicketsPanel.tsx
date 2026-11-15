@@ -123,7 +123,7 @@ function TicketRow({ listed, priorities, showStage, busy, starting, isSelected, 
       }
       actions={
         offered && !phone ? (
-          <span className="-mr-2 flex items-center gap-2">
+          <span className="-mr-1.5 flex items-center gap-2">
             <TicketStartActions
               compact
               projectId={projectId}
