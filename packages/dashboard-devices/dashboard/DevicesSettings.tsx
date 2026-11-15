@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { ChevronLeft, Ellipsis, House, Loader2, Monitor, Plus, Server, Smartphone, Tablet, UserPlus, UserRound } from 'lucide-react'
-import { Badge, Button, ConfirmDialog, Dialog, DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, Input, List, Row, RowShapes, Section, SettingsRow, SettingsRowShapes, SettingsSection, Slot, buttonVariants, formatDateTime, formatRelative, useOpenAgentDown, usePolled, useSettingsCrumb } from '@openagt/dashboard/module'
+import { Badge, Button, ConfirmDialog, Dialog, DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, Input, List, Row, RowShapes, Section, SettingsRow, SettingsRowShapes, SettingsSection, Slot, formatDateTime, formatRelative, useOpenAgentDown, usePolled, useSettingsCrumb } from '@openagt/dashboard/module'
 import { addDevice, keepPerson, loadMine, myName, nameOwner, removeDevice, removeMine, removePerson, renameDevice, setTailscale, type Answer, type DeviceRow, type DoorStatus, type LineRow, type PersonRow, type PersonThere } from './devices.js'
 import { installFailed, removeDevice as removeServerDevice } from './servers.js'
 import { AddDevice, useJoined, type Adding } from './AddDevice.js'
@@ -278,6 +278,7 @@ function PhoneRow({ d, item }: { d: Devices; item: PhoneItem }) {
   const [confirming, setConfirming] = useState(false)
   const [name, setName] = useState(item.name)
   const [busy, setBusy] = useState(false)
+  const [menuOpen, setMenuOpen] = useState(false)
   // Being removed: said on the row from the press until the row is gone, which is the next read of its list; a removal that failed says why instead.
   const [removing, setRemoving] = useState(false)
   const [error, setError] = useState<string | undefined>()
@@ -313,8 +314,9 @@ function PhoneRow({ d, item }: { d: Devices; item: PhoneItem }) {
         facts={[word, where, <span title={formatDateTime(item.seen ?? item.added)}>{seenWords(item.seen, item.added)}</span>]}
         {...(removing ? { state: <State tone="working">Removing…</State> } : {})}
         actions={
-          <DropdownMenu>
-            <DropdownMenuTrigger aria-label={`${item.name}: more`} disabled={busy || removing} className={buttonVariants({ variant: 'ghost', size: 'icon-sm' })}>
+          // While its own change runs the menu stays shut, and its press keeps the keyboard.
+          <DropdownMenu open={menuOpen} onOpenChange={next => setMenuOpen(next && !busy && !removing)}>
+            <DropdownMenuTrigger aria-label={`${item.name}: more`} render={<Button variant="ghost" size="icon-sm" loading={busy || removing} />}>
               {removing ? <Loader2 className="size-4 animate-spin" aria-hidden /> : <Ellipsis className="size-4" aria-hidden />}
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">
