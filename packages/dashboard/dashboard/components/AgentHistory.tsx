@@ -5,11 +5,12 @@ import { Plus, ChevronDown, Bot, ArrowDownUp, Check, Cloud, Laptop, LayoutDashbo
 import { MACHINE_ICONS } from './MachineMark.js'
 import { PersonMark } from './PersonMark.js'
 import type { ComponentType } from 'react'
-import type { AgentMeta, AgentStatus, RecentAgent, ProjectSummary } from '../../src/index.js'
+import type { AgentMeta, AgentStatus, Intervention, RecentAgent, ProjectSummary } from '../../src/index.js'
+import { interventionKey } from '../../src/client.js'
+import { StateCell } from './ui/state.js'
 import type { ModuleHostPerson } from '../module/index.js'
 import { DRIVER_LABELS, driverFromImpl, cloudRunState, type CloudRunState, type MachineKind } from '../../src/client.js'
 import { buttonVariants } from './ui/button.js'
-import { Badge } from './ui/badge.js'
 import { inPlace } from '../lib/in-place.js'
 import { formatRoute, type Route } from '../lib/route.js'
 import { NO_PROJECTS } from '../../src/project-address.js'
@@ -107,7 +108,7 @@ export function AgentHistory({
   pages = [],
   activePage = null,
   onPage = () => {},
-  interventionCount = 0,
+  waiting = [],
   hrefOf = route => formatRoute(route, NO_PROJECTS),
 }: {
   /** The page beside it scrolls as a page (App): the sidebar then stays where it is, as tall as the screen. */
@@ -144,8 +145,8 @@ export function AgentHistory({
   activePage?: string | null
   /** Open a module's page by its segment. */
   onPage?: (segment: string) => void
-  /** Human Queue count, shown on the Overview item and the picker (#632). */
-  interventionCount?: number
+  /** What waits on the person (the Human Queue, #632), the picked project's or every project's: the "Needs you" part. */
+  waiting?: readonly Intervention[]
   /** The address a row or a nav item goes to, as the shell writes it: each is a link, which also opens in a new tab. */
   hrefOf?: (route: Route) => string
   /** Cross-project recents, for when all projects show: every project's sessions pooled. */
@@ -373,7 +374,7 @@ export function AgentHistory({
           />
           {/* Overview: the way home, its own nav item directly under New and above the session list,
               more prominent than a menu row. Only this — the current view — carries the active fill. */}
-          <OverviewButton active={projectId === null && activePage === null} count={interventionCount} href={homeHref} onClick={leave(onDashboard)} />
+          <NavRow icon={LayoutDashboard} label="Overview" active={projectId === null && activePage === null} href={homeHref} onClick={leave(onDashboard)} />
           {/* The modules' pages the shell hands over (#1774), the picked project's only when one is
               picked: destinations with no project selected, like the Overview, named by the module,
               never by the dashboard — the tickets' page among them, when a package brings one. */}
@@ -398,6 +399,15 @@ export function AgentHistory({
               <ScrollArea className="min-h-0 flex-1">
                 {/* The rows keep the nav's edges, the scrollbar laid over their right padding while it shows. The `!`, as on the
                     nav above: a module's stylesheet has the group's own `p-2`, which would otherwise win on its page. */}
+                {waiting.length > 0 && (
+                  <NeedsYou
+                    waiting={waiting}
+                    hrefOf={item => (item.agentId ? hrefOf({ projectId: item.projectId, agentId: item.agentId }) : item.url)}
+                    onOpen={item => (item.agentId ? leave(onSelectRecent ?? (() => {}))(item.projectId, item.agentId) : undefined)}
+                    moreHref={homeHref}
+                    onMore={leave(onDashboard)}
+                  />
+                )}
                 <SidebarGroup className="pt-3!">
                   {/* The label sticks to the top of the scroll; the gradient strip under it (also sticky)
                       fades the rows into the background as they scroll up beneath the label. Shown even
@@ -523,29 +533,6 @@ function NavRow({
   )
 }
 
-// The Overview entry (Rom): the way home, pinned above the session list and more prominent than a
-// menu row. Carries the Human Queue count (#632) so the one cross-project signal stays visible, and
-// highlights while it is the current view.
-function OverviewButton({ active, count, href, onClick }: { active: boolean; count: number; href: string; onClick: () => void }) {
-  return (
-    <NavRow icon={LayoutDashboard} label="Overview" active={active} href={href} onClick={onClick}>
-      {count > 0 && (
-        <Tooltip>
-          <TooltipTrigger
-            // The one filled pill of the sidebar: a count that needs the person.
-            render={<Badge className="bg-foreground/10 text-foreground" />}
-          >
-            {count}
-          </TooltipTrigger>
-          <TooltipContent>
-            {count} item{count === 1 ? '' : 's'} in your Human Queue
-          </TooltipContent>
-        </Tooltip>
-      )}
-    </NavRow>
-  )
-}
-
 // The "New" launcher: one click to the "New agent session" page, of the project picked at the top of
 // the rail, or with all of them showing, of no project. Where the session works is picked on that
 // page, in the row above the box (ProjectPicker), not here.
@@ -573,6 +560,72 @@ function NewButton({
       <Plus aria-hidden />
       <span className="truncate">New agent session</span>
     </a>
+  )
+}
+
+/** How many of what waits on the person the sidebar lists before a row offers the rest, as the Human Queue does. */
+const NEEDS_SHOWN = 5
+
+/**
+ * What waits on the person, over the Log: each a run's name in the waiting hexagon and what it needs
+ * in the Human Queue's two words; past five, a row that opens the Overview, where the Human Queue
+ * lists them all. The Log still lists every run in its order: a run answered stays where it was.
+ */
+function NeedsYou({
+  waiting,
+  hrefOf,
+  onOpen,
+  moreHref,
+  onMore,
+}: {
+  waiting: readonly Intervention[]
+  /** Where a row goes: its run's page, or a pull request no run here opened. */
+  hrefOf: (item: Intervention) => string | undefined
+  /** Open a row's run in place. */
+  onOpen: (item: Intervention) => void
+  moreHref: string
+  onMore: () => void
+}) {
+  const shown = waiting.slice(0, NEEDS_SHOWN)
+  const rest = waiting.length - shown.length
+  const rowClass = 'focus-ring flex w-full items-center gap-2 rounded-md px-1.5 text-left text-sm text-foreground transition-colors hover:bg-foreground/4 active:bg-foreground/8 md:h-8 max-md:h-11'
+  return (
+    <SidebarGroup className="pt-3! pb-0!">
+      <SidebarGroupLabel className="px-1.5">Needs you</SidebarGroupLabel>
+      <SidebarGroupContent>
+        <SidebarMenu className="gap-0.5">
+          {shown.map(item => {
+            const href = hrefOf(item)
+            const need = needsWord(item.kind, item.gitHost)
+            const external = item.agentId === undefined
+            return (
+              <SidebarMenuItem key={interventionKey(item)}>
+                <a
+                  href={href}
+                  aria-label={`${item.title} · ${need}`}
+                  {...(external ? { target: '_blank', rel: 'noreferrer' } : { onClick: inPlace(() => onOpen(item)) })}
+                  className={rowClass}
+                >
+                  <span className="flex size-4 shrink-0 items-center justify-center">
+                    <StateCell state="waiting" />
+                  </span>
+                  <span className="min-w-0 flex-1 truncate">{item.title}</span>
+                  <span aria-hidden className="shrink-0 text-xs text-muted-foreground">{need}</span>
+                </a>
+              </SidebarMenuItem>
+            )
+          })}
+          {rest > 0 && (
+            <SidebarMenuItem>
+              <a href={moreHref} onClick={inPlace(onMore)} className={cn(rowClass, 'text-muted-foreground')}>
+                <span aria-hidden className="size-4 shrink-0" />
+                {rest} more
+              </a>
+            </SidebarMenuItem>
+          )}
+        </SidebarMenu>
+      </SidebarGroupContent>
+    </SidebarGroup>
   )
 }
 

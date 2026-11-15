@@ -61,6 +61,30 @@ function agent(over: Partial<AgentMeta> = {}): AgentMeta {
 const renderRail = (ui: ReactElement) => render(<SidebarProvider>{ui}</SidebarProvider>)
 
 describe('AgentHistory (#785)', () => {
+  test('what waits on the person is its own part over the Log: a run\'s name and what it needs, five, then a row that opens the Overview; the Overview row has no count', () => {
+    const asks = (n: number) => ({ projectId: 'p1', projectName: 'p1', kind: 'awaiting' as const, title: `Run ${n}`, agentId: `r${n}`, awaitId: `q${n}` })
+    const onSelectRecent = vi.fn()
+    const onDashboard = vi.fn()
+    renderRail(
+      <AgentHistory projectId="p1" scope="p1" agents={[]} selectedAgentId={null} onSelect={() => {}} onSelectRecent={onSelectRecent} onDashboard={onDashboard} homeHref="/p1" waiting={[1, 2, 3, 4, 5, 6].map(asks)} hrefOf={route => `/${route.projectId}/${route.agentId}`} />,
+    )
+    expect(screen.getByText('Needs you')).toBeTruthy()
+    const row = screen.getByRole('link', { name: 'Run 1 · Needs answer' })
+    expect(row.getAttribute('href')).toBe('/p1/r1')
+    expect(row.textContent).toBe('Run 1Needs answer')
+    fireEvent.click(row)
+    expect(onSelectRecent).toHaveBeenCalledWith('p1', 'r1')
+    expect(screen.queryByRole('link', { name: /^Run 6/ })).toBeNull()
+    fireEvent.click(screen.getByRole('link', { name: '1 more' }))
+    expect(onDashboard).toHaveBeenCalled()
+    expect(screen.getByRole('link', { name: 'Overview' }).textContent).toBe('Overview')
+  })
+
+  test('with nothing waiting there is no "Needs you" part', () => {
+    renderRail(<AgentHistory projectId="p1" scope="p1" agents={[agent()]} selectedAgentId={null} onSelect={() => {}} />)
+    expect(screen.queryByText('Needs you')).toBeNull()
+  })
+
   test('a row and a nav item are links to their pages: a plain click goes there in place, a Ctrl+click is the browser\'s, for a new tab', () => {
     const onSelect = vi.fn()
     const onPage = vi.fn()

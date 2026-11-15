@@ -705,7 +705,7 @@ export function App() {
           pages={sidebarPages}
           activePage={pageSegment}
           onPage={showPage}
-          interventionCount={interventions.length}
+          waiting={interventions}
           hrefOf={hrefOf}
         />
         {/* On a phone the sidebar is a sheet, and this button, over the page's top left corner,

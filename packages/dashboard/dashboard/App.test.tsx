@@ -718,18 +718,19 @@ describe('the project select (#1513)', () => {
     fireEvent.click(screen.getByRole('option', { name: to }))
   }
 
-  test('all projects show until one is picked; then the Overview, its badge and the agent list show only that project', async () => {
+  test('all projects show until one is picked; then the Overview, what needs you and the agent list show only that project', async () => {
     answerTwo()
     render(<App />)
     expect(await screen.findByText('card for app, site')).toBeTruthy()
-    expect(await screen.findByText('app asks')).toBeTruthy()
+    // Listed on the Overview and in the sidebar's "Needs you".
+    await waitFor(() => expect(screen.getAllByText('app asks')).toHaveLength(2))
     expect(await screen.findByText('app works')).toBeTruthy()
     expect(await screen.findByText('app ran')).toBeTruthy()
 
     await pick('All projects', /site/)
     expect(url()).toBe('/site/overview')
     expect(await screen.findByText('card for site')).toBeTruthy()
-    expect(screen.getByText('site asks')).toBeTruthy()
+    await waitFor(() => expect(screen.getAllByText('site asks')).toHaveLength(2))
     expect(screen.queryByText('app asks')).toBeNull()
     expect(screen.getByText('site works')).toBeTruthy()
     expect(screen.queryByText('app works')).toBeNull()
@@ -745,8 +746,8 @@ describe('the project select (#1513)', () => {
     fireEvent.click(await screen.findByRole('link', { name: 'Logs' }))
     expect(url()).toBe('/site/logs')
     expect(await screen.findByText('runs of site')).toBeTruthy()
-    // The sidebar marks the page that is open, also with Settings open over it. The Overview row's
-    // name carries its Human Queue count here, and the person's row ends in "settings", hence the patterns.
+    // The sidebar marks the page that is open, also with Settings open over it. The person's row ends
+    // in "settings", hence the patterns.
     const marked = () => ['Overview', 'Logs', 'Settings'].filter(name => screen.getByRole(name === 'Settings' ? 'button' : 'link', { name: name === 'Settings' ? /settings$/i : new RegExp(`^${name}`) }).getAttribute('aria-current') === 'page')
     expect(marked()).toEqual(['Logs'])
     fireEvent.click(screen.getByRole('button', { name: /settings$/i }))
